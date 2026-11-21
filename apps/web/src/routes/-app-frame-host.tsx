@@ -159,11 +159,18 @@ export const AppFrameHost = ({ children, frames }: AppFrameHostProps) => {
           organizationId: memberUser.activeOrganizationId,
         },
   );
+  const initialVisitor = publicKnowledge ? visitor : null;
+  const [prevInitialVisitor, setPrevInitialVisitor] = useState<string | null>(
+    null,
+  );
   const [shownVisitor, setShownVisitor] = useState<string | null>(null);
   const resetting = visitorChanged({ publicKnowledge, shownVisitor, visitor });
   // The first visitor the frame is shown to is recorded as it renders.
-  if (publicKnowledge && shownVisitor === null && visitor !== null) {
-    setShownVisitor(visitor);
+  if (prevInitialVisitor !== initialVisitor) {
+    setPrevInitialVisitor(initialVisitor);
+    if (shownVisitor === null && initialVisitor !== null) {
+      setShownVisitor(initialVisitor);
+    }
   }
   useLayoutEffect(() => {
     if (!publicKnowledge || visitor === null) {
