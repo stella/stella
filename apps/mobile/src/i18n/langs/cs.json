@@ -731,8 +731,17 @@
     "useStella": "Použít stella"
   },
   "signedFile": {
+    "bindingDiffers": "Jeho obsah neodpovídá otisku uvedenému v podpisu.",
+    "bindingMatches": "Jeho obsah odpovídá otisku uvedenému v podpisu.",
+    "bindingNotCompared": "Nalezeno podle názvu souboru. Obsah nebyl porovnán.",
+    "digestNote": "Shoda otisku ukazuje, že jde o podepsaná data. Platnost podpisu tím ověřena není.",
     "layer": "Vrstva podpisů {number, number}",
     "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
+    "signedAt": "Uvedený čas podpisu: {time}",
+    "signedFileMissing": "Podepsaný soubor v tomto spisu není.",
+    "signers": "Podepisující",
+    "signs": "Podepsaný soubor",
+    "statedFilesMissing": "Uvedeno v podpisu, ve spisu nenalezeno:",
     "unknownSigner": "Neznámý podepisující",
     "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
     "unverified": "Podpisy nebyly ověřeny."

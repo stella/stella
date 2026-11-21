@@ -36,6 +36,7 @@ export type ViewerSurface =
   | "inspector-asic"
   | "inspector-structured-document"
   | "inspector-cades"
+  | "inspector-signature"
   | "inspector-data-box"
   | "inspector-pdf"
   | "inspector-text"

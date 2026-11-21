@@ -11,7 +11,10 @@
 
 import { Result } from "better-result";
 
-import { legalFileFormat } from "@stll/api-contract/document-format";
+import {
+  legalFileFormat,
+  signatureFormatCandidate,
+} from "@stll/api-contract/document-format";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
@@ -98,7 +101,11 @@ export const resolveExtractionMimeType = ({
   fileName: string;
   mimeType: string;
 }): string => {
-  const legal = legalFileFormat(mimeType, fileName);
+  // A `.sig` or `.xml` file goes to the signature reader, which finds no
+  // text in one whose bytes are not a signature.
+  const legal =
+    legalFileFormat(mimeType, fileName) ??
+    signatureFormatCandidate(mimeType, fileName);
   if (legal) {
     return legal.mimeType;
   }
@@ -166,6 +173,7 @@ export const extractFileTextResult = async (
 ): Promise<Result<string | null, ExtractionWorkerError>> => {
   const normalizedMimeType =
     legalFileFormat(mimeType, fileName)?.mimeType ??
+    signatureFormatCandidate(mimeType, fileName)?.mimeType ??
     normalizeMimeType(mimeType);
   if (!canExtractMimeType(normalizedMimeType)) {
     return Result.ok(null);

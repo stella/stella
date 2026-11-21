@@ -37,7 +37,16 @@ const MAX_XML_DEPTH = 96;
 // Feed the parser in slices so a failure recorded by a callback stops the read
 // within one slice instead of after the whole part.
 const XML_WRITE_CHUNK_CHARS = 64 * 1024;
-const LEGACY_XML_ENCODINGS = ["gb18030", "windows-1254"] as const;
+// Single-byte Central European encodings appear in signed filings from
+// Czech, Slovak and Polish authorities.
+const LEGACY_XML_ENCODINGS = [
+  "gb18030",
+  "windows-1254",
+  "windows-1250",
+  "windows-1252",
+  "iso-8859-1",
+  "iso-8859-2",
+] as const;
 const DECLARED_ENCODING = /\bencoding\s*=\s*["']([\w.:-]{1,40})["']/u;
 
 const unreadableXml = () =>
@@ -173,6 +182,15 @@ const parseXmlPart = (
   }
   return Result.ok(read.root);
 };
+
+/**
+ * One standalone XML document under the same parser rules as a package part:
+ * no document type declarations, an explicit encoding only, and a node budget.
+ */
+export const parseXmlDocument = (
+  bytes: Uint8Array,
+  maxNodes: number = MAX_XML_NODES,
+) => parseXmlPart(bytes, { remaining: maxNodes });
 
 export const openXmlDocumentPackage = async (
   bytes: Uint8Array,

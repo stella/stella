@@ -318,9 +318,18 @@
     "title": "SharePoint ir OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Jo turinys neatitinka paraše nurodytos maišos reikšmės.",
+    "bindingMatches": "Jo turinys atitinka paraše nurodytą maišos reikšmę.",
+    "bindingNotCompared": "Rasta pagal failo pavadinimą. Turinys nebuvo palygintas.",
+    "digestNote": "Sutampanti maišos reikšmė rodo, kad tai pasirašyti duomenys. Parašas taip nepatikrinamas.",
     "layer": "Parašų sluoksnis {number, number}",
     "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
     "pdfUnavailable": "PDF peržiūra nepasiekiama.",
+    "signedAt": "Nurodytas pasirašymo laikas: {time}",
+    "signedFileMissing": "Pasirašyto failo šioje byloje nėra.",
+    "signers": "Pasirašę asmenys",
+    "signs": "Pasirašytas failas",
+    "statedFilesMissing": "Nurodyti paraše, bet šioje byloje nerasti:",
     "unknownSigner": "Nežinomas pasirašęs asmuo",
     "unreadable": "Nepavyko perskaityti pasirašyto failo.",
     "unverified": "Parašai nepatikrinti."

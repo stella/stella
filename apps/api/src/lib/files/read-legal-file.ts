@@ -18,6 +18,8 @@ import { readCadesPreview } from "@/api/lib/files/cades-preview";
 import type { LegalFileReadOptions } from "@/api/lib/files/legal-file-source";
 import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
+import { readSignatureFile } from "@/api/lib/files/read-signature-file";
+import { signatureDocumentText } from "@/api/lib/files/signature-document-text";
 
 type LegalContentReader = (options: LegalFileReadOptions) => Promise<
   Result<
@@ -57,6 +59,43 @@ const readStructuredDocumentContent: LegalContentReader = async (options) => {
   });
 };
 
+/**
+ * A signature file's text, or null for a `.sig` or `.xml` file whose bytes
+ * are not a signature: that file is read the way it would be otherwise.
+ */
+export const readSignatureContent = async (
+  options: LegalFileReadOptions,
+): Promise<
+  Result<
+    {
+      text: string;
+      attachments: { entityId: SafeId<"entity">; position: number }[];
+    } | null,
+    HandlerError
+  >
+> => {
+  const read = await readSignatureFile(options);
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  if ("type" in read.value) {
+    return Result.ok(null);
+  }
+  const { preview, reply } = read.value;
+  return Result.ok({
+    text: signatureDocumentText(reply, preview.signedFiles),
+    attachments: [],
+  });
+};
+
+const readNamedSignatureContent: LegalContentReader = async (options) => {
+  const read = await readSignatureContent(options);
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  return Result.ok(read.value ?? { text: "", attachments: [] });
+};
+
 export const LEGAL_FILE_READERS = {
   ofd: readStructuredDocumentContent,
   uyap: readStructuredDocumentContent,
@@ -73,6 +112,8 @@ export const LEGAL_FILE_READERS = {
     }
     return Result.ok({ text: cadesDocumentText(read.value), attachments: [] });
   },
+  cadesDetached: readNamedSignatureContent,
+  xades: readNamedSignatureContent,
   dataBox: async (options) => {
     const read = await readDataBoxFile(options);
     if (read.isErr()) {

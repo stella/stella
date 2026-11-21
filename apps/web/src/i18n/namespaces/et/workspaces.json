@@ -318,9 +318,18 @@
     "title": "SharePoint ja OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Selle sisu ei vasta allkirjas märgitud räsile.",
+    "bindingMatches": "Selle sisu vastab allkirjas märgitud räsile.",
+    "bindingNotCompared": "Leitud failinime järgi. Sisu ei võrreldud.",
+    "digestNote": "Kattuv räsi näitab, et need on allkirjastatud andmed. Allkirja see ei kontrolli.",
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
     "pdfUnavailable": "PDF-i eelvaade pole saadaval.",
+    "signedAt": "Märgitud allkirjastamise aeg: {time}",
+    "signedFileMissing": "Allkirjastatud faili selles toimikus ei ole.",
+    "signers": "Allkirjastajad",
+    "signs": "Allkirjastatud fail",
+    "statedFilesMissing": "Allkirjas nimetatud, kuid sellest toimikust ei leitud:",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
     "unverified": "Allkirju ei ole kontrollitud."

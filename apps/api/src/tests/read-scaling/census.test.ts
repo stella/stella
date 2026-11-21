@@ -90,6 +90,10 @@ import {
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
+import {
+  signatureContentScalingScenario,
+  signaturePreviewScalingScenario,
+} from "./signature-preview";
 import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
@@ -156,6 +160,8 @@ const measuredApiScenarios = [
   structuredDocumentScalingScenario,
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
+  signatureContentScalingScenario,
+  signaturePreviewScalingScenario,
   dataBoxPreviewScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,

@@ -130,6 +130,7 @@ const {
   cadesPreviewOptions,
   dataBoxPreviewOptions,
   fileOptions,
+  signaturePreviewOptions,
 } = await import("@/lib/files/queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
@@ -450,6 +451,77 @@ test("keeps the original available when the signed container cannot be opened", 
     mounted.getByRole("button", { name: "Download original" }),
   ).toBeTruthy();
   expect(pdfEngineRenderCount).toBe(0);
+});
+
+test("a detached signature lists its signers and links the signed document", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-signature"),
+    label: "Signature",
+    fileName: "smlouva.pdf.p7s",
+    mimeType: "application/pkcs7-signature",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, {
+      type: "signature",
+      standard: "cades",
+      packaging: "detached",
+      signers: [
+        {
+          id: "layer-0.signer-0",
+          name: "Example notary office",
+          signedAt: "2026-03-02T09:30:00.000Z",
+        },
+        { id: "layer-0.signer-1", name: null, signedAt: null },
+      ],
+      statedFileNames: ["příloha.pdf"],
+      signedFiles: [
+        {
+          entityId: ENTITY_ID,
+          fileName: "smlouva.pdf",
+          binding: "digestMatches",
+        },
+      ],
+      document: null,
+    });
+  });
+  expect(
+    await mounted.findByRole("heading", { name: "smlouva.pdf.p7s" }),
+  ).toBeTruthy();
+  expect(mounted.getByText("Example notary office")).toBeTruthy();
+  expect(mounted.getByText("Unknown signer")).toBeTruthy();
+  expect(
+    mounted.getByText("The signatures have not been verified."),
+  ).toBeTruthy();
+  expect(mounted.getByRole("button", { name: "smlouva.pdf" })).toBeTruthy();
+  expect(
+    mounted.getByText(bundledEnglishMessages.signedFile.bindingMatches),
+  ).toBeTruthy();
+  expect(
+    mounted.getByText(bundledEnglishMessages.signedFile.digestNote),
+  ).toBeTruthy();
+  expect(mounted.getByText("příloha.pdf")).toBeTruthy();
+  expect(pdfEngineRenderCount).toBe(0);
+});
+
+test("an .xml file the server finds no signature in keeps its own viewer", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-plain-xml"),
+    fileName: "faktura.xml",
+    mimeType: "text/xml",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, {
+      type: "notSignature",
+    });
+  });
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(
+    mounted.queryByText("The signatures have not been verified."),
+  ).toBeNull();
 });
 
 test.each([".asice", ".asics"])(

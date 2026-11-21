@@ -318,9 +318,18 @@
     "title": "SharePoint und OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Ihr Inhalt entspricht nicht dem in der Signatur angegebenen Hashwert.",
+    "bindingMatches": "Ihr Inhalt entspricht dem in der Signatur angegebenen Hashwert.",
+    "bindingNotCompared": "Über den Dateinamen gefunden. Der Inhalt wurde nicht verglichen.",
+    "digestNote": "Ein übereinstimmender Hashwert zeigt, dass dies die signierten Daten sind. Die Signatur ist damit nicht geprüft.",
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
     "pdfUnavailable": "Die PDF-Vorschau ist nicht verfügbar.",
+    "signedAt": "Angegebener Signaturzeitpunkt: {time}",
+    "signedFileMissing": "Die signierte Datei liegt nicht in dieser Akte.",
+    "signers": "Unterzeichnende",
+    "signs": "Signierte Datei",
+    "statedFilesMissing": "In der Signatur genannt, aber nicht in dieser Akte:",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
     "unverified": "Die Signaturen wurden nicht geprüft."

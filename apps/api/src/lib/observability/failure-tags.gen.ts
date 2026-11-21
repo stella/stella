@@ -488,6 +488,7 @@ export const FAILURE_TAGS = [
   "SharedPostgresDockerError",
   "SharedTestPostgresError",
   "SignInMapCountryUnresolvedError",
+  "SignatureParseError",
   "SkCollectionIssueError",
   "SkDocumentRawMissingError",
   "SkDocumentRawStorageError",

@@ -32,6 +32,8 @@ import {
 import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
+  SIGNATURE_FILE_KINDS,
+  type SignatureFileFormatKind,
 } from "@stll/api-contract/legal-file-formats";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
@@ -69,6 +71,13 @@ import {
   parseEmail,
 } from "@/api/lib/files/email-to-html";
 import type { P7mParseError } from "@/api/lib/files/p7m";
+import { signatureDocumentText } from "@/api/lib/files/signature-document-text";
+import {
+  SIGNATURE_WORKER_EXIT,
+  SIGNATURE_WORKER_MODE,
+  type SignatureWorkerMode,
+} from "@/api/lib/files/signature-preview-protocol";
+import { extractSignaturePreview } from "@/api/lib/files/signature-preview-worker";
 import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -416,6 +425,33 @@ const extractAsicText = async ({
   return Result.ok(asicDocumentText(preview.value));
 };
 
+/**
+ * A file that is not a signature has no text here: a `.sig` or `.xml` file is
+ * read as one only when its bytes are one.
+ */
+const extractSignatureText =
+  (kind: SignatureFileFormatKind) =>
+  async ({
+    fileBytes,
+    maxChars,
+  }: LegalTextReadOptions): Promise<
+    Result<string | null, LegalTextReadError>
+  > => {
+    const preview = await extractSignaturePreview({
+      fileBytes,
+      kind,
+      fileName: "",
+      maxChars,
+      readText: extractEmbeddedPayloadText,
+    });
+    if (preview.isErr()) {
+      return preview.error._tag === "SignatureParseError"
+        ? Result.ok(null)
+        : Result.err(preview.error);
+    }
+    return Result.ok(signatureDocumentText(preview.value.reply));
+  };
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -427,6 +463,8 @@ const LEGAL_TEXT_READERS = {
   asicE: extractAsicText,
   asicS: extractAsicText,
   cades: extractCadesText,
+  cadesDetached: extractSignatureText("cadesDetached"),
+  xades: extractSignatureText("xades"),
   dataBox: extractDataBoxText,
 } satisfies Record<
   LegalFileFormatKind,
@@ -680,6 +718,55 @@ const writeAsicPreview = async (options: {
   return Result.ok(0);
 };
 
+const isSignatureKind = (value: string): value is SignatureFileFormatKind =>
+  SIGNATURE_FILE_KINDS.some((kind) => kind === value);
+
+const writeSignaturePreview = async ({
+  mode,
+  fileBytes,
+  kind,
+  fileName,
+  maxChars,
+}: {
+  mode: SignatureWorkerMode;
+  fileBytes: Uint8Array;
+  kind: string;
+  fileName: string;
+  maxChars: number;
+}) => {
+  if (!isSignatureKind(kind)) {
+    return panic("Signature worker kind is invalid");
+  }
+  const preview = await extractSignaturePreview({
+    fileBytes,
+    kind,
+    fileName,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "SignatureParseError":
+        return Result.ok(SIGNATURE_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(SIGNATURE_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(preview.error);
+    }
+  }
+  const { reply, file } = preview.value;
+  if (mode === SIGNATURE_WORKER_MODE.pdf) {
+    if (file?.mimeType !== PDF_MIME_TYPE) {
+      return Result.ok(SIGNATURE_WORKER_EXIT.unreadable);
+    }
+    await writeWorkerStdout(new Uint8Array(file.bytes));
+    return Result.ok(0);
+  }
+  await writeWorkerStdout(JSON.stringify(reply));
+  return Result.ok(0);
+};
+
 function exitWithWorkerError(error: unknown): never {
   const errorClass = getWorkerErrorClass(error);
   const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
@@ -707,6 +794,22 @@ try {
       mode: mimeType,
       fileBytes,
       fileName: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
+  }
+  if (
+    mimeType === SIGNATURE_WORKER_MODE.preview ||
+    mimeType === SIGNATURE_WORKER_MODE.pdf
+  ) {
+    const preview = await writeSignaturePreview({
+      mode: mimeType,
+      fileBytes,
+      kind: process.argv[4] ?? "",
+      fileName: process.argv[5] ?? "",
       maxChars,
     });
     if (preview.isErr()) {

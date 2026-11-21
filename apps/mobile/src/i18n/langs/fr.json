@@ -731,8 +731,17 @@
     "useStella": "Utiliser stella"
   },
   "signedFile": {
+    "bindingDiffers": "Son contenu ne correspond pas à l’empreinte indiquée dans la signature.",
+    "bindingMatches": "Son contenu correspond à l’empreinte indiquée dans la signature.",
+    "bindingNotCompared": "Trouvé par son nom de fichier. Son contenu n’a pas été comparé.",
+    "digestNote": "Une empreinte identique montre qu’il s’agit des données signées. Elle ne vérifie pas la signature.",
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
+    "signedAt": "Heure de signature indiquée : {time}",
+    "signedFileMissing": "Le fichier signé n’est pas dans ce dossier.",
+    "signers": "Signataires",
+    "signs": "Fichier signé",
+    "statedFilesMissing": "Cités dans la signature, absents de ce dossier :",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",
     "unverified": "Les signatures n’ont pas été vérifiées."

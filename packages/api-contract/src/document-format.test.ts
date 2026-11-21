@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
-import { documentFormat } from "./document-format";
+import { documentFormat, signatureFormatCandidate } from "./document-format";
 import type { DocumentFormatKind } from "./document-format";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
 
@@ -43,7 +43,10 @@ describe("documentFormat", () => {
       ["message.eml", "email"],
       ["datová zpráva.ZFO", "dataBox"],
       ["contratto.pdf.P7M.P7M", "cades"],
-      ["firma.p7s", "file"],
+      ["firma.p7s", "cadesDetached"],
+      ["podanie.pdf.XADES", "xades"],
+      ["release.sig", "file"],
+      ["faktura.xml", "file"],
       ["readme.md", "markdown"],
       ["notes.txt", "text"],
       ["archive.zip", "file"],
@@ -103,5 +106,30 @@ describe("documentFormat", () => {
     expect(labelOf(undefined, "bez přípony")).toBeUndefined();
     expect(labelOf("constructor", "a.pdf")).toBe("PDF");
     expect(labelOf("__proto__")).toBeUndefined();
+  });
+});
+
+describe("signatureFormatCandidate", () => {
+  test("names a signature reader only for names the bytes must settle", () => {
+    const candidateOf = (mimeType: string | null, fileName: string) =>
+      signatureFormatCandidate(mimeType, fileName)?.kind;
+    expect(candidateOf(null, "contract.pdf.sig")).toBe("cadesDetached");
+    expect(candidateOf("application/pgp-signature", "release.SIG")).toBe(
+      "cadesDetached",
+    );
+    expect(candidateOf("text/xml", "podanie.xml")).toBe("xades");
+    expect(candidateOf("application/xml", "export")).toBe("xades");
+    expect(candidateOf("application/octet-stream", "podanie.XML")).toBe(
+      "xades",
+    );
+  });
+
+  test("leaves files recognised by name to their own reader", () => {
+    expect(signatureFormatCandidate(null, "contract.pdf.p7s")).toBeUndefined();
+    expect(signatureFormatCandidate(null, "podanie.xades")).toBeUndefined();
+    expect(
+      signatureFormatCandidate("application/pdf", "x.xml"),
+    ).toBeUndefined();
+    expect(signatureFormatCandidate(null, "notes.txt")).toBeUndefined();
   });
 });

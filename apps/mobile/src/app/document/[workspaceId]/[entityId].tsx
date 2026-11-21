@@ -11,9 +11,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocale, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
+import type { SignedFileBinding } from "@stll/api-contract/signature";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
@@ -47,6 +48,12 @@ import type { DocumentFile, LegalDocumentFile } from "@/state/document-file";
 import { useAppColors } from "@/theme";
 
 type Failure = "offline" | "noFile" | "failed" | "unsupported" | "android";
+
+const SIGNED_FILE_BINDING_KEYS = {
+  digestMatches: "bindingMatches",
+  digestDiffers: "bindingDiffers",
+  notCompared: "bindingNotCompared",
+} as const satisfies Record<SignedFileBinding, string>;
 
 type Phase =
   | { readonly status: "opening" }
@@ -87,6 +94,7 @@ const openDocument = async ({
     file.value.viewer === "asic" ||
     file.value.viewer === "cades" ||
     file.value.viewer === "dataBox" ||
+    file.value.viewer === "signature" ||
     file.value.viewer === "structured-document"
   ) {
     return { status: "legalPreview", file: file.value };
@@ -435,6 +443,8 @@ const LegalFilePreview = ({
   const common = useTranslations("common");
   const signedFile = useTranslations("signedFile");
   const structuredDocument = useTranslations("structuredDocument");
+  const format = useFormatter();
+  const router = useRouter();
   const { fieldId, preview, viewer } = file;
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const originalInFlight = useRef(false);
@@ -527,6 +537,93 @@ const LegalFilePreview = ({
         </>
       );
     }
+    if (viewer === "signature" && Result.isOk(preview)) {
+      const { document, packaging, signedFiles, signers, statedFileNames } =
+        preview.value;
+      const listed = new Set(signedFiles.map(({ fileName }) => fileName));
+      const unlisted = statedFileNames.filter((name) => !listed.has(name));
+      return (
+        <>
+          <Text accessibilityRole="header" selectable variant="headline">
+            {document?.fileName ?? file.fileName}
+          </Text>
+          <Text variant="caption">{signedFile("unverified")}</Text>
+          <View>
+            <Text accessibilityRole="header" variant="label">
+              {signedFile("signers")}
+            </Text>
+            {signers.map((signer) => (
+              <View key={signer.id}>
+                <Text selectable>
+                  {signer.name ?? signedFile("unknownSigner")}
+                </Text>
+                {signer.signedAt !== null && (
+                  <Text variant="caption">
+                    {signedFile("signedAt", {
+                      time: format.dateTime(new Date(signer.signedAt), {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }),
+                    })}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </View>
+          {packaging === "detached" && (
+            <View>
+              <Text accessibilityRole="header" variant="label">
+                {signedFile("signs")}
+              </Text>
+              {signedFiles.length === 0 && (
+                <Text variant="caption">{signedFile("signedFileMissing")}</Text>
+              )}
+              {signedFiles.map(({ entityId, fileName, binding }) => (
+                <View key={entityId}>
+                  <Button
+                    hitSlop={8}
+                    onPress={() => {
+                      router.push({
+                        pathname: "/document/[workspaceId]/[entityId]",
+                        params: { workspaceId, entityId },
+                      });
+                    }}
+                    size="inline"
+                    variant="link"
+                  >
+                    <Text variant="label">{fileName}</Text>
+                  </Button>
+                  <Text variant="caption">
+                    {signedFile(SIGNED_FILE_BINDING_KEYS[binding])}
+                  </Text>
+                </View>
+              ))}
+              {unlisted.length > 0 && (
+                <>
+                  <Text variant="caption">
+                    {signedFile("statedFilesMissing")}
+                  </Text>
+                  {unlisted.map((fileName) => (
+                    <Text key={fileName} selectable>
+                      {fileName}
+                    </Text>
+                  ))}
+                </>
+              )}
+              {signedFiles.some(({ binding }) => binding !== "notCompared") && (
+                <Text variant="caption">{signedFile("digestNote")}</Text>
+              )}
+            </View>
+          )}
+          {packaging !== "detached" &&
+            (document?.text.trim() ? (
+              <Text selectable>{document.text}</Text>
+            ) : (
+              <Text variant="caption">{signedFile("noReadableContent")}</Text>
+            ))}
+        </>
+      );
+    }
     if (preview.status === "ok") {
       if (viewer === "asic") {
         return (
@@ -578,6 +675,7 @@ const LegalFilePreview = ({
       "structured-document": structuredDocument("noReadableContent"),
       asic: signedFile("unreadable"),
       cades: signedFile("unreadable"),
+      signature: signedFile("unreadable"),
     } satisfies Record<typeof viewer, string>;
     const unreadableMessage = unreadableMessages[viewer];
     return (

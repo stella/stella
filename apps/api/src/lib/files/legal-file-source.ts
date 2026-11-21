@@ -1,7 +1,10 @@
 import { Result, UnhandledException } from "better-result";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
-import { legalFileFormat } from "@stll/api-contract/document-format";
+import {
+  legalFileFormat,
+  signatureFormatCandidate,
+} from "@stll/api-contract/document-format";
 import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 
@@ -78,7 +81,14 @@ export const loadLegalFileSource = async (
     return missingFile();
   }
   const { content, entityId } = row;
-  const format = legalFileFormat(content.mimeType, content.fileName);
+  // A `.sig` or `.xml` file reaches a signature reader as a candidate: its
+  // reader decides from the bytes, and only a reader that accepts the kind.
+  const registered = legalFileFormat(content.mimeType, content.fileName);
+  const candidate =
+    registered === undefined
+      ? signatureFormatCandidate(content.mimeType, content.fileName)
+      : undefined;
+  const format = registered ?? candidate;
   if (content.encrypted || !format || !acceptedKinds.includes(format.kind)) {
     return Result.err(
       new HandlerError({
@@ -170,7 +180,11 @@ export const loadLegalFileSource = async (
   return Result.ok({
     source: source.value,
     mimeType: format.mimeType,
+    kind: format.kind,
+    /** The name alone does not make the file this format. */
+    sniffed: candidate !== undefined,
     entityId,
+    fileName: content.fileName,
     deliver,
   });
 };

@@ -19,6 +19,10 @@ import {
   stampedDownloadEndpoint,
   updateDocumentPropertiesEndpoint,
 } from "@/api/handlers/files/routes";
+import {
+  signatureContentEndpoint,
+  signaturePreviewEndpoint,
+} from "@/api/handlers/files/signature";
 import structuredDocumentPreviewEndpoint from "@/api/handlers/files/structured-document";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { routes } from "@/api/http/route";
@@ -30,6 +34,8 @@ export const filesRoute = routes(
     "/asic/:fieldId": { GET: asicPreviewEndpoint },
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
     "/cades/:fieldId/content": { GET: cadesContentEndpoint },
+    "/signature/:fieldId": { GET: signaturePreviewEndpoint },
+    "/signature/:fieldId/content": { GET: signatureContentEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },
     "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
     "/office-citation/:entityId/:fieldId/:blockId": {

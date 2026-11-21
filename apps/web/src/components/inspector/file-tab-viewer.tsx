@@ -3,6 +3,7 @@ import { type ComponentType, lazy, memo, Suspense } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { signatureFormatCandidate } from "@stll/api-contract/document-format";
 import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import { cn } from "@stll/ui/utils";
 
@@ -59,6 +60,11 @@ const CadesFileViewer = lazy(async () => {
   return { default: m.CadesFileViewer };
 });
 
+const SignatureFileViewer = lazy(async () => {
+  const m = await import("@/components/inspector/signature-file-viewer");
+  return { default: m.SignatureFileViewer };
+});
+
 const DataBoxFileViewer = lazy(async () => {
   const m = await import("@/features/correspondence/data-box-file-viewer");
   return { default: m.DataBoxFileViewer };
@@ -90,6 +96,13 @@ const structuredDocumentViewer = {
   surface: "inspector-structured-document",
 } as const satisfies LegalFileViewer;
 
+const signatureFileViewer = {
+  Viewer: SignatureFileViewer,
+  unreadable: "signedFile.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-signature",
+} as const satisfies LegalFileViewer;
+
 const legalFileViewers = {
   asicE: asicFileViewer,
   asicS: asicFileViewer,
@@ -99,6 +112,8 @@ const legalFileViewers = {
     download: "common.downloadOriginal",
     surface: "inspector-cades",
   },
+  cadesDetached: signatureFileViewer,
+  xades: signatureFileViewer,
   ofd: structuredDocumentViewer,
   uyap: structuredDocumentViewer,
   dataBox: {
@@ -233,6 +248,8 @@ const FileTabViewerComponent = ({
       case "asicE":
       case "asicS":
       case "cades":
+      case "cadesDetached":
+      case "xades":
       case "dataBox":
       case "ofd":
       case "uyap": {
@@ -354,32 +371,57 @@ const FileTabViewerComponent = ({
           </>
         );
       case "pdf":
-      case null:
-        if (entity.conversionRefusal !== undefined) {
-          return (
+      case null: {
+        const pdfViewer =
+          entity.conversionRefusal === undefined ? (
+            <PeekPdfViewer
+              pdfPageSource="portfolio"
+              activePropertyId={entity.filePropertyId ?? ""}
+              entityId={tab.entityId}
+              errorFallback={viewerErrorFallback}
+              fieldId={tab.id}
+              filePurpose="display"
+              colorMode={pdfColorMode}
+              mimeType={tab.mimeType ?? undefined}
+              onDocxScrollTopChange={docxEditor.handleScrollTopChange}
+              onDownload={handleDownload}
+              onError={onViewerError}
+              onPeekNavigate={closeAll}
+              onWheelZoom={handlePdfWheelZoom}
+              scaleOffset={scaleOffset}
+              viewId={peekPdfViewId}
+              workspaceId={tab.workspaceId}
+            />
+          ) : (
             <ConversionRefusalFallback refusal={entity.conversionRefusal} />
           );
+        // A `.sig` or `.xml` file is a signature only if the server reads one
+        // in its bytes; any other file keeps the viewer it always had.
+        if (
+          nativePreviewKind === null &&
+          signatureFormatCandidate(tab.mimeType, tab.fileName) !== undefined
+        ) {
+          return (
+            <RecoverableViewerBoundary
+              finalFallback={(error) =>
+                isPreviewUnavailableError(error) ? pdfViewer : undefined
+              }
+              key={tab.id}
+              onDownload={handleDownload}
+              surface="inspector-signature"
+            >
+              <Suspense fallback={<PeekSuspenseFallback />}>
+                <SignatureFileViewer
+                  notSignature={pdfViewer}
+                  onDownload={handleDownload}
+                  tab={tab}
+                />
+              </Suspense>
+            </RecoverableViewerBoundary>
+          );
         }
-        return (
-          <PeekPdfViewer
-            pdfPageSource="portfolio"
-            activePropertyId={entity.filePropertyId ?? ""}
-            entityId={tab.entityId}
-            errorFallback={viewerErrorFallback}
-            fieldId={tab.id}
-            filePurpose="display"
-            colorMode={pdfColorMode}
-            mimeType={tab.mimeType ?? undefined}
-            onDocxScrollTopChange={docxEditor.handleScrollTopChange}
-            onDownload={handleDownload}
-            onError={onViewerError}
-            onPeekNavigate={closeAll}
-            onWheelZoom={handlePdfWheelZoom}
-            scaleOffset={scaleOffset}
-            viewId={peekPdfViewId}
-            workspaceId={tab.workspaceId}
-          />
-        );
+        return pdfViewer;
+      }
       default:
         nativePreviewKind satisfies never;
         return panic("Unhandled native file preview");

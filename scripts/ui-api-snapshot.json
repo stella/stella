@@ -2223,6 +2223,7 @@
       "asicE",
       "asicS",
       "cades",
+      "cadesDetached",
       "csv",
       "dataBox",
       "excel",
@@ -2234,7 +2235,8 @@
       "powerpoint",
       "rtf",
       "uyap",
-      "word"
+      "word",
+      "xades"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],

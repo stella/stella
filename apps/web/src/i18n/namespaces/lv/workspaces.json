@@ -318,9 +318,18 @@
     "title": "SharePoint un OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Tā saturs neatbilst parakstā norādītajai jaucējvērtībai.",
+    "bindingMatches": "Tā saturs atbilst parakstā norādītajai jaucējvērtībai.",
+    "bindingNotCompared": "Atrasts pēc faila nosaukuma. Saturs netika salīdzināts.",
+    "digestNote": "Sakrītoša jaucējvērtība parāda, ka tie ir parakstītie dati. Parakstu tā nepārbauda.",
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
     "pdfUnavailable": "PDF priekšskatījums nav pieejams.",
+    "signedAt": "Norādītais parakstīšanas laiks: {time}",
+    "signedFileMissing": "Parakstītā faila šajā lietā nav.",
+    "signers": "Parakstītāji",
+    "signs": "Parakstītais fails",
+    "statedFilesMissing": "Norādīti parakstā, bet šajā lietā nav atrasti:",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
     "unverified": "Paraksti nav pārbaudīti."

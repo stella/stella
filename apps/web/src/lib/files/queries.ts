@@ -14,6 +14,7 @@ import {
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
+import { signaturePreviewSchema } from "@stll/api-contract/signature";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
@@ -114,6 +115,12 @@ export const filesKeys = {
     fieldId,
   ],
   contentByFieldId: fileContentByFieldQueryRoot,
+  signatureByFieldId: ({ fieldId, workspaceId }: FileByFieldIdKey) => [
+    ...filesKeys.all(),
+    "signature",
+    workspaceId,
+    fieldId,
+  ],
   metadataByFieldId: fileMetadataQueryKey,
   emailHtmlByFieldId: (key: FileByFieldIdKey) => [
     ...filesKeys.all(),
@@ -330,58 +337,116 @@ export const cadesPreviewOptions = (props: FileOptionsProps) =>
     },
   );
 
+/** The PDF a signed file carries, read as delivered by its content route. */
+const fetchEmbeddedPdf = async (path: string, signal: AbortSignal) => {
+  const response = await fetchWithTimeout(apiUrl(path), {
+    credentials: "include",
+    signal,
+    timeout: { type: "headers", ms: 60_000 },
+  });
+  let result: ApiResponse<ArrayBuffer>;
+  if (!response.ok) {
+    const value = await readBodyJsonWithIdleDeadline(response, {
+      idleMs: 30_000,
+      maxBytes: 64 * 1024,
+      signal,
+    });
+    result = { data: null, error: { status: response.status, value } };
+  } else if (response.headers.get("content-type") !== PDF_MIME) {
+    await Promise.allSettled([response.body?.cancel()]);
+    result = {
+      data: null,
+      error: {
+        status: 502,
+        value: {
+          message: "Invalid PDF response from the signed file preview",
+        },
+      },
+    };
+  } else {
+    const bytes = await readBodyWithIdleDeadline(response, {
+      idleMs: 30_000,
+      maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
+      signal,
+    });
+    result = {
+      data:
+        bytes.buffer instanceof ArrayBuffer
+          ? bytes.buffer
+          : new Uint8Array(bytes).buffer,
+      error: null,
+    };
+  }
+  return unwrapApiResponse(result);
+};
+
 export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
   resourceQueryOptions(
     queryOptions({
       gcTime: 0,
       retry: false,
       queryKey: [...filesKeys.cadesByFieldId({ fieldId, workspaceId }), "pdf"],
+      queryFn: async ({ signal }) =>
+        await fetchEmbeddedPdf(
+          `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
+          signal,
+        ),
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId },
+    },
+  );
+
+export const signaturePreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: filesKeys.signatureByFieldId(props),
       queryFn: async ({ signal }) => {
-        const response = await fetchWithTimeout(
-          apiUrl(
-            `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
-          ),
-          {
-            credentials: "include",
-            signal,
-            timeout: { type: "headers", ms: 60_000 },
-          },
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .signature({
+            fieldId: props.fieldId,
+          })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          signaturePreviewSchema,
+          unwrapApiResponse(response),
+          "Signature preview must match its response schema",
         );
-        let result: ApiResponse<ArrayBuffer>;
-        if (!response.ok) {
-          const value = await readBodyJsonWithIdleDeadline(response, {
-            idleMs: 30_000,
-            maxBytes: 64 * 1024,
-            signal,
-          });
-          result = { data: null, error: { status: response.status, value } };
-        } else if (response.headers.get("content-type") !== PDF_MIME) {
-          await Promise.allSettled([response.body?.cancel()]);
-          result = {
-            data: null,
-            error: {
-              status: 502,
-              value: {
-                message: "Invalid PDF response from the signed file preview",
-              },
-            },
-          };
-        } else {
-          const bytes = await readBodyWithIdleDeadline(response, {
-            idleMs: 30_000,
-            maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
-            signal,
-          });
-          result = {
-            data:
-              bytes.buffer instanceof ArrayBuffer
-                ? bytes.buffer
-                : new Uint8Array(bytes).buffer,
-            error: null,
-          };
-        }
-        return unwrapApiResponse(result);
       },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const signaturePdfOptions = ({
+  fieldId,
+  workspaceId,
+}: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      gcTime: 0,
+      retry: false,
+      queryKey: [
+        ...filesKeys.signatureByFieldId({ fieldId, workspaceId }),
+        "pdf",
+      ],
+      queryFn: async ({ signal }) =>
+        await fetchEmbeddedPdf(
+          `/files/${encodeURIComponent(workspaceId)}/signature/${encodeURIComponent(fieldId)}/content`,
+          signal,
+        ),
     }),
     {
       resources: [
