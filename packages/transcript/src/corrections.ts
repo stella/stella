@@ -61,7 +61,7 @@ export type DictationEdits = {
   /** Words they replaced with a close spelling. */
   readonly corrections: readonly { from: string; to: string }[];
   /**
-   * Runs of dictated words, as word keys, they left alone in a dictation
+   * Runs of dictated words, as written, they left alone in a dictation
    * they otherwise edited: words they read and kept. Empty when they
    * changed nothing, since then they may not have read it.
    */
@@ -130,14 +130,18 @@ export const learnFrom = (
   { corrections, kept }: DictationEdits,
 ): LearnedFix[] => {
   let next = [...fixes];
-  for (const { from, to } of corrections) {
+  // The same correction twice in one dictation is one sighting.
+  const distinct = new Map(
+    corrections.map((correction) => [
+      `${correction.from}\u0000${correction.to}`,
+      correction,
+    ]),
+  );
+  for (const { from, to } of distinct.values()) {
     const fromKey = phraseKey(from);
-    const toKey = phraseKey(to);
     // The person turned a fix's words back: it was wrong.
     next = next.map((fix) =>
-      phraseKey(fix.from) === toKey && phraseKey(fix.to) === fromKey
-        ? contradicted(fix)
-        : fix,
+      turnsBack(fix, { from, to }) ? contradicted(fix) : fix,
     );
     const known = next.find((fix) => phraseKey(fix.from) === fromKey);
     const updated =
@@ -145,9 +149,7 @@ export const learnFrom = (
     next = [...next.filter((fix) => fix !== known), updated];
   }
   next = next.map((fix) =>
-    kept.some((run) => containsRun(run, phraseKey(fix.from).split(" ")))
-      ? contradicted(fix)
-      : fix,
+    kept.some((run) => keptAsDictated(run, fix)) ? contradicted(fix) : fix,
   );
   while (next.length > LEARNED_FIX_LIMIT) {
     const unused = next.findIndex(
@@ -174,30 +176,21 @@ export const applyLearnedFixes = (
   const pieces = splitWords(text);
   let out = "";
   let index = 0;
-  while (index < pieces.length) {
-    const rest = pieces.slice(index);
+  for (
+    let piece = pieces.at(0);
+    piece !== undefined;
+    piece = pieces.at(index)
+  ) {
     // Only a word starts a match: what lies before it stays.
-    const starts = rest.at(0)?.kind === "word";
-    const found = active.flatMap(({ keys, to }) => {
-      if (!starts) {
-        return [];
-      }
-      const leading = leadingWords(rest, keys.length);
-      const same = leading?.words.every(
-        (word, at) => wordKey(word) === keys[at],
-      );
-      return leading !== undefined && same === true
-        ? [{ to, taken: leading.taken }]
-        : [];
-    });
-    const match = found.at(0);
+    const match =
+      piece.kind === "word" ? fixAt(pieces, index, active) : undefined;
     if (match === undefined) {
-      out += rest.at(0)?.text ?? "";
+      out += piece.text;
       index += 1;
     } else {
-      const original = rest
-        .slice(0, match.taken)
-        .map((piece) => piece.text)
+      const original = pieces
+        .slice(index, index + match.taken)
+        .map(({ text: written }) => written)
         .join("");
       out += casedLike(match.to, original);
       index += match.taken;
@@ -205,6 +198,55 @@ export const applyLearnedFixes = (
   }
   return out;
 };
+
+/** The first fix, longest first, whose words start at `start`, and how many pieces they cover. */
+const fixAt = (
+  pieces: Pieces,
+  start: number,
+  active: readonly { keys: readonly string[]; to: string }[],
+): { to: string; taken: number } | undefined => {
+  for (const { keys, to } of active) {
+    const leading = leadingWords(pieces, start, keys.length);
+    if (
+      leading !== undefined &&
+      leading.words.every((word, at) => wordKey(word) === keys[at])
+    ) {
+      return { to, taken: leading.taken };
+    }
+  }
+  return undefined;
+};
+
+/** Whether a fix changes only case, as "Mckenzie" to "McKenzie". */
+const caseOnly = (fix: { from: string; to: string }): boolean =>
+  phraseKey(fix.from) === phraseKey(fix.to);
+
+/**
+ * Whether a correction turns a fix's words back: compared in any case,
+ * or as written for a fix that changes only case.
+ */
+const turnsBack = (
+  fix: LearnedFix,
+  correction: { from: string; to: string },
+): boolean => {
+  const same = caseOnly(fix)
+    ? (left: string, right: string) => exactPhrase(left) === exactPhrase(right)
+    : (left: string, right: string) => phraseKey(left) === phraseKey(right);
+  return same(fix.from, correction.to) && same(fix.to, correction.from);
+};
+
+/** Whether a run of words kept as dictated holds a fix's dictated words. */
+const keptAsDictated = (run: readonly string[], fix: LearnedFix): boolean => {
+  if (caseOnly(fix)) {
+    return containsRun(run, exactPhrase(fix.from).split(" "));
+  }
+  return containsRun(run.map(wordKey), phraseKey(fix.from).split(" "));
+};
+
+const exactPhrase = (phrase: string): string =>
+  wordsOf(phrase)
+    .map(({ exact }) => exact)
+    .join(" ");
 
 const firstSighting = (from: string, to: string): LearnedFix => ({
   from,
@@ -272,14 +314,19 @@ const phraseKey = (phrase: string): string =>
  * Words as they read in `text`, joined by single spaces. A capital that
  * only marks the start of a sentence is not part of the spelling.
  */
+/** The first letter, as one code point, and the rest. */
+const splitInitial = (text: string): [string, string] => {
+  const head = Array.from(text).at(0) ?? "";
+  return [head, text.slice(head.length)];
+};
+
 const asWritten = (words: readonly Word[], text: string): string => {
   const phrase = words.map(({ text: word }) => word).join(" ");
   const first = words.at(0);
   if (first === undefined || !startsSentence(text, first.start)) {
     return phrase;
   }
-  const head = phrase.charAt(0);
-  const rest = phrase.slice(1);
+  const [head, rest] = splitInitial(phrase);
   return head !== head.toLowerCase() && rest === rest.toLowerCase()
     ? `${head.toLowerCase()}${rest}`
     : phrase;
@@ -313,8 +360,8 @@ const isCorrection = (from: string, to: string): boolean => {
     from.length > LEARNED_FIX_TEXT_LIMIT ||
     to.length > LEARNED_FIX_TEXT_LIMIT ||
     /\p{N}/u.test(`${from}${to}`) ||
-    (from.slice(1) === to.slice(1) &&
-      from.charAt(0).toLowerCase() === to.charAt(0).toLowerCase())
+    (splitInitial(from)[1] === splitInitial(to)[1] &&
+      splitInitial(from)[0].toLowerCase() === splitInitial(to)[0].toLowerCase())
   ) {
     return false;
   }
@@ -342,6 +389,11 @@ const keptRuns = (
   const runs: string[][] = [];
   let run: string[] = [];
   for (let index = first; index < end; index += 1) {
+    // Words put in before this one part it from the words before.
+    if (hunks.some(({ old }) => old.start === index && old.end === index)) {
+      runs.push(run);
+      run = [];
+    }
     const edited = hunks.some(
       ({ old }) => old.start <= index && index < old.end,
     );
@@ -349,7 +401,7 @@ const keptRuns = (
       runs.push(run);
       run = [];
     } else {
-      run.push(words[index]?.key ?? "");
+      run.push(words[index]?.exact ?? "");
     }
   }
   runs.push(run);
@@ -359,15 +411,20 @@ const keptRuns = (
 type Pieces = ReturnType<typeof splitWords>;
 
 /**
- * The first `count` words of `pieces` when only spaces separate them, and
- * how many pieces they span.
+ * The first `count` words of `pieces` from `start` on when only spaces
+ * separate them, and how many pieces they span.
  */
 const leadingWords = (
   pieces: Pieces,
+  start: number,
   count: number,
 ): { words: string[]; taken: number } | undefined => {
   const words: string[] = [];
-  for (const [index, piece] of pieces.entries()) {
+  for (let index = 0; start + index < pieces.length; index += 1) {
+    const piece = pieces.at(start + index);
+    if (piece === undefined) {
+      return undefined;
+    }
     if (piece.kind === "word") {
       words.push(piece.text);
     } else if (!/^ +$/u.test(piece.text)) {

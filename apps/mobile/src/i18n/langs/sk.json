@@ -675,7 +675,7 @@
     "dictationLearnedDelete": "Vymazať, čo sa stella naučila",
     "dictationLearnedEmpty": "Zatiaľ žiadne naučené opravy.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Keď nadiktované slovo dvakrát opravíte rovnako, stella ho v ďalších diktátoch už napíše opravené. Zostáva len v tomto telefóne.",
+    "dictationLearnedHint": "Keď pravopis nadiktovaného slova alebo mena dvakrát opravíte rovnako, stella ho v ďalších diktátoch už napíše opravené. Zostáva len v tomto telefóne.",
     "dictationLearnedTitle": "Opravy naučené z vašich úprav",
     "dictationLearnedUnreadable": "To, čo sa stella naučila, sa nedá načítať.",
     "dictationModelDefault": "Predvolený",

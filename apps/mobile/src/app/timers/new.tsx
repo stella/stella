@@ -60,6 +60,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
     if (dictating) {
       return;
     }
+    const learned = field.learnOnceSent(description.trim());
     startStarting(async () => {
       setFailure(null);
       const started = await startTimer({
@@ -69,7 +70,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(started)) {
-        field.learn(description.trim());
+        learned();
         changed("timers");
         router.back();
         return;

@@ -85,7 +85,7 @@ describe("what the person fixed", () => {
         span("", "Stela poslala smlouvu Novakovi."),
         "Stela poslala smlouvu Novákovi.",
       ).kept,
-    ).toEqual([["stela", "poslala", "smlouvu"]]);
+    ).toEqual([["Stela", "poslala", "smlouvu"]]);
     expect(
       editsOf(span("", "Stela poslala smlouvu."), "Stela poslala smlouvu.")
         .kept,
@@ -160,6 +160,42 @@ describe("learning a fix", () => {
     expect(learned).toHaveLength(LEARNED_FIX_LIMIT);
     expect(learned.some(({ from }) => from === "slovo1")).toBe(false);
     expect(learned.at(-1)?.from).toBe("stela");
+  });
+});
+
+describe("learning a fix of case or of a repeated word", () => {
+  test("a fix of the case inside a word is learned, not taken for a reversal", () => {
+    const corrected = {
+      corrections: [{ from: "Mckenzie", to: "McKenzie" }],
+      kept: [],
+    };
+    const twice = learnFrom(learnFrom([], corrected), corrected);
+    expect(twice.at(0)?.status).toBe("on");
+  });
+
+  test("the right spelling kept elsewhere does not contradict a case fix", () => {
+    const learned = learnFrom([fix("Mckenzie", "McKenzie", "learning", 1)], {
+      corrections: [{ from: "Novakovi", to: "Novákovi" }],
+      kept: [["pan", "McKenzie", "volal"]],
+    });
+    expect(learned.at(0)?.status).toBe("learning");
+  });
+
+  test("one dictation corrected twice the same way is one sighting", () => {
+    const edits = editsOf(
+      span("", "Stela volala a stela psala dlouho večer."),
+      "Stella volala a stella psala dlouho večer.",
+    );
+    expect(edits.corrections).toHaveLength(2);
+    expect(learnFrom([], edits).at(0)?.status).toBe("learning");
+  });
+
+  test("words put in between dictated words part their kept run", () => {
+    const edits = editsOf(
+      span("", "Mc Kenzie volal dnes ráno Novakovi."),
+      "Mc John Kenzie volal dnes ráno Novákovi.",
+    );
+    expect(edits.kept).toEqual([["Mc"], ["Kenzie", "volal", "dnes", "ráno"]]);
   });
 });
 

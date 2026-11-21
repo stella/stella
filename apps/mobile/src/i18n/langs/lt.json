@@ -675,7 +675,7 @@
     "dictationLearnedDelete": "Ištrinti, ką išmoko stella",
     "dictationLearnedEmpty": "Kol kas nieko neišmokta.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Kai padiktuotą žodį du kartus pataisote vienodai, stella kituose diktavimuose jį rašys taip. Saugoma tik šiame telefone.",
+    "dictationLearnedHint": "Kai padiktuoto žodžio ar vardo rašybą du kartus pataisote vienodai, stella kituose diktavimuose jį rašys taip. Saugoma tik šiame telefone.",
     "dictationLearnedTitle": "Iš jūsų pataisymų išmokti pataisymai",
     "dictationLearnedUnreadable": "Nepavyko nuskaityti to, ką išmoko stella.",
     "dictationModelDefault": "Numatytasis",

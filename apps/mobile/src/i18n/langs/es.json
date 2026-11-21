@@ -675,7 +675,7 @@
     "dictationLearnedDelete": "Borrar lo que aprendió stella",
     "dictationLearnedEmpty": "Aún no se ha aprendido ninguna corrección.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Cuando corriges dos veces igual una palabra dictada, stella la escribe así en los siguientes dictados. Solo se guarda en este teléfono.",
+    "dictationLearnedHint": "Cuando corriges dos veces igual la ortografía de una palabra o un nombre dictados, stella los escribe así en los siguientes dictados. Solo se guarda en este teléfono.",
     "dictationLearnedTitle": "Correcciones aprendidas de tus cambios",
     "dictationLearnedUnreadable": "No se pudo leer lo que aprendió stella.",
     "dictationModelDefault": "Predeterminado",

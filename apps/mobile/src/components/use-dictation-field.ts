@@ -10,7 +10,7 @@ import { useSession } from "@/connection/session-provider";
 import { deviceAccountStore } from "@/native/account-store";
 import { insertDictation } from "@/state/dictation";
 import type { Dictated, TextSelection } from "@/state/dictation";
-import { readLearnedFixes, writeLearnedFixes } from "@/state/dictation-learned";
+import { updateLearnedFixes } from "@/state/dictation-learned";
 
 /**
  * A text field that takes dictation where its cursor is. Spread
@@ -20,8 +20,8 @@ import { readLearnedFixes, writeLearnedFixes } from "@/state/dictation-learned";
  * since, as a sent message's empty box, takes dictation at its end. After
  * a dictation the field's cursor is put after the dictated text, once: the
  * next selection the field reports hands the cursor back to the person.
- * Call `learn` with the text sent or saved: how the person corrected what
- * was dictated is learned on this phone (`@stll/transcript/corrections`).
+ * `learnOnceSent` learns, on this phone, how the person corrected what was
+ * dictated in the text sent or saved (`@stll/transcript/corrections`).
  */
 export const useDictationField = (
   value: string,
@@ -73,39 +73,29 @@ export const useDictationField = (
       setPlaced({ start: caret, end: caret });
     },
     /**
-     * The field's text went out as `final`: what the person did to each
-     * dictation in it is learned, best effort. A phone that cannot keep it
-     * learns nothing this time; the text went out either way.
+     * The field's text is going out as `final`: takes the dictations in it
+     * now, so one made while the text is being sent is not compared with
+     * it, and returns what to call once it went out. Then what the person
+     * did to each dictation is learned, best effort: a phone that cannot
+     * keep it learns nothing this time, and the text went out either way.
      */
-    learn: (final: string) => {
+    learnOnceSent: (final: string) => {
       const dictated = spans.current;
       spans.current = [];
-      const session =
-        state.status === "signed-in" ? state.source.session() : undefined;
-      if (dictated.length === 0 || session === undefined) {
-        return;
-      }
-      learnFromSpans({ session, dictated, final }).catch(() => undefined);
+      return () => {
+        const session =
+          state.status === "signed-in" ? state.source.session() : undefined;
+        if (dictated.length === 0 || session === undefined) {
+          return;
+        }
+        updateLearnedFixes(deviceAccountStore, session, (fixes) => {
+          let learned = fixes;
+          for (const span of dictated) {
+            learned = learnFrom(learned, editsOf(span, final));
+          }
+          return learned;
+        }).catch(() => undefined);
+      };
     },
   };
-};
-
-/** Adds what the person did to each dictation to the fixes the phone keeps. */
-const learnFromSpans = async ({
-  session,
-  dictated,
-  final,
-}: {
-  session: { readonly serverUrl: string; readonly userId: string };
-  dictated: readonly DictatedSpan[];
-  final: string;
-}) => {
-  const fixes = await readLearnedFixes(deviceAccountStore, session);
-  let learned = fixes;
-  for (const span of dictated) {
-    learned = learnFrom(learned, editsOf(span, final));
-  }
-  if (JSON.stringify(learned) !== JSON.stringify(fixes)) {
-    await writeLearnedFixes(deviceAccountStore, session, learned);
-  }
 };

@@ -100,6 +100,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
       { days, picked: due === "pick" ? pickedOn : null },
       today,
     );
+    const learned = field.learnOnceSent(name.trim());
     startAdding(async () => {
       setFailure(null);
       const created = await createTask({
@@ -114,7 +115,7 @@ const NewTaskForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(created)) {
-        field.learn(name.trim());
+        learned();
         changed("tasks");
         router.back();
         return;

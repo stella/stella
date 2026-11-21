@@ -54,19 +54,66 @@ export const readLearnedFixes = async (
   return parsed.success ? parsed.output : [];
 };
 
-export const writeLearnedFixes = async (
-  store: AccountStore,
-  account: AccountKeys,
-  fixes: readonly LearnedFix[],
-): Promise<void> => {
-  await (fixes.length === 0
-    ? store.remove(learnedKey(account))
-    : store.write(learnedKey(account), JSON.stringify(fixes)));
+type SignIn = AccountKeys & { readonly signInId: string };
+
+/**
+ * Each account's last change to its learned fixes, so the next one reads
+ * what that one wrote, and sign-out's removal waits for it.
+ */
+const queues = new Map<string, Promise<unknown>>();
+/** Sign-ins whose fixes were removed at sign-out: nothing is written for them again. */
+const signedOut = new Set<string>();
+
+const queued = async <T>(key: string, step: () => Promise<T>): Promise<T> => {
+  const done = (queues.get(key) ?? Promise.resolve()).then(step, step);
+  queues.set(
+    key,
+    done.catch(() => undefined),
+  );
+  return await done;
 };
 
-/** Deletes the ending session's learned fixes from the device. */
+/**
+ * Changes the learned fixes as one read and write, after any change still
+ * under way for the account; the fixes as written. Nothing is written once
+ * the sign-in has signed out.
+ */
+export const updateLearnedFixes = async (
+  store: AccountStore,
+  signIn: SignIn,
+  change: (fixes: LearnedFix[]) => LearnedFix[],
+): Promise<LearnedFix[]> =>
+  await queued(learnedKey(signIn), async () => {
+    const fixes = await readLearnedFixes(store, signIn);
+    const next = change(fixes);
+    if (
+      signedOut.has(signIn.signInId) ||
+      JSON.stringify(next) === JSON.stringify(fixes)
+    ) {
+      return fixes;
+    }
+    await (next.length === 0
+      ? store.remove(learnedKey(signIn))
+      : store.write(learnedKey(signIn), JSON.stringify(next)));
+    return next;
+  });
+
+/** Deletes the learned fixes, after any change under way; works when they cannot be read. */
+export const deleteLearnedFixes = async (
+  store: AccountStore,
+  signIn: SignIn,
+): Promise<void> => {
+  await queued(learnedKey(signIn), async () => {
+    await store.remove(learnedKey(signIn));
+  });
+};
+
+/** Deletes the ending session's learned fixes from the device, after any change under way. */
 export const forgetLearnedFixes =
   (store: AccountStore): BeforeSessionEnd =>
   async (_reason, session) => {
-    await store.remove(learnedKey(session));
+    signedOut.add(session.signInId);
+    await queued(learnedKey(session), async () => {
+      await store.remove(learnedKey(session));
+    });
   };

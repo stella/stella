@@ -92,9 +92,7 @@ export const DictationSetting = ({
           stored={stored}
         />
       </Suspense>
-      <Suspense fallback={null}>
-        <DictationLearnedSetting session={session} />
-      </Suspense>
+      <DictationLearnedSetting session={session} />
     </View>
   );
 };
