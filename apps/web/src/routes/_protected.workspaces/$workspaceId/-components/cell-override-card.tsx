@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type ReactElement, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -35,12 +35,14 @@ type CellOverride = NonNullable<WorkspaceCellMetadata["override"]>;
 
 const OVERRIDE_REASON_MAX_LENGTH = 500;
 
-type CellOverrideCardProps = React.PropsWithChildren<{
+type CellOverrideCardProps = {
   entity: WorkspaceEntity;
   property: WorkspaceProperty;
   metadata: WorkspaceCellMetadata;
   override: CellOverride;
-}>;
+  /** The cell the card is shown for. */
+  children: ReactElement;
+};
 
 /**
  * A cell whose AI value a person replaced: a small corner mark on the cell,
