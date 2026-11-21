@@ -67,7 +67,7 @@ import type {
   ActivityRetention,
   ActivitySettingsSnapshot,
 } from "./activity-types";
-import { CaptureDetailsControl } from "./ActivityCaptureDetails";
+import { TitlesAccessStrip } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { useBillingDraftSettings } from "./billing-draft-settings";
@@ -254,10 +254,41 @@ type SettingsSectionProps = {
   settings: ActivitySettingsSnapshot;
 };
 
+const CAPTURE_DETAILS_ROW_ID = "activity-capture-details";
+
+/** Why details are not recorded although the setting is on, under its row:
+ * the Activity window's own strip when Accessibility access is missing. */
+const DetailsAccessFooter = ({
+  access,
+  onCommand,
+}: {
+  access: ActivitySettingsSnapshot["detailsAccess"];
+  onCommand: RunCommand;
+}) => {
+  const t = useTranslations("activity");
+  switch (access) {
+    case "disabled":
+    case "ready":
+      return null;
+    case "accessibilityRequired":
+      return <TitlesAccessStrip onCommand={onCommand} />;
+    case "unavailable":
+      return (
+        <p className="text-muted-foreground text-xs">
+          {t("detailsUnavailable")}
+        </p>
+      );
+    default:
+      access satisfies never;
+      return panic("Unhandled activity details access");
+  }
+};
+
 const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
   const t = useTranslations("activity");
   const detectCallsIds = settingsRowIds("activity-detect-calls");
   const retentionIds = settingsRowIds("activity-retention");
+  const captureDetailsIds = settingsRowIds(CAPTURE_DETAILS_ROW_ID);
   return (
     <SettingsSection>
       <SettingsRow
@@ -276,10 +307,34 @@ const RecordingSettings = ({ onCommand, settings }: SettingsSectionProps) => {
           }
         />
       </SettingsRow>
+      <SettingsRow
+        description={t(
+          settings.captureDetails
+            ? "captureDetailsDescription"
+            : "captureDetailsOffDescription",
+        )}
+        footer={
+          <DetailsAccessFooter
+            access={settings.detailsAccess}
+            onCommand={onCommand}
+          />
+        }
+        id={CAPTURE_DETAILS_ROW_ID}
+        interaction="label"
+        title={t("captureDetails")}
+      >
+        <Checkbox
+          aria-describedby={captureDetailsIds.description}
+          aria-labelledby={captureDetailsIds.label}
+          id={captureDetailsIds.control}
+          checked={settings.captureDetails}
+          onCheckedChange={(enabled) =>
+            onCommand("activity_set_capture_details", { enabled })
+          }
+        />
+      </SettingsRow>
+      {/* stella AI drafts send the titles recorded above, so they follow. */}
       <BillingDraftConsentSettings />
-      <SettingsPanel>
-        <CaptureDetailsControl onCommand={onCommand} settings={settings} />
-      </SettingsPanel>
       <SettingsRow id="activity-retention" title={t("retention")}>
         <Select
           onValueChange={(retention) => {

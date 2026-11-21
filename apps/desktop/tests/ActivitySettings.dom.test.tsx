@@ -3,7 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 GlobalRegistrator.register({ url: "http://localhost/" });
 
-const { act, cleanup, fireEvent, render } =
+const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { emit } = await import("@tauri-apps/api/event");
 const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
@@ -45,17 +45,31 @@ const SETTINGS = {
 };
 
 /** Renders the pane over a native side whose reads follow `native`. */
-const renderPane = async (native: { readable: boolean }) => {
+const renderPane = async (native: {
+  readable: boolean;
+  captureDetails?: boolean;
+}) => {
   mockIPC(
-    (command) => {
+    (command, args) => {
       if (command === "activity_get_settings") {
         if (!native.readable) {
           throw new Error("activity account unavailable");
         }
-        return SETTINGS;
+        return {
+          ...SETTINGS,
+          captureDetails: native.captureDetails ?? SETTINGS.captureDetails,
+        };
       }
       if (command === "activity_set_detect_calls") {
         throw new Error("rejected");
+      }
+      if (
+        command === "activity_set_capture_details" &&
+        args !== undefined &&
+        "enabled" in args &&
+        typeof args["enabled"] === "boolean"
+      ) {
+        native.captureDetails = args["enabled"];
       }
       return null;
     },
@@ -96,4 +110,34 @@ test("a read that succeeds leaves the error of a failed change in place", async 
   });
 
   await findByText(messages.errorUpdate);
+});
+
+test("the title setting describes what flipping it does in its current state", async () => {
+  const native = { readable: true, captureDetails: false };
+  const { findByRole } = await renderPane(native);
+  const checkbox = await findByRole("checkbox", {
+    name: messages.captureDetails,
+  });
+  const description = () =>
+    document.querySelector(
+      `#${checkbox.getAttribute("aria-describedby") ?? ""}`,
+    )?.textContent;
+  expect(checkbox.getAttribute("aria-checked")).toBe("false");
+  expect(description()).toBe(messages.captureDetailsOffDescription);
+
+  fireEvent.click(checkbox);
+  // The native side applies the change, then announces it.
+  await waitFor(() => {
+    expect(native.captureDetails).toBe(true);
+  });
+  await act(async () => {
+    await emit(ACTIVITY_CHANGED_EVENT);
+  });
+
+  expect(
+    (
+      await findByRole("checkbox", { name: messages.captureDetails })
+    ).getAttribute("aria-checked"),
+  ).toBe("true");
+  expect(description()).toBe(messages.captureDetailsDescription);
 });
