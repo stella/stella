@@ -11,9 +11,12 @@ import { Button } from "@stll/ui/button";
 import { Form } from "@stll/ui/form";
 import { PlusIcon, XIcon } from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
+import {
+  SettingsRow,
+  settingsRowIds,
+  SettingsSection,
+} from "@stll/ui/settings";
 import { TruncatedText } from "@stll/ui/truncated-text";
-
-import { SettingsGroup, SettingsRow, settingsRowIds } from "./settings-layout";
 
 type Problem = "duplicate" | "failed" | "full";
 
@@ -95,7 +98,7 @@ export const DictationCustomWords = ({
   };
 
   return (
-    <SettingsGroup title={showGroupTitle ? t("group") : undefined}>
+    <SettingsSection title={showGroupTitle ? t("group") : undefined}>
       <SettingsRow
         description={t("description")}
         footer={
@@ -196,6 +199,6 @@ export const DictationCustomWords = ({
           </ul>
         </li>
       )}
-    </SettingsGroup>
+    </SettingsSection>
   );
 };

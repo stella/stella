@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Agora",
       "currentSession": "Atual",
-      "device": "Dispositivo",
       "deviceOnOs": "{browser} em {os}",
-      "ipAddress": "Endereço IP",
-      "lastActive": "Último ativo",
       "noOtherSessions": "Nenhuma outra sessão ativa",
       "revokeOtherSessions": "Desconectar outros dispositivos",
       "revokeOtherSessionsConfirm": "Isso encerrará todas as sessões, exceto a atual.",
@@ -5833,11 +5830,9 @@
       "chatNotifications": "Notificações do chat",
       "chatNotificationsBlocked": "As notificações da stella estão bloqueadas neste navegador. Permita-as nas configurações do site no navegador.",
       "chatNotificationsDescription": "Receba uma notificação deste navegador quando uma resposta do chat terminar enquanto a stella estiver em segundo plano.",
-      "chatNotificationsToggle": "Avisar quando uma resposta estiver pronta ou precisar de mim",
       "chatNotificationsUnsupported": "Este navegador não oferece suporte a notificações.",
       "chatTechnicalDetails": "Detalhes técnicos no chat",
       "chatTechnicalDetailsDescription": "Cada etapa do chat mostra o que consultou e o que encontrou. Ative para ver também o código e os resultados brutos.",
-      "chatTechnicalDetailsToggle": "Mostrar detalhes técnicos no chat",
       "confirmDelete": "Confirmar exclusão de conta",
       "dangerZone": "Zona de perigo",
       "dangerZoneDescription": "Excluir permanentemente o acesso à conta e os dados privados da conta.",
@@ -6178,7 +6173,6 @@
       "documentProcessing": {
         "description": "Reconheça automaticamente texto em PDFs digitalizados para que seu conteúdo possa ser pesquisado.",
         "title": "Reconhecimento de texto de documentos",
-        "toggleLabel": "Reconhecer automaticamente texto em PDFs digitalizados",
         "updated": "Configuração de reconhecimento de texto atualizada"
       },
       "documentTypes": {
@@ -6200,8 +6194,7 @@
       "membersDescription": "Gerenciar quem tem acesso a esta organização e quaisquer convites pendentes",
       "memoryExtraction": {
         "description": "Quando ativado, o stella revisa em segundo plano as conversas resumidas e propõe memórias que uma pessoa precisa confirmar antes que influenciem o assistente. Isso funciona com a própria chave do provedor de IA da sua equipe, então deixe desativado, a menos que queira que esse uso de IA em segundo plano seja cobrado na sua chave.",
-        "title": "Extração de memória",
-        "toggleLabel": "Sugerir memórias do histórico de chat em segundo plano"
+        "title": "Extração de memória"
       },
       "organizationIdHint": "ID permanente que nunca muda. Use-o ao entrar em contato com o suporte ou ao configurar integrações.",
       "pastInvitations": "Convites anteriores",
@@ -6210,8 +6203,7 @@
       "practiceJurisdictionsDescription": "Selecione as jurisdições relevantes para você.",
       "promptCaching": {
         "description": "Quando ativado, a stella adiciona marcadores de cache para que solicitações de IA repetidas sobre o mesmo documento ou thread custem ~10× menos e terminem mais rápido. Os prompts em cache permanecem com o provedor de IA por até 5 minutos, restritos à sua organização. Ao desativar, a stella para de enviar marcadores de cache, mas os provedores ainda podem cachear oportunisticamente; apenas um contrato Zero Data Retention com o provedor desativa totalmente o cache do lado do servidor.",
-        "title": "Cache de prompts",
-        "toggleLabel": "Permitir cache de prompts com provedores de IA"
+        "title": "Cache de prompts"
       },
       "renameDescription": "Os membros verão o novo nome imediatamente.",
       "renameTitle": "Renomear organização",

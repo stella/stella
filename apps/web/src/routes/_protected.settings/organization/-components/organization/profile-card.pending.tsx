@@ -7,12 +7,11 @@ import {
   InputFace,
   LabelFace,
 } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 import { Skeleton } from "@stll/ui/skeleton";
-import { cn } from "@stll/ui/utils";
 
 import { PendingText } from "@/components/pending-text";
-import { FORM_STACK_CLASS } from "@/routes/_protected.settings/-components/settings-card.pending";
+import { FORM_STACK_CLASS } from "@/routes/_protected.settings/-components/settings-section.pending";
 
 /*
  * The organization's profile card (`./profile-card.tsx`): its logo row (the
@@ -22,15 +21,15 @@ import { FORM_STACK_CLASS } from "@/routes/_protected.settings/-components/setti
  * the same boxes with the controls' faces.
  */
 
-/** The card's frame around its form. */
+/** The card's section around its form. */
 export const OrganizationProfileCardFrame = ({
   children,
 }: {
   children: ReactNode;
 }) => (
-  <Frame>
-    <FramePanel>{children}</FramePanel>
-  </Frame>
+  <SettingsSection>
+    <SettingsPanel>{children}</SettingsPanel>
+  </SettingsSection>
 );
 
 /** The logo and its actions, on one row. */
@@ -51,8 +50,8 @@ export const ORGANIZATION_LOGO_CLASS = "size-12 text-sm";
  */
 export const OrganizationProfileCardPending = () => (
   <OrganizationProfileCardFrame>
-    {/* The live `Form` with the card's `gap-4 p-1`. */}
-    <div className={cn(FORM_STACK_CLASS, "p-1")}>
+    {/* The live `Form`'s column. */}
+    <div className={FORM_STACK_CLASS}>
       <OrganizationProfileLogoRow>
         <Skeleton className="size-12 shrink-0 rounded-full" />
         <ButtonFace size="sm" variant="outline">

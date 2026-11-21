@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Nyní",
       "currentSession": "Aktuální",
-      "device": "Zařízení",
       "deviceOnOs": "{browser} na {os}",
-      "ipAddress": "IP adresa",
-      "lastActive": "Naposledy aktivní",
       "noOtherSessions": "Žádná další aktivní sezení",
       "revokeOtherSessions": "Odhlásit ostatní zařízení",
       "revokeOtherSessionsConfirm": "Tímto ukončíte všechna sezení kromě aktuálního.",
@@ -5833,11 +5830,9 @@
       "chatNotifications": "Oznámení z chatu",
       "chatNotificationsBlocked": "Oznámení jsou pro stellu v tomto prohlížeči zablokovaná. Povolte je v nastavení webu v prohlížeči.",
       "chatNotificationsDescription": "Dostanete oznámení z tohoto prohlížeče, když se odpověď v chatu dokončí, zatímco je stella na pozadí.",
-      "chatNotificationsToggle": "Upozornit mě, když je odpověď hotová nebo potřebuje můj vstup",
       "chatNotificationsUnsupported": "Tento prohlížeč oznámení nepodporuje.",
       "chatTechnicalDetails": "Technické detaily v chatu",
       "chatTechnicalDetailsDescription": "Každý krok v chatu ukazuje, co hledal a co našel. Po zapnutí uvidíte i kód a nezpracované výsledky za ním.",
-      "chatTechnicalDetailsToggle": "Zobrazovat technické detaily v chatu",
       "confirmDelete": "Potvrdit smazání účtu",
       "dangerZone": "Nebezpečná zóna",
       "dangerZoneDescription": "Trvale smazat přístup k účtu a soukromá data účtu.",
@@ -6178,7 +6173,6 @@
       "documentProcessing": {
         "description": "Automaticky rozpoznávejte text v naskenovaných PDF, aby v nich šlo vyhledávat.",
         "title": "Rozpoznávání textu v dokumentech",
-        "toggleLabel": "Automaticky rozpoznávat text v naskenovaných PDF",
         "updated": "Nastavení rozpoznávání textu aktualizováno"
       },
       "documentTypes": {
@@ -6200,8 +6194,7 @@
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
       "memoryExtraction": {
         "description": "Když je zapnuto, stella na pozadí prochází shrnutá vlákna chatů a navrhuje záznamy do paměti, které musí člověk potvrdit, než ovlivní asistenta. Běží to na vlastním klíči poskytovatele AI vašeho týmu, takže to nechte vypnuté, pokud nechcete, aby se toto využití AI na pozadí účtovalo na váš klíč.",
-        "title": "Extrakce paměti",
-        "toggleLabel": "Navrhovat záznamy do paměti z historie chatů na pozadí"
+        "title": "Extrakce paměti"
       },
       "organizationIdHint": "Trvalé ID, které se nikdy nemění. Použijte ho při kontaktu s podporou nebo při nastavování integrací.",
       "pastInvitations": "Dřívější pozvánky",
@@ -6210,8 +6203,7 @@
       "practiceJurisdictionsDescription": "Vyberte jurisdikce, které jsou pro vás relevantní.",
       "promptCaching": {
         "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypnutí zastaví zasílání cache značek, ale poskytovatelé si mohou prompty stále cachovat oportunisticky; pouze smlouva Zero Data Retention s poskytovatelem zcela vypne cachování na straně serveru.",
-        "title": "Cachování promptů",
-        "toggleLabel": "Povolit cachování promptů u poskytovatelů AI"
+        "title": "Cachování promptů"
       },
       "renameDescription": "Členové nový název uvidí okamžitě.",
       "renameTitle": "Přejmenovat organizaci",

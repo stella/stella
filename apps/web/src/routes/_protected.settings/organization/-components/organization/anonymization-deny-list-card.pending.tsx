@@ -6,8 +6,8 @@ import {
   FieldTriggerFace,
   InputFace,
 } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { Trash2Icon, UploadIcon } from "@stll/ui/icons";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 
@@ -35,15 +35,15 @@ export const AnonymizationDenyListFrame = ({
   entries,
   feedback,
 }: AnonymizationDenyListFrameProps) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
+  <SettingsSection>
+    <SettingsPanel>
+      <div className="flex flex-col gap-3">
         {feedback}
         <div className="rounded-md border p-3">{addTerm}</div>
         <div className="flex flex-col gap-1">{entries}</div>
       </div>
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 /** The add-term form's rows: the label picker beside the add button, and

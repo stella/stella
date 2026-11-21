@@ -73,15 +73,15 @@ import {
   PROFILE_SHORTCUT_FIELD_CLASS,
   ProfilePageShell,
 } from "@/routes/_protected.settings/-account.profile.pending";
-import { ChatNotificationsCard } from "@/routes/_protected.settings/-components/account/chat-notifications-card";
-import { ChatTechnicalDetailsCard } from "@/routes/_protected.settings/-components/account/chat-technical-details-card";
+import { ChatNotificationsRow } from "@/routes/_protected.settings/-components/account/chat-notifications-row";
+import { ChatTechnicalDetailsRow } from "@/routes/_protected.settings/-components/account/chat-technical-details-row";
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
 import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
 import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
 import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
-import { FormField } from "@/routes/_protected.settings/-components/settings-card.pending";
+import { FormField } from "@/routes/_protected.settings/-components/settings-section.pending";
 
 import {
   accountDeletionLeavesTasksUnassigned,
@@ -342,12 +342,16 @@ function ProfilePageBody() {
     <ProfilePageShell
       accountCards={
         <>
-          <ChatNotificationsCard />
-          <ChatTechnicalDetailsCard />
           <SignInMethods />
           <TwoFactorCard />
           <SessionsCard />
           <PersonalDataExportCard />
+        </>
+      }
+      chatPreferences={
+        <>
+          <ChatNotificationsRow />
+          <ChatTechnicalDetailsRow />
         </>
       }
       deleteAccount={

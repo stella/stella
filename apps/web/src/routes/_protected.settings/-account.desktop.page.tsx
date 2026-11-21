@@ -1,6 +1,6 @@
 import { useTranslations } from "use-intl";
 
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsRow, SettingsSection } from "@stll/ui/settings";
 
 import { env } from "@/env";
 import { DesktopConnectionCard } from "@/features/desktop/desktop-connection-card";
@@ -19,18 +19,12 @@ export function DesktopPage() {
       shortcut={shortcut}
     >
       {env.VITE_SELFHOST ? (
-        <Frame>
-          <FramePanel>
-            <div className="space-y-1 p-1">
-              <h2 className="text-sm font-medium">
-                {t("settings.account.desktopSelfHostTitle")}
-              </h2>
-              <p className="text-muted-foreground max-w-2xl text-sm">
-                {t("settings.account.desktopSelfHostDescription")}
-              </p>
-            </div>
-          </FramePanel>
-        </Frame>
+        <SettingsSection>
+          <SettingsRow
+            description={t("settings.account.desktopSelfHostDescription")}
+            title={t("settings.account.desktopSelfHostTitle")}
+          />
+        </SettingsSection>
       ) : null}
     </DesktopPageShell>
   );

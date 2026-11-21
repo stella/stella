@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Jetzt",
       "currentSession": "Aktuell",
-      "device": "Gerät",
       "deviceOnOs": "{browser} auf {os}",
-      "ipAddress": "IP-Adresse",
-      "lastActive": "Zuletzt aktiv",
       "noOtherSessions": "Keine weiteren aktiven Sitzungen",
       "revokeOtherSessions": "Andere Geräte abmelden",
       "revokeOtherSessionsConfirm": "Dadurch werden alle Sitzungen außer Ihrer aktuellen beendet.",
@@ -5833,11 +5830,9 @@
       "chatNotifications": "Chat-Benachrichtigungen",
       "chatNotificationsBlocked": "Benachrichtigungen für stella sind in diesem Browser blockiert. Erlauben Sie sie in den Website-Einstellungen des Browsers.",
       "chatNotificationsDescription": "Erhalten Sie eine Benachrichtigung von diesem Browser, wenn eine Chat-Antwort fertig ist, während stella im Hintergrund läuft.",
-      "chatNotificationsToggle": "Benachrichtigen, wenn eine Antwort fertig ist oder meine Eingabe braucht",
       "chatNotificationsUnsupported": "Dieser Browser unterstützt keine Benachrichtigungen.",
       "chatTechnicalDetails": "Technische Details im Chat",
       "chatTechnicalDetailsDescription": "Jeder Schritt im Chat zeigt, was er nachgeschlagen und gefunden hat. Eingeschaltet sehen Sie auch den Code und die Rohergebnisse dahinter.",
-      "chatTechnicalDetailsToggle": "Technische Details im Chat anzeigen",
       "confirmDelete": "Konto löschen bestätigen",
       "dangerZone": "Gefahrenbereich",
       "dangerZoneDescription": "Löschen Sie Ihren Kontozugriff und private Kontodaten dauerhaft.",
@@ -6178,7 +6173,6 @@
       "documentProcessing": {
         "description": "Erkennt Text in gescannten PDFs automatisch, damit deren Inhalt durchsuchbar ist.",
         "title": "Dokumenttexterkennung",
-        "toggleLabel": "Text in gescannten PDFs automatisch erkennen",
         "updated": "Einstellung für Dokumenttexterkennung aktualisiert"
       },
       "documentTypes": {
@@ -6200,8 +6194,7 @@
       "membersDescription": "Verwalten Sie, wer Zugriff auf diese Organisation hat, sowie ausstehende Einladungen",
       "memoryExtraction": {
         "description": "Wenn aktiviert, prüft stella zusammengefasste Chatverläufe im Hintergrund und schlägt Erinnerungen vor, die eine Person bestätigen muss, bevor sie den Assistenten beeinflussen. Dies läuft über den eigenen KI-Anbieterschlüssel Ihres Teams, lassen Sie es daher deaktiviert, sofern Sie diese Hintergrund-KI-Nutzung nicht über Ihren Schlüssel abrechnen möchten.",
-        "title": "Gedächtnis-Extraktion",
-        "toggleLabel": "Im Hintergrund Erinnerungen aus dem Chatverlauf vorschlagen"
+        "title": "Gedächtnis-Extraktion"
       },
       "organizationIdHint": "Dauerhafte ID, die sich nie ändert. Verwenden Sie sie für Supportanfragen und beim Einrichten von Integrationen.",
       "pastInvitations": "Frühere Einladungen",
@@ -6210,8 +6203,7 @@
       "practiceJurisdictionsDescription": "Wählen Sie die für Sie relevanten Jurisdiktionen aus.",
       "promptCaching": {
         "description": "Wenn aktiviert, fügt stella Cache-Markierungen hinzu, sodass wiederholte KI-Anfragen über dasselbe Dokument oder denselben Thread ca. 10× weniger kosten und schneller abschließen. Zwischengespeicherte Prompts verbleiben bis zu 5 Minuten beim KI-Anbieter und sind auf Ihre Organisation beschränkt. Beim Deaktivieren sendet stella keine Cache-Markierungen mehr, Anbieter können jedoch weiterhin opportunistisch zwischenspeichern; nur ein Zero-Data-Retention-Vertrag mit dem Anbieter deaktiviert das serverseitige Caching vollständig.",
-        "title": "Prompt-Caching",
-        "toggleLabel": "Prompt-Caching bei KI-Anbietern erlauben"
+        "title": "Prompt-Caching"
       },
       "renameDescription": "Mitglieder sehen den neuen Namen sofort.",
       "renameTitle": "Organisation umbenennen",

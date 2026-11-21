@@ -8,7 +8,7 @@ import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { createHostedUsageManagementSession } from "@/components/usage/usage-limit-modal";
@@ -177,16 +177,13 @@ function ManageUsageButton() {
 function EmptyStateCard() {
   const t = useTranslations();
   return (
-    <Frame>
-      <FramePanel>
-        <h2 className="text-lg font-medium">
-          {t("settings.organization.usageEmptyTitle")}
-        </h2>
-        <p className="text-muted-foreground mt-1 text-sm">
+    <SettingsSection title={t("settings.organization.usageEmptyTitle")}>
+      <SettingsPanel>
+        <p className="text-muted-foreground text-sm">
           {t("settings.organization.usageEmptyDescription")}
         </p>
-      </FramePanel>
-    </Frame>
+      </SettingsPanel>
+    </SettingsSection>
   );
 }
 

@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Teraz",
       "currentSession": "Bieżąca",
-      "device": "Urządzenie",
       "deviceOnOs": "{browser} na {os}",
-      "ipAddress": "Adres IP",
-      "lastActive": "Ostatnia aktywność",
       "noOtherSessions": "Brak innych aktywnych sesji",
       "revokeOtherSessions": "Wyloguj inne urządzenia",
       "revokeOtherSessionsConfirm": "Spowoduje to zakończenie wszystkich sesji z wyjątkiem bieżącej.",
@@ -5833,11 +5830,9 @@
       "chatNotifications": "Powiadomienia z czatu",
       "chatNotificationsBlocked": "Powiadomienia stelli są zablokowane w tej przeglądarce. Zezwól na nie w ustawieniach witryny w przeglądarce.",
       "chatNotificationsDescription": "Otrzymuj powiadomienie z tej przeglądarki, gdy odpowiedź na czacie zakończy się, a stella działa w tle.",
-      "chatNotificationsToggle": "Powiadamiaj mnie, gdy odpowiedź jest gotowa lub wymaga mojej reakcji",
       "chatNotificationsUnsupported": "Ta przeglądarka nie obsługuje powiadomień.",
       "chatTechnicalDetails": "Szczegóły techniczne na czacie",
       "chatTechnicalDetailsDescription": "Każdy krok na czacie pokazuje, czego szukał i co znalazł. Po włączeniu zobaczysz też kod i surowe wyniki.",
-      "chatTechnicalDetailsToggle": "Pokazuj szczegóły techniczne na czacie",
       "confirmDelete": "Potwierdź usunięcie konta",
       "dangerZone": "Strefa zagrożenia",
       "dangerZoneDescription": "Trwale usuń dostęp do konta i prywatne dane konta.",
@@ -6178,7 +6173,6 @@
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
         "title": "Rozpoznawanie tekstu dokumentów",
-        "toggleLabel": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF",
         "updated": "Ustawienie rozpoznawania tekstu dokumentów zaktualizowane"
       },
       "documentTypes": {
@@ -6200,8 +6194,7 @@
       "membersDescription": "Zarządzaj tym, kto ma dostęp do tej organizacji, oraz oczekującymi zaproszeniami",
       "memoryExtraction": {
         "description": "Gdy włączone, stella w tle analizuje podsumowane wątki czatów i proponuje wpisy do pamięci, które musi zatwierdzić człowiek, zanim wpłyną na asystenta. Działa to na własnym kluczu dostawcy AI Twojego zespołu, więc pozostaw wyłączone, chyba że chcesz, aby to działające w tle użycie AI było rozliczane na Twój klucz.",
-        "title": "Wyodrębnianie pamięci",
-        "toggleLabel": "Proponuj wpisy do pamięci z historii czatów w tle"
+        "title": "Wyodrębnianie pamięci"
       },
       "organizationIdHint": "Stały identyfikator, który nigdy się nie zmienia. Użyj go, kontaktując się z pomocą techniczną lub konfigurując integracje.",
       "pastInvitations": "Poprzednie zaproszenia",
@@ -6210,8 +6203,7 @@
       "practiceJurisdictionsDescription": "Wybierz jurysdykcje, które są dla Ciebie istotne.",
       "promptCaching": {
         "description": "Po włączeniu stella dodaje znaczniki cache, dzięki czemu powtarzające się zapytania AI dotyczące tego samego dokumentu lub wątku kosztują ~10× mniej i kończą się szybciej. Cache'owane prompty pozostają u dostawcy AI do 5 minut i są ograniczone do Twojej organizacji. Po wyłączeniu stella przestaje wysyłać znaczniki cache, ale dostawcy mogą nadal cache'ować oportunistycznie; tylko umowa Zero Data Retention z dostawcą całkowicie wyłącza cache'owanie po stronie serwera.",
-        "title": "Cache'owanie promptów",
-        "toggleLabel": "Zezwól na cache'owanie promptów u dostawców AI"
+        "title": "Cache'owanie promptów"
       },
       "renameDescription": "Członkowie od razu zobaczą nową nazwę.",
       "renameTitle": "Zmień nazwę organizacji",

@@ -84,7 +84,7 @@ const SURFACES = [
       messages.settings.organization.auditLogsResourceTypePlaceholder,
     landmarks: {
       heading: "h1",
-      filters: "[data-slot=frame-panel] .grid.items-end",
+      filters: "[data-slot=settings-panel] .grid.items-end",
       table: "table",
       firstRow: "tbody tr",
     },

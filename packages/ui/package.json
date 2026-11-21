@@ -103,6 +103,7 @@
     "./input-otp-face": "./src/components/input-otp-face.tsx",
     "./list": "./src/components/list.tsx",
     "./list-shell": "./src/components/list-shell.tsx",
+    "./settings": "./src/components/settings.tsx",
     "./kbd": "./src/components/kbd.tsx",
     "./label": "./src/components/label.tsx",
     "./landing": "./src/components/landing.tsx",

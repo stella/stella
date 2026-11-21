@@ -7,9 +7,9 @@ import { useTranslations } from "use-intl";
 import type { SettingsCheck } from "@stll/api-contract/desktop-rpc";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { SettingsRow } from "@stll/ui/settings";
 
 import { StellaAppIcon } from "../shared/StellaAppIcon";
-import { SettingsRow } from "./settings-layout";
 
 /**
  * The About page's version row. "Check for updates" asks the native updater

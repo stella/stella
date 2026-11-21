@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Most",
       "currentSession": "Jelenlegi",
-      "device": "Eszköz",
       "deviceOnOs": "{browser} – {os}",
-      "ipAddress": "IP-cím",
-      "lastActive": "Utoljára aktív",
       "noOtherSessions": "Nincs más aktív munkamenet",
       "revokeOtherSessions": "Kijelentkezés más eszközökről",
       "revokeOtherSessionsConfirm": "Ezzel az összes munkamenet megszűnik, kivéve a jelenlegit.",
@@ -5833,11 +5830,9 @@
       "chatNotifications": "Csevegési értesítések",
       "chatNotificationsBlocked": "A stella értesítései le vannak tiltva ebben a böngészőben. Engedélyezze őket a böngésző webhely-beállításaiban.",
       "chatNotificationsDescription": "Értesítést kap ettől a böngészőtől, amikor egy csevegési válasz elkészül, miközben a stella a háttérben fut.",
-      "chatNotificationsToggle": "Értesítsen, ha egy válasz elkészült, vagy a közreműködésemre vár",
       "chatNotificationsUnsupported": "Ez a böngésző nem támogatja az értesítéseket.",
       "chatTechnicalDetails": "Technikai részletek a csevegésben",
       "chatTechnicalDetailsDescription": "A csevegés minden lépése megmutatja, mit keresett és mit talált. Bekapcsolva a mögötte lévő kódot és a nyers eredményeket is látja.",
-      "chatTechnicalDetailsToggle": "Technikai részletek megjelenítése a csevegésben",
       "confirmDelete": "Fiók törlésének megerősítése",
       "dangerZone": "Veszélyes zóna",
       "dangerZoneDescription": "Fiókhozzáférése és a fiók privát adatainak végleges törlése.",
@@ -6178,7 +6173,6 @@
       "documentProcessing": {
         "description": "Automatikusan felismeri a szkennelt PDF-ek szövegét, hogy a tartalmuk kereshető legyen.",
         "title": "Dokumentumszöveg-felismerés",
-        "toggleLabel": "Szöveg automatikus felismerése szkennelt PDF-ekben",
         "updated": "A dokumentumszöveg-felismerés beállítása frissítve"
       },
       "documentTypes": {
@@ -6200,8 +6194,7 @@
       "membersDescription": "Kezelje, kik férhetnek hozzá ehhez a szervezethez, és a függőben lévő meghívókat",
       "memoryExtraction": {
         "description": "Ha be van kapcsolva, a stella a háttérben áttekinti az összefoglalt csevegéseket, és memóriabejegyzéseket javasol, amelyeket egy embernek meg kell erősítenie, mielőtt befolyásolnák az asszisztenst. Ez a csapata saját AI-szolgáltatói kulcsával fut, ezért hagyja kikapcsolva, hacsak nem szeretné, hogy ezt a háttérben zajló AI-használatot az Ön kulcsára számlázzák.",
-        "title": "Memóriakinyerés",
-        "toggleLabel": "Memóriabejegyzések javaslata a csevegési előzmények alapján, a háttérben"
+        "title": "Memóriakinyerés"
       },
       "organizationIdHint": "Állandó azonosító, amely soha nem változik. Használja, ha az ügyfélszolgálathoz fordul, vagy integrációt állít be.",
       "pastInvitations": "Korábbi meghívók",
@@ -6210,8 +6203,7 @@
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
       "promptCaching": {
         "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt AI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az AI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak; csak az AI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
-        "title": "Prompt gyorsítótárazás",
-        "toggleLabel": "Prompt gyorsítótárazás engedélyezése az AI-szolgáltatóknál"
+        "title": "Prompt gyorsítótárazás"
       },
       "renameDescription": "A tagok azonnal látni fogják az új nevet.",
       "renameTitle": "Szervezet átnevezése",

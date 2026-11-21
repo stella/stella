@@ -3,10 +3,7 @@
     "sessions": {
       "activeNow": "Maintenant",
       "currentSession": "En cours",
-      "device": "Appareil",
       "deviceOnOs": "{browser} sur {os}",
-      "ipAddress": "Adresse IP",
-      "lastActive": "Dernière activité",
       "noOtherSessions": "Aucune autre session active",
       "revokeOtherSessions": "Déconnecter les autres appareils",
       "revokeOtherSessionsConfirm": "Toutes les sessions seront fermées, sauf la session en cours.",
@@ -5833,11 +5830,9 @@
       "chatNotifications": "Notifications des conversations",
       "chatNotificationsBlocked": "Les notifications de stella sont bloquées dans ce navigateur. Autorisez-les dans les paramètres du site du navigateur.",
       "chatNotificationsDescription": "Recevez une notification de ce navigateur lorsqu’une réponse dans une conversation se termine pendant que stella est en arrière-plan.",
-      "chatNotificationsToggle": "M’avertir quand une réponse est prête ou attend mon intervention",
       "chatNotificationsUnsupported": "Ce navigateur ne prend pas en charge les notifications.",
       "chatTechnicalDetails": "Détails techniques dans les conversations",
       "chatTechnicalDetailsDescription": "Chaque étape d’une conversation indique ce qu’elle a consulté et ce qu’elle a trouvé. Activez cette option pour voir aussi le code et les résultats bruts.",
-      "chatTechnicalDetailsToggle": "Afficher les détails techniques dans les conversations",
       "confirmDelete": "Confirmer la suppression du compte",
       "dangerZone": "Zone de danger",
       "dangerZoneDescription": "Supprimer définitivement votre accès au compte et les données privées du compte.",
@@ -6178,7 +6173,6 @@
       "documentProcessing": {
         "description": "Reconnaissez automatiquement le texte des PDF numérisés afin de pouvoir rechercher leur contenu.",
         "title": "Reconnaissance de texte des documents",
-        "toggleLabel": "Reconnaître automatiquement le texte des PDF numérisés",
         "updated": "Paramètre de reconnaissance de texte mis à jour"
       },
       "documentTypes": {
@@ -6200,8 +6194,7 @@
       "membersDescription": "Gérez qui a accès à cette organisation et les invitations en attente",
       "memoryExtraction": {
         "description": "Lorsque cette option est activée, stella examine en arrière-plan les conversations résumées et propose des souvenirs qu'une personne doit confirmer avant qu'ils n'influencent l'assistant. Cela fonctionne avec la propre clé de fournisseur d'IA de votre équipe ; laissez-la donc désactivée, sauf si vous souhaitez que cette utilisation d'IA en arrière-plan soit facturée sur votre clé.",
-        "title": "Extraction de mémoire",
-        "toggleLabel": "Suggérer des souvenirs à partir de l'historique des conversations en arrière-plan"
+        "title": "Extraction de mémoire"
       },
       "organizationIdHint": "Identifiant permanent qui ne change jamais. Utilisez-le pour contacter l’assistance ou configurer des intégrations.",
       "pastInvitations": "Invitations passées",
@@ -6210,8 +6203,7 @@
       "practiceJurisdictionsDescription": "Sélectionnez les juridictions qui vous concernent.",
       "promptCaching": {
         "description": "Lorsqu'activé, stella ajoute des marqueurs de cache afin que les requêtes IA répétées sur le même document ou fil de discussion coûtent ~10× moins et s'achèvent plus vite. Les prompts mis en cache restent chez le fournisseur d'IA jusqu'à 5 minutes, limités à votre organisation. La désactivation empêche stella d'envoyer des marqueurs de cache, mais les fournisseurs peuvent toujours mettre en cache de manière opportuniste ; seul un contrat Zero Data Retention avec le fournisseur désactive entièrement la mise en cache côté serveur.",
-        "title": "Mise en cache des prompts",
-        "toggleLabel": "Autoriser la mise en cache des prompts auprès des fournisseurs d'IA"
+        "title": "Mise en cache des prompts"
       },
       "renameDescription": "Les membres verront immédiatement le nouveau nom.",
       "renameTitle": "Renommer l’organisation",
