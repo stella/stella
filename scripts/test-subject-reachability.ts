@@ -809,7 +809,7 @@ const dynamicImport = async (
   }
   const bindingElements = declaration.name.elements.filter(
     (element): element is ts.BindingElement & { name: ts.Identifier } =>
-      Boolean(element.name) && ts.isIdentifier(element.name),
+      element.name !== undefined && ts.isIdentifier(element.name),
   );
   const symbols =
     bindingElements.length > 0
