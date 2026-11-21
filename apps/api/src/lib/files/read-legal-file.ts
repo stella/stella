@@ -63,7 +63,7 @@ const readStructuredDocumentContent: LegalContentReader = async (options) => {
  * A signature file's text, or null for a `.sig` or `.xml` file whose bytes
  * are not a signature: that file is read the way it would be otherwise.
  */
-export const readSignatureContent = async (
+const readSignatureContent = async (
   options: LegalFileReadOptions,
 ): Promise<
   Result<

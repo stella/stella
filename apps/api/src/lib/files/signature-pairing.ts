@@ -7,6 +7,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import type { StatedDigest } from "@/api/lib/files/cms-signed-data";
 import type { SignatureWorkerReply } from "@/api/lib/files/signature-preview-protocol";
@@ -21,7 +22,7 @@ type SignedFile = Extract<
 
 type FileContent = Extract<FieldContent, { type: "file" }>;
 
-/** Documents named for one signature; more is a naming collision, not a pair. */
+/** Documents one signature can name; more is a collision, not a pair. */
 const MAX_SIGNED_FILES = 8;
 /** Siblings hashed again for a digest other than the stored SHA-256. */
 const MAX_REHASHED_FILES = 4;
@@ -65,7 +66,7 @@ const hexDigest = async (
  * The names a signature file's own name points at: `x.pdf.p7s` and
  * `x.pdf.xades` sign `x.pdf`; `x.p7s` signs `x` with its usual extension.
  */
-export const conventionalSignedFileNames = (signatureFileName: string) => {
+const conventionalSignedFileNames = (signatureFileName: string) => {
   const stem = signatureFileName.trim().replace(SIGNATURE_SUFFIX, "");
   if (stem === signatureFileName.trim() || stem.length === 0) {
     return [];
@@ -102,6 +103,11 @@ type FindSignedFilesOptions = {
 
 const fileSha256Hex = sql<string>`(${fields.content}->>'sha256Hex')`;
 
+/** More documents than the cap share the name or bytes: no pair to name. */
+const completeRows = <TRow>(
+  read: { type: "complete"; rows: TRow[] } | { type: "overflow" },
+): TRow[] => (read.type === "complete" ? read.rows : []);
+
 const readCandidates = async ({
   scopedDb,
   workspaceId,
@@ -135,41 +141,49 @@ const readCandidates = async ({
     const byName =
       names.length === 0
         ? []
-        : await tx
-            .select(select)
-            .from(entities)
-            .innerJoin(
-              fields,
-              eq(fields.entityVersionId, entities.currentVersionId),
-            )
-            .where(
-              and(
-                documentInMatter,
-                fileInMatter,
-                inArray(entities.name, [...names]),
-              ),
-            )
-            .orderBy(asc(entities.name), asc(entities.id))
-            .limit(MAX_SIGNED_FILES);
+        : completeRows(
+            await readBounded(
+              tx
+                .select(select)
+                .from(entities)
+                .innerJoin(
+                  fields,
+                  eq(fields.entityVersionId, entities.currentVersionId),
+                )
+                .where(
+                  and(
+                    documentInMatter,
+                    fileInMatter,
+                    inArray(entities.name, [...names]),
+                  ),
+                )
+                .orderBy(asc(entities.name), asc(entities.id)),
+              MAX_SIGNED_FILES,
+            ),
+          );
     const byDigest =
       sha256Hexes.length === 0
         ? []
-        : await tx
-            .select(select)
-            .from(fields)
-            .innerJoin(
-              entities,
-              eq(entities.currentVersionId, fields.entityVersionId),
-            )
-            .where(
-              and(
-                documentInMatter,
-                fileInMatter,
-                inArray(fileSha256Hex, [...sha256Hexes]),
-              ),
-            )
-            .orderBy(asc(entities.createdAt), asc(entities.id))
-            .limit(MAX_SIGNED_FILES);
+        : completeRows(
+            await readBounded(
+              tx
+                .select(select)
+                .from(fields)
+                .innerJoin(
+                  entities,
+                  eq(entities.currentVersionId, fields.entityVersionId),
+                )
+                .where(
+                  and(
+                    documentInMatter,
+                    fileInMatter,
+                    inArray(fileSha256Hex, [...sha256Hexes]),
+                  ),
+                )
+                .orderBy(asc(entities.createdAt), asc(entities.id)),
+              MAX_SIGNED_FILES,
+            ),
+          );
     const candidates = new Map<SafeId<"entity">, Candidate>();
     for (const [rows, foundByDigest] of [
       [byDigest, true],

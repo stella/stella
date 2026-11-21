@@ -23,7 +23,7 @@ export const SIGNATURE_FIXTURE_SIGNERS = [
 const certificates = new Map<string, Promise<pkijs.Certificate>>();
 
 /** A self-signed certificate naming the signer; nothing here is verified. */
-export const signerCertificate = async (commonName: string) => {
+const signerCertificate = async (commonName: string) => {
   let certificate = certificates.get(commonName);
   if (certificate === undefined) {
     certificate = createSelfSignedCertificate({ commonName, keyType: "EC" }).then(

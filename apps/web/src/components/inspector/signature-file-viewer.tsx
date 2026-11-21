@@ -126,11 +126,14 @@ export const SignatureFileViewer = ({
   notSignature,
   onDownload,
   tab,
+  // Explicit ReactNode: `notSignature` widens the inferred return to a type
+  // containing React 19's Promise<AwaitedReactNode> member, which
+  // promise-function-async would otherwise flag on this sync component.
 }: {
   notSignature?: ReactNode;
   onDownload: () => void;
   tab: FileTab;
-}) => {
+}): ReactNode => {
   const { data } = useSuspenseQuery(
     signaturePreviewOptions({ fieldId: tab.id, workspaceId: tab.workspaceId }),
   );

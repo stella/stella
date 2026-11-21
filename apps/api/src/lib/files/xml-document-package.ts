@@ -195,7 +195,7 @@ const parseXmlPart = (
  * One standalone XML document under the same parser rules as a package part:
  * no document type declarations, an explicit encoding only, and a node budget.
  */
-export const parseXmlDocument = (
+export const parseStandaloneXml = (
   bytes: Uint8Array,
   maxNodes: number = MAX_XML_NODES,
 ) => parseXmlPart(bytes, { remaining: maxNodes });

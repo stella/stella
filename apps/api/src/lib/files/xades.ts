@@ -16,7 +16,7 @@ import {
 } from "@/api/lib/files/signature-file";
 import {
   type DocumentXmlNode,
-  parseXmlDocument,
+  parseStandaloneXml,
 } from "@/api/lib/files/xml-document-package";
 
 const XMLDSIG_NAMESPACE = "http://www.w3.org/2000/09/xmldsig#";
@@ -288,7 +288,7 @@ export const parseXadesFile = (
   if (!mayHoldXadesSignature(bytes)) {
     return signatureFailure("not_signature");
   }
-  const parsed = parseXmlDocument(bytes);
+  const parsed = parseStandaloneXml(bytes);
   if (parsed.isErr()) {
     return signatureFailure(
       parsed.error.reason === "limit" ? "limit" : "not_signature",

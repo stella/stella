@@ -251,12 +251,12 @@ const FileTabViewerComponent = ({
 
   // A `.sig` or `.xml` file is a signature only if the server reads one in
   // its bytes; any other file keeps the viewer it always had.
-  const probeSignature = (fallback: ReactNode) =>
+  const probeSignature = (fallback: ReactNode): ReactNode =>
     signatureFormatCandidate(tab.mimeType, tab.fileName) === undefined ? (
       fallback
     ) : (
       <RecoverableViewerBoundary
-        finalFallback={(error) =>
+        finalFallback={(error): ReactNode =>
           isPreviewUnavailableError(error) ? fallback : undefined
         }
         key={tab.id}
@@ -273,7 +273,9 @@ const FileTabViewerComponent = ({
       </RecoverableViewerBoundary>
     );
 
-  const fileViewer = (() => {
+  // Explicit ReactNode: a probed fallback is typed ReactNode, whose React 19
+  // Promise<AwaitedReactNode> member promise-function-async would flag.
+  const fileViewer = ((): ReactNode => {
     switch (nativePreviewKind) {
       case "asicE":
       case "asicS":

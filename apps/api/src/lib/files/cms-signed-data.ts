@@ -92,9 +92,7 @@ const isSignedDigestAlgorithm = (
   Object.hasOwn(SIGNED_DIGEST_ALGORITHMS, oid);
 
 /** A digest algorithm by OID, or null for one a signature may not state here. */
-export const signedDigestAlgorithm = (
-  oid: string,
-): SignedDigestAlgorithm | null =>
+const signedDigestAlgorithm = (oid: string): SignedDigestAlgorithm | null =>
   isSignedDigestAlgorithm(oid) ? SIGNED_DIGEST_ALGORITHMS[oid] : null;
 
 const nameAttribute = (name: pkijs.RelativeDistinguishedNames) => {

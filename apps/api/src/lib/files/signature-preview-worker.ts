@@ -22,7 +22,7 @@ import {
 const SIGNATURE_SUFFIX = /(?:\.(?:p7s|sig|xades|xml))+$/iu;
 const XML_MIME_TYPE = "application/xml";
 
-export const parseSignatureFile = (
+const parseSignatureFile = (
   kind: SignatureFileFormatKind,
   bytes: Uint8Array,
 ) =>
