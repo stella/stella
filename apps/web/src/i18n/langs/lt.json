@@ -4614,6 +4614,7 @@
     "moveToMain": "Perkelti į pagrindinį rodinį",
     "moveToSide": "Perkelti į šoninį skydelį",
     "openChat": "Atidaryti pokalbį",
+    "openTabs": "Atidarytos kortelės ({count})",
     "reopenTab": "Iš naujo atidaryti {name}",
     "resizePane": "Keisti polangio dydį",
     "review": {

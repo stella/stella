@@ -4614,6 +4614,7 @@
     "moveToMain": "Vii põhivaatesse",
     "moveToSide": "Vii külgpaneeli",
     "openChat": "Ava vestlus",
+    "openTabs": "Avatud vahelehed ({count})",
     "reopenTab": "Ava {name} uuesti",
     "resizePane": "Muuda paneeli suurust",
     "review": {

@@ -4614,6 +4614,7 @@
     "moveToMain": "Déplacer vers la vue principale",
     "moveToSide": "Déplacer vers le panneau latéral",
     "openChat": "Ouvrir la conversation",
+    "openTabs": "Onglets ouverts ({count})",
     "reopenTab": "Rouvrir {name}",
     "resizePane": "Redimensionner le volet",
     "review": {

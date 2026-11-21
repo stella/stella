@@ -6,11 +6,7 @@ import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/directional-icon";
-import {
-  FileTextIcon,
-  MessageSquareIcon,
-  PanelRightIcon,
-} from "@stll/ui/icons";
+import { PanelRightIcon } from "@stll/ui/icons";
 import {
   entityTabGlyph,
   InspectorEntityTab,
@@ -19,16 +15,11 @@ import {
 } from "@stll/ui/inspector";
 import type { InspectorEntityTabInactiveIcon } from "@stll/ui/inspector";
 import { getMatterSwatch } from "@stll/ui/matter-colors";
-import { MatterIcon } from "@stll/ui/matter-icon";
 import { containedEventHandler } from "@stll/ui/use-contained-handler";
 import { cn } from "@stll/ui/utils";
 import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
-import { DocumentIcon } from "@/components/document-icon";
-import { chatTabHeaderLabel } from "@/components/inspector/chat-context-label.logic";
-import { ExternalSourceLogo } from "@/components/inspector/external-reference-panel";
-import { findMcpConnectorIconHref } from "@/components/inspector/external-source-icon";
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
 import { useInspectorGroups } from "@/components/inspector/inspector-group-controls";
 import {
@@ -43,28 +34,28 @@ import {
 } from "@/components/inspector/inspector-rail-chat.logic";
 import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
 import {
+  InspectorTabIcon,
+  InspectorTabLabel,
+  SuggestedReviveTabIcon,
+} from "@/components/inspector/inspector-tab-presentation";
+import {
   isGenericInspectorTab,
   useInspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import type {
-  ChatTab,
   InspectorTab,
   InspectorTabsStore,
 } from "@/components/inspector/inspector-tabs-store";
 import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
-import { taskTabDetailOptions } from "@/components/inspector/task-tab-query";
 import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu";
 import { useRouteWorkspaceId } from "@/components/inspector/use-route-workspace-id";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
-import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useMainSkill } from "@/features/knowledge/use-main-skill";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useRouteErrorLifecycle } from "@/lib/analytics/route-error-lifecycle-context";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
-import { mcpConnectorsOptions } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -265,106 +256,6 @@ const inspectorDiagnosticState = (tabCount: number, minimized: boolean) => {
   return minimized ? "minimized" : "open";
 };
 
-type FileTabIconProps = {
-  fileName: string;
-  mimeType: string | undefined;
-};
-
-/**
- * Rail icon for any file-like tab, shown while its `InspectorEntityTab` is
- * active (`entityTabGlyph` covers the inactive glyph). Shared by workspace
- * file tabs and skill resources so every file reads the same way in the
- * rail.
- */
-const FileTabIcon = ({ fileName, mimeType }: FileTabIconProps) => {
-  if (mimeType) {
-    return (
-      <DocumentIcon
-        className="size-3.5"
-        fileName={fileName}
-        mimeType={mimeType}
-      />
-    );
-  }
-  return <FileTextIcon className="size-3.5" />;
-};
-
-type VerticalTabIconProps = {
-  tab: InspectorTab;
-  externalIconHref?: string | undefined;
-};
-
-/**
- * The icon `InspectorEntityTab` shows for this tab. For file-like kinds
- * (see `tabGlyph`), that's only while active — `InspectorEntityTab` swaps
- * to `entityTabGlyph`'s abbreviation otherwise, so this never has to
- * branch on that itself. Every other kind has no glyph to swap to, so
- * `InspectorEntityTab` keeps rendering this icon while inactive too
- * (dimmed) — a registration's own rail icon is always asked for its
- * `active` rendering here for the same reason.
- */
-const VerticalTabIcon = ({ tab, externalIconHref }: VerticalTabIconProps) => {
-  // Generic registry-backed kinds (registered by non-workspace
-  // routes) delegate their rail icon to the registration so the
-  // rail stays open to extension without growing this switch.
-  if (isGenericInspectorTab(tab)) {
-    const registration = getInspectorView(tab.viewType);
-    if (registration === undefined) {
-      return (
-        <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-          {entityTabGlyph(tab.label)}
-        </span>
-      );
-    }
-    const RailIcon = registration.railIcon;
-    return (
-      <RailIcon
-        active
-        tab={{
-          id: tab.id,
-          label: tab.label,
-          payload: tab.payload,
-          ownerRouteId: tab.ownerRouteId,
-        }}
-      />
-    );
-  }
-
-  if (tab.type === "task") {
-    return (
-      <EntityKindIcon className="size-3.5" kind="task" status={tab.status} />
-    );
-  }
-
-  if (tab.type === "chat") {
-    return <MessageSquareIcon className="size-3.5" />;
-  }
-
-  if (tab.type === "matter") {
-    return (
-      <MatterIcon
-        className="size-3.5"
-        matter={{ id: tab.workspaceId, color: tab.color ?? null }}
-      />
-    );
-  }
-
-  if (tab.type === "external") {
-    return (
-      <ExternalSourceLogo
-        className="size-3.5 border-0"
-        iconHref={externalIconHref}
-      />
-    );
-  }
-
-  if (tab.type === "skill-resource") {
-    return <FileTabIcon fileName={tab.label} mimeType={tab.mimeType} />;
-  }
-
-  return <FileTabIcon fileName={tab.fileName} mimeType={tab.mimeType} />;
-};
-
 /**
  * `InspectorEntityTab`'s inactive-state glyph, for the tab kinds that want
  * one — regular file tabs, skill resources, and an unregistered generic
@@ -434,47 +325,6 @@ const SuggestedReviveTab = () => {
   );
 };
 
-const SuggestedReviveTabIcon = ({ tab }: { tab: InspectorTab }) => {
-  if (isGenericInspectorTab(tab)) {
-    const registration = getInspectorView(tab.viewType);
-    if (registration !== undefined) {
-      const RailIcon = registration.railIcon;
-      return (
-        <RailIcon
-          active={false}
-          tab={{
-            id: tab.id,
-            label: tab.label,
-            payload: tab.payload,
-            ownerRouteId: tab.ownerRouteId,
-          }}
-        />
-      );
-    }
-  }
-  // Unlike the inactive regular tabs (abbreviation text), the ghost
-  // always shows the file-type icon: the chip stands in for the
-  // document that is centered in the main view, so the icon is the
-  // recognisable anchor.
-  if (tab.type === "pdf" && tab.mimeType !== undefined) {
-    return (
-      <DocumentIcon
-        className="size-3.5"
-        fileName={tab.fileName}
-        mimeType={tab.mimeType}
-      />
-    );
-  }
-  if (tab.type === "pdf") {
-    return <FileTextIcon className="size-3.5" />;
-  }
-  return (
-    <span className="text-[9px] leading-none font-semibold tracking-tight uppercase">
-      {entityTabGlyph(tab.label)}
-    </span>
-  );
-};
-
 type InspectorTabDropArgs = { sourceId: string; targetId: string };
 
 type VerticalTabProps = {
@@ -495,62 +345,14 @@ const flashTabElement = (el: HTMLElement) => {
   );
 };
 
-const ChatVerticalTab = ({
-  tab,
-  ...props
-}: VerticalTabProps & { tab: ChatTab }) => {
-  const t = useTranslations();
-  const skillLabel = useSkillLabel();
-  const label = chatTabHeaderLabel({
-    activeSkillName:
-      tab.activeSkill === undefined ? undefined : skillLabel(tab.activeSkill),
-    boundDocumentLabel: undefined,
-    newChatLabel: t("chat.newChat"),
-    tabLabel: tab.label,
-  });
-  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
-};
-
-const VerticalTab = (props: VerticalTabProps) => {
-  const { tab } = props;
-  if (tab.type === "chat") {
-    return <ChatVerticalTab {...props} tab={tab} />;
-  }
-  if (tab.type === "task") {
-    return <TaskVerticalTab {...props} tab={tab} />;
-  }
-  if (tab.type !== "view") {
-    return <VerticalTabCell {...props} />;
-  }
-  const RailLabel = getInspectorView(tab.viewType)?.railLabel;
-  if (RailLabel === undefined) {
-    return <VerticalTabCell {...props} />;
-  }
-  return (
-    <RailLabel
-      renderLabel={(label) => (
-        <VerticalTabCell {...props} tab={{ ...tab, label }} />
-      )}
-      tab={tab}
-    />
-  );
-};
-
-const TaskVerticalTab = ({
-  tab,
-  ...props
-}: VerticalTabProps & { tab: Extract<InspectorTab, { type: "task" }> }) => {
-  const t = useTranslations();
-  const organizationId = useAuthenticatedUser().activeOrganizationId;
-  const taskQuery = useQuery(taskTabDetailOptions(tab, organizationId));
-  const taskView = queryView(taskQuery);
-  useQueryViewError(taskView, "TaskVerticalTab:query");
-  const label =
-    taskView.type === "items"
-      ? taskView.items.name || t("tasks.untitled")
-      : (tab.creationStatus === "pending" && tab.label) || t("common.loading");
-  return <VerticalTabCell {...props} tab={{ ...tab, label }} />;
-};
+const VerticalTab = (props: VerticalTabProps) => (
+  <InspectorTabLabel
+    render={(label) => (
+      <VerticalTabCell {...props} tab={{ ...props.tab, label }} />
+    )}
+    tab={props.tab}
+  />
+);
 
 const VerticalTabCell = ({
   onDropTab,
@@ -565,33 +367,6 @@ const VerticalTabCell = ({
   const tabNavigate = useNavigate();
   const tabQueryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const externalConnectorSlug =
-    tab.type === "external" ? tab.connectorSlug : undefined;
-  const storedExternalIconHref =
-    tab.type === "external" ? tab.iconHref : undefined;
-  const mcpConnectorsDataQuery = useQuery({
-    ...mcpConnectorsOptions(activeOrganizationId),
-    enabled:
-      externalConnectorSlug !== undefined &&
-      storedExternalIconHref === undefined,
-  });
-  const mcpConnectorsDataView = queryView(mcpConnectorsDataQuery);
-  useQueryViewError(mcpConnectorsDataView, "VerticalTabCell:query");
-  const mcpConnectorsData =
-    mcpConnectorsDataView.type === "items"
-      ? mcpConnectorsDataView.items
-      : undefined;
-  const availableConnectors = mcpConnectorsData
-    ? mcpConnectorsData.connectors
-    : [];
-  const externalIconHref =
-    storedExternalIconHref ??
-    (externalConnectorSlug === undefined
-      ? undefined
-      : findMcpConnectorIconHref({
-          connectorSlug: externalConnectorSlug,
-          connectors: availableConnectors,
-        }));
 
   const contextMenu = useTabContextMenu({
     canRename: tab.type !== "matter",
@@ -659,7 +434,7 @@ const VerticalTabCell = ({
         )}
         draggable
         glyph={tabGlyph(tab)}
-        icon={<VerticalTabIcon externalIconHref={externalIconHref} tab={tab} />}
+        icon={<InspectorTabIcon tab={tab} />}
         inactiveIcon={tabInactiveIcon(tab)}
         label={tooltipLabel}
         onClose={onClose}

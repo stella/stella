@@ -4614,6 +4614,7 @@
     "moveToMain": "Mover para a visualização principal",
     "moveToSide": "Mover para o painel lateral",
     "openChat": "Abrir chat",
+    "openTabs": "Abas abertas ({count})",
     "reopenTab": "Reabrir {name}",
     "resizePane": "Redimensionar painel",
     "review": {

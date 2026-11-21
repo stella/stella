@@ -4614,6 +4614,7 @@
     "moveToMain": "Move to main view",
     "moveToSide": "Move to side panel",
     "openChat": "Open chat",
+    "openTabs": "Open tabs ({count})",
     "reopenTab": "Reopen {name}",
     "resizePane": "Resize pane",
     "review": {

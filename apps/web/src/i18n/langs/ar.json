@@ -4614,6 +4614,7 @@
     "moveToMain": "النقل إلى العرض الرئيسي",
     "moveToSide": "النقل إلى اللوحة الجانبية",
     "openChat": "فتح الدردشة",
+    "openTabs": "علامات التبويب المفتوحة ({count})",
     "reopenTab": "إعادة فتح {name}",
     "resizePane": "تغيير حجم اللوحة",
     "review": {

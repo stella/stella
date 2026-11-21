@@ -29,6 +29,7 @@ import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
+import { InspectorTabSwitcherMenu } from "@/components/inspector/inspector-tab-switcher";
 import { resolveInspectorMatterColor } from "@/components/inspector/inspector-tab-workspace";
 import {
   isGenericInspectorTab,
@@ -608,6 +609,7 @@ export const InspectorPanel = ({
           />
         ))}
         {ribbonContextMenu.element}
+        <InspectorTabSwitcherMenu />
       </div>
     </RenderStormRegion>
   );

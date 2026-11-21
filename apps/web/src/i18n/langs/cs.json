@@ -4614,6 +4614,7 @@
     "moveToMain": "Přesunout do hlavního zobrazení",
     "moveToSide": "Přesunout do bočního panelu",
     "openChat": "Otevřít chat",
+    "openTabs": "Otevřené karty ({count})",
     "reopenTab": "Znovu otevřít {name}",
     "resizePane": "Změnit šířku panelu",
     "review": {
