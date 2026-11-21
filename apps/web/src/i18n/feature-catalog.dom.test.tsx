@@ -6,7 +6,7 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const { cleanup, render, screen } = await import("@testing-library/react");
+const { act, cleanup, render, screen } = await import("@testing-library/react");
 const { IntlProvider, useTranslations } = await import("use-intl");
 const { defineFeatureCatalog, mergeFeatureMessages } =
   await import("./feature-catalog");
@@ -54,26 +54,30 @@ const AppGreeting = () => {
 };
 
 test("the provider shows its fallback, then the feature's and the app's strings", async () => {
-  render(
-    <IntlProvider locale="en" messages={messages} timeZone="UTC">
-      <fixtureCatalog.Provider
-        fallback={<span data-testid="feature-pending" />}
-      >
-        <TypedGreeting />
-        <AppGreeting />
-      </fixtureCatalog.Provider>
-    </IntlProvider>,
-  );
-  expect(await screen.findByText("Hello from the feature")).toBeTruthy();
+  // The catalog resolves inside act, so React retries the suspended tree.
+  await act(async () => {
+    render(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <fixtureCatalog.Provider
+          fallback={<span data-testid="feature-pending" />}
+        >
+          <TypedGreeting />
+          <AppGreeting />
+        </fixtureCatalog.Provider>
+      </IntlProvider>,
+    );
+    await Promise.resolve();
+  });
+  expect(screen.getByText("Hello from the feature")).toBeTruthy();
   expect(screen.getByText(messages.common.close)).toBeTruthy();
   expect(screen.queryByTestId("feature-pending")).toBeNull();
 });
 
-test("a locale's catalog is loaded once", async () => {
+test("a locale's catalog is loaded once", () => {
   loads.length = 0;
-  await fixtureCatalog.load("en");
-  await fixtureCatalog.load("en");
-  expect(loads).toEqual([]);
+  fixtureCatalog.preload("de");
+  fixtureCatalog.preload("de");
+  expect(loads).toEqual(["de"]);
 });
 
 test("a feature namespace may not shadow an app namespace", () => {

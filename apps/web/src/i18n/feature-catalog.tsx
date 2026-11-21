@@ -20,7 +20,8 @@ import { createTranslator } from "use-intl/core";
 
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { SupportedLanguage } from "@/i18n/i18n-store";
-import { useRenderedMessageLocale } from "@/i18n/provider";
+import { useRenderedMessageLocale } from "@/i18n/rendered-message-locale";
+import { detached } from "@/lib/detached";
 
 type CatalogMessages = Record<string, Record<string, unknown>>;
 
@@ -39,9 +40,9 @@ type FeatureCatalogProviderProps = {
  * The app's messages with a feature's namespaces beside them. A namespace the
  * app already uses would silently shadow its strings, so it is refused.
  */
-export const mergeFeatureMessages = <TMessages extends CatalogMessages>(
+export const mergeFeatureMessages = (
   appMessages: Record<string, unknown>,
-  featureMessages: TMessages,
+  featureMessages: CatalogMessages,
 ): Record<string, unknown> => {
   for (const namespace of Object.keys(featureMessages)) {
     if (Object.hasOwn(appMessages, namespace)) {
@@ -64,24 +65,37 @@ export const defineFeatureCatalog = <TMessages extends CatalogMessages>(
   const MessagesContext = createContext<TMessages | null>(null);
   const loading = new Map<SupportedLanguage, Promise<TMessages>>();
 
-  // The same promise for every render of a locale, as `use()` requires.
-  const load = (lang: SupportedLanguage): Promise<TMessages> => {
-    const pending = loading.get(lang);
-    if (pending !== undefined) {
-      return pending;
+  /**
+   * Starts loading a locale once; later calls reuse the same promise, as
+   * `use()` requires. A failed chunk is dropped so the next render asks again.
+   */
+  const preload = (lang: SupportedLanguage): void => {
+    if (loading.has(lang)) {
+      return;
     }
-    const started = loaders[lang]().catch((error: unknown) => {
-      // A failed chunk is asked for again on the next render, not cached.
-      loading.delete(lang);
-      throw error;
-    });
+    const started = loaders[lang]();
     loading.set(lang, started);
-    return started;
+    // `use()` hands the rejection to the error boundary; this only forgets
+    // the failed load, and its own promise never rejects.
+    detached(
+      started.then(
+        () => undefined,
+        (_error: unknown) => {
+          // The error reaches the error boundary through `use()`.
+          loading.delete(lang);
+        },
+      ),
+      "i18n.feature-catalog-retry",
+    );
   };
 
   const Loaded = ({ children }: { children: ReactNode }) => {
     const lang = useI18nStore((state) => state.loadedLang);
-    const messages = use(load(lang));
+    preload(lang);
+    const messages = use(
+      loading.get(lang) ??
+        panic("A feature catalog locale did not start loading"),
+    );
     const appMessages = useMessages();
     const locale = useRenderedMessageLocale();
     const timeZone = useTimeZone();
@@ -122,5 +136,5 @@ export const defineFeatureCatalog = <TMessages extends CatalogMessages>(
     });
   };
 
-  return { Provider, useTranslations: useCatalogTranslations, load };
+  return { Provider, useTranslations: useCatalogTranslations, preload };
 };
