@@ -190,7 +190,10 @@ const xmlBytes = (xml: string) =>
 /** An XAdES signature carrying `content` in base64, as ePUAP filings do. */
 export const envelopingXades = async (
   content: Uint8Array,
-  { signer = SIGNATURE_FIXTURE_SIGNERS[0], mimeType = "application/pdf" } = {},
+  {
+    signer = SIGNATURE_FIXTURE_SIGNERS[0],
+    mimeType = "application/pdf",
+  }: { signer?: string; mimeType?: string } = {},
 ) =>
   xmlBytes(
     await signatureXml({
@@ -205,7 +208,10 @@ export const envelopingXades = async (
 export const detachedXades = async (
   fileName: string,
   content: Uint8Array,
-  { signer = SIGNATURE_FIXTURE_SIGNERS[0], transformed = false } = {},
+  {
+    signer = SIGNATURE_FIXTURE_SIGNERS[0],
+    transformed = false,
+  }: { signer?: string; transformed?: boolean } = {},
 ) =>
   xmlBytes(
     await signatureXml({
@@ -224,7 +230,7 @@ export const detachedXades = async (
 /** A signed XML document holding its own XAdES signature. */
 export const envelopedXades = async (
   documentXml: string,
-  { signer = SIGNATURE_FIXTURE_SIGNERS[1] } = {},
+  { signer = SIGNATURE_FIXTURE_SIGNERS[1] }: { signer?: string } = {},
 ) => {
   const signature = await signatureXml({
     id: "signature-1",
