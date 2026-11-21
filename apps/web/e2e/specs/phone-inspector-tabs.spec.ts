@@ -41,7 +41,9 @@ const openFromTable = async (page: Page, baseName: string) => {
 const switcherNamed = (page: Page, count: number) =>
   page.locator(HEADER).getByRole("button", {
     exact: true,
-    name: messages.inspector.openTabs.replace("{count}", () => String(count)),
+    name: messages.inspector.openTabs.replace("{count, number}", () =>
+      String(count),
+    ),
   });
 
 test.describe("inspector tabs on a phone", () => {

@@ -4614,7 +4614,7 @@
     "moveToMain": "Mover a la vista principal",
     "moveToSide": "Mover al panel lateral",
     "openChat": "Abrir chat",
-    "openTabs": "Pestañas abiertas ({count})",
+    "openTabs": "Pestañas abiertas ({count, number})",
     "reopenTab": "Reabrir {name}",
     "resizePane": "Cambiar el tamaño del panel",
     "review": {

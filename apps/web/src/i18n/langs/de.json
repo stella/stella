@@ -4614,7 +4614,7 @@
     "moveToMain": "In Hauptansicht verschieben",
     "moveToSide": "In Seitenleiste verschieben",
     "openChat": "Chat öffnen",
-    "openTabs": "Geöffnete Tabs ({count})",
+    "openTabs": "Geöffnete Tabs ({count, number})",
     "reopenTab": "{name} erneut öffnen",
     "resizePane": "Bereich in der Größe ändern",
     "review": {

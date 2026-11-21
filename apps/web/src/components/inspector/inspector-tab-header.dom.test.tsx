@@ -176,7 +176,7 @@ describe("renaming a file from the inspector header", () => {
         .map((button) => button.getAttribute("aria-label")),
     ).toEqual([
       englishMessages.common.back,
-      englishMessages.inspector.openTabs.replace("{count}", () => "1"),
+      englishMessages.inspector.openTabs.replace("{count, number}", () => "1"),
     ]);
   });
 

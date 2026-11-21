@@ -191,8 +191,8 @@ const mount = async () => {
 
 /** The rail's tabs, top to bottom, by accessible name. */
 const railTabs = (container: HTMLElement) =>
-  [...container.querySelectorAll<HTMLElement>(RAIL_TAB)].map((tab) =>
-    tab.getAttribute("aria-label"),
+  [...container.querySelectorAll<HTMLElement>(RAIL_TAB)].map(
+    (tab) => tab.getAttribute("aria-label") ?? "",
   );
 
 const openSwitcher = async (
@@ -200,7 +200,9 @@ const openSwitcher = async (
 ) => {
   const count = useInspectorTabsStore.getState().tabs.length;
   const trigger = within(view.getByTestId("phone-header")).getByRole("button", {
-    name: messages.inspector.openTabs.replace("{count}", () => String(count)),
+    name: messages.inspector.openTabs.replace("{count, number}", () =>
+      String(count),
+    ),
   });
   await act(async () => {
     fireEvent.click(trigger);
