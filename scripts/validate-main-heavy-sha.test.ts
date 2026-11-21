@@ -228,7 +228,8 @@ esac
 }, 30_000);
 
 // Checkouts other than the network retry helper, which is pinned to the
-// workflow's own revision and holds only scripts/retry.sh.
+// workflow's own revision and holds only scripts/retry.sh and, where Bun runs
+// the release candidate check, the package.json that pins Bun.
 const trustedCheckouts = (
   steps: readonly {
     readonly uses?: string | undefined;
@@ -243,7 +244,9 @@ const trustedCheckouts = (
       return true;
     }
     expect(step.with["ref"]).toBe(`\${{ github.workflow_sha }}`);
-    expect(step.with["sparse-checkout"]).toBe("scripts/retry.sh");
+    expect(["scripts/retry.sh", "package.json\nscripts/retry.sh\n"]).toContain(
+      step.with["sparse-checkout"],
+    );
     expect(step.with["persist-credentials"]).toBe(false);
     return false;
   });
@@ -253,6 +256,8 @@ test("only trusted main tooling is checked out before target verification", () =
   expect(names).toEqual([
     "Checkout network retry helper",
     "Stage network retry helper",
+    // Uncached runtime for the release candidate verifier; no target code.
+    "Setup Bun for the release candidate check",
     "Check release candidate",
     "Validate merge queue depth",
     "Checkout trusted release proof tooling",

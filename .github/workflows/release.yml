@@ -172,7 +172,7 @@ jobs:
             release_base="$(git merge-base "$RELEASE_SHA" origin/main)"
             # The candidate checkout is the working directory: Bun loads
             # none of its bunfig.toml or .env.
-            bun --no-env-file --config=/dev/null "$RELEASE_CANDIDATE_TREE_VERIFIER" "$release_base" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
+            bun --no-env-file --config=/dev/null "$RUNNER_TEMP/verify-release-candidate-tree.mjs" "$release_base" "$RELEASE_SHA" "$GITHUB_REPOSITORY"
             echo "rc_ref=$RELEASE_REF" >> "$GITHUB_OUTPUT"
           else
             rc_tags="$(git tag --points-at "$RELEASE_SHA" --list "v${file_version}-rc.*" --sort=-v:refname)"
