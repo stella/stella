@@ -23,13 +23,17 @@ const moreViews = (page: Page) =>
     name: messages.common.showMore,
   });
 
+/** A wait's own timeout when the caller gave one, else the default's. */
+const within = (timeout: number | undefined) =>
+  timeout === undefined ? {} : { timeout };
+
 /** Waits until the strip has decided which views fit beside each other. */
 const settledStrip = async (page: Page, timeout?: number) => {
   await expect(
     viewStrip(page).locator(
       '[data-slot="workspace-view-measure"][data-measured]',
     ),
-  ).toHaveCount(1, { timeout });
+  ).toHaveCount(1, within(timeout));
 };
 
 /** Every view the strip offers, tabs first, then the menu's, in order. */
@@ -60,7 +64,7 @@ export const expectSavedView = async (
   await expect
     .poll(async () => await savedViewNames(page, options), {
       message: `the view strip offers "${name}"`,
-      timeout: options.timeout,
+      ...within(options.timeout),
     })
     .toContain(name);
 };
@@ -82,8 +86,10 @@ export const openSavedView = async (
     await moreViews(page).click();
     await page.getByRole("menuitem", { exact: true, name }).click();
   }
-  await expect(tab).toHaveAttribute("aria-selected", "true", {
-    timeout: options.timeout,
-  });
+  await expect(tab).toHaveAttribute(
+    "aria-selected",
+    "true",
+    within(options.timeout),
+  );
   return tab;
 };
