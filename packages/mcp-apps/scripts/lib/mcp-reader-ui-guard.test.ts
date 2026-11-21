@@ -3,6 +3,7 @@ import path from "node:path";
 import * as v from "valibot";
 
 import {
+  READER_COLLECTION_KEYS,
   READER_MESSAGE_KEYS,
   READER_TEMPLATE_KEYS,
 } from "../../src/decision-reader/message-keys";
@@ -207,6 +208,10 @@ test("reader messages are derived from every web locale without fallback", async
     await Bun.file(path.join(generatedRoot, "reader-messages.json")).json(),
   );
   const localeRoot = path.join(root, "apps/web/src/i18n/langs");
+  const collectionLocaleRoot = path.join(
+    root,
+    "apps/web/src/components/legal-reader/collection-attribution/i18n/langs",
+  );
   const files = [
     ...new Bun.Glob("*.json").scanSync({ cwd: localeRoot }),
   ].toSorted();
@@ -216,12 +221,21 @@ test("reader messages are derived from every web locale without fallback", async
   const keys = [
     ...Object.values(READER_MESSAGE_KEYS),
     ...READER_TEMPLATE_KEYS,
+    ...READER_COLLECTION_KEYS,
   ].toSorted();
   for (const file of files) {
     const locale = path.basename(file, ".json");
-    const catalogue: unknown = await Bun.file(
-      path.join(localeRoot, file),
-    ).json();
+    const catalogue: unknown = {
+      ...v.parse(
+        v.record(v.string(), v.unknown()),
+        await Bun.file(path.join(localeRoot, file)).json(),
+      ),
+      // The reader's collection attribution has its own feature catalog.
+      ...v.parse(
+        v.record(v.string(), v.unknown()),
+        await Bun.file(path.join(collectionLocaleRoot, file)).json(),
+      ),
+    };
     expect(Object.keys(generated[locale] ?? {}).toSorted()).toEqual(keys);
     for (const key of keys) {
       let value = catalogue;
