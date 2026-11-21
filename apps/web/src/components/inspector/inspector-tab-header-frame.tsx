@@ -135,13 +135,14 @@ export const InspectorTabSwitcherButton = (
 
 // Mounted triggers register, so the menu can hand focus to the one on screen.
 const registerTrigger = (element: HTMLElement | null) => {
-  if (element === null) {
-    return;
-  }
   const { triggers } = getInspectorTabSwitcherHandle();
-  triggers.add(element);
+  if (element !== null) {
+    triggers.add(element);
+  }
   return () => {
-    triggers.delete(element);
+    if (element !== null) {
+      triggers.delete(element);
+    }
   };
 };
 

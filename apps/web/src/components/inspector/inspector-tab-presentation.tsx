@@ -204,8 +204,14 @@ export const InspectorTabLabel = ({ tab, render }: InspectorTabLabelProps) => {
       }
       return <RailLabel renderLabel={render} tab={tab} />;
     }
-    default:
+    case "external":
+    case "matter":
+    case "pdf":
+    case "skill-resource":
       return render(tab.label);
+    default:
+      tab satisfies never;
+      return panic("Unhandled inspector tab kind");
   }
 };
 
