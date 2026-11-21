@@ -1,6 +1,0 @@
-{
-  "metric": "direct-root-connection-imports",
-  "file": "apps/api/src/lib/dictation/kept-transcript-store.ts",
-  "delta": 1,
-  "reason": "The kept-transcript deletion table is owner-only (forced RLS, stella denied) because no request role may read or change it; the dictation request records a provider id there through this one declared door (scripts/ownership/kept-transcript-deletions.ts), and the scheduler task works it on its own owner connection."
-}
