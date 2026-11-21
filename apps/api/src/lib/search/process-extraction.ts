@@ -312,7 +312,7 @@ type NativeExtractionRun = Pick<
  */
 export type NativeExtractionDatabase = Pick<
   typeof rootDb,
-  "delete" | "insert" | "transaction" | "update"
+  "transaction" | "update"
 >;
 
 type RecordDocxVersionLanguageOptions = {

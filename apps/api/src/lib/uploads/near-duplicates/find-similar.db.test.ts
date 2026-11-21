@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -282,6 +283,72 @@ test("new text for a version replaces its signature and band keys", async () => 
     await storedSignatureOf(await currentVersionOf(freshId)),
   );
   await db.delete(entities).where(inArray(entities.id, [rewrittenId, freshId]));
+});
+
+test("text too short to compare removes the version's signature and band keys", async () => {
+  const shortenedId = await seedDocument(matterId, "Shortened.docx", [
+    CONTRACT,
+  ]);
+  const entityVersionId = await currentVersionOf(shortenedId);
+  (
+    await recordNearDuplicateSignature(
+      asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(db),
+      {
+        entityId: shortenedId,
+        entityVersionId,
+        organizationId,
+        workspaceId: matterId,
+        text: "too short",
+      },
+    )
+  ).unwrap();
+  expect(await storedSignatureOf(entityVersionId)).toEqual({
+    signature: undefined,
+    bandKeys: [],
+  });
+  await db.delete(entities).where(eq(entities.id, shortenedId));
+});
+
+test("a failed band write keeps the version's previous signature and band keys", async () => {
+  const keptId = await seedDocument(matterId, "Kept.docx", [CONTRACT]);
+  const entityVersionId = await currentVersionOf(keptId);
+  const before = await storedSignatureOf(entityVersionId);
+  expect(before.bandKeys).toHaveLength(LSH_BANDS);
+  const failingBandWrites = {
+    transaction: async (run: (tx: unknown) => Promise<unknown>) =>
+      await db.transaction(
+        async (tx) =>
+          await run(
+            new Proxy(tx, {
+              get: (target, property, receiver): unknown =>
+                property === "insert"
+                  ? (table: Parameters<typeof target.insert>[0]) =>
+                      table === entityVersionMinhashBands
+                        ? panic("band write failed")
+                        : target.insert(table)
+                  : Reflect.get(target, property, receiver),
+            }),
+          ),
+      ),
+  };
+  const failure = await recordNearDuplicateSignature(
+    asTestRaw<Parameters<typeof recordNearDuplicateSignature>[0]>(
+      failingBandWrites,
+    ),
+    {
+      entityId: keptId,
+      entityVersionId,
+      organizationId,
+      workspaceId: matterId,
+      text: UNRELATED,
+    },
+  ).then(
+    () => null,
+    (error: unknown) => error,
+  );
+  expect(failure).not.toBeNull();
+  expect(await storedSignatureOf(entityVersionId)).toEqual(before);
+  await db.delete(entities).where(eq(entities.id, keptId));
 });
 
 test("a signature must name the entity that owns its version", async () => {

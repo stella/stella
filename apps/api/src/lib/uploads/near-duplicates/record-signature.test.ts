@@ -13,12 +13,8 @@ const TEXT = Array.from(
 test("records nothing and reports the configuration without a content key", async () => {
   const writes: string[] = [];
   const db = {
-    delete: () => {
-      writes.push("delete");
-      throw new Error("no write expected");
-    },
-    insert: () => {
-      writes.push("insert");
+    transaction: () => {
+      writes.push("transaction");
       throw new Error("no write expected");
     },
   };

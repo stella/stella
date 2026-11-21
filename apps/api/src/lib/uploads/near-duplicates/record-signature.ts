@@ -3,13 +3,15 @@
 import { Result } from "better-result";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
+import type { RootDatabase } from "@/api/db/root";
 import {
   entityVersionMinhashBands,
   entityVersionMinhashSignatures,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { keyedContentLookupKey } from "@/api/lib/content-encryption";
+import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
+import { lockForWrite } from "@/api/lib/db/lock-for-write";
 import type { ConfigurationError } from "@/api/lib/errors/tagged-errors";
 import {
   lshBandKeys,
@@ -29,15 +31,15 @@ type RecordNearDuplicateSignatureOptions = {
 };
 
 /**
- * Store the version's signature and band keys, or nothing when the text is
- * too short to compare. New text for the version replaces the signature and
- * its band keys. Every step converges, so a redelivery, or a run that stopped
- * partway, ends with exactly the latest text's signature and keys. Refuses,
+ * Store the version's signature and band keys in one transaction. New text for
+ * the version replaces both, and text too short to compare removes them (the
+ * band keys cascade with the signature), so a version's rows always describe
+ * its latest text. A redelivery of the same text writes nothing new. Refuses,
  * recording nothing, where no content key is configured: the hash seeds come
  * only from the organization's keyed lookup key.
  */
 export const recordNearDuplicateSignature = async (
-  db: Pick<Transaction, "delete" | "insert">,
+  db: Pick<RootDatabase, "transaction">,
   {
     entityId,
     entityVersionId,
@@ -51,33 +53,53 @@ export const recordNearDuplicateSignature = async (
     return Result.err(key.error);
   }
   const signature = minHashSignature(text, minHashSeeds(key.value));
-  if (!signature) {
-    return Result.ok(undefined);
-  }
   const scope = { entityId, entityVersionId, organizationId, workspaceId };
-  const bytes = signatureToBytes(signature);
-  const bandKeys = lshBandKeys(signature);
-  // audit: skip - derived from text the audited upload already stored
-  await db
-    .insert(entityVersionMinhashSignatures)
-    .values({ ...scope, signature: bytes })
-    .onConflictDoUpdate({
-      target: entityVersionMinhashSignatures.entityVersionId,
-      set: { signature: bytes },
-      setWhere: sql`${entityVersionMinhashSignatures.signature} IS DISTINCT FROM excluded.signature`,
+  await withAggregateTransaction(db, async (tx) => {
+    const parents = await lockForWrite(tx, {
+      organizationIds: [organizationId],
+      workspaceIds: [workspaceId],
     });
-  await db
-    .delete(entityVersionMinhashBands)
-    .where(
-      and(
-        eq(entityVersionMinhashBands.workspaceId, workspaceId),
-        eq(entityVersionMinhashBands.entityVersionId, entityVersionId),
-        notInArray(entityVersionMinhashBands.bandKey, bandKeys),
-      ),
-    );
-  await db
-    .insert(entityVersionMinhashBands)
-    .values(bandKeys.map((bandKey) => ({ ...scope, bandKey })))
-    .onConflictDoNothing();
+    if (
+      !parents.organizationIds.has(organizationId) ||
+      !parents.workspaceIds.has(workspaceId)
+    ) {
+      return;
+    }
+    // audit: skip - derived from text the audited upload already stored
+    if (!signature) {
+      await tx
+        .delete(entityVersionMinhashSignatures)
+        .where(
+          and(
+            eq(entityVersionMinhashSignatures.workspaceId, workspaceId),
+            eq(entityVersionMinhashSignatures.entityVersionId, entityVersionId),
+          ),
+        );
+      return;
+    }
+    const bytes = signatureToBytes(signature);
+    const bandKeys = lshBandKeys(signature);
+    await tx
+      .insert(entityVersionMinhashSignatures)
+      .values({ ...scope, signature: bytes })
+      .onConflictDoUpdate({
+        target: entityVersionMinhashSignatures.entityVersionId,
+        set: { signature: bytes },
+        setWhere: sql`${entityVersionMinhashSignatures.signature} IS DISTINCT FROM excluded.signature`,
+      });
+    await tx
+      .delete(entityVersionMinhashBands)
+      .where(
+        and(
+          eq(entityVersionMinhashBands.workspaceId, workspaceId),
+          eq(entityVersionMinhashBands.entityVersionId, entityVersionId),
+          notInArray(entityVersionMinhashBands.bandKey, bandKeys),
+        ),
+      );
+    await tx
+      .insert(entityVersionMinhashBands)
+      .values(bandKeys.map((bandKey) => ({ ...scope, bandKey })))
+      .onConflictDoNothing();
+  });
   return Result.ok(undefined);
 };
