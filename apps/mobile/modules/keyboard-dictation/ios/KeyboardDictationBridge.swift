@@ -18,6 +18,8 @@ enum KeyboardDictationBridge {
   static let languageKey = "keyboardDictation.language"
   static let keyboardSeenKey = "keyboardDictation.keyboardSeenAt"
   static let keepWarmKey = "keyboardDictation.keepWarmSeconds"
+  /// The letter layout picked in the app's settings; the app writes it.
+  static let layoutKey = "keyboardDictation.layout"
 
   /// The languages the keyboard's language key offers, `auto` first: the
   /// transcription then hears which one is spoken. Pinned to the app's list
@@ -59,6 +61,14 @@ enum KeyboardDictationBridge {
       CFNotificationCenterGetDarwinNotifyCenter(),
       CFNotificationName(name as CFString), nil, nil, true)
   }
+}
+
+/// The letters the keyboard types, as Settings › stella keyboard offers
+/// them. Pinned to the app's list (`src/state/keyboard-dictation.ts`) by its
+/// test.
+enum KeyboardLayoutChoice: String, Codable, CaseIterable {
+  case qwertz
+  case qwerty
 }
 
 enum KeyboardCommandKind: String, Codable {

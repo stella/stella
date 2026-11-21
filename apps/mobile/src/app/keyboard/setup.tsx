@@ -5,7 +5,7 @@ import { requestRecordingPermissionsAsync } from "expo-audio";
 import * as Linking from "expo-linking";
 import { Stack } from "expo-router";
 import { ScrollView, View } from "react-native";
-import { useFormatter, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Text } from "@stll/ui/text";
@@ -16,10 +16,15 @@ import { CheckIcon } from "@/icons.gen";
 import {
   endKeyboardSession,
   setKeepWarm,
+  setKeyboardLayout,
   startKeyboardSession,
 } from "@/native/keyboard-dictation";
-import { KEEP_WARM_CHOICES } from "@/state/keyboard-dictation";
-import type { KeepWarm } from "@/state/keyboard-dictation";
+import {
+  defaultKeyboardLayout,
+  KEEP_WARM_CHOICES,
+  KEYBOARD_LAYOUTS,
+} from "@/state/keyboard-dictation";
+import type { KeepWarm, KeyboardLayout } from "@/state/keyboard-dictation";
 import { useUiColors } from "@/theme";
 
 /**
@@ -82,6 +87,9 @@ const KeyboardSetupScreen = () => {
         </View>
       </View>
       {status === null ? null : (
+        <LayoutSetting layout={status.layout} onChange={refresh} />
+      )}
+      {status === null ? null : (
         <KeepWarmSetting
           keepWarm={status.keepWarm}
           onChange={refresh}
@@ -91,6 +99,67 @@ const KeyboardSetupScreen = () => {
         />
       )}
     </ScrollView>
+  );
+};
+
+const LAYOUT_LABELS = {
+  qwertz: "layoutQwertz",
+  qwerty: "layoutQwerty",
+} as const satisfies Record<KeyboardLayout, string>;
+
+/** The letters the keyboard types; before a pick, the one for the app's language. */
+const LayoutSetting = ({
+  layout,
+  onChange,
+}: {
+  layout: KeyboardLayout | null;
+  onChange: () => void;
+}) => {
+  const t = useTranslations("keyboardDictation");
+  const locale = useLocale();
+  const ui = useUiColors();
+  const selected = layout ?? defaultKeyboardLayout(locale);
+  return (
+    <View className="gap-2">
+      <View className="px-1">
+        <Text accessibilityRole="header" variant="section">
+          {t("layoutTitle")}
+        </Text>
+      </View>
+      <View className="border-border bg-card rounded-xl border px-3">
+        {KEYBOARD_LAYOUTS.map((choice, index) => (
+          <Button
+            accessibilityRole="radio"
+            accessibilityState={{ selected: choice === selected }}
+            key={choice}
+            onPress={() => {
+              setKeyboardLayout(choice);
+              onChange();
+            }}
+            size="row"
+            variant="ghost"
+          >
+            <View
+              className={`flex-1 flex-row items-center gap-3 ${
+                index === KEYBOARD_LAYOUTS.length - 1
+                  ? ""
+                  : "border-border border-b"
+              }`}
+            >
+              <Text className="flex-1" variant="rowTitle">
+                {t(LAYOUT_LABELS[choice])}
+              </Text>
+              {choice === selected ? (
+                <CheckIcon color={ui.foreground} size={18} />
+              ) : null}
+            </View>
+          </Button>
+        ))}
+      </View>
+      <View className="px-1">
+        <Text variant="caption">{t("layoutHint")}</Text>
+      </View>
+    </View>
   );
 };
 

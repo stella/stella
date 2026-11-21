@@ -5,6 +5,7 @@ import * as v from "valibot";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  defaultKeyboardLayout,
   KEEP_WARM_CHOICES,
   keepWarmOf,
   KEYBOARD_HANDOFF_WINDOW_MS,
@@ -83,11 +84,13 @@ describe("the session's answers", () => {
         warmUntil: NOW,
         jobId: JOB,
         keyboardSeenAt: NOW - 5,
+        layout: "qwerty",
       }),
     ).toEqual({
       session: { type: "warm", phase: "recording", warmUntil: NOW, jobId: JOB },
       keepWarm: 900,
       keyboardSeenAt: NOW - 5,
+      layout: "qwerty",
     });
     expect(
       parseKeyboardStatus({
@@ -95,7 +98,19 @@ describe("the session's answers", () => {
         phase: "ready",
         keepWarmSeconds: 0,
       }),
-    ).toEqual({ session: { type: "off" }, keepWarm: 0, keyboardSeenAt: null });
+    ).toEqual({
+      session: { type: "off" },
+      keepWarm: 0,
+      keyboardSeenAt: null,
+      layout: null,
+    });
+  });
+
+  test("before a pick, Czech and Slovak speakers type on QWERTZ, everyone else on QWERTY", () => {
+    expect(defaultKeyboardLayout("cs")).toBe("qwertz");
+    expect(defaultKeyboardLayout("sk")).toBe("qwertz");
+    expect(defaultKeyboardLayout("en")).toBe("qwerty");
+    expect(defaultKeyboardLayout("pt-BR")).toBe("qwerty");
   });
 
   test("a shape the native side never sends fails loudly", () => {

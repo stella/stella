@@ -27,6 +27,13 @@ public class KeyboardDictationModule: Module {
       KeyboardDictationSession.shared.setKeepWarm(seconds: seconds)
     }
 
+    Function("setLayout") { (layout: String) -> Bool in
+      guard let parsed = KeyboardLayoutChoice(rawValue: layout) else {
+        return false
+      }
+      return KeyboardDictationSession.shared.setLayout(parsed)
+    }
+
     Function("start") { (warmSeconds: Int, rules: ChunkRulesRecord) -> String in
       KeyboardDictationSession.shared.start(
         warmSeconds: warmSeconds,

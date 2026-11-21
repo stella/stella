@@ -25,6 +25,24 @@ export const KEYBOARD_LANGUAGES = [
 
 export type KeyboardLanguage = (typeof KEYBOARD_LANGUAGES)[number];
 
+/**
+ * The keyboard's letter layouts, as Settings offers them. The keyboard's own
+ * list (`KeyboardLayoutChoice` in the bridge) is pinned to this one.
+ */
+export const KEYBOARD_LAYOUTS = ["qwertz", "qwerty"] as const;
+
+export type KeyboardLayout = (typeof KEYBOARD_LAYOUTS)[number];
+
+/**
+ * The layout the keyboard uses before one is picked: Czech QWERTZ for a
+ * Czech or Slovak speaker, QWERTY otherwise. The keyboard decides the same
+ * by the phone's first language (`KeyboardLayoutChoice.fallback`).
+ */
+export const defaultKeyboardLayout = (locale: string): KeyboardLayout => {
+  const language = locale.split("-")[0];
+  return language === "cs" || language === "sk" ? "qwertz" : "qwerty";
+};
+
 /** The language the transcription is told: none for `auto`. */
 export const transcriptionLanguage = (
   language: KeyboardLanguage,
@@ -112,6 +130,7 @@ const statusSchema = v.object({
   warmUntil: v.optional(v.number()),
   jobId: v.optional(v.string()),
   keyboardSeenAt: v.optional(v.number()),
+  layout: v.optional(v.picklist(KEYBOARD_LAYOUTS)),
 });
 
 /** The session as the app shows it. */
@@ -130,18 +149,28 @@ export type KeyboardStatus = {
   readonly keepWarm: KeepWarm;
   /** When the keyboard last ran with Full Access; null before it has. */
   readonly keyboardSeenAt: number | null;
+  /** The layout picked in Settings; null before one is. */
+  readonly layout: KeyboardLayout | null;
 };
 
 /** The session's status, as `parseKeyboardPieces` reads its pieces. */
 export const parseKeyboardStatus = (raw: unknown): KeyboardStatus => {
-  const { active, jobId, keepWarmSeconds, keyboardSeenAt, phase, warmUntil } =
-    v.parse(statusSchema, raw);
+  const {
+    active,
+    jobId,
+    keepWarmSeconds,
+    keyboardSeenAt,
+    layout,
+    phase,
+    warmUntil,
+  } = v.parse(statusSchema, raw);
   return {
     session: active
       ? { type: "warm", phase, warmUntil: warmUntil ?? 0, jobId }
       : { type: "off" },
     keepWarm: keepWarmOf(keepWarmSeconds),
     keyboardSeenAt: keyboardSeenAt ?? null,
+    layout: layout ?? null,
   };
 };
 

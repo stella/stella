@@ -113,8 +113,11 @@ and theirs must grant it.
 
 ## stella keyboard
 
-`keyboard-extension/` is a custom keyboard for dictating into any app. A
-keyboard may not record, so the app does: `modules/keyboard-dictation` keeps
+`keyboard-extension/` is a custom keyboard for dictating into any app. It
+types too, with or without Full Access: Czech QWERTZ or English QWERTY
+(Settings › Dictation › stella keyboard; before a pick, by the phone's
+language), Czech and Slovak accents under a long press, shift and caps lock,
+and two symbol planes. A keyboard may not record, so the app does: `modules/keyboard-dictation` keeps
 an audio session open for as long as Settings › Dictation › stella keyboard
 says ("Keep microphone warm"), records what the keyboard asks for in pieces
 cut at pauses, and hands them to `src/components/keyboard-dictation-host.tsx`,

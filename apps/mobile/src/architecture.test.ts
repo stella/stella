@@ -43,6 +43,7 @@ import { BAR_GLYPHS } from "./bar-glyphs.gen";
 import {
   KEYBOARD_HANDOFF_WINDOW_MS,
   KEYBOARD_LANGUAGES,
+  KEYBOARD_LAYOUTS,
 } from "./state/keyboard-dictation";
 
 const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
@@ -353,6 +354,31 @@ describe("the app's builds", () => {
     expect(Number(window?.replaceAll("_", ""))).toBe(
       KEYBOARD_HANDOFF_WINDOW_MS,
     );
+    const layouts = /enum KeyboardLayoutChoice[^{]*\{([^}]*)\}/u.exec(
+      bridge,
+    )?.[1];
+    expect(
+      [...(layouts ?? "").matchAll(/case (\w+)/gu)].map((match) => match[1]),
+    ).toEqual([...KEYBOARD_LAYOUTS]);
+  });
+
+  test("the keyboard types every Czech and Slovak letter, from either layout", () => {
+    const keys = readFileSync(
+      path.join(
+        SOURCE_ROOT,
+        "..",
+        KEYBOARD_EXTENSION_FOLDER,
+        "KeyboardKeys.swift",
+      ),
+      "utf-8",
+    );
+    const accents = keys.slice(
+      keys.indexOf("static let accents"),
+      keys.indexOf("static let symbols"),
+    );
+    for (const letter of "ěščřžýáíéúůďťňäôľĺŕó") {
+      expect(accents).toContain(`"${letter}"`);
+    }
   });
 
   test("every message the keyboard shows is in the catalogs, in every locale", () => {
@@ -364,18 +390,17 @@ describe("the app's builds", () => {
     for (const messages of Object.values(catalogs)) {
       expect(Object.keys(messages).toSorted()).toEqual(source);
     }
+    const extension = path.join(SOURCE_ROOT, "..", KEYBOARD_EXTENSION_FOLDER);
     const named = new Set(
-      [
-        ...readFileSync(
-          path.join(
-            SOURCE_ROOT,
-            "..",
-            KEYBOARD_EXTENSION_FOLDER,
-            "KeyboardViewController.swift",
-          ),
-          "utf-8",
-        ).matchAll(/strings\.(\w+)/gu),
-      ].map((match) => match[1] ?? ""),
+      readdirSync(extension)
+        .filter((name) => name.endsWith(".swift"))
+        .flatMap((name) =>
+          [
+            ...readFileSync(path.join(extension, name), "utf-8").matchAll(
+              /strings\.(\w+)/gu,
+            ),
+          ].map((match) => match[1] ?? ""),
+        ),
     );
     expect(named.size).toBeGreaterThan(0);
     for (const key of named) {
@@ -420,6 +445,7 @@ describe("the app's builds", () => {
       ).toEqual(
         [
           "KeyboardDictationBridge.swift",
+          "KeyboardKeys.swift",
           "KeyboardStrings.swift",
           "KeyboardViewController.swift",
           "StellaKeyboard-Info.plist",

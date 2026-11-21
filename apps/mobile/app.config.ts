@@ -379,6 +379,7 @@ type KeyboardExtension = {
 const KEYBOARD_STRINGS_FILE = "KeyboardStrings.swift";
 const KEYBOARD_SOURCES = [
   "KeyboardViewController.swift",
+  "KeyboardKeys.swift",
   path.basename(KEYBOARD_BRIDGE),
   KEYBOARD_STRINGS_FILE,
 ];

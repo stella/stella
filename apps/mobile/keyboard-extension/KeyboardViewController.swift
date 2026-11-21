@@ -9,8 +9,12 @@ import UIKit
 /// shown goes in at the cursor; text that arrives after it closed is kept for
 /// ten minutes behind a Paste dictation chip.
 ///
-/// The keyboard records nothing, makes no network request and reads only the
-/// character before the cursor, to space what it inserts.
+/// Its letters (`KeyboardKeys.swift`) type with or without Full Access; only
+/// dictation needs it, and without it the big key says how to turn it on.
+///
+/// The keyboard records nothing, makes no network request and keeps nothing
+/// typed; it reads the text before the cursor only to space what it inserts
+/// and to capitalize a sentence's first letter.
 final class KeyboardViewController: UIInputViewController {
   private struct Configuration {
     let group: String
@@ -54,7 +58,6 @@ final class KeyboardViewController: UIInputViewController {
   private var holdTimer: Timer?
   private var holding = false
   private var stopOnRelease = false
-  private var deleteTimer: Timer?
   private var refreshTimer: Timer?
   private var observing = false
 
@@ -62,7 +65,12 @@ final class KeyboardViewController: UIInputViewController {
   private let actionButton = UIButton(type: .system)
   private let micButton = UIButton(type: .system)
   private let languageButton = UIButton(type: .system)
-  private let nextKeyboardButton = UIButton(type: .system)
+  private lazy var keys = KeyboardKeys(
+    layout: .fallback,
+    labels: KeyboardKeys.Labels(
+      shift: strings.shift, capsLock: strings.capsLock, symbols: strings.symbols,
+      moreSymbols: strings.moreSymbols, letters: strings.letters, space: strings.space,
+      delete: strings.delete, newLine: strings.newLine, nextKeyboard: strings.nextKeyboard))
   private let spinner = UIActivityIndicatorView(style: .medium)
 
   override func viewDidLoad() {
@@ -92,6 +100,10 @@ final class KeyboardViewController: UIInputViewController {
       }
       startObserving(group: store.group)
     }
+    keys.use(
+      store?.read(String.self, KeyboardDictationBridge.layoutKey)
+        .flatMap(KeyboardLayoutChoice.init(rawValue:)) ?? .fallback)
+    keys.followCursor()
     refreshTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
       self?.render()
     }
@@ -102,7 +114,7 @@ final class KeyboardViewController: UIInputViewController {
     super.viewWillDisappear(animated)
     refreshTimer?.invalidate()
     refreshTimer = nil
-    stopDeleting()
+    keys.stop()
     holdTimer?.invalidate()
     if holding, let jobId = pendingJob {
       send(.stop, jobId: jobId)
@@ -118,7 +130,7 @@ final class KeyboardViewController: UIInputViewController {
 
   override func viewWillLayoutSubviews() {
     super.viewWillLayoutSubviews()
-    nextKeyboardButton.isHidden = !needsInputModeSwitchKey
+    keys.nextKeyboardButton.isHidden = !needsInputModeSwitchKey
   }
 
   // MARK: - State
@@ -184,7 +196,9 @@ final class KeyboardViewController: UIInputViewController {
     var mic = micButton.configuration ?? .filled()
     mic.image = UIImage(
       systemName: recording ? "stop.fill" : "mic.fill",
-      withConfiguration: UIImage.SymbolConfiguration(pointSize: 28, weight: .semibold))
+      withConfiguration: UIImage.SymbolConfiguration(pointSize: 20, weight: .semibold))
+    mic.title = recording ? strings.stop : strings.dictate
+    mic.imagePadding = 8
     mic.baseBackgroundColor = recording ? .systemRed : .tintColor
     mic.baseForegroundColor = .white
     micButton.configuration = mic
@@ -363,35 +377,35 @@ final class KeyboardViewController: UIInputViewController {
     let opensWord = text.first.map { !".,;:!?)]}…".contains($0) } ?? false
     let runsOn = before.map { !$0.isWhitespace && !"([{„“‚'\"".contains($0) } ?? false
     textDocumentProxy.insertText(runsOn && opensWord ? " \(text)" : text)
+    keys.followCursor()
   }
 
-  @objc private func typeCharacter(_ sender: UIButton) {
-    if let character = sender.configuration?.title {
-      textDocumentProxy.insertText(character)
-    }
+  override func textDidChange(_ textInput: UITextInput?) {
+    super.textDidChange(textInput)
+    keys.followCursor()
   }
 
-  @objc private func typeSpace() {
-    textDocumentProxy.insertText(" ")
-  }
-
-  @objc private func typeReturn() {
-    textDocumentProxy.insertText("\n")
-  }
-
-  @objc private func deleteDown() {
-    textDocumentProxy.deleteBackward()
-    deleteTimer = Timer.scheduledTimer(withTimeInterval: 0.45, repeats: false) { [weak self] _ in
-      self?.deleteTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) {
-        [weak self] _ in
-        self?.textDocumentProxy.deleteBackward()
+  /// A capital where the field asks for one: at its start, or after a
+  /// sentence's end, a space and nothing else.
+  private func wantsCapital() -> Bool {
+    let proxy = textDocumentProxy
+    switch proxy.autocapitalizationType ?? .sentences {
+    case .none:
+      return false
+    case .allCharacters:
+      return true
+    case .words:
+      return proxy.documentContextBeforeInput?.last.map(\.isWhitespace) ?? true
+    case .sentences:
+      let before = proxy.documentContextBeforeInput ?? ""
+      let trimmed = before.trimmingCharacters(in: .whitespaces)
+      if trimmed.isEmpty || before.hasSuffix("\n") {
+        return true
       }
+      return before.last == " " && ".!?".contains(trimmed.last ?? " ")
+    @unknown default:
+      return false
     }
-  }
-
-  @objc private func stopDeleting() {
-    deleteTimer?.invalidate()
-    deleteTimer = nil
   }
 
   @objc private func nextLanguage() {
@@ -461,27 +475,12 @@ final class KeyboardViewController: UIInputViewController {
       group: group, scheme: scheme, dictateRoute: dictateRoute, setupRoute: setupRoute)
   }
 
-  private static let characterKey = UIColor { traits in
-    traits.userInterfaceStyle == .dark ? UIColor(white: 0.42, alpha: 1) : .white
-  }
-
   private static let functionKey = UIColor { traits in
     traits.userInterfaceStyle == .dark
       ? UIColor(white: 0.27, alpha: 1)
       : UIColor(red: 0.67, green: 0.69, blue: 0.73, alpha: 1)
   }
 
-  private func key(title: String? = nil, symbol: String? = nil, function: Bool) -> UIButton {
-    var configuration = UIButton.Configuration.filled()
-    configuration.baseBackgroundColor = function ? Self.functionKey : Self.characterKey
-    configuration.baseForegroundColor = .label
-    configuration.cornerStyle = .medium
-    configuration.title = title
-    configuration.image = symbol.flatMap { UIImage(systemName: $0) }
-    let button = UIButton(configuration: configuration)
-    button.heightAnchor.constraint(equalToConstant: 44).isActive = true
-    return button
-  }
 
   private func layout() {
     statusLabel.font = .preferredFont(forTextStyle: .footnote)
@@ -504,23 +503,13 @@ final class KeyboardViewController: UIInputViewController {
     top.alignment = .center
     top.heightAnchor.constraint(greaterThanOrEqualToConstant: 34).isActive = true
 
-    let punctuation = UIStackView(
-      arrangedSubviews: [".", ",", "?", "!", ":", "§"].map { character in
-        let button = key(title: character, function: false)
-        button.accessibilityLabel = character
-        button.addTarget(self, action: #selector(typeCharacter(_:)), for: .touchUpInside)
-        return button
-      })
-    punctuation.distribution = .fillEqually
-    punctuation.spacing = 6
-
     var mic = UIButton.Configuration.filled()
     mic.cornerStyle = .large
     micButton.configuration = mic
     micButton.addTarget(self, action: #selector(micDown), for: .touchDown)
     micButton.addTarget(self, action: #selector(micUp), for: [.touchUpInside, .touchUpOutside])
     micButton.addTarget(self, action: #selector(micUp), for: .touchCancel)
-    micButton.heightAnchor.constraint(greaterThanOrEqualToConstant: 72).isActive = true
+    micButton.heightAnchor.constraint(equalToConstant: 48).isActive = true
     spinner.translatesAutoresizingMaskIntoConstraints = false
     spinner.hidesWhenStopped = true
     spinner.color = .white
@@ -530,45 +519,37 @@ final class KeyboardViewController: UIInputViewController {
       spinner.centerYAnchor.constraint(equalTo: micButton.centerYAnchor),
     ])
 
-    nextKeyboardButton.configuration = key(symbol: "globe", function: true).configuration
-    nextKeyboardButton.accessibilityLabel = strings.nextKeyboard
-    nextKeyboardButton.addTarget(
+    keys.nextKeyboardButton.addTarget(
       self, action: #selector(handleInputModeList(from:with:)), for: .allTouchEvents)
-
-    languageButton.configuration = key(function: true).configuration
-    languageButton.accessibilityLabel = strings.language
-    languageButton.addTarget(self, action: #selector(nextLanguage), for: .touchUpInside)
-
-    let space = key(title: strings.space, function: false)
-    space.addTarget(self, action: #selector(typeSpace), for: .touchUpInside)
-
-    let delete = key(symbol: "delete.left", function: true)
-    delete.accessibilityLabel = strings.delete
-    delete.addTarget(self, action: #selector(deleteDown), for: .touchDown)
-    delete.addTarget(
-      self, action: #selector(stopDeleting), for: [.touchUpInside, .touchUpOutside, .touchCancel])
-
-    let newLine = key(symbol: "return", function: true)
-    newLine.accessibilityLabel = strings.newLine
-    newLine.addTarget(self, action: #selector(typeReturn), for: .touchUpInside)
-
-    let bottom = UIStackView(arrangedSubviews: [
-      nextKeyboardButton, languageButton, space, delete, newLine,
-    ])
-    bottom.spacing = 6
-    for (button, width) in [
-      (nextKeyboardButton, 44.0), (languageButton, 52.0), (delete, 52.0), (newLine, 72.0),
-    ] {
-      button.widthAnchor.constraint(equalToConstant: width).isActive = true
-      button.heightAnchor.constraint(equalToConstant: 44).isActive = true
+    keys.insert = { [weak self] text in
+      self?.textDocumentProxy.insertText(text)
+    }
+    keys.deleteBackward = { [weak self] in
+      self?.textDocumentProxy.deleteBackward()
+    }
+    keys.wantsCapital = { [weak self] in
+      self?.wantsCapital() ?? false
     }
 
-    let stack = UIStackView(arrangedSubviews: [top, punctuation, micButton, bottom])
+    var languageKey = UIButton.Configuration.filled()
+    languageKey.baseBackgroundColor = Self.functionKey
+    languageKey.baseForegroundColor = .label
+    languageKey.cornerStyle = .medium
+    languageButton.configuration = languageKey
+    languageButton.accessibilityLabel = strings.language
+    languageButton.addTarget(self, action: #selector(nextLanguage), for: .touchUpInside)
+    languageButton.widthAnchor.constraint(equalToConstant: 52).isActive = true
+
+    // The microphone stays the biggest key, right above the letters.
+    let dictation = UIStackView(arrangedSubviews: [languageButton, micButton])
+    dictation.spacing = 6
+
+    let stack = UIStackView(arrangedSubviews: [top, dictation, keys])
     stack.axis = .vertical
     stack.spacing = 8
     stack.translatesAutoresizingMaskIntoConstraints = false
     view.addSubview(stack)
-    let height = view.heightAnchor.constraint(equalToConstant: 270)
+    let height = view.heightAnchor.constraint(equalToConstant: 310)
     height.priority = .defaultHigh
     NSLayoutConstraint.activate([
       height,

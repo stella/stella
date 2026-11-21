@@ -116,6 +116,17 @@ final class KeyboardDictationSession {
     }
   }
 
+  /// The letters the keyboard types, read by it as it next appears.
+  func setLayout(_ layout: KeyboardLayoutChoice) -> Bool {
+    queue.sync {
+      guard let store else {
+        return false
+      }
+      store.write(layout.rawValue, KeyboardDictationBridge.layoutKey)
+      return true
+    }
+  }
+
   func start(warmSeconds: Int, rules: KeyboardChunkRules) -> KeyboardSessionStart {
     queue.sync {
       guard let store else {
@@ -202,6 +213,9 @@ final class KeyboardDictationSession {
         "phase": phase.rawValue,
         "keepWarmSeconds": store?.read(Int.self, KeyboardDictationBridge.keepWarmKey) ?? 0,
       ]
+      if let layout = store?.read(String.self, KeyboardDictationBridge.layoutKey) {
+        value["layout"] = layout
+      }
       if active {
         value["warmUntil"] = warmUntil
       }

@@ -13,6 +13,7 @@ import {
 import type {
   KeepWarm,
   KeyboardLanguage,
+  KeyboardLayout,
   KeyboardOutcome,
   KeyboardPiece,
   KeyboardStatus,
@@ -36,6 +37,7 @@ type KeyboardDictationModule = {
   ) => { remove: () => void };
   configure: (group: string) => boolean;
   setKeepWarm: (seconds: number) => boolean;
+  setLayout: (layout: string) => boolean;
   start: (
     warmSeconds: number,
     rules: {
@@ -145,6 +147,10 @@ export const readKeyboardStatus = (): KeyboardStatus | null => {
 /** Keeps the choice in the App Group; a session under way takes it at once. */
 export const setKeepWarm = (seconds: KeepWarm): boolean =>
   keyboardDictation()?.setKeepWarm(seconds) ?? false;
+
+/** Keeps the keyboard's letter layout in the App Group, for it to read as it next appears. */
+export const setKeyboardLayout = (layout: KeyboardLayout): boolean =>
+  keyboardDictation()?.setLayout(layout) ?? false;
 
 /** Calls `listener` on the session's event; returns the unsubscribe. */
 export const onKeyboardDictation = (

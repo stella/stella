@@ -2,6 +2,7 @@
   "duplicatesCommon": [],
   "duplicateValues": [
     "chat.dictate",
+    "chat.dictationPaste",
     "chat.dictationTranscribing",
     "chat.documentClose",
     "chat.documentOpen",
@@ -27,6 +28,7 @@
     "keyboard.cancel",
     "keyboard.delete",
     "keyboard.dictate",
+    "keyboard.paste",
     "keyboard.stop",
     "keyboard.transcribing",
     "law.retry",
@@ -125,6 +127,13 @@
     "entity.type": [
       "fr"
     ],
+    "keyboard.capsLock": [
+      "cs",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "keyboard.languageAutoShort": [
       "cs",
       "de",
@@ -136,6 +145,12 @@
       "lv",
       "pl",
       "pt-BR",
+      "sk"
+    ],
+    "keyboard.shift": [
+      "cs",
+      "hu",
+      "pl",
       "sk"
     ],
     "matter.details": [
