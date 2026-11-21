@@ -1,5 +1,5 @@
 {
   "kind": "priority",
   "qualifier": "Tags the final release on the exact release-candidate commit once its proof is green and a person set the production gate status; creates the stable tag.",
-  "reviewedDigest": "24658ddf2c047ad54a6401ae4bb8c62739302961e8ade11958ac72dc7fff1171"
+  "reviewedDigest": "7e12bd8901cf3cae78428869b852f4547d5ae35ed6b5e9a1b5d53a90f3a3da22"
 }
