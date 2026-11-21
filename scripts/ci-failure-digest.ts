@@ -1027,10 +1027,18 @@ export const failureLines = (
   if (blocked.length === 0 && interrupted.length === 0) {
     return causes;
   }
-  const reserved = Math.min(limit - 1, blocked.length + interrupted.length);
+  // Watchdog reports lead, but leave one line for an independent cause.
+  const leading = blocked.slice(
+    0,
+    Math.max(1, causes.length > 0 ? limit - 1 : limit),
+  );
+  const causeRoom = Math.max(
+    causes.length > 0 ? 1 : 0,
+    limit - leading.length - interrupted.length,
+  );
   return dedupe([
-    ...blocked,
-    ...causes.slice(0, Math.max(1, limit - reserved)),
+    ...leading,
+    ...causes.slice(0, causeRoom),
     ...interrupted,
   ]).slice(0, limit);
 };

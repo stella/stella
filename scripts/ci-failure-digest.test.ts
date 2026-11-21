@@ -2076,3 +2076,28 @@ test("the digest reads the event-loop watchdog's own kill line under its file", 
   );
   expect(tail).not.toContain("still running when the run stopped");
 });
+
+test("watchdog reports never crowd out an independent failure", () => {
+  const kill = (file: string) => [
+    `@stll/${file}:test: cache miss, executing ${file}`,
+    `@stll/${file}:test: ::group::src/${file}.test.ts:`,
+    `@stll/${file}:test: ${eventLoopBlockedMessage({ file: `src/${file}.test.ts`, blockedMs: 60_000, pid: 1, descendants: 0 })}`,
+    `@stll/${file}:test: Ran 1 test across 1 file. [60.00s]`,
+  ];
+  const log = [
+    ...kill("a"),
+    ...kill("b"),
+    ...kill("c"),
+    "@stll/d:test: cache miss, executing d",
+    "@stll/d:test: ::group::src/d.test.ts:",
+    "@stll/d:test: error: expect(received).toBe(expected)",
+    "@stll/d:test: (fail) d adds up [1.00ms]",
+    "@stll/d:test: Ran 1 test across 1 file. [5.00ms]",
+  ];
+  const messages = failureLines(log, 3).map(({ message }) => message);
+  expect(messages).toHaveLength(3);
+  expect(
+    messages.filter((message) => message.includes(WATCHDOG_MARKER)),
+  ).toHaveLength(2);
+  expect(messages.some((message) => message.includes("d adds up"))).toBe(true);
+});
