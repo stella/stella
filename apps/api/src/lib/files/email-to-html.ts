@@ -557,11 +557,6 @@ const toOwnedArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
     ? bytes.buffer
     : bytes.slice().buffer;
 
-/**
- * An .eml file. A certified email (Italian PEC) is recognised by its parts:
- * it reads as its original message, or as the provider's notice, with the
- * certification data beside it.
- */
 type NestedAttachmentCharset = {
   bytes: Uint8Array;
   fileName: string | null;
@@ -653,6 +648,11 @@ const nestedAttachmentCharset = (
   return charsets.size === 1 ? ([...charsets][0] ?? null) : null;
 };
 
+/**
+ * An .eml file. A certified email (Italian PEC) is recognised by its parts:
+ * it reads as its original message, or as the provider's notice, with the
+ * certification data beside it.
+ */
 const parseEml = async (
   fileBuffer: ArrayBuffer,
 ): Promise<Result<ParsedEmail, EmailParseError>> => {

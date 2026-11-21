@@ -32,10 +32,11 @@
       "short": "Accusé bref",
       "summary": "Accusé synthétique"
     },
-    "recipients": "Destinataires certifiés",
-    "sender": "Expéditeur certifié",
+    "recipients": "Destinataires indiqués",
+    "sender": "Expéditeur indiqué",
     "signatureNotVerified": "La signature du fournisseur est conservée dans le fichier et n’est pas vérifiée.",
-    "signedBy": "Signé par {name}"
+    "signedBy": "Signé par {name}",
+    "statedInFile": "Tel qu’indiqué dans le fichier"
   },
   "chat": {
     "alreadyAnswered": "Une réponse a déjà été donnée.",

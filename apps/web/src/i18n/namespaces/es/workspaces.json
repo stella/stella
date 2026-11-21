@@ -9,43 +9,6 @@
       "unknown": "Sin determinar"
     },
     "backToList": "Volver a correspondencia",
-    "certifiedEmail": {
-      "certifiedAt": "Certificado el",
-      "deliveredTo": "Entregado a",
-      "error": "Error notificado",
-      "errors": {
-        "noDomain": "Dominio desconocido",
-        "noRecipient": "Destinatario desconocido",
-        "other": "Otro error",
-        "virus": "Virus detectado"
-      },
-      "handedOverFor": "Tomado a cargo para",
-      "kinds": {
-        "acceptance": "Recibo de aceptación (PEC)",
-        "delivery": "Recibo de entrega (PEC)",
-        "deliveryError": "Aviso de no entrega (PEC)",
-        "deliveryErrorWarning": "Aviso de plazo de entrega superado (PEC)",
-        "nonAcceptance": "Aviso de no aceptación (PEC)",
-        "takenInCharge": "Recibo de toma a cargo (PEC)",
-        "transport": "Correo electrónico certificado (PEC)",
-        "virusDetected": "Aviso de detección de virus (PEC)"
-      },
-      "messageId": "ID del mensaje PEC",
-      "notDeliveredTo": "No entregado a",
-      "ordinaryMailbox": "Buzón ordinario",
-      "originalNotIncluded": "Este archivo no incluye el mensaje original.",
-      "provider": "Proveedor de PEC",
-      "receipt": "Recibo solicitado",
-      "receiptTypes": {
-        "full": "Recibo completo",
-        "short": "Recibo breve",
-        "summary": "Recibo sintético"
-      },
-      "recipients": "Destinatarios certificados",
-      "sender": "Remitente certificado",
-      "signatureNotVerified": "La firma del proveedor se conserva en el archivo y no se verifica.",
-      "signedBy": "Firmado por {name}"
-    },
     "createAddress": "Crear dirección",
     "dataBox": {
       "acceptedAt": "Notificado",

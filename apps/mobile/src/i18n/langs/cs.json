@@ -32,10 +32,11 @@
       "short": "Zkrácené potvrzení",
       "summary": "Souhrnné potvrzení"
     },
-    "recipients": "Certifikovaní příjemci",
-    "sender": "Certifikovaný odesílatel",
+    "recipients": "Uvedení příjemci",
+    "sender": "Uvedený odesílatel",
     "signatureNotVerified": "Podpis poskytovatele zůstává v souboru a není ověřen.",
-    "signedBy": "Podpis: {name}"
+    "signedBy": "Podpis: {name}",
+    "statedInFile": "Jak je uvedeno v souboru"
   },
   "chat": {
     "alreadyAnswered": "Na tohle už bylo odpovězeno.",

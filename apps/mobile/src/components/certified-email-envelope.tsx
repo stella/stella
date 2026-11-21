@@ -73,12 +73,13 @@ export const CertifiedEmailReading = ({
   const format = useFormatter();
   const errorKey = ERROR_KEYS[envelope.error];
   const deliveryKey = DELIVERY_LABEL_KEYS[envelope.kind];
-  const signerName = envelope.signature?.signerName ?? null;
+  const { signerName } = envelope.signature;
   return (
     <>
       <Text accessibilityRole="header" variant="headline">
         {t(KIND_TITLE_KEYS[envelope.kind])}
       </Text>
+      <Text variant="caption">{t("statedInFile")}</Text>
       {!envelope.includesOriginal && (
         <Text variant="caption">{t("originalNotIncluded")}</Text>
       )}
@@ -152,12 +153,10 @@ export const CertifiedEmailReading = ({
           <Text selectable>{envelope.messageId}</Text>
         </Field>
       )}
-      {envelope.signature !== null && (
-        <Text variant="caption">
-          {signerName ? `${t("signedBy", { name: signerName })}\n` : ""}
-          {t("signatureNotVerified")}
-        </Text>
-      )}
+      <Text variant="caption">
+        {signerName ? `${t("signedBy", { name: signerName })}\n` : ""}
+        {t("signatureNotVerified")}
+      </Text>
       {text.trim() ? <Text selectable>{text}</Text> : null}
       {attachments.length > 0 && (
         <Field label={t("attachments")}>

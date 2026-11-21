@@ -32,10 +32,11 @@
       "short": "Rövid igazolás",
       "summary": "Összesítő igazolás"
     },
-    "recipients": "Hitelesített címzettek",
-    "sender": "Hitelesített feladó",
+    "recipients": "Megadott címzettek",
+    "sender": "Megadott feladó",
     "signatureNotVerified": "A szolgáltató aláírása a fájlban marad, és nincs ellenőrizve.",
-    "signedBy": "Aláíró: {name}"
+    "signedBy": "Aláíró: {name}",
+    "statedInFile": "A fájlban szereplő adatok szerint"
   },
   "chat": {
     "alreadyAnswered": "Erre már válaszoltak.",

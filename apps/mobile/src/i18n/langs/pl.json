@@ -32,10 +32,11 @@
       "short": "Skrócone potwierdzenie",
       "summary": "Syntetyczne potwierdzenie"
     },
-    "recipients": "Certyfikowani odbiorcy",
-    "sender": "Certyfikowany nadawca",
+    "recipients": "Wskazani odbiorcy",
+    "sender": "Wskazany nadawca",
     "signatureNotVerified": "Podpis dostawcy pozostaje w pliku i nie jest weryfikowany.",
-    "signedBy": "Podpisane przez {name}"
+    "signedBy": "Podpisane przez {name}",
+    "statedInFile": "Zgodnie z danymi w pliku"
   },
   "chat": {
     "alreadyAnswered": "Odpowiedź została już udzielona.",

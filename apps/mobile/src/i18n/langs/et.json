@@ -32,10 +32,11 @@
       "short": "Lühike kinnitus",
       "summary": "Kokkuvõtlik kinnitus"
     },
-    "recipients": "Sertifitseeritud saajad",
-    "sender": "Sertifitseeritud saatja",
+    "recipients": "Märgitud saajad",
+    "sender": "Märgitud saatja",
     "signatureNotVerified": "Teenusepakkuja allkiri jääb faili ega ole kontrollitud.",
-    "signedBy": "Allkirjastaja: {name}"
+    "signedBy": "Allkirjastaja: {name}",
+    "statedInFile": "Nagu failis märgitud"
   },
   "chat": {
     "alreadyAnswered": "Sellele on juba vastatud.",

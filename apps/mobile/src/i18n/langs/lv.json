@@ -32,10 +32,11 @@
       "short": "Īss apstiprinājums",
       "summary": "Kopsavilkuma apstiprinājums"
     },
-    "recipients": "Sertificēti saņēmēji",
-    "sender": "Sertificēts sūtītājs",
+    "recipients": "Norādītie saņēmēji",
+    "sender": "Norādītais sūtītājs",
     "signatureNotVerified": "Pakalpojumu sniedzēja paraksts paliek failā un netiek pārbaudīts.",
-    "signedBy": "Parakstītājs: {name}"
+    "signedBy": "Parakstītājs: {name}",
+    "statedInFile": "Kā norādīts failā"
   },
   "chat": {
     "alreadyAnswered": "Uz šo jau ir atbildēts.",

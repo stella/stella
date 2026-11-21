@@ -32,10 +32,11 @@
       "short": "Short receipt",
       "summary": "Summary receipt"
     },
-    "recipients": "Certified recipients",
-    "sender": "Certified sender",
+    "recipients": "Stated recipients",
+    "sender": "Stated sender",
     "signatureNotVerified": "The provider’s signature is kept with the file and not verified.",
-    "signedBy": "Signed by {name}"
+    "signedBy": "Signed by {name}",
+    "statedInFile": "As stated in the file"
   },
   "chat": {
     "alreadyAnswered": "This was already answered.",

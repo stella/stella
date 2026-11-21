@@ -94,8 +94,8 @@ export const certifiedEmailEnvelopeSchema = v.object({
   receivedFor: v.array(v.string()),
   /** Whether the provider's message carries the original message. */
   includesOriginal: v.boolean(),
-  /** Null when the message carries no readable signature part. */
-  signature: v.nullable(certifiedEmailSignatureSchema),
+  /** The provider's signature part, which every PEC message carries (6.1). */
+  signature: certifiedEmailSignatureSchema,
 });
 export type CertifiedEmailEnvelope = v.InferOutput<
   typeof certifiedEmailEnvelopeSchema

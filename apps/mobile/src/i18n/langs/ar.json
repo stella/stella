@@ -32,10 +32,11 @@
       "short": "إيصال مختصر",
       "summary": "إيصال موجز"
     },
-    "recipients": "المستلمون المعتمدون",
-    "sender": "المرسل المعتمد",
+    "recipients": "المستلمون المذكورون",
+    "sender": "المرسل المذكور",
     "signatureNotVerified": "يبقى توقيع مزود الخدمة مع الملف ولا يتم التحقق منه.",
-    "signedBy": "وقّعه {name}"
+    "signedBy": "وقّعه {name}",
+    "statedInFile": "كما هو مذكور في الملف"
   },
   "chat": {
     "alreadyAnswered": "تمت الإجابة على هذا بالفعل.",

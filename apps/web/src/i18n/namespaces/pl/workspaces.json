@@ -9,43 +9,6 @@
       "unknown": "Nieustalone"
     },
     "backToList": "Wróć do korespondencji",
-    "certifiedEmail": {
-      "certifiedAt": "Data certyfikacji",
-      "deliveredTo": "Doręczono do",
-      "error": "Zgłoszony błąd",
-      "errors": {
-        "noDomain": "Nieznana domena",
-        "noRecipient": "Nieznany odbiorca",
-        "other": "Inny błąd",
-        "virus": "Wykryto wirusa"
-      },
-      "handedOverFor": "Przejęto dla",
-      "kinds": {
-        "acceptance": "Potwierdzenie przyjęcia (PEC)",
-        "delivery": "Potwierdzenie doręczenia (PEC)",
-        "deliveryError": "Zawiadomienie o niedoręczeniu (PEC)",
-        "deliveryErrorWarning": "Zawiadomienie o przekroczeniu terminu doręczenia (PEC)",
-        "nonAcceptance": "Zawiadomienie o nieprzyjęciu (PEC)",
-        "takenInCharge": "Potwierdzenie przejęcia (PEC)",
-        "transport": "Certyfikowany e-mail (PEC)",
-        "virusDetected": "Zawiadomienie o wykryciu wirusa (PEC)"
-      },
-      "messageId": "Identyfikator wiadomości PEC",
-      "notDeliveredTo": "Nie doręczono do",
-      "ordinaryMailbox": "Zwykła skrzynka",
-      "originalNotIncluded": "Ten plik nie zawiera oryginalnej wiadomości.",
-      "provider": "Dostawca PEC",
-      "receipt": "Żądane potwierdzenie",
-      "receiptTypes": {
-        "full": "Pełne potwierdzenie",
-        "short": "Skrócone potwierdzenie",
-        "summary": "Syntetyczne potwierdzenie"
-      },
-      "recipients": "Certyfikowani odbiorcy",
-      "sender": "Certyfikowany nadawca",
-      "signatureNotVerified": "Podpis dostawcy pozostaje w pliku i nie jest weryfikowany.",
-      "signedBy": "Podpisane przez {name}"
-    },
     "createAddress": "Utwórz adres",
     "dataBox": {
       "acceptedAt": "Doręczono",

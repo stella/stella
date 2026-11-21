@@ -32,10 +32,11 @@
       "short": "Trumpas patvirtinimas",
       "summary": "Santraukinis patvirtinimas"
     },
-    "recipients": "Sertifikuoti gavėjai",
-    "sender": "Sertifikuotas siuntėjas",
+    "recipients": "Nurodyti gavėjai",
+    "sender": "Nurodytas siuntėjas",
     "signatureNotVerified": "Paslaugų teikėjo parašas lieka faile ir netikrinamas.",
-    "signedBy": "Pasirašė: {name}"
+    "signedBy": "Pasirašė: {name}",
+    "statedInFile": "Kaip nurodyta faile"
   },
   "chat": {
     "alreadyAnswered": "Į tai jau atsakyta.",

@@ -32,10 +32,11 @@
       "short": "Recibo breve",
       "summary": "Recibo sintético"
     },
-    "recipients": "Destinatários certificados",
-    "sender": "Remetente certificado",
+    "recipients": "Destinatários indicados",
+    "sender": "Remetente indicado",
     "signatureNotVerified": "A assinatura do provedor é mantida no arquivo e não é verificada.",
-    "signedBy": "Assinado por {name}"
+    "signedBy": "Assinado por {name}",
+    "statedInFile": "Conforme consta no arquivo"
   },
   "chat": {
     "alreadyAnswered": "Isso já foi respondido.",

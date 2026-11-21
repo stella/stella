@@ -137,9 +137,9 @@ describe("a PEC transport envelope", () => {
   test("states its certification data in the text search, chat and agents read", async () => {
     const text = parsedEmailToText(await parse(await pecMessage()));
     for (const expected of [
-      "Italian certified email (PEC): transport envelope",
-      `Certified sender: ${PEC_FIXTURE.sender}`,
-      `Certified recipient: ${PEC_FIXTURE.externalRecipient} (ordinary mailbox)`,
+      "Italian certified email (PEC) as stated in the file, not verified: transport envelope",
+      `Stated sender: ${PEC_FIXTURE.sender}`,
+      `Stated recipient: ${PEC_FIXTURE.externalRecipient} (ordinary mailbox)`,
       "Certified at: 2026-11-21T09:15:30.000Z",
       `PEC message ID: ${PEC_FIXTURE.messageId}`,
       "Provider signature: unverified",
@@ -209,6 +209,12 @@ describe("what is not a PEC message", () => {
     const parsed = await parse(
       await pecMessage({ providerHeader: null, signed: false }),
     );
+    expect(parsed.certified).toBeNull();
+    expect(attachmentNames(parsed)).toContain("daticert.xml");
+  });
+
+  test("an unsigned message with a provider header reads as an ordinary email", async () => {
+    const parsed = await parse(await pecMessage({ signed: false }));
     expect(parsed.certified).toBeNull();
     expect(attachmentNames(parsed)).toContain("daticert.xml");
   });

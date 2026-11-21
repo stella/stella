@@ -32,10 +32,11 @@
       "short": "Skrátené potvrdenie",
       "summary": "Súhrnné potvrdenie"
     },
-    "recipients": "Certifikovaní príjemcovia",
-    "sender": "Certifikovaný odosielateľ",
+    "recipients": "Uvedení príjemcovia",
+    "sender": "Uvedený odosielateľ",
     "signatureNotVerified": "Podpis poskytovateľa zostáva v súbore a nie je overený.",
-    "signedBy": "Podpis: {name}"
+    "signedBy": "Podpis: {name}",
+    "statedInFile": "Ako je uvedené v súbore"
   },
   "chat": {
     "alreadyAnswered": "Na toto už bolo odpovedané.",

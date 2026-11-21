@@ -32,10 +32,11 @@
       "short": "Kurze Bestätigung",
       "summary": "Knappe Bestätigung"
     },
-    "recipients": "Zertifizierte Empfänger",
-    "sender": "Zertifizierter Absender",
+    "recipients": "Angegebene Empfänger",
+    "sender": "Angegebener Absender",
     "signatureNotVerified": "Die Signatur des Anbieters bleibt in der Datei und wird nicht geprüft.",
-    "signedBy": "Signiert von {name}"
+    "signedBy": "Signiert von {name}",
+    "statedInFile": "Wie in der Datei angegeben"
   },
   "chat": {
     "alreadyAnswered": "Dies wurde bereits beantwortet.",

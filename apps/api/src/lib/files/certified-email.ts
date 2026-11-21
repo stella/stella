@@ -308,7 +308,9 @@ const isMessagePart = ({ mimeType }: CertifiedEmailPart) =>
 /**
  * The certified reading of a message from its header names and top-level
  * parts, or null when it is not a provider's message: it must carry a
- * provider header and exactly one part of certification data.
+ * provider header, exactly one part of certification data and exactly one
+ * signature part. The signature is read, never verified, so the reading is
+ * what the file states.
  */
 export const readCertifiedEmailParts = (
   {
@@ -338,10 +340,12 @@ export const readCertifiedEmailParts = (
     const signature = readSignature(part.bytes);
     return signature === null ? [] : [{ signature, index }];
   });
+  // Every provider message is signed (6.1); unsigned data states nothing.
   const [signature] = signatures;
-  if (signature !== undefined && signatures.length === 1) {
-    certificationParts.add(signature.index);
+  if (signature === undefined || signatures.length !== 1) {
+    return null;
   }
+  certificationParts.add(signature.index);
   // The rules attach one original message; with more, none is the original.
   const messages = parts.flatMap((part, index) =>
     isMessagePart(part) ? [{ bytes: part.bytes, index }] : [],
@@ -356,10 +360,7 @@ export const readCertifiedEmailParts = (
     envelope: {
       ...certification.read,
       includesOriginal: original !== null,
-      signature:
-        signature !== undefined && signatures.length === 1
-          ? signature.signature
-          : null,
+      signature: signature.signature,
     },
     original: original?.bytes ?? null,
     certificationParts,
@@ -393,13 +394,13 @@ const ERROR_TEXT = {
 export const certifiedEmailText = (envelope: CertifiedEmailEnvelope) => {
   const { signature } = envelope;
   return [
-    `Italian certified email (PEC): ${KIND_TEXT[envelope.kind]}`,
-    ...line("Certified sender", envelope.sender),
+    `Italian certified email (PEC) as stated in the file, not verified: ${KIND_TEXT[envelope.kind]}`,
+    ...line("Stated sender", envelope.sender),
     ...envelope.recipients.map(
       ({ address, certified }) =>
-        `Certified recipient: ${address} (${certified ? "certified mailbox" : "ordinary mailbox"})`,
+        `Stated recipient: ${address} (${certified ? "certified mailbox" : "ordinary mailbox"})`,
     ),
-    ...line("Certified subject", envelope.subject),
+    ...line("Stated subject", envelope.subject),
     ...line("Delivered to", envelope.deliveredTo),
     ...envelope.receivedFor.map((address) => `Taken in charge for: ${address}`),
     ...line("Certified at", envelope.certifiedAt),
@@ -409,9 +410,9 @@ export const certifiedEmailText = (envelope: CertifiedEmailEnvelope) => {
     ...line("Requested receipt", envelope.receiptType),
     ...line("Error", ERROR_TEXT[envelope.error]),
     ...line("Error detail", envelope.errorDetail),
-    `Provider signature: ${signature === null ? "none found" : "unverified"}`,
-    ...line("Stated signer", signature?.signerName ?? null),
-    ...line("Stated issuer", signature?.issuerName ?? null),
-    ...line("Stated signing time", signature?.signedAt ?? null),
+    "Provider signature: unverified",
+    ...line("Stated signer", signature.signerName),
+    ...line("Stated issuer", signature.issuerName),
+    ...line("Stated signing time", signature.signedAt),
   ].join("\n");
 };
