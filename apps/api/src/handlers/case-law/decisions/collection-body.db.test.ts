@@ -430,8 +430,9 @@ test("retained Polish publication parts compose through public readers and yield
   expect(publicBlocks).toContain("Section one");
   expect(publicBlocks).toContain("Section two");
   expect(publicBlocks).toContain("alternate-wrapping");
-  expect(publicBlocks).toContain("https://example.test/collection/part-1");
-  expect(publicBlocks).toContain("https://example.test/collection/part-2");
+  // The decision's own link is the MCP reader's one publisher link.
+  expect(publicBlocks).not.toContain("https://example.test/collection/part-1");
+  expect(publicBlocks).not.toContain("https://example.test/collection/part-2");
   const completeKey = await retain(
     "complete",
     { extent: "complete", legalSentence: null, keywords: [] },
