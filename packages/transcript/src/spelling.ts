@@ -259,9 +259,7 @@ const compareRanks = (
 /** The spelled words of a phrase, joined as the custom word joins them. */
 const spellPhrase = (spelled: readonly string[], spelling: string): string => {
   const gaps = spelling.trim().match(/\s+/gu) ?? [];
-  return spelled
-    .map((word, index) => `${word}${index < gaps.length ? gaps[index] : ""}`)
-    .join("");
+  return spelled.map((word, index) => `${word}${gaps[index] ?? ""}`).join("");
 };
 
 const joinPieces = (pieces: readonly Piece[]): string =>
