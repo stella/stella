@@ -379,6 +379,11 @@ describe("putting dictated text where the cursor is", () => {
     );
   });
 
+  test("before a line break the full stop stays", () => {
+    expect(insert("\nDál.", "Hotovo.", { at: 0 }).text).toBe("Hotovo.\nDál.");
+    expect(insert("\nale", "Hotovo.", { at: 0 }).text).toBe("Hotovo.\nale");
+  });
+
   test("an ellipsis stays", () => {
     expect(insert("a pak", "Uvidíme...", { at: 0 }).text).toBe(
       "Uvidíme... a pak",

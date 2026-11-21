@@ -259,8 +259,9 @@ export const insertDictation = ({
   } else if (!locale.toLowerCase().startsWith("de")) {
     text = lowercaseFirstWord(text, dictated.names);
   }
-  // The sentence goes on after the cursor: what follows starts in lower case.
-  const next = after.trimStart().at(0);
+  // The sentence goes on after the cursor, on the same line, in lower case
+  // or after a comma.
+  const next = after.replace(/^[^\S\n]+/u, "").at(0);
   if (
     next !== undefined &&
     /^[\p{Ll}.,;:!?]/u.test(next) &&
