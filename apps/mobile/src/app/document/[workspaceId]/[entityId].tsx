@@ -87,6 +87,7 @@ const openDocument = async ({
   }
   if (
     file.value.viewer === "asic" ||
+    file.value.viewer === "signed-dossier" ||
     file.value.viewer === "cades" ||
     file.value.viewer === "dataBox" ||
     file.value.viewer === "e-invoice" ||
@@ -564,6 +565,46 @@ const LegalFilePreview = ({
       if (viewer === "e-invoice") {
         return <EInvoiceDetails preview={preview.value} />;
       }
+      if (viewer === "signed-dossier") {
+        const { documents, signers } = preview.value;
+        return (
+          <>
+            <Text variant="caption">{signedFile("unverified")}</Text>
+            <View>
+              <Text accessibilityRole="header" variant="label">
+                {signedFile("signers")}
+              </Text>
+              {signers.length === 0 ? (
+                <Text variant="caption">{signedFile("noSigners")}</Text>
+              ) : (
+                signers.map((signer) => (
+                  <Text key={signer.id} selectable>
+                    {signer.name ?? signedFile("unknownSigner")}
+                  </Text>
+                ))
+              )}
+            </View>
+            {documents.map(({ id, fileName, status, text, textFormat }) => (
+              <View key={id}>
+                <Text accessibilityRole="header" selectable variant="label">
+                  {fileName}
+                </Text>
+                {status !== "unavailable" && text.trim() ? (
+                  <LegalFilePreviewText format={textFormat} text={text} />
+                ) : null}
+                {status === "truncated" && (
+                  <Text variant="caption">{common("previewTruncated")}</Text>
+                )}
+                {status === "unavailable" && (
+                  <Text variant="caption">
+                    {signedFile("noReadableContent")}
+                  </Text>
+                )}
+              </View>
+            ))}
+          </>
+        );
+      }
       if (viewer === "structured-document") {
         return (
           <>
@@ -595,6 +636,7 @@ const LegalFilePreview = ({
       ),
       asic: signedFile("unreadable"),
       cades: signedFile("unreadable"),
+      "signed-dossier": signedFile("unreadable"),
     } satisfies Record<typeof viewer, string>;
     const unreadableMessage = unreadableMessages[viewer];
     return (

@@ -174,14 +174,6 @@ const parseXmlPart = (
   return Result.ok(read.root);
 };
 
-/** One standalone XML document under the same parser limits as a package part. */
-export const parseStandaloneXml = (
-  bytes: Uint8Array,
-): Result<DocumentXmlNode, DocumentPackageError> =>
-  bytes.byteLength > MAX_XML_TOTAL_BYTES
-    ? Result.err(limitError())
-    : parseXmlPart(bytes, { remaining: MAX_XML_NODES });
-
 export const openXmlDocumentPackage = async (
   bytes: Uint8Array,
 ): Promise<Result<DocumentXmlReader, DocumentPackageError>> => {
@@ -214,6 +206,19 @@ export const openXmlDocumentPackage = async (
   };
   return Result.ok(readXml);
 };
+
+/**
+ * Parses one XML document that is not inside a ZIP package, such as an XML
+ * dossier with embedded documents. The same node and depth budgets apply; the
+ * byte budget is the caller's, which has already bounded the file.
+ */
+export const parseStandaloneXml = (
+  bytes: Uint8Array,
+  maxBytes: number,
+): Result<DocumentXmlNode, DocumentPackageError> =>
+  bytes.byteLength > maxBytes
+    ? Result.err(limitError())
+    : parseXmlPart(bytes, { remaining: MAX_XML_NODES });
 
 export const createDocumentText = (maxChars: number) => {
   let text = "";

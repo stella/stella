@@ -94,6 +94,10 @@ import {
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
+import {
+  signedDossierContentScalingScenario,
+  signedDossierPreviewScalingScenario,
+} from "./signed-dossier";
 import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
@@ -157,6 +161,8 @@ const measuredApiScenarios = [
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
   asicPreviewScalingScenario,
+  signedDossierContentScalingScenario,
+  signedDossierPreviewScalingScenario,
   structuredDocumentScalingScenario,
   eInvoicePreviewScalingScenario,
   eInvoiceAttachmentScalingScenario,

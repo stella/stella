@@ -659,6 +659,20 @@
     "hideList": "Hide the list",
     "showList": "Show the list"
   },
+  "quickDictation": {
+    "activityReady": "Dictation ready",
+    "activityReadyDetail": "Tap to review the text in stella",
+    "activityRecording": "Dictating",
+    "activityRecordingDetail": "Tap Done to review the text",
+    "copied": "Copied",
+    "copy": "Copy",
+    "documentName": "Dictation {when}",
+    "none": "No dictation is waiting. Start one with the Action Button, Siri or Control Center.",
+    "noneTitle": "Nothing to review",
+    "saveFailed": "The text could not be prepared for saving. Try again.",
+    "sendToChat": "Send to chat",
+    "text": "Dictated text"
+  },
   "role": {
     "readFailed": "Your permissions could not be loaded, so changes are hidden for now.",
     "retry": "Try again"
@@ -786,6 +800,8 @@
   "signedFile": {
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
+    "noSigners": "No signer details were found.",
+    "signers": "Signers",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."

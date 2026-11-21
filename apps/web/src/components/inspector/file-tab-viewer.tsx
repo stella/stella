@@ -70,6 +70,11 @@ const EInvoiceViewer = lazy(async () => {
   return { default: m.EInvoiceViewer };
 });
 
+const SignedDossierViewer = lazy(async () => {
+  const m = await import("@/components/inspector/signed-dossier-viewer");
+  return { default: m.SignedDossierViewer };
+});
+
 const StructuredDocumentViewer = lazy(async () => {
   const m = await import("@/components/inspector/structured-document-viewer");
   return { default: m.StructuredDocumentViewer };
@@ -93,6 +98,13 @@ const asicFileViewer = {
   surface: "inspector-asic",
 } as const satisfies LegalFileViewer;
 
+const signedDossierViewer = {
+  Viewer: SignedDossierViewer,
+  unreadable: "signedFile.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-signed-dossier",
+} as const satisfies LegalFileViewer;
+
 const structuredDocumentViewer = {
   Viewer: StructuredDocumentViewer,
   unreadable: "structuredDocument.noReadableContent",
@@ -110,6 +122,8 @@ const eInvoiceViewer = {
 const legalFileViewers = {
   asicE: asicFileViewer,
   asicS: asicFileViewer,
+  eAkta: signedDossierViewer,
+  zep: signedDossierViewer,
   cades: {
     Viewer: CadesFileViewer,
     unreadable: "signedFile.unreadable",
@@ -278,6 +292,8 @@ const FileTabViewerComponent = ({
       case "asicS":
       case "cades":
       case "dataBox":
+      case "eAkta":
+      case "zep":
       case "ofd":
       case "uyap":
       case "isdoc":

@@ -659,6 +659,20 @@
     "hideList": "إخفاء القائمة",
     "showList": "إظهار القائمة"
   },
+  "quickDictation": {
+    "activityReady": "الإملاء جاهز",
+    "activityReadyDetail": "اضغط لمراجعة النص في stella",
+    "activityRecording": "جارٍ الإملاء",
+    "activityRecordingDetail": "اضغط تم لمراجعة النص",
+    "copied": "تم النسخ",
+    "copy": "نسخ",
+    "documentName": "إملاء {when}",
+    "none": "لا يوجد إملاء بانتظار المراجعة. ابدأ واحدًا بزر الإجراء أو Siri أو مركز التحكم.",
+    "noneTitle": "لا شيء للمراجعة",
+    "saveFailed": "تعذّر تجهيز النص للحفظ. حاول مرة أخرى.",
+    "sendToChat": "إرسال إلى الدردشة",
+    "text": "النص المُملى"
+  },
   "role": {
     "readFailed": "تعذّر تحميل صلاحياتك، لذا التعديلات مخفية في الوقت الحالي.",
     "retry": "حاول مرة أخرى"
@@ -786,6 +800,8 @@
   "signedFile": {
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
+    "noSigners": "لم يُعثر على بيانات أي موقّع.",
+    "signers": "الموقّعون",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",
     "unverified": "لم يُتحقق من التوقيعات."

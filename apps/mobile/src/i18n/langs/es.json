@@ -659,6 +659,20 @@
     "hideList": "Ocultar la lista",
     "showList": "Mostrar la lista"
   },
+  "quickDictation": {
+    "activityReady": "Dictado listo",
+    "activityReadyDetail": "Toca para revisar el texto en stella",
+    "activityRecording": "Dictando",
+    "activityRecordingDetail": "Toca Listo para revisar el texto",
+    "copied": "Copiado",
+    "copy": "Copiar",
+    "documentName": "Dictado {when}",
+    "none": "No hay ningún dictado pendiente. Empieza uno con el botón de acción, Siri o el centro de control.",
+    "noneTitle": "Nada que revisar",
+    "saveFailed": "No se pudo preparar el texto para guardarlo. Inténtalo de nuevo.",
+    "sendToChat": "Enviar al chat",
+    "text": "Texto dictado"
+  },
   "role": {
     "readFailed": "No se pudieron cargar sus permisos, así que los cambios quedan ocultos por ahora.",
     "retry": "Reintentar"
@@ -786,6 +800,8 @@
   "signedFile": {
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
+    "noSigners": "No se encontraron datos de los firmantes.",
+    "signers": "Firmantes",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",
     "unverified": "Las firmas no se han verificado."

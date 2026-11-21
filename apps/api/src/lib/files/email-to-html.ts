@@ -860,7 +860,7 @@ const hasExplicitWritingDirection = ($: CheerioApi): boolean => {
   );
 };
 
-const emailBodyToText = (body: EmailBody): string => {
+export const emailBodyToText = (body: EmailBody): string => {
   if (body.type === "text") {
     return normalizeExtractedText(body.text);
   }

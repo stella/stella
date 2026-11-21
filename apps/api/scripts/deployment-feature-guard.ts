@@ -87,6 +87,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Structured invoice previews use matter file read permissions on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/signed-dossier",
+    "Signed container previews use matter file read permissions on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/asic",
     "ASiC previews use matter file read permissions on every deployment",
   ],

@@ -659,6 +659,20 @@
     "hideList": "Liste ausblenden",
     "showList": "Liste einblenden"
   },
+  "quickDictation": {
+    "activityReady": "Diktat bereit",
+    "activityReadyDetail": "Tippe, um den Text in stella zu prüfen",
+    "activityRecording": "Diktat läuft",
+    "activityRecordingDetail": "Tippe auf Fertig, um den Text zu prüfen",
+    "copied": "Kopiert",
+    "copy": "Kopieren",
+    "documentName": "Diktat {when}",
+    "none": "Kein Diktat wartet. Starte eines mit der Aktionstaste, Siri oder im Kontrollzentrum.",
+    "noneTitle": "Nichts zu prüfen",
+    "saveFailed": "Der Text konnte nicht zum Speichern vorbereitet werden. Versuche es erneut.",
+    "sendToChat": "An den Chat senden",
+    "text": "Diktierter Text"
+  },
   "role": {
     "readFailed": "Ihre Berechtigungen konnten nicht geladen werden, daher sind Änderungen vorerst ausgeblendet.",
     "retry": "Erneut versuchen"
@@ -786,6 +800,8 @@
   "signedFile": {
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "noSigners": "Es wurden keine Angaben zu Unterzeichnern gefunden.",
+    "signers": "Unterzeichner",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
     "unverified": "Die Signaturen wurden nicht geprüft."

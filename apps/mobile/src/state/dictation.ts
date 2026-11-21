@@ -22,6 +22,8 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import { sameClassFallback } from "@/state/dictation-fallback";
+import type { ModelClass } from "@/state/dictation-fallback";
 import { partOfType } from "@/state/form-part";
 import type { FormPart } from "@/state/form-part";
 
@@ -113,6 +115,51 @@ export const readDictationModels = async ({
     path: "/v1/dictation/models",
     schema: desktopDictationModelsSchema,
   });
+
+/**
+ * One recording's text, with the model the person picked. When the server
+ * cannot serve it (503), the recording goes once more only to a model of
+ * the same provider, region side and retention (`sameClassFallback`), the
+ * picked model's class read from the list or, once it is withdrawn, from
+ * `modelClass` as kept when it was picked. With none, it goes nowhere else
+ * and the failure stands.
+ */
+export const transcribeWithinClass = async ({
+  fetch,
+  source,
+  audio,
+  choice,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly audio: FormPart;
+  readonly choice: TranscriptionChoice & {
+    readonly modelClass: ModelClass | null;
+  };
+}): Promise<Result<string, ApiError>> => {
+  const first = await transcribeRecording({ fetch, source, audio, choice });
+  const picked = choice.modelId;
+  if (
+    picked === undefined ||
+    !first.isErr() ||
+    first.error._tag !== "ApiRequestError" ||
+    first.error.status !== 503
+  ) {
+    return first;
+  }
+  const offered = await readDictationModels({ fetch, source });
+  const fallback = offered.isOk()
+    ? sameClassFallback(picked, choice.modelClass, offered.value)
+    : undefined;
+  return fallback === undefined
+    ? first
+    : await transcribeRecording({
+        fetch,
+        source,
+        audio,
+        choice: { ...choice, modelId: fallback },
+      });
+};
 
 const vocabularySchema = v.object({
   candidates: v.array(v.object({ term: v.string(), weight: v.number() })),

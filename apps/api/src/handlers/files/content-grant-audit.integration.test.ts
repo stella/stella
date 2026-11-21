@@ -18,10 +18,12 @@ import {
   ASIC_E_FILE_FORMAT,
   ASIC_S_FILE_FORMAT,
   CADES_FILE_FORMAT,
+  E_AKTA_FILE_FORMAT,
   ISDOC_FILE_FORMAT,
   ISDOCX_FILE_FORMAT,
   XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
+import { SIGNED_DOSSIER_FORMATS } from "@stll/api-contract/signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { rejectionOf } from "@stll/property-testing/rejection";
@@ -63,6 +65,10 @@ import {
 } from "@/api/handlers/files/get";
 import { readMarkedDownload } from "@/api/handlers/files/marked-download";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
+import {
+  signedDossierContentEndpoint,
+  signedDossierPreviewEndpoint,
+} from "@/api/handlers/files/signed-dossier";
 import structuredDocumentEndpoint from "@/api/handlers/files/structured-document";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
@@ -111,6 +117,7 @@ import {
   xmlBytes,
 } from "@/api/tests/fixtures/e-invoice";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
+import { makeEAktaFixture } from "@/api/tests/fixtures/signed-dossier";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -128,6 +135,10 @@ import {
   eInvoicePreviewScalingScenario,
 } from "@/api/tests/read-scaling/e-invoice";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
+import {
+  signedDossierContentScalingScenario,
+  signedDossierPreviewScalingScenario,
+} from "@/api/tests/read-scaling/signed-dossier";
 import { structuredDocumentScalingScenario } from "@/api/tests/read-scaling/structured-document";
 import {
   getRlsFixture,
@@ -1046,6 +1057,45 @@ const seedAsic = async () =>
     }),
   );
 
+// A generic type models an older upload recognized by its stored extension.
+const seedEAkta = async (pdf?: Uint8Array) =>
+  await seedStored(
+    {
+      fileName: "kérelem.DOSSZIE",
+      mimeType: "application/octet-stream",
+      pdfFileId: null,
+    },
+    await makeEAktaFixture({
+      documents: [
+        { title: "kérelem.txt", extension: "txt", bytes: "Kérelem szövege" },
+        {
+          title: "végzés.pdf",
+          extension: "pdf",
+          bytes: pdf ?? (await pdfBytes()),
+        },
+      ],
+      frameSigners: ["Example frame signer"],
+    }),
+  );
+
+const signedDossierPdfContext = (
+  fieldId: SafeId<"field">,
+  scopedDb: ScopedDb,
+  document = 1,
+) =>
+  createTestHandlerContext<
+    Parameters<typeof signedDossierContentEndpoint.handler>[0]
+  >({
+    workspaceId: ids.wsA1,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userA1 },
+    audit: recorderA(),
+    scopedDb,
+    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    params: { workspaceId: ids.wsA1, fieldId },
+    query: { document },
+  });
+
 const UYAP_FIXTURE_TEXT = "İçtihat özeti";
 const structuredFixtures = {
   uyap: {
@@ -1427,6 +1477,10 @@ describe("archive preview byte limits", () => {
   const previews = [
     { format: ASIC_E_FILE_FORMAT, endpoint: asicPreviewEndpoint },
     { format: ASIC_S_FILE_FORMAT, endpoint: asicPreviewEndpoint },
+    ...SIGNED_DOSSIER_FORMATS.map((format) => ({
+      format,
+      endpoint: signedDossierPreviewEndpoint,
+    })),
     ...STRUCTURED_DOCUMENT_FORMATS.map((format) => ({
       format,
       endpoint: structuredDocumentEndpoint,
@@ -1617,6 +1671,137 @@ describe("ASiC file delivery", () => {
         ),
       ),
     ).toBe(404);
+  });
+});
+
+describe("signed container delivery", () => {
+  test("an existing generic upload shows the same documents and signers in Files and AI", async () => {
+    const { fieldId, entityId, entityVersionId } = await seedEAkta();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const view = await signedDossierPreviewEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    );
+    expect(view).toMatchObject({
+      signers: [{ name: "Example frame signer" }],
+      documents: [
+        {
+          fileName: "kérelem.txt",
+          text: "Kérelem szövege",
+          status: "readable",
+          pdf: false,
+        },
+        { fileName: "végzés.pdf", pdf: true },
+      ],
+    });
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: E_AKTA_FILE_FORMAT.auditFormat },
+    });
+    const read = await LEGAL_FILE_READERS.eAkta({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    const { text } = read.unwrap();
+    expect(text).toContain("kérelem.txt");
+    expect(text).toContain("Kérelem szövege");
+    expect(text).toContain("Example frame signer");
+    expect(text).toContain("unverified");
+  });
+
+  test("serves the exact embedded PDF, scoped and audited", async () => {
+    const pdf = await pdfBytes();
+    const { fieldId, entityId } = await seedEAkta(pdf);
+    const response = await signedDossierContentEndpoint.handler(
+      signedDossierPdfContext(fieldId, scopedDbA()),
+    );
+    if (!(response instanceof Response)) {
+      panic("Expected a PDF response");
+    }
+    expect(response.headers.get("content-type")).toBe(PDF_MIME_TYPE);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+      new Uint8Array(pdf),
+    );
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: E_AKTA_FILE_FORMAT.auditFormat },
+    });
+  });
+
+  test("refuses a document that is not a PDF without recording a delivery", async () => {
+    const { fieldId, entityId } = await seedEAkta();
+    expect(
+      answeredStatus(
+        await signedDossierContentEndpoint.handler(
+          signedDossierPdfContext(fieldId, scopedDbA(), 0),
+        ),
+      ),
+    ).toBe(422);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("both endpoints refuse a signed container in another matter", async () => {
+    const { fieldId } = await seedFile(
+      {
+        fileName: "podanie.zep",
+        mimeType: "application/zip",
+        pdfFileId: null,
+      },
+      "b",
+    );
+    expect(
+      answeredStatus(
+        await signedDossierPreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+    expect(
+      answeredStatus(
+        await signedDossierContentEndpoint.handler(
+          signedDossierPdfContext(fieldId, scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+  });
+
+  const growMatter = async () => {
+    const unrelated = Array.from({ length: 80 }, () => ({
+      id: createSafeId<"entity">(),
+      name: "Docket entry",
+      kind: "document" as const,
+      workspaceId: ids.wsA1,
+    }));
+    seededEntityIds.push(...unrelated.map(({ id }) => id));
+    await testDb.insert(entities).values(unrelated);
+  };
+
+  test("preview cost stays bounded as a matter grows", async () => {
+    const { fieldId } = await seedEAkta();
+    const context = legalFileContext(fieldId, scopedDbA());
+    const small = await signedDossierPreviewScalingScenario.measure(context);
+    await growMatter();
+    const large = await signedDossierPreviewScalingScenario.measure(context);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(small.rows).toBe(2);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+
+  test("PDF cost stays bounded as a matter grows", async () => {
+    const { fieldId } = await seedEAkta();
+    const context = signedDossierPdfContext(fieldId, scopedDbA());
+    const small = await signedDossierContentScalingScenario.measure(context);
+    await growMatter();
+    const large = await signedDossierContentScalingScenario.measure(context);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(readScalingViolations({ small, large })).toEqual([]);
   });
 });
 

@@ -2226,6 +2226,7 @@
       "cades",
       "csv",
       "dataBox",
+      "eAkta",
       "excel",
       "fatturaPA",
       "isdoc",
@@ -2239,7 +2240,8 @@
       "rtf",
       "uyap",
       "word",
-      "xml"
+      "xml",
+      "zep"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],

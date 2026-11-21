@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
 import { readEInvoiceFile } from "@/api/lib/files/e-invoice-document";
 import { E_INVOICE_PREVIEW_MAX_LINES } from "@/api/lib/files/e-invoice-nodes";
 import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
@@ -51,13 +52,17 @@ describe("XML document routing", () => {
     ["a CII invoice", ciiXml(), "cii"],
     ["plain XML", plainXml(), null],
   ])("routes %s by its root namespace", (_, xml, expected) => {
-    const root = parseStandaloneXml(xmlBytes(xml)).unwrap();
+    const root = parseStandaloneXml(
+      xmlBytes(xml),
+      DOCUMENT_ARCHIVE_MAX_BYTES,
+    ).unwrap();
     expect(classifyXmlDocument(root)).toBe(expected);
   });
 
   test("an unqualified root named like an invoice stays plain XML", () => {
     const root = parseStandaloneXml(
       xmlBytes("<Invoice><ID>1</ID></Invoice>"),
+      DOCUMENT_ARCHIVE_MAX_BYTES,
     ).unwrap();
     expect(classifyXmlDocument(root)).toBeNull();
   });

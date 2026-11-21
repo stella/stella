@@ -4,6 +4,7 @@ import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import { compareCodeUnit } from "@stll/collation";
 
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
+import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
 import {
   type DocumentPackageError,
   openDocumentArchive,
@@ -92,7 +93,7 @@ const withAttachments = (
 export const readEInvoiceXml = (
   bytes: Uint8Array,
 ): Result<EInvoiceDocument | null, DocumentPackageError> => {
-  const root = parseStandaloneXml(bytes);
+  const root = parseStandaloneXml(bytes, DOCUMENT_ARCHIVE_MAX_BYTES);
   if (root.isErr()) {
     return Result.err(root.error);
   }
@@ -130,7 +131,10 @@ const readIsdocx = async (
     if (manifestBytes.isErr()) {
       return Result.err(manifestBytes.error);
     }
-    const manifest = parseStandaloneXml(manifestBytes.value);
+    const manifest = parseStandaloneXml(
+      manifestBytes.value,
+      DOCUMENT_ARCHIVE_MAX_BYTES,
+    );
     if (manifest.isErr()) {
       return Result.err(manifest.error);
     }
@@ -152,7 +156,7 @@ const readIsdocx = async (
   if (mainBytes.isErr()) {
     return Result.err(mainBytes.error);
   }
-  const root = parseStandaloneXml(mainBytes.value);
+  const root = parseStandaloneXml(mainBytes.value, DOCUMENT_ARCHIVE_MAX_BYTES);
   if (root.isErr()) {
     return Result.err(root.error);
   }
