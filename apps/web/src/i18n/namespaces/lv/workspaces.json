@@ -320,7 +320,9 @@
   "signedFile": {
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
+    "noSigners": "Dati par parakstītājiem netika atrasti.",
     "pdfUnavailable": "PDF priekšskatījums nav pieejams.",
+    "signers": "Parakstītāji",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
     "unverified": "Paraksti nav pārbaudīti."

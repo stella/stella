@@ -733,6 +733,8 @@
   "signedFile": {
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
+    "noSigners": "لم يُعثر على بيانات أي موقّع.",
+    "signers": "الموقّعون",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",
     "unverified": "لم يُتحقق من التوقيعات."

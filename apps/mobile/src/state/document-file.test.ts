@@ -6,6 +6,7 @@ import {
   DATA_BOX_DOCUMENT_KIND,
   DATA_BOX_MESSAGE_MIME_TYPE,
 } from "@stll/api-contract/data-box";
+import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -352,6 +353,49 @@ describe("reading a document's file", () => {
     },
   );
 
+  test.each([".ES3", ".et3", ".dosszie", ".zep"])(
+    "reads a signed container with the %s extension through its preview",
+    async (extension) => {
+      const fileName = `podanie${extension}`;
+      const preview = {
+        signers: [
+          { id: "signature-0", name: "Example signer" },
+          { id: "signature-1", name: null },
+        ],
+        documents: [
+          {
+            fileName: "határozat.pdf",
+            status: "readable",
+            text: "Az első oldal",
+            pdf: true,
+          },
+          {
+            fileName: "príloha.bin",
+            status: "unavailable",
+            text: "",
+            pdf: false,
+          },
+        ],
+      } satisfies InferOutput<typeof signedDossierPreviewSchema>;
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "signed-dossier" && file.preview.unwrap()).toEqual(
+        preview,
+      );
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/signed-dossier/field%3F1",
+      ]);
+    },
+  );
+
   test.each([".UDF", ".ofd"])(
     "reads a %s file through the shared text preview",
     async (extension) => {
@@ -381,6 +425,11 @@ describe("reading a document's file", () => {
       viewer: "asic",
       fileName: "Detached.asice",
       mimeType: "application/vnd.etsi.asic-e+zip",
+    },
+    {
+      viewer: "signed-dossier",
+      fileName: "Podanie.zep",
+      mimeType: "application/zip",
     },
     {
       viewer: "structured-document",

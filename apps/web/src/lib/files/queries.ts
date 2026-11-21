@@ -14,6 +14,7 @@ import {
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
+import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { fetchWithTimeout } from "@stll/fetch";
 import {
@@ -110,6 +111,12 @@ export const filesKeys = {
   cadesByFieldId: ({ fieldId, workspaceId }: FileByFieldIdKey) => [
     ...filesKeys.all(),
     "cades",
+    workspaceId,
+    fieldId,
+  ],
+  signedDossierByFieldId: ({ fieldId, workspaceId }: FileByFieldIdKey) => [
+    ...filesKeys.all(),
+    "signed-dossier",
     workspaceId,
     fieldId,
   ],
@@ -330,58 +337,116 @@ export const cadesPreviewOptions = (props: FileOptionsProps) =>
     },
   );
 
+/** An audited PDF the API derives from a signed file, read within the upload limit. */
+const fetchDerivedPdf = async (path: string, signal: AbortSignal) => {
+  const response = await fetchWithTimeout(apiUrl(path), {
+    credentials: "include",
+    signal,
+    timeout: { type: "headers", ms: 60_000 },
+  });
+  let result: ApiResponse<ArrayBuffer>;
+  if (!response.ok) {
+    const value = await readBodyJsonWithIdleDeadline(response, {
+      idleMs: 30_000,
+      maxBytes: 64 * 1024,
+      signal,
+    });
+    result = { data: null, error: { status: response.status, value } };
+  } else if (response.headers.get("content-type") !== PDF_MIME) {
+    await Promise.allSettled([response.body?.cancel()]);
+    result = {
+      data: null,
+      error: {
+        status: 502,
+        value: {
+          message: "Invalid PDF response from the signed file preview",
+        },
+      },
+    };
+  } else {
+    const bytes = await readBodyWithIdleDeadline(response, {
+      idleMs: 30_000,
+      maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
+      signal,
+    });
+    result = {
+      data:
+        bytes.buffer instanceof ArrayBuffer
+          ? bytes.buffer
+          : new Uint8Array(bytes).buffer,
+      error: null,
+    };
+  }
+  return unwrapApiResponse(result);
+};
+
 export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
   resourceQueryOptions(
     queryOptions({
       gcTime: 0,
       retry: false,
       queryKey: [...filesKeys.cadesByFieldId({ fieldId, workspaceId }), "pdf"],
+      queryFn: async ({ signal }) =>
+        await fetchDerivedPdf(
+          `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
+          signal,
+        ),
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId },
+    },
+  );
+
+export const signedDossierPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: filesKeys.signedDossierByFieldId(props),
       queryFn: async ({ signal }) => {
-        const response = await fetchWithTimeout(
-          apiUrl(
-            `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
-          ),
-          {
-            credentials: "include",
-            signal,
-            timeout: { type: "headers", ms: 60_000 },
-          },
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes["signed-dossier"]({
+          fieldId: props.fieldId,
+        }).get({ fetch: { signal } });
+        return parseSuccessBody(
+          signedDossierPreviewSchema,
+          unwrapApiResponse(response),
+          "Signed container preview must match its response schema",
         );
-        let result: ApiResponse<ArrayBuffer>;
-        if (!response.ok) {
-          const value = await readBodyJsonWithIdleDeadline(response, {
-            idleMs: 30_000,
-            maxBytes: 64 * 1024,
-            signal,
-          });
-          result = { data: null, error: { status: response.status, value } };
-        } else if (response.headers.get("content-type") !== PDF_MIME) {
-          await Promise.allSettled([response.body?.cancel()]);
-          result = {
-            data: null,
-            error: {
-              status: 502,
-              value: {
-                message: "Invalid PDF response from the signed file preview",
-              },
-            },
-          };
-        } else {
-          const bytes = await readBodyWithIdleDeadline(response, {
-            idleMs: 30_000,
-            maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
-            signal,
-          });
-          result = {
-            data:
-              bytes.buffer instanceof ArrayBuffer
-                ? bytes.buffer
-                : new Uint8Array(bytes).buffer,
-            error: null,
-          };
-        }
-        return unwrapApiResponse(result);
       },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const signedDossierPdfOptions = ({
+  document,
+  fieldId,
+  workspaceId,
+}: FileOptionsProps & { document: number }) =>
+  resourceQueryOptions(
+    queryOptions({
+      gcTime: 0,
+      retry: false,
+      queryKey: [
+        ...filesKeys.signedDossierByFieldId({ fieldId, workspaceId }),
+        "pdf",
+        document,
+      ],
+      queryFn: async ({ signal }) =>
+        await fetchDerivedPdf(
+          `/files/${encodeURIComponent(workspaceId)}/signed-dossier/${encodeURIComponent(fieldId)}/content?document=${document}`,
+          signal,
+        ),
     }),
     {
       resources: [

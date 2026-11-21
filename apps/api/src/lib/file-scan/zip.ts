@@ -1,4 +1,5 @@
 import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
+import { ZEP_FILE_FORMAT } from "@stll/api-contract/signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 
 import {
@@ -29,6 +30,8 @@ export const ZIP_BASED_MEDIA_TYPES: ReadonlySet<ScanMediaType> =
     "application/x-zip-compressed",
     ...STRUCTURED_DOCUMENT_FORMATS.map(({ mimeType }) => mimeType),
     ...ASIC_FILE_FORMATS.map(({ mimeType }) => mimeType),
+    ZEP_FILE_FORMAT.mimeType,
+    ...ZEP_FILE_FORMAT.mimeAliases,
   ]);
 
 export const hasZipMagic = (buffer: Uint8Array): boolean => {

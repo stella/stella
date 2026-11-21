@@ -320,7 +320,9 @@
   "signedFile": {
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "noSigners": "Nem találhatók adatok az aláírókról.",
     "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "signers": "Aláírók",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."

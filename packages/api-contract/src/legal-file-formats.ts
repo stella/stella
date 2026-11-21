@@ -1,4 +1,5 @@
 import { ASIC_FILE_FORMATS } from "./asic-file-formats";
+import { SIGNED_DOSSIER_FORMATS } from "./signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "./structured-document-formats";
 
 export const STRUCTURED_DOCUMENT_KINDS = STRUCTURED_DOCUMENT_FORMATS.map(
@@ -27,11 +28,16 @@ export const [ASIC_E_FILE_FORMAT, ASIC_S_FILE_FORMAT] = ASIC_FILE_FORMATS;
 
 export const ASIC_FILE_KINDS = ASIC_FILE_FORMATS.map(({ kind }) => kind);
 
+export const SIGNED_DOSSIER_KINDS = SIGNED_DOSSIER_FORMATS.map(
+  ({ kind }) => kind,
+);
+
 /** Recognized legal containers shared by Files, search and chat. */
 export const LEGAL_FILE_FORMATS = [
   DATA_BOX_FILE_FORMAT,
   CADES_FILE_FORMAT,
   ...ASIC_FILE_FORMATS,
+  ...SIGNED_DOSSIER_FORMATS,
   ...STRUCTURED_DOCUMENT_FORMATS,
 ] as const;
 

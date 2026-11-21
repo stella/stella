@@ -5,6 +5,7 @@ import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import { legalFileFormat } from "@stll/api-contract/document-format";
+import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 
 import type { Fetch } from "@/connection/http";
@@ -125,6 +126,16 @@ type AsicDocumentFile = {
   readonly preview: Result<v.InferOutput<typeof asicPreviewSchema>, ApiError>;
 };
 
+type SignedDossierDocumentFile = {
+  readonly viewer: "signed-dossier";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof signedDossierPreviewSchema>,
+    ApiError
+  >;
+};
+
 type StructuredDocumentFile = {
   readonly viewer: "structured-document";
   readonly fileName: string;
@@ -139,6 +150,7 @@ export type LegalDocumentFile =
   | AsicDocumentFile
   | CadesDocumentFile
   | DataBoxDocumentFile
+  | SignedDossierDocumentFile
   | StructuredDocumentFile;
 
 export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
@@ -271,6 +283,21 @@ export const readDocumentFile = async ({
           schema: dataBoxPreviewSchema,
         });
         return Result.ok({ viewer: kind, fileName, fieldId, preview });
+      }
+      case "eAkta":
+      case "zep": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/signed-dossier/${encodeURIComponent(fieldId)}`,
+          schema: signedDossierPreviewSchema,
+        });
+        return Result.ok({
+          viewer: "signed-dossier",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies SignedDossierDocumentFile);
       }
       case "ofd":
       case "uyap": {

@@ -289,6 +289,8 @@ export const DOCUMENT_MARKS = {
   asicE: signedDocumentMark,
   asicS: signedDocumentMark,
   cades: signedDocumentMark,
+  eAkta: signedDocumentMark,
+  zep: signedDocumentMark,
   dataBox: {
     viewBox: "0 0 24 24",
     gradients: [],
