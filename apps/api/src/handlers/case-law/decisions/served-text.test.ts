@@ -8,8 +8,8 @@ import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { readServedDecisionText } from "./served-text";
 
 const decisionId = createSafeId<"caseLawDecision">();
-const unreadable = () =>
-  Promise.reject(
+const unreadable = async () =>
+  await Promise.reject(
     new CorpusPayloadUnavailableError({
       message: "Fixture object unavailable",
       documentId: decisionId,
