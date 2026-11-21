@@ -7,7 +7,8 @@ import messages from "@/i18n/langs/en.json";
 
 GlobalRegistrator.register({ url: "https://app.example.test" });
 const { act, useSyncExternalStore } = await import("react");
-const { cleanup, render } = await import("@testing-library/react");
+const { cleanup, fireEvent, render, waitFor } =
+  await import("@testing-library/react");
 const { IntlProvider } = await import("use-intl");
 const { ChatComposerActionButton } =
   await import("./chat-composer-action-button");
@@ -131,4 +132,43 @@ test("an empty draft keeps Send reachable and names what to do", () => {
   expect(button.hasAttribute("disabled")).toBe(false);
   button.click();
   expect(sends).toBe(0);
+});
+
+const hover = (element: HTMLElement) => {
+  fireEvent.pointerEnter(element, { pointerType: "mouse" });
+  fireEvent.pointerMove(element, { pointerType: "mouse" });
+  fireEvent.mouseEnter(element);
+  fireEvent.mouseMove(element);
+};
+
+const openTooltips = () =>
+  [...document.querySelectorAll('[data-slot="tooltip-popup"]')].map(
+    (popup) => popup.textContent,
+  );
+
+test("a resting pointer keeps a tooltip open on Send only while it says why Send is disabled", async () => {
+  const Composer = ({ canSend }: { canSend: boolean }) => (
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
+      <ChatComposerActionButton
+        canSend={canSend}
+        disabledReason={messages.chat.sendPromptEmpty}
+        isGenerating={false}
+        onSend={() => undefined}
+      />
+    </IntlProvider>
+  );
+  const ui = render(<Composer canSend={false} />);
+  const send = ui.getByRole("button", { name: messages.chat.sendPrompt });
+  act(() => {
+    hover(send);
+  });
+  await waitFor(() => {
+    expect(openTooltips()).toEqual([messages.chat.sendPromptEmpty]);
+  });
+  // The draft fills under the resting pointer: an enabled Send names
+  // itself and keeps no tooltip open over the turn it starts.
+  ui.rerender(<Composer canSend />);
+  await waitFor(() => {
+    expect(openTooltips()).toEqual([]);
+  });
 });
