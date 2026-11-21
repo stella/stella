@@ -69,8 +69,11 @@ const response = safePublicHandlerResponseSchemasWithStatusText(
   dictationLearnedFixesSchema,
 );
 
-/** The linked member's learned fixes, as `GET /v1/dictation/learned-fixes` answers. */
-const createDesktopLearnedFixesListEndpoint = (
+/**
+ * The linked member's learned fixes, as `GET /v1/dictation/learned-fixes`
+ * answers. Exported for the scaling harness, which supplies the account.
+ */
+export const createDesktopLearnedFixesListEndpoint = (
   options: DesktopLearnedFixesOptions = {},
 ) =>
   createSafeBoundedPublicHandler(
