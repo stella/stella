@@ -192,3 +192,26 @@ test("refuses preview when an embedded file fails the upload scan", async () => 
   );
   expect(unreadable.isErr() && unreadable.error.status).toBe(422);
 });
+
+test("delivers a zipped PDF that inflates past the size of its container", async () => {
+  const pdf = await pdfBytes();
+  // Trailing whitespace after the end marker keeps the bytes a valid PDF.
+  const padded = new Uint8Array(pdf.byteLength + 2 * 1024 * 1024).fill(0x20);
+  padded.set(pdf);
+  const bytes = await makeEAktaFixture({
+    documents: [
+      {
+        title: "végzés.pdf",
+        extension: "pdf",
+        bytes: padded,
+        transforms: ["zip", "base64"],
+      },
+    ],
+  });
+  expect(bytes.byteLength).toBeLessThan(padded.byteLength);
+  const delivered = await readSignedDossierPdf(
+    stored(bytes, "record.es3", E_AKTA_FILE_FORMAT.mimeType),
+    0,
+  );
+  expect(delivered.unwrap()).toEqual(padded);
+});

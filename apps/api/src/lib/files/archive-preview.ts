@@ -133,7 +133,9 @@ export const readSignedDossierPdf = async (
     ],
     stdin: new Blob([bytes]),
     timeoutMs: LIMITS.extractionTimeoutMs,
-    maxOutputBytes: bytes.byteLength,
+    // A compressed document can inflate past its container, never past the
+    // archive reader's retained-content budget.
+    maxOutputBytes: DOCUMENT_ARCHIVE_MAX_BYTES,
   });
   if (result.isErr()) {
     const { exitCode } = result.error;
