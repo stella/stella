@@ -255,6 +255,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/country-codes/src/**/*.ts",
   "packages/db-load-gate/src/**/*.ts",
   "packages/decision-reader/src/**/*.{ts,tsx}",
+  "packages/docx-authoring/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
