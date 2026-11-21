@@ -715,6 +715,19 @@
       "failed": "Das Fenster konnte nicht geöffnet werden. Versuchen Sie es erneut.",
       "open": "Öffnen",
       "title": "Aufnahme transkribieren"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Andere Töne leiser stellen",
+        "nothing": "Nichts tun",
+        "pause": "Musik und Spotify pausieren"
+      },
+      "description": "Was mit anderen Tönen passiert, während stella aufnimmt, damit sie nicht im Text landen. Nach der Aufnahme ist alles wie vorher.",
+      "speakersOnly": {
+        "description": "Kopfhörer bleiben unverändert: Das Mikrofon hört sie nicht.",
+        "title": "Nur über Lautsprecher"
+      },
+      "title": "Beim Diktieren"
     }
   },
   "keepAwake": {

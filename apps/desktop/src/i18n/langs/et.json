@@ -715,6 +715,19 @@
       "failed": "Akent ei õnnestunud avada. Proovige uuesti.",
       "open": "Ava",
       "title": "Salvestise transkribeerimine"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Vaigista muid helisid",
+        "nothing": "Ära tee midagi",
+        "pause": "Peata Muusika ja Spotify"
+      },
+      "description": "Mis juhtub muude helidega, kui stella salvestab, et need teksti ei satuks. Salvestuse lõppedes taastub kõik.",
+      "speakersOnly": {
+        "description": "Kõrvaklapid jäävad puutumata: mikrofon neid ei kuule.",
+        "title": "Ainult kõlarite kaudu"
+      },
+      "title": "Dikteerimise ajal"
     }
   },
   "keepAwake": {

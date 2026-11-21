@@ -715,6 +715,19 @@
       "failed": "Nepavyko atidaryti lango. Bandykite dar kartą.",
       "open": "Atidaryti",
       "title": "Įrašo transkribavimas"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Patildyti kitus garsus",
+        "nothing": "Nieko nedaryti",
+        "pause": "Pristabdyti Muziką ir Spotify"
+      },
+      "description": "Kas nutinka kitiems garsams, kol stella įrašo, kad jie nepatektų į tekstą. Baigus įrašyti viskas grįžta.",
+      "speakersOnly": {
+        "description": "Ausinių nekeisti: mikrofonas jų negirdi.",
+        "title": "Tik per garsiakalbius"
+      },
+      "title": "Diktuojant"
     }
   },
   "keepAwake": {

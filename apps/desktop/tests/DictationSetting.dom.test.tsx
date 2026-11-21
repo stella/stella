@@ -37,6 +37,7 @@ const ENABLED_SNAPSHOT = {
   shareWindowTitle: false,
   shareTextBeforeCursor: false,
   sounds: true,
+  speakersOnly: true,
   textBeforeCursorAvailable: true,
   failure: null,
   failureKeptInHistory: false,
@@ -52,6 +53,8 @@ const ENABLED_SNAPSHOT = {
   retypeShortcut: true,
   retypeShortcutTaken: false,
   shortcutTaken: false,
+  whileDictating: "nothing",
+  whileDictatingOffered: ["nothing", "lower", "pause"],
 };
 
 /** Renders the setting over a native side that answers with `snapshot`. */
@@ -486,6 +489,43 @@ test("removing an app's own settings stores the rest", async () => {
   await waitFor(() => {
     expect(calls).toEqual([{ settings: [mail] }]);
   });
+});
+
+test("speakers only is offered once dictation changes other sound", async () => {
+  const calls: unknown[] = [];
+  const { getByRole, queryByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, whileDictating: "lower" },
+    (called, payload) => {
+      if (called !== "dictation_set_speakers_only") {
+        return undefined;
+      }
+      calls.push(payload);
+      return {
+        ...ENABLED_SNAPSHOT,
+        speakersOnly: false,
+        whileDictating: "lower",
+      };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.whileDictating.speakersOnly.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+  cleanup();
+
+  await renderSetting(ENABLED_SNAPSHOT);
+  expect(
+    queryByRole("switch", {
+      name: defaultMessages.dictation.whileDictating.speakersOnly.title,
+    }),
+  ).toBeNull();
 });
 
 test("an unread focus is not reported as switching apps", () => {

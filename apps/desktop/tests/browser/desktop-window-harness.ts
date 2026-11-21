@@ -234,6 +234,8 @@ const openWindow = async (
             ["dictation_set_cleanup", "enabled", "cleanup"],
             ["dictation_set_sounds", "enabled", "sounds"],
             ["dictation_set_retype_shortcut", "enabled", "retypeShortcut"],
+            ["dictation_set_while_dictating", "choice", "whileDictating"],
+            ["dictation_set_speakers_only", "enabled", "speakersOnly"],
             ["dictation_set_share_window_title", "enabled", "shareWindowTitle"],
             [
               "dictation_set_share_text_before_cursor",
@@ -425,11 +427,11 @@ export const openSettingsWindow = async (
   if (tab === "dictation") {
     const pane = page.locator("[data-slot=settings-page]");
     await expect(pane.getByRole("alert")).toBeVisible();
-    // Sounds, typing the last dictation again, cleanup and both of its
-    // context switches, all switchable.
+    // Sounds, only through speakers, typing the last dictation again,
+    // cleanup and both of its context switches, all switchable.
     await expect(
       pane.locator("[data-slot=settings-row] [role=switch]"),
-    ).toHaveCount(5);
+    ).toHaveCount(6);
     await expect(
       pane.locator("[data-slot=settings-row][data-disabled]"),
     ).toHaveCount(0);

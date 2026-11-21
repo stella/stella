@@ -715,6 +715,19 @@
       "failed": "Az ablakot nem sikerült megnyitni. Próbálja újra.",
       "open": "Megnyitás",
       "title": "Felvétel átírása"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Más hangok halkítása",
+        "nothing": "Semmi",
+        "pause": "A Zene és a Spotify szüneteltetése"
+      },
+      "description": "Mi történjen a többi hanggal, amíg a stella rögzít, hogy ne kerüljön a szövegbe. A rögzítés végén minden visszaáll.",
+      "speakersOnly": {
+        "description": "A fejhallgató marad, ahogy van: a mikrofon nem hallja.",
+        "title": "Csak hangszórón"
+      },
+      "title": "Diktálás közben"
     }
   },
   "keepAwake": {

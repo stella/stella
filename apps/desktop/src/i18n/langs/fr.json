@@ -715,6 +715,19 @@
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez.",
       "open": "Ouvrir",
       "title": "Transcrire un enregistrement"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Baisser les autres sons",
+        "nothing": "Ne rien faire",
+        "pause": "Mettre Musique et Spotify en pause"
+      },
+      "description": "Ce qui arrive aux autres sons pendant que stella enregistre, pour qu’ils ne finissent pas dans le texte. Tout revient à la fin de l’enregistrement.",
+      "speakersOnly": {
+        "description": "Les écouteurs restent tels quels : le micro ne les entend pas.",
+        "title": "Seulement sur les haut-parleurs"
+      },
+      "title": "Pendant la dictée"
     }
   },
   "keepAwake": {

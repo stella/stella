@@ -51,6 +51,8 @@ import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import { DictationInputFix } from "./DictationInputFix";
 import { DictationMicrophoneRow } from "./DictationMicrophone";
+import { DictationWhileDictatingRows } from "./DictationWhileDictating";
+import type { WhileDictating } from "./DictationWhileDictating";
 import { SettingsPageHeader } from "./settings-layout";
 
 type DictationModel =
@@ -95,6 +97,8 @@ export type DictationSnapshot = {
   shareWindowTitle: boolean;
   /** Whether a short sound marks the start and the end of listening. */
   sounds: boolean;
+  /** Whether other sound changes only while it plays through speakers. */
+  speakersOnly: boolean;
   /** Whether cleanup also gets the text before the cursor. */
   shareTextBeforeCursor: boolean;
   /** Whether this computer can read the text before the cursor; without it
@@ -134,6 +138,10 @@ export type DictationSnapshot = {
   retypeShortcut: boolean;
   retypeShortcutTaken: boolean;
   shortcutTaken: boolean;
+  /** What happens to other sound while recording, and what this computer
+   *  offers. */
+  whileDictating: WhileDictating;
+  whileDictatingOffered: WhileDictating[];
 };
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -608,6 +616,17 @@ const DictationShortcutSection = ({
         onChange={(sounds) => {
           change("dictation_set_sounds", { enabled: sounds });
         }}
+      />
+      <DictationWhileDictatingRows
+        choice={snapshot.whileDictating}
+        offered={snapshot.whileDictatingOffered}
+        onChoice={(choice) => {
+          change("dictation_set_while_dictating", { choice });
+        }}
+        onSpeakersOnly={(enabled) => {
+          change("dictation_set_speakers_only", { enabled });
+        }}
+        speakersOnly={snapshot.speakersOnly}
       />
       <DictationRetypeRow
         checked={snapshot.retypeShortcut}
