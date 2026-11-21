@@ -13,6 +13,7 @@ import {
   desktopBillingPlainDraftModelResponseSchema,
 } from "@stll/api-contract/desktop-billing-drafts";
 import type {
+  DesktopBillingDraftCodeName,
   DesktopBillingDraftRequest,
   DesktopBillingDraftResponse,
   DesktopBillingGuidedDraftResponse,
@@ -84,6 +85,7 @@ const body = createDesktopBillingDraftRequest({
     evidence: { documentNames: ["Agreement"], windowTitles: [] },
   },
 });
+const NO_CODE_NAMES: DesktopBillingDraftCodeName[] = [];
 const context = {
   mode: "guided" as const,
   matters: [
@@ -115,6 +117,7 @@ const context = {
       sections: ["Narratives"],
     },
   ],
+  codeNames: NO_CODE_NAMES,
   preference: "Keep it short",
   orgAIConfig: null,
   promptCachingEnabled: false,
@@ -145,6 +148,7 @@ const plainFixture: DesktopBillingPlainDraftResponse = {
     {
       entryId: "entry_1",
       narrative: "Revize smlouvy",
+      narrativeLanguage: "cs",
       matchedEarlierEntryIds: [EARLIER_ID],
     },
   ],
@@ -164,6 +168,7 @@ const fixture: DesktopBillingGuidedDraftResponse = {
     {
       entryId: "entry_1",
       narrative: "Revize smlouvy",
+      narrativeLanguage: "cs",
       classification: { type: "activity_group", activityGroup: "client" },
       flags: [
         {
@@ -411,6 +416,7 @@ test("one structured request uses selected evidence, region and opaque reference
         narrative: "Reviewed agreement",
       },
     ],
+    codeNames: [],
   });
   expect(calls).toHaveLength(1);
   expect(calls.at(0)?.schema).toBe(desktopBillingDraftModelResponseSchema);
@@ -437,6 +443,7 @@ test("without guideline files a consenting user gets plain descriptions with no 
         narrative: "Reviewed agreement",
       },
     ],
+    codeNames: [],
   });
   const { result } = v.parse(desktopBillingDraftReviewSchema, review);
   expect(result.mode).toBe("plain");
@@ -955,6 +962,77 @@ test("move proposals use the authorized target's canonical name", async () => {
   });
 });
 
+test("a LEDES draft names the codes it uses from the matter's own code list", async () => {
+  const otherMatterId = "00000000-0000-4000-8000-000000000005";
+  const ledes = {
+    type: "ledes",
+    taskCode: "L120",
+    activityCode: "A104",
+  } as const;
+  const { response } = await exercise({
+    draftContext: {
+      ...context,
+      matters: context.matters.map((matter) => ({
+        ...matter,
+        ledesEnabled: true,
+      })),
+      codeNames: [
+        {
+          matterId: MATTER_ID,
+          type: "task",
+          code: "L120",
+          name: "Analysis/strategy",
+        },
+        {
+          matterId: MATTER_ID,
+          type: "activity",
+          code: "A104",
+          name: "Review/analyze",
+        },
+        // A code the draft does not use, and one from another matter's list.
+        {
+          matterId: MATTER_ID,
+          type: "task",
+          code: "L110",
+          name: "Fact investigation",
+        },
+        {
+          matterId: otherMatterId,
+          type: "task",
+          code: "L120",
+          name: "Another list",
+        },
+      ],
+    },
+    output: {
+      ...fixture,
+      drafts: fixture.drafts.map((draft) => ({
+        ...draft,
+        classification: ledes,
+      })),
+    },
+  });
+  expect(response.status).toBe(200);
+  const review = v.parse(
+    desktopBillingDraftReviewSchema,
+    await response.json(),
+  );
+  expect(review.codeNames).toEqual([
+    {
+      matterId: MATTER_ID,
+      type: "task",
+      code: "L120",
+      name: "Analysis/strategy",
+    },
+    {
+      matterId: MATTER_ID,
+      type: "activity",
+      code: "A104",
+      name: "Review/analyze",
+    },
+  ]);
+});
+
 test("compact model output still passes canonical bounds before proposals are accepted", async () => {
   const { response, calls } = await exercise({
     output: {
@@ -1010,6 +1088,7 @@ test("billing reference mapping preserves every colliding text field", () => {
           {
             entryId: "entry_1",
             narrative: text,
+            narrativeLanguage: "cs",
             classification,
             flags: [
               {

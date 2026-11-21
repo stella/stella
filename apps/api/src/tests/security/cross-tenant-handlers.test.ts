@@ -1200,11 +1200,13 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
               {
                 entryId: "entry_1",
                 narrative: "Reviewed the agreement",
+                narrativeLanguage: "en",
                 matchedEarlierEntryIds: [],
               },
             ],
           },
           earlierEntries: [],
+          codeNames: [],
         },
       }),
   },
@@ -5053,6 +5055,7 @@ const desktopServer = (): TestServer => {
         ).entries.map(({ entryId }) => ({
           entryId,
           narrative: "Reviewed the agreement",
+          narrativeLanguage: "en",
           matchedEarlierEntryIds: [],
         })),
       }),

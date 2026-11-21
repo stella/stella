@@ -23,6 +23,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   agentSkillResources,
   agentSkills,
+  billingCodes,
   billingDraftUserSettings,
   billingGuidelineFiles,
   contacts,
@@ -460,6 +461,58 @@ test("guideline context joins only firm and selected client files with rule sect
   expect(
     context.matters.find(({ matterId }) => matterId === ids.wsA2)?.ledesEnabled,
   ).toBe(false);
+});
+
+test("a LEDES matter's context names only its own active billing codes", async () => {
+  const codeIds = {
+    task: createSafeId<"billingCode">(),
+    inactive: createSafeId<"billingCode">(),
+    unselected: createSafeId<"billingCode">(),
+  };
+  await db.insert(billingCodes).values([
+    {
+      id: codeIds.task,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      type: "task",
+      code: "L120",
+      label: "Analysis/strategy",
+    },
+    {
+      id: codeIds.inactive,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      type: "activity",
+      code: "A199",
+      label: "Retired",
+      active: false,
+    },
+    // Another matter the request does not select.
+    {
+      id: codeIds.unselected,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+      type: "task",
+      code: "L120",
+      label: "Another list",
+    },
+  ]);
+  try {
+    const context = (await load()).unwrap();
+    assert.ok(context.mode === "guided");
+    expect(context.codeNames).toEqual([
+      {
+        matterId: ids.wsA1,
+        type: "task",
+        code: "L120",
+        name: "Analysis/strategy",
+      },
+    ]);
+  } finally {
+    await db
+      .delete(billingCodes)
+      .where(inArray(billingCodes.id, Object.values(codeIds)));
+  }
 });
 
 test("personal consent and drafting preferences remain readable and editable only by their owner", async () => {
