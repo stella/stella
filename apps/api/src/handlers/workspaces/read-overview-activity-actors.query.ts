@@ -53,6 +53,7 @@ export const readOverviewActivityActorRows = async ({
       .from(auditLogs)
       .where(and(...conditions))
       .as("historical_activity_actors");
+    // sql-perf-allow: bounded by distinct user actors of one workspace from audit_logs_org_workspace_user_actor_created_id_idx, joined by user primary key
     const identityCondition =
       search === ""
         ? sql`true`
