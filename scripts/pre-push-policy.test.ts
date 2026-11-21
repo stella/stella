@@ -17,9 +17,6 @@ const assertLightweightPush = (config: unknown) => {
     parallel: false,
     commands: {
       changeset: { run: "bun scripts/changeset-guard.ts --base origin/main" },
-      "cli-contract": {
-        run: "bun scripts/check-cli-contract-changeset.ts --base origin/main",
-      },
       typecheck: {
         run: "bun scripts/pre-push-typecheck.ts --base origin/main",
       },
