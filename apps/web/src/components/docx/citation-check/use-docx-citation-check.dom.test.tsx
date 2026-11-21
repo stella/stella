@@ -10,7 +10,8 @@ import messages from "@/i18n/langs/en.json";
 import type { OrganizationSettings } from "@/queries/organization-settings";
 
 GlobalRegistrator.register({ url: "http://localhost:3000" });
-const { act, cleanup, renderHook } = await import("@testing-library/react");
+const { act, cleanup, render, waitFor } =
+  await import("@testing-library/react");
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -18,6 +19,7 @@ const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { organizationSettingsOptions } =
   await import("@/queries/organization-settings");
+const { useExternalSyncEffect } = await import("@/hooks/use-effect");
 const { useDocxCitationCheck } = await import("./use-docx-citation-check");
 
 const ORGANIZATION_ID = "citation-org";
@@ -81,32 +83,42 @@ const renderCitationCheck = (status: "enabled" | "hidden" | "undeclared") => {
     forwarded.push(selection.text);
   };
   const editorRef: { current: DocxEditorRef | null } = { current: null };
-  const rendered = renderHook(
-    () => useDocxCitationCheck({ editorRef, onSelectionTextChange }),
-    {
-      wrapper: ({ children }) => (
-        <QueryClientProvider client={client}>
-          <AuthenticatedUserProvider
-            user={{
-              activeOrganizationId: ORGANIZATION_ID,
-              id: USER_ID,
-              email: "member@example.test",
-              name: "Member",
-              image: null,
-              preferredName: null,
-              timezoneId: "UTC",
-              wordEditShortcut: null,
-            }}
-          >
-            <IntlProvider locale="en" messages={messages} timeZone="UTC">
-              {children}
-            </IntlProvider>
-          </AuthenticatedUserProvider>
-        </QueryClientProvider>
-      ),
-    },
+  const latest: ReturnType<typeof useDocxCitationCheck>[] = [];
+  // Renders what the editor renders: the hook's props are read back, and its
+  // card (the lazily loaded host) is mounted the way the editor mounts it.
+  const Harness = () => {
+    const citationCheck = useDocxCitationCheck({
+      editorRef,
+      onSelectionTextChange,
+    });
+    useExternalSyncEffect(() => {
+      latest.push(citationCheck);
+    }, [citationCheck]);
+    return citationCheck.card;
+  };
+  render(
+    <QueryClientProvider client={client}>
+      <AuthenticatedUserProvider
+        user={{
+          activeOrganizationId: ORGANIZATION_ID,
+          id: USER_ID,
+          email: "member@example.test",
+          name: "Member",
+          image: null,
+          preferredName: null,
+          timezoneId: "UTC",
+          wordEditShortcut: null,
+        }}
+      >
+        <IntlProvider locale="en" messages={messages} timeZone="UTC">
+          <Harness />
+        </IntlProvider>
+      </AuthenticatedUserProvider>
+    </QueryClientProvider>,
   );
-  return { rendered, onSelectionTextChange, forwarded };
+  const current = () =>
+    latest.at(-1) ?? panic("The harness rendered no citation check");
+  return { current, onSelectionTextChange, forwarded };
 };
 
 const expectEditorUntouched = (status: "hidden" | "undeclared") => {
@@ -115,9 +127,9 @@ const expectEditorUntouched = (status: "hidden" | "undeclared") => {
       await Promise.resolve(panic("A disabled citation check sent a request")),
     { preconnect: originalFetch.preconnect },
   );
-  const { rendered, onSelectionTextChange, forwarded } =
+  const { current, onSelectionTextChange, forwarded } =
     renderCitationCheck(status);
-  const { editorProps, card } = rendered.result.current;
+  const { editorProps, card } = current();
   // The editor's own callback comes back as is, so a selection cannot arm
   // the settle timer or reach the check endpoint.
   expect(editorProps.onSelectionTextChange).toBe(onSelectionTextChange);
@@ -140,19 +152,20 @@ test("an undeclared feature leaves the editor's selection callback alone and req
   expectEditorUntouched("undeclared");
 });
 
-test("with the feature enabled a selection naming a decision offers the check and still reaches the editor", () => {
-  const { rendered, forwarded } = renderCitationCheck("enabled");
-  act(() => {
-    rendered.result.current.editorProps.onSelectionTextChange({
-      from: 0,
-      to: CITING_SENTENCE.length,
-      text: CITING_SENTENCE,
+test("with the feature enabled a selection naming a decision offers the check and still reaches the editor", async () => {
+  const { current, forwarded } = renderCitationCheck("enabled");
+  // The host loads lazily; until it has, a selection is forwarded unchecked.
+  await waitFor(() => {
+    act(() => {
+      current().editorProps.onSelectionTextChange({
+        from: 0,
+        to: CITING_SENTENCE.length,
+        text: CITING_SENTENCE,
+      });
     });
+    expect(
+      current().editorProps.customContextMenuItems?.map((item) => item.id),
+    ).toEqual(["stella.check-citation"]);
   });
-  expect(forwarded).toEqual([CITING_SENTENCE]);
-  expect(
-    rendered.result.current.editorProps.customContextMenuItems?.map(
-      (item) => item.id,
-    ),
-  ).toEqual(["stella.check-citation"]);
+  expect(forwarded.at(0)).toBe(CITING_SENTENCE);
 });
