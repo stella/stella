@@ -9,6 +9,7 @@ import { ScrollArea } from "@stll/ui/scroll-area";
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import type { FileTab } from "@/components/inspector/file-tab";
+import { LegalFilePreviewText } from "@/components/inspector/legal-file-preview-text";
 import { asicPreviewOptions } from "@/lib/files/queries";
 
 export const AsicFileViewer = ({
@@ -48,18 +49,13 @@ export const AsicFileViewer = ({
             {t("common.downloadOriginal")}
           </Button>
           <ul className="divide-y">
-            {data.members.map(({ fileName, status, text }) => (
+            {data.members.map(({ fileName, status, text, textFormat }) => (
               <li className="space-y-2 py-3" key={fileName}>
                 <h2 className="text-sm font-medium wrap-break-word">
                   <BidiText>{fileName}</BidiText>
                 </h2>
                 {status !== "unavailable" && text.trim() ? (
-                  <pre
-                    className="font-sans text-sm leading-relaxed wrap-break-word whitespace-pre-wrap"
-                    dir="auto"
-                  >
-                    {text}
-                  </pre>
+                  <LegalFilePreviewText format={textFormat} text={text} />
                 ) : null}
                 {status === "truncated" && (
                   <p className="text-muted-foreground text-sm">

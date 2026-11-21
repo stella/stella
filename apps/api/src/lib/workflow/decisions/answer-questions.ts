@@ -69,7 +69,8 @@ const CANDIDATE_SNIPPET_CHARS = 60;
 const RUNNER_UP_MIN_PROBABILITY = 0.02;
 
 const NOT_STATED = "__not_stated";
-const NO_SOURCE = "__none";
+/** The option a where-question offers when no listed source carries the answer. */
+export const NO_SOURCE = "__none";
 
 export type AnswerSource = {
   /** The id the caller cites: a passage anchor, a folio block id, a bates page. */
@@ -339,6 +340,24 @@ const candidateCriteria = (
   return Object.fromEntries(criteria);
 };
 
+/**
+ * One option per source, glossed by the start of its text, plus `__none`:
+ * the criteria of every question that asks which source carries an answer.
+ */
+export const sourceChoiceCriteria = (
+  sources: readonly AnswerSource[],
+  noneCriterion: string,
+): Record<string, SystemOneEntry> => {
+  const criteria = new Map<string, SystemOneEntry>(
+    sources.map((source) => [
+      source.id,
+      truncate(collapseWhitespace(source.text), LOCATOR_DESCRIPTION_CHARS),
+    ]),
+  );
+  criteria.set(NO_SOURCE, noneCriterion);
+  return Object.fromEntries(criteria);
+};
+
 const whereQuestion = (
   question: string,
   sources: readonly AnswerSource[],
@@ -346,19 +365,12 @@ const whereQuestion = (
   if (sources.length === 0 || sources.length > LOCATOR_CHOICE_MAX_SOURCES) {
     return null;
   }
-  const criteria = new Map(
-    sources.map((source) => [
-      source.id,
-      truncate(collapseWhitespace(source.text), LOCATOR_DESCRIPTION_CHARS),
-    ]),
-  );
-  criteria.set(NO_SOURCE, "No source states the answer.");
   return choice(
     {
       question,
       task: "Which entry of `sources` states the answer to `question`? Choose `__none` when no entry states it.",
     },
-    Object.fromEntries(criteria),
+    sourceChoiceCriteria(sources, "No source states the answer."),
   );
 };
 

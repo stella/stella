@@ -1,0 +1,1457 @@
+{
+  "caseLaw": {
+    "analysis": {
+      "abstract": "Santrauka",
+      "aiLayer": "{layer} (DI)",
+      "backToSection": "Grįžti į šios dalies pradžią",
+      "categories": {
+        "facts": "Faktinės aplinkybės",
+        "holding": "Teismo išvada",
+        "procedural-history": "Procesinė eiga",
+        "reasoning": "Mąstymas"
+      },
+      "errors": {
+        "analysisDisabled": "DI analizės kūrimas šiame serveryje išjungtas. Skaitykite sprendimo tekstą arba bandykite vėliau.",
+        "answerIncomplete": "{source, select, organization {Jūsų organizacijos {provider} raktas grąžino neišsamų atsakymą.} other {DI modelis grąžino neišsamų atsakymą.}}",
+        "decisionNotFound": "Šis teismo sprendimas nerastas. Atverkite jį iš naujo paieškoje.",
+        "documentUnparseable": "Teismo sprendimo tekstas dar neparengtas analizei. Skaitykite pirminį šaltinį.",
+        "languageUnsupported": "DI analizė prieinama tik šiomis kalbomis paskelbtiems sprendimams: {languages}.",
+        "openLanguageVersion": "Atidaryti kalbinę versiją: {language}",
+        "providerRefused": "{source, select, organization {{provider} atmetė užklausą, pateiktą su jūsų organizacijos raktu. Patikrinkite raktą, jo kvotą ir atsiskaitymą organizacijos nustatymuose.} other {DI teikėjas atmetė užklausą.}}",
+        "providerUnavailable": "{source, select, organization {{provider} šiuo metu nepasiekiamas su jūsų organizacijos raktu.} other {DI teikėjas šiuo metu nepasiekiamas.}}",
+        "retryAfter": "Bandyti dar kartą galėsite po {time}.",
+        "sourceRestricted": "Šaltinis neleidžia atlikti DI analizės. Skaitykite sprendimo tekstą arba pirminį šaltinį.",
+        "timedOut": "{source, select, organization {{provider} neatsakė laiku naudojant jūsų organizacijos raktą.} other {DI modelis neatsakė laiku.}}"
+      },
+      "generate": "Parengti DI santraukas",
+      "invitation": "Su nemokama paskyra DI parengia darbines pastabas apie šį sprendimą.",
+      "noCurrentSection": "Šiuo metu nėra skyriaus, į kurį būtų galima pereiti.",
+      "topics": "Temos",
+      "treatment": "Vėlesnis vertinimas"
+    },
+    "analyzing": "Analizuojama…",
+    "browse": {
+      "courtDescription": "{court} ({country}): sprendimai viešoje stella teisės duomenų bazėje pagal metus ir mėnesį.",
+      "courts": "Teismai",
+      "days": "Dienos",
+      "jurisdictionDescription": "{country}: teismų sprendimai viešoje stella teisės duomenų bazėje pagal teismą, metus ir mėnesį.",
+      "periodDescription": "{court} ({country}), {period}: sprendimai viešoje stella teisės duomenų bazėje."
+    },
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Kokios buvo faktinės aplinkybės ir ką teigė kiekviena šalis?",
+          "name": "Faktinės aplinkybės ir šalių pozicijos"
+        },
+        "holding": {
+          "body": "Ką teismas nusprendė ir kodėl?",
+          "name": "Rezoliucinė dalis ir motyvai"
+        },
+        "precedent": {
+          "body": "Kuriais ankstesniais sprendimais remiamasi ir ar jų laikomasi?",
+          "name": "Ankstesni sprendimai"
+        },
+        "provisions": {
+          "body": "Kurias nuostatas teismas taiko ir kaip jas aiškina?",
+          "name": "Taikytos nuostatos"
+        }
+      }
+    },
+    "citation": {
+      "citedAtLeast": "Cituota bent {count, plural, one {# kartą} few {# kartus} many {# karto} other {# kartų}}",
+      "citedSummary": "{count, plural, =0 {Necituota} one {Cituota kartą} few {Cituota # kartus} many {Cituota # karto} other {Cituota # kartų}}",
+      "dateUnavailable": "Data nenurodyta",
+      "decisionCount": "{count, plural, =0 {Sprendimų nėra} one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}",
+      "goToMention": "Eiti į paminėjimą nr. {number}",
+      "goToParagraph": "Eiti į {paragraph} punktą",
+      "lastNegative": "paskutinė neigiama citata {year} m.",
+      "mentionMark": "paminėjimas nr. {number}",
+      "mentionsInDecision": "{count, plural, one {Šiame sprendime cituojama # kartą} few {Šiame sprendime cituojama # kartus} many {Šiame sprendime cituojama # karto} other {Šiame sprendime cituojama # kartų}}",
+      "negativeCount": "{count, plural, one {# neigiama} few {# neigiamos} many {# neigiamos} other {# neigiamų}}",
+      "none": "Citavimų dar neužfiksuota.",
+      "notInStella": "Programoje stella dar nėra",
+      "openDecision": "Atverti sprendimą",
+      "paragraphLabel": "{paragraph} punktas",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph} punktas",
+      "partialSummary": "Citavimų sumos ir laiko juosta yra nepilnos.",
+      "passageNotFound": "Cituojanti ištrauka tekste nerasta",
+      "positiveCount": "{count, plural, one {# teigiama} few {# teigiamos} many {# teigiamos} other {# teigiamų}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
+      "showAll": "{count, plural, one {Rodyti # sprendimą} few {Rodyti visus # sprendimus} many {Rodyti visus # sprendimo} other {Rodyti visus # sprendimų}}",
+      "stripLabel": "Citatos pagal metus",
+      "treatment": {
+        "mixed": "Mišrus",
+        "negative": "Neigiamas",
+        "neutral": "Paminėtas",
+        "positive": "Patvirtintas",
+        "supportive": "Sekama",
+        "unclassified": "Neklasifikuota"
+      },
+      "unresolved": "Nesusieta su sprendimu",
+      "whereCited": "Kur cituojamas šis sprendimas",
+      "yearTitle": "{year}: {count, plural, one {# citata} few {# citatos} many {# citatos} other {# citatų}}"
+    },
+    "columns": {
+      "caseNumber": "Bylos numeris",
+      "citedBy": "Cituojama",
+      "headnote": "Santrauka",
+      "summary": "Teisės taisyklė / atitiktis"
+    },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# teismas} few {# teismai} many {# teismo} other {# teismų}}",
+      "newLast24Hours": "{count} per pastarąsias 24 val.",
+      "newLast7Days": "Nauji per pastarąsias 7 dienas",
+      "otherCourts": "Kiti teismai"
+    },
+    "courtTiers": {
+      "constitutional": "Konstituciniai teismai",
+      "other": "Kiti teismai",
+      "regional": "Apeliaciniai ir apygardų teismai",
+      "supreme": "Aukščiausieji teismai"
+    },
+    "coverage": {
+      "allCurrent": "Visi šaltiniai atnaujinti",
+      "censusComparison": "{stored} išsaugota / {publisher} paskelbta · {withText} su tekstu",
+      "censusComplete": "Visas",
+      "censusIncomplete": "Ne visas",
+      "censusSliceMemberships": "Sumuojami atskirų dalių skaičiai; vienas sprendimas gali būti įskaičiuotas kelis kartus.",
+      "completeness": "Išsamumas",
+      "completenessHelp": "Išsaugotų sprendimų skaičius, palygintas su skelbėjo nurodytu skaičiumi, jo sąrašu arba užfiksuotu bendru skaičiumi. Skelbėjo sąraše esantys sprendimai, kurių trūkumą nustatė sutikrinimas, neįskaičiuojami.",
+      "countryNavigation": "Pereiti prie šalies",
+      "courtsHeading": "Pagal teismą",
+      "decisionYears": "Sprendimų metai",
+      "decisionsAcross": "sprendimai iš {count, plural, one {# jurisdikcijos} few {# jurisdikcijų} other {# jurisdikcijų} many {# jurisdikcijų}}",
+      "description": "Kiek teismų praktikos yra korpuse pagal valstybes ir teismus ir kiek atnaujintas kiekvienas šaltinis.",
+      "generatedAt": "Duomenys {date}",
+      "healthCurrent": "Atnaujinta",
+      "healthDelayed": "Vėluoja",
+      "healthDisabled": "Išjungta",
+      "healthSnapshot": "Fiksuota momentinė kopija",
+      "healthStalled": "Sustojęs",
+      "healthUnknown": "Niekada nevykdyta",
+      "inPreparation": "Rengiama",
+      "lastSync": "Paskutinis sinchronizavimas",
+      "notCountedYet": "Dar nesuskaičiuota",
+      "notMeasuredYet": "Dar neišmatuota",
+      "searchable": "Prieinami paieškai",
+      "sourceExceptions": "{count, plural, one {# šaltiniui reikia dėmesio} few {# šaltiniams reikia dėmesio} other {# šaltinių reikia dėmesio} many {# šaltinių reikia dėmesio}}",
+      "sourcesCurrent": "Atnaujinti šaltiniai",
+      "syncedAt": "Sinchronizuota {time}",
+      "title": "Teismų praktikos aprėptis",
+      "totalFrom": "Bendras skaičius {date}",
+      "unavailable": "Aprėpties duomenys šiuo metu nepasiekiami."
+    },
+    "decisionNotFound": "Sprendimas nerastas",
+    "decisionTypes": {
+      "administrative_decision": "Administracinis sprendimas",
+      "binding_excise_information": "Privaloma informacija apie akcizus",
+      "binding_rate_information": "Privaloma informacija apie PVM tarifą",
+      "court_direction": "Potvarkis",
+      "decision": "Sprendimas",
+      "finding": "Sprendimas iš esmės",
+      "general_tax_ruling": "Bendroji mokesčių interpretacija",
+      "individual_tax_ruling": "Individuali mokesčių interpretacija",
+      "judgment": "Teismo sprendimas",
+      "leave_refused": "Atsisakyta nesant reikšmingo teisės klausimo",
+      "merits_decision": "Sprendimas byloje",
+      "ministry_of_justice_decision": "Teisingumo ministerijos sprendimas",
+      "minutes_extract": "Protokolo išrašas",
+      "opinion": "Nuomonė",
+      "order": "Nutartis",
+      "other": "Kita",
+      "payment_order": "Teismo įsakymas",
+      "penal_order": "Baudžiamasis įsakymas",
+      "principle_decision": "Principinis sprendimas",
+      "protective_opinion": "Apsauginė nuomonė",
+      "resolution": "Nutarimas",
+      "signalling_decision": "Signalinė nutartis",
+      "statement_of_reasons": "Motyvai",
+      "tax_explanations": "Mokesčių paaiškinimai",
+      "top_up_tax_opinion": "Nuomonė dėl papildomo mokesčio",
+      "uniformity_decision": "Teismų praktikos vienodinimo sprendimas"
+    },
+    "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
+    "filters": {
+      "countryMismatch": "Pašalinti filtrai, kurie netaikomi pasirinktai šaliai ({country}): {filters}.",
+      "remove": "Pašalinti filtrą {filter}",
+      "showInCountry": "Rodyti {filter} šalyje {country}"
+    },
+    "languages": {
+      "count": "{count, plural, one {# kalba} few {# kalbos} many {# kalbos} other {# kalbų}}",
+      "matchedIn": "Atitikmuo {language} kalba"
+    },
+    "linkedPassageGone": "Susietos ištraukos šiame tekste nebėra.",
+    "loadingMore": "Kraunama daugiau…",
+    "marginFilter": {
+      "label": "Cituojamų nuostatų filtras",
+      "paragraph": "{count, plural, one {¶{paragraph} cituojama # nuostata} few {¶{paragraph} cituojamos # nuostatos} many {¶{paragraph} cituojama # nuostatos} other {¶{paragraph} cituojama # nuostatų}}",
+      "selection": "{count, plural, one {Pažymėtame tekste cituojama # nuostata} few {Pažymėtame tekste cituojamos # nuostatos} many {Pažymėtame tekste cituojama # nuostatos} other {Pažymėtame tekste cituojama # nuostatų}}",
+      "unnumberedParagraph": "{count, plural, one {Šioje pastraipoje cituojama # nuostata} few {Šioje pastraipoje cituojamos # nuostatos} many {Šioje pastraipoje cituojama # nuostatos} other {Šioje pastraipoje cituojama # nuostatų}}"
+    },
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# sprendimas jau buvo čia išsaugotas} few {# sprendimai jau buvo čia išsaugoti} many {# sprendimo jau buvo čia išsaugota} other {# sprendimų jau buvo čia išsaugota}}",
+      "empty": "Šioje byloje kol kas neišsaugota jokios teismų praktikos.",
+      "emptyAction": "Ieškoti teismų praktikoje",
+      "note": "Pastaba",
+      "notePlaceholder": "Kodėl šie sprendimai čia svarbūs…",
+      "rejectedLimit": "{count, plural, one {# sprendimas neišsaugotas: byla pilna} few {# sprendimai neišsaugoti: byla pilna} many {# sprendimo neišsaugota: byla pilna} other {# sprendimų neišsaugota: byla pilna}}",
+      "rejectedMissing": "{count, plural, one {# sprendimas nerastas} few {# sprendimai nerasti} many {# sprendimo nerasta} other {# sprendimų nerasta}}",
+      "remove": "Pašalinti iš bylos",
+      "save": "Išsaugoti byloje",
+      "savePage": "Iš šio puslapio {count, plural, one {bus išsaugotas # sprendimas} few {bus išsaugoti # sprendimai} many {bus išsaugota # sprendimo} other {bus išsaugota # sprendimų}}.",
+      "saveSelection": "{count, plural, one {Bus išsaugotas # pasirinktas sprendimas} few {Bus išsaugoti # pasirinkti sprendimai} many {Bus išsaugota # pasirinkto sprendimo} other {Bus išsaugota # pasirinktų sprendimų}}.",
+      "saveTitle": "Išsaugoti byloje",
+      "saved": "Į bylą {matter} išsaugota {count, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}}"
+    },
+    "newestDecisions": "Naujausi sprendimai",
+    "noResults": {
+      "hint": "Išbandykite kitus žodžius, patobulinkite užklausą su DI arba užduokite klausimą pokalbyje."
+    },
+    "notesFilter": {
+      "ai": "DI",
+      "human": "Žmonių",
+      "toggleState": "{label}: {state, select, on {įjungta} other {išjungta}}"
+    },
+    "oldestDecisions": "Seniausi sprendimai",
+    "pagination": {
+      "goToPage": "Eiti į {page} psl.",
+      "label": "Rezultatų puslapiai",
+      "pageOfCount": "{page} psl. iš {pageCount}",
+      "pageOfEstimatedCount": "{page} psl. iš ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page} psl. iš apytiksliai {pageCount}",
+      "pageWithEstimatedMatchCounts": "{page} psl. · apytiksliai {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
+      "pageWithEstimatedResultCount": "{page} psl. · apytiksliai {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "pageWithMatchCounts": "{page} psl. · {exactCount, plural, one {# tikslus atitikmuo} few {# tikslūs atitikmenys} many {# tikslaus atitikmens} other {# tikslių atitikmenų}} · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
+      "pageWithPartialMatchCount": "{page} psl. · {relaxedCount, plural, one {# dalinis atitikmuo} few {# daliniai atitikmenys} many {# dalinio atitikmens} other {# dalinių atitikmenų}} šiame puslapyje",
+      "pageWithResultCount": "{page} psl. · {count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
+      "perPage": "Viename puslapyje",
+      "refineForMore": "Patikslinkite paiešką, kad pamatytumėte daugiau rezultatų"
+    },
+    "paragraphRangeNotFound": "{count, plural, one {Pastraipa {range} šiame tekste nerasta.} few {Pastraipos {range} šiame tekste nerastos.} many {Pastraipos {range} šiame tekste nerastos.} other {Pastraipos {range} šiame tekste nerastos.}}",
+    "paragraphRangeSelected": "{count, plural, one {Pastraipa {range} paryškinta.} few {Pastraipos {range} paryškintos.} many {Pastraipos {range} paryškintos.} other {Pastraipos {range} paryškintos.}}",
+    "provision": {
+      "article": "{value} str.",
+      "letter": "{value} papunktis",
+      "openEnded": "ir kt.",
+      "point": "{value} p.",
+      "sentence": "{value} sakinys",
+      "subsection": "{value} d."
+    },
+    "reader": {
+      "documentUpdated": "Dokumentas atnaujintas.",
+      "expandProvisions": "Išskleisti nuostatas",
+      "headMatter": "Bylos informacija",
+      "sourceAttribution": "Šaltinio duomenys laisvai prieinami adresu <link>{source}</link>."
+    },
+    "research": {
+      "answering": "{count, plural, one {Atsakoma į # langelį…} few {Atsakoma į # langelius…} many {Atsakoma į # langelio…} other {Atsakoma į # langelių…}}",
+      "answers": {
+        "failureReasons": {
+          "decisionUnavailable": "Sprendimas nepasiekiamas",
+          "missingAnswer": "Modelis neatsakė",
+          "modelError": "Modelio klaida",
+          "noText": "Nėra sprendimo teksto",
+          "runError": "Vykdymas nutrūko",
+          "wrongType": "Atsakymas netinkamo formato"
+        },
+        "no": "Ne",
+        "notAllowed": "Neleidžia šaltinio sąlygos",
+        "notRun": "Nepaleista",
+        "notStated": "Sprendime nenurodyta",
+        "pending": "Atsakoma…",
+        "showSource": "Rodyti šaltinį",
+        "yes": "Taip"
+      },
+      "deleteColumnConfirm": "Klausimas ir visi jo atsakymai bus ištrinti visai jūsų organizacijai – iš visų paieškų ir visiems nariams. Jei norite jį pašalinti tik iš šios paieškos, pasirinkite „Pašalinti iš šios paieškos“.",
+      "editQuestionHint": "Pakeitus formuluotę, atsakymo tipą ar jo parinktis, esami atsakymai atmetami; po to paleiskite stulpelį iš naujo.",
+      "emptyPage": "Šiame puslapyje nėra teismų sprendimų.",
+      "newQuestionColumn": "Nauja",
+      "nothingToRun": "Kiekvienas langelis jau turi atsakymą",
+      "questionAdded": "„{question}“ pridėta prie lentelės",
+      "questionPlaceholder": "pvz., Ar teismas pripažino atleidimą teisėtu?",
+      "removeFromSearch": "Pašalinti iš šios paieškos",
+      "runAll": "Atsakyti į visus",
+      "runConfirm": "Atsakyti dabar",
+      "runEstimate": "{rows, plural, one {# sprendimas} few {# sprendimai} many {# sprendimo} other {# sprendimų}} × {columns, plural, one {# klausimas} few {# klausimai} many {# klausimo} other {# klausimų}} šiame puslapyje: {cells, plural, one {bus sukurtas # atsakymas} few {bus sukurti # atsakymai} many {bus sukurta # atsakymo} other {bus sukurta # atsakymų}}.",
+      "runInProgress": "Vienas paieškos klausimas jau apdorojamas.",
+      "runPermissionRequired": "Norint apdoroti paieškos klausimus reikia leidimo.",
+      "runTitle": "Atsakyti šiame puslapyje",
+      "savedQuestions": "Išsaugoti klausimai",
+      "title": "Tyrimo lentelės"
+    },
+    "results": {
+      "excerpt": {
+        "label": "Ištrauka",
+        "long": "Ilga",
+        "medium": "Vidutinė",
+        "short": "Trumpa"
+      }
+    },
+    "rewritten": {
+      "line": "Tikslių atitikmenų <bdi>{original}</bdi> nėra; rodomi rezultatai pagal <bdi>{query}</bdi>",
+      "searchOriginal": "Ieškoti mano pradinių žodžių"
+    },
+    "sameCaseNumber": "{count, plural, one {# sprendimas turi} few {# sprendimai turi} many {# sprendimo turi} other {# sprendimų turi}} šį bylos numerį. Pasirinkite teismą.",
+    "searchLabel": "Ieškoti teismų praktikoje",
+    "searchPlaceholder": "Bylos numeris, ECLI arba žodžiai, pvz. 22 Cdo 2653/2012",
+    "searchStillSearching": "Paieškos paslauga užimta. Vis dar ieškoma…",
+    "searchUnavailable": {
+      "description": "Nepavyko pasiekti teismų praktikos paieškos. Jūsų užklausa lieka adreso juostoje, pabandykite po akimirkos dar kartą.",
+      "title": "Paieška laikinai nepasiekiama"
+    },
+    "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ieškokite pagal bylos numerį arba sprendimo ECLI, jei jį žinote.",
+        "message": "Nerasta sprendimo, tiksliai atitinkančio šią rinkinio nuorodą."
+      },
+      "noHits": {
+        "hint": "Pabandykite mažiau arba kitų žodžių: terminų, kuriuos vartotų teismo sprendimas, o ne sakinio, kuriuo užduodamas klausimas.",
+        "message": "Niekas neatitiko žodžių, kurių reikalavo ši paieška."
+      },
+      "noHitsFiltered": {
+        "hint": "Pašalinkite filtrą arba jį išplėskite ir ieškokite dar kartą.",
+        "message": "Niekas neatitiko pasirinktų filtrų."
+      },
+      "partialMatch": "Dalinė atitiktis",
+      "partialMatchMissing": "Trūkstami žodžiai: {terms}",
+      "partialMatches": "Dalinės atitiktys užklausai: <bdi>{query}</bdi>",
+      "resultsFor": "Rezultatai pagal: <bdi>{query}</bdi>",
+      "searchEveryWord": "Ieškoti visų žodžių"
+    },
+    "seo": {
+      "collectionName": "stella teismų praktika",
+      "description": "Vieša teismų praktikos duomenų bazė su indeksuojamais teismų sprendimais ir teisės šaltiniais.",
+      "homeDescription": "Vieša teisės duomenų bazė: teismų sprendimai ir konsoliduoti teisės aktai, ieškomi pagal identifikatorių arba žodžius.",
+      "scopedDescription": "Vieša teismų praktikos duomenų bazė ({scope}) su indeksuojamais teismų sprendimais ir teisės šaltiniais."
+    },
+    "showWholeHeadnote": "Rodyti visą santrauką",
+    "sort": {
+      "newest": "Naujausi",
+      "oldest": "Seniausi",
+      "oldestUnavailable": "Paieškos rezultatai rikiuojami pagal aktualumą arba nuo naujausių. Norėdami pirmiausia matyti seniausius sprendimus, išvalykite paiešką.",
+      "relevance": "Tinkamiausi"
+    },
+    "viewer": {
+      "abstract": "Santrauka",
+      "appealReviews": {
+        "conflict": "Duomenys apie peržiūrą yra neišsamūs arba prieštaringi. Peržiūros rezultatą reikia patikrinti.",
+        "corpusOnly": "Turimame rinkinyje nerasta sprendimo, kuriuo peržiūrimas šis sprendimas. Tai neįrodo, kad skundas nepateiktas.",
+        "noneFound": "Peržiūrinčio sprendimo nerasta",
+        "overturned": "Panaikinta arba pakeista",
+        "partly": "Iš dalies panaikinta",
+        "reviewedBy": "Peržiūrintys sprendimai",
+        "reviews": "Peržiūrėti sprendimai",
+        "sourceHistory": "Proceso istorija",
+        "sourceMetadata": "Leidėjo metaduomenys",
+        "sourceOpening": "Įvadinė pastraipa",
+        "title": "Peržiūra pagal skundą",
+        "truncated": "Rodoma tik dalis peržiūros istorijos.",
+        "underReview": "Peržiūrima",
+        "unknown": "Rezultatas nežinomas",
+        "upheld": "Palikta galioti"
+      },
+      "appliedVersionNotStated": "Taikyta redakcija nenurodyta",
+      "appliedVersionNotStatedCompact": "Redakcija nenurodyta",
+      "appliedVersionStatedAmendment": "Redakcija su <reference>{amendment}</reference> pakeitimais",
+      "appliedVersionStatedAmendmentCompact": "Nurodyta: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {{date} galiojusi redakcija} until {Iki {date} galiojusi redakcija} from {Nuo {date} galiojanti redakcija} other {{date} galiojusi redakcija}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Nurodyta: {date}} until {Nurodyta: iki {date}} from {Nurodyta: nuo {date}} other {Nurodyta: {date}}}",
+      "caseFileDocuments": "Šios bylos dokumentai",
+      "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
+      "citedBy": "Cituojama",
+      "citedDecisionPassage": "Sprendimo ištrauka",
+      "cites": "Cituoja",
+      "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Eiti į pastraipą} few {Eiti į pastraipas} many {Eiti į pastraipas} other {Eiti į pastraipas}}",
+      "judgeRole": {
+        "advocateGeneral": "Generalinis advokatas",
+        "dissenting": "Atskiroji nuomonė",
+        "panelMember": "Kolegijos narys",
+        "presiding": "Kolegijos pirmininkas",
+        "rapporteur": "Teisėjas pranešėjas"
+      },
+      "judges": "Teisėjai",
+      "legalArea": "Teisės sritis",
+      "legalSentence": "Teisinė tezė",
+      "paragraphReference": "{number} pastraipa",
+      "popularName": "Populiarus pavadinimas",
+      "portraitCredit": "Portretų šaltinis: {source}",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# paminėjimas} few {# paminėjimai} many {# paminėjimo} other {# paminėjimų}}",
+      "provisionsCited": "Cituojamos nuostatos",
+      "provisionsFailed": "Citatų apdorojimas nepavyko",
+      "provisionsNoneFound": "Cituojamų nuostatų nerasta",
+      "provisionsProcessing": "Citatos apdorojamos",
+      "provisionsUnavailable": "Citatos neprieinamos",
+      "provisionsUnplaceable": "Citatų negalima susieti su sprendimo tekstu",
+      "provisionsUnsupported": "Šio sprendimo citatų apdorojimas nepalaikomas",
+      "provisionsWithheld": "Citatos neatskleidžiamos",
+      "sourceFields": {
+        "decisionCategory": "Sprendimo kategorija",
+        "publishedOnWeb": "Paskelbta internete"
+      },
+      "statutes": "Taikomi teisės aktai",
+      "textNotYetAvailable": "Teismas nepaskelbė sprendimo teksto arba jis čia dar neprieinamas.",
+      "textPending": "Sprendimo tekstas dar gaunamas",
+      "textReadFailed": "Nepavyko įkelti sprendimo teksto",
+      "textUnavailable": "Šiam sprendimui teksto nėra",
+      "versionAtDecisionDateInferred": "Sprendimo dieną galiojusi redakcija (numanoma)",
+      "versionBasisInferredCompact": "Sprendimo data · numanoma",
+      "versionBasisInferredExplanation": "Redakcija nustatyta pagal sprendimo datą. Sprendime nenurodyta, kuri redakcija taikoma."
+    },
+    "withdrawnByPublisher": "Leidėjas atšaukė"
+  },
+  "catalogue": {
+    "addCustom": "Pridėti pasirinktinį",
+    "addCustomMcp": "Pridėti integraciją",
+    "addCustomSkill": "Pridėti įgūdį",
+    "by": "Autorius: {author}",
+    "configuration": "Konfigūracija",
+    "cost": {
+      "free": "Nemokama",
+      "paid": "Mokama"
+    },
+    "detailAuthMethod": "Autentifikacija",
+    "empty": "Pagal dabartinį filtrą nėra įrašų.",
+    "filter": {
+      "mcps": "Integracijos",
+      "nativeTools": "Integruoti įrankiai",
+      "skills": "Įgūdžiai"
+    },
+    "filterHint": "Filtruota: {codes}",
+    "firstParty": "stella",
+    "firstPartyTooltip": "Sukurta stella komandos",
+    "installFailed": "Įdiegti nepavyko",
+    "installPack": "{count, plural, one {Įdiegti # įrankį} few {Įdiegti # įrankius} other {Įdiegti # įrankių} many {Įdiegti # įrankių}}",
+    "installed": "{name} įdiegta",
+    "installedShort": "Įdiegta",
+    "onboarding": {
+      "packTitle": "Rekomenduojama jūsų jurisdikcijai"
+    },
+    "openHomepage": "Atidaryti pagrindinį puslapį",
+    "packDescription": "{count, plural, one {# įrankis} few {# įrankiai} other {# įrankių} many {# įrankių}} parinkta jūsų praktikai. Įdiekite vienu paspaudimu arba pasirinkite žemiau.",
+    "packInstalled": "{count, plural, one {Įdiegta # įrankis} few {Įdiegti # įrankiai} other {Įdiegta # įrankių} many {Įdiegta # įrankių}}",
+    "packPartial": "Įdiegta {installed}, {failed} nepavyko",
+    "removed": "Šis įrankis nebepasiekiamas.",
+    "sectionOthers": "Kiti",
+    "settings": {
+      "packTitle": "Rekomenduojamas paketas"
+    },
+    "setup": {
+      "account": "Paskyra",
+      "apiKey": "API raktas",
+      "none": "Nereikia nustatyti"
+    },
+    "skillNeedsUnavailableTools": "Pokalbyje nesiūloma. Reikia įrankio, kuris ten nepasiekiamas: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Paslepia klientų vardus, sąskaitų numerius, adresus ir kitus asmens duomenis prieš bendrinant bylos turinį su DI paslaugų teikėjais. Grįžtama kliento pusėje; atviras tekstas niekada nepalieka jūsų darbo vietos.",
+      "ares": "Čekijos įmonių paieška pagal IČO arba pavadinimą viešajame ARES registre (ūkio subjektų administracinis registras, Čekijos juridinių asmenų registro atitikmuo).",
+      "boe": "Ispanijos konsoliduoti teisės aktai, kasdienis oficialus leidinys ir BORME (prekybos registro leidinys) iš oficialios Boletín Oficial del Estado atvirųjų duomenų API.",
+      "brreg": "Norvegijos įmonių paieška pagal organisasjonsnummer arba pavadinimą viešoje atviroje Brreg Enhetsregisteret API.",
+      "companiesHouse": "JK įmonių paieška pagal Companies House registracijos numerį arba pavadinimą Companies House viešųjų duomenų API. Reikalingas nemokamas API raktas.",
+      "createDocx": "Kuria „Word“ dokumentus iš pokalbio su formatavimu, lentelėmis, antraštėmis ir įterptais stiliais. Rezultatą galima atsisiųsti ir redaguoti „Word“, „LibreOffice“ ir „Pages“ programose.",
+      "denue": "Meksikos veiklos vietų ir ūkio vienetų paieška pagal DENUE veiklos vietos ID, pavadinimą arba teisinį pavadinimą oficialioje INEGI DENUE API. DENUE yra veiklos vietų katalogas, o ne bendrovių teisės registras Registro Público de Comercio. Reikalingas nemokamas INEGI API žetonas.",
+      "edgar": "JAV biržinių bendrovių paieška pagal Central Index Key (CIK) SEC EDGAR pateikčių API.",
+      "gcis": "Taivano įmonių paieška pagal 統一編號 (tongbian, mokesčių identifikatorius) arba pavadinimą Ekonomikos reikalų ministerijos (MoEA) portalo Commerce Industrial Services atvirųjų duomenų API.",
+      "infosoud": "Čekijos teismo bylų paieška ir posėdžių kalendorius iš infosoud.gov.cz. Ieškokite pagal bylos numerį, teismą arba šalį ir sužinokite posėdžių datas bei bylos būseną.",
+      "krs": "Lenkijos įmonių paieška pagal KRS numerį Teisingumo ministerijos Krajowy Rejestr Sądowy (KRS) atviroje API. Apima Rejestr Przedsiębiorców (komercinės bendrovės) ir Rejestr Stowarzyszeń (asociacijos ir fondai).",
+      "orsr": "Slovakijos įmonių paieška pagal IČO arba pavadinimą Teisingumo ministerijos tvarkomo Obchodný register Slovenskej republiky JSON API.",
+      "prh": "Suomijos įmonių paieška pagal Y-tunnus arba pavadinimą Patentti- ja rekisterihallitus (PRH) atviroje API AvoinData v3.",
+      "rechercheEntreprises": "Prancūzijos įmonių paieška pagal SIREN, SIRET arba pavadinimą atviroje API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovakijos paieška pagal IČO arba pavadinimą registre Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO), kurį tvarko Slovakijos Respublikos statistikos biuras. Apima visus juridinius asmenis ir verslininkus, įskaitant individualią veiklą vykdančius asmenis, asociacijas, fondus ir viešąsias įstaigas, nepatenkančias į prekybos registrą.",
+      "vies": "PVM mokėtojų kodų tikrinimas visoje ES per Europos Komisijos PVM informacijos mainų sistemos (VIES) REST API. Patvirtina, ar kodas registruotas tiekėjo valstybėje narėje, ir grąžina registruoto prekiautojo pavadinimą bei adresą, jei valstybė narė juos atskleidžia.",
+      "webSearch": "Ieško viešajame internete ir skaito atskirus puslapius. Kai nustatyta jurisdikcija, užklausos pirmiausia nukreipiamos į pirminius šaltinius (teismus, teisės aktų portalus), kitu atveju į atvirą internetą. Įjungiama kiekvienam pokalbiui atskirai."
+    },
+    "toolNames": {
+      "anonymize": "Anonimizuoti",
+      "createDocx": "Sukurti DOCX",
+      "gcis": "GCIS įmonių registras",
+      "vies": "ES PVM kodo tikrinimas (VIES)",
+      "webSearch": "Žiniatinklio paieška"
+    },
+    "unavailable": "Dar neprieinama"
+  },
+  "guides": {
+    "action": {
+      "replay": "Pradėti iš naujo",
+      "skip": "Praleisti"
+    },
+    "checklist": {
+      "activeTour": "Pirmiausia užbaikite dabartinį vadovą arba iš jo išeikite.",
+      "progress": "Atlikta {completed} iš {total}"
+    },
+    "community": {
+      "personalSupport": "Asmeninė pagalba"
+    },
+    "help": {
+      "buttonLabel": "Pagalba ir atsiliepimai",
+      "title": "Pagalba ir atsiliepimai"
+    },
+    "leave": "Išeiti iš vadovo",
+    "minutes": "{count} min.",
+    "nudge": {
+      "action": "Atverti vadovus",
+      "body": "Naujokas? Keli trumpi turai viską parodys."
+    },
+    "status": {
+      "skipped": "Praleista"
+    },
+    "tours": {
+      "chat": {
+        "description": "Suteikite DI kontekstą ir saugiai išsiųskite užklausą",
+        "examplePrompt": "Apibendrinkite pagrindines šios sutarties prievoles",
+        "steps": {
+          "anonymize": {
+            "body": "Prieš siunčiant paslepia asmens duomenis, o atsakyme juos atkuria.",
+            "title": "Siųsti nuasmenintai",
+            "when": "Įjunkite, kai tekste yra asmens duomenų, o klausimas nepriklauso nuo to, kas yra šalys. Palikite išjungtą, kai svarbiausia būtent tapatybė, pavyzdžiui, tikrinant interesų konfliktą: vietaženkliai pašalina būtent tai, ko klausiate."
+          },
+          "attach": {
+            "body": "Įkelia failą iš šio įrenginio į pokalbį. Jis perskaitomas tik šioje gijoje ir į bylą neįsegamas.",
+            "title": "Prisegti failą",
+            "when": "Tinka vienkartiniam dokumentui, kurio nereikia saugoti: ką tik el. paštu gautam projektui, skenuotai kopijai ar skaičiuoklei, kurios tenorite santraukos."
+          },
+          "composer": {
+            "body": "Paprasta kalba parašykite, ko norite: kokia užduotis, su kuo ji susijusi ir kokios formos atsakymo tikitės. Visa kita čia tik patikslina jau parašytą užklausą.",
+            "title": "Pradėkite nuo užklausos"
+          },
+          "context": {
+            "body": "Prideda esamą bylą arba failą kaip kontekstą. Nieko neįkelia ir nekopijuoja.",
+            "title": "Nurodyti bylą arba failą",
+            "when": "Naudokite vietoj failo prisegimo visada, kai dokumentas jau įsegtas. Nurodykite bylą, kai asistentas turi peržvelgti ją visą; vieną failą, kai tiksliai žinote, kurį skaityti. Įvedus @ tuščiame redaktoriuje šis sąrašas atsiveria iš karto."
+          },
+          "plusMenu": {
+            "body": "Naudokite + failui prisegti arba bylai nurodyti.",
+            "title": "Pridėkite kontekstą naudodami +",
+            "when": "Kai pokalbyje dar nėra reikiamo konteksto."
+          },
+          "send": {
+            "body": "Išsiunčia žinutę su viskuo, ką aukščiau prisegėte, nurodėte ar įjungėte. Redaktorius lieka vietoje, todėl tolesniu klausimu galėsite pridėti tai, ko trūko pirmame atsakyme.",
+            "title": "Išsiųskite žinutę",
+            "when": "Pirmas atsakymas parodo, ko dar trūksta."
+          }
+        },
+        "title": "Pradėkite nuo pokalbio"
+      },
+      "chatPower": {
+        "description": "Naudokite įgūdžius arba prijunkite kitus naudingus įrankius",
+        "steps": {
+          "mcp": {
+            "body": "Įjungia arba išjungia prijungto serverio įrankius jūsų pokalbiuose: įmonių registrus, vidines sistemas, visa, ką prijungė jūsų komanda.",
+            "title": "Prijungti įrankių serveriai",
+            "when": "Įjunkite, kai atsakymui reikia gyvų duomenų iš už darbo srities ribų. Kitus palikite išjungtus: kuo mažiau įrankių žaidime, tuo siauresnis ir nuspėjamesnis atsakymas."
+          },
+          "models": {
+            "body": "Pakeičia modelį tik šiame pokalbyje. Visos kitos gijos lieka su jūsų darbo srities numatytuoju modeliu.",
+            "title": "Kuris modelis"
+          },
+          "plusMenu": {
+            "body": "Tame pačiame meniu taip pat yra modelio keitimas, įgūdžiai ir prijungti įrankių serveriai. Kiti žingsniai jį atvers ir aptars kiekvieną parinktį.",
+            "title": "Daugiau už mygtuko +"
+          },
+          "skills": {
+            "body": "Įterpia įrašytą užklausą arba jūsų komandos parašytą įgūdį: peržiūrėtą nurodymų rinkinį, kuris tą pačią užduotį kaskart atlieka vienodai.",
+            "title": "Įgūdžiai ir įrašytos užklausos",
+            "when": "Naudokite, kai užduotis kartojasi ir svarbi formuluotė, pavyzdžiui, tikrinant tipinę sutartį ar rengiant priėmimo santrauką. Įvedus / tuščiame redaktoriuje šis sąrašas atsiveria iš karto."
+          }
+        },
+        "title": "Nuveikite daugiau pokalbyje"
+      },
+      "documents": {
+        "description": "Įtraukite dokumentą į bylą ir vėliau jį raskite",
+        "steps": {
+          "browse": {
+            "body": "Ši lentelė yra bylos dokumentų sąrašas. Įkelti failai čia rodomi kaip eilutės. Norėdami grįžti vėliau, šoninėje juostoje atidarykite bylą, pasirinkite jos lentelės rodinį, tada pasirinkite dokumento eilutę.",
+            "title": "Vėl rasti dokumentą"
+          },
+          "upload": {
+            "body": "Spustelėjus Įkelti atidaromas failų parinkiklis; failus taip pat galite nuvilkti į bylą. Kiekvienas failas tampa šios bylos dokumentu, kurį gali rasti jūsų komanda, o stella gali naudoti peržiūroje.",
+            "title": "Įtraukti dokumentą į bylą",
+            "when": "Įkelkite čia, kai failas priklauso bylai ir turi likti pasiekiamas. Tiesiogiai pokalbyje jį pridėkite tik tada, kai tai yra laikinas vieno pokalbio kontekstas."
+          }
+        },
+        "title": "Darbas su dokumentais"
+      },
+      "playbooks": {
+        "description": "Išsaugokite dokumentų peržiūros procesą kitam kartui",
+        "steps": {
+          "basics": {
+            "body": "Pridėkite pavadinimą ir aprašą. Jei reikia, apribokite vienu dokumento tipu.",
+            "title": "Pavadinkite peržiūros vadovą"
+          },
+          "create": {
+            "body": "Pradėkite nuo tuščio peržiūros vadovo.",
+            "title": "Sukurkite peržiūros vadovą"
+          },
+          "overview": {
+            "body": "Peržiūros vadove išsaugomi klausimai ir taisyklės kitiems dokumentams.",
+            "title": "Išsaugokite peržiūros procesą"
+          },
+          "positions": {
+            "body": "Kiekvienai taisyklei pasirinkite: vertinti tekstą ar išgauti detalę.",
+            "title": "Pridėkite peržiūros taisykles"
+          }
+        },
+        "title": "Sukurkite peržiūros vadovą"
+      },
+      "tabularReview": {
+        "description": "Išgaukite atsakymus iš daugelio failų vienu metu",
+        "steps": {
+          "addColumn": {
+            "body": "Naujas stulpelis atidaro stulpelio rengyklę. Suteikite stulpeliui aiškų klausimo formos pavadinimą ir tiksliai nurodykite programai stella, ko ieškoti; ta pati instrukcija taikoma kiekvienai dokumento eilutei.",
+            "title": "Užduoti vieną klausimą apie kiekvieną dokumentą",
+            "when": "Kiekvienam atsakymui, kurį reikia palyginti, filtruoti, rikiuoti ar eksportuoti, sukurkite atskirą stulpelį. Susijusį kontekstą pateikite užklausoje, užuot jungę kelis atsakymus viename langelyje."
+          },
+          "answerType": {
+            "body": "Laukas Grąžina nustato kiekvieno atsakymo formatą. Kai rezultatas yra struktūrinis, pasirinkite skaičių, datą, vieną arba kelias parinktis; stella išlaikys stulpelio nuoseklumą, užuot pateikusi bet kokį tekstą.",
+            "title": "Pasirinkti atsakymo tipą",
+            "when": "Fiksuotam rezultatų rinkiniui naudokite pasirinkimą, rikiavimui ir skaičiavimams – skaičių arba datą, o tekstą tik tada, kai atsakymui tikrai reikia išsamaus paaiškinimo."
+          },
+          "table": {
+            "body": "Kiekviena eilutė yra dokumentas, o kiekvienas pasirinktinis stulpelis – vienas klausimas, vienu metu užduodamas apie visus dokumentus. Taip failų aplankas paverčiamas palyginamais atsakymais neatidarant kiekvieno failo atskirai.",
+            "title": "Peržiūrėti visą rinkinį, o ne vieną failą",
+            "when": "Naudokite lentelę, kai reikia tų pačių faktų ar sprendimų iš kelių dokumentų. Atidarykite dokumentą tiesiogiai, kai išdėstymas, formuluotė ar aplinkinis kontekstas yra svarbesni už palyginimą."
+          }
+        },
+        "title": "Peržiūra lentelėje"
+      },
+      "workflows": {
+        "description": "Sujunkite veiksmus į pakartojamą darbo eigą",
+        "steps": {
+          "create": {
+            "body": "Pasirinkus Kurti atidaromas neišsaugotas darbo eigos juodraštis. Tolesniuose veiksmuose nustatoma, kada ji paleidžiama, ką ji atlieka ir kur žmogus turi nuspręsti, ar ji gali tęstis.",
+            "title": "Pradėti darbo eigos juodraštį"
+          },
+          "overview": {
+            "body": "Darbo eiga susieja paleidiklį su veiksmų seka, todėl įprastas procesas kiekvieną kartą vyksta vienodai. Ji gali automatiškai paruošti darbą ir prireikus palikti sprendimą peržiūrą atliekančiam žmogui.",
+            "title": "Automatizuoti pakartojamą procesą",
+            "when": "Automatizuokite darbą, kurio paleidiklis yra pastovus, veiksmai kartojami, o už išimtis atsakingas aiškiai nustatytas asmuo. Kintantį ar daug vertinimo reikalaujantį darbą atlikite rankiniu būdu, kol pats procesas nusistovės."
+          },
+          "reviewGate": {
+            "body": "Peržiūros patvirtinimas sustabdo vykdymą, kol žmogus jį patvirtina arba atmeta. Įterpkite patvirtinimą prieš pirmą veiksmą, kurio negalima atlikti remiantis vien automatiniu rezultatu.",
+            "title": "Palikti sprendimą peržiūrą atliekančiam žmogui",
+            "when": "Naudokite patvirtinimą prieš išsiųsdami, įtraukdami į bylą, perduodami spręsti toliau ar kitaip galutinai patvirtindami svarbių pasekmių turintį rezultatą. Praleiskite jį tik tada, kai kitą veiksmą galima saugiai atšaukti ir jam nereikia žmogaus vertinimo."
+          },
+          "steps": {
+            "body": "Veiksmai vykdomi šia tvarka ir perduoda darbo rezultatus toliau. Kiekvienam veiksmui priskirkite vieną aiškią užduotį, kad klaidos būtų suprantamos, o seką būtų lengva pakeisti.",
+            "title": "Sudaryti veiksmų seką"
+          },
+          "trigger": {
+            "body": "Paleidiklis nustato, kada pradedamas vykdymas: rankiniu būdu, pagal tvarkaraštį arba įkėlus atitinkančius failus. Susiaurinkite bylos ir failų sąlygas, kad nesusijęs darbas niekada nepaleistų darbo eigos.",
+            "title": "Pasirinkti, kas paleidžia darbo eigą",
+            "when": "Kol procesas naujas, naudokite rankinį paleidimą; pagal laiką vykdomoms įprastoms užduotims naudokite tvarkaraštį, o failo įkėlimą – tik tada, kai gautas dokumentas yra patikimas signalas pradėti."
+          }
+        },
+        "title": "Automatizuoti darbo eigą"
+      }
+    },
+    "unavailable": "Šis vadovas šiuo metu nepasiekiamas",
+    "whenLabel": "Kada naudoti:"
+  },
+  "knowledge": {
+    "agentSkills": {
+      "availabilityClient": "Vienas klientas",
+      "availabilityClientBadgeHelp": "Prieinamas tik vieno kliento bylose.",
+      "availabilityClientHelp": "Naudojamas tik šio kliento bylose. Vėliau to pakeisti negalima.",
+      "availabilityFixedHelp": "Nustatyta kuriant įgūdį. To pakeisti negalima.",
+      "availabilityLabel": "Prieinama",
+      "availabilityMatter": "Viena byla",
+      "availabilityMatterBadgeHelp": "Prieinamas tik vienoje byloje.",
+      "availabilityMatterHelp": "Naudojamas tik šioje byloje. Vėliau to pakeisti negalima.",
+      "availabilityOrganization": "Visa organizacija",
+      "availabilityTeamNeedsMatter": "Norėdami bendrinti įgūdį su komanda, pasirinkite bylą, kuriai jis skirtas. Vėliau to pakeisti negalima.",
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Kurkite sutarčių peržiūros vadovą pozicija po pozicijos, remdamiesi anksčiau pasirašytomis sutartimis, trumpu pokalbiu ir įprastais rinkos standartais.",
+          "name": "Kurti peržiūros vadovą",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Pridėk pozicijų į vieną iš mano esamų peržiūros vadovų.",
+              "name": "Papildyti peržiūros vadovą"
+            },
+            "fromContracts": {
+              "body": "Sukurk konfidencialumo sutarčių peržiūros vadovą pagal mano anksčiau pasirašytas sutartis.",
+              "name": "Pradėti nuo ankstesnių sutarčių"
+            },
+            "fromMarketStandards": {
+              "body": "Sukurk tiekimo sutarčių peržiūros vadovą pagal įprastas rinkos pozicijas.",
+              "name": "Pradėti nuo rinkos standartų"
+            }
+          }
+        }
+      },
+      "builtInSection": "Integruoti įgūdžiai",
+      "deleteFile": "Ištrinti failą",
+      "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
+      "disableSkill": "Išjungti įgūdį",
+      "discoverSkills": "Ieškoti įgūdžių",
+      "discoveredSkills": "{count, plural, one {Rastas # įgūdis} few {Rasti # įgūdžiai} other {Rasta # įgūdžių} many {Rasta # įgūdžių}}",
+      "discoveryEmpty": "Šioje saugykloje ar aplanke įgūdžių nerasta.",
+      "discoverySkippedInvalid": "{count, plural, one {Praleistas # netinkamas įgūdis} few {Praleisti # netinkami įgūdžiai} other {Praleista # netinkamų įgūdžių} many {Praleista # netinkamų įgūdžių}}",
+      "dropPack": "Vilkite .zip/.skill arba SKILL.md failą, kad importuotumėte įgūdį",
+      "editSkill": "Redaguoti įgūdį",
+      "enableSkill": "Įjungti įgūdį",
+      "enterFileName": "Įveskite failo pavadinimą.",
+      "exportAsSkill": "Eksportuoti kaip .skill",
+      "exportAsZip": "Eksportuoti kaip .zip",
+      "exportFailed": "Nepavyko eksportuoti įgūdžio",
+      "exportSkill": "Eksportuoti įgūdį",
+      "fileExists": "Failas šiuo keliu jau yra",
+      "howItRuns": "Kaip jis veikia",
+      "importFailureFetch": "Nepavyko įkelti įgūdžio šaltinio.",
+      "importFailureIntegrity": "Įgūdžio šaltinis po aptikimo pasikeitė. Peržiūrėkite jį dar kartą.",
+      "importFailureLimit": "Pasiektas įgūdžių limitas.",
+      "importFailureNameConflict": "Įgūdis tokiu pavadinimu jau yra.",
+      "importHelp": "Įklijuokite viešos GitHub saugyklos, aplanko arba SKILL.md failo URL. Prieš diegdami peržiūrėkite rastus įgūdžius.",
+      "importPartial": "{installedCount, plural, one {Importuota: {installed}} few {Importuota: {installed}} many {Importuota: {installed}} other {Importuota: {installed}}}; {failedCount, plural, one {nepavyko: {failed}} few {nepavyko: {failed}} many {nepavyko: {failed}} other {nepavyko: {failed}}}.",
+      "importSelected": "Importuoti pasirinktus ({count})",
+      "importSkill": "Importuoti iš URL",
+      "importTitle": "Importuoti įgūdį",
+      "importedSkills": "{count, plural, one {Importuotas # įgūdis} few {Importuoti # įgūdžiai} other {Importuota # įgūdžių} many {Importuota # įgūdžių}}",
+      "invalidPath": "Naudokite santykinį kelią. Failų ir aplankų pavadinimai negali būti . ar .., prasidėti ar baigtis tarpu, baigtis tašku arba turėti \\ : * ? \" |, kampinių skliaustų ar valdymo simbolių.",
+      "invocationAuto": "Automatiškai",
+      "invocationAutoHelp": "DI gali pats naudoti šį įgūdį, kai jis tinka užklausai.",
+      "invocationManual": "Tik iškvietus",
+      "invocationManualHelp": "Naudojamas tik tada, kai iškviečiate jį su / arba pridedate prie savo žinutės.",
+      "license": "Licencija: {license}",
+      "newFile": "Naujas failas",
+      "newFileFilenamePlaceholder": "notes.md",
+      "newFilePathPlaceholder": "aplankas/notes.md",
+      "newFolder": "Naujas aplankas",
+      "pdfPreviewSoon": "PDF peržiūra bus galima, kai bus palaikomi dvejetainiai įgūdžių ištekliai.",
+      "renameFile": "Pervadinti",
+      "scopePrivate": "Tik man",
+      "scopeTeam": "Visiems komandoje",
+      "selectSkillToImport": "Pasirinkite bent vieną įgūdį.",
+      "selectionLimit": "Vienu metu pasirinkite iki {count, plural, one {# įgūdžio} few {# įgūdžių} many {# įgūdžio} other {# įgūdžių}}.",
+      "skippedFiles": "{count, plural, one {# failas nebuvo importuotas} few {# failai nebuvo importuoti} many {# failo nebuvo importuota} other {# failų nebuvo importuota}}",
+      "skippedReasonNotUtf8Text": "Ne UTF-8 tekstas",
+      "skippedReasonOutsideSkillFolder": "Už įgūdžio aplanko ribų",
+      "skippedReasonUnsupportedExtension": "Nepalaikomas failo tipas",
+      "skippedReasonUnsupportedFolder": "Ne išteklių aplanke",
+      "starter": {
+        "compare": {
+          "body": "Palyginkite dvi šio dokumento versijas ir išvardykite visus esminius pakeitimus bei jų vietą.",
+          "description": "Išvardykite visus esminius dviejų versijų pakeitimus",
+          "name": "Palyginti versijas"
+        },
+        "draft": {
+          "body": "Parenkite santūrų atsakymą į šį laišką. Išlaikykite profesionalų toną, aptarkite kiekvieną iškeltą klausimą ir pažymėkite neišspręstus klausimus, kuriuos turiu patvirtinti.",
+          "description": "Parenkite profesionalų atsakymą į laišką",
+          "name": "Parengti atsakymą"
+        },
+        "risks": {
+          "body": "Peržiūrėkite šį dokumentą ir nustatykite teisines rizikas, trūkstamas apsaugos priemones bei dviprasmiškas sąlygas. Prie kiekvienos išvados nurodykite konkrečią sąlygą.",
+          "description": "Raskite teisines rizikas ir dviprasmiškas sąlygas",
+          "name": "Rasti rizikas"
+        },
+        "summarize": {
+          "body": "Apibendrinkite šį dokumentą. Aptarkite šalis, pagrindinius įsipareigojimus, datas, finansines sąlygas ir visas sąlygas dėl nutraukimo ar atsakomybės.",
+          "description": "Gaukite struktūruotą pagrindinių sąlygų santrauką",
+          "name": "Apibendrinti dokumentą"
+        }
+      },
+      "uploadHelp": "Naudokite SKILL.md failą arba .zip/.skill aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
+      "uploadPack": "Įkelti .zip/.skill arba SKILL.md",
+      "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
+      "version": "Versija: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Įtraukti į biblioteką",
+      "added": "{name} yra jūsų bibliotekoje",
+      "confirmAddTitle": "Įtraukti {name} į {organization}?",
+      "confirmDescription": "Šio šablono kopija bus įrašyta į {organization} biblioteką.",
+      "confirmDownloadTitle": "Atsisiųsti {name} organizacijai {organization}?",
+      "confirmStarterDescription": "Šio vadovo kopija bus įrašyta į {organization} biblioteką.",
+      "confirmUseTitle": "Naudoti {name} organizacijoje {organization}?",
+      "installFailed": "Šablono pridėti nepavyko",
+      "noPreview": "Šio šablono peržiūra neprieinama.",
+      "notFound": "Šio šablono kataloge nėra.",
+      "unavailable": "Katalogas šiuo metu nepasiekiamas."
+    },
+    "landing": {
+      "accountLine": "Su nemokama paskyra laikykite savo organizacijos šablonus, sąlygas ir vadovus.",
+      "withAccount": "Su nemokama paskyra"
+    },
+    "mcp": {
+      "addAndConnect": "Pridėti ir prijungti",
+      "addServer": "Pridėti serverį",
+      "addServerCardTitle": "Pridėti naują integraciją",
+      "auth": {
+        "bearer": "Bearer tokenas",
+        "none": "Be autentifikavimo",
+        "oauth2": "OAuth 2.0"
+      },
+      "authorizationReviewDescription": "Prieš patvirtindami patikrinkite autorizavimo serverį ir galinių taškų kilmę.",
+      "authorizationServer": "Autorizavimo serveris",
+      "bearerTokenDescription": "Šis serveris naudoja Bearer tokeną. Įklijuokite teikėjo tokeną, kad užbaigtumėte prijungimą.",
+      "callbackConnectedDescription": "Jos įrankius jau galima naudoti pokalbyje.",
+      "callbackConnectedTitle": "Integracija prijungta",
+      "callbackFailedDescription": "Prisijungimas nebuvo baigtas, todėl niekas neprijungta.",
+      "callbackFailedTitle": "Integracija neprijungta",
+      "connectedToast": "MCP prijungta",
+      "connectedWithLastUsed": "Prijungta · paskutinį kartą naudota {time}",
+      "description": "Tvarkykite integracijas, kurios gali pridėti įrankių į pokalbį. Tokenai saugomi kiekvienam naudotojui atskirai.",
+      "detected": "Aptikta: {authType}",
+      "disable": "Išjungti",
+      "disabled": "Prijungta · išjungta",
+      "emptyDescription": "Atrinktos teisinės integracijos bus rodomos čia, kai jos bus įjungtos jūsų darbo srityje.",
+      "emptyTitle": "Integracijų dar nėra",
+      "enable": "Įjungti",
+      "endpointOrigins": "Galinių taškų kilmė",
+      "enterToken": "Įveskite prieigos raktą.",
+      "errorDescription": "Nepavyko atnaujinti integracijos.",
+      "errorTitle": "MCP nepavyko",
+      "mcpExplainer": "Integracijos prijungia prie pokalbio išorines paslaugas, su kuriomis gali dirbti DI.",
+      "needsReapproval": "Reikia patvirtinti iš naujo",
+      "needsReauth": "Reikia prisijungti iš naujo",
+      "off": "Išjungta",
+      "on": "Įjungta",
+      "openTools": "Atidaryti Įrankius",
+      "otherTitle": "Kitos integracijos",
+      "probe": "Patikrinti",
+      "recommendedFor": "Rekomenduojama: {jurisdictions}",
+      "saveToken": "Išsaugoti tokeną",
+      "tokenHelp": "Kaip gauti tokeną",
+      "tokenLabel": "Bearer tokenas",
+      "tokenPlaceholder": "Įklijuokite tokeną",
+      "urlLabel": "MCP serverio URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Naudoti pokalbyje",
+      "whatIsAnMcpServer": "Kas yra MCP serveris?"
+    },
+    "playbooks": {
+      "addCheck": "Pridėti tikslią taisyklę",
+      "addExtractPosition": "Tik ištraukti",
+      "addExtractPositionHint": "Užfiksuoja reikšmę, be vertinimo",
+      "addGradedPosition": "Įvertinama pozicija",
+      "addGradedPositionHint": "Pakopinės taisyklės su išvada",
+      "addOption": "Pridėti parinktį",
+      "addPosition": "Pridėti poziciją",
+      "addRule": "Taisyklė",
+      "adoptAsIdeal": "Priimti kaip idealią formuluotę",
+      "all": "Visi peržiūros vadovai",
+      "approval": {
+        "approve": "Patvirtinti",
+        "approveFailed": "Nepavyko patvirtinti peržiūros vadovo",
+        "approvedOn": "Patvirtinta {date}",
+        "approvedToast": "Peržiūros vadovas patvirtintas",
+        "saveBeforeApprove": "Prieš patvirtindami šį peržiūros vadovą, išsaugokite pakeitimus.",
+        "sourcesNotice": "Prieš patvirtindami patikrinkite, ar jokioje pozicijoje neįvardytas dokumentas, byla ar priešinga šalis: šį peržiūros vadovą gali skaityti visa organizacija.",
+        "statusApproved": "Patvirtinta",
+        "statusDraft": "Juodraštis"
+      },
+      "askContentLabel": "Atsakymo tipas",
+      "askQuestionLabel": "Klausimas",
+      "askQuestionPlaceholder": "Ką turėtume nuskaityti iš kiekvieno dokumento? Palikite tuščią, jei norite įvesti rankiniu būdu.",
+      "autosave": {
+        "failed": "Nepavyko išsaugoti",
+        "nameMissing": "Neišsaugota: pridėkite pavadinimą",
+        "positionsNeedAttention": "Neišsaugota: {count, plural, one {# pozicija reikalauja} few {# pozicijos reikalauja} other {# pozicijų reikalauja} many {# pozicijų reikalauja}} dėmesio"
+      },
+      "buildWithAi": {
+        "description": "Atsakykite į kelis klausimus pokalbyje, o peržiūros vadovas bus išsaugomas eigoje.",
+        "title": "Kurti su DI"
+      },
+      "check": "Naudoti tikslią taisyklę vietoje DI",
+      "checkHint": "Išmatuojamoms sąlygoms, pavyzdžiui: mokėjimo terminas ≤ 30 dienų.",
+      "checkKind": {
+        "constraint": "Tikrinti atsakymą pagal sąlygą",
+        "presence": "Reikalauti arba drausti atsakymą"
+      },
+      "clausePlaceholder": "Ieškoti sąlygų…",
+      "clauseSearchEmpty": "Sąlygų nerasta",
+      "collapsePosition": "Suskleisti poziciją",
+      "confirmDelete": "Tai visam laikui ištrins peržiūros vadovą.",
+      "contentType": {
+        "int": "Skaičius",
+        "singleSelect": "Vienas pasirinkimas",
+        "text": "Tekstas"
+      },
+      "convertToExtract": "Tik išgauti atsakymą",
+      "convertToExtractDescription": "Tai pašalins šios pozicijos pakopų sistemą ir vertinimą. Šio veiksmo atšaukti negalima.",
+      "convertToExtractTitle": "Konvertuoti į tik ištraukimą?",
+      "convertToGraded": "Pridėti vertinimo taisykles",
+      "convertToRules": "Konvertuoti į taisykles",
+      "createPlaybook": "Naujas peržiūros vadovas",
+      "created": "Peržiūros vadovas sukurtas",
+      "creatingFromStarter": "Pagal pasirinktą šabloną kuriamas peržiūros vadovas…",
+      "customizeAnswer": "Keisti išgaunamą atsakymą",
+      "customizeAnswerHint": "Redaguoti klausimą arba atsakymo formatą.",
+      "decisionLine": "{runs, plural, one {priimta {accepted, number} · atmesta {dismissed, number} · per # peržiūrą} few {priimta {accepted, number} · atmesta {dismissed, number} · per # peržiūras} many {priimta {accepted, number} · atmesta {dismissed, number} · per # peržiūras} other {priimta {accepted, number} · atmesta {dismissed, number} · per # peržiūras}}",
+      "deleteFailed": "Nepavyko ištrinti peržiūros vadovo",
+      "deletePlaybook": "Ištrinti peržiūros vadovą",
+      "deletePosition": "Ištrinti poziciją",
+      "deleted": "Peržiūros vadovas ištrintas",
+      "deletedElsewhere": "Šis peržiūros vadovas ištrintas.",
+      "derivedAutomatically": "Išgavimo klausimas ir atsakymo formatas sukuriami pagal šią poziciją. Nieko nustatyti nereikia.",
+      "derivedQuestion": "Išgavimo klausimas",
+      "derivedType": "Atsakymo formatas",
+      "descriptionPlaceholder": "Ką tikrina šis peržiūros vadovas?",
+      "disabledBadge": "Išjungta: praleidžiama peržiūrose",
+      "discardChanges": "Atmesti pakeitimus",
+      "duplicatePosition": "Dubliuoti poziciją",
+      "empty": "Peržiūros vadovų dar nėra",
+      "emptyDescription": "Sukurkite peržiūros vadovą, kad galėtumėte tikrinti dokumentus pagal savo standartus.",
+      "enablePosition": "Įjungti poziciją",
+      "entryLabelPlaceholder": "Žymė (neprivaloma)",
+      "entryPlaceholder": "Priimtina alternatyvi formuluotė",
+      "entryRank": "#{index}",
+      "expandPosition": "Išskleisti poziciją",
+      "expectation": {
+        "required": "Atsakymas turi būti pateiktas",
+        "restricted": "Atsakymo neturi būti"
+      },
+      "extractOnlyBadge": "Tik ištraukti",
+      "extractOnlyDescription": "Be vertinimo; reikšmė užfiksuojama lentelėje.",
+      "extraction": "Ištraukimas",
+      "extractionAuto": "Automatiškai",
+      "extractionManual": "Rankiniu būdu",
+      "fixErrorsBeforeSaving": "Prieš išsaugodami ištaisykite paryškintus laukus.",
+      "gradedNeedsContent": "Pridėkite bent vieną taisyklę, alternatyvų įrašą arba idealią formuluotę.",
+      "guidanceLabel": "Pridėti peržiūros nurodymus",
+      "guidancePlaceholder": "Pridėkite išimtį ar nurodymą, kurio neapima pirmiau pateiktos taisyklės.",
+      "homeDescription": "Vieną kartą nustatykite peržiūros standartus ir nuosekliai taikykite juos kiekvienam dokumentui.",
+      "idealFromClause": "Iš sąlygų bibliotekos",
+      "idealInline": "Įvestas tekstas",
+      "idealInlinePlaceholder": "Įklijuokite idealią formuluotę…",
+      "idealLanguage": "Ideali formuluotė",
+      "issueLabel": "Tema",
+      "issuePlaceholder": "pvz., Atsakomybės ribojimas",
+      "lastUsed": "Paskutinį kartą naudota {date}",
+      "loadFailed": "Nepavyko įkelti peržiūros vadovų",
+      "loading": "Įkeliami peržiūros vadovai…",
+      "manageTypes": "Tvarkyti tipus…",
+      "namePlaceholder": "pvz., NDA peržiūra",
+      "nameRequired": "Pridėkite pavadinimą.",
+      "negotiation": {
+        "addTalkingPoint": "Pridėti derybų punktą",
+        "escalationLabel": "Eskalavimas",
+        "escalationPlaceholder": "Kada ir kam eskaluoti (pasirinktinai)",
+        "rationaleLabel": "Pagrindimas",
+        "rationalePlaceholder": "Kodėl to siekiame (pasirinktinai)",
+        "talkingPointPlaceholder": "Ką sakyti",
+        "talkingPointsLabel": "Derybų punktai",
+        "title": "Derybos"
+      },
+      "noPositions": "Pozicijų dar nėra. Pridėkite pirmąją.",
+      "noSettledPosition": "Nusistovėjusios pozicijos nėra",
+      "openInPane": "Atidaryti peržiūros vadovą",
+      "optionPlaceholder": "Parinkties reikšmė",
+      "optionsLabel": "Parinktys",
+      "outline": "Struktūra",
+      "pendingPane": {
+        "description": "Atsakykite į klausimus pokalbyje. Kai patvirtinsite pirmąjį išsaugojimą, peržiūros vadovas atsidarys čia ir galėsite jį redaguoti šalia pokalbio.",
+        "title": "Jūsų peržiūros vadovas atsiras čia"
+      },
+      "positionOfTotal": "Pozicija {index} iš {total}",
+      "positionRemoved": "Pozicija pašalinta",
+      "positions": "Pozicijos",
+      "recent": "Neseniai naudoti",
+      "recommended": "Rekomenduojami ruošiniai",
+      "redLinePlaceholder": "Formuluotė, kuri niekada nėra priimtina",
+      "referenceStandard": "Iš referencijos",
+      "removeCheck": "Pašalinti patikrą",
+      "removeIdeal": "Pašalinti idealią formuluotę",
+      "removeSource": "Pašalinti šaltinį {documentName}",
+      "reorderPosition": "Pertvarkyti poziciją",
+      "review": {
+        "changePlaybook": "Pasirinkti kitą peržiūros vadovą",
+        "extractedLabel": "Rasta:",
+        "facetTitle": "Peržiūra su peržiūros vadovu",
+        "failed": "Nepavyko peržiūrėti dokumento",
+        "fixAccepted": "Priimta",
+        "insertFailed": "Nepavyko įterpti pageidaujamos sąlygos",
+        "insertPreferred": "Įterpti pageidaujamą sąlygą",
+        "launcherDescription": "Patikrinkite šį dokumentą pagal organizacijos peržiūros vadovą ir gaukite išvadas tiesiog tekste.",
+        "matchedFallback": "Atitinkanti alternatyva:",
+        "noFindings": "Problemų nerasta",
+        "playbookLabel": "Peržiūros vadovas",
+        "playbookPlaceholder": "Pasirinkite peržiūros vadovą",
+        "reject": "Atmesti",
+        "reviewAgain": "Peržiūrėti dar kartą",
+        "reviewedAgainst": "Peržiūrėta pagal {name}",
+        "reviewing": "Peržiūrima…",
+        "reviewingHint": "Dideliems peržiūros vadovams tai gali užtrukti kelias minutes.",
+        "run": "Peržiūrėti",
+        "scrollToChange": "Eiti į pakeitimą",
+        "viewClause": "Žiūrėti sąlygą",
+        "violatedRedLine": "Pažeista raudona linija:"
+      },
+      "ruleNumber": "Taisyklė {index}",
+      "rulePlaceholder": "pvz. Mokėjimo terminas negali viršyti 30 dienų",
+      "saveFailed": "Nepavyko išsaugoti peržiūros vadovo",
+      "severity": {
+        "blocker": "Blokuojanti"
+      },
+      "severityLabel": "Svarba",
+      "staleCopy": {
+        "loaded": "Įkelta naujesnė šio peržiūros vadovo versija. Prieš redaguodami įkelkite iš naujo.",
+        "unavailable": "Nepavyko įkelti naujausios šio peržiūros vadovo versijos. Tai paskutinė įkelta kopija; ji gali būti pasenusi."
+      },
+      "starters": {
+        "addedToast": "Peržiūros vadovas pridėtas",
+        "browseButton": "Naršyti parengtus peržiūros vadovus",
+        "positionCount": "{count, plural, one {# pozicija} few {# pozicijos} many {# pozicijos} other {# pozicijų}}",
+        "title": "Parengti peržiūros vadovai",
+        "useStarter": "Naudoti šį ruošinį"
+      },
+      "switchToAuto": "Automatiškai sukurti klausimą ir formatą",
+      "switchToManual": "Tinkinti klausimą ir atsakymo formatą",
+      "termKind": {
+        "enumeration": "Išvardijimas",
+        "language": "Formuluotė",
+        "parameter": "Parametras",
+        "presence": "Buvimas"
+      },
+      "tier": {
+        "acceptable": "Priimtina",
+        "fallback": "Alternatyva",
+        "notAcceptable": "Nepriimtina"
+      },
+      "untitledPosition": "Pozicija be pavadinimo",
+      "updated": "Peržiūros vadovas atnaujintas",
+      "updatedAt": "Atnaujinta {date}",
+      "verdict": {
+        "additional": "Papildoma",
+        "compliant": "Atitinka",
+        "deviation": "Nukrypimas",
+        "fallback": "Alternatyva",
+        "missing": "Trūksta",
+        "notApplicable": "Netaikoma"
+      },
+      "versions": {
+        "confirmRestore": "Dabartinį juodraštį pakeis šios versijos turinys.",
+        "restoreFailed": "Nepavyko atkurti versijos",
+        "restoredToast": "Versija atkurta",
+        "versionHistory": "Versijų istorija"
+      }
+    },
+    "sections": {
+      "caseLaw": {
+        "description": "Teismų sprendimai iš įvairių jurisdikcijų"
+      },
+      "clauses": {
+        "description": "Pakartotinai naudojamų sąlygų biblioteka"
+      },
+      "mcp": {
+        "description": "Prijunkite stella prie išorinių įrankių",
+        "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Įvertinti kontroliniai sąrašai, tikrinantys dokumentus pagal jūsų standartus"
+      },
+      "skills": {
+        "title": "Įgūdžiai"
+      },
+      "templates": {
+        "description": "Dokumentų šablonai su vietos žymėmis",
+        "title": "Šablonai"
+      },
+      "tools": {
+        "description": "Įgūdžiai, integracijos ir visada pasiekiami įrankiai, kuriuos DI gali naudoti pokalbyje",
+        "title": "Įrankiai"
+      },
+      "workflows": {
+        "description": "Automatizuokite darbą su dokumentais naudodami pakartotinai naudojamas, kelių žingsnių darbo eigas."
+      }
+    },
+    "skills": {
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Atsakykite į klausimą remdamiesi patikimais šaltiniais.",
+            "inside": "šaltinių hierarchija · tyrimo užklausa",
+            "title": "Atsakyti pagal šaltinius"
+          },
+          "checkAgainstRules": {
+            "blurb": "Peržiūrėkite dokumentą ir su nuorodomis pažymėkite, kas neatitinka reikalavimų.",
+            "inside": "šaltiniai pagal jurisdikciją · kontrolinis sąrašas · peržiūros užklausa",
+            "title": "Patikrinti pagal taisykles"
+          },
+          "intakeToDraft": {
+            "blurb": "Surinkite faktus, tada parenkite dokumento juodraštį.",
+            "inside": "apklausa · dokumentų pavyzdžiai · rengimo užklausa",
+            "title": "Nuo duomenų surinkimo iki juodraščio"
+          }
+        },
+        "insideLabel": "Sudėtis",
+        "startBlank": "Pradėti nuo tuščio lapo",
+        "startBlankHint": "Tuščias įgūdis, kai tiksliai žinote, ko reikia.",
+        "subtitle": "Pasirinkite pradinę struktūrą. Parengsime aplankus ir padėsime juos užpildyti.",
+        "title": "Kaip turėtų veikti jūsų įgūdis?"
+      },
+      "commandConflict": "Įgūdis su šia / komanda jau yra",
+      "commandHelp": "Įveskite komandą pokalbyje, kad paleistumėte šį įgūdį.",
+      "commandLabel": "Pokalbio komanda (neprivaloma)",
+      "commandPlaceholder": "pvz. apibendrinti",
+      "errors": {
+        "commandInvalid": "Naudokite tik mažąsias raides, skaitmenis, brūkšnelius ir pabraukimus"
+      },
+      "form": {
+        "scope": "Matomumas",
+        "scopePrivate": "Tik aš",
+        "scopeTeam": "Visi komandoje"
+      }
+    }
+  },
+  "lawHome": {
+    "clearRecent": "Išvalyti naujausius",
+    "clearRecentConfirmation": "Ištrinti visas jūsų naujausias paieškas, teismų sprendimus ir teisės aktus šioje organizacijoje? Šio veiksmo negalima atšaukti.",
+    "importFailed": "Vietinės istorijos nepavyko importuoti. Ji vis dar išsaugota šiame įrenginyje.",
+    "inForceFrom": "Įsigalioja {date}",
+    "noRecent": "Naujausios veiklos dar nėra",
+    "noSignals": "Signalų dar nėra",
+    "prompt": "Ko ieškote?",
+    "recent": "Naujausi",
+    "recentCasesFilter": "Sprendimai",
+    "recentLoadFailed": "Naujausios veiklos nepavyko įkelti.",
+    "recentSearchFilter": "Paieškos",
+    "recentUpdateFailed": "Naujausios veiklos nepavyko atnaujinti.",
+    "searchLabel": "Ieškoti teisės duomenų bazėje",
+    "searchPlaceholder": "Bylos numeris, akto numeris, ECLI arba raktažodžiai",
+    "signals": "Signalai",
+    "topCourts": "Iš aukščiausiųjų teismų"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "Dėl šios {citation} ištraukos:\n\n„{quote}“\n\n",
+      "colorGreen": "Žalia",
+      "colorRed": "Raudona",
+      "colorSky": "Mėlyna",
+      "colorViolet": "Violetinė",
+      "colorYellow": "Geltona",
+      "commentPlaceholder": "Rašykite komentarą…",
+      "commentText": "Komentaro tekstas",
+      "commentedPassage": "Pakomentuota ištrauka",
+      "editComment": "Redaguoti komentarą",
+      "editedAt": "Redaguota {time}",
+      "guestAuthor": "Jūs",
+      "guestLimitReached": "Šiame skirtuke galima laikyti iki {count, plural, one {# paryškinimo ar pastabos} few {# paryškinimų ir pastabų} many {# paryškinimo ir pastabos} other {# paryškinimų ir pastabų}}. Norėdami išsaugoti daugiau, sukurkite paskyrą.",
+      "guestMigrationComplete": "Paryškinimai ir pastabos išsaugoti.",
+      "guestMigrationFailed": "Kai kurių paryškinimų ir pastabų nepavyko išsaugoti. Jie liks šiame skirtuke kitam bandymui.",
+      "guestSavePrompt": "Jūsų paryškinimai ir pastabos bus išsaugoti sukūrus nemokamą paskyrą.",
+      "guestStorageUnavailable": "Paryškinimų ir pastabų nepavyko išsaugoti šiame skirtuke.",
+      "highlight": "Paryškinti",
+      "highlightedPassage": "Paryškinta ištrauka",
+      "history": {
+        "colorRestored": "Spalva atkurta",
+        "commentRemoved": "Komentaras pašalintas",
+        "commentRestored": "Komentaras atkurtas",
+        "highlightRemoved": "Paryškinimas pašalintas",
+        "highlightRestored": "Paryškinimas atkurtas",
+        "markChanged": "Šis paryškinimas ar komentaras tuo metu buvo pakeistas kitur, todėl paliktas nepakeistas.",
+        "markGone": "Šio paryškinimo ar komentaro nebėra.",
+        "nothingToRedo": "Nėra ką grąžinti",
+        "nothingToUndo": "Nėra ką anuliuoti",
+        "redoShortcut": "Grąžinti paryškinimo ar komentaro pakeitimą",
+        "styleRestored": "Stilius atkurtas",
+        "textRestored": "Komentaro tekstas atkurtas",
+        "undoShortcut": "Anuliuoti paryškinimo ar komentaro pakeitimą",
+        "visibilityRestored": "Bendrinimas atkurtas"
+      },
+      "orphaned": {
+        "description": "Šio dokumento tekstas buvo atnaujintas po jų sukūrimo: pažymėtų ištraukų jame nepavyko vėl rasti arba jos dabar pasikartoja keliose vietose. Jos tekste nerodomos.",
+        "summary": "{count, plural, one {# žymėjimas ar komentaras nebeatitinka teksto} few {# žymėjimai ar komentarai nebeatitinka teksto} many {# žymėjimo ar komentaro nebeatitinka teksto} other {# žymėjimų ir komentarų nebeatitinka teksto}}"
+      },
+      "removeHighlight": "Pašalinti paryškinimą",
+      "styleHighlight": "Paryškinimas",
+      "styleSquiggly": "Banguota linija",
+      "styleStrikethrough": "Perbraukimas",
+      "visibilityShared": "Bendrinama su organizacija",
+      "visibilitySharedWithMatter": "Bendrinama su byla"
+    },
+    "contents": {
+      "aiSection": "{section} (DI sugeneruota dalis)",
+      "headingWithAiSection": "{heading} (DI sugeneruota dalis: {section})"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokinė citata su nuoroda",
+      "citationOnly": "Tik nuoroda",
+      "citationWithQuote": "Nuoroda su citata",
+      "quoteWithCitation": "Citata su nuoroda",
+      "textOnly": "Tik tekstas"
+    }
+  },
+  "publicTools": {
+    "addSkill": "Pridėkite įgūdį",
+    "addToStella": "Pridėti prie stella",
+    "alreadyInstalled": "Šis įrankis jau įdiegtas.",
+    "content": "Turinys",
+    "contentUnavailable": "Nepavyko įkelti šio įgūdžio turinio. Peržiūrėkite jį GitHub platformoje.",
+    "contribute": {
+      "contributingLink": "Skaityti prisidėjimo vadovą",
+      "cta": "Prisidėti",
+      "form": {
+        "authorLabel": "Autoriaus vardas",
+        "authorUrlLabel": "Autoriaus URL (neprivaloma)",
+        "commitError": "Nepavyko gauti naujausio commit. Toliau įklijuokite 40 simbolių SHA.",
+        "costLabel": "Kaina",
+        "directoryLabel": "Kelias saugykloje (neprivaloma)",
+        "directoryPlaceholder": "skills/my-skill",
+        "inTreeReminder": "Toje pačioje pakeitimų užklausoje pridėkite SKILL.md šalia manifesto.",
+        "intro": "Įveskite duomenis manifestui sugeneruoti, tada atidarykite pakeitimų užklausą. Paskyros nereikia.",
+        "invalidHint": "Užpildykite privalomus laukus, kad galėtumėte atidaryti pakeitimų užklausą.",
+        "jurisdictionPlaceholder": "CZ",
+        "jurisdictionsHint": "Pridėkite ISO šalių kodus. Jei įgūdis nepriklauso nuo jurisdikcijos, palikite tuščią.",
+        "jurisdictionsLabel": "Jurisdikcijos",
+        "licenseLabel": "Licencija",
+        "manifestPreview": "Sukurtas manifest.json",
+        "name": "Įgūdžio pavadinimas",
+        "openPr": "Atidaryti GitHub pakeitimų užklausą",
+        "practiceAreasLabel": "Teisės sritys",
+        "repoLabel": "Saugykla",
+        "repoPlaceholder": "savininkas/vardas arba GitHub URL",
+        "resolvingCommit": "Ieškoma…",
+        "revLabel": "Fiksuotas commit",
+        "revPlaceholder": "40 simbolių commit SHA",
+        "setupLabel": "Sąranka",
+        "slugHint": "URL ir aplanko pavadinime naudojamas mažųjų raidžių identifikatorius.",
+        "slugLabel": "URL identifikatorius",
+        "sourceGithub": "GitHub saugykla",
+        "sourceGithubHint": "Didesniems ar savarankiškai prižiūrimiems įgūdžiams, fiksuotiems ties konkrečiu commit.",
+        "sourceInTree": "Šioje saugykloje",
+        "sourceInTreeHint": "Mažiems įgūdžiams, kurių turinys saugomas čia.",
+        "sourceLabel": "Kur saugomas įgūdis?",
+        "title": "Pridėkite įgūdį",
+        "useLatestCommit": "Naudoti naujausią commit"
+      },
+      "githubBody": "Dideli arba savarankiškai prižiūrimi įgūdžiai lieka nuosavoje GitHub saugykloje, fiksuoti ties konkrečiu commit. Pasikeitus šaltinio saugyklai, suplanuota patikra atidaro pakeitimų užklausą, todėl peržiūrėta fiksuota versija išlieka aktuali.",
+      "githubTitle": "GitHub prisegtas įgūdis:",
+      "inTreeBody": "Maži įgūdžiai saugomi šioje saugykloje šalia jų aprašo, iki 10 MB vienam įrašui. Jų turinys patiekiamas ir supakuojamas tiesiai iš katalogo.",
+      "inTreeTitle": "Aplankas saugykloje:",
+      "intro": "Kataloge pateikiami teisinio darbo įgūdžiai, integracijos ir integruoti įrankiai. Kiekvienas gali pasiūlyti įrašą pateikdamas pakeitimų užklausą.",
+      "licenseBody": "Kiekvienas įrašas deklaruoja licenciją iš toliau pateikto leistinų sąrašo. „Copyleft“ licencijos nepriimamos, kad savarankiški prieglobos naudotojai galėtų laisvai platinti.",
+      "licenseTitle": "Leidžiamų licencijų sąrašas",
+      "mcpBody": "Integracijos aprašomos manifeste, kuriame nurodomas serverio URL, autentifikavimo tipas ir prašomos prieigos. Kataloge prisijungimo duomenys nesaugomi; vartotojai juos pateikia savo kliente.",
+      "mcpTitle": "MCP integracijos",
+      "recommendedBody": "Ženklelį „Rekomenduojama“ kuruoja prižiūrėtojai versija valdomame faile. Jokiu būdu negalima jo nustatyti iš viešosios svetainės arba vien iš ištraukimo užklausos.",
+      "recommendedTitle": "Rekomenduojama būsena",
+      "repoLink": "Naršyti katalogo įrašus",
+      "title": "Pridėkite įrankį"
+    },
+    "discovery": {
+      "allBody": "Ištirkite daugkartinio naudojimo darbo eigas, patikimus viešuosius duomenų šaltinius ir galimybes, įtrauktas į stella.",
+      "allTitle": "Visi įrankiai",
+      "aresBody": "Ieškokite Čekijos organizacijos pagal pavadinimą arba IČO oficialiame ARES registre.",
+      "contractReviewBody": "Peržiūrėkite komercinių sutarčių sąlygas pagal derybų gaires; nukrypimai ir siūlomi pakeitimai bus aiškiai pažymėti.",
+      "editorsPick": "Redaktoriaus pasirinkimai",
+      "exampleReview": "Apžvalgos pavyzdys",
+      "featuredTitle": "Pradėkite nuo darbo eigos",
+      "fromCommunity": "Iš bendruomenės",
+      "groups": {
+        "dataSources": "Duomenų šaltiniai ir integracijos",
+        "dataSourcesBody": "Prijunkite autoritetingus registrus ir specializuotas tarnybas, kai reikalui reikia išorinės informacijos.",
+        "included": "Įtraukta į stella",
+        "includedBody": "Pagrindinės galimybės, kurias galima naudoti nepridedant atskirų įgūdžių ar paskyros.",
+        "skillsBody": "Daugkartinio naudojimo teisinės darbo eigos su instrukcijomis, kurias galite peržiūrėti prieš pridėdami."
+      },
+      "heroBody": "Ieškokite pagal užduotį, jurisdikciją arba šaltinį. Kiekvieną įrankį galite peržiūrėti prieš pridėdami jį prie savo darbo srities.",
+      "heroTitle": "Prie ko dirbate?",
+      "howBody": "Įgūdis pateikia teisinį metodą kaip peržiūrimas instrukcijas. Pridėkite jį vieną kartą ir tą patį metodą taikykite kaskart prireikus.",
+      "howTitle": "Kas yra įgūdis?",
+      "includedBadge": "Įtraukta",
+      "jurisRankBody": "Įvertinkite Argentinos Aukščiausiojo Teismo precedentų autoritetą pasitelkdami citavimo įtaką ir doktrinos raidą.",
+      "noResults": "Dar nėra įrankių, atitinkančių šią paiešką.",
+      "openSkill": "Kaip tai veikia",
+      "review": {
+        "aligned": "Atitinka",
+        "governingLaw": "Taikytina teisė",
+        "liabilityCap": "Atsakomybės viršutinė riba",
+        "missing": "Nepateikta",
+        "outsidePlaybook": "Neatitinka peržiūros vadovo",
+        "termination": "Nutraukimas"
+      },
+      "searchPlaceholder": "Ką reikia daryti?",
+      "tasks": {
+        "prepareDocuments": "Ruošti dokumentus",
+        "protectClientData": "Apsaugokite kliento duomenis",
+        "researchPrecedents": "Tirti precedentus",
+        "reviewAgreements": "Peržiūrėkite susitarimus",
+        "verifyOrganizations": "Patvirtinkite organizaciją"
+      },
+      "tasksTitle": "Arba pasirinkite užduotį"
+    },
+    "documentation": "Dokumentacija",
+    "downloadUpstream": "Atsisiųsti šaltinio archyvą",
+    "installConfirm": {
+      "mcpBody": "Jūsų darbo vietai bus pridėta MCP jungtis \"{name}\". Vėliau MCP nustatymuose pateikiate savo kredencialus.",
+      "nativeToolBody": "Integruotas įrankis „{name}“ bus įjungtas jūsų darbo vietoje.",
+      "skillBody": "Įgūdis „{name}“ bus įdiegtas jūsų darbo vietoje.",
+      "title": "Pridėti {name} į savo darbo vietą?"
+    },
+    "installUnavailable": "Šio įrankio jūsų organizacijoje įdiegti negalima.",
+    "mcpConfigHint": "Nuo kliento nepriklausomi ryšio duomenys. Įklijuokite juos į bet kurį su MCP suderinamą klientą ir pridėkite savo prisijungimo duomenis.",
+    "metaDescription": "Naršykite atvirame teisinio darbo įgūdžių, integracijų ir integruotų įrankių kataloge.",
+    "missingFromCatalogue": "Šio įrankio nėra jūsų organizacijos kataloge.",
+    "nativeToolInfo": "Tai integruota stella funkcija. Įjunkite ją savo darbo srityje, kad galėtumėte naudoti pokalbyje.",
+    "notFound": "Įrankis nerastas.",
+    "practiceArea": "Teisės sritis",
+    "practiceAreas": {
+      "bankingFinance": "Bankininkystė ir finansai",
+      "capitalMarkets": "Kapitalo rinkos",
+      "commercial": "Komercinė teisė",
+      "competition": "Konkurencijos teisė",
+      "corporate": "Bendrovių teisė",
+      "criminal": "Baudžiamoji teisė",
+      "dataProtection": "Duomenų apsauga",
+      "disputeResolution": "Ginčų sprendimas",
+      "employment": "Darbo teisė",
+      "energy": "Energetikos teisė",
+      "environmental": "Aplinkos teisė",
+      "family": "Šeimos teisė",
+      "immigration": "Imigracijos teisė",
+      "insolvency": "Nemokumas",
+      "intellectualProperty": "Intelektinė nuosavybė",
+      "litigation": "Bylinėjimasis",
+      "mergersAcquisitions": "Susijungimai ir įsigijimai",
+      "privateClient": "Privatūs klientai",
+      "publicAdministrative": "Viešoji ir administracinė teisė",
+      "realEstate": "Nekilnojamas turtas",
+      "regulatory": "Reguliavimo teisė",
+      "tax": "Mokesčių teisė",
+      "technology": "Technologijų teisė",
+      "whiteCollarCrime": "Ekonominiai nusikaltimai"
+    },
+    "tokenHelp": "Kaip gauti žetoną",
+    "viewOnGithub": "Peržiūrėti GitHub platformoje"
+  },
+  "readerAnswers": {
+    "answerLanguage": "Atsakymo kalba",
+    "budgetError": "Atsakymams skirtas biudžetas išnaudotas.",
+    "documentLanguage": "Dokumento kalba ({language})",
+    "expand": "Išskleisti atsakymą",
+    "explain": "Paaiškinti",
+    "followUp": "Užduoti papildomą klausimą",
+    "followUpRequired": "Įrašykite papildomą klausimą, kurį norite išsiųsti.",
+    "invalidCitations": "{count, plural, one {Nepavyko patikrinti # nuorodos.} few {Nepavyko patikrinti # nuorodų.} many {Nepavyko patikrinti # nuorodos.} other {Nepavyko patikrinti # nuorodų.}}",
+    "loading": "Generuojamas atsakymas…",
+    "minimise": "Suskleisti atsakymą",
+    "modelError": "Modelis negalėjo užbaigti šio atsakymo.",
+    "networkError": "Ryšys nutrūko. Bandykite dar kartą.",
+    "regenerate": "Generuoti atsakymą iš naujo",
+    "selectionError": "Pažymėkite tekstą iš paties sprendimo.",
+    "send": "Siųsti papildomą klausimą",
+    "share": "Bendrinti su komanda",
+    "timeoutError": "Baigėsi atsakymui skirtas laikas. Bandykite dar kartą.",
+    "title": "Atsakymas apie pasirinktą tekstą",
+    "waitForCurrentAction": "Palaukite, kol bus baigtas vykdomas veiksmas su šiuo atsakymu."
+  },
+  "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nekeistas} one {Pakeistas # kartą} few {Pakeistas # kartus} many {Pakeistas # karto} other {Pakeistas # kartų}}",
+    "asOf": "Tekstas, galiojęs",
+    "backToList": "Visi teisės aktai",
+    "citingDecisionHideSnippet": "Sutraukti ištrauką",
+    "citingDecisionMentionCount": "cituota {count}×",
+    "citingDecisionOlderVersion": "Ankstesnė redakcija",
+    "citingDecisionShowSnippet": "Rodyti visą ištrauką",
+    "citingDecisionsCourtPlaceholder": "Visi teismai",
+    "citingDecisionsFilterPlaceholder": "Filtruoti įkeltus sprendimus",
+    "citingDecisionsSnapshotCapped": "{count, plural, one {Rodomas # sprendimas} few {Rodomi # sprendimai} many {Rodoma # sprendimo} other {Rodoma # sprendimų}} (iki {limit} sprendimų, kuriuose ši nuostata minima dažniausiai).",
+    "citingDecisionsSortCitations": "Šios nuostatos paminėjimai",
+    "citingDecisionsSortDate": "Sprendimo data",
+    "citingDecisionsYear": "Sprendimo metai",
+    "citingDecisionsYearOutOfRange": "Įveskite metus nuo {min} iki {max}.",
+    "citingDecisionsYearPlaceholder": "Visi metai",
+    "columns": {
+      "act": "Teisės aktas",
+      "amendments": "Pakeitimai",
+      "firstVersion": "Pirmoji redakcija",
+      "lastAmended": "Paskutinį kartą pakeista"
+    },
+    "compareAbsent": "Šioje redakcijoje nėra",
+    "compareAddedLater": "Šioje redakcijoje šios nuostatos dar nebuvo.",
+    "compareClose": "Uždaryti palyginimą",
+    "compareMoved": "Perkelta:",
+    "compareMovedFrom": "Perkelta čia iš {provision}",
+    "compareMovedFromElsewhere": "Perkelta čia iš kitos vietos",
+    "compareMovedTo": "Perkelta į {provision}",
+    "compareMovedToElsewhere": "Perkelta į kitą vietą",
+    "compareNoChanges": "Formuluotė abiejose redakcijose vienoda.",
+    "compareNoLongerPresent": "Šioje redakcijoje šios nuostatos nebėra. Ji panaikinta arba pernumeruota.",
+    "compareProvisionNeither": "Nė vienoje redakcijoje šios nuostatos nėra.",
+    "compareProvisionTitle": "{provision} pakeitimai tarp redakcijų",
+    "compareSameVersion": "Tai rodoma redakcija. Palyginimui pasirinkite kitą.",
+    "compareShowUnchanged": "Rodyti nepakeistas nuostatas",
+    "compareSideBySide": "Palyginti greta",
+    "compareTitle": "Pakeitimai tarp redakcijų",
+    "compareUnavailable": "Redakcijų palyginti nepavyko.",
+    "compareUnstructured": "Viena iš redakcijų prieinama tik kaip paprastas tekstas, todėl jų palyginti negalima.",
+    "compareVersionMissing": "Lyginamos redakcijos šio akto istorijoje nėra.",
+    "compareWholeAct": "Palyginti visą aktą",
+    "compareWithPreviousWording": "Palyginti su ankstesne redakcija",
+    "compareWithVersion": "Palyginti su redakcija {version}",
+    "currentWording": "Galiojanti redakcija",
+    "description": "Vieša konsoliduotų teisės aktų duomenų bazė, indeksuojama pagal aktą ir jo redakciją.",
+    "diffInserted": "Įterpta:",
+    "diffRemoved": "Išbraukta:",
+    "emptyDocument": "Ši redakcija neturi teksto.",
+    "emptyState": "Teisės aktų nerasta.",
+    "expression": {
+      "invalidWindow": "Prieštaringos leidėjo datos",
+      "promulgated": "Paskelbtas tekstas",
+      "withdrawn": "Leidėjas jo nebeskelbia"
+    },
+    "inForceSince": "Galioja nuo {date}",
+    "inForceSinceAtLeast": "Galioja ne vėliau kaip nuo {date}",
+    "ineligibleVersion": "{range} ({label})",
+    "leadingDecision": "Pagrindinis sprendimas",
+    "leadingDecisionsExplanation": "Pirmasis paminėjimas kiekviename sprendime, surikiuotas pagal citavimo autoritetą: įvertintos gaunamos citatos, atsižvelgiant į teismo rangą, citatos pobūdį ir senumą.",
+    "noVersionInForce": "Pasirinktą dieną negaliojo nė viena šio akto redakcija.",
+    "openEnded": "dabar",
+    "outline": "Turinys",
+    "outlineJumpLabel": "Pereiti prie nuostatos",
+    "outlineJumpPlaceholder": "§ 10 arba pavadinimas",
+    "pendingChanges": "Būsimi pakeitimai",
+    "pendingChangesIncomplete": "Skelbėjo duomenys gali neapimti visų būsimų pakeitimų.",
+    "provisionAbsentVersions": "{count, plural, =1 {Šioje įstatymo redakcijoje nėra} one {Šiose įstatymo redakcijose nėra (#)} few {Šiose įstatymo redakcijose nėra (#)} many {Šiose įstatymo redakcijose nėra (#)} other {Šiose įstatymo redakcijose nėra (#)}}",
+    "provisionAskContextPrompt": "\n\nIštraukos, kuriose nuostata taikoma autoritetingiausiuose sprendimuose:\n{passages}\n\nNaudok teismų praktikos įrankius, kad perskaitytum bet kurį iš šių sprendimų visą arba rastum daugiau sprendimų, kuriuose nuostata cituojama.",
+    "provisionAskSummarize": "Apibendrinti, kaip teismai taiko šią nuostatą",
+    "provisionAskSummarizePrompt": "Apibendrink, kaip teismai taiko {subject}, ir nurodyk sprendimus, kuriais remiesi.",
+    "provisionDetailsFor": "{provision} informacija",
+    "provisionEffectiveFrom": "galioja nuo {date}",
+    "provisionHistoryEmpty": "Šios nuostatos redakcijų nėra.",
+    "provisionHistoryUnavailable": "Nepavyko įkelti šios nuostatos istorijos.",
+    "provisionPartTextUnavailable": "{provisionLabel} tekstas neprieinamas",
+    "provisionPromptSubject": "{statute} ({eli}) {provision}, redakcija, galiojanti nuo {date}",
+    "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "taip pat nuo {date}",
+    "provisionRunShowVersions": "Rodyti įstatymo redakcijas laikotarpiu {range}",
+    "provisionRunUnchanged": "{count, plural, one {nepakitusi per # įstatymo redakciją} few {nepakitusi per # įstatymo redakcijas} many {nepakitusi per # įstatymo redakcijos} other {nepakitusi per # įstatymo redakcijų}}",
+    "provisionTextUnavailable": "Šios redakcijos tekstas nepasiekiamas",
+    "provisionVersionsAll": "Visos įstatymo redakcijos",
+    "provisionWordingAdded": "Nauja nuostata",
+    "provisionWordingChanged": "Pakeista",
+    "provisionWordingEarliest": "Seniausia turima redakcija",
+    "publisherWindowInconsistent": "Šiai dienai galiojančios redakcijos nustatyti negalima: leidėjo duomenys prieštaringi.",
+    "resolvedAlias": "Atpažinta kaip {label}",
+    "searchLabel": "Ieškoti teisės aktų",
+    "searchPlaceholder": "Numeris, pavadinimas arba antraštė, pvz. 89/2012 Sb.",
+    "showCitedPartOnly": "Rodyti tik cituojamą dalį",
+    "showFullProvision": "Rodyti visą nuostatą",
+    "showInText": "Rodyti tekste",
+    "sortNeedsYear": "Norėdami rūšiuoti pagal šį stulpelį, filtruose pasirinkite metus.",
+    "statedWindow": "Leidėjo nurodytos datos: {range}",
+    "status": {
+      "current": "Galiojantis",
+      "draft": "Projektinis",
+      "ended": "Nebegalioja",
+      "future": "Būsimas",
+      "historical": "Pakeistas",
+      "neverInForce": "Niekada neįsigaliojo",
+      "repealed": "Panaikintas",
+      "unknown": "Būsena neaiški"
+    },
+    "title": "Teisės aktai",
+    "validity": "Galioja nuo {from} iki {to}",
+    "versionAlreadySelected": "Jau peržiūrite šią versiją.",
+    "versionAppliedInDecision": "Sprendime <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> taikyta redakcija (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# įterpta nuostata} few {# įterptos nuostatos} many {# įterptos nuostatos} other {# įterptų nuostatų}}",
+    "versionChangesChanged": "{count, plural, one {# pakeista nuostata} few {# pakeistos nuostatos} many {# pakeistos nuostatos} other {# pakeistų nuostatų}}",
+    "versionChangesNone": "Formuluotė nepakeista",
+    "versionChangesRemoved": "{count, plural, one {# išbraukta nuostata} few {# išbrauktos nuostatos} many {# išbrauktos nuostatos} other {# išbrauktų nuostatų}}",
+    "versionChangesWords": "{inserted, plural, one {# įterptas žodis} few {# įterpti žodžiai} many {# įterpto žodžio} other {# įterptų žodžių}}, {deleted, plural, one {# išbrauktas žodis} few {# išbraukti žodžiai} many {# išbraukto žodžio} other {# išbrauktų žodžių}}",
+    "wordingVersionUnknown": "Redakcijos versijos data nežinoma"
+  }
+}

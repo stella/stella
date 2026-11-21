@@ -3,12 +3,43 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { panic } from "better-result";
 
+import {
+  CollectionAttributionList,
+  type CollectionAttributionMessages,
+  type CollectionBodySource,
+} from "../src/collection-attribution";
 import { DecisionReaderProvider } from "../src/reader-adapters";
 import type { DecisionReaderAdapters } from "../src/reader-adapters";
+
+const fakeCollectionAttributionMessages: CollectionAttributionMessages = {
+  partialText: "Published sections are shown; completeness is not established.",
+  unclassifiedText: "The extent of this collection text is unknown.",
+  provenanceOmitted: ({ omittedCount, totalCount }) =>
+    `Omitted publication records: ${omittedCount} of ${totalCount}.`,
+  sourceAttribution: (source, date, link) => (
+    <>
+      Collection publication: {link(source)}.{" "}
+      {date === null ? "Retrieval date unknown." : `Retrieved ${date}.`}
+    </>
+  ),
+};
+
+/** Collection attribution with fixed English strings, rendered synchronously. */
+export const FakeCollectionAttribution = ({
+  bodySource,
+}: {
+  bodySource: CollectionBodySource;
+}) => (
+  <CollectionAttributionList
+    bodySource={bodySource}
+    messages={fakeCollectionAttributionMessages}
+  />
+);
 
 // Reader adapters for tests: fixed English messages and plain links, so a
 // rendered decision can be read and compared without the host app.
 export const fakeReaderAdapters = {
+  CollectionAttribution: FakeCollectionAttribution,
   messages: {
     "statutes.diffRemoved": "Removed",
     "statutes.diffInserted": "Inserted",

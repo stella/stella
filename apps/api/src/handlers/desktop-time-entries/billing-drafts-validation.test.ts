@@ -41,6 +41,7 @@ const fixture = () => {
     drafts: context.entries.map(({ entryId }) => ({
       entryId,
       narrative: "Reviewed agreement",
+      narrativeLanguage: "en",
       classification: { type: "activity_group", activityGroup: "client" },
       flags: [
         {
@@ -520,6 +521,7 @@ test("plain descriptions cover each selected entry once and cite only earlier en
   const described = (entryId: string, matchedEarlierEntryIds: string[]) => ({
     entryId,
     narrative: "Reviewed agreement",
+    narrativeLanguage: "en",
     matchedEarlierEntryIds,
   });
   expect(

@@ -111,18 +111,25 @@ export const useReaderChatBinding = ({
   // already knows wins, and a tab restored from a previous session hands its
   // thread back before a fresh one is minted. A different document is a
   // different conversation, so it gets a seed of its own.
+  const boundKey = bound ? documentKey : null;
+  const [prevBoundKey, setPrevBoundKey] = useState<LegalDocumentChatKey | null>(
+    null,
+  );
   const [seed, setSeed] = useState<{
     documentKey: LegalDocumentChatKey;
     threadId: ChatThreadId;
   } | null>(null);
   let seededThreadId = seed?.documentKey === documentKey ? seed.threadId : null;
-  if (bound && seededThreadId === null) {
-    const known = lookupLegalDocumentChatThread(documentKey);
-    seededThreadId =
-      known.status === "thread"
-        ? known.threadId
-        : (tabThreadId ?? createChatThreadId());
-    setSeed({ documentKey, threadId: seededThreadId });
+  if (prevBoundKey !== boundKey) {
+    setPrevBoundKey(boundKey);
+    if (boundKey !== null && seededThreadId === null) {
+      const known = lookupLegalDocumentChatThread(boundKey);
+      seededThreadId =
+        known.status === "thread"
+          ? known.threadId
+          : (tabThreadId ?? createChatThreadId());
+      setSeed({ documentKey: boundKey, threadId: seededThreadId });
+    }
   }
   // Telling the owner writes to a store other components read, which a render
   // may not do, so it waits for the commit. First writer wins: two readers on

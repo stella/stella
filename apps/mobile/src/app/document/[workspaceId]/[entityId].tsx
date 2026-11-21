@@ -22,6 +22,7 @@ import DocumentView from "@/components/document-viewer/document-view.dom";
 import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
 import type { ViewerAppearance } from "@/components/document-viewer/zoom";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
+import { LegalFilePreviewText } from "@/components/legal-file-preview-text";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { useDocumentEditing } from "@/components/use-document-editing";
 import {
@@ -500,7 +501,7 @@ const LegalFilePreview = ({
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
-      const { fileName, layers, text } = preview.value;
+      const { fileName, layers, text, textFormat } = preview.value;
       return (
         <>
           <Text accessibilityRole="header" selectable variant="headline">
@@ -520,7 +521,7 @@ const LegalFilePreview = ({
             </View>
           ))}
           {text.trim() ? (
-            <Text selectable>{text}</Text>
+            <LegalFilePreviewText format={textFormat} text={text} />
           ) : (
             <Text variant="caption">{signedFile("noReadableContent")}</Text>
           )}
@@ -532,24 +533,26 @@ const LegalFilePreview = ({
         return (
           <>
             <Text variant="caption">{signedFile("unverified")}</Text>
-            {preview.value.members.map(({ fileName, status, text }) => (
-              <View key={fileName}>
-                <Text accessibilityRole="header" selectable variant="label">
-                  {fileName}
-                </Text>
-                {status !== "unavailable" && text.trim() ? (
-                  <Text selectable>{text}</Text>
-                ) : null}
-                {status === "truncated" && (
-                  <Text variant="caption">{common("previewTruncated")}</Text>
-                )}
-                {status === "unavailable" && (
-                  <Text variant="caption">
-                    {signedFile("noReadableContent")}
+            {preview.value.members.map(
+              ({ fileName, status, text, textFormat }) => (
+                <View key={fileName}>
+                  <Text accessibilityRole="header" selectable variant="label">
+                    {fileName}
                   </Text>
-                )}
-              </View>
-            ))}
+                  {status !== "unavailable" && text.trim() ? (
+                    <LegalFilePreviewText format={textFormat} text={text} />
+                  ) : null}
+                  {status === "truncated" && (
+                    <Text variant="caption">{common("previewTruncated")}</Text>
+                  )}
+                  {status === "unavailable" && (
+                    <Text variant="caption">
+                      {signedFile("noReadableContent")}
+                    </Text>
+                  )}
+                </View>
+              ),
+            )}
           </>
         );
       }
@@ -557,7 +560,7 @@ const LegalFilePreview = ({
         return (
           <>
             <Text variant="caption">{structuredDocument("textOnly")}</Text>
-            <Text selectable>{preview.value.text}</Text>
+            <LegalFilePreviewText format="plain" text={preview.value.text} />
             {preview.value.truncated && (
               <Text variant="caption">{common("previewTruncated")}</Text>
             )}

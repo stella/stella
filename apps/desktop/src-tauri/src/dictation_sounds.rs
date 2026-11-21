@@ -23,6 +23,9 @@ const DRAIN: Duration = Duration::from_millis(80);
 /// A fifth apart: the same two notes, rising or falling.
 const LOW_HZ: f64 = 587.33;
 const HIGH_HZ: f64 = 880.0;
+/// How long a cue sounds, from the first note until its output drains.
+pub const CUE_LENGTH: Duration =
+  Duration::from_millis(2 * NOTE_MILLIS as u64).saturating_add(DRAIN);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Cue {

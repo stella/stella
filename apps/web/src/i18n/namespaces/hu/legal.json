@@ -1,0 +1,1457 @@
+{
+  "caseLaw": {
+    "analysis": {
+      "abstract": "Összefoglaló",
+      "aiLayer": "AI – {layer}",
+      "backToSection": "Vissza a szakasz elejére",
+      "categories": {
+        "facts": "Tényállás",
+        "holding": "Jogi álláspont",
+        "procedural-history": "Eljárási előzmények",
+        "reasoning": "Érvelés"
+      },
+      "errors": {
+        "analysisDisabled": "Az AI-elemzés készítése ezen a szerveren ki van kapcsolva. Olvassa el a határozat szövegét, vagy próbálja újra később.",
+        "answerIncomplete": "{source, select, organization {A szervezet {provider}-kulcsa hiányos választ adott.} other {Az AI-modell hiányos választ adott.}}",
+        "decisionNotFound": "Ez a határozat nem található. Nyissa meg újra a keresésből.",
+        "documentUnparseable": "A határozat szövege még nem áll készen az elemzésre. Olvassa el az eredeti forrást.",
+        "languageUnsupported": "AI-elemzés csak az alábbi nyelvű határozatokhoz érhető el: {languages}.",
+        "openLanguageVersion": "Nyelvi változat megnyitása: {language}",
+        "providerRefused": "{source, select, organization {A(z) {provider} elutasította a szervezet kulcsával küldött kérést. Ellenőrizze a kulcsot, a kvótát és a számlázást a szervezet beállításaiban.} other {Az AI-szolgáltató elutasította a kérést.}}",
+        "providerUnavailable": "{source, select, organization {A(z) {provider} jelenleg nem érhető el a szervezet kulcsával.} other {Az AI-szolgáltató jelenleg nem érhető el.}}",
+        "retryAfter": "{time} után újra megpróbálhatja.",
+        "sourceRestricted": "A forrás nem engedélyezi az AI-elemzést. Olvassa el a határozat szövegét vagy az eredeti forrást.",
+        "timedOut": "{source, select, organization {A(z) {provider} nem válaszolt időben a szervezet kulcsával.} other {Az AI-modell nem válaszolt időben.}}"
+      },
+      "generate": "AI jogi tételek elkészítése",
+      "invitation": "Ingyenes fiókkal az AI munkajegyzeteket készít ehhez a határozathoz.",
+      "noCurrentSection": "Nincs aktuális szakasz, amelyre ugorhatna.",
+      "topics": "Témák",
+      "treatment": "Későbbi megítélés"
+    },
+    "analyzing": "Elemzés folyamatban…",
+    "browse": {
+      "courtDescription": "{court} ({country}): határozatok a stella nyilvános jogi adatbázisában, év és hónap szerint.",
+      "courts": "Bíróságok",
+      "days": "Napok",
+      "jurisdictionDescription": "{country}: bírósági határozatok a stella nyilvános jogi adatbázisában, bíróság, év és hónap szerint.",
+      "periodDescription": "{court} ({country}), {period}: határozatok a stella nyilvános jogi adatbázisában."
+    },
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Milyen volt a tényállás, és mit adott elő mindegyik fél?",
+          "name": "Tényállás és a felek előadásai"
+        },
+        "holding": {
+          "body": "Mit döntött a bíróság, és miért?",
+          "name": "Rendelkező rész és indokolás"
+        },
+        "precedent": {
+          "body": "Mely korábbi döntésekre támaszkodik, és követi-e azokat?",
+          "name": "Korábbi döntések"
+        },
+        "provisions": {
+          "body": "Mely rendelkezéseket alkalmazza a bíróság, és hogyan értelmezi őket?",
+          "name": "Alkalmazott rendelkezések"
+        }
+      }
+    },
+    "citation": {
+      "citedAtLeast": "Legalább {count, plural, one {# alkalommal} other {# alkalommal}} idézték",
+      "citedSummary": "{count, plural, =0 {Nem hivatkozták} one {Egyszer hivatkozták} other {#-szor hivatkozták}}",
+      "dateUnavailable": "Dátum nem érhető el",
+      "decisionCount": "{count, plural, =0 {Nincs határozat} one {# határozat} other {# határozat}}",
+      "goToMention": "Ugrás ide: {number}. említés",
+      "goToParagraph": "Ugrás ide: {paragraph}. pont",
+      "lastNegative": "utolsó elutasító hivatkozás: {year}",
+      "mentionMark": "{number}. említés",
+      "mentionsInDecision": "{count, plural, one {Ebben a határozatban egy hivatkozás} other {Ebben a határozatban # hivatkozás}}",
+      "negativeCount": "{count, plural, one {# elutasító} other {# elutasító}}",
+      "none": "Még nincs rögzített hivatkozás.",
+      "notInStella": "Még nincs a stella alkalmazásban",
+      "openDecision": "Határozat megnyitása",
+      "paragraphLabel": "{paragraph}. pont",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, {paragraph}. pont",
+      "partialSummary": "Az idézettségi összesítések és az idővonal hiányosak.",
+      "passageNotFound": "A hivatkozó szövegrész nem található a szövegben",
+      "positiveCount": "{count, plural, one {# támogató} other {# támogató}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
+      "showAll": "{count, plural, one {Mind a # határozat megjelenítése} other {Mind a # határozat megjelenítése}}",
+      "stripLabel": "Hivatkozások évenként",
+      "treatment": {
+        "mixed": "Vegyes",
+        "negative": "Elutasító",
+        "neutral": "Említett",
+        "positive": "Megerősített",
+        "supportive": "Követett",
+        "unclassified": "Besorolatlan"
+      },
+      "unresolved": "Nincs határozathoz rendelve",
+      "whereCited": "Hol hivatkozik erre a határozatra",
+      "yearTitle": "{year}: {count, plural, one {# hivatkozás} other {# hivatkozás}}"
+    },
+    "columns": {
+      "caseNumber": "Ügyszám",
+      "citedBy": "Hivatkozások",
+      "headnote": "Jogi tétel",
+      "summary": "Jogtétel / találat"
+    },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# bíróság} other {# bíróság}}",
+      "newLast24Hours": "{count} az elmúlt 24 órában",
+      "newLast7Days": "Új az elmúlt 7 napban",
+      "otherCourts": "Egyéb bíróságok"
+    },
+    "courtTiers": {
+      "constitutional": "Alkotmánybíróságok",
+      "other": "Egyéb bíróságok",
+      "regional": "Ítélőtáblák és törvényszékek",
+      "supreme": "Legfelsőbb bíróságok"
+    },
+    "coverage": {
+      "allCurrent": "Minden forrás naprakész",
+      "censusComparison": "{stored} tárolt / {publisher} közzétett · {withText} szöveggel",
+      "censusComplete": "Teljes",
+      "censusIncomplete": "Hiányos",
+      "censusSliceMemberships": "Az egyes részhalmazok összesített számai; egy határozat többször is szerepelhet.",
+      "completeness": "Teljesség",
+      "completenessHelp": "A tárolt határozatok száma a kiadó által közölt, a jegyzékében szereplő vagy kézzel rögzített összesítéshez viszonyítva. A kiadó jegyzékében szereplő, az egyeztetés során hiányzónak talált határozatok nem számítanak bele.",
+      "countryNavigation": "Ugrás egy országhoz",
+      "courtsHeading": "Bíróságonként",
+      "decisionYears": "Határozatok évei",
+      "decisionsAcross": "határozat {count, plural, one {# joghatóságból} other {# joghatóságból}}",
+      "description": "Mennyi ítélkezési gyakorlatot tartalmaz a korpusz országonként és bíróságonként, és mennyire friss az egyes források tartalma.",
+      "generatedAt": "Adatok: {date}",
+      "healthCurrent": "Naprakész",
+      "healthDelayed": "Késik",
+      "healthDisabled": "Kikapcsolva",
+      "healthSnapshot": "Rögzített pillanatkép",
+      "healthStalled": "Elakadt",
+      "healthUnknown": "Még nem futott",
+      "inPreparation": "Előkészületben",
+      "lastSync": "Utolsó szinkronizálás",
+      "notCountedYet": "Még nincs megszámolva",
+      "notMeasuredYet": "Még nincs megmérve",
+      "searchable": "Kereshető",
+      "sourceExceptions": "{count, plural, one {# forrás figyelmet igényel} other {# forrás figyelmet igényel}}",
+      "sourcesCurrent": "Naprakész források",
+      "syncedAt": "Szinkronizálva: {time}",
+      "title": "Az ítélkezési gyakorlat lefedettsége",
+      "totalFrom": "Összesítés {date} szerint",
+      "unavailable": "A lefedettségi adatok jelenleg nem érhetők el."
+    },
+    "decisionNotFound": "A határozat nem található",
+    "decisionTypes": {
+      "administrative_decision": "Hatósági határozat",
+      "binding_excise_information": "Kötelező erejű jövedéki tájékoztatás",
+      "binding_rate_information": "Kötelező erejű áfakulcs-tájékoztatás",
+      "court_direction": "Intézkedés",
+      "decision": "Határozat",
+      "finding": "Érdemi határozat",
+      "general_tax_ruling": "Általános adójogi értelmezés",
+      "individual_tax_ruling": "Egyedi adójogi értelmezés",
+      "judgment": "Ítélet",
+      "leave_refused": "Elutasítás jelentős jogkérdés hiányában",
+      "merits_decision": "Ügydöntő határozat",
+      "ministry_of_justice_decision": "Igazságügyi minisztériumi határozat",
+      "minutes_extract": "Jegyzőkönyvi kivonat",
+      "opinion": "Vélemény",
+      "order": "Végzés",
+      "other": "Egyéb",
+      "payment_order": "Fizetési meghagyás",
+      "penal_order": "Büntetővégzés",
+      "principle_decision": "Elvi határozat",
+      "protective_opinion": "Biztosító vélemény",
+      "resolution": "Határozat (uchwała)",
+      "signalling_decision": "Jelzés",
+      "statement_of_reasons": "Indokolás",
+      "tax_explanations": "Adózási magyarázatok",
+      "top_up_tax_opinion": "Vélemény a kiegészítő adóról",
+      "uniformity_decision": "Jogegységi határozat"
+    },
+    "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást az ítélkezési gyakorlat importálásához.",
+    "filters": {
+      "countryMismatch": "A következő szűrőket eltávolítottuk, mert nem ehhez az országhoz tartoznak ({country}): {filters}.",
+      "remove": "A(z) {filter} szűrő eltávolítása",
+      "showInCountry": "{filter} megjelenítése ebben az országban: {country}"
+    },
+    "languages": {
+      "count": "{count, plural, one {# nyelv} other {# nyelv}}",
+      "matchedIn": "Találat {language} nyelven"
+    },
+    "linkedPassageGone": "A hivatkozott szövegrész már nem szerepel ebben a szövegben.",
+    "loadingMore": "Betöltés folyamatban…",
+    "marginFilter": {
+      "label": "Hivatkozott rendelkezések szűrője",
+      "paragraph": "{count, plural, one {# hivatkozott rendelkezés itt: ¶{paragraph}} other {# hivatkozott rendelkezés itt: ¶{paragraph}}}",
+      "selection": "{count, plural, one {# hivatkozott rendelkezés a kijelölésben} other {# hivatkozott rendelkezés a kijelölésben}}",
+      "unnumberedParagraph": "{count, plural, one {# hivatkozott rendelkezés ebben a bekezdésben} other {# hivatkozott rendelkezés ebben a bekezdésben}}"
+    },
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# határozat már el volt mentve ide} other {# határozat már el volt mentve ide}}",
+      "empty": "Ebben az ügyben még nincs mentett ítélkezési gyakorlat.",
+      "emptyAction": "Keresés az ítélkezési gyakorlatban",
+      "note": "Megjegyzés",
+      "notePlaceholder": "Miért fontosak itt ezek a határozatok…",
+      "rejectedLimit": "{count, plural, one {# határozat nem lett elmentve: az ügy megtelt} other {# határozat nem lett elmentve: az ügy megtelt}}",
+      "rejectedMissing": "{count, plural, one {# határozat nem található} other {# határozat nem található}}",
+      "remove": "Eltávolítás az ügyből",
+      "save": "Mentés ügybe",
+      "savePage": "Erről az oldalról {count, plural, one {# határozat} other {# határozat}} lesz elmentve.",
+      "saveSelection": "{count, plural, one {# kijelölt határozat} other {# kijelölt határozat}} lesz elmentve.",
+      "saveTitle": "Mentés ügybe",
+      "saved": "{count, plural, one {# határozat} other {# határozat}} elmentve ide: {matter}"
+    },
+    "newestDecisions": "Legújabb határozatok",
+    "noResults": {
+      "hint": "Próbáljon más szavakat, javítsa a keresést AI-val, vagy tegye fel a kérdést a csevegésben."
+    },
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Emberi",
+      "toggleState": "{label}: {state, select, on {be} other {ki}}"
+    },
+    "oldestDecisions": "Legrégebbi határozatok",
+    "pagination": {
+      "goToPage": "Ugrás a(z) {page}. oldalra",
+      "label": "Találati oldalak",
+      "pageOfCount": "{page}. oldal / {pageCount}",
+      "pageOfEstimatedCount": "{page}. oldal / ~{pageCount}",
+      "pageOfEstimatedCountLabel": "{page}. oldal a körülbelül {pageCount} oldalból",
+      "pageWithEstimatedMatchCounts": "{page}. oldal · körülbelül {exactCount, plural, one {# pontos egyezés} other {# pontos egyezés}} · {relaxedCount, plural, one {# részleges egyezés} other {# részleges egyezés}} ezen az oldalon",
+      "pageWithEstimatedResultCount": "{page}. oldal · körülbelül {count, plural, one {# találat} other {# találat}}",
+      "pageWithMatchCounts": "{page}. oldal · {exactCount, plural, one {# pontos egyezés} other {# pontos egyezés}} · {relaxedCount, plural, one {# részleges egyezés} other {# részleges egyezés}} ezen az oldalon",
+      "pageWithPartialMatchCount": "{page}. oldal · {relaxedCount, plural, one {# részleges egyezés} other {# részleges egyezés}} ezen az oldalon",
+      "pageWithResultCount": "{page}. oldal · {count, plural, one {# találat} other {# találat}}",
+      "perPage": "Oldalanként",
+      "refineForMore": "Szűkítse a keresést, hogy további találatokat lásson"
+    },
+    "paragraphRangeNotFound": "{count, plural, one {A(z) {range} bekezdés nem található ebben a szövegben.} other {A(z) {range} bekezdések nem találhatók ebben a szövegben.}}",
+    "paragraphRangeSelected": "{count, plural, one {A(z) {range} bekezdés ki van emelve.} other {A(z) {range} bekezdések ki vannak emelve.}}",
+    "provision": {
+      "article": "{value}. cikk",
+      "letter": "{value}) pont",
+      "openEnded": "és köv.",
+      "point": "{value}. pont",
+      "sentence": "{value}. mondat",
+      "subsection": "({value}) bekezdés"
+    },
+    "reader": {
+      "documentUpdated": "A dokumentum frissült.",
+      "expandProvisions": "Rendelkezések kibontása",
+      "headMatter": "Az ügy adatai",
+      "sourceAttribution": "A forrásadatok szabadon elérhetők itt: <link>{source}</link>."
+    },
+    "research": {
+      "answering": "{count, plural, one {# cella megválaszolása…} other {# cella megválaszolása…}}",
+      "answers": {
+        "failureReasons": {
+          "decisionUnavailable": "A határozat nem érhető el",
+          "missingAnswer": "A modell nem válaszolt",
+          "modelError": "Modellhiba",
+          "noText": "Nincs határozatszöveg",
+          "runError": "A futás megszakadt",
+          "wrongType": "Hibás formátumú válasz"
+        },
+        "no": "Nem",
+        "notAllowed": "A forrás feltételei nem engedik",
+        "notRun": "Nem futott",
+        "notStated": "A határozat nem tartalmazza",
+        "pending": "Válaszolás…",
+        "showSource": "Forrás megjelenítése",
+        "yes": "Igen"
+      },
+      "deleteColumnConfirm": "A kérdés és minden válasza törlődik az egész szervezet számára, minden keresésből és minden tagnál. Ha csak ebből a keresésből szeretné eltávolítani, válassza az „Eltávolítás ebből a keresésből” lehetőséget.",
+      "editQuestionHint": "A szöveg, a válasz típusának vagy a lehetőségeinek módosítása elveti a jelenlegi válaszokat; utána futtassa újra az oszlopot.",
+      "emptyPage": "Ezen az oldalon nincsenek bírósági határozatok.",
+      "newQuestionColumn": "Új",
+      "nothingToRun": "Minden cellának van már válasza",
+      "questionAdded": "„{question}” hozzáadva a táblázathoz",
+      "questionPlaceholder": "pl. Érvényesnek találta a bíróság a felmondást?",
+      "removeFromSearch": "Eltávolítás ebből a keresésből",
+      "runAll": "Mind megválaszolása",
+      "runConfirm": "Válaszadás most",
+      "runEstimate": "{rows, plural, one {# határozat} other {# határozat}} × {columns, plural, one {# kérdés} other {# kérdés}} ezen az oldalon: {cells, plural, one {# válasz} other {# válasz}} készül.",
+      "runInProgress": "Már folyamatban van egy kutatási kérdés feldolgozása.",
+      "runPermissionRequired": "A kutatási kérdések feldolgozásához jogosultság szükséges.",
+      "runTitle": "Ezen oldal megválaszolása",
+      "savedQuestions": "Mentett kérdések",
+      "title": "Kutatási táblák"
+    },
+    "results": {
+      "excerpt": {
+        "label": "Részlet",
+        "long": "Hosszú",
+        "medium": "Közepes",
+        "short": "Rövid"
+      }
+    },
+    "rewritten": {
+      "line": "Nincs pontos találat erre: <bdi>{original}</bdi>; találatok erre: <bdi>{query}</bdi>",
+      "searchOriginal": "Az eredeti szavaim keresése"
+    },
+    "sameCaseNumber": "{count, plural, one {# határozat viseli} other {# határozat viseli}} ezt az ügyszámot. Válasszon bíróságot.",
+    "searchLabel": "Keresés a joggyakorlatban",
+    "searchPlaceholder": "Ügyszám, ECLI vagy szavak, pl. 22 Cdo 2653/2012",
+    "searchStillSearching": "A keresőszolgáltatás leterhelt. A keresés folyamatban…",
+    "searchUnavailable": {
+      "description": "Az ítélkezési gyakorlat keresője nem érhető el. A keresése megmarad a címsorban, próbálja újra egy pillanat múlva.",
+      "title": "A keresés átmenetileg nem érhető el"
+    },
+    "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Ha ismert, keressen a határozat ügyszáma vagy ECLI-azonosítója alapján.",
+        "message": "Nem található a gyűjteményi hivatkozásnak pontosan megfelelő határozat."
+      },
+      "noHits": {
+        "hint": "Próbáljon kevesebb vagy más szót: azokat a kifejezéseket, amelyeket egy határozat használna, nem a kérdés mondatát.",
+        "message": "Semmi nem felel meg a keresés által megkívánt szavaknak."
+      },
+      "noHitsFiltered": {
+        "hint": "Töröljön vagy bővítsen egy szűrőt, és keressen újra.",
+        "message": "Semmi nem felel meg a beállított szűrőknek."
+      },
+      "partialMatch": "Részleges találat",
+      "partialMatchMissing": "Hiányzó szavak: {terms}",
+      "partialMatches": "Részleges találatok erre: <bdi>{query}</bdi>",
+      "resultsFor": "Találatok erre: <bdi>{query}</bdi>",
+      "searchEveryWord": "Minden szó keresése"
+    },
+    "seo": {
+      "collectionName": "stella ítélkezési gyakorlat",
+      "description": "Nyilvános ítélkezési adatbázis indexelhető bírósági határozatokkal és jogforrásokkal.",
+      "homeDescription": "Nyilvános jogi adatbázis: bírósági határozatok és egységes szerkezetű jogszabályok, azonosító vagy szavak alapján kereshetők.",
+      "scopedDescription": "Nyilvános ítélkezési adatbázis ({scope}), indexelhető bírósági határozatokkal és jogforrásokkal."
+    },
+    "showWholeHeadnote": "A teljes jogi tétel megjelenítése",
+    "sort": {
+      "newest": "Legújabb",
+      "oldest": "Legrégebbi",
+      "oldestUnavailable": "A keresés találatai relevancia szerint vagy a legújabbtól kezdve rendeződnek. A legrégebbi határozatok elöl való megjelenítéséhez törölje a keresést.",
+      "relevance": "Legrelevánsabb"
+    },
+    "viewer": {
+      "abstract": "Kivonat",
+      "appealReviews": {
+        "conflict": "A felülvizsgálatra vonatkozó adatok hiányosak vagy ellentmondásosak. A felülvizsgálat eredményét ellenőrizni kell.",
+        "corpusOnly": "A rendelkezésre álló korpuszban nem található ezt a határozatot felülvizsgáló határozat. Ez nem bizonyítja, hogy nem nyújtottak be jogorvoslatot.",
+        "noneFound": "Nem található felülvizsgáló határozat",
+        "overturned": "Hatályon kívül helyezve vagy megváltoztatva",
+        "partly": "Részben hatályon kívül helyezve",
+        "reviewedBy": "Felülvizsgáló határozatok",
+        "reviews": "Felülvizsgált határozatok",
+        "sourceHistory": "Eljárási előzmények",
+        "sourceMetadata": "Kiadói metaadatok",
+        "sourceOpening": "Bevezető bekezdés",
+        "title": "Jogorvoslati felülvizsgálat",
+        "truncated": "A felülvizsgálati előzményeknek csak egy része látható.",
+        "underReview": "Felülvizsgálat alatt",
+        "unknown": "Ismeretlen eredmény",
+        "upheld": "Hatályban maradt"
+      },
+      "appliedVersionNotStated": "Az alkalmazott változat nincs megadva",
+      "appliedVersionNotStatedCompact": "A változat nincs megadva",
+      "appliedVersionStatedAmendment": "A <reference>{amendment}</reference> szerinti módosított szöveg",
+      "appliedVersionStatedAmendmentCompact": "Megadva: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {A {date} napján hatályos szöveg} until {A {date} napjáig hatályos szöveg} from {A {date} napjától hatályos szöveg} other {A {date} napján hatályos szöveg}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Megadva: {date}} until {Megadva: {date} napjáig} from {Megadva: {date} napjától} other {Megadva: {date}}}",
+      "caseFileDocuments": "Az ügy iratai",
+      "caseFileMayHoldOthers": "Az ügy iratai további határozatokat is tartalmazhatnak.",
+      "citedBy": "Hivatkozik rá",
+      "citedDecisionPassage": "Részlet a határozatból",
+      "cites": "Hivatkozásai",
+      "dissentByline": "Különvélemény: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Ugrás a bekezdéshez} other {Ugrás a bekezdésekhez}}",
+      "judgeRole": {
+        "advocateGeneral": "Főtanácsnok",
+        "dissenting": "Különvélemény",
+        "panelMember": "A tanács tagja",
+        "presiding": "A tanács elnöke",
+        "rapporteur": "Előadó bíró"
+      },
+      "judges": "Bírák",
+      "legalArea": "Jogterület",
+      "legalSentence": "Elvi bírósági határozat",
+      "paragraphReference": "{number}. bekezdés",
+      "popularName": "Népszerű név",
+      "portraitCredit": "A portrék forrása: {source}",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# említés} other {# említés}}",
+      "provisionsCited": "Hivatkozott rendelkezések",
+      "provisionsFailed": "A hivatkozások feldolgozása sikertelen",
+      "provisionsNoneFound": "Nem találhatók hivatkozott rendelkezések",
+      "provisionsProcessing": "A hivatkozások feldolgozása folyamatban van",
+      "provisionsUnavailable": "A hivatkozások nem érhetők el",
+      "provisionsUnplaceable": "A hivatkozások nem helyezhetők el a határozat szövegében",
+      "provisionsUnsupported": "A hivatkozások feldolgozása ennél a határozatnál nem támogatott",
+      "provisionsWithheld": "A hivatkozások nem hozzáférhetők",
+      "sourceFields": {
+        "decisionCategory": "Döntés kategóriája",
+        "publishedOnWeb": "Weben közzétéve"
+      },
+      "statutes": "Alkalmazandó jogszabályok",
+      "textNotYetAvailable": "A bíróság nem tette közzé a határozat szövegét, vagy az itt még nem érhető el.",
+      "textPending": "A határozat szövege még betöltés alatt áll",
+      "textReadFailed": "A határozat szövegét nem sikerült betölteni",
+      "textUnavailable": "Ehhez a határozathoz nem érhető el szöveg",
+      "versionAtDecisionDateInferred": "A határozat napján hatályos változat (következtetett)",
+      "versionBasisInferredCompact": "Határozat dátuma · következtetett",
+      "versionBasisInferredExplanation": "A változatot a határozat dátumából következtettük ki. A határozat nem jelöli meg az alkalmazandó szövegváltozatot."
+    },
+    "withdrawnByPublisher": "A közzétevő visszavonta"
+  },
+  "catalogue": {
+    "addCustom": "Egyéni hozzáadása",
+    "addCustomMcp": "Integráció hozzáadása",
+    "addCustomSkill": "Készség hozzáadása",
+    "by": "Készítette: {author}",
+    "configuration": "Konfiguráció",
+    "cost": {
+      "free": "Ingyenes",
+      "paid": "Fizetős"
+    },
+    "detailAuthMethod": "Hitelesítés",
+    "empty": "Nincs az aktuális szűrőnek megfelelő bejegyzés.",
+    "filter": {
+      "mcps": "Integrációk",
+      "nativeTools": "Beépített eszközök",
+      "skills": "Készségek"
+    },
+    "filterHint": "Szűrve: {codes}",
+    "firstParty": "stella",
+    "firstPartyTooltip": "A stella csapat által készítve",
+    "installFailed": "Telepítés sikertelen",
+    "installPack": "{count, plural, one {# eszköz telepítése} other {# eszköz telepítése}}",
+    "installed": "{name} telepítve",
+    "installedShort": "Telepítve",
+    "onboarding": {
+      "packTitle": "Az Ön joghatóságához ajánlott"
+    },
+    "openHomepage": "Kezdőlap megnyitása",
+    "packDescription": "{count, plural, one {# eszköz} other {# eszköz}} a praxisához válogatva. Egy kattintással telepíthető vagy alább egyenként kiválasztható.",
+    "packInstalled": "{count, plural, one {# eszköz telepítve} other {# eszköz telepítve}}",
+    "packPartial": "{installed} telepítve, {failed} sikertelen",
+    "removed": "Ez az eszköz már nem érhető el.",
+    "sectionOthers": "Egyéb",
+    "settings": {
+      "packTitle": "Ajánlott csomag"
+    },
+    "setup": {
+      "account": "Fiók",
+      "apiKey": "API-kulcs",
+      "none": "Nincs beállítás"
+    },
+    "skillNeedsUnavailableTools": "A csevegésben nem jelenik meg. Olyan eszközt igényel, amely ott nem érhető el: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Elrejti az ügyfélneveket, számlaszámokat, címeket és más személyes adatokat, mielőtt az ügy tartalma AI-szolgáltatókhoz kerülne. Az ügyféloldalon visszafordítható; az eredeti szöveg soha nem hagyja el a munkaterületét.",
+      "ares": "Cseh cégek keresése IČO vagy cégnév alapján a nyilvános ARES-nyilvántartásban (a gazdasági szereplők közigazgatási nyilvántartása, a cégnyilvántartás cseh megfelelője).",
+      "boe": "Spanyol egységes szerkezetű jogszabályok, napi hivatalos közlöny és BORME (cégközlöny) a Boletín Oficial del Estado hivatalos nyílt adatos API-jából.",
+      "brreg": "Norvég cégek keresése organisasjonsnummer vagy cégnév alapján a Brreg Enhetsregisteret nyilvános, nyílt API-ján.",
+      "companiesHouse": "Brit cégek keresése Companies House-cégjegyzékszám vagy cégnév alapján a Companies House nyilvános adat-API-ján. Ingyenes API-kulcsot igényel.",
+      "createDocx": "Word-dokumentumokat hoz létre a csevegésből formázással, táblázatokkal, fejlécekkel és beágyazott stílusokkal. Az eredmény letölthető, és Wordben, LibreOffice-ban és Pagesben szerkeszthető.",
+      "denue": "Mexikói telephelyek és gazdasági egységek keresése DENUE-telephelyazonosító, név vagy cégnév alapján az INEGI hivatalos DENUE API-ján. A DENUE telephelyjegyzék, nem a Registro Público de Comercio társasági jogi nyilvántartás. Ingyenes INEGI API-tokent igényel.",
+      "edgar": "Amerikai tőzsdei társaságok keresése Central Index Key (CIK) alapján a SEC EDGAR beadvány-API-ján.",
+      "gcis": "Tajvani cégek keresése 統一編號 (tongbian, adóazonosító) vagy cégnév alapján a gazdasági minisztérium (MoEA) Commerce Industrial Services portáljának nyílt adatos API-ján.",
+      "infosoud": "Cseh bírósági ügyek keresése és tárgyalási naptár az infosoud.gov.cz oldalról. Ügyszám, bíróság vagy fél alapján lekérheti a tárgyalási időpontokat és az ügy állását.",
+      "krs": "Lengyel cégek keresése KRS-szám alapján az igazságügyi minisztérium Krajowy Rejestr Sądowy (KRS) nyílt API-ján. Kiterjed a Rejestr Przedsiębiorców (kereskedelmi társaságok) és a Rejestr Stowarzyszeń (egyesületek és alapítványok) nyilvántartásra.",
+      "orsr": "Szlovák cégek keresése IČO vagy cégnév alapján az igazságügyi minisztérium által működtetett Obchodný register Slovenskej republiky JSON API-ján.",
+      "prh": "Finn cégek keresése Y-tunnus vagy cégnév alapján a Patentti- ja rekisterihallitus (PRH) AvoinData v3 nyílt API-ján.",
+      "rechercheEntreprises": "Francia cégek keresése SIREN, SIRET vagy cégnév alapján a recherche-entreprises.api.gouv.fr nyílt API-n (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Szlovák keresés IČO vagy név alapján a Szlovák Köztársaság Statisztikai Hivatala által vezetett Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) nyilvántartásban. Kiterjed minden jogi személyre és vállalkozóra, így az egyéni vállalkozókra, egyesületekre, alapítványokra és a cégnyilvántartáson kívüli közszervekre is.",
+      "vies": "Uniós adószámok ellenőrzése az Európai Bizottság héa-információcsere-rendszerének (VIES) REST API-ján. Megerősíti, hogy a szám nyilvántartásba van-e véve a szállító tagállamában, és visszaadja a bejegyzett vállalkozás nevét és címét, ha a tagállam közzéteszi azokat.",
+      "webSearch": "Keres a nyilvános weben, és elolvassa az egyes oldalakat. Ha van beállított joghatóság, a lekérdezések először az elsődleges forrásokat érik el (bíróságok, jogszabály-portálok), egyébként a nyílt webet. Beszélgetésenként kapcsolható be."
+    },
+    "toolNames": {
+      "anonymize": "Anonimizálás",
+      "createDocx": "DOCX létrehozása",
+      "gcis": "GCIS cégnyilvántartás",
+      "vies": "Uniós adószám-ellenőrzés (VIES)",
+      "webSearch": "Webes keresés"
+    },
+    "unavailable": "Még nem elérhető"
+  },
+  "guides": {
+    "action": {
+      "replay": "Újrakezdés",
+      "skip": "Kihagyás"
+    },
+    "checklist": {
+      "activeTour": "Először fejezze be az aktuális útmutatót, vagy lépjen ki belőle.",
+      "progress": "{completed} / {total} kész"
+    },
+    "community": {
+      "personalSupport": "Személyes támogatás"
+    },
+    "help": {
+      "buttonLabel": "Súgó és visszajelzés",
+      "title": "Súgó és visszajelzés"
+    },
+    "leave": "Kilépés az útmutatóból",
+    "minutes": "{count} perc",
+    "nudge": {
+      "action": "Útmutatók megnyitása",
+      "body": "Új itt? Néhány rövid bemutató körbevezeti."
+    },
+    "status": {
+      "skipped": "Kihagyva"
+    },
+    "tours": {
+      "chat": {
+        "description": "Adjon kontextust az AI-nak, majd küldje el biztonságosan a kérését",
+        "examplePrompt": "Foglalja össze a szerződés legfontosabb kötelezettségeit",
+        "steps": {
+          "anonymize": {
+            "body": "Küldés előtt elrejti a személyes adatokat, majd visszaállítja őket a válaszban.",
+            "title": "Küldés anonimizálva",
+            "when": "Akkor kapcsolja be, ha a szöveg személyes adatot tartalmaz, és a kérdés nem azon múlik, kik a felek. Hagyja kikapcsolva, ha éppen a személyazonosság a lényeg, például összeférhetetlenségi vizsgálatnál: a helyőrzők pontosan azt tüntetik el, amire rákérdez."
+          },
+          "attach": {
+            "body": "Feltölt egy fájlt erről az eszközről a beszélgetésbe. Csak ehhez a szálhoz olvassa be, és nem kerül be egy ügybe.",
+            "title": "Fájl csatolása",
+            "when": "Egyszeri dokumentumhoz való, amelyet nem kell megőriznie: épp e-mailben érkezett tervezethez, beolvasott irathoz, táblázathoz, amelyből csak összefoglalót kér."
+          },
+          "composer": {
+            "body": "Írja le hétköznapi nyelven, mit szeretne: a feladatot, hogy mire vonatkozik, és milyen formájú választ vár. Minden más itt csak élesíti a már megfogalmazott kérést.",
+            "title": "Kezdje a kéréssel"
+          },
+          "context": {
+            "body": "Egy már mentett ügyet vagy fájlt ad hozzá kontextusként. Semmit sem tölt fel vagy másol újra.",
+            "title": "Hivatkozás ügyre vagy fájlra",
+            "when": "Csatolás helyett használja, valahányszor a dokumentum már be van iktatva. Az ügyre hivatkozzon, ha az asszisztensnek végig kell néznie; egyetlen fájlra, ha pontosan tudja, melyiket olvassa. A @ az üres szerkesztőben közvetlenül megnyitja ezt a listát."
+          },
+          "plusMenu": {
+            "body": "A + gombbal fájlt csatolhat vagy ügyre hivatkozhat.",
+            "title": "Adjon hozzá anyagokat a + gombbal",
+            "when": "Ha a szükséges anyagok még nincsenek a csevegésben."
+          },
+          "send": {
+            "body": "Elküldi az üzenetet mindazzal, amit fent csatolt, meghivatkozott vagy bekapcsolt. A szerkesztő a helyén marad, így egy követő kérdéssel pótolhatja azt, ami az első válaszból hiányzott.",
+            "title": "Küldje el",
+            "when": "Az első válasz megmutatja, mi hiányzik még."
+          }
+        },
+        "title": "Kezdje a csevegéssel"
+      },
+      "chatPower": {
+        "description": "Használjon készségeket, vagy csatlakoztasson további hasznos eszközöket",
+        "steps": {
+          "mcp": {
+            "body": "Be- és kikapcsolja egy csatlakoztatott kiszolgáló eszközeit a csevegéseiben: cégnyilvántartások, belső rendszerek, bármi, amit a csapata csatlakoztatott.",
+            "title": "Csatlakoztatott eszközkiszolgálók",
+            "when": "Akkor kapcsoljon be egyet, ha a válaszhoz a munkaterületen kívüli friss adat kell. A többit hagyja kikapcsolva: minél kevesebb eszköz van játékban, annál szűkebb és kiszámíthatóbb a válasz."
+          },
+          "models": {
+            "body": "Csak ebben a beszélgetésben vált modellt. A többi szál megtartja a munkaterülethez beállított alapértelmezést.",
+            "title": "Melyik modell"
+          },
+          "plusMenu": {
+            "body": "Ugyanez a menü tartalmazza a modellváltást, a készségeket és a csatlakoztatott eszközkiszolgálókat is. A következő lépések megnyitják, és sorra veszik mindegyiket.",
+            "title": "További lehetőségek a + gomb mögött"
+          },
+          "skills": {
+            "body": "Beilleszt egy mentett promptot vagy a csapata által írt készséget: átnézett utasításkészletet, amely ugyanazt a feladatot mindig ugyanúgy oldja meg.",
+            "title": "Készségek és mentett promptok",
+            "when": "Akkor használja, ha a feladat ismétlődik és számít a megfogalmazás, például szokásos szerződés-átnézésnél vagy ügyfélfelvételi összefoglalónál. A / az üres szerkesztőben közvetlenül megnyitja ezt a listát."
+          }
+        },
+        "title": "Hozzon ki többet a csevegésből"
+      },
+      "documents": {
+        "description": "Iktasson egy dokumentumot, majd találja meg később",
+        "steps": {
+          "browse": {
+            "body": "Ez a táblázat az ügy dokumentumlistája. A feltöltött fájlok itt sorokként jelennek meg. Ha később vissza szeretne térni, nyissa meg az ügyet az oldalsávból, válassza ki a táblázatos nézetét, majd jelölje ki a dokumentum sorát.",
+            "title": "A dokumentum újbóli megkeresése"
+          },
+          "upload": {
+            "body": "A Feltöltés megnyitja a fájlválasztót; a fájlokat rá is húzhatja az ügyre. Minden fájlból dokumentum lesz ebben az ügyben, így a csapata megtalálhatja, stella pedig felhasználhatja a felülvizsgálat során.",
+            "title": "Dokumentum iktatása az ügybe",
+            "when": "Akkor töltsön fel ide egy fájlt, ha az ügyhöz tartozik, és később is elérhetőnek kell maradnia. Közvetlenül a csevegéshez csak akkor csatolja, ha csak az adott csevegés ideiglenes kontextusául szolgál."
+          }
+        },
+        "title": "Munka dokumentumokkal"
+      },
+      "playbooks": {
+        "description": "Mentse el a dokumentumellenőrzés menetét későbbre",
+        "steps": {
+          "basics": {
+            "body": "Adjon meg nevet és leírást. Szükség esetén korlátozza egy adott dokumentumtípusra.",
+            "title": "Nevezze el a playbookot"
+          },
+          "create": {
+            "body": "Kezdjen egy üres playbookkal.",
+            "title": "Hozzon létre playbookot"
+          },
+          "overview": {
+            "body": "A playbook megőrzi a kérdéseket és szabályokat további dokumentumok ellenőrzéséhez.",
+            "title": "Mentse el az ellenőrzés menetét"
+          },
+          "positions": {
+            "body": "Minden szabálynál válassza ki, hogy stella értékelje a szöveget, vagy olvasson ki belőle egy adatot.",
+            "title": "Adjon hozzá ellenőrzési szabályokat"
+          }
+        },
+        "title": "Hozzon létre playbookot"
+      },
+      "tabularReview": {
+        "description": "Nyerjen ki válaszokat sok fájlból egyszerre",
+        "steps": {
+          "addColumn": {
+            "body": "Az Új oszlop megnyitja az oszlopszerkesztőt. Adjon az oszlopnak egyértelmű, kérdésként megfogalmazott nevet, és pontosan írja le a stella alkalmazásnak, mit keressen; ugyanaz az utasítás fut le minden dokumentumsoron.",
+            "title": "Egy kérdés feltevése minden dokumentumhoz",
+            "when": "Minden összehasonlítani, szűrni, rendezni vagy exportálni kívánt válaszhoz hozzon létre külön oszlopot. A kapcsolódó kontextust a promptban adja meg, ahelyett hogy több választ egyetlen cellába vonna össze."
+          },
+          "answerType": {
+            "body": "A Visszatérési érték határozza meg az egyes válaszok formáját. Ha az eredmény strukturált, válasszon számot, dátumot, egyszeres vagy többszörös kijelölést; stella így biztosítja az oszlop egységességét, és nem tetszőleges szöveget ad vissza.",
+            "title": "A válasz típusának kiválasztása",
+            "when": "Rögzített eredményhalmazhoz használjon kijelölést, rendezéshez és számításokhoz számot vagy dátumot, szöveget pedig csak akkor, ha a válasz valóban részletes kifejtést igényel."
+          },
+          "table": {
+            "body": "Minden sor egy dokumentum, minden egyéni oszlop pedig egy kérdés, amelyet egyszerre tesz fel az összes dokumentumhoz. Így a fájlok mappájából összehasonlítható válaszok lesznek anélkül, hogy egyenként meg kellene nyitnia őket.",
+            "title": "A teljes dokumentumkészlet felülvizsgálata",
+            "when": "Akkor használja a táblázatot, ha több dokumentumból ugyanazokra a tényekre vagy döntésekre van szüksége. Nyissa meg közvetlenül a dokumentumot, ha az elrendezés, a megfogalmazás vagy a környező kontextus fontosabb az összehasonlításnál."
+          }
+        },
+        "title": "Áttekintés táblázatban"
+      },
+      "workflows": {
+        "description": "Fűzzön össze lépéseket ismételhető munkafolyamattá",
+        "steps": {
+          "create": {
+            "body": "A Létrehozás megnyit egy mentetlen munkafolyamat-vázlatot. A következő lépések meghatározzák, mikor indul el, mit végez, és hol kell egy személynek eldöntenie, hogy folytatódhat-e.",
+            "title": "Munkafolyamat-vázlat indítása"
+          },
+          "overview": {
+            "body": "A munkafolyamat egy eseményindítót műveletek sorozatához kapcsol, így egy rutinfolyamat minden alkalommal ugyanúgy fut le. Automatikusan előkészítheti a munkát, miközben szükség esetén a felülvizsgálónál hagyja a döntést.",
+            "title": "Egy ismételhető folyamat automatizálása",
+            "when": "Olyan munkát automatizáljon, amelynek állandó eseményindítója, ismételhető lépései és a kivételek kezeléséért egyértelműen kijelölt felelőse van. A változó vagy sok mérlegelést igénylő munkát addig végezze manuálisan, amíg maga a folyamat ki nem alakul."
+          },
+          "reviewGate": {
+            "body": "A felülvizsgálati ellenőrzőpont szünetelteti a futást, amíg valaki jóvá nem hagyja vagy el nem utasítja. Helyezze az ellenőrzőpontot az első olyan művelet elé, amelyet nem szabad kizárólag automatizált eredmény alapján végrehajtani.",
+            "title": "A döntés a felülvizsgálónál marad",
+            "when": "Használjon ellenőrzőpontot elküldés, iktatás, eszkalálás vagy egyéb jelentős következményekkel járó eredmény véglegesítése előtt. Csak akkor hagyja ki, ha a következő lépés biztonságosan visszafordítható, és nem igényel emberi mérlegelést."
+          },
+          "steps": {
+            "body": "A lépések ebben a sorrendben futnak, és továbbadják egymásnak a munkát. Minden lépés egyetlen, egyértelmű műveletért feleljen, hogy a hibák érthetők legyenek, a sorrend pedig könnyen módosítható maradjon.",
+            "title": "A lépéssor összeállítása"
+          },
+          "trigger": {
+            "body": "Az eseményindító határozza meg, mikor kezdődik egy futás: manuálisan, ütemezés szerint vagy egyező fájlok feltöltésekor. Szűkítse az ügyre és a fájlokra vonatkozó feltételeit, hogy a nem kapcsolódó munka soha ne indítsa el a munkafolyamatot.",
+            "title": "A munkafolyamat indítási feltételének kiválasztása",
+            "when": "Amíg új a folyamat, használjon manuális indítást; időalapú rutinfeladatokhoz ütemezést, fájlfeltöltést pedig csak akkor, ha egy beérkező dokumentum megbízhatóan jelzi a kezdést."
+          }
+        },
+        "title": "Munkafolyamat automatizálása"
+      }
+    },
+    "unavailable": "Ez az útmutató jelenleg nem érhető el",
+    "whenLabel": "Mikor használja:"
+  },
+  "knowledge": {
+    "agentSkills": {
+      "availabilityClient": "Egy ügyfél",
+      "availabilityClientBadgeHelp": "Csak egy ügyfél ügyeiben érhető el.",
+      "availabilityClientHelp": "Csak ennek az ügyfélnek az ügyeiben használható. Ez később nem módosítható.",
+      "availabilityFixedHelp": "A készség létrehozásakor lett beállítva. Nem módosítható.",
+      "availabilityLabel": "Elérhető itt",
+      "availabilityMatter": "Egy ügy",
+      "availabilityMatterBadgeHelp": "Csak egy ügyben érhető el.",
+      "availabilityMatterHelp": "Csak ebben az ügyben használható. Ez később nem módosítható.",
+      "availabilityOrganization": "Teljes szervezet",
+      "availabilityTeamNeedsMatter": "Ha meg szeretné osztani a készséget a csapattal, válassza ki az ügyet, amelyhez készült. Ez később nem módosítható.",
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Hozzon létre szerződés-felülvizsgálati playbookot álláspontról álláspontra, a korábban aláírt szerződései, egy rövid interjú és a szokásos piaci standardok alapján.",
+          "name": "Playbook létrehozása",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Adj hozzá álláspontokat az egyik meglévő playbookomhoz.",
+              "name": "Playbook bővítése"
+            },
+            "fromContracts": {
+              "body": "Készíts playbookot titoktartási megállapodásokhoz a korábban aláírt megállapodásaim alapján.",
+              "name": "Kiindulás korábbi szerződésekből"
+            },
+            "fromMarketStandards": {
+              "body": "Készíts playbookot beszállítói szerződésekhez a szokásos piaci álláspontokból kiindulva.",
+              "name": "Kiindulás a piaci standardokból"
+            }
+          }
+        }
+      },
+      "builtInSection": "Beépített készségek",
+      "deleteFile": "Fájl törlése",
+      "deleteFileConfirm": "Törli a fájlt? Ez nem vonható vissza.",
+      "disableSkill": "Készség kikapcsolása",
+      "discoverSkills": "Készségek keresése",
+      "discoveredSkills": "{count, plural, one {# készség található} other {# készség található}}",
+      "discoveryEmpty": "Ebben a tárolóban vagy mappában nem található készség.",
+      "discoverySkippedInvalid": "{count, plural, one {# érvénytelen készség kihagyva} other {# érvénytelen készség kihagyva}}",
+      "dropPack": "Húzzon ide egy .zip/.skill vagy SKILL.md fájlt a készség importálásához",
+      "editSkill": "Készség szerkesztése",
+      "enableSkill": "Készség bekapcsolása",
+      "enterFileName": "Adjon meg egy fájlnevet.",
+      "exportAsSkill": "Exportálás .skill fájlként",
+      "exportAsZip": "Exportálás .zip fájlként",
+      "exportFailed": "A készséget nem sikerült exportálni",
+      "exportSkill": "Készség exportálása",
+      "fileExists": "Ezen az útvonalon már létezik fájl",
+      "howItRuns": "Működés",
+      "importFailureFetch": "A készség forrását nem sikerült betölteni.",
+      "importFailureIntegrity": "A készség forrása a felderítés után megváltozott. Ellenőrizze újra.",
+      "importFailureLimit": "Elérte a készségek maximális számát.",
+      "importFailureNameConflict": "Már létezik ilyen nevű készség.",
+      "importHelp": "Illessze be egy nyilvános GitHub-tároló, mappa vagy SKILL.md fájl URL-jét. Telepítés előtt ellenőrizze a megtalált készségeket.",
+      "importPartial": "{installedCount, plural, one {{installed} importálva} other {{installed} importálva}}; {failedCount, plural, one {{failed} sikertelen} other {{failed} sikertelen}}.",
+      "importSelected": "Kijelöltek importálása ({count})",
+      "importSkill": "Importálás URL-ből",
+      "importTitle": "Készség importálása",
+      "importedSkills": "{count, plural, one {# készség importálva} other {# készség importálva}}",
+      "invalidPath": "Relatív útvonalat használjon. A fájl- és mappanevek nem lehetnek . vagy .., nem kezdődhetnek és nem végződhetnek szóközzel, nem végződhetnek ponttal, és nem tartalmazhatnak \\ : * ? \" | karaktert, csúcsos zárójelet vagy vezérlőkaraktert.",
+      "invocationAuto": "Automatikusan",
+      "invocationAutoHelp": "Az AI magától is használhatja ezt a készséget, ha illik a kéréshez.",
+      "invocationManual": "Csak kérésre",
+      "invocationManualHelp": "Csak akkor kerül használatra, ha a / jellel meghívja, vagy hozzáadja az üzenetéhez.",
+      "license": "Licenc: {license}",
+      "newFile": "Új fájl",
+      "newFileFilenamePlaceholder": "notes.md",
+      "newFilePathPlaceholder": "folder/notes.md",
+      "newFolder": "Új mappa",
+      "pdfPreviewSoon": "A PDF-előnézet a bináris készségerőforrások támogatásával válik elérhetővé.",
+      "renameFile": "Átnevezés",
+      "scopePrivate": "Csak én",
+      "scopeTeam": "Mindenki a csapatban",
+      "selectSkillToImport": "Válasszon legalább egy készséget.",
+      "selectionLimit": "Egyszerre legfeljebb {count, plural, one {# készséget} other {# készséget}} válasszon ki.",
+      "skippedFiles": "{count, plural, one {# fájl importálása kimaradt} other {# fájl importálása kimaradt}}",
+      "skippedReasonNotUtf8Text": "Nem UTF-8 szöveg",
+      "skippedReasonOutsideSkillFolder": "A készség mappáján kívül",
+      "skippedReasonUnsupportedExtension": "Nem támogatott fájltípus",
+      "skippedReasonUnsupportedFolder": "Nem erőforrásmappában van",
+      "starter": {
+        "compare": {
+          "body": "Hasonlítsa össze a dokumentum két verzióját, és sorolja fel az összes lényeges változást a helyük megjelölésével.",
+          "description": "Sorolja fel a két verzió közötti összes lényeges változást",
+          "name": "Verziók összehasonlítása"
+        },
+        "draft": {
+          "body": "Fogalmazzon meg mértéktartó választ erre a levélre. Őrizze meg a szakszerű hangnemet, térjen ki minden felvetett pontra, és jelezze a nyitott kérdéseket, amelyeket meg kell erősítenem.",
+          "description": "Fogalmazzon meg szakszerű választ egy levélre",
+          "name": "Válasz megfogalmazása"
+        },
+        "risks": {
+          "body": "Vizsgálja át ezt a dokumentumot jogi kockázatok, hiányzó védelmi kikötések és nem egyértelmű kikötések szempontjából. Minden megállapításnál hivatkozzon a konkrét kikötésre.",
+          "description": "Tárja fel a jogi kockázatokat és a nem egyértelmű kikötéseket",
+          "name": "Kockázatok feltárása"
+        },
+        "summarize": {
+          "body": "Foglalja össze ezt a dokumentumot. Térjen ki a felekre, a fő kötelezettségekre, a határidőkre, a pénzügyi feltételekre, valamint az esetleges megszüntetési vagy felelősségi kikötésekre.",
+          "description": "Kapjon strukturált összefoglalót a fő feltételekről",
+          "name": "Dokumentum összefoglalása"
+        }
+      },
+      "uploadHelp": "Használjon SKILL.md fájlt vagy olyan .zip/.skill mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
+      "uploadPack": ".zip/.skill vagy SKILL.md feltöltése",
+      "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
+      "version": "Verzió: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Hozzáadás a könyvtárhoz",
+      "added": "{name} a könyvtárában van",
+      "confirmAddTitle": "Hozzáadja a(z) {name} sablont ehhez: {organization}?",
+      "confirmDescription": "A sablon egy példánya a(z) {organization} könyvtárába kerül.",
+      "confirmDownloadTitle": "Letölti a(z) {name} sablont ehhez: {organization}?",
+      "confirmStarterDescription": "A playbook egy példánya a(z) {organization} könyvtárába kerül.",
+      "confirmUseTitle": "Használja a(z) {name} sablont itt: {organization}?",
+      "installFailed": "A sablont nem sikerült hozzáadni",
+      "noPreview": "Ehhez a sablonhoz nem érhető el előnézet.",
+      "notFound": "Ez a sablon nincs a katalógusban.",
+      "unavailable": "A katalógus jelenleg nem érhető el."
+    },
+    "landing": {
+      "accountLine": "Ingyenes fiókkal szervezete saját sablonjait, záradékait és playbookjait is kezelheti.",
+      "withAccount": "Ingyenes fiókkal"
+    },
+    "mcp": {
+      "addAndConnect": "Hozzáadás és csatlakozás",
+      "addServer": "Szerver hozzáadása",
+      "addServerCardTitle": "Új integráció hozzáadása",
+      "auth": {
+        "bearer": "Bearer-token",
+        "none": "Nincs hitelesítés",
+        "oauth2": "OAuth 2.0"
+      },
+      "authorizationReviewDescription": "Jóváhagyás előtt ellenőrizze az engedélyezési kiszolgálót és a végpontok eredetét.",
+      "authorizationServer": "Engedélyezési kiszolgáló",
+      "bearerTokenDescription": "Ez a szerver Bearer tokent használ. A csatlakozás befejezéséhez illessze be a szolgáltatótól kapott tokent.",
+      "callbackConnectedDescription": "Az eszközei készen állnak a csevegésben.",
+      "callbackConnectedTitle": "Integráció csatlakoztatva",
+      "callbackFailedDescription": "A bejelentkezés nem fejeződött be, így semmi sem csatlakozott.",
+      "callbackFailedTitle": "Az integráció nincs csatlakoztatva",
+      "connectedToast": "MCP csatlakoztatva",
+      "connectedWithLastUsed": "Csatlakoztatva · legutóbbi használat: {time}",
+      "description": "Kezelje azokat az integrációkat, amelyek eszközöket adhatnak a csevegéshez. A tokeneket felhasználónként tároljuk.",
+      "detected": "Felismerve: {authType}",
+      "disable": "Kikapcsolás",
+      "disabled": "Csatlakoztatva · kikapcsolva",
+      "emptyDescription": "A válogatott jogi integrációk itt jelennek meg, miután engedélyezve lettek a munkaterületén.",
+      "emptyTitle": "Még nincsenek integrációk",
+      "enable": "Bekapcsolás",
+      "endpointOrigins": "Végpontok eredete",
+      "enterToken": "Adjon meg egy hozzáférési tokent.",
+      "errorDescription": "Az integrációt nem sikerült frissíteni.",
+      "errorTitle": "MCP sikertelen",
+      "mcpExplainer": "Az integrációk külső szolgáltatásokat kapcsolnak a csevegéshez, amelyekkel az AI dolgozhat.",
+      "needsReapproval": "Új jóváhagyás szükséges",
+      "needsReauth": "Újracsatlakozás szükséges",
+      "off": "Ki",
+      "on": "Be",
+      "openTools": "Eszközök megnyitása",
+      "otherTitle": "További integrációk",
+      "probe": "Ellenőrzés",
+      "recommendedFor": "Ajánlott: {jurisdictions}",
+      "saveToken": "Token mentése",
+      "tokenHelp": "Token beszerzése",
+      "tokenLabel": "Bearer-token",
+      "tokenPlaceholder": "Token beillesztése",
+      "urlLabel": "MCP-szerver URL-je",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Használat a csevegésben",
+      "whatIsAnMcpServer": "Mi az az MCP-szerver?"
+    },
+    "playbooks": {
+      "addCheck": "Pontos szabály hozzáadása",
+      "addExtractPosition": "Csak kinyerés",
+      "addExtractPositionHint": "Egy érték rögzítése, értékelés nélkül",
+      "addGradedPosition": "Értékelt álláspont",
+      "addGradedPositionHint": "Szintezett szabályok végső minősítéssel",
+      "addOption": "Lehetőség hozzáadása",
+      "addPosition": "Álláspont hozzáadása",
+      "addRule": "Szabály",
+      "adoptAsIdeal": "Elfogadás ideális szövegként",
+      "all": "Minden playbook",
+      "approval": {
+        "approve": "Jóváhagyás",
+        "approveFailed": "Nem sikerült jóváhagyni a playbookot",
+        "approvedOn": "Jóváhagyva: {date}",
+        "approvedToast": "Playbook jóváhagyva",
+        "saveBeforeApprove": "A playbook jóváhagyása előtt mentse a módosításokat.",
+        "sourcesNotice": "Jóváhagyás előtt ellenőrizze, hogy egyik álláspont sem nevez meg dokumentumot, ügyet vagy ellenfelet: ezt a playbookot az egész szervezet olvashatja.",
+        "statusApproved": "Jóváhagyva",
+        "statusDraft": "Piszkozat"
+      },
+      "askContentLabel": "Válasz típusa",
+      "askQuestionLabel": "A kérdés szövege",
+      "askQuestionPlaceholder": "Mit olvassunk ki minden dokumentumból? Hagyja üresen a kézi bevitelhez.",
+      "autosave": {
+        "failed": "A mentés nem sikerült",
+        "nameMissing": "Nincs mentve: adjon meg egy nevet",
+        "positionsNeedAttention": "Nincs mentve: {count, plural, one {# álláspont} other {# álláspont}} figyelmet igényel"
+      },
+      "buildWithAi": {
+        "description": "Válaszoljon néhány kérdésre a csevegésben, a playbook pedig menet közben mentődik.",
+        "title": "Létrehozás AI-val"
+      },
+      "check": "Pontos szabály használata AI helyett",
+      "checkHint": "Mérhető feltételekhez, például: fizetési határidő ≤ 30 nap.",
+      "checkKind": {
+        "constraint": "A válasz ellenőrzése feltétellel",
+        "presence": "Válasz megkövetelése vagy tiltása"
+      },
+      "clausePlaceholder": "Záradékok keresése…",
+      "clauseSearchEmpty": "Nem található záradék",
+      "collapsePosition": "Álláspont összecsukása",
+      "confirmDelete": "Ezzel véglegesen törlődik a playbook.",
+      "contentType": {
+        "int": "Szám",
+        "singleSelect": "Egyszeres választás",
+        "text": "Szöveg"
+      },
+      "convertToExtract": "Csak a válasz kinyerése",
+      "convertToExtractDescription": "Ezzel eltávolítja a szintlétrát és az értékelést ennél az álláspontnál. Ez nem vonható vissza.",
+      "convertToExtractTitle": "Átalakítja csak kinyerésre?",
+      "convertToGraded": "Értékelési szabályok hozzáadása",
+      "convertToRules": "Átalakítás szabályokká",
+      "createPlaybook": "Új playbook",
+      "created": "Playbook létrehozva",
+      "creatingFromStarter": "Playbook létrehozása a kiválasztott sablonból…",
+      "customizeAnswer": "A kinyert válasz módosítása",
+      "customizeAnswerHint": "A kérdés vagy a válaszformátum szerkesztése.",
+      "decisionLine": "{runs, plural, one {elfogadva {accepted, number} · elvetve {dismissed, number} · # ellenőrzésben} other {elfogadva {accepted, number} · elvetve {dismissed, number} · # ellenőrzésben}}",
+      "deleteFailed": "A playbook törlése nem sikerült",
+      "deletePlaybook": "Playbook törlése",
+      "deletePosition": "Álláspont törlése",
+      "deleted": "Playbook törölve",
+      "deletedElsewhere": "Ezt a playbookot törölték.",
+      "derivedAutomatically": "A kinyerési kérdés és a válaszformátum ebből a pozícióból készül. Nincs szükség beállításra.",
+      "derivedQuestion": "Kinyerési kérdés",
+      "derivedType": "Válaszformátum",
+      "descriptionPlaceholder": "Mit ellenőriz ez a playbook?",
+      "disabledBadge": "Kikapcsolva: a futtatások kihagyják",
+      "discardChanges": "Módosítások elvetése",
+      "duplicatePosition": "Álláspont duplikálása",
+      "empty": "Még nincsenek playbookok",
+      "emptyDescription": "Hozzon létre egy playbookot, hogy a dokumentumokat a saját standardjaihoz mérje.",
+      "enablePosition": "Álláspont bekapcsolása",
+      "entryLabelPlaceholder": "Címke (opcionális)",
+      "entryPlaceholder": "Elfogadható alternatív megfogalmazás",
+      "entryRank": "#{index}",
+      "expandPosition": "Álláspont kibontása",
+      "expectation": {
+        "required": "A válasznak jelen kell lennie",
+        "restricted": "A válasznak hiányoznia kell"
+      },
+      "extractOnlyBadge": "Csak kinyerés",
+      "extractOnlyDescription": "Nincs értékelés; az érték bekerül a táblázatba.",
+      "extraction": "Kinyerés",
+      "extractionAuto": "Automatikus",
+      "extractionManual": "Kézi",
+      "fixErrorsBeforeSaving": "Mentés előtt javítsa ki a kiemelt mezőket.",
+      "gradedNeedsContent": "Adjon hozzá legalább egy szabályt, alternatív bejegyzést vagy ideális megfogalmazást.",
+      "guidanceLabel": "Ellenőrzési utasítások hozzáadása",
+      "guidancePlaceholder": "Adjon meg egy kivételt vagy utasítást, amelyet a fenti szabályok nem fednek le.",
+      "homeDescription": "Állítsa be egyszer a felülvizsgálati normákat, majd alkalmazza őket következetesen minden dokumentumra.",
+      "idealFromClause": "Záradékkönyvtárból",
+      "idealInline": "Egyéni szöveg",
+      "idealInlinePlaceholder": "Illessze be az ideális megfogalmazást…",
+      "idealLanguage": "Ideális megfogalmazás",
+      "issueLabel": "Téma",
+      "issuePlaceholder": "pl. Felelősség korlátozása",
+      "lastUsed": "Legutóbb használva: {date}",
+      "loadFailed": "A playbookok betöltése nem sikerült",
+      "loading": "Playbookok betöltése…",
+      "manageTypes": "Típusok kezelése…",
+      "namePlaceholder": "pl. NDA felülvizsgálata",
+      "nameRequired": "Adjon meg egy nevet.",
+      "negotiation": {
+        "addTalkingPoint": "Tárgyalási pont hozzáadása",
+        "escalationLabel": "Eszkaláció",
+        "escalationPlaceholder": "Mikor és kihez kell eszkalálni (nem kötelező)",
+        "rationaleLabel": "Indoklás",
+        "rationalePlaceholder": "Miért szeretnénk ezt (nem kötelező)",
+        "talkingPointPlaceholder": "Mit mondjunk",
+        "talkingPointsLabel": "Tárgyalási pontok",
+        "title": "Tárgyalás"
+      },
+      "noPositions": "Még nincsenek álláspontok. Adja hozzá az elsőt.",
+      "noSettledPosition": "Nincs kialakult álláspont",
+      "openInPane": "Playbook megnyitása",
+      "optionPlaceholder": "Lehetőség értéke",
+      "optionsLabel": "Lehetőségek",
+      "outline": "Vázlat",
+      "pendingPane": {
+        "description": "Válaszoljon a kérdésekre a csevegésben. Miután jóváhagyta az első mentést, a playbook itt nyílik meg, és a beszélgetés mellett szerkesztheti.",
+        "title": "A playbook itt fog megjelenni"
+      },
+      "positionOfTotal": "{index}. álláspont, összesen {total}",
+      "positionRemoved": "Álláspont eltávolítva",
+      "positions": "Álláspontok",
+      "recent": "Nemrég használt",
+      "recommended": "Ajánlott kiindulópontok",
+      "redLinePlaceholder": "Megfogalmazás, amely soha nem elfogadható",
+      "referenceStandard": "A referenciából",
+      "removeCheck": "Ellenőrzés eltávolítása",
+      "removeIdeal": "Ideális megfogalmazás eltávolítása",
+      "removeSource": "{documentName} forrás eltávolítása",
+      "reorderPosition": "Álláspont átrendezése",
+      "review": {
+        "changePlaybook": "Másik playbook választása",
+        "extractedLabel": "Találat:",
+        "facetTitle": "Ellenőrzés playbookkal",
+        "failed": "A dokumentum ellenőrzése nem sikerült",
+        "fixAccepted": "Elfogadva",
+        "insertFailed": "A preferált záradékot nem sikerült beszúrni",
+        "insertPreferred": "Preferált záradék beszúrása",
+        "launcherDescription": "Ellenőrizze ezt a dokumentumot egy szervezeti playbook alapján, és kapja meg a megállapításokat közvetlenül a szövegben.",
+        "matchedFallback": "Egyező alternatíva:",
+        "noFindings": "Nem található probléma",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Válasszon playbookot",
+        "reject": "Elutasítás",
+        "reviewAgain": "Újraellenőrzés",
+        "reviewedAgainst": "Ellenőrizve {name} alapján",
+        "reviewing": "Ellenőrzés…",
+        "reviewingHint": "Nagy playbookok esetén ez akár néhány percig is eltarthat.",
+        "run": "Ellenőrzés",
+        "scrollToChange": "Ugrás a módosításhoz",
+        "viewClause": "Záradék megtekintése",
+        "violatedRedLine": "Nem elfogadható szabályt sért:"
+      },
+      "ruleNumber": "{index}. szabály",
+      "rulePlaceholder": "pl. A fizetési határidő nem haladhatja meg a 30 napot",
+      "saveFailed": "A playbook mentése nem sikerült",
+      "severity": {
+        "blocker": "Blokkoló"
+      },
+      "severityLabel": "Súlyosság",
+      "staleCopy": {
+        "loaded": "A playbook újabb verziója betöltődött. Szerkesztés előtt töltse újra.",
+        "unavailable": "A playbook legfrissebb verzióját nem sikerült betölteni. Ez az utoljára betöltött példány, amely elavult lehet."
+      },
+      "starters": {
+        "addedToast": "Playbook hozzáadva",
+        "browseButton": "Kezdő playbookok böngészése",
+        "positionCount": "{count, plural, one {# pozíció} other {# pozíció}}",
+        "title": "Kezdő playbookok",
+        "useStarter": "Kiindulópont használata"
+      },
+      "switchToAuto": "Kérdés és formátum automatikus létrehozása",
+      "switchToManual": "A kérdés és a válaszformátum testreszabása",
+      "termKind": {
+        "enumeration": "Felsorolás",
+        "language": "Megfogalmazás",
+        "parameter": "Paraméter",
+        "presence": "Jelenlét"
+      },
+      "tier": {
+        "acceptable": "Elfogadható",
+        "fallback": "Alternatíva",
+        "notAcceptable": "Nem elfogadható"
+      },
+      "untitledPosition": "Névtelen álláspont",
+      "updated": "Playbook frissítve",
+      "updatedAt": "Frissítve: {date}",
+      "verdict": {
+        "additional": "További",
+        "compliant": "Megfelel",
+        "deviation": "Eltérés",
+        "fallback": "Alternatív megfogalmazás",
+        "missing": "Hiányzik",
+        "notApplicable": "Nem alkalmazható"
+      },
+      "versions": {
+        "confirmRestore": "A jelenlegi piszkozatot ennek a verziónak a tartalma váltja fel.",
+        "restoreFailed": "Nem sikerült visszaállítani a verziót",
+        "restoredToast": "Verzió visszaállítva",
+        "versionHistory": "Verzióelőzmények"
+      }
+    },
+    "sections": {
+      "caseLaw": {
+        "description": "Bírósági határozatok és ítélkezési gyakorlat adatbázisa"
+      },
+      "clauses": {
+        "description": "Újrafelhasználható mintakikötések"
+      },
+      "mcp": {
+        "description": "A stella összekapcsolása külső eszközökkel",
+        "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Értékelt ellenőrzőlisták, amelyek a dokumentumokat az Ön standardjaihoz mérik"
+      },
+      "skills": {
+        "title": "Készségek"
+      },
+      "templates": {
+        "description": "Dokumentumsablonok helyőrzőkkel",
+        "title": "Sablonok"
+      },
+      "tools": {
+        "description": "Készségek, integrációk és mindig elérhető eszközök, amelyeket az AI a csevegésben használhat",
+        "title": "Eszközök"
+      },
+      "workflows": {
+        "description": "Automatizálja a dokumentumokkal végzett munkát újrafelhasználható, többlépéses munkafolyamatokkal."
+      }
+    },
+    "skills": {
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Válaszoljon meg egy kérdést hiteles forrásokra támaszkodva.",
+            "inside": "forráshierarchia · kutatási utasítás",
+            "title": "Válaszadás források alapján"
+          },
+          "checkAgainstRules": {
+            "blurb": "Vizsgáljon felül egy dokumentumot, és hivatkozásokkal jelölje meg, ami nem felel meg a szabályoknak.",
+            "inside": "jogrendszerenkénti hivatkozások · ellenőrzőlista · felülvizsgálati utasítás",
+            "title": "Ellenőrzés szabályok alapján"
+          },
+          "intakeToDraft": {
+            "blurb": "Kérdezze meg a tényeket, majd készítsen dokumentumtervezetet.",
+            "inside": "interjú · iratminták · szövegezési utasítás",
+            "title": "Adatfelvételtől a tervezetig"
+          }
+        },
+        "insideLabel": "Tartalma",
+        "startBlank": "Kezdés üresen",
+        "startBlankHint": "Üres készség arra az esetre, ha pontosan tudja, mire van szüksége.",
+        "subtitle": "Válasszon kiindulási szerkezetet. Beállítjuk a mappákat, és végigvezetjük a kitöltésükön.",
+        "title": "Hogyan működjön a készsége?"
+      },
+      "commandConflict": "Már létezik készség ezzel a / paranccsal",
+      "commandHelp": "A készség futtatásához írja be a parancsot a csevegésbe.",
+      "commandLabel": "Csevegési parancs (nem kötelező)",
+      "commandPlaceholder": "pl. összefoglalás",
+      "errors": {
+        "commandInvalid": "Csak kisbetűket, számjegyeket, kötőjeleket és aláhúzásjeleket használjon"
+      },
+      "form": {
+        "scope": "Láthatóság",
+        "scopePrivate": "Csak én",
+        "scopeTeam": "A csapat minden tagja"
+      }
+    }
+  },
+  "lawHome": {
+    "clearRecent": "Előzmények törlése",
+    "clearRecentConfirmation": "Törli az összes legutóbbi keresését, határozatát és jogszabályát ebben a szervezetben? Ez a művelet nem vonható vissza.",
+    "importFailed": "A helyi előzményeket nem sikerült importálni. Továbbra is ezen az eszközön vannak mentve.",
+    "inForceFrom": "Hatálybalépés: {date}",
+    "noRecent": "Még nincs legutóbbi tevékenység",
+    "noSignals": "Még nincsenek jelzések",
+    "prompt": "Mit keres?",
+    "recent": "Legutóbbiak",
+    "recentCasesFilter": "Határozatok",
+    "recentLoadFailed": "A legutóbbi tevékenységet nem sikerült betölteni.",
+    "recentSearchFilter": "Keresések",
+    "recentUpdateFailed": "A legutóbbi tevékenységet nem sikerült frissíteni.",
+    "searchLabel": "Keresés a jogi adatbázisban",
+    "searchPlaceholder": "Ügyszám, jogszabályszám, ECLI vagy kulcsszavak",
+    "signals": "Jelzések",
+    "topCourts": "A legfelsőbb bíróságoktól"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "A(z) {citation} alábbi részletéről:\n\n„{quote}”\n\n",
+      "colorGreen": "Zöld",
+      "colorRed": "Piros",
+      "colorSky": "Kék",
+      "colorViolet": "Lila",
+      "colorYellow": "Sárga",
+      "commentPlaceholder": "Írjon megjegyzést…",
+      "commentText": "Megjegyzés szövege",
+      "commentedPassage": "Megjegyzéssel ellátott részlet",
+      "editComment": "Megjegyzés szerkesztése",
+      "editedAt": "Szerkesztve: {time}",
+      "guestAuthor": "Ön",
+      "guestLimitReached": "Ez a lap legfeljebb {count, plural, one {# kiemelést vagy jegyzetet} other {# kiemelést és jegyzetet}} tud tárolni. Továbbiak mentéséhez hozzon létre fiókot.",
+      "guestMigrationComplete": "A kiemelések és jegyzetek mentve.",
+      "guestMigrationFailed": "Néhány kiemelést és jegyzetet nem sikerült menteni. Egy újabb próbálkozásig ezen a lapon maradnak.",
+      "guestSavePrompt": "A kiemelések és jegyzetek mentésre kerülnek, amikor létrehoz egy ingyenes fiókot.",
+      "guestStorageUnavailable": "A kiemeléseket és jegyzeteket nem sikerült menteni ezen a lapon.",
+      "highlight": "Kiemelés",
+      "highlightedPassage": "Kiemelt részlet",
+      "history": {
+        "colorRestored": "Szín visszaállítva",
+        "commentRemoved": "Megjegyzés eltávolítva",
+        "commentRestored": "Megjegyzés visszaállítva",
+        "highlightRemoved": "Kiemelés eltávolítva",
+        "highlightRestored": "Kiemelés visszaállítva",
+        "markChanged": "Ez a kiemelés vagy megjegyzés időközben máshol módosult, ezért változatlan maradt.",
+        "markGone": "Ez a kiemelés vagy megjegyzés már nem létezik.",
+        "nothingToRedo": "Nincs mit megismételni",
+        "nothingToUndo": "Nincs mit visszavonni",
+        "redoShortcut": "Kiemelés vagy megjegyzés módosításának megismétlése",
+        "styleRestored": "Stílus visszaállítva",
+        "textRestored": "Megjegyzés szövege visszaállítva",
+        "undoShortcut": "Kiemelés vagy megjegyzés módosításának visszavonása",
+        "visibilityRestored": "Megosztás visszaállítva"
+      },
+      "orphaned": {
+        "description": "A dokumentum szövege a létrehozásuk óta frissült: a megjelölt részeket nem sikerült újra megtalálni benne, vagy most több helyen is előfordulnak. Ezek nem jelennek meg a szövegben.",
+        "summary": "{count, plural, one {# kiemelés vagy megjegyzés már nem illeszkedik a szöveghez} other {# kiemelés és megjegyzés már nem illeszkedik a szöveghez}}"
+      },
+      "removeHighlight": "Kiemelés eltávolítása",
+      "styleHighlight": "Kiemelés",
+      "styleSquiggly": "Hullámos vonal",
+      "styleStrikethrough": "Áthúzás",
+      "visibilityShared": "Megosztva a szervezettel",
+      "visibilitySharedWithMatter": "Megosztva az üggyel"
+    },
+    "contents": {
+      "aiSection": "{section} (AI által generált szakasz)",
+      "headingWithAiSection": "{heading} (AI által generált szakasz: {section})"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Blokkidézet hivatkozással",
+      "citationOnly": "Csak hivatkozás",
+      "citationWithQuote": "Hivatkozás idézettel",
+      "quoteWithCitation": "Idézet hivatkozással",
+      "textOnly": "Csak szöveg"
+    }
+  },
+  "publicTools": {
+    "addSkill": "Készség hozzáadása",
+    "addToStella": "Hozzáadás a stella alkalmazáshoz",
+    "alreadyInstalled": "Ez az eszköz már telepítve van.",
+    "content": "Tartalom",
+    "contentUnavailable": "Nem sikerült betölteni ennek a készségnek a tartalmát. Tekintse meg inkább a GitHubon.",
+    "contribute": {
+      "contributingLink": "Közreműködési útmutató",
+      "cta": "Közreműködés",
+      "form": {
+        "authorLabel": "Szerző neve",
+        "authorUrlLabel": "A szerző URL-címe (nem kötelező)",
+        "commitError": "Nem sikerült lekérni a legutóbbi commitot. Illessze be alább a 40 karakteres SHA-értéket.",
+        "costLabel": "Költség",
+        "directoryLabel": "Elérési út az adattárban (nem kötelező)",
+        "directoryPlaceholder": "skills/my-skill",
+        "inTreeReminder": "Adja hozzá a SKILL.md fájlt a manifestfájl mellé ugyanabban a pull requestben.",
+        "intro": "Töltse ki az adatokat a manifestfájl létrehozásához, majd nyisson egy pull requestet. Nincs szükség fiókra.",
+        "invalidHint": "Töltse ki a kötelező mezőket a pull request megnyitásához.",
+        "jurisdictionPlaceholder": "CZ",
+        "jurisdictionsHint": "Adja meg az ISO-országkódokat. A joghatóságtól független készségeknél hagyja üresen.",
+        "jurisdictionsLabel": "Joghatóságok",
+        "licenseLabel": "Licenc",
+        "manifestPreview": "Létrehozott manifest.json",
+        "name": "Készség neve",
+        "openPr": "GitHub pull request megnyitása",
+        "practiceAreasLabel": "Szakterületek",
+        "repoLabel": "Adattár",
+        "repoPlaceholder": "owner/name vagy GitHub URL",
+        "resolvingCommit": "Commit azonosítása…",
+        "revLabel": "Rögzített commit",
+        "revPlaceholder": "40 karakteres commit-SHA",
+        "setupLabel": "Beállítás",
+        "slugHint": "Az URL-ben és a mappanévben használt kisbetűs azonosító.",
+        "slugLabel": "URL-azonosító",
+        "sourceGithub": "GitHub-adattár",
+        "sourceGithubHint": "Nagyobb vagy önállóan karbantartott, egy adott commithoz rögzített készségekhez.",
+        "sourceInTree": "Ebben az adattárban",
+        "sourceInTreeHint": "Olyan kis készségekhez, amelyek tartalma itt található.",
+        "sourceLabel": "Hol található a készség?",
+        "title": "Készség hozzáadása",
+        "useLatestCommit": "Legújabb commit használata"
+      },
+      "githubBody": "A nagyobb vagy önállóan karbantartott készségek a saját GitHub-adattárukban maradnak, és egy adott commithoz vannak rögzítve. Egy ütemezett ellenőrzés pull requestet nyit, amikor a forrásadattár megváltozik, így a rögzített verzió a felülvizsgálat után is naprakész marad.",
+      "githubTitle": "Commithoz rögzített GitHub-készség:",
+      "inTreeBody": "A kisebb készségek ebben az adattárban, a manifestfájljuk mellett találhatók, bejegyzésenként legfeljebb 10 MB méretben. Tartalmukat közvetlenül a katalógusból szolgáljuk ki és csomagoljuk.",
+      "inTreeTitle": "Adattáron belüli mappa:",
+      "intro": "A katalógus a jogi munkához használható készségeket, integrációkat és beépített eszközöket sorolja fel. Bárki javasolhat új bejegyzést pull requesten keresztül.",
+      "licenseBody": "Minden bejegyzéshez az alábbi listán szereplő megengedő licencek egyikét kell megadni. A copyleft licenceket nem fogadjuk el, hogy a saját példányt üzemeltetők szabadon továbbterjeszthessék a tartalmat.",
+      "licenseTitle": "Engedélyezett licencek",
+      "mcpBody": "Az integrációkat egy manifestfájl írja le, amely tartalmazza a kiszolgáló URL-jét, a hitelesítés típusát és az igényelt jogosultsági köröket. A katalógus nem tárol hitelesítő adatokat; ezeket a felhasználók a saját kliensükben adják meg.",
+      "mcpTitle": "MCP-integrációk",
+      "recommendedBody": "Az „Ajánlott” jelvényt a karbantartók kezelik egy verziókövetett fájlban. A jelvény nem állítható be a nyilvános webhelyről, és önmagában egy pull requesttel sem.",
+      "recommendedTitle": "Ajánlott állapot",
+      "repoLink": "Böngésszen a katalógus bejegyzései között",
+      "title": "Eszköz beküldése"
+    },
+    "discovery": {
+      "allBody": "Fedezze fel az újrafelhasználható munkafolyamatokat, a megbízható nyilvános adatforrásokat és a stella beépített lehetőségeit.",
+      "allTitle": "Minden eszköz",
+      "aresBody": "Keressen egy cseh szervezetet név vagy IČO alapján a hivatalos ARES nyilvántartásban.",
+      "contractReviewBody": "Vesse össze a kereskedelmi megállapodások minden záradékát a tárgyalási útmutatóval; az eltérések és a javasolt módosítások jól láthatóan jelennek meg.",
+      "editorsPick": "Szerkesztői válogatás",
+      "exampleReview": "Mintaellenőrzés",
+      "featuredTitle": "Kezdjen egy munkafolyamattal",
+      "fromCommunity": "A közösségből",
+      "groups": {
+        "dataSources": "Adatforrások és integrációk",
+        "dataSourcesBody": "Csatlakoztassa a hiteles nyilvántartásokat és a szakszolgálatokat, ha egy ügynek külső információra van szüksége.",
+        "included": "A stella része",
+        "includedBody": "Külön készség vagy fiók hozzáadása nélkül azonnal használható alapfunkciók.",
+        "skillsBody": "Újrafelhasználható jogi munkafolyamatok olyan utasításokkal, amelyeket hozzáadás előtt áttekinthet."
+      },
+      "heroBody": "Keressen feladat, joghatóság vagy forrás alapján. Minden eszközt áttekinthet, mielőtt hozzáadná a munkaterületéhez.",
+      "heroTitle": "Min dolgozik?",
+      "howBody": "A készség ellenőrizhető utasításokba foglal egy jogi módszert. Elég egyszer hozzáadni, majd ugyanazt a megközelítést használhatja minden alkalommal, amikor erre a feladatra kerül sor.",
+      "howTitle": "Mi az a készség?",
+      "includedBadge": "Alapból elérhető",
+      "jurisRankBody": "Értékelje az Argentin Legfelsőbb Bíróság precedenseinek súlyát a hivatkozási hatás és a doktrinális fejlődés alapján.",
+      "noResults": "Ennek a keresésnek még nincs megfelelő eszköz.",
+      "openSkill": "Működés megtekintése",
+      "review": {
+        "aligned": "Összhangban",
+        "governingLaw": "Irányadó jog",
+        "liabilityCap": "Felelősségi korlát",
+        "missing": "Nincs megadva",
+        "outsidePlaybook": "Eltér az útmutatótól",
+        "termination": "Felmondás"
+      },
+      "searchPlaceholder": "Milyen feladatot szeretne elvégezni?",
+      "tasks": {
+        "prepareDocuments": "Dokumentumok előkészítése",
+        "protectClientData": "Az ügyféladatok védelme",
+        "researchPrecedents": "Precedensek kutatása",
+        "reviewAgreements": "A megállapodások felülvizsgálata",
+        "verifyOrganizations": "Szervezet ellenőrzése"
+      },
+      "tasksTitle": "Vagy válasszon feladatot"
+    },
+    "documentation": "Dokumentáció",
+    "downloadUpstream": "Forrásarchívum letöltése",
+    "installConfirm": {
+      "mcpBody": "A munkaterületéhez hozzáadjuk ezt az MCP-csatlakozót: „{name}”. Ezután az MCP-beállításokban adhatja meg saját hitelesítő adatait.",
+      "nativeToolBody": "A munkaterületén engedélyezzük a következő beépített eszközt: „{name}”.",
+      "skillBody": "A munkaterületére telepítjük a következő készséget: „{name}”.",
+      "title": "Hozzáadja a munkaterületéhez: {name}?"
+    },
+    "installUnavailable": "Ez az eszköz nem telepíthető a szervezetében.",
+    "mcpConfigHint": "Kliensfüggetlen kapcsolati adatok. Illessze be bármely MCP-kompatibilis kliensbe, majd adja meg saját hitelesítő adatait.",
+    "metaDescription": "Böngésszen a jogi munkához szükséges készségek, integrációk és beépített eszközök nyílt katalógusában.",
+    "missingFromCatalogue": "Ez az eszköz nem szerepel szervezete katalógusában.",
+    "nativeToolInfo": "Ez a stella beépített funkciója. A csevegésben való használathoz engedélyezze a munkaterületen.",
+    "notFound": "Az eszköz nem található.",
+    "practiceArea": "Jogi szakterület",
+    "practiceAreas": {
+      "bankingFinance": "Bank- és pénzügyi jog",
+      "capitalMarkets": "Tőkepiaci jog",
+      "commercial": "Kereskedelmi jog",
+      "competition": "Versenyjog",
+      "corporate": "Társasági jog",
+      "criminal": "Büntetőjog",
+      "dataProtection": "Adatvédelmi jog",
+      "disputeResolution": "Vitarendezés",
+      "employment": "Munkajog",
+      "energy": "Energiajog",
+      "environmental": "Környezetvédelmi jog",
+      "family": "Családjog",
+      "immigration": "Bevándorlási jog",
+      "insolvency": "Fizetésképtelenségi jog",
+      "intellectualProperty": "Szellemi tulajdonjog",
+      "litigation": "Peres eljárások",
+      "mergersAcquisitions": "Összeolvadások és felvásárlások",
+      "privateClient": "Magánügyfelek",
+      "publicAdministrative": "Köz- és közigazgatási jog",
+      "realEstate": "Ingatlanjog",
+      "regulatory": "Szabályozási jog",
+      "tax": "Adójog",
+      "technology": "Technológiai jog",
+      "whiteCollarCrime": "Gazdasági bűncselekmények"
+    },
+    "tokenHelp": "Token beszerzése",
+    "viewOnGithub": "Megtekintés GitHubon"
+  },
+  "readerAnswers": {
+    "answerLanguage": "Válasz nyelve",
+    "budgetError": "A válaszokra szánt keret kimerült.",
+    "documentLanguage": "Dokumentum nyelve ({language})",
+    "expand": "Válasz kibontása",
+    "explain": "Magyarázat",
+    "followUp": "Kiegészítő kérdés feltevése",
+    "followUpRequired": "Az elküldéshez írja be a kiegészítő kérdést.",
+    "invalidCitations": "{count, plural, one {# hivatkozást nem sikerült ellenőrizni.} other {# hivatkozást nem sikerült ellenőrizni.}}",
+    "loading": "Válasz generálása…",
+    "minimise": "Válasz összecsukása",
+    "modelError": "A modell nem tudta befejezni ezt a választ.",
+    "networkError": "A kapcsolat megszakadt. Próbálja újra.",
+    "regenerate": "Válasz újragenerálása",
+    "selectionError": "Jelöljön ki szöveget magából a határozatból.",
+    "send": "Kiegészítő kérdés küldése",
+    "share": "Megosztás a csapattal",
+    "timeoutError": "Lejárt a válaszadás időkorlátja. Próbálja újra.",
+    "title": "Válasz a kijelölt szövegről",
+    "waitForCurrentAction": "Várja meg, amíg a válaszon végzett művelet befejeződik."
+  },
+  "statutes": {
+    "amendedTimes": "{count, plural, =0 {Nem módosították} one {# alkalommal módosították} other {# alkalommal módosították}}",
+    "asOf": "Ezen a napon hatályos szöveg",
+    "backToList": "Összes jogszabály",
+    "citingDecisionHideSnippet": "Szövegrész összecsukása",
+    "citingDecisionMentionCount": "{count}× hivatkozva",
+    "citingDecisionOlderVersion": "Korábbi változat",
+    "citingDecisionShowSnippet": "Teljes szövegrész megjelenítése",
+    "citingDecisionsCourtPlaceholder": "Minden bíróság",
+    "citingDecisionsFilterPlaceholder": "Betöltött határozatok szűrése",
+    "citingDecisionsSnapshotCapped": "{count, plural, one {# határozat} other {# határozat}} megjelenítve (legfeljebb a rendelkezést legtöbbször említő {limit} határozatból).",
+    "citingDecisionsSortCitations": "A rendelkezés említései",
+    "citingDecisionsSortDate": "A határozat dátuma",
+    "citingDecisionsYear": "A határozat éve",
+    "citingDecisionsYearOutOfRange": "Adjon meg egy évet {min} és {max} között.",
+    "citingDecisionsYearPlaceholder": "Minden év",
+    "columns": {
+      "act": "Jogszabály",
+      "amendments": "Módosítások",
+      "firstVersion": "Első változat",
+      "lastAmended": "Utoljára módosítva"
+    },
+    "compareAbsent": "Ebben a változatban nem szerepel",
+    "compareAddedLater": "Ebben a változatban ez a rendelkezés még nem létezett.",
+    "compareClose": "Összehasonlítás bezárása",
+    "compareMoved": "Áthelyezve:",
+    "compareMovedFrom": "Ide áthelyezve innen: {provision}",
+    "compareMovedFromElsewhere": "Máshonnan ide áthelyezve",
+    "compareMovedTo": "Áthelyezve ide: {provision}",
+    "compareMovedToElsewhere": "Máshová áthelyezve",
+    "compareNoChanges": "A szöveg mindkét változatban azonos.",
+    "compareNoLongerPresent": "Ebben a változatban ez a rendelkezés már nem szerepel. Hatályon kívül helyezték vagy átszámozták.",
+    "compareProvisionNeither": "Egyik változat sem tartalmazza ezt a rendelkezést.",
+    "compareProvisionTitle": "{provision} változásai a változatok között",
+    "compareSameVersion": "Ez a megjelenített változat. Válasszon egy másikat az összehasonlításhoz.",
+    "compareShowUnchanged": "Változatlan rendelkezések megjelenítése",
+    "compareSideBySide": "Összehasonlítás egymás mellett",
+    "compareTitle": "Változások a változatok között",
+    "compareUnavailable": "A változatokat nem sikerült összehasonlítani.",
+    "compareUnstructured": "Az egyik változat csak egyszerű szövegként érhető el, ezért a kettő nem hasonlítható össze.",
+    "compareVersionMissing": "Az összehasonlítandó változat nem szerepel a jogszabály történetében.",
+    "compareWholeAct": "A teljes jogszabály összehasonlítása",
+    "compareWithPreviousWording": "Összehasonlítás az előző szövegváltozattal",
+    "compareWithVersion": "Összehasonlítás ezzel: {version}",
+    "currentWording": "Jelenlegi szöveg",
+    "description": "Egységes szerkezetű jogszabályok nyilvános adatbázisa, jogszabály és változat szerint indexelhető.",
+    "diffInserted": "Beszúrva:",
+    "diffRemoved": "Törölve:",
+    "emptyDocument": "Ehhez a változathoz nem érhető el szöveg.",
+    "emptyState": "Nem található jogszabály.",
+    "expression": {
+      "invalidWindow": "A kiadó dátumai ellentmondásosak",
+      "promulgated": "Kihirdetett szöveg",
+      "withdrawn": "A kiadó már nem közli"
+    },
+    "inForceSince": "Hatályos {date} óta",
+    "inForceSinceAtLeast": "Hatályos legkésőbb {date} óta",
+    "ineligibleVersion": "{range} ({label})",
+    "leadingDecision": "Irányadó határozat",
+    "leadingDecisionsExplanation": "Az első említés minden határozatban, hivatkozási tekintély szerint rangsorolva: súlyozott bejövő hivatkozások, a bíróság rangjához, a hivatkozás előjeléhez és korához igazítva.",
+    "noVersionInForce": "A kiválasztott napon a jogszabály egyetlen változata sem volt hatályban.",
+    "openEnded": "jelenleg is",
+    "outline": "Tartalom",
+    "outlineJumpLabel": "Ugrás rendelkezéshez",
+    "outlineJumpPlaceholder": "§ 10 vagy cím",
+    "pendingChanges": "Közelgő módosítások",
+    "pendingChangesIncomplete": "Előfordulhat, hogy a közzétevő adatai nem tartalmazzák az összes közelgő módosítást.",
+    "provisionAbsentVersions": "{count, plural, one {Nem szerepel a törvény e szövegváltozatában} other {Nem szerepel a törvény e # szövegváltozatában}}",
+    "provisionAskContextPrompt": "\n\nA rendelkezést alkalmazó részletek a legnagyobb súlyú határozatokból:\n{passages}\n\nAz ítélkezési gyakorlat eszközeivel bármelyik határozatot teljes terjedelmében elolvashatod, vagy további, a rendelkezésre hivatkozó határozatokat kereshetsz.",
+    "provisionAskSummarize": "Foglald össze, hogyan alkalmazzák a bíróságok ezt a rendelkezést",
+    "provisionAskSummarizePrompt": "Foglald össze, hogyan alkalmazzák a bíróságok a következőt: {subject}, és hivatkozz a felhasznált határozatokra.",
+    "provisionDetailsFor": "{provision} részletei",
+    "provisionEffectiveFrom": "{date} óta hatályos",
+    "provisionHistoryEmpty": "Ehhez a rendelkezéshez nincs nyilvántartott szövegváltozat.",
+    "provisionHistoryUnavailable": "A rendelkezés története nem tölthető be.",
+    "provisionPartTextUnavailable": "A(z) {provisionLabel} szövege nem érhető el",
+    "provisionPromptSubject": "{statute} ({eli}) {provision}, a {date} napjától hatályos szöveg szerint",
+    "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "ettől is: {date}",
+    "provisionRunShowVersions": "A törvény szövegváltozatainak megjelenítése, időszak: {range}",
+    "provisionRunUnchanged": "{count, plural, one {változatlan a törvény # szövegváltozatában} other {változatlan a törvény # szövegváltozatában}}",
+    "provisionTextUnavailable": "Ehhez a változathoz nem érhető el szöveg",
+    "provisionVersionsAll": "A törvény összes szövegváltozata",
+    "provisionWordingAdded": "Új rendelkezés",
+    "provisionWordingChanged": "Módosítva",
+    "provisionWordingEarliest": "Legkorábbi elérhető szövegváltozat",
+    "publisherWindowInconsistent": "Erre a napra nem állapítható meg hatályos szöveg: a kiadó adatai ellentmondásosak.",
+    "resolvedAlias": "Felismerve: {label}",
+    "searchLabel": "Keresés a jogszabályok között",
+    "searchPlaceholder": "Szám, rövid név vagy cím, pl. 89/2012 Sb.",
+    "showCitedPartOnly": "Csak az idézett rész megjelenítése",
+    "showFullProvision": "A teljes rendelkezés megjelenítése",
+    "showInText": "Megjelenítés a szövegben",
+    "sortNeedsYear": "Az oszlop szerinti rendezéshez válasszon évet a szűrőkben.",
+    "statedWindow": "A kiadó által megadott dátumok: {range}",
+    "status": {
+      "current": "Hatályos",
+      "draft": "Tervezetben",
+      "ended": "Már nem hatályos",
+      "future": "Jövőbeli",
+      "historical": "Felváltott",
+      "neverInForce": "Soha nem lépett hatályba",
+      "repealed": "Hatályon kívül helyezett",
+      "unknown": "Állapota nem egyértelmű"
+    },
+    "title": "Jogszabályok",
+    "validity": "Hatályos {from} és {to} között",
+    "versionAlreadySelected": "Már ezt a verziót tekinti meg.",
+    "versionAppliedInDecision": "A(z) <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> határozatban alkalmazott változat (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# új rendelkezés} other {# új rendelkezés}}",
+    "versionChangesChanged": "{count, plural, one {# módosult rendelkezés} other {# módosult rendelkezés}}",
+    "versionChangesNone": "A szöveg változatlan",
+    "versionChangesRemoved": "{count, plural, one {# elhagyott rendelkezés} other {# elhagyott rendelkezés}}",
+    "versionChangesWords": "{inserted, plural, one {# beszúrt szó} other {# beszúrt szó}}, {deleted, plural, one {# törölt szó} other {# törölt szó}}",
+    "wordingVersionUnknown": "A szövegváltozat dátuma nem érhető el"
+  }
+}

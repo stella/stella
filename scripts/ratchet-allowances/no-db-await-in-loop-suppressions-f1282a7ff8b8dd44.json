@@ -1,6 +1,0 @@
-{
-  "metric": "no-db-await-in-loop-suppressions",
-  "file": "apps/api/src/scripts/repair-court-identity.ts",
-  "delta": 5,
-  "reason": "The operator repair walks a source by keyset pages and renames one row per transaction so each write commits with its own corpus projection reconcile; pages and rows are sequential by design, bounded by --page and --limit."
-}

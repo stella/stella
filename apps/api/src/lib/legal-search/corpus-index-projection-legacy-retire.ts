@@ -16,8 +16,7 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-cont
 import {
   type DesiredStateKey,
   lockRegisteredCorpusProjectionManifestForMutation,
-  retireServedCopiesTx,
-  SERVED_COPY_RETIREMENT_REASONS,
+  retireLegacyErasedServedCopiesTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusIndexProjectionNamedCopyTrailsTwoChanges } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRecord } from "@/api/lib/type-guards";
@@ -408,11 +407,7 @@ export const retireLegacyUnprovenServedCopiesTx = async (
       ({ entityId, outcome }) =>
         outcome === "retired" ? [{ family, generation, entityId }] : [],
     );
-    await retireServedCopiesTx(
-      tx,
-      retired,
-      SERVED_COPY_RETIREMENT_REASONS.legacyUnproven,
-    );
+    await retireLegacyErasedServedCopiesTx(tx, retired);
   }
   return Result.ok({
     scanned: page.length,

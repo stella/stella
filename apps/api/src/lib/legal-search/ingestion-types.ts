@@ -1007,7 +1007,10 @@ export type StoredRawListing =
   | StoredRawReparseRejected;
 
 export type ReadStoredRawListingOptions = {
-  stored: StoredRawReparseInput;
+  stored: Pick<
+    StoredRawReparseInput,
+    "raw" | "contentType" | "sourceDocumentId"
+  >;
   /** The envelope part holding the publisher's listing row. */
   part: string;
   /** The publisher id that row states, read the way the adapter keys it. */

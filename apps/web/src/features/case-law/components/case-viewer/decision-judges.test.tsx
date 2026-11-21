@@ -108,6 +108,7 @@ const renderDecision = (judges: readonly DecisionJudge[]): string =>
         judges: [...judges],
         language: "cs",
         sourceAttributionUrl: null,
+        bodySource: { textSource: "host" },
         textFields: {
           abstract: ABSENT,
           headnote: ABSENT,

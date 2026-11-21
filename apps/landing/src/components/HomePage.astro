@@ -4,7 +4,7 @@ import LandingFooter from "./LandingFooter.astro";
 import HomeProductStory from "./HomeProductStory.astro";
 import { CliMcpPreview } from "./react/previews/CliMcpPreview";
 import { getChangelogReleases } from "../lib/changelog";
-import { getReleaseKind } from "../lib/changelog-release";
+import { isFeatureRelease } from "../lib/changelog-release";
 import { resolveProductHrefs } from "../data/products/links";
 import { resolveProductDiscoverLabels } from "../data/site-nav";
 import { resolveSceneWindowLabels } from "../data/product-story";
@@ -15,9 +15,10 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 // Releases are sorted newest-first; the strip shows the last three feature
-// (non-patch) releases, and the hero badge reuses the newest of them.
+// releases (any version whose note carries a product headline rather than the
+// maintenance title), and the hero badge reuses the newest of them.
 const featureReleases = getChangelogReleases()
-  .filter((release) => getReleaseKind(release.tagName) !== "patch")
+  .filter((release) => isFeatureRelease(release.heading))
   .slice(0, 3);
 const latestRelease = featureReleases.at(0);
 const releaseDateFormatter = new Intl.DateTimeFormat(locale, {

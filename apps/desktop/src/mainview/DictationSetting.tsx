@@ -43,16 +43,24 @@ import { Tooltip, TooltipFactTrigger, TooltipPopup } from "@stll/ui/tooltip";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { formatHoldKey, isHoldKey } from "../shared/hold-key";
 import type { HoldKey } from "../shared/hold-key";
-import type { ShortcutKeys } from "../shared/shortcut-keys";
+import { formatShortcut } from "../shared/shortcut-keys";
+import type { KeyboardLayout, ShortcutKeys } from "../shared/shortcut-keys";
 import {
   DESKTOP_PLATFORM,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { DictationAppSettings } from "./DictationAppSettings";
+import type {
+  DictationAppSetting,
+  DictationRecentApp,
+} from "./DictationAppSettings";
 import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import { DictationInputFix } from "./DictationInputFix";
 import { DictationMicrophoneRow } from "./DictationMicrophone";
+import { DictationWhileDictatingRows } from "./DictationWhileDictating";
+import type { WhileDictating } from "./DictationWhileDictating";
 import { SettingsPageHeader } from "./settings-layout";
 
 type DictationModel =
@@ -84,6 +92,9 @@ type DictationLanguage = {
 };
 
 export type DictationSnapshot = {
+  /** Cleanup and the language for one app or kind of app, over the
+   *  settings below. */
+  appSettings: DictationAppSetting[];
   available: boolean;
   /** Whether the transcribed text goes through stella to the organization's
    *  AI provider before it is typed. */
@@ -112,6 +123,8 @@ export type DictationSnapshot = {
   shareWindowTitle: boolean;
   /** Whether a short sound marks the start and the end of listening. */
   sounds: boolean;
+  /** Whether other sound changes only while it plays through speakers. */
+  speakersOnly: boolean;
   /** Whether cleanup also gets the text before the cursor. */
   shareTextBeforeCursor: boolean;
   /** Whether this computer can read the text before the cursor; without it
@@ -142,7 +155,19 @@ export type DictationSnapshot = {
   model: DictationModel;
   modelBytes: number;
   phase: "idle" | "recording" | "transcribing";
+  /** Apps dictated into since stella started, offered for their own
+   *  settings. */
+  recentApps: DictationRecentApp[];
+  /** Whether a shortcut types the last dictation again, its keys, and
+   *  whether another app holds them. */
+  retypeKeys: ShortcutKeys;
+  retypeShortcut: boolean;
+  retypeShortcutTaken: boolean;
   shortcutTaken: boolean;
+  /** What happens to other sound while recording, and what this computer
+   *  offers. */
+  whileDictating: WhileDictating;
+  whileDictatingOffered: WhileDictating[];
 };
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -347,10 +372,6 @@ const DictationPage = ({
     return Result.isOk(result);
   };
 
-  const setHoldKey = async (holdKey: HoldKey) => {
-    await change("dictation_set_hold_key", { holdKey });
-  };
-
   const setEnabled = async (enabled: boolean) => {
     await change("dictation_set_enabled", { enabled });
   };
@@ -369,6 +390,9 @@ const DictationPage = ({
 
   const setCustomWords = async (words: string[]) =>
     await change("dictation_set_custom_words", { words });
+
+  const setAppSettings = async (settings: DictationAppSetting[]) =>
+    await change("dictation_set_app_settings", { settings });
 
   const download = async () => {
     await change("dictation_download_model");
@@ -429,28 +453,16 @@ const DictationPage = ({
       <TranscribeRecordingGroup />
       {snapshot.enabled && (
         <>
-          <SettingsSection title={t("groups.shortcut")}>
-            {snapshot.holdKeys.length > 1 && (
-              <DictationHoldKeyRow
-                holdKey={snapshot.holdKey}
-                holdKeys={snapshot.holdKeys}
-                label={holdKeyLabel}
-                onChange={(holdKey) => {
-                  void setHoldKey(holdKey);
-                }}
-              />
-            )}
-            <DictationMicrophoneRow
-              focused={focus === "microphone"}
-              onFocused={onFocusShown}
-            />
-            <DictationSoundsRow
-              checked={snapshot.sounds}
-              onChange={(sounds) => {
-                void change("dictation_set_sounds", { enabled: sounds });
-              }}
-            />
-          </SettingsSection>
+          <DictationShortcutSection
+            change={(command, args) => {
+              void change(command, args);
+            }}
+            focus={focus}
+            holdKeyLabel={holdKeyLabel}
+            layout={layout}
+            onFocusShown={onFocusShown}
+            snapshot={snapshot}
+          />
           <SettingsSection title={t("groups.transcription")}>
             {snapshot.cloudAvailable ? (
               <DictationDestination
@@ -487,6 +499,12 @@ const DictationPage = ({
             )}
           </SettingsSection>
           <DictationCleanupSection change={change} snapshot={snapshot} />
+          <DictationAppSettings
+            languages={snapshot.language.supported}
+            onChange={setAppSettings}
+            recentApps={snapshot.recentApps}
+            settings={snapshot.appSettings}
+          />
           {/* stella AI and cleanup take the words; without either, the
               text from the speech model here is spelled with them. */}
           <DictationCustomWords
@@ -520,6 +538,73 @@ const DictationPage = ({
         </>
       )}
     </div>
+  );
+};
+
+/** The key to hold, the microphone, the sounds and the shortcut that types
+ *  the last dictation again. */
+const DictationShortcutSection = ({
+  change,
+  focus,
+  holdKeyLabel,
+  layout,
+  onFocusShown,
+  snapshot,
+}: Pick<DictationFocus, "focus" | "onFocusShown"> & {
+  change: (command: string, args: InvokeArgs) => void;
+  holdKeyLabel: (holdKey: HoldKey) => string;
+  layout: KeyboardLayout | null;
+  snapshot: DictationSnapshot;
+}) => {
+  const t = useTranslations("dictation");
+  const locale = useLocale();
+  return (
+    <SettingsSection title={t("groups.shortcut")}>
+      {snapshot.holdKeys.length > 1 && (
+        <DictationHoldKeyRow
+          holdKey={snapshot.holdKey}
+          holdKeys={snapshot.holdKeys}
+          label={holdKeyLabel}
+          onChange={(holdKey) => {
+            change("dictation_set_hold_key", { holdKey });
+          }}
+        />
+      )}
+      <DictationMicrophoneRow
+        focused={focus === "microphone"}
+        onFocused={onFocusShown}
+      />
+      <DictationSoundsRow
+        checked={snapshot.sounds}
+        onChange={(sounds) => {
+          change("dictation_set_sounds", { enabled: sounds });
+        }}
+      />
+      <DictationWhileDictatingRows
+        choice={snapshot.whileDictating}
+        offered={snapshot.whileDictatingOffered}
+        onChoice={(choice) => {
+          change("dictation_set_while_dictating", { choice });
+        }}
+        onSpeakersOnly={(enabled) => {
+          change("dictation_set_speakers_only", { enabled });
+        }}
+        speakersOnly={snapshot.speakersOnly}
+      />
+      <DictationRetypeRow
+        checked={snapshot.retypeShortcut}
+        onChange={(enabled) => {
+          change("dictation_set_retype_shortcut", { enabled });
+        }}
+        shortcut={formatShortcut({
+          keys: snapshot.retypeKeys,
+          layout,
+          locale,
+          platform: DESKTOP_PLATFORM,
+        })}
+        taken={snapshot.retypeShortcutTaken}
+      />
+    </SettingsSection>
   );
 };
 
@@ -652,8 +737,41 @@ const DictationSoundsRow = ({
   );
 };
 
-/** An opt-in switch under AI cleanup, with what it sends; dimmed and
- *  disabled while cleanup is off. */
+/** The shortcut that types the last dictation again; the tray offers the
+ *  same whether or not it is on. */
+const DictationRetypeRow = ({
+  checked,
+  onChange,
+  shortcut,
+  taken,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+  shortcut: string;
+  taken: boolean;
+}) => {
+  const t = useTranslations("dictation.retype");
+  const ids = settingsRowIds("dictation-retype");
+  return (
+    <SettingsRow
+      description={
+        checked && taken
+          ? t("taken", { shortcut })
+          : t("description", { shortcut })
+      }
+      id="dictation-retype"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
+  );
+};
+
 /** AI cleanup: the switch, how it writes, and what it may also read. */
 const DictationCleanupSection = ({
   change,
@@ -851,6 +969,8 @@ const DictationTranslateToRow = ({
   );
 };
 
+/** An opt-in switch under AI cleanup, with what it sends; dimmed and
+ *  disabled while cleanup is off. */
 const DictationSwitchRow = ({
   checked,
   description,

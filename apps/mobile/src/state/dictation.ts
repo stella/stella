@@ -16,6 +16,7 @@ import {
   TRANSCRIPTION_LABELS_SHOWN_FIELD,
 } from "@stll/api-contract/transcription";
 import type { TRANSCRIPTION_AUDIO_MEDIA_TYPES } from "@stll/api-contract/transcription";
+import { foldSearchMatchText } from "@stll/text-normalize";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -211,16 +212,163 @@ const segmentText = (
   return segment.type === "lineBreak" ? "\n" : "\n\n";
 };
 
-/**
- * Puts dictated text after what is already in the box, with one space
- * between them, so dictating twice reads as one message.
- */
-export const appendDictation = (draft: string, dictated: string): string => {
-  if (dictated === "") {
-    return draft;
-  }
-  if (draft === "" || /\s$/u.test(draft)) {
-    return `${draft}${dictated}`;
-  }
-  return `${draft} ${dictated}`;
+/** Where the cursor is in a text field, in UTF-16 units as React Native reports it. */
+export type TextSelection = { readonly start: number; readonly end: number };
+
+/** A dictation's text and the names it was transcribed with. */
+export type Dictated = {
+  readonly text: string;
+  /** The matter's names: a first word that is one of them keeps its capital. */
+  readonly names: readonly string[];
 };
+
+type InsertDictationOptions = {
+  readonly draft: string;
+  /** Unknown, the text goes at the end. */
+  readonly selection: TextSelection | undefined;
+  readonly dictated: Dictated;
+  /** The app's language: in German, nouns keep their capital mid-sentence. */
+  readonly locale: string;
+};
+
+/**
+ * Puts dictated text where the cursor is, in place of any selection, joined
+ * as if typed there: a space on either side where a word meets a word, none
+ * before a comma or after an opening bracket. Mid-sentence the first word
+ * loses the capital the model gives every transcript, unless it is a name
+ * or written in capitals, and a full stop before the sentence goes on is
+ * dropped; at the start of a sentence the first letter is a capital. Also
+ * where the dictated text starts, and where the cursor ends up: after it.
+ */
+export const insertDictation = ({
+  draft,
+  selection,
+  dictated,
+  locale,
+}: InsertDictationOptions): { text: string; start: number; caret: number } => {
+  const start = clampOffset(selection?.start ?? draft.length, draft);
+  const end = Math.max(start, clampOffset(selection?.end ?? start, draft));
+  const before = draft.slice(0, start);
+  const after = draft.slice(end);
+  let text = dictated.text.trim();
+  if (text === "") {
+    return { text: draft, start: end, caret: end };
+  }
+  if (startsSentence(before)) {
+    text = capitalizeFirst(text);
+  } else if (!locale.toLowerCase().startsWith("de")) {
+    text = lowercaseFirstWord(text, dictated.names);
+  }
+  // The sentence goes on after the cursor, on the same line, in lower case
+  // or after a comma.
+  const next = after.replace(/^[^\S\n]+/u, "").at(0);
+  if (
+    next !== undefined &&
+    /^[\p{Ll}.,;:!?]/u.test(next) &&
+    text.endsWith(".") &&
+    !text.endsWith("..")
+  ) {
+    text = text.slice(0, -1);
+  }
+  const lead = needsSpaceBefore(before, text) ? " " : "";
+  const trail = needsSpaceAfter(text, after) ? " " : "";
+  const at = before.length + lead.length;
+  return {
+    text: `${before}${lead}${text}${trail}${after}`,
+    start: at,
+    caret: at + text.length,
+  };
+};
+
+const clampOffset = (offset: number, text: string): number =>
+  Math.min(Math.max(0, Math.trunc(offset)), text.length);
+
+/** Quotes and brackets that close what precedes the cursor. */
+const CLOSING = new Set([")", "]", "}", "»", "”", "“", "’", "'", '"']);
+const OPENING = new Set(["(", "[", "{", "«", "„", "‚", "¿", "¡", "/"]);
+/** Quotes that open or close depending on what stands before them. */
+const EITHER_QUOTE = new Set(['"', "'", "“", "‘"]);
+
+/** Whether text typed after `before` starts a sentence: at the start, after a line break or a sentence's end. */
+const startsSentence = (before: string): boolean => {
+  if (/\n[^\S\n]*$/u.test(before)) {
+    return true;
+  }
+  let index = before.trimEnd().length;
+  while (index > 0 && CLOSING.has(before.charAt(index - 1))) {
+    index -= 1;
+  }
+  return index === 0 || /[.!?…]/u.test(before.charAt(index - 1));
+};
+
+const needsSpaceBefore = (before: string, text: string): boolean => {
+  const last = before.at(-1);
+  if (
+    last === undefined ||
+    /\s/u.test(last) ||
+    /^[.,;:!?…)\]}»%]/u.test(text)
+  ) {
+    return false;
+  }
+  if (OPENING.has(last)) {
+    return false;
+  }
+  // A quote right after a space or at the start opens a quotation.
+  if (EITHER_QUOTE.has(last)) {
+    const prior = before.at(-2);
+    return prior !== undefined && !/\s/u.test(prior);
+  }
+  return true;
+};
+
+const needsSpaceAfter = (text: string, after: string): boolean => {
+  const next = after.at(0);
+  return (
+    next !== undefined &&
+    !/\s/u.test(next) &&
+    !/^[.,;:!?…)\]}»%]/u.test(next) &&
+    !CLOSING.has(next) &&
+    !/\s$/u.test(text)
+  );
+};
+
+const capitalizeFirst = (text: string): string => {
+  const first = /^\P{L}*(\p{L}+)/u.exec(text)?.at(1) ?? "";
+  // A word with a capital inside, as "iPhone", is written that way.
+  if (first === "" || first !== first.toLowerCase()) {
+    return text;
+  }
+  const at = text.indexOf(first);
+  return `${text.slice(0, at)}${first.charAt(0).toUpperCase()}${text.slice(at + 1)}`;
+};
+
+/**
+ * The first word in lower case when only its first letter is a capital and
+ * it is no name; "I" and its contractions stay.
+ */
+const lowercaseFirstWord = (text: string, names: readonly string[]): string => {
+  const first = /^\P{L}*(\p{L}[\p{L}\p{M}'’-]*)/u.exec(text)?.at(1) ?? "";
+  const rest = first.slice(1);
+  if (
+    first === "" ||
+    !startsUpper(first) ||
+    rest !== rest.toLowerCase() ||
+    /^I(?:['’]|$)/u.test(first) ||
+    isName(first, names)
+  ) {
+    return text;
+  }
+  const at = text.indexOf(first);
+  return `${text.slice(0, at)}${first.charAt(0).toLowerCase()}${text.slice(at + 1)}`;
+};
+
+/** Whether a word is one of the names, or a name with a case ending, as "Nováka" of "Novák". */
+const isName = (word: string, names: readonly string[]): boolean => {
+  const folded = foldSearchMatchText(word);
+  return names.some((name) => {
+    const head = foldSearchMatchText(name.split(/\s/u).at(0) ?? "");
+    return head !== "" && folded.startsWith(head) && startsUpper(name);
+  });
+};
+
+const startsUpper = (word: string): boolean => /^\p{Lu}/u.test(word);

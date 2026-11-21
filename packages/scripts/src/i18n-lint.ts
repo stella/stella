@@ -638,7 +638,7 @@ export const FIRST_PERSON_APP_VOICE_GUIDANCE =
   "avoid 1st-person app voice (e.g. cs 'Analyzuji…', sk 'Pracujem…'); use impersonal forms ('Analyzuje se…', 'Probíhá…') so the app does not speak as a persona";
 
 // Enforce the established T-V register per locale (de Sie, cs/sk vykání,
-// hu Ön, es tú) on unambiguous pronouns so informal/formal drift does not creep in.
+// et Teie, hu Ön, es tú) on unambiguous pronouns so informal/formal drift does not creep in.
 const REGISTER_DRIFT_PATTERNS = new Map<string, RegExp>([
   [
     "de",
@@ -649,6 +649,10 @@ const REGISTER_DRIFT_PATTERNS = new Map<string, RegExp>([
     "sk",
     /(?<!\p{L})(?:tvoj|tvoja|tvoje|tvojho|tvojmu|tvojím|tvojich)(?!\p{L})/iu,
   ],
+  [
+    "et",
+    /(?<!\p{L})(?:sina|sinu|sind|sinule|sulle|sinul|sul|sinult|sult|sinuga|sinuta|sinuni|sinuna|sinus|sinust|sinusse|sa|su)(?!\p{L})/iu,
+  ],
   ["hu", /(?<!\p{L})(?:tied|neked|téged|veled)(?!\p{L})/iu],
   ["es", /(?<!\p{L})(?:usted|ustedes)(?!\p{L})/iu],
 ]);
@@ -657,7 +661,7 @@ export const hasRegisterDrift = (value: string, locale: string): boolean =>
   REGISTER_DRIFT_PATTERNS.get(locale)?.test(literalMessageText(value)) ?? false;
 
 export const REGISTER_DRIFT_GUIDANCE =
-  "keep the locale's established register (de Sie, cs/sk vykání, hu Ön, es tú)";
+  "keep the locale's established register (de Sie, cs/sk vykání, et Teie, hu Ön, es tú)";
 
 export type ForbiddenRule = {
   concept: string;
@@ -943,12 +947,19 @@ const emptyBaseline = (): LintBaseline => ({
  * Every lint violation for one locale, keyed by category. A key appears under a
  * category when that translated string violates the corresponding check.
  */
-const findViolations = (
-  source: Record<string, string>,
-  target: Record<string, string>,
-  locale: string,
-  rules: ForbiddenRule[],
-): Record<LintCategory, string[]> => {
+const findViolations = ({
+  source,
+  target,
+  locale,
+  rules,
+  skipRegisterLocales = new Set(),
+}: {
+  source: Record<string, string>;
+  target: Record<string, string>;
+  locale: string;
+  rules: ForbiddenRule[];
+  skipRegisterLocales?: ReadonlySet<string>;
+}): Record<LintCategory, string[]> => {
   const result: Record<LintCategory, string[]> = {
     placeholder: [],
     icu: [],
@@ -1011,7 +1022,8 @@ const findViolations = (
       hasInflectedStella(targetValue, locale) ||
       hasBareUngrammaticalStella(targetValue, locale) ||
       hasFirstPersonAppVoice(targetValue, locale) ||
-      hasRegisterDrift(targetValue, locale)
+      (!skipRegisterLocales.has(locale) &&
+        hasRegisterDrift(targetValue, locale))
     ) {
       result.terminology.push(key);
     }
@@ -1119,7 +1131,22 @@ if (import.meta.main) {
           : Object.fromEntries(
               flatten(await readJson(path.resolve(langsDir, file))),
             );
-      const violations = findViolations(source, target, locale, rules);
+      // apps/landing intentionally uses informal sina for Estonian marketing copy
+      // (see apps/landing/src/i18n/TRANSLATION.md), while product apps use formal Teie.
+      const resolvedParts = path.resolve(langsDir).split(path.sep);
+      const isLandingCatalog = resolvedParts.some(
+        (part, idx) => part === "apps" && resolvedParts[idx + 1] === "landing",
+      );
+      const skipRegisterLocales = isLandingCatalog
+        ? new Set(["et"])
+        : new Set<string>();
+      const violations = findViolations({
+        source,
+        target,
+        locale,
+        rules,
+        skipRegisterLocales,
+      });
 
       const reported: string[] = [];
       for (const category of CATEGORIES) {
@@ -1163,7 +1190,8 @@ if (import.meta.main) {
                     ...(hasFirstPersonAppVoice(entry.target, locale)
                       ? [FIRST_PERSON_APP_VOICE_GUIDANCE]
                       : []),
-                    ...(hasRegisterDrift(entry.target, locale)
+                    ...(!skipRegisterLocales.has(locale) &&
+                    hasRegisterDrift(entry.target, locale)
                       ? [REGISTER_DRIFT_GUIDANCE]
                       : []),
                   ]

@@ -204,6 +204,7 @@ const fullDecision = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  bodySource: { textSource: "host" },
   sourceLanguages: null,
   sourceUrl: "https://publisher.example.test/decision",
   textFields: {

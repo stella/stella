@@ -4,6 +4,11 @@ import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
 import { documentFormat } from "./document-format";
 import type { DocumentFormatKind } from "./document-format";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
+import {
+  ASIC_E_FILE_FORMAT,
+  LEGAL_FILE_FORMATS,
+  legalFileFormatProfiles,
+} from "./legal-file-formats";
 
 const kindOf = (mimeType: string | null, fileName?: string) =>
   documentFormat(mimeType, fileName).kind;
@@ -57,6 +62,7 @@ describe("documentFormat", () => {
   test("names an unlisted image or text type by its family", () => {
     expect(documentFormat("image/heic", "IMG_0042.HEIC")).toEqual({
       kind: "image",
+      mark: "image",
       label: "HEIC",
     });
     expect(kindOf("image/tiff")).toBe("image");
@@ -103,5 +109,41 @@ describe("documentFormat", () => {
     expect(labelOf(undefined, "bez přípony")).toBeUndefined();
     expect(labelOf("constructor", "a.pdf")).toBe("PDF");
     expect(labelOf("__proto__")).toBeUndefined();
+  });
+
+  test("keeps a profile's tag and mark under its format's media type", () => {
+    const asicE = ASIC_E_FILE_FORMAT.mimeType;
+    expect(documentFormat(asicE, "smlouva.BDOC")).toEqual({
+      kind: "asicE",
+      mark: "bdoc",
+      label: "BDOC",
+    });
+    expect(documentFormat(null, "smlouva.bdoc")).toEqual({
+      kind: "asicE",
+      mark: "bdoc",
+      label: "BDOC",
+    });
+    expect(documentFormat(asicE, "contract.asice")).toEqual({
+      kind: "asicE",
+      mark: "asicE",
+      label: "ASiC-E",
+    });
+    // Only a profile of the same family overrides the media type: a name
+    // naming another family, or the same mark, leaves it as it was.
+    expect(documentFormat(asicE, "contract.p7m").mark).toBe("asicE");
+    expect(documentFormat("application/msword", "legacy.docx").label).toBe(
+      "DOC",
+    );
+  });
+
+  test("declares every profile's extensions on its format", () => {
+    for (const format of LEGAL_FILE_FORMATS) {
+      for (const profile of legalFileFormatProfiles(format)) {
+        expect(format.extensions).toEqual(
+          expect.arrayContaining([...profile.extensions]),
+        );
+        expect(profile.mark).not.toBe(format.kind);
+      }
+    }
   });
 });

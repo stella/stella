@@ -95,9 +95,18 @@ Bun.plugin({
     build.onLoad({ filter: /pdf-viewport\.tsx$/u }, () => ({
       contents: `
         import React from "react";
-        export const PDFViewport = () => {
+        import { usePDFStore } from "@/lib/pdf/pdf-context";
+        // Reports how the viewer would draw: the width its pages fit (from
+        // the provider), the zoom over it, and whether the wheel zooms.
+        export const PDFViewport = ({ onWheelZoom, scaleOffset }) => {
           globalThis.recordPdfEngineRender();
-          return React.createElement("div", { "data-testid": "pdf-engine" });
+          const fitToWidth = usePDFStore((state) => state.fitToWidth);
+          return React.createElement("div", {
+            "data-fit-width": String(fitToWidth),
+            "data-scale-offset": String(scaleOffset ?? 0),
+            "data-testid": "pdf-engine",
+            "data-wheel-zoom": String(typeof onWheelZoom === "function"),
+          });
         };
       `,
       loader: "js",
@@ -127,6 +136,7 @@ const { useDocxEditorHostStore } =
 const { FileTabPanel } = await import("./file-tab-panel");
 const {
   asicPreviewOptions,
+  cadesPdfOptions,
   cadesPreviewOptions,
   dataBoxPreviewOptions,
   fileOptions,
@@ -363,18 +373,25 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
 );
 
 test.each([
-  { mimeType: "application/pdf", fileName: "submission.pdf", text: "" },
+  {
+    mimeType: "application/pdf",
+    fileName: "submission.pdf",
+    text: "",
+    textFormat: "markdown",
+  },
   {
     mimeType: "text/plain",
     fileName: "submission.txt",
     text: "The enclosed submission",
+    textFormat: "plain",
   },
   {
     mimeType: "application/octet-stream",
     fileName: "submission.bin",
     text: "",
+    textFormat: "plain",
   },
-])(
+] as const)(
   "opens a signed container with $mimeType content in the inspector",
   async (embedded) => {
     const tab = {
@@ -436,6 +453,99 @@ test.each([
   },
 );
 
+const signedPdfTab = {
+  ...pdfTab,
+  id: toSafeId<"field">("field-cades"),
+  label: "Signed submission",
+  fileName: "submission.pdf.p7m",
+  mimeType: "application/octet-stream",
+};
+
+const seedSignedPdf = (client: QueryClientInstance) => {
+  client.setQueryData(
+    cadesPreviewOptions({
+      fieldId: signedPdfTab.id,
+      workspaceId: signedPdfTab.workspaceId,
+    }).queryKey,
+    {
+      fileName: "submission.pdf",
+      mimeType: "application/pdf",
+      text: "",
+      textFormat: "markdown",
+      layers: [],
+    },
+  );
+};
+
+// The panel stub measures every box at 800 px; the pages fit that width.
+const PANEL_WIDTH = "800";
+
+/** How the stubbed PDF engine was asked to draw. */
+const drawing = (engine: HTMLElement) => {
+  const { fitWidth, scaleOffset, wheelZoom } = engine.dataset;
+  return { fitWidth, scaleOffset, wheelZoom };
+};
+
+test("draws a signed file's PDF as a PDF tab draws its own", async () => {
+  const plain = renderFileTab(pdfTab);
+  expect(drawing(await plain.findByTestId("pdf-engine"))).toEqual({
+    fitWidth: PANEL_WIDTH,
+    scaleOffset: "0",
+    wheelZoom: "true",
+  });
+  await act(async () => {
+    cleanup();
+  });
+
+  const signed = renderFileTab(signedPdfTab, seedSignedPdf);
+  // Fits the panel, zooms with the wheel, and follows the same controls.
+  expect(drawing(await signed.findByTestId("pdf-engine"))).toEqual({
+    fitWidth: PANEL_WIDTH,
+    scaleOffset: "0",
+    wheelZoom: "true",
+  });
+  await act(async () => {
+    fireEvent.click(signed.getByRole("button", { name: "Zoom in" }));
+  });
+  expect(drawing(signed.getByTestId("pdf-engine")).scaleOffset).toBe("0.25");
+});
+
+test("reopens a signed file's PDF from the cache without fetching it again", async () => {
+  const mounted = renderFileTab(signedPdfTab, seedSignedPdf);
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(cadesPdfRequests).toHaveLength(1);
+
+  await act(async () => {
+    fireEvent.click(mounted.getByTestId("toggle-panel"));
+  });
+  expect(mounted.queryByTestId("pdf-engine")).toBeNull();
+  // A closed tab keeps the extracted bytes as long as a file keeps its own,
+  // not until the next tick.
+  const cache = mounted.queryClient.getQueryCache();
+  const signedBytes = cache.find({
+    queryKey: cadesPdfOptions({
+      fieldId: signedPdfTab.id,
+      workspaceId: signedPdfTab.workspaceId,
+    }).queryKey,
+  });
+  const fileBytes = cache.find({
+    queryKey: fileOptions({
+      fieldId: signedPdfTab.id,
+      workspaceId: signedPdfTab.workspaceId,
+    }).queryKey,
+  });
+  expect(signedBytes?.getObserversCount()).toBe(0);
+  expect(signedBytes?.gcTime).toBeGreaterThan(0);
+  expect(signedBytes?.gcTime).toBe(fileBytes?.gcTime);
+  await act(async () => {
+    fireEvent.click(mounted.getByTestId("toggle-panel"));
+  });
+
+  // Present in the same commit as the reopen: no loading state in between.
+  expect(mounted.getByTestId("pdf-engine")).toBeTruthy();
+  expect(cadesPdfRequests).toHaveLength(1);
+});
+
 test("keeps the original available when the signed container cannot be opened", async () => {
   const mounted = renderFileTab({
     ...pdfTab,
@@ -468,13 +578,20 @@ test.each([".asice", ".asics"])(
           {
             fileName: "submission.pdf",
             status: "readable",
-            text: "The enclosed submission",
+            text: "# Share purchase agreement\n\n**2. Purchase price**\n\nThe enclosed submission",
+            textFormat: "markdown",
           },
-          { fileName: "attachment.bin", status: "unavailable", text: "" },
+          {
+            fileName: "attachment.bin",
+            status: "unavailable",
+            text: "",
+            textFormat: "plain",
+          },
           {
             fileName: "notes.txt",
             status: "truncated",
-            text: "The first page",
+            text: "# The first page\nSecond line",
+            textFormat: "plain",
           },
         ],
       });
@@ -486,8 +603,19 @@ test.each([".asice", ".asics"])(
     expect(
       mounted.getByRole("heading", { name: "attachment.bin" }),
     ).toBeTruthy();
+    // A converted document reads as formatted text, never as its Markdown
+    // source; a text file keeps its characters and line breaks as written.
+    // The Markdown renderer loads on first use, so the heading may follow
+    // the member list by a render.
+    expect(
+      await mounted.findByRole("heading", { name: "Share purchase agreement" }),
+    ).toBeTruthy();
+    expect(mounted.getByText("2. Purchase price")).toBeTruthy();
     expect(mounted.getByText("The enclosed submission")).toBeTruthy();
-    expect(mounted.getByText("The first page")).toBeTruthy();
+    expect(mounted.queryByText(/\*\*|^# Share/u)).toBeNull();
+    const plain = mounted.getByText(/^# The first page/u);
+    expect(plain.tagName).toBe("PRE");
+    expect(plain.textContent).toBe("# The first page\nSecond line");
     expect(
       mounted.getByText("The full text is unavailable in this preview."),
     ).toBeTruthy();
@@ -532,7 +660,14 @@ test("isolates member names in the Arabic ASiC preview", async () => {
     (client) => {
       const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
       client.setQueryData(asicPreviewOptions(key).queryKey, {
-        members: [{ fileName, status: "truncated", text: "جزء من المستند" }],
+        members: [
+          {
+            fileName,
+            status: "truncated",
+            text: "جزء من المستند",
+            textFormat: "plain",
+          },
+        ],
       });
     },
     "ar",
@@ -697,7 +832,17 @@ function renderFileTab(
     >(null);
     const [editingTabId, setEditingTabId] = React.useState<string | null>(null);
     const [editValue, setEditValue] = React.useState("");
-    const [scaleOffsets, setScaleOffsets] = React.useState(new Map());
+    const [scaleOffsets, setScaleOffsets] = React.useState(
+      new Map<string, number>(),
+    );
+    const [panelOpen, setPanelOpen] = React.useState(true);
+    const zoom = (tabId: string, direction: "in" | "out") =>
+      setScaleOffsets((current) =>
+        new Map(current).set(
+          tabId,
+          (current.get(tabId) ?? 0) + (direction === "in" ? 0.25 : -0.25),
+        ),
+      );
 
     return (
       <QueryClientProvider client={queryClient}>
@@ -729,39 +874,48 @@ function renderFileTab(
               >
                 {bundledEnglishMessages.common.retry}
               </button>
-              <FileTabPanel
-                activeId={tab.id}
-                canUpdateEntity={false}
-                closeAll={noop}
-                commitRename={noop}
-                docxActionsRef={docxActionsRef}
-                docxScrollTopByTab={docxScrollTopByTab}
-                editingDocxTabId={editingDocxTabId}
-                editingTabId={editingTabId}
-                editValue={editValue}
-                handleCloseTab={noop}
-                handleMinimizeFromFullView={noop}
-                handleOpenFullView={openFullView}
-                handleResetZoom={noop}
-                handleWheelZoom={noop}
-                handleZoom={noop}
-                matterOrigin={null}
-                minimized={false}
-                mountedPdfIds={new Set([tab.id])}
-                documentReviewPaneFieldId={null}
-                pdfRouteJustification={null}
-                peekPdfViewId="peek-view"
-                ribbonLabelContextMenuOpenAt={noop}
-                scaleOffsets={scaleOffsets}
-                setDocxCompatibilityByTab={setDocxCompatibilityByTab}
-                setDocxScrollTopByTab={setDocxScrollTopByTab}
-                setEditingTabId={setEditingTabId}
-                setEditingDocxTabId={setEditingDocxTabId}
-                setEditValue={setEditValue}
-                setScaleOffsets={setScaleOffsets}
-                startRename={noop}
-                tab={tab}
-              />
+              <button
+                data-testid="toggle-panel"
+                onClick={() => setPanelOpen((open) => !open)}
+                type="button"
+              >
+                {bundledEnglishMessages.common.retry}
+              </button>
+              {panelOpen && (
+                <FileTabPanel
+                  activeId={tab.id}
+                  canUpdateEntity={false}
+                  closeAll={noop}
+                  commitRename={noop}
+                  docxActionsRef={docxActionsRef}
+                  docxScrollTopByTab={docxScrollTopByTab}
+                  editingDocxTabId={editingDocxTabId}
+                  editingTabId={editingTabId}
+                  editValue={editValue}
+                  handleCloseTab={noop}
+                  handleMinimizeFromFullView={noop}
+                  handleOpenFullView={openFullView}
+                  handleResetZoom={noop}
+                  handleWheelZoom={noop}
+                  handleZoom={zoom}
+                  matterOrigin={null}
+                  minimized={false}
+                  mountedPdfIds={new Set([tab.id])}
+                  documentReviewPaneFieldId={null}
+                  pdfRouteJustification={null}
+                  peekPdfViewId="peek-view"
+                  ribbonLabelContextMenuOpenAt={noop}
+                  scaleOffsets={scaleOffsets}
+                  setDocxCompatibilityByTab={setDocxCompatibilityByTab}
+                  setDocxScrollTopByTab={setDocxScrollTopByTab}
+                  setEditingTabId={setEditingTabId}
+                  setEditingDocxTabId={setEditingDocxTabId}
+                  setEditValue={setEditValue}
+                  setScaleOffsets={setScaleOffsets}
+                  startRename={noop}
+                  tab={tab}
+                />
+              )}
             </FormattingProvider>
           </IntlProvider>
         </AuthenticatedUserProvider>
@@ -780,9 +934,10 @@ function renderFileTab(
     routeTree: createRootRoute({ component: Harness }),
     history: createMemoryHistory({ initialEntries: ["/"] }),
   });
-  return render(
+  const rendered = render(
     <div dir={locale === "ar" ? "rtl" : "ltr"}>
       <RouterProvider router={router} />
     </div>,
   );
+  return Object.assign(rendered, { queryClient });
 }

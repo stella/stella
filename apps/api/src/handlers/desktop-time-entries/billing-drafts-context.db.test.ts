@@ -23,6 +23,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import {
   agentSkillResources,
   agentSkills,
+  billingCodes,
   billingDraftUserSettings,
   billingGuidelineFiles,
   contacts,
@@ -426,7 +427,11 @@ test("an inaccessible selected matter is refused by scoped queries before any AI
     const result = await load(matterId, [ids.wsA1]);
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
-      expect(result.error.message).toBe("Selected matter is unavailable");
+      expect(result.error).toMatchObject({
+        status: 403,
+        code: DESKTOP_BILLING_DRAFT_REFUSAL_CODE.matterUnavailable,
+        message: "Selected matter is unavailable",
+      });
     }
   }
 });
@@ -460,6 +465,66 @@ test("guideline context joins only firm and selected client files with rule sect
   expect(
     context.matters.find(({ matterId }) => matterId === ids.wsA2)?.ledesEnabled,
   ).toBe(false);
+});
+
+test("a LEDES matter's context names only its own active billing codes", async () => {
+  const codeIds = {
+    task: createSafeId<"billingCode">(),
+    inactive: createSafeId<"billingCode">(),
+    unselected: createSafeId<"billingCode">(),
+  };
+  await db.insert(billingCodes).values([
+    {
+      id: codeIds.task,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      type: "task",
+      code: "L120",
+      label: "Analysis/strategy",
+    },
+    {
+      id: codeIds.inactive,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+      type: "activity",
+      code: "A199",
+      label: "Retired",
+      active: false,
+    },
+    // Another matter the request does not select.
+    {
+      id: codeIds.unselected,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+      type: "task",
+      code: "L120",
+      label: "Another list",
+    },
+  ]);
+  try {
+    const context = (await load()).unwrap();
+    assert.ok(context.mode === "guided");
+    // The seeded matter carries codes of its own; only these rows matter.
+    expect(
+      context.codeNames.filter(
+        ({ code }) => code === "L120" || code === "A199",
+      ),
+    ).toEqual([
+      {
+        matterId: ids.wsA1,
+        type: "task",
+        code: "L120",
+        name: "Analysis/strategy",
+      },
+    ]);
+    expect(
+      context.codeNames.every(({ matterId }) => matterId === ids.wsA1),
+    ).toBe(true);
+  } finally {
+    await db
+      .delete(billingCodes)
+      .where(inArray(billingCodes.id, Object.values(codeIds)));
+  }
 });
 
 test("personal consent and drafting preferences remain readable and editable only by their owner", async () => {

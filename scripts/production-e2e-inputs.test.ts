@@ -70,7 +70,7 @@ test("shipped web source changes the production suite; tests, stories and docs d
     "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
     "apps/web/src/routes/_protected.chat/-components/chat-history-link.tsx",
     "apps/web/src/lib/react-query.ts",
-    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/namespaces/en/core.json",
     "apps/web/src/fonts.css",
   ]) {
     expect(productionWebSource(file), file).toBe(true);

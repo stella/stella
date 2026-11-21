@@ -39,6 +39,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { toBrowserApiUrl } from "@/lib/api-origins";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -291,7 +292,7 @@ export const VersionsSidebar = ({
       .url({ fieldId: toSafeId<"field">(fieldId) })
       .get({ query: { purpose: "download" } });
     if (!response.error) {
-      openIsolatedWindow(response.data.presignedUrl);
+      openIsolatedWindow(toBrowserApiUrl(response.data.presignedUrl));
     }
   };
 

@@ -30,6 +30,7 @@ const OPEN_DICTATION_SETTINGS_ACTION: &str = "open-dictation-settings";
 const DICTATION_HINT_ITEM: &str = "dictation-hint";
 /// Followed by the stored language choice (`auto` or a language code).
 const DICTATION_LANGUAGE_PREFIX: &str = "dictation-language:";
+const RETYPE_DICTATION_ACTION: &str = "dictation-retype";
 const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
 const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
@@ -99,10 +100,12 @@ fn activity_action(
 enum DictationMenu {
   /// Switched off: one item, opening the page where it is turned on.
   Off,
-  /// On: a line naming the key to hold, a quick language switch, then its
+  /// On: a line naming the key to hold, typing the last dictation again
+  /// (enabled while there is one), a quick language switch, then its
   /// settings.
   On {
     hint: String,
+    can_retype: bool,
     languages: Vec<TrayLanguage>,
   },
 }
@@ -144,6 +147,7 @@ fn dictation_menu(
     .collect();
   Some(DictationMenu::On {
     hint: t_fmt("tray.dictationHint", &[("key", &key)]),
+    can_retype: state.can_retype,
     languages,
   })
 }
@@ -615,10 +619,19 @@ fn build_dictation_menu(
       )
       .separator()
       .item(&transcribe),
-    DictationMenu::On { hint, languages } => menu
+    DictationMenu::On {
+      hint,
+      can_retype,
+      languages,
+    } => menu
       .item(
         &MenuItemBuilder::with_id(DICTATION_HINT_ITEM, hint)
           .enabled(false)
+          .build(app)?,
+      )
+      .item(
+        &MenuItemBuilder::with_id(RETYPE_DICTATION_ACTION, t("tray.dictationRetype"))
+          .enabled(*can_retype)
           .build(app)?,
       )
       .item(&build_dictation_language_menu(app, languages)?)
@@ -715,6 +728,9 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == OPEN_DICTATION_SETTINGS_ACTION {
     return MenuAction::OpenPreferences(PreferencesTab::Dictation);
   }
+  if action == RETYPE_DICTATION_ACTION {
+    return MenuAction::RetypeDictation;
+  }
   if action == PAUSE_ACTIVITY_ACTION {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused);
   }
@@ -766,6 +782,7 @@ pub enum MenuAction {
   OpenClipboard,
   OpenActivity,
   OpenTranscribe,
+  RetypeDictation,
   SetActivityRecording(ActivityRecordingStatus),
   /// The stored dictation language choice the quick switch picked.
   SetDictationLanguage(String),
@@ -881,6 +898,7 @@ mod tests {
       hold_key: HoldChoice::Fn,
       language: Choice::Automatic,
       inferred: vec!["cs", "en"],
+      can_retype: true,
     };
     assert_eq!(
       dictation_menu(Some(off), KeyNames::Mac, "en"),
@@ -896,6 +914,7 @@ mod tests {
       hold_key,
       language: Choice::Automatic,
       inferred: Vec::new(),
+      can_retype: false,
     };
     let hint = |state, names| match dictation_menu(Some(state), names, "en") {
       Some(DictationMenu::On { hint, .. }) => hint,
@@ -923,6 +942,7 @@ mod tests {
       hold_key: HoldChoice::Fn,
       language: Choice::Language("de"),
       inferred: vec!["cs", "en"],
+      can_retype: false,
     };
     let Some(DictationMenu::On { languages, .. }) =
       dictation_menu(Some(state), KeyNames::Mac, "en")
@@ -957,6 +977,30 @@ mod tests {
   }
 
   #[test]
+  fn typing_the_last_dictation_again_is_offered_once_there_is_one() {
+    init_i18n();
+    let can_retype = |can_retype| {
+      let state = TrayDictation {
+        enabled: true,
+        hold_key: HoldChoice::Fn,
+        language: Choice::Automatic,
+        inferred: Vec::new(),
+        can_retype,
+      };
+      match dictation_menu(Some(state), KeyNames::Mac, "en") {
+        Some(DictationMenu::On { can_retype, .. }) => can_retype,
+        other => panic!("expected the on menu, got {other:?}"),
+      }
+    };
+    assert!(!can_retype(false));
+    assert!(can_retype(true));
+    assert!(matches!(
+      handle_menu_action(RETYPE_DICTATION_ACTION),
+      MenuAction::RetypeDictation
+    ));
+  }
+
+  #[test]
   fn the_dictation_submenu_opens_the_transcribe_window() {
     assert!(matches!(
       handle_menu_action(OPEN_TRANSCRIBE_ACTION),
@@ -977,6 +1021,7 @@ mod tests {
     for key in [
       "tray.dictation",
       "tray.dictationHint",
+      "tray.dictationRetype",
       "tray.dictationSettings",
       "tray.dictationTurnOn",
     ] {

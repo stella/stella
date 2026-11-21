@@ -8,6 +8,7 @@ import {
   HeaderSearchProvider,
   useHeaderSearch,
 } from "@/components/header-search";
+import { KeptDictationsProvider } from "@/components/kept-dictations";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
@@ -42,10 +43,12 @@ export const ProtectedScreens = () => {
               <RoleProvider>
                 <SelectionProvider>
                   <ActiveChatRunsProvider>
-                    <TimerActivitySync />
-                    <PushRegistration />
-                    <Screens />
-                    <RunBanners />
+                    <KeptDictationsProvider>
+                      <TimerActivitySync />
+                      <PushRegistration />
+                      <Screens />
+                      <RunBanners />
+                    </KeptDictationsProvider>
                   </ActiveChatRunsProvider>
                 </SelectionProvider>
               </RoleProvider>
