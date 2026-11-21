@@ -120,14 +120,15 @@ export const runCapabilityCommand = async ({
   // alongside a body passed through --input, instead of forcing the caller to
   // hand-relocate it into `params.workspaceId` in the JSON.
   const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  const inputBase =
+  const parsedInput =
     typeof inputRaw === "string"
       ? await parseInputObject({ inputRaw, writers })
-      : {};
-  if (inputBase === undefined) {
+      : Result.ok<Record<string, unknown>>({});
+  if (Result.isError(parsedInput)) {
     setExit(context, EXIT_CODES.validation);
     return;
   }
+  const inputBase = parsedInput.value;
   const built = await composeCapabilityFlags({ base: inputBase, flags, spec });
   if (!built.ok) {
     writers.stderr(`${built.message}\n`);
