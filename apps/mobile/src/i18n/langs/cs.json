@@ -679,7 +679,7 @@
     "dictationLearnedDelete": "Smazat, co se stella naučila",
     "dictationLearnedEmpty": "Zatím žádné naučené opravy.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Když pravopis nadiktovaného slova nebo jména dvakrát opravíte stejně, stella ho v dalších diktátech už napíše opravené. Zůstává jen v tomto telefonu.",
+    "dictationLearnedHint": "Když pravopis nadiktovaného slova nebo jména dvakrát opravíte stejně, stella ho v dalších diktátech už napíše opravené. Synchronizuje se s vašimi dalšími zařízeními; vidíte to jen vy.",
     "dictationLearnedTitle": "Opravy naučené z vašich úprav",
     "dictationLearnedUnreadable": "To, co se stella naučila, nejde načíst.",
     "dictationModelDefault": "Výchozí",

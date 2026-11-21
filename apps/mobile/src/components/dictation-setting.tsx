@@ -94,7 +94,7 @@ export const DictationSetting = ({
           stored={stored}
         />
       </Suspense>
-      <DictationLearnedSetting session={session} />
+      <DictationLearnedSetting session={session} source={source} />
     </View>
   );
 };

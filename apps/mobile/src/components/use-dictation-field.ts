@@ -1,11 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 
+import { randomUUID } from "expo-crypto";
 import type { TextInputSelectionChangeEvent } from "react-native";
 import { useLocale } from "use-intl";
 
-import { editsOf, learnFrom } from "@stll/transcript/corrections";
+import { editsOf, learnedFixChangesOf } from "@stll/transcript/corrections";
 import type { DictatedSpan } from "@stll/transcript/corrections";
+import { applyLearnedFixChanges } from "@stll/transcript/learned-fixes";
+import type { LearnedFixChange } from "@stll/transcript/learned-fixes";
 
+import { syncLearned } from "@/components/learned-fixes-sync";
 import { useSession } from "@/connection/session-provider";
 import { deviceAccountStore } from "@/native/account-store";
 import { insertDictation } from "@/state/dictation";
@@ -20,8 +24,9 @@ import { updateLearnedFixes } from "@/state/dictation-learned";
  * since, as a sent message's empty box, takes dictation at its end. After
  * a dictation the field's cursor is put after the dictated text, once: the
  * next selection the field reports hands the cursor back to the person.
- * `learnOnceSent` learns, on this phone, how the person corrected what was
- * dictated in the text sent or saved (`@stll/transcript/corrections`).
+ * `learnOnceSent` learns how the person corrected what was dictated in the
+ * text sent or saved (`@stll/transcript/corrections`), on this phone and,
+ * once synced, on their other devices.
  */
 export const useDictationField = (
   value: string,
@@ -83,18 +88,26 @@ export const useDictationField = (
       const dictated = spans.current;
       spans.current = [];
       return () => {
-        const session =
-          state.status === "signed-in" ? state.source.session() : undefined;
-        if (dictated.length === 0 || session === undefined) {
+        if (dictated.length === 0 || state.status !== "signed-in") {
           return;
         }
-        updateLearnedFixes(deviceAccountStore, session, (fixes) => {
+        const { source } = state;
+        const session = source.session();
+        if (session === undefined) {
+          return;
+        }
+        updateLearnedFixes(deviceAccountStore, session, randomUUID, (fixes) => {
           let learned = fixes;
+          const changes: LearnedFixChange[] = [];
           for (const span of dictated) {
-            learned = learnFrom(learned, editsOf(span, final));
+            const taught = learnedFixChangesOf(learned, editsOf(span, final));
+            learned = applyLearnedFixChanges(learned, taught);
+            changes.push(...taught);
           }
-          return learned;
-        }).catch(() => undefined);
+          return changes;
+        })
+          .then(async () => await syncLearned(source))
+          .catch(() => undefined);
       };
     },
   };
