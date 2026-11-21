@@ -278,12 +278,15 @@ export const useDictation = (
   // The system took the microphone, or the one recorded from went away: the
   // recorder is paused and would go on by itself afterwards, which is no
   // longer what the person is saying. What was heard is transcribed.
+  // A stop the person already asked for stands.
   useSystemStops(() => {
     const current = run.current;
-    if (current === null) {
+    if (current === null || meaning.current !== "cut") {
       return;
     }
-    const heardMs = current.doneMs + current.pieceMs;
+    // The recorder's own count, as the last reading may be 250 ms old.
+    const pieceMs = live.current ? recorder.getStatus().durationMillis : 0;
+    const heardMs = current.doneMs + Math.max(current.pieceMs, pieceMs);
     stop(heardMs >= SYSTEM_STOP_KEEPS_MS ? "finish" : "cancel").catch(fail);
   });
 
@@ -442,6 +445,10 @@ const openMicrophone = async ({
       : await readDictationPreferences(deviceAccountStore, session).catch(
           () => DEFAULT_DICTATION_PREFERENCES,
         );
+  // A start that no longer counts leaves the shared session alone.
+  if (!current()) {
+    return { type: "stale" };
+  }
   await setAudioModeAsync(RECORDING_MODE);
   const prepared = await Result.tryPromise(async () => {
     await recorder.prepareToRecordAsync();
