@@ -1,9 +1,12 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createTestState } from "@stll/test-state";
+
 import { apiRoutes } from "@/api/api-routes";
 import { dictationLearnedFixes } from "@/api/db/schema";
 import { desktopDeviceProofReplays } from "@/api/db/schema/desktop-device-proof-replay";
+import { env } from "@/api/env";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   learnedFixesScalingScenarios,
@@ -11,6 +14,8 @@ import {
 } from "@/api/tests/read-scaling/dictation-learned-fixes";
 import { createScalingTempTables } from "@/api/tests/read-scaling/entity-fixture";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
+
+const testState = createTestState({ file: import.meta.path, config: env });
 
 describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
   "learned dictation fixes scaling",
@@ -32,6 +37,19 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             fixtures.at(0) ?? panic("Small learned-fix fixture required");
           const large =
             fixtures.at(1) ?? panic("Large learned-fix fixture required");
+          // The desktop read answers only while dictation is granted.
+          testState.patchConfig({
+            FEATURE_ORG_ACCESS_STATE: true,
+            FEATURE_CONFIGURED_ACCESS: false,
+            FEATURE_FREE_TIER: false,
+            API_FEATURE_ACCESS_GRANTS: {
+              ...env.API_FEATURE_ACCESS_GRANTS,
+              "desktop-dictation": [small, large].map(({ organizationId }) => ({
+                type: "organization" as const,
+                organizationId,
+              })),
+            },
+          });
           for (const scenario of learnedFixesScalingScenarios) {
             expect(
               apiRoutes.filter(
