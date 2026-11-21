@@ -25,6 +25,7 @@ import { heldDecisionAttachmentForAdapter } from "@/api/lib/legal-search/held-de
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { readStoredRawListing } from "@/api/lib/legal-search/ingestion-types";
 import { SOURCE_RAW_ENVELOPE_CONTENT_TYPE } from "@/api/lib/legal-search/source-raw-envelope";
+import { requestBoundedTimeoutMs } from "@/api/lib/load/request-latency-budget";
 
 import {
   collectionBodySourceOf,
@@ -239,7 +240,9 @@ const loadCollectionSnapshots = async ({
   plan,
   rows,
 }: LoadCollectionSnapshotsOptions) => {
-  const signal = AbortSignal.timeout(COLLECTION_READ_TIMEOUT_MS);
+  const signal = AbortSignal.timeout(
+    requestBoundedTimeoutMs(COLLECTION_READ_TIMEOUT_MS),
+  );
   const loaded: LoadedCollectionSnapshot[] = [];
   let remainingBytes = COLLECTION_READ_MAX_BYTES;
   for (const publication of plan.publications) {
