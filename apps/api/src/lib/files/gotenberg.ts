@@ -4,6 +4,7 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   convertedDocumentFormatOfMimeType,
   type ConvertedDocumentMimeType,
+  isConvertedDocumentMimeType,
 } from "@stll/api-contract/converted-document-formats";
 import { declareFingerprintFields } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -201,10 +202,13 @@ const CONVERTER_EXTENSIONS = {
 const converterExtensions = (
   mimeType: ConvertibleMime,
 ): readonly [string, ...string[]] => {
-  const converted = convertedDocumentFormatOfMimeType(mimeType);
-  return converted === undefined
-    ? CONVERTER_EXTENSIONS[mimeType]
-    : [converted.converterExtension.slice(1)];
+  if (!isConvertedDocumentMimeType(mimeType)) {
+    return CONVERTER_EXTENSIONS[mimeType];
+  }
+  const converted =
+    convertedDocumentFormatOfMimeType(mimeType) ??
+    panic(`No converted format declares ${mimeType}`);
+  return [converted.converterExtension.slice(1)];
 };
 
 /**

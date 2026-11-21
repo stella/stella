@@ -62,6 +62,12 @@ export const convertedDocumentFormatOfMimeType = (
       format.mimeAliases.some((alias) => alias === mimeType),
   );
 
+/** Whether `mimeType` declares a converted format, canonically or by alias. */
+export const isConvertedDocumentMimeType = (
+  mimeType: string,
+): mimeType is ConvertedDocumentMimeType =>
+  convertedDocumentFormatOfMimeType(mimeType) !== undefined;
+
 /** The converted format a file name's extension names, if any. */
 export const convertedDocumentFormatOfFileName = (
   fileName: string,
