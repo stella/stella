@@ -17,6 +17,7 @@
  */
 import { parse, TYPE } from "@formatjs/icu-messageformat-parser";
 import type { MessageFormatElement } from "@formatjs/icu-messageformat-parser";
+import { Result } from "better-result";
 import path from "node:path";
 
 type JsonValue = string | JsonObject;
@@ -91,11 +92,9 @@ const compactMessage = (value: string): string => {
   if (!value.includes("{") && !value.includes("<")) {
     return "";
   }
-  try {
-    return compactElements(parse(value, { ignoreTag: false }));
-  } catch {
-    return value;
-  }
+  return Result.try(() =>
+    compactElements(parse(value, { ignoreTag: false })),
+  ).unwrapOr(value);
 };
 
 const args = process.argv.slice(2);
