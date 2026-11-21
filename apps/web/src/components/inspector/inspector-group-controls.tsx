@@ -54,6 +54,9 @@ export type InspectorGroupPresentation = {
   color: string;
 } & ({ type: "matter"; workspaceId: string } | { type: "custom" });
 
+/** Open tabs by group, in the order the rail and the phone switcher show them. */
+export type InspectorGroups = ReturnType<typeof useInspectorGroups>;
+
 export const useInspectorGroups = () => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();

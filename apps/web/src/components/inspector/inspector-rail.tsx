@@ -21,7 +21,7 @@ import { WorkspaceEndRail } from "@stll/ui/workspace-shell";
 
 import { useMainLegalDocument } from "@/components/ai-suggestions/use-main-legal-document";
 import { getActiveSkillChatContext } from "@/components/inspector/inspector-active-skill";
-import { useInspectorGroups } from "@/components/inspector/inspector-group-controls";
+import type { InspectorGroups } from "@/components/inspector/inspector-group-controls";
 import {
   INSPECTOR_TAB_DRAG_TYPE,
   InspectorRailGroup,
@@ -62,6 +62,7 @@ import { useQueryViewError } from "@/lib/use-query-view";
 
 export const InspectorRail = ({
   activeId,
+  groups: { visibleGroups, ungroupedTabs },
   minimized,
   onActivateTab,
   onCloseTab,
@@ -108,7 +109,6 @@ export const InspectorRail = ({
   // The rail stands beside the main view, so a chat started here is about
   // whatever that view is showing.
   const legalDocument = useMainLegalDocument();
-  const { visibleGroups, ungroupedTabs } = useInspectorGroups();
   const transfer = useInspectorGroupTransfer();
   const dropOnTab = ({ sourceId, targetId }: InspectorTabDropArgs) => {
     const store = useInspectorTabsStore.getState();
@@ -241,6 +241,9 @@ export const InspectorRail = ({
 
 type InspectorRailProps = {
   activeId: string | null;
+  /** The panel's tab groups (`useInspectorGroups`), shared with the phone
+   *  tab switcher so both list the same tabs in the same order. */
+  groups: InspectorGroups;
   minimized: boolean;
   onActivateTab: (tabId: string) => void;
   onCloseTab: (tabId: string) => void;

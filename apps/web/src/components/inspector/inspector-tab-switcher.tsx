@@ -13,7 +13,7 @@ import {
 } from "@stll/ui/menu";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { useInspectorGroups } from "@/components/inspector/inspector-group-controls";
+import type { InspectorGroups } from "@/components/inspector/inspector-group-controls";
 import {
   InspectorTabIcon,
   InspectorTabLabel,
@@ -32,7 +32,12 @@ import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
  * pressed for the picked tab's, so on close the menu hands focus to the
  * trigger now on screen rather than the one it opened from.
  */
-export const InspectorTabSwitcherMenu = () => {
+export const InspectorTabSwitcherMenu = ({
+  groups,
+}: {
+  /** The panel's tab groups, the same value the rail draws. */
+  groups: InspectorGroups;
+}) => {
   const { menu, triggers } = getInspectorTabSwitcherHandle();
   return (
     <Menu handle={menu}>
@@ -41,7 +46,7 @@ export const InspectorTabSwitcherMenu = () => {
         className="w-72 max-w-[calc(100vw-2rem)]"
         finalFocus={() => shownTrigger(triggers) ?? true}
       >
-        <InspectorTabSwitcherList />
+        <InspectorTabSwitcherList groups={groups} />
       </MenuPopup>
     </Menu>
   );
@@ -62,12 +67,15 @@ const activateTab = (tabId: string) => {
   store.setMinimized(false);
 };
 
-const InspectorTabSwitcherList = () => {
+const InspectorTabSwitcherList = ({
+  groups: { visibleGroups, ungroupedTabs },
+}: {
+  groups: InspectorGroups;
+}) => {
   const t = useTranslations();
   const activeId = useInspectorTabsStore((s) => s.activeId);
   const suggestion = useInspectorTabsStore((s) => s.reviveSuggestion);
   const reviveSuggestedTab = useInspectorTabsStore((s) => s.reviveSuggestedTab);
-  const { visibleGroups, ungroupedTabs } = useInspectorGroups();
   return (
     <>
       <MenuRadioGroup

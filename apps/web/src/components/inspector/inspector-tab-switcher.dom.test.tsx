@@ -35,6 +35,7 @@ const { createRouteErrorLifecycleController } =
 const { RouteErrorLifecycleProvider } =
   await import("@/lib/analytics/route-error-lifecycle-context");
 const { InspectorRail } = await import("./inspector-rail");
+const { useInspectorGroups } = await import("./inspector-group-controls");
 const { InspectorTabSwitcherTrigger } =
   await import("./inspector-tab-header-frame");
 const { InspectorTabSwitcherMenu } = await import("./inspector-tab-switcher");
@@ -116,10 +117,13 @@ const RailAndSwitcher = () => {
   const tabs = useInspectorTabsStore((s) => s.tabs);
   const activeId = useInspectorTabsStore((s) => s.activeId);
   const minimized = useInspectorTabsStore((s) => s.minimized);
+  // One read for both, as the panel does.
+  const groups = useInspectorGroups();
   return (
     <>
       <InspectorRail
         activeId={activeId}
+        groups={groups}
         minimized={minimized}
         onActivateTab={activateTab}
         onCloseTab={(tabId) => useInspectorTabsStore.getState().closeTab(tabId)}
@@ -132,7 +136,7 @@ const RailAndSwitcher = () => {
       <header data-testid="phone-header">
         <InspectorTabSwitcherTrigger />
       </header>
-      <InspectorTabSwitcherMenu />
+      <InspectorTabSwitcherMenu groups={groups} />
     </>
   );
 };
