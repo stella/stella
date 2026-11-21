@@ -1,9 +1,10 @@
 import { createContext, useContext } from "react";
-import type { ReactElement, ReactNode } from "react";
+import type { ComponentType, ReactElement, ReactNode } from "react";
 
 import { panic } from "better-result";
 
 import type { ReaderCitationTreatment } from "./citation-treatment";
+import type { CollectionBodySource } from "./collection-attribution";
 import type { MissingBodyReason } from "./decision-body-state.logic";
 import type { ReaderMessageKey } from "./reader-message-types";
 import type {
@@ -21,15 +22,6 @@ export type ReaderMessages = Record<ReaderMessageKey, string> & {
     source: string,
     link: (children: ReactNode) => ReactNode,
   ) => ReactNode;
-  collectionSourceAttribution: (
-    source: string,
-    date: string | null,
-    link: (children: ReactNode) => ReactNode,
-  ) => ReactNode;
-  collectionProvenanceOmitted: (counts: {
-    omittedCount: number;
-    totalCount: number;
-  }) => string;
   dissentByline: (names: readonly string[]) => ReactNode;
   provisionPartTextUnavailable: (provisionLabel: string) => string;
   provisionEffectiveFrom: (date: string) => string;
@@ -61,6 +53,12 @@ export type ReaderStatuteLinkProps =
 
 export type ReaderPresentationAdapters = {
   messages: ReaderMessages;
+  /**
+   * A collection body's attribution, usually `CollectionAttributionList`
+   * with the host's strings. It may suspend: a host can load those strings
+   * with the component, off its startup path.
+   */
+  CollectionAttribution: ComponentType<{ bodySource: CollectionBodySource }>;
   /**
    * Renders a block's permalink mark with the host's Copy of the block's
    * link: `copy` copies it, and `copied` is true while the mark confirms in

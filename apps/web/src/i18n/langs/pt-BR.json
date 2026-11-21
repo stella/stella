@@ -1478,11 +1478,6 @@
       "subsection": "par. {value}"
     },
     "reader": {
-      "collectionPartialText": "As seções publicadas são exibidas; a integridade do texto não foi estabelecida.",
-      "collectionProvenanceOmitted": "Registros de publicação omitidos: {omittedCount, number} de {totalCount, number}.",
-      "collectionSourceAttribution": "Publicação da coletânea: <link>{source}</link>. Consultada em {date}.",
-      "collectionSourceAttributionUnknownDate": "Publicação da coletânea: <link>{source}</link>. Data de consulta desconhecida.",
-      "collectionUnclassifiedText": "A extensão deste texto da coletânea é desconhecida.",
       "documentUpdated": "O documento foi atualizado.",
       "expandProvisions": "Expandir dispositivos",
       "headMatter": "Informações do processo",

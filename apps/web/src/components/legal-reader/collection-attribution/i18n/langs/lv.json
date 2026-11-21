@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "Parādītas publicētās daļas; pilnīgums nav apstiprināts.",
+    "provenanceOmitted": "Izlaistie publikāciju ieraksti: {omittedCount, number} no {totalCount, number}.",
+    "sourceAttribution": "Krājuma publikācija: <link>{source}</link>. Iegūta {date}.",
+    "sourceAttributionUnknownDate": "Krājuma publikācija: <link>{source}</link>. Iegūšanas datums nav zināms.",
+    "unclassifiedText": "Šī krājuma teksta apjoms nav zināms."
+  }
+}

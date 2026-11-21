@@ -1478,11 +1478,6 @@
       "subsection": "{value} d."
     },
     "reader": {
-      "collectionPartialText": "Rodomos paskelbtos dalys; išsamumas nepatvirtintas.",
-      "collectionProvenanceOmitted": "Praleisti publikacijų įrašai: {omittedCount, number} iš {totalCount, number}.",
-      "collectionSourceAttribution": "Rinkinio publikacija: <link>{source}</link>. Gauta {date}.",
-      "collectionSourceAttributionUnknownDate": "Rinkinio publikacija: <link>{source}</link>. Gavimo data nežinoma.",
-      "collectionUnclassifiedText": "Šio rinkinio teksto apimtis nežinoma.",
       "documentUpdated": "Dokumentas atnaujintas.",
       "expandProvisions": "Išskleisti nuostatas",
       "headMatter": "Bylos informacija",

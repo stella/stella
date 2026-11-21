@@ -13,6 +13,7 @@ import { formattedArtifactsLikeRepository } from "../../../scripts/generated-art
 import { assembleMcpAppDocument } from "../src/app-document";
 import type { McpAppDocumentParts } from "../src/app-document";
 import {
+  READER_COLLECTION_KEYS,
   READER_MESSAGE_KEYS,
   READER_TEMPLATE_KEYS,
 } from "../src/decision-reader/message-keys";
@@ -82,15 +83,37 @@ const repoRoot = path.resolve(import.meta.dirname, "../../..");
 const canonicalRepoRoot = realpathSync(repoRoot);
 const readerMessages = new Map<string, Map<string, string>>();
 const localeRoot = path.join(webRoot, "src/i18n/langs");
+// The web reader loads its collection attribution strings lazily, from a
+// feature catalog of their own; this app reads them from there.
+const collectionLocaleRoot = path.join(
+  webRoot,
+  "src/components/legal-reader/collection-attribution/i18n/langs",
+);
 for (const file of [
   ...new Bun.Glob("*.json").scanSync({ cwd: localeRoot }),
 ].toSorted()) {
   const locale = path.basename(file, ".json");
-  const catalogue: unknown = await Bun.file(path.join(localeRoot, file)).json();
+  const appCatalogue: unknown = await Bun.file(
+    path.join(localeRoot, file),
+  ).json();
+  const collectionCatalogue: unknown = await Bun.file(
+    path.join(collectionLocaleRoot, file),
+  ).json();
+  if (
+    typeof appCatalogue !== "object" ||
+    appCatalogue === null ||
+    typeof collectionCatalogue !== "object" ||
+    collectionCatalogue === null
+  ) {
+    panic(`Reader catalogues for ${locale} are not objects`);
+  }
+  // Feature catalogs own a namespace the app catalog never uses.
+  const catalogue: unknown = { ...appCatalogue, ...collectionCatalogue };
   const messages = new Map<string, string>();
   for (const key of [
     ...Object.values(READER_MESSAGE_KEYS),
     ...READER_TEMPLATE_KEYS,
+    ...READER_COLLECTION_KEYS,
   ]) {
     let value = catalogue;
     for (const segment of key.split(".")) {

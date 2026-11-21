@@ -1478,11 +1478,6 @@
       "subsection": "lg {value}"
     },
     "reader": {
-      "collectionPartialText": "Kuvatud on avaldatud osad; täielikkust pole kindlaks tehtud.",
-      "collectionProvenanceOmitted": "Välja jäetud avaldamiskirjed: {omittedCount, number} / {totalCount, number}.",
-      "collectionSourceAttribution": "Kogumiku väljaanne: <link>{source}</link>. Hangitud {date}.",
-      "collectionSourceAttributionUnknownDate": "Kogumiku väljaanne: <link>{source}</link>. Hankimise kuupäev pole teada.",
-      "collectionUnclassifiedText": "Selle kogumiku teksti ulatus pole teada.",
       "documentUpdated": "Dokumenti on uuendatud.",
       "expandProvisions": "Laienda sätteid",
       "headMatter": "Kohtuasja andmed",

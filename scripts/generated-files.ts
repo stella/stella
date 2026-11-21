@@ -2013,6 +2013,7 @@ const GENERATOR_DECLARATIONS = [
       "packages/api-contract/src/case-law-court-year.ts",
       "apps/web/src/fonts.css",
       "apps/web/src/i18n/langs/*.json",
+      "apps/web/src/components/legal-reader/collection-attribution/i18n/langs/*.json",
       "packages/decision-reader/**",
       "packages/agent-input/**",
       "packages/legal-atlas/**",

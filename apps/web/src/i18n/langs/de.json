@@ -1478,11 +1478,6 @@
       "subsection": "Abs. {value}"
     },
     "reader": {
-      "collectionPartialText": "Veröffentlichte Abschnitte werden angezeigt; die Vollständigkeit wurde nicht festgestellt.",
-      "collectionProvenanceOmitted": "Ausgelassene Veröffentlichungsnachweise: {omittedCount, number} von {totalCount, number}.",
-      "collectionSourceAttribution": "Veröffentlichung in der Sammlung: <link>{source}</link>. Abgerufen am {date}.",
-      "collectionSourceAttributionUnknownDate": "Veröffentlichung in der Sammlung: <link>{source}</link>. Abrufdatum unbekannt.",
-      "collectionUnclassifiedText": "Der Umfang dieses Sammlungstextes ist unbekannt.",
       "documentUpdated": "Das Dokument wurde aktualisiert.",
       "expandProvisions": "Bestimmungen aufklappen",
       "headMatter": "Angaben zum Verfahren",

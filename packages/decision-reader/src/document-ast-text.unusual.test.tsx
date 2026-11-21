@@ -7,6 +7,7 @@ import fc from "fast-check";
 import type { Block, ParagraphBlock } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
 
+import { FakeCollectionAttribution } from "../tests/reader-adapters";
 import { BlockRenderer } from "./document-ast-text";
 import { ReaderPresentationProvider } from "./reader-adapters";
 import type { ReaderPresentationAdapters } from "./reader-adapters";
@@ -34,17 +35,6 @@ const messages = {
   "statutes.showCitedPartOnly": "Show cited part only",
   "statutes.showFullProvision": "Show full provision",
   "aiDisclosure.caseLaw": "Generated disclosure",
-  "caseLaw.reader.collectionPartialText":
-    "Published sections are shown; completeness is not established.",
-  "caseLaw.reader.collectionUnclassifiedText":
-    "The extent of this collection text is unknown.",
-  collectionProvenanceOmitted: ({ omittedCount, totalCount }) =>
-    `Omitted publication records: ${omittedCount} of ${totalCount}.`,
-  collectionSourceAttribution: (source, date, link) => (
-    <>
-      {link(source)} {date}
-    </>
-  ),
   sourceAttribution: (
     source: string,
     link: (children: ReactNode) => ReactNode,
@@ -60,7 +50,9 @@ const messages = {
 
 const renderBlocks = (blocks: readonly Block[]): string =>
   renderToStaticMarkup(
-    <ReaderPresentationProvider adapters={{ messages }}>
+    <ReaderPresentationProvider
+      adapters={{ messages, CollectionAttribution: FakeCollectionAttribution }}
+    >
       {blocks.map((block) => (
         <BlockRenderer
           activeMatchIndex={-1}

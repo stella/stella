@@ -1478,11 +1478,6 @@
       "subsection": "{value}. daļa"
     },
     "reader": {
-      "collectionPartialText": "Parādītas publicētās daļas; pilnīgums nav apstiprināts.",
-      "collectionProvenanceOmitted": "Izlaistie publikāciju ieraksti: {omittedCount, number} no {totalCount, number}.",
-      "collectionSourceAttribution": "Krājuma publikācija: <link>{source}</link>. Iegūta {date}.",
-      "collectionSourceAttributionUnknownDate": "Krājuma publikācija: <link>{source}</link>. Iegūšanas datums nav zināms.",
-      "collectionUnclassifiedText": "Šī krājuma teksta apjoms nav zināms.",
       "documentUpdated": "Dokuments ir atjaunināts.",
       "expandProvisions": "Izvērst noteikumus",
       "headMatter": "Informācija par lietu",

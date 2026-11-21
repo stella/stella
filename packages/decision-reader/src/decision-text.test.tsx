@@ -532,7 +532,10 @@ test("readers without a copy adapter expose no permalink control", () => {
   for (const variant of ["case-law", "statute"] as const) {
     const markup = renderToStaticMarkup(
       <ReaderPresentationProvider
-        adapters={{ messages: fakeReaderAdapters.messages }}
+        adapters={{
+          messages: fakeReaderAdapters.messages,
+          CollectionAttribution: fakeReaderAdapters.CollectionAttribution,
+        }}
       >
         {permalinkFixture(variant)}
       </ReaderPresentationProvider>,

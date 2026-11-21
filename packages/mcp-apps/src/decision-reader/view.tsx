@@ -21,7 +21,7 @@ import "../shared/generated/style.css";
 import type { ReaderController } from "./controller";
 import { readerErrorPresentation } from "./failures";
 import { openDecisionAnchor, openProvisionAnchor } from "./link-actions";
-import { readerMessages } from "./messages";
+import { collectionAttributionFor, readerMessages } from "./messages";
 import { resolveReaderRange } from "./model";
 import type { OpenDecision, ReaderPager } from "./model";
 import { handleReaderBackShortcut } from "./navigation";
@@ -296,6 +296,9 @@ export const ReaderView = ({
       <ReaderPresentationProvider
         adapters={{
           messages: presentation,
+          CollectionAttribution: collectionAttributionFor(
+            bridgeState.context.locale,
+          ),
         }}
       >
         <main
