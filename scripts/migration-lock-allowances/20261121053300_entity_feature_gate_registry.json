@@ -1,5 +1,5 @@
 {
   "add-constraint": "Both feature gate CHECKs are added NOT VALID, without a scan, to the two MinHash tables created by the previous migration; the online gate repair validates them. Acquisition is bounded by 2s lock_timeout.",
   "create-policy": "The feature gate policies are catalog-only additions to the new, still empty MinHash tables, under 2s lock_timeout.",
-  "create-trigger": "The gate triggers on the new MinHash tables are catalog-only creations that read no rows; SHARE ROW EXCLUSIVE is held only for the statement, under 2s lock_timeout."
+  "create-trigger": "The gate triggers on the new MinHash tables are catalog-only creations that read no rows. CREATE TRIGGER takes SHARE ROW EXCLUSIVE on each table; the 2s lock_timeout bounds only the wait to acquire it, and the lock is held until the migration transaction commits. Both tables were created empty by the previous migration, so the held lock blocks no existing writer."
 }
