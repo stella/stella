@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Místo odpovídá jednomu členovi vašeho týmu s vlastním přihlášením. Tarif Team se účtuje za místo, tarify Free a Solo zahrnují jednoho člena.",
+        "answer": "Místo odpovídá jednomu členovi vašeho týmu s vlastním přihlášením. Tarif team se účtuje za místo, tarify free a solo zahrnují jednoho člena.",
         "question": "Co je místo?"
       },
       "1": {
         "answer": "AI se pozastaví, dokud se limit příští měsíc neobnoví, a aplikace nabídne přechod na vyšší tarif. Vše ostatní funguje dál a AI na vašem vlastním klíči od poskytovatele modelů se to netýká.",
-        "question": "Co se stane, když vyčerpám AI limit v tarifu Free?"
+        "question": "Co se stane, když vyčerpám AI limit v tarifu free?"
       },
       "2": {
         "answer": "Ano. Přístup k placenému tarifu vám zůstane až do konce zaplaceného období.",
@@ -180,7 +180,7 @@
         "question": "Co se stane s mými daty, když tarif skončí?"
       },
       "4": {
-        "answer": "Ano, v každém tarifu včetně Free. S vlastním klíčem vám využití AI účtuje poskytovatel modelů a tarif ho neomezuje.",
+        "answer": "Ano, v každém tarifu včetně free. S vlastním klíčem vám využití AI účtuje poskytovatel modelů a tarif ho neomezuje.",
         "question": "Mohu použít vlastní klíč od poskytovatele modelů?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# člen} few {# členové} many {# člena} other {# členů}}",
     "membersPerSeat": "Tolik členů, kolik potřebujete, s platbou za místo",
-    "metaDescription": "Ceník aplikace stella: začněte zdarma bez karty, Solo za pevnou měsíční cenu, Team za místo. Rešerše judikatury a vlastní klíče k AI v každém tarifu.",
-    "metaTitle": "Ceník: tarify Free, Solo a Team | stella",
+    "metaDescription": "Ceník aplikace stella: začněte zdarma bez karty, solo za pevnou měsíční cenu, team za místo. Rešerše judikatury a vlastní klíče k AI v každém tarifu.",
+    "metaTitle": "Ceník: tarify free, solo a team | stella",
     "perMonth": "měsíčně",
     "perSeatPerMonth": "za místo měsíčně",
     "plans": {

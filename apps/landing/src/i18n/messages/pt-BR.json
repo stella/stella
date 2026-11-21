@@ -149,7 +149,7 @@
     "ctaHeading": "Comece com uma conta gratuita.",
     "everyPlan": {
       "caseLaw": {
-        "body": "Pesquise e leia jurisprudência e legislação em todos os planos. Contas Free têm limites de uso razoável.",
+        "body": "Pesquise e leia jurisprudência e legislação em todos os planos. Contas free têm limites de uso razoável.",
         "title": "Jurisprudência e legislação"
       },
       "heading": "Incluído em todos os planos",
@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Um assento é um membro da sua equipe com login próprio. O plano Team é cobrado por assento; Free e Solo incluem um membro.",
+        "answer": "Um assento é um membro da sua equipe com login próprio. O plano team é cobrado por assento; free e solo incluem um membro.",
         "question": "O que é um assento?"
       },
       "1": {
         "answer": "A IA fica pausada até a cota ser renovada no mês seguinte, e o aplicativo sugere um plano superior. Todo o resto continua funcionando, e a IA na chave do seu próprio provedor não é afetada.",
-        "question": "O que acontece quando a cota de IA do plano Free acaba?"
+        "question": "O que acontece quando a cota de IA do plano free acaba?"
       },
       "2": {
         "answer": "Sim. Você mantém o acesso ao plano pago até o fim do período já pago.",
@@ -180,7 +180,7 @@
         "question": "O que acontece com meus dados quando um plano termina?"
       },
       "4": {
-        "answer": "Sim, em todos os planos, inclusive no Free. Com a sua própria chave, o uso de IA é cobrado pelo seu provedor, em vez de limitado pelo plano.",
+        "answer": "Sim, em todos os planos, inclusive no free. Com a sua própria chave, o uso de IA é cobrado pelo seu provedor, em vez de limitado pelo plano.",
         "question": "Posso usar a chave do meu próprio provedor de IA?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# membro} many {# membros} other {# membros}}",
     "membersPerSeat": "Quantos membros você precisar, cobrados por assento",
-    "metaDescription": "Preços da stella: comece grátis sem cartão, Solo com preço mensal fixo e Team por assento. Jurisprudência e suas próprias chaves de IA em todos os planos.",
-    "metaTitle": "Preços: planos Free, Solo e Team | stella",
+    "metaDescription": "Preços da stella: comece grátis sem cartão, solo com preço mensal fixo e team por assento. Jurisprudência e suas próprias chaves de IA em todos os planos.",
+    "metaTitle": "Preços: planos free, solo e team | stella",
     "perMonth": "por mês",
     "perSeatPerMonth": "por assento por mês",
     "plans": {

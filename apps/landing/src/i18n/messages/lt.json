@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Vieta – tai vienas Jūsų komandos narys su atskiru prisijungimu. Team planas apmokestinamas už kiekvieną vietą; Free ir Solo planai apima vieną narį.",
+        "answer": "Vieta – tai vienas Jūsų komandos narys su atskiru prisijungimu. team planas apmokestinamas už kiekvieną vietą; free ir solo planai apima vieną narį.",
         "question": "Kas yra vieta?"
       },
       "1": {
         "answer": "DI sustabdomas, kol kitą mėnesį kvota atsinaujins, o programa pasiūlo pereiti prie aukštesnio plano. Visa kita veikia toliau, o DI su Jūsų pačių modelių teikėjo raktu tai neturi įtakos.",
-        "question": "Kas nutinka, kai baigiasi Free plano DI kvota?"
+        "question": "Kas nutinka, kai baigiasi free plano DI kvota?"
       },
       "2": {
         "answer": "Taip. Mokamu planu galėsite naudotis iki apmokėto laikotarpio pabaigos.",
@@ -180,7 +180,7 @@
         "question": "Kas nutinka mano duomenims, kai planas baigiasi?"
       },
       "4": {
-        "answer": "Taip, pagal bet kurį planą, įskaitant Free. Naudojant savo raktą, už DI naudojimą sąskaitą išrašo Jūsų modelių teikėjas, o planas jo neriboja.",
+        "answer": "Taip, pagal bet kurį planą, įskaitant free. Naudojant savo raktą, už DI naudojimą sąskaitą išrašo Jūsų modelių teikėjas, o planas jo neriboja.",
         "question": "Ar galiu naudoti savo modelių teikėjo raktą?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# narys} few {# nariai} many {# nario} other {# narių}}",
     "membersPerSeat": "Tiek narių, kiek reikia, apmokestinama už vietą",
-    "metaDescription": "stella kainos: pradėkite nemokamai be kortelės, Solo – fiksuota mėnesio kaina, Team – už vietą. Teismų praktikos paieška ir savi DI raktai kiekviename plane.",
-    "metaTitle": "Kainos: Free, Solo ir Team planai | stella",
+    "metaDescription": "stella kainos: pradėkite nemokamai be kortelės, solo – fiksuota mėnesio kaina, team – už vietą. Teismų praktikos paieška ir savi DI raktai kiekviename plane.",
+    "metaTitle": "Kainos: free, solo ir team planai | stella",
     "perMonth": "per mėnesį",
     "perSeatPerMonth": "vietai per mėnesį",
     "plans": {

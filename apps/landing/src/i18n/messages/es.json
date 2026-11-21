@@ -149,7 +149,7 @@
     "ctaHeading": "Empieza con una cuenta gratuita.",
     "everyPlan": {
       "caseLaw": {
-        "body": "Busca y consulta jurisprudencia y legislación en todos los planes. Las cuentas Free tienen límites de uso razonable.",
+        "body": "Busca y consulta jurisprudencia y legislación en todos los planes. Las cuentas free tienen límites de uso razonable.",
         "title": "Jurisprudencia y legislación"
       },
       "heading": "Incluido en todos los planes",
@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Un puesto es un miembro de tu equipo con su propio inicio de sesión. El plan Team se factura por puesto; Free y Solo incluyen un miembro.",
+        "answer": "Un puesto es un miembro de tu equipo con su propio inicio de sesión. El plan team se factura por puesto; free y solo incluyen un miembro.",
         "question": "¿Qué es un puesto?"
       },
       "1": {
         "answer": "La IA se pausa hasta que la asignación se renueva el mes siguiente, y la aplicación te ofrece mejorar tu plan. Todo lo demás sigue funcionando, y la IA con la clave de tu propio proveedor no se ve afectada.",
-        "question": "¿Qué pasa cuando se agota la asignación de IA del plan Free?"
+        "question": "¿Qué pasa cuando se agota la asignación de IA del plan free?"
       },
       "2": {
         "answer": "Sí. Mantienes el acceso a tu plan de pago hasta el final del periodo que ya has pagado.",
@@ -180,7 +180,7 @@
         "question": "¿Qué pasa con mis datos cuando termina un plan?"
       },
       "4": {
-        "answer": "Sí, en todos los planes, Free incluido. Con tu propia clave, el uso de la IA lo factura tu proveedor en lugar de quedar limitado por el plan.",
+        "answer": "Sí, en todos los planes, free incluido. Con tu propia clave, el uso de la IA lo factura tu proveedor en lugar de quedar limitado por el plan.",
         "question": "¿Puedo usar la clave de mi propio proveedor de IA?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# miembro} many {# miembros} other {# miembros}}",
     "membersPerSeat": "Tantos miembros como necesites, facturados por puesto",
-    "metaDescription": "Precios de stella: empieza gratis sin tarjeta, Solo a precio mensual fijo y Team por puesto. Jurisprudencia y tus propias claves de IA en todos los planes.",
-    "metaTitle": "Precios: planes Free, Solo y Team | stella",
+    "metaDescription": "Precios de stella: empieza gratis sin tarjeta, solo a precio mensual fijo y team por puesto. Jurisprudencia y tus propias claves de IA en todos los planes.",
+    "metaTitle": "Precios: planes free, solo y team | stella",
     "perMonth": "al mes",
     "perSeatPerMonth": "por puesto al mes",
     "plans": {

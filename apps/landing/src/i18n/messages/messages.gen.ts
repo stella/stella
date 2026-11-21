@@ -152,7 +152,7 @@ type Messages = {
     "ctaHeading": "Start with a free account.";
     "everyPlan": {
       "caseLaw": {
-        "body": "Search and read case law and legislation on every plan. Free accounts have fair-use rate limits.";
+        "body": "Search and read case law and legislation on every plan. Accounts on the free plan have fair-use rate limits.";
         "title": "Case law and legislation";
       };
       "heading": "Included in every plan";
@@ -167,12 +167,12 @@ type Messages = {
     };
     "faqs": {
       "0": {
-        "answer": "A seat is one member of your team with their own sign-in. Team is billed per seat; Free and Solo include one member.";
+        "answer": "A seat is one member of your team with their own sign-in. The team plan is billed per seat; free and solo include one member.";
         "question": "What is a seat?";
       };
       "1": {
         "answer": "AI pauses until the allowance renews the next month, and the app offers an upgrade. Everything else keeps working, and AI on your own model provider key is not affected.";
-        "question": "What happens when the Free AI allowance runs out?";
+        "question": "What happens when the AI allowance on the free plan runs out?";
       };
       "2": {
         "answer": "Yes. You keep access to your paid plan until the end of the period you have paid for.";
@@ -183,7 +183,7 @@ type Messages = {
         "question": "What happens to my data when a plan ends?";
       };
       "4": {
-        "answer": "Yes, on every plan, Free included. With your own key, AI use is billed by your model provider rather than limited by the plan.";
+        "answer": "Yes, on every plan, free included. With your own key, AI use is billed by your model provider rather than limited by the plan.";
         "question": "Can I use my own model provider key?";
       };
       "5": {
@@ -198,8 +198,8 @@ type Messages = {
     };
     "members": "{count, plural, one {# member} other {# members}}";
     "membersPerSeat": "As many members as you need, billed per seat";
-    "metaDescription": "stella pricing: start free with no card, Solo at a flat monthly price, Team per seat. Case-law search and your own AI model keys on every plan.";
-    "metaTitle": "Pricing: Free, Solo and Team plans | stella";
+    "metaDescription": "stella pricing: start free with no card, solo at a flat monthly price, team per seat. Case-law search and your own AI model keys on every plan.";
+    "metaTitle": "Pricing: free, solo and team plans | stella";
     "perMonth": "per month";
     "perSeatPerMonth": "per seat per month";
     "plans": {

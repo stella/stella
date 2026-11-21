@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Miejsce to jeden członek Twojego zespołu z własnym logowaniem. Plan Team jest rozliczany za miejsce; plany Free i Solo obejmują jednego członka.",
+        "answer": "Miejsce to jeden członek Twojego zespołu z własnym logowaniem. Plan team jest rozliczany za miejsce; plany free i solo obejmują jednego członka.",
         "question": "Czym jest miejsce?"
       },
       "1": {
         "answer": "AI wstrzymuje się do odnowienia limitu w kolejnym miesiącu, a aplikacja proponuje wyższy plan. Wszystko inne działa dalej, a AI na Twoim własnym kluczu dostawcy modeli nie podlega temu limitowi.",
-        "question": "Co się stanie, gdy wyczerpię limit AI w planie Free?"
+        "question": "Co się stanie, gdy wyczerpię limit AI w planie free?"
       },
       "2": {
         "answer": "Tak. Zachowujesz dostęp do płatnego planu do końca opłaconego okresu.",
@@ -180,7 +180,7 @@
         "question": "Co dzieje się z moimi danymi po zakończeniu planu?"
       },
       "4": {
-        "answer": "Tak, w każdym planie, również w Free. Przy własnym kluczu za użycie AI rozlicza Cię dostawca modeli, a plan go nie ogranicza.",
+        "answer": "Tak, w każdym planie, również w free. Przy własnym kluczu za użycie AI rozlicza Cię dostawca modeli, a plan go nie ogranicza.",
         "question": "Czy mogę używać własnego klucza dostawcy modeli?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# członek} few {# członkowie} many {# członków} other {# członka}}",
     "membersPerSeat": "Tylu członków, ilu potrzebujesz, z rozliczeniem za miejsce",
-    "metaDescription": "Cennik aplikacji stella: zacznij za darmo bez karty, Solo w stałej cenie miesięcznej, Team za miejsce. Orzecznictwo i własne klucze AI w każdym planie.",
-    "metaTitle": "Cennik: plany Free, Solo i Team | stella",
+    "metaDescription": "Cennik aplikacji stella: zacznij za darmo bez karty, solo w stałej cenie miesięcznej, team za miejsce. Orzecznictwo i własne klucze AI w każdym planie.",
+    "metaTitle": "Cennik: plany free, solo i team | stella",
     "perMonth": "miesięcznie",
     "perSeatPerMonth": "za miejsce miesięcznie",
     "plans": {

@@ -149,7 +149,7 @@
     "ctaHeading": "Commencez avec un compte gratuit.",
     "everyPlan": {
       "caseLaw": {
-        "body": "Recherchez et consultez la jurisprudence et la législation avec tous les forfaits. Les comptes Free sont soumis à des limites d’usage raisonnable.",
+        "body": "Recherchez et consultez la jurisprudence et la législation avec tous les forfaits. Les comptes free sont soumis à des limites d’usage raisonnable.",
         "title": "Jurisprudence et législation"
       },
       "heading": "Inclus dans tous les forfaits",
@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Un siège correspond à un membre de votre équipe disposant de ses propres identifiants. Le forfait Team est facturé par siège ; Free et Solo incluent un membre.",
+        "answer": "Un siège correspond à un membre de votre équipe disposant de ses propres identifiants. Le forfait team est facturé par siège ; free et solo incluent un membre.",
         "question": "Qu’est-ce qu’un siège ?"
       },
       "1": {
         "answer": "L’IA est suspendue jusqu’au renouvellement du quota le mois suivant, et l’application vous propose de passer à un forfait supérieur. Tout le reste continue de fonctionner, et l’IA utilisée avec la clé de votre propre fournisseur n’est pas concernée.",
-        "question": "Que se passe-t-il quand le quota d’IA du forfait Free est épuisé ?"
+        "question": "Que se passe-t-il quand le quota d’IA du forfait free est épuisé ?"
       },
       "2": {
         "answer": "Oui. Vous gardez l’accès à votre forfait payant jusqu’à la fin de la période déjà réglée.",
@@ -180,7 +180,7 @@
         "question": "Que deviennent mes données à la fin d’un forfait ?"
       },
       "4": {
-        "answer": "Oui, avec tous les forfaits, Free compris. Avec votre propre clé, l’usage de l’IA est facturé par votre fournisseur au lieu d’être limité par le forfait.",
+        "answer": "Oui, avec tous les forfaits, free compris. Avec votre propre clé, l’usage de l’IA est facturé par votre fournisseur au lieu d’être limité par le forfait.",
         "question": "Puis-je utiliser la clé de mon propre fournisseur d’IA ?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# membre} many {# membres} other {# membres}}",
     "membersPerSeat": "Autant de membres que nécessaire, facturés par siège",
-    "metaDescription": "Tarifs de stella : démarrez gratuitement sans carte, Solo à prix mensuel fixe, Team par siège. Jurisprudence et vos clés d’IA dans tous les forfaits.",
-    "metaTitle": "Tarifs : forfaits Free, Solo et Team | stella",
+    "metaDescription": "Tarifs de stella : démarrez gratuitement sans carte, solo à prix mensuel fixe, team par siège. Jurisprudence et vos clés d’IA dans tous les forfaits.",
+    "metaTitle": "Tarifs : forfaits free, solo et team | stella",
     "perMonth": "par mois",
     "perSeatPerMonth": "par siège et par mois",
     "plans": {

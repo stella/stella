@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Koht on üks sinu meeskonna liige, kellel on oma sisselogimine. Team-plaani eest arveldatakse koha kohta; Free ja Solo sisaldavad ühte liiget.",
+        "answer": "Koht on üks sinu meeskonna liige, kellel on oma sisselogimine. team-plaani eest arveldatakse koha kohta; free ja solo sisaldavad ühte liiget.",
         "question": "Mis on koht?"
       },
       "1": {
         "answer": "Tehisintellekt peatub, kuni maht järgmisel kuul uueneb, ja rakendus pakub plaani täiendamist. Kõik muu töötab edasi ning sinu enda mudelipakkuja võtmega tehisintellekti see ei mõjuta.",
-        "question": "Mis juhtub, kui Free-plaani tehisintellekti maht saab otsa?"
+        "question": "Mis juhtub, kui free-plaani tehisintellekti maht saab otsa?"
       },
       "2": {
         "answer": "Jah. Tasuline plaan jääb sulle kasutada makstud perioodi lõpuni.",
@@ -180,7 +180,7 @@
         "question": "Mis saab minu andmetest, kui plaan lõpeb?"
       },
       "4": {
-        "answer": "Jah, igas plaanis, ka Free-plaanis. Oma võtmega arveldab tehisintellekti kasutuse eest sinu mudelipakkuja ja plaan seda ei piira.",
+        "answer": "Jah, igas plaanis, ka free-plaanis. Oma võtmega arveldab tehisintellekti kasutuse eest sinu mudelipakkuja ja plaan seda ei piira.",
         "question": "Kas saan kasutada oma mudelipakkuja võtit?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# liige} other {# liiget}}",
     "membersPerSeat": "Nii palju liikmeid, kui vajad, arveldus koha kohta",
-    "metaDescription": "stella hinnad: alusta tasuta ilma kaardita, Solo kindla kuuhinnaga, Team koha kohta. Kohtupraktika otsing ja oma tehisintellekti võtmed igas plaanis.",
-    "metaTitle": "Hinnad: plaanid Free, Solo ja Team | stella",
+    "metaDescription": "stella hinnad: alusta tasuta ilma kaardita, solo kindla kuuhinnaga, team koha kohta. Kohtupraktika otsing ja oma tehisintellekti võtmed igas plaanis.",
+    "metaTitle": "Hinnad: plaanid free, solo ja team | stella",
     "perMonth": "kuus",
     "perSeatPerMonth": "koha kohta kuus",
     "plans": {

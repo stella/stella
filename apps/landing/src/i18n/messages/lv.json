@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Vieta ir viens jūsu komandas dalībnieks ar saviem pieteikšanās datiem. Plānā Team maksa ir par katru vietu; plāni Free un Solo ietver vienu dalībnieku.",
+        "answer": "Vieta ir viens jūsu komandas dalībnieks ar saviem pieteikšanās datiem. Plānā team maksa ir par katru vietu; plāni free un solo ietver vienu dalībnieku.",
         "question": "Kas ir vieta?"
       },
       "1": {
         "answer": "AI darbība tiek apturēta līdz apjoma atjaunošanai nākamajā mēnesī, un lietotne piedāvā pāriet uz augstāku plānu. Viss pārējais turpina darboties, un AI ar jūsu pašu modeļu pakalpojumu sniedzēja atslēgu tas neietekmē.",
-        "question": "Kas notiek, kad plāna Free AI apjoms ir izlietots?"
+        "question": "Kas notiek, kad plāna free AI apjoms ir izlietots?"
       },
       "2": {
         "answer": "Jā. Piekļuve maksas plānam saglabājas līdz apmaksātā perioda beigām.",
@@ -180,7 +180,7 @@
         "question": "Kas notiek ar maniem datiem, kad plāns beidzas?"
       },
       "4": {
-        "answer": "Jā, jebkurā plānā, arī Free. Ja izmantojat savu atslēgu, par AI lietojumu jums izraksta rēķinu modeļu pakalpojumu sniedzējs, nevis to ierobežo plāns.",
+        "answer": "Jā, jebkurā plānā, arī free. Ja izmantojat savu atslēgu, par AI lietojumu jums izraksta rēķinu modeļu pakalpojumu sniedzējs, nevis to ierobežo plāns.",
         "question": "Vai varu izmantot sava modeļu pakalpojumu sniedzēja atslēgu?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, zero {# dalībnieku} one {# dalībnieks} other {# dalībnieki}}",
     "membersPerSeat": "Tik daudz dalībnieku, cik nepieciešams, maksa par katru vietu",
-    "metaDescription": "stella cenas: sāciet bez maksas un bez kartes, Solo par fiksētu mēneša cenu, Team par katru vietu. Tiesu prakses meklēšana un savas AI atslēgas katrā plānā.",
-    "metaTitle": "Cenas: plāni Free, Solo un Team | stella",
+    "metaDescription": "stella cenas: sāciet bez maksas un bez kartes, solo par fiksētu mēneša cenu, team par katru vietu. Tiesu prakses meklēšana un savas AI atslēgas katrā plānā.",
+    "metaTitle": "Cenas: plāni free, solo un team | stella",
     "perMonth": "mēnesī",
     "perSeatPerMonth": "par vietu mēnesī",
     "plans": {

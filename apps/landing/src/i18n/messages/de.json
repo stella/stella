@@ -149,7 +149,7 @@
     "ctaHeading": "Starten Sie mit einem kostenlosen Konto.",
     "everyPlan": {
       "caseLaw": {
-        "body": "Durchsuchen und lesen Sie Rechtsprechung und Gesetze in jedem Tarif. Für Konten im Tarif Free gelten Nutzungsgrenzen nach der Fair-Use-Richtlinie.",
+        "body": "Durchsuchen und lesen Sie Rechtsprechung und Gesetze in jedem Tarif. Für Konten im Tarif free gelten Nutzungsgrenzen nach der Fair-Use-Richtlinie.",
         "title": "Rechtsprechung und Gesetze"
       },
       "heading": "In jedem Tarif enthalten",
@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Ein Platz entspricht einem Mitglied Ihres Teams mit eigener Anmeldung. Der Tarif Team wird pro Platz abgerechnet; Free und Solo umfassen ein Mitglied.",
+        "answer": "Ein Platz entspricht einem Mitglied Ihres Teams mit eigener Anmeldung. Der Tarif team wird pro Platz abgerechnet; free und solo umfassen ein Mitglied.",
         "question": "Was ist ein Platz?"
       },
       "1": {
         "answer": "Die KI pausiert, bis sich das Kontingent im nächsten Monat erneuert, und die App bietet Ihnen ein Upgrade an. Alles andere funktioniert weiter, und KI über den Schlüssel Ihres eigenen KI-Anbieters ist nicht betroffen.",
-        "question": "Was passiert, wenn das KI-Kontingent im Tarif Free aufgebraucht ist?"
+        "question": "Was passiert, wenn das KI-Kontingent im Tarif free aufgebraucht ist?"
       },
       "2": {
         "answer": "Ja. Ihr bezahlter Tarif bleibt bis zum Ende des bereits bezahlten Zeitraums nutzbar.",
@@ -180,7 +180,7 @@
         "question": "Was passiert mit meinen Daten, wenn ein Tarif endet?"
       },
       "4": {
-        "answer": "Ja, in jedem Tarif, auch in Free. Mit Ihrem eigenen Schlüssel rechnet Ihr KI-Anbieter die Nutzung ab, statt dass der Tarif sie begrenzt.",
+        "answer": "Ja, in jedem Tarif, auch in free. Mit Ihrem eigenen Schlüssel rechnet Ihr KI-Anbieter die Nutzung ab, statt dass der Tarif sie begrenzt.",
         "question": "Kann ich den Schlüssel meines eigenen KI-Anbieters verwenden?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# Mitglied} other {# Mitglieder}}",
     "membersPerSeat": "So viele Mitglieder wie nötig, abgerechnet pro Platz",
-    "metaDescription": "Preise von stella: kostenlos starten ohne Kreditkarte, Solo zum festen Monatspreis, Team pro Platz. Rechtsprechung und eigene KI-Schlüssel in jedem Tarif.",
-    "metaTitle": "Preise: Tarife Free, Solo und Team | stella",
+    "metaDescription": "Preise von stella: kostenlos starten ohne Kreditkarte, solo zum festen Monatspreis, team pro Platz. Rechtsprechung und eigene KI-Schlüssel in jedem Tarif.",
+    "metaTitle": "Preise: Tarife free, solo und team | stella",
     "perMonth": "pro Monat",
     "perSeatPerMonth": "pro Platz und Monat",
     "plans": {

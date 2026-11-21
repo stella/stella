@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Egy hely a csapata egy tagja, saját bejelentkezéssel. A Team díjcsomagot helyenként számlázzuk; a Free és a Solo egy tagot tartalmaz.",
+        "answer": "Egy hely a csapata egy tagja, saját bejelentkezéssel. A team díjcsomagot helyenként számlázzuk; a free és a solo egy tagot tartalmaz.",
         "question": "Mi az a hely?"
       },
       "1": {
         "answer": "Az AI szünetel, amíg a keret a következő hónapban meg nem újul, az alkalmazás pedig magasabb díjcsomagot ajánl. Minden más tovább működik, és ez nem érinti a saját modellszolgáltatói kulcsán futó AI-t.",
-        "question": "Mi történik, ha elfogy a Free díjcsomag AI-kerete?"
+        "question": "Mi történik, ha elfogy a free díjcsomag AI-kerete?"
       },
       "2": {
         "answer": "Igen. A fizetős díjcsomaghoz a kifizetett időszak végéig megmarad a hozzáférése.",
@@ -180,7 +180,7 @@
         "question": "Mi lesz az adataimmal, ha lejár a díjcsomag?"
       },
       "4": {
-        "answer": "Igen, minden díjcsomagban, a Free-t is beleértve. Saját kulccsal az AI-használatot a modellszolgáltató számlázza, és a díjcsomag nem korlátozza.",
+        "answer": "Igen, minden díjcsomagban, a free-t is beleértve. Saját kulccsal az AI-használatot a modellszolgáltató számlázza, és a díjcsomag nem korlátozza.",
         "question": "Használhatom a saját modellszolgáltatói kulcsomat?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# tag} other {# tag}}",
     "membersPerSeat": "Annyi tag, amennyire szüksége van, helyenkénti számlázással",
-    "metaDescription": "A stella alkalmazás árai: kezdje ingyen, kártya nélkül; Solo fix havidíjjal, Team helyenként. Ítélkezési gyakorlat és saját AI-kulcsok minden díjcsomagban.",
-    "metaTitle": "Árak: Free, Solo és Team díjcsomagok | stella",
+    "metaDescription": "A stella alkalmazás árai: kezdje ingyen, kártya nélkül; solo fix havidíjjal, team helyenként. Ítélkezési gyakorlat és saját AI-kulcsok minden díjcsomagban.",
+    "metaTitle": "Árak: free, solo és team díjcsomagok | stella",
     "perMonth": "havonta",
     "perSeatPerMonth": "helyenként havonta",
     "plans": {

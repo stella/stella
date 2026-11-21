@@ -1,7 +1,7 @@
 // Plan facts the pricing page renders. Prose lives in the catalogs
 // (`pricing.*`); amounts, storage, and plan names stay here so no translation
-// can change a price. Plan names are not translated: they match what the app
-// and checkout show.
+// can change a price. Plan names are not translated and, like the brand, are
+// always lowercase.
 
 export const PRICING_CURRENCY = "EUR";
 
@@ -18,7 +18,7 @@ type PlanPrice =
 
 type PricingPlan = {
   id: string;
-  name: string;
+  name: Lowercase<string>;
   seating: PlanSeating;
   /** Storage in gigabytes, per seat on a per-seat plan. */
   storageGb: number;
@@ -28,21 +28,21 @@ type PricingPlan = {
 export const pricingPlans = [
   {
     id: "free",
-    name: "Free",
+    name: "free",
     seating: { type: "single" },
     storageGb: 1,
     price: { type: "free" },
   },
   {
     id: "solo",
-    name: "Solo",
+    name: "solo",
     seating: { type: "single" },
     storageGb: 50,
     price: { type: "paid", monthly: 29, yearlyPerMonth: 24 },
   },
   {
     id: "team",
-    name: "Team",
+    name: "team",
     seating: { type: "perSeat" },
     storageGb: 200,
     price: { type: "paid", monthly: 59, yearlyPerMonth: 49 },

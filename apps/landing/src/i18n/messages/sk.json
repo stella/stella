@@ -164,12 +164,12 @@
     },
     "faqs": {
       "0": {
-        "answer": "Miesto zodpovedá jednému členovi vášho tímu s vlastným prihlásením. Tarif Team sa účtuje za miesto, tarify Free a Solo zahŕňajú jedného člena.",
+        "answer": "Miesto zodpovedá jednému členovi vášho tímu s vlastným prihlásením. Tarif team sa účtuje za miesto, tarify free a solo zahŕňajú jedného člena.",
         "question": "Čo je miesto?"
       },
       "1": {
         "answer": "AI sa pozastaví, kým sa limit v nasledujúcom mesiaci neobnoví, a aplikácia ponúkne prechod na vyšší tarif. Všetko ostatné funguje ďalej a AI na vašom vlastnom kľúči od poskytovateľa modelov sa to netýka.",
-        "question": "Čo sa stane, keď vyčerpám AI limit v tarife Free?"
+        "question": "Čo sa stane, keď vyčerpám AI limit v tarife free?"
       },
       "2": {
         "answer": "Áno. Prístup k platenému tarifu vám zostane až do konca zaplateného obdobia.",
@@ -180,7 +180,7 @@
         "question": "Čo sa stane s mojimi údajmi, keď tarif skončí?"
       },
       "4": {
-        "answer": "Áno, v každom tarife vrátane Free. S vlastným kľúčom vám využitie AI účtuje poskytovateľ modelov a tarif ho neobmedzuje.",
+        "answer": "Áno, v každom tarife vrátane free. S vlastným kľúčom vám využitie AI účtuje poskytovateľ modelov a tarif ho neobmedzuje.",
         "question": "Môžem použiť vlastný kľúč od poskytovateľa modelov?"
       },
       "5": {
@@ -195,8 +195,8 @@
     },
     "members": "{count, plural, one {# člen} few {# členovia} many {# člena} other {# členov}}",
     "membersPerSeat": "Toľko členov, koľko potrebujete, s platbou za miesto",
-    "metaDescription": "Cenník aplikácie stella: začnite zadarmo bez karty, Solo za pevnú mesačnú cenu, Team za miesto. AI právny asistent a vlastné kľúče k AI v každom tarife.",
-    "metaTitle": "Cenník: tarify Free, Solo a Team | stella",
+    "metaDescription": "Cenník aplikácie stella: začnite zadarmo bez karty, solo za pevnú mesačnú cenu, team za miesto. AI právny asistent a vlastné kľúče k AI v každom tarife.",
+    "metaTitle": "Cenník: tarify free, solo a team | stella",
     "perMonth": "mesačne",
     "perSeatPerMonth": "za miesto mesačne",
     "plans": {
