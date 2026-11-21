@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Qué se registra",
       "sent": {
-        "aiDrafts": "Borradores de stella IA que pidas, una vez permitidos: asunto, fecha, duración y nombres de aplicaciones del registro, además de sus títulos de ventana y nombres de documentos cuando se registran. No se guardan.",
+        "aiDrafts": "Borradores de stella IA que pidas, una vez permitidos: asunto, fecha, duración y nombres de aplicaciones del registro, sus títulos de ventana y nombres de documentos cuando se registran, y las instrucciones que escribas. stella añade tus descripciones anteriores del asunto, el formato de facturación del cliente y, si tu despacho las usa, sus normas de facturación. Todo va al proveedor de IA que usa tu despacho, o al de stella IA, solo para redactar el borrador; stella no guarda el borrador ni lo que se envió para él.",
         "timeEntries": "Registros de tiempo que crees: asunto, fecha, duración, descripción, si es facturable y los códigos de facturación que tenga"
       },
       "sentTitle": "Qué sale de este ordenador",

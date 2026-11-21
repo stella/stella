@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Co se zaznamenává",
       "sent": {
-        "aiDrafts": "Návrhy od stella AI, o které po udělení souhlasu požádáte: spis, datum, délka a názvy aplikací záznamu a také názvy jeho oken a dokumentů, pokud se zaznamenávají. Neukládají se.",
+        "aiDrafts": "Návrhy od stella AI, o které po udělení souhlasu požádáte: spis, datum, délka a názvy aplikací záznamu, názvy jeho oken a dokumentů, pokud se zaznamenávají, a pokyny, které napíšete. stella k nim přidá vaše dřívější popisy ve spisu, fakturační formát klienta a fakturační pravidla kanceláře, pokud je používá. Vše jde k poskytovateli AI, kterého kancelář používá, případně k poskytovateli stella AI, jen kvůli napsání návrhu; stella návrh ani to, co se kvůli němu odeslalo, neukládá.",
         "timeEntries": "Časové záznamy, které vytvoříte: spis, datum, délka, popis, fakturovatelnost a případné fakturační kódy"
       },
       "sentTitle": "Co opouští tento počítač",

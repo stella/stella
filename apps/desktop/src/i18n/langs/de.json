@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Was aufgezeichnet wird",
       "sent": {
-        "aiDrafts": "Entwürfe von stella KI, die Sie nach erteilter Einwilligung anfordern: Akte, Datum, Dauer und App-Namen des Eintrags, dazu seine Fenstertitel und Dokumentnamen, wenn sie aufgezeichnet werden. Sie werden nicht gespeichert.",
+        "aiDrafts": "Entwürfe von stella KI, die Sie nach erteilter Einwilligung anfordern: Akte, Datum, Dauer und App-Namen des Eintrags, seine Fenstertitel und Dokumentnamen, wenn sie aufgezeichnet werden, und Anweisungen, die Sie eingeben. stella ergänzt Ihre früheren Beschreibungen zur Akte, das Abrechnungsformat des Mandanten und, sofern Ihre Kanzlei sie nutzt, ihre Abrechnungsrichtlinien. All das geht an den KI-Anbieter Ihrer Kanzlei oder den von stella KI, nur um den Entwurf zu schreiben; stella speichert weder den Entwurf noch das dafür Gesendete.",
         "timeEntries": "Zeiteinträge, die Sie anlegen: Akte, Datum, Dauer, Beschreibung, Abrechenbarkeit und etwaige Abrechnungscodes"
       },
       "sentTitle": "Was diesen Computer verlässt",

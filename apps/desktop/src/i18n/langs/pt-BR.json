@@ -117,7 +117,7 @@
       },
       "recordedTitle": "O que é registrado",
       "sent": {
-        "aiDrafts": "Rascunhos da stella IA que você pede, depois de permitir: caso, data, duração e nomes de aplicativos do lançamento, além dos títulos de janela e nomes de documentos quando registrados. Eles não são armazenados.",
+        "aiDrafts": "Rascunhos da stella IA que você pede, depois de permitir: caso, data, duração e nomes de aplicativos do lançamento, seus títulos de janela e nomes de documentos quando registrados e as instruções que você digitar. A stella acrescenta suas descrições anteriores no caso, o formato de faturamento do cliente e, quando o escritório as usa, as regras de faturamento. Tudo vai para o provedor de IA que o escritório usa, ou o da stella IA, só para redigir o rascunho; a stella não salva o rascunho nem o que foi enviado para ele.",
         "timeEntries": "Lançamentos de horas que você cria: caso, data, duração, descrição, se é faturável e eventuais códigos de faturamento"
       },
       "sentTitle": "O que sai deste computador",

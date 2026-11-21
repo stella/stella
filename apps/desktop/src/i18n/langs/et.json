@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Mida salvestatakse",
       "sent": {
-        "aiDrafts": "stella AI mustandid, mida pärast lubamist küsite: kande toimik, kuupäev, kestus ja rakenduste nimed ning selle akende pealkirjad ja dokumentide nimed, kui neid salvestatakse. Neid ei säilitata.",
+        "aiDrafts": "stella AI mustandid, mida pärast lubamist küsite: kande toimik, kuupäev, kestus ja rakenduste nimed, selle akende pealkirjad ja dokumentide nimed, kui neid salvestatakse, ning teie sisestatud juhised. stella lisab teie varasemad kirjeldused selles toimikus, kliendi arveldusvormingu ja teie büroo arveldusjuhised, kui büroo neid kasutab. Kõik see läheb teie büroo kasutatavale AI-teenuse pakkujale või stella AI pakkujale ainult mustandi kirjutamiseks; stella ei salvesta mustandit ega selle jaoks saadetut.",
         "timeEntries": "Teie loodud ajakanded: toimik, kuupäev, kestus, kirjeldus, arveldatavus ja võimalikud arvelduskoodid"
       },
       "sentTitle": "Mis sellest arvutist lahkub",

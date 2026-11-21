@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Kas įrašoma",
       "sent": {
-        "aiDrafts": "stella DI juodraščiai, kurių paprašote leidę: įrašo byla, data, trukmė ir programų pavadinimai, taip pat jo langų antraštės ir dokumentų pavadinimai, jei jie įrašomi. Jie nesaugomi.",
+        "aiDrafts": "stella DI juodraščiai, kurių paprašote leidę: įrašo byla, data, trukmė ir programų pavadinimai, jo langų antraštės ir dokumentų pavadinimai, jei jie įrašomi, ir jūsų įvesti nurodymai. stella prideda jūsų ankstesnius aprašus byloje, kliento atsiskaitymo formatą ir, jei kontora jas naudoja, jos atsiskaitymo gaires. Visa tai siunčiama jūsų kontoros naudojamam DI teikėjui arba stella DI teikėjui tik juodraščiui parašyti; stella nesaugo nei juodraščio, nei to, kas jam buvo išsiųsta.",
         "timeEntries": "Jūsų sukurti laiko įrašai: byla, data, trukmė, aprašas, ar apmokamas ir galimi atsiskaitymo kodai"
       },
       "sentTitle": "Kas palieka šį kompiuterį",

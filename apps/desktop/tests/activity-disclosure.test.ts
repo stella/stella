@@ -3,6 +3,16 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import {
+  desktopBillingDraftEntrySchema,
+  desktopBillingDraftEvidenceSchema,
+  desktopBillingDraftRequestSchema,
+} from "@stll/api-contract/desktop-billing-drafts";
+import {
+  desktopTimeEntryBatchItemSchema,
+  desktopTimeEntryBatchSchema,
+} from "@stll/api-contract/desktop-time-entries";
+
+import {
   ACTIVITY_RECORDED,
   ACTIVITY_SENT,
 } from "../src/activity/activity-disclosure";
@@ -13,9 +23,10 @@ import type {
 
 // Setup and the Activity window tell the user what Activity records and what
 // leaves the computer. Each field the native side keeps per stretch of time,
-// and each field a request built from recorded activity sends, is mapped here
-// to the fact that discloses it. A field added without a mapping fails, and
-// so does a fact no field backs any more.
+// and each field of a request built from recorded activity, both as the
+// native side sends it and as the API contract accepts it, is mapped here to
+// the fact that discloses it. A field added without a mapping fails, and so
+// does a fact no field backs any more.
 
 const NATIVE_SOURCE = path.join(import.meta.dir, "../src-tauri/src");
 
@@ -30,8 +41,8 @@ const structFields = (file: string, name: string) => {
   ].flatMap((match) => (match[1] ? [match[1]] : []));
 };
 
-/** Fields that carry nothing about the day: request bookkeeping, the
- *  user's own typed instruction, or the server's earlier answer. */
+/** Fields that carry nothing about the day: request bookkeeping, or the
+ *  server's own earlier answer sent back for a refinement. */
 const NOT_ABOUT_THE_DAY = "notAboutTheDay";
 
 /** A field the user sets, not one the recorder captures. */
@@ -39,9 +50,17 @@ const CHOSEN_BY_YOU = "chosenByYou";
 
 type Disclosed<Fact> = Fact | readonly Fact[];
 
+type FieldGroup<Fact> = {
+  /** The fields as declared, read from their owner. */
+  fields: () => string[];
+  /** Each field, by the fact that discloses it. */
+  mapping: Record<string, Disclosed<Fact>>;
+};
+
 const RECORDED_FIELDS = {
-  "activity.rs": {
-    ActivitySegment: {
+  "activity.rs: ActivitySegment": {
+    fields: () => structFields("activity.rs", "ActivitySegment"),
+    mapping: {
       app_identifier: "app",
       app_name: "app",
       call: "calls",
@@ -54,77 +73,115 @@ const RECORDED_FIELDS = {
   },
 } as const satisfies Record<
   string,
-  Record<
-    string,
-    Record<string, Disclosed<ActivityRecordedFact | typeof CHOSEN_BY_YOU>>
-  >
+  FieldGroup<ActivityRecordedFact | typeof CHOSEN_BY_YOU>
 >;
 
+const DRAFT_ENTRY = {
+  app_names: "aiDrafts",
+  date: "aiDrafts",
+  duration_minutes: "aiDrafts",
+  entry_id: NOT_ABOUT_THE_DAY,
+  evidence: "aiDrafts",
+  matter_id: "aiDrafts",
+  timezone: "aiDrafts",
+} as const;
+
+const DRAFT_EVIDENCE = {
+  document_names: "aiDrafts",
+  window_titles: "aiDrafts",
+} as const;
+
+const DRAFT_REQUEST = {
+  entries: "aiDrafts",
+  previous_result: NOT_ABOUT_THE_DAY,
+  steer: "aiDrafts",
+} as const;
+
+const TIME_ENTRY = {
+  billable: "timeEntries",
+  classification: "timeEntries",
+  date_worked: "timeEntries",
+  duration_minutes: "timeEntries",
+  matter_id: "timeEntries",
+  narrative: "timeEntries",
+  timezone_id: "timeEntries",
+} as const;
+
+const TIME_ENTRY_BATCH = {
+  entries: "timeEntries",
+  idempotency_key: NOT_ABOUT_THE_DAY,
+} as const;
+
+/** The contract spells fields in camelCase; the native side in snake_case. */
+const snakeCase = (name: string) =>
+  name.replaceAll(/[A-Z]/gu, (letter) => `_${letter.toLowerCase()}`);
+
+const contractFields = (entries: Record<string, unknown>) => () =>
+  Object.keys(entries).map(snakeCase);
+
 const SENT_FIELDS = {
-  "billing_draft_submit.rs": {
-    DraftEntry: {
-      app_names: "aiDrafts",
-      date: "aiDrafts",
-      duration_minutes: "aiDrafts",
-      entry_id: NOT_ABOUT_THE_DAY,
-      evidence: "aiDrafts",
-      matter_id: "aiDrafts",
-      timezone: "aiDrafts",
-    },
-    DraftEvidence: {
-      document_names: "aiDrafts",
-      window_titles: "aiDrafts",
-    },
-    DraftRequest: {
-      entries: "aiDrafts",
-      previous_result: NOT_ABOUT_THE_DAY,
-      steer: NOT_ABOUT_THE_DAY,
-    },
+  "billing_draft_submit.rs: DraftEntry": {
+    fields: () => structFields("billing_draft_submit.rs", "DraftEntry"),
+    mapping: DRAFT_ENTRY,
   },
-  "time_entry_submit.rs": {
-    ConfirmedBatch: {
-      entries: "timeEntries",
-      idempotency_key: NOT_ABOUT_THE_DAY,
-    },
-    ConfirmedTimeEntry: {
-      billable: "timeEntries",
-      classification: "timeEntries",
-      date_worked: "timeEntries",
-      duration_minutes: "timeEntries",
-      matter_id: "timeEntries",
-      narrative: "timeEntries",
-      timezone_id: "timeEntries",
-    },
+  "billing_draft_submit.rs: DraftEvidence": {
+    fields: () => structFields("billing_draft_submit.rs", "DraftEvidence"),
+    mapping: DRAFT_EVIDENCE,
+  },
+  "billing_draft_submit.rs: DraftRequest": {
+    fields: () => structFields("billing_draft_submit.rs", "DraftRequest"),
+    mapping: DRAFT_REQUEST,
+  },
+  "time_entry_submit.rs: ConfirmedBatch": {
+    fields: () => structFields("time_entry_submit.rs", "ConfirmedBatch"),
+    mapping: TIME_ENTRY_BATCH,
+  },
+  "time_entry_submit.rs: ConfirmedTimeEntry": {
+    fields: () => structFields("time_entry_submit.rs", "ConfirmedTimeEntry"),
+    mapping: TIME_ENTRY,
+  },
+  desktopBillingDraftEntrySchema: {
+    fields: contractFields(desktopBillingDraftEntrySchema.entries),
+    mapping: DRAFT_ENTRY,
+  },
+  desktopBillingDraftEvidenceSchema: {
+    fields: contractFields(desktopBillingDraftEvidenceSchema.entries),
+    mapping: DRAFT_EVIDENCE,
+  },
+  desktopBillingDraftRequestSchema: {
+    fields: contractFields(desktopBillingDraftRequestSchema.pipe[0].entries),
+    mapping: DRAFT_REQUEST,
+  },
+  desktopTimeEntryBatchSchema: {
+    fields: contractFields(desktopTimeEntryBatchSchema.entries),
+    mapping: TIME_ENTRY_BATCH,
+  },
+  desktopTimeEntryBatchItemSchema: {
+    fields: contractFields(desktopTimeEntryBatchItemSchema.entries),
+    mapping: TIME_ENTRY,
   },
 } as const satisfies Record<
   string,
-  Record<
-    string,
-    Record<string, Disclosed<ActivitySentFact | typeof NOT_ABOUT_THE_DAY>>
-  >
+  FieldGroup<ActivitySentFact | typeof NOT_ABOUT_THE_DAY>
 >;
 
-type FieldMap = Record<string, Record<string, Record<string, unknown>>>;
-
-const factsOf = (fields: FieldMap) =>
+const factsOf = (groups: Record<string, FieldGroup<string>>) =>
   new Set(
-    Object.values(fields)
-      .flatMap((byStruct) => Object.values(byStruct))
-      .flatMap((mapping) => Object.values(mapping))
+    Object.values(groups)
+      .flatMap(({ mapping }) => Object.values(mapping))
       .flat(),
   );
 
 describe("the activity disclosure", () => {
-  const every: FieldMap[] = [RECORDED_FIELDS, SENT_FIELDS];
-  for (const fields of every) {
-    for (const [file, byStruct] of Object.entries(fields)) {
-      for (const [name, mapping] of Object.entries(byStruct)) {
-        test(`maps every field of ${file}: ${name} to a fact`, () => {
-          expect(structFields(file, name).toSorted()).toEqual(
-            Object.keys(mapping).toSorted(),
-          );
-        });
-      }
+  const every: Record<string, FieldGroup<string>>[] = [
+    RECORDED_FIELDS,
+    SENT_FIELDS,
+  ];
+  for (const groups of every) {
+    for (const [label, { fields, mapping }] of Object.entries(groups)) {
+      test(`maps every field of ${label} to a fact`, () => {
+        expect(fields().toSorted()).toEqual(Object.keys(mapping).toSorted());
+      });
     }
   }
 

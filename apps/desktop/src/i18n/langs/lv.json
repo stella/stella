@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Kas tiek ierakstīts",
       "sent": {
-        "aiDrafts": "stella AI melnraksti, ko pieprasāt pēc atļaujas: ieraksta lieta, datums, ilgums un lietotņu nosaukumi, kā arī tā logu virsraksti un dokumentu nosaukumi, ja tie tiek ierakstīti. Tie netiek glabāti.",
+        "aiDrafts": "stella AI melnraksti, ko pieprasāt pēc atļaujas: ieraksta lieta, datums, ilgums un lietotņu nosaukumi, tā logu virsraksti un dokumentu nosaukumi, ja tie tiek ierakstīti, un jūsu ievadītie norādījumi. stella pievieno jūsu agrākos aprakstus lietā, klienta norēķinu formātu un, ja jūsu birojs tās izmanto, tā norēķinu vadlīnijas. Tas viss tiek nosūtīts jūsu biroja izmantotajam AI pakalpojumu sniedzējam vai stella AI pakalpojumu sniedzējam tikai melnraksta uzrakstīšanai; stella nesaglabā ne melnrakstu, ne tam nosūtīto.",
         "timeEntries": "Jūsu izveidotie laika ieraksti: lieta, datums, ilgums, apraksts, vai tas ir apmaksājams, un iespējamie norēķinu kodi"
       },
       "sentTitle": "Kas atstāj šo datoru",

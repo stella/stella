@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Ce qui est enregistré",
       "sent": {
-        "aiDrafts": "Brouillons de stella AI que vous demandez, une fois autorisés : dossier, date, durée et noms d’applications de l’entrée, ainsi que ses titres de fenêtres et noms de documents lorsqu’ils sont enregistrés. Ils ne sont pas conservés.",
+        "aiDrafts": "Brouillons de stella AI que vous demandez, une fois autorisés : dossier, date, durée et noms d’applications de l’entrée, ses titres de fenêtres et noms de documents lorsqu’ils sont enregistrés, et les consignes que vous saisissez. stella y ajoute vos descriptions précédentes sur le dossier, le format de facturation du client et, si votre cabinet les utilise, ses règles de facturation. Le tout part chez le fournisseur d’IA de votre cabinet, ou celui de stella AI, uniquement pour rédiger le brouillon ; stella ne conserve ni le brouillon ni ce qui a été envoyé pour lui.",
         "timeEntries": "Saisies de temps que vous créez : dossier, date, durée, description, caractère facturable et éventuels codes de facturation"
       },
       "sentTitle": "Ce qui quitte cet ordinateur",

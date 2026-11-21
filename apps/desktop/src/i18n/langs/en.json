@@ -117,7 +117,7 @@
       },
       "recordedTitle": "What is recorded",
       "sent": {
-        "aiDrafts": "stella AI drafts you ask for, once allowed: the entry's matter, date, duration and app names, plus its window titles and document names when recorded. They are not stored.",
+        "aiDrafts": "stella AI drafts you ask for, once allowed: the entry's matter, date, duration and app names, its window titles and document names when recorded, and any instructions you type. stella adds your earlier descriptions on the matter, the client's billing format and, where your firm uses them, its billing guidelines. All of it goes to the AI provider your firm uses, or stella AI's, only to write the draft; stella does not save the draft or what was sent for it.",
         "timeEntries": "Time entries you create: matter, date, duration, description, billable status and any billing codes"
       },
       "sentTitle": "What leaves this computer",

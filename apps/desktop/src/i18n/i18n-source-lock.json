@@ -110,7 +110,7 @@
   "activity.disclosure.recorded.calls": "Time on calls, unless you turn it off",
   "activity.disclosure.recorded.details": "Window titles and document names, unless you turn them off",
   "activity.disclosure.recordedTitle": "What is recorded",
-  "activity.disclosure.sent.aiDrafts": "stella AI drafts you ask for, once allowed: the entry's matter, date, duration and app names, plus its window titles and document names when recorded. They are not stored.",
+  "activity.disclosure.sent.aiDrafts": "stella AI drafts you ask for, once allowed: the entry's matter, date, duration and app names, its window titles and document names when recorded, and any instructions you type. stella adds your earlier descriptions on the matter, the client's billing format and, where your firm uses them, its billing guidelines. All of it goes to the AI provider your firm uses, or stella AI's, only to write the draft; stella does not save the draft or what was sent for it.",
   "activity.disclosure.sent.timeEntries": "Time entries you create: matter, date, duration, description, billable status and any billing codes",
   "activity.disclosure.sentTitle": "What leaves this computer",
   "activity.disclosure.storedMac": "Encrypted on this Mac, for your account only",

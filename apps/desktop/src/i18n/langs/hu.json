@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Mit rögzít",
       "sent": {
-        "aiDrafts": "Az Ön által kért stella AI-javaslatok, engedélyezés után: a bejegyzés ügye, dátuma, időtartama és alkalmazásnevei, valamint ablakcímei és dokumentumnevei, ha rögzítésre kerülnek. Ezeket nem tároljuk.",
+        "aiDrafts": "Az Ön által kért stella AI-javaslatok, engedélyezés után: a bejegyzés ügye, dátuma, időtartama és alkalmazásnevei, ablakcímei és dokumentumnevei, ha rögzítésre kerülnek, valamint a beírt utasításai. A stella hozzáadja az ügyben korábban írt leírásait, az ügyfél számlázási formátumát és – ha az irodája használja őket – a számlázási irányelveket. Mindez csak a javaslat megírásához kerül az irodája által használt AI-szolgáltatóhoz vagy a stella AI szolgáltatójához; a stella sem a javaslatot, sem a hozzá elküldött adatokat nem menti.",
         "timeEntries": "Az Ön által létrehozott időbejegyzések: ügy, dátum, időtartam, leírás, számlázhatóság és az esetleges számlázási kódok"
       },
       "sentTitle": "Mi hagyja el ezt a számítógépet",

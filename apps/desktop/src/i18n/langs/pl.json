@@ -117,7 +117,7 @@
       },
       "recordedTitle": "Co jest zapisywane",
       "sent": {
-        "aiDrafts": "Propozycje stella AI, o które prosisz po wyrażeniu zgody: sprawa, data, czas trwania i nazwy aplikacji wpisu oraz jego tytuły okien i nazwy dokumentów, jeśli są rejestrowane. Nie są przechowywane.",
+        "aiDrafts": "Propozycje stella AI, o które prosisz po wyrażeniu zgody: sprawa, data, czas trwania i nazwy aplikacji wpisu, jego tytuły okien i nazwy dokumentów, jeśli są rejestrowane, oraz polecenia, które wpiszesz. stella dodaje Twoje wcześniejsze opisy w sprawie, format rozliczeń klienta oraz zasady rozliczeń kancelarii, jeśli z nich korzysta. Wszystko trafia do dostawcy AI, z którego korzysta kancelaria, albo do dostawcy stella AI, wyłącznie w celu napisania propozycji; stella nie zapisuje propozycji ani tego, co wysłano w jej celu.",
         "timeEntries": "Wpisy czasu, które tworzysz: sprawa, data, czas trwania, opis, rozliczalność i ewentualne kody rozliczeniowe"
       },
       "sentTitle": "Co opuszcza ten komputer",
