@@ -1,11 +1,9 @@
 import { panic } from "better-result";
-import * as v from "valibot";
 
 import {
   SESSION_SIGN_IN_REVIEW,
   type SessionSignInLocation,
   type SessionSignInReview,
-  sessionSignInReviewBodySchema,
 } from "@stll/api-contract/session-sign-ins";
 import {
   DEVICE_KIND,
@@ -13,19 +11,6 @@ import {
   parseDeviceKind,
   parseUserAgent,
 } from "@stll/user-agent";
-
-import { routeSearchSchema } from "@/route-search-params";
-
-/**
- * `review` names the sign-in the new-device email asked about; a malformed
- * value falls back to no review rather than failing the page.
- */
-export const securitySearchSchema = routeSearchSchema({
-  review: v.fallback(
-    v.optional(sessionSignInReviewBodySchema.entries.sessionId),
-    undefined,
-  ),
-});
 
 /** One live session as the sessions list returns it. */
 export type ListedSession = {

@@ -189,7 +189,16 @@ export const PersonalDataExportCard = () => {
       return noExport;
     case "items": {
       if (latestView.items === null) {
-        return noExport;
+        // A failed refresh of "no export yet" keeps its retry.
+        return (
+          <PersonalDataExportCardFrame
+            action={requestButton(
+              t("settings.account.personalDataExportRequest"),
+            )}
+            description={<PersonalDataExportDescription />}
+            footer={<QueryViewFeedback view={latestView} />}
+          />
+        );
       }
       const state = exportState(latestView.items);
       return (

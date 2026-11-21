@@ -2,8 +2,8 @@ import { useState } from "react";
 import type { ReactNode } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useNavigate } from "@tanstack/react-router";
-import { panic } from "better-result";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { SESSION_SIGN_IN_REVIEW } from "@stll/api-contract/session-sign-ins";
@@ -42,6 +42,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
+import { readQueryResult } from "@/lib/errors/query-result";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { resourceMutation } from "@/lib/workspace-realtime";
@@ -113,6 +114,7 @@ const ThisDeviceRow = ({ device }: { device: SignedInDevice }) => {
   const t = useTranslations();
   const format = useFormatter();
   const { deviceLabel, placeLabel } = useDeviceWording();
+  const pending = device.review === SESSION_SIGN_IN_REVIEW.pending;
   const parts: DetailPart[] = [
     {
       key: "place",
@@ -142,12 +144,34 @@ const ThisDeviceRow = ({ device }: { device: SignedInDevice }) => {
         <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
           <bdi>{deviceLabel(device.name)}</bdi>
           <Badge>{t("settings.account.security.thisDevice")}</Badge>
+          {pending && (
+            <Badge tone="warning">
+              {t("settings.account.security.newBadge")}
+            </Badge>
+          )}
         </span>
       }
     >
-      <ListItemStatus tone="success">
-        {t("settings.account.security.activeNow")}
-      </ListItemStatus>
+      {/* A sign-in waiting for review can be this very device: someone
+          reading the page on the device the email reported. */}
+      {pending ? (
+        <Button
+          render={
+            <Link
+              search={{ review: device.id }}
+              to="/settings/account/security"
+            />
+          }
+          size="sm"
+          variant="outline"
+        >
+          {t("settings.account.security.reviewAction")}
+        </Button>
+      ) : (
+        <ListItemStatus tone="success">
+          {t("settings.account.security.activeNow")}
+        </ListItemStatus>
+      )}
     </SettingsRow>
   );
 };
@@ -295,9 +319,11 @@ export const useSignOutDevice = (onSignedOut?: (sessionId: string) => void) => {
       scope: { type: "organization" },
       mutationFn: async (sessionId: string) => {
         const result = await authClient.revokeSessionById({ sessionId });
-        if (result.error) {
-          throw toAuthClientError(result.error);
-        }
+        readQueryResult(
+          result.error
+            ? Result.err(toAuthClientError(result.error))
+            : Result.ok(undefined),
+        );
         // The outcome lands before the refreshed lists drop the device.
         onSignedOut?.(sessionId);
         return sessionId;
@@ -329,10 +355,11 @@ const SignOutOtherDevicesDialog = () => {
       scope: { type: "organization" },
       mutationFn: async () => {
         const result = await authClient.revokeOtherSessions();
-        if (result.error) {
-          throw toAuthClientError(result.error);
-        }
-        return result.data;
+        return readQueryResult(
+          result.error
+            ? Result.err(toAuthClientError(result.error))
+            : Result.ok(result.data),
+        );
       },
     }),
     onSuccess: () => {

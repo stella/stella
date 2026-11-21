@@ -123,6 +123,9 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
                     >
                       <Icon className="size-4" />
                       {t(item.labelKey)}
+                      {item.to === SECURITY_PATH && reviewCount > 0 && (
+                        <SignInReviewBadge count={reviewCount} />
+                      )}
                     </MenuItem>
                   );
                 })}
