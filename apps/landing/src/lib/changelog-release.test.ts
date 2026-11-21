@@ -3,8 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   formatMaintenanceReleaseRange,
   getMaintenanceReleaseTitle,
-  getReleaseKind,
   groupMaintenanceReleases,
+  isFeatureRelease,
+  isMaintenanceRelease,
   isStellaReleaseTag,
 } from "./changelog-release";
 
@@ -20,10 +21,40 @@ describe("Stella changelog releases", () => {
     expect(isStellaReleaseTag("v0.7.0-rc.1")).toBe(false);
   });
 
-  test("classifies stella versions", () => {
-    expect(getReleaseKind("v1.0.0")).toBe("major");
-    expect(getReleaseKind("v1.2.0")).toBe("minor");
-    expect(getReleaseKind("v1.2.3")).toBe("patch");
+  test("a headlined release is a feature release whatever its version", () => {
+    // Patch versions ship product headlines too (e.g. v0.9.80).
+    expect(isFeatureRelease("Sign PDFs with your own certificate")).toBe(true);
+    expect(isMaintenanceRelease("Sign PDFs with your own certificate")).toBe(
+      false,
+    );
+  });
+
+  test("maintenance and untitled releases are not feature releases", () => {
+    expect(isFeatureRelease("Maintenance release")).toBe(false);
+    expect(isMaintenanceRelease("Maintenance release")).toBe(true);
+    expect(isFeatureRelease(null)).toBe(false);
+    expect(isMaintenanceRelease(null)).toBe(false);
+  });
+
+  test("feature and maintenance selections agree with the grouping", () => {
+    const titles = [
+      "Sign PDFs with your own certificate",
+      "Maintenance release",
+      "Maintenance release",
+      null,
+      "Connected tools",
+    ] as const;
+
+    const entries = groupMaintenanceReleases(titles, (title) => title);
+    const groupedAsMaintenance = entries.flatMap((entry) =>
+      entry.type === "maintenance" ? entry.releases : [],
+    );
+
+    expect(groupedAsMaintenance).toEqual(titles.filter(isMaintenanceRelease));
+    expect(titles.filter(isFeatureRelease)).toEqual([
+      "Sign PDFs with your own certificate",
+      "Connected tools",
+    ]);
   });
 
   test("folds each consecutive run titled Maintenance release", () => {
