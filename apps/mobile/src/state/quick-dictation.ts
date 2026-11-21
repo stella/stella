@@ -148,12 +148,13 @@ export const transcribeQuickDictation = async ({
       return gone ? await transcribeRecording({ fetch, source, audio }) : first;
     }),
   );
-  const failure = texts.find((text) => text.isErr());
-  if (failure !== undefined && failure.isErr()) {
-    return {
-      type: "failed",
-      signedOut: failure.error._tag === "SignedOutError",
-    };
+  for (const text of texts) {
+    if (text.isErr()) {
+      return {
+        type: "failed",
+        signedOut: text.error._tag === "SignedOutError",
+      };
+    }
   }
   const joined = joinChunks(texts.map((text) => text.unwrapOr("")));
   if (joined === "") {
