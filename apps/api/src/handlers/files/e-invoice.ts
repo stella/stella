@@ -59,7 +59,12 @@ const ATTACHMENT_SOURCE_KINDS = [...E_INVOICE_KINDS, "cades"] as const;
 const MAX_ATTACHMENT_INDEX = 9999;
 
 const attachmentConfig = {
-  ...config,
+  contract: "patch",
+  contentDelivery: { type: "audited" },
+  permissions: { workspace: ["read"] },
+  accountAccess: ACCOUNT_ACCESS.sandbox,
+  access: "read",
+  mcp: { type: "internal", reason: "upload_mechanics" },
   params: workspaceParams({
     fieldId: resourceIdSchema("field"),
     index: numberFromString(
