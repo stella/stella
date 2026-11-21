@@ -24,6 +24,7 @@ import {
   browseCalendarScalingScenario,
   browseCourtsScalingScenario,
 } from "./case-law-browse-hubs";
+import { certifiedEmailScalingScenario } from "./certified-email";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -157,6 +158,7 @@ const measuredApiScenarios = [
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,
+  certifiedEmailScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,

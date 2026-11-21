@@ -226,11 +226,7 @@ export const hasCmsSignedDataHeader = (bytes: Uint8Array) => {
 /** The id of the outermost SignedData layer; nested layers extend its path. */
 export const OUTER_CMS_LAYER_ID = "layer-0";
 
-/** Extracts CMS content and stated signer metadata without verifying signatures. */
-export const readCmsSignedData = (
-  bytes: Uint8Array,
-  layerId: string = OUTER_CMS_LAYER_ID,
-): Result<CmsSignedData, CmsFailure> => {
+const decodeSignedData = (bytes: Uint8Array) => {
   // asn1js can throw on certain malformed strings, and pkijs throws on schema mismatch.
   const decoded = Result.try(() => {
     const { offset, result } = asn1js.fromBER(bytes, {
@@ -244,10 +240,32 @@ export const readCmsSignedData = (
       ? new pkijs.SignedData({ schema: contentInfo.content })
       : null;
   });
-  if (decoded.isErr() || decoded.value === null) {
+  return decoded.isErr() ? null : decoded.value;
+};
+
+/**
+ * The stated signers of a SignedData whose content travels beside it, as in
+ * an S/MIME `multipart/signed` signature part. Nothing is verified.
+ */
+export const readDetachedCmsSigners = (
+  bytes: Uint8Array,
+): Result<CmsSigner[], "not_signed_data"> => {
+  const signedData = decodeSignedData(bytes);
+  return signedData === null
+    ? Result.err("not_signed_data")
+    : Result.ok(readSigners(signedData, OUTER_CMS_LAYER_ID));
+};
+
+/** Extracts CMS content and stated signer metadata without verifying signatures. */
+export const readCmsSignedData = (
+  bytes: Uint8Array,
+  layerId: string = OUTER_CMS_LAYER_ID,
+): Result<CmsSignedData, CmsFailure> => {
+  const signedData = decodeSignedData(bytes);
+  if (signedData === null) {
     return Result.err("not_signed_data");
   }
-  const { eContent, eContentType } = decoded.value.encapContentInfo;
+  const { eContent, eContentType } = signedData.encapContentInfo;
   if (eContent === undefined) {
     return Result.err("detached");
   }
@@ -262,6 +280,6 @@ export const readCmsSignedData = (
     id: layerId,
     contentType: eContentType,
     content,
-    signers: readSigners(decoded.value, layerId),
+    signers: readSigners(signedData, layerId),
   });
 };

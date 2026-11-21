@@ -47,6 +47,7 @@ import {
   cadesContentEndpoint,
   cadesPreviewEndpoint,
 } from "@/api/handlers/files/cades";
+import certifiedEmailEndpoint from "@/api/handlers/files/certified-email";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import {
@@ -95,6 +96,11 @@ import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { makeAsicFixture } from "@/api/tests/fixtures/asic";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
+import {
+  PEC_FIXTURE,
+  PEC_SIGNER_NAME,
+  pecMessage,
+} from "@/api/tests/fixtures/pec";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -106,6 +112,7 @@ import {
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
 } from "@/api/tests/read-scaling/cades-preview";
+import { certifiedEmailScalingScenario } from "@/api/tests/read-scaling/certified-email";
 import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import { structuredDocumentScalingScenario } from "@/api/tests/read-scaling/structured-document";
@@ -1166,6 +1173,113 @@ describe.each(STRUCTURED_DOCUMENT_FORMATS)(
     });
   },
 );
+
+describe("certified email text preview", () => {
+  const stored = {
+    fileName: "posta-certificata.eml",
+    mimeType: EML_MIME_TYPE,
+    pdfFileId: null,
+  };
+  const seed = async () => await seedStored(stored, await pecMessage());
+
+  test("returns the envelope, the original message and its attachments, audited once", async () => {
+    const { fieldId, entityId } = await seed();
+    const read = await certifiedEmailEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    );
+    expect(read).toMatchObject({
+      envelope: {
+        system: "pec",
+        kind: "transport",
+        sender: PEC_FIXTURE.sender,
+        messageId: PEC_FIXTURE.messageId,
+        includesOriginal: true,
+        signature: { status: "unverified", signerName: PEC_SIGNER_NAME },
+      },
+      attachments: [{ fileName: PEC_FIXTURE.attachmentName }],
+    });
+    expect(
+      typeof read === "object" && read !== null && "text" in read
+        ? read.text
+        : "",
+    ).toContain(PEC_FIXTURE.body);
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: {
+        fieldId,
+        format: "certified-email",
+        disposition: "inline",
+        mimeType: EML_MIME_TYPE,
+      },
+    });
+  });
+
+  test("an ordinary email is refused as unavailable and records nothing", async () => {
+    const seeded = await seedEmail();
+    const read = await certifiedEmailEndpoint.handler(
+      legalFileContext(seeded.fieldId, scopedDbA()),
+    );
+    expect(read).toMatchObject({
+      code: 422,
+      response: { code: PREVIEW_UNAVAILABLE_ERROR_CODE },
+    });
+    expect(await auditRowsFor(seeded.entityId)).toEqual([]);
+  });
+
+  test("another matter's certified email is not found and records nothing", async () => {
+    const { fieldId, entityId } = await seedFile(stored, "b");
+    expectStatus(
+      await certifiedEmailEndpoint.handler(
+        legalFileContext(fieldId, scopedDbA()),
+      ),
+      404,
+    );
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("returns nothing when its audit record fails", async () => {
+    const { fieldId, entityId } = await seed();
+    expectStatus(
+      await certifiedEmailEndpoint.handler(
+        legalFileContext(fieldId, scopedDbA(), failingRecorder),
+      ),
+      500,
+    );
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("discards the reading when the source version is withdrawn", async () => {
+    const { fieldId, entityId, entityVersionId } = await seed();
+    expectStatus(
+      await certifiedEmailEndpoint.handler(
+        legalFileContext(fieldId, withdrawnAfterLookup(entityVersionId)),
+      ),
+      404,
+    );
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("query cost stays bounded as the matter grows", async () => {
+    const { fieldId } = await seed();
+    const context = legalFileContext(fieldId, scopedDbA());
+    const measureWithAddedDocuments = async (count: number) => {
+      const unrelated = Array.from({ length: count }, () => ({
+        id: createSafeId<"entity">(),
+        workspaceId: ids.wsA1,
+        kind: "document" as const,
+        name: "Ricevuta",
+      }));
+      seededEntityIds.push(...unrelated.map(({ id }) => id));
+      await testDb.insert(entities).values(unrelated);
+      return await certifiedEmailScalingScenario.measure(context);
+    };
+
+    const small = await measureWithAddedDocuments(10);
+    const large = await measureWithAddedDocuments(190);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
 
 describe("archive preview byte limits", () => {
   const oversized = DOCUMENT_ARCHIVE_MAX_BYTES + 1;

@@ -40,6 +40,7 @@ import {
   localizeEmailBodyHtml,
   parseEmailDate,
 } from "@/components/inspector/email-html-viewer.logic";
+import { CertifiedEmailEnvelope } from "@/features/correspondence/certified-email-envelope";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
@@ -456,6 +457,11 @@ export const EmailHtmlViewer = ({
           </section>
         ) : null}
       </header>
+      {preview.certified ? (
+        <div className="shrink-0 border-b p-4">
+          <CertifiedEmailEnvelope envelope={preview.certified} />
+        </div>
+      ) : null}
       <div className="bg-muted/30 min-w-0 shrink-0 p-2">
         <iframe
           className="bg-background w-full border-0"

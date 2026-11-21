@@ -1,4 +1,42 @@
 {
+  "certifiedEmail": {
+    "attachments": "Anhänge",
+    "certifiedAt": "Zertifiziert am",
+    "deliveredTo": "Zugestellt an",
+    "error": "Gemeldeter Fehler",
+    "errors": {
+      "noDomain": "Unbekannte Domain",
+      "noRecipient": "Unbekannter Empfänger",
+      "other": "Anderer Fehler",
+      "virus": "Virus erkannt"
+    },
+    "handedOverFor": "Übernommen für",
+    "kinds": {
+      "acceptance": "Annahmebestätigung (PEC)",
+      "delivery": "Zustellbestätigung (PEC)",
+      "deliveryError": "Unzustellbarkeitsmeldung (PEC)",
+      "deliveryErrorWarning": "Meldung über überschrittene Zustellfrist (PEC)",
+      "nonAcceptance": "Nichtannahmemeldung (PEC)",
+      "takenInCharge": "Übernahmebestätigung (PEC)",
+      "transport": "Zertifizierte E-Mail (PEC)",
+      "virusDetected": "Virenmeldung (PEC)"
+    },
+    "messageId": "PEC-Nachrichten-ID",
+    "notDeliveredTo": "Nicht zugestellt an",
+    "ordinaryMailbox": "Gewöhnliches Postfach",
+    "originalNotIncluded": "Diese Datei enthält die ursprüngliche Nachricht nicht.",
+    "provider": "PEC-Anbieter",
+    "receipt": "Angeforderte Bestätigung",
+    "receiptTypes": {
+      "full": "Vollständige Bestätigung",
+      "short": "Kurze Bestätigung",
+      "summary": "Knappe Bestätigung"
+    },
+    "recipients": "Zertifizierte Empfänger",
+    "sender": "Zertifizierter Absender",
+    "signatureNotVerified": "Die Signatur des Anbieters bleibt in der Datei und wird nicht geprüft.",
+    "signedBy": "Signiert von {name}"
+  },
   "chat": {
     "alreadyAnswered": "Dies wurde bereits beantwortet.",
     "answerAwaitingInput": "Diese Antwort braucht Ihre Eingabe.",

@@ -9,6 +9,43 @@
       "unknown": "Not determined"
     },
     "backToList": "Back to correspondence",
+    "certifiedEmail": {
+      "certifiedAt": "Certified at",
+      "deliveredTo": "Delivered to",
+      "error": "Reported error",
+      "errors": {
+        "noDomain": "Unknown domain",
+        "noRecipient": "Unknown recipient",
+        "other": "Other error",
+        "virus": "Virus detected"
+      },
+      "handedOverFor": "Handed over for",
+      "kinds": {
+        "acceptance": "Acceptance receipt (PEC)",
+        "delivery": "Delivery receipt (PEC)",
+        "deliveryError": "Non-delivery notice (PEC)",
+        "deliveryErrorWarning": "Delivery timeout notice (PEC)",
+        "nonAcceptance": "Non-acceptance notice (PEC)",
+        "takenInCharge": "Handover receipt (PEC)",
+        "transport": "Certified email (PEC)",
+        "virusDetected": "Virus notice (PEC)"
+      },
+      "messageId": "PEC message ID",
+      "notDeliveredTo": "Not delivered to",
+      "ordinaryMailbox": "Ordinary mailbox",
+      "originalNotIncluded": "This file does not include the original message.",
+      "provider": "PEC provider",
+      "receipt": "Receipt requested",
+      "receiptTypes": {
+        "full": "Full receipt",
+        "short": "Short receipt",
+        "summary": "Summary receipt"
+      },
+      "recipients": "Certified recipients",
+      "sender": "Certified sender",
+      "signatureNotVerified": "The provider’s signature is kept with the file and not verified.",
+      "signedBy": "Signed by {name}"
+    },
     "createAddress": "Create address",
     "dataBox": {
       "acceptedAt": "Accepted on",

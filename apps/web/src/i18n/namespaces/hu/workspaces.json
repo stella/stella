@@ -9,6 +9,43 @@
       "unknown": "Nem megállapított"
     },
     "backToList": "Vissza a levelezéshez",
+    "certifiedEmail": {
+      "certifiedAt": "Hitelesítés ideje",
+      "deliveredTo": "Kézbesítve ide",
+      "error": "Jelentett hiba",
+      "errors": {
+        "noDomain": "Ismeretlen tartomány",
+        "noRecipient": "Ismeretlen címzett",
+        "other": "Egyéb hiba",
+        "virus": "Vírust észleltek"
+      },
+      "handedOverFor": "Átvéve a következő címzettnek",
+      "kinds": {
+        "acceptance": "Befogadási igazolás (PEC)",
+        "delivery": "Kézbesítési igazolás (PEC)",
+        "deliveryError": "Értesítés a sikertelen kézbesítésről (PEC)",
+        "deliveryErrorWarning": "Értesítés a kézbesítési határidő túllépéséről (PEC)",
+        "nonAcceptance": "Értesítés az elutasításról (PEC)",
+        "takenInCharge": "Átvételi igazolás (PEC)",
+        "transport": "Hitelesített e-mail (PEC)",
+        "virusDetected": "Értesítés vírus észleléséről (PEC)"
+      },
+      "messageId": "PEC-üzenetazonosító",
+      "notDeliveredTo": "Nem kézbesítve ide",
+      "ordinaryMailbox": "Hagyományos postafiók",
+      "originalNotIncluded": "Ez a fájl nem tartalmazza az eredeti üzenetet.",
+      "provider": "PEC-szolgáltató",
+      "receipt": "Kért igazolás",
+      "receiptTypes": {
+        "full": "Teljes igazolás",
+        "short": "Rövid igazolás",
+        "summary": "Összesítő igazolás"
+      },
+      "recipients": "Hitelesített címzettek",
+      "sender": "Hitelesített feladó",
+      "signatureNotVerified": "A szolgáltató aláírása a fájlban marad, és nincs ellenőrizve.",
+      "signedBy": "Aláíró: {name}"
+    },
     "createAddress": "Cím létrehozása",
     "dataBox": {
       "acceptedAt": "Átvéve",

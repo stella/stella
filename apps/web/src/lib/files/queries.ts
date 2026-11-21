@@ -13,6 +13,7 @@ import {
 } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
+import type { CertifiedEmailEnvelope } from "@stll/api-contract/certified-email";
 import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -68,6 +69,7 @@ type EmailHtmlPreviewData = {
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
   citationBlocks: EmailCitationBlock[];
+  certified: CertifiedEmailEnvelope | null;
   source: EmailCitationSource;
 };
 
@@ -415,6 +417,7 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         bodyFolds: data.bodyFolds,
         bodyHtml: data.bodyHtml,
         citationBlocks: data.citationBlocks,
+        certified: data.certified,
         source: data.source,
       } satisfies EmailHtmlPreviewData;
     },

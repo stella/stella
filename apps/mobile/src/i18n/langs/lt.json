@@ -1,4 +1,42 @@
 {
+  "certifiedEmail": {
+    "attachments": "Priedai",
+    "certifiedAt": "Sertifikavimo laikas",
+    "deliveredTo": "Įteikta adresu",
+    "error": "Pranešta klaida",
+    "errors": {
+      "noDomain": "Nežinomas domenas",
+      "noRecipient": "Nežinomas gavėjas",
+      "other": "Kita klaida",
+      "virus": "Aptiktas virusas"
+    },
+    "handedOverFor": "Perimta gavėjui",
+    "kinds": {
+      "acceptance": "Priėmimo patvirtinimas (PEC)",
+      "delivery": "Įteikimo patvirtinimas (PEC)",
+      "deliveryError": "Pranešimas apie neįteikimą (PEC)",
+      "deliveryErrorWarning": "Pranešimas apie viršytą įteikimo terminą (PEC)",
+      "nonAcceptance": "Pranešimas apie nepriėmimą (PEC)",
+      "takenInCharge": "Perėmimo patvirtinimas (PEC)",
+      "transport": "Sertifikuotas el. laiškas (PEC)",
+      "virusDetected": "Pranešimas apie aptiktą virusą (PEC)"
+    },
+    "messageId": "PEC pranešimo ID",
+    "notDeliveredTo": "Neįteikta adresu",
+    "ordinaryMailbox": "Įprasta pašto dėžutė",
+    "originalNotIncluded": "Šiame faile nėra originalaus pranešimo.",
+    "provider": "PEC paslaugų teikėjas",
+    "receipt": "Prašomas patvirtinimas",
+    "receiptTypes": {
+      "full": "Pilnas patvirtinimas",
+      "short": "Trumpas patvirtinimas",
+      "summary": "Santraukinis patvirtinimas"
+    },
+    "recipients": "Sertifikuoti gavėjai",
+    "sender": "Sertifikuotas siuntėjas",
+    "signatureNotVerified": "Paslaugų teikėjo parašas lieka faile ir netikrinamas.",
+    "signedBy": "Pasirašė: {name}"
+  },
   "chat": {
     "alreadyAnswered": "Į tai jau atsakyta.",
     "answerAwaitingInput": "Šiam atsakymui reikia jūsų įvesties.",
