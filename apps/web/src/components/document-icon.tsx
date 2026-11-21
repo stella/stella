@@ -65,14 +65,13 @@ export const DocumentIcon = ({
     );
   }
 
-  // A profile's own mark (BDOC within ASiC-E), else its family's.
+  // The format's mark: its family's, or a profile's own (BDOC within
+  // ASiC-E), which document-icon.test.tsx keeps registered.
   if (isDocumentMarkKind(kind)) {
-    return (
-      <DocumentMark
-        className={className}
-        kind={isDocumentMarkKind(mark) ? mark : kind}
-      />
-    );
+    if (!isDocumentMarkKind(mark)) {
+      return panic(`Unregistered document mark: ${mark}`);
+    }
+    return <DocumentMark className={className} kind={mark} />;
   }
 
   switch (kind) {
