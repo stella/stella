@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { DesktopDictationModels } from "@stll/api-contract/desktop-dictation-transcription";
 
-import { sameClassFallback } from "./dictation-fallback";
+import { classOf, sameClassFallback } from "./dictation-fallback";
 
 const offered = (
   models: DesktopDictationModels["models"],
@@ -23,7 +23,7 @@ describe("same-class fallback", () => {
       model("retaining", { retainsData: true }),
       model("sibling"),
     ]);
-    expect(sameClassFallback("picked", list)).toBe("sibling");
+    expect(sameClassFallback("picked", null, list)).toBe("sibling");
   });
 
   test("never from a model that keeps nothing to one whose provider keeps the audio", () => {
@@ -31,7 +31,7 @@ describe("same-class fallback", () => {
       model("picked"),
       model("retaining", { retainsData: true }),
     ]);
-    expect(sameClassFallback("picked", list)).toBeUndefined();
+    expect(sameClassFallback("picked", null, list)).toBeUndefined();
   });
 
   test("a model outside the region falls back only to another outside it", () => {
@@ -40,7 +40,7 @@ describe("same-class fallback", () => {
       model("inside"),
       model("also-outside", { outsideRegion: true }),
     ]);
-    expect(sameClassFallback("picked", list)).toBe("also-outside");
+    expect(sameClassFallback("picked", null, list)).toBe("also-outside");
   });
 
   test("the server's default comes first when it qualifies", () => {
@@ -48,22 +48,51 @@ describe("same-class fallback", () => {
       [model("picked"), model("first"), model("default")],
       "default",
     );
-    expect(sameClassFallback("picked", list)).toBe("default");
+    expect(sameClassFallback("picked", null, list)).toBe("default");
     const otherDefault = offered(
       [model("picked"), model("first"), model("default", { provider: "B" })],
       "default",
     );
-    expect(sameClassFallback("picked", otherDefault)).toBe("first");
+    expect(sameClassFallback("picked", null, otherDefault)).toBe("first");
   });
 
   test("an unlisted model, or one with no named provider, goes nowhere else", () => {
     expect(
-      sameClassFallback("gone", offered([model("sibling")], "sibling")),
+      sameClassFallback("gone", null, offered([model("sibling")], "sibling")),
     ).toBeUndefined();
     const unnamed = offered([
       { id: "picked", displayName: "picked" },
       { id: "sibling", displayName: "sibling" },
     ]);
-    expect(sameClassFallback("picked", unnamed)).toBeUndefined();
+    expect(sameClassFallback("picked", null, unnamed)).toBeUndefined();
+  });
+
+  test("a withdrawn model falls back by the class kept when it was picked", () => {
+    const kept = {
+      provider: "Provider A",
+      outsideRegion: false,
+      retainsData: false,
+    };
+    const list = offered([
+      model("other", { provider: "Provider B" }),
+      model("keeps", { retainsData: true }),
+      model("sibling"),
+    ]);
+    expect(sameClassFallback("withdrawn", kept, list)).toBe("sibling");
+    expect(
+      sameClassFallback("withdrawn", { ...kept, retainsData: true }, list),
+    ).toBe("keeps");
+    expect(
+      sameClassFallback("withdrawn", { ...kept, provider: "Provider C" }, list),
+    ).toBeUndefined();
+  });
+
+  test("a listed model's class comes from the list", () => {
+    expect(classOf(model("m", { outsideRegion: true }))).toEqual({
+      provider: "Provider A",
+      outsideRegion: true,
+      retainsData: false,
+    });
+    expect(classOf({ id: "m", displayName: "m" })).toBeNull();
   });
 });

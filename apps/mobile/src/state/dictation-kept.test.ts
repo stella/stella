@@ -10,6 +10,7 @@ import {
   RecordingReadError,
   recordingsToTranscribe,
   RECOVERED_OFFER_MS,
+  refusalOf,
   retriesByItself,
   retryDelayMs,
   stillOffered,
@@ -25,12 +26,14 @@ const KEPT: KeptDictation = {
   field: "chat",
   matterId: "matter-1",
   modelId: null,
+  modelClass: null,
   locale: "en",
   cleanup: false,
   keptAt: 1000,
   state: {
     type: "waiting",
     refused: false,
+    refusedFor: null,
     pieces: [
       { type: "text", text: "First part." },
       { type: "audio", file: "1.m4a" },
@@ -54,6 +57,7 @@ describe("kept dictations", () => {
       state: {
         type: "waiting",
         refused: false,
+        refusedFor: null,
         pieces: [{ type: "audio", file: "../x" }],
       },
     };
@@ -138,5 +142,23 @@ describe("kept dictations", () => {
       "Second.",
       "Third.",
     ]);
+  });
+
+  test("only a model the server does not serve is a refusal for the model", () => {
+    expect(
+      refusalOf(
+        new ApiRequestError({
+          message: "synthetic",
+          status: 503,
+          code: "transcription_model_unavailable",
+        }),
+      ),
+    ).toBe("model");
+    expect(
+      refusalOf(new ApiRequestError({ message: "synthetic", status: 400 })),
+    ).toBeNull();
+    expect(
+      refusalOf(new RecordingReadError({ message: "synthetic" })),
+    ).toBeNull();
   });
 });
