@@ -262,6 +262,7 @@
     "packages/transcript": {
       "entry": [
         "src/transcript.ts",
+        "src/spelling.ts",
         "src/timeline.ts",
         "src/exporters.ts",
         "src/vocabulary.ts",

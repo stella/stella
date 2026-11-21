@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Kai kurios įrašytos veiklos perskaityti negalima. Galite ištrinti neperskaitomą įrašytą veiklą ir jos juodraščių atkūrimo duomenis.",
     "unrecoverableOtherHistoryConfirmation": "Kitų paskyrų įrašyta istorija bus ištrinta, įskaitant laukiamų juodraščių atkūrimo duomenis su trūkstamais raktais arba neperskaitomais failais. Sukurti juodraščiai jau gali egzistuoti. Šio veiksmo atšaukti negalima.",
     "welcomeControlFact": "Neaktyvumo laikas neskaičiuojamas. Bet kada pristabdykite arba ištrinkite.",
-    "welcomeDetails": "Programų veikla įrašoma kas kelias sekundes ir niekada nėra automatiškai įkeliama. Įrašomi ir langų pavadinimai bei atvertų dokumentų keliai, nebent išjungsite išsamią informaciją. Santraukos į iškarpinę patenka tik jūsų prašymu. Galite neįtraukti programų ir pasirinkti istorijos saugojimo trukmę. Išjungus išsamią informaciją, nauja informacija nebeįrašoma; ankstesnė lieka iki saugojimo termino pabaigos arba ištrynimo. Pasiūlymo langų pavadinimai palieka šį įrenginį tik tada, kai patvirtinate stella DI aprašą, vieną kartą arba visada; jie nesaugomi.",
+    "welcomeDetails": "Programų veikla įrašoma kas kelias sekundes ir niekada nėra automatiškai įkeliama. Įrašomi ir langų pavadinimai bei atvertų dokumentų keliai, nebent išjungsite išsamią informaciją. Santraukos į iškarpinę patenka tik jūsų prašymu. Galite neįtraukti programų ir pasirinkti istorijos saugojimo trukmę. Išjungus išsamią informaciją, nauja informacija nebeįrašoma; ankstesnė lieka iki saugojimo termino pabaigos arba ištrynimo. Pasiūlymo langų pavadinimai palieka šį įrenginį tik tada, kai suteikę sutikimą paprašote stella DI juodraščio, vieną kartą arba visada; jie nesaugomi.",
     "welcomeLearnMore": "Sužinoti daugiau",
     "welcomeLocalFact": "Šifruojama šiame įrenginyje.",
     "welcomePreviewMatter": "Riverside nuomos sutarties pratęsimas",
@@ -662,6 +662,35 @@
       "openSoundPc": "Atidaryti garso nustatymus",
       "title": "„stella“ negirdi mikrofono"
     },
+    "perApp": {
+      "add": "Pridėti…",
+      "cleanup": {
+        "default": "Taisymas pagal nustatymą",
+        "label": "Taisymas: {name}",
+        "off": "Be taisymo",
+        "on": "Su taisymu"
+      },
+      "description": "Įjunkite arba išjunkite DI taisymą ir pasirinkite kalbą vienai programai ar programų rūšiai. Lemia programa, kuri yra priekyje, kai pradedate diktuoti.",
+      "failed": "Nustatymų išsaugoti nepavyko. Bandykite dar kartą.",
+      "group": "Pagal programą",
+      "kinds": {
+        "browser": "Naršyklės",
+        "chat": "Pokalbių programos",
+        "code": "Kodo redaktoriai",
+        "document": "Dokumentai",
+        "email": "El. pašto programos",
+        "other": "Kitos programos",
+        "terminal": "Terminalai"
+      },
+      "kindsOfApp": "Programų rūšys",
+      "language": {
+        "default": "Kalba pagal nustatymą",
+        "label": "Kalba: {name}"
+      },
+      "recentApps": "Naujausios programos",
+      "remove": "Pašalinti {name}",
+      "title": "Programos nustatymai"
+    },
     "preview": {
       "finishing": "Baigiama…",
       "label": "Iki šiol padiktuotas tekstas",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "Kalbos modelio pašalinti nepavyko. Bandykite dar kartą.",
     "removeModel": "Pašalinti",
+    "retype": {
+      "description": "Paspauskite {shortcut}, kad paskutinis diktavimas būtų įvestas dar kartą žymeklio vietoje. Jis laikomas tik atmintyje, kol yra iškarpinės istorijoje.",
+      "taken": "Kita programa naudoja {shortcut}. stella piktogramos meniu Diktavimas siūlo tą patį.",
+      "title": "Paskutinio diktavimo spartusis klavišas"
+    },
     "shortcutTaken": "{shortcut} naudoja kita programa.",
     "sounds": {
       "description": "Groti trumpą tylų garsą, kai įrašymas prasideda ir kai baigiasi.",
@@ -681,6 +715,19 @@
       "failed": "Nepavyko atidaryti lango. Bandykite dar kartą.",
       "open": "Atidaryti",
       "title": "Įrašo transkribavimas"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Patildyti kitus garsus",
+        "nothing": "Nieko nedaryti",
+        "pause": "Pristabdyti Muziką ir Spotify"
+      },
+      "description": "Kas nutinka kitiems garsams, kol stella įrašo, kad jie nepatektų į tekstą. Baigus įrašyti viskas grįžta.",
+      "speakersOnly": {
+        "description": "Ausinių nekeisti: mikrofonas jų negirdi.",
+        "title": "Tik per garsiakalbius"
+      },
+      "title": "Diktuojant"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "Redagavimas perkeltas į kitą įrenginį"
   },
   "onboarding": {
-    "activityAiNote": "Pasiūlymo langų pavadinimai palieka šį įrenginį tik tada, kai patvirtinate stella DI aprašą, vieną kartą arba visada. Jie nesaugomi.",
+    "activityAiNote": "Pasiūlymo langų pavadinimai palieka šį įrenginį tik tada, kai suteikę sutikimą paprašote stella DI juodraščio, vieną kartą arba visada. Jie nesaugomi.",
     "activityBody": "Pamatykite, kur dingo darbo diena, ir paverskite ją laiko įrašų juodraščiais. Jūs sprendžiate, kas įrašoma ir kas siunčiama.",
     "activityConsentNote": "Niekas neįrašoma, kol skiltyje Veikla nepaspausite Pradėti įrašyti. Bet kada galite pristabdyti, išskirti programas ar ištrinti bet kurią dieną.",
     "activityNeverKeys": "Klavišų paspaudimai ar įvestas tekstas",
@@ -1210,6 +1257,7 @@
     "checkForUpdates": "Tikrinti naujinimus",
     "dictation": "Diktavimas",
     "dictationHint": "Norėdami diktuoti, laikykite {key}",
+    "dictationRetype": "Įvesti paskutinį diktavimą dar kartą",
     "dictationSettings": "Diktavimo nustatymai…",
     "dictationTurnOn": "Įjungti diktavimą…",
     "documentsSyncing": "{count, plural, one {{count} dokumentas sinchronizuojamas} few {{count} dokumentai sinchronizuojami} other {{count} dokumentų sinchronizuojama}}",

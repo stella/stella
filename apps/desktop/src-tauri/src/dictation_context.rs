@@ -17,7 +17,7 @@
   allow(dead_code, reason = "only builds with the speech engine send context")
 )]
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 use crate::{
   dictation_cleanup,
@@ -26,7 +26,7 @@ use crate::{
 };
 
 /// The kind of app a dictation goes to, as the cleanup contract names it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AppKind {
   Email,

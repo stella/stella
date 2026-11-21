@@ -14,12 +14,13 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { ComposerAttachMenu } from "@/components/composer-attach-menu";
-import { dictationClock } from "@/components/dictate-button";
+import { dictationClock, KeptDictationBar } from "@/components/dictate-button";
 import { ThreadMatter } from "@/components/thread-matter";
 import { useChatAttachments } from "@/components/use-chat-attachments";
 import type { AttachmentNotice } from "@/components/use-chat-attachments";
 import { useDictation } from "@/components/use-dictation";
 import type { DictationNotice } from "@/components/use-dictation";
+import { useDictationField } from "@/components/use-dictation-field";
 import { useSharedDraft } from "@/components/use-shared-draft";
 import {
   ArrowUpIcon,
@@ -44,7 +45,6 @@ import type {
   DraftSendMode,
   SendRefusal,
 } from "@/state/chat-attachments";
-import { appendDictation } from "@/state/dictation";
 import { DICTATION_TOTAL_MAX_MS } from "@/state/dictation-chunks";
 import { sizeInUnits } from "@/state/scan-pages";
 import { useUiColors } from "@/theme";
@@ -131,12 +131,11 @@ export const ChatComposer = ({
     },
     shareId,
   });
-  const dictation = useDictation(
-    (text) => {
-      setDraft((typed) => appendDictation(typed, text));
-    },
-    { matterId: use(ThreadMatter) },
-  );
+  const field = useDictationField(draft, setDraft);
+  const dictation = useDictation(field.insert, {
+    field: "chat",
+    matterId: use(ThreadMatter),
+  });
   const message = draft.trim();
   const notice = useNoticeText({
     notice: files.notice,
@@ -277,6 +276,7 @@ export const ChatComposer = ({
           {t("sendWithoutAnonymization")}
         </Button>
       ) : null}
+      <KeptDictationBar dictation={dictation} />
       <Box>
         {files.attachments.length === 0 ? null : (
           <ScrollView
@@ -315,7 +315,7 @@ export const ChatComposer = ({
             {dictation.phase === "idle" ? (
               <Textarea
                 accessibilityLabel={t("composerPlaceholder")}
-                onChangeText={setDraft}
+                {...field.inputProps}
                 placeholder={t("composerPlaceholder")}
                 unstyled
                 value={draft}

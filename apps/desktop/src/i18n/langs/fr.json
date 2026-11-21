@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Certaines activités enregistrées ne peuvent pas être lues. Vous pouvez effacer les activités enregistrées illisibles et les données de récupération de leurs brouillons.",
     "unrecoverableOtherHistoryConfirmation": "L'historique enregistré des autres comptes sera supprimé, y compris les données de récupération des brouillons en attente dont les clés sont absentes ou les fichiers illisibles. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",
     "welcomeControlFact": "Temps d’inactivité exclu. Suspendez ou supprimez à tout moment.",
-    "welcomeDetails": "L’activité des applications est relevée toutes les quelques secondes et n’est jamais envoyée automatiquement. Les titres de fenêtres et les chemins des documents ouverts sont aussi enregistrés, sauf si vous désactivez les détails. Les résumés ne sont copiés dans le presse-papiers que sur demande. Vous pouvez exclure des applications et choisir la durée de conservation de l’historique. Désactiver les détails arrête l’enregistrement de nouveaux détails ; les anciens restent conservés jusqu’à l’expiration de cette durée ou leur suppression. Les titres de fenêtres d’une suggestion ne quittent cet appareil que si vous approuvez une description par stella AI, une fois ou toujours ; ils ne sont pas conservés.",
+    "welcomeDetails": "L’activité des applications est relevée toutes les quelques secondes et n’est jamais envoyée automatiquement. Les titres de fenêtres et les chemins des documents ouverts sont aussi enregistrés, sauf si vous désactivez les détails. Les résumés ne sont copiés dans le presse-papiers que sur demande. Vous pouvez exclure des applications et choisir la durée de conservation de l’historique. Désactiver les détails arrête l’enregistrement de nouveaux détails ; les anciens restent conservés jusqu’à l’expiration de cette durée ou leur suppression. Les titres de fenêtre d’une suggestion ne quittent cet appareil que lorsque vous demandez un brouillon à stella AI après avoir donné votre consentement, une fois ou toujours ; ils ne sont pas conservés.",
     "welcomeLearnMore": "En savoir plus",
     "welcomeLocalFact": "Chiffré sur cet appareil.",
     "welcomePreviewMatter": "Renouvellement du bail Riverside",
@@ -662,6 +662,35 @@
       "openSoundPc": "Ouvrir les paramètres de son",
       "title": "stella n'entend pas votre micro"
     },
+    "perApp": {
+      "add": "Ajouter…",
+      "cleanup": {
+        "default": "Correction selon le réglage",
+        "label": "Correction pour {name}",
+        "off": "Sans correction",
+        "on": "Avec correction"
+      },
+      "description": "Activez ou désactivez la correction par l’IA et choisissez la langue pour une app ou un type d’app. C’est l’app au premier plan au début de la dictée qui compte.",
+      "failed": "Les réglages n’ont pas pu être enregistrés. Réessayez.",
+      "group": "Par app",
+      "kinds": {
+        "browser": "Navigateurs",
+        "chat": "Apps de discussion",
+        "code": "Éditeurs de code",
+        "document": "Traitements de texte",
+        "email": "Apps de messagerie",
+        "other": "Autres apps",
+        "terminal": "Terminaux"
+      },
+      "kindsOfApp": "Types d’app",
+      "language": {
+        "default": "Langue selon le réglage",
+        "label": "Langue pour {name}"
+      },
+      "recentApps": "Apps récentes",
+      "remove": "Retirer {name}",
+      "title": "Réglages pour une app"
+    },
     "preview": {
       "finishing": "Finalisation…",
       "label": "Ce que vous avez dicté jusqu’ici",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "Le modèle vocal n’a pas pu être supprimé. Réessayez.",
     "removeModel": "Supprimer",
+    "retype": {
+      "description": "Appuyez sur {shortcut} pour retaper votre dernière dictée au curseur. Elle reste seulement en mémoire, tant qu’elle figure dans l’historique du presse-papiers.",
+      "taken": "Une autre app utilise {shortcut}. Le menu Dictée de l’icône stella propose la même chose.",
+      "title": "Raccourci pour la dernière dictée"
+    },
     "shortcutTaken": "Une autre application utilise {shortcut}.",
     "sounds": {
       "description": "Émettre un son bref et discret au début et à la fin de l’enregistrement.",
@@ -681,6 +715,19 @@
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez.",
       "open": "Ouvrir",
       "title": "Transcrire un enregistrement"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Baisser les autres sons",
+        "nothing": "Ne rien faire",
+        "pause": "Mettre Musique et Spotify en pause"
+      },
+      "description": "Ce qui arrive aux autres sons pendant que stella enregistre, pour qu’ils ne finissent pas dans le texte. Tout revient à la fin de l’enregistrement.",
+      "speakersOnly": {
+        "description": "Les écouteurs restent tels quels : le micro ne les entend pas.",
+        "title": "Seulement sur les haut-parleurs"
+      },
+      "title": "Pendant la dictée"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "Modification déplacée vers un autre appareil"
   },
   "onboarding": {
-    "activityAiNote": "Les titres de fenêtres d’une suggestion ne quittent cet appareil que si vous approuvez une description par stella AI, une fois ou toujours. Ils ne sont pas conservés.",
+    "activityAiNote": "Les titres de fenêtre d’une suggestion ne quittent cet appareil que lorsque vous demandez un brouillon à stella AI après avoir donné votre consentement, une fois ou toujours. Ils ne sont pas conservés.",
     "activityBody": "Voyez où est passée votre journée de travail et transformez-la en brouillons de saisies de temps. Vous décidez de ce qui est enregistré et de ce qui est envoyé.",
     "activityConsentNote": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement dans Activité. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
     "activityNeverKeys": "Frappes au clavier ou texte saisi",
@@ -1210,6 +1257,7 @@
     "checkForUpdates": "Vérifier les mises à jour",
     "dictation": "Dictée",
     "dictationHint": "Maintenez {key} pour dicter",
+    "dictationRetype": "Retaper la dernière dictée",
     "dictationSettings": "Réglages de la dictée…",
     "dictationTurnOn": "Activer la dictée…",
     "documentsSyncing": "{count, plural, one {{count} document en synchronisation} other {{count} documents en synchronisation}}",

@@ -1,0 +1,1457 @@
+{
+  "caseLaw": {
+    "analysis": {
+      "abstract": "Kokkuvõte",
+      "aiLayer": "{layer} (AI)",
+      "backToSection": "Tagasi selle osa algusesse",
+      "categories": {
+        "facts": "Asjaolud",
+        "holding": "Lahend",
+        "procedural-history": "Menetluskäik",
+        "reasoning": "Arutlus"
+      },
+      "errors": {
+        "analysisDisabled": "Tehisintellekti analüüside loomine on selles serveris välja lülitatud. Lugege kohtulahendi teksti või proovige hiljem uuesti.",
+        "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "decisionNotFound": "Seda kohtulahendit ei leitud. Avage see uuesti otsingust.",
+        "documentUnparseable": "Kohtulahendi tekst ei ole analüüsiks valmis. Lugege algallikat.",
+        "languageUnsupported": "AI-analüüs on saadaval ainult nendes keeltes lahenditele: {languages}.",
+        "openLanguageVersion": "Ava keeleversioon: {language}",
+        "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
+        "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
+        "retryAfter": "Uuesti saate proovida alates {time}.",
+        "sourceRestricted": "Allikas ei luba tehisintellekti analüüsi. Lugege kohtulahendi teksti või algallikat.",
+        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}"
+      },
+      "generate": "Koosta AI lühikokkuvõtted",
+      "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
+      "noCurrentSection": "Praegu pole jaotist, kuhu liikuda.",
+      "topics": "Teemad",
+      "treatment": "Hilisem käsitlus"
+    },
+    "analyzing": "Analüüsin…",
+    "browse": {
+      "courtDescription": "{court} ({country}): lahendid stella avalikus õigusandmebaasis aasta ja kuu kaupa.",
+      "courts": "Kohtud",
+      "days": "Päevad",
+      "jurisdictionDescription": "{country}: kohtulahendid stella avalikus õigusandmebaasis kohtu, aasta ja kuu kaupa.",
+      "periodDescription": "{court} ({country}), {period}: lahendid stella avalikus õigusandmebaasis."
+    },
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Millised olid asjaolud ja mida väitis kumbki pool?",
+          "name": "Asjaolud ja poolte seisukohad"
+        },
+        "holding": {
+          "body": "Kuidas kohus otsustas ja miks?",
+          "name": "Resolutsioon ja põhjendused"
+        },
+        "precedent": {
+          "body": "Millistele varasematele lahenditele see tugineb ja kas järgib neid?",
+          "name": "Varasemad lahendid"
+        },
+        "provisions": {
+          "body": "Milliseid sätteid kohus kohaldab ja kuidas neid tõlgendab?",
+          "name": "Kohaldatud sätted"
+        }
+      }
+    },
+    "citation": {
+      "citedAtLeast": "Viidatud vähemalt {count, plural, one {# kord} other {# korda}}",
+      "citedSummary": "{count, plural, =0 {Viitamata} one {Viidatud üks kord} other {Viidatud # korda}}",
+      "dateUnavailable": "Kuupäev pole saadaval",
+      "decisionCount": "{count, plural, =0 {Lahendeid pole} one {# lahend} other {# lahendit}}",
+      "goToMention": "Mine {number}. mainimise juurde",
+      "goToParagraph": "Mine punkti {paragraph} juurde",
+      "lastNegative": "viimane negatiivne viide aastal {year}",
+      "mentionMark": "{number}. mainimine",
+      "mentionsInDecision": "{count, plural, one {Selles lahendis viidatud üks kord} other {Selles lahendis viidatud # korda}}",
+      "negativeCount": "{count, plural, one {# negatiivne} other {# negatiivset}}",
+      "none": "Viiteid pole veel salvestatud.",
+      "notInStella": "Veel pole rakenduses stella",
+      "openDecision": "Ava lahend",
+      "paragraphLabel": "Punkt {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, punkt {paragraph}",
+      "partialSummary": "Viidete koguarvud ja ajajoon on osalised.",
+      "passageNotFound": "Viitavat lõiku tekstist ei leitud",
+      "positiveCount": "{count, plural, one {# positiivne} other {# positiivset}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
+      "showAll": "{count, plural, one {Näita # lahendit} other {Näita kõiki # lahendit}}",
+      "stripLabel": "Viited aastate kaupa",
+      "treatment": {
+        "mixed": "Vastuoluline",
+        "negative": "Negatiivne",
+        "neutral": "Mainitud",
+        "positive": "Heaks kiidetud",
+        "supportive": "Järgitud",
+        "unclassified": "Liigitamata"
+      },
+      "unresolved": "Lahendiga sidumata",
+      "whereCited": "Kus sellele lahendile viidatakse",
+      "yearTitle": "{year}: {count, plural, one {# viide} other {# viidet}}"
+    },
+    "columns": {
+      "caseNumber": "Kohtuasja number",
+      "citedBy": "Viidatud",
+      "headnote": "Lühikokkuvõte",
+      "summary": "Õiguslik seisukoht / vaste"
+    },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# kohus} other {# kohut}}",
+      "newLast24Hours": "{count} viimase 24 h jooksul",
+      "newLast7Days": "Uued viimase 7 päeva jooksul",
+      "otherCourts": "Muud kohtud"
+    },
+    "courtTiers": {
+      "constitutional": "Põhiseaduslikkuse järelevalve kohtud",
+      "other": "Muud kohtud",
+      "regional": "Ringkonnakohtud",
+      "supreme": "Riigikohtud"
+    },
+    "coverage": {
+      "allCurrent": "Kõik allikad on ajakohased",
+      "censusComparison": "{stored} salvestatud / {publisher} avaldatud · {withText} tekstiga",
+      "censusComplete": "Täielik",
+      "censusIncomplete": "Mittetäielik",
+      "censusSliceMemberships": "Arvud on liidetud osade kaupa; üks lahend võib esineda mitu korda.",
+      "completeness": "Täielikkus",
+      "completenessHelp": "Salvestatud lahendite arv võrrelduna avaldaja koguarvu, tema loendi või registreeritud koguarvuga. Avaldaja loendis olevaid lahendeid, mis võrdlemisel puudu leiti, ei arvestata.",
+      "countryNavigation": "Vali riik",
+      "courtsHeading": "Kohtute kaupa",
+      "decisionYears": "Lahendite aastad",
+      "decisionsAcross": "lahendit {count, plural, one {# jurisdiktsioonist} other {# jurisdiktsioonist}}",
+      "description": "Kui palju kohtupraktikat korpuses on, riikide ja kohtute kaupa, ning kui värske on iga allikas.",
+      "generatedAt": "Andmed seisuga {date}",
+      "healthCurrent": "Ajakohane",
+      "healthDelayed": "Hilineb",
+      "healthDisabled": "Välja lülitatud",
+      "healthSnapshot": "Fikseeritud hetktõmmis",
+      "healthStalled": "Takerdunud",
+      "healthUnknown": "Pole kunagi käivitunud",
+      "inPreparation": "Ettevalmistamisel",
+      "lastSync": "Viimane sünkroonimine",
+      "notCountedYet": "Veel loendamata",
+      "notMeasuredYet": "Veel mõõtmata",
+      "searchable": "Otsitavad",
+      "sourceExceptions": "{count, plural, one {# allikas vajab tähelepanu} other {# allikat vajab tähelepanu}}",
+      "sourcesCurrent": "Ajakohased allikad",
+      "syncedAt": "Sünkroonitud {time}",
+      "title": "Kohtupraktika kaetus",
+      "totalFrom": "Koguarv seisuga {date}",
+      "unavailable": "Kaetuse andmed ei ole praegu saadaval."
+    },
+    "decisionNotFound": "Otsust ei leitud",
+    "decisionTypes": {
+      "administrative_decision": "Haldusakt",
+      "binding_excise_information": "Siduv aktsiisiteave",
+      "binding_rate_information": "Siduv käibemaksumäära teave",
+      "court_direction": "Korraldus",
+      "decision": "Otsus",
+      "finding": "Sisuline otsus",
+      "general_tax_ruling": "Üldine maksutõlgendus",
+      "individual_tax_ruling": "Individuaalne maksutõlgendus",
+      "judgment": "Kohtuotsus",
+      "leave_refused": "Tagasi lükatud olulise õigusküsimuse puudumise tõttu",
+      "merits_decision": "Sisulahend",
+      "ministry_of_justice_decision": "Justiitsministeeriumi otsus",
+      "minutes_extract": "Väljavõte protokollist",
+      "opinion": "Arvamus",
+      "order": "Määrus",
+      "other": "Muu",
+      "payment_order": "Maksekäsk",
+      "penal_order": "Karistuskäsk",
+      "principle_decision": "Põhimõtteline otsus",
+      "protective_opinion": "Kaitsev arvamus",
+      "resolution": "Resolutsioon",
+      "signalling_decision": "Märguandeotsus",
+      "statement_of_reasons": "Põhjendus",
+      "tax_explanations": "Maksualased selgitused",
+      "top_up_tax_opinion": "Arvamus täiendava maksu kohta",
+      "uniformity_decision": "Kohtupraktika ühtlustamise otsus"
+    },
+    "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
+    "filters": {
+      "countryMismatch": "Eemaldati filtrid, mis ei kuulu valitud riigi ({country}) juurde: {filters}.",
+      "remove": "Eemalda filter {filter}",
+      "showInCountry": "Kuva {filter} riigis {country}"
+    },
+    "languages": {
+      "count": "{count, plural, one {# keel} other {# keelt}}",
+      "matchedIn": "Vaste keeles: {language}"
+    },
+    "linkedPassageGone": "Lingitud lõiku selles tekstis enam ei ole.",
+    "loadingMore": "Laadib rohkem…",
+    "marginFilter": {
+      "label": "Viidatud sätete filter",
+      "paragraph": "{count, plural, one {¶{paragraph} viitab # sättele} other {¶{paragraph} viitab # sättele}}",
+      "selection": "{count, plural, one {Valitud tekst viitab # sättele} other {Valitud tekst viitab # sättele}}",
+      "unnumberedParagraph": "{count, plural, one {See lõik viitab # sättele} other {See lõik viitab # sättele}}"
+    },
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# lahend oli siia juba salvestatud} other {# lahendit oli siia juba salvestatud}}",
+      "empty": "Sellesse toimikusse pole veel kohtupraktikat salvestatud.",
+      "emptyAction": "Otsi kohtupraktikat",
+      "note": "Märkus",
+      "notePlaceholder": "Miks need lahendid siin olulised on…",
+      "rejectedLimit": "{count, plural, one {# lahendit ei salvestatud: toimik on täis} other {# lahendit ei salvestatud: toimik on täis}}",
+      "rejectedMissing": "{count, plural, one {# lahendit ei leitud} other {# lahendit ei leitud}}",
+      "remove": "Eemalda toimikust",
+      "save": "Salvesta toimikusse",
+      "savePage": "Sellelt lehelt salvestatakse {count, plural, one {# lahend} other {# lahendit}}.",
+      "saveSelection": "Salvestatakse {count, plural, one {# valitud lahend} other {# valitud lahendit}}.",
+      "saveTitle": "Salvesta toimikusse",
+      "saved": "{count, plural, one {# lahend} other {# lahendit}} salvestatud toimikusse {matter}"
+    },
+    "newestDecisions": "Uusimad lahendid",
+    "noResults": {
+      "hint": "Proovige teisi sõnu, parandage päringut tehisintellektiga või esitage küsimus vestluses."
+    },
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Inimeste",
+      "toggleState": "{label}: {state, select, on {sees} other {väljas}}"
+    },
+    "oldestDecisions": "Vanimad lahendid",
+    "pagination": {
+      "goToPage": "Mine leheküljele {page}",
+      "label": "Tulemuste leheküljed",
+      "pageOfCount": "Lehekülg {page}/{pageCount}",
+      "pageOfEstimatedCount": "Lehekülg {page}/~{pageCount}",
+      "pageOfEstimatedCountLabel": "Lehekülg {page}, kokku ligikaudu {pageCount}",
+      "pageWithEstimatedMatchCounts": "Lehekülg {page} · ligikaudu {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
+      "pageWithEstimatedResultCount": "Lehekülg {page} · ligikaudu {count, plural, one {# tulemus} other {# tulemust}}",
+      "pageWithMatchCounts": "Lehekülg {page} · {exactCount, plural, one {# täpne vaste} other {# täpset vastet}} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
+      "pageWithPartialMatchCount": "Lehekülg {page} · {relaxedCount, plural, one {# osaline vaste} other {# osalist vastet}} sellel lehel",
+      "pageWithResultCount": "Lehekülg {page} · {count, plural, one {# tulemus} other {# tulemust}}",
+      "perPage": "Lehekülje kohta",
+      "refineForMore": "Täpsustage otsingut, et näha rohkem tulemusi"
+    },
+    "paragraphRangeNotFound": "{count, plural, one {Lõiku {range} sellest tekstist ei leitud.} other {Lõike {range} sellest tekstist ei leitud.}}",
+    "paragraphRangeSelected": "{count, plural, one {Lõik {range} on esile tõstetud.} other {Lõigud {range} on esile tõstetud.}}",
+    "provision": {
+      "article": "art {value}",
+      "letter": "p {value})",
+      "openEnded": "jj",
+      "point": "punkt {value}",
+      "sentence": "lause {value}",
+      "subsection": "lg {value}"
+    },
+    "reader": {
+      "documentUpdated": "Dokumenti on uuendatud.",
+      "expandProvisions": "Laienda sätteid",
+      "headMatter": "Kohtuasja andmed",
+      "sourceAttribution": "Lähteandmed on vabalt kättesaadavad aadressil <link>{source}</link>."
+    },
+    "research": {
+      "answering": "{count, plural, one {Vastan # lahtrile…} other {Vastan # lahtrile…}}",
+      "answers": {
+        "failureReasons": {
+          "decisionUnavailable": "Lahend pole saadaval",
+          "missingAnswer": "Mudel ei vastanud",
+          "modelError": "Mudeli viga",
+          "noText": "Lahendi tekst puudub",
+          "runError": "Käivitus katkes",
+          "wrongType": "Vastus vales vormingus"
+        },
+        "no": "Ei",
+        "notAllowed": "Allika tingimused ei luba",
+        "notRun": "Pole käivitatud",
+        "notStated": "Lahendis pole märgitud",
+        "pending": "Vastan…",
+        "showSource": "Näita allikat",
+        "yes": "Jah"
+      },
+      "deleteColumnConfirm": "Küsimus ja kõik selle vastused kustutatakse kogu teie organisatsiooni jaoks, igast otsingust ja kõigilt liikmetelt. Kui soovite selle eemaldada ainult sellest otsingust, valige „Eemalda sellest otsingust“.",
+      "editQuestionHint": "Sõnastuse, vastuse tüübi või selle valikute muutmine kustutab praegused vastused; käivitage veerg seejärel uuesti.",
+      "emptyPage": "Sellel lehel pole kohtulahendeid.",
+      "newQuestionColumn": "Uus",
+      "nothingToRun": "Igal lahtril on juba vastus",
+      "questionAdded": "„{question}“ lisati tabelisse",
+      "questionPlaceholder": "nt Kas kohus pidas ülesütlemist kehtivaks?",
+      "removeFromSearch": "Eemalda sellest otsingust",
+      "runAll": "Vasta kõigile",
+      "runConfirm": "Vasta nüüd",
+      "runEstimate": "{rows, plural, one {# lahend} other {# lahendit}} × {columns, plural, one {# küsimus} other {# küsimust}} sellel leheküljel: luuakse {cells, plural, one {# vastus} other {# vastust}}.",
+      "runInProgress": "Üht uurimisküsimust juba töödeldakse.",
+      "runPermissionRequired": "Uurimisküsimuste töötlemiseks on vaja vastavat õigust.",
+      "runTitle": "Vasta sellel leheküljel",
+      "savedQuestions": "Salvestatud küsimused",
+      "title": "Uurimistabelid"
+    },
+    "results": {
+      "excerpt": {
+        "label": "Väljavõte",
+        "long": "Pikk",
+        "medium": "Keskmine",
+        "short": "Lühike"
+      }
+    },
+    "rewritten": {
+      "line": "Päringule <bdi>{original}</bdi> täpseid vasteid pole; kuvatakse tulemused päringule <bdi>{query}</bdi>",
+      "searchOriginal": "Otsi minu algseid sõnu"
+    },
+    "sameCaseNumber": "{count, plural, one {# lahend kannab} other {# lahendit kannavad}} seda kohtuasja numbrit. Valige kohus.",
+    "searchLabel": "Otsi kohtupraktikast",
+    "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
+    "searchStillSearching": "Otsinguteenus on hõivatud. Otsing jätkub…",
+    "searchUnavailable": {
+      "description": "Kohtupraktika otsinguga ei õnnestunud ühendust saada. Sinu päring säilib aadressiribal, proovi hetke pärast uuesti.",
+      "title": "Otsing pole ajutiselt saadaval"
+    },
+    "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Kui teate kohtuasja numbrit või lahendi ECLI-t, otsige selle järgi.",
+        "message": "Sellele kogumikuviitele täpselt vastavat kohtulahendit ei leitud."
+      },
+      "noHits": {
+        "hint": "Proovige vähem või teisi sõnu: mõisteid, mida kasutaks kohtulahend, mitte lauset, millega küsimus esitatakse.",
+        "message": "Miski ei vasta sõnadele, mida see otsing nõudis."
+      },
+      "noHitsFiltered": {
+        "hint": "Eemaldage filter või laiendage seda ja otsige uuesti.",
+        "message": "Miski ei vasta valitud filtritele."
+      },
+      "partialMatch": "Osaline vaste",
+      "partialMatchMissing": "Puuduvad sõnad: {terms}",
+      "partialMatches": "Osalised vasted päringule: <bdi>{query}</bdi>",
+      "resultsFor": "Tulemused päringule: <bdi>{query}</bdi>",
+      "searchEveryWord": "Otsi kõiki sõnu"
+    },
+    "seo": {
+      "collectionName": "stella kohtupraktika",
+      "description": "Avalik kohtupraktika andmebaas indekseeritavate kohtulahendite ja õiguse allikatega.",
+      "homeDescription": "Avalik õigusandmebaas kohtulahendite ja konsolideeritud õigusaktidega; otsida saab tunnuse või sõnade järgi.",
+      "scopedDescription": "Avalik kohtupraktika andmebaas ({scope}) indekseeritavate kohtulahendite ja õiguse allikatega."
+    },
+    "showWholeHeadnote": "Näita kogu lühikokkuvõtet",
+    "sort": {
+      "newest": "Uusimad",
+      "oldest": "Vanimad",
+      "oldestUnavailable": "Otsingu tulemused järjestatakse asjakohasuse järgi või uuemad enne. Vanimate lahendite esmalt nägemiseks tühjendage otsing.",
+      "relevance": "Asjakohaseimad"
+    },
+    "viewer": {
+      "abstract": "Kokkuvõte",
+      "appealReviews": {
+        "conflict": "Läbivaatamise andmed on puudulikud või vastuolulised. Läbivaatamise tulemust tuleb kontrollida.",
+        "corpusOnly": "Olemasolevast korpusest ei leitud seda lahendit läbivaatavat lahendit. See ei tõenda, et edasikaebust ei ole esitatud.",
+        "noneFound": "Läbivaatavat lahendit ei leitud",
+        "overturned": "Tühistatud või muudetud",
+        "partly": "Osaliselt tühistatud",
+        "reviewedBy": "Läbivaatavad lahendid",
+        "reviews": "Läbivaadatud lahendid",
+        "sourceHistory": "Menetluse ajalugu",
+        "sourceMetadata": "Avaldaja metaandmed",
+        "sourceOpening": "Sissejuhatav lõik",
+        "title": "Edasikaebuse läbivaatamine",
+        "truncated": "Kuvatud on ainult osa läbivaatamise ajaloost.",
+        "underReview": "Läbivaatamisel",
+        "unknown": "Tulemus teadmata",
+        "upheld": "Jäi jõusse"
+      },
+      "appliedVersionNotStated": "Kohaldatud redaktsiooni pole märgitud",
+      "appliedVersionNotStatedCompact": "Redaktsioon märkimata",
+      "appliedVersionStatedAmendment": "Redaktsioon muudatuse <reference>{amendment}</reference> järgi",
+      "appliedVersionStatedAmendmentCompact": "Märgitud: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Kuupäeval {date} kehtinud redaktsioon} until {Kuni {date} kehtinud redaktsioon} from {Alates {date} kehtinud redaktsioon} other {Kuupäeval {date} kehtinud redaktsioon}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Märgitud: {date}} until {Märgitud: kuni {date}} from {Märgitud: alates {date}} other {Märgitud: {date}}}",
+      "caseFileDocuments": "Selle kohtuasja dokumendid",
+      "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
+      "citedBy": "Viidatud",
+      "citedDecisionPassage": "Lõik lahendis",
+      "cites": "Viitab",
+      "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Mine lõigu juurde} other {Mine lõikude juurde}}",
+      "judgeRole": {
+        "advocateGeneral": "Kohtujurist",
+        "dissenting": "Eriarvamus",
+        "panelMember": "Kohtukoosseisu liige",
+        "presiding": "Eesistuja kohtunik",
+        "rapporteur": "Ettekandja-kohtunik"
+      },
+      "judges": "Kohtunikud",
+      "legalArea": "Õigusvaldkond",
+      "legalSentence": "Õiguslause",
+      "paragraphReference": "Lõik {number}",
+      "popularName": "Rahvanimi",
+      "portraitCredit": "Portreede allikas: {source}",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# mainimine} other {# mainimist}}",
+      "provisionsCited": "Viidatud sätted",
+      "provisionsFailed": "Viidete töötlemine ebaõnnestus",
+      "provisionsNoneFound": "Viidatud sätteid ei leitud",
+      "provisionsProcessing": "Viiteid töödeldakse",
+      "provisionsUnavailable": "Viited pole saadaval",
+      "provisionsUnplaceable": "Viiteid ei saa lahendi tekstis paigutada",
+      "provisionsUnsupported": "Selle lahendi viidete töötlemist ei toetata",
+      "provisionsWithheld": "Viiteid ei avaldata",
+      "sourceFields": {
+        "decisionCategory": "Lahendi kategooria",
+        "publishedOnWeb": "Veebis avaldatud"
+      },
+      "statutes": "Kohaldatavad õigusaktid",
+      "textNotYetAvailable": "Kohus ei ole lahendi teksti avaldanud või ei ole see siin veel kättesaadav.",
+      "textPending": "Lahendi teksti alles hangitakse",
+      "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
+      "textUnavailable": "Selle lahendi teksti ei ole saadaval",
+      "versionAtDecisionDateInferred": "Otsuse kuupäeval kehtinud redaktsioon (tuletatud)",
+      "versionBasisInferredCompact": "Lahendi kuupäev · tuletatud",
+      "versionBasisInferredExplanation": "Redaktsioon on tuletatud lahendi kuupäevast. Lahendis ei ole märgitud, milline redaktsioon kohaldub."
+    },
+    "withdrawnByPublisher": "Avaldaja on tagasi võtnud"
+  },
+  "catalogue": {
+    "addCustom": "Lisa kohandatud",
+    "addCustomMcp": "Lisa integratsioon",
+    "addCustomSkill": "Lisa oskus",
+    "by": "Autor: {author}",
+    "configuration": "Konfiguratsioon",
+    "cost": {
+      "free": "Tasuta",
+      "paid": "Tasuline"
+    },
+    "detailAuthMethod": "Autentimine",
+    "empty": "Praegusele filtrile ei vasta ükski kirje.",
+    "filter": {
+      "mcps": "Integratsioonid",
+      "nativeTools": "Sisseehitatud tööriistad",
+      "skills": "Oskused"
+    },
+    "filterHint": "Filtreeritud: {codes}",
+    "firstParty": "stella",
+    "firstPartyTooltip": "Loodud stella tiimi poolt",
+    "installFailed": "Installimine ebaõnnestus",
+    "installPack": "{count, plural, one {Installi # tööriist} other {Installi # tööriista}}",
+    "installed": "{name} installitud",
+    "installedShort": "Installitud",
+    "onboarding": {
+      "packTitle": "Soovitatud teie jurisdiktsioonile"
+    },
+    "openHomepage": "Ava avaleht",
+    "packDescription": "{count, plural, one {# tööriist} other {# tööriista}} teie praksiseks valitud. Installige ühe klõpsuga või valige allpool eraldi.",
+    "packInstalled": "{count, plural, one {# tööriist installitud} other {# tööriista installitud}}",
+    "packPartial": "{installed} installitud, {failed} ebaõnnestus",
+    "removed": "See tööriist pole enam saadaval.",
+    "sectionOthers": "Muud",
+    "settings": {
+      "packTitle": "Soovitatud pakett"
+    },
+    "setup": {
+      "account": "Konto",
+      "apiKey": "API-võti",
+      "none": "Seadistus puudub"
+    },
+    "skillNeedsUnavailableTools": "Vestluses seda ei pakuta. See vajab tööriista, mis seal pole saadaval: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Peidab klientide nimed, kontonumbrid, aadressid ja muud isikuandmed enne toimiku sisu jagamist AI-teenuse pakkujatega. Kliendi poolel pööratav; avatekst ei lahku kunagi teie tööruumist.",
+      "ares": "Tšehhi ettevõtete otsing IČO või ärinime järgi avalikust ARES-i registrist (majandusüksuste haldusregister, Tšehhi vaste äriregistrile).",
+      "boe": "Hispaania konsolideeritud õigusaktid, igapäevane ametlik väljaanne ja BORME (äriregistri väljaanne) Boletín Oficial del Estado ametlikust avaandmete API-st.",
+      "brreg": "Norra ettevõtete otsing organisasjonsnummeri või ärinime järgi Brreg Enhetsregisteret'i avalikust avatud API-st.",
+      "companiesHouse": "Ühendkuningriigi ettevõtete otsing Companies House'i registrinumbri või ärinime järgi Companies House'i avalike andmete API-st. Vajalik on tasuta API-võti.",
+      "createDocx": "Loob vestlusest Wordi dokumente koos vormingu, tabelite, päiste ja manustatud stiilidega. Tulemuse saab alla laadida ning seda Wordis, LibreOffice'is ja Pagesis muuta.",
+      "denue": "Mehhiko tegevuskohtade ja majandusüksuste otsing DENUE tegevuskoha ID, nime või ärinime järgi INEGI ametlikust DENUE API-st. DENUE on tegevuskohtade kataloog, mitte äriühinguõiguse register Registro Público de Comercio. Vajalik on tasuta INEGI API-tunnus.",
+      "edgar": "USA börsiettevõtete otsing Central Index Key (CIK) järgi SEC-i EDGAR-i esitiste API-st.",
+      "gcis": "Taiwani ettevõtete otsing 統一編號 (tongbian, maksukohustuslase number) või ärinime järgi majandusministeeriumi (MoEA) portaali Commerce Industrial Services avaandmete API-st.",
+      "infosoud": "Tšehhi kohtuasjade otsing ja istungite kalender aadressilt infosoud.gov.cz. Otsi kohtuasja numbri, kohtu või poole järgi, et saada istungite ajad ja menetluse seis.",
+      "krs": "Poola ettevõtete otsing KRS-numbri järgi justiitsministeeriumi Krajowy Rejestr Sądowy (KRS) avatud API-st. Hõlmab registreid Rejestr Przedsiębiorców (äriühingud) ja Rejestr Stowarzyszeń (ühingud ja sihtasutused).",
+      "orsr": "Slovakkia ettevõtete otsing IČO või ärinime järgi justiitsministeeriumi hallatava registri Obchodný register Slovenskej republiky JSON API-st.",
+      "prh": "Soome ettevõtete otsing Y-tunnuse või ärinime järgi asutuse Patentti- ja rekisterihallitus (PRH) avatud API-st AvoinData v3.",
+      "rechercheEntreprises": "Prantsuse ettevõtete otsing SIREN-i, SIRET-i või ärinime järgi avatud API-st recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Slovakkia otsing IČO või nime järgi Slovaki Vabariigi Statistikaameti hallatavas registris Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO). Hõlmab kõiki juriidilisi isikuid ja ettevõtjaid, sealhulgas füüsilisest isikust ettevõtjaid, ühinguid, sihtasutusi ja avalikke asutusi, kes äriregistris ei ole.",
+      "vies": "Üle-ELiline käibemaksukohustuslase numbri kontroll Euroopa Komisjoni käibemaksuteabe vahetamise süsteemi (VIES) REST API kaudu. Kinnitab, kas number on tarnija liikmesriigis registreeritud, ning tagastab registreeritud ettevõtja nime ja aadressi, kui liikmesriik need avaldab.",
+      "webSearch": "Otsib avalikust veebist ja loeb üksikuid lehti. Kui jurisdiktsioon on määratud, suunatakse päringud esmalt esmaallikatesse (kohtud, õigusaktide portaalid), muidu avatud veebi. Lubatakse iga vestluse jaoks eraldi."
+    },
+    "toolNames": {
+      "anonymize": "Anonüümimine",
+      "createDocx": "Loo DOCX",
+      "gcis": "GCIS-i äriregister",
+      "vies": "ELi käibemaksukohustuslase kontroll (VIES)",
+      "webSearch": "Veebiotsing"
+    },
+    "unavailable": "Veel pole saadaval"
+  },
+  "guides": {
+    "action": {
+      "replay": "Alusta uuesti",
+      "skip": "Jäta vahele"
+    },
+    "checklist": {
+      "activeTour": "Lõpetage praegune juhend või väljuge sellest.",
+      "progress": "{completed} / {total} tehtud"
+    },
+    "community": {
+      "personalSupport": "Personaalne tugi"
+    },
+    "help": {
+      "buttonLabel": "Abi ja tagasiside",
+      "title": "Abi ja tagasiside"
+    },
+    "leave": "Välju juhendist",
+    "minutes": "{count} min.",
+    "nudge": {
+      "action": "Ava juhendid",
+      "body": "Uus siin? Mõni lühike ringkäik näitab teile kõike."
+    },
+    "status": {
+      "skipped": "Vahele jäetud"
+    },
+    "tours": {
+      "chat": {
+        "description": "Lisa AI-le kontekst ja saada päring turvaliselt",
+        "examplePrompt": "Võta kokku selle lepingu peamised kohustused",
+        "steps": {
+          "anonymize": {
+            "body": "Peidab isikuandmed enne saatmist ja taastab need vastuses.",
+            "title": "Saada anonüümitult",
+            "when": "Lülita sisse, kui tekst sisaldab isikuandmeid ja küsimus ei sõltu sellest, kes on osapooled. Jäta välja, kui just isik ongi küsimuse tuum, näiteks huvide konflikti kontrollimisel: kohatäited eemaldavad täpselt selle, mille kohta küsid."
+          },
+          "attach": {
+            "body": "Laadib faili sellest seadmest vestlusesse. Seda loetakse ainult selle lõime jaoks ja toimikusse seda ei salvestata.",
+            "title": "Lisa fail",
+            "when": "Sobib ühekordsele dokumendile, mida pole vaja alles hoida: äsja e-postiga saabunud kavand, skann või tabel, millest soovid vaid kokkuvõtet."
+          },
+          "composer": {
+            "body": "Kirjuta tavakeeles, mida soovid: ülesanne, mida see puudutab ja millises vormis vastust ootad. Kõik ülejäänu siin üksnes teravdab juba kirja pandud soovi.",
+            "title": "Alusta soovist"
+          },
+          "context": {
+            "body": "Lisab olemasoleva toimiku või faili kontekstiks. Midagi ei laadita üles ega kopeerita.",
+            "title": "Viita toimikule või failile",
+            "when": "Kasuta seda faili lisamise asemel alati, kui dokument on juba salvestatud. Viita toimikule, kui assistent peaks selle tervikuna läbi vaatama; ühele failile siis, kui tead täpselt, mida lugeda. @ tühjas redaktoris avab selle loendi otse."
+          },
+          "plusMenu": {
+            "body": "Kasuta nuppu +, et lisada fail või viidata toimikule.",
+            "title": "Lisa konteksti nupuga +",
+            "when": "Kui vajalikku konteksti pole veel vestluses."
+          },
+          "send": {
+            "body": "Saadab sõnumi koos kõigega, mille eespool lisasid, millele viitasid või mille sisse lülitasid. Redaktor jääb paigale, nii et järelküsimusega saad lisada selle, mis esimesest vastusest puudus.",
+            "title": "Saada teele",
+            "when": "Esimene vastus näitab, mis on veel puudu."
+          }
+        },
+        "title": "Alusta vestlusest"
+      },
+      "chatPower": {
+        "description": "Kasuta oskusi või ühenda muid kasulikke tööriistu",
+        "steps": {
+          "mcp": {
+            "body": "Lülitab ühendatud serveri tööriistad sinu vestlustes sisse või välja: äriregistrid, sisemised süsteemid, kõik, mille sinu meeskond on ühendanud.",
+            "title": "Ühendatud tööriistaserverid",
+            "when": "Lülita sisse, kui vastus vajab värskeid andmeid väljastpoolt tööruumi. Ülejäänud jäta välja: mida vähem tööriistu mängus, seda kitsam ja etteaimatavam on vastus."
+          },
+          "models": {
+            "body": "Vahetab mudelit ainult selles vestluses. Kõik teised lõimed jäävad sinu tööruumi vaikemudeli juurde.",
+            "title": "Milline mudel"
+          },
+          "plusMenu": {
+            "body": "Samas menüüs on ka mudeli vahetus, oskused ja ühendatud tööriistaserverid. Järgmised sammud avavad selle ja käsitlevad iga valikut eraldi.",
+            "title": "Veel nupu + taga"
+          },
+          "skills": {
+            "body": "Lisab salvestatud viiba või sinu meeskonna kirjutatud oskuse: üle vaadatud juhiste kogumi, mis lahendab sama ülesande iga kord ühtmoodi.",
+            "title": "Oskused ja salvestatud viibad",
+            "when": "Kasuta siis, kui ülesanne kordub ja sõnastus loeb, näiteks tavapärase lepingu ülevaatamisel või vastuvõtu kokkuvõttes. / tühjas redaktoris avab selle loendi otse."
+          }
+        },
+        "title": "Tee vestluses rohkem"
+      },
+      "documents": {
+        "description": "Lisa dokument toimikusse ja leia see hiljem uuesti",
+        "steps": {
+          "browse": {
+            "body": "See tabel on toimiku dokumentide loend. Üleslaaditud failid kuvatakse siin ridadena. Hiljem naasmiseks ava toimik külgribalt, vali selle tabelivaade ja seejärel dokumendi rida.",
+            "title": "Leia dokument uuesti"
+          },
+          "upload": {
+            "body": "Nupp „Laadi üles“ avab failivalija; faile saab ka toimikusse lohistada. Igast failist saab selles toimikus dokument, mille sinu meeskond leiab ja mida stella saab ülevaatusel kasutada.",
+            "title": "Lisa dokument toimikusse",
+            "when": "Laadi fail siia, kui see kuulub toimikusse ja peab jääma kättesaadavaks. Lisa fail otse vestlusesse ainult siis, kui see on ajutine kontekst ühe vestluse jaoks."
+          }
+        },
+        "title": "Töö dokumentidega"
+      },
+      "playbooks": {
+        "description": "Salvesta dokumendi ülevaatamise protsess järgmiseks korraks",
+        "steps": {
+          "basics": {
+            "body": "Lisa nimi ja kirjeldus. Vajadusel piira see ühe dokumendiliigiga.",
+            "title": "Anna playbookile nimi"
+          },
+          "create": {
+            "body": "Alusta tühja playbookiga.",
+            "title": "Loo playbook"
+          },
+          "overview": {
+            "body": "Playbook säilitab küsimused ja reeglid teiste dokumentide jaoks.",
+            "title": "Salvesta ülevaatamise käik"
+          },
+          "positions": {
+            "body": "Vali iga reegli puhul, kas hinnata teksti või eraldada sellest üksikasi.",
+            "title": "Lisa ülevaatuse reeglid"
+          }
+        },
+        "title": "Loo playbook"
+      },
+      "tabularReview": {
+        "description": "Eralda vastused paljudest failidest korraga",
+        "steps": {
+          "addColumn": {
+            "body": "Nupp „Uus veerg“ avab veeruredaktori. Sõnasta veeru nimi selge küsimusena ja ütle rakendusele stella täpselt, mida otsida; sama juhist rakendatakse iga dokumendi rea suhtes.",
+            "title": "Esita igale dokumendile sama küsimus",
+            "when": "Loo eraldi veerg iga vastuse jaoks, mida soovid võrrelda, filtreerida, sortida või eksportida. Lisa seotud kontekst juhisesse, selle asemel et ühendada mitu vastust ühte lahtrisse."
+          },
+          "answerType": {
+            "body": "Valik „Vorming“ määrab iga vastuse kuju. Kui tulemusel on kindel struktuur, vali arv, kuupäev, üksikvalik või mitmikvalik; nii hoiab stella veeru ühtlasena ega tagasta suvalist vabateksti.",
+            "title": "Vali vastuse tüüp",
+            "when": "Kasuta fikseeritud tulemuste jaoks valikut, sortimiseks ja arvutusteks arvu või kuupäeva ning teksti ainult siis, kui vastus vajab tõepoolest põhjalikku kirjeldust."
+          },
+          "table": {
+            "body": "Iga rida on dokument ja iga kohandatud veerg üks küsimus, mis esitatakse korraga kõigile dokumentidele. Nii muutub failide kaust võrreldavateks vastusteks, ilma et peaksid dokumente ükshaaval avama.",
+            "title": "Vaata läbi kogu kogum, mitte üks fail",
+            "when": "Kasuta tabelit, kui vajad mitmest dokumendist samu fakte või otsuseid. Ava dokument otse, kui paigutus, sõnastus või ümbritsev kontekst on võrdlusest olulisem."
+          }
+        },
+        "title": "Ülevaatus tabelis"
+      },
+      "workflows": {
+        "description": "Ühenda sammud korratavaks töövooks",
+        "steps": {
+          "create": {
+            "body": "Nupp „Loo“ avab salvestamata töövoo mustandi. Järgmised sammud määravad, millal see käivitub, mida teeb ja kus peab inimene otsustama, kas töövoog jätkub.",
+            "title": "Alusta töövoo mustandiga"
+          },
+          "overview": {
+            "body": "Töövoog ühendab käivitaja toimingute jadaga, et tavapärane protsess kulgeks iga kord ühtemoodi. See võib töö automaatselt ette valmistada, jättes vajalikud otsused ülevaataja teha.",
+            "title": "Automatiseeri korratav protsess",
+            "when": "Automatiseeri töö, millel on kindel käivitaja, korduvad sammud ja erandite eest selgelt vastutav isik. Hoia muutuv või suuresti hinnangutel põhinev töö käsitsi tehtavana, kuni protsess ise on paigas."
+          },
+          "reviewGate": {
+            "body": "Ülevaatuse kontrollpunkt peatab käituse, kuni inimene selle kinnitab või tagasi lükkab. Lisa kontrollpunkt enne esimest toimingut, mida ei tohiks teha üksnes automatiseeritud tulemuse põhjal.",
+            "title": "Jäta otsus ülevaatajale",
+            "when": "Kasuta kontrollpunkti enne saatmist, toimikusse lisamist, eskaleerimist või muul viisil olulise tulemuse kinnitamist. Jäta see vahele ainult siis, kui järgmise sammu saab ohutult tagasi võtta ja see ei vaja inimese hinnangut."
+          },
+          "steps": {
+            "body": "Sammud käivituvad selles järjekorras ja annavad oma töö edasi. Määra igale sammule üks selge toiming, et tõrkeid oleks lihtne mõista ja järjestust muuta.",
+            "title": "Koosta sammude jada"
+          },
+          "trigger": {
+            "body": "Käivitaja määrab, millal käitus algab: käsitsi, ajakava järgi või sobivate failide üleslaadimisel. Täpsusta toimiku- ja failitingimusi nii, et töövoog ei käivituks kunagi seosetu töö peale.",
+            "title": "Vali, mis töövoo käivitab",
+            "when": "Kasuta käsitsi käivitamist, kuni protsess on uus, ajakava ajapõhiste rutiinide jaoks ning faili üleslaadimist ainult siis, kui saabuv dokument on usaldusväärne alustamissignaal."
+          }
+        },
+        "title": "Automatiseeri töövoog"
+      }
+    },
+    "unavailable": "See juhend ei ole praegu saadaval",
+    "whenLabel": "Millal kasutada:"
+  },
+  "knowledge": {
+    "agentSkills": {
+      "availabilityClient": "Üks klient",
+      "availabilityClientBadgeHelp": "Saadaval ainult ühe kliendi toimikutes.",
+      "availabilityClientHelp": "Kasutatav ainult selle kliendi toimikutes. Seda ei saa hiljem muuta.",
+      "availabilityFixedHelp": "Määrati oskuse loomisel. Seda ei saa muuta.",
+      "availabilityLabel": "Saadaval",
+      "availabilityMatter": "Üks toimik",
+      "availabilityMatterBadgeHelp": "Saadaval ainult ühes toimikus.",
+      "availabilityMatterHelp": "Kasutatav ainult selles toimikus. Seda ei saa hiljem muuta.",
+      "availabilityOrganization": "Kogu organisatsioon",
+      "availabilityTeamNeedsMatter": "Oskuse jagamiseks meeskonnaga valige toimik, mille jaoks see on mõeldud. Seda ei saa hiljem muuta.",
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Looge lepingute ülevaatamise playbook seisukoht seisukoha haaval, tuginedes oma varem allkirjastatud lepingutele, lühikesele intervjuule ja turul tavapärastele standarditele.",
+          "name": "Loo playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Lisa seisukohti ühte minu olemasolevasse playbooki.",
+              "name": "Täienda playbooki"
+            },
+            "fromContracts": {
+              "body": "Koosta konfidentsiaalsuslepingute playbook minu varem allkirjastatud lepingute põhjal.",
+              "name": "Alusta varasematest lepingutest"
+            },
+            "fromMarketStandards": {
+              "body": "Koosta tarnelepingute playbook, lähtudes turul tavapärastest seisukohtadest.",
+              "name": "Alusta turustandarditest"
+            }
+          }
+        }
+      },
+      "builtInSection": "Sisseehitatud oskused",
+      "deleteFile": "Kustuta fail",
+      "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",
+      "disableSkill": "Keela oskus",
+      "discoverSkills": "Otsi oskusi",
+      "discoveredSkills": "{count, plural, one {Leiti # oskus} other {Leiti # oskust}}",
+      "discoveryEmpty": "Sellest hoidlast või kaustast ei leitud ühtegi oskust.",
+      "discoverySkippedInvalid": "{count, plural, one {# vigane oskus jäeti vahele} other {# vigast oskust jäeti vahele}}",
+      "dropPack": "Lohistage siia .zip/.skill või SKILL.md, et oskus importida",
+      "editSkill": "Muuda oskust",
+      "enableSkill": "Luba oskus",
+      "enterFileName": "Sisestage failinimi.",
+      "exportAsSkill": "Ekspordi .skill-failina",
+      "exportAsZip": "Ekspordi .zip-failina",
+      "exportFailed": "Oskust ei õnnestunud eksportida",
+      "exportSkill": "Ekspordi oskus",
+      "fileExists": "Selle teega fail on juba olemas",
+      "howItRuns": "Kuidas see käitub",
+      "importFailureFetch": "Oskuse allikat ei saanud laadida.",
+      "importFailureIntegrity": "Oskuse allikas muutus pärast avastamist. Vaata see uuesti üle.",
+      "importFailureLimit": "Oskuste limiit on täis.",
+      "importFailureNameConflict": "Selle nimega oskus on juba olemas.",
+      "importHelp": "Kleebi avaliku GitHubi hoidla, kausta või SKILL.md faili URL. Vaata leitud oskused enne installimist üle.",
+      "importPartial": "{installedCount, plural, one {{installed} imporditud} other {{installed} imporditud}}; {failedCount, plural, one {{failed} nurjus} other {{failed} nurjus}}.",
+      "importSelected": "Impordi valitud ({count})",
+      "importSkill": "Impordi URL-ist",
+      "importTitle": "Impordi oskus",
+      "importedSkills": "{count, plural, one {Imporditi # oskus} other {Imporditi # oskust}}",
+      "invalidPath": "Kasutage suhtelist teed. Faili- ja kaustanimed ei tohi olla . ega .., alata ega lõppeda tühikuga, lõppeda punktiga ega sisaldada märke \\ : * ? \" |, noolsulge ega juhtmärke.",
+      "invocationAuto": "Automaatselt",
+      "invocationAutoHelp": "AI võib seda oskust ise kasutada, kui see päringuga sobib.",
+      "invocationManual": "Ainult käivitamisel",
+      "invocationManualHelp": "Kasutatakse ainult siis, kui käivitate selle märgiga / või lisate selle oma sõnumisse.",
+      "license": "Litsents: {license}",
+      "newFile": "Uus fail",
+      "newFileFilenamePlaceholder": "notes.md",
+      "newFilePathPlaceholder": "folder/notes.md",
+      "newFolder": "Uus kaust",
+      "pdfPreviewSoon": "PDF eelvaade muutub saadavaks, kui binaarseid oskuseressursse hakatakse toetama.",
+      "renameFile": "Nimeta ümber",
+      "scopePrivate": "Ainult mina",
+      "scopeTeam": "Kõik meeskonnas",
+      "selectSkillToImport": "Valige vähemalt üks oskus.",
+      "selectionLimit": "Vali korraga kuni {count, plural, one {# oskus} other {# oskust}}.",
+      "skippedFiles": "{count, plural, one {# faili ei imporditud} other {# faili ei imporditud}}",
+      "skippedReasonNotUtf8Text": "Pole UTF-8 tekst",
+      "skippedReasonOutsideSkillFolder": "Väljaspool oskuse kausta",
+      "skippedReasonUnsupportedExtension": "Failitüüpi ei toetata",
+      "skippedReasonUnsupportedFolder": "Pole ressursikaustas",
+      "starter": {
+        "compare": {
+          "body": "Võrdle selle dokumendi kahte versiooni ja too välja kõik olulised muudatused koos nende asukohaga.",
+          "description": "Too välja kõik olulised muudatused kahe versiooni vahel",
+          "name": "Võrdle versioone"
+        },
+        "draft": {
+          "body": "Koosta sellele kirjale tasakaalukas vastus. Hoia professionaalset tooni, käsitle iga tõstatatud punkti ja too välja avatud küsimused, mida pean kinnitama.",
+          "description": "Koosta kirjale professionaalne vastus",
+          "name": "Koosta vastus"
+        },
+        "risks": {
+          "body": "Vaata see dokument üle õiguslike riskide, puuduvate kaitsesätete ja ebaselgete klauslite leidmiseks. Too iga leiu juures välja konkreetne klausel.",
+          "description": "Leia õiguslikud riskid ja ebaselged klauslid",
+          "name": "Leia riskid"
+        },
+        "summarize": {
+          "body": "Tee sellest dokumendist kokkuvõte. Käsitle pooli, peamisi kohustusi, kuupäevi, rahalisi tingimusi ning lõpetamist või vastutust puudutavaid klausleid.",
+          "description": "Saa struktureeritud kokkuvõte põhitingimustest",
+          "name": "Tee dokumendist kokkuvõte"
+        }
+      },
+      "uploadHelp": "Kasuta SKILL.md-faili või .zip/.skill-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
+      "uploadPack": "Laadi üles .zip/.skill või SKILL.md",
+      "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
+      "version": "Versioon: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Lisa teeki",
+      "added": "{name} on sinu teegis",
+      "confirmAddTitle": "Kas lisada {name} organisatsioonile {organization}?",
+      "confirmDescription": "Selle malli koopia salvestatakse organisatsiooni {organization} teeki.",
+      "confirmDownloadTitle": "Kas laadida {name} alla organisatsioonile {organization}?",
+      "confirmStarterDescription": "Selle playbooki koopia salvestatakse organisatsiooni {organization} teeki.",
+      "confirmUseTitle": "Kas kasutada {name} organisatsioonis {organization}?",
+      "installFailed": "Malli lisamine ebaõnnestus",
+      "noPreview": "Selle malli eelvaade pole saadaval.",
+      "notFound": "Seda malli kataloogis ei ole.",
+      "unavailable": "Kataloog pole praegu saadaval."
+    },
+    "landing": {
+      "accountLine": "Tasuta kontoga hoiad alles oma organisatsiooni mallid, klauslid ja playbookid.",
+      "withAccount": "Tasuta kontoga"
+    },
+    "mcp": {
+      "addAndConnect": "Lisa ja ühenda",
+      "addServer": "Lisa server",
+      "addServerCardTitle": "Lisa uus integratsioon",
+      "auth": {
+        "bearer": "Bearer-token",
+        "none": "Autentimiseta",
+        "oauth2": "OAuth 2.0"
+      },
+      "authorizationReviewDescription": "Enne heakskiitmist kontrollige autoriseerimisserverit ja lõpp-punktide päritolu.",
+      "authorizationServer": "Autoriseerimisserver",
+      "bearerTokenDescription": "See server kasutab bearer-tokenit. Ühenduse lõpetamiseks kleepige teenusepakkuja token.",
+      "callbackConnectedDescription": "Selle tööriistad on vestluses kasutamiseks valmis.",
+      "callbackConnectedTitle": "Integratsioon ühendatud",
+      "callbackFailedDescription": "Sisselogimine ei lõppenud, seega midagi ei ühendatud.",
+      "callbackFailedTitle": "Integratsiooni ei ühendatud",
+      "connectedToast": "MCP ühendatud",
+      "connectedWithLastUsed": "Ühendatud · viimati kasutatud {time}",
+      "description": "Hallake integratsioone, mis saavad vestlusse tööriistu lisada. Tokenid salvestatakse kasutajapõhiselt.",
+      "detected": "Tuvastatud: {authType}",
+      "disable": "Lülita välja",
+      "disabled": "Ühendatud · välja lülitatud",
+      "emptyDescription": "Kureeritud juriidilised integratsioonid kuvatakse siin, kui need on teie tööruumis lubatud.",
+      "emptyTitle": "Integratsioone veel pole",
+      "enable": "Lülita sisse",
+      "endpointOrigins": "Lõpp-punktide päritolu",
+      "enterToken": "Sisestage juurdepääsuluba.",
+      "errorDescription": "Integratsiooni ei saanud uuendada.",
+      "errorTitle": "MCP ebaõnnestus",
+      "mcpExplainer": "Integratsioonid ühendavad vestlusega väliseid teenuseid, millega tehisintellekt saab töötada.",
+      "needsReapproval": "Vajab uut heakskiitu",
+      "needsReauth": "Vajab taasühendamist",
+      "off": "Väljas",
+      "on": "Sees",
+      "openTools": "Ava Tööriistad",
+      "otherTitle": "Muud integratsioonid",
+      "probe": "Kontrolli",
+      "recommendedFor": "Soovitatud: {jurisdictions}",
+      "saveToken": "Salvesta token",
+      "tokenHelp": "Kuidas token hankida",
+      "tokenLabel": "Bearer-token",
+      "tokenPlaceholder": "Kleepige token",
+      "urlLabel": "MCP serveri URL",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Kasuta vestluses",
+      "whatIsAnMcpServer": "Mis on MCP server?"
+    },
+    "playbooks": {
+      "addCheck": "Lisa täpne reegel",
+      "addExtractPosition": "Ainult väljavõte",
+      "addExtractPositionHint": "Salvestab väärtuse, ilma hindamiseta",
+      "addGradedPosition": "Hinnatud seisukoht",
+      "addGradedPositionHint": "Astmelised reeglid koos tulemusega",
+      "addOption": "Lisa valik",
+      "addPosition": "Lisa seisukoht",
+      "addRule": "Reegel",
+      "adoptAsIdeal": "Võta ideaalse sõnastusena kasutusele",
+      "all": "Kõik playbookid",
+      "approval": {
+        "approve": "Kiida heaks",
+        "approveFailed": "Playbooki heakskiitmine nurjus",
+        "approvedOn": "Heaks kiidetud {date}",
+        "approvedToast": "Playbook heaks kiidetud",
+        "saveBeforeApprove": "Salvestage muudatused enne selle playbooki heakskiitmist.",
+        "sourcesNotice": "Enne heakskiitmist kontrollige, et ükski seisukoht ei nimetaks dokumenti, toimikut ega vastaspoolt: seda playbooki saab lugeda kogu organisatsioon.",
+        "statusApproved": "Heaks kiidetud",
+        "statusDraft": "Mustand"
+      },
+      "askContentLabel": "Vastuse tüüp",
+      "askQuestionLabel": "Küsimus",
+      "askQuestionPlaceholder": "Mida peaksime igast dokumendist välja lugema? Käsitsi sisestamiseks jätke tühjaks.",
+      "autosave": {
+        "failed": "Salvestamine ebaõnnestus",
+        "nameMissing": "Salvestamata: lisage nimi",
+        "positionsNeedAttention": "Salvestamata: {count, plural, one {# seisukoht vajab} other {# seisukohta vajavad}} tähelepanu"
+      },
+      "buildWithAi": {
+        "description": "Vasta vestluses mõnele küsimusele ja playbook salvestatakse jooksvalt.",
+        "title": "Loo AI-ga"
+      },
+      "check": "Kasuta tehisintellekti asemel täpset reeglit",
+      "checkHint": "Mõõdetavate tingimuste jaoks, näiteks: maksetähtaeg ≤ 30 päeva.",
+      "checkKind": {
+        "constraint": "Kontrolli vastust tingimuse järgi",
+        "presence": "Nõua või keela vastus"
+      },
+      "clausePlaceholder": "Otsi klausleid…",
+      "clauseSearchEmpty": "Klausleid ei leitud",
+      "collapsePosition": "Ahenda seisukoht",
+      "confirmDelete": "See kustutab playbooki jäädavalt.",
+      "contentType": {
+        "int": "Arv",
+        "singleSelect": "Ühekordne valik",
+        "text": "Tekst"
+      },
+      "convertToExtract": "Eralda ainult vastus",
+      "convertToExtractDescription": "See eemaldab selle seisukoha tasemeredeli ja hindamise. Seda ei saa tagasi võtta.",
+      "convertToExtractTitle": "Teisendada ainult väljavõtteks?",
+      "convertToGraded": "Lisa hindamisreeglid",
+      "convertToRules": "Teisenda reegliteks",
+      "createPlaybook": "Uus playbook",
+      "created": "Playbook loodud",
+      "creatingFromStarter": "Valitud malli põhjal luuakse playbook…",
+      "customizeAnswer": "Muuda eraldatavat vastust",
+      "customizeAnswerHint": "Muuda küsimust või vastuse vormingut.",
+      "decisionLine": "{runs, plural, one {aktsepteeritud {accepted, number} · kõrvale jäetud {dismissed, number} · # ülevaatuse jooksul} other {aktsepteeritud {accepted, number} · kõrvale jäetud {dismissed, number} · # ülevaatuse jooksul}}",
+      "deleteFailed": "Playbooki kustutamine ebaõnnestus",
+      "deletePlaybook": "Kustuta playbook",
+      "deletePosition": "Kustuta seisukoht",
+      "deleted": "Playbook kustutatud",
+      "deletedElsewhere": "See playbook on kustutatud.",
+      "derivedAutomatically": "Eraldusküsimus ja vastuse vorming luuakse selle positsiooni põhjal. Midagi pole vaja seadistada.",
+      "derivedQuestion": "Eraldusküsimus",
+      "derivedType": "Vastuse vorming",
+      "descriptionPlaceholder": "Mida see playbook kontrollib?",
+      "disabledBadge": "Väljas: jäetakse ülevaatustel vahele",
+      "discardChanges": "Loobu muudatustest",
+      "duplicatePosition": "Dubleeri seisukoht",
+      "empty": "Playbooke veel pole",
+      "emptyDescription": "Looge playbook, et vaadata dokumente üle oma standardite alusel.",
+      "enablePosition": "Luba seisukoht",
+      "entryLabelPlaceholder": "Silt (valikuline)",
+      "entryPlaceholder": "Vastuvõetav alternatiivne sõnastus",
+      "entryRank": "#{index}",
+      "expandPosition": "Laienda seisukoht",
+      "expectation": {
+        "required": "Vastus peab olema olemas",
+        "restricted": "Vastus peab puuduma"
+      },
+      "extractOnlyBadge": "Ainult väljavõte",
+      "extractOnlyDescription": "Hindamiseta; salvestab väärtuse tabelisse.",
+      "extraction": "Ekstraktsioon",
+      "extractionAuto": "Automaatne",
+      "extractionManual": "Käsitsi",
+      "fixErrorsBeforeSaving": "Parandage esiletõstetud väljad enne salvestamist.",
+      "gradedNeedsContent": "Lisage vähemalt üks reegel, alternatiivne kirje või ideaalne sõnastus.",
+      "guidanceLabel": "Lisa läbivaatamise juhised",
+      "guidancePlaceholder": "Lisa erand või juhis, mida ülaltoodud reeglid ei kata.",
+      "homeDescription": "Määrake ülevaatusstandardid üks kord ja rakendage neid järjepidevalt igale dokumendile.",
+      "idealFromClause": "Klauslite teegist",
+      "idealInline": "Sisestatud tekst",
+      "idealInlinePlaceholder": "Kleepige ideaalne sõnastus…",
+      "idealLanguage": "Ideaalne sõnastus",
+      "issueLabel": "Teema",
+      "issuePlaceholder": "nt Vastutuse piiramine",
+      "lastUsed": "Viimati kasutatud {date}",
+      "loadFailed": "Playbookide laadimine ebaõnnestus",
+      "loading": "Playbookide laadimine…",
+      "manageTypes": "Halda liike…",
+      "namePlaceholder": "nt NDA ülevaatus",
+      "nameRequired": "Lisage nimi.",
+      "negotiation": {
+        "addTalkingPoint": "Lisa jutupunkt",
+        "escalationLabel": "Eskaleerimine",
+        "escalationPlaceholder": "Millal ja kellele eskaleerida (valikuline)",
+        "rationaleLabel": "Põhjendus",
+        "rationalePlaceholder": "Miks me seda soovime (valikuline)",
+        "talkingPointPlaceholder": "Mida öelda",
+        "talkingPointsLabel": "Jutupunktid",
+        "title": "Läbirääkimised"
+      },
+      "noPositions": "Seisukohti veel pole. Lisage esimene.",
+      "noSettledPosition": "Kindlaks määratud seisukoht puudub",
+      "openInPane": "Ava playbook",
+      "optionPlaceholder": "Valiku väärtus",
+      "optionsLabel": "Valikud",
+      "outline": "Struktuur",
+      "pendingPane": {
+        "description": "Vasta vestluses küsimustele. Kui kinnitad esimese salvestamise, avaneb playbook siin ja saad seda vestluse kõrval muuta.",
+        "title": "Sinu playbook ilmub siia"
+      },
+      "positionOfTotal": "Seisukoht {index}/{total}",
+      "positionRemoved": "Seisukoht eemaldatud",
+      "positions": "Seisukohad",
+      "recent": "Hiljuti kasutatud",
+      "recommended": "Soovitatud lähtekohad",
+      "redLinePlaceholder": "Sõnastus, mis pole kunagi vastuvõetav",
+      "referenceStandard": "Võrdlusdokumendist",
+      "removeCheck": "Eemalda kontroll",
+      "removeIdeal": "Eemalda ideaalne sõnastus",
+      "removeSource": "Eemalda allikas {documentName}",
+      "reorderPosition": "Sorteeri seisukoht ümber",
+      "review": {
+        "changePlaybook": "Vali teine playbook",
+        "extractedLabel": "Leitud:",
+        "facetTitle": "Ülevaatus playbookiga",
+        "failed": "Dokumendi ülevaatus ebaõnnestus",
+        "fixAccepted": "Nõustutud",
+        "insertFailed": "Eelistatud klausli lisamine ebaõnnestus",
+        "insertPreferred": "Lisa eelistatud klausel",
+        "launcherDescription": "Vaadake see dokument üle organisatsiooni playbooki alusel ja saage tulemused otse tekstis.",
+        "matchedFallback": "Vastav alternatiiv:",
+        "noFindings": "Probleeme ei leitud",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Vali playbook",
+        "reject": "Lükka tagasi",
+        "reviewAgain": "Vaata uuesti üle",
+        "reviewedAgainst": "Üle vaadatud {name} alusel",
+        "reviewing": "Ülevaatamine…",
+        "reviewingHint": "Suurte playbookide puhul võib see võtta paar minutit.",
+        "run": "Vaata üle",
+        "scrollToChange": "Mine muudatuse juurde",
+        "viewClause": "Vaata klauslit",
+        "violatedRedLine": "Rikutud punane joon:"
+      },
+      "ruleNumber": "Reegel {index}",
+      "rulePlaceholder": "nt Maksetähtaeg ei tohi ületada 30 päeva",
+      "saveFailed": "Playbooki salvestamine ebaõnnestus",
+      "severity": {
+        "blocker": "Blokeeriv"
+      },
+      "severityLabel": "Raskusaste",
+      "staleCopy": {
+        "loaded": "Sellest playbookist on laaditud uuem versioon. Enne muutmist laadige uuesti.",
+        "unavailable": "Selle playbooki uusimat versiooni ei õnnestunud laadida. See on viimati laaditud koopia ja võib olla aegunud."
+      },
+      "starters": {
+        "addedToast": "Playbook lisatud",
+        "browseButton": "Sirvi valmis playbooke",
+        "positionCount": "{count, plural, one {# positsioon} other {# positsiooni}}",
+        "title": "Valmis playbookid",
+        "useStarter": "Kasuta seda lähtekohta"
+      },
+      "switchToAuto": "Loo küsimus ja vorming automaatselt",
+      "switchToManual": "Kohanda küsimust ja vastuse vormingut",
+      "termKind": {
+        "enumeration": "Loend",
+        "language": "Sõnastus",
+        "parameter": "Parameeter",
+        "presence": "Olemasolu"
+      },
+      "tier": {
+        "acceptable": "Vastuvõetav",
+        "fallback": "Alternatiiv",
+        "notAcceptable": "Vastuvõetamatu"
+      },
+      "untitledPosition": "Pealkirjata seisukoht",
+      "updated": "Playbook uuendatud",
+      "updatedAt": "Uuendatud {date}",
+      "verdict": {
+        "additional": "Täiendav",
+        "compliant": "Vastav",
+        "deviation": "Kõrvalekalle",
+        "fallback": "Alternatiiv",
+        "missing": "Puudub",
+        "notApplicable": "Ei kohaldu"
+      },
+      "versions": {
+        "confirmRestore": "Teie praegune mustand asendatakse selle versiooni sisuga.",
+        "restoreFailed": "Versiooni taastamine nurjus",
+        "restoredToast": "Versioon taastatud",
+        "versionHistory": "Versiooniajalugu"
+      }
+    },
+    "sections": {
+      "caseLaw": {
+        "description": "Kohtulahendid erinevatest jurisdiktsioonidest"
+      },
+      "clauses": {
+        "description": "Korduvkasutatav klauslite kogu"
+      },
+      "mcp": {
+        "description": "Ühendage stella väliste tööriistadega",
+        "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Hinnatud kontroll-loendid, mis vaatavad dokumendid üle teie standardite alusel"
+      },
+      "skills": {
+        "title": "Oskused"
+      },
+      "templates": {
+        "description": "Dokumendimallid kohatäitjatega",
+        "title": "Mallid"
+      },
+      "tools": {
+        "description": "Oskused, integratsioonid ja alati saadaolevad tööriistad, mida tehisintellekt saab vestluses kasutada",
+        "title": "Tööriistad"
+      },
+      "workflows": {
+        "description": "Automatiseeri dokumenditööd korduvkasutatavate mitmeastmeliste töövoogudega."
+      }
+    },
+    "skills": {
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Vasta küsimusele usaldusväärsete allikate põhjal.",
+            "inside": "allikate hierarhia · uurimispäring",
+            "title": "Vasta allikate põhjal"
+          },
+          "checkAgainstRules": {
+            "blurb": "Vaata dokument üle ja märgi koos viidetega, mis nõuetele ei vasta.",
+            "inside": "viited õigusruumide kaupa · kontroll-loend · ülevaatuspäring",
+            "title": "Kontrolli nõuete alusel"
+          },
+          "intakeToDraft": {
+            "blurb": "Küsi asjaolusid ja koosta seejärel dokumendi mustand.",
+            "inside": "intervjuu · näidisdokumendid · koostamispäring",
+            "title": "Andmete kogumisest mustandini"
+          }
+        },
+        "insideLabel": "Sisaldab",
+        "startBlank": "Alusta tühjalt lehelt",
+        "startBlankHint": "Tühi oskus juhuks, kui teate täpselt, mida vajate.",
+        "subtitle": "Valige lähtekuju. Seadistame kaustad ja juhendame teid nende täitmisel.",
+        "title": "Kuidas peaks teie oskus töötama?"
+      },
+      "commandConflict": "Selle / käsuga oskus on juba olemas",
+      "commandHelp": "Selle oskuse käivitamiseks sisestage käsk vestlusse.",
+      "commandLabel": "Vestluse käsk (valikuline)",
+      "commandPlaceholder": "nt kokku võtta",
+      "errors": {
+        "commandInvalid": "Kasuta ainult väiketähti, numbreid, sidekriipse ja allkriipse"
+      },
+      "form": {
+        "scope": "Nähtavus",
+        "scopePrivate": "Ainult mina",
+        "scopeTeam": "Kõik meeskonnas"
+      }
+    }
+  },
+  "lawHome": {
+    "clearRecent": "Kustuta hiljutised",
+    "clearRecentConfirmation": "Kas kustutada kõik teie hiljutised otsingud, kohtulahendid ja õigusaktid selles organisatsioonis? Seda ei saa tagasi võtta.",
+    "importFailed": "Kohalikku ajalugu ei saanud importida. See on endiselt selles seadmes alles.",
+    "inForceFrom": "Jõustub {date}",
+    "noRecent": "Hiljutisi tegevusi pole",
+    "noSignals": "Signaale veel pole",
+    "prompt": "Mida otsite?",
+    "recent": "Hiljutised",
+    "recentCasesFilter": "Kohtulahendid",
+    "recentLoadFailed": "Hiljutisi tegevusi ei saanud laadida.",
+    "recentSearchFilter": "Otsingud",
+    "recentUpdateFailed": "Hiljutisi tegevusi ei saanud uuendada.",
+    "searchLabel": "Otsi õigusandmebaasist",
+    "searchPlaceholder": "Kohtuasja number, akti number, ECLI või märksõnad",
+    "signals": "Signaalid",
+    "topCourts": "Kõrgeimatest kohtutest"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "Selle {citation} lõigu kohta:\n\n„{quote}“\n\n",
+      "colorGreen": "Roheline",
+      "colorRed": "Punane",
+      "colorSky": "Sinine",
+      "colorViolet": "Lilla",
+      "colorYellow": "Kollane",
+      "commentPlaceholder": "Kirjuta kommentaar…",
+      "commentText": "Kommentaari tekst",
+      "commentedPassage": "Kommenteeritud lõik",
+      "editComment": "Muuda kommentaari",
+      "editedAt": "Muudetud {time}",
+      "guestAuthor": "Teie",
+      "guestLimitReached": "See vahekaart mahutab kuni {count, plural, one {# esiletõstmise või märkuse} other {# esiletõstmist ja märkust}}. Rohkema salvestamiseks looge konto.",
+      "guestMigrationComplete": "Esiletõstmised ja märkused salvestati.",
+      "guestMigrationFailed": "Mõnda esiletõstmist ja märkust ei õnnestunud salvestada. Need jäävad uue katse jaoks sellele vahekaardile.",
+      "guestSavePrompt": "Teie esiletõstmised ja märkused salvestatakse tasuta konto loomisel.",
+      "guestStorageUnavailable": "Esiletõstmisi ja märkusi ei õnnestunud sellel vahekaardil salvestada.",
+      "highlight": "Tõsta esile",
+      "highlightedPassage": "Esiletõstetud lõik",
+      "history": {
+        "colorRestored": "Värv taastatud",
+        "commentRemoved": "Kommentaar eemaldatud",
+        "commentRestored": "Kommentaar taastatud",
+        "highlightRemoved": "Esiletõst eemaldatud",
+        "highlightRestored": "Esiletõst taastatud",
+        "markChanged": "Seda esiletõstu või kommentaari on vahepeal mujal muudetud, seega jäeti see muutmata.",
+        "markGone": "Seda esiletõstu või kommentaari enam ei ole.",
+        "nothingToRedo": "Pole midagi uuesti teha",
+        "nothingToUndo": "Pole midagi tagasi võtta",
+        "redoShortcut": "Tee esiletõstu või kommentaari muudatus uuesti",
+        "styleRestored": "Stiil taastatud",
+        "textRestored": "Kommentaari tekst taastatud",
+        "undoShortcut": "Võta esiletõstu või kommentaari muudatus tagasi",
+        "visibilityRestored": "Jagamine taastatud"
+      },
+      "orphaned": {
+        "description": "Selle dokumendi teksti on pärast nende loomist uuendatud: märgitud lõike ei õnnestunud selles uuesti leida või esinevad need nüüd mitmes kohas. Neid tekstis ei kuvata.",
+        "summary": "{count, plural, one {# esiletõst või kommentaar ei vasta enam tekstile} other {# esiletõstu ja kommentaari ei vasta enam tekstile}}"
+      },
+      "removeHighlight": "Eemalda esiletõst",
+      "styleHighlight": "Esiletõst",
+      "styleSquiggly": "Laineline joon",
+      "styleStrikethrough": "Läbikriipsutus",
+      "visibilityShared": "Jagatud organisatsiooniga",
+      "visibilitySharedWithMatter": "Jagatud toimikuga"
+    },
+    "contents": {
+      "aiSection": "{section} (tehisintellektiga loodud osa)",
+      "headingWithAiSection": "{heading} (tehisintellektiga loodud osa: {section})"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Plokktsitaat viitega",
+      "citationOnly": "Ainult viide",
+      "citationWithQuote": "Viide tsitaadiga",
+      "quoteWithCitation": "Tsitaat viitega",
+      "textOnly": "Ainult tekst"
+    }
+  },
+  "publicTools": {
+    "addSkill": "Lisa oskus",
+    "addToStella": "Lisa rakendusse stella",
+    "alreadyInstalled": "See tööriist on juba paigaldatud.",
+    "content": "Sisu",
+    "contentUnavailable": "Selle oskuse sisu ei saanud laadida. Vaata seda hoopis GitHubis.",
+    "contribute": {
+      "contributingLink": "Loe kaastööjuhendit",
+      "cta": "Panusta",
+      "form": {
+        "authorLabel": "Autori nimi",
+        "authorUrlLabel": "Autori URL (valikuline)",
+        "commitError": "Viimast commiti ei saanud laadida. Kleebi allolevale väljale 40-kohaline SHA.",
+        "costLabel": "Maksumus",
+        "directoryLabel": "Tee hoidlas (valikuline)",
+        "directoryPlaceholder": "skills/my-skill",
+        "inTreeReminder": "Lisage samasse tõmbamistaotlusesse manifesti kõrvale SKILL.md.",
+        "intro": "Manifesti loomiseks sisestage üksikasjad ja seejärel avage tõmbetaotlus. Kontot pole vaja.",
+        "invalidHint": "Tõmbetaotluse avamiseks täida nõutud väljad.",
+        "jurisdictionPlaceholder": "CZ",
+        "jurisdictionsHint": "Lisage ISO riigikoodid. Jurisdiktsiooni-agnostiliste oskuste jaoks jätke tühjaks.",
+        "jurisdictionsLabel": "Jurisdiktsioonid",
+        "licenseLabel": "Litsents",
+        "manifestPreview": "Loodud manifest.json",
+        "name": "Oskuse nimi",
+        "openPr": "Ava GitHubi tõmbetaotlus",
+        "practiceAreasLabel": "Õigusvaldkonnad",
+        "repoLabel": "Hoidla",
+        "repoPlaceholder": "omanik/nimi või GitHub URL",
+        "resolvingCommit": "Otsimine…",
+        "revLabel": "Kinnitatud commit",
+        "revPlaceholder": "40-kohaline commiti SHA",
+        "setupLabel": "Seadistamine",
+        "slugHint": "URL-is ja kausta nimes kasutatav väiketähtedega identifikaator.",
+        "slugLabel": "URL-i identifikaator",
+        "sourceGithub": "GitHub hoidla",
+        "sourceGithubHint": "Suuremate või iseseisvalt hooldatavate, kindla commitiga seotud oskuste jaoks.",
+        "sourceInTree": "Selles hoidlas",
+        "sourceInTreeHint": "Väikeste oskuste jaoks, mille sisu asub siin.",
+        "sourceLabel": "Kus oskus asub?",
+        "title": "Lisa oskus",
+        "useLatestCommit": "Kasuta uusimat commiti"
+      },
+      "githubBody": "Suured või iseseisvalt hooldatavad oskused jäävad oma GitHubi hoidlasse ja seotakse kindla commitiga. Ajastatud kontroll avab lähtehoidla muutumisel tõmbetaotluse, et kinnitatud versioon püsiks pärast ülevaatust ajakohane.",
+      "githubTitle": "GitHub-kinnitusega oskus:",
+      "inTreeBody": "Väikesed oskused asuvad selles hoidlas nende manifesti kõrval, kuni 10 MB sissekande kohta. Nende sisu serveeritakse ja pakendatakse otse kataloogist.",
+      "inTreeTitle": "Hoidlasisene kaust:",
+      "intro": "Kataloogis on loetletud oskused, integratsioonid ja sisseehitatud tööriistad juriidiliseks tööks. Igaüks saab tõmbetaotluse kaudu sisestada ettepaneku.",
+      "licenseBody": "Iga kirje deklareerib litsentsi allolevast lubatud loendist. Copylefti litsentse ei aktsepteerita, nii et isehostijad saavad neid vabalt edasi levitada.",
+      "licenseTitle": "Lubatud litsentsid",
+      "mcpBody": "Integratsioone kirjeldab manifest, mis sisaldab serveri URL-i, autentimistüüpi ja taotletavaid õigusi. Kataloogis ei salvestata autentimisandmeid; kasutajad lisavad need oma klientrakenduses.",
+      "mcpTitle": "MCP integratsioonid",
+      "recommendedBody": "Märgi „Soovitatud” kureerivad hooldajad versioonikontrollitud failis. Seda ei saa kuidagi määrata avalikult saidilt või ainult tõmbetaotlusest.",
+      "recommendedTitle": "Soovitatav olek",
+      "repoLink": "Sirvige kataloogi kirjeid",
+      "title": "Lisage tööriist"
+    },
+    "discovery": {
+      "allBody": "Avasta korduvkasutatavaid töövooge, usaldusväärseid avalikke andmeallikaid ja rakendusega stella kaasas olevaid võimalusi.",
+      "allTitle": "Kõik tööriistad",
+      "aresBody": "Otsige ametlikust ARES registrist üles Tšehhi organisatsioon nime või IČO järgi.",
+      "contractReviewBody": "Võrdle kaubanduslepingute iga klauslit läbirääkimisjuhendiga; kõrvalekalded ja soovitatud muudatused tuuakse selgelt esile.",
+      "editorsPick": "Toimetaja valikud",
+      "exampleReview": "Näidisülevaade",
+      "featuredTitle": "Alusta töövooga",
+      "fromCommunity": "Kogukonnast",
+      "groups": {
+        "dataSources": "Andmeallikad ja integratsioonid",
+        "dataSourcesBody": "Ühenda usaldusväärsed registrid ja eriteenused, kui toimik vajab välist teavet.",
+        "included": "Sisaldub rakenduses stella",
+        "includedBody": "Põhivõimalused, mis on kasutamiseks valmis ilma eraldi oskusi või kontot lisamata.",
+        "skillsBody": "Korduvkasutatavad juriidilised töövood koos juhistega, mida saate enne lisamist kontrollida."
+      },
+      "heroBody": "Otsi ülesande, jurisdiktsiooni või allika järgi. Iga tööriista saad enne tööruumi lisamist üle vaadata.",
+      "heroTitle": "Millega sa tegeled?",
+      "howBody": "Oskus esitab õigusmeetodi kontrollitavate juhistena. Lisa see üks kord ja kasuta sama lähenemist alati, kui ülesanne kordub.",
+      "howTitle": "Mis on oskus?",
+      "includedBadge": "Kaasas",
+      "jurisRankBody": "Hinnake Argentina ülemkohtu pretsedentide autoriteeti tsiteerimise mõju ja õpetusliku arengu kaudu.",
+      "noResults": "Sellele otsingule ei vasta veel ükski tööriist.",
+      "openSkill": "Vaata, kuidas see töötab",
+      "review": {
+        "aligned": "Kooskõlas",
+        "governingLaw": "Kohaldatav õigus",
+        "liabilityCap": "Vastutuse ülempiir",
+        "missing": "Puudub",
+        "outsidePlaybook": "Ei vasta playbookile",
+        "termination": "Lepingu lõpetamine"
+      },
+      "searchPlaceholder": "Mida sa tegema pead?",
+      "tasks": {
+        "prepareDocuments": "Valmistage ette dokumendid",
+        "protectClientData": "Kaitske kliendi andmeid",
+        "researchPrecedents": "Uuri pretsedente",
+        "reviewAgreements": "Vaata lepingud üle",
+        "verifyOrganizations": "Kontrolli organisatsiooni"
+      },
+      "tasksTitle": "Või vali ülesanne"
+    },
+    "documentation": "Dokumentatsioon",
+    "downloadUpstream": "Laadi alla lähtearhiiv",
+    "installConfirm": {
+      "mcpBody": "Teie tööruumi jaoks lisatakse MCP pistik \"{name}\". Seejärel sisestate MCP seadetes oma mandaadid.",
+      "nativeToolBody": "Sisseehitatud tööriist \"{name}\" lubatakse teie tööruumi jaoks.",
+      "skillBody": "Teie tööruumi installitakse oskus \"{name}\".",
+      "title": "Kas lisada {name} oma tööruumi?"
+    },
+    "installUnavailable": "Seda tööriista ei saa teie organisatsioonis paigaldada.",
+    "mcpConfigHint": "Klientrakendusest sõltumatud ühenduse andmed. Kleebi need mis tahes MCP-ga ühilduvasse klienti ja lisa oma autentimisandmed.",
+    "metaDescription": "Sirvige juriidilise töö oskuste, integratsioonide ja sisseehitatud tööriistade avatud kataloogi.",
+    "missingFromCatalogue": "Seda tööriista ei ole teie organisatsiooni kataloogis.",
+    "nativeToolInfo": "See on sisseehitatud stella võimalus. Lubage see oma tööruumis, et seda vestluses kasutada.",
+    "notFound": "Tööriista ei leitud.",
+    "practiceArea": "Õigusvaldkond",
+    "practiceAreas": {
+      "bankingFinance": "Pangandus ja rahandus",
+      "capitalMarkets": "Kapitaliturud",
+      "commercial": "Äriõigus",
+      "competition": "Konkurentsiõigus",
+      "corporate": "Ühinguõigus",
+      "criminal": "Kriminaalõigus",
+      "dataProtection": "Andmekaitse",
+      "disputeResolution": "Vaidluste lahendamine",
+      "employment": "Tööõigus",
+      "energy": "Energiaõigus",
+      "environmental": "Keskkonnaõigus",
+      "family": "Perekonnaõigus",
+      "immigration": "Sisserändeõigus",
+      "insolvency": "Maksejõuetus",
+      "intellectualProperty": "Intellektuaalomand",
+      "litigation": "Kohtuvaidlused",
+      "mergersAcquisitions": "Ühinemised ja ülevõtmised",
+      "privateClient": "Erakliendi nõustamine",
+      "publicAdministrative": "Avalik ja haldusõigus",
+      "realEstate": "Kinnisvara",
+      "regulatory": "Regulatiivõigus",
+      "tax": "Maksuõigus",
+      "technology": "Tehnoloogiaõigus",
+      "whiteCollarCrime": "Majanduskuriteod"
+    },
+    "tokenHelp": "Kuidas hankida pääsutõend",
+    "viewOnGithub": "Vaata GitHubis"
+  },
+  "readerAnswers": {
+    "answerLanguage": "Vastuse keel",
+    "budgetError": "Vastuste eelarve on ammendatud.",
+    "documentLanguage": "Dokumendi keel ({language})",
+    "expand": "Laienda vastust",
+    "explain": "Selgita",
+    "followUp": "Esita täpsustav küsimus",
+    "followUpRequired": "Kirjutage saatmiseks täpsustav küsimus.",
+    "invalidCitations": "{count, plural, one {# viidet ei õnnestunud kontrollida.} other {# viidet ei õnnestunud kontrollida.}}",
+    "loading": "Vastuse loomine…",
+    "minimise": "Ahenda vastust",
+    "modelError": "Mudel ei suutnud seda vastust lõpetada.",
+    "networkError": "Ühendus katkes. Proovi uuesti.",
+    "regenerate": "Loo vastus uuesti",
+    "selectionError": "Valige tekst otsusest endast.",
+    "send": "Saada täpsustav küsimus",
+    "share": "Jaga meeskonnaga",
+    "timeoutError": "Vastuse loomise aeg sai otsa. Proovi uuesti.",
+    "title": "Vastus valitud teksti kohta",
+    "waitForCurrentAction": "Oodake, kuni selle vastusega seotud toiming lõpeb."
+  },
+  "statutes": {
+    "amendedTimes": "{count, plural, =0 {Muutmata} one {Muudetud # kord} other {Muudetud # korda}}",
+    "asOf": "Kehtinud tekst kuupäeval",
+    "backToList": "Kõik õigusaktid",
+    "citingDecisionHideSnippet": "Ahenda lõik",
+    "citingDecisionMentionCount": "viidatud {count}×",
+    "citingDecisionOlderVersion": "Varasem redaktsioon",
+    "citingDecisionShowSnippet": "Näita kogu lõiku",
+    "citingDecisionsCourtPlaceholder": "Kõik kohtud",
+    "citingDecisionsFilterPlaceholder": "Filtreeri laaditud lahendeid",
+    "citingDecisionsSnapshotCapped": "Kuvatakse {count, plural, one {# lahend} other {# lahendit}} (kuni {limit} kõige rohkem seda sätet maininud lahendit).",
+    "citingDecisionsSortCitations": "Viited sellele sättele",
+    "citingDecisionsSortDate": "Lahendi kuupäev",
+    "citingDecisionsYear": "Lahendi aasta",
+    "citingDecisionsYearOutOfRange": "Sisestage aasta vahemikus {min}–{max}.",
+    "citingDecisionsYearPlaceholder": "Kõik aastad",
+    "columns": {
+      "act": "Õigusakt",
+      "amendments": "Muudatused",
+      "firstVersion": "Esimene redaktsioon",
+      "lastAmended": "Viimati muudetud"
+    },
+    "compareAbsent": "Selles redaktsioonis puudub",
+    "compareAddedLater": "Selles redaktsioonis seda sätet veel ei olnud.",
+    "compareClose": "Sulge võrdlus",
+    "compareMoved": "Teisaldatud:",
+    "compareMovedFrom": "Teisaldatud siia kohast {provision}",
+    "compareMovedFromElsewhere": "Teisaldatud siia mujalt",
+    "compareMovedTo": "Teisaldatud kohta {provision}",
+    "compareMovedToElsewhere": "Teisaldatud mujale",
+    "compareNoChanges": "Sõnastus on mõlemas redaktsioonis sama.",
+    "compareNoLongerPresent": "Selles redaktsioonis seda sätet enam ei ole. See on kehtetuks tunnistatud või ümber nummerdatud.",
+    "compareProvisionNeither": "Kumbki redaktsioon seda sätet ei sisalda.",
+    "compareProvisionTitle": "{provision} muudatused redaktsioonide vahel",
+    "compareSameVersion": "See on kuvatud redaktsioon. Valige võrdlemiseks mõni teine.",
+    "compareShowUnchanged": "Näita muutmata sätteid",
+    "compareSideBySide": "Võrdle kõrvuti",
+    "compareTitle": "Muudatused redaktsioonide vahel",
+    "compareUnavailable": "Redaktsioone ei õnnestunud võrrelda.",
+    "compareUnstructured": "Üks redaktsioonidest on saadaval ainult lihttekstina, seega ei saa neid võrrelda.",
+    "compareVersionMissing": "Võrreldavat redaktsiooni selle akti ajaloos ei ole.",
+    "compareWholeAct": "Võrdle kogu akti",
+    "compareWithPreviousWording": "Võrdle eelmise sõnastusega",
+    "compareWithVersion": "Võrdle redaktsiooniga {version}",
+    "currentWording": "Kehtiv sõnastus",
+    "description": "Avalik konsolideeritud õigusaktide andmebaas, mida saab indekseerida õigusakti ja redaktsiooni järgi.",
+    "diffInserted": "Lisatud:",
+    "diffRemoved": "Välja jäetud:",
+    "emptyDocument": "Sellel redaktsioonil puudub tekst.",
+    "emptyState": "Õigusakte ei leitud.",
+    "expression": {
+      "invalidWindow": "Väljaandja kuupäevad on vastuolulised",
+      "promulgated": "Välja kuulutatud tekst",
+      "withdrawn": "Väljaandja seda enam ei avalda"
+    },
+    "inForceSince": "Kehtib alates {date}",
+    "inForceSinceAtLeast": "Kehtib hiljemalt alates {date}",
+    "ineligibleVersion": "{range} ({label})",
+    "leadingDecision": "Juhtiv lahend",
+    "leadingDecisionsExplanation": "Iga lahendi esimene viide, järjestatud viite kaalukuse järgi: kaalutud saabuvad viited, arvestades kohtu taset, viite polaarsust ja vanust.",
+    "noVersionInForce": "Valitud kuupäeval ei kehtinud ükski selle õigusakti redaktsioon.",
+    "openEnded": "praeguseni",
+    "outline": "Sisukord",
+    "outlineJumpLabel": "Liigu sättele",
+    "outlineJumpPlaceholder": "§ 10 või pealkiri",
+    "pendingChanges": "Eelseisvad muudatused",
+    "pendingChangesIncomplete": "Avaldaja andmed ei pruugi sisaldada kõiki eelseisvaid muudatusi.",
+    "provisionAbsentVersions": "{count, plural, one {Seaduse selles redaktsioonis puudub} other {Seaduse neis # redaktsioonis puudub}}",
+    "provisionAskContextPrompt": "\n\nSätet kohaldavad lõigud kõige autoriteetsemates lahendites:\n{passages}\n\nKasuta kohtupraktika tööriistu, et lugeda mõnda neist lahenditest tervikuna või leida teisi sätet viitavaid lahendeid.",
+    "provisionAskSummarize": "Võta kokku, kuidas kohtud seda sätet kohaldavad",
+    "provisionAskSummarizePrompt": "Võta kokku, kuidas kohtud kohaldavad sätet {subject}, viidates lahenditele, millele tugined.",
+    "provisionDetailsFor": "{provision} üksikasjad",
+    "provisionEffectiveFrom": "kehtib alates {date}",
+    "provisionHistoryEmpty": "Selle sätte kohta ei ole ühtegi redaktsiooni.",
+    "provisionHistoryUnavailable": "Selle sätte ajalugu ei õnnestunud laadida.",
+    "provisionPartTextUnavailable": "{provisionLabel} tekst ei ole saadaval",
+    "provisionPromptSubject": "{statute} ({eli}) {provision} redaktsioonis, mis kehtib alates {date}",
+    "provisionPromptSubjectUndated": "{statute} ({eli}) {provision}",
+    "provisionRunAlsoFrom": "ka alates {date}",
+    "provisionRunShowVersions": "Näita seaduse redaktsioone perioodil {range}",
+    "provisionRunUnchanged": "{count, plural, one {muutmata seaduse # redaktsioonis} other {muutmata seaduse # redaktsioonis}}",
+    "provisionTextUnavailable": "Selle redaktsiooni tekst pole saadaval",
+    "provisionVersionsAll": "Seaduse kõik redaktsioonid",
+    "provisionWordingAdded": "Uus säte",
+    "provisionWordingChanged": "Muudetud",
+    "provisionWordingEarliest": "Vanim saadaolev redaktsioon",
+    "publisherWindowInconsistent": "Sellel kuupäeval kehtivat redaktsiooni ei saa kindlaks teha: väljaandja andmed on vastuolulised.",
+    "resolvedAlias": "Tuvastatud kui {label}",
+    "searchLabel": "Otsi õigusaktidest",
+    "searchPlaceholder": "Number, lühinimi või pealkiri, nt 89/2012 Sb.",
+    "showCitedPartOnly": "Näita ainult viidatud osa",
+    "showFullProvision": "Näita kogu sätet",
+    "showInText": "Näita tekstis",
+    "sortNeedsYear": "Selle veeru järgi sortimiseks valige filtrites aasta.",
+    "statedWindow": "Väljaandja esitatud kuupäevad: {range}",
+    "status": {
+      "current": "Kehtiv",
+      "draft": "Eelnõus",
+      "ended": "Enam ei kehti",
+      "future": "Tulevane",
+      "historical": "Asendatud",
+      "neverInForce": "Ei jõustunud kunagi",
+      "repealed": "Kehtetu",
+      "unknown": "Olek ebaselge"
+    },
+    "title": "Õigusaktid",
+    "validity": "Kehtib {from} kuni {to}",
+    "versionAlreadySelected": "Vaatate juba seda versiooni.",
+    "versionAppliedInDecision": "Kohtulahendis <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> kohaldatud redaktsioon (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# säte lisatud} other {# sätet lisatud}}",
+    "versionChangesChanged": "{count, plural, one {# säte muudetud} other {# sätet muudetud}}",
+    "versionChangesNone": "Sõnastus muutmata",
+    "versionChangesRemoved": "{count, plural, one {# säte välja jäetud} other {# sätet välja jäetud}}",
+    "versionChangesWords": "{inserted, plural, one {# sõna lisatud} other {# sõna lisatud}}, {deleted, plural, one {# sõna kustutatud} other {# sõna kustutatud}}",
+    "wordingVersionUnknown": "Sõnastuse versiooni kuupäev pole teada"
+  }
+}

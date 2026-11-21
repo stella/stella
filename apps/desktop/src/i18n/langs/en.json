@@ -184,7 +184,7 @@
     "unreadableEraseNotice": "Some saved activity cannot be read. You can erase unreadable saved activity and its draft recovery.",
     "unrecoverableOtherHistoryConfirmation": "Saved history from other accounts will be deleted, including pending draft recovery with missing keys or unreadable files. Created drafts may already exist. This cannot be undone.",
     "welcomeControlFact": "Idle time excluded. Pause or delete anytime.",
-    "welcomeDetails": "App activity is sampled every few seconds and never uploaded automatically. Window titles and open-document paths are captured too, unless you turn details off. Summaries reach the clipboard only when requested. You can exclude apps and choose how long history is kept. Turning details off stops new details; past details remain until retention or deletion. Window titles of a suggestion leave this device only when you approve a stella AI description, once or always; they are not stored.",
+    "welcomeDetails": "App activity is sampled every few seconds and never uploaded automatically. Window titles and open-document paths are captured too, unless you turn details off. Summaries reach the clipboard only when requested. You can exclude apps and choose how long history is kept. Turning details off stops new details; past details remain until retention or deletion. Window titles of a suggestion leave this device only when you request a stella AI draft after granting drafting consent, once or always; they are not stored.",
     "welcomeLearnMore": "Learn more",
     "welcomeLocalFact": "Encrypted on this device.",
     "welcomePreviewMatter": "Riverside lease renewal",
@@ -662,6 +662,35 @@
       "openSoundPc": "Open sound settings",
       "title": "stella could not hear your microphone"
     },
+    "perApp": {
+      "add": "Add…",
+      "cleanup": {
+        "default": "Cleanup as set",
+        "label": "Cleanup for {name}",
+        "off": "Without cleanup",
+        "on": "With cleanup"
+      },
+      "description": "Turn AI cleanup on or off and pick the language for one app or a kind of app. The app in front when you start dictating decides.",
+      "failed": "The settings could not be saved. Try again.",
+      "group": "Per app",
+      "kinds": {
+        "browser": "Browsers",
+        "chat": "Chat apps",
+        "code": "Code editors",
+        "document": "Documents",
+        "email": "Email apps",
+        "other": "Other apps",
+        "terminal": "Terminals"
+      },
+      "kindsOfApp": "Kinds of app",
+      "language": {
+        "default": "Language as set",
+        "label": "Language for {name}"
+      },
+      "recentApps": "Recent apps",
+      "remove": "Remove {name}",
+      "title": "Settings for an app"
+    },
     "preview": {
       "finishing": "Finishing…",
       "label": "What you have said so far",
@@ -669,6 +698,11 @@
     },
     "removeFailed": "The speech model could not be removed. Try again.",
     "removeModel": "Remove",
+    "retype": {
+      "description": "Press {shortcut} to type your last dictation again at the cursor. It is kept only in memory, while it is in clipboard history.",
+      "taken": "Another app is using {shortcut}. The Dictation menu of the stella icon offers the same.",
+      "title": "Shortcut for the last dictation"
+    },
     "shortcutTaken": "Another app is using {shortcut}.",
     "sounds": {
       "description": "Play a short, quiet sound when recording starts and when it stops.",
@@ -681,6 +715,19 @@
       "failed": "The window could not be opened. Try again.",
       "open": "Open",
       "title": "Transcribe a recording"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Lower other sound",
+        "nothing": "Do nothing",
+        "pause": "Pause Music and Spotify"
+      },
+      "description": "What happens to other sound while stella records, so it does not end up in the text. It comes back when recording stops.",
+      "speakersOnly": {
+        "description": "Leave headphones alone: what plays in them does not reach the recording.",
+        "title": "Only through speakers"
+      },
+      "title": "While dictating"
     }
   },
   "keepAwake": {
@@ -763,7 +810,7 @@
     "takenOverTitle": "Editing moved to another device"
   },
   "onboarding": {
-    "activityAiNote": "Window titles of a suggestion leave this device only when you approve a stella AI description, once or always. They are not stored.",
+    "activityAiNote": "Window titles of a suggestion leave this device only when you request a stella AI draft after granting drafting consent, once or always. They are not stored.",
     "activityBody": "See where your working day went and turn it into draft time entries. You decide what is recorded and what is sent.",
     "activityConsentNote": "Nothing is recorded until you press Start recording in Activity. Pause, exclude apps or delete any day whenever you like.",
     "activityNeverKeys": "Keystrokes or typed text",
@@ -1210,6 +1257,7 @@
     "checkForUpdates": "Check for updates",
     "dictation": "Dictation",
     "dictationHint": "Hold {key} to dictate",
+    "dictationRetype": "Type last dictation again",
     "dictationSettings": "Dictation settings…",
     "dictationTurnOn": "Turn on dictation…",
     "documentsSyncing": "{count, plural, one {1 document syncing} other {{count} documents syncing}}",

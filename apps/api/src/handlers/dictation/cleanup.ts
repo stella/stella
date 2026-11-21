@@ -61,7 +61,7 @@ export const cleanUpDictation = async ({
     system: DICTATION_CLEANUP_SYSTEM_PROMPT,
     prompt: buildDictationCleanupPrompt(body),
     outputSchema: dictationCleanupModelOutputSchema,
-    accept: (output) => acceptDictationCleanup(output, body.transcript),
+    accept: (output) => acceptDictationCleanup(output, body),
   });
 
 /** The model call a test puts in place of the organization's model. */

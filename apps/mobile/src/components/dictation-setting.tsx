@@ -12,6 +12,7 @@ import { Text } from "@stll/ui/text";
 import type { AccessTokenSource, StoredSession } from "@/connection/session";
 import { CheckIcon } from "@/icons.gen";
 import { deviceAccountStore } from "@/native/account-store";
+import { DICTATION_ROUTE_AVAILABLE } from "@/native/dictation-device";
 import type { ApiError } from "@/state/api-request";
 import { readDictationModels } from "@/state/dictation";
 import {
@@ -20,14 +21,18 @@ import {
   shownModel,
   writeDictationPreferences,
 } from "@/state/dictation-preferences";
-import type { DictationPreferences } from "@/state/dictation-preferences";
+import type {
+  DictationMicrophone,
+  DictationPreferences,
+} from "@/state/dictation-preferences";
 import { useUiColors } from "@/theme";
 
 /**
  * How this account dictates on this phone: the model, with where it runs and
- * whether its provider keeps the audio said beside it, and whether stella AI
- * tidies the text. Both are kept on the phone, so the choice shows what was
- * written, not what was tapped.
+ * whether its provider keeps the audio said beside it, whether stella AI
+ * tidies the text, and whether the iPhone's own microphone records. All are
+ * kept on the phone, so the choice shows what was written, not what was
+ * tapped.
  */
 export const DictationSetting = ({
   session,
@@ -77,6 +82,9 @@ export const DictationSetting = ({
           onCleanup={(cleanup) => {
             save((current) => ({ ...current, cleanup }));
           }}
+          onMicrophone={(microphone) => {
+            save((current) => ({ ...current, microphone }));
+          }}
           onModel={(modelId) => {
             save((current) => ({ ...current, modelId }));
           }}
@@ -91,12 +99,14 @@ const DictationChoices = ({
   disabled,
   models,
   onCleanup,
+  onMicrophone,
   onModel,
   stored,
 }: {
   disabled: boolean;
   models: Promise<Result<DesktopDictationModels, ApiError>>;
   onCleanup: (cleanup: boolean) => void;
+  onMicrophone: (microphone: DictationMicrophone) => void;
   onModel: (modelId: string | null) => void;
   stored: Promise<DictationPreferences>;
 }) => {
@@ -202,6 +212,24 @@ const DictationChoices = ({
       <View className="px-1">
         <Text variant="caption">{t("dictationCleanupHint")}</Text>
       </View>
+      {DICTATION_ROUTE_AVAILABLE ? (
+        <>
+          <View className="border-border bg-card flex-row items-center gap-3 rounded-xl border p-4">
+            <Text className="flex-1">{t("dictationBuiltInMicrophone")}</Text>
+            <Switch
+              accessibilityLabel={t("dictationBuiltInMicrophone")}
+              checked={preferences.microphone === "built-in"}
+              disabled={disabled}
+              onCheckedChange={(checked) => {
+                onMicrophone(checked ? "built-in" : "system");
+              }}
+            />
+          </View>
+          <View className="px-1">
+            <Text variant="caption">{t("dictationBuiltInMicrophoneHint")}</Text>
+          </View>
+        </>
+      ) : null}
     </>
   );
 };

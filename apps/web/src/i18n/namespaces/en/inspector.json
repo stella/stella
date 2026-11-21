@@ -1,0 +1,822 @@
+{
+  "aiColumns": {
+    "countSummary": "{columns} columns × {rows} rows = {answers, plural, one {# answer} other {# answers}}. Answers spend budget.",
+    "modelRefused": "The model refused to answer",
+    "noRowsToRun": "There are no eligible rows in this selection.",
+    "nothingFound": "Nothing found",
+    "nothingFoundInCutDocument": "Nothing found in the part that was read",
+    "refusedBudget": "Not run: answer budget unavailable",
+    "rerunAllPage": "Rerun all (this page)",
+    "rerunColumnPage": "Rerun column (this page)",
+    "runColumnPage": "Run column (this page)",
+    "runPageRows": "Run for {count, plural, one {# row on this page} other {# rows on this page}}",
+    "runRemainingPage": "Run remaining (this page)",
+    "runSelectedRows": "Run for {count, plural, one {# selected row} other {# selected rows}}",
+    "selectedRun": "Run AI columns for {count, plural, one {# row} other {# rows}}",
+    "waitToRun": "Wait for the current run to finish."
+  },
+  "avt": {
+    "anchorFacts": {
+      "about": "About the anchor-fact record",
+      "addFact": "Add a fact",
+      "addFactPlaceholder": "State the fact as the evidence shows it",
+      "addInterpretationNote": "Add interpretation note",
+      "busyLine": "Facts you accept appear here.",
+      "confidenceLevels": {
+        "high": "High confidence",
+        "low": "Low confidence",
+        "medium": "Medium confidence"
+      },
+      "description": "Hard evidence (emails, messages, bank records, agreed facts) extracted into the anchor-fact record that claims are checked against. Review, edit, or add facts by hand.",
+      "editInterpretationNote": "Edit interpretation note",
+      "emptyLine": "Extract facts from the matter's documents or add one by hand.",
+      "emptyTitle": "No anchor facts yet",
+      "heldDescription": "These extractions are <strong>genuinely uncertain in meaning</strong>: the content is provisional or unconfirmed, not merely written by hand. They are held out of scoring until a reviewer confirms, edits, or retypes them. A legible source is never queued just for its medium.",
+      "heldFilter": "{count, plural, one {# held for review} other {# held for review}}",
+      "heldForReview": "Held for review",
+      "hideSources": "Hide sources",
+      "holdOutOfScoring": "Hold out of scoring",
+      "inScoring": "In scoring",
+      "includeInScoring": "Include in scoring",
+      "interpretationNote": "Interpretation note",
+      "interpretationNotePlaceholder": "Where the meaning of this evidence is contested, say how. Leave empty when it is not.",
+      "interpretiveConfidence": "Interpretive confidence",
+      "openList": "Open list",
+      "record": "Anchor-fact record",
+      "showSources": "Show sources",
+      "title": "Anchor facts"
+    },
+    "chronology": {
+      "claims": "{count, plural, one {# claim rests on this fact} other {# claims rest on this fact}}",
+      "empty": "This list has no facts yet.",
+      "moreClaims": "{count, plural, one {# more claim} other {# more claims}}",
+      "undated": "Undated"
+    },
+    "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Anchor facts disagree",
+        "conflictCount": "{count, plural, one {# conflict} other {# conflicts}}",
+        "gap": "<strong>No anchor fact covers this claim.</strong> This is a gap in the record, not a weak verdict: there is nothing to check the claim against yet.",
+        "notVerifiable": "<strong>Not a verifiable assertion.</strong> This is the kind of statement no document could ever settle: a counterfactual, a prediction, a statement of intent, a legal conclusion, or a claim too vague to check. Set aside rather than scored.",
+        "supportCount": "{count, plural, one {# support} other {# supports}}",
+        "verdictWithheld": "Verdict withheld"
+      },
+      "escalatedReview": "Escalated to the evidence team; no verdict to confirm or dispute here until the underlying conflict is resolved.",
+      "flagDispute": "Flag dispute",
+      "humanReview": "Human review",
+      "interpretationCaveat": "A contributing fact carries a substantive interpretation caveat: what the evidence means, not the medium it came in, is what is uncertain.",
+      "notVerifiable": {
+        "reopen": "Re-open → check against record",
+        "reopenExplanation": "<strong>Set aside as not verifiable.</strong> If this is actually a checkable claim, re-open it: AVT keeps your reclassification and runs only the record-check it skipped.",
+        "reopenedPending": "Re-opened as a checkable claim. It shows as <strong>No coverage</strong> until the document is verified again."
+      },
+      "note": {
+        "add": "Add note / correction",
+        "heading": "Your note · {savedAt}",
+        "headingUndated": "Your note",
+        "placeholder": "Record a correction or an explanation. Saving records the note against this claim only; it does not change the verdict or the anchor-fact record.",
+        "saveCorrection": "Save correction"
+      },
+      "overridden": "Overridden",
+      "overrideNotice": "Overridden to <strong>{verdict}</strong>; the analysis below is the tool's own, shown unchanged.",
+      "overrideTooltip": "A reviewer has recorded a different verdict. The analysis below is the tool's own, unchanged.",
+      "overrideVerdict": "Override verdict",
+      "recordConflict": {
+        "confirmGoverningRecord": "Confirm as governing",
+        "description": "Two anchor facts speak to the same point (<strong>{subject}</strong>) but disagree. Both are <strong>high-confidence</strong> sources, so this is not a reliability problem: the record itself is internally inconsistent. AVT withholds a verdict rather than score the claim, because picking one record over the other is a judgement for you to make and record, not one the tool should make silently.",
+        "escalatedNotice": "Flagged for the evidence team. The record conflict stays open and counted until a governing record is chosen.",
+        "flagForEvidenceTeam": "Flag for evidence team",
+        "governed": "<strong>{value}</strong> governs: the claim is judged against this record. The other record stays on file.",
+        "reconcile": "Reconcile the record",
+        "suggestedNotice": "A document's record is suggested over a witness's account. Confirm it, or choose the other record.",
+        "title": "Conflicting evidence in the record",
+        "treatAsGoverningRecord": "Treat as governing"
+      },
+      "relation": {
+        "conflicts": "Conflicts",
+        "supports": "Supports"
+      },
+      "reopened": "Re-opened, check pending",
+      "reopenedTooltip": "A reviewer re-classified this as a checkable fact; a live record check is still pending.",
+      "sourceCount": "{count, plural, one {# source} other {# sources}}",
+      "verdictBy": "Verdict by {model}",
+      "verdictByGenerativeModel": "Verdict by the generative model; the decision model did not settle it",
+      "whyVerdict": "Why this verdict: anchor facts"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Objective, checkable assertion, scored against the record. Includes claims framed as admissions or denials: judged on the underlying proposition, not the bare words."
+      },
+      "opinion": {
+        "hint": "A value judgement or characterisation: no document can confirm or contradict it, so it is set aside, not scored.",
+        "label": "Opinion"
+      },
+      "setAside": "set aside",
+      "unverifiable": {
+        "hint": "An assertion no document could ever settle: a counterfactual, a prediction, a statement of intent or belief, a legal conclusion, or a claim too vague to check. Set aside, not scored. Distinct from No coverage, which is a checkable fact the record is merely silent on.",
+        "label": "Not verifiable"
+      }
+    },
+    "confidence": {
+      "interpretation": "Interpretation",
+      "tooltip": "Interpretive confidence: how unambiguous this evidence's meaning is. Independent of the source medium (handwriting, scan, etc.)."
+    },
+    "confirm": {
+      "acknowledge": "Mark as noted",
+      "recordConflict": "Confirm resolution",
+      "supported": "Confirm: ready",
+      "verdict": "Confirm verdict"
+    },
+    "disposition": {
+      "contested": "The verdict is clean, but a contributing fact's interpretation is contested; worth your eyes before sign-off.",
+      "contradicted": "The record departs from this claim. A human call is needed before this verdict stands.",
+      "nocover": "No fact on the list covers this yet.",
+      "notverifiable": "Set aside as not verifiable; sign-off is optional. Re-open below if it's actually checkable.",
+      "recordconflict": "Two exhibits in the record disagree. Resolve which governs above, or flag the evidence team; the tool won't pick for you.",
+      "restsOnHeld": "A fact this verdict rests on is held for review; confirm the verdict still stands without it, or re-check the claim once the fact is settled.",
+      "scopeMismatch": "A cited fact covers a different scope than the claim. Weigh whether it settles the claim as worded before the verdict stands.",
+      "supported": "The record affirms this. Your sign-off confirms the tool read it correctly; no judgement call needed.",
+      "tension": "The record only partly supports this. Weigh the supporting and conflicting facts above before the verdict stands.",
+      "testimonyOnly": "The record affirms this, but no document's record backs it: it rests on testimony. Your sign-off confirms the tool read it correctly; the verdict stays marked as resting on testimony.",
+      "unsourcedOnly": "The record affirms this, but only through facts with no source yet. Your sign-off confirms the tool read them correctly; the facts stay marked as unsourced."
+    },
+    "documents": {
+      "claimSummary": "Contradicted: {contradicted} · In tension: {tension} · Record conflicts: {conflicts}",
+      "empty": "Upload a document to this matter to verify it.",
+      "kindsLoadFailed": "Whether these documents are testimony could not be loaded.",
+      "notVerified": "Not verified yet",
+      "otherList": "Checked against another list",
+      "permissionRequired": "You need permission to edit this list to verify documents.",
+      "sizeConfirmTitle": "Verify this document?",
+      "starting": "Starting verification…",
+      "statusLoadFailed": "The verification status of these documents could not be loaded.",
+      "testimony": "Testimony",
+      "testimonyAbout": "About testimony",
+      "testimonyLine": "Mark witness statements, interview notes and transcripts as testimony. Facts taken from them count as a person's account, not a record.",
+      "verifyAgain": "Verify again"
+    },
+    "extraction": {
+      "busy": "Finish the current extraction and its review first.",
+      "confirmStart": "{units, plural, one {Start, # unit} other {Start, # units}}",
+      "dialogDescription": "You accept or decline each fact before it joins the record.",
+      "dialogTitle": "Extract facts from documents",
+      "documentsChosen": "{count, plural, one {# chosen, up to {max}} other {# chosen, up to {max}}}",
+      "documentsLabel": "Documents to read",
+      "errors": {
+        "accessRevoked": "The fact extraction stopped because access is unavailable.",
+        "aiUnavailable": "No AI model is available to read the documents. Check the organization's AI settings.",
+        "documentMissing": "A chosen document or the list no longer exists. Reload the page and choose again.",
+        "enqueueFailed": "The fact extraction could not be started. Try again.",
+        "extractionFailed": "The facts in these documents could not be extracted.",
+        "internal": "The fact extraction failed unexpectedly.",
+        "noText": "No text could be read from the chosen documents.",
+        "sourceUnavailable": "A document changed or was removed after the extraction started. Choose the documents again.",
+        "unsupportedFormat": "Only DOCX files, PDFs and files with a PDF rendition can be read for facts."
+      },
+      "extractFromDocuments": "Extract from documents",
+      "failedTitle": "Fact extraction failed",
+      "instructionLabel": "What to look for (optional)",
+      "instructionPlaceholder": "For example: payments between the parties and when they were made",
+      "nothingFound": "No facts were found in the chosen documents.",
+      "proposedTitle": "Proposed facts",
+      "queued": "Waiting to start.",
+      "reviewed": "{accepted} of {proposed, plural, one {# proposed fact} other {# proposed facts}} accepted.",
+      "runSize": "{available, plural, one {This run uses about {estimated} of your # available unit.} other {This run uses about {estimated} of your # available units.}}",
+      "running": "Reading the documents. Proposed facts will appear here for review.",
+      "selectDocument": "Select at least one document.",
+      "startFailed": "Could not start the fact extraction",
+      "starting": "Starting fact extraction…",
+      "submit": "{count, plural, =0 {Extract facts} one {Extract facts from # document} other {Extract facts from # documents}}"
+    },
+    "factTier": {
+      "testimony": {
+        "hint": "Every source of this fact that has not been rejected is testimony: a witness statement, interview note or transcript.",
+        "label": "Testimony"
+      },
+      "unsourced": {
+        "hint": "No source document that has not been rejected is linked to this fact; its medium and date describe the evidence but are not a source.",
+        "label": "Unsourced"
+      }
+    },
+    "gap": {
+      "addFact": "Add fact from a document",
+      "addFactFailed": "The fact could not be added",
+      "factOffList": "A fact no longer on the list",
+      "linkFact": "Link a fact",
+      "linkFailed": "The fact could not be linked",
+      "linked": "Linked facts",
+      "linkedMark": "Linked",
+      "linksChanged": "Links changed since the last check.",
+      "noFacts": "No fact on the list matches.",
+      "recheck": "Re-check",
+      "recheckFailed": "The claim could not be checked again",
+      "searchFacts": "Search the list's facts",
+      "sheet": {
+        "passage": "Passage",
+        "passageHint": "The words in the document that establish the fact.",
+        "statementRequired": "Write the fact.",
+        "statementTooLong": "A fact holds at most {limit} characters.",
+        "submit": "Add and re-check",
+        "title": "Add fact from a document"
+      },
+      "showNextSteps": "Show next steps",
+      "unlink": "Unlink {fact}"
+    },
+    "graph": {
+      "claimCount": "{count, plural, one {# claim} other {# claims}}",
+      "claimTitle": "Claim",
+      "columns": {
+        "claims": "Claims",
+        "sources": "Source documents",
+        "statements": "Statements"
+      },
+      "empty": "This list has no facts or verified documents yet.",
+      "factCount": "{count, plural, one {# fact} other {# facts}}",
+      "factOverflow": "Showing the first {count, plural, one {# fact} other {# facts}} of this list.",
+      "filters": {
+        "allSources": "All sources",
+        "allVerdicts": "All verdicts",
+        "conflicts": "Conflicts",
+        "heldFacts": "Held facts",
+        "source": "Filter by source",
+        "verdict": "Filter by verdict"
+      },
+      "held": "Held",
+      "linkedFacts": "{count, plural, one {# linked fact} other {# linked facts}}",
+      "listLabel": "Graph as a list",
+      "loadMore": "Load more documents",
+      "noMatch": "Nothing matches these filters.",
+      "noStatements": "No document has been verified against this list yet.",
+      "offList": "No longer on the list",
+      "relation": {
+        "conflicts": "Conflicts",
+        "governs": "Governs",
+        "record": "On the record",
+        "recordConflict": "Conflicting record",
+        "supports": "Supports"
+      },
+      "unlinked": "Facts no claim rests on",
+      "verifyInReview": "Verify a document"
+    },
+    "guidance": {
+      "escalate": "Escalate",
+      "manualJudgement": "Manual judgement",
+      "optional": "Optional",
+      "readyToConfirm": "Ready to confirm"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Accepted as routine",
+        "conflictReopened": "Withdrew the conflict's resolution",
+        "escalated": "Flagged for the evidence team",
+        "factLinked": "Linked a fact",
+        "factUnlinked": "Unlinked a fact",
+        "governed": "Chose the governing record",
+        "noteCleared": "Cleared the note",
+        "noteSaved": "Saved a note",
+        "overridden": "Overrode the verdict",
+        "overrideWithdrawn": "Withdrew the override",
+        "rechecked": "Re-checked the claim",
+        "reopened": "Re-opened as a checkable claim",
+        "statusCleared": "Cleared the review status",
+        "statusDisputed": "Marked disputed",
+        "statusNeedsEvidence": "Marked as needing evidence",
+        "statusReviewed": "Marked reviewed"
+      },
+      "carriedFrom": "From the run of {date}",
+      "carriedFromEarlier": "From an earlier run",
+      "empty": "No review actions yet.",
+      "filters": {
+        "allKinds": "Any action",
+        "allReviewers": "Any reviewer",
+        "kind": "Filter by action",
+        "reviewer": "Filter by reviewer"
+      },
+      "formerMember": "Former member",
+      "kinds": {
+        "factLink": "Fact links",
+        "override": "Verdict overrides",
+        "recheck": "Re-checks",
+        "recordConflict": "Record conflict resolutions",
+        "reopen": "Re-openings",
+        "status": "Status changes"
+      },
+      "noMatches": "No actions match these filters.",
+      "noStatus": "No status",
+      "none": "No actions yet",
+      "reasonUnrecorded": "No reason recorded: this was done before reasons were required.",
+      "runButton": "Review history",
+      "runTitle": "Review history"
+    },
+    "matches": {
+      "count": "{count, plural, one {# match} other {# matches}}",
+      "noNext": "This is the last match.",
+      "noPrevious": "This is the first match.",
+      "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Chronology",
+      "graph": "Graph",
+      "label": "Show the list as",
+      "review": "Review"
+    },
+    "qualifiers": {
+      "heading": "Caveats",
+      "recordSilent": {
+        "hint": "The record is not expected to speak to this point, so the missing coverage is not a gap.",
+        "label": "Record silent"
+      },
+      "restsOnHeld": {
+        "hint": "A fact this verdict rests on is now held out of scoring.",
+        "label": "Rests on a held fact"
+      },
+      "scopeMismatch": {
+        "hint": "A cited fact covers a different period, population, place or measure than the claim.",
+        "label": "Scope mismatch"
+      },
+      "testimonyOnly": {
+        "hint": "No document's record backs the facts this verdict rests on, and at least one of them is testimony.",
+        "label": "Testimony only"
+      },
+      "unsourcedOnly": {
+        "hint": "No fact this verdict rests on has a source yet.",
+        "label": "Unsourced only"
+      }
+    },
+    "reason": {
+      "escalate": "Why does the evidence team need this?",
+      "govern": "Why does this record govern?",
+      "override": "Why is the verdict “{verdict}”?",
+      "placeholder": "Say why; it stays in the claim's history",
+      "reopen": "Why can this claim be checked?",
+      "required": "Give a reason to record this.",
+      "unresolveConflict": "Why withdraw this resolution?",
+      "withdrawOverride": "Why return to the tool's verdict?"
+    },
+    "recheck": {
+      "currentVerdict": "The verdict after the re-check",
+      "runVerdict": "The run's verdict",
+      "summary": "Re-checked {checkedAt} against {count, plural, one {# fact} other {# facts}}."
+    },
+    "review": {
+      "alreadyReopened": "This claim has already been reopened.",
+      "decided": "{status, select, disputed {Disputed} needsEvidence {Needs evidence} other {{origin, select, bulk {Accepted as routine} other {Reviewed}}}} · {decidedAt}",
+      "escalated": "Resolve the escalation before changing the review decision.",
+      "permissionRequired": "You need permission to edit this list to review claims.",
+      "status": {
+        "disputed": "Disputed",
+        "needsEvidence": "Needs evidence",
+        "reviewed": "Reviewed"
+      },
+      "undo": "Undo decision"
+    },
+    "runs": {
+      "back": "All documents",
+      "carryOver": {
+        "openSource": "Open the run of {date}",
+        "outcomes": {
+          "ambiguous": "Several possible matches",
+          "textChanged": "Wording changed",
+          "unmatched": "No matching claim",
+          "verdictChanged": "Verdict changed"
+        },
+        "summary": {
+          "carried": "{count, number} carried",
+          "carriedAndMissed": "{carried, number} carried · {missed, number} not",
+          "label": "Reviews from the run of {date}: {carried, number} carried, {missed, number} not carried",
+          "missed": "{count, number} not carried"
+        }
+      },
+      "errors": {
+        "accessRevoked": "Verification stopped because access is unavailable.",
+        "aiUnavailable": "No AI model is available to verify documents. Check the organization's AI settings.",
+        "enqueueFailed": "The verification could not be started. Try again.",
+        "extractionFailed": "The claims in this document could not be extracted.",
+        "gradingFailed": "The claims could not be checked against the list's facts.",
+        "internal": "The verification failed unexpectedly.",
+        "noText": "No text could be read from this document.",
+        "pinContentChanged": "The document changed after the verification started. Verify it again.",
+        "pinUnresolved": "The document version this verification was started on can no longer be found.",
+        "unsupportedFormat": "Only DOCX files, PDFs and files with a PDF rendition can be verified."
+      },
+      "evidencePinned": "Checked against {count, plural, one {# fact} other {# facts}} as they stood on {checkedAt}. Later edits to the list do not change this verification.",
+      "failedTitle": "Verification failed",
+      "history": {
+        "label": "Verification history",
+        "loadFailed": "Earlier verifications of this document could not be loaded."
+      },
+      "inProgress": "Checking the document's claims against the list's facts…",
+      "loadFailed": "This verification could not be loaded.",
+      "noClaims": "No claims were found in this document.",
+      "startFailed": "Could not start the verification",
+      "status": {
+        "running": "Verifying"
+      },
+      "unreadParts": "{count, plural, one {# part of the document could not be read, so its claims were not checked.} other {# parts of the document could not be read, so their claims were not checked.}}"
+    },
+    "save": {
+      "failed": "Not saved",
+      "failedTitle": "Your change was not saved"
+    },
+    "scope": {
+      "checkedDocument": "Checked paragraphs <num>{range}</num> only.",
+      "checkedOrdinal": "Checked paragraphs <num>{range}</num> only, counted in order: this document does not number its paragraphs.",
+      "errors": {
+        "empty": "These paragraphs have no text to check.",
+        "garbage": "Enter paragraph numbers, such as 82–136.",
+        "notFound": "These paragraphs are not in this document.",
+        "numberingUnclear": "This document's paragraph numbers cannot be read. Verify the whole document.",
+        "required": "Enter the paragraphs to verify.",
+        "reversed": "The range ends before it starts.",
+        "tooWide": "Verify at most 500 paragraphs at a time."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "No claims were found in these paragraphs.",
+      "showBefore": "Show the text before ¶ {from}",
+      "verifyParagraphs": "Verify paragraphs"
+    },
+    "staleness": {
+      "failed": "The claims could not be checked again",
+      "finished": "{count, plural, one {# claim re-checked} other {# claims re-checked}}",
+      "partial": "{rechecked, number} re-checked, {failed, plural, one {# failed} other {# failed}}",
+      "reasons": {
+        "factChanged": "Fact changed",
+        "factHeld": "Fact held",
+        "factRemoved": "Fact removed",
+        "newFactRelated": "New related fact"
+      },
+      "recheckAll": "Re-check all",
+      "recheckLocked": "Being re-checked with the other out-of-date claims",
+      "runLine": "{count, plural, one {# claim may be out of date} other {# claims may be out of date}}",
+      "running": "{count, plural, one {Re-checking # claim…} other {Re-checking # claims…}}"
+    },
+    "states": {
+      "contradicted": {
+        "chip": "Contradicted",
+        "label": "Contradicted by the record"
+      },
+      "nocover": {
+        "chip": "No coverage",
+        "label": "No anchor fact covers this claim",
+        "silentChip": "No coverage · record silent"
+      },
+      "notverifiable": {
+        "chip": "Not verifiable",
+        "label": "Not a checkable factual claim"
+      },
+      "recordconflict": {
+        "chip": "Record conflict",
+        "label": "Anchor facts disagree with each other"
+      },
+      "supported": {
+        "chip": "Supported",
+        "label": "Supported by the record"
+      },
+      "tension": {
+        "chip": "In tension",
+        "label": "In tension with the record"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "Accept {count, plural, one {# routine claim} other {# routine claims}}",
+      "attentionComplete": "<strong>Every claim needing judgement has been dispositioned.</strong> {count, plural, one {The # routine determination does not require individual review.} other {The # routine determinations do not require individual review.}}",
+      "attentionOpen": "<strong>{count, plural, one {# claim needs} other {# claims need}} your judgement</strong>: conflicts and contested interpretations. {routineCount, plural, one {The other # is routine and does not need individual sign-off.} other {The other # are routine and do not need individual sign-off.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, contested} other {}}{reviewStatus, select, reviewed {, reviewed} disputed {, disputed} needsEvidence {, needs evidence} other {}})",
+      "documentView": {
+        "label": "Document view",
+        "original": "Original",
+        "reading": "Reading view"
+      },
+      "notLocated": "{count, plural, one {# claim was not located in the original} other {# claims were not located in the original}}",
+      "pdfTextFailed": "The PDF's text could not be read, so the claims are not marked on its pages.",
+      "selectClaim": "Select a claim to inspect the record.",
+      "showQueue": "Show queue",
+      "stats": {
+        "claims": "Claims",
+        "needsJudgement": "Needs judgement",
+        "progress": "{settled}/{total}"
+      }
+    },
+    "view": {
+      "chooseList": "Choose a list",
+      "createList": "Create a list",
+      "evidenceList": "Facts from",
+      "loadSample": "Load sample case",
+      "loadSampleFailed": "Couldn't load the sample case",
+      "loadingSample": "Loading the sample case…",
+      "noLists": "This matter has no lists",
+      "pickList": "Choose the list whose facts this matter's documents are checked against."
+    }
+  },
+  "inspector": {
+    "anonymization": {
+      "addPlaceholder": "Term to anonymize",
+      "contextMenuAddAction": "Anonymize selection",
+      "deleteAction": "Delete term",
+      "detectedHeading": "Detected in this document ({count})",
+      "detectingMatches": "Detecting matches in this document…",
+      "downloadAction": "Download anonymized PDF",
+      "downloadHint": "Exports the saved version as a PDF with non-selectable text.",
+      "emptyState": "No workspace-specific terms yet. Add one above.",
+      "enterTerm": "Enter a term to anonymize.",
+      "ignoreAction": "Ignore in this document",
+      "ignoreScopeAlways": "Always ignore",
+      "ignoreScopeDocument": "Ignore in this matter",
+      "ignoreScopeMenuAriaLabel": "Ignore scope",
+      "labelPickerAriaLabel": "Match label",
+      "labelPickerEmpty": "No matching label.",
+      "labelPickerPlaceholder": "Label",
+      "matchCount": "{count, plural, one {# match} other {# matches}} highlighted in this document.",
+      "matchedWorkspaceTermsHeading": "Matching workspace terms ({count})",
+      "noMatchesInDocument": "None of your workspace terms appear in this document.",
+      "openFullViewHint": "Open the file in full view to see anonymization highlights and per-document match counts.",
+      "restoreAction": "Restore in this document",
+      "scanFailed": "The scan failed. Retry to detect matches.",
+      "termAddedToast": "Added \"{value}\" to workspace anonymization terms.",
+      "termMatchCountAriaLabel": "Matched {count, plural, one {# time} other {# times}} in this document.",
+      "title": "Anonymization vocabulary",
+      "unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
+      "waitForMatches": "Wait for the anonymization scan to finish.",
+      "workspaceTermsHeading": "Workspace terms ({count})"
+    },
+    "attachmentNotPreviewable": "Download this attachment to open it.",
+    "closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
+    "closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
+    "closeTab": "Close <bdi>{name}</bdi>",
+    "conversionRefusal": {
+      "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
+      "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
+      "unsupportedField": "This document contains {fieldType}, which can't be converted.",
+      "unsupportedReference": "This document refers to an external resource in {element} {attribute}, so it can't be converted."
+    },
+    "enterGroupName": "Enter a name for the group.",
+    "external": {
+      "confirmDescription": "You're about to visit an external website.",
+      "confirmTitle": "Open external link?",
+      "openLink": "Open link",
+      "openOriginal": "Open original",
+      "unavailable": "The referenced site does not allow a safe preview. If the tool returned document text, it appears here; otherwise open the original."
+    },
+    "facet": {
+      "anonymization": "Anonymization"
+    },
+    "firstSourceReached": "This is the first source.",
+    "groups": {
+      "addContext": "Add context",
+      "chatMoveDescription": "<bdi>{chatName}</bdi> will be grouped under <bdi>{matterName}</bdi>. Add the matter to the chat’s context so it can use its files and information.",
+      "chatMoveTitle": "Add this matter to the chat?",
+      "collapse": "Collapse {groupName}",
+      "color": "Group color",
+      "colorOption": "Color {number}",
+      "copyIntoMatter": "Copy into matter",
+      "expand": "Expand {groupName}",
+      "fileMoveDescription": "<bdi>{fileName}</bdi> belongs to <bdi>{sourceMatterName}</bdi>. Copy it into <bdi>{matterName}</bdi>, or group its existing tab there without copying the file.",
+      "fileMoveTitle": "Copy this file into the matter?",
+      "groupOnly": "Group only",
+      "moveToGroup": "Move to group",
+      "name": "Group name",
+      "newGroup": "New group",
+      "remove": "Ungroup tabs",
+      "rename": "Rename group",
+      "saveFailed": "Could not save tab groups on this browser.",
+      "tabCount": "{count, plural, one {# tab} other {# tabs}}",
+      "ungroup": "Remove from group"
+    },
+    "hidePane": "Hide pane",
+    "lastSourceReached": "This is the last source.",
+    "matterPicker": {
+      "allMatters": "All matters",
+      "description": "Pick the matters this chat can draw on.",
+      "empty": "No matters available.",
+      "noMatter": "No matter",
+      "noResults": "No matter matches “{query}”.",
+      "searchPlaceholder": "Search matters or clients…",
+      "title": "Matter context"
+    },
+    "metadata": {
+      "aiExtractedHeading": "Extracted by AI",
+      "documentProperties": {
+        "empty": "This file records no properties of its own",
+        "heading": "File properties",
+        "keys": {
+          "application": "Application",
+          "applicationVersion": "Application version",
+          "characters": "Characters",
+          "company": "Company",
+          "contentStatus": "Content status",
+          "createdAt": "Created",
+          "description": "Comments",
+          "editingMinutes": "Total editing time",
+          "keywords": "Keywords",
+          "lastModifiedBy": "Last saved by",
+          "lastPrintedAt": "Printed",
+          "manager": "Manager",
+          "modifiedAt": "Modified",
+          "pages": "Pages",
+          "paragraphs": "Paragraphs",
+          "producer": "PDF producer",
+          "revision": "Revision number",
+          "slides": "Slides",
+          "subject": "Subject",
+          "template": "Template",
+          "title": "Title",
+          "words": "Words"
+        },
+        "passwordProtected": "The file is password-protected, so its properties cannot be read",
+        "saveFailed": "Couldn't save that property.",
+        "tooLarge": "The file is too large to read its properties",
+        "unreadable": "The file's properties could not be read",
+        "unsupportedFormat": "This file type does not carry document properties"
+      },
+      "lastUpdatedBy": "Last updated by",
+      "matterColumnsHeading": "Matter information",
+      "noMatterColumns": "Nothing recorded about this document yet",
+      "stellaHeading": "Stored in stella",
+      "versionCurrent": "v{version} (current)"
+    },
+    "moveToMain": "Move to main view",
+    "moveToSide": "Move to side panel",
+    "openChat": "Open chat",
+    "openTabs": "Open tabs ({count, number})",
+    "reopenTab": "Reopen {name}",
+    "resizePane": "Resize pane",
+    "review": {
+      "acceptChange": "Accept change",
+      "acceptFinding": "Accept finding",
+      "addNote": "Add comment for counterparty",
+      "addNotePlaceholder": "What the counterparty should see",
+      "addNoteSubmit": "Add comment",
+      "addReference": "Add {name} as a reference",
+      "allDecided": "Every finding here has been decided.",
+      "basisCombined": "{count, plural, one {Reviews against {name} and compares with # reference document} other {Reviews against {name} and compares with # reference documents}}",
+      "basisDivider": "and / or",
+      "basisPlaybook": "Reviews against {name}",
+      "basisReferences": "{count, plural, one {Compares with # reference document} other {Compares with # reference documents}}",
+      "basisToggle": "What was compared",
+      "changeBasis": "Change review basis",
+      "chatDraft": {
+        "finding": "Finding:",
+        "impact": "Impact:",
+        "issue": "Issue:",
+        "question": "How should I redraft the target on this point?",
+        "rationale": "Rationale:"
+      },
+      "checks": "Checks:",
+      "commentFailed": "Couldn't add the comment",
+      "completePositionIssues": "Enter an issue for each selected position.",
+      "decidedCount": "{count, number} decided",
+      "decision": "Decision",
+      "decisionFailed": "Couldn't record your decision",
+      "decisions": {
+        "accepted": "Accepted",
+        "dismissed": "Dismissed"
+      },
+      "dismissFinding": "Dismiss finding",
+      "documentChanged": "This document changed after this review.",
+      "documentCutNotice": "<strong>{documentName} was not read in full.</strong> It is too long for this model, so about {percent} of its text was left out. A position with no answer is flagged for review, because the answer may be in the part left out.",
+      "documentTooLarge": "This document is too long for this model to read enough of it. Try a model with a larger context window.",
+      "documentsTooLarge": "These documents are too long for this model to read together. Use fewer or shorter documents, or try a model with a larger context window.",
+      "enterNote": "Write a comment first.",
+      "export": {
+        "counterparty": "Download for counterparty",
+        "counterpartyFailed": "Could not export the document",
+        "counterpartyHint": "The saved document with tracked changes, without the internal review notes",
+        "counterpartyUnavailable": "Open the document to export it",
+        "csv": "CSV",
+        "docx": "Word (.docx)",
+        "exporting": "Exporting",
+        "internal": "Internal memo",
+        "internalHint": "Findings, rationale and references",
+        "xlsx": "Excel (.xlsx)"
+      },
+      "failed": "Document review failed",
+      "filterCoverage": "Coverage",
+      "filterDeviations": "Deviations",
+      "fixesWithheldNotice": "Proposed changes weren't created for this review because it used a reference document from a matter that isn't available to the person who ran it. Findings are unaffected.",
+      "flag": "Flag",
+      "flaggedPositions": "{total, plural, one {{flagged, number} of # position flagged} other {{flagged, number} of # positions flagged}}",
+      "fromChat": "From chat",
+      "fromThisMatter": "From this matter",
+      "history": {
+        "backToLatest": "Back to latest",
+        "decided": "{decided, number} of {total, number} decided",
+        "fromTable": "From the table",
+        "references": "{count, plural, one {# reference} other {# references}}"
+      },
+      "impact": {
+        "favourable": "Favourable",
+        "neutral": "No effect",
+        "unfavourable": "Unfavourable"
+      },
+      "impactForSide": {
+        "favourable": "Better for {role}",
+        "neutral": "No effect for {role}",
+        "unfavourable": "Worse for {role}"
+      },
+      "insufficientEvidence": "The supplied documents do not provide enough evidence for this topic.",
+      "marginNotes": {
+        "above": "{count, number} above",
+        "below": "{count, number} below",
+        "documentNotRead": "Open the document in the main pane to pin the findings beside it.",
+        "label": "Findings beside the clauses they are about",
+        "unanchored": "Not tied to a clause"
+      },
+      "noEditor": "Open the document to accept changes",
+      "noMaterialDifferences": "No material differences found",
+      "noPassage": "No passage",
+      "noPlaybooksMatch": "No matching playbooks.",
+      "notCompared": "Not compared",
+      "notComparedCount": "Not compared: {count, number}",
+      "noteAdded": "Comment added for the counterparty",
+      "noteBlockedChecking": "stella is still checking whether this document can be edited safely. Your comment is kept; try again in a moment.",
+      "noteBlockedCollaboration": "The shared editing session is still opening. Your comment is kept; try again in a moment.",
+      "noteBlockedOpening": "The document is still opening. Your comment is kept; try again in a moment.",
+      "noteBlockedReadOnly": "This shared document is open for viewing only. Your comment is kept; try again once you can edit it.",
+      "noteNotAdded": "Comment not added",
+      "openPlaybooks": "Open playbooks",
+      "pane": {
+        "document": "Panel: findings beside the document",
+        "margin": "Margin: findings beside their clauses",
+        "review": "Main: findings in the wide pane"
+      },
+      "passageUnavailable": "Reference text unavailable",
+      "passagesCount": "{count, plural, one {# passage} other {# passages}}",
+      "passagesToggle": "Passages",
+      "pendingCount": "{count, plural, one {# pending} other {# pending}}",
+      "perspective": {
+        "neutral": "Not specified",
+        "other": "Other…",
+        "otherPlaceholder": "Role as the document names it",
+        "title": "We act for"
+      },
+      "playbookDeleted": "This playbook no longer exists; the review is kept as a record.",
+      "playbookOutdated": "A newer approved version of this playbook exists.",
+      "playbookSection": "Playbook",
+      "presence": {
+        "absent": "No",
+        "present": "Yes"
+      },
+      "progressPositions": "{total, plural, one {{completed, number} of # position} other {{completed, number} of # positions}}",
+      "proposedChange": "Proposed change",
+      "proposing": "Proposing positions… {count, number}",
+      "readOnlyRun": "Decided on this run",
+      "recommendation": "Recommendation:",
+      "referenceDocument": "Reference document",
+      "referenceLimitReached": "Reference limit reached",
+      "referencePlaceholder": "Search reference documents",
+      "referencesCount": "{count, number}/{max, number}",
+      "referencesDisagree": "References disagree",
+      "referencesSection": "Reference documents",
+      "removeReference": "Remove reference {name}",
+      "reopen": "Reopen",
+      "results": "Review results",
+      "reviewAgain": "Run another review",
+      "reviewPositionsFirst": "Review the positions first",
+      "reviewing": "Review in progress…",
+      "reviewingHint": "This can take up to a couple of minutes for large documents.",
+      "run": "Start review",
+      "saveAsPlaybook": "Save as playbook",
+      "saveAsPlaybookFailed": "Could not save this review as a playbook",
+      "savedAsPlaybook": "Saved as a playbook",
+      "searchPlaybooks": "Search playbooks",
+      "selectPositionFirst": "Select at least one position.",
+      "selectReviewBasis": "Choose a playbook or add a reference document.",
+      "selectReviewPositionOrReference": "Choose a playbook with active positions or add a reference document.",
+      "showInDocument": "Show in document",
+      "sizeConfirmStart": "Start review",
+      "sizeConfirmTitle": "Large review",
+      "skipReason": {
+        "dealSpecificValue": "Deal-specific value",
+        "lowerWeight": "Lower commercial weight",
+        "structural": "Structural difference"
+      },
+      "standardColumn": "Standard",
+      "standardColumnFrom": "Standard ({name})",
+      "suggestionSkipped": "No longer matches the document",
+      "suggestionStaged": "Staged as a tracked change in the document",
+      "summary": {
+        "forParty": "for the {role}",
+        "noSide": "no side",
+        "proposedFromReferences": "positions proposed from the references",
+        "unnamedReferences": "{count, plural, one {# reference document} other {# reference documents}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>A full review of this version</link>, with links and proposed changes, is available in the review history.",
+        "origin": "<strong>From a table run.</strong> These findings were graded on the values extracted for the table, so they don't link to the document and include no proposed changes.",
+        "runAnotherReview": "To get links and proposed changes, use <action>{label}</action>."
+      },
+      "targetAsReference": "The reviewed document cannot be its own reference.",
+      "targetColumn": "This document",
+      "targetDocument": "Target document",
+      "title": "Review document",
+      "topicsTitle": "What should this review cover?",
+      "why": "Why",
+      "whyItMatters": "Why it matters:"
+    },
+    "selectAttachmentToSave": "Select an attachment to save.",
+    "showPane": "Show pane",
+    "swapViews": "Swap main and side views",
+    "title": "Inspector"
+  }
+}

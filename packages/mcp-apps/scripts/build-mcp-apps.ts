@@ -81,6 +81,8 @@ const webRoot = path.resolve(import.meta.dirname, "../../../apps/web");
 const repoRoot = path.resolve(import.meta.dirname, "../../..");
 const canonicalRepoRoot = realpathSync(repoRoot);
 const readerMessages = new Map<string, Map<string, string>>();
+const { buildCatalogs } = await import("../../scripts/src/i18n-namespaces");
+await buildCatalogs(path.join(webRoot, "src/i18n"));
 const localeRoot = path.join(webRoot, "src/i18n/langs");
 for (const file of [
   ...new Bun.Glob("*.json").scanSync({ cwd: localeRoot }),

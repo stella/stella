@@ -25,6 +25,7 @@ const OPEN_ACTIVITY_ACTION: &str = "open-activity";
 const OPEN_TRANSCRIBE_ACTION: &str = "open-transcribe";
 const OPEN_DICTATION_SETTINGS_ACTION: &str = "open-dictation-settings";
 const DICTATION_HINT_ITEM: &str = "dictation-hint";
+const RETYPE_DICTATION_ACTION: &str = "dictation-retype";
 const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
 const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
@@ -94,8 +95,9 @@ fn activity_action(
 enum DictationMenu {
   /// Switched off: one item, opening the page where it is turned on.
   Off,
-  /// On: a line naming the key to hold, then its settings.
-  On { hint: String },
+  /// On: a line naming the key to hold, typing the last dictation again
+  /// (enabled while there is one), then its settings.
+  On { hint: String, can_retype: bool },
 }
 
 /// `None` wherever the Settings window shows no Dictation page.
@@ -114,6 +116,7 @@ fn dictation_menu(
   });
   Some(DictationMenu::On {
     hint: t_fmt("tray.dictationHint", &[("key", &key)]),
+    can_retype: state.can_retype,
   })
 }
 
@@ -584,10 +587,15 @@ fn build_dictation_menu(
       )
       .separator()
       .item(&transcribe),
-    DictationMenu::On { hint } => menu
+    DictationMenu::On { hint, can_retype } => menu
       .item(
         &MenuItemBuilder::with_id(DICTATION_HINT_ITEM, hint)
           .enabled(false)
+          .build(app)?,
+      )
+      .item(
+        &MenuItemBuilder::with_id(RETYPE_DICTATION_ACTION, t("tray.dictationRetype"))
+          .enabled(*can_retype)
           .build(app)?,
       )
       .separator()
@@ -665,6 +673,9 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == OPEN_DICTATION_SETTINGS_ACTION {
     return MenuAction::OpenPreferences(PreferencesTab::Dictation);
   }
+  if action == RETYPE_DICTATION_ACTION {
+    return MenuAction::RetypeDictation;
+  }
   if action == PAUSE_ACTIVITY_ACTION {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused);
   }
@@ -712,6 +723,7 @@ pub enum MenuAction {
   OpenClipboard,
   OpenActivity,
   OpenTranscribe,
+  RetypeDictation,
   SetActivityRecording(ActivityRecordingStatus),
   CheckForUpdates,
   OpenEditRoot,
@@ -823,6 +835,7 @@ mod tests {
     let off = TrayDictation {
       enabled: false,
       hold_key: HoldChoice::Fn,
+      can_retype: true,
     };
     assert_eq!(
       dictation_menu(Some(off), KeyNames::Mac, "en"),
@@ -836,9 +849,10 @@ mod tests {
     let on = |hold_key| TrayDictation {
       enabled: true,
       hold_key,
+      can_retype: false,
     };
     let hint = |state, names| match dictation_menu(Some(state), names, "en") {
-      Some(DictationMenu::On { hint }) => hint,
+      Some(DictationMenu::On { hint, .. }) => hint,
       other => panic!("expected the on menu, got {other:?}"),
     };
     assert_eq!(
@@ -853,6 +867,28 @@ mod tests {
       hint(on(HoldChoice::Combination), KeyNames::Windows),
       "Hold Ctrl+Alt+Space to dictate"
     );
+  }
+
+  #[test]
+  fn typing_the_last_dictation_again_is_offered_once_there_is_one() {
+    init_i18n();
+    let can_retype = |can_retype| {
+      let state = TrayDictation {
+        enabled: true,
+        hold_key: HoldChoice::Fn,
+        can_retype,
+      };
+      match dictation_menu(Some(state), KeyNames::Mac, "en") {
+        Some(DictationMenu::On { can_retype, .. }) => can_retype,
+        other => panic!("expected the on menu, got {other:?}"),
+      }
+    };
+    assert!(!can_retype(false));
+    assert!(can_retype(true));
+    assert!(matches!(
+      handle_menu_action(RETYPE_DICTATION_ACTION),
+      MenuAction::RetypeDictation
+    ));
   }
 
   #[test]
@@ -876,6 +912,7 @@ mod tests {
     for key in [
       "tray.dictation",
       "tray.dictationHint",
+      "tray.dictationRetype",
       "tray.dictationSettings",
       "tray.dictationTurnOn",
     ] {

@@ -1253,7 +1253,7 @@ const AdditionalDatesControl = ({
             <CalendarIcon className={ADDITIONAL_DATES_ICON_CLASS} />
             {count > 0
               ? t("workspaces.views.calendar.additionalDates", {
-                  count: String(count),
+                  count,
                 })
               : t("workspaces.views.calendar.addDates")}
           </Button>

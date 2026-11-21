@@ -137,7 +137,7 @@ export const AcceptAllButton = ({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("docxReview.acceptAllConfirmDescription", {
-                count: String(pendingChanges.length),
+                count: pendingChanges.length,
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>

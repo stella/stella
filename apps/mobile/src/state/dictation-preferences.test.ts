@@ -50,7 +50,11 @@ describe("dictation preferences", () => {
 
   test("a choice reads back for its account only", async () => {
     const { store } = memoryStore();
-    const picked = { modelId: "elevenlabs/scribe-v3", cleanup: true };
+    const picked = {
+      modelId: "elevenlabs/scribe-v3",
+      cleanup: true,
+      microphone: "system",
+    } as const;
     await writeDictationPreferences(store, ACCOUNT, picked);
 
     expect(await readDictationPreferences(store, ACCOUNT)).toEqual(picked);
@@ -59,11 +63,29 @@ describe("dictation preferences", () => {
     ).toEqual(DEFAULT_DICTATION_PREFERENCES);
   });
 
+  test("choices kept before the microphone was one record from the iPhone's", async () => {
+    const { items, store } = memoryStore();
+    await writeDictationPreferences(
+      store,
+      ACCOUNT,
+      DEFAULT_DICTATION_PREFERENCES,
+    );
+    for (const key of items.keys()) {
+      items.set(key, JSON.stringify({ modelId: "m", cleanup: true }));
+    }
+    expect(await readDictationPreferences(store, ACCOUNT)).toEqual({
+      modelId: "m",
+      cleanup: true,
+      microphone: "built-in",
+    });
+  });
+
   test("a value this build cannot read is the defaults", async () => {
     const { items, store } = memoryStore();
     await writeDictationPreferences(store, ACCOUNT, {
       modelId: null,
       cleanup: true,
+      microphone: "built-in",
     });
     for (const key of items.keys()) {
       items.set(key, "{not json");
@@ -78,6 +100,7 @@ describe("dictation preferences", () => {
     await writeDictationPreferences(store, ACCOUNT, {
       modelId: "m",
       cleanup: true,
+      microphone: "system",
     });
     const boundary = createSessionEndBoundary();
     boundary.register(forgetDictationPreferences(store));
@@ -86,7 +109,11 @@ describe("dictation preferences", () => {
   });
 
   test("a picked model counts only while the server offers it", () => {
-    const picked = { modelId: "m", cleanup: false };
+    const picked = {
+      modelId: "m",
+      cleanup: false,
+      microphone: "built-in",
+    } as const;
     expect(chosenModelId(picked, null)).toBe("m");
     expect(chosenModelId(picked, [{ id: "m" }])).toBe("m");
     expect(chosenModelId(picked, [{ id: "other" }])).toBeUndefined();
@@ -94,7 +121,11 @@ describe("dictation preferences", () => {
   });
 
   test("settings show the model a dictation sends, even when the list cannot be read", () => {
-    const picked = { modelId: "m", cleanup: false };
+    const picked = {
+      modelId: "m",
+      cleanup: false,
+      microphone: "built-in",
+    } as const;
     expect(shownModel(picked, [{ id: "m" }])).toEqual({
       selected: "m",
       unlisted: false,

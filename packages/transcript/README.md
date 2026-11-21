@@ -10,6 +10,9 @@ platform APIs. Invalid inputs return `better-result` errors.
   transcript remapping, bitrate-based upload planning and chunk merging.
 - `@stll/transcript/exporters`: plain text, Markdown, SRT, VTT and canonical JSON.
 - `@stll/transcript/vocabulary`: ranked vocabulary with mechanism budgets.
+- `@stll/transcript/spelling`: custom words and names spelled as written where a
+  transcript comes close, as the desktop spells them after local transcription,
+  keeping Czech and Slovak case endings.
 
 `detectKeptIntervals` treats each dBFS sample as the following fixed-width
 interval. Samples at or below the threshold are silence; `-Infinity` is valid.
