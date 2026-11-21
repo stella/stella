@@ -1943,9 +1943,9 @@ console.log(m.configuredCodeCheckConcurrency(), m.codeCheckConcurrency(12 * 1024
 
 describe("check failure reporting", () => {
   const commands = [
-    ["bun", "turbo", "lint"],
-    ["bun", "turbo", "typecheck"],
-    ["bun", "turbo", "typecheck:repo"],
+    ["bun", "--bun", "turbo", "lint"],
+    ["bun", "--bun", "turbo", "typecheck"],
+    ["bun", "--bun", "turbo", "typecheck:repo"],
   ];
   test("planner deadlines retain measured headroom beyond the old fixed cap and respect the remaining leg budget", () => {
     const longest =

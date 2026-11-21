@@ -11,6 +11,7 @@ if (!process.env["TURBO_HASH"]) {
     process.execPath,
     [
       "x",
+      "--bun",
       "--no-install",
       "turbo",
       "run",
