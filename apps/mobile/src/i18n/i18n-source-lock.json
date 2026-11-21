@@ -728,5 +728,7 @@
   "chat.dictationDiscardTitle": "Discard this dictation?",
   "chat.dictationDiscardMessage": "Its recording is deleted from this phone and cannot be transcribed later.",
   "chat.dictationPaste": "Paste dictation",
-  "chat.dictationKeep": "Keep dictation"
+  "chat.dictationKeep": "Keep dictation",
+  "chat.dictateHoldHint": "Tap to dictate, or hold to dictate until you let go.",
+  "chat.dictationNoSignal": "The microphone gives no signal. Check that it is not muted or used by another app."
 }
