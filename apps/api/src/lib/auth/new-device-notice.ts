@@ -31,6 +31,8 @@ type PreviousSession = {
 
 type NewDeviceNotice = {
   email: string;
+  /** The reported session, which the email's review link opens. */
+  sessionId: string;
   device: SignInDevice;
   ipAddress: SignInAddress;
   createdAt: Date;
@@ -147,6 +149,7 @@ export const sendNewDeviceNotice = async ({
 
       dependencies.sendNotice({
         email: user.email,
+        sessionId: session.id,
         device: signInDevice(currentDevice),
         ipAddress:
           typeof currentIpAddress === "string" && currentIpAddress !== ""

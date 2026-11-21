@@ -40,7 +40,7 @@ const NO_COMPUTER = "None of your computers is connected.";
 /** The failed turn's button that opens stella desktop and sends again. */
 const OPEN_DESKTOP = "Open stella desktop";
 /** What a turn, and that button, say while stella desktop opens. */
-const OPENING_DESKTOP = "Opening stella desktop...";
+const OPENING_DESKTOP = "Opening stella desktop…";
 
 test.beforeEach(async ({ request }) => {
   await setComputerOnline(request, true);

@@ -25,6 +25,7 @@ type Messages = {
   };
   "newDeviceLogin": {
     "action": "Review signed-in devices";
+    "actionNote": "The button opens Settings › Security at this sign-in.";
     "body": "Someone just signed in to your account from a new device or location.";
     "device": "Device";
     "deviceName": {

@@ -77,10 +77,6 @@ import { ChatNotificationsRow } from "@/routes/_protected.settings/-components/a
 import { ChatTechnicalDetailsRow } from "@/routes/_protected.settings/-components/account/chat-technical-details-row";
 import { DeletionTaskReassignments } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
 import type { DeletionTaskGroup } from "@/routes/_protected.settings/-components/account/deletion-task-reassignments";
-import { PersonalDataExportCard } from "@/routes/_protected.settings/-components/account/personal-data-export-card";
-import { SessionsCard } from "@/routes/_protected.settings/-components/account/sessions-card";
-import { SignInMethods } from "@/routes/_protected.settings/-components/account/sign-in-methods";
-import { TwoFactorCard } from "@/routes/_protected.settings/-components/account/two-factor-card";
 import { FormField } from "@/routes/_protected.settings/-components/settings-section.pending";
 
 import {
@@ -356,14 +352,6 @@ function ProfilePageBody() {
 
   return (
     <ProfilePageShell
-      accountCards={
-        <>
-          <SignInMethods />
-          <TwoFactorCard />
-          <SessionsCard />
-          <PersonalDataExportCard />
-        </>
-      }
       chatPreferences={
         <>
           <ChatNotificationsRow />

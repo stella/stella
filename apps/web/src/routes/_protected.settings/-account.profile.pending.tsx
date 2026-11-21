@@ -10,10 +10,6 @@ import { SettingsPanel, SettingsRow, SettingsSection } from "@stll/ui/settings";
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
 import { framePendingView } from "@/routes/-pending-view.logic";
-import { PersonalDataExportCardPending } from "@/routes/_protected.settings/-components/account/personal-data-export-card.pending";
-import { SessionsCardPending } from "@/routes/_protected.settings/-components/account/sessions-card.pending";
-import { SignInMethodsPending } from "@/routes/_protected.settings/-components/account/sign-in-methods.pending";
-import { TwoFactorCardPending } from "@/routes/_protected.settings/-components/account/two-factor-card.pending";
 import { SettingsPageHeaderPending } from "@/routes/_protected.settings/-components/settings-page-header.pending";
 import {
   FORM_STACK_CLASS,
@@ -82,9 +78,6 @@ type ProfilePageShellProps = {
   localePreferences: ReactNode;
   /** The chat preference rows: notifications, technical details. */
   chatPreferences: ReactNode;
-  /** The account's own sections: sign-in, two-factor, sessions, data
-   *  export. */
-  accountCards: ReactNode;
   /** The danger zone's action. */
   deleteAccount: ReactNode;
   /** What the page mounts beside its cards (the deletion dialog). */
@@ -93,7 +86,6 @@ type ProfilePageShellProps = {
 
 /** The profile page's layout, in both phases. */
 export const ProfilePageShell = ({
-  accountCards,
   chatPreferences,
   children,
   deleteAccount,
@@ -130,8 +122,6 @@ export const ProfilePageShell = ({
       {chatPreferences}
     </SettingsSectionPending>
 
-    {accountCards}
-
     <SettingsSectionPending
       description="settings.account.dangerZoneDescription"
       title="settings.account.dangerZone"
@@ -165,14 +155,6 @@ const LOCALE_PREFERENCE_ROWS = Object.values(LOCALE_PREFERENCE_LABELS);
 const ProfilePendingView = () => (
   <SettingsPagePending area="account">
     <ProfilePageShell
-      accountCards={
-        <>
-          <SignInMethodsPending />
-          <TwoFactorCardPending />
-          <SessionsCardPending />
-          <PersonalDataExportCardPending />
-        </>
-      }
       chatPreferences={
         <>
           <SettingsSwitchRowPending
