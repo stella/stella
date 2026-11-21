@@ -207,10 +207,7 @@ const fixAt = (
 ): { to: string; taken: number } | undefined => {
   for (const { keys, to } of active) {
     const leading = leadingWords(pieces, start, keys.length);
-    if (
-      leading !== undefined &&
-      leading.words.every((word, at) => wordKey(word) === keys[at])
-    ) {
+    if (leading?.words.every((word, at) => wordKey(word) === keys[at])) {
       return { to, taken: leading.taken };
     }
   }
