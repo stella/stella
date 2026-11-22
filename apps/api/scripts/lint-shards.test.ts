@@ -99,13 +99,13 @@ test("a run whose shards all pass succeeds", () => {
 test("API_LINT_SHARD selects a single shard and rejects unknown shard names", () => {
   const commands = apiLintCommands(["oxlint", "--type-aware"]);
   expect(apiLintCommandForShard(["oxlint", "--type-aware"], "lib")).toEqual(
-    commands[0],
+    commands[0] ?? [],
   );
   expect(
     apiLintCommandForShard(["oxlint", "--type-aware"], "handlers"),
   ).toEqual(commands[1]);
   expect(apiLintCommandForShard(["oxlint", "--type-aware"], "rest")).toEqual(
-    commands[2],
+    commands[2] ?? [],
   );
   expect(API_LINT_SHARD_NAMES).toEqual(["lib", "handlers", "rest"]);
   const invalid = Bun.spawnSync(

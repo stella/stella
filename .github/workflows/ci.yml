@@ -2205,6 +2205,7 @@ jobs:
       contents: read
       actions: write
     env:
+      API_LINT_SHARD: ${{ matrix.shard }}
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
@@ -3794,7 +3795,6 @@ jobs:
         # not hold the job until the job's own timeout.
         timeout-minutes: 20
         env:
-          API_LINT_SHARD: ${{ matrix.shard }}
           STELLA_VERIFY: check
           CHECK_BASE_REF: ${{ format('origin/{0}', github.base_ref || 'main') }}
           BASE_REF: ${{ github.base_ref || 'main' }}
