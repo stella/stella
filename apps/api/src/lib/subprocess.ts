@@ -8,7 +8,6 @@ import {
   SubprocessError,
   type SubprocessTerminationReason,
 } from "@/api/lib/errors/tagged-errors";
-import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Writes a worker's answer to stdout and resolves once the pipe has taken all
@@ -41,7 +40,7 @@ type SpawnWorkerOptions = {
   onStderr?: (stderr: string) => void;
   /**
    * Resident memory the worker may reach. The parent reads it every
-   * `LIMITS.workerRssPollMs` and kills the worker past it, or when the read
+   * `WORKER_RSS_POLL_MS` and kills the worker past it, or when the read
    * fails while the worker runs, which fails as a `memory` termination.
    * Without it the worker is bounded only by its timeout and its
    * container's limit.
@@ -165,6 +164,14 @@ type WorkerTermination = {
   timeoutAbort: boolean;
 };
 
+/**
+ * How often a parent reads the resident memory of a worker that has a
+ * ceiling. Kept here, not in `LIMITS`: workers and retention sources import
+ * this module, and the limits module brings the API contract with it. At
+ * 50 ms a worker growing 200 MB/s passes its ceiling by about 10 MB.
+ */
+const WORKER_RSS_POLL_MS = 50;
+
 const HAS_PROC_FS = existsSync("/proc/self/status");
 const VM_RSS = /^VmRSS:\s+(?<kilobytes>\d+) kB$/mu;
 const BYTES_PER_KIB = 1024;
@@ -242,7 +249,7 @@ export const readProcessRss = async (pid: number): Promise<ProcessRss> =>
   HAS_PROC_FS ? await readProcStatusRss(pid) : await readPsRss(pid);
 
 /**
- * Reads a worker's resident memory every `LIMITS.workerRssPollMs` and calls
+ * Reads a worker's resident memory every `WORKER_RSS_POLL_MS` and calls
  * `onExceeded` once it is past `maxRssBytes`, or once it cannot be read
  * while the worker runs: a ceiling nobody can check is not held, so the
  * watch fails closed. A read still running when the next one is due is not
@@ -285,7 +292,7 @@ const watchWorkerMemory = ({
   const poll = () => {
     reading ??= check();
   };
-  const timer = setInterval(poll, LIMITS.workerRssPollMs);
+  const timer = setInterval(poll, WORKER_RSS_POLL_MS);
   return () => {
     clearInterval(timer);
   };
