@@ -31,7 +31,7 @@ export const at = (
 };
 
 /** Longest stated value a preview keeps; invoice fields are far shorter. */
-export const E_INVOICE_MAX_VALUE_CHARS = 10_000;
+const E_INVOICE_MAX_VALUE_CHARS = 10_000;
 
 /** A stated value: the element's own text, trimmed, or null when empty. */
 export const textOf = (node: DocumentXmlNode | undefined): string | null => {
