@@ -136,8 +136,12 @@ export const renderDocumentName = ({
       dropNextSeparator = true;
     }
   }
-  const stem = trimSeparators(kept.join("").replaceAll(/\s{2,}/gu, " "))
+  // Cut by code point so a character outside the BMP is never split in half.
+  const stem = Array.from(
+    trimSeparators(kept.join("").replaceAll(/\s{2,}/gu, " ")),
+  )
     .slice(0, MAX_DOCUMENT_NAME_LENGTH)
+    .join("")
     .trim();
   return stem === "" ? null : `${stem}${extension}`;
 };

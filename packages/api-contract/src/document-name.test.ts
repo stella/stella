@@ -85,6 +85,15 @@ describe("renderDocumentName", () => {
     ).toBe("Lease.pdf");
   });
 
+  test("cuts a long name without splitting a character", () => {
+    const name = renderDocumentName({
+      pattern: "{title}",
+      values: { ...NONE, title: `${"a".repeat(199)}😀😀` },
+      extension: ".pdf",
+    });
+    expect(name).toBe(`${"a".repeat(199)}😀.pdf`);
+  });
+
   test("returns null when no token has a value", () => {
     expect(
       renderDocumentName({

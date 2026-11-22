@@ -30,10 +30,19 @@ export const DOCUMENT_NAMING_SYSTEM_PROMPT =
 export const namingPrompt = (name: string, text: string): string =>
   `File name: "${name}"\n\n${text.slice(0, NAMING_TEXT_CAP_CHARS)}`;
 
-/** The name's extension with its dot, or "" when it has none. */
+const FILE_EXTENSION = /^\.[\p{L}\p{N}]{1,10}$/u;
+
+/**
+ * The name's extension with its dot, or "" when it has none. Only a short run
+ * of letters and digits counts, so "Smlouva č. 5" has none.
+ */
 export const extensionOf = (name: string): string => {
   const dot = name.lastIndexOf(".");
-  return dot > 0 && dot < name.length - 1 ? name.slice(dot) : "";
+  if (dot <= 0) {
+    return "";
+  }
+  const extension = name.slice(dot);
+  return FILE_EXTENSION.test(extension) ? extension : "";
 };
 
 export const namingValues = (
