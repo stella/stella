@@ -224,7 +224,7 @@ const UnavailableFileListItem = ({ file }: { file: ContainedFile }) => {
   return (
     <li className="text-muted-foreground flex min-h-12 items-center gap-3 px-3 py-2">
       <DocumentIcon
-        className="size-5 shrink-0 opacity-60"
+        className="size-5 shrink-0"
         fileName={file.fileName}
         mimeType={null}
       />
