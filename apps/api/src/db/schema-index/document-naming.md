@@ -4,23 +4,23 @@
 
 One line per column: `table.column  builder  flags  file:line  first sentence of its comment`.
 
-## document_naming_runs · `documentNamingRuns` · document-naming.ts:40 · rls
+## document_naming_runs · `documentNamingRuns` · document-naming.ts:39 · rls
 
 One automatic rename of a newly uploaded document, from the organization's naming pattern.
 
 ```text
-document_naming_runs.{...entityFeatureGateColumns()}  spread                                document-naming.ts:43
-document_naming_runs.id                               safeUuid            pk,fk,not null    document-naming.ts:45  The processing run that gave the document its text.
-document_naming_runs.organization_id                  safeOrganizationId  fk,not null       document-naming.ts:46
-document_naming_runs.workspace_id                     safeWorkspaceId     fk,not null       document-naming.ts:47
-document_naming_runs.entity_id                        safeUuid            fk,not null       document-naming.ts:48
-document_naming_runs.entity_version_id                safeUuid            fk,not null       document-naming.ts:49
-document_naming_runs.source_name                      varchar             not null          document-naming.ts:51  The document's name when the run was created; a rename since wins.
-document_naming_runs.status                           text                default,not null  document-naming.ts:52
-document_naming_runs.attempt                          integer             default,not null  document-naming.ts:56
-document_naming_runs.claimed_at                       timestamptz         null              document-naming.ts:57
-document_naming_runs.error_code                       varchar             null              document-naming.ts:58
-document_naming_runs.skipped_until                    timestamptz         null              document-naming.ts:60  A run refused for an exhausted action period waits for its end.
-document_naming_runs.created_at                       timestamptz         default,not null  document-naming.ts:61
-document_naming_runs.updated_at                       timestamptz         default,not null  document-naming.ts:62
+document_naming_runs.{...entityFeatureGateColumns()}  spread                                document-naming.ts:42
+document_naming_runs.id                               safeUuid            pk,not null       document-naming.ts:44  The processing run that gave the document its text.
+document_naming_runs.organization_id                  safeOrganizationId  fk,not null       document-naming.ts:45
+document_naming_runs.workspace_id                     safeWorkspaceId     fk,not null       document-naming.ts:46
+document_naming_runs.entity_id                        safeUuid            fk,not null       document-naming.ts:47
+document_naming_runs.entity_version_id                safeUuid            fk,not null       document-naming.ts:48
+document_naming_runs.source_name                      varchar             not null          document-naming.ts:50  The document's name when the run was created; a rename since wins.
+document_naming_runs.status                           text                default,not null  document-naming.ts:51
+document_naming_runs.attempt                          integer             default,not null  document-naming.ts:55
+document_naming_runs.claimed_at                       timestamptz         null              document-naming.ts:56
+document_naming_runs.error_code                       varchar             null              document-naming.ts:57
+document_naming_runs.skipped_until                    timestamptz         null              document-naming.ts:59  A run refused for an exhausted action period waits for its end.
+document_naming_runs.created_at                       timestamptz         default,not null  document-naming.ts:60
+document_naming_runs.updated_at                       timestamptz         default,not null  document-naming.ts:61
 ```

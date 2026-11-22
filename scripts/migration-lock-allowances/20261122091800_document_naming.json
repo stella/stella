@@ -1,6 +1,6 @@
 {
   "add-column": "organization_settings and workspaces gain one nullable or constant-default column each, a catalog-only change with no table rewrite. The ACCESS EXCLUSIVE lock is acquired under the 1s lock_timeout and is held until the migration transaction commits, which follows within this short, catalog-only migration.",
-  "add-foreign-key": "document_naming_runs is new and empty, so its foreign keys validate no existing rows. Each takes a SHARE ROW EXCLUSIVE lock on the referenced document_processing_runs, organization, workspaces, entities or entity_versions table. The 1s lock_timeout bounds the wait for each lock and the 5s statement_timeout bounds each statement; acquired locks are held until the migration commits.",
+  "add-foreign-key": "document_naming_runs is new and empty, so its foreign keys validate no existing rows. Each takes a SHARE ROW EXCLUSIVE lock on the referenced organization, workspaces, entities or entity_versions table. The 1s lock_timeout bounds the wait for each lock and the 5s statement_timeout bounds each statement; acquired locks are held until the migration commits.",
   "row-level-security": "Row security is enabled and forced on the new, empty document_naming_runs table before application code can write it.",
   "create-policy": "Policies are catalog-only additions to the new, empty document_naming_runs table and run under the migration's one-second lock timeout."
 }

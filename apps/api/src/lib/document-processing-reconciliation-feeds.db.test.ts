@@ -240,6 +240,9 @@ const FIXTURES = [
 const resetFixtureState = async () => {
   redisAvailable = true;
   await testDb
+    .delete(documentNamingRuns)
+    .where(eq(documentNamingRuns.organizationId, ids.orgA));
+  await testDb
     .delete(documentProcessingRuns)
     .where(eq(documentProcessingRuns.organizationId, ids.orgA));
   await testDb

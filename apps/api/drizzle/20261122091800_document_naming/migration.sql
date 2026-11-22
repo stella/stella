@@ -2,7 +2,8 @@ SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 -- Automatic renames of newly uploaded documents from the organization's
 -- naming pattern, in matters that opt in (#3294). A run cascades with the
--- processing run, entity version and document it names.
+-- entity version and document it names; its id is the processing run that
+-- gave the version its text.
 ALTER TABLE "organization_settings" ADD COLUMN "document_name_pattern" varchar(128);--> statement-breakpoint
 ALTER TABLE "workspaces" ADD COLUMN "document_naming_enabled" boolean DEFAULT false NOT NULL;--> statement-breakpoint
 CREATE TABLE "document_naming_runs" (
@@ -22,7 +23,6 @@ CREATE TABLE "document_naming_runs" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "document_naming_runs_claim_check" CHECK (("status" = 'running') = ("claimed_at" IS NOT NULL))
 );--> statement-breakpoint
-ALTER TABLE "document_naming_runs" ADD CONSTRAINT "document_naming_runs_source_run_fk" FOREIGN KEY ("id") REFERENCES "document_processing_runs"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "document_naming_runs" ADD CONSTRAINT "document_naming_runs_organization_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "document_naming_runs" ADD CONSTRAINT "document_naming_runs_workspace_fk" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "document_naming_runs" ADD CONSTRAINT "document_naming_runs_workspace_organization_fk" FOREIGN KEY ("workspace_id","organization_id") REFERENCES "workspaces"("id","organization_id") ON DELETE CASCADE;--> statement-breakpoint

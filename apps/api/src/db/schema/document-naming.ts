@@ -14,7 +14,6 @@ import {
   wsOrganizationPolicies,
 } from "./common";
 import { workspaces } from "./contacts";
-import { documentProcessingRuns } from "./document-processing";
 import { entities, entityVersions } from "./entities";
 
 export const DOCUMENT_NAMING_STATUSES = [
@@ -63,13 +62,6 @@ export const documentNamingRuns = p.pgTable(
   },
   (table) => [
     ...entityFeatureGateChecks(table),
-    p
-      .foreignKey({
-        columns: [table.id],
-        foreignColumns: [documentProcessingRuns.id],
-        name: "document_naming_runs_source_run_fk",
-      })
-      .onDelete("cascade"),
     p
       .foreignKey({
         columns: [table.organizationId],
@@ -146,10 +138,6 @@ export const documentNamingRuns = p.pgTable(
           { target: "entity_versions", kind: "owned-content" },
         ],
         [table.entityId, { target: "entities", kind: "owned-content" }],
-        [
-          table.id,
-          { kind: "owned-by-parent", parent: documentProcessingRuns },
-        ],
       ]),
     }),
   ],

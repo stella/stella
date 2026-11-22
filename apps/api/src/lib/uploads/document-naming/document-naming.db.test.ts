@@ -190,6 +190,9 @@ afterEach(async () => {
   mock.restore();
   for (const id of runs.splice(0)) {
     await testDb
+      .delete(documentNamingRuns)
+      .where(eq(documentNamingRuns.id, id));
+    await testDb
       .delete(documentProcessingRuns)
       .where(eq(documentProcessingRuns.id, id));
   }
