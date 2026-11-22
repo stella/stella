@@ -34,7 +34,10 @@ import {
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
-import { CORPUS_INDEX_ACTIVE_GENERATION_STATUSES } from "@/api/lib/legal-search/corpus-generation-contract";
+import {
+  CORPUS_FAMILIES,
+  CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,
+} from "@/api/lib/legal-search/corpus-generation-contract";
 import { requireRegisteredCorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-generation-store";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
@@ -53,6 +56,7 @@ import {
   deriveCorpusIndexProjectionDescriptor,
   type LegislationV2ProjectionInput,
 } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { corpusProjectionErasureIsRecorded } from "@/api/lib/legal-search/corpus-index-projection-erasure-evidence";
 import { CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE } from "@/api/lib/legal-search/corpus-index-projection-intent-transition-spec";
 import { readCaseLawProvisionKeys } from "@/api/lib/legal-search/corpus-index-projection-provision-keys";
 import {
@@ -1164,6 +1168,14 @@ const CORPUS_PROJECTION_SERVED_COPY_RISKS = [
   /**
    * A copy two changes behind that the legacy pass keeps only because its
    * work is blocked or its epoch is not canonical would lose that protection.
+   * The pass retires a copy only on a recorded erasure, so a copy with none
+   * recorded since its reservation has nothing to lose
+   * (`corpusProjectionErasureIsRecorded`, the pass's own rule without its
+   * upper bound, so nothing the pass could act on escapes the hold). No
+   * erasure can be recorded between this read and the write: a withdrawal
+   * takes the canonical row's lock before it writes its record, and the caller
+   * holds that lock. One that waited for it records after the write and owes
+   * the state an erasure of its own, which the pass never retires through.
    */
   "legacy_retirement",
 ] as const;
@@ -1312,9 +1324,24 @@ const readNamedCopiesTx = async (
     AND ${corpusIndexProjectionRevisionIsRestorable({ ...restoreCopy, ...current })}
     AND ${corpusIndexProjectionRevisionIsRestorable({ ...restoreCopy, ...next })} IS NOT TRUE
   )`;
-  // The legacy pass keeps a copy two changes behind while its work is
-  // blocked or its desired epoch is not canonical; a write that resets the
-  // work or makes the epoch canonical would hand the copy to it.
+  const erasureRecorded = sql`(${sql.join(
+    CORPUS_FAMILIES.map(
+      (family) => sql`(
+        ${states.family} = ${family}
+        AND ${corpusProjectionErasureIsRecorded({
+          family,
+          entityId: states.entityId,
+          reservedAt: intents.createdAt,
+          before: null,
+        })}
+      )`,
+    ),
+    sql` OR `,
+  )})`;
+  // The legacy pass keeps a copy with a recorded erasure, two changes behind,
+  // while its work is blocked or its desired epoch is not canonical; a write
+  // that resets the work or makes the epoch canonical would hand the copy to
+  // it.
   const legacyProtectionLost = sql`(
     ${intents.status} = 'applied'
     AND ${corpusIndexProjectionNamedCopyTrailsTwoChanges({ ...namedCopy, ...current })}
@@ -1323,6 +1350,7 @@ const readNamedCopiesTx = async (
       ${corpusIndexProjectionIsBlocked(states.workStatus)}
       OR ${states.desiredEpoch} <> ${next.desiredEpoch} - 1
     )
+    AND ${erasureRecorded}
   )`;
   const rows = await tx
     .select({
