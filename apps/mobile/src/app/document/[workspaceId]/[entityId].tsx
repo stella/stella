@@ -464,7 +464,7 @@ const LegalFilePreview = ({
   const partOpener = canOpenFiles()
     ? {
         opening,
-        open: (part: string) => {
+        open: (part: string, mediaType: string) => {
           void openDelivered(
             part,
             async () =>
@@ -474,6 +474,7 @@ const LegalFilePreview = ({
                 workspaceId,
                 fieldId,
                 part,
+                mediaType,
               }),
           );
         },

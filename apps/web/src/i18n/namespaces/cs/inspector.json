@@ -564,6 +564,7 @@
       "back": "Zpět na seznam",
       "download": "Stáhnout {fileName}",
       "noPreview": "Tento typ souboru nemá náhled. Stáhněte si ho nebo ho uložte do spisu.",
+      "notConverted": "Tento soubor se nepodařilo převést pro náhled. Stáhněte si ho nebo ho uložte do spisu.",
       "open": "Otevřít {fileName}"
     },
     "firstSourceReached": "Toto je první zdroj.",

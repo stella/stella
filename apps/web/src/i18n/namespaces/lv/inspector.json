@@ -564,6 +564,7 @@
       "back": "Atpakaļ uz sarakstu",
       "download": "Lejupielādēt {fileName}",
       "noPreview": "Šim faila veidam nav priekšskatījuma. Lejupielādējiet to vai saglabājiet lietā.",
+      "notConverted": "Šo failu neizdevās pārveidot priekšskatījumam. Lejupielādējiet to vai saglabājiet lietā.",
       "open": "Atvērt {fileName}"
     },
     "firstSourceReached": "Šis ir pirmais avots.",

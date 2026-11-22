@@ -3807,6 +3807,7 @@
   "inspector.fileParts.back": "Back to the list",
   "inspector.fileParts.download": "Download {fileName}",
   "inspector.fileParts.noPreview": "This file type has no preview. Download it or save it to a matter.",
+  "inspector.fileParts.notConverted": "This file couldn't be converted for preview. Download it or save it to a matter.",
   "inspector.fileParts.open": "Open {fileName}",
   "inspector.firstSourceReached": "This is the first source.",
   "inspector.groups.addContext": "Add context",

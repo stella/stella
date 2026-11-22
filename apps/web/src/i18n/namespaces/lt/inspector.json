@@ -564,6 +564,7 @@
       "back": "Grįžti į sąrašą",
       "download": "Atsisiųsti {fileName}",
       "noPreview": "Šio tipo failo peržiūra negalima. Atsisiųskite jį arba išsaugokite byloje.",
+      "notConverted": "Šio failo nepavyko konvertuoti peržiūrai. Atsisiųskite jį arba išsaugokite byloje.",
       "open": "Atidaryti {fileName}"
     },
     "firstSourceReached": "Tai pirmas šaltinis.",
