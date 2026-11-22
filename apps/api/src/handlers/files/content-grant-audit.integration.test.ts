@@ -2171,7 +2171,7 @@ describe("saving a file part", () => {
       savePartContext(source.fieldId, "member:0"),
     );
     if (saved instanceof HttpStatusResponse) {
-      return panic(`Expected the part to be saved, got ${String(saved.code)}`);
+      panic(`Expected the part to be saved, got ${String(saved.code)}`);
     }
     seededEntityIds.push(saved.entityId);
     expect(saved.fileName).toBe("lisa.txt");
