@@ -173,6 +173,46 @@ describe("a part that is itself a container", () => {
     );
   });
 
+  test("a text file of an email inside keeps the charset its email declares", async () => {
+    // "Lhůta k vyjádření" in Windows-1250: not UTF-8, so the charset decides.
+    const cp1250 = Uint8Array.from([
+      0x4c, 0x68, 0xf9, 0x74, 0x61, 0x20, 0x6b, 0x20, 0x76, 0x79, 0x6a, 0xe1,
+      0x64, 0xf8, 0x65, 0x6e, 0xed,
+    ]);
+    expect(new TextDecoder("utf-8", { fatal: false }).decode(cp1250)).toContain(
+      "�",
+    );
+    const email = new TextEncoder().encode(
+      [
+        "From: Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+        "To: Jitka Skořepová <skorepova@stavby-hradec.cz>",
+        "Subject: Lhuta",
+        "MIME-Version: 1.0",
+        'Content-Type: multipart/mixed; boundary="SPIS"',
+        "",
+        "--SPIS",
+        "Content-Type: text/plain; charset=utf-8",
+        "",
+        "Dobrý den.",
+        "--SPIS",
+        'Content-Type: text/plain; charset="windows-1250"',
+        "Content-Transfer-Encoding: base64",
+        'Content-Disposition: attachment; filename="lhuta.txt"',
+        "",
+        Buffer.from(cp1250).toString("base64"),
+        "--SPIS--",
+        "",
+      ].join("\r\n"),
+    );
+    const files = await listOf(
+      makeZipArchive([{ name: "lhuta.eml", data: email }]),
+      member(0),
+    );
+    expect(files?.map(({ fileName, charset }) => [fileName, charset])).toEqual([
+      ["lhuta.txt", "windows-1250"],
+    ]);
+  });
+
   test("a path runs at most the deepest a part may sit", () => {
     let deepest: FilePart = member(0);
     for (let depth = 1; depth < FILE_PART_MAX_DEPTH; depth += 1) {

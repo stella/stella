@@ -117,6 +117,7 @@ export const FilePartRow = ({
 }) => {
   const opener = use(FilePartOpenerContext);
   const t = useTranslations("fileParts");
+  const document = useTranslations("document");
   const format = useFormatter();
   const ui = useUiColors();
   const [inside, setInside] = useState<FilesInside>({ status: "closed" });
@@ -207,12 +208,23 @@ export const FilePartRow = ({
   return (
     <View>
       {row}
-      <View className="ps-6">
+      <View className="gap-2 ps-6">
         {inside.status === "failed" ? (
           <Text variant="caption">{t("insideFailed")}</Text>
         ) : (
           <ContainedFileList files={inside.files} />
         )}
+        {/* The container itself still opens as a file, as any part does. */}
+        <Button
+          loading={opener.opening === part}
+          onPress={() => {
+            opener.open(part);
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {document("openOriginal")}
+        </Button>
       </View>
     </View>
   );

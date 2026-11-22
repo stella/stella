@@ -67,6 +67,14 @@ export const FILE_PART_UNAVAILABLE_LABEL = {
   unreadable: "inspector.fileParts.unavailable.unreadable",
 } as const satisfies Record<FilePartUnavailableReason, TranslationKey>;
 
+/** A declared charset the text preview decodes with; null for any other. */
+export const textCharsetOf = (
+  charset: string | null | undefined,
+): EmailTextAttachmentCharset | null =>
+  Object.values(EMAIL_TEXT_ATTACHMENT_CHARSET).find(
+    (known) => known === charset,
+  ) ?? null;
+
 /**
  * A container's files as list rows, in its order: a file that opens as its
  * part (its folder as the row's second line), any other with its reason.
@@ -82,7 +90,11 @@ export const containedFileRows = (files: readonly ContainedFile[]) =>
       : {
           type: "part" as const,
           key: file.part.part,
-          part: { ...file.part, detail: file.folder },
+          part: {
+            ...file.part,
+            detail: file.folder,
+            charset: textCharsetOf(file.charset),
+          },
         },
   );
 
