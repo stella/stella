@@ -112,13 +112,14 @@ export const useFilePartActions = ({
     );
   };
 
+  const saveToPicked = async (destination: FilePartDestination) =>
+    pickerPart === null ? false : await save(pickerPart, destination);
+
   const dialog = (
     <FilePartMatterDialog
       excludeWorkspaceId={workspaceId}
       onClose={() => setPickerPart(null)}
-      onSave={async (destination) =>
-        pickerPart === null ? false : await save(pickerPart, destination)
-      }
+      onSave={saveToPicked}
       open={pickerPart !== null}
       saving={saving}
     />
