@@ -43,12 +43,32 @@ const DocumentPageLayer = ({
 }: ManualRedactionPageLayerProps) => {
   const page = usePDFStore((s) => s.pages.get(pageId));
   const pdfDocument = usePDFStore((s) => s.document);
-  if (!page || pdfDocument?.pageSource !== "document") {
+  const documentKey =
+    pdfDocument === null
+      ? undefined
+      : pdfDocumentKey(pdfDocument.document.fingerprints);
+  // A portfolio binds the field too, under its own key, so the areas of the
+  // document the field showed before are dropped as for any other document.
+  const boundKey =
+    documentKey === undefined || pdfDocument?.pageSource === "document"
+      ? documentKey
+      : `portfolio:${documentKey}`;
+  const bindDocument = useManualRedactionStore((s) => s.bindDocument);
+  useExternalSyncEffect(() => {
+    if (boundKey !== undefined) {
+      bindDocument(fieldId, boundKey);
+    }
+  }, [bindDocument, boundKey, fieldId]);
+  if (
+    !page ||
+    documentKey === undefined ||
+    pdfDocument?.pageSource !== "document"
+  ) {
     return null;
   }
   return (
     <BoundPageLayer
-      documentKey={pdfDocumentKey(pdfDocument.document.fingerprints)}
+      documentKey={documentKey}
       fieldId={fieldId}
       pageHeight={page.originalHeight}
       pageIndex={page.proxy.pageNumber - 1}
@@ -79,10 +99,6 @@ const BoundPageLayer = ({
   pageWidth,
   pageHeight,
 }: BoundPageLayerProps) => {
-  const bindDocument = useManualRedactionStore((s) => s.bindDocument);
-  useExternalSyncEffect(() => {
-    bindDocument(fieldId, documentKey);
-  }, [bindDocument, documentKey, fieldId]);
   const field = useManualRedactionStore((s) => s.byFieldId[fieldId]);
   const bound = field?.documentKey === documentKey ? field : undefined;
   const areas = (bound?.areas ?? NO_AREAS).filter(
