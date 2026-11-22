@@ -97,6 +97,14 @@ export const readContainerMemberTexts = async ({
       continue;
     }
     const mimeType = await containerMemberMimeType(member.bytes);
+    // The scan takes ownership of the bytes; type and size are read first.
+    const mediaType = partMediaTypeOf({
+      bytes: member.bytes,
+      detected: mimeType,
+      stated: null,
+      fileName: member.fileName,
+    });
+    const sizeBytes = member.bytes.byteLength;
     const scanned = await scanContainerMember(member, mimeType);
     if (scanned.isErr()) {
       return Result.err(scanned.error);
@@ -104,13 +112,8 @@ export const readContainerMemberTexts = async ({
     const unread = {
       fileName: member.fileName,
       mimeType,
-      mediaType: partMediaTypeOf({
-        bytes: member.bytes,
-        detected: mimeType,
-        stated: null,
-        fileName: member.fileName,
-      }),
-      sizeBytes: member.bytes.byteLength,
+      mediaType,
+      sizeBytes,
       text: "",
       textFormat: "plain",
     } as const;
