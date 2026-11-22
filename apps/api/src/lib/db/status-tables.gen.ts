@@ -443,6 +443,8 @@ export const ENUM_COLUMNS = {
   ],
   entity_links: ["entity_feature_gate"],
   entity_version_ai_summaries: ["entity_feature_gate"],
+  entity_version_minhash_bands: ["entity_feature_gate"],
+  entity_version_minhash_signatures: ["entity_feature_gate"],
   entity_versions: ["entity_feature_gate"],
   eu_completion_receipts: ["mode", "target"],
   expenses: ["category"],
