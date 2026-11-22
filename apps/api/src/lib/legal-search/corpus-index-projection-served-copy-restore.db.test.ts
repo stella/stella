@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { reopenCorpusProjectionCleanupTx } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import {
+  type CorpusProjectionServedCopyRisk,
   countCorpusProjectionServedCopies,
   reconcileCorpusProjectionDesiredStateTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
@@ -211,7 +212,7 @@ describe("a repair restores a queued copy before it moves the epoch", () => {
     const outcome = await continuousReconciles(entityId);
 
     if (outcome.isErr()) {
-      return panic("Expected the repair to restore the copy and go through");
+      panic("Expected the repair to restore the copy and go through");
     }
     expect(outcome.value).toMatchObject({ epoch: 3n, changed: true });
     expect(outcome.value.servedCopies).toEqual([
@@ -281,7 +282,7 @@ describe("a repair restores a queued copy before it moves the epoch", () => {
     const outcome = await continuousReconciles(entityId);
 
     if (outcome.isErr()) {
-      return panic("Expected the repair to go through");
+      panic("Expected the repair to go through");
     }
     expect(outcome.value.servedCopies).toEqual([
       { generation: SERVED, entityId, outcome: "already_current" },
@@ -382,14 +383,14 @@ describe("a repair with any other risk is held whole, restores included", () => 
       const outcome = await continuousReconciles(entityId);
 
       if (outcome.isOk()) {
-        return panic("Expected the repair to be held");
+        panic("Expected the repair to be held");
       }
       expect(outcome.error.copies).toEqual([
         {
           generation: SERVED,
           entityId,
           outcome: "held",
-          risk: "unrestorable_cleanup",
+          risk: "unrestorable_cleanup" satisfies CorpusProjectionServedCopyRisk,
         },
       ]);
       expect(await revisionOf(revision)).toEqual(queued);
@@ -449,14 +450,14 @@ describe("a repair with any other risk is held whole, restores included", () => 
     const held = await continuousReconciles(entityId);
 
     if (held.isOk()) {
-      return panic("Expected the repair to be held");
+      panic("Expected the repair to be held");
     }
     expect(held.error.copies).toEqual([
       {
         generation: SERVED,
         entityId,
         outcome: "held",
-        risk: "unrestorable_cleanup",
+        risk: "unrestorable_cleanup" satisfies CorpusProjectionServedCopyRisk,
       },
     ]);
     expect(await revisionOf(revision)).toEqual(reopened);
@@ -464,7 +465,6 @@ describe("a repair with any other risk is held whole, restores included", () => 
       claimed: { unserved: 0, served_after_delete: 1, served_unproven: 0 },
       restoredIntentIds: [],
     });
-    return undefined;
   });
 
   test("a sibling generation at risk keeps the restorable copy queued and writes nothing", async () => {
@@ -495,7 +495,7 @@ describe("a repair with any other risk is held whole, restores included", () => 
     const outcome = await continuousReconciles(entityId);
 
     if (outcome.isOk()) {
-      return panic("Expected the repair to be held");
+      panic("Expected the repair to be held");
     }
     expect(outcome.error.copies).toEqual([
       {
@@ -531,7 +531,7 @@ describe("a repair with any other risk is held whole, restores included", () => 
     const outcome = await continuousReconciles(entityId);
 
     if (outcome.isOk()) {
-      return panic("Expected the repair to be held");
+      panic("Expected the repair to be held");
     }
     expect(outcome.error.copies).toEqual([
       {

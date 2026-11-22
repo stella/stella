@@ -1199,7 +1199,7 @@ type CorpusProjectionHeldServedCopy = Extract<
 >;
 
 /** The named copies a written repair kept for readers, none of them held. */
-export type CorpusProjectionWrittenServedCopy = Exclude<
+type CorpusProjectionWrittenServedCopy = Exclude<
   CorpusProjectionServedCopyReport,
   { outcome: "held" }
 >;
@@ -1482,9 +1482,9 @@ export const writeRepairedCorpusProjectionDesiredStatesTx = async (
             ...atRisk.filter(({ revisionId }) => unrestored.has(revisionId)),
             ...stillAtRisk,
           ];
-          return savepoint.rollback();
+          savepoint.rollback();
         }
-        return await write(savepoint);
+        await write(savepoint);
       }),
   );
   if (attempted.isOk()) {

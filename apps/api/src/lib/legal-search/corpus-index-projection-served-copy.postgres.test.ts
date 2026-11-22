@@ -688,7 +688,7 @@ if (!databaseUrl || !runPostgresTests) {
 
         const outcome = await repair;
         if (outcome.isOk()) {
-          return panic("Expected the repair to be held");
+          panic("Expected the repair to be held");
         }
         expect(outcome.error.copies).toEqual([
           {
@@ -702,7 +702,6 @@ if (!databaseUrl || !runPostgresTests) {
           status: "cleanup_started",
           cleanupAttempts: 1,
         });
-        return undefined;
       });
     });
 
@@ -736,7 +735,7 @@ if (!databaseUrl || !runPostgresTests) {
 
         const outcome = await repair;
         if (outcome.isOk()) {
-          return panic("Expected the repair to be held");
+          panic("Expected the repair to be held");
         }
         expect(outcome.error.copies).toEqual([
           {
@@ -750,7 +749,6 @@ if (!databaseUrl || !runPostgresTests) {
           status: "cleanup_started",
           cleanupAttempts: 1,
         });
-        return undefined;
       });
     });
 
@@ -845,7 +843,7 @@ if (!databaseUrl || !runPostgresTests) {
 
           const outcome = await repair;
           if (outcome.isOk()) {
-            return panic("Expected the repair to be held");
+            panic("Expected the repair to be held");
           }
           expect(outcome.error.copies).toEqual([
             {
@@ -870,7 +868,6 @@ if (!databaseUrl || !runPostgresTests) {
           expect(after.revisions.find(queued)).toEqual(
             before.revisions.find(queued),
           );
-          return undefined;
         });
       });
     });
