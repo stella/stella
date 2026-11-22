@@ -529,7 +529,10 @@ const encode = (text: string) => new TextEncoder().encode(text);
 const endsWithNote = ({
   items,
   pageCount,
-}: Awaited<ReturnType<typeof textItems>>) =>
+}: {
+  items: readonly TextItem[];
+  pageCount: number;
+}) =>
   readsBack(
     items.filter(({ page }) => page === pageCount),
     PREVIEW_SHORTENED_NOTE,
