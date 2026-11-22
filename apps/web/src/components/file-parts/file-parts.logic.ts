@@ -68,7 +68,7 @@ export const FILE_PART_UNAVAILABLE_LABEL = {
 } as const satisfies Record<FilePartUnavailableReason, TranslationKey>;
 
 /** A declared charset the text preview decodes with; null for any other. */
-export const textCharsetOf = (
+const textCharsetOf = (
   charset: string | null | undefined,
 ): EmailTextAttachmentCharset | null =>
   Object.values(EMAIL_TEXT_ATTACHMENT_CHARSET).find(
