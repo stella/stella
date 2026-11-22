@@ -290,7 +290,7 @@ type DocumentDigestOptions = {
 };
 // A document digest binds its own shape and every metadata document it
 // reaches, so editing a callee changes the digest of each caller.
-export const createDocumentDigest = ({
+const createDocumentDigest = ({
   nodes,
   parsedDocuments,
 }: DocumentDigestOptions) => {

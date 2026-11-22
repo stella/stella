@@ -107,6 +107,13 @@ export const readDecisions = (
         observeRead,
       );
     }
+    for (const file of files) {
+      if (file !== CLASSIFICATION_DECISIONS_FILE) {
+        throw new AdmissionError({
+          message: `Unexpected classification decision entry: ${file}. Store all job classifications in ${CLASSIFICATION_DECISIONS_FILE}`,
+        });
+      }
+    }
     observeRead?.(CLASSIFICATION_DECISIONS_FILE);
     return parseRecord(
       git(source.root, [

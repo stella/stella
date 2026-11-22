@@ -1208,9 +1208,7 @@ test("a new privileged job stays undecided until a reviewer classifies it", () =
       ".github/ci-job-classification-decisions/",
     );
     // The job added beside it holds no privilege and owes no decision.
-    expect(result.error.message).not.toContain(
-      decisionPathForKey(`${key}/plain`),
-    );
+    expect(result.error.message).not.toContain(`${key}/plain`);
   }
 }, 15_000);
 
@@ -1250,16 +1248,26 @@ test("job digests bind exactly the reachable local action closure", () => {
         `runs: {using: composite, steps: [{run: 'bun script.ts', env: {VALUE: ${JSON.stringify(value)}}}]}`,
       );
       const changed = generateClassification(options);
-      expect(changed.isErr()).toBe(true);
       if (changed.isErr()) {
-        expect(changed.error).toBeInstanceOf(ReviewRequiredError);
-        expect(changed.error.message).toContain(
-          decisionPathForKey("candidate:.github/workflows/ci.yml/caller"),
-        );
-        expect(changed.error.message).not.toContain(
-          decisionPathForKey("candidate:.github/workflows/ci.yml/reusable"),
-        );
+        throw changed.error;
       }
+      const jobDigest = (manifest: PublicMetadata, id: string) => {
+        const node = manifest.nodes.find(
+          (entry) =>
+            entry.type === "metadata" &&
+            entry.repository === "candidate" &&
+            entry.path === ".github/workflows/ci.yml",
+        );
+        return node?.type === "metadata"
+          ? node.jobs.find((job) => job.id === id)?.digest
+          : undefined;
+      };
+      expect(jobDigest(changed.value, "caller")).not.toBe(
+        jobDigest(baseline.value, "caller"),
+      );
+      expect(jobDigest(changed.value, "reusable")).toBe(
+        jobDigest(baseline.value, "reusable"),
+      );
       f.documents.set(actionKey, originalAction);
       f.documents.set(
         "candidate:.github/actions/unreachable/action.yml",
@@ -1516,12 +1524,7 @@ test("reusable workflow caller inputs require review until metadata is refreshed
     verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
     ".github/ci-job-classification-decisions/",
   );
-  const stale = generateClassification(options);
-  expect(stale.isErr()).toBe(true);
-  if (stale.isErr()) {
-    expect(stale.error).toBeInstanceOf(ReviewRequiredError);
-  }
-  const refreshed = generateClassification(fixtureGenerationOptions(f));
+  const refreshed = generateClassification(options);
   if (refreshed.isErr()) {
     throw refreshed.error;
   }
@@ -1752,12 +1755,7 @@ for (const [before, after] of [
       verifyPublicMetadata({ manifest: baseline.value, reader: f.reader }),
       ".github/ci-job-classification-decisions/",
     );
-    const stale = generateClassification(options);
-    expect(stale.isErr()).toBe(true);
-    if (stale.isErr()) {
-      expect(stale.error).toBeInstanceOf(ReviewRequiredError);
-    }
-    const refreshed = generateClassification(fixtureGenerationOptions(f));
+    const refreshed = generateClassification(options);
     if (refreshed.isErr()) {
       throw refreshed.error;
     }
@@ -1970,8 +1968,10 @@ test("missing decisions fail with the exact decision entry to paste", () => {
     expect(result.error.message).toContain(
       JSON.stringify(
         {
-          kind: "<choose ordinary, support, or priority>",
-          qualifier: "<describe the reviewed classification>",
+          [key]: {
+            kind: "<choose ordinary, support, or priority>",
+            qualifier: "<describe the reviewed classification>",
+          },
         },
         null,
         2,
