@@ -2274,6 +2274,7 @@ const config = defineConfig({
     "./.oxlint-plugins/citation-evidence-text-fence.ts",
     "./.oxlint-plugins/no-source-raw-projection.ts",
     "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
+    "./.oxlint-plugins/no-api-env-in-public-reader.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
@@ -5500,6 +5501,14 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-api-env-in-public-reader.fixture.ts",
+      ],
+      rules: {
+        "no-api-env-in-public-reader/no-api-env-in-public-reader": "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-direct-ingestion-checkpoint-write.fixture.ts",
       ],
       rules: {
@@ -6137,6 +6146,7 @@ const config = defineConfig({
               "apps/api/src/env-db-load-gate.ts",
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
+              "apps/api/src/env-public-corpus.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-parsed-input-state-backfill.ts",
@@ -6450,6 +6460,15 @@ const config = defineConfig({
       rules: {
         "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
           "error",
+      },
+    },
+    {
+      // The public case-law reader loads without tenant content settings:
+      // nothing its value imports reach may import the full API environment.
+      files: ["apps/api/src/**/*.ts", "packages/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "no-api-env-in-public-reader/no-api-env-in-public-reader": "error",
       },
     },
     {
