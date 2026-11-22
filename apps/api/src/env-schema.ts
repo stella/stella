@@ -820,6 +820,11 @@ export const envApiServerSchema = {
   FEATURE_SHAREPOINT: featureFlagSchema,
   /** Dark-launch internal conflict-of-interest checks until intake review. */
   FEATURE_CONFLICT_CHECK: featureFlagSchema,
+  /**
+   * Dark-launch the editor's citation check: one decision-model request per
+   * checked sentence. Organizations also need the `citation-check` grant.
+   */
+  FEATURE_CITATION_CHECK: featureFlagSchema,
 
   /**
    * Dark-launch gate for the auth.md `identity_assertion` (ID-JAG)

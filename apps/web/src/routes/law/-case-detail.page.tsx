@@ -180,13 +180,15 @@ export function PublicDecisionViewer({
       "case-law.replace-moved-anchor",
     );
   }, [movedRouteAnchor, replaceRouteHash]);
+  const landingRoute = `${decision.id}#${routeAnchorId ?? ""}`;
+  const [prevLandingRoute, setPrevLandingRoute] = useState(landingRoute);
   const [citationLanding, setCitationLanding] = useState<{
     route: string;
     anchorId: string;
     sessionId: string;
   } | null>(null);
-  const landingRoute = `${decision.id}#${routeAnchorId ?? ""}`;
-  if (citationLanding !== null && citationLanding.route !== landingRoute) {
+  if (prevLandingRoute !== landingRoute) {
+    setPrevLandingRoute(landingRoute);
     setCitationLanding(null);
   }
   const initialAnchorId =

@@ -237,7 +237,15 @@ export default eslintCompatPlugin({
             modalStatements.clear();
             referencesByStatement.clear();
             signals.length = 0;
-            return !isFileIn(context, CANONICAL_OWNERS);
+            if (isFileIn(context, CANONICAL_OWNERS)) {
+              return false;
+            }
+            const text = context.sourceCode.text;
+            return (
+              text.includes("dialog") ||
+              text.includes("sheet") ||
+              text.includes("\\")
+            );
           },
           ImportDeclaration(node) {
             const isModalModule =

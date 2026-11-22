@@ -20,7 +20,6 @@
       "delivery": "Kézbesítés",
       "deliveryEvents": "Kézbesítési események",
       "deliveryReceipt": "Kézbesítési igazolás",
-      "directionUnknown": "Ismeretlen irány",
       "messageId": "Üzenetazonosító",
       "moreContacts": "További kapcsolattartók tartoznak ehhez az adatfiókhoz.",
       "openFile": ".zfo-fájl megnyitása",
@@ -320,7 +319,9 @@
   "signedFile": {
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "noSigners": "Nem találhatók adatok az aláírókról.",
     "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "signers": "Aláírók",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."

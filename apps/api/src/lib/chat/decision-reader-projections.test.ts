@@ -29,4 +29,12 @@ test("decision reader output projections bundle without server modules", async (
     input.startsWith(`${apiRoot}${path.sep}`),
   );
   expect(apiInputs).toEqual([projectionPath]);
+  // The API's instant check loads a time library every MCP app would carry.
+  expect(
+    inputs.filter(
+      (input) =>
+        input.includes("@stll+time") ||
+        input.includes(`@stll${path.sep}time${path.sep}`),
+    ),
+  ).toEqual([]);
 });

@@ -10,18 +10,26 @@ import { cn } from "@stll/ui/utils";
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import type { FileTab } from "@/components/inspector/file-tab";
-import { PeekSuspenseFallback } from "@/components/pdf/peek/peek-pdf-viewer";
+import type { LegalFilePdfView } from "@/components/inspector/legal-file-pdf-view";
+import { LegalFilePreviewText } from "@/components/inspector/legal-file-preview-text";
+import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import {
+  PeekPdfViewport,
+  PeekSuspenseFallback,
+} from "@/components/pdf/peek/peek-pdf-viewer";
 import { PDF_MIME } from "@/lib/consts";
-import { cadesPdfOptions, cadesPreviewOptions } from "@/lib/files/queries";
-import { PDFProvider } from "@/lib/pdf/pdf-context";
-import { PDFPage } from "@/lib/pdf/pdf-page";
-import { PDFViewport } from "@/lib/pdf/pdf-viewport";
+import {
+  cadesPdfOptions,
+  cadesPreviewOptions,
+} from "@/lib/files/legal-file-queries";
 
 export const CadesFileViewer = ({
   onDownload,
+  pdfView,
   tab,
 }: {
   onDownload: () => void;
+  pdfView: LegalFilePdfView;
   tab: FileTab;
 }) => {
   const { data } = useSuspenseQuery(
@@ -30,12 +38,7 @@ export const CadesFileViewer = ({
   const t = useTranslations();
   const hasPdf = data.mimeType === PDF_MIME;
   const textPreview = data.text.trim() ? (
-    <pre
-      className="font-sans text-sm leading-relaxed wrap-break-word whitespace-pre-wrap"
-      dir="auto"
-    >
-      {data.text}
-    </pre>
+    <LegalFilePreviewText format={data.textFormat} text={data.text} />
   ) : null;
 
   return (
@@ -99,11 +102,15 @@ export const CadesFileViewer = ({
         </article>
       </ScrollArea>
       {hasPdf && (
-        <div className="document-preview-surface min-h-0 flex-1 border-t">
-          <PDFProvider
+        // The embedded PDF is drawn by the inspector's PDF viewer: it fits
+        // the panel's width, follows the zoom controls floating over it and
+        // zooms with the wheel, as a plain PDF file does.
+        <div className="relative flex min-h-0 min-w-0 flex-1 flex-col border-t">
+          <MeasuredPdfProvider
+            active
             fallback={{
               suspense: <PeekSuspenseFallback />,
-              error: () => (
+              error: (
                 <ScrollArea axis="vertical" className="h-full">
                   <div className="space-y-3 p-4" {...DOCKED_COMPOSER_CLEARANCE}>
                     <p className="text-muted-foreground text-sm">
@@ -115,12 +122,17 @@ export const CadesFileViewer = ({
               ),
             }}
             fieldId={`cades:${tab.id}`}
+            initialScaleOffset={pdfView.scaleOffset}
             onDownload={onDownload}
-            startPage={1}
             surface="inspector-cades"
           >
-            <CadesPdf fieldId={tab.id} workspaceId={tab.workspaceId} />
-          </PDFProvider>
+            <CadesPdf
+              fieldId={tab.id}
+              pdfView={pdfView}
+              workspaceId={tab.workspaceId}
+            />
+          </MeasuredPdfProvider>
+          {pdfView.controls}
         </div>
       )}
     </FileViewerWithAI>
@@ -129,22 +141,24 @@ export const CadesFileViewer = ({
 
 const CadesPdf = ({
   fieldId,
+  pdfView,
   workspaceId,
 }: {
   fieldId: string;
+  pdfView: LegalFilePdfView;
   workspaceId: string;
 }) => {
   const { data: buffer } = useSuspenseQuery(
     cadesPdfOptions({ fieldId, workspaceId }),
   );
   return (
-    <PDFViewport
+    <PeekPdfViewport
       buffer={buffer}
-      className="h-full"
-      contentClassName="relative mt-2 space-y-2 px-2"
+      colorMode={pdfView.colorMode}
       fileId={`cades:${fieldId}`}
+      onWheelZoom={pdfView.onWheelZoom}
       pageSource="document"
-      renderPage={(props) => <PDFPage {...props} />}
+      scaleOffset={pdfView.scaleOffset}
     />
   );
 };

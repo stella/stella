@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "Les sections publiées sont affichées ; leur exhaustivité n’a pas été établie.",
+    "provenanceOmitted": "Références de publication omises : {omittedCount, number} sur {totalCount, number}.",
+    "sourceAttribution": "Publication du recueil : <link>{source}</link>. Consultée le {date}.",
+    "sourceAttributionUnknownDate": "Publication du recueil : <link>{source}</link>. Date de consultation inconnue.",
+    "unclassifiedText": "L’étendue de ce texte du recueil est inconnue."
+  }
+}

@@ -161,11 +161,16 @@ export const McpReconnectNoticeContent = ({
           mcpReconnectDismissKey(candidate),
       ),
   );
-  if (
-    newAnnouncements.length > 0 ||
-    retainedAnnouncements.length !== announced.length
-  ) {
-    setAnnounced([...retainedAnnouncements, ...newAnnouncements]);
+  const announcementKey = `${recoveredIds.join(",")}| ${matches.map(mcpReconnectDismissKey).join(",")}`;
+  const [prevAnnouncementKey, setPrevAnnouncementKey] = useState("");
+  if (prevAnnouncementKey !== announcementKey) {
+    setPrevAnnouncementKey(announcementKey);
+    if (
+      newAnnouncements.length > 0 ||
+      retainedAnnouncements.length !== announced.length
+    ) {
+      setAnnounced([...retainedAnnouncements, ...newAnnouncements]);
+    }
   }
   const message = (candidate: NamedConnection): ReactNode =>
     t.rich(

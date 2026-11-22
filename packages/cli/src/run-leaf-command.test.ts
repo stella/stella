@@ -628,11 +628,13 @@ describe("--input source failures", () => {
   test("an unreadable @<path> names the file it could not read", async () => {
     const sink = collect();
     expect(
-      await parseInputObject({
-        inputRaw: "@/nonexistent/args.json",
-        writers: sink.writers,
-      }),
-    ).toBeUndefined();
+      (
+        await parseInputObject({
+          inputRaw: "@/nonexistent/args.json",
+          writers: sink.writers,
+        })
+      ).isErr(),
+    ).toBe(true);
     expect(sink.stderrText()).toContain(
       "--input could not read file /nonexistent/args.json",
     );
@@ -641,14 +643,18 @@ describe("--input source failures", () => {
   test("a non-object or malformed payload is rejected by shape, not by schema", async () => {
     const sink = collect();
     expect(
-      await parseInputObject({ inputRaw: "[1,2]", writers: sink.writers }),
-    ).toBeUndefined();
+      (
+        await parseInputObject({ inputRaw: "[1,2]", writers: sink.writers })
+      ).isErr(),
+    ).toBe(true);
     expect(sink.stderrText()).toContain("--input must be a JSON object.");
 
     const broken = collect();
     expect(
-      await parseInputObject({ inputRaw: "{oops", writers: broken.writers }),
-    ).toBeUndefined();
+      (
+        await parseInputObject({ inputRaw: "{oops", writers: broken.writers })
+      ).isErr(),
+    ).toBe(true);
     expect(broken.stderrText()).toContain("--input is not valid JSON.");
   });
 });

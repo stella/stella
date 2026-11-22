@@ -1704,6 +1704,12 @@ const docUnsupportedFieldType = (
     return Result.ok(null);
   });
 const safe = (): false => false;
+/**
+ * WordPerfect, Works and iWork files are imported by libraries that read only
+ * the file itself (and, for iWork, its own package): they load no linked
+ * resource, so there is no reference to refuse.
+ */
+const selfContained = safe;
 
 const DETECTORS = {
   "application/msword": safe,
@@ -1715,11 +1721,19 @@ const DETECTORS = {
     ooxmlHasExternalReference,
   "application/vnd.ms-excel": safe,
   "application/vnd.ms-powerpoint": safe,
+  "application/vnd.ms-works": selfContained,
   "application/vnd.oasis.opendocument.presentation": odfHasExternalReference,
   "application/vnd.oasis.opendocument.spreadsheet": odfHasExternalReference,
   "application/vnd.oasis.opendocument.text": odfHasExternalReference,
   "application/rtf": safe,
-  "application/vnd.apple.pages": safe,
+  "application/vnd.apple.numbers": selfContained,
+  "application/vnd.apple.pages": selfContained,
+  "application/vnd.wordperfect": selfContained,
+  "application/wordperfect": selfContained,
+  "application/wordperfect5.1": selfContained,
+  "application/x-iwork-numbers-sffnumbers": selfContained,
+  "application/x-iwork-pages-sffpages": selfContained,
+  "application/x-wordperfect": selfContained,
   "application/xhtml+xml": safe,
   "image/bmp": safe,
   "image/gif": safe,

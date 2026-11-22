@@ -166,6 +166,8 @@ describe("a filesystem view before its entities load", () => {
   });
 
   test("stands stored column widths in the template", async () => {
+    // A column nobody sized yields from its default width to the minimum.
+    const YIELDING_TRACK = `minmax(${String(columns.MIN_COLUMN_WIDTH_PX)}px, ${String(columns.DEFAULT_EXTRA_WIDTH_PX)}px)`;
     const container = await renderAt(
       `/workspaces/${WORKSPACE_ID}/view-files`,
       () => (
@@ -179,7 +181,7 @@ describe("a filesystem view before its entities load", () => {
     );
     const header = byClass(container, FILESYSTEM_COLUMN_HEADER_CLASS);
     expect(header.style.gridTemplateColumns).toBe(
-      `300px ${String(columns.DEFAULT_EXTRA_WIDTH_PX)}px ${String(columns.DEFAULT_EXTRA_WIDTH_PX)}px 200px 2rem`,
+      `300px ${YIELDING_TRACK} ${YIELDING_TRACK} 200px 2rem`,
     );
   });
 

@@ -1,8 +1,11 @@
 import { useState } from "react";
+import type { RefObject } from "react";
 
 import type { EditorView } from "@tiptap/pm/view";
 
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
+import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
+import { useDocxCitationCheck } from "@/components/docx/citation-check/use-docx-citation-check";
 
 import {
   useDocxAnonymizationHighlights,
@@ -10,6 +13,7 @@ import {
 } from "./use-docx-anonymization";
 
 type UseDocxEditorViewOptions = {
+  editorRef: RefObject<DocxEditorRef | null>;
   entityId: string;
   fieldId: string;
   workspaceId: string;
@@ -17,10 +21,11 @@ type UseDocxEditorViewOptions = {
 
 /**
  * The live ProseMirror view Folio hands back through `onEditorViewReady`,
- * and the integrations that run against it: inline autocomplete and the
- * anonymization decorations.
+ * and the integrations that run against it: inline autocomplete, the
+ * anonymization decorations and the citation check.
  */
 export const useDocxEditorView = ({
+  editorRef,
   entityId,
   fieldId,
   workspaceId,
@@ -47,14 +52,25 @@ export const useDocxEditorView = ({
     workspaceId,
   });
   const anonymizationSelectionProps = useDocxAnonymizationSelection(fieldId);
+  // Wraps the anonymization selection bridge; off, it hands it back as is.
+  const citationCheck = useDocxCitationCheck({
+    editorRef,
+    onSelectionTextChange: anonymizationSelectionProps.onSelectionTextChange,
+  });
 
   return {
     editorView,
-    /** `DocxEditor` props that capture the view and bridge anonymization. */
+    /**
+     * `DocxEditor` props that capture the view, bridge anonymization and
+     * carry the citation check's menu entry.
+     */
     editorProps: {
       onAnonymizationMatchesChange,
       ...anonymizationSelectionProps,
+      ...citationCheck.editorProps,
       onEditorViewReady: setEditorView,
     },
+    /** Rendered over the editor; null unless a citation check has run. */
+    citationCheckCard: citationCheck.card,
   };
 };

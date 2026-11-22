@@ -15,6 +15,7 @@ type DictationDeviceModule = EventEmitter<DictationDeviceEvents> & {
   routeForDictation: (builtInMicrophone: boolean) => void;
   releaseRoute: () => void;
   keptFolder: () => string;
+  tap: () => void;
 };
 
 /**
@@ -78,3 +79,8 @@ export const watchNetwork = (
  */
 export const keptDictationFolder = (): string | null =>
   device?.keptFolder() ?? null;
+
+/** A light tap the person feels as a dictation starts and stops; nothing in a build without it. */
+export const tapForDictation = (): void => {
+  device?.tap();
+};

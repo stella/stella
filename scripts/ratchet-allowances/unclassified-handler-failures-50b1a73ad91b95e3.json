@@ -1,6 +1,0 @@
-{
-  "metric": "unclassified-handler-failures",
-  "file": "apps/api/src/lib/agent-skills/skill-export.ts",
-  "delta": 1,
-  "reason": "A stored original whose bytes no longer match the digest recorded with them is a data-integrity defect, not a condition the caller can fix, so the export refuses it as an unclassified 500 that keeps alerting."
-}

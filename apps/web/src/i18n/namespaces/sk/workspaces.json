@@ -20,7 +20,6 @@
       "delivery": "Doručenie",
       "deliveryEvents": "Udalosti doručovania",
       "deliveryReceipt": "Doručenka",
-      "directionUnknown": "Smer neznámy",
       "messageId": "ID správy",
       "moreContacts": "Tejto dátovej schránke zodpovedajú ďalšie kontakty.",
       "openFile": "Otvoriť súbor .zfo",
@@ -320,7 +319,9 @@
   "signedFile": {
     "layer": "Vrstva podpisov {number, number}",
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
+    "noSigners": "Nenašli sa žiadne údaje o podpisovateľoch.",
     "pdfUnavailable": "Náhľad PDF nie je k dispozícii.",
+    "signers": "Podpisovatelia",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
     "unverified": "Podpisy neboli overené."

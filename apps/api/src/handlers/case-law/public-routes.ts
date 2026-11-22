@@ -246,6 +246,10 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
   config: {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    contentDelivery: {
+      type: "public",
+      reason: "Returns published court collection text.",
+    },
     mcp: { type: "tool", name: "read_case_law_decision" },
     cache: { kind: "none" },
     params: v.object({ decisionId: resourceIdSchema("caseLawDecision") }),
@@ -282,6 +286,10 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   config: {
     contract: "patch",
     accountAccess: ACCOUNT_ACCESS.sandbox,
+    contentDelivery: {
+      type: "public",
+      reason: "Returns published court collection text.",
+    },
     mcp: { type: "covered", by: "read_case_law_decision" },
     cache: { kind: "none" },
     params: v.object({
