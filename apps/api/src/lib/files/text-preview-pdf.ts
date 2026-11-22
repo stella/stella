@@ -106,7 +106,7 @@ const pageWriter = (pdf: PDF) => {
       const content = [
         ...(underlay.length === 0 ? [] : ["q", ...underlay, "Q"]),
         "BT",
-        ...(operators[index] ?? []),
+        ...(operators[index] ?? panic("Every pending page has its operators")),
         "ET",
       ].join("\n");
       page.dict.set(
@@ -435,7 +435,10 @@ export const csvToPdf = async (
   for (const record of records) {
     columnCount = Math.max(columnCount, record.length);
   }
-  const [header = [], ...body] = records;
+  const [header, ...body] = records;
+  if (header === undefined) {
+    return panic("A CSV read as records has at least one");
+  }
   const cellText = (record: readonly string[], column: number) =>
     record[column] ?? "";
   const naturalWidth = (cellLayout: TextLayout, value: string) => {

@@ -18,6 +18,7 @@
 
 import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
+import { Console } from "node:console";
 import * as v from "valibot";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
@@ -33,11 +34,12 @@ import {
   pdfWorkerOperationSchema,
 } from "./pdf-worker-protocol";
 
-// stdout carries the answer; a decoder library that logs must not corrupt it.
-// oxlint-disable-next-line no-console -- routes library logging to stderr
-console.log = console.error;
-// oxlint-disable-next-line no-console -- routes library logging to stderr
-console.info = console.error;
+// stdout carries the answer; a decoder library that logs must not corrupt
+// it, so every console method writes to stderr.
+globalThis.console = new Console({
+  stderr: process.stderr,
+  stdout: process.stderr,
+});
 
 const operation = v.safeParse(pdfWorkerOperationSchema, process.argv.at(2));
 if (!operation.success) {
