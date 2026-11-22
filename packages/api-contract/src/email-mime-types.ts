@@ -11,7 +11,7 @@ export const TNEF_MIME_TYPE = "application/vnd.ms-tnef";
 export const TNEF_MIME_ALIASES = ["application/ms-tnef"] as const;
 
 /** The name Outlook gives the TNEF stream it attaches to a message. */
-export const TNEF_FILE_NAME = "winmail.dat";
+const TNEF_FILE_NAME = "winmail.dat";
 
 export const EMAIL_MIME_TYPES = {
   [EML_MIME_TYPE]: null,

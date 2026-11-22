@@ -80,7 +80,7 @@ const variable = (type: number, id: number, bytes: Uint8Array): Property => ({
   value: concat([u32(1), u32(bytes.byteLength), padded(bytes)]),
 });
 
-export const mapi = {
+const mapi = {
   unicode: (id: number, text: string) => variable(0x00_1f, id, utf16(text)),
   string8: (id: number, text: string) =>
     variable(0x00_1e, id, legacyString(text)),
@@ -120,7 +120,7 @@ export const mapi = {
 };
 
 /** A property list: its count, then each property's type, id and value. */
-export const propertyList = (properties: readonly Property[]) =>
+const propertyList = (properties: readonly Property[]) =>
   concat([
     u32(properties.length),
     ...properties.flatMap(({ type, id, value }) => [u16(type), u16(id), value]),
@@ -221,7 +221,7 @@ export const compressRtf = (rtf: Uint8Array): Uint8Array => {
   ]);
 };
 
-export type TnefFixtureAttachment = {
+type TnefFixtureAttachment = {
   /** The long name in `PidTagAttachLongFilename`. */
   readonly fileName: string;
   /** The legacy 8.3 title (`attAttachTitle`); the long name when absent. */
@@ -234,7 +234,7 @@ export type TnefFixtureAttachment = {
   readonly legacyOnly?: boolean;
 };
 
-export type TnefFixture = {
+type TnefFixture = {
   readonly subject: string;
   readonly from: { readonly name: string; readonly email: string };
   readonly to: readonly { readonly name: string; readonly email: string }[];

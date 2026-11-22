@@ -21,7 +21,7 @@ import { Temporal } from "@stll/time";
 
 import { decompressRtf } from "@/api/lib/files/rtf-compressed";
 
-export class TnefParseError extends TaggedError("TnefParseError")<{
+class TnefParseError extends TaggedError("TnefParseError")<{
   message: string;
   reason: "invalid" | "limit";
 }> {
@@ -31,7 +31,7 @@ export class TnefParseError extends TaggedError("TnefParseError")<{
 }
 
 /** The signature every TNEF stream opens with, little-endian. */
-export const TNEF_SIGNATURE = 0x22_3e_9f_78;
+const TNEF_SIGNATURE = 0x22_3e_9f_78;
 
 /** Whether bytes open as a TNEF stream. */
 export const hasTnefSignature = (bytes: Uint8Array): boolean =>
@@ -159,13 +159,13 @@ type PropertyValue =
 /** One property list: the first value of each property id. */
 type Properties = ReadonlyMap<number, PropertyValue>;
 
-export type TnefRecipient = {
+type TnefRecipient = {
   name: string | null;
   email: string | null;
   type: "to" | "cc" | "bcc";
 };
 
-export type TnefAttachment = {
+type TnefAttachment = {
   fileName: string | null;
   mimeType: string | null;
   contentId: string | null;

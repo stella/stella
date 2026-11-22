@@ -10,7 +10,7 @@ import { Result, TaggedError } from "better-result";
 
 import { declareFingerprintFields } from "@stll/errors";
 
-export class CompressedRtfError extends TaggedError("CompressedRtfError")<{
+class CompressedRtfError extends TaggedError("CompressedRtfError")<{
   message: string;
   reason: "invalid" | "limit";
 }> {

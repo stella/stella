@@ -6,7 +6,7 @@
  */
 import { Result } from "better-result";
 
-export type RtfMessageBody =
+type RtfMessageBody =
   { type: "html"; html: string } | { type: "text"; text: string };
 
 /** Groups opened deeper than this are not read. */
