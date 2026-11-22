@@ -115,7 +115,7 @@ const sampleInvoice = {
       quantity: "10.000",
       unitCode: "HUR",
       unitPrice: "100.00",
-      priceBasis: "1 HUR",
+      priceBasis: { quantity: "1", unitCode: "HUR" },
       vatRate: "21",
       vatCategory: "S",
       netAmount: "1000.00",
@@ -1067,9 +1067,11 @@ test.each([
     expect(mounted.getByText("Sample Supplier Test")).toBeTruthy();
     expect(mounted.getByText("Sample Customer Test")).toBeTruthy();
     expect(mounted.getByText("XX0000000001")).toBeTruthy();
-    expect(mounted.getByText("Registration number (0088)")).toBeTruthy();
+    expect(mounted.getByText("Registration number (GLN)")).toBeTruthy();
     expect(mounted.getByText("Sample consulting hours")).toBeTruthy();
-    expect(mounted.getByText("10.000 HUR")).toBeTruthy();
+    // Common units are named in words, with the plural their count takes.
+    expect(mounted.getByText("10.000 hours")).toBeTruthy();
+    expect(mounted.getByText("1 hour")).toBeTruthy();
     expect(mounted.getByText("Showing 1 of 3 lines")).toBeTruthy();
     expect(mounted.getAllByText("21% (S)")).toHaveLength(2);
     expect(mounted.getByText("Total with VAT")).toBeTruthy();

@@ -109,6 +109,7 @@
     "paymentReference": "Identifikace platby",
     "prepaidAmount": "Uhrazeno zálohou",
     "quantity": "Množství a jednotka",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Dodavatel",
@@ -118,6 +119,14 @@
     "taxableAmount": "Základ daně",
     "totals": "Součty",
     "unitPrice": "Jednotková cena",
+    "units": {
+      "day": "{count, plural, one {{quantity} den} few {{quantity} dny} many {{quantity} dne} other {{quantity} dní}}",
+      "hour": "{count, plural, one {{quantity} hodina} few {{quantity} hodiny} many {{quantity} hodiny} other {{quantity} hodin}}",
+      "month": "{count, plural, one {{quantity} měsíc} few {{quantity} měsíce} many {{quantity} měsíce} other {{quantity} měsíců}}",
+      "unit": "{count, plural, one {{quantity} ks} few {{quantity} ks} many {{quantity} ks} other {{quantity} ks}}",
+      "week": "{count, plural, one {{quantity} týden} few {{quantity} týdny} many {{quantity} týdne} other {{quantity} týdnů}}",
+      "year": "{count, plural, one {{quantity} rok} few {{quantity} roky} many {{quantity} roku} other {{quantity} let}}"
+    },
     "unreadable": "Fakturu nelze přečíst.",
     "vat": "DPH",
     "vatBreakdown": "Rekapitulace DPH"

@@ -64,15 +64,64 @@ export const joined = (
 export const addressLines = (...lines: (string | null)[]): string[] =>
   lines.filter((line) => line !== null);
 
-/** A stated quantity with its unit code, as "100 C62". */
-export const quantityWithUnit = (
+/** A stated quantity with its unit code ("100", "C62"). */
+export const statedQuantity = (
   node: DocumentXmlNode | undefined,
-): string | null => {
+): { quantity: string; unitCode: string | null } | null => {
   const quantity = textOf(node);
   return quantity === null
     ? null
-    : joined(" ", quantity, attributeOf(node, "unitCode"));
+    : { quantity, unitCode: attributeOf(node, "unitCode") };
 };
+
+type Party = EInvoice["seller"];
+type PartyIdentifier = Party["identifiers"][number];
+
+/** The more specific a kind, the earlier: a VAT id is more than "other". */
+const KIND_RANK = {
+  vat: 0,
+  tax: 1,
+  registration: 2,
+  other: 3,
+} as const satisfies Record<PartyIdentifier["kind"], number>;
+
+/** An identifier's value as written apart from spacing, dots and dashes. */
+const identifierKey = (value: string) =>
+  value.replace(/[\s.-]/gu, "").toUpperCase();
+
+/**
+ * A party's identifiers, each value once. A file often states one number in
+ * two places (the VAT number, and the electronic address in the VAT
+ * scheme); it is listed where the first one stood, under the more specific
+ * of the two kinds.
+ */
+export const distinctIdentifiers = (
+  identifiers: readonly PartyIdentifier[],
+): PartyIdentifier[] => {
+  const byValue = new Map<string, PartyIdentifier>();
+  for (const identifier of identifiers) {
+    const key = identifierKey(identifier.value);
+    const known = byValue.get(key);
+    if (
+      known === undefined ||
+      KIND_RANK[identifier.kind] < KIND_RANK[known.kind]
+    ) {
+      byValue.set(
+        key,
+        known === undefined
+          ? identifier
+          : { ...identifier, value: known.value },
+      );
+    }
+  }
+  return [...byValue.values()];
+};
+
+/** The party with each identifier listed once. */
+export const withDistinctIdentifiers = (party: Party): Party => ({
+  ...party,
+  identifiers: distinctIdentifiers(party.identifiers),
+});
 
 // ISO 13616: two letters, two check digits, then up to 30 letters or digits.
 const IBAN_SHAPE = /^[A-Z]{2}\d{2}[A-Z\d]{11,30}$/u;
