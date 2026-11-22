@@ -115,7 +115,7 @@
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Dodávateľ",
     "taxAmount": "Výška DPH",
-    "taxPointDate": "Dátum dodania",
+    "taxPointDate": "Dátum vzniku daňovej povinnosti",
     "taxTotal": "DPH spolu",
     "taxableAmount": "Základ dane",
     "totals": "Súčty",

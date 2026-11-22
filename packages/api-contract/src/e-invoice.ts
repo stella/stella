@@ -57,6 +57,11 @@ export const eInvoiceSchema = v.object({
       quantity: stated,
       unitCode: stated,
       unitPrice: stated,
+      /**
+       * The quantity the unit price is for, with its unit, when the file
+       * states one (UBL BaseQuantity, CII BasisQuantity): 50 per 100 units.
+       */
+      priceBasis: stated,
       vatRate: stated,
       vatCategory: stated,
       netAmount: stated,

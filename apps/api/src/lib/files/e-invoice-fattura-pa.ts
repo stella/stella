@@ -120,6 +120,7 @@ export const readFatturaPaInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
           quantity: textAt(line, "Quantita"),
           unitCode: textAt(line, "UnitaMisura"),
           unitPrice: textAt(line, "PrezzoUnitario"),
+          priceBasis: null,
           vatRate: textAt(line, "AliquotaIVA"),
           vatCategory: textAt(line, "Natura"),
           netAmount: textAt(line, "PrezzoTotale"),

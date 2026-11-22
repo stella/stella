@@ -30,9 +30,15 @@ export const at = (
   return current;
 };
 
+/** Longest stated value a preview keeps; invoice fields are far shorter. */
+export const E_INVOICE_MAX_VALUE_CHARS = 10_000;
+
 /** A stated value: the element's own text, trimmed, or null when empty. */
 export const textOf = (node: DocumentXmlNode | undefined): string | null => {
-  const text = node?.text.replace(/\s+/gu, " ").trim();
+  const text = node?.text
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, E_INVOICE_MAX_VALUE_CHARS);
   return text || null;
 };
 
@@ -57,6 +63,23 @@ export const joined = (
 
 export const addressLines = (...lines: (string | null)[]): string[] =>
   lines.filter((line) => line !== null);
+
+/** A stated quantity with its unit code, as "100 C62". */
+export const quantityWithUnit = (
+  node: DocumentXmlNode | undefined,
+): string | null => {
+  const quantity = textOf(node);
+  return quantity === null
+    ? null
+    : joined(" ", quantity, attributeOf(node, "unitCode"));
+};
+
+// ISO 13616: two letters, two check digits, then up to 30 letters or digits.
+const IBAN_SHAPE = /^[A-Z]{2}\d{2}[A-Z\d]{11,30}$/u;
+
+/** Whether an account identifier is written as an IBAN, spaces aside. */
+export const isIbanShaped = (value: string): boolean =>
+  IBAN_SHAPE.test(value.replace(/\s+/gu, "").toUpperCase());
 
 /** The stated values of a list, in order, without the empty ones. */
 export const statedValues = (values: (string | null)[]): string[] =>

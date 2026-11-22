@@ -358,6 +358,16 @@ export const readDocumentFile = async ({
           path: `/v1/files/${encodeURIComponent(workspaceId)}/e-invoice/${encodeURIComponent(fieldId)}`,
           schema: eInvoicePreviewSchema,
         });
+        // Any XML file is tried as an invoice; one the server does not read
+        // as an invoice opens as before, like any other file.
+        const notAnInvoice =
+          kind === "xml" &&
+          Result.isError(preview) &&
+          preview.error._tag === "ApiRequestError" &&
+          preview.error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
+        if (notAnInvoice) {
+          break;
+        }
         return Result.ok({
           viewer: "e-invoice",
           format: kind,

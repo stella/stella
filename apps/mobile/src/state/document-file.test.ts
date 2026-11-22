@@ -124,6 +124,7 @@ const invoicePreview = {
           quantity: "1",
           unitCode: "C62",
           unitPrice: "100.00",
+          priceBasis: null,
           vatRate: "20",
           vatCategory: "S",
           netAmount: "100.00",
@@ -396,6 +397,30 @@ describe("reading a document's file", () => {
     expect(calls).toEqual([
       "/v1/entities/matter-1/entity/entity-1/versions",
       "/v1/files/matter-1/certified-email/field%3F1",
+      "/v1/files/matter-1/url/field%3F1?purpose=display",
+    ]);
+  });
+
+  test("opens a plain .xml as before once the server says it is no invoice", async () => {
+    const { fetch, calls } = server((path) => {
+      if (path.endsWith("/versions")) {
+        return Response.json(legalFileVersion("settings.xml", "text/xml"));
+      }
+      if (path.includes("/e-invoice/")) {
+        return Response.json(
+          { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Not an invoice" },
+          { status: 422 },
+        );
+      }
+      return path.endsWith("purpose=display")
+        ? Response.json({ message: "Not displayable" }, { status: 400 })
+        : Response.json(delivered("text/xml", { fileName: "settings.xml" }));
+    });
+    const file = (await read(fetch)).unwrap();
+    expect(file.viewer).toBe("quick-look");
+    expect(calls.slice(0, 3)).toEqual([
+      "/v1/entities/matter-1/entity/entity-1/versions",
+      "/v1/files/matter-1/e-invoice/field%3F1",
       "/v1/files/matter-1/url/field%3F1?purpose=display",
     ]);
   });
@@ -686,11 +711,6 @@ describe("reading a document's file", () => {
       viewer: "dataBox",
       fileName: "Doručenka.zfo",
       mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
-    },
-    {
-      viewer: "e-invoice",
-      fileName: "settings.xml",
-      mimeType: "application/xml",
     },
     {
       viewer: "e-invoice",

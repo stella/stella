@@ -510,7 +510,7 @@
     "supplier": "Pārdevējs",
     "taxAmount": "PVN summa",
     "taxId": "Nodokļu maksātāja numurs",
-    "taxPointDate": "Darījuma datums",
+    "taxPointDate": "Nodokļa punkta datums",
     "taxTotal": "PVN kopā",
     "taxableAmount": "Ar nodokli apliekamā vērtība",
     "totals": "Kopsummas",

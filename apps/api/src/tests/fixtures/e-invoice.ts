@@ -203,8 +203,16 @@ const ublParty = (name: string, vat: string) => `<cac:Party>
       <cac:PartyLegalEntity><cbc:RegistrationName>${name}</cbc:RegistrationName><cbc:CompanyID schemeID="0002">HRB 00000</cbc:CompanyID></cac:PartyLegalEntity>
     </cac:Party>`;
 
-export const ublXml = (root: "Invoice" | "CreditNote" = "Invoice") => {
+export const ublXml = (
+  root: "Invoice" | "CreditNote" = "Invoice",
+  {
+    lines = 1,
+    description = "Synthetic widget",
+    accountId = "DE00000000000000000001",
+  }: { lines?: number; description?: string; accountId?: string } = {},
+) => {
   const isCredit = root === "CreditNote";
+  const quantity = isCredit ? "CreditedQuantity" : "InvoicedQuantity";
   return `<?xml version="1.0" encoding="UTF-8"?>
 <${root} xmlns="urn:oasis:names:specification:ubl:schema:xsd:${root}-2"
   ${UBL_NAMESPACES}>
@@ -225,7 +233,7 @@ export const ublXml = (root: "Invoice" | "CreditNote" = "Invoice") => {
   <cac:PaymentMeans>
     <cbc:PaymentMeansCode>58</cbc:PaymentMeansCode>
     <cbc:PaymentID>UBL-0007</cbc:PaymentID>
-    <cac:PayeeFinancialAccount><cbc:ID>DE00000000000000000001</cbc:ID><cac:FinancialInstitutionBranch><cbc:ID>EXAMDEFF</cbc:ID></cac:FinancialInstitutionBranch></cac:PayeeFinancialAccount>
+    <cac:PayeeFinancialAccount><cbc:ID>${accountId}</cbc:ID><cac:FinancialInstitutionBranch><cbc:ID>EXAMDEFF</cbc:ID></cac:FinancialInstitutionBranch></cac:PayeeFinancialAccount>
   </cac:PaymentMeans>
   <cac:TaxTotal>
     <cbc:TaxAmount currencyID="EUR">19.00</cbc:TaxAmount>
@@ -241,17 +249,20 @@ export const ublXml = (root: "Invoice" | "CreditNote" = "Invoice") => {
     <cbc:TaxInclusiveAmount currencyID="EUR">119.00</cbc:TaxInclusiveAmount>
     <cbc:PayableAmount currencyID="EUR">119.00</cbc:PayableAmount>
   </cac:LegalMonetaryTotal>
-  <cac:${root}Line>
-    <cbc:ID>1</cbc:ID>
-    <cbc:${isCredit ? "CreditedQuantity" : "InvoicedQuantity"} unitCode="C62">10</cbc:${isCredit ? "CreditedQuantity" : "InvoicedQuantity"}>
+${Array.from(
+  { length: lines },
+  (_, index) => `  <cac:${root}Line>
+    <cbc:ID>${index + 1}</cbc:ID>
+    <cbc:${quantity} unitCode="C62">10</cbc:${quantity}>
     <cbc:LineExtensionAmount currencyID="EUR">100.00</cbc:LineExtensionAmount>
     <cac:Item>
-      <cbc:Name>Synthetic widget</cbc:Name>
+      <cbc:Name>${description}</cbc:Name>
       <cac:ClassifiedTaxCategory><cbc:ID>S</cbc:ID><cbc:Percent>19</cbc:Percent><cac:TaxScheme><cbc:ID>VAT</cbc:ID></cac:TaxScheme></cac:ClassifiedTaxCategory>
     </cac:Item>
-    <cac:Price><cbc:PriceAmount currencyID="EUR">10.00</cbc:PriceAmount></cac:Price>
+    <cac:Price><cbc:PriceAmount currencyID="EUR">1.00</cbc:PriceAmount><cbc:BaseQuantity unitCode="C62">0.1</cbc:BaseQuantity></cac:Price>
   </cac:${root}Line>
-</${root}>
+`,
+).join("")}</${root}>
 `;
 };
 

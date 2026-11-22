@@ -81,7 +81,12 @@ const invoiceText = (invoice: EInvoice): string[] => {
                         .filter((part) => part !== null)
                         .join(" "),
                 ],
-                ["unit price", line.unitPrice],
+                [
+                  "unit price",
+                  line.unitPrice === null || line.priceBasis === null
+                    ? line.unitPrice
+                    : `${line.unitPrice} per ${line.priceBasis}`,
+                ],
                 [
                   "VAT",
                   line.vatRate === null && line.vatCategory === null

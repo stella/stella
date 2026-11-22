@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
+import type { EInvoice, EInvoicePreview } from "@stll/api-contract/e-invoice";
 import { compareCodeUnit } from "@stll/collation";
 
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
@@ -52,6 +52,92 @@ export type EInvoiceDocument = {
   attachments: readonly InvoiceAttachment[];
 };
 
+/**
+ * The largest preview a reader hands on, well inside the 8 MiB the preview
+ * workers may answer with, so a signed file's preview keeps its signers and
+ * text however large its invoice is.
+ */
+export const E_INVOICE_PREVIEW_MAX_JSON_BYTES = 3 * 1024 * 1024;
+
+type PreviewList =
+  "lines" | "notes" | "vatBreakdown" | "payments" | "invoices" | "attachments";
+
+type InvoiceList = Exclude<PreviewList, "invoices" | "attachments">;
+
+const listLength = (preview: EInvoicePreview, list: PreviewList): number => {
+  if (list === "invoices" || list === "attachments") {
+    return preview[list].length;
+  }
+  return Math.max(0, ...preview.invoices.map((i) => i[list].length));
+};
+
+const halveInvoiceList = (
+  invoice: EInvoice,
+  list: InvoiceList,
+  keep: number,
+): EInvoice => {
+  if (list === "lines") {
+    return { ...invoice, lines: invoice.lines.slice(0, keep) };
+  }
+  if (list === "notes") {
+    return { ...invoice, notes: invoice.notes.slice(0, keep) };
+  }
+  if (list === "vatBreakdown") {
+    return { ...invoice, vatBreakdown: invoice.vatBreakdown.slice(0, keep) };
+  }
+  return { ...invoice, payments: invoice.payments.slice(0, keep) };
+};
+
+const halveList = (
+  preview: EInvoicePreview,
+  list: PreviewList,
+  keep: number,
+): EInvoicePreview => {
+  if (list === "invoices") {
+    return { ...preview, invoices: preview.invoices.slice(0, keep) };
+  }
+  if (list === "attachments") {
+    return { ...preview, attachments: preview.attachments.slice(0, keep) };
+  }
+  return {
+    ...preview,
+    invoices: preview.invoices.map((invoice) =>
+      halveInvoiceList(invoice, list, keep),
+    ),
+  };
+};
+
+const PREVIEW_LISTS: readonly PreviewList[] = [
+  "lines",
+  "notes",
+  "vatBreakdown",
+  "payments",
+  "invoices",
+  "attachments",
+];
+
+/**
+ * Halves the longest list until the preview fits. Counts the file states,
+ * such as `lineCount`, keep their values, so a viewer can say what is left out.
+ */
+const fitPreview = (preview: EInvoicePreview): EInvoicePreview => {
+  let fitted = preview;
+  while (
+    Buffer.byteLength(JSON.stringify(fitted)) > E_INVOICE_PREVIEW_MAX_JSON_BYTES
+  ) {
+    const current = fitted;
+    const [longest] = PREVIEW_LISTS.map((list) => ({
+      list,
+      length: listLength(current, list),
+    })).toSorted((left, right) => right.length - left.length);
+    if (longest === undefined || longest.length <= 1) {
+      break;
+    }
+    fitted = halveList(fitted, longest.list, Math.floor(longest.length / 2));
+  }
+  return fitted;
+};
+
 const withAttachments = (
   syntax: EInvoicePreview["syntax"],
   parsed: ParsedEInvoice,
@@ -69,7 +155,7 @@ const withAttachments = (
     ...packaged,
   ];
   return {
-    preview: {
+    preview: fitPreview({
       syntax,
       version: parsed.version,
       invoices: parsed.invoices,
@@ -81,7 +167,7 @@ const withAttachments = (
           sizeBytes,
         }),
       ),
-    },
+    }),
     attachments,
   };
 };

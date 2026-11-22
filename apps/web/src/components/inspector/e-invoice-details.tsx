@@ -142,6 +142,9 @@ const Rate = ({
   );
 };
 
+/** The quantity a price is for, as the file writes it ("100 C62"). */
+const PricedPer = ({ basis }: { basis: string }) => <bdi>{` / ${basis}`}</bdi>;
+
 const Section = ({
   children,
   title,
@@ -248,6 +251,10 @@ const LineItems = ({ invoice }: { invoice: EInvoice }) => {
               <TableCell numeric>
                 {line.unitPrice !== null && (
                   <Amount amount={line.unitPrice} currency={currency} />
+                )}
+                {/* The price is for this quantity, when the file states it. */}
+                {line.unitPrice !== null && line.priceBasis !== null && (
+                  <PricedPer basis={line.priceBasis} />
                 )}
               </TableCell>
               <TableCell numeric>

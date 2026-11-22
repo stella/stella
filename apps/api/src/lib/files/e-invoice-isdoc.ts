@@ -109,6 +109,7 @@ export const readIsdocInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
           quantity: textOf(quantity),
           unitCode: attributeOf(quantity, "unitCode"),
           unitPrice: textAt(line, "UnitPrice"),
+          priceBasis: null,
           vatRate: textAt(line, "ClassifiedTaxCategory", "Percent"),
           vatCategory: null,
           netAmount: textAt(line, "LineExtensionAmount"),

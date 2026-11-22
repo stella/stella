@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
-import { readEInvoiceFile } from "@/api/lib/files/e-invoice-document";
+import {
+  E_INVOICE_PREVIEW_MAX_JSON_BYTES,
+  readEInvoiceFile,
+} from "@/api/lib/files/e-invoice-document";
 import { E_INVOICE_PREVIEW_MAX_LINES } from "@/api/lib/files/e-invoice-nodes";
 import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
 import {
@@ -139,6 +142,7 @@ describe("structured invoice reading", () => {
       quantity: "2",
       unitCode: "HUR",
       unitPrice: "1500.00",
+      priceBasis: null,
       vatRate: "21",
       vatCategory: null,
       netAmount: "3000.00",
@@ -264,7 +268,8 @@ describe("structured invoice reading", () => {
           description: "Synthetic widget",
           quantity: "10",
           unitCode: "C62",
-          unitPrice: "10.00",
+          unitPrice: "1.00",
+          priceBasis: "0.1 C62",
           vatRate: "19",
           vatCategory: "S",
           netAmount: "100.00",
@@ -353,6 +358,31 @@ describe("structured invoice reading", () => {
       ],
       notes: ["Synthetic subscription"],
     });
+  });
+
+  test("shows only an IBAN as one and keeps another account identifier", async () => {
+    const { preview } = await read(
+      xmlBytes(ublXml("Invoice", { accountId: "0000000001" })),
+    );
+    expect(preview.invoices[0]?.payments[0]).toMatchObject({
+      iban: null,
+      accountNumber: "0000000001",
+    });
+  });
+
+  test("keeps a large invoice's preview within its byte budget", async () => {
+    const lines = E_INVOICE_PREVIEW_MAX_LINES;
+    const { preview } = await read(
+      xmlBytes(ublXml("Invoice", { lines, description: "w".repeat(6000) })),
+    );
+    const [invoice] = preview.invoices;
+    expect(Buffer.byteLength(JSON.stringify(preview))).toBeLessThanOrEqual(
+      E_INVOICE_PREVIEW_MAX_JSON_BYTES,
+    );
+    expect(invoice?.lineCount).toBe(lines);
+    expect(invoice?.lines.length).toBeGreaterThan(0);
+    expect(invoice?.lines.length).toBeLessThan(lines);
+    expect(invoice?.totals.payableAmount).toBe("119.00");
   });
 
   test("search and AI text carries the same fields the preview shows", async () => {

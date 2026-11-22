@@ -108,6 +108,7 @@ const sampleInvoice = {
       quantity: "10.000",
       unitCode: "HUR",
       unitPrice: "100.00",
+      priceBasis: "1 HUR",
       vatRate: "21",
       vatCategory: "S",
       netAmount: "1000.00",

@@ -195,6 +195,23 @@ describe("structured invoice files", () => {
     expect(preview.invoice).toEqual(unsigned);
   });
 
+  test("a signed invoice too large to list in full still previews with its signers", async () => {
+    const name = "large-invoice.xml.p7m";
+    const file = storedFile(
+      await wrapP7m(
+        xmlBytes(
+          ublXml("Invoice", { lines: 1000, description: "w".repeat(6000) }),
+        ),
+      ),
+      CADES_FILE_FORMAT.mimeType,
+      name,
+    );
+    const preview = (await readCadesPreview(file, name)).unwrap();
+    expect(preview.layers).toHaveLength(1);
+    expect(preview.invoice?.invoices[0]?.lineCount).toBe(1000);
+    expect(preview.invoice?.invoices[0]?.lines.length).toBeLessThan(1000);
+  });
+
   test("a signed file holding plain text keeps its text and no invoice", async () => {
     const name = "note.txt.p7m";
     const file = storedFile(

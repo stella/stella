@@ -9,8 +9,10 @@ import {
   childrenOf,
   documentTypeFromUnCode,
   type EmbeddedInvoiceFile,
+  isIbanShaped,
   joined,
   type ParsedEInvoice,
+  quantityWithUnit,
   statedValues,
   textAt,
   textOf,
@@ -129,6 +131,7 @@ export const readUblInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
           quantity: textOf(quantity),
           unitCode: attributeOf(quantity, "unitCode"),
           unitPrice: textAt(line, "Price", "PriceAmount"),
+          priceBasis: quantityWithUnit(at(line, "Price", "BaseQuantity")),
           vatRate: textAt(item, "ClassifiedTaxCategory", "Percent"),
           vatCategory: textAt(item, "ClassifiedTaxCategory", "ID"),
           netAmount: textAt(line, "LineExtensionAmount"),
@@ -157,13 +160,17 @@ export const readUblInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
     },
     payments: payments.map((payment) => {
       const account = at(payment, "PayeeFinancialAccount");
+      // BT-84 holds an IBAN for SEPA transfers and any other account
+      // identifier otherwise; only an IBAN is shown as one.
+      const accountId = textAt(account, "ID");
+      const isIban = accountId !== null && isIbanShaped(accountId);
       return {
         meansCode: textAt(payment, "PaymentMeansCode"),
         dueDate: textAt(payment, "PaymentDueDate"),
         amount: null,
-        iban: textAt(account, "ID"),
+        iban: isIban ? accountId : null,
         bic: textAt(account, "FinancialInstitutionBranch", "ID"),
-        accountNumber: null,
+        accountNumber: isIban ? null : accountId,
         bankCode: null,
         reference: textAt(payment, "PaymentID"),
       };

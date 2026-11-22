@@ -506,7 +506,7 @@
     "quantity": "Množství a jednotka",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
-    "registrationNumber": "IČO",
+    "registrationNumber": "Registrační číslo",
     "supplier": "Dodavatel",
     "taxAmount": "Výše DPH",
     "taxId": "DIČ",

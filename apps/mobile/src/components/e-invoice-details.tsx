@@ -242,7 +242,14 @@ const InvoiceDetails = ({
                         ? line.quantity
                         : `${line.quantity} ${line.unitCode}`,
                   },
-                  { label: t("unitPrice"), value: amount(line.unitPrice) },
+                  {
+                    label: t("unitPrice"),
+                    // The price is for this quantity, when the file states it.
+                    value:
+                      line.unitPrice === null || line.priceBasis === null
+                        ? amount(line.unitPrice)
+                        : `${amount(line.unitPrice) ?? ""} / ${line.priceBasis}`,
+                  },
                   {
                     label: t("vat"),
                     value: rate(line.vatRate, line.vatCategory),

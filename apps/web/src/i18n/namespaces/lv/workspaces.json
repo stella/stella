@@ -115,7 +115,7 @@
     "ratePercentWithCategory": "{rate}% ({category})",
     "supplier": "Pārdevējs",
     "taxAmount": "PVN summa",
-    "taxPointDate": "Darījuma datums",
+    "taxPointDate": "Nodokļa punkta datums",
     "taxTotal": "PVN kopā",
     "taxableAmount": "Ar nodokli apliekamā vērtība",
     "totals": "Kopsummas",

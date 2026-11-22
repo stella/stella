@@ -506,7 +506,7 @@
     "quantity": "Quantidade e unidade",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
-    "registrationNumber": "CNPJ",
+    "registrationNumber": "Número de registro",
     "supplier": "Fornecedor",
     "taxAmount": "Valor do IVA",
     "taxId": "Identificação fiscal",
