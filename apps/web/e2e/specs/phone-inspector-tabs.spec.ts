@@ -5,6 +5,7 @@ import path from "node:path";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { apiStatus, apiUploadDocx } from "../helpers/api";
+import { openSavedView } from "../helpers/saved-views";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -93,11 +94,9 @@ test.describe("inspector tabs on a phone", () => {
     await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
       waitUntil: "domcontentloaded",
     });
-    const tableTab = page.getByRole("tab", { exact: true, name: "Table" });
-    await expect(tableTab).toBeVisible({
+    await openSavedView(page, "Table", {
       timeout: PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS,
     });
-    await tableTab.click();
 
     await openFromTable(page, FIRST);
     await page

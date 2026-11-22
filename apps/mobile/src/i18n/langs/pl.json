@@ -610,6 +610,20 @@
     "hideList": "Ukryj listę",
     "showList": "Pokaż listę"
   },
+  "quickDictation": {
+    "activityReady": "Dyktowanie gotowe",
+    "activityReadyDetail": "Stuknij, aby przejrzeć tekst w aplikacji stella",
+    "activityRecording": "Dyktujesz",
+    "activityRecordingDetail": "Stuknij Gotowe, aby przejrzeć tekst",
+    "copied": "Skopiowano",
+    "copy": "Kopiuj",
+    "documentName": "Dyktowanie {when}",
+    "none": "Żadne dyktowanie nie czeka. Zacznij przyciskiem czynności, Siri lub w centrum sterowania.",
+    "noneTitle": "Nie ma czego przejrzeć",
+    "saveFailed": "Nie udało się przygotować tekstu do zapisania. Spróbuj ponownie.",
+    "sendToChat": "Wyślij do czatu",
+    "text": "Podyktowany tekst"
+  },
   "role": {
     "readFailed": "Nie udało się wczytać Twoich uprawnień, więc zmiany są na razie ukryte.",
     "retry": "Spróbuj ponownie"
@@ -749,6 +763,8 @@
   "signedFile": {
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
+    "noSigners": "Nie znaleziono danych podpisujących.",
+    "signers": "Podpisujący",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",
     "unverified": "Podpisy nie zostały zweryfikowane."

@@ -9,7 +9,7 @@ import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { LegalFilePreviewText } from "@/components/inspector/legal-file-preview-text";
-import { structuredDocumentPreviewOptions } from "@/lib/files/queries";
+import { structuredDocumentPreviewOptions } from "@/lib/files/legal-file-queries";
 
 export const StructuredDocumentViewer = ({
   onDownload,

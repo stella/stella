@@ -111,6 +111,36 @@ describe("documentFormat", () => {
     expect(labelOf("__proto__")).toBeUndefined();
   });
 
+  test("tags converted formats by any declared type or extension, under the generic mark", () => {
+    const formatOf = (mimeType: string | null, fileName?: string) =>
+      documentFormat(mimeType, fileName);
+    expect(formatOf("application/x-iwork-pages-sffpages")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "PAGES",
+    });
+    expect(formatOf("application/vnd.apple.numbers")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "NUMBERS",
+    });
+    expect(formatOf("application/vnd.wordperfect")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "WPD",
+    });
+    expect(formatOf("application/octet-stream", "smlouva.wp5")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "WPD",
+    });
+    expect(formatOf("application/vnd.ms-works", "dopis")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "WPS",
+    });
+  });
+
   test("keeps a profile's tag and mark under its format's media type", () => {
     const asicE = ASIC_E_FILE_FORMAT.mimeType;
     expect(documentFormat(asicE, "smlouva.BDOC")).toEqual({

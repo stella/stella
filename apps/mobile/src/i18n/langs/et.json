@@ -610,6 +610,20 @@
     "hideList": "Peida loend",
     "showList": "Näita loendit"
   },
+  "quickDictation": {
+    "activityReady": "Dikteering on valmis",
+    "activityReadyDetail": "Puuduta, et vaadata teksti rakenduses stella",
+    "activityRecording": "Dikteerid",
+    "activityRecordingDetail": "Puuduta Valmis, et teksti vaadata",
+    "copied": "Kopeeritud",
+    "copy": "Kopeeri",
+    "documentName": "Dikteering {when}",
+    "none": "Ükski dikteering ei oota. Alusta toimingunupu, Siri või juhtimiskeskusega.",
+    "noneTitle": "Pole midagi üle vaadata",
+    "saveFailed": "Teksti ei õnnestunud salvestamiseks ette valmistada. Proovi uuesti.",
+    "sendToChat": "Saada vestlusesse",
+    "text": "Dikteeritud tekst"
+  },
   "role": {
     "readFailed": "Teie õigusi ei õnnestunud laadida, seega on muudatused praegu peidetud.",
     "retry": "Proovi uuesti"
@@ -749,6 +763,8 @@
   "signedFile": {
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "noSigners": "Allkirjastajate andmeid ei leitud.",
+    "signers": "Allkirjastajad",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
     "unverified": "Allkirju ei ole kontrollitud."

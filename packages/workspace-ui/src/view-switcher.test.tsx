@@ -20,6 +20,7 @@ describe("WorkspaceViewSwitcher", () => {
         addControl={<button type="button">Add view</button>}
         ariaLabel="Saved views"
         direction="ltr"
+        overflowLabel="Show more"
         onViewChange={() => undefined}
         reorder={null}
         actionMenu={{
@@ -46,17 +47,24 @@ describe("WorkspaceViewSwitcher", () => {
     expect(markup).toContain(
       `class="flex min-w-0 flex-1 items-center gap-1 px-2 ${TOOLBAR_ROW_HEIGHT}"`,
     );
-    expect(markup).toContain('class="h-full min-w-0 flex-1"');
-    expect(markup).toContain("h-full gap-0");
+    expect(markup).toContain(
+      'class="relative flex h-full min-w-0 flex-1 items-center gap-0.5"',
+    );
+    expect(markup).toContain("h-full min-w-0 gap-0");
     expect(markup).toContain('data-slot="tabs-list"');
-    expect(markup.match(/pe-6\.5/gu)).toHaveLength(VIEWS.length);
+    // Each tab and its measuring copy reserve the action menu's room.
+    expect(markup.match(/pe-6\.5/gu)).toHaveLength(VIEWS.length * 2);
     expect(markup).toContain('class="relative flex h-full items-center"');
     expect(markup).toContain(
       'class="absolute inset-e-0 top-1/2 mt-1 -translate-y-1/2"',
     );
+    // The tabs never scroll, so the add action draws no divider of its own.
     expect(markup).toContain(
-      'class="border-border flex shrink-0 translate-y-1 items-center border-s ps-1"><button type="button">Add view</button>',
+      'class="flex shrink-0 translate-y-1 items-center"><button type="button">Add view</button>',
     );
+    expect(markup).not.toContain("border-s");
+    // Before the row is measured every view is a tab, and nothing overflows.
+    expect(markup).not.toContain("workspace-view-overflow-trigger");
   });
 
   test.each([null, undefined, false, true])(
@@ -67,6 +75,7 @@ describe("WorkspaceViewSwitcher", () => {
           activeViewId="table"
           ariaLabel="Saved views"
           direction="ltr"
+          overflowLabel="Show more"
           onViewChange={() => undefined}
           reorder={null}
           actionMenu={{ label: "Actions", renderItems: () => actions }}
@@ -86,6 +95,7 @@ describe("WorkspaceViewSwitcher", () => {
         activeViewId="table"
         ariaLabel="Saved views"
         direction="rtl"
+        overflowLabel="Show more"
         onViewChange={() => undefined}
         reorder={null}
         renderIcon={() => null}
@@ -102,6 +112,7 @@ describe("WorkspaceViewSwitcher", () => {
         activeViewId="table"
         ariaLabel="Saved views"
         direction="ltr"
+        overflowLabel="Show more"
         editing={{
           viewId: "table",
           renderLabel: () => <input aria-label="Rename view" dir="ltr" />,
@@ -118,7 +129,6 @@ describe("WorkspaceViewSwitcher", () => {
     );
 
     expect(markup).toContain("Rename view");
-    expect(markup).not.toContain("All matters");
     expect(markup).not.toContain("Actions");
     expect(markup).toContain("pe-6.5");
   });

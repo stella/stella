@@ -610,6 +610,20 @@
     "hideList": "Paslēpt sarakstu",
     "showList": "Rādīt sarakstu"
   },
+  "quickDictation": {
+    "activityReady": "Diktāts ir gatavs",
+    "activityReadyDetail": "Pieskarieties, lai pārskatītu tekstu stella",
+    "activityRecording": "Notiek diktēšana",
+    "activityRecordingDetail": "Pieskarieties Gatavs, lai pārskatītu tekstu",
+    "copied": "Nokopēts",
+    "copy": "Kopēt",
+    "documentName": "Diktāts {when}",
+    "none": "Neviens diktāts negaida. Sāciet ar darbības pogu, Siri vai vadības centrā.",
+    "noneTitle": "Nav ko pārskatīt",
+    "saveFailed": "Tekstu neizdevās sagatavot saglabāšanai. Mēģiniet vēlreiz.",
+    "sendToChat": "Sūtīt uz tērzēšanu",
+    "text": "Diktētais teksts"
+  },
   "role": {
     "readFailed": "Jūsu atļaujas neizdevās ielādēt, tāpēc izmaiņas pagaidām ir paslēptas.",
     "retry": "Mēģināt vēlreiz"
@@ -749,6 +763,8 @@
   "signedFile": {
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
+    "noSigners": "Dati par parakstītājiem netika atrasti.",
+    "signers": "Parakstītāji",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
     "unverified": "Paraksti nav pārbaudīti."

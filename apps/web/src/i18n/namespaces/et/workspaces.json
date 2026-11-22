@@ -319,7 +319,9 @@
   "signedFile": {
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "noSigners": "Allkirjastajate andmeid ei leitud.",
     "pdfUnavailable": "PDF-i eelvaade pole saadaval.",
+    "signers": "Allkirjastajad",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
     "unverified": "Allkirju ei ole kontrollitud."

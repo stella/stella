@@ -610,6 +610,20 @@
     "hideList": "Masquer la liste",
     "showList": "Afficher la liste"
   },
+  "quickDictation": {
+    "activityReady": "Dictée prête",
+    "activityReadyDetail": "Touchez pour relire le texte dans stella",
+    "activityRecording": "Dictée en cours",
+    "activityRecordingDetail": "Touchez Terminé pour relire le texte",
+    "copied": "Copié",
+    "copy": "Copier",
+    "documentName": "Dictée {when}",
+    "none": "Aucune dictée en attente. Lancez-en une avec le bouton Action, Siri ou le centre de contrôle.",
+    "noneTitle": "Rien à relire",
+    "saveFailed": "Le texte n’a pas pu être préparé pour l’enregistrement. Réessayez.",
+    "sendToChat": "Envoyer dans une conversation",
+    "text": "Texte dicté"
+  },
   "role": {
     "readFailed": "Vos autorisations n’ont pas pu être chargées : les modifications sont masquées pour l’instant.",
     "retry": "Réessayer"
@@ -749,6 +763,8 @@
   "signedFile": {
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
+    "noSigners": "Aucune information sur les signataires n’a été trouvée.",
+    "signers": "Signataires",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",
     "unverified": "Les signatures n’ont pas été vérifiées."

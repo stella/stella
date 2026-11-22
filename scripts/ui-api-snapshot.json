@@ -1457,6 +1457,7 @@
     "./identity-text": ["IdentityText"],
     "./initials": ["getInitials"],
     "./inline-drop-indicator": ["InlineDropIndicator"],
+    "./inline-overflow": ["resolveInlineOverflow", "splitInlineOverflow"],
     "./inline-rename": ["InlineRenameInput"],
     "./inline-reorder": ["reorderInlineIds", "toInlineDropPosition"],
     "./input": ["Input"],
@@ -1996,6 +1997,11 @@
       "isStructuredInputType",
       "useContentDir"
     ],
+    "./use-inline-overflow": [
+      "INLINE_OVERFLOW_ITEM_ATTRIBUTE",
+      "INLINE_OVERFLOW_TRIGGER_ATTRIBUTE",
+      "useInlineOverflow"
+    ],
     "./use-latest": ["useLatest"],
     "./use-mobile": ["useIsMobile"],
     "./use-prefers-reduced-motion": ["usePrefersReducedMotion"],
@@ -2226,6 +2232,7 @@
       "cades",
       "csv",
       "dataBox",
+      "eAkta",
       "excel",
       "markdown",
       "ofd",
@@ -2235,7 +2242,8 @@
       "powerpoint",
       "rtf",
       "uyap",
-      "word"
+      "word",
+      "zep"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],
