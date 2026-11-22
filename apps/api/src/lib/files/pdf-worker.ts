@@ -41,9 +41,15 @@ const stderrConsole = new Console({
   stdout: process.stderr,
 });
 Object.assign(globalThis.console, {
-  debug: stderrConsole.debug,
-  info: stderrConsole.info,
-  log: stderrConsole.log,
+  debug: (...values: unknown[]) => {
+    stderrConsole.debug(...values);
+  },
+  info: (...values: unknown[]) => {
+    stderrConsole.info(...values);
+  },
+  log: (...values: unknown[]) => {
+    stderrConsole.log(...values);
+  },
 });
 
 const operation = v.safeParse(pdfWorkerOperationSchema, process.argv.at(2));
