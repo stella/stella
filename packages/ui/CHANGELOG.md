@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.81.1
+
+### Patch Changes
+
+- [#9232](https://github.com/stella/stella/pull/9232) [`76bd78b`](https://github.com/stella/stella/commit/76bd78b75de4b4179f90bc3a89d4187ead4bd174) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Count which inline-overflow items fit in the same commit that renders the row, so the first paint never shows items past its edge.
+
 ## 0.81.0
 
 ### Minor Changes
