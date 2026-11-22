@@ -6603,7 +6603,6 @@ jobs:
 
       - *merge_group_cancel
 
-  # Both Rust WebAssembly packages: the scan engine and the HEIC decoder.
   scan-engine-wasm-drift:
     needs: ci-plan
     if: >-
@@ -6627,7 +6626,7 @@ jobs:
         uses: $/.github/actions/ci-install
         with:
           cache-write: save
-          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","@stll/heic-decoder","--filter","stella"]'
+          flags: '["--frozen-lockfile","--ignore-scripts","--filter","@stll/scan-engine","--filter","stella"]'
           log-file: "${{ runner.temp }}/bun-install/scan-engine-wasm.log"
         env:
           NPM_TOKEN: ""
@@ -6655,36 +6654,26 @@ jobs:
             ~/.cargo/bin/wasm-bindgen
             ~/.cargo/bin/wasm-bindgen-test-runner
             packages/scan-engine/target
-            packages/heic-decoder/target
-          key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml', 'packages/heic-decoder/Cargo.lock', 'packages/heic-decoder/rust-toolchain.toml') }}
+          key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml') }}
 
       - name: Fetch Rust dependencies and wasm-bindgen
         timeout-minutes: 15
-        run: |
-          bash scripts/retry.sh bash packages/scan-engine/scripts/wasm-toolchain.sh
-          bash scripts/retry.sh bash packages/heic-decoder/scripts/wasm-toolchain.sh
+        run: bash scripts/retry.sh bash packages/scan-engine/scripts/wasm-toolchain.sh
 
       - name: Check generated WebAssembly from a fresh Cargo cache
         id: wasm-check
         env:
           SCAN_ENGINE_WASM_OUT_DIR: ${{ runner.temp }}/scan-engine-wasm
-        run: bash packages/scan-engine/scripts/test-wasm-offline.sh
-
-      - name: Check generated HEIC decoder WebAssembly from a fresh Cargo cache
-        id: heic-wasm-check
-        env:
           HEIC_DECODER_WASM_OUT_DIR: ${{ runner.temp }}/heic-decoder-wasm
-        run: bash packages/heic-decoder/scripts/test-wasm-offline.sh
+        run: bash packages/scan-engine/scripts/test-wasm-offline.sh && bash packages/heic-decoder/scripts/test-wasm-offline.sh
 
       - name: Record fresh WebAssembly checksums
-        if: failure() && (steps.wasm-check.outcome == 'failure' || steps.heic-wasm-check.outcome == 'failure')
+        if: failure() && steps.wasm-check.outcome == 'failure'
         run: |
-          for package in scan-engine heic-decoder; do
-            if [[ -d "$RUNNER_TEMP/$package-wasm" ]]; then
-              (cd "$RUNNER_TEMP/$package-wasm" && sha256sum ./*) > "$RUNNER_TEMP/$package-wasm.sha256"
-              rustc -vV > "$RUNNER_TEMP/$package-wasm.toolchain"
-            fi
-          done
+          if [[ -d "$RUNNER_TEMP/scan-engine-wasm" ]]; then
+            (cd "$RUNNER_TEMP/scan-engine-wasm" && sha256sum ./*) > "$RUNNER_TEMP/scan-engine-wasm.sha256"
+            rustc -vV > "$RUNNER_TEMP/scan-engine-wasm.toolchain"
+          fi
 
       - name: Upload fresh WebAssembly on mismatch
         if: failure() && steps.wasm-check.outcome == 'failure'
@@ -6693,20 +6682,9 @@ jobs:
           name: scan-engine-wasm
           path: |
             ${{ runner.temp }}/scan-engine-wasm/
+            ${{ runner.temp }}/heic-decoder-wasm/
             ${{ runner.temp }}/scan-engine-wasm.sha256
             ${{ runner.temp }}/scan-engine-wasm.toolchain
-          retention-days: 7
-          if-no-files-found: warn
-
-      - name: Upload fresh HEIC decoder WebAssembly on mismatch
-        if: failure() && steps.heic-wasm-check.outcome == 'failure'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: heic-decoder-wasm
-          path: |
-            ${{ runner.temp }}/heic-decoder-wasm/
-            ${{ runner.temp }}/heic-decoder-wasm.sha256
-            ${{ runner.temp }}/heic-decoder-wasm.toolchain
           retention-days: 7
           if-no-files-found: warn
 
@@ -6721,14 +6699,10 @@ jobs:
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: |
-          bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
-          bash .github/actions/cargo-deny/fetch.sh packages/heic-decoder/Cargo.toml
+        run: for p in scan-engine heic-decoder; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
 
       - name: License audit
-        run: |
-          cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph bans licenses sources
-          cargo deny --offline --manifest-path packages/heic-decoder/Cargo.toml check --config packages/heic-decoder/deny.toml --hide-inclusion-graph bans licenses sources
+        run: for p in scan-engine heic-decoder; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
 
       - name: Save Rust build cache
         if: success()
@@ -6739,8 +6713,7 @@ jobs:
             ~/.cargo/bin/wasm-bindgen
             ~/.cargo/bin/wasm-bindgen-test-runner
             packages/scan-engine/target
-            packages/heic-decoder/target
-          key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml', 'packages/heic-decoder/Cargo.lock', 'packages/heic-decoder/rust-toolchain.toml') }}
+          key: scan-engine-wasm-${{ runner.os }}-${{ hashFiles('packages/scan-engine/Cargo.lock', 'packages/scan-engine/rust-toolchain.toml') }}
 
       - *merge_group_cancel
 

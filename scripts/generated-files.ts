@@ -2092,8 +2092,7 @@ const GENERATOR_DECLARATIONS = [
     ],
     write: ["bun", "--cwd=packages/heic-decoder", "run", "build:wasm"],
     check: ["bash", "packages/heic-decoder/scripts/test-wasm-offline.sh"],
-    checkedBy:
-      "Check generated HEIC decoder WebAssembly from a fresh Cargo cache",
+    checkedBy: "Check generated WebAssembly from a fresh Cargo cache",
     autofix: false,
     after: [],
   },
