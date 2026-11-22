@@ -260,20 +260,18 @@ export const plainTextToPdf = async (
   const width = A4.width - 2 * TEXT_MARGIN;
   let rows: PositionedStampRow[] = [];
   let y = top;
-  let full = false;
-  const endPage = () => {
+  /** Writes the page; `false` once the page limit is reached. */
+  const endPage = (): boolean => {
     writer.add({ rows, size: A4, underlay: [] });
     rows = [];
     y = top;
-    full = writer.count() >= LIMITS.pdfRenderTextPagesMax;
+    return writer.count() < LIMITS.pdfRenderTextPagesMax;
   };
-  const place = () => {
+  /** Sets the text page by page; `true` when the page limit cut it short. */
+  const place = (): boolean => {
     for (const [sectionIndex, section] of text.split("\f").entries()) {
-      if (full) {
-        return;
-      }
-      if (sectionIndex > 0) {
-        endPage();
+      if (sectionIndex > 0 && !endPage()) {
+        return true;
       }
       for (const line of section.split(LINE_BREAK)) {
         // Piece by piece, so a line of megabytes is placed as it is set
@@ -285,11 +283,12 @@ export const plainTextToPdf = async (
             toEms(width, size),
           )) {
             const { ascent, pitch } = rowMetrics(row, base);
-            if (rows.length > 0 && y - pitch * size < TEXT_MARGIN) {
-              endPage();
-            }
-            if (full) {
-              return;
+            if (
+              rows.length > 0 &&
+              y - pitch * size < TEXT_MARGIN &&
+              !endPage()
+            ) {
+              return true;
             }
             const rowWidth = toPoints(row.width, size);
             rows.push({
@@ -304,10 +303,9 @@ export const plainTextToPdf = async (
         }
       }
     }
+    return false;
   };
-  place();
-  // Content left over means the page limit cut the text short.
-  const cut = full;
+  const cut = place();
   if (rows.length > 0) {
     endPage();
   }
