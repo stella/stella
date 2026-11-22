@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.1.0
+
+### Minor Changes
+
+- [#9227](https://github.com/stella/stella/pull/9227) [`b1101fe`](https://github.com/stella/stella/commit/b1101fe79d727bb86a8335dddb85bca2b9ceeb76) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - Turn on automatic document naming for a matter, and read and set the organization's document name pattern.
+
 ## 8.0.1
 
 ### Patch Changes
