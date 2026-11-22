@@ -573,7 +573,7 @@ const encode = (text: string) => new TextEncoder().encode(text);
 const endsWithNote = ({
   items,
   pageCount,
-}: Awaited<ReturnType<typeof textItems>>) =>
+}: Pick<Awaited<ReturnType<typeof textItems>>, "items" | "pageCount">) =>
   readsBack(
     items.filter(({ page }) => page === pageCount),
     PREVIEW_SHORTENED_NOTE,

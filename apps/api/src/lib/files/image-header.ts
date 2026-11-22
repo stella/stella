@@ -518,8 +518,12 @@ const readHeifSequenceHeader = (
   if (moov === undefined) {
     return null;
   }
+  const traks = heifBoxes(bytes, moov.start, moov.end);
+  if (traks === null) {
+    return null;
+  }
   const data = view(bytes);
-  for (const trak of heifBoxes(bytes, moov.start, moov.end) ?? []) {
+  for (const trak of traks) {
     if (trak.type !== "trak") {
       continue;
     }
@@ -627,7 +631,10 @@ const heifPrimaryProperties = (
   if (primary === null || iprp === undefined) {
     return null;
   }
-  const iprpChildren = heifBoxes(bytes, iprp.start, iprp.end) ?? [];
+  const iprpChildren = heifBoxes(bytes, iprp.start, iprp.end);
+  if (iprpChildren === null) {
+    return null;
+  }
   const ipco = iprpChildren.find((box) => box.type === "ipco");
   const properties =
     ipco === undefined ? null : heifBoxes(bytes, ipco.start, ipco.end);

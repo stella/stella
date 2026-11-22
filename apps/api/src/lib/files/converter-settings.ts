@@ -23,7 +23,9 @@ export type ConverterSettings = v.InferOutput<
  * route is appended to the configured path, so a converter behind a
  * reverse-proxy prefix keeps that prefix.
  */
-export const gotenbergConvertTarget = (settings: ConverterSettings): URL => {
+export const gotenbergConvertTarget = (
+  settings: Pick<ConverterSettings, "GOTENBERG_URL">,
+): URL => {
   const target = new URL(settings.GOTENBERG_URL);
   let pathEnd = target.pathname.length;
   while (pathEnd > 0 && target.pathname[pathEnd - 1] === "/") {
