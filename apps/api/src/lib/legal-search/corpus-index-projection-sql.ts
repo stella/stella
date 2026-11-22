@@ -273,6 +273,41 @@ export const corpusIndexProjectionRevisionDeleteIsUnproven = ({
   OR (${statusHasCopy(status, "intact_until_claimed")} AND ${cleanupAttempts} > 0)
 )`;
 
+/**
+ * A named revision a repair is held for: a delete of it may have been issued,
+ * or a cleanup writer recorded why it queued it, so it is never restored.
+ * Judged by status, because attempts and `last_error` outlive the cleanup or
+ * append that wrote them: an offline revision killed alone in its run that
+ * turns out to have published keeps its `last_error` once `applied`.
+ *
+ * What ends the hold, status by status:
+ *
+ * - `cleanup_pending`: the cleanup claim takes it (`cleanup_started`).
+ * - `cleanup_started`: the delete receipt (`cleanup_committed`), or the
+ *   expired-lease sweep (`cleanup_pending`, claimed again).
+ * - `cleanup_committed`: settlement (`settled`), which holds nothing; a
+ *   reissue goes back to `cleanup_pending`, a bounded number of times.
+ * - `cleanup_stalled`: no worker transition leaves it. Only an operator's
+ *   `cleanup_pending`, or a canonical erasure un-naming the copy, ends it.
+ *
+ * `settled` is exempt although it may reopen to `cleanup_pending`. Its delete
+ * is proven, so a repair has no copy to take away. The reopening takes the
+ * naming state's row lock, which the repair writer's caller holds, so it runs
+ * wholly before the repair, which then finds `cleanup_pending` with attempts
+ * and is held, or wholly after it. After it, the repair has neither moved the
+ * pointer nor cost a proof: only a claim leads to settlement and attempts
+ * never decrease, so a reopened revision is never restorable, and no append
+ * replaces it until it settles again.
+ */
+export const corpusIndexProjectionRevisionHoldsRepair = ({
+  status,
+  cleanupAttempts,
+  lastError,
+}: CorpusProjectionRevisionCopyColumns & { lastError: SQLWrapper }) => sql`(
+  ${corpusIndexProjectionRevisionDeleteIsUnproven({ status, cleanupAttempts })}
+  OR (${statusHasCopy(status, "intact_until_claimed")} AND ${lastError} IS NOT NULL)
+)`;
+
 const revisionCopyIsIntact = ({
   status,
   cleanupAttempts,

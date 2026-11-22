@@ -15,6 +15,7 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { reopenCorpusProjectionCleanupTx } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
 import {
   countCorpusProjectionServedCopies,
   reconcileCorpusProjectionDesiredStateTx,
@@ -331,6 +332,22 @@ describe("a repair with any other risk is held whole, restores included", () => 
       },
     },
     {
+      name: "whose cleanup stalled",
+      queue: async () => {
+        const copy = await queuedRestorableCopy();
+        await previousClaim(copy.revision);
+        await previousRecordDelete(copy.revision, 1);
+        await run(sql`
+          UPDATE corpus_index_projection_intents
+          SET status = 'cleanup_stalled', last_error = 'cleanup stalled',
+              updated_at = clock_timestamp()
+          WHERE id = ${copy.revision} AND status = 'cleanup_committed'
+        `);
+        return copy;
+      },
+      reached: { status: "cleanup_stalled", cleanupAttempts: 1 },
+    },
+    {
       name: "a claim held and its lease expired",
       queue: async () => {
         const copy = await queuedRestorableCopy();
@@ -380,6 +397,75 @@ describe("a repair with any other risk is held whole, restores included", () => 
       expect(await canonicalEpochOf(entityId)).toBe(epoch);
     });
   }
+
+  test("a settled copy holds nothing, and reopened it holds the next repair", async () => {
+    const { entityId, revision } = await queuedRestorableCopy();
+    await previousClaim(revision);
+    await previousRecordDelete(revision, 1);
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET status = 'settled', settled_at = clock_timestamp(),
+          updated_at = clock_timestamp()
+      WHERE id = ${revision} AND status = 'cleanup_committed'
+    `);
+    expect(await revisionOf(revision)).toMatchObject({
+      status: "settled",
+      cleanupAttempts: 1,
+    });
+
+    const settled = await continuousReconciles(entityId);
+
+    // The repair moves the desired state; the copy is gone, so none is
+    // reported, and the pointer stays until an append replaces it.
+    expect(settled.isOk() && settled.value).toMatchObject({
+      epoch: 3n,
+      changed: true,
+      servedCopies: [],
+    });
+    expect(await servedStateOf(entityId)).toMatchObject({
+      desiredEpoch: 3n,
+      appliedRevision: toSafeId<"corpusIndexProjectionIntent">(revision),
+    });
+
+    const { indexId } = await revisionOf(revision);
+    await db.transaction(
+      async (tx) =>
+        await reopenCorpusProjectionCleanupTx(asTestRaw<Transaction>(tx), {
+          intentIds: [toSafeId<"corpusIndexProjectionIntent">(revision)],
+          indexId,
+          errorMessage: "census found the revision after settlement",
+        }),
+    );
+    const reopened = await revisionOf(revision);
+    expect(reopened).toMatchObject({
+      status: "cleanup_pending",
+      cleanupAttempts: 1,
+    });
+    await run(sql`
+      UPDATE case_law_decisions SET content_hash = ${fingerprint(2)}
+      WHERE id = ${entityId}
+    `);
+
+    const held = await continuousReconciles(entityId);
+
+    if (held.isOk()) {
+      return panic("Expected the repair to be held");
+    }
+    expect(held.error.copies).toEqual([
+      {
+        generation: SERVED,
+        entityId,
+        outcome: "held",
+        risk: "unrestorable_cleanup",
+      },
+    ]);
+    expect(await revisionOf(revision)).toEqual(reopened);
+    expect(await claim()).toMatchObject({
+      claimed: { unserved: 0, served_after_delete: 1, served_unproven: 0 },
+      restoredIntentIds: [],
+    });
+    return undefined;
+  });
 
   test("a sibling generation at risk keeps the restorable copy queued and writes nothing", async () => {
     const { entityId, revision } = await servedEntity();

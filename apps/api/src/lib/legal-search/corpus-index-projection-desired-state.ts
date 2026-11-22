@@ -46,6 +46,7 @@ import {
   type ProjectedCorpusIndexGeneration,
   readProjectedCorpusIndexGenerationsTx,
 } from "@/api/lib/legal-search/corpus-index-projected-generations";
+import { corpusIndexIntentStatusesWithCopy } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
@@ -65,6 +66,7 @@ import { restoreQueuedNamedCopiesTx } from "@/api/lib/legal-search/corpus-index-
 import {
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNamedCopyTrailsTwoChanges,
+  corpusIndexProjectionRevisionHoldsRepair,
   corpusIndexProjectionRevisionIsRestorable,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
@@ -1146,9 +1148,10 @@ const CORPUS_PROJECTION_SERVED_COPY_RISKS = [
    */
   "restorable_cleanup",
   /**
-   * A cleanup claim owns or owned the copy, a delete may have reached it, or
-   * a cleanup writer recorded why it queued it. The writer never moves past
-   * such a copy while a state names it, and never restores it.
+   * A cleanup claim owns or owned the queued copy, a delete may have reached
+   * it, or a cleanup writer recorded why it queued it. The writer never moves
+   * past such a copy while a state names it, and never restores it
+   * (`corpusIndexProjectionRevisionHoldsRepair`, with what ends the hold).
    */
   "unrestorable_cleanup",
   /**
@@ -1287,11 +1290,11 @@ const readNamedCopiesTx = async (
     revisionAppliedAt: intents.appliedAt,
     lastError: intents.lastError,
   };
-  const unrestorableCleanup = sql`(
-    ${intents.status} = 'cleanup_started'
-    OR ${intents.cleanupAttempts} > 0
-    OR ${intents.lastError} IS NOT NULL
-  )`;
+  const unrestorableCleanup = corpusIndexProjectionRevisionHoldsRepair({
+    status: intents.status,
+    cleanupAttempts: intents.cleanupAttempts,
+    lastError: intents.lastError,
+  });
   const namedCopy = {
     appliedRevision: states.appliedRevision,
     appliedAction: states.appliedAction,
@@ -1323,6 +1326,7 @@ const readNamedCopiesTx = async (
       generation: states.generation,
       entityId: states.entityId,
       revisionId: intents.id,
+      status: intents.status,
       risk: sql<CorpusProjectionServedCopyRisk | null>`CASE
         WHEN ${actionChanges}
           THEN ${"desired_action_change" satisfies CorpusProjectionServedCopyRisk}
@@ -1448,10 +1452,13 @@ export const writeRepairedCorpusProjectionDesiredStatesTx = async (
   };
   const named = await readNamedCopiesTx(tx, values);
   const atRisk = copiesAtRisk(named);
-  const alreadyCurrent = named.flatMap(({ generation, entityId, risk }) =>
-    risk === null
-      ? [{ generation, entityId, outcome: "already_current" } as const]
-      : [],
+  // A settled revision is named but gone, so there is no copy to report.
+  const gone = new Set(corpusIndexIntentStatusesWithCopy("deleted"));
+  const alreadyCurrent = named.flatMap(
+    ({ generation, entityId, risk, status }) =>
+      risk === null && !gone.has(status)
+        ? [{ generation, entityId, outcome: "already_current" } as const]
+        : [],
   );
   if (atRisk.length === 0) {
     await write(tx);
