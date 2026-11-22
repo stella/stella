@@ -1227,6 +1227,35 @@ const countShadowedUserNameHelpers: FileCounter = (content, { file }) =>
     required: /getDisplayName|getInitials/u,
   });
 
+// Invented test, seed, browser-spec and marketing data should read as a real
+// file, so a placeholder party, firm or person name counts: "Acme",
+// "John Doe", "Jan Novák", "Test User", "Example Ltd", lorem ipsum,
+// "[COMPANY NAME]". Czech "vzorový" (template) is an ordinary word, so only a
+// capitalised form used as a name, firm or address counts ("Jan Vzorový",
+// "Vzorová společnost", "Vzorová 1"), never "Vzorová smlouva" or lowercase.
+const PLACEHOLDER_PARTY_NAME =
+  /(?<![\p{L}\p{N}_])(?:J(?:ohn|ane) Doe|John Smith|Acme|[Ll]orem ipsum|J[aá]n Novák|Jana Nováková|(?:Example|Sample|Demo|Test|Foo|Dummy) (?:Corp(?:oration)?|Inc|Ltd|LLC|GmbH|Company|Client|Customer|Firm|Holdings|Person|User|Lawyer|Org(?:anization)?)|Vzorov\p{L}*(?!\s+(?!spole[čc]nos[tť])\p{Ll})|Firma,?\s+s\.\s?r\.\s?o\.)(?![\p{L}\p{N}_])|\[(?:COMPANY|CLIENT|FIRM|PARTY|PERSON) NAME\]/gu;
+const PLACEHOLDER_PARTY_NAME_PRESENT = new RegExp(
+  PLACEHOLDER_PARTY_NAME.source,
+  "u",
+);
+const PLACEHOLDER_SCRIPT_FILE = /\.[cm]?[jt]sx?$/u;
+// Locale catalogs hold product copy, where "Vzorová" is an ordinary word.
+const LOCALE_PATH = /(?:^|\/)(?:locales?|i18n)\//u;
+
+// Comments in script files are skipped; data fixtures count as written.
+const countPlaceholderPartyNames: FileCounter = (content, { file }) => {
+  if (!PLACEHOLDER_PARTY_NAME_PRESENT.test(content)) {
+    return 0;
+  }
+  return countMatches(
+    PLACEHOLDER_SCRIPT_FILE.test(file)
+      ? stripComments({ content, file })
+      : content,
+    PLACEHOLDER_PARTY_NAME,
+  );
+};
+
 // Both patterns below need `title={` or `dateStyle` in the stripped text.
 const AD_HOC_RELATIVE_TIME_REQUIRED = /title=\{|dateStyle/u;
 
@@ -3377,6 +3406,30 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "placeholder-party-names",
+    description:
+      "placeholder party, firm or person names (Acme, John Doe, Jan Novák, Test User, Vzorová společnost, lorem ipsum, [COMPANY NAME]) in tests, fixtures, seeds, browser specs and marketing previews; invented data reads as a real file",
+    include: [
+      "apps/*/src/**/*.test.{ts,tsx}",
+      "apps/*/scripts/**/*.test.{ts,tsx}",
+      "apps/*/tests/**/*.{ts,tsx}",
+      "packages/*/src/**/*.test.{ts,tsx}",
+      "packages/*/scripts/**/*.test.{ts,tsx}",
+      "apps/*/src/**/__fixtures__/**/*.{ts,tsx,json,xml,html,xhtml,txt,md,csv,yml,yaml}",
+      "apps/*/scripts/**/__fixtures__/**/*.{ts,tsx,json,xml,html,xhtml,txt,md,csv,yml,yaml}",
+      "packages/*/src/**/__fixtures__/**/*.{ts,tsx,json,xml,html,xhtml,txt,md,csv,yml,yaml}",
+      "apps/api/scripts/seed-*.ts",
+      "apps/web/e2e/**/*.{ts,tsx,json}",
+      "packages/playwright-tools/src/**/*.{ts,json}",
+      "apps/landing/src/components/react/previews/**/*.{ts,tsx}",
+      "apps/landing/src/data/**/*.ts",
+    ],
+    exclude: (file) =>
+      file.endsWith(".d.ts") || /\.gen\./u.test(file) || LOCALE_PATH.test(file),
+    count: countPlaceholderPartyNames,
+  },
+  {
+    scope: "file",
     id: "raw-user-avatar-primitive",
     description:
       "imports of @stll/ui/avatar outside the shared owner and explicit non-user exceptions",
@@ -5065,6 +5118,25 @@ const SELF_TEST_TOLERATED_BROWSER_ERRORS = `${TOLERATED_BROWSER_ERROR_FIXTURE_LI
 // and the comment are excluded.
 const EXPECTED_TOLERATED_BROWSER_ERRORS = 2;
 const EXPECTED_SHADOWED_USER_NAME_HELPERS = 2;
+const PLACEHOLDER_PARTY_NAME_FIXTURE_LINES = [
+  'const client = { name: "Acme s.r.o.", contact: "John Doe" };',
+  'const defendant = "žalovaná Vzorová společnost Omega a.s.";',
+  'const witness = "Jan Vzorový, bytem Vzorová 1, Praha";',
+  'const seeded = ["Test User", "[COMPANY NAME]", "Jana Nováková"];',
+  'const template = "Vzorová smlouva o dílo podle vzorový dokument";',
+  'const unrelated = ["AcmeClient", "Testing Company", "Jan Nováček"];',
+  '// "Jane Doe" in a comment must not count.',
+];
+const SELF_TEST_PLACEHOLDER_PARTY_NAMES = `${PLACEHOLDER_PARTY_NAME_FIXTURE_LINES.join("\n")}\n`;
+const SELF_TEST_PLACEHOLDER_PARTY_NAMES_JSON =
+  '{ "parties": ["Example Ltd", "Novák & Partners"], "note": "lorem ipsum" }\n';
+const PLACEHOLDER_PARTY_NAME_LOCALE_FIXTURE =
+  "apps/web/src/__fixtures__/locales/cs.json";
+// Acme, John Doe, Vzorová (firm), Jan Vzorový, Vzorová 1 (address), Test User,
+// [COMPANY NAME] and Jana Nováková in the test file, then Example Ltd and
+// lorem ipsum in the data fixture. The template title, lowercase adjective,
+// longer identifiers, the comment and the locale catalog are excluded.
+const EXPECTED_PLACEHOLDER_PARTY_NAMES = 10;
 const EXPECTED_AD_HOC_RELATIVE_TIME_FORMATTING = 3;
 
 const SHARED_API_HELPER_FIXTURE_LINES = [
@@ -6813,6 +6885,21 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/placeholder-party-names.test.ts",
+      SELF_TEST_PLACEHOLDER_PARTY_NAMES,
+    );
+    writeFixture(
+      root,
+      "apps/api/src/__fixtures__/placeholder-parties.json",
+      SELF_TEST_PLACEHOLDER_PARTY_NAMES_JSON,
+    );
+    writeFixture(
+      root,
+      PLACEHOLDER_PARTY_NAME_LOCALE_FIXTURE,
+      '{ "client": "Jan Novák" }\n',
+    );
+    writeFixture(
+      root,
       "apps/web/src/undeclared-api-client-writes.ts",
       SELF_TEST_UNDECLARED_API_CLIENT_WRITES,
     );
@@ -7222,6 +7309,7 @@ const runSelfTest = (): number => {
       ],
       ["raw-user-avatar-primitive", EXPECTED_RAW_USER_AVATAR_PRIMITIVES],
       ["e2e-tolerated-browser-errors", EXPECTED_TOLERATED_BROWSER_ERRORS],
+      ["placeholder-party-names", EXPECTED_PLACEHOLDER_PARTY_NAMES],
       ["undeclared-api-client-writes", EXPECTED_UNDECLARED_API_CLIENT_WRITES],
       ["shadowed-user-name-helpers", EXPECTED_SHADOWED_USER_NAME_HELPERS],
       [
@@ -7248,6 +7336,13 @@ const runSelfTest = (): number => {
       requireSnapshot(snapshot, "implicit-root-connection-shapes").files
     ) {
       failures.push("implicit-root-connection-shapes did not exempt a door");
+    }
+
+    if (
+      PLACEHOLDER_PARTY_NAME_LOCALE_FIXTURE in
+      requireSnapshot(snapshot, "placeholder-party-names").files
+    ) {
+      failures.push("placeholder-party-names did not exclude a locale file");
     }
 
     failures.push(...legacyPaintSelfTestFailures(snapshot));

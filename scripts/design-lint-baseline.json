@@ -637,7 +637,6 @@
     "apps/api/src/lib/file-scan/archive.ts": 1,
     "apps/api/src/lib/file-scan/yara.ts": 1,
     "apps/api/src/lib/files/document-properties.ts": 1,
-    "apps/api/src/lib/files/gotenberg.ts": 1,
     "apps/api/src/lib/files/image-derivative.ts": 1,
     "apps/api/src/lib/files/image-header.ts": 1,
     "apps/api/src/lib/files/image-pdf.ts": 1,

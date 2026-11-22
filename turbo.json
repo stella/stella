@@ -1537,6 +1537,7 @@
         "$TURBO_ROOT$/packages/fetch/**",
         "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
+        "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/locales/**",
@@ -1797,6 +1798,7 @@
       "outputs": []
     },
     "@stll/api#lint": {
+      "env": ["API_LINT_SHARD"],
       "dependsOn": [
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime",

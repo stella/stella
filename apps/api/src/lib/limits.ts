@@ -40,7 +40,7 @@ import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
 
-import type { env } from "@/api/env";
+import type { envPublicCorpus } from "@/api/env-public-corpus";
 import { SITEMAP_RANGE_ROWS_CEILING } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   API_RATE_LIMITS,
@@ -564,6 +564,9 @@ export const LIMITS = {
   imageDerivativeSourcePixelsMax: 40_000_000,
   /** Wall-clock ceiling for one thumbnail plus blur placeholder. */
   imageDerivativeTimeoutMs: 30_000,
+  /** Hard timeout for the PDF worker rendering one image, text or CSV
+   *  file as its preview PDF (every page of a TIFF, every row of a CSV). */
+  pdfRenderTimeoutMs: 60_000,
   /** Largest stored source (bytes) a PDF or thumbnail derivative is built
    *  from. Checked against the recorded size before the object is read and
    *  again against the store's declared length, so a refused file is never
@@ -1101,21 +1104,7 @@ export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
  */
 export const EMAIL_OTP_MIN_RESPONSE_DURATION_MS = 1000;
 
-export type PublicCorpusLimitsConfiguration = Pick<
-  typeof env,
-  | "PUBLIC_LAW_DATABASE_POOL_MAX"
-  | "PUBLIC_LAW_DATABASE_URL"
-  | "DATABASE_ROOT_POOL_MAX"
-  | "PUBLIC_CORPUS_RESERVED_CONNECTIONS"
-  | "PUBLIC_CORPUS_ASSUMED_REPLICAS"
-  | "PUBLIC_CORPUS_SEARCH_P95_SECONDS"
-  | "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS"
-  | "PUBLIC_CORPUS_SITEMAP_P95_SECONDS"
-  | "PUBLIC_CORPUS_SEARCH_ADDRESS_MAX"
-  | "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX"
-  | "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX"
-  | "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX"
->;
+export type PublicCorpusLimitsConfiguration = typeof envPublicCorpus;
 
 /** Derive fleet request budgets from pool permits and assumed p95 latency.
  * Defaults are initial estimates: tune replica count, latency and overrides

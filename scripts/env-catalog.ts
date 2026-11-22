@@ -1753,6 +1753,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_TEST_ARTIFACT_DIR",
   "API_TEST_CHILD_TIMEOUT_MS",
   // Resolved weight identity changes the Turbo test cache key.
+  // Selects a single API lint shard (`lib`, `handlers`, or `rest`) for parallel CI runs.
+  "API_LINT_SHARD",
   "API_TEST_DURATIONS_HASH",
   // Optional main-measured weights path; content identity is keyed separately.
   "API_TEST_DURATIONS_FILE",

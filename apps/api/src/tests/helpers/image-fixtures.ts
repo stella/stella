@@ -101,6 +101,32 @@ export const splitPng = (
 };
 
 /**
+ * A 16-bit RGB PNG whose left half is red and right half blue: an encoding
+ * the direct embedder does not take.
+ */
+export const sixteenBitPng = (width: number, height: number): Uint8Array => {
+  const channels = 3;
+  const stride = 1 + width * channels * 2;
+  const rows = new Uint8Array(height * stride);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const [red, green, blue] = x < width / 2 ? RED : BLUE;
+      // Each 16-bit sample is its 8-bit value repeated, big-endian.
+      rows.set(
+        [red, red, green, green, blue, blue],
+        y * stride + 1 + x * channels * 2,
+      );
+    }
+  }
+  return concat([
+    PNG_SIGNATURE,
+    ihdrChunk({ bitDepth: 16, colorType: 2, height, interlaced: false, width }),
+    pngChunk("IDAT", deflateSync(rows)),
+    pngChunk("IEND", new Uint8Array(0)),
+  ]);
+};
+
+/**
  * A PNG header with no image data: only its IHDR fields are meaningful, so
  * a decoder handed it fails while a header reader sees every field.
  */
@@ -197,3 +223,213 @@ export const splitWebp = async (
     .webp({ lossless: true })
     .bytes();
 };
+
+/** A 24-bit bottom-up BMP whose left half is red and right half blue. */
+export const splitBmp = (width: number, height: number): Uint8Array => {
+  const stride = Math.ceil((width * 3) / 4) * 4;
+  const size = 54 + stride * height;
+  const bytes = new Uint8Array(size);
+  const view = new DataView(bytes.buffer);
+  bytes.set([0x42, 0x4d], 0);
+  view.setUint32(2, size, true);
+  view.setUint32(10, 54, true);
+  view.setUint32(14, 40, true);
+  view.setInt32(18, width, true);
+  view.setInt32(22, height, true);
+  view.setUint16(26, 1, true);
+  view.setUint16(28, 24, true);
+  view.setUint32(34, stride * height, true);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const [red, green, blue] = x < width / 2 ? RED : BLUE;
+      // BMP stores blue, green, red.
+      bytes.set([blue, green, red], 54 + y * stride + x * 3);
+    }
+  }
+  return bytes;
+};
+
+/**
+ * GIF LZW data for `indices` (2-colour palette, minimum code size 2), with a
+ * clear code before the code width would grow, so every code is 3 bits.
+ */
+const gifImageData = (indices: readonly number[]): Uint8Array => {
+  const clear = 4;
+  const end = 5;
+  const codes: number[] = [];
+  // After a clear, the next code is 6; 3-bit codes reach 7, so two literal
+  // codes fit before the table would need a fourth bit.
+  for (const [index, value] of indices.entries()) {
+    if (index % 2 === 0) {
+      codes.push(clear);
+    }
+    codes.push(value);
+  }
+  codes.push(end);
+  const packed: number[] = [];
+  let buffer = 0;
+  let bits = 0;
+  // Codes are packed least significant bit first.
+  for (const code of codes) {
+    buffer += code * 2 ** bits;
+    bits += 3;
+    while (bits >= 8) {
+      packed.push(buffer % 256);
+      buffer = Math.floor(buffer / 256);
+      bits -= 8;
+    }
+  }
+  if (bits > 0) {
+    packed.push(buffer % 256);
+  }
+  const blocks: number[] = [2];
+  for (let offset = 0; offset < packed.length; offset += 255) {
+    const block = packed.slice(offset, offset + 255);
+    blocks.push(block.length, ...block);
+  }
+  blocks.push(0);
+  return Uint8Array.from(blocks);
+};
+
+/**
+ * A GIF89a of `frames` frames, the first split red | blue and every later
+ * one solid blue, so a decoder that shows any frame but the first is seen.
+ */
+export const splitGif = (
+  width: number,
+  height: number,
+  frames = 1,
+): Uint8Array => {
+  const header = new Uint8Array(13);
+  header.set(new TextEncoder().encode("GIF89a"), 0);
+  const view = new DataView(header.buffer);
+  view.setUint16(6, width, true);
+  view.setUint16(8, height, true);
+  // Global colour table of 2 entries.
+  header[10] = 0x80;
+  const palette = Uint8Array.from([...RED, ...BLUE]);
+  const parts: Uint8Array[] = [header, palette];
+  for (let frame = 0; frame < frames; frame += 1) {
+    const descriptor = new Uint8Array(10);
+    descriptor[0] = 0x2c;
+    const descriptorView = new DataView(descriptor.buffer);
+    descriptorView.setUint16(5, width, true);
+    descriptorView.setUint16(7, height, true);
+    const indices: number[] = [];
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        indices.push(frame === 0 && x < width / 2 ? 0 : 1);
+      }
+    }
+    parts.push(descriptor, gifImageData(indices));
+  }
+  parts.push(Uint8Array.of(0x3b));
+  return concat(parts);
+};
+
+type TiffPageFixture = {
+  width: number;
+  height: number;
+  /**
+   * One sample tuple per pixel, rows top to bottom: RGB, or CMYK when
+   * `cmyk` is set.
+   */
+  pixel: (x: number, y: number) => readonly number[];
+  cmyk?: boolean;
+  orientation?: ImageOrientation;
+};
+
+/**
+ * An uncompressed little-endian RGB or CMYK TIFF with one directory per
+ * page, chained in order.
+ */
+export const tiffFile = (pages: readonly TiffPageFixture[]): Uint8Array => {
+  const parts: Uint8Array[] = [];
+  let offset = 8;
+  const directories: { at: number; bytes: Uint8Array }[] = [];
+  const layouts = pages.map((page) => {
+    const samples = page.cmyk === true ? 4 : 3;
+    const pixels = new Uint8Array(page.width * page.height * samples);
+    for (let y = 0; y < page.height; y += 1) {
+      for (let x = 0; x < page.width; x += 1) {
+        pixels.set(page.pixel(x, y), (y * page.width + x) * samples);
+      }
+    }
+    const pixelsAt = offset;
+    offset += pixels.length;
+    const bitsAt = offset;
+    offset += 2 * samples;
+    return { bitsAt, page, pixels, pixelsAt, samples };
+  });
+  for (const { bitsAt, page, pixels, pixelsAt, samples } of layouts) {
+    const entries: [number, number, number, number][] = [
+      [256, 4, 1, page.width],
+      [257, 4, 1, page.height],
+      [258, 3, samples, bitsAt],
+      [259, 3, 1, 1],
+      // PhotometricInterpretation: RGB (2) or separated, CMYK (5).
+      [262, 3, 1, samples === 4 ? 5 : 2],
+      [273, 4, 1, pixelsAt],
+      ...(page.orientation === undefined
+        ? []
+        : [[274, 3, 1, page.orientation] as [number, number, number, number]]),
+      [277, 3, 1, samples],
+      [278, 4, 1, page.height],
+      [279, 4, 1, pixels.length],
+    ];
+    const directory = new Uint8Array(2 + entries.length * 12 + 4);
+    const view = new DataView(directory.buffer);
+    view.setUint16(0, entries.length, true);
+    for (const [index, [tag, type, count, value]] of entries.entries()) {
+      const at = 2 + index * 12;
+      view.setUint16(at, tag, true);
+      view.setUint16(at + 2, type, true);
+      view.setUint32(at + 4, count, true);
+      if (type === 3 && count === 1) {
+        view.setUint16(at + 8, value, true);
+      } else {
+        view.setUint32(at + 8, value, true);
+      }
+    }
+    directories.push({ at: offset, bytes: directory });
+    offset += directory.length;
+  }
+  for (const [index, directory] of directories.entries()) {
+    const next = directories[index + 1]?.at ?? 0;
+    new DataView(directory.bytes.buffer).setUint32(
+      directory.bytes.length - 4,
+      next,
+      true,
+    );
+  }
+  const header = new Uint8Array(8);
+  const headerView = new DataView(header.buffer);
+  header.set([0x49, 0x49], 0);
+  headerView.setUint16(2, 42, true);
+  headerView.setUint32(4, directories[0]?.at ?? 0, true);
+  parts.push(header);
+  for (const { pixels, samples } of layouts) {
+    const bits = new Uint8Array(2 * samples);
+    const bitsView = new DataView(bits.buffer);
+    for (let sample = 0; sample < samples; sample += 1) {
+      bitsView.setUint16(2 * sample, 8, true);
+    }
+    parts.push(pixels, bits);
+  }
+  for (const { bytes } of directories) {
+    parts.push(bytes);
+  }
+  return concat(parts);
+};
+
+/** A {@link tiffFile} page split red | blue. */
+export const splitTiffPage = (
+  width: number,
+  height: number,
+  orientation?: ImageOrientation,
+): TiffPageFixture => ({
+  width,
+  height,
+  pixel: (x) => (x < width / 2 ? RED : BLUE),
+  ...(orientation === undefined ? {} : { orientation }),
+});
