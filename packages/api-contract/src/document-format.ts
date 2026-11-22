@@ -1,6 +1,8 @@
 import {
   CONVERTED_DOCUMENT_FORMATS,
+  type ConvertedDocumentFormat,
   HTML_RENDERED_DOCUMENT_FORMATS,
+  type HtmlRenderedDocumentFormat,
 } from "./converted-document-formats";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
 import {
@@ -43,6 +45,8 @@ export type DocumentFormatKind =
   | "csv"
   | "image"
   | "email"
+  | ConvertedDocumentFormat["kind"]
+  | HtmlRenderedDocumentFormat["kind"]
   | LegalFileFormatKind
   | "markdown"
   | "text"
@@ -60,8 +64,7 @@ export type DocumentFormat = {
   readonly label: string | undefined;
 };
 
-type FormatEntry = {
-  /** "file" for a format known by its tag that has no mark of its own. */
+export type RecognisedDocumentFormat = {
   readonly kind: DocumentFormatKind;
   /** The mark's key, when it is not the kind's own. */
   readonly mark?: string;
@@ -83,7 +86,7 @@ const TNEF: FormatEntry = {
  * Every format a file is recognised as, by media type and by extension. A
  * format's mark is reserved for it: RTF, ODT and ODS are not Word or Excel.
  */
-const DOCUMENT_FORMATS: readonly FormatEntry[] = [
+const DOCUMENT_FORMATS: readonly RecognisedDocumentFormat[] = [
   {
     kind: "pdf",
     label: "PDF",
@@ -175,8 +178,14 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
     extensions: [".webp"],
   },
   ...[...CONVERTED_DOCUMENT_FORMATS, ...HTML_RENDERED_DOCUMENT_FORMATS].map(
-    ({ label, mimeType, mimeAliases, extensions }): FormatEntry => ({
-      kind: "file",
+    ({
+      kind,
+      label,
+      mimeType,
+      mimeAliases,
+      extensions,
+    }): RecognisedDocumentFormat => ({
+      kind,
       label,
       mimeTypes: [mimeType, ...mimeAliases],
       extensions,
@@ -184,7 +193,7 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
   ),
   // A profile follows its format, so its extensions name it rather than the
   // format; the format alone answers to the shared media type.
-  ...LEGAL_FILE_FORMATS.flatMap((format): FormatEntry[] => [
+  ...LEGAL_FILE_FORMATS.flatMap((format): RecognisedDocumentFormat[] => [
     {
       kind: format.kind,
       label: format.label,
@@ -222,23 +231,30 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
   },
 ];
 
-const PLAIN_TEXT: FormatEntry = {
+const PLAIN_TEXT: RecognisedDocumentFormat = {
   kind: "text",
   label: "TXT",
   mimeTypes: ["text/plain"],
   extensions: [".txt"],
 };
 
+/**
+ * Every format a file is recognised as, with the media types and extensions
+ * that name it, so a test can walk each one through `documentFormat`.
+ */
+export const RECOGNISED_DOCUMENT_FORMATS: readonly RecognisedDocumentFormat[] =
+  [...DOCUMENT_FORMATS, PLAIN_TEXT];
+
 // Maps, so a media type or extension named like an object key
 // ("constructor") finds nothing rather than an inherited property.
-const BY_MIME_TYPE: ReadonlyMap<string, FormatEntry> = new Map(
+const BY_MIME_TYPE: ReadonlyMap<string, RecognisedDocumentFormat> = new Map(
   DOCUMENT_FORMATS.flatMap((entry) =>
     entry.mimeTypes.map((mimeType) => [mimeType, entry] as const),
   ),
 );
 
-const BY_EXTENSION: ReadonlyMap<string, FormatEntry> = new Map(
-  [...DOCUMENT_FORMATS, PLAIN_TEXT].flatMap((entry) =>
+const BY_EXTENSION: ReadonlyMap<string, RecognisedDocumentFormat> = new Map(
+  RECOGNISED_DOCUMENT_FORMATS.flatMap((entry) =>
     entry.extensions.map((extension) => [extension, entry] as const),
   ),
 );
@@ -257,9 +273,10 @@ const extensionLabel = (
     .match(/\.([a-z0-9]{1,5})$/iu)?.[1]
     ?.toUpperCase();
 
-const markOf = (entry: FormatEntry): string => entry.mark ?? entry.kind;
+const markOf = (entry: RecognisedDocumentFormat): string =>
+  entry.mark ?? entry.kind;
 
-const formatOf = (entry: FormatEntry): DocumentFormat => ({
+const formatOf = (entry: RecognisedDocumentFormat): DocumentFormat => ({
   kind: entry.kind,
   mark: markOf(entry),
   label: entry.label,

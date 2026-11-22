@@ -247,9 +247,9 @@ const openDocumentMark = ({
   };
 };
 
-// The legal formats' marks share one design: the format's page in its own
-// colour, with the format's tag drawn on it in white strokes, the way the
-// data-box mark letters "ZFO" on its envelope. A format added to the legal
+// The legal and converted formats' marks share one design: the format's page
+// in its own colour, with the format's tag drawn on it in white strokes, the
+// way the data-box mark letters "ZFO" on its envelope. A format added to a
 // registry gets its mark from a colour and a tag, never another's artwork.
 
 /**
@@ -264,14 +264,19 @@ const MARK_GLYPHS = {
   D: "0 0,2 0,3 1,3 3,2 4,0 4,0 0",
   E: "3 0,0 0,0 4,3 4|0 2,2.2 2",
   F: "3 0,0 0,0 4|0 2,2.2 2",
+  G: "3 0,0 0,0 4,3 4,3 2,1.5 2",
+  H: "0 0,0 4|3 0,3 4|0 2,3 2",
   I: "0.5 0,2.5 0|1.5 0,1.5 4|0.5 4,2.5 4",
   L: "0 0,0 4,3 4",
   M: "0 4,0 0,1.5 2,3 0,3 4",
+  N: "0 4,0 0,3 4,3 0",
   O: "0 0,3 0,3 4,0 4,0 0",
   P: "0 4,0 0,3 0,3 2,0 2",
+  R: "0 4,0 0,3 0,3 2,0 2|1.2 2,3 4",
   S: "3 0,0 0,0 2,3 2,3 4,0 4",
   T: "0 0,3 0|1.5 0,1.5 4",
   U: "0 0,0 4,3 4,3 0",
+  W: "0 0,0 4,1.5 2,3 4,3 0",
   X: "0 0,3 4|3 0,0 4",
   Z: "0 0,3 0,0 4,3 4",
   "3": "0 0,3 0,1.5 2,3 2,3 4,0 4",
@@ -340,7 +345,7 @@ const tagPath = (lines: readonly (readonly MarkGlyph[])[]) => {
   };
 };
 
-const legalFormatMark = ({
+const taggedFormatMark = ({
   color,
   lines,
 }: {
@@ -381,36 +386,51 @@ const legalFormatMark = ({
 };
 
 export const DOCUMENT_MARKS = {
-  ofd: legalFormatMark({ color: "#9a5b00", lines: [["O", "F", "D"]] }),
-  uyap: legalFormatMark({ color: "#b3261e", lines: [["U", "D", "F"]] }),
-  asicE: legalFormatMark({
+  ofd: taggedFormatMark({ color: "#9a5b00", lines: [["O", "F", "D"]] }),
+  uyap: taggedFormatMark({ color: "#b3261e", lines: [["U", "D", "F"]] }),
+  asicE: taggedFormatMark({
     color: "#2e6b4f",
     lines: [["A", "S", "I", "C"], ["E"]],
   }),
-  asicS: legalFormatMark({
+  asicS: taggedFormatMark({
     color: "#4f7a2e",
     lines: [["A", "S", "I", "C"], ["S"]],
   }),
-  bdoc: legalFormatMark({ color: "#0f6e7a", lines: [["B", "D", "O", "C"]] }),
-  cades: legalFormatMark({ color: "#6b4c9a", lines: [["P", "7", "M"]] }),
-  fatturaPA: legalFormatMark({ color: "#1d6f42", lines: [["F", "P", "A"]] }),
-  isdoc: legalFormatMark({
+  bdoc: taggedFormatMark({ color: "#0f6e7a", lines: [["B", "D", "O", "C"]] }),
+  cades: taggedFormatMark({ color: "#6b4c9a", lines: [["P", "7", "M"]] }),
+  fatturaPA: taggedFormatMark({ color: "#1d6f42", lines: [["F", "P", "A"]] }),
+  isdoc: taggedFormatMark({
     color: "#1f5fa8",
     lines: [["I", "S", "D", "O", "C"]],
   }),
-  isdocx: legalFormatMark({
+  isdocx: taggedFormatMark({
     color: "#2a4f8f",
     lines: [["I", "S", "D", "O", "C"], ["X"]],
   }),
-  xml: legalFormatMark({ color: "#5c6470", lines: [["X", "M", "L"]] }),
-  zip: legalFormatMark({ color: "#7a5c2e", lines: [["Z", "I", "P"]] }),
-  eAkta: legalFormatMark({ color: "#8c2f5d", lines: [["E", "S", "3"]] }),
-  et3: legalFormatMark({ color: "#a2481f", lines: [["E", "T", "3"]] }),
-  zep: legalFormatMark({ color: "#24529c", lines: [["Z", "E", "P"]] }),
-  xadesZep: legalFormatMark({
+  xml: taggedFormatMark({ color: "#5c6470", lines: [["X", "M", "L"]] }),
+  zip: taggedFormatMark({ color: "#7a5c2e", lines: [["Z", "I", "P"]] }),
+  eAkta: taggedFormatMark({ color: "#8c2f5d", lines: [["E", "S", "3"]] }),
+  et3: taggedFormatMark({ color: "#a2481f", lines: [["E", "T", "3"]] }),
+  zep: taggedFormatMark({ color: "#24529c", lines: [["Z", "E", "P"]] }),
+  xadesZep: taggedFormatMark({
     color: "#3d4f8f",
     lines: [["X", "Z", "E", "P"]],
   }),
+  wordPerfect: taggedFormatMark({ color: "#2f4f9e", lines: [["W", "P", "D"]] }),
+  works: taggedFormatMark({ color: "#4a6b8a", lines: [["W", "P", "S"]] }),
+  pages: taggedFormatMark({
+    color: "#c25400",
+    lines: [["P", "A", "G", "E", "S"]],
+  }),
+  numbers: taggedFormatMark({
+    color: "#2e7d32",
+    lines: [
+      ["N", "U", "M"],
+      ["B", "E", "R", "S"],
+    ],
+  }),
+  webArchive: taggedFormatMark({ color: "#00728f", lines: [["M", "H", "T"]] }),
+  epub: taggedFormatMark({ color: "#6b7a1c", lines: [["E", "P", "U", "B"]] }),
   dataBox: {
     viewBox: "0 0 24 24",
     gradients: [],
@@ -818,3 +838,7 @@ export const isDocumentMarkKind = (kind: string): kind is DocumentMarkKind =>
 
 /** What both renderers draw a mark from. */
 export type DocumentMarkContract = { kind: DocumentMarkKind };
+
+/** Every mark, so a registry can be checked to draw each one. */
+export const DOCUMENT_MARK_KINDS: readonly DocumentMarkKind[] =
+  Object.keys(DOCUMENT_MARKS).filter(isDocumentMarkKind);

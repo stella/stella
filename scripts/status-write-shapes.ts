@@ -19,6 +19,7 @@ import {
   type TemplateLiteral,
   walk,
 } from "../packages/scripts/src/syntax-tree.ts";
+import { parseSyntax } from "./parse-memo.ts";
 
 type Expression = OxcExpression | SpreadElement;
 
@@ -994,7 +995,7 @@ export const statusWriteCalls = ({
   file,
   columns,
 }: StatusWriteOptions): Node[] => {
-  const source = parseSource(file, content).program;
+  const source = parseSyntax({ fileName: file, text: content }).program;
   const inspector = mutationsFor(source);
   const { lifecycleKeys, mutationKeys } = tablesFor(columns, inspector);
   const { containsStatus, conflictSetWrites } = payloadsFor(

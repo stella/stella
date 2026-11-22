@@ -43,6 +43,7 @@ import {
   RecoverableViewerBoundary,
   type ViewerSurface,
 } from "@/components/viewer/recoverable-viewer-boundary";
+import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
 import { PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -68,6 +69,12 @@ const DataBoxFileViewer = lazy(async () => {
 const EInvoiceViewer = lazy(async () => {
   const m = await import("@/components/inspector/e-invoice-viewer");
   return { default: m.EInvoiceViewer };
+});
+
+const ManualRedactionPageLayer = lazy(async () => {
+  const m =
+    await import("@/components/pdf/manual-redaction/manual-redaction-page-layer");
+  return { default: m.ManualRedactionPageLayer };
 });
 
 const SignedDossierViewer = lazy(async () => {
@@ -456,6 +463,18 @@ const FileTabViewerComponent = ({
             onError={onViewerError}
             onPeekNavigate={closeAll}
             onWheelZoom={handlePdfWheelZoom}
+            pdfPageOverlay={
+              env.VITE_FEATURE_PDF_AREA_REDACTION
+                ? (pageId) => (
+                    <Suspense fallback={null}>
+                      <ManualRedactionPageLayer
+                        fieldId={tab.id}
+                        pageId={pageId}
+                      />
+                    </Suspense>
+                  )
+                : undefined
+            }
             scaleOffset={scaleOffset}
             viewId={peekPdfViewId}
             workspaceId={tab.workspaceId}

@@ -151,7 +151,9 @@ describe("a ZIP archive's files", () => {
       },
     ]);
     expect(files.map(({ fileName }) => fileName)).toEqual(["smlouva.pdf"]);
-    expect(files.at(0)?.folder?.length).toBe(1024);
+    // Cut at a shown name's bound, the whole name would end in a slash.
+    expect(`${folders}smlouva.pdf`.slice(0, 1024).endsWith("/")).toBe(true);
+    expect(files.at(0)?.folder).toBe(folders.slice(0, -1));
   });
 
   test("an archive of no files lists none", async () => {

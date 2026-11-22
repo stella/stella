@@ -1,4 +1,0 @@
-{
-  "kind": "support",
-  "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate."
-}
