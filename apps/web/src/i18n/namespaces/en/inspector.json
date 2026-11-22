@@ -545,6 +545,8 @@
     "closeTab": "Close <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
+      "noPreviewDecodingOff": "This server makes no previews of {format} images. Download the file to open it.",
+      "noPreviewUnreadable": "This {format} image can't be read for a preview. Download the file to open it.",
       "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
       "unsupportedField": "This document contains {fieldType}, which can't be converted.",
       "unsupportedReference": "This document refers to an external resource in {element} {attribute}, so it can't be converted."

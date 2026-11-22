@@ -155,6 +155,7 @@
     "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/fetch": "workspace:*",
+    "@stll/heic-decoder": "workspace:*",
     "@stll/folio-agents": "catalog:",
     "@stll/folio-core": "catalog:",
     "@stll/html": "workspace:*",

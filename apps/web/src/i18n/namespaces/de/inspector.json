@@ -545,6 +545,8 @@
     "closeTab": "<bdi>{name}</bdi> schließen",
     "conversionRefusal": {
       "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
+      "noPreviewDecodingOff": "Dieser Server erstellt keine Vorschauen von {format}-Bildern. Laden Sie die Datei herunter, um sie zu öffnen.",
+      "noPreviewUnreadable": "Dieses {format}-Bild kann für eine Vorschau nicht gelesen werden. Laden Sie die Datei herunter, um sie zu öffnen.",
       "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
       "unsupportedField": "Dieses Dokument enthält ein {fieldType}-Feld, das nicht konvertiert werden kann.",
       "unsupportedReference": "Dieses Dokument verweist in {element} {attribute} auf eine externe Ressource und kann daher nicht konvertiert werden."

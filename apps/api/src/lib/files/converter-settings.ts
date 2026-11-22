@@ -1,9 +1,17 @@
 import * as v from "valibot";
 
+import { featureFlagSchema } from "@/api/env-base-schema";
+
 export const converterSettingsSchema = {
   GOTENBERG_URL: v.pipe(v.string(), v.url()),
   GOTENBERG_USERNAME: v.string(),
   GOTENBERG_PASSWORD: v.string(),
+  /**
+   * Make previews of HEIC/HEIF photos by decoding them on this server, in
+   * the sandboxed PDF worker. Off, such a photo shows that it has no preview
+   * here and downloads as it was uploaded.
+   */
+  HEIC_PREVIEW_DECODING_ENABLED: featureFlagSchema,
 };
 
 export type ConverterSettings = v.InferOutput<

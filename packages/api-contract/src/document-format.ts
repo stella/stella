@@ -155,6 +155,19 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
     mimeTypes: ["image/webp"],
     extensions: [".webp"],
   },
+  // A sequence (a burst) previews as its first picture, like the still.
+  {
+    kind: "image",
+    label: "HEIC",
+    mimeTypes: ["image/heic", "image/heic-sequence"],
+    extensions: [".heic", ".heics"],
+  },
+  {
+    kind: "image",
+    label: "HEIF",
+    mimeTypes: ["image/heif", "image/heif-sequence"],
+    extensions: [".heif", ".heifs", ".hif"],
+  },
   ...[...CONVERTED_DOCUMENT_FORMATS, ...HTML_RENDERED_DOCUMENT_FORMATS].map(
     ({ label, mimeType, mimeAliases, extensions }): FormatEntry => ({
       kind: "file",
@@ -280,8 +293,8 @@ export const documentFormat = (
   if (media === "text/plain") {
     return formatOf(PLAIN_TEXT);
   }
-  // A type outside the table still names its family: an image/heic photo is
-  // an image, as an unlisted text/ type is text.
+  // A type outside the table still names its family: an image/avif picture
+  // is an image, as an unlisted text/ type is text.
   const label = extensionLabel(fileName);
   if (media.startsWith("image/")) {
     return { kind: "image", mark: "image", label };

@@ -14,6 +14,7 @@ import { readTiffPages } from "@/api/lib/files/tiff-pages";
 import { LIMITS } from "@/api/lib/limits";
 import {
   declaredPng,
+  heicFixture,
   splitBmp,
   splitGif,
   splitJpeg,
@@ -21,6 +22,7 @@ import {
   splitTiffPage,
   splitWebp,
   tiffFile,
+  withHeifRotation,
 } from "@/api/tests/helpers/image-fixtures";
 
 /** The first index of `needle` in `haystack`, or -1. */
@@ -182,6 +184,48 @@ describe("images rendered in-process", () => {
     const pages = await renderPages(await rendered("image/tiff", tiff));
     expect(pages).toHaveLength(1);
     expectSplit(pages[0]);
+  });
+
+  test("a HEIC photo becomes one page sized to the photo", async () => {
+    // 1100 x 700 px in 3 x 2 tiles is 825 x 525 pt.
+    const pages = await renderPages(
+      await rendered("image/heic", heicFixture("grid.heic")),
+    );
+    expect(pages).toHaveLength(1);
+    expect(pages[0]?.width).toBeCloseTo(825, 3);
+    expect(pages[0]?.height).toBeCloseTo(525, 3);
+  });
+
+  test("a rotated HEIC photo is shown upright", async () => {
+    const turned = withHeifRotation(heicFixture("grid.heic"), 1);
+    expect(readImageHeader(turned, "image/heic")?.orientation).toBe(8);
+    const [page] = await renderPages(await rendered("image/heic", turned));
+    expect(page?.width).toBeCloseTo(525, 3);
+    expect(page?.height).toBeCloseTo(825, 3);
+  });
+
+  test("a HEIC photo declaring more than the decode budget is too large", async () => {
+    const huge = heicFixture("grid.heic");
+    // The grid's ispe (version and flags, then 1100 and 700) declares
+    // 20000 x 20000 instead; the tiles are untouched.
+    const ispe = indexOfBytes(
+      huge,
+      Uint8Array.from([
+        ...new TextEncoder().encode("ispe"),
+        ...[0, 0, 0, 0, 0, 0, 0x04, 0x4c, 0, 0, 0x02, 0xbc],
+      ]),
+    );
+    expect(ispe).toBeGreaterThan(0);
+    const view = new DataView(huge.buffer, huge.byteOffset);
+    view.setUint32(ispe + 8, 20_000);
+    view.setUint32(ispe + 12, 20_000);
+    const result = await renderPdf("image/heic", huge);
+    expect(Result.isOk(result) && result.value.type).toBe("too-large");
+  });
+
+  test("a HEIC file whose pictures are cut off is refused", async () => {
+    const cut = heicFixture("grid.heic").subarray(0, 3000);
+    expect(Result.isError(await renderPdf("image/heic", cut))).toBe(true);
   });
 
   test("an image whose bitstream is garbage is refused", async () => {

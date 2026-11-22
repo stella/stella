@@ -545,6 +545,8 @@
     "closeTab": "Uždaryti <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Tai seno formato „{format}“ failas. Norėdami jį konvertuoti, iš naujo įrašykite kaip {replacementExtension}.",
+      "noPreviewDecodingOff": "Šis serveris nekuria „{format}“ vaizdų peržiūrų. Norėdami failą atidaryti, atsisiųskite jį.",
+      "noPreviewUnreadable": "Šio „{format}“ vaizdo nepavyksta nuskaityti peržiūrai. Norėdami failą atidaryti, atsisiųskite jį.",
       "unsupportedEncoding": "Šiame dokumente naudojama nepalaikoma {encoding} koduotė, todėl jo konvertuoti negalima.",
       "unsupportedField": "Šiame dokumente yra {fieldType} laukas, kurio konvertuoti negalima.",
       "unsupportedReference": "Šis dokumentas nurodo išorinį išteklių dalyje {element} {attribute}, todėl jo konvertuoti negalima."

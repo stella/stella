@@ -71,11 +71,29 @@ describe("documentFormat", () => {
     }
   });
 
+  test("names HEIC and HEIF photos and their sequences", () => {
+    for (const [mimeType, fileName, label] of [
+      ["image/heic", "IMG_0042.HEIC", "HEIC"],
+      ["image/heic-sequence", "IMG_0043.heics", "HEIC"],
+      ["image/heif", "photo.heif", "HEIF"],
+      ["image/heif-sequence", "burst.heifs", "HEIF"],
+      // Stored without a usable type, the extension names it.
+      ["application/octet-stream", "IMG_0044.heic", "HEIC"],
+      [null, "DSC0001.HIF", "HEIF"],
+    ] as const) {
+      expect(documentFormat(mimeType, fileName)).toEqual({
+        kind: "image",
+        mark: "image",
+        label,
+      });
+    }
+  });
+
   test("names an unlisted image or text type by its family", () => {
-    expect(documentFormat("image/heic", "IMG_0042.HEIC")).toEqual({
+    expect(documentFormat("image/avif", "picture.avif")).toEqual({
       kind: "image",
       mark: "image",
-      label: "HEIC",
+      label: "AVIF",
     });
     expect(kindOf("image/tiff")).toBe("image");
     expect(kindOf("text/html")).toBe("text");

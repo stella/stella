@@ -37,6 +37,7 @@ import {
 import {
   declaredPng,
   declaredSizePng,
+  heicFixture,
   sixteenBitPng,
   splitBmp,
   splitGif,
@@ -486,6 +487,74 @@ const convertWithConverterStub = async (
 /** The page count of a PDF conversion result. */
 const pageCountOf = async (buffer: ArrayBuffer) =>
   (await PDF.load(new Uint8Array(buffer))).getPageCount();
+
+describe("HEIC/HEIF photos", () => {
+  const noPreview = (cause: "decoding_off" | "unreadable", format = "HEIC") =>
+    ({ kind: "no_preview", format, cause }) as const;
+
+  const refusalOf = (
+    result: Awaited<ReturnType<typeof convertToPdf>>,
+  ): unknown =>
+    Result.isError(result) && result.error instanceof ConversionInputError
+      ? result.error.reason
+      : null;
+
+  test.each([
+    ["image/heic", "HEIC"],
+    ["image/heic-sequence", "HEIC"],
+    ["image/heif", "HEIF"],
+    ["image/heif-sequence", "HEIF"],
+  ] as const)(
+    "with decoding off, a %s file has no preview and nothing decodes it",
+    async (mimeType, format) => {
+      const { failures, result, urls } = await convertWithConverterStub(
+        async () =>
+          await convertToPdf(fileOf(heicFixture("grid.heic"), mimeType), {
+            heifDecoding: false,
+          }),
+      );
+
+      expect(urls).toEqual([]);
+      expect(failures).toEqual([]);
+      expect(refusalOf(result)).toEqual(noPreview("decoding_off", format));
+    },
+  );
+
+  test("with decoding on, a photo renders as one page in the worker", async () => {
+    const { failures, result, urls } = await convertWithConverterStub(
+      async () =>
+        await convertToPdf(fileOf(heicFixture("grid.heic"), "image/heic"), {
+          heifDecoding: true,
+        }),
+    );
+
+    expect(urls).toEqual([]);
+    expect(failures).toEqual([]);
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(await pageCountOf(result.value.buffer)).toBe(1);
+    }
+  });
+
+  test.each([
+    ["a container that cannot be read", new TextEncoder().encode("not HEIF")],
+    // The header reads; the tiles' pictures are cut off.
+    [
+      "pictures that cannot be read",
+      heicFixture("grid.heic").subarray(0, 3000),
+    ],
+  ] as const)("%s has no preview", async (_label, bytes) => {
+    const { result, urls } = await convertWithConverterStub(
+      async () =>
+        await convertToPdf(fileOf(bytes, "image/heic"), {
+          heifDecoding: true,
+        }),
+    );
+
+    expect(urls).toEqual([]);
+    expect(refusalOf(result)).toEqual(noPreview("unreadable"));
+  });
+});
 
 describe("images, plain text and CSV are rendered by stella, never the converter", () => {
   test.each([

@@ -426,7 +426,10 @@ const FileTabViewerComponent = ({
       case null:
         if (entity.conversionRefusal !== undefined) {
           return (
-            <ConversionRefusalFallback refusal={entity.conversionRefusal} />
+            <ConversionRefusalFallback
+              onDownload={handleDownload}
+              refusal={entity.conversionRefusal}
+            />
           );
         }
         return (

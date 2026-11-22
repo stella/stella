@@ -16,7 +16,12 @@ export type FileConversionRefusal =
       attribute: string;
     }
   | { kind: "unsupported_field"; fieldType: string }
-  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" };
+  | { kind: "legacy_format"; replacementExtension: ".xlsx" | ".pptx" }
+  | {
+      kind: "no_preview";
+      format: string;
+      cause: "decoding_off" | "unreadable";
+    };
 
 export type FieldContent =
   | {

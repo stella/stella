@@ -545,6 +545,8 @@
     "closeTab": "Zavřít <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší soubor {format}. Chcete-li jej převést, uložte jej znovu jako {replacementExtension}.",
+      "noPreviewDecodingOff": "Tento server nevytváří náhledy obrázků {format}. Chcete-li soubor otevřít, stáhněte si jej.",
+      "noPreviewUnreadable": "Tento obrázek {format} nelze pro náhled načíst. Chcete-li soubor otevřít, stáhněte si jej.",
       "unsupportedEncoding": "Tento dokument používá nepodporované kódování {encoding}, takže jej nelze převést.",
       "unsupportedField": "Tento dokument obsahuje pole {fieldType}, které nelze převést.",
       "unsupportedReference": "Tento dokument odkazuje na externí prostředek v {element} {attribute}, takže jej nelze převést."

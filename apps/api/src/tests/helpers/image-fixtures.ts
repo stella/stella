@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
 
 import type { ImageOrientation } from "@/api/lib/files/image-header";
@@ -433,3 +436,34 @@ export const splitTiffPage = (
   pixel: (x) => (x < width / 2 ? RED : BLUE),
   ...(orientation === undefined ? {} : { orientation }),
 });
+
+/**
+ * A synthetic HEIC photo made with the platform's own encoder (see the
+ * decoder package's `fixtures/README.md`): `grid.heic` (1100x700, a grid of
+ * 3x2 tiles), `single.heic` (96x64), `alpha.heic` (300x200, transparent
+ * corners) or `p3.heic` (as `alpha.heic`, Display P3).
+ */
+export const heicFixture = (
+  name: "alpha.heic" | "grid.heic" | "p3.heic" | "single.heic",
+): Uint8Array =>
+  new Uint8Array(
+    readFileSync(
+      fileURLToPath(import.meta.resolve(`@stll/heic-decoder/fixtures/${name}`)),
+    ),
+  );
+
+/** `bytes` with the first `irot` property set to `quarterTurns` anticlockwise. */
+export const withHeifRotation = (
+  bytes: Uint8Array,
+  quarterTurns: 0 | 1 | 2 | 3,
+): Uint8Array => {
+  const copy = bytes.slice();
+  const name = new TextEncoder().encode("irot");
+  for (let offset = 4; offset + 4 < copy.length; offset += 1) {
+    if (name.every((byte, index) => copy[offset + index] === byte)) {
+      copy[offset + 4] = quarterTurns;
+      return copy;
+    }
+  }
+  return panic("The HEIF fixture has no irot property");
+};
