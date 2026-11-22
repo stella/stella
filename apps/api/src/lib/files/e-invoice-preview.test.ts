@@ -207,6 +207,9 @@ describe("structured invoice files", () => {
         storedFile(bytes, XML_FILE_FORMAT.mimeType, "IT00000000001_00003.xml"),
       )
     ).unwrap();
+    if (preview.invoice === null) {
+      throw new Error("The signed invoice did not preview");
+    }
     expect(unsigned).toEqual({ type: "invoice", invoice: preview.invoice });
   });
 
