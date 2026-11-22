@@ -305,6 +305,7 @@ export const readFileHandler = async ({
     });
     markContentDeliveryIntent();
     return {
+      kind: "file" as const,
       fileId: delivery.fileId,
       mimeType: delivery.mimeType,
       originalMimeType: delivery.originalMimeType,
@@ -341,6 +342,7 @@ export const readFilePartUrlHandler = async ({
 }: ReadFileHandlerProps & { part: FilePart }): Promise<
   Result<
     {
+      kind: "part";
       fileName: string;
       mimeType: string;
       originalMimeType: string;
@@ -388,6 +390,7 @@ export const readFilePartUrlHandler = async ({
   });
   markContentDeliveryIntent();
   return Result.ok({
+    kind: "part",
     fileName: read.value.fileName,
     mimeType: read.value.mimeType,
     originalMimeType: read.value.mimeType,

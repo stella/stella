@@ -149,6 +149,10 @@ export const fileOptions = (props: FileOptionsProps) =>
           });
 
         const data = unwrapApiResponse(response);
+        // Without a `part` the endpoint answers with the file itself.
+        if (data.kind !== "file") {
+          throw new APIError({ status: 502, message: "Expected a file link" });
+        }
 
         const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
           signal,
@@ -428,6 +432,10 @@ export const textFileOptions = (props: FileOptionsProps) =>
           });
 
         const data = unwrapApiResponse(response);
+        // Without a `part` the endpoint answers with the file itself.
+        if (data.kind !== "file") {
+          throw new APIError({ status: 502, message: "Expected a file link" });
+        }
 
         const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
           signal,
