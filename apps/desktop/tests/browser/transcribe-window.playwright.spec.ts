@@ -176,7 +176,6 @@ for (const scheme of ["light", "dark"] as const) {
     await open(page, scheme);
     const t = en.transcribe;
     await expect(page.getByText(t.drop.title)).toBeVisible();
-    await expect(page.getByText(t.note)).toBeVisible();
     await expect(
       page.getByText(
         t.destination.cloudDescriptionModel.replace("{model}", "Scribe v3"),

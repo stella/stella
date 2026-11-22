@@ -79,11 +79,7 @@ import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { SettingsPageHeader } from "./settings-layout";
-import {
-  isAgentSettingsFocus,
-  isSettingsPage,
-  SETTINGS_PAGES,
-} from "./settings-pages";
+import { SETTINGS_PAGES, settingsView } from "./settings-pages";
 import type { SettingsPage } from "./settings-pages";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { ShortcutSetting } from "./ShortcutSetting";
@@ -122,9 +118,10 @@ const reportSubscriptionFailure = () => {
   });
 };
 
-const getInitialPage = (): SettingsPage => {
-  const page = window.location.hash.replace(/^#/u, "");
-  return isSettingsPage(page) ? page : "general";
+/** The view a new window was opened for: `#tab` or `#tab/focus`. */
+const getInitialView = () => {
+  const [tab, focus] = window.location.hash.replace(/^#/u, "").split("/");
+  return settingsView({ tab, focus });
 };
 
 /** The permissions the Permissions page lists; open at login is an app
@@ -858,12 +855,16 @@ const App = () => {
   const accountGeneration = useRef(0);
   const snapshotGeneration = useRef(0);
   const snapshotRefresh = useRef<() => void>(() => undefined);
-  const [activePage, setActivePage] = useState<SettingsPage>(getInitialPage);
-  const [agentSettingsFocus, setAgentSettingsFocus] =
-    useState<AgentSettingsFocus | null>(null);
-  const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
-    null,
+  const [initialView] = useState(getInitialView);
+  const [activePage, setActivePage] = useState<SettingsPage>(
+    initialView?.page ?? "general",
   );
+  const [agentSettingsFocus, setAgentSettingsFocus] =
+    useState<AgentSettingsFocus | null>(initialView?.agentFocus ?? null);
+  const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
+    initialView?.dictationFocus ?? null,
+  );
+  const initialUpdateCheck = useRef(initialView?.checkForUpdates ?? false);
   // The tray's "Check for updates" opens About and runs the check there, so
   // its answer shows in the window rather than in a notification the system
   // may not show.
@@ -924,24 +925,26 @@ const App = () => {
       subscribeDesktopEvent<{ tab: string; focus?: unknown }>({
         event: "activate-tab",
         handler: (event) => {
-          const { tab: nextPage, focus } = event.payload;
-          if (!isSettingsPage(nextPage)) {
+          const view = settingsView(event.payload);
+          if (view === null) {
             return;
           }
-          setActivePage(nextPage);
+          setActivePage(view.page);
           // A focus belongs to the link that sent it; any other opening
           // drops one still waiting for its card.
-          setAgentSettingsFocus(
-            nextPage === "agents" && isAgentSettingsFocus(focus) ? focus : null,
-          );
-          setDictationFocus(
-            nextPage === "dictation" && focus === "microphone" ? focus : null,
-          );
-          if (nextPage === "about" && focus === "update-check") {
+          setAgentSettingsFocus(view.agentFocus);
+          setDictationFocus(view.dictationFocus);
+          if (view.checkForUpdates) {
             runRequestedUpdateCheck();
           }
         },
         onError: reportSubscriptionFailure,
+        onSubscribed: () => {
+          if (initialUpdateCheck.current) {
+            initialUpdateCheck.current = false;
+            runRequestedUpdateCheck();
+          }
+        },
       }),
     [],
   );

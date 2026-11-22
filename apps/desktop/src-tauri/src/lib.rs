@@ -718,22 +718,40 @@ pub(crate) enum SettingsView {
 }
 
 impl SettingsView {
-  /// The `activate-tab` event the window reads.
-  fn event_payload(self) -> serde_json::Value {
+  const fn tab(self) -> PreferencesTab {
     match self {
-      Self::Tab(tab) => serde_json::json!({ "tab": tab.id() }),
-      Self::Agents(focus) => serde_json::json!({
-        "tab": PreferencesTab::Agents.id(),
-        "focus": focus.id(),
-      }),
-      Self::Microphone => serde_json::json!({
-        "tab": PreferencesTab::Dictation.id(),
-        "focus": "microphone",
-      }),
-      Self::UpdateCheck => serde_json::json!({
-        "tab": PreferencesTab::About.id(),
-        "focus": "update-check",
-      }),
+      Self::Tab(tab) => tab,
+      Self::Agents(_) => PreferencesTab::Agents,
+      Self::Microphone => PreferencesTab::Dictation,
+      Self::UpdateCheck => PreferencesTab::About,
+    }
+  }
+
+  const fn focus(self) -> Option<&'static str> {
+    match self {
+      Self::Tab(_) => None,
+      Self::Agents(focus) => Some(focus.id()),
+      Self::Microphone => Some("microphone"),
+      Self::UpdateCheck => Some("update-check"),
+    }
+  }
+
+  /// The `activate-tab` event an open window reads.
+  fn event_payload(self) -> serde_json::Value {
+    let tab = self.tab().id();
+    match self.focus() {
+      Some(focus) => serde_json::json!({ "tab": tab, "focus": focus }),
+      None => serde_json::json!({ "tab": tab }),
+    }
+  }
+
+  /// The page a new window loads. The fragment names the view, so it is there
+  /// however long the window takes to start listening for events.
+  fn page(self) -> String {
+    let tab = self.tab().id();
+    match self.focus() {
+      Some(focus) => format!("index.html#{tab}/{focus}"),
+      None => format!("index.html#{tab}"),
     }
   }
 }
@@ -747,18 +765,17 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
   #[cfg(target_os = "macos")]
   best_effort(handle.show(), "app could not be shown");
 
-  let payload = view.event_payload();
   if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
     best_effort(window.show(), "settings window could not be shown");
     best_effort(window.set_focus(), "settings window could not be focused");
     best_effort(
-      handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
+      handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", view.event_payload()),
       "settings tab change was not announced",
     );
     return;
   }
 
-  let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, "index.html")
+  let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, view.page())
     .title("stella desktop")
     .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
     .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
@@ -787,15 +804,6 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
           feature_access::refresh_now();
         }
       });
-      // Emit tab activation after a short delay to let the webview load
-      let handle = handle.clone();
-      tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        best_effort(
-          handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
-          "tab activation was not announced",
-        );
-      });
     }
     Err(e) => {
       tracing::error!(error = %e, "failed to create settings window");
@@ -805,7 +813,7 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
 
 #[cfg(test)]
 mod preferences_tab_tests {
-  use super::{AgentSettingsFocus, PreferencesTab};
+  use super::{AgentSettingsFocus, PreferencesTab, SettingsView};
 
   /// The ids in one `const NAME = [...]` array literal of `settings-pages.ts`.
   fn declared(name: &str) -> &'static str {
@@ -817,6 +825,18 @@ mod preferences_tab_tests {
       .split_once(']')
       .expect("the array is one array literal")
       .0
+  }
+
+  #[test]
+  fn a_new_window_loads_the_view_it_was_opened_for() {
+    assert_eq!(
+      SettingsView::Tab(PreferencesTab::General).page(),
+      "index.html#general"
+    );
+    assert_eq!(
+      SettingsView::UpdateCheck.page(),
+      "index.html#about/update-check"
+    );
   }
 
   #[test]

@@ -270,6 +270,20 @@ test("the tray's update check opens About and answers there", async () => {
   );
 });
 
+test("a window opened for the update check runs it once", async () => {
+  window.location.hash = "#about/update-check";
+  const { commands, findByText, nav } = await renderApp({});
+
+  expect(currentEntries(nav)).toEqual([{ current: "page", name: pages.about }]);
+  expect(
+    await findByText(defaultMessages.settings.updates.upToDate),
+  ).toBeTruthy();
+  expect(commands.filter((command) => command === "check_for_updates")).toEqual(
+    ["check_for_updates"],
+  );
+  expect(window.location.hash).toBe("#about");
+});
+
 test("About never names a preview build while the version loads", async () => {
   const { entry, queryByText } = await renderApp({ snapshot: "pending" });
 
