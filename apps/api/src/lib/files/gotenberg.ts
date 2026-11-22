@@ -8,7 +8,7 @@ import {
   type HtmlRenderedDocumentMimeType,
   isConvertedDocumentMimeType,
 } from "@stll/api-contract/converted-document-formats";
-import { declareFingerprintFields } from "@stll/errors";
+import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readCappedBytes } from "@stll/skills/streaming";
 
@@ -108,6 +108,11 @@ export class PdfRenderError extends TaggedError("PdfRenderError")<{
 }> {
   static {
     declareFingerprintFields(this, ["reason"]);
+    // A file the decoders refuse, or that renders past the size limit, is
+    // the file's answer, not a defect; a worker that did not finish is.
+    declareFailureClass(this, ({ reason }) =>
+      reason === "failed" ? "tagged_failure" : "file_preview_unrenderable",
+    );
   }
 }
 

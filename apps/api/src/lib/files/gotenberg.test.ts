@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
+import { failureGradeOf, readFailureBrand } from "@stll/errors";
 
 import {
   DERIVATIVE_REFUSAL,
@@ -574,6 +575,17 @@ describe("images, plain text and CSV are rendered by stella, never the converter
     expect(failures).toEqual([EMBED_FAILED_EVENT, RENDER_FAILED_EVENT]);
     expect(urls).toEqual([]);
     expect(Result.isError(result)).toBe(true);
+  });
+
+  test("a refusal grades as the file's answer, a worker failure as a defect", () => {
+    const grade = (reason: PdfRenderError["reason"]) =>
+      failureGradeOf(
+        readFailureBrand(new PdfRenderError({ message: "render", reason }))
+          ?.reason ?? "tagged_failure",
+      );
+    expect(grade("unreadable")).toBe("anticipated");
+    expect(grade("too-large")).toBe("anticipated");
+    expect(grade("failed")).toBe("defect");
   });
 
   test("a refusal is the same answer on every attempt", async () => {
