@@ -21,6 +21,7 @@ import {
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
 import { toSafeId } from "@/lib/safe-id";
+import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
@@ -75,6 +76,7 @@ export const useCreateWorkspace = () => {
 
 type WorkspaceUpdateValueByType = {
   color: string | null;
+  documentNamingEnabled: boolean;
   leadUserId: string | null;
   name: string;
   reference: string;
@@ -96,6 +98,7 @@ type WorkspaceUpdateRefreshScope = "query-cache" | "route-metadata";
 const WORKSPACE_UPDATE_REFRESH_SCOPE = {
   clientId: "query-cache",
   color: "query-cache",
+  documentNamingEnabled: "query-cache",
   leadUserId: "query-cache",
   name: "route-metadata",
   reference: "query-cache",
@@ -124,6 +127,8 @@ export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
       };
     case "color":
       return { color: update.value };
+    case "documentNamingEnabled":
+      return { documentNamingEnabled: update.value };
     case "leadUserId":
       return { leadUserId: update.value };
     case "name":
@@ -155,7 +160,9 @@ export const useUpdateWorkspace = () => {
   const queryClient = useQueryClient();
   const router = useRouter();
 
-  return useMutation({
+  const writeUpdate = resourceMutation({
+    mutation: "updateWorkspace",
+    queryClient,
     mutationFn: async ({ update, workspaceId }: UpdateWorkspaceVars) => {
       const response = await api
         .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
@@ -165,6 +172,10 @@ export const useUpdateWorkspace = () => {
         throw toAPIError(response.error);
       }
     },
+  });
+
+  return useMutation({
+    mutationFn: writeUpdate,
     onSuccess: async (_data, variables) => {
       const { workspaceId } = variables;
       await Promise.all(

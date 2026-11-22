@@ -566,6 +566,7 @@
       "download": "Baixar {fileName}",
       "noFilesInside": "Não há arquivos dentro.",
       "noPreview": "Este tipo de arquivo não tem pré-visualização. Baixe-o ou salve-o em um caso.",
+      "notConverted": "Não foi possível converter este arquivo para pré-visualização. Baixe-o ou salve-o em um caso.",
       "open": "Abrir {fileName}",
       "unavailable": {
         "encrypted": "Protegido por senha, não pode ser aberto",

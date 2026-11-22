@@ -566,6 +566,7 @@
       "download": "Stiahnuť {fileName}",
       "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
       "noPreview": "Tento typ súboru nemá náhľad. Stiahnite si ho alebo ho uložte do spisu.",
+      "notConverted": "Tento súbor sa nepodarilo previesť na náhľad. Stiahnite si ho alebo ho uložte do spisu.",
       "open": "Otvoriť {fileName}",
       "unavailable": {
         "encrypted": "Chránené heslom, nedá sa otvoriť",

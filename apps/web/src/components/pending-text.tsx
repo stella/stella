@@ -378,6 +378,7 @@ type PendingTextMessageKey =
   | "organization.aiConfig.replaceKey"
   | "organization.aiInstructions.description"
   | "organization.aiInstructions.title"
+  | "organization.documentNaming.pattern"
   | "organization.invitations.expires"
   | "organization.invitations.invited"
   | "organization.matterNumber.nextPreview"

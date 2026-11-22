@@ -566,6 +566,7 @@
       "download": "{fileName} herunterladen",
       "noFilesInside": "Darin sind keine Dateien.",
       "noPreview": "Für diesen Dateityp gibt es keine Vorschau. Laden Sie die Datei herunter oder speichern Sie sie in einer Akte.",
+      "notConverted": "Diese Datei konnte nicht für die Vorschau umgewandelt werden. Laden Sie sie herunter oder speichern Sie sie in einer Akte.",
       "open": "{fileName} öffnen",
       "unavailable": {
         "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",

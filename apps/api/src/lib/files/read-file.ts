@@ -28,7 +28,11 @@ import {
   createFileContentGrant,
   type FileContentPurpose,
 } from "@/api/lib/files/file-content-grant";
-import { readFilePart } from "@/api/lib/files/file-part";
+import { type FilePartRead, readFilePart } from "@/api/lib/files/file-part";
+import {
+  filePartDisplayIdentity,
+  filePartForDisplay,
+} from "@/api/lib/files/file-part-rendition";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
 import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { openWithinDeadline } from "@/api/lib/files/storage-open-deadline";
@@ -392,10 +396,15 @@ export const readFilePartUrlHandler = async ({
     workspaceId,
   });
   markContentDeliveryIntent();
+  // A display names what the grant delivers: a converted type's PDF.
+  const delivered =
+    partDisposition(purpose) === "inline"
+      ? filePartDisplayIdentity(read.value)
+      : read.value;
   return Result.ok({
     kind: "part",
-    fileName: read.value.fileName,
-    mimeType: read.value.mimeType,
+    fileName: delivered.fileName,
+    mimeType: delivered.mimeType,
     originalMimeType: read.value.mimeType,
     presignedUrl: fileContentGrantUrl(grant),
     stampable: false,
@@ -428,9 +437,17 @@ export const readFilePartContentHandler = async ({
   if (read.isErr()) {
     return Result.err(read.error);
   }
-  const { bytes, fileName, mimeType } = read.value;
   const disposition = partDisposition(purpose);
-  // A display shows a text part's head only; a download is always whole.
+  // A display shows a converted document as its PDF and a text part's head
+  // only; a download is always the whole part.
+  const shown =
+    disposition === "inline"
+      ? await filePartForDisplay(read.value)
+      : Result.ok<FilePartRead, HandlerError>(read.value);
+  if (shown.isErr()) {
+    return Result.err(shown.error);
+  }
+  const { bytes, fileName, mimeType } = shown.value;
   const body =
     disposition === "inline" ? filePartInlineBytes(bytes, mimeType) : bytes;
   return Result.ok(

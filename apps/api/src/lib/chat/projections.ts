@@ -2867,6 +2867,7 @@ export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   matterNumberingEnabled: v.optional(v.boolean()),
+  documentNamePattern: v.optional(v.nullable(v.string())),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),

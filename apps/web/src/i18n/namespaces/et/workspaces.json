@@ -552,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Kas olete kindel, et soovite selle toimiku kustutada? Seda toimingut ei saa tagasi võtta.",
     "deletedItem": "Kustutatud: {name}",
     "deletingWorkspace": "Toimiku kustutamine",
+    "documentNaming": {
+      "description": "Uued dokumendid saavad organisatsiooni nimemustri: {pattern}",
+      "label": "Nimeta uued üleslaadimised ümber"
+    },
     "documentSwitcher": {
       "download": "Laadi see fail alla",
       "renditionsFailed": "Laadige dokument uuesti ja proovige see uuesti alla laadida.",

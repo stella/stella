@@ -566,6 +566,7 @@
       "download": "Descargar {fileName}",
       "noFilesInside": "No contiene ningún archivo.",
       "noPreview": "Este tipo de archivo no tiene vista previa. Descárguelo o guárdelo en un asunto.",
+      "notConverted": "No se pudo convertir este archivo para la vista previa. Descárguelo o guárdelo en un asunto.",
       "open": "Abrir {fileName}",
       "unavailable": {
         "encrypted": "Protegido con contraseña, no se puede abrir",

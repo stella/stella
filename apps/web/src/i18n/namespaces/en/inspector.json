@@ -566,6 +566,7 @@
       "download": "Download {fileName}",
       "noFilesInside": "There are no files inside.",
       "noPreview": "This file type has no preview. Download it or save it to a matter.",
+      "notConverted": "This file couldn't be converted for preview. Download it or save it to a matter.",
       "open": "Open {fileName}",
       "unavailable": {
         "encrypted": "Password-protected, can’t be opened",

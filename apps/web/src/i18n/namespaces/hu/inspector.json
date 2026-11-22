@@ -566,6 +566,7 @@
       "download": "{fileName} letöltése",
       "noFilesInside": "Nincsenek benne fájlok.",
       "noPreview": "Ehhez a fájltípushoz nincs előnézet. Töltse le, vagy mentse egy ügybe.",
+      "notConverted": "Ezt a fájlt nem sikerült átalakítani az előnézethez. Töltse le, vagy mentse egy ügybe.",
       "open": "{fileName} megnyitása",
       "unavailable": {
         "encrypted": "Jelszóval védett, nem nyitható meg",

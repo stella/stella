@@ -566,6 +566,7 @@
       "download": "Télécharger {fileName}",
       "noFilesInside": "Aucun fichier à l’intérieur.",
       "noPreview": "Ce type de fichier n’a pas d’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
+      "notConverted": "Ce fichier n’a pas pu être converti pour l’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
       "open": "Ouvrir {fileName}",
       "unavailable": {
         "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
