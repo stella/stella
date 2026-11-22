@@ -15,7 +15,7 @@
 import { panic, Result, TaggedError, UnhandledException } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { declareFingerprintFields } from "@stll/errors";
+import { classifyFailure, declareFingerprintFields } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
@@ -88,6 +88,8 @@ export type ChatCompactorOutcome =
 type ChatThreadCompactorOptions = {
   /** Test seam at the final current-authority check. */
   beforeDispatchAuthorization?: (() => Promise<void>) | undefined;
+  /** Budget for one thread's run once it is admitted. */
+  compactionTimeoutMs?: number;
   /** The RLS connection the owner's reads and writes run on. Tests inject
    *  their database; production uses the application connection. */
   database?: RlsDatabase<Transaction>;
@@ -98,6 +100,7 @@ type ChatThreadCompactorOptions = {
 export const createChatThreadCompactor =
   ({
     beforeDispatchAuthorization,
+    compactionTimeoutMs = COMPACTION_TIMEOUT_MS,
     database,
     withStoredContentEgress = withThreadStoredContentEgress,
   }: ChatThreadCompactorOptions = {}): SchedulerTask =>
@@ -105,6 +108,7 @@ export const createChatThreadCompactor =
     await drainCompactionQueue({
       ...context,
       beforeDispatchAuthorization,
+      compactionTimeoutMs,
       database,
       withStoredContentEgress,
     });
@@ -116,12 +120,14 @@ type DrainCompactionQueueOptions = Pick<
   "db" | "logger" | "signal"
 > & {
   beforeDispatchAuthorization: (() => Promise<void>) | undefined;
+  compactionTimeoutMs: number;
   database: RlsDatabase<Transaction> | undefined;
   withStoredContentEgress: WithThreadStoredContentEgress;
 };
 
 const drainCompactionQueue = async ({
   beforeDispatchAuthorization,
+  compactionTimeoutMs,
   database,
   db,
   logger,
@@ -148,6 +154,7 @@ const drainCompactionQueue = async ({
 
     const outcome = await compactThread({
       beforeDispatchAuthorization,
+      compactionTimeoutMs,
       database,
       db,
       signal,
@@ -308,6 +315,7 @@ export const settlementForOutcome = (
 
 type CompactThreadOptions = {
   beforeDispatchAuthorization: (() => Promise<void>) | undefined;
+  compactionTimeoutMs: number;
   database: RlsDatabase<Transaction> | undefined;
   db: SchedulerDb;
   signal: AbortSignal;
@@ -322,6 +330,7 @@ type CompactThreadResult = Result<
 
 const compactThread = async ({
   beforeDispatchAuthorization,
+  compactionTimeoutMs,
   database,
   db,
   signal,
@@ -386,45 +395,47 @@ const compactThread = async ({
         organizationId: thread.organizationId,
         modelTier: admission.modelTier,
       });
-      return await runChatThreadCompaction({
-        abortSignal: AbortSignal.any([
-          AbortSignal.timeout(COMPACTION_TIMEOUT_MS),
-          signal,
-          leaseSignal,
-        ]),
-        admission,
-        analytics: createTanStackAIAnalyticsCallbacks({
-          dataClass: "customer",
-          feature: "chat.thread_compaction",
-          modelTask: "chat",
-          orgAIConfig,
-          modelTier: admission.modelTier,
-          properties: { organization_id: thread.organizationId },
-          sessionId: thread.threadId,
-          traceId: Bun.randomUUIDv7(),
-          usageMetering: {
-            actionType: "background",
+      const deadline = AbortSignal.timeout(compactionTimeoutMs);
+      return await withCompactionDeadline(
+        deadline,
+        thread,
+        async () =>
+          await runChatThreadCompaction({
+            abortSignal: AbortSignal.any([deadline, signal, leaseSignal]),
+            admission,
+            analytics: createTanStackAIAnalyticsCallbacks({
+              dataClass: "customer",
+              feature: "chat.thread_compaction",
+              modelTask: "chat",
+              orgAIConfig,
+              modelTier: admission.modelTier,
+              properties: { organization_id: thread.organizationId },
+              sessionId: thread.threadId,
+              traceId: Bun.randomUUIDv7(),
+              usageMetering: {
+                actionType: "background",
+                organizationId: thread.organizationId,
+                // Usage already incurred is recorded even if the owner has just
+                // left; reads and the checkpoint write hold the owner's access.
+                safeDb: memberDb,
+                serviceTier: "batch",
+                userId: thread.userId,
+                workspaceId: null,
+              },
+            }),
+            beforeDispatchAuthorization,
+            modelId: thread.chatModel ?? undefined,
+            orgAIConfig,
+            managedAIResidency,
             organizationId: thread.organizationId,
-            // Usage already incurred is recorded even if the owner has just
-            // left; reads and the checkpoint write hold the owner's access.
-            safeDb: memberDb,
-            serviceTier: "batch",
+            preserveTokens,
+            safeDb,
+            threadId: thread.threadId,
+            triggerTokens,
             userId: thread.userId,
-            workspaceId: null,
-          },
-        }),
-        beforeDispatchAuthorization,
-        modelId: thread.chatModel ?? undefined,
-        orgAIConfig,
-        managedAIResidency,
-        organizationId: thread.organizationId,
-        preserveTokens,
-        safeDb,
-        threadId: thread.threadId,
-        triggerTokens,
-        userId: thread.userId,
-        withStoredContentEgress,
-      });
+            withStoredContentEgress,
+          }),
+      );
     },
   });
   if (Result.isError(admitted)) {
@@ -442,6 +453,34 @@ const compactThread = async ({
     return lost === null ? Result.err(compacted.error) : Result.ok(lost);
   }
   return compacted;
+};
+
+/**
+ * The run's own budget ending is a deadline outcome: the thread stays queued
+ * and is retried. Any other rejection propagates unchanged.
+ */
+const withCompactionDeadline = async <T, E>(
+  deadline: AbortSignal,
+  thread: QueuedCompactionThread,
+  run: () => Promise<Result<T, E>>,
+): Promise<Result<T, E | ChatCompactionError>> => {
+  try {
+    return await run();
+  } catch (error) {
+    if (!deadline.aborted) {
+      throw error;
+    }
+    return Result.err(
+      classifyFailure(
+        new ChatCompactionError({
+          cause: error,
+          message: "chat compaction exceeded its deadline",
+          threadId: thread.threadId,
+        }),
+        "work_deadline_exceeded",
+      ),
+    );
+  }
 };
 
 /** Reported, as the cause of an `UnhandledException` like any other aborted
