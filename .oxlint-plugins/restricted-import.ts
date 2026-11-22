@@ -94,11 +94,52 @@ type RestrictedImportEntry = {
   owners: readonly string[];
 };
 
+const BARE_PACKAGE_NEEDLES = new WeakMap<
+  ModuleMatcher & ((id: string) => boolean),
+  string
+>();
+
 // A bare package and every subpath of it (`nanoid`, `nanoid/non-secure`).
-const packageWithSubpaths =
-  (name: string) =>
-  (moduleId: string): boolean =>
+const packageWithSubpaths = (name: string) => {
+  const matcher = (moduleId: string): boolean =>
     moduleId === name || moduleId.startsWith(`${name}/`);
+  BARE_PACKAGE_NEEDLES.set(matcher, name);
+  return matcher;
+};
+
+const REPO_PATH_PREFIX = /^(?:apps|packages|scripts|\.)\//u;
+
+const barePackageNeedleFor = (matcher: ModuleMatcher): string | null => {
+  if (typeof matcher === "string") {
+    return REPO_PATH_PREFIX.test(matcher) ? null : matcher;
+  }
+  return BARE_PACKAGE_NEEDLES.get(matcher) ?? null;
+};
+
+const entryCanMatchSource = (
+  entry: RestrictedImportEntry,
+  text: string,
+): boolean => {
+  if (text.includes("\\")) {
+    return true;
+  }
+  if (
+    entry.restriction.type === "module" &&
+    entry.restriction.dynamicImports === DYNAMIC_IMPORTS.readableOnly &&
+    text.includes("import")
+  ) {
+    return true;
+  }
+  const needles: string[] = [];
+  for (const matcher of entry.modules) {
+    const needle = barePackageNeedleFor(matcher);
+    if (needle === null) {
+      return true;
+    }
+    needles.push(needle);
+  }
+  return needles.some((needle) => text.includes(needle));
+};
 
 // lucide exports every glyph as `X`, `XIcon` and `LucideX`.
 const lucideGlyphNames = (glyphs: readonly string[]): ReadonlySet<string> =>
@@ -866,6 +907,50 @@ type RestrictedImportOptions = {
   rollout?: string | undefined;
 };
 
+const attachExportVisitors = (
+  visitors: VisitorWithHooks,
+  context: Context,
+  reportExport: (
+    node: Ranged,
+    resolved: ResolvedImport | null,
+    hit: ExportHit,
+  ) => void,
+): void => {
+  // `ns.X`, `ns["X"]`, `require("m").X`, `(await import("m")).X`.
+  visitors.MemberExpression = (node) => {
+    reportExport(node, exportOfExpression(context, node), EXPORT_HIT.binding);
+  };
+  visitors.JSXMemberExpression = (node) => {
+    reportExport(node, exportOfJsxMember(context, node), EXPORT_HIT.binding);
+  };
+  // `const { X } = ns`, `const { X } = await import("m")`.
+  visitors.VariableDeclarator = (node) => {
+    if (!isAstNode(node.id) || node.id.type !== "ObjectPattern") {
+      return;
+    }
+    const base = exportOfExpression(context, node.init);
+    if (base === null || !isNamespaceLike(base)) {
+      return;
+    }
+    for (const property of node.id.properties) {
+      if (!isAstNode(property) || property.type !== "Property") {
+        continue;
+      }
+      const key =
+        property.computed && !isStringLiteral(property.key)
+          ? null
+          : getPropertyName(property.key);
+      if (key !== null) {
+        reportExport(
+          property,
+          { moduleId: base.moduleId, imported: key },
+          EXPORT_HIT.binding,
+        );
+      }
+    }
+  };
+};
+
 export const restrictedImportVisitors = (
   context: Context,
   ruleName: RestrictedImportRuleName,
@@ -989,9 +1074,25 @@ export const restrictedImportVisitors = (
     }
   };
 
-  return {
+  const hasExports = entries.some(
+    (entry) => entry.restriction.type === "exports",
+  );
+  const hasModule = entries.some(
+    (entry) => entry.restriction.type === "module",
+  );
+  const hasCallHit = entries.some(
+    (entry) =>
+      entry.restriction.type === "exports" &&
+      entry.restriction.hit === EXPORT_HIT.call,
+  );
+
+  const visitors: VisitorWithHooks = {
     before() {
-      active = entries.filter((entry) => !isFileIn(context, entry.owners));
+      const text = context.sourceCode.text;
+      active = entries.filter(
+        (entry) =>
+          !isFileIn(context, entry.owners) && entryCanMatchSource(entry, text),
+      );
       return active.length > 0;
     },
     ImportDeclaration(node) {
@@ -1026,52 +1127,32 @@ export const restrictedImportVisitors = (
         }
       }
     },
-    CallExpression(node) {
-      const required = dynamicModuleSourceForEnforcement(node, context);
-      if (required !== null) {
-        reportModuleLoad(node, required, MODULE_LOADING.static);
-        return;
-      }
-      reportExport(
-        node,
-        isAstNode(node)
-          ? exportOfExpression(context, invokedCallee(node))
-          : null,
-        EXPORT_HIT.call,
-      );
-    },
-    // `ns.X`, `ns["X"]`, `require("m").X`, `(await import("m")).X`.
-    MemberExpression(node) {
-      reportExport(node, exportOfExpression(context, node), EXPORT_HIT.binding);
-    },
-    JSXMemberExpression(node) {
-      reportExport(node, exportOfJsxMember(context, node), EXPORT_HIT.binding);
-    },
-    // `const { X } = ns`, `const { X } = await import("m")`.
-    VariableDeclarator(node) {
-      if (!isAstNode(node.id) || node.id.type !== "ObjectPattern") {
-        return;
-      }
-      const base = exportOfExpression(context, node.init);
-      if (base === null || !isNamespaceLike(base)) {
-        return;
-      }
-      for (const property of node.id.properties) {
-        if (!isAstNode(property) || property.type !== "Property") {
-          continue;
-        }
-        const key =
-          property.computed && !isStringLiteral(property.key)
-            ? null
-            : getPropertyName(property.key);
-        if (key !== null) {
-          reportExport(
-            property,
-            { moduleId: base.moduleId, imported: key },
-            EXPORT_HIT.binding,
-          );
-        }
-      }
-    },
   };
+
+  if (hasModule || hasCallHit) {
+    visitors.CallExpression = (node) => {
+      if (hasModule) {
+        const required = dynamicModuleSourceForEnforcement(node, context);
+        if (required !== null) {
+          reportModuleLoad(node, required, MODULE_LOADING.static);
+          return;
+        }
+      }
+      if (hasCallHit) {
+        reportExport(
+          node,
+          isAstNode(node)
+            ? exportOfExpression(context, invokedCallee(node))
+            : null,
+          EXPORT_HIT.call,
+        );
+      }
+    };
+  }
+
+  if (hasExports) {
+    attachExportVisitors(visitors, context, reportExport);
+  }
+
+  return visitors;
 };

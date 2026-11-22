@@ -96,6 +96,8 @@ const CONSUMERS = {
   "apps/api/src/handlers/case-law/decisions/search.ts": "search",
   "apps/api/src/handlers/case-law/decisions/search-expand.ts": "search",
   "apps/api/src/handlers/case-law/decisions/search-refine.ts": "search",
+  // The editor's citation check resolves a reference like the search box.
+  "apps/api/src/handlers/case-law/citations/check.logic.ts": "search",
   "apps/api/src/handlers/case-law/decisions/latest.ts": "search",
   "apps/api/src/handlers/case-law/decisions/facets.ts": "search",
   "apps/api/src/handlers/case-law/decisions/status.ts": "search",

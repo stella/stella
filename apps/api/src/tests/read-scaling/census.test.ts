@@ -24,6 +24,7 @@ import {
   browseCalendarScalingScenario,
   browseCourtsScalingScenario,
 } from "./case-law-browse-hubs";
+import { certifiedEmailScalingScenario } from "./certified-email";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -37,6 +38,7 @@ import {
   chatQueueReadScalingScenario,
 } from "./chat-queue";
 import { chatPinnedThreadsScalingScenario } from "./chat-threads";
+import { citationCheckApiScalingScenario } from "./citation-check";
 import { claimCommentScalingScenarios } from "./claim-comments";
 import { reviewHistoryScalingScenarios } from "./claim-review-history";
 import { clientInvoicePrefillScalingScenario } from "./client-invoice-prefill";
@@ -89,6 +91,10 @@ import {
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
+import {
+  signedDossierContentScalingScenario,
+  signedDossierPreviewScalingScenario,
+} from "./signed-dossier";
 import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
@@ -119,6 +125,7 @@ const measuredApiScenarios = [
   organizationCreateScalingScenario,
   matterVocabularyScalingScenario,
   verifyQuoteApiScalingScenario,
+  citationCheckApiScalingScenario,
   ...readScalingScenarios,
   ...writeScalingScenarios,
   memberBillingScalingScenario,
@@ -151,10 +158,13 @@ const measuredApiScenarios = [
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
   asicPreviewScalingScenario,
+  signedDossierContentScalingScenario,
+  signedDossierPreviewScalingScenario,
   structuredDocumentScalingScenario,
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,
+  certifiedEmailScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,

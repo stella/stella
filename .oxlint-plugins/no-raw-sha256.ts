@@ -1133,6 +1133,14 @@ export default eslintCompatPlugin({
           context.report({ node, messageId: "owned" });
         };
         return {
+          before() {
+            if (isExempt()) {
+              return false;
+            }
+            return /crypto|sha[-_]?256|createhash|hasher|subtle|hmac|\bbun\b|\\/iu.test(
+              context.sourceCode.text,
+            );
+          },
           CallExpression: check,
           NewExpression: check,
           Identifier(node) {

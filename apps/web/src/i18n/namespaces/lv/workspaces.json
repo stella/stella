@@ -20,7 +20,6 @@
       "delivery": "Piegāde",
       "deliveryEvents": "Piegādes gaita",
       "deliveryReceipt": "Piegādes apliecinājums",
-      "directionUnknown": "Virziens nezināms",
       "messageId": "Ziņas ID",
       "moreContacts": "Ar šo datu pastkasti ir saistītas vēl citas kontaktpersonas.",
       "openFile": "Atvērt .zfo failu",
@@ -320,7 +319,9 @@
   "signedFile": {
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
+    "noSigners": "Dati par parakstītājiem netika atrasti.",
     "pdfUnavailable": "PDF priekšskatījums nav pieejams.",
+    "signers": "Parakstītāji",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
     "unverified": "Paraksti nav pārbaudīti."

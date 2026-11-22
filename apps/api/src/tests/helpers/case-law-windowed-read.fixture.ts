@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { expect } from "bun:test";
 
+import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { classifiedCitationBlockIds } from "@stll/legal-ast/citation-passage";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
@@ -154,6 +155,7 @@ export const caseLawWindowFixture = async (
                 country: "CZE",
                 decisionDate: null,
                 ecli: null,
+                bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
                 language: "cs",
                 languageAlternates: [],
                 slug: null,

@@ -982,6 +982,9 @@ function RouteComponentInner({
               <PDFProvider
                 key={fieldId}
                 fieldId={fieldId}
+                // The full-screen page sets its own scale; it does not fit a
+                // measured box.
+                fitToWidth={null}
                 initialScaleOffset={scaleOffset}
                 startPage={pageNumber}
                 surface="document-pdf"

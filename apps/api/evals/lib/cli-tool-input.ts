@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { flagKey } from "../../../../packages/cli/src/flag-name";
 import { normalizeInputKeyCasing } from "../../../../packages/cli/src/input-key-casing";
 import type { LeafCommandSpec } from "../../../../packages/cli/src/route-types";
@@ -30,7 +32,7 @@ export const composeCliToolInput = async ({
     return { ok: false, message: "scoring requires inline input" } as const;
   }
   const messages: string[] = [];
-  const base =
+  const parsedInput =
     typeof inputRaw === "string"
       ? await parseInputObject({
           inputRaw,
@@ -43,10 +45,11 @@ export const composeCliToolInput = async ({
             },
           },
         })
-      : {};
-  if (base === undefined) {
+      : Result.ok<Record<string, unknown>>({});
+  if (Result.isError(parsedInput)) {
     return { ok: false, message: messages.join("").trim() } as const;
   }
+  const base = parsedInput.value;
   const cased = normalizeInputKeyCasing({
     args: base,
     inputSchema: spec.inputSchema,

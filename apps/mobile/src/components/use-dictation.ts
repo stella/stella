@@ -24,6 +24,8 @@ import type {
 import { randomUUID } from "expo-crypto";
 import { useLocale } from "use-intl";
 
+import { applyLearnedFixes } from "@stll/transcript/corrections";
+import type { LearnedFix } from "@stll/transcript/corrections";
 import { respell } from "@stll/transcript/spelling";
 
 import {
@@ -38,6 +40,7 @@ import { deviceAccountStore } from "@/native/account-store";
 import {
   releaseDictationRoute,
   routeForDictation,
+  tapForDictation,
   watchDictationDevice,
 } from "@/native/dictation-device";
 import { DICTATION_MAX_SECONDS, readMatterVocabulary } from "@/state/dictation";
@@ -49,8 +52,19 @@ import {
   watchChunk,
 } from "@/state/dictation-chunks";
 import type { ChunkWatch } from "@/state/dictation-chunks";
-import { retriesByItself } from "@/state/dictation-kept";
-import type { DictationField, PieceFailure } from "@/state/dictation-kept";
+import { refusalOf, retriesByItself } from "@/state/dictation-kept";
+import type {
+  DictationField,
+  KeptRefusal,
+  PieceFailure,
+} from "@/state/dictation-kept";
+import { readLearnedFixes } from "@/state/dictation-learned";
+import {
+  meterShare,
+  SIGNAL_UNKNOWN,
+  watchSignal,
+} from "@/state/dictation-level";
+import type { SignalWatch } from "@/state/dictation-level";
 import {
   chosenModelId,
   DEFAULT_DICTATION_PREFERENCES,
@@ -124,6 +138,8 @@ type DictationSetup = {
   readonly source: AccessTokenSource;
   readonly preferences: DictationPreferences;
   readonly vocabulary: readonly string[];
+  /** The fixes learned from the person's corrections on this phone. */
+  readonly learned: readonly LearnedFix[];
 };
 
 /**
@@ -143,6 +159,8 @@ type Run = {
   /** How long the current piece has run, as last reported. */
   pieceMs: number;
   watch: ChunkWatch;
+  /** Whether the microphone gives any signal at all, across pieces. */
+  signal: SignalWatch;
 };
 
 /** What came of one piece of a dictation. */
@@ -195,6 +213,7 @@ export const useDictation = (
   const [notice, setNotice] = useState<DictationNotice>();
   // How long the dictation's finished pieces ran, for the clock.
   const [doneMs, setDoneMs] = useState(0);
+  const [noSignal, setNoSignal] = useState(false);
   // A stop the recorder makes by itself, at a piece's limit, is a cut.
   const meaning = useRef<StopMeaning>("cut");
   const stopping = useRef(false);
@@ -206,12 +225,16 @@ export const useDictation = (
     setPhase("idle");
     setNotice("failed");
   };
-  // Set before the first await of `start`, so a second tap while the
-  // permission prompt or the recorder is still opening is ignored.
-  const starting = useRef(false);
-  // Which start is current: a sent message or a closed composer moves it on,
-  // so a start still opening the microphone stops before it records.
-  const attempt = useRef(0);
+  const press = usePressControls({
+    phase,
+    start: async (id) => {
+      await start(id);
+    },
+    stop: async (how) => {
+      await stop(how);
+    },
+    fail,
+  });
   // The recorder keeps the listener of its first render; this one passes
   // each status to the handler of the latest render.
   const handleStatus = useRef<(status: RecordingStatus) => void>(
@@ -317,8 +340,11 @@ export const useDictation = (
 
   useCutAtPauses(reading, (latest) => {
     const current = run.current;
-    const action =
-      current === null || stopping.current ? null : nextStop(current, latest);
+    if (current === null) {
+      return;
+    }
+    setNoSignal(heardNoSignal(current, latest));
+    const action = stopping.current ? null : nextStop(current, latest);
     if (action !== null) {
       void stop(action).catch(() => undefined);
     }
@@ -333,7 +359,7 @@ export const useDictation = (
     const opened = await openMicrophone({
       recorder,
       source,
-      current: () => attempt.current === id,
+      current: () => press.isCurrent(id),
     });
     if (opened.type !== "open") {
       if (opened.type !== "stale") {
@@ -344,6 +370,7 @@ export const useDictation = (
     const { preferences } = opened;
     meaning.current = "cut";
     setDoneMs(0);
+    setNoSignal(false);
     run.current = newRun({
       // Read while the person speaks, so the first piece waits for nothing.
       setup: readSetup(source, preferences, async () =>
@@ -355,11 +382,12 @@ export const useDictation = (
     });
     recorder.record({ forDuration: DICTATION_MAX_SECONDS });
     live.current = true;
+    tapForDictation();
     setPhase("recording");
   };
 
   useDropOnClose(recorder, () => {
-    attempt.current += 1;
+    press.moveOn();
     const dropped = run.current;
     run.current = null;
     meaning.current = "cancel";
@@ -376,27 +404,21 @@ export const useDictation = (
       phase === "recording"
         ? doneMs + (reading.isRecording ? reading.durationMillis : 0)
         : 0,
-    start: () => {
-      if (starting.current || phase !== "idle") {
-        return;
-      }
-      starting.current = true;
-      attempt.current += 1;
-      start(attempt.current)
-        .catch(fail)
-        .finally(() => {
-          starting.current = false;
-        });
-    },
-    finish: () => {
-      stop("finish").catch(fail);
-    },
-    cancel: () => {
-      stop("cancel").catch(fail);
-    },
+    /** How loud the microphone hears the person, 0 to 1, while recording. */
+    level:
+      phase === "recording" && reading.isRecording
+        ? meterShare(reading.metering)
+        : 0,
+    /** The microphone gives no signal at all: muted, taken, or broken. */
+    noSignal: phase === "recording" && noSignal,
+    start: press.start,
+    finish: press.finish,
+    cancel: press.cancel,
+    hold: press.hold,
+    release: press.release,
     /** A sent message forgets the last notice and stops a start still opening the microphone. */
     settleForSend: () => {
-      attempt.current += 1;
+      press.moveOn();
       setNotice(undefined);
     },
     ...keptControls,
@@ -422,6 +444,7 @@ const newRun = ({
   pieces: [],
   pieceMs: 0,
   watch: NO_PAUSE,
+  signal: SIGNAL_UNKNOWN,
 });
 
 /** What a dictation is kept with, should it be: as it was recorded. */
@@ -432,9 +455,12 @@ const keptSetupOf = (
 ): KeptSetup => ({
   field,
   matterId: current.matterId ?? null,
-  modelId: chosenModelId(preferences, null) ?? null,
+  modelId: chosenModelId(preferences) ?? null,
+  modelClass: preferences.modelClass,
   locale: current.locale,
   cleanup: preferences.cleanup,
+  style: preferences.style,
+  translateTo: preferences.translateTo,
 });
 
 /**
@@ -479,6 +505,7 @@ const settleGathered = ({
           setup,
           pieces: gathered.pieces,
           refused: gathered.refused,
+          refusedFor: gathered.refusedFor,
         }) ?? false;
       if (!isKept) {
         for (const piece of gathered.pieces) {
@@ -498,7 +525,7 @@ const settleGathered = ({
 
 /** A kept dictation as a field shows it. */
 export type DictationWaiting = {
-  readonly status: "waiting" | "retrying" | "needs-person";
+  readonly status: "waiting" | "retrying" | "needs-person" | "needs-model";
   /** Dictated into a field since closed, not this one. */
   readonly earlier: boolean;
 };
@@ -593,7 +620,12 @@ const waitingOf = (
   earlier: boolean,
 ): DictationWaiting | undefined => {
   const statuses = new Set(views.map(({ status }) => status));
-  for (const status of ["retrying", "waiting", "needs-person"] as const) {
+  for (const status of [
+    "retrying",
+    "waiting",
+    "needs-model",
+    "needs-person",
+  ] as const) {
     if (statuses.has(status)) {
       return { status, earlier };
     }
@@ -736,6 +768,99 @@ const continueRecording = async ({
   live.current = true;
 };
 
+/**
+ * The microphone's own controls: a tap starts a dictation and the done and
+ * cross buttons end it, as before; holding the microphone
+ * (`HOLD_TO_TALK_MS`, `hold`) records only while it is held, and letting go
+ * (`release`) finishes it, or, before recording began, calls the start off.
+ * The person feels a light tap as a dictation stops, as they did when it
+ * started.
+ */
+const usePressControls = ({
+  phase,
+  start,
+  stop,
+  fail,
+}: {
+  phase: DictationPhase;
+  start: (id: number) => Promise<void>;
+  stop: (how: StopMeaning) => Promise<void>;
+  fail: () => void;
+}) => {
+  // Set before the first await of `start`, so a second tap while the
+  // permission prompt or the recorder is still opening is ignored.
+  const starting = useRef(false);
+  // Which start is current: a sent message, a closed field or a microphone
+  // let go moves it on, so a start still opening the microphone stops
+  // before it records.
+  const attempt = useRef(0);
+  const held = useRef(false);
+  const begin = () => {
+    if (starting.current || phase !== "idle") {
+      return;
+    }
+    starting.current = true;
+    attempt.current += 1;
+    start(attempt.current)
+      .catch(fail)
+      .finally(() => {
+        starting.current = false;
+      });
+  };
+  const end = (how: "finish" | "cancel") => {
+    tapForDictation();
+    stop(how).catch(fail);
+  };
+  return {
+    isCurrent: (id: number) => attempt.current === id,
+    moveOn: () => {
+      attempt.current += 1;
+    },
+    start: begin,
+    finish: () => {
+      end("finish");
+    },
+    cancel: () => {
+      end("cancel");
+    },
+    hold: () => {
+      held.current = phase === "idle" && !starting.current;
+      begin();
+    },
+    release: () => {
+      if (!held.current) {
+        return;
+      }
+      held.current = false;
+      if (phase === "recording") {
+        end("finish");
+      } else {
+        // Let go while the microphone was still opening: no dictation.
+        attempt.current += 1;
+      }
+    },
+  };
+};
+
+/** How long the microphone is held before it records only while held. */
+export const HOLD_TO_TALK_MS = 350;
+
+/**
+ * Whether the microphone has given no signal for long enough to say so,
+ * across the dictation's pieces; keeps the watch on the run.
+ */
+const heardNoSignal = (
+  current: Run,
+  { durationMillis, metering }: Reading,
+): boolean => {
+  const next = watchSignal(current.signal, {
+    atMs: current.doneMs + durationMillis,
+    meteringDb: metering,
+  });
+  current.signal = next.watch;
+  return next.noSignal;
+};
+
 /** One reading of the recorder while it records. */
 type Reading = {
   readonly durationMillis: number;
@@ -777,19 +902,22 @@ type Gathered =
       readonly type: "keep";
       readonly pieces: readonly FinishedPiece[];
       readonly refused: boolean;
+      readonly refusedFor: KeptRefusal | null;
     };
 
 /**
  * The finished dictation's text: its pieces joined in order, cleaned up
- * when the person turned that on, and the matter's names spelled as written
- * where the model came close; or nothing, when nothing was heard; or its
- * pieces to keep, when one could not be transcribed.
+ * when the person turned that on, with the fixes learned from their
+ * corrections, and the matter's names spelled as written where the model
+ * came close; or nothing, when nothing was heard; or its pieces to keep,
+ * when one could not be transcribed.
  */
 const gatherText = async (current: Run): Promise<Gathered> => {
   const outcomes = await Promise.all(current.pieces);
   const failures = outcomes.flatMap((outcome) =>
     outcome.type === "failed" ? [outcome.error] : [],
   );
+  const refused = !failures.some(retriesByItself);
   if (failures.length > 0) {
     return {
       type: "keep",
@@ -806,7 +934,11 @@ const gatherText = async (current: Run): Promise<Gathered> => {
             return panic("A piece came to no known outcome");
         }
       }),
-      refused: !failures.some(retriesByItself),
+      refused,
+      refusedFor:
+        refused && failures.some((failure) => refusalOf(failure) === "model")
+          ? "model"
+          : null,
     };
   }
   const partly = outcomes.some(({ type }) => type === "lost");
@@ -822,13 +954,15 @@ const gatherText = async (current: Run): Promise<Gathered> => {
   const text = await finalText({
     source: setup.source,
     cleanup: setup.preferences.cleanup,
+    style: setup.preferences.style,
+    translateTo: setup.preferences.translateTo,
     joined,
     locale: current.locale,
   });
   return {
     type: "text",
     dictated: {
-      text: respell(text, setup.vocabulary),
+      text: respell(applyLearnedFixes(text, setup.learned), setup.vocabulary),
       names: setup.vocabulary,
     },
     partly,
@@ -931,8 +1065,15 @@ const readSetup = async (
   preferences: DictationPreferences,
   terms: () => Promise<string[]>,
 ): Promise<DictationSetup> => {
-  const vocabulary = await terms().catch(() => []);
-  return { source, preferences, vocabulary };
+  const session = source.session();
+  const [vocabulary, learned] = await Promise.all([
+    terms().catch(() => []),
+    // Fixes the phone cannot read are not applied; the text stays as heard.
+    session === undefined
+      ? []
+      : readLearnedFixes(deviceAccountStore, session).catch(() => []),
+  ]);
+  return { source, preferences, vocabulary, learned };
 };
 
 /**
@@ -948,7 +1089,12 @@ const pieceOutcome = async (
   const transcribed = await transcribePiece({
     source,
     uri,
-    choice: { modelId: chosenModelId(preferences, null), matterId, vocabulary },
+    choice: {
+      modelId: chosenModelId(preferences),
+      modelClass: preferences.modelClass,
+      matterId,
+      vocabulary,
+    },
   });
   if (transcribed.isErr()) {
     return { type: "failed", uri, error: transcribed.error };

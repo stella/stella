@@ -5,7 +5,15 @@ import type { InvokeArgs } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
 
-import { DESKTOP_DICTATION_CLEANUP_LIMITS } from "@stll/api-contract/desktop-dictation-cleanup";
+import {
+  DESKTOP_DICTATION_CLEANUP_LIMITS,
+  DESKTOP_DICTATION_CLEANUP_STYLES,
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
 import { displayLanguageName } from "@stll/locales";
 import { Button } from "@stll/ui/button";
 import {
@@ -61,6 +69,20 @@ type DictationModel =
   | { received: number; status: "downloading"; total: number };
 
 const AUTOMATIC_LANGUAGE = "auto";
+/** The translate-to choice for the language the speaker dictates in. */
+const NO_TRANSLATION = "off";
+
+const isCleanupStyle = (
+  value: unknown,
+): value is DesktopDictationCleanupStyle =>
+  DESKTOP_DICTATION_CLEANUP_STYLES.some((style) => style === value);
+
+const isTranslationLanguage = (
+  value: unknown,
+): value is DesktopDictationTranslationLanguage =>
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES.some(
+    (language) => language === value,
+  );
 
 type DictationLanguage = {
   /** `auto` or one of `supported`. */
@@ -78,6 +100,10 @@ export type DictationSnapshot = {
   /** Whether the transcribed text goes through stella to the organization's
    *  AI provider before it is typed. */
   cleanup: boolean;
+  /** How cleanup writes the text. */
+  cleanupStyle: DesktopDictationCleanupStyle;
+  /** The language cleanup writes the text in; null: the spoken one. */
+  translateTo: DesktopDictationTranslationLanguage | null;
   /** Whether the server enables transcription by stella AI; without it the
    *  choice of destination is not offered. */
   cloudAvailable: boolean;
@@ -356,19 +382,6 @@ const DictationPage = ({
     await change("dictation_set_enabled", { enabled });
   };
 
-  const setCleanup = async (cleanup: boolean) => {
-    await change("dictation_set_cleanup", { enabled: cleanup });
-  };
-
-  const setShare = async (
-    command:
-      | "dictation_set_share_text_before_cursor"
-      | "dictation_set_share_window_title",
-    enabled: boolean,
-  ) => {
-    await change(command, { enabled });
-  };
-
   const setLanguage = async (language: string) => {
     await change("dictation_set_language", { language });
   };
@@ -395,8 +408,6 @@ const DictationPage = ({
     const removed = await change("dictation_remove_model");
     setRemoveFailed(!removed);
   };
-
-  const cleanupIds = settingsRowIds("dictation-cleanup");
 
   return (
     <div className="flex flex-col gap-6">
@@ -493,55 +504,7 @@ const DictationPage = ({
               />
             )}
           </SettingsSection>
-          <SettingsSection title={t("groups.cleanup")}>
-            <SettingsRow
-              description={
-                snapshot.destination === "cloud"
-                  ? t("cleanup.descriptionCloud")
-                  : t("cleanup.description")
-              }
-              id="dictation-cleanup"
-              title={t("cleanup.title")}
-            >
-              <Switch
-                aria-describedby={cleanupIds.description}
-                aria-labelledby={cleanupIds.label}
-                checked={snapshot.cleanup}
-                onCheckedChange={(cleanup) => {
-                  void setCleanup(cleanup);
-                }}
-              />
-            </SettingsRow>
-            {/* What cleanup may also read; offered only while it runs. */}
-            <DictationSwitchRow
-              checked={snapshot.shareWindowTitle}
-              description={t("context.windowTitle.description")}
-              disabled={!snapshot.cleanup}
-              id="dictation-share-window-title"
-              onChange={(enabled) => {
-                void setShare("dictation_set_share_window_title", enabled);
-              }}
-              title={t("context.windowTitle.title")}
-            />
-            {snapshot.textBeforeCursorAvailable && (
-              <DictationSwitchRow
-                checked={snapshot.shareTextBeforeCursor}
-                description={t("context.textBeforeCursor.description", {
-                  limit:
-                    DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
-                })}
-                disabled={!snapshot.cleanup}
-                id="dictation-share-text-before-cursor"
-                onChange={(enabled) => {
-                  void setShare(
-                    "dictation_set_share_text_before_cursor",
-                    enabled,
-                  );
-                }}
-                title={t("context.textBeforeCursor.title")}
-              />
-            )}
-          </SettingsSection>
+          <DictationCleanupSection change={change} snapshot={snapshot} />
           <DictationAppSettings
             languages={snapshot.language.supported}
             onChange={setAppSettings}
@@ -867,6 +830,203 @@ const DictationFixRow = ({
         checked={checked}
         onCheckedChange={onChange}
       />
+    </SettingsRow>
+  );
+};
+
+/** AI cleanup: the switch, how it writes, and what it may also read. */
+const DictationCleanupSection = ({
+  change,
+  snapshot,
+}: {
+  change: (command: string, args?: InvokeArgs) => Promise<boolean>;
+  snapshot: DictationSnapshot;
+}) => {
+  const t = useTranslations("dictation");
+  const cleanupIds = settingsRowIds("dictation-cleanup");
+
+  const setCleanup = async (cleanup: boolean) => {
+    await change("dictation_set_cleanup", { enabled: cleanup });
+  };
+
+  const setCleanupStyle = async (style: DesktopDictationCleanupStyle) => {
+    await change("dictation_set_cleanup_style", { style });
+  };
+
+  const setTranslateTo = async (
+    language: DesktopDictationTranslationLanguage | null,
+  ) => {
+    await change("dictation_set_translate_to", { language });
+  };
+
+  const setShare = async (
+    command:
+      | "dictation_set_share_text_before_cursor"
+      | "dictation_set_share_window_title",
+    enabled: boolean,
+  ) => {
+    await change(command, { enabled });
+  };
+
+  return (
+    <SettingsSection title={t("groups.cleanup")}>
+      <SettingsRow
+        description={
+          snapshot.destination === "cloud"
+            ? t("cleanup.descriptionCloud")
+            : t("cleanup.description")
+        }
+        id="dictation-cleanup"
+        title={t("cleanup.title")}
+      >
+        <Switch
+          aria-describedby={cleanupIds.description}
+          aria-labelledby={cleanupIds.label}
+          checked={snapshot.cleanup}
+          onCheckedChange={(cleanup) => {
+            void setCleanup(cleanup);
+          }}
+        />
+      </SettingsRow>
+      {/* How cleanup writes; offered only while it runs. */}
+      <DictationCleanupStyleRow
+        disabled={!snapshot.cleanup}
+        onChange={(style) => {
+          void setCleanupStyle(style);
+        }}
+        style={snapshot.cleanupStyle}
+      />
+      <DictationTranslateToRow
+        disabled={!snapshot.cleanup}
+        onChange={(language) => {
+          void setTranslateTo(language);
+        }}
+        translateTo={snapshot.translateTo}
+      />
+      {/* What cleanup may also read; offered only while it runs. */}
+      <DictationSwitchRow
+        checked={snapshot.shareWindowTitle}
+        description={t("context.windowTitle.description")}
+        disabled={!snapshot.cleanup}
+        id="dictation-share-window-title"
+        onChange={(enabled) => {
+          void setShare("dictation_set_share_window_title", enabled);
+        }}
+        title={t("context.windowTitle.title")}
+      />
+      {snapshot.textBeforeCursorAvailable && (
+        <DictationSwitchRow
+          checked={snapshot.shareTextBeforeCursor}
+          description={t("context.textBeforeCursor.description", {
+            limit: DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
+          })}
+          disabled={!snapshot.cleanup}
+          id="dictation-share-text-before-cursor"
+          onChange={(enabled) => {
+            void setShare("dictation_set_share_text_before_cursor", enabled);
+          }}
+          title={t("context.textBeforeCursor.title")}
+        />
+      )}
+    </SettingsSection>
+  );
+};
+
+const DictationCleanupStyleRow = ({
+  disabled,
+  onChange,
+  style,
+}: {
+  disabled: boolean;
+  onChange: (style: DesktopDictationCleanupStyle) => void;
+  style: DesktopDictationCleanupStyle;
+}) => {
+  const t = useTranslations("dictation.cleanupStyle");
+  const ids = settingsRowIds("dictation-cleanup-style");
+  return (
+    <SettingsRow
+      depth="nested"
+      description={t(`${style}.description`)}
+      disabled={disabled}
+      id="dictation-cleanup-style"
+      title={t("title")}
+    >
+      <Select
+        disabled={disabled}
+        onValueChange={(value) => {
+          if (isCleanupStyle(value)) {
+            onChange(value);
+          }
+        }}
+        value={style}
+      >
+        <SelectTrigger
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          className="w-44"
+        >
+          <SelectValue>
+            {(value: unknown) =>
+              isCleanupStyle(value) ? t(`${value}.title`) : null
+            }
+          </SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          {DESKTOP_DICTATION_CLEANUP_STYLES.map((value) => (
+            <SelectItem key={value} value={value}>
+              {t(`${value}.title`)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
+    </SettingsRow>
+  );
+};
+
+const DictationTranslateToRow = ({
+  disabled,
+  onChange,
+  translateTo,
+}: {
+  disabled: boolean;
+  onChange: (language: DesktopDictationTranslationLanguage | null) => void;
+  translateTo: DesktopDictationTranslationLanguage | null;
+}) => {
+  const t = useTranslations("dictation.translateTo");
+  const ids = settingsRowIds("dictation-translate-to");
+  const label = (value: unknown) =>
+    isTranslationLanguage(value) ? displayLanguageName(value) : t("off");
+  return (
+    <SettingsRow
+      depth="nested"
+      description={t("description")}
+      disabled={disabled}
+      id="dictation-translate-to"
+      title={t("title")}
+    >
+      <Select
+        disabled={disabled}
+        onValueChange={(value) => {
+          onChange(isTranslationLanguage(value) ? value : null);
+        }}
+        value={translateTo ?? NO_TRANSLATION}
+      >
+        <SelectTrigger
+          aria-describedby={ids.description}
+          aria-labelledby={ids.label}
+          className="w-44"
+        >
+          <SelectValue>{label}</SelectValue>
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value={NO_TRANSLATION}>{t("off")}</SelectItem>
+          {DESKTOP_DICTATION_TRANSLATION_LANGUAGES.map((value) => (
+            <SelectItem key={value} value={value}>
+              {displayLanguageName(value)}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
     </SettingsRow>
   );
 };

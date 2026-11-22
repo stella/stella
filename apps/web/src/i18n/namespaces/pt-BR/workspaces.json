@@ -20,7 +20,6 @@
       "delivery": "Entrega",
       "deliveryEvents": "Histórico de entrega",
       "deliveryReceipt": "Comprovante de entrega",
-      "directionUnknown": "Direção desconhecida",
       "messageId": "ID da mensagem",
       "moreContacts": "Há mais contatos associados a esta caixa de dados.",
       "openFile": "Abrir arquivo .zfo",
@@ -320,7 +319,9 @@
   "signedFile": {
     "layer": "Camada de assinaturas {number, number}",
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
+    "noSigners": "Nenhum dado de signatário foi encontrado.",
     "pdfUnavailable": "A prévia do PDF não está disponível.",
+    "signers": "Signatários",
     "unknownSigner": "Signatário desconhecido",
     "unreadable": "Não foi possível ler o arquivo assinado.",
     "unverified": "As assinaturas não foram verificadas."

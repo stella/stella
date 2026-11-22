@@ -4,10 +4,11 @@
     "accessibilityAccessMissing": "stella has no Accessibility access. If it already shows as on in the list, turn it off and on again.",
     "accessibilityRequired": "Allow Accessibility access to record details. App names are still recorded.",
     "activeLabel": "active",
-    "aiAccept": "Accept",
+    "aiApplyChange": "Apply change",
     "aiDismiss": "Dismiss",
     "aiDraftAgain": "Draft again",
     "aiDraftAllow": "Allow",
+    "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Task {task} · Activity {activity}",
     "aiDraftConsent": "stella AI can draft descriptions from each entry's matter, date, duration and app names, plus the document names and window titles shown here when you record them. Your earlier entries on the matter help it match how you write. Nothing else about your day leaves this computer.",
     "aiDraftConsentRequired": "Allow stella AI again to draft this description.",
@@ -21,9 +22,10 @@
     "aiDraftNeedsMatter": "Choose a matter and stella AI can draft the description.",
     "aiDraftOff": "Your firm has turned stella AI drafts off.",
     "aiDraftOffer": "stella AI can draft the description.",
-    "aiDraftRefused": "You can no longer create time entries on this matter.",
+    "aiDraftRefused": "You can no longer create time entries on this matter. Choose another matter.",
     "aiDraftRetry": "Try again",
-    "aiDraftTooLarge": "This entry has more detail than one draft can use.",
+    "aiDraftTooLarge": "This entry has more detail than one draft can use. Select a shorter stretch of time, or write the description yourself.",
+    "aiDraftUnavailable": "stella AI is not available to you for drafts. Write the description yourself.",
     "aiDraftWhatIsSent": "What is sent?",
     "aiDraftWrite": "Draft with stella AI",
     "aiDraftWriting": "stella AI is drafting the description…",
@@ -46,11 +48,10 @@
     "appNameOnlyApps": "Apps recording names only",
     "batchCreated": "{count, plural, one {# draft created} other {# drafts created}}",
     "batchFailed": "Drafts could not be created. Try again.",
-    "batchPrivacy": "Only matter, date, duration and narrative are sent",
     "billingDraftsForgetPreference": "Forget preference",
     "billingDraftsGranted": "stella AI drafts the descriptions of your time entries from the details each entry shows.",
     "billingDraftsPreference": "Your drafting preference",
-    "billingDraftsRevoked": "stella AI drafts descriptions only after you allow it on a time entry.",
+    "billingDraftsRevoked": "stella AI drafts no descriptions until you allow it.",
     "billingDraftsTitle": "stella AI drafts",
     "billingDraftsUnavailable": "stella AI draft settings cannot be loaded right now.",
     "billingDraftsWithdraw": "Withdraw consent",
@@ -59,7 +60,7 @@
     "browserAnsweredTitles": "Tab titles in <bdi>{browser}</bdi> are recorded. You can change this in Settings.",
     "browserPrivacyNote": "Private windows may be recorded too; pause recording or exclude the browser while browsing privately.",
     "browserQuestionAppNameOnly": "App name only",
-    "browserQuestionDescription": "Tab titles help describe your work. Private windows are recognized only by their title, so pause recording while browsing privately.",
+    "browserQuestionDescription": "Tab titles help describe your work. stella cannot recognize every private window, so pause recording before you browse privately.",
     "browserQuestionLater": "Decide later",
     "browserQuestionRecordTitles": "Record titles",
     "browserQuestionTitle": "Also record tab titles in <bdi>{browser}</bdi>?",
@@ -73,6 +74,7 @@
     "candidatesFailed": "Matter suggestions could not be loaded. Try again.",
     "captureDetails": "Also record window titles and open documents",
     "captureDetailsDescription": "Turning this off stops new details. Past details remain until retention or deletion.",
+    "captureDetailsOffDescription": "Turning this on adds window titles and document names to new activity.",
     "captureModeAppOnly": "App only",
     "captureModeBrowser": "Browser",
     "captureModeLabel": "What to record for {name}",
@@ -100,6 +102,31 @@
     "detailsUnavailable": "Details are unavailable on this device. App names are still recorded.",
     "detectCalls": "Record calls",
     "detectCallsDescription": "While Teams, Zoom or a browser uses your microphone, that time counts as the call, even if you only listen or work in another app. Audio is never recorded.",
+    "disclosure": {
+      "control": "Nothing is recorded until you press Start recording in Activity. Pause, exclude apps or delete any day whenever you like.",
+      "never": {
+        "audio": "Sound from the microphone",
+        "keystrokes": "Keystrokes or typed text",
+        "screen": "Screenshots or screen contents",
+        "webAddresses": "Website addresses"
+      },
+      "neverTitle": "Never recorded",
+      "recorded": {
+        "activeTime": "Active time only; idle time is left out",
+        "app": "Which app is in front, every few seconds",
+        "browserTitles": "Browser tab titles, only in browsers you allow",
+        "calls": "Time on calls, unless you turn it off",
+        "details": "Window titles and, on a Mac, the full path of each open document, folders included, unless you turn them off"
+      },
+      "recordedTitle": "What is recorded",
+      "sent": {
+        "aiDrafts": "stella AI drafts you ask for, once allowed: the entry's matter, date, duration and app names, its window titles and document names when recorded, and any instructions you type. stella adds your earlier descriptions on the matter, the client's billing format and, where your firm uses them, its billing guidelines. All of it goes to the AI provider your firm uses, or stella AI's, only to write the draft; stella does not save the draft or what was sent for it.",
+        "timeEntries": "Time entries you create: matter, date, duration, description, billable status and any billing codes"
+      },
+      "sentTitle": "What leaves this computer",
+      "storedMac": "Encrypted on this Mac, for your account only",
+      "storedPc": "Encrypted on this PC, for your account only"
+    },
     "draftMarkerFailed": "Drafts were created, but the local receipt could not be saved. Retry to save the receipt.",
     "draftedEntry": "Drafted",
     "draftedLabel": "drafted",
@@ -110,6 +137,8 @@
     "earlierTimeStaysUntitled": "Earlier time stays without titles.",
     "earliestDayReached": "You are viewing the earliest day available.",
     "empty": "Nothing was recorded on this day.",
+    "emptyToday": "Nothing recorded yet today. Your work appears here as you go.",
+    "emptyTodayPaused": "Recording is paused. Choose Resume to record your work today.",
     "encrypted": "Encrypted on this device",
     "enterRefinement": "Enter an instruction to revise the description.",
     "entryBillable": "Billable",
@@ -130,6 +159,7 @@
     "granularity": "Grid",
     "hours": "{hours} h",
     "incompatibleActivity": "Saved activity cannot be read by this version of the app. Update the app to continue.",
+    "joinedActivity": "Not counted for this matter",
     "keepHistory": "Keep history",
     "latestDayReached": "You are viewing the latest day available.",
     "memoryOnly": "Not saved in this build",
@@ -139,6 +169,7 @@
     "moreApps": "+{count} more",
     "narrativeApps": "Work in {apps}",
     "narrativeEvidence": "Work on {evidence}",
+    "narrativeTitle": "“{title}”",
     "newEntry": "New entry",
     "nextDay": "Next day",
     "noMatters": "No matters found. Try another search.",
@@ -171,8 +202,8 @@
     "selectRange": "Select a range",
     "settings": "Settings",
     "suggestionPieceLabel": "Suggested entry: {matter}, {range}, {duration}, {hours} h in total",
-    "suggestionPieces": "{count, plural, one {# session} other {# sessions}} · {duration} · {hours} h",
-    "suggestionRange": "{range} · {duration} · {hours} h",
+    "suggestionPieces": "{count, plural, one {# session} other {# sessions}} · {hours} h",
+    "suggestionRange": "{range} · {hours} h",
     "timeEntries": "Time entries",
     "title": "Activity",
     "titlesNeedAccessibility": "Window titles are not recorded without Accessibility access.",
@@ -183,12 +214,8 @@
     "unreadableEraseConfirmation": "Unreadable saved activity and its pending draft recovery will be erased. Created drafts may already exist. This cannot be undone.",
     "unreadableEraseNotice": "Some saved activity cannot be read. You can erase unreadable saved activity and its draft recovery.",
     "unrecoverableOtherHistoryConfirmation": "Saved history from other accounts will be deleted, including pending draft recovery with missing keys or unreadable files. Created drafts may already exist. This cannot be undone.",
-    "welcomeControlFact": "Idle time excluded. Pause or delete anytime.",
-    "welcomeDetails": "App activity is sampled every few seconds and never uploaded automatically. Window titles and open-document paths are captured too, unless you turn details off. Summaries reach the clipboard only when requested. You can exclude apps and choose how long history is kept. Turning details off stops new details; past details remain until retention or deletion. Window titles of a suggestion leave this device only when you request a stella AI draft after granting drafting consent, once or always; they are not stored.",
     "welcomeLearnMore": "Learn more",
-    "welcomeLocalFact": "Encrypted on this device.",
     "welcomePreviewMatter": "Riverside lease renewal",
-    "welcomePrivacyFact": "No screen contents; titles only by choice.",
     "welcomeStart": "Start recording",
     "welcomeTitle": "Your day, privately",
     "writeDescription": "Enter a description for this entry."
@@ -548,6 +575,25 @@
       "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email.",
       "title": "Clean up with AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Keeps a relaxed tone with light punctuation.",
+        "title": "Casual"
+      },
+      "notes": {
+        "description": "Short points, one per line, without filler words.",
+        "title": "Notes"
+      },
+      "polished": {
+        "description": "Fixes recognition mistakes and keeps your wording.",
+        "title": "Polished"
+      },
+      "title": "Style",
+      "verbatim": {
+        "description": "Every word as heard; only punctuation and capitals are added.",
+        "title": "Verbatim"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Up to {limit, number} characters of the document you are in, so the dictation fits what you are writing.",
@@ -579,6 +625,7 @@
       "local": "This computer",
       "localDescription": "Speech is transcribed on this computer and is not stored.",
       "model": "Transcription model",
+      "modelWithdrawn": "The model you chose is no longer offered. Choose another; until then, dictation is transcribed on this computer.",
       "outsideRegion": "Outside your region",
       "retainsData": "Keeps your audio",
       "retainsDataTitle": "{provider} keeps what you dictate",
@@ -684,10 +731,13 @@
       "checkBodyMac": "Check Microphone access in System Settings, then try again.",
       "checkBodyPc": "Check microphone access in Windows Settings, then try again.",
       "chooseMicrophone": "Choose microphone…",
+      "chooseModel": "Choose model…",
       "dismiss": "Dismiss",
       "inputDevice": "Input: {device}",
       "missingBody": "Dictation is using {device} instead.",
       "missingTitle": "{missing} is not connected",
+      "modelBody": "Pick one in Settings → Dictation. This dictation was transcribed on this computer.",
+      "modelTitle": "Your transcription model is no longer offered",
       "nothingBody": "Speak while you hold the key, or choose another input in Sound settings.",
       "nothingTitle": "stella did not hear any speech",
       "openSettingsMac": "Open System Settings",
@@ -749,6 +799,11 @@
       "failed": "The window could not be opened. Try again.",
       "open": "Open",
       "title": "Transcribe a recording"
+    },
+    "translateTo": {
+      "description": "Writes the cleaned text in this language, whatever language you speak.",
+      "off": "Language you speak",
+      "title": "Write in"
     },
     "whileDictating": {
       "choices": {
@@ -844,23 +899,12 @@
     "takenOverTitle": "Editing moved to another device"
   },
   "onboarding": {
-    "activityAiNote": "Window titles of a suggestion leave this device only when you request a stella AI draft after granting drafting consent, once or always. They are not stored.",
     "activityBody": "See where your working day went and turn it into draft time entries. You decide what is recorded and what is sent.",
-    "activityConsentNote": "Nothing is recorded until you press Start recording in Activity. Pause, exclude apps or delete any day whenever you like.",
-    "activityNeverKeys": "Keystrokes or typed text",
-    "activityNeverScreen": "Screenshots or screen contents",
-    "activityNeverTitle": "Never recorded",
-    "activityNeverWeb": "Website addresses",
-    "activityRecordsActive": "Active time only; idle time is left out",
-    "activityRecordsApp": "Which app is in front, every few seconds",
-    "activityRecordsDetails": "Window titles and document names, unless you turn them off",
-    "activityRecordsTitle": "What is recorded",
     "activityStoryDraft": "Draft",
-    "activityStoryRecordMac": "Encrypted on this Mac, for your account only",
-    "activityStoryRecordPc": "Encrypted on this PC, for your account only",
     "activityStoryRecordTitle": "Recorded",
     "activityStoryReviewCaption": "You check the day and choose the matter",
     "activityStoryReviewTitle": "You review",
+    "activityStorySendCaption": "You choose what leaves this computer",
     "activityStorySendTitle": "You send",
     "activityTitle": "Activity, explained",
     "back": "Back",
@@ -951,7 +995,7 @@
     "howSigningBodyMac": "Choose “Sign with stella desktop” on a PDF in stella. Your certificate stays in your keychain or on your smart card, and the signed PDF returns to stella as a new version.",
     "howSigningBodyPc": "Choose “Sign with stella desktop” on a PDF in stella. Your certificate stays in your certificate store or on your smart card, and the signed PDF returns to stella as a new version.",
     "howTitle": "How stella desktop works",
-    "introduceActivityBody": "Activity is now available for your account. Nothing is recorded until you start it in the activity window.",
+    "introduceActivityBody": "Activity is now available for your account: see where your working day went and turn it into draft time entries.",
     "introduceActivityTitle": "New: activity timeline",
     "introduceDictationTitle": "New: dictation",
     "later": "Set up later",

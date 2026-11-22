@@ -1,5 +1,6 @@
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import {
+  hasUsableAst,
   isDocumentAst,
   omitDerivablePlainText,
 } from "@stll/legal-ast/document-ast";
@@ -65,7 +66,10 @@ export const readServedDecisionAst = async ({
           key: astS3Key,
           step: "readDecision.corpusAst",
           read: async () => astFrom("store", await readStore()),
-          fallback: rowAst,
+          fallback: async () => {
+            const row = await rowAst();
+            return row !== null && hasUsableAst(row.payload) ? row : null;
+          },
         });
 
   if (resolved === null) {

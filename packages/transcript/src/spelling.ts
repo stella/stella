@@ -173,7 +173,7 @@ const isWordCharacter = (character: string): boolean =>
  * letters and digits, with an apostrophe or a hyphen inside it and the
  * combining accents that follow its letters.
  */
-const splitWords = (text: string): Piece[] => {
+export const splitWords = (text: string): Piece[] => {
   const characters = Array.from(text);
   const pieces: Piece[] = [];
   let current = "";
@@ -443,7 +443,7 @@ const allowed = (letters: number): number => {
  * had one and the custom word starts in lower case, as at the start of a
  * sentence.
  */
-const casedLike = (spelling: string, original: string): string => {
+export const casedLike = (spelling: string, original: string): string => {
   const first = Array.from(spelling).at(0) ?? "";
   const originalFirst = Array.from(original).at(0) ?? "";
   const upper = (character: string) =>
@@ -458,7 +458,7 @@ const casedLike = (spelling: string, original: string): string => {
 };
 
 /** Lower case, without diacritics and without apostrophes or hyphens. */
-const fold = (word: string): string =>
+export const fold = (word: string): string =>
   Array.from(word)
     .filter((character) => !JOINERS.has(character) && !isCombining(character))
     .map((character) =>
@@ -505,7 +505,7 @@ const BASE_LETTERS: Readonly<Record<string, string>> = Object.fromEntries(
 );
 
 /** Edits between two words, a swap of neighbouring letters counted once. */
-const distance = (left: string, right: string): number => {
+export const distance = (left: string, right: string): number => {
   const a = Array.from(left);
   const b = Array.from(right);
   const width = b.length + 1;

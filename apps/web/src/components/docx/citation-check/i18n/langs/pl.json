@@ -1,0 +1,21 @@
+{
+  "docxCitationCheck": {
+    "action": "Sprawdź powołanie",
+    "alternatives": "{count, plural, one {Temu oznaczeniu odpowiada jeszcze # orzeczenie} few {Temu oznaczeniu odpowiadają jeszcze # orzeczenia} many {Temu oznaczeniu odpowiada jeszcze # orzeczeń} other {Temu oznaczeniu odpowiada jeszcze # orzeczenia}}",
+    "checking": "Sprawdzam {citation} …",
+    "contradicts": "Przeczy",
+    "doesNotAddress": "Nie odnosi się",
+    "earlier": "Wcześniejsze sprawdzenia",
+    "failed": "Sprawdzenie powołania nie powiodło się. Spróbuj ponownie.",
+    "goToParagraph": "Przejdź do akapitu",
+    "noPassage": "Żaden pojedynczy fragment orzeczenia nie zawiera tego wniosku.",
+    "notFound": "W bazie orzecznictwa nie ma orzeczenia odpowiadającego {citation}",
+    "probability": "prawdopodobieństwo {probability, number, percent}",
+    "showPassage": "Pokaż fragment",
+    "supports": "Potwierdza",
+    "title": "Sprawdzenie powołania",
+    "unavailableDerivedAi": "Wydawca tego orzeczenia nie zezwala na analizę jego tekstu przez sztuczną inteligencję.",
+    "unavailableNoText": "Orzeczenie zostało odnalezione, ale jego tekst nie jest dostępny do sprawdzenia.",
+    "uncertain": "Niepewne"
+  }
+}

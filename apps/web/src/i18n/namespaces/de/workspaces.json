@@ -20,7 +20,6 @@
       "delivery": "Zustellung",
       "deliveryEvents": "Zustellverlauf",
       "deliveryReceipt": "Zustellnachweis",
-      "directionUnknown": "Richtung unbekannt",
       "messageId": "Nachrichten-ID",
       "moreContacts": "Weitere Kontakte stimmen mit diesem Datenpostfach überein.",
       "openFile": ".zfo-Datei öffnen",
@@ -320,7 +319,9 @@
   "signedFile": {
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
+    "noSigners": "Es wurden keine Angaben zu Unterzeichnern gefunden.",
     "pdfUnavailable": "Die PDF-Vorschau ist nicht verfügbar.",
+    "signers": "Unterzeichner",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
     "unverified": "Die Signaturen wurden nicht geprüft."

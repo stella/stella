@@ -2338,6 +2338,32 @@
               },
               "maxItems": 14
             },
+            "bodySource": {
+              "type": "object",
+              "properties": {
+                "textSource": {
+                  "examples": ["host", "collection"],
+                  "type": "string"
+                },
+                "source": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "retrievedAt": {
+                  "type": ["string", "null"],
+                  "maxLength": 32
+                },
+                "extent": {
+                  "examples": ["complete", "section", "unclassified"],
+                  "type": "string"
+                },
+                "provenance": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "required": ["textSource"]
+            },
             "decisionId": {
               "type": "string"
             },
@@ -2495,6 +2521,32 @@
                 "additionalProperties": true
               },
               "maxItems": 14
+            },
+            "bodySource": {
+              "type": "object",
+              "properties": {
+                "textSource": {
+                  "examples": ["host", "collection"],
+                  "type": "string"
+                },
+                "source": {
+                  "type": "object",
+                  "additionalProperties": true
+                },
+                "retrievedAt": {
+                  "type": ["string", "null"],
+                  "maxLength": 32
+                },
+                "extent": {
+                  "examples": ["complete", "section", "unclassified"],
+                  "type": "string"
+                },
+                "provenance": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "required": ["textSource"]
             },
             "decisionId": {
               "type": "string"

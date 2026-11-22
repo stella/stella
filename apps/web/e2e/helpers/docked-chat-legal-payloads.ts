@@ -1,3 +1,4 @@
+import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { toSafeId } from "@stll/api-contract/safe-id";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
@@ -53,6 +54,7 @@ const decision = {
   metadata: {},
   resolution: { type: "direct" as const },
   sections: null,
+  bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
   slug: "synthetic-dock-decision",
   source: {
     adapterKey: "synthetic",

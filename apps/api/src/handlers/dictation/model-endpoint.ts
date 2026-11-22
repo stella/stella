@@ -9,7 +9,12 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
-import type { OrgAISettings } from "@/api/lib/ai-config-loader";
+import type {
+  OrgAISettings,
+  OrgSettingsForAuth,
+} from "@/api/lib/ai-config-loader";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
+import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import {
   generateArtefact,
@@ -329,4 +334,54 @@ export const runDesktopDictationModelAction = async function* <
         });
       }),
   );
+};
+
+/** What a signed-in member's cleanup reads from its root handler context:
+ *  the organization's AI settings, unreadable ones included. */
+type MemberDictationContext = OrgSettingsForAuth & {
+  safeDb: SafeDb;
+  session: { activeOrganizationId: SafeId<"organization"> };
+  user: { id: SafeId<"user"> };
+  request: Request;
+  actionSignal?: AbortSignal | undefined;
+};
+
+/**
+ * Runs one model-backed cleanup for a signed-in member, after the root
+ * handler has checked the role, usage and the "dictation.cleanup" action
+ * admission: the organization's stored AI settings must be readable and the
+ * cleanup budget is consumed before `run` reaches the model under the
+ * admission the handler's configured action admission granted.
+ */
+export const runMemberDictationModelAction = async function* <
+  TResult extends NonNullable<unknown>,
+>({
+  ctx,
+  modelAdmission,
+  limit = consumeDictationLimit,
+  run,
+}: {
+  ctx: MemberDictationContext;
+  modelAdmission: ModelDispatchAdmission;
+  limit?: typeof consumeDictationLimit | undefined;
+  run: (admitted: AdmittedDictationContext) => SafeHandlerGenerator<TResult>;
+}): SafeHandlerGenerator<TResult> {
+  if (ctx.orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
+    return Result.err(storedAIConfigUnreadableError());
+  }
+  const organizationId = ctx.session.activeOrganizationId;
+  const userId = ctx.user.id;
+  yield* Result.await(limit({ organizationId, userId, operation: "cleanup" }));
+  return yield* run({
+    caller: {
+      organizationId,
+      userId,
+      safeDb: ctx.safeDb,
+      orgAIConfig: ctx.orgAIConfig,
+      managedAIResidency: ctx.managedAIResidency,
+      promptCachingEnabled: ctx.promptCachingEnabled,
+    },
+    modelAdmission,
+    actionSignal: ctx.actionSignal ?? ctx.request.signal,
+  });
 };

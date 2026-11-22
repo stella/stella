@@ -166,6 +166,12 @@ describe("register drift", () => {
     expect(hasRegisterDrift("Si fuiste tú, ignora esto", "es")).toBe(false);
     expect(hasRegisterDrift("Neked küldtük", "hu")).toBe(true);
     expect(hasRegisterDrift("Önnek küldtük", "hu")).toBe(false);
+    expect(hasRegisterDrift("Sinu konto on valmis", "et")).toBe(true);
+    expect(hasRegisterDrift("Millega sa tegeled?", "et")).toBe(true);
+    expect(hasRegisterDrift("Sul pole õigust", "et")).toBe(true);
+    expect(hasRegisterDrift("Teie konto on valmis", "et")).toBe(false);
+    expect(hasRegisterDrift("Kasuta {sa} väärtust", "et")).toBe(false);
+    expect(hasRegisterDrift("Saada see uuesti", "et")).toBe(false);
   });
 });
 

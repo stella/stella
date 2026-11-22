@@ -26,6 +26,7 @@ import {
   MAX_EMAIL_CITATION_BLOCK_TEXT_LENGTH,
   MAX_EMAIL_CITATION_BLOCKS,
 } from "@stll/api-contract";
+import type { CertifiedEmailEnvelope } from "@stll/api-contract/certified-email";
 import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
@@ -40,6 +41,11 @@ import {
 import { type Element, isTag, isText } from "@stll/html/nodes";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import {
+  certifiedEmailText,
+  mayBeCertificationData,
+  readCertifiedEmailParts,
+} from "@/api/lib/files/certified-email";
 import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
 import { EMAIL_PREVIEW_PALETTE as PALETTE } from "@/api/lib/files/email-preview-palette";
 import { EMAIL_SENDER_CLASS_CSS } from "@/api/lib/files/email-sender-styles";
@@ -97,6 +103,12 @@ export type ParsedEmail = {
   body: EmailBody;
   inlineImages: InlineImage[];
   attachments: EmailAttachment[];
+  /**
+   * A certified email's certification data. The fields above are then the
+   * original message's when the provider's message carries it, else the
+   * provider's notice without the parts the envelope stands for.
+   */
+  certified: CertifiedEmailEnvelope | null;
 };
 
 /**
@@ -116,6 +128,7 @@ export type EmailPreview = {
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
   citationBlocks: EmailCitationBlock[];
+  certified: CertifiedEmailEnvelope | null;
 };
 
 /**
@@ -226,6 +239,7 @@ export const buildEmailPreview = (
     bodyFolds: renderedBody.bodyFolds,
     bodyHtml: renderedBody.bodyHtml,
     citationBlocks: [...headerCitationBlocks, ...renderedBody.citationBlocks],
+    certified: parsed.certified,
   };
 };
 
@@ -298,7 +312,8 @@ export const parseEmail = async (
   return await parseEml(fileBuffer);
 };
 
-export const parsedEmailToText = (parsed: ParsedEmail): string => {
+/** The message's headers and body as text, without its certification data. */
+export const emailMessageText = (parsed: ParsedEmail): string => {
   const parts: string[] = [];
   const rows = [
     ["From", parsed.from],
@@ -321,6 +336,17 @@ export const parsedEmailToText = (parsed: ParsedEmail): string => {
   }
 
   return normalizeExtractedText(parts.join("\n"));
+};
+
+/** The email as text: a certified email's certification data, then the message. */
+export const parsedEmailToText = (parsed: ParsedEmail): string => {
+  const message = emailMessageText(parsed);
+  if (parsed.certified === null) {
+    return message;
+  }
+  return normalizeExtractedText(
+    [certifiedEmailText(parsed.certified), message].join("\n"),
+  );
 };
 
 // ── .eml parsing (postal-mime) ──────────────────────────
@@ -412,11 +438,18 @@ const buildPostalMimeAttachmentCharsetLookup = (
   return lookup;
 };
 
-const parseEml = async (
+type ParsedEmlMessage = Omit<ParsedEmail, "certified"> & {
+  headerNames: string[];
+};
+
+const parseEmlMessage = async (
   fileBuffer: ArrayBuffer,
-): Promise<Result<ParsedEmail, EmailParseError>> => {
+  { keepMessageParts = false }: { keepMessageParts?: boolean } = {},
+): Promise<Result<ParsedEmlMessage, EmailParseError>> => {
   const parser = new PostalMime({
     attachmentEncoding: "arraybuffer",
+    // A certified email's original message is one of its parts, not text.
+    ...(keepMessageParts ? { forceRfc822Attachments: true } : {}),
   });
   const parsed = await Result.tryPromise({
     try: async () => await parser.parse(fileBuffer),
@@ -432,6 +465,8 @@ const parseEml = async (
   }
   const email = parsed.value;
   const attachmentCharsets = buildPostalMimeAttachmentCharsetLookup(parser);
+  // Read only when an inline message contributed attachments, see below.
+  let nestedCharsets: Promise<NestedAttachmentCharset[]> | undefined;
 
   const inlineImages: InlineImage[] = [];
   const attachments: EmailAttachment[] = [];
@@ -440,12 +475,25 @@ const parseEml = async (
     if (!bytes) {
       continue;
     }
-    if (!attachmentCharsets.has(attachment.content)) {
-      panic("PostalMime attachment is missing from its parser tree");
+    const charset = attachmentCharsets.has(attachment.content)
+      ? (attachmentCharsets.get(attachment.content) ?? null)
+      : nestedAttachmentCharset(
+          await (nestedCharsets ??= readNestedAttachmentCharsets(parser)),
+          { bytes, fileName: attachment.filename },
+        );
+    // Fail if the internal contract drifts so a non-UTF-8 attachment cannot
+    // silently render as corrupted text.
+    if (charset === undefined) {
+      return Result.err(
+        new EmailParseError({
+          message: "PostalMime attachment is missing from its parser tree",
+          mimeType: EML_MIME_TYPE,
+        }),
+      );
     }
 
     attachments.push({
-      charset: attachmentCharsets.get(attachment.content) ?? null,
+      charset,
       contentId: attachment.contentId
         ? stripAngleBrackets(attachment.contentId)
         : null,
@@ -503,7 +551,176 @@ const parseEml = async (
       : { type: "text", text: email.text ?? "" },
     inlineImages,
     attachments,
-  } satisfies ParsedEmail);
+    headerNames: email.headers.map(({ key }) => key),
+  } satisfies ParsedEmlMessage);
+};
+
+const withoutHeaderNames = ({
+  headerNames: _headerNames,
+  ...message
+}: ParsedEmlMessage): Omit<ParsedEmail, "certified"> => message;
+
+const toOwnedArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
+  bytes.byteOffset === 0 &&
+  bytes.byteLength === bytes.buffer.byteLength &&
+  bytes.buffer instanceof ArrayBuffer
+    ? bytes.buffer
+    : bytes.slice().buffer;
+
+type NestedAttachmentCharset = {
+  bytes: Uint8Array;
+  fileName: string | null;
+  charset: EmailTextAttachmentCharset | null;
+};
+
+/**
+ * Inline messages within inline messages, as deep as PostalMime parses them
+ * (its `maxRfc822NestingDepth` default).
+ */
+const MAX_NESTED_MESSAGE_DEPTH = 10;
+
+const messagePartContents = (node: unknown, found: ArrayBuffer[]) => {
+  if (!isRecord(node)) {
+    return found;
+  }
+  const contentType = node["contentType"];
+  const content = node["content"];
+  if (
+    isRecord(contentType) &&
+    isRecord(contentType["parsed"]) &&
+    contentType["parsed"]["value"] === "message/rfc822" &&
+    content instanceof ArrayBuffer
+  ) {
+    found.push(content);
+  }
+  const childNodes = node["childNodes"];
+  if (Array.isArray(childNodes)) {
+    for (const childNode of childNodes) {
+      messagePartContents(childNode, found);
+    }
+  }
+  return found;
+};
+
+/**
+ * PostalMime parses an inline `message/rfc822` part with a nested parser and
+ * keeps that parser's attachments but not its tree, where their charsets are.
+ * Reading each message part again yields the same attachments with them.
+ */
+const readNestedAttachmentCharsets = async (
+  parser: unknown,
+  depth = 0,
+): Promise<NestedAttachmentCharset[]> => {
+  if (depth >= MAX_NESTED_MESSAGE_DEPTH || !isRecord(parser)) {
+    return [];
+  }
+  const entries: NestedAttachmentCharset[] = [];
+  for (const content of messagePartContents(parser["root"], [])) {
+    const nested = new PostalMime({ attachmentEncoding: "arraybuffer" });
+    const email = await Result.tryPromise(
+      async () => await nested.parse(content),
+    );
+    if (email.isErr()) {
+      continue;
+    }
+    const charsets = buildPostalMimeAttachmentCharsetLookup(nested);
+    for (const attachment of email.value.attachments) {
+      const bytes = attachmentContentToBytes(attachment.content);
+      if (bytes && charsets.has(attachment.content)) {
+        entries.push({
+          bytes,
+          fileName: attachment.filename,
+          charset: charsets.get(attachment.content) ?? null,
+        });
+      }
+    }
+    entries.push(...(await readNestedAttachmentCharsets(nested, depth + 1)));
+  }
+  return entries;
+};
+
+const nestedAttachmentCharset = (
+  entries: readonly NestedAttachmentCharset[],
+  { bytes, fileName }: { bytes: Uint8Array; fileName: string | null },
+): EmailTextAttachmentCharset | null | undefined => {
+  const charsets = new Set(
+    entries
+      .filter(
+        (entry) =>
+          entry.fileName === fileName &&
+          Buffer.from(entry.bytes).equals(Buffer.from(bytes)),
+      )
+      .map(({ charset }) => charset),
+  );
+  // Undefined when no parse found the attachment at all.
+  if (charsets.size === 0) {
+    return undefined;
+  }
+  // Identical attachments that declare different charsets name none.
+  return charsets.size === 1 ? ([...charsets][0] ?? null) : null;
+};
+
+/**
+ * An .eml file. A certified email (Italian PEC) is recognised by its parts:
+ * it reads as its original message, or as the provider's notice, with the
+ * certification data beside it.
+ */
+const parseEml = async (
+  fileBuffer: ArrayBuffer,
+): Promise<Result<ParsedEmail, EmailParseError>> => {
+  const parsed = await parseEmlMessage(fileBuffer);
+  if (
+    parsed.isOk() &&
+    !parsed.value.attachments.some(({ bytes }) => mayBeCertificationData(bytes))
+  ) {
+    return Result.ok({ ...withoutHeaderNames(parsed.value), certified: null });
+  }
+  // The provider's parts are read without parsing the original inline, so an
+  // original the inline parse refuses still leaves the provider's notice.
+  const provider = await parseEmlMessage(fileBuffer, {
+    keepMessageParts: true,
+  });
+  const certified = provider.isOk()
+    ? readCertifiedEmailParts({
+        headerNames: provider.value.headerNames,
+        parts: provider.value.attachments,
+      })
+    : null;
+  if (!provider.isOk() || certified === null) {
+    return parsed.isOk()
+      ? Result.ok({ ...withoutHeaderNames(parsed.value), certified: null })
+      : parsed;
+  }
+  if (certified.original !== null) {
+    const original = await parseEmlMessage(
+      toOwnedArrayBuffer(certified.original),
+    );
+    if (original.isOk()) {
+      // A provider may attach parts of its own beside the original (6.3.4).
+      const providerParts = provider.value.attachments.filter(
+        (_, index) => !certified.certificationParts.has(index),
+      );
+      const message = withoutHeaderNames(original.value);
+      return Result.ok({
+        ...message,
+        attachments: [...message.attachments, ...providerParts],
+        certified: certified.envelope,
+      });
+    }
+  }
+  // Without a readable original, the provider's notice is the message; an
+  // original that does not parse stays one of its attachments.
+  const notice = withoutHeaderNames(provider.value);
+  const unreadOriginal = certified.original;
+  return Result.ok({
+    ...notice,
+    attachments: notice.attachments.filter(
+      ({ bytes }, index) =>
+        !certified.certificationParts.has(index) ||
+        (unreadOriginal !== null && bytes === unreadOriginal),
+    ),
+    certified: certified.envelope,
+  });
 };
 
 const formatAddress = (address: Address): string => {
@@ -612,6 +829,7 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
       : { type: "text", text: data.text ?? "" },
     inlineImages,
     attachments,
+    certified: null,
   };
 };
 
@@ -860,7 +1078,7 @@ const hasExplicitWritingDirection = ($: CheerioApi): boolean => {
   );
 };
 
-const emailBodyToText = (body: EmailBody): string => {
+export const emailBodyToText = (body: EmailBody): string => {
   if (body.type === "text") {
     return normalizeExtractedText(body.text);
   }

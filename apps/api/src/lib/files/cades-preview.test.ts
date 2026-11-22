@@ -41,6 +41,7 @@ describe("CAdES file reading", () => {
       fileName: "filing.pdf",
       mimeType: PDF_MIME_TYPE,
       text: expect.stringContaining("Signed filing text"),
+      textFormat: "markdown",
     });
     expect(
       preview.layers.map(({ signers }) =>
@@ -72,6 +73,7 @@ describe("CAdES file reading", () => {
     expect(preview.unwrap()).toMatchObject({
       mimeType: "text/plain",
       text,
+      textFormat: "plain",
     });
     const pdf = await readCadesPdf(signed, name);
     expect(pdf.isErr() && pdf.error.status).toBe(422);
@@ -93,6 +95,7 @@ describe("CAdES file reading", () => {
       fileName: "unknown.bin",
       mimeType: "application/octet-stream",
       text: "",
+      textFormat: "plain",
       layers: [
         {
           id: "layer-0",

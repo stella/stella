@@ -25,7 +25,7 @@ const REPLAY_ENTRYPOINTS = [
  * outside them without building the closure, so the closure refuses any file
  * that would escape them.
  */
-export const REPLAY_CLOSURE_ROOTS = ["apps/", "packages/", "node_modules/"];
+export const REPLAY_CLOSURE_ROOTS = ["apps/api/", "packages/", "node_modules/"];
 
 /** Follow value imports rather than assigning write ownership by directory. */
 export const replayImportClosure = (root: string) => {

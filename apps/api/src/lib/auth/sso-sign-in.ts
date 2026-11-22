@@ -1,7 +1,4 @@
-import type {
-  BetterAuthPlugin,
-  GenericEndpointContext,
-} from "@better-auth/core";
+import type { BetterAuthPlugin } from "@better-auth/core";
 import { createAuthMiddleware } from "@better-auth/core/api";
 import {
   defineRequestState,
@@ -22,6 +19,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { SSO_PROVIDER_ID_PATTERN } from "@/api/db/auth-schema";
+import type { DatabaseHookContext } from "@/api/lib/auth/database-hook-context";
 import { isSessionCreatingAuthPath } from "@/api/lib/auth/session-path-classification";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isEnterpriseSsoDeployed } from "@/api/lib/db/sso-access";
@@ -279,14 +277,20 @@ const resolveSsoUser = async (
  *   no session, as on a pending sign-in's second step.
  */
 export const ssoSessionProvenance = async (
-  ctx: GenericEndpointContext | null,
+  ctx: DatabaseHookContext,
   userId: SafeId<"user">,
 ): Promise<{ ssoProviderId: string | null }> => {
   const callbackProviderId = ssoCallbackProviderId(ctx);
   if (callbackProviderId !== undefined) {
     return { ssoProviderId: await verifiedProviderRecord(callbackProviderId) };
   }
-  if (ctx === null || isSessionCreatingAuthPath(ctx.path)) {
+  // A session created outside any endpoint, by a server call, replaces no
+  // signed-in session and authenticates through no provider.
+  if (
+    ctx === null ||
+    ctx === undefined ||
+    isSessionCreatingAuthPath(ctx.path)
+  ) {
     return { ssoProviderId: null };
   }
   const signedIn = await getSessionFromCtx(ctx);

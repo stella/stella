@@ -207,6 +207,7 @@ export const listContactsPage = async ({
       conditions.push(eq(contacts.type, query.type));
     }
     if (query.q) {
+      // sql-perf-allow: bounded by one organization's contacts via contacts_org_display_name_idx (and contacts_org_type_idx when type is set)
       conditions.push(ilike(contacts.displayName, `%${escapeLike(query.q)}%`));
     }
     if (query.cursor) {

@@ -4,7 +4,8 @@
 //! account. With it goes the kind of app the text is for and, when the
 //! speaker shares them, the window title and the text before the cursor
 //! (`dictation_context`), which set the register and are never typed, and the
-//! speaker's custom words (`dictation_words`) as the spellings to use. The
+//! speaker's custom words (`dictation_words`) as the spellings to use, and
+//! the style and language the speaker chose for the text (`CleanupForm`). The
 //! answer is a list of typed segments; any failure, timeout, or malformed or
 //! implausible answer leaves the raw transcript, so cleanup never blocks or
 //! loses a dictation. Neither the transcript, the custom words nor the answer
@@ -51,7 +52,13 @@ struct Contract {
   /// `dictation_context::AppKind` names the same kinds; a test binds them.
   #[cfg(test)]
   app_kinds: Vec<String>,
+  /// `CleanupStyle` names the same styles; a test binds them.
+  #[cfg(test)]
+  styles: Vec<String>,
+  translation_languages: Vec<String>,
   min_answer_text_percent: usize,
+  /// What notes and translations must keep, which word the dictation anew.
+  condensed_min_answer_text_percent: usize,
   min_break_allowance: usize,
   transcript_characters_per_break: usize,
   sentence_end_marks: String,
@@ -119,6 +126,74 @@ pub fn contract_app_kinds() -> &'static [String] {
   &contract().app_kinds
 }
 
+/// How cleanup writes the text; `polished` (the default) is cleanup as it
+/// was before styles, and a request leaves it out.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CleanupStyle {
+  #[default]
+  Polished,
+  Casual,
+  Notes,
+  Verbatim,
+}
+
+impl CleanupStyle {
+  pub const ALL: [Self; 4] =
+    [Self::Polished, Self::Casual, Self::Notes, Self::Verbatim];
+
+  pub const fn stored(self) -> &'static str {
+    match self {
+      Self::Polished => "polished",
+      Self::Casual => "casual",
+      Self::Notes => "notes",
+      Self::Verbatim => "verbatim",
+    }
+  }
+
+  /// The stored preference; anything unknown reads as polished.
+  pub fn parse(stored: Option<&str>) -> Self {
+    Self::ALL
+      .into_iter()
+      .find(|style| Some(style.stored()) == stored)
+      .unwrap_or_default()
+  }
+
+  fn is_polished(&self) -> bool {
+    *self == Self::Polished
+  }
+}
+
+/// A language the contract lets cleanup write the text in, as it lists it.
+pub fn translation_language(tag: &str) -> Option<&'static str> {
+  contract()
+    .translation_languages
+    .iter()
+    .map(String::as_str)
+    .find(|language| *language == tag)
+}
+
+/// How the speaker asked cleanup to write a dictation: its style, and the
+/// language to write it in when not the spoken one.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct CleanupForm {
+  pub style: CleanupStyle,
+  pub translate_to: Option<&'static str>,
+}
+
+impl CleanupForm {
+  /// Notes and translations word the dictation anew, so they need to keep only
+  /// the contract's condensed share of it.
+  fn min_answer_text_percent(self) -> usize {
+    let contract = contract();
+    if self.style == CleanupStyle::Notes || self.translate_to.is_some() {
+      contract.condensed_min_answer_text_percent
+    } else {
+      contract.min_answer_text_percent
+    }
+  }
+}
+
 /// Every segment's text is at most a transcript long, and JSON spends at
 /// most six bytes on a character; the field names fit in the rest.
 fn max_response_bytes() -> usize {
@@ -141,6 +216,11 @@ struct CleanupRequest<'a> {
   /// API expects.
   #[serde(skip_serializing_if = "<[_]>::is_empty")]
   vocabulary: &'a [String],
+  /// Absent when polished, as an older API expects.
+  #[serde(skip_serializing_if = "CleanupStyle::is_polished")]
+  style: CleanupStyle,
+  #[serde(rename = "translateTo", skip_serializing_if = "Option::is_none")]
+  translate_to: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -335,7 +415,7 @@ fn dictated_content(transcript: &str) -> (usize, usize) {
 /// lines no more often than the dictation could have asked for. The server
 /// applies the same bounds; this side holds them too, so an answer that lost
 /// content is never typed.
-pub fn plausible(transcript: &str, segments: &[Segment]) -> bool {
+pub fn plausible(transcript: &str, segments: &[Segment], form: CleanupForm) -> bool {
   let contract = contract();
   let (dictated, discardable) = dictated_content(transcript);
   let mut kept = 0;
@@ -358,7 +438,7 @@ pub fn plausible(transcript: &str, segments: &[Segment]) -> bool {
   let has_text = texts > 0 || (dictated == 0 && breaks > 0);
   has_text
     && kept * 100
-      >= dictated.saturating_sub(discardable) * contract.min_answer_text_percent
+      >= dictated.saturating_sub(discardable) * form.min_answer_text_percent()
     && breaks <= allowed_breaks
 }
 
@@ -415,11 +495,13 @@ fn client() -> Result<&'static DesktopHttpClient, String> {
 }
 
 /// What cleanup asks for besides the transcript.
+#[derive(Clone, Copy)]
 struct Asked<'a> {
   locale: Option<&'a str>,
   languages: &'a [&'a str],
   vocabulary: &'a [String],
   context: &'a CleanupContext,
+  form: CleanupForm,
 }
 
 async fn post(
@@ -438,6 +520,8 @@ async fn post(
         languages,
         context: asked.context,
         vocabulary: asked.vocabulary,
+        style: asked.form.style,
+        translate_to: asked.form.translate_to,
       }),
     &account.device_key,
     Some(&account.credential.key),
@@ -448,31 +532,38 @@ async fn post(
   .map_err(request_cause_logged(FAILURE))
 }
 
-/// An API from before custom words refuses a request that carries them as
-/// invalid; asked again without them, it still cleans up.
-fn retry_without_vocabulary(
-  status: reqwest::StatusCode,
-  vocabulary: &[String],
-) -> bool {
-  status == reqwest::StatusCode::UNPROCESSABLE_ENTITY && !vocabulary.is_empty()
+/// What to ask again after `status`: an API from before styles refuses a
+/// request that names a style or a language to write in as invalid, and one
+/// from before custom words a request with them, so each is dropped in turn,
+/// the newest first; asked again without it, the API still cleans up. `None`
+/// once nothing is left to drop or the refusal was of another kind.
+fn fallback<'a>(status: reqwest::StatusCode, asked: &Asked<'a>) -> Option<Asked<'a>> {
+  if status != reqwest::StatusCode::UNPROCESSABLE_ENTITY {
+    return None;
+  }
+  if asked.form != CleanupForm::default() {
+    return Some(Asked {
+      form: CleanupForm::default(),
+      ..*asked
+    });
+  }
+  (!asked.vocabulary.is_empty()).then_some(Asked {
+    vocabulary: &[],
+    ..*asked
+  })
 }
 
+/// The segments, with the form the API was asked for in the end.
 async fn send(
   account: &AccountRequest,
   transcript: &str,
   asked: &Asked<'_>,
-) -> Result<Vec<Segment>, String> {
-  let mut response = post(account, transcript, asked).await?;
-  if retry_without_vocabulary(response.status(), asked.vocabulary) {
-    response = post(
-      account,
-      transcript,
-      &Asked {
-        vocabulary: &[],
-        ..*asked
-      },
-    )
-    .await?;
+) -> Result<(Vec<Segment>, CleanupForm), String> {
+  let mut asked = *asked;
+  let mut response = post(account, transcript, &asked).await?;
+  while let Some(next) = fallback(response.status(), &asked) {
+    asked = next;
+    response = post(account, transcript, &asked).await?;
   }
   if !response.status().is_success() {
     return Err(format!(
@@ -491,7 +582,7 @@ async fn send(
     }
     body.extend_from_slice(&chunk);
   }
-  parse_segments(&body)
+  parse_segments(&body).map(|segments| (segments, asked.form))
 }
 
 /// The linked account the server enabled dictation for, and no other: what
@@ -540,6 +631,7 @@ async fn request(
   languages: &[&str],
   vocabulary: &[String],
   context: &CleanupContext,
+  form: CleanupForm,
 ) -> Result<Vec<Segment>, String> {
   let account = dictation_account(app).await?;
   let segments = send(
@@ -550,12 +642,13 @@ async fn request(
       languages,
       vocabulary,
       context,
+      form,
     },
   )
   .await;
   drop(account);
-  let segments = segments?;
-  if plausible(transcript, &segments) {
+  let (segments, form) = segments?;
+  if plausible(transcript, &segments, form) {
     Ok(segments)
   } else {
     Err(IMPLAUSIBLE.to_string())
@@ -578,7 +671,7 @@ pub(crate) fn bounded<T>(
 /// The cleaned segments, or `None` whenever the raw transcript should be
 /// typed instead. Blocks the dictation thread for at most [`TIMEOUT`]. The
 /// plausibility check measures the answer against the transcript alone, so
-/// nothing from `context` can be typed.
+/// nothing from `context` can be typed; `form` says how to write it.
 ///
 /// Returns how it went, for the local log, with the segments.
 pub fn clean_up(
@@ -587,13 +680,14 @@ pub fn clean_up(
   languages: &[&str],
   vocabulary: &[String],
   context: &CleanupContext,
+  form: CleanupForm,
 ) -> (Option<Vec<Segment>>, Cleanup) {
   if transcript.chars().count() > contract().max_transcript_length {
     return (None, Cleanup::TooLong);
   }
   match bounded(
     TIMEOUT,
-    request(app, transcript, languages, vocabulary, context),
+    request(app, transcript, languages, vocabulary, context, form),
   ) {
     Some(Ok(segments)) => (Some(segments), Cleanup::Applied),
     Some(Err(error)) => {
@@ -670,9 +764,14 @@ mod tests {
     let transcript = "the parties agree to extend the deadline by two weeks";
     assert!(plausible(
       transcript,
-      &[plain("The parties agree to extend the deadline.")]
+      &[plain("The parties agree to extend the deadline.")],
+      CleanupForm::default()
     ));
-    assert!(!plausible(transcript, &[plain("The parties agree.")]));
+    assert!(!plausible(
+      transcript,
+      &[plain("The parties agree.")],
+      CleanupForm::default()
+    ));
   }
 
   #[test]
@@ -685,7 +784,8 @@ mod tests {
         plain("a tedy"),
         Segment::LineBreak,
         plain("se rozhodl odejít."),
-      ]
+      ],
+      CleanupForm::default()
     ));
     assert!(plausible(
       "tučně 42, ne, 24 dní tečka",
@@ -695,7 +795,8 @@ mod tests {
           bold: true,
         },
         plain(" dní."),
-      ]
+      ],
+      CleanupForm::default()
     ));
   }
 
@@ -709,6 +810,10 @@ mod tests {
     transcript: String,
     segments: Vec<WireSegment>,
     plausible: bool,
+    #[serde(default)]
+    style: CleanupStyle,
+    #[serde(default, rename = "translateTo")]
+    translate_to: Option<String>,
   }
 
   /// The server runs the same cases (cleanup-model.test.ts), so both sides
@@ -721,8 +826,14 @@ mod tests {
     for case in cases {
       let segments: Vec<Segment> =
         case.segments.into_iter().map(Segment::from).collect();
+      let form = CleanupForm {
+        style: case.style,
+        translate_to: case.translate_to.as_deref().map(|tag| {
+          translation_language(tag).expect("a case writes in a contract language")
+        }),
+      };
       assert_eq!(
-        plausible(&case.transcript, &segments),
+        plausible(&case.transcript, &segments, form),
         case.plausible,
         "{}",
         case.name
@@ -732,10 +843,22 @@ mod tests {
 
   #[test]
   fn only_a_dictation_of_commands_may_become_breaks_alone() {
-    assert!(plausible("nový řádek", &[Segment::LineBreak]));
-    assert!(plausible("Nový odstavec.", &[Segment::ParagraphBreak]));
-    assert!(!plausible("nový řádek", &[]));
-    assert!(!plausible("smlouva nový řádek", &[Segment::LineBreak]));
+    assert!(plausible(
+      "nový řádek",
+      &[Segment::LineBreak],
+      CleanupForm::default()
+    ));
+    assert!(plausible(
+      "Nový odstavec.",
+      &[Segment::ParagraphBreak],
+      CleanupForm::default()
+    ));
+    assert!(!plausible("nový řádek", &[], CleanupForm::default()));
+    assert!(!plausible(
+      "smlouva nový řádek",
+      &[Segment::LineBreak],
+      CleanupForm::default()
+    ));
   }
 
   /// The transcript's words, with a line break before each of the first
@@ -759,12 +882,16 @@ mod tests {
   fn an_answer_that_breaks_far_more_often_than_dictated_is_not_typed() {
     // Four breaks are always allowed; 27 characters allow no more.
     let short = "ano ne ano ne ano ne ano ne";
-    assert!(plausible(short, &broken(short, 4)));
-    assert!(!plausible(short, &broken(short, 5)));
+    assert!(plausible(short, &broken(short, 4), CleanupForm::default()));
+    assert!(!plausible(short, &broken(short, 5), CleanupForm::default()));
     // 240 characters allow one break per 20 of them.
     let long = "slovo ".repeat(40);
-    assert!(plausible(&long, &broken(&long, 12)));
-    assert!(!plausible(&long, &broken(&long, 13)));
+    assert!(plausible(&long, &broken(&long, 12), CleanupForm::default()));
+    assert!(!plausible(
+      &long,
+      &broken(&long, 13),
+      CleanupForm::default()
+    ));
   }
 
   #[test]
@@ -955,11 +1082,15 @@ mod tests {
       languages: &["cs", "en"],
       vocabulary: &[],
       context: &context,
+      form: CleanupForm::default(),
     };
     let good = AccountRequest::fixture(linked(base.clone(), "stella_dr_good")).await;
     assert_eq!(
       send(&good, "tučně 42", &asked).await.unwrap(),
-      parse_segments(FIXTURE.as_bytes()).unwrap()
+      (
+        parse_segments(FIXTURE.as_bytes()).unwrap(),
+        CleanupForm::default()
+      )
     );
     drop(good);
     let bad = AccountRequest::fixture(linked(base, "stella_dr_bad")).await;
@@ -983,6 +1114,8 @@ mod tests {
         languages: &["cs", "en"],
         context: &context,
         vocabulary,
+        style: CleanupStyle::Polished,
+        translate_to: None,
       })
       .unwrap()
     };
@@ -994,18 +1127,109 @@ mod tests {
   }
 
   #[test]
-  fn only_a_refused_request_with_custom_words_is_asked_again_without_them() {
+  fn a_style_and_a_language_to_write_in_are_fields_absent_when_polished() {
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Chat,
+      window_title: None,
+      text_before_cursor: None,
+    };
+    let body = |style, translate_to| {
+      serde_json::to_value(CleanupRequest {
+        transcript: "za prvé zavolat za druhé poslat",
+        locale: None,
+        languages: &["cs"],
+        context: &context,
+        vocabulary: &[],
+        style,
+        translate_to,
+      })
+      .unwrap()
+    };
+    let polished = body(CleanupStyle::Polished, None);
+    assert!(polished.get("style").is_none());
+    assert!(polished.get("translateTo").is_none());
+    let notes = body(CleanupStyle::Notes, Some("en"));
+    assert_eq!(notes["style"], "notes");
+    assert_eq!(notes["translateTo"], "en");
+  }
+
+  #[test]
+  fn styles_and_translation_languages_are_the_contract_ones() {
+    let names: Vec<&str> = CleanupStyle::ALL
+      .iter()
+      .map(|style| style.stored())
+      .collect();
+    assert_eq!(names, contract().styles);
+    for style in CleanupStyle::ALL {
+      assert_eq!(
+        serde_json::to_value(style).unwrap(),
+        serde_json::json!(style.stored())
+      );
+      assert_eq!(CleanupStyle::parse(Some(style.stored())), style);
+    }
+    assert_eq!(CleanupStyle::parse(Some("formal")), CleanupStyle::Polished);
+    assert_eq!(CleanupStyle::parse(None), CleanupStyle::Polished);
+    assert_eq!(translation_language("en"), Some("en"));
+    assert_eq!(translation_language("pt-BR"), Some("pt-BR"));
+    assert_eq!(translation_language("off"), None);
+    assert_eq!(translation_language("EN"), None);
+  }
+
+  #[test]
+  fn notes_and_translations_keep_the_condensed_share() {
+    let transcript = "so um basically I think we should probably call the client on Monday and then you know send the draft by Friday";
+    let notes = [
+      plain("- Call client Monday"),
+      Segment::LineBreak,
+      plain("- Draft by Friday"),
+    ];
+    assert!(!plausible(transcript, &notes, CleanupForm::default()));
+    let noted = CleanupForm {
+      style: CleanupStyle::Notes,
+      translate_to: None,
+    };
+    assert!(plausible(transcript, &notes, noted));
+    assert!(!plausible(transcript, &[plain("- Call")], noted));
+    let translated = CleanupForm {
+      style: CleanupStyle::Polished,
+      translate_to: Some("cs"),
+    };
+    assert!(plausible(transcript, &notes, translated));
+  }
+
+  #[test]
+  fn a_refused_request_is_asked_again_without_the_newest_fields_first() {
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Email,
+      window_title: None,
+      text_before_cursor: None,
+    };
     let words = vec!["custom terms list".to_string()];
     let invalid = reqwest::StatusCode::UNPROCESSABLE_ENTITY;
-    assert!(retry_without_vocabulary(invalid, &words));
-    assert!(!retry_without_vocabulary(invalid, &[]));
+    let asked = Asked {
+      locale: None,
+      languages: &["cs"],
+      vocabulary: &words,
+      context: &context,
+      form: CleanupForm {
+        style: CleanupStyle::Notes,
+        translate_to: Some("en"),
+      },
+    };
+    let without_form = fallback(invalid, &asked).unwrap();
+    assert_eq!(without_form.form, CleanupForm::default());
+    assert_eq!(without_form.vocabulary, words.as_slice());
+    let without_words = fallback(invalid, &without_form).unwrap();
+    assert_eq!(without_words.form, CleanupForm::default());
+    assert!(without_words.vocabulary.is_empty());
+    assert!(fallback(invalid, &without_words).is_none());
     for status in [
       reqwest::StatusCode::OK,
       reqwest::StatusCode::FORBIDDEN,
       reqwest::StatusCode::TOO_MANY_REQUESTS,
       reqwest::StatusCode::BAD_GATEWAY,
     ] {
-      assert!(!retry_without_vocabulary(status, &words), "{status}");
+      assert!(fallback(status, &asked).is_none(), "{status}");
     }
   }
 }

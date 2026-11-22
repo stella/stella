@@ -13,8 +13,8 @@ import { Switch } from "@stll/ui/switch";
 
 import { DictationCustomWords } from "../mainview/DictationCustomWords";
 import {
+  ChosenModelNote,
   CloudModelSelect,
-  DictationModelTags,
   RetentionWarning,
   shownCloudModel,
   unavailableMessage,
@@ -415,7 +415,7 @@ const CloudModel = ({
           <p className="text-sm font-medium" id={labelId}>
             {destinationT("model")}
           </p>
-          {chosen === null ? null : <DictationModelTags model={chosen} />}
+          <ChosenModelNote chosen={chosen} cloudModel={cloudModel} />
         </div>
         <CloudModelSelect
           chosen={chosen}

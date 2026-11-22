@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
@@ -599,6 +600,7 @@ const storedDecisionFixture = () =>
     judges: [],
     headnote: { type: "absent", reason: "not_published" },
     sections: null,
+    bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
     language: "cs",
     languageGroupKey: null,
     languageAlternates: [],
@@ -3037,6 +3039,7 @@ describe("decision text in chat projection", () => {
       judges: [],
       headnote: { type: "absent", reason: "not_published" },
       sections: null,
+      bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
       language: "cs",
       languageGroupKey: null,
       languageAlternates: [],

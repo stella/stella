@@ -74,6 +74,7 @@ export const SETTINGS_DICTATION = {
   ],
   available: true,
   cleanup: true,
+  cleanupStyle: "polished",
   cloudAvailable: true,
   cloudModel: "elevenlabs-direct/scribe-v3",
   customWords: ["Libeňská", "custom terms list", "22 Cdo 120/2026"],
@@ -109,6 +110,7 @@ export const SETTINGS_DICTATION = {
   sounds: true,
   speakersOnly: true,
   textBeforeCursorAvailable: true,
+  translateTo: null,
   whileDictating: "lower",
   whileDictatingOffered: ["nothing", "lower", "pause"],
 } as const satisfies DictationSettingSnapshot;

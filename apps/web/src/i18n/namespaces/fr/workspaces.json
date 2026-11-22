@@ -20,7 +20,6 @@
       "delivery": "Remise",
       "deliveryEvents": "Historique de remise",
       "deliveryReceipt": "Accusé de réception",
-      "directionUnknown": "Sens inconnu",
       "messageId": "Identifiant du message",
       "moreContacts": "D’autres contacts correspondent à cette boîte de données.",
       "openFile": "Ouvrir le fichier .zfo",
@@ -320,7 +319,9 @@
   "signedFile": {
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
+    "noSigners": "Aucune information sur les signataires n’a été trouvée.",
     "pdfUnavailable": "L’aperçu PDF est indisponible.",
+    "signers": "Signataires",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",
     "unverified": "Les signatures n’ont pas été vérifiées."

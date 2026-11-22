@@ -37,11 +37,15 @@ const QUOTE_DECISION_UNREADABLE = failureSink({
   expected: [],
 });
 
-const config = {
+const verifyQuotationConfig = {
   description:
     "Check whether a quotation occurs word for word in one stored decision. Answers with its exact occurrences, the closest passage and differences for an altered quote, or that the text cannot be verified.",
   contract: "patch",
   accountAccess: ACCOUNT_ACCESS.sandbox,
+  contentDelivery: {
+    type: "public",
+    reason: "Returns published court collection text.",
+  },
   // The route serves the public site; agents reach the same check through the
   // curated `verify_quote` tool, as they reach citations through theirs.
   mcp: { type: "internal", reason: "public_indexing" },
@@ -63,7 +67,7 @@ export const createVerifyQuotationHandler = ({
   readSharedCorpus = readsSharedPublicLawCorpus,
 }: VerifyQuotationDependencies = {}) =>
   createSafePublicSubjectFollowUpHandler({
-    config,
+    config: verifyQuotationConfig,
     caseLawDb,
     locate: ({ body }) => ({
       kind: "id",

@@ -33,6 +33,10 @@ import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
 } from "@stll/api-contract/legal-file-formats";
+import type {
+  PreviewText,
+  PreviewTextFormat,
+} from "@stll/api-contract/preview-text";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
@@ -49,6 +53,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
   ASIC_PREVIEW_WORKER_MODE,
+  SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
 import type { AsicParseError } from "@/api/lib/files/asic-container";
@@ -69,6 +74,12 @@ import {
   parseEmail,
 } from "@/api/lib/files/email-to-html";
 import type { P7mParseError } from "@/api/lib/files/p7m";
+import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
+import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
+import {
+  extractSignedDossierPdf,
+  extractSignedDossierPreview,
+} from "@/api/lib/files/signed-dossier-worker";
 import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -327,6 +338,7 @@ type LegalTextReadError =
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
+  | SignedDossierParseError
   | UnhandledException;
 
 const extractDataBoxText = async ({
@@ -394,7 +406,9 @@ const extractCadesText = async ({
   if (content.isErr()) {
     return content;
   }
-  return Result.ok(cadesDocumentText({ layers, text: content.value ?? "" }));
+  return Result.ok(
+    cadesDocumentText({ layers, text: content.value?.text ?? "" }),
+  );
 };
 
 const extractAsicText = async ({
@@ -416,6 +430,20 @@ const extractAsicText = async ({
   return Result.ok(asicDocumentText(preview.value));
 };
 
+const extractSignedDossierText = async ({
+  fileBytes,
+  mimeType,
+  maxChars,
+}: LegalTextReadOptions) => {
+  const preview = await extractSignedDossierPreview({
+    fileBytes,
+    mimeType,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  return preview.map(signedDossierText);
+};
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -426,6 +454,8 @@ const LEGAL_TEXT_READERS = {
   uyap: extractStructuredText,
   asicE: extractAsicText,
   asicS: extractAsicText,
+  eAkta: extractSignedDossierText,
+  zep: extractSignedDossierText,
   cades: extractCadesText,
   dataBox: extractDataBoxText,
 } satisfies Record<
@@ -565,28 +595,49 @@ const readMaxCharsArgument = (value: string | undefined): number => {
   return parsed;
 };
 
+/**
+ * A contained document's text with its markup, named by the reader that
+ * produced it: the converters write Markdown, a text file is read as the
+ * text it holds. A preview renders each as what it is and never guesses.
+ */
+const readEmbeddedPayload = async (
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<{ text: string | null; format: PreviewTextFormat } | null> => {
+  if (mimeType === PDF_MIME_TYPE) {
+    return { text: await extractPdfMarkdown(bytes), format: "markdown" };
+  }
+  if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
+    return {
+      text: await extractOfficeDocumentMarkdown(bytes),
+      format: "markdown",
+    };
+  }
+  if (isDirectTextMimeType(mimeType)) {
+    return {
+      text: extractDirectText(bytes, mimeType),
+      format: mimeType === "text/markdown" ? "markdown" : "plain",
+    };
+  }
+  return null;
+};
+
 const extractEmbeddedPayloadText = async (
   file: ScannedFile,
   maxChars: number,
-) => {
+): Promise<Result<PreviewText | null, UnhandledException>> => {
   // Embedded data is dispatched only to leaf readers, even if an archive
   // member is itself a signed container or a message.
   const bytes = new Uint8Array(file.bytes);
   const mimeType = normalizeMimeType(file.mimeType);
-  const content = await Result.tryPromise(async () => {
-    if (mimeType === PDF_MIME_TYPE) {
-      return await extractPdfMarkdown(bytes);
-    }
-    if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
-      return await extractOfficeDocumentMarkdown(bytes);
-    }
-    if (isDirectTextMimeType(mimeType)) {
-      return extractDirectText(bytes, mimeType);
-    }
-    return null;
-  });
+  const content = await Result.tryPromise(
+    async () => await readEmbeddedPayload(bytes, mimeType),
+  );
   if (content.isOk()) {
-    return Result.ok(content.value?.slice(0, maxChars) || null);
+    const text = content.value?.text?.slice(0, maxChars);
+    return Result.ok(
+      content.value && text ? { text, format: content.value.format } : null,
+    );
   }
 
   const error = content.error.cause;
@@ -650,7 +701,8 @@ const writeCadesPreview = async ({
     fileName: sanitizeFilename(file.fileName),
     mimeType: file.mimeType,
     layers,
-    text: content.value ?? "",
+    text: content.value?.text ?? "",
+    textFormat: content.value?.format ?? "plain",
   } satisfies v.InferOutput<typeof cadesPreviewSchema>;
   await writeWorkerStdout(JSON.stringify(preview));
   return Result.ok(0);
@@ -677,6 +729,40 @@ const writeAsicPreview = async (options: {
     }
   }
   await writeWorkerStdout(JSON.stringify(preview.value));
+  return Result.ok(0);
+};
+
+const writeSignedDossier = async (options: {
+  mode: (typeof SIGNED_DOSSIER_WORKER_MODE)[keyof typeof SIGNED_DOSSIER_WORKER_MODE];
+  fileBytes: Uint8Array;
+  mimeType: string;
+  maxChars: number;
+  document: number;
+}) => {
+  const output =
+    options.mode === SIGNED_DOSSIER_WORKER_MODE.pdf
+      ? await extractSignedDossierPdf(options)
+      : (
+          await extractSignedDossierPreview({
+            ...options,
+            readText: extractEmbeddedPayloadText,
+          })
+        ).map((preview) => JSON.stringify(preview));
+  if (output.isErr()) {
+    switch (output.error._tag) {
+      case "SignedDossierParseError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(output.error);
+    }
+  }
+  if (output.value === null) {
+    return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+  }
+  await writeWorkerStdout(output.value);
   return Result.ok(0);
 };
 
@@ -736,6 +822,25 @@ try {
       exitWithWorkerError(preview.error);
     }
     process.exit(preview.value);
+  }
+  if (
+    mimeType === SIGNED_DOSSIER_WORKER_MODE.preview ||
+    mimeType === SIGNED_DOSSIER_WORKER_MODE.pdf
+  ) {
+    const written = await writeSignedDossier({
+      mode: mimeType,
+      fileBytes,
+      mimeType: process.argv[4] ?? "",
+      maxChars,
+      // An unparsable position names no document; the reader refuses it.
+      document: parseIntegerToken(process.argv[5] ?? "", {
+        sign: "unsigned",
+      }).unwrapOr(-1),
+    });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
   }
   const result = await extract({
     fileBytes,
