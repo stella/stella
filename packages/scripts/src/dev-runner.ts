@@ -565,28 +565,23 @@ export const describeFailedProbes = (
   return failures;
 };
 
-type ApiPortHealthOutcome =
-  { status: "healthy" } | { status: "unhealthy" } | { status: "unreachable" };
-
-const probeApiPortHealth = async (
-  port: number,
-): Promise<ApiPortHealthOutcome> => {
+const isHealthyApiPort = async (port: number) => {
+  let outcome: "healthy" | "unhealthy" | "unreachable";
   try {
     const response = await fetch(`${apiUrlForPort(port)}/health`, {
       method: "GET",
       signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),
     });
     const bodyText = await response.text();
-    return validateApiHealth(response, bodyText) === undefined
-      ? { status: "healthy" }
-      : { status: "unhealthy" };
+    outcome =
+      validateApiHealth(response, bodyText) === undefined
+        ? "healthy"
+        : "unhealthy";
   } catch {
-    return { status: "unreachable" };
+    outcome = "unreachable";
   }
+  return outcome === "healthy";
 };
-
-const isHealthyApiPort = async (port: number) =>
-  (await probeApiPortHealth(port)).status === "healthy";
 
 const sharedInfraPortList = (infraPorts: InfraPorts) => [
   infraPorts.postgres,
