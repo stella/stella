@@ -73,6 +73,8 @@ const CELL_PADDING_Y = 2.5;
 const RULE_WIDTH = 0.5;
 /** A column is never set narrower than this many ems of text. */
 const COLUMN_MIN_EMS = 6;
+/** The share of a page's height a repeated header row may take. */
+const HEADER_SHARE_MAX = 1 / 3;
 /** Records measured to choose column widths. */
 const COLUMN_SAMPLE_RECORDS = 500;
 /** Absorbs rounding, so a cell measured on one line stays on one line. */
@@ -208,20 +210,28 @@ export const plainTextToPdf = async (
       endPage();
     }
     for (const line of section.split(LINE_BREAK)) {
-      for (const { row, rtl } of layoutLines(layout, line, width, size)) {
-        const { ascent, pitch } = rowMetrics(row, base);
-        if (rows.length > 0 && y - pitch * size < TEXT_MARGIN) {
-          endPage();
+      // Piece by piece, so a line of megabytes is placed as it is set
+      // instead of being held whole.
+      for (const piece of paragraphPieces(expandTabs(line))) {
+        for (const { row, rtl } of layoutParagraph(
+          layout,
+          piece,
+          toEms(width, size),
+        )) {
+          const { ascent, pitch } = rowMetrics(row, base);
+          if (rows.length > 0 && y - pitch * size < TEXT_MARGIN) {
+            endPage();
+          }
+          const rowWidth = toPoints(row.width, size);
+          rows.push({
+            color: PDF_NEUTRALS.black,
+            fontSize: size,
+            row,
+            x: rtl ? A4.width - TEXT_MARGIN - rowWidth : TEXT_MARGIN,
+            y: y - ascent * size,
+          });
+          y -= pitch * size;
         }
-        const rowWidth = toPoints(row.width, size);
-        rows.push({
-          color: PDF_NEUTRALS.black,
-          fontSize: size,
-          row,
-          x: rtl ? A4.width - TEXT_MARGIN - rowWidth : TEXT_MARGIN,
-          y: y - ascent * size,
-        });
-        y -= pitch * size;
       }
     }
   }
@@ -233,10 +243,12 @@ export const plainTextToPdf = async (
 
 /**
  * The records of a CSV file, read with the delimiter (comma, semicolon or
- * tab) under which the most records are as wide as the header, the wider
- * table on a tie (and the earlier delimiter after that), or `null` when no
- * delimiter reads it as CSV. Consistency comes first: a comma file whose
- * values contain semicolons must not read as a ragged semicolon table.
+ * tab) under which the most records are as wide as a header of at least two
+ * columns, the wider table on a tie (and the earlier delimiter after that),
+ * or `null` when no delimiter reads it as CSV. Consistency comes first, so a
+ * comma file whose values contain semicolons does not read as a ragged
+ * semicolon table; and a reading of one field per line counts no consistent
+ * records, so it never outranks a table with a ragged record.
  */
 const readCsvRecords = (text: string): string[][] | null => {
   const source = text.replace(/^\uFEFF/u, "");
@@ -248,7 +260,8 @@ const readCsvRecords = (text: string): string[][] | null => {
       continue;
     }
     const width = parsed.rows[0]?.length ?? 0;
-    const consistent = parsed.rows.filter((row) => row.length === width).length;
+    const consistent =
+      width > 1 ? parsed.rows.filter((row) => row.length === width).length : 0;
     if (
       best === null ||
       consistent > best.consistent ||
@@ -398,23 +411,49 @@ const cellsHeight = (cells: readonly PlacedCell[], base: StampFace) =>
   Math.max(0, ...cells.map(({ lines }) => blockHeight(lines, base))) +
   2 * CELL_PADDING_Y;
 
-/** The leading rows of a block that fit `room` points (at least one), and the rest. */
-const splitLines = (
-  lines: readonly TextRow[],
-  room: number,
-  base: StampFace,
-) => {
-  let used = 0;
-  let count = 0;
-  for (const { row } of lines) {
-    const pitch = rowMetrics(row, base).pitch * TABLE_FONT_SIZE;
-    if (count > 0 && used + pitch > room) {
-      break;
-    }
-    used += pitch;
-    count += 1;
+/** Where a cell's rows have been placed up to, with their pitches summed. */
+type CellCursor = PlacedCell & {
+  /** `offsets[i]` is the height of rows `0..i-1`, in points. */
+  offsets: number[];
+  next: number;
+};
+
+const cellCursor = (cell: PlacedCell, base: StampFace): CellCursor => {
+  const offsets = [0];
+  let total = 0;
+  for (const { row } of cell.lines) {
+    total += rowMetrics(row, base).pitch * TABLE_FONT_SIZE;
+    offsets.push(total);
   }
-  return { fit: lines.slice(0, count), rest: lines.slice(count) };
+  return { ...cell, next: 0, offsets };
+};
+
+/** The height of a cell's rows not yet placed. */
+const remainingHeight = ({ next, offsets }: CellCursor) =>
+  (offsets.at(-1) ?? 0) - (offsets[next] ?? 0);
+
+/**
+ * The cell's next rows that fit a block `height` points tall, padding
+ * included (at least one, so a row taller than a page still moves on), and
+ * the cursor moved past them.
+ */
+const takeLines = (cursor: CellCursor, height: number): PlacedCell => {
+  const start = cursor.next;
+  const top = cursor.offsets[start] ?? 0;
+  let end = start;
+  while (
+    end < cursor.lines.length &&
+    (end === start ||
+      (cursor.offsets[end + 1] ?? 0) - top <= height - 2 * CELL_PADDING_Y)
+  ) {
+    end += 1;
+  }
+  cursor.next = end;
+  return {
+    lines: cursor.lines.slice(start, end),
+    width: cursor.width,
+    x: cursor.x,
+  };
 };
 
 /** CSV as a PDF table, or as plain text when it does not read as CSV. */
@@ -490,18 +529,33 @@ export const csvToPdf = async (
       }));
     const headerCells = cellsOf(header, boldLayout);
     const headerHeight = cellsHeight(headerCells, base);
+    // A header taller than this would leave a page too little room for
+    // records, so it is set once, as the first record, and not repeated.
+    const repeatHeader =
+      headerHeight <= (size.height - 2 * TABLE_MARGIN) * HEADER_SHARE_MAX;
     const startPage = () => {
       const page = tablePage(size, columns, base);
-      page.place(headerCells, headerHeight, true);
+      if (repeatHeader) {
+        page.place(headerCells, headerHeight, true);
+      }
       return page;
     };
     let page = startPage();
-    for (const record of body) {
-      let cells: PlacedCell[] = cellsOf(record, layout);
+    for (const cells of (function* recordCells() {
+      if (!repeatHeader) {
+        yield headerCells;
+      }
+      for (const record of body) {
+        yield cellsOf(record, layout);
+      }
+    })()) {
+      const cursors = cells.map((cell) => cellCursor(cell, base));
       for (;;) {
-        const height = cellsHeight(cells, base);
-        if (height <= page.room()) {
-          page.place(cells, height, false);
+        const rest =
+          Math.max(0, ...cursors.map(remainingHeight)) + 2 * CELL_PADDING_Y;
+        if (rest <= page.room()) {
+          const placed = cursors.map((cursor) => takeLines(cursor, rest));
+          page.place(placed, rest, false);
           break;
         }
         if (page.hasBody()) {
@@ -510,17 +564,12 @@ export const csvToPdf = async (
           continue;
         }
         // Taller than a whole page: place what fits and carry the rest.
-        const room = page.room() - 2 * CELL_PADDING_Y;
-        const split = cells.map((cell) => ({
-          cell,
-          ...splitLines(cell.lines, room, base),
-        }));
-        const placed = split.map(({ cell, fit }) => ({ ...cell, lines: fit }));
+        const room = page.room();
+        const placed = cursors.map((cursor) => takeLines(cursor, room));
         page.place(placed, cellsHeight(placed, base), false);
         writer.add(page.take());
         page = startPage();
-        cells = split.map(({ cell, rest }) => ({ ...cell, lines: rest }));
-        if (cells.every(({ lines }) => lines.length === 0)) {
+        if (cursors.every((cursor) => remainingHeight(cursor) === 0)) {
           break;
         }
       }

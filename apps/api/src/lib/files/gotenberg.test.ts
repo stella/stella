@@ -493,6 +493,14 @@ describe("images, plain text and CSV are rendered by stella, never the converter
       () => tiffFile([splitTiffPage(16, 8), splitTiffPage(8, 8, 6)]),
       2,
     ],
+    [
+      "image/tiff",
+      () =>
+        tiffFile([
+          { width: 8, height: 8, cmyk: true, pixel: () => [0, 255, 255, 0] },
+        ]),
+      1,
+    ],
     ["image/png", () => sixteenBitPng(8, 8), 1],
     ["image/webp", async () => await splitWebp(16, 8), 1],
     ["text/plain", () => new TextEncoder().encode("Synthetic notes"), 1],

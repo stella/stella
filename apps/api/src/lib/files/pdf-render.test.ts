@@ -14,6 +14,16 @@ import {
   tiffFile,
 } from "@/api/tests/helpers/image-fixtures";
 
+/** The first index of `needle` in `haystack`, or -1. */
+const indexOfBytes = (haystack: Uint8Array, needle: Uint8Array) => {
+  for (let index = 0; index + needle.length <= haystack.length; index += 1) {
+    if (needle.every((byte, offset) => haystack[index + offset] === byte)) {
+      return index;
+    }
+  }
+  return -1;
+};
+
 type RenderedPage = {
   width: number;
   height: number;
@@ -132,11 +142,34 @@ describe("images rendered in-process", () => {
     expect(isBlue(pages[2]?.colorAt(0.5, 0.5) ?? [0, 0, 0])).toBe(true);
   });
 
-  test("a TIFF whose pixels are cut short is refused, not rendered", async () => {
+  test("a TIFF whose strip runs past the end of the file is refused", async () => {
     const tiff = tiffFile([splitTiffPage(64, 32)]);
-    // Keep the header and first strip bytes, drop the directory.
-    const result = await renderPdf("image/tiff", tiff.subarray(0, 64));
-    expect(Result.isError(result)).toBe(true);
+    expect(Result.isOk(await renderPdf("image/tiff", tiff))).toBe(true);
+    // The directory stays readable; only its StripOffsets value (tag 273,
+    // LONG, one value) moves so the strip's bytes would end past the file.
+    const entry = indexOfBytes(
+      tiff,
+      Uint8Array.from([0x11, 0x01, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00]),
+    );
+    expect(entry).toBeGreaterThan(0);
+    const cut = tiff.slice();
+    new DataView(cut.buffer).setUint32(entry + 8, tiff.length - 16, true);
+    expect(Result.isError(await renderPdf("image/tiff", cut))).toBe(true);
+  });
+
+  test("a CMYK TIFF renders in colour", async () => {
+    const tiff = tiffFile([
+      {
+        width: 64,
+        height: 32,
+        cmyk: true,
+        // Magenta and yellow make red; cyan and magenta make blue.
+        pixel: (x) => (x < 32 ? [0, 255, 255, 0] : [255, 255, 0, 0]),
+      },
+    ]);
+    const pages = await renderPages(await rendered("image/tiff", tiff));
+    expect(pages).toHaveLength(1);
+    expectSplit(pages[0]);
   });
 
   test("an image whose bitstream is garbage is refused", async () => {
@@ -299,6 +332,18 @@ describe("plain text rendered in-process", () => {
     expect(items).toEqual([]);
   });
 
+  test("a replaced character keeps the direction it has in the file", async () => {
+    // Cuneiform reads left to right and no face draws it; the Arabic after
+    // it must not turn the line into a right-to-left one.
+    const { items } = await textItems(
+      await rendered(
+        "text/plain",
+        new TextEncoder().encode(`\u{12000} ${ARABIC}`),
+      ),
+    );
+    expect(Math.min(...items.map(({ x }) => x))).toBeLessThan(100);
+  });
+
   test("a character no font has shows as a replacement mark", async () => {
     // Cuneiform: no shipped face covers it.
     const { items } = await textItems(
@@ -400,6 +445,59 @@ describe("CSV rendered in-process", () => {
     expect(
       items.some(({ text }) => text === "Pobočky (Praha; Brno; Ostrava)"),
     ).toBe(true);
+  });
+
+  test("a comma table with a ragged record stays a table", async () => {
+    const { items } = await textItems(
+      await rendered(
+        "text/csv",
+        new TextEncoder().encode("Name,Amount\nAlice,10\nBob,20,note"),
+      ),
+    );
+    for (const cell of ["Name", "Alice", "Bob", "note"]) {
+      expect(items.some(({ text }) => text === cell)).toBe(true);
+    }
+  });
+
+  test("a header taller than a third of a page is set once, not repeated", async () => {
+    const tallHeader = Array.from(
+      { length: 100 },
+      (_, index) => `Hlavička ${index + 1}`,
+    ).join("\n");
+    const records = Array.from({ length: 120 }, (_, index) => `${index},x`);
+    const { items, pageCount } = await textItems(
+      await rendered(
+        "text/csv",
+        new TextEncoder().encode([`"${tallHeader}",b`, ...records].join("\n")),
+      ),
+    );
+    expect(pageCount).toBeGreaterThan(2);
+    expect(items.filter(({ text }) => text === "Hlavička 100")).toHaveLength(1);
+    for (const index of [0, 60, 119]) {
+      expect(items.filter(({ text }) => text === String(index))).toHaveLength(
+        1,
+      );
+    }
+  });
+
+  test("a cell taller than many pages continues page after page", async () => {
+    const tallCell = Array.from(
+      { length: 3000 },
+      (_, index) => `Řádek ${index + 1}`,
+    ).join("\n");
+    const { items, pageCount } = await textItems(
+      await rendered(
+        "text/csv",
+        new TextEncoder().encode(`a,b\n"${tallCell}",x\nlast,y`),
+      ),
+    );
+    expect(pageCount).toBeGreaterThan(10);
+    for (const index of [1, 1500, 3000]) {
+      expect(
+        items.filter(({ text }) => text === `Řádek ${index}`),
+      ).toHaveLength(1);
+    }
+    expect(items.filter(({ text }) => text === "last")).toHaveLength(1);
   });
 
   test("text that is not CSV is shown as text", async () => {

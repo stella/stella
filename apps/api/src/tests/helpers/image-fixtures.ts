@@ -330,44 +330,50 @@ export const splitGif = (
 type TiffPageFixture = {
   width: number;
   height: number;
-  /** One RGB triple per pixel, rows top to bottom. */
-  pixel: (x: number, y: number) => readonly [number, number, number];
+  /**
+   * One sample tuple per pixel, rows top to bottom: RGB, or CMYK when
+   * `cmyk` is set.
+   */
+  pixel: (x: number, y: number) => readonly number[];
+  cmyk?: boolean;
   orientation?: ImageOrientation;
 };
 
 /**
- * An uncompressed little-endian RGB TIFF with one directory per page,
- * chained in order.
+ * An uncompressed little-endian RGB or CMYK TIFF with one directory per
+ * page, chained in order.
  */
 export const tiffFile = (pages: readonly TiffPageFixture[]): Uint8Array => {
   const parts: Uint8Array[] = [];
   let offset = 8;
   const directories: { at: number; bytes: Uint8Array }[] = [];
   const layouts = pages.map((page) => {
-    const pixels = new Uint8Array(page.width * page.height * 3);
+    const samples = page.cmyk === true ? 4 : 3;
+    const pixels = new Uint8Array(page.width * page.height * samples);
     for (let y = 0; y < page.height; y += 1) {
       for (let x = 0; x < page.width; x += 1) {
-        pixels.set(page.pixel(x, y), (y * page.width + x) * 3);
+        pixels.set(page.pixel(x, y), (y * page.width + x) * samples);
       }
     }
     const pixelsAt = offset;
     offset += pixels.length;
     const bitsAt = offset;
-    offset += 6;
-    return { bitsAt, page, pixels, pixelsAt };
+    offset += 2 * samples;
+    return { bitsAt, page, pixels, pixelsAt, samples };
   });
-  for (const { bitsAt, page, pixels, pixelsAt } of layouts) {
+  for (const { bitsAt, page, pixels, pixelsAt, samples } of layouts) {
     const entries: [number, number, number, number][] = [
       [256, 4, 1, page.width],
       [257, 4, 1, page.height],
-      [258, 3, 3, bitsAt],
+      [258, 3, samples, bitsAt],
       [259, 3, 1, 1],
-      [262, 3, 1, 2],
+      // PhotometricInterpretation: RGB (2) or separated, CMYK (5).
+      [262, 3, 1, samples === 4 ? 5 : 2],
       [273, 4, 1, pixelsAt],
       ...(page.orientation === undefined
         ? []
         : [[274, 3, 1, page.orientation] as [number, number, number, number]]),
-      [277, 3, 1, 3],
+      [277, 3, 1, samples],
       [278, 4, 1, page.height],
       [279, 4, 1, pixels.length],
     ];
@@ -402,12 +408,12 @@ export const tiffFile = (pages: readonly TiffPageFixture[]): Uint8Array => {
   headerView.setUint16(2, 42, true);
   headerView.setUint32(4, directories[0]?.at ?? 0, true);
   parts.push(header);
-  for (const { pixels } of layouts) {
-    const bits = new Uint8Array(6);
+  for (const { pixels, samples } of layouts) {
+    const bits = new Uint8Array(2 * samples);
     const bitsView = new DataView(bits.buffer);
-    bitsView.setUint16(0, 8, true);
-    bitsView.setUint16(2, 8, true);
-    bitsView.setUint16(4, 8, true);
+    for (let sample = 0; sample < samples; sample += 1) {
+      bitsView.setUint16(2 * sample, 8, true);
+    }
     parts.push(pixels, bits);
   }
   for (const { bytes } of directories) {

@@ -24,6 +24,15 @@ const REDUCED_RESOLUTION = 1;
 const IMAGE_WIDTH_TAG = "t256";
 const IMAGE_HEIGHT_TAG = "t257";
 const ORIENTATION_TAG = "t274";
+const BITS_PER_SAMPLE_TAG = "t258";
+const PHOTOMETRIC_TAG = "t262";
+const SAMPLES_PER_PIXEL_TAG = "t277";
+const STRIP_OFFSETS_TAG = "t273";
+const STRIP_BYTE_COUNTS_TAG = "t279";
+const TILE_OFFSETS_TAG = "t324";
+const TILE_BYTE_COUNTS_TAG = "t325";
+/** PhotometricInterpretation 5: separated, which is CMYK in practice. */
+const PHOTOMETRIC_SEPARATED = 5;
 const RGBA_CHANNELS = 4;
 
 class TiffPagesError extends TaggedError("TiffPagesError")<{
@@ -57,6 +66,75 @@ const firstNumber = (value: unknown): number | null => {
       ? value[0]
       : undefined;
   return typeof first === "number" ? first : null;
+};
+
+/** A tag's values as numbers, or `null` when it is absent or not numeric. */
+const numbers = (value: unknown): number[] | null => {
+  if (!(
+    Array.isArray(value) ||
+    value instanceof Uint8Array ||
+    value instanceof Uint16Array ||
+    value instanceof Uint32Array
+  )) {
+    return null;
+  }
+  const out: number[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "number") {
+      return null;
+    }
+    out.push(entry);
+  }
+  return out;
+};
+
+/**
+ * Whether every strip or tile of a page lies inside the file. utif2 reads
+ * bytes past the end as zero, so a cut-short file would otherwise decode to
+ * a page of blank pixels.
+ */
+const dataWithinFile = (directory: TiffDirectory, fileLength: number) => {
+  const tiled = directory[TILE_OFFSETS_TAG] !== undefined;
+  const offsets = numbers(
+    directory[tiled ? TILE_OFFSETS_TAG : STRIP_OFFSETS_TAG],
+  );
+  const counts = numbers(
+    directory[tiled ? TILE_BYTE_COUNTS_TAG : STRIP_BYTE_COUNTS_TAG],
+  );
+  return (
+    offsets !== null &&
+    counts !== null &&
+    offsets.length > 0 &&
+    offsets.length === counts.length &&
+    offsets.every(
+      (offset, index) => offset + (counts[index] ?? 0) <= fileLength,
+    )
+  );
+};
+
+/**
+ * An 8-bit CMYK page as RGBA, by the same naive conversion utif2 uses. utif2
+ * itself reaches for a browser global on this path, which a worker has not.
+ */
+const cmykToRgba = (
+  directory: TiffDirectory,
+  width: number,
+  height: number,
+) => {
+  const samples = firstNumber(directory[SAMPLES_PER_PIXEL_TAG]) ?? 4;
+  const { data } = directory;
+  const pixels = width * height;
+  const rgba = new Uint8Array(pixels * RGBA_CHANNELS);
+  for (let pixel = 0; pixel < pixels; pixel += 1) {
+    const source = pixel * samples;
+    const black = (255 - (data[source + 3] ?? 0)) / 255;
+    const target = pixel * RGBA_CHANNELS;
+    rgba[target] = Math.round((255 - (data[source] ?? 0)) * black);
+    rgba[target + 1] = Math.round((255 - (data[source + 1] ?? 0)) * black);
+    rgba[target + 2] = Math.round((255 - (data[source + 2] ?? 0)) * black);
+    rgba[target + 3] = samples > 4 ? (data[source + 4] ?? 255) : 255;
+  }
+  return rgba;
 };
 
 const isOrientation = (value: number | null): value is ImageOrientation =>
@@ -116,6 +194,22 @@ export const readTiffPages = (
         }),
       );
     }
+    if (!dataWithinFile(directory, bytes.length)) {
+      return Result.err(
+        new TiffPagesError({
+          message: "A TIFF page's image data lies outside the file",
+        }),
+      );
+    }
+    const separated =
+      firstNumber(directory[PHOTOMETRIC_TAG]) === PHOTOMETRIC_SEPARATED;
+    if (separated && firstNumber(directory[BITS_PER_SAMPLE_TAG]) !== 8) {
+      return Result.err(
+        new TiffPagesError({
+          message: "A CMYK TIFF page is not 8 bits per sample",
+        }),
+      );
+    }
     const orientation = firstNumber(directory[ORIENTATION_TAG]);
     pages.push({
       directory,
@@ -135,7 +229,10 @@ export const readTiffPages = (
     pages: (function* decodePages() {
       for (const { directory, height, orientation, width } of pages) {
         decodeImage(buffer, directory, all);
-        const rgba = UTIF.toRGBA8(directory);
+        const rgba =
+          firstNumber(directory[PHOTOMETRIC_TAG]) === PHOTOMETRIC_SEPARATED
+            ? cmykToRgba(directory, width, height)
+            : UTIF.toRGBA8(directory);
         // The page's compressed strips are no longer needed once decoded.
         directory.data = new Uint8Array();
         if (rgba.length !== width * height * RGBA_CHANNELS) {

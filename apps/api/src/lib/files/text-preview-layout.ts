@@ -54,6 +54,8 @@ const NO_BREAK_BEFORE =
 const NO_BREAK_AFTER =
   /[\uFF08\u300C\u300E\u3010\u3014\u3008\u300A\u3018\u3016\u301D\uFF5B\uFF3B([{]/u;
 const LETTER = /\p{L}/u;
+/** Characters that belong to the one before them in a grapheme. */
+const JOINS_PREVIOUS = /[\p{M}\p{Default_Ignorable_Code_Point}]/u;
 const HYPHEN = /[-\u2010]/u;
 const REPLACEMENT_CHARACTER = "\uFFFD";
 /** The smallest line pitch, in ems. */
@@ -74,6 +76,16 @@ const utf8 = new TextEncoder();
  * The text with every character no face can draw replaced by U+FFFD and
  * control characters removed. Coverage is cached per code point.
  */
+/** The text without control characters, which draw nothing. */
+const withoutControls = (text: string) =>
+  Array.from(text)
+    .filter((character) => !CONTROL.test(character))
+    .join("");
+
+/**
+ * The text with every character no face can draw replaced by U+FFFD, one
+ * code point for one, so its indices stay those of the source.
+ */
 const drawableText = (
   faces: readonly StampFace[],
   text: string,
@@ -81,9 +93,6 @@ const drawableText = (
 ) => {
   let out = "";
   for (const character of text) {
-    if (CONTROL.test(character)) {
-      continue;
-    }
     if (INVISIBLE.test(character)) {
       out += character;
       continue;
@@ -163,11 +172,16 @@ type ShapedParagraph = {
 const shapeParagraph = (
   { faces, shaper }: StampFonts,
   text: string,
+  /**
+   * The text as the file has it, one code point for each of `text`'s: a
+   * replaced character keeps the direction it has in the source.
+   */
+  source: string,
 ): ShapedParagraph => {
   const characters = Array.from(text);
   const { levels, paragraphLevel } = shaper.resolveBidi({
     direction: BIDI_DIRECTION.auto,
-    text,
+    text: source,
   });
   const assigned = assignFaces(faces, characters);
   const advances = new Float64Array(characters.length);
@@ -414,12 +428,13 @@ const rowOf = (
 const setParagraph = (
   fonts: StampFonts,
   drawable: string,
+  source: string,
   maxWidth: number,
 ): TextRow[] => {
   if (!Array.from(drawable).some((character) => !INVISIBLE.test(character))) {
     return [{ row: { runs: [], width: 0 }, rtl: false }];
   }
-  const paragraph = shapeParagraph(fonts, drawable);
+  const paragraph = shapeParagraph(fonts, drawable, source);
   return breakParagraph(paragraph, maxWidth).map(([start, end]) => ({
     row: rowOf(paragraph, start, end),
     rtl: paragraph.rtl,
@@ -465,8 +480,9 @@ export const layoutParagraph = (
   if (known !== undefined) {
     return known;
   }
-  const drawable = drawableText(fonts.faces, text, coverage);
-  const rows = setParagraph(fonts, drawable, maxWidth);
+  const source = withoutControls(text);
+  const drawable = drawableText(fonts.faces, source, coverage);
+  const rows = setParagraph(fonts, drawable, source, maxWidth);
   if (key !== null) {
     if (repeated.size >= REUSED_PARAGRAPHS_MAX) {
       repeated.clear();
@@ -478,8 +494,9 @@ export const layoutParagraph = (
 
 /**
  * `line` cut into pieces of at most {@link PARAGRAPH_PIECE_MAX} code points,
- * each ending after a space where one is near the limit, so one enormous
- * line is shaped piece by piece instead of all at once.
+ * each ending after a space where one is near the limit and otherwise
+ * before a character that starts a grapheme, so one enormous line is shaped
+ * piece by piece instead of all at once.
  */
 export const paragraphPieces = (line: string): string[] => {
   const characters = Array.from(line);
@@ -491,14 +508,20 @@ export const paragraphPieces = (line: string): string[] => {
   while (start < characters.length) {
     let end = Math.min(start + PARAGRAPH_PIECE_MAX, characters.length);
     if (end < characters.length) {
-      for (
-        let space = end;
-        space > start + PARAGRAPH_PIECE_MAX / 2;
-        space -= 1
+      let space = end;
+      while (
+        space > start + PARAGRAPH_PIECE_MAX / 2 &&
+        !isSpace(characters[space - 1])
       ) {
-        if (isSpace(characters[space - 1])) {
-          end = space;
-          break;
+        space -= 1;
+      }
+      if (isSpace(characters[space - 1])) {
+        end = space;
+      } else {
+        // No space near the limit: never part a mark, joiner or selector
+        // from the character it belongs to.
+        while (end > start + 1 && JOINS_PREVIOUS.test(characters[end] ?? "")) {
+          end -= 1;
         }
       }
     }
