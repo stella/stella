@@ -7,6 +7,7 @@ import {
   FieldDescriptionFace,
   FieldFace,
   FieldTriggerFace,
+  InputFace,
   LabelFace,
 } from "@stll/ui/control-face";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
@@ -33,6 +34,8 @@ type MatterNumberingCardFrameProps = {
   padding: ReactNode;
   /** The next number's preview (`MatterNumberPreview`). */
   preview: ReactNode;
+  /** The document name pattern's field and its sample name. */
+  documentNaming: ReactNode;
   /** The save button. */
   save: ReactNode;
 };
@@ -40,6 +43,7 @@ type MatterNumberingCardFrameProps = {
 /** The matter numbering card, in both phases. */
 export const MatterNumberingCardFrame = ({
   customPattern,
+  documentNaming,
   numberingToggle,
   padding,
   pattern,
@@ -54,6 +58,7 @@ export const MatterNumberingCardFrame = ({
         {customPattern}
         {padding}
         {preview}
+        {documentNaming}
         {save}
       </div>
     </SettingsPanel>
@@ -151,6 +156,19 @@ export const MatterNumberingCardPending = () => (
     }
     pattern={<PickerFieldPending label="organization.matterNumber.pattern" />}
     preview={<MatterNumberPreviewPending />}
+    documentNaming={
+      <FieldFace>
+        <LabelFace>
+          <PendingText
+            barClassName="w-24"
+            id="organization.documentNaming.pattern"
+          />
+        </LabelFace>
+        <InputFace>
+          <FaceLabelPending className="w-48" />
+        </InputFace>
+      </FieldFace>
+    }
     save={
       <ButtonFace className="self-start" size="sm" variant="default">
         <PendingText barClassName="w-20" id="common.saveChanges" />

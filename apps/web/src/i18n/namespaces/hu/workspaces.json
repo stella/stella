@@ -553,6 +553,10 @@
     "deleteWorkspaceConfirmDescription": "Biztosan törölni szeretné ezt az ügyet? Ez a művelet nem vonható vissza.",
     "deletedItem": "Törölve: {name}",
     "deletingWorkspace": "Ügy törlése folyamatban",
+    "documentNaming": {
+      "description": "Az új dokumentumok a szervezet névmintáját kapják: {pattern}",
+      "label": "Új feltöltések átnevezése"
+    },
     "documentSwitcher": {
       "download": "Fájl letöltése",
       "renditionsFailed": "Töltse újra a dokumentumot, majd próbálja meg ismét letölteni.",

@@ -553,6 +553,10 @@
     "deleteWorkspaceConfirmDescription": "هل أنت متأكد من رغبتك في حذف هذا الملف القانوني؟ لا يمكن التراجع عن هذا الإجراء.",
     "deletedItem": "تم الحذف: {name}",
     "deletingWorkspace": "جارٍ حذف الملف القانوني",
+    "documentNaming": {
+      "description": "تحصل المستندات الجديدة على نمط اسم المؤسسة: {pattern}",
+      "label": "إعادة تسمية الملفات المرفوعة حديثًا"
+    },
     "documentSwitcher": {
       "download": "تنزيل هذا الملف",
       "renditionsFailed": "افتح المستند مجددًا ثم أعد محاولة التنزيل.",

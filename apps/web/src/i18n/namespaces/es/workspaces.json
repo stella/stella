@@ -553,6 +553,10 @@
     "deleteWorkspaceConfirmDescription": "¿Está seguro de que desea eliminar este asunto? Esta acción no se puede deshacer.",
     "deletedItem": "Eliminado: {name}",
     "deletingWorkspace": "Eliminando asunto",
+    "documentNaming": {
+      "description": "Los documentos nuevos reciben el patrón de nombre de la organización: {pattern}",
+      "label": "Renombrar las nuevas subidas"
+    },
     "documentSwitcher": {
       "download": "Descargar este archivo",
       "renditionsFailed": "Vuelva a cargar el documento e intente descargarlo de nuevo.",

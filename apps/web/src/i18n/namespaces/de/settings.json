@@ -211,6 +211,15 @@
     "creationRateLimited": "In letzter Zeit wurden zu viele Organisationen erstellt. Versuchen Sie es später erneut.",
     "creationRefused": "Die Organisation konnte nicht erstellt werden. Prüfen Sie die Angaben und versuchen Sie es erneut.",
     "creationSlugConflict": "Diese Organisationsadresse wird bereits verwendet. Wählen Sie einen anderen Namen oder eine andere Adresse.",
+    "documentNaming": {
+      "description": "Benennt neue Uploads in Akten um, die dies aktiviert haben. Stella liest Datum, Art und Titel jedes Dokuments und setzt sie in dieses Muster ein. Leer lassen, um die hochgeladenen Namen zu behalten.",
+      "invalid": "Verwenden Sie nur die aufgeführten Platzhalter und keine Zeichen \\ / : * ? \" < > |.",
+      "pattern": "Namensmuster",
+      "preview": "Ein unterzeichneter Vertrag hieße:",
+      "sampleDocType": "Vertrag",
+      "sampleTitle": "Anteilskaufvertrag",
+      "tokenHelp": "Platzhalter: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Ein Platzhalter ohne Wert entfällt samt Trennzeichen."
+    },
     "invitations": {
       "cancelConfirmDescription": "Der an {email} gesendete Einladungslink funktioniert dann nicht mehr. Um diese Person erneut einzuladen, senden Sie eine neue Einladung.",
       "cancelInvitation": "Einladung stornieren",

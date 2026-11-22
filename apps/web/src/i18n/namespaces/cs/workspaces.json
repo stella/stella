@@ -553,6 +553,10 @@
     "deleteWorkspaceConfirmDescription": "Opravdu chcete smazat tento spis? Tuto akci nelze vrátit.",
     "deletedItem": "Smazáno: {name}",
     "deletingWorkspace": "Mazání spisu",
+    "documentNaming": {
+      "description": "Nové dokumenty dostanou název podle vzoru organizace: {pattern}",
+      "label": "Přejmenovávat nově nahrané dokumenty"
+    },
     "documentSwitcher": {
       "download": "Stáhnout tento soubor",
       "renditionsFailed": "Načtěte dokument znovu a opakujte stažení.",

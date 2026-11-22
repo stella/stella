@@ -211,6 +211,15 @@
     "creationRateLimited": "Pēdējā laikā izveidots pārāk daudz organizāciju. Mēģiniet vēlāk vēlreiz.",
     "creationRefused": "Organizāciju neizdevās izveidot. Pārbaudiet datus un mēģiniet vēlreiz.",
     "creationSlugConflict": "Šī organizācijas adrese jau tiek izmantota. Izvēlieties citu nosaukumu vai adresi.",
+    "documentNaming": {
+      "description": "Pārdēvē jaunās augšupielādes lietās, kurās tas ir ieslēgts. Stella nolasa katra dokumenta datumu, veidu un nosaukumu un aizpilda šo veidni. Atstājiet tukšu, lai saglabātu sākotnējos nosaukumus.",
+      "invalid": "Izmantojiet tikai uzskaitītos marķierus un nevienu no rakstzīmēm \\ / : * ? \" < > |.",
+      "pattern": "Nosaukuma veidne",
+      "preview": "Parakstīts līgums sauktos:",
+      "sampleDocType": "Līgums",
+      "sampleTitle": "Daļu pirkuma līgums",
+      "tokenHelp": "Marķieri: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Marķieris bez vērtības tiek izlaists kopā ar atdalītāju."
+    },
     "invitations": {
       "cancelConfirmDescription": "Uz {email} nosūtītā uzaicinājuma saite vairs nedarbosies. Lai uzaicinātu šo personu vēlreiz, nosūtiet jaunu uzaicinājumu.",
       "cancelInvitation": "Atcelt uzaicinājumu",

@@ -211,6 +211,15 @@
     "creationRateLimited": "W ostatnim czasie utworzono zbyt wiele organizacji. Spróbuj ponownie później.",
     "creationRefused": "Nie udało się utworzyć organizacji. Sprawdź dane i spróbuj ponownie.",
     "creationSlugConflict": "Ten adres organizacji jest już używany. Wybierz inną nazwę lub inny adres.",
+    "documentNaming": {
+      "description": "Zmienia nazwy nowo przesłanych plików w sprawach, które to włączyły. Stella odczytuje datę, rodzaj i tytuł każdego dokumentu i uzupełnia ten wzorzec. Pozostaw puste, aby zachować oryginalne nazwy.",
+      "invalid": "Używaj tylko wymienionych znaczników i żadnego ze znaków \\ / : * ? \" < > |.",
+      "pattern": "Wzorzec nazwy",
+      "preview": "Podpisana umowa nazywałaby się:",
+      "sampleDocType": "Umowa",
+      "sampleTitle": "Umowa sprzedaży udziałów",
+      "tokenHelp": "Znaczniki: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Znacznik bez wartości jest pomijany wraz z separatorem."
+    },
     "invitations": {
       "cancelConfirmDescription": "Link z zaproszenia wysłanego na adres {email} przestanie działać. Aby ponownie zaprosić tę osobę, wyślij nowe zaproszenie.",
       "cancelInvitation": "Anuluj zaproszenie",
