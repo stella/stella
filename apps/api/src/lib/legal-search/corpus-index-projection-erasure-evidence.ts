@@ -10,10 +10,9 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-cont
  * (`retireLegacyUnprovenServedCopiesTx`) and the repair writer's hold for it.
  *
  * The record is the case-law index-job trail: a succeeded `withdraw` row is
- * written in the transaction that takes a decision's text back
+ * written in the transaction that withdraws a decision's document
  * (`recordCorpusWithdrawalAuditEvent`), with the canonical change and the
- * desired erasure. Legislation has no such record: a version is withdrawn, and
- * its changed body taken out until it settles, without one.
+ * desired erasure. Legislation has no such record.
  */
 
 type CorpusProjectionErasureWindow = {

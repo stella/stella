@@ -150,16 +150,13 @@ const requireDecision = (value: string): LegacyRetireDecision =>
  * its named copy was reserved and before the cutover
  * (`corpusProjectionErasureIsRecorded`).
  *
- * - From the copy's reservation, as the owner states. A withdrawal whose
- *   transaction began before the reservation and wrote its erasure after the
- *   apply falls outside the window and leaves the copy served, the safe
- *   direction here.
+ * - From the copy's reservation, as the owner states.
  * - Up to the cutover: a withdrawal whose transaction began at or after it is
  *   this release's write, and the undo that follows it is this release's
  *   write too, which retires the copy itself (`readUndoneErasuresTx`).
  *
- * Legislation records no erasure, so this is never true for legislation and
- * the pass never retires a legislation copy.
+ * Legislation has no such record, so the pass never retires a legislation
+ * copy.
  */
 const erasureRecordedInWindow = (
   family: CorpusFamily,

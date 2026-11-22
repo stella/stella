@@ -416,7 +416,7 @@ describe("a repair moves past a copy its cleanup already owns or will delete", (
     });
   }
 
-  test("a copy a later erasure queued, then undone with its pointer kept, holds no repair either", async () => {
+  test("a copy queued with a recorded reason holds no repair either", async () => {
     const { entityId, revision } = await servedEntity();
     await changeDesired(entityId, 2, { action: "erase" });
     await previousErasureFence(revision);
