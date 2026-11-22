@@ -1,5 +1,15 @@
 import * as v from "valibot";
 
+import {
+  DESKTOP_DICTATION_CLEANUP_STYLES,
+  DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+
 import type { BeforeSessionEnd } from "@/connection/session-end";
 import { modelClassSchema } from "@/state/dictation-fallback";
 import type { ModelClass } from "@/state/dictation-fallback";
@@ -10,13 +20,16 @@ import { keyPart } from "@/state/recent-searches";
  * How this account dictates on this phone: the model it picked, absent for
  * the one the server offers by default, with where that model's audio goes
  * as the list said when it was picked, whether stella AI tidies the text
- * before it lands in the box, and which microphone records. Kept per server
- * and person, like recent searches, and forgotten at sign-out.
+ * before it lands in the box, how it writes it, the language it writes it
+ * in (null keeps the spoken one) and which microphone records. Kept per
+ * server and person, like recent searches, and forgotten at sign-out.
  */
 export type DictationPreferences = {
   readonly modelId: string | null;
   readonly modelClass: ModelClass | null;
   readonly cleanup: boolean;
+  readonly style: DesktopDictationCleanupStyle;
+  readonly translateTo: DesktopDictationTranslationLanguage | null;
   readonly microphone: DictationMicrophone;
 };
 
@@ -33,15 +46,27 @@ export const DEFAULT_DICTATION_PREFERENCES: DictationPreferences = {
   modelId: null,
   modelClass: null,
   cleanup: false,
+  style: DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
+  translateTo: null,
   microphone: "built-in",
 };
 
+// The style and language came later: a choice kept before them, or one a
+// newer build kept, reads with the default in their place.
 const preferencesSchema = v.object({
   modelId: v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
   // Picked before the class was kept: unknown, so a withdrawn model falls
   // back to none.
   modelClass: v.optional(v.nullable(modelClassSchema), null),
   cleanup: v.boolean(),
+  style: v.fallback(
+    v.picklist(DESKTOP_DICTATION_CLEANUP_STYLES),
+    DEFAULT_DICTATION_PREFERENCES.style,
+  ),
+  translateTo: v.fallback(
+    v.nullable(v.picklist(DESKTOP_DICTATION_TRANSLATION_LANGUAGES)),
+    DEFAULT_DICTATION_PREFERENCES.translateTo,
+  ),
   // Kept before the microphone was a choice: the default.
   microphone: v.optional(
     v.picklist(DICTATION_MICROPHONES),

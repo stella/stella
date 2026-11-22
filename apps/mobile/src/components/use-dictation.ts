@@ -459,6 +459,8 @@ const keptSetupOf = (
   modelClass: preferences.modelClass,
   locale: current.locale,
   cleanup: preferences.cleanup,
+  style: preferences.style,
+  translateTo: preferences.translateTo,
 });
 
 /**
@@ -952,6 +954,8 @@ const gatherText = async (current: Run): Promise<Gathered> => {
   const text = await finalText({
     source: setup.source,
     cleanup: setup.preferences.cleanup,
+    style: setup.preferences.style,
+    translateTo: setup.preferences.translateTo,
     joined,
     locale: current.locale,
   });
