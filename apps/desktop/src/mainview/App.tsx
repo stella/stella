@@ -1,8 +1,14 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
@@ -82,26 +88,14 @@ import type { SettingsPage } from "./settings-pages";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { ShortcutSetting } from "./ShortcutSetting";
 import { SigningDriverSection } from "./SigningDriverSection";
-import { AppVersionRow } from "./UpdateCheck";
+import { AppVersionRow, useUpdateCheck } from "./UpdateCheck";
+import type { UpdateCheck } from "./UpdateCheck";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
   revisionCreated: true,
   syncIssues: true,
 } satisfies DesktopNotificationPreferences;
-const DEFAULT_UPDATE_SNAPSHOT = {
-  baseUrl: null,
-  channel: null,
-  currentHash: null,
-  currentVersion: null,
-  lastCheckedAt: null,
-  latestHash: null,
-  latestVersion: null,
-  status: "disabled",
-  statusMessage: "Update checks are not configured yet.",
-  updateAvailable: false,
-  updateReady: false,
-} satisfies DesktopUpdateSnapshot;
 
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
 
@@ -722,26 +716,32 @@ const PermissionsPane = () => {
 };
 
 const AboutPane = ({
-  accountState,
   onCopyDiagnostics,
   onEmailSupport,
   onRevealSupportRoot,
   update,
+  updateCheck,
 }: {
-  accountState: DesktopAccountState;
   onCopyDiagnostics: () => void;
   onEmailSupport: () => void;
   onRevealSupportRoot: () => void;
-  update: DesktopUpdateSnapshot;
+  /** Null until the native snapshot arrives. */
+  update: DesktopUpdateSnapshot | null;
+  updateCheck: UpdateCheck;
 }) => {
-  const format = useFormatter();
   const t = useTranslations("settings");
 
-  const versionLabel =
-    update.currentVersion ??
-    (import.meta.env.DEV ? t("developmentBuild") : t("previewBuild"));
-  const linkedAccount =
-    accountState.status === "connected" ? accountState.account : null;
+  // Before the native snapshot arrives the version is unknown, not a preview
+  // build; the row waits for it instead of naming the wrong one.
+  const versionLabel = (() => {
+    if (update === null) {
+      return null;
+    }
+    return (
+      update.currentVersion ??
+      (import.meta.env.DEV ? t("developmentBuild") : t("previewBuild"))
+    );
+  })();
 
   return (
     <>
@@ -750,21 +750,9 @@ const AboutPane = ({
         <AppVersionRow
           onEmailSupport={onEmailSupport}
           supportEmail={SUPPORT_EMAIL}
+          updateCheck={updateCheck}
           versionLabel={versionLabel}
         />
-        {linkedAccount ? (
-          <SettingsRow id="about-last-verified" title={t("lastVerified")}>
-            <span className="text-muted-foreground text-sm tabular-nums">
-              {linkedAccount.verifiedAt
-                ? format.dateTime(
-                    Temporal.Instant.from(linkedAccount.verifiedAt)
-                      .epochMilliseconds,
-                    { dateStyle: "medium", timeStyle: "short" },
-                  )
-                : t("notAvailableYet")}
-            </span>
-          </SettingsRow>
-        ) : null}
       </SettingsSection>
 
       <SettingsSection title={t("support")}>
@@ -876,6 +864,13 @@ const App = () => {
   const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
     null,
   );
+  // The tray's "Check for updates" opens About and runs the check there, so
+  // its answer shows in the window rather than in a notification the system
+  // may not show.
+  const updateCheck = useUpdateCheck();
+  const runRequestedUpdateCheck = useEffectEvent(() => {
+    void updateCheck.run();
+  });
   const activityAvailability = useActivityAvailability();
   const dictationAvailability = useDictationAvailability();
   // A requested page that depends on the account stays shown while its
@@ -942,6 +937,9 @@ const App = () => {
           setDictationFocus(
             nextPage === "dictation" && focus === "microphone" ? focus : null,
           );
+          if (nextPage === "about" && focus === "update-check") {
+            runRequestedUpdateCheck();
+          }
         },
         onError: reportSubscriptionFailure,
       }),
@@ -1080,7 +1078,7 @@ const App = () => {
 
   const notificationPreferences =
     state?.notificationPreferences ?? DEFAULT_NOTIFICATION_PREFERENCES;
-  const update = state?.update ?? DEFAULT_UPDATE_SNAPSHOT;
+  const update = state?.update ?? null;
 
   const handlePreferenceChange = async (
     preferenceKey: NotificationPreferenceKey,
@@ -1286,7 +1284,6 @@ const App = () => {
       case "about":
         return (
           <AboutPane
-            accountState={accountState}
             onCopyDiagnostics={() => {
               void handleCopyDiagnostics();
             }}
@@ -1297,6 +1294,7 @@ const App = () => {
               void handleRevealSupportRoot();
             }}
             update={update}
+            updateCheck={updateCheck}
           />
         );
       default:
@@ -1312,6 +1310,8 @@ const App = () => {
         accountState={accountState}
         current={shownPage}
         onSelect={(nextPage) => {
+          // An update check's answer belongs to the visit that asked.
+          updateCheck.dismiss();
           setActivePage(nextPage);
           // Choosing a page by hand is never the link's visit.
           setAgentSettingsFocus(null);

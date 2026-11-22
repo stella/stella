@@ -269,6 +269,8 @@ test("the empty transcript explains why its copy and save menus cannot open", as
 test("a dropped DS2 file is refused with the export note", async ({ page }) => {
   await open(page, "light");
   await expect(page.getByText(en.transcribe.drop.title)).toBeVisible();
+  // The note answers such a file; it is not standing advice.
+  await expect(page.getByText(en.transcribe.note)).toHaveCount(0);
   await emitTauriEvent(page, "transcribe-file", {
     status: "refused",
     name: "Interview.ds2",

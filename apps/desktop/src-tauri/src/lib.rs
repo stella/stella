@@ -460,38 +460,9 @@ pub fn run() {
                 }
               }
               tray::MenuAction::CheckForUpdates => {
-                let sessions = &*manager;
-                let active_edit_sessions = move || async move {
-                  sessions.lock().await.has_active_edit_sessions()
-                };
-
-                match updater::run_check(&handle, active_edit_sessions).await {
-                  updater::CheckOutcome::Deferred { version } => {
-                    tracing::info!(
-                        version = %version,
-                        "tray-triggered updater check deferred while desktop edits are active"
-                    );
-                  }
-                  updater::CheckOutcome::UpToDate => {
-                    if let Err(err) = handle
-                      .notification()
-                      .builder()
-                      .title("Stella is up to date")
-                      .show()
-                    {
-                      tracing::warn!(error = %err, "up-to-date notification failed");
-                    }
-                  }
-                  updater::CheckOutcome::Installed { version } => {
-                    tracing::info!(version = %version, "tray-triggered update installed, relaunching");
-                  }
-                  updater::CheckOutcome::Failed(msg) => {
-                    tracing::warn!(error = %msg, "tray-triggered updater check failed");
-                  }
-                  updater::CheckOutcome::Disabled => {
-                    tracing::debug!("tray updater check skipped: updates are managed");
-                  }
-                }
+                // About runs the check and shows its answer in the window: a
+                // notification can be dropped by the system without an error.
+                show_settings(&handle, SettingsView::UpdateCheck);
               }
               tray::MenuAction::OpenEditRoot => {
                 manager.lock().await.open_edit_root().await;
@@ -742,6 +713,8 @@ pub(crate) enum SettingsView {
   Agents(AgentSettingsFocus),
   /// Dictation, focused on the microphone it records from.
   Microphone,
+  /// About, running "Check for updates" and showing its answer.
+  UpdateCheck,
 }
 
 impl SettingsView {
@@ -756,6 +729,10 @@ impl SettingsView {
       Self::Microphone => serde_json::json!({
         "tab": PreferencesTab::Dictation.id(),
         "focus": "microphone",
+      }),
+      Self::UpdateCheck => serde_json::json!({
+        "tab": PreferencesTab::About.id(),
+        "focus": "update-check",
       }),
     }
   }
