@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { existsSync } from "node:fs";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 import {
   SUBPROCESS_TERMINATION_REASON,
   SubprocessError,
@@ -165,7 +167,6 @@ type WorkerTermination = {
 
 const HAS_PROC_FS = existsSync("/proc/self/status");
 const VM_RSS = /^VmRSS:\s+(?<kilobytes>\d+) kB$/mu;
-const DECIMAL = /^\d+$/u;
 const BYTES_PER_KIB = 1024;
 
 /** A zombie: exited, not yet reaped, and holding no memory. */
@@ -181,6 +182,14 @@ export type ProcessRss =
   | { type: "exited" }
   | { type: "unreadable"; cause: unknown };
 
+/** A resident size given in kibibytes, as both readers report it. */
+const residentKilobytes = (token: string): ProcessRss => {
+  const kilobytes = parseIntegerToken(token, { sign: "unsigned" });
+  return Result.isOk(kilobytes)
+    ? { type: "resident", bytes: kilobytes.value * BYTES_PER_KIB }
+    : { type: "unreadable", cause: kilobytes.error };
+};
+
 const readProcStatusRss = async (pid: number): Promise<ProcessRss> => {
   const status = await Result.tryPromise(
     async () => await Bun.file(`/proc/${pid}/status`).text(),
@@ -195,7 +204,7 @@ const readProcStatusRss = async (pid: number): Promise<ProcessRss> => {
   }
   const kilobytes = VM_RSS.exec(status.value)?.groups?.["kilobytes"];
   if (kilobytes !== undefined) {
-    return { type: "resident", bytes: Number(kilobytes) * BYTES_PER_KIB };
+    return residentKilobytes(kilobytes);
   }
   return ZOMBIE_STATE.test(status.value)
     ? { type: "exited" }
@@ -218,13 +227,10 @@ const readPsRss = async (pid: number): Promise<ProcessRss> => {
     return { type: "unreadable", cause: answer.error };
   }
   const { exitCode, kilobytes } = answer.value;
-  if (DECIMAL.test(kilobytes)) {
-    return { type: "resident", bytes: Number(kilobytes) * BYTES_PER_KIB };
-  }
   // ps lists nothing and exits 1 for a process that is gone.
   return exitCode === 1 && kilobytes === ""
     ? { type: "exited" }
-    : { type: "unreadable", cause: `ps exited ${exitCode}` };
+    : residentKilobytes(kilobytes);
 };
 
 /**

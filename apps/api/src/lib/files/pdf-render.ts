@@ -50,7 +50,7 @@ import {
   addShortenedNotePage,
   csvToPdf,
   plainTextToPdf,
-  type PreviewText,
+  type TextPreviewSource,
 } from "@/api/lib/files/text-preview-pdf";
 import { readTiffPages } from "@/api/lib/files/tiff-pages";
 import { LIMITS } from "@/api/lib/limits";
@@ -208,7 +208,7 @@ const renderImage = async (
 export const previewText = (
   bytes: Uint8Array,
   declaredType: string,
-): PreviewText => {
+): TextPreviewSource => {
   const limit = LIMITS.pdfRenderTextSourceBytesMax;
   if (bytes.byteLength <= limit) {
     const { text } = decodeDeclared(bytes, { contentType: declaredType });
@@ -230,7 +230,7 @@ export const previewText = (
 
 const renderText = async (
   mimeType: string,
-  source: PreviewText,
+  source: TextPreviewSource,
   fonts: StampFonts,
 ): Promise<RenderedPdf> => ({
   type: "pdf",
