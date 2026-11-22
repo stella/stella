@@ -5,7 +5,17 @@ import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
   legalFileFormatProfiles,
+  XML_FILE_FORMAT,
 } from "./legal-file-formats";
+
+/**
+ * Media types that only say a file is XML. Many XML formats are uploaded
+ * under them, so a name whose extension names a format is that format.
+ */
+const GENERIC_XML_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  XML_FILE_FORMAT.mimeType,
+  ...XML_FILE_FORMAT.mimeAliases,
+]);
 
 /** The family a file's mark stands for; each has its own mark. */
 export type DocumentFormatKind =
@@ -246,6 +256,13 @@ export const documentFormat = (
   const extension = extensionOf(fileName);
   const byExtension =
     extension === null ? undefined : BY_EXTENSION.get(extension);
+  if (
+    byExtension !== undefined &&
+    byExtension.kind !== byMimeType?.kind &&
+    GENERIC_XML_MEDIA_TYPES.has(media)
+  ) {
+    return formatOf(byExtension);
+  }
   if (byMimeType !== undefined) {
     return formatOf(
       byExtension?.kind === byMimeType.kind &&

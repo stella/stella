@@ -14,6 +14,18 @@ const kindOf = (mimeType: string | null, fileName?: string) =>
   documentFormat(mimeType, fileName).kind;
 
 describe("documentFormat", () => {
+  test.each([
+    ["application/xml", "podanie.xzep", "xadesZep"],
+    ["text/xml", "faktura.isdoc", "isdoc"],
+    ["application/xml", "IT00000000001_00001.xml", "xml"],
+    ["text/xml", "data", "xml"],
+  ] as const)(
+    "a generic XML type %s yields to the format %s names",
+    (mimeType, fileName, kind) => {
+      expect(documentFormat(mimeType, fileName).kind).toBe(kind);
+    },
+  );
+
   test("uses the email mark for EML and Outlook MSG files", () => {
     expect(kindOf(EML_MIME_TYPE)).toBe("email");
     expect(kindOf(MSG_MIME_TYPE)).toBe("email");
