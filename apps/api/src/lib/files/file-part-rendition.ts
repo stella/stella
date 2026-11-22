@@ -30,7 +30,7 @@ import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 /** The name a part's PDF rendition is delivered under. */
-export const pdfRenditionFileName = (fileName: string): string => {
+const pdfRenditionFileName = (fileName: string): string => {
   const dot = fileName.lastIndexOf(".");
   return `${dot <= 0 ? fileName : fileName.slice(0, dot)}.pdf`;
 };

@@ -1,4 +1,11 @@
-import { lazy, type ReactNode, Suspense, useId, useState } from "react";
+import {
+  lazy,
+  type ReactElement,
+  type ReactNode,
+  Suspense,
+  useId,
+  useState,
+} from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -481,7 +488,7 @@ const FilePartPreview = ({
   fileName: string;
   kind: Exclude<FilePartPreviewKind, "none">;
   /** What shows when the server could not convert a converted part. */
-  notConverted: ReactNode;
+  notConverted: ReactElement;
   row: FilePartRow;
   scaleOffset: number;
   source: FilePartSource;

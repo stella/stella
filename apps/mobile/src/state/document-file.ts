@@ -216,7 +216,7 @@ export const readOriginalDocumentFile = async ({
  * converts it to, the way a stored file of its type opens; any other part
  * as itself, whole.
  */
-export const partPurposeFor = (mediaType: string): FilePurpose =>
+const partPurposeFor = (mediaType: string): FilePurpose =>
   isFilePartConvertedMediaType(mediaType) ? "display" : "download";
 
 /**
