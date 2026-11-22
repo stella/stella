@@ -431,6 +431,8 @@ const readDictation = async ({
           modelClass: preferences.modelClass,
           locale,
           cleanup: preferences.cleanup,
+          style: preferences.style,
+          translateTo: preferences.translateTo,
         },
         pieces: text.pieces.map((piece): FinishedPiece => {
           if (piece.type === "text") {

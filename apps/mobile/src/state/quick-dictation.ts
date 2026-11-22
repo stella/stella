@@ -187,7 +187,14 @@ export const transcribeQuickDictation = async ({
     return { type: "silent" };
   }
   const cleaned = preferences.cleanup
-    ? await cleanUpDictation({ fetch, source, transcript: joined, locale })
+    ? await cleanUpDictation({
+        fetch,
+        source,
+        transcript: joined,
+        locale,
+        style: preferences.style,
+        translateTo: preferences.translateTo,
+      })
     : null;
   const text =
     cleaned?.isOk() === true && cleaned.value !== "" ? cleaned.value : joined;
