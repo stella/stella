@@ -35,10 +35,15 @@ import {
 } from "./pdf-worker-protocol";
 
 // stdout carries the answer; a decoder library that logs must not corrupt
-// it, so every console method writes to stderr.
-globalThis.console = new Console({
+// it, so the console's stdout methods write to stderr.
+const stderrConsole = new Console({
   stderr: process.stderr,
   stdout: process.stderr,
+});
+Object.assign(globalThis.console, {
+  debug: stderrConsole.debug,
+  info: stderrConsole.info,
+  log: stderrConsole.log,
 });
 
 const operation = v.safeParse(pdfWorkerOperationSchema, process.argv.at(2));
