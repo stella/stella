@@ -46,7 +46,6 @@ import {
   type ProjectedCorpusIndexGeneration,
   readProjectedCorpusIndexGenerationsTx,
 } from "@/api/lib/legal-search/corpus-index-projected-generations";
-import { corpusIndexIntentStatusesWithCopy } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
   type CaseLawProjectionInput,
   type CorpusIndexProjectionDescriptor,
@@ -66,7 +65,7 @@ import { restoreQueuedNamedCopiesTx } from "@/api/lib/legal-search/corpus-index-
 import {
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNamedCopyTrailsTwoChanges,
-  corpusIndexProjectionRevisionHoldsRepair,
+  corpusIndexProjectionRevisionCopyIsIntact,
   corpusIndexProjectionRevisionIsRestorable,
 } from "@/api/lib/legal-search/corpus-index-projection-sql";
 import { isRedistributable } from "@/api/lib/legal-search/corpus-source";
@@ -1148,12 +1147,20 @@ const CORPUS_PROJECTION_SERVED_COPY_RISKS = [
    */
   "restorable_cleanup",
   /**
-   * A cleanup claim owns or owned the queued copy, a delete may have reached
-   * it, or a cleanup writer recorded why it queued it. The writer never moves
-   * past such a copy while a state names it, and never restores it
-   * (`corpusIndexProjectionRevisionHoldsRepair`, with what ends the hold).
+   * The named copy's cleanup stalled. The database guard refuses every write
+   * of a state that names a stalled revision, so the repair could only abort.
+   * No worker transition leaves a stall: an operator's `cleanup_pending` ends
+   * this hold.
+   *
+   * No other cleanup status is a risk of its own. A copy a delete may have
+   * reached, or one queued with a recorded reason, is never restored, whatever
+   * the desired epoch is; what its cleanup does next does not read the epoch;
+   * and readers follow the pointer, which an upsert over an upsert leaves as
+   * it is. So moving past such a copy takes nothing from readers, and holding
+   * the repair would only keep the entity's other generations behind until
+   * cleanup acts.
    */
-  "unrestorable_cleanup",
+  "stalled_cleanup",
   /**
    * A copy two changes behind that the legacy pass keeps only because its
    * work is blocked or its epoch is not canonical would lose that protection.
@@ -1172,7 +1179,8 @@ const MAX_HELD_COPIES = 16;
  * - `restored`: a queued copy still provably the one readers are served went
  *   back to `applied` before the repair moved any epoch.
  * - `already_current`: the write costs the copy nothing, so nothing was
- *   needed (a copy a cleanup claim restored first is one).
+ *   needed (a copy a cleanup claim restored first is one). A copy a delete may
+ *   have reached is not reported: there is none left to keep.
  * - `held`: the repair was held for it, and nothing was written.
  */
 const CORPUS_PROJECTION_SERVED_COPY_OUTCOMES = [
@@ -1290,11 +1298,7 @@ const readNamedCopiesTx = async (
     revisionAppliedAt: intents.appliedAt,
     lastError: intents.lastError,
   };
-  const unrestorableCleanup = corpusIndexProjectionRevisionHoldsRepair({
-    status: intents.status,
-    cleanupAttempts: intents.cleanupAttempts,
-    lastError: intents.lastError,
-  });
+  const stalledCleanup = sql`${intents.status} = 'cleanup_stalled'`;
   const namedCopy = {
     appliedRevision: states.appliedRevision,
     appliedAction: states.appliedAction,
@@ -1326,14 +1330,17 @@ const readNamedCopiesTx = async (
       generation: states.generation,
       entityId: states.entityId,
       revisionId: intents.id,
-      status: intents.status,
+      copyIsIntact: sql<boolean>`${corpusIndexProjectionRevisionCopyIsIntact({
+        status: intents.status,
+        cleanupAttempts: intents.cleanupAttempts,
+      })}`,
       risk: sql<CorpusProjectionServedCopyRisk | null>`CASE
         WHEN ${actionChanges}
           THEN ${"desired_action_change" satisfies CorpusProjectionServedCopyRisk}
         WHEN ${restoreProofLost}
           THEN ${"restorable_cleanup" satisfies CorpusProjectionServedCopyRisk}
-        WHEN ${unrestorableCleanup}
-          THEN ${"unrestorable_cleanup" satisfies CorpusProjectionServedCopyRisk}
+        WHEN ${stalledCleanup}
+          THEN ${"stalled_cleanup" satisfies CorpusProjectionServedCopyRisk}
         WHEN ${legacyProtectionLost}
           THEN ${"legacy_retirement" satisfies CorpusProjectionServedCopyRisk}
       END`,
@@ -1428,9 +1435,9 @@ const requireServedCopyRisk = (value: string): CorpusProjectionServedCopyRisk =>
  * then runs the whole guard again over every generation it writes. Only a
  * clean second guard lets the write through; otherwise the restores roll
  * back with it and the write is held as before. Any other risk (an action
- * change, which covers an erasure and its undo, a copy a cleanup claim took
- * or a delete may have reached, or one the legacy pass would take) holds the
- * write without restoring anything.
+ * change, which covers an erasure and its undo, a copy whose cleanup stalled,
+ * or one the legacy pass would take) holds the write without restoring
+ * anything.
  */
 export const writeRepairedCorpusProjectionDesiredStatesTx = async (
   tx: Transaction,
@@ -1452,11 +1459,9 @@ export const writeRepairedCorpusProjectionDesiredStatesTx = async (
   };
   const named = await readNamedCopiesTx(tx, values);
   const atRisk = copiesAtRisk(named);
-  // A settled revision is named but gone, so there is no copy to report.
-  const gone = new Set(corpusIndexIntentStatusesWithCopy("deleted"));
   const alreadyCurrent = named.flatMap(
-    ({ generation, entityId, risk, status }) =>
-      risk === null && !gone.has(status)
+    ({ generation, entityId, risk, copyIsIntact }) =>
+      risk === null && copyIsIntact
         ? [{ generation, entityId, outcome: "already_current" } as const]
         : [],
   );

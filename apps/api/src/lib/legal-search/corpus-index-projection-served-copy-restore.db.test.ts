@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -29,8 +29,9 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 /**
  * A repair that would cost a queued, still restorable copy its proof restores
  * that copy first and then goes through, instead of holding until a cleanup
- * claim happens by. Everything else that would take a named copy away from
- * readers still holds the whole repair, and nothing it would have restored
+ * claim happens by. A copy its cleanup already owns, or will delete whatever
+ * the repair does, holds nothing. Everything that would take a named copy away
+ * from readers still holds the whole repair, and nothing it would have restored
  * moves. The served generation is the fixture's; a second, building
  * generation of the same family is owed the entity too.
  */
@@ -298,12 +299,20 @@ describe("a repair restores a queued copy before it moves the epoch", () => {
   });
 });
 
-describe("a repair with any other risk is held whole, restores included", () => {
+describe("a repair moves past a copy its cleanup already owns or will delete", () => {
   type Queued = { entityId: string; revision: string };
-  const taken: {
+  const owned: {
     name: string;
     queue: () => Promise<Queued>;
     reached: Record<string, unknown>;
+    /** A copy no delete can have reached is still kept, and reported. */
+    kept: boolean;
+    /** What the next claim does with it, before and after the repair alike. */
+    claimed: {
+      unserved: number;
+      served_after_delete: number;
+      served_unproven: number;
+    };
   }[] = [
     {
       name: "a cleanup claim holds",
@@ -317,6 +326,8 @@ describe("a repair with any other risk is held whole, restores included", () => 
         cleanupAttempts: 1,
         lastError: null,
       },
+      kept: false,
+      claimed: { unserved: 0, served_after_delete: 0, served_unproven: 0 },
     },
     {
       name: "a claim held and its delete receipt is recorded",
@@ -331,22 +342,8 @@ describe("a repair with any other risk is held whole, restores included", () => 
         cleanupAttempts: 1,
         lastError: null,
       },
-    },
-    {
-      name: "whose cleanup stalled",
-      queue: async () => {
-        const copy = await queuedRestorableCopy();
-        await previousClaim(copy.revision);
-        await previousRecordDelete(copy.revision, 1);
-        await run(sql`
-          UPDATE corpus_index_projection_intents
-          SET status = 'cleanup_stalled', last_error = 'cleanup stalled',
-              updated_at = clock_timestamp()
-          WHERE id = ${copy.revision} AND status = 'cleanup_committed'
-        `);
-        return copy;
-      },
-      reached: { status: "cleanup_stalled", cleanupAttempts: 1 },
+      kept: false,
+      claimed: { unserved: 0, served_after_delete: 0, served_unproven: 0 },
     },
     {
       name: "a claim held and its lease expired",
@@ -357,6 +354,8 @@ describe("a repair with any other risk is held whole, restores included", () => 
         return copy;
       },
       reached: { status: "cleanup_pending", cleanupAttempts: 1 },
+      kept: false,
+      claimed: { unserved: 0, served_after_delete: 1, served_unproven: 0 },
     },
     {
       name: "a drift repair queued with its reason",
@@ -370,36 +369,72 @@ describe("a repair with any other risk is held whole, restores included", () => 
         cleanupAttempts: 0,
         lastError: "applied census observed engine drift",
       },
+      kept: true,
+      claimed: { unserved: 0, served_after_delete: 0, served_unproven: 1 },
     },
   ];
-  for (const { name, queue, reached } of taken) {
-    test(`a copy ${name} holds the repair and is not restored`, async () => {
+  for (const { name, queue, reached, kept, claimed } of owned) {
+    test(`a copy ${name} holds no repair, and the repair takes nothing from it`, async () => {
       const { entityId, revision } = await queue();
-      const states = await statesOf(entityId);
+      const before = await servedStateOf(entityId);
       const queued = await revisionOf(revision);
       const epoch = await canonicalEpochOf(entityId);
       expect(queued).toMatchObject(reached);
 
       const outcome = await continuousReconciles(entityId);
 
-      if (outcome.isOk()) {
-        panic("Expected the repair to be held");
+      if (outcome.isErr()) {
+        panic("Expected the repair to go through");
       }
-      expect(outcome.error.copies).toEqual([
-        {
-          generation: SERVED,
-          entityId,
-          outcome: "held",
-          risk: "unrestorable_cleanup" satisfies CorpusProjectionServedCopyRisk,
-        },
-      ]);
+      expect(outcome.value).toMatchObject({ epoch: epoch + 1n, changed: true });
+      expect(outcome.value.servedCopies).toEqual(
+        kept
+          ? [{ generation: SERVED, entityId, outcome: "already_current" }]
+          : [],
+      );
+      // The revision is byte for byte what it was, and the state still names
+      // it: readers see exactly what they saw.
       expect(await revisionOf(revision)).toEqual(queued);
-      expect(await statesOf(entityId)).toEqual(states);
-      expect(await canonicalEpochOf(entityId)).toBe(epoch);
+      const after = await servedStateOf(entityId);
+      expect(after).toMatchObject({
+        desiredAction: "upsert",
+        desiredEpoch: epoch + 1n,
+        workStatus: "eligible",
+        appliedAction: before.appliedAction,
+        appliedRevision: before.appliedRevision,
+        appliedEpoch: before.appliedEpoch,
+        appliedFingerprint: before.appliedFingerprint,
+        appliedIndexId: before.appliedIndexId,
+        appliedAt: before.appliedAt,
+        appliedRevisionSettled: before.appliedRevisionSettled,
+      });
+      // The other generation is owed the entity from here on.
+      expect(
+        (await statesOf(entityId)).map(({ generation }) => generation),
+      ).toEqual([SERVED, BUILDING.generation].toSorted());
+      expect((await claim()).claimed).toEqual(claimed);
     });
   }
 
-  test("a settled copy holds nothing, and reopened it holds the next repair", async () => {
+  test("a copy a later erasure queued, then undone with its pointer kept, holds no repair either", async () => {
+    const { entityId, revision } = await servedEntity();
+    await changeDesired(entityId, 2, { action: "erase" });
+    await previousErasureFence(revision);
+    await changeDesired(entityId, 3, {
+      action: "upsert",
+      fingerprint: fingerprint(1),
+    });
+    const queued = await revisionOf(revision);
+
+    const outcome = await continuousReconciles(entityId);
+
+    expect(outcome.isOk() && outcome.value.changed).toBe(true);
+    expect(await revisionOf(revision)).toEqual(queued);
+    // Its recorded reason still decides it.
+    expect((await claim()).claimed.served_unproven).toBe(1);
+  });
+
+  test("a settled copy holds nothing, nor does it once reopened", async () => {
     const { entityId, revision } = await queuedRestorableCopy();
     await previousClaim(revision);
     await previousRecordDelete(revision, 1);
@@ -447,24 +482,70 @@ describe("a repair with any other risk is held whole, restores included", () => 
       WHERE id = ${entityId}
     `);
 
-    const held = await continuousReconciles(entityId);
+    const again = await continuousReconciles(entityId);
 
-    if (held.isOk()) {
-      panic("Expected the repair to be held");
-    }
-    expect(held.error.copies).toEqual([
-      {
-        generation: SERVED,
-        entityId,
-        outcome: "held",
-        risk: "unrestorable_cleanup" satisfies CorpusProjectionServedCopyRisk,
-      },
-    ]);
+    expect(again.isOk() && again.value).toMatchObject({
+      epoch: 4n,
+      changed: true,
+      servedCopies: [],
+    });
     expect(await revisionOf(revision)).toEqual(reopened);
     expect(await claim()).toMatchObject({
       claimed: { unserved: 0, served_after_delete: 1, served_unproven: 0 },
       restoredIntentIds: [],
     });
+  });
+});
+
+describe("a repair with any other risk is held whole, restores included", () => {
+  test("a copy whose cleanup stalled holds the repair until an operator requeues it", async () => {
+    const { entityId, revision } = await queuedRestorableCopy();
+    await previousClaim(revision);
+    await previousRecordDelete(revision, 1);
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET status = 'cleanup_stalled', last_error = 'cleanup stalled',
+          updated_at = clock_timestamp()
+      WHERE id = ${revision} AND status = 'cleanup_committed'
+    `);
+    const states = await statesOf(entityId);
+    const queued = await revisionOf(revision);
+    const epoch = await canonicalEpochOf(entityId);
+    // What the hold stands in for: the guard refuses the state's every write.
+    const refused = await Result.tryPromise(
+      async () =>
+        await run(sql`
+          UPDATE corpus_index_projection_states SET updated_at = clock_timestamp()
+          WHERE entity_id = ${entityId} AND generation = ${SERVED}
+        `),
+    );
+    expect(refused.isErr()).toBe(true);
+
+    const outcome = await continuousReconciles(entityId);
+
+    if (outcome.isOk()) {
+      panic("Expected the repair to be held");
+    }
+    expect(outcome.error.copies).toEqual([
+      {
+        generation: SERVED,
+        entityId,
+        outcome: "held",
+        risk: "stalled_cleanup" satisfies CorpusProjectionServedCopyRisk,
+      },
+    ]);
+    expect(await revisionOf(revision)).toEqual(queued);
+    expect(await statesOf(entityId)).toEqual(states);
+    expect(await canonicalEpochOf(entityId)).toBe(epoch);
+
+    await run(sql`
+      UPDATE corpus_index_projection_intents
+      SET status = 'cleanup_pending', cleanup_not_before = clock_timestamp(),
+          cleanup_started_at = NULL, delete_opstamp = NULL,
+          delete_task_created_at = NULL, updated_at = clock_timestamp()
+      WHERE id = ${revision} AND status = 'cleanup_stalled'
+    `);
+    expect((await continuousReconciles(entityId)).isOk()).toBe(true);
   });
 
   test("a sibling generation at risk keeps the restorable copy queued and writes nothing", async () => {

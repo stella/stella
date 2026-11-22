@@ -662,7 +662,7 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    test("a claim that commits first keeps the copy it took: the repair holds", async () => {
+    test("a claim that commits first keeps the copy it took: the repair goes through and takes nothing from it", async () => {
       await withTwoConnections(async (writer, claimer, fixture, observer) => {
         await previousPrepare(writer, fixture);
         // A second change: the claim cannot prove the copy, so it takes it.
@@ -687,20 +687,16 @@ if (!databaseUrl || !runPostgresTests) {
         expect(claimed.claimed.served_unproven).toBe(1);
 
         const outcome = await repair;
-        if (outcome.isOk()) {
-          panic("Expected the repair to be held");
-        }
-        expect(outcome.error.copies).toEqual([
-          {
-            generation: GENERATION,
-            entityId: fixture.entityId,
-            outcome: "held",
-            risk: "unrestorable_cleanup",
-          },
-        ]);
+        expect(outcome.isOk() && outcome.value).toMatchObject({
+          changed: true,
+          servedCopies: [],
+        });
         expect(await statusOf(observer, fixture)).toEqual({
           status: "cleanup_started",
           cleanupAttempts: 1,
+        });
+        expect(await stateOf(observer, fixture)).toMatchObject({
+          appliedRevision: fixture.revision,
         });
       });
     });
@@ -742,13 +738,15 @@ if (!databaseUrl || !runPostgresTests) {
             generation: GENERATION,
             entityId: fixture.entityId,
             outcome: "held",
-            risk: "unrestorable_cleanup",
+            risk: "restorable_cleanup",
           },
         ]);
         expect(await statusOf(observer, fixture)).toEqual({
           status: "cleanup_started",
           cleanupAttempts: 1,
         });
+        // Held for that one race: the next repair finds nothing to protect.
+        expect((await reconcile(writer, fixture)).isOk()).toBe(true);
       });
     });
 
@@ -835,8 +833,7 @@ if (!databaseUrl || !runPostgresTests) {
               SET status = 'cleanup_pending',
                   append_publish_barrier_at = append_committed_at + ${PUBLISH_DELAY},
                   cleanup_not_before = clock_timestamp(),
-                  last_error = 'projection revision scheduled by erasure',
-                  updated_at = clock_timestamp()
+                  last_error = NULL, updated_at = clock_timestamp()
               WHERE id = ${sibling.revision} AND status = 'applied'
             `);
           });
@@ -850,7 +847,7 @@ if (!databaseUrl || !runPostgresTests) {
               generation: SIBLING,
               entityId: fixture.entityId,
               outcome: "held",
-              risk: "unrestorable_cleanup",
+              risk: "restorable_cleanup",
             },
             {
               generation: GENERATION,
