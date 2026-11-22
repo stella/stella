@@ -157,11 +157,10 @@ test("a bumped pin snapshots the new revision and preserves the review decision"
   if (!remoteDecision) {
     throw new Error("renamed remote decision missing");
   }
-  const decision = allDecisions[remoteDecision];
-  expect(decision.kind).toBe("ordinary");
-  expect(decision.qualifier).toBe(
-    "reviewed supplier6:.github/workflows/shared.yml/shared",
-  );
+  expect(allDecisions[remoteDecision]).toEqual({
+    kind: "ordinary",
+    qualifier: "reviewed supplier6:.github/workflows/shared.yml/shared",
+  });
 });
 
 test("a pin bumped in one of two callers copies the decision to the new revision", () => {
