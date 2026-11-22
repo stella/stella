@@ -24,7 +24,6 @@
     "apps/api/src/lib/docx/ai-field-generator.ts::buildAiConditionDecider::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/docx/ai-field-generator.ts::buildAiOccurrenceAdapter::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/docx/ai-field-generator.ts::buildAiOccurrenceAdapter::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/docx/date-fields.ts::formatDateValue::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/entities/create-from-buffer.ts::cleanupObject::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/entity-versions/create-entity-version-from-buffer.ts::cleanupObject::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/entity-versions/resolve-docx-edit-author-name.ts::resolveDocxEditAuthorName::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
@@ -49,12 +48,6 @@
     "apps/api/src/lib/templates/suggest-template-fields.ts::suggestTemplateFieldsOrEmpty::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/workflow-queue.ts::handleWorkflowJobFailed::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/mcp/document-file-upload.ts::abortCreatedReservation::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/scripts/adapter-health.ts::getSourceTotal::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/scripts/better-auth-17-backfill.ts::<module>::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/scripts/citation-probe.ts::resolveCredentials::not-ok-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/scripts/post-deploy-response-policy.ts::readBuildCommit::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/agent-engine/src/bun-docker/api.ts::demuxExecStream::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/cli/src/registry-cache.ts::readCacheFile::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "packages/scripts/src/dev-runner.ts::isHealthyApiPort::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure."
+    "packages/cli/src/registry-cache.ts::readCacheFile::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure."
   }
 }
