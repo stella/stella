@@ -9,32 +9,6 @@ const ICON_DISCOVERY_TIMEOUT_MS = 5000;
 const ICON_HTML_MAX_CHARS = 200_000;
 const ICON_HTML_MAX_BYTES = 300_000;
 
-type IconDiscoveryHtmlRead =
-  | { readonly kind: "html"; readonly html: string }
-  | { readonly kind: "unavailable" };
-
-const readIconDiscoveryHtml = async (
-  rootUrl: URL,
-  permit: ThirdPartyOutboundPermit,
-): Promise<IconDiscoveryHtmlRead> => {
-  const response = await safeOutboundFetchBytes({
-    permit,
-    headers: { Accept: "text/html" },
-    maxBytes: ICON_HTML_MAX_BYTES,
-    timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
-    url: rootUrl,
-  });
-  if (Result.isError(response) || !response.value.ok) {
-    return { kind: "unavailable" };
-  }
-  return {
-    kind: "html",
-    html: new TextDecoder()
-      .decode(response.value.body)
-      .slice(0, ICON_HTML_MAX_CHARS),
-  };
-};
-
 export const discoverMcpIconUrl = async (
   rawUrl: string,
   permit: ThirdPartyOutboundPermit,
@@ -45,14 +19,25 @@ export const discoverMcpIconUrl = async (
   }
 
   const rootUrl = new URL("/", parsed.value.origin);
-  const htmlRead = await readIconDiscoveryHtml(rootUrl, permit);
-  if (htmlRead.kind === "html" && htmlRead.html.length > 0) {
-    const discovered = findIconInHtml({
-      html: htmlRead.html,
-      rootUrl,
-    });
-    if (discovered) {
-      return discovered;
+  const response = await safeOutboundFetchBytes({
+    permit,
+    headers: { Accept: "text/html" },
+    maxBytes: ICON_HTML_MAX_BYTES,
+    timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
+    url: rootUrl,
+  });
+  if (Result.isOk(response) && response.value.ok) {
+    const html = new TextDecoder()
+      .decode(response.value.body)
+      .slice(0, ICON_HTML_MAX_CHARS);
+    if (html.length > 0) {
+      const discovered = findIconInHtml({
+        html,
+        rootUrl,
+      });
+      if (discovered) {
+        return discovered;
+      }
     }
   }
 
