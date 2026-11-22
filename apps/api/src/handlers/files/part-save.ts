@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import {
   documentWriteRefusalHandlerError,
   DocumentWriteRefusedError,
@@ -66,7 +67,7 @@ const config = {
   }),
 } satisfies WorkspaceHandlerConfig;
 
-export default createSafeHandler(
+const saveFilePart = createSafeHandler(
   config,
   async function* ({
     body: { destinationWorkspaceId, parentId, part: partId },
@@ -220,6 +221,14 @@ export default createSafeHandler(
     });
   },
 );
+
+declareAggregateMutation(saveFilePart, {
+  type: "independent",
+  reason:
+    "Copies one part of a file into a matter as a new document through createEntityFromBuffer, which takes the destination matter's own locks before it writes; it owns no registered aggregate.",
+});
+
+export default saveFilePart;
 
 const toSaveHandlerError = (
   error:

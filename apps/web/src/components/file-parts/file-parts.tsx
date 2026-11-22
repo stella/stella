@@ -186,7 +186,7 @@ const FilePartListItem = ({
         onClick={() => onOpen(row.part)}
         variant="plain"
       >
-        <span className="hover:bg-muted/60 flex min-h-12 w-full min-w-0 items-center gap-3 rounded-s-lg px-3 py-2 text-start transition-colors">
+        <span className="hover:bg-muted/60 flex min-h-12 w-full min-w-0 items-center gap-3 rounded-s-lg px-3 py-2 text-start">
           <DocumentIcon
             className="size-5 shrink-0"
             fileName={fileName}
@@ -407,7 +407,9 @@ const NoPreview = ({
           part={row.part}
         />
       </div>
-      {fallback ? <div className="border-t p-4">{fallback}</div> : null}
+      {fallback === null || fallback === undefined ? null : (
+        <div className="border-t p-4">{fallback}</div>
+      )}
     </ScrollArea>
   );
 };

@@ -108,16 +108,16 @@ export const fileTypeIcon = (
   if (isDocumentMarkKind(format.mark)) {
     return { type: "mark", mark: format.mark };
   }
-  switch (format.kind) {
-    case "image":
-      return { type: "glyph", family: "image" };
-    case "email":
-      return { type: "glyph", family: "email" };
-    case "text":
-      return { type: "glyph", family: "text" };
-    default:
-      return { type: "glyph", family: unmarkedFamily(mediaType, fileName) };
+  // Images, emails and text have a family of their own; any other kind is
+  // read from the media type and the name.
+  if (
+    format.kind === "image" ||
+    format.kind === "email" ||
+    format.kind === "text"
+  ) {
+    return { type: "glyph", family: format.kind };
   }
+  return { type: "glyph", family: unmarkedFamily(mediaType, fileName) };
 };
 
 /**

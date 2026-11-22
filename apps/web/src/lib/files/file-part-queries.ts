@@ -44,7 +44,7 @@ const readFilePartLink = async (
     : panic("The part link answered with the whole file");
 };
 
-export const filePartKeys = {
+const filePartKeys = {
   content: ({ workspaceId, fieldId, part }: FilePartKey) => [
     ...filesKeys.all(),
     "part",

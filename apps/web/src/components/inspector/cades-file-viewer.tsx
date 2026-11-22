@@ -46,7 +46,7 @@ export const CadesFileViewer = ({
   // The signed document, and the files a signed invoice carries.
   const parts = [
     ...(data.content === null ? [] : [data.content]),
-    ...(data.invoice?.attachments ?? []),
+    ...(data.invoice === null ? [] : data.invoice.attachments),
   ];
   const { open, openPart, close } = useOpenFilePart(parts);
   const pdfPart =

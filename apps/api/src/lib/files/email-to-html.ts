@@ -54,7 +54,7 @@ import { partMediaType } from "@/api/lib/files/part-media-type";
 import { isRecord } from "@/api/lib/type-guards";
 
 /** The most attachments an email's preview lists. */
-export const MAX_EMAIL_ATTACHMENT_DESCRIPTORS = 100;
+const MAX_EMAIL_ATTACHMENT_DESCRIPTORS = 100;
 
 const EMAIL_WRITING_DIRECTIONS = {
   auto: null,

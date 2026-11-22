@@ -2133,7 +2133,9 @@ const savePartContext = (fieldId: SafeId<"field">, part: string) =>
     session: { activeOrganizationId: ids.orgA },
     user: { id: ids.userA1 },
     audit: recorderA(),
-    createAuditRecorder: ({ workspaceId } = {}) =>
+    createAuditRecorder: ({
+      workspaceId,
+    }: { workspaceId?: SafeId<"workspace"> | null } = {}) =>
       createAuditRecorder({
         organizationId: ids.orgA,
         workspaceId: workspaceId ?? ids.wsA1,
