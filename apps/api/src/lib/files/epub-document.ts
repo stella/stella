@@ -37,6 +37,8 @@ const OPF_NS = "http://www.idpf.org/2007/opf";
 const MAX_PACKAGE_XML_BYTES = 4 * 1024 * 1024;
 /** Spine entries read; a longer book is previewed up to this chapter. */
 const MAX_CHAPTERS = 1000;
+/** Decompressed bytes all of a book's parts may take together. */
+const MAX_READ_BYTES = 96 * 1024 * 1024;
 const CHAPTER_TYPES: ReadonlySet<string> = new Set([
   "application/xhtml+xml",
   "text/html",
@@ -147,20 +149,39 @@ export const ebookToHtml = async (
     );
   }
   const entries = archive.value;
-  const readBytes = (path: string): Uint8Array | null => {
-    const entry = entries.get(path);
-    if (entry === undefined) {
-      return null;
+  // Every part is decompressed at most once, and all reads together within
+  // one budget, however often the package refers to a part.
+  const reads = new Map<string, Result<Uint8Array | null, EbookError>>();
+  let readBudget = MAX_READ_BYTES;
+  const readBytes = (path: string): Result<Uint8Array | null, EbookError> => {
+    const cached = reads.get(path);
+    if (cached !== undefined) {
+      return cached;
     }
-    const read = readArchiveEntry(entry);
-    return Result.isOk(read) ? read.value : null;
+    const entry = entries.get(path);
+    let read: Result<Uint8Array | null, EbookError>;
+    if (entry === undefined) {
+      read = Result.ok(null);
+    } else if (entry.uncompressedSize > readBudget) {
+      read = Result.err(ebookError("The e-book exceeds the reading limits"));
+    } else {
+      readBudget -= entry.uncompressedSize;
+      const data = readArchiveEntry(entry);
+      read = Result.isOk(data)
+        ? Result.ok(data.value)
+        : Result.err(
+            ebookError("An e-book part could not be read", data.error),
+          );
+    }
+    reads.set(path, read);
+    return read;
   };
   const readXml = (path: string): DocumentXmlNode | null => {
     const part = readBytes(path);
-    if (part === null) {
+    if (Result.isError(part) || part.value === null) {
       return null;
     }
-    const parsed = parseStandaloneXml(part, MAX_PACKAGE_XML_BYTES);
+    const parsed = parseStandaloneXml(part.value, MAX_PACKAGE_XML_BYTES);
     return Result.isOk(parsed) ? parsed.value : null;
   };
 
@@ -170,7 +191,8 @@ export const ebookToHtml = async (
   if (opfPath === null || opf === null) {
     return Result.err(ebookError("The e-book has no readable package"));
   }
-  const chapters = spineChapters(opf, opfPath);
+  // A chapter the spine lists twice renders once.
+  const chapters = [...new Set(spineChapters(opf, opfPath))];
   if (chapters.length === 0) {
     return Result.err(ebookError("The e-book lists no chapters"));
   }
@@ -180,10 +202,18 @@ export const ebookToHtml = async (
   let length = 0;
   for (const chapter of chapters) {
     const source = readBytes(chapter);
-    if (source === null) {
-      continue;
+    if (Result.isError(source)) {
+      return source;
     }
-    const $ = load(new TextDecoder().decode(source));
+    if (source.value === null) {
+      return Result.err(ebookError("An e-book chapter is missing"));
+    }
+    // Charged before parsing, so the parse itself is within the budget.
+    length += source.value.byteLength;
+    if (length > RENDERED_HTML_MAX_CHARS) {
+      return Result.err(ebookError("The e-book exceeds the reading limits"));
+    }
+    const $ = load(new TextDecoder().decode(source.value));
     // An image drawn through SVG (a cover, a full-page plate) becomes a
     // plain image, since the sanitizer keeps no SVG.
     $("svg image").each((_, element) => {
@@ -191,21 +221,25 @@ export const ebookToHtml = async (
       const href = image.attr("xlink:href") ?? image.attr("href") ?? "";
       image.closest("svg").replaceWith($("<img>").attr("src", href));
     });
+    // Written by the image callback; the first failed read ends the render.
+    const imageRead: { failure: EbookError | null } = { failure: null };
     embedImages($, (reference) => {
       const path = packagePath(chapter, reference);
-      const image = path === null ? null : readBytes(path);
       const type = path === null ? null : embeddableImageType(null, path);
-      return image === null || type === null ? null : embed(type, image);
+      if (path === null || type === null) {
+        return null;
+      }
+      const image = readBytes(path);
+      if (Result.isError(image)) {
+        imageRead.failure ??= image.error;
+        return null;
+      }
+      return image.value === null ? null : embed(type, image.value);
     });
-    const body = $("body").html() ?? "";
-    length += body.length;
-    if (length > RENDERED_HTML_MAX_CHARS) {
-      break;
+    if (imageRead.failure !== null) {
+      return Result.err(imageRead.failure);
     }
-    bodies.push(`<div>${body}</div>`);
-  }
-  if (bodies.length === 0) {
-    return Result.err(ebookError("The e-book's chapters could not be read"));
+    bodies.push(`<div>${$("body").html() ?? ""}</div>`);
   }
   const book = load("");
   book("body").html(bodies.join("<hr>"));

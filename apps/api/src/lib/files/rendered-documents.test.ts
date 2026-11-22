@@ -128,6 +128,38 @@ describe("e-books", () => {
     await expectConvertibleHtml(source);
   });
 
+  test("render a chapter the spine repeats once, and an image referenced often within the budget", async () => {
+    const references = '<img src="plate.png">'.repeat(2000);
+    const source = html(
+      await ebookToHtml(
+        await ebookFile({
+          chapters: [
+            { file: "one.xhtml", body: `<h1>Only chapter</h1>${references}` },
+          ],
+          images: { "plate.png": PNG },
+          spineOrder: ["one.xhtml", "one.xhtml", "one.xhtml"],
+        }),
+      ),
+    );
+    expect(source.split("Only chapter")).toHaveLength(2);
+    expect(source.split(PNG_DATA_URI)).toHaveLength(2001);
+  });
+
+  test("fail, never skip, a chapter whose stored bytes are damaged", async () => {
+    const book = await ebookFile({
+      chapters: [
+        { file: "one.xhtml", body: "<p>Intact chapter</p>" },
+        { file: "two.xhtml", body: "<p>Damaged chapter</p>" },
+      ],
+    });
+    const marker = new TextEncoder().encode("Damaged chapter");
+    const at = Buffer.from(book).indexOf(Buffer.from(marker));
+    expect(at).toBeGreaterThan(0);
+    const damaged = book.slice();
+    damaged[at] = 0x58;
+    expect(Result.isError(await ebookToHtml(damaged))).toBe(true);
+  });
+
   test("refuse a package with no readable package document", async () => {
     const rendered = await ebookToHtml(
       await packageOf({ mimetype: "application/epub+zip" }),
