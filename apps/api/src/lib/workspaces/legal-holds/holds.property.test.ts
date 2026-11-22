@@ -18,25 +18,23 @@ const objectKeyArb = fc
   )
   .map(([org, matter, name]) => `${org}/${matter}/${name}.pdf`);
 
+const holdTargetBuilders: Record<
+  "matter" | "entity" | "entityVersion" | "thread" | "organization",
+  () => HoldTarget
+> = {
+  matter: () => ({ type: "matter", workspaceId: createSafeId<"workspace">() }),
+  entity: () => ({ type: "entity", entityId: createSafeId<"entity">() }),
+  entityVersion: () => ({
+    type: "entityVersion",
+    entityVersionId: createSafeId<"entityVersion">(),
+  }),
+  thread: () => ({ type: "thread", threadId: createSafeId<"chatThread">() }),
+  organization: () => ({ type: "organization" }),
+};
+
 const buildHoldTarget = (
   kind: "matter" | "entity" | "entityVersion" | "thread" | "organization",
-): HoldTarget => {
-  switch (kind) {
-    case "matter":
-      return { type: "matter", workspaceId: createSafeId<"workspace">() };
-    case "entity":
-      return { type: "entity", entityId: createSafeId<"entity">() };
-    case "entityVersion":
-      return {
-        type: "entityVersion",
-        entityVersionId: createSafeId<"entityVersion">(),
-      };
-    case "thread":
-      return { type: "thread", threadId: createSafeId<"chatThread">() };
-    default:
-      return { type: "organization" };
-  }
-};
+): HoldTarget => holdTargetBuilders[kind]();
 
 describe("legal hold target predicate properties", () => {
   test("file-set targets always parameterize object keys and empty sets compile to false", () => {
