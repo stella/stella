@@ -1,6 +1,6 @@
 import { Result, TaggedError } from "better-result";
 
-import { convertedDocumentFormatOfFileName } from "@stll/api-contract/converted-document-formats";
+import { previewedDocumentFormatOfFileName } from "@stll/api-contract/converted-document-formats";
 
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -64,7 +64,7 @@ export const resolveUploadMime = ({
   // A Pages or Numbers file is a ZIP package, so it often arrives declared
   // as a plain ZIP archive; its name says which package it is.
   const zipPackage = ZIP_ARCHIVE_UPLOAD_MIME_TYPES.has(canonicalDeclaredMime)
-    ? convertedDocumentFormatOfFileName(fileName)
+    ? previewedDocumentFormatOfFileName(fileName)
     : undefined;
   if (zipPackage?.zipPackage === true) {
     return zipPackage.mimeType;
@@ -78,7 +78,7 @@ export const resolveUploadMime = ({
   }
   // Some converted formats go by extensions no media type table lists
   // (WordPerfect's `.wp5`).
-  const converted = convertedDocumentFormatOfFileName(fileName);
+  const converted = previewedDocumentFormatOfFileName(fileName);
   if (converted !== undefined) {
     return converted.mimeType;
   }

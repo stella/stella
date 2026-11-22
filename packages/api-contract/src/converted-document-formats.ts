@@ -74,12 +74,55 @@ export const isConvertedDocumentMimeType = (
 ): mimeType is ConvertedDocumentMimeType =>
   convertedDocumentFormatOfMimeType(mimeType) !== undefined;
 
-/** The converted format a file name's extension names, if any. */
-export const convertedDocumentFormatOfFileName = (
+/**
+ * Formats whose preview is rendered from HTML stella builds out of them: a
+ * web archive's page with its own images, an e-book's chapters in reading
+ * order. That HTML converts like any other HTML file.
+ */
+export const HTML_RENDERED_DOCUMENT_FORMATS = [
+  {
+    label: "MHT",
+    mimeType: "multipart/related",
+    mimeAliases: ["application/x-mimearchive", "message/x-mht"],
+    extensions: [".mht", ".mhtml"],
+    zipPackage: false,
+  },
+  {
+    label: "EPUB",
+    mimeType: "application/epub+zip",
+    mimeAliases: [],
+    extensions: [".epub"],
+    zipPackage: true,
+  },
+] as const;
+
+export type HtmlRenderedDocumentFormat =
+  (typeof HTML_RENDERED_DOCUMENT_FORMATS)[number];
+
+/** Every media type, canonical or alias, an HTML-rendered format is declared as. */
+export type HtmlRenderedDocumentMimeType =
+  | HtmlRenderedDocumentFormat["mimeType"]
+  | HtmlRenderedDocumentFormat["mimeAliases"][number];
+
+/** The HTML-rendered format declared by `mimeType`, if any. */
+export const htmlRenderedDocumentFormatOfMimeType = (
+  mimeType: string,
+): HtmlRenderedDocumentFormat | undefined =>
+  HTML_RENDERED_DOCUMENT_FORMATS.find(
+    (format) =>
+      format.mimeType === mimeType ||
+      format.mimeAliases.some((alias) => alias === mimeType),
+  );
+
+/** The converted or HTML-rendered format a file name's extension names. */
+export const previewedDocumentFormatOfFileName = (
   fileName: string,
-): ConvertedDocumentFormat | undefined => {
+): ConvertedDocumentFormat | HtmlRenderedDocumentFormat | undefined => {
   const lower = fileName.trim().toLowerCase();
-  return CONVERTED_DOCUMENT_FORMATS.find((format) =>
+  return [
+    ...CONVERTED_DOCUMENT_FORMATS,
+    ...HTML_RENDERED_DOCUMENT_FORMATS,
+  ].find((format) =>
     format.extensions.some((extension) => lower.endsWith(extension)),
   );
 };
