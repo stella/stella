@@ -1,5 +1,5 @@
 {
   "metric": "audit-skip-directives",
-  "delta": 1,
-  "reason": "Dispatching a document naming run is worker bookkeeping; the rename it leads to is audited through renameEntityHandler."
+  "delta": 2,
+  "reason": "Document naming bookkeeping: dispatching a naming run, and settling it when a person renames the upload first, are worker state; the rename itself is audited through renameEntityHandler in both cases."
 }
