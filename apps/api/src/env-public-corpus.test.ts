@@ -9,9 +9,9 @@ const publicReaderEnv = {
 } as const;
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const moduleUrl = (path: string) => new URL(path, import.meta.url).href;
-const PUBLIC_READER_ENTRY = moduleUrl(
-  "handlers/case-law/decisions/search-telemetry.ts",
-);
+// The public case-law search handler: its imports reach the corpus policy
+// and the tenant page limit.
+const PUBLIC_READER_ENTRY = moduleUrl("handlers/case-law/decisions/search.ts");
 const PUBLIC_CORPUS_POLICY = moduleUrl("public-corpus-policy.ts");
 const API_ENV = moduleUrl("env.ts");
 
@@ -34,7 +34,7 @@ const load = (module: string, env: Record<string, string>) =>
   run(`import ${JSON.stringify(module)};`, env);
 
 describe("public corpus environment", () => {
-  test("the public reader loads in a strict runtime without a content key", () => {
+  test("the public case-law search loads in a strict runtime without a content key", () => {
     // The fixture must reach the fault: the same settings refuse the API env.
     const api = load(API_ENV, publicReaderEnv);
     expect(api.exitCode).not.toBe(0);

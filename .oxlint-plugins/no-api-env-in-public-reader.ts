@@ -6,13 +6,14 @@
 // either.
 //
 // The boundary is the value-import closure of the public reader entrypoints:
-// the case-law search telemetry the decision search handler runs through, the
-// public corpus policy, and every `lib/legal-search/public-read-*` and
-// `public-search-*` module. A file joins the boundary by being imported from
+// the case-law decision search handler, the public corpus policy, and every
+// `lib/legal-search/public-read-*` and `public-search-*` module. A file joins the boundary by being imported from
 // it, so a new dependency is checked without being listed. Inside it, a value
 // import, re-export or dynamic import of either environment module is
 // reported; a type-only import is erased and stays allowed. Settings the
-// reader needs come from a narrow env module such as `@/api/env-public-corpus`.
+// reader needs come from a narrow env module such as `@/api/env-public-corpus`,
+// or through a reader the API environment binds at boot (the action size
+// limits in `lib/rate-limit/action-size-settings.ts`).
 //
 // Out of scope: `require` calls and specifiers the closure cannot read. The
 // end-to-end guard is apps/api/src/env-public-corpus.test.ts, which loads the
@@ -46,7 +47,7 @@ const FORBIDDEN_MODULES = new Set([
 ]);
 
 const publicReaderEntrypoints = (): string[] => [
-  "apps/api/src/handlers/case-law/decisions/search-telemetry.ts",
+  "apps/api/src/handlers/case-law/decisions/search.ts",
   "apps/api/src/public-corpus-policy.ts",
   ...readdirSync(path.join(ROOT, LEGAL_SEARCH))
     .filter(
