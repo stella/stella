@@ -1,4 +1,0 @@
-{
-  "kind": "ordinary",
-  "qualifier": "Reports package publishing outcomes with read-only permissions; performs no publishing or release writes."
-}
