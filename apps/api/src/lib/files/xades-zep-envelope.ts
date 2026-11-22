@@ -152,17 +152,62 @@ const objectFormats = (root: DocumentXmlNode) => {
   return formats;
 };
 
-/** Text an inline XML object holds, one element's text per line. */
-const inlineXmlText = (object: DocumentXmlNode) =>
-  descendants(object, () => true)
-    .map((node) => node.text.trim())
-    .filter(Boolean)
-    .join("\n");
+/**
+ * The text an inline XML object holds, in document order. An element with
+ * text of its own is running prose and keeps its inline children in place
+ * (`must <b>not</b> pay`); an element of elements only is a record, one
+ * field per line.
+ */
+const xmlText = (node: DocumentXmlNode): string =>
+  node.text.trim()
+    ? node.content
+        .map((item) => (typeof item === "string" ? item : xmlText(item)))
+        .join("")
+        .replace(/\s+/gu, " ")
+        .trim()
+    : node.children.map(xmlText).filter(Boolean).join("\n");
 
-const referencedIds = (root: DocumentXmlNode) =>
-  new Set(
-    fragmentTargets(descendants(root, (node) => isDsig(node, "Reference"))),
+/**
+ * Every object a signature signs: its `SignedInfo` references, and those of
+ * any manifest a signature references in turn. A manifest nothing signs
+ * signs nothing.
+ */
+const signedObjectIds = (
+  signatures: readonly DocumentXmlNode[],
+  root: DocumentXmlNode,
+) => {
+  const manifests = new Map(
+    descendants(root, (node) => isDsig(node, "Manifest")).flatMap(
+      (manifest) => {
+        const id = manifest.attributes.get("Id");
+        return id === undefined ? [] : [[id, manifest] as const];
+      },
+    ),
   );
+  const signed = new Set<string>();
+  const pending = signatures.flatMap((signature) =>
+    fragmentTargets(
+      childElements(signature, XMLDSIG_NAMESPACE, "SignedInfo").flatMap(
+        (info) => childElements(info, XMLDSIG_NAMESPACE, "Reference"),
+      ),
+    ),
+  );
+  for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
+    if (signed.has(id)) {
+      continue;
+    }
+    signed.add(id);
+    const manifest = manifests.get(id);
+    if (manifest !== undefined) {
+      pending.push(
+        ...fragmentTargets(
+          childElements(manifest, XMLDSIG_NAMESPACE, "Reference"),
+        ),
+      );
+    }
+  }
+  return signed;
+};
 
 const readObject = (
   object: DocumentXmlNode,
@@ -182,7 +227,7 @@ const readObject = (
     // An XML data object is embedded as XML; its text is what a reader sees.
     return Result.ok({
       fileName,
-      bytes: new TextEncoder().encode(inlineXmlText(object)),
+      bytes: new TextEncoder().encode(xmlText(object)),
     });
   }
   // CEP and §4.2 store binary objects in base64 and mark them so; a text
@@ -233,7 +278,7 @@ export const readXadesZepEnvelope = (
   // Data objects sit beside the signature or, enveloped, inside it. Only an
   // object a signature references is signed data; the signature's own
   // properties and key information are not.
-  const signed = referencedIds(root);
+  const signed = signedObjectIds(signatures, root);
   const objects = [
     ...childElements(root, XMLDSIG_NAMESPACE, "Object"),
     ...signatures.flatMap((signature) =>

@@ -48,6 +48,46 @@ describe("XAdES_ZEP envelopes", () => {
     },
   );
 
+  test("keeps inline markup in its place in an XML object's text", async () => {
+    const envelope = read(
+      await makeXadesZepFixture({
+        objects: [
+          {
+            id: "Data1",
+            description: "Výrok",
+            mimeType: "application/xml",
+            content: {
+              xml: "<vyrok><p>Žalovaný je <b>povinný</b> zaplatiť trovy.</p><p>Odvolanie <i>nie je</i> prípustné.</p></vyrok>",
+            },
+          },
+        ],
+      }),
+    );
+    expect(
+      envelope.documents.map(({ bytes }) => new TextDecoder().decode(bytes)),
+    ).toEqual([
+      "Žalovaný je povinný zaplatiť trovy.\nOdvolanie nie je prípustné.",
+    ]);
+  });
+
+  test("leaves out an object only an unsigned manifest names", async () => {
+    const signed = new TextDecoder().decode(
+      await makeXadesZepFixture({ objects }),
+    );
+    const stray =
+      '<ds:Object Id="Stray">Unsigned text</ds:Object><ds:Object><ds:Manifest Id="Unsigned"><ds:Reference URI="#Stray"><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>AAAA</ds:DigestValue></ds:Reference></ds:Manifest></ds:Object>';
+    const withStray = signed.replace(
+      "<ds:Signature ",
+      () => `${stray}<ds:Signature `,
+    );
+    expect(withStray).not.toBe(signed);
+    const envelope = read(new TextEncoder().encode(withStray));
+    expect(envelope.documents.map(({ fileName }) => fileName)).toEqual([
+      "Rozhodnutie.pdf",
+      "Žiadosť.xml",
+    ]);
+  });
+
   test("lists every signer of the composite form", async () => {
     const envelope = read(
       await makeXadesZepFixture({
