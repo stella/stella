@@ -69,7 +69,7 @@ import {
   type TSImportType,
   walk,
 } from "../packages/scripts/src/syntax-tree";
-import { memoizeRecent, parseSyntax } from "./parse-memo";
+import { memoizeRecent, parseSyntax } from "./parse-memo.ts";
 
 // `apps/api/src/db/root.ts`, by alias or path. `./root` is how a sibling in
 // `apps/api/src/db/` names it; no other API module is called `root`.

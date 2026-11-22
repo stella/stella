@@ -19,7 +19,7 @@ import {
   type TemplateLiteral,
   walk,
 } from "../packages/scripts/src/syntax-tree.ts";
-import { parseSyntax } from "./parse-memo";
+import { parseSyntax } from "./parse-memo.ts";
 
 type Expression = OxcExpression | SpreadElement;
 

@@ -22,7 +22,7 @@
 import { panic } from "better-result";
 
 import type { Node } from "../packages/scripts/src/syntax-tree";
-import { parseSyntax } from "./parse-memo";
+import { parseSyntax } from "./parse-memo.ts";
 
 // --- Tracked rules ----------------------------------------------------------
 
