@@ -1678,7 +1678,8 @@
       "dependsOn": [
         "transit",
         "@stll/cli#codegen:runtime",
-        "generate:capability-runtime"
+        "generate:capability-runtime",
+        "generate:typecheck-declarations"
       ],
       "inputs": [
         "$TURBO_ROOT$/packages/agent-engine/**",

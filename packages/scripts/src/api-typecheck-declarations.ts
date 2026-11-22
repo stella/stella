@@ -531,7 +531,8 @@ export const discoverApiDeclarationEntries = async (project: string) => {
         const consumer = path.join(root, filename);
         if (
           consumer === config ||
-          consumer === path.join(api, "tsconfig.tests.json")
+          consumer === path.join(api, "tsconfig.tests.json") ||
+          consumer === path.join(api, "tsconfig.contracts.json")
         ) {
           continue;
         }
