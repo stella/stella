@@ -1,5 +1,13 @@
 # @stll/ui
 
+## 0.82.0
+
+### Minor Changes
+
+- [#9231](https://github.com/stella/stella/pull/9231) [`39eabb8`](https://github.com/stella/stella/commit/39eabb8eee2640bdda32e928239460602aefc23b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `formatFileSize` writes sizes under 1 kB with the long, plural-aware unit ("333 bytes", "333 bajtů") instead of the short English unit, which has no plural ("333 byte"). Larger sizes keep the short units.
+
+  The `format` argument now receives `unitDisplay: "long"` for bytes, so a formatter passed in must accept `"long" | "short"`.
+
 ## 0.81.1
 
 ### Patch Changes
