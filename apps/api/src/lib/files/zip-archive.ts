@@ -46,6 +46,8 @@ const UNIX_SYMLINK_TYPE = 10;
 const DOS_DIRECTORY_ATTRIBUTE = 0x10;
 /** Characters of a name shown; a longer stated name is cut. */
 const MAX_NAME_CHARS = 1024;
+/** The end of central directory record, all an empty archive holds. */
+const EMPTY_ARCHIVE_BYTES = 22;
 
 /**
  * The upper half of code page 437, the encoding the ZIP specification gives
@@ -100,16 +102,16 @@ const unicodePathName = (entry: ZipEntry): string | null => {
   return null;
 };
 
-/** The entry's name as the archive states it, decoded for display. */
-const statedName = (entry: ZipEntry): string => {
-  const name =
-    unicodePathName(entry) ??
-    (hasFlag(entry.flags, ZIP_FLAG_UTF8)
-      ? lenientUtf8.decode(entry.name)
-      : (decodeUtf8(entry.name) ?? decodeCp437(entry.name)));
-  // Control characters are shown as the replacement character, never kept.
-  return name.slice(0, MAX_NAME_CHARS).replace(/\p{Cc}/gu, "�");
-};
+/** The entry's name as the archive states it, decoded. */
+const statedName = (entry: ZipEntry): string =>
+  unicodePathName(entry) ??
+  (hasFlag(entry.flags, ZIP_FLAG_UTF8)
+    ? lenientUtf8.decode(entry.name)
+    : (decodeUtf8(entry.name) ?? decodeCp437(entry.name)));
+
+/** A stated name or folder as shown: bounded, control characters replaced. */
+const shown = (text: string): string =>
+  text.slice(0, MAX_NAME_CHARS).replace(/\p{Cc}/gu, "\uFFFD");
 
 const unixFileType = (entry: ZipEntry): number =>
   Math.floor(entry.externalAttributes / UNIX_FILE_TYPE_PLACE);
@@ -166,16 +168,24 @@ export type ZipArchiveFile = {
 };
 
 const archiveFile = (entry: ZipEntry, name: string): ZipArchiveFile => {
+  // Split the whole stated name first; only what is shown is bounded.
   const segments = name.split(/[/\\]/u).filter((segment) => segment !== "");
-  const fileName = segments.at(-1) ?? name;
   return {
-    fileName,
-    folder: segments.length > 1 ? segments.slice(0, -1).join("/") : null,
+    fileName: shown(segments.at(-1) ?? name),
+    folder: segments.length > 1 ? shown(segments.slice(0, -1).join("/")) : null,
     sizeBytes: entry.uncompressedSize,
     unavailable: unavailableReason(entry),
     entry,
   };
 };
+
+/** An archive of no entries: its end record alone, which a reader accepts. */
+const isEmptyArchive = (bytes: Uint8Array): boolean =>
+  bytes.byteLength >= EMPTY_ARCHIVE_BYTES &&
+  bytes[0] === 0x50 &&
+  bytes[1] === 0x4b &&
+  bytes[2] === 0x05 &&
+  bytes[3] === 0x06;
 
 const invalid = (message: string) =>
   Result.err(new DocumentPackageError({ message, reason: "invalid" }));
@@ -187,7 +197,7 @@ const invalid = (message: string) =>
 export const readZipArchive = async (
   bytes: Uint8Array,
 ): Promise<Result<ZipArchiveFile[], DocumentPackageError>> => {
-  if (!hasZipMagic(bytes)) {
+  if (!hasZipMagic(bytes) && !isEmptyArchive(bytes)) {
     return invalid("The file is not a ZIP archive");
   }
   if (!(await isWithinArchiveLimits(bytes))) {

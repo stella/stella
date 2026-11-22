@@ -27,6 +27,7 @@ import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
 import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
+import { LIMITS } from "@/api/lib/limits";
 
 type LegalContentReader = (options: LegalFileReadOptions) => Promise<
   Result<
@@ -99,7 +100,13 @@ const readZipArchiveContent: LegalContentReader = async (options) => {
   if (read.isErr()) {
     return Result.err(read.error);
   }
-  return Result.ok({ text: zipArchiveText(read.value), attachments: [] });
+  return Result.ok({
+    text: zipArchiveText({
+      files: read.value.files,
+      maxChars: LIMITS.extractedContentMaxChars,
+    }),
+    attachments: [],
+  });
 };
 
 export const LEGAL_FILE_READERS = {
