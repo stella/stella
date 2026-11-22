@@ -45,3 +45,6 @@ export const namingValues = (
   matterNumber,
   title: naming.title,
 });
+
+/** A naming run settled because a person renamed the document first. */
+export const DOCUMENT_NAMING_RENAMED_ERROR_CODE = "renamed_since_upload";

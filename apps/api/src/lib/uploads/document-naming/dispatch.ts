@@ -13,8 +13,8 @@ type CompletedRun = Pick<
 
 /**
  * Create the naming run for a processing run that just gave a new document's
- * first version its text, when the matter opted in and the organization has a
- * pattern. Returns whether a run was created; a document gets one at most.
+ * first version its text, when an upload started that processing, the matter
+ * opted in and the organization has a pattern. Returns whether a run was created; a document gets one at most.
  */
 export const dispatchDocumentNaming = async (
   db: Pick<RootDatabase, "execute">,
@@ -28,7 +28,10 @@ export const dispatchDocumentNaming = async (
     )
     SELECT ${run.id}, ${run.organizationId}, ${run.workspaceId},
       ${run.entityId}, ${run.entityVersionId}, e.name
-    FROM entities e
+    FROM document_processing_runs dpr
+    INNER JOIN entities e
+      ON e.id = dpr.entity_id
+      AND e.workspace_id = dpr.workspace_id
     INNER JOIN entity_versions ev
       ON ev.id = e.current_version_id
       AND ev.entity_id = e.id
@@ -46,7 +49,11 @@ export const dispatchDocumentNaming = async (
       AND ec.workspace_id = e.workspace_id
       AND ec.source_entity_version_id = ev.id
       AND ec.char_count >= ${NAMING_TEXT_MIN_CHARS}
-    WHERE e.id = ${run.entityId}
+    WHERE dpr.id = ${run.id}
+      -- Only the processing an upload started; a later manual OCR or repair
+      -- of a document that predates the opt-in never renames it.
+      AND dpr.request_source = 'upload'
+      AND e.id = ${run.entityId}
       AND e.workspace_id = ${run.workspaceId}
       AND e.kind = 'document'
       AND e.current_version_id = ${run.entityVersionId}

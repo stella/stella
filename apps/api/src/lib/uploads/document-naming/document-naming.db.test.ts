@@ -15,6 +15,7 @@ import { eq } from "drizzle-orm";
 import { dbClock } from "@stll/test-kit/db";
 
 import type { rootDb, Transaction } from "@/api/db/root";
+import type { SafeDb } from "@/api/db/safe-db";
 import {
   documentNamingRuns,
   documentProcessingRuns,
@@ -23,7 +24,9 @@ import {
   organizationSettings,
   workspaces,
 } from "@/api/db/schema";
+import { createSafeDb } from "@/api/db/scoped";
 import type { RlsDatabase } from "@/api/db/scoped";
+import { createRenameEntityHandler } from "@/api/handlers/entities/rename-operation";
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
 import {
@@ -82,6 +85,7 @@ const runs: ReturnType<typeof toSafeId<"documentProcessingRun">>[] = [];
 
 const completedRun = async (
   kind: "native-extraction" | "ocr" = "native-extraction",
+  requestSource: "upload" | "manual" = "upload",
 ) => {
   const id = toSafeId<"documentProcessingRun">(Bun.randomUUIDv7());
   runs.push(id);
@@ -98,7 +102,7 @@ const completedRun = async (
         ? DOCUMENT_OCR_PROCESSOR_VERSION
         : DOCUMENT_NATIVE_EXTRACTION_PROCESSOR_VERSION,
     requestedBy: ids.userA1,
-    requestSource: "upload",
+    requestSource,
     sourceFileId: ids.fileObjectA1,
     sourceSha256Hex: "c".repeat(64),
     status: "succeeded",
@@ -188,6 +192,10 @@ beforeEach(async () => {
 
 afterEach(async () => {
   mock.restore();
+  // A person's rename settles a run under an id of its own.
+  await testDb
+    .delete(documentNamingRuns)
+    .where(eq(documentNamingRuns.entityId, ids.entityA1));
   for (const id of runs.splice(0)) {
     await testDb
       .delete(documentNamingRuns)
@@ -266,4 +274,47 @@ test("a matter that opted out before the run keeps the uploaded name", async () 
   expect(modelSpy).not.toHaveBeenCalled();
   expect(await nameOf()).toBe(UPLOADED_NAME);
   expect(await namingStatus(source.id)).toBe("cancelled");
+});
+
+const renameAsPerson = async (name: string) => {
+  const rename = createRenameEntityHandler({
+    enqueueEntitySearchRepairs: async () => await Promise.resolve(),
+    flushEntitySearchRepairs: async () =>
+      await Promise.resolve({ failed: 0, repaired: 0 }),
+  });
+  const renamed = await Result.gen(() =>
+    rename({
+      safeDb: asTestRaw<SafeDb>(
+        createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+      ),
+      workspaceId: ids.wsA1,
+      recordAuditEvent: async () => await Promise.resolve(),
+      body: { entityId: ids.entityA1, name },
+    }),
+  );
+  expect(Result.isOk(renamed)).toBe(true);
+};
+
+test("a manual OCR of an older document gets no naming run", async () => {
+  await optIn("{date}_{title}", true);
+  expect(
+    await dispatchDocumentNaming(
+      asTestRaw<typeof rootDb>(testDb),
+      await completedRun("ocr", "manual"),
+    ),
+  ).toBe(false);
+});
+
+test("a rename while the upload's text is extracted wins", async () => {
+  await optIn("{date}_{title}", true);
+  await renameAsPerson("Signed SPA.pdf");
+
+  expect(
+    await dispatchDocumentNaming(
+      asTestRaw<typeof rootDb>(testDb),
+      await completedRun(),
+    ),
+  ).toBe(false);
+  expect(await nameOf()).toBe("Signed SPA.pdf");
+  expect(modelSpy).not.toHaveBeenCalled();
 });

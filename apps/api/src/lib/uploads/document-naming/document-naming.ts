@@ -1,6 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
 
+import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { renderDocumentName } from "@stll/api-contract/document-name";
 import type { PermissionInput } from "@stll/permissions";
 
@@ -29,6 +30,7 @@ import { loadCurrentDeadlineSourceReader } from "@/api/lib/document-content-prov
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { createModelActionAdmitter } from "@/api/lib/rate-limit/model-action-admission";
+import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
 import {
   createRootMembershipScopedDb,
   createRootSafeDb,
@@ -41,6 +43,7 @@ import {
 } from "@/api/lib/scouts/document-deadlines.logic";
 import { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
+  DOCUMENT_NAMING_RENAMED_ERROR_CODE,
   DOCUMENT_NAMING_SYSTEM_PROMPT,
   documentNamingSchema,
   extensionOf,
@@ -59,7 +62,7 @@ const NAMING_ERROR_CODE = {
   NO_ACTOR: "no_actor",
   NAMING_FAILED: "naming_failed",
   NOT_ELIGIBLE: "not_eligible",
-  RENAMED: "renamed_since_upload",
+  RENAMED: DOCUMENT_NAMING_RENAMED_ERROR_CODE,
 } as const;
 
 class DocumentNamingError extends TaggedError("DocumentNamingError")<{
@@ -482,5 +485,10 @@ export const runDocumentNaming = async ({
     );
   }
   await settleNaming(db, naming, { to: "succeeded", errorCode: null });
+  // The rename skipped the route that tells open tabs; tell them here.
+  broadcastWorkspaceResourceUpdated(
+    naming.workspaceId,
+    resourceRef({ type: RESOURCE_TYPE.ENTITY, id: naming.entityId }),
+  );
   return Result.ok(undefined);
 };
