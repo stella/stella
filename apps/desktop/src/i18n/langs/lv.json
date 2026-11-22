@@ -575,6 +575,25 @@
       "descriptionCloud": "stella AI arī izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam.",
       "title": "Labot ar AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Saglabā nepiespiestu toni ar vieglu pieturzīmju lietojumu.",
+        "title": "Brīvs"
+      },
+      "notes": {
+        "description": "Īsi punkti, katrs savā rindā, bez liekiem vārdiem.",
+        "title": "Piezīmes"
+      },
+      "polished": {
+        "description": "Izlabo atpazīšanas kļūdas un saglabā jūsu formulējumu.",
+        "title": "Noslīpēts"
+      },
+      "title": "Stils",
+      "verbatim": {
+        "description": "Katrs vārds tā, kā izskanēja; tiek pievienotas tikai pieturzīmes un lielie burti.",
+        "title": "Burtisks"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Līdz {limit, number} rakstzīmēm no dokumenta, kurā strādājat, lai diktētais atbilstu rakstītajam.",
@@ -746,6 +765,11 @@
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz.",
       "open": "Atvērt",
       "title": "Ieraksta transkribēšana"
+    },
+    "translateTo": {
+      "description": "Uzraksta notīrīto tekstu šajā valodā neatkarīgi no tā, kādā valodā jūs runājat.",
+      "off": "Runātā valoda",
+      "title": "Rakstīt valodā"
     },
     "whileDictating": {
       "choices": {

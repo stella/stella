@@ -160,6 +160,7 @@ describe("renderEmailHtml", () => {
       { cid: "logo", mimeType: "image/png", dataBase64: PNG_BASE64 },
     ],
     attachments: [],
+    certified: null,
     ...overrides,
   });
 

@@ -18,6 +18,7 @@ import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
+import { CertifiedEmailReading } from "@/components/certified-email-envelope";
 import DocumentView from "@/components/document-viewer/document-view.dom";
 import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
 import type { ViewerAppearance } from "@/components/document-viewer/zoom";
@@ -89,6 +90,7 @@ const openDocument = async ({
     file.value.viewer === "asic" ||
     file.value.viewer === "signed-dossier" ||
     file.value.viewer === "cades" ||
+    file.value.viewer === "certifiedEmail" ||
     file.value.viewer === "dataBox" ||
     file.value.viewer === "e-invoice" ||
     file.value.viewer === "structured-document"
@@ -535,6 +537,9 @@ const LegalFilePreview = ({
       );
     }
     if (preview.status === "ok") {
+      if (viewer === "certifiedEmail") {
+        return <CertifiedEmailReading read={preview.value} />;
+      }
       if (viewer === "asic") {
         return (
           <>
@@ -636,6 +641,7 @@ const LegalFilePreview = ({
       ),
       asic: signedFile("unreadable"),
       cades: signedFile("unreadable"),
+      certifiedEmail: t(requestFailure),
       "signed-dossier": signedFile("unreadable"),
     } satisfies Record<typeof viewer, string>;
     const unreadableMessage = unreadableMessages[viewer];

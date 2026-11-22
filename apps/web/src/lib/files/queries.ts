@@ -11,6 +11,7 @@ import {
   DOCUMENT_PROPERTIES_RESULT_SCHEMA,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import type { CertifiedEmailEnvelope } from "@stll/api-contract/certified-email";
 import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
@@ -58,6 +59,7 @@ type EmailHtmlPreviewData = {
   bodyFolds: EmailBodyFold[];
   bodyHtml: string;
   citationBlocks: EmailCitationBlock[];
+  certified: CertifiedEmailEnvelope | null;
   source: EmailCitationSource;
 };
 
@@ -236,21 +238,9 @@ export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
         fieldId: props.fieldId,
       }).get({ fetch: { signal } });
 
-      const data = unwrapApiResponse(response);
-
-      return {
-        subject: data.subject,
-        from: data.from,
-        to: data.to,
-        cc: data.cc,
-        bcc: data.bcc,
-        date: data.date,
-        attachments: data.attachments,
-        bodyFolds: data.bodyFolds,
-        bodyHtml: data.bodyHtml,
-        citationBlocks: data.citationBlocks,
-        source: data.source,
-      } satisfies EmailHtmlPreviewData;
+      // The answer is the preview and its source, field for field.
+      const data: EmailHtmlPreviewData = unwrapApiResponse(response);
+      return data;
     },
   });
 

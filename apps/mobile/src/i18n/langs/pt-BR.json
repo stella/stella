@@ -1,4 +1,43 @@
 {
+  "certifiedEmail": {
+    "attachments": "Anexos",
+    "certifiedAt": "Certificado em",
+    "deliveredTo": "Entregue a",
+    "error": "Erro informado",
+    "errors": {
+      "noDomain": "Domínio desconhecido",
+      "noRecipient": "Destinatário desconhecido",
+      "other": "Outro erro",
+      "virus": "Vírus detectado"
+    },
+    "handedOverFor": "Tomado a cargo para",
+    "kinds": {
+      "acceptance": "Recibo de aceitação (PEC)",
+      "delivery": "Recibo de entrega (PEC)",
+      "deliveryError": "Aviso de não entrega (PEC)",
+      "deliveryErrorWarning": "Aviso de prazo de entrega excedido (PEC)",
+      "nonAcceptance": "Aviso de não aceitação (PEC)",
+      "takenInCharge": "Recibo de tomada a cargo (PEC)",
+      "transport": "E-mail certificado (PEC)",
+      "virusDetected": "Aviso de detecção de vírus (PEC)"
+    },
+    "messageId": "ID da mensagem PEC",
+    "notDeliveredTo": "Não entregue a",
+    "ordinaryMailbox": "Caixa comum",
+    "originalNotIncluded": "Este arquivo não inclui a mensagem original.",
+    "provider": "Provedor de PEC",
+    "receipt": "Recibo solicitado",
+    "receiptTypes": {
+      "full": "Recibo completo",
+      "short": "Recibo breve",
+      "summary": "Recibo sintético"
+    },
+    "recipients": "Destinatários indicados",
+    "sender": "Remetente indicado",
+    "signatureNotVerified": "A assinatura do provedor é mantida no arquivo e não é verificada.",
+    "signedBy": "Assinado por {name}",
+    "statedInFile": "Conforme consta no arquivo"
+  },
   "chat": {
     "alreadyAnswered": "Isso já foi respondido.",
     "answerAwaitingInput": "Esta resposta precisa da sua ação.",

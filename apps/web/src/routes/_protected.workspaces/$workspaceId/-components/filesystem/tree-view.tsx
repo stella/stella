@@ -104,7 +104,6 @@ import { calculateFolderStatistics } from "@/routes/_protected.workspaces/$works
 import type { FolderStatistics } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/folder-statistics.logic";
 import {
   buildGridTemplate,
-  DEFAULT_EXTRA_WIDTH_PX,
   FILESYSTEM_CREATED_BY_ID,
   FILESYSTEM_METADATA_LABEL_IDS,
   FILESYSTEM_ROW_HEIGHT_PX,
@@ -867,7 +866,9 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
               <ColumnHeaderCell
                 activeSort={primarySort}
                 align="end"
-                currentWidth={columnWidths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}
+                // Unset, a drag starts from the width the column has yielded
+                // to, not from its default.
+                currentWidth={columnWidths[col.id]}
                 key={col.id}
                 label={col.label}
                 onHide={() => handleHideColumn(col.id)}

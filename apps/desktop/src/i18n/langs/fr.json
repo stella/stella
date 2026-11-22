@@ -575,6 +575,25 @@
       "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail.",
       "title": "Corriger avec l’IA"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Garde un ton détendu, avec une ponctuation légère.",
+        "title": "Décontracté"
+      },
+      "notes": {
+        "description": "Des points courts, un par ligne, sans mots de remplissage.",
+        "title": "Notes"
+      },
+      "polished": {
+        "description": "Corrige les erreurs de reconnaissance et conserve votre formulation.",
+        "title": "Soigné"
+      },
+      "title": "Style",
+      "verbatim": {
+        "description": "Chaque mot tel qu’il a été dit ; seules la ponctuation et les majuscules sont ajoutées.",
+        "title": "Mot à mot"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Jusqu’à {limit, number} caractères du document où vous êtes, pour que la dictée s’accorde avec ce que vous écrivez.",
@@ -746,6 +765,11 @@
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez.",
       "open": "Ouvrir",
       "title": "Transcrire un enregistrement"
+    },
+    "translateTo": {
+      "description": "Écrit le texte nettoyé dans cette langue, quelle que soit la langue que vous parlez.",
+      "off": "Langue parlée",
+      "title": "Écrire en"
     },
     "whileDictating": {
       "choices": {

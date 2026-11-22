@@ -173,6 +173,7 @@
     "./signed-dossier-formats": "./src/signed-dossier-formats.ts",
     "./asic-file-formats": "./src/asic-file-formats.ts",
     "./cades": "./src/cades.ts",
+    "./certified-email": "./src/certified-email.ts",
     "./preview-text": "./src/preview-text.ts",
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",

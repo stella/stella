@@ -575,6 +575,25 @@
       "descriptionCloud": "stella KI korrigiert außerdem Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ oder „fett“ und passt den Text an die App an, etwa an E-Mail.",
       "title": "Mit KI überarbeiten"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Behält einen lockeren Ton mit sparsamer Zeichensetzung bei.",
+        "title": "Locker"
+      },
+      "notes": {
+        "description": "Kurze Punkte, einer pro Zeile, ohne Füllwörter.",
+        "title": "Notizen"
+      },
+      "polished": {
+        "description": "Korrigiert Erkennungsfehler und behält Ihre Formulierungen bei.",
+        "title": "Ausformuliert"
+      },
+      "title": "Stil",
+      "verbatim": {
+        "description": "Jedes Wort wie gesprochen; nur Satzzeichen und Großschreibung werden ergänzt.",
+        "title": "Wörtlich"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Bis zu {limit, number} Zeichen des Dokuments, in dem Sie arbeiten, damit das Diktat an Ihren Text anschließt.",
@@ -746,6 +765,11 @@
       "failed": "Das Fenster konnte nicht geöffnet werden. Versuchen Sie es erneut.",
       "open": "Öffnen",
       "title": "Aufnahme transkribieren"
+    },
+    "translateTo": {
+      "description": "Schreibt den bereinigten Text in dieser Sprache, egal in welcher Sprache Sie sprechen.",
+      "off": "Gesprochene Sprache",
+      "title": "Schreiben auf"
     },
     "whileDictating": {
       "choices": {
