@@ -283,9 +283,7 @@ const watchWorkerMemory = ({
     }
   };
   const poll = () => {
-    if (reading === null) {
-      reading = check();
-    }
+    reading ??= check();
   };
   const timer = setInterval(poll, LIMITS.workerRssPollMs);
   return () => {
