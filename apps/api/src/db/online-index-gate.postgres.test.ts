@@ -443,6 +443,33 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
     });
   });
 
+  test("an expression index build analyzes its table, so the planner has the expression's statistics", async () => {
+    await withFixture(async (fixture) => {
+      const definitionBody = `ON public.${fixture.table} USING btree (((id + other)))`;
+      fixture.index = {
+        ...fixture.index,
+        definitionBody,
+        createSql: `CREATE INDEX CONCURRENTLY ${fixture.name} ${definitionBody}`,
+      };
+      const expressionStats = async () =>
+        await fixture.observer<
+          { count: number }[]
+        >`SELECT count(*)::integer AS count FROM pg_stats WHERE schemaname = 'public' AND tablename = ${fixture.name}`;
+      await repair(fixture);
+      expect((await expressionStats()).at(0)?.count).toBe(1);
+    });
+  });
+
+  test("a plain column index build leaves its table's statistics to autovacuum", async () => {
+    await withFixture(async (fixture) => {
+      await repair(fixture);
+      const analyzed = await fixture.observer<
+        { analyzed: boolean }[]
+      >`SELECT last_analyze IS NOT NULL AS analyzed FROM pg_stat_user_tables WHERE relid = ${`public.${fixture.table}`}::regclass`;
+      expect(analyzed.at(0)?.analyzed).toBe(false);
+    });
+  });
+
   test("a cancelled build defers its run, and the next run repairs it with repair priority", async () => {
     await withFixture(async (fixture) => {
       await blockBuild(fixture);

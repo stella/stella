@@ -9,6 +9,7 @@ import { BackfillHeldError } from "./backfill-runtime";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import {
+  analyzeTable,
   createIndexConcurrently,
   createOnlineTableGate,
   declaresOnlineBuild,
@@ -1478,6 +1479,42 @@ type EnsureOnlineIndexOptions = {
   reserveObserver: () => Promise<OnlineMigrationConnection>;
 };
 
+const READ_INDEX_HAS_EXPRESSIONS_SQL = `
+  SELECT index_state.indexprs IS NOT NULL AS "hasExpressions"
+  FROM pg_catalog.pg_class index_relation
+  JOIN pg_catalog.pg_namespace index_namespace
+    ON index_namespace.oid = index_relation.relnamespace
+  JOIN pg_catalog.pg_index index_state
+    ON index_state.indexrelid = index_relation.oid
+  JOIN pg_catalog.pg_class table_relation
+    ON table_relation.oid = index_state.indrelid
+  WHERE index_namespace.nspname = $1
+    AND index_relation.relname = $2
+    AND table_relation.relname = $3
+`;
+
+/**
+ * PostgreSQL keeps statistics for an index expression only after its table
+ * is analyzed, and autovacuum can leave a large table unanalyzed for days.
+ * Until then the planner guesses the expression's selectivity and may scan
+ * the whole table instead of reading the new index, so a build analyzes it.
+ */
+const analyzeExpressionIndexTable = async (
+  session: GatedTableSession,
+  { name, tableName }: Pick<RequiredMigrationIndex, "name" | "tableName">,
+): Promise<void> => {
+  const row = (
+    await session.query(READ_INDEX_HAS_EXPRESSIONS_SQL, [
+      "public",
+      name,
+      tableName,
+    ])
+  ).at(0);
+  if (isRecord(row) && row["hasExpressions"] === true) {
+    await session.run(analyzeTable(tableName));
+  }
+};
+
 export const ensureOnlineIndexValid = async ({
   connection,
   index,
@@ -1517,12 +1554,14 @@ export const ensureOnlineIndexValid = async ({
         // only once the copy is valid, so enforcement never lapses; a
         // DROP before CREATE would let a duplicate commit in between.
         await session.run(reindexIndexConcurrently(index));
+        await analyzeExpressionIndexTable(session, index);
         return;
       }
       if (!declaresOnlineBuild(index)) {
         panic(`Required migration index ${index.name} is missing`);
       }
       await session.run(createIndexConcurrently(index));
+      await analyzeExpressionIndexTable(session, index);
     },
   });
   if (outcome.type === "complete") {
