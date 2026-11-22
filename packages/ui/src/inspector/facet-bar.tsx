@@ -100,85 +100,92 @@ export const InspectorFacetBar = <F extends string>({
   return (
     <div
       className={cn(
-        "bg-background/85 supports-[backdrop-filter]:bg-background/65 sticky top-0 z-10 flex shrink-0 items-center gap-0.5 overflow-hidden border-b px-1.5 backdrop-blur",
+        "bg-background/85 supports-[backdrop-filter]:bg-background/65 sticky top-0 z-10 flex shrink-0 items-center overflow-hidden border-b px-1.5 backdrop-blur",
         TOOLBAR_ROW_HEIGHT,
       )}
       data-active-facet={facet}
       data-slot="inspector-facet-bar"
-      ref={containerRef}
     >
-      {/* `contents` keeps the chips in the bar's flex row, and the overflow
-          trigger outside the list: a tablist owns only tabs. */}
-      <div className="contents" role="tablist">
-        {visibleFacets.map((value) => (
-          <FacetChip
-            activeBadge={activeBadge}
-            disabled={disabledFacets?.has(value) ?? false}
-            isActive={value === facet}
-            key={value}
-            label={labels[value]}
-            onSelect={() => onChange(value)}
-            value={value}
-          />
-        ))}
-      </div>
-
-      {overflowing && (
-        <Menu>
-          <MenuTrigger
-            aria-label={overflowMenuLabel}
-            // Pinned to the inline-end (far right in LTR, far left in RTL)
-            // via `ms-auto`, set apart from the last chip rather than
-            // crammed beside it. The outline variant reads as a real
-            // button, not a bare chevron.
-            className="ms-auto"
-            data-slot="inspector-facet-overflow-trigger"
-            render={<Button size="icon-sm" type="button" variant="outline" />}
-          >
-            <ChevronDownIcon />
-          </MenuTrigger>
-          <MenuPopup align="end" side="bottom">
-            {overflowFacets.map((value) => (
-              <MenuItem
-                data-facet-overflow-value={value}
-                disabled={disabledFacets?.has(value) ?? false}
-                key={value}
-                onClick={() => onChange(value)}
-              >
-                {labels[value]}
-              </MenuItem>
-            ))}
-          </MenuPopup>
-        </Menu>
-      )}
-
-      {/* Off-screen full-width copy of every chip (plus the trigger) used
-          only to measure natural widths; never visible or interactive. */}
+      {/* The measured row sits inside the bar's padding, so its own box is
+          the room the chips and the overflow trigger share. */}
       <div
-        aria-hidden="true"
-        className="pointer-events-none invisible absolute flex w-max items-center gap-0.5"
-        ref={measureRef}
+        className="relative flex h-full min-w-0 flex-1 items-center gap-0.5"
+        data-slot="inspector-facet-row"
+        ref={containerRef}
       >
-        {facets.map((value) => (
-          <span
-            className={cn(CHIP_CLASS, INACTIVE_CHIP_CLASS)}
-            data-facet-option={value}
-            data-facet-option-disabled={
-              disabledFacets?.has(value) ? "" : undefined
-            }
-            key={value}
-            {...{ [INLINE_OVERFLOW_ITEM_ATTRIBUTE]: value }}
-          >
-            {labels[value]}
-          </span>
-        ))}
-        {/* Mirrors the overflow trigger's square footprint (Button
+        {/* `contents` keeps the chips in the row's flex line, and the overflow
+          trigger outside the list: a tablist owns only tabs. */}
+        <div className="contents" role="tablist">
+          {visibleFacets.map((value) => (
+            <FacetChip
+              activeBadge={activeBadge}
+              disabled={disabledFacets?.has(value) ?? false}
+              isActive={value === facet}
+              key={value}
+              label={labels[value]}
+              onSelect={() => onChange(value)}
+              value={value}
+            />
+          ))}
+        </div>
+
+        {overflowing && (
+          <Menu>
+            <MenuTrigger
+              aria-label={overflowMenuLabel}
+              // Pinned to the inline-end (far right in LTR, far left in RTL)
+              // via `ms-auto`, set apart from the last chip rather than
+              // crammed beside it. The outline variant reads as a real
+              // button, not a bare chevron.
+              className="ms-auto"
+              data-slot="inspector-facet-overflow-trigger"
+              render={<Button size="icon-sm" type="button" variant="outline" />}
+            >
+              <ChevronDownIcon />
+            </MenuTrigger>
+            <MenuPopup align="end" side="bottom">
+              {overflowFacets.map((value) => (
+                <MenuItem
+                  data-facet-overflow-value={value}
+                  disabled={disabledFacets?.has(value) ?? false}
+                  key={value}
+                  onClick={() => onChange(value)}
+                >
+                  {labels[value]}
+                </MenuItem>
+              ))}
+            </MenuPopup>
+          </Menu>
+        )}
+
+        {/* Off-screen full-width copy of every chip (plus the trigger) used
+          only to measure natural widths; never visible or interactive. */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none invisible absolute flex w-max items-center gap-0.5"
+          ref={measureRef}
+        >
+          {facets.map((value) => (
+            <span
+              className={cn(CHIP_CLASS, INACTIVE_CHIP_CLASS)}
+              data-facet-option={value}
+              data-facet-option-disabled={
+                disabledFacets?.has(value) ? "" : undefined
+              }
+              key={value}
+              {...{ [INLINE_OVERFLOW_ITEM_ATTRIBUTE]: value }}
+            >
+              {labels[value]}
+            </span>
+          ))}
+          {/* Mirrors the overflow trigger's square footprint (Button
             `size="icon-sm"`) so the fit calculation reserves the right
             amount of room for it. */}
-        <span
-          className="size-8 shrink-0 rounded-lg border sm:size-7"
-          {...{ [INLINE_OVERFLOW_TRIGGER_ATTRIBUTE]: "" }}
-        />
+          <span
+            className="size-8 shrink-0 rounded-lg border sm:size-7"
+            {...{ [INLINE_OVERFLOW_TRIGGER_ATTRIBUTE]: "" }}
+          />
+        </div>
       </div>
     </div>
   );
