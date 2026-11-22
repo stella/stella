@@ -1487,7 +1487,9 @@ type EnsureOnlineIndexOptions = {
 };
 
 const READ_INDEX_HAS_EXPRESSIONS_SQL = `
-  SELECT index_state.indexprs IS NOT NULL AS "hasExpressions"
+  SELECT
+    index_state.indexprs IS NOT NULL AS "hasExpressions",
+    pg_catalog.pg_relation_size(table_relation.oid) > 0 AS "hasPages"
   FROM pg_catalog.pg_class index_relation
   JOIN pg_catalog.pg_namespace index_namespace
     ON index_namespace.oid = index_relation.relnamespace
@@ -1517,7 +1519,13 @@ const analyzeExpressionIndexTable = async (
       tableName,
     ])
   ).at(0);
-  if (isRecord(row) && row["hasExpressions"] === true) {
+  // An empty table teaches the planner nothing, and analyzing it would record
+  // it as empty until autovacuum next looks; its rows get analyzed later.
+  if (
+    isRecord(row) &&
+    row["hasExpressions"] === true &&
+    row["hasPages"] === true
+  ) {
     await session.run(analyzeTable(tableName));
   }
 };
