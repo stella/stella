@@ -270,6 +270,7 @@ const MARK_GLYPHS = {
   O: "0 0,3 0,3 4,0 4,0 0",
   P: "0 4,0 0,3 0,3 2,0 2",
   S: "3 0,0 0,0 2,3 2,3 4,0 4",
+  T: "0 0,3 0|1.5 0,1.5 4",
   U: "0 0,0 4,3 4,3 0",
   X: "0 0,3 4|3 0,0 4",
   Z: "0 0,3 0,0 4,3 4",
@@ -403,7 +404,12 @@ export const DOCUMENT_MARKS = {
   }),
   xml: legalFormatMark({ color: "#5c6470", lines: [["X", "M", "L"]] }),
   eAkta: legalFormatMark({ color: "#8c2f5d", lines: [["E", "S", "3"]] }),
+  et3: legalFormatMark({ color: "#a2481f", lines: [["E", "T", "3"]] }),
   zep: legalFormatMark({ color: "#24529c", lines: [["Z", "E", "P"]] }),
+  xadesZep: legalFormatMark({
+    color: "#3d4f8f",
+    lines: [["X", "Z", "E", "P"]],
+  }),
   dataBox: {
     viewBox: "0 0 24 24",
     gradients: [],

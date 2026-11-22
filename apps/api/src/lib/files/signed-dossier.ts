@@ -29,6 +29,8 @@ const MAX_DOCUMENT_NAME_LENGTH = 255;
 
 /** A parsed container: its documents in order and its stated signers. */
 export type SignedDossier = {
+  /** A delivery receipt acknowledges a dossier rather than being one. */
+  receipt: boolean;
   documents: ContainerMember[];
   signers: XadesSigner[];
 };

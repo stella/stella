@@ -364,6 +364,7 @@
     "title": "SharePoint i OneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "Potwierdzenie doręczenia akt elektronicznych",
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "noSigners": "Nie znaleziono danych podpisujących.",

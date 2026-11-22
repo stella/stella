@@ -364,6 +364,7 @@
     "title": "SharePoint وOneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "إيصال تسليم لملف إلكتروني",
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
     "noSigners": "لم يُعثر على بيانات أي موقّع.",

@@ -364,6 +364,7 @@
     "title": "SharePoint and OneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "Delivery receipt for an electronic dossier",
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
     "noSigners": "No signer details were found.",

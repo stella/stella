@@ -5509,6 +5509,7 @@
   "sharepoint.picker.title": "Import from SharePoint or OneDrive",
   "sharepoint.reconnectRequired": "Sign-in expired",
   "sharepoint.title": "SharePoint and OneDrive",
+  "signedFile.deliveryReceipt": "Delivery receipt for an electronic dossier",
   "signedFile.layer": "Signature layer {number, number}",
   "signedFile.noReadableContent": "No readable content is available for preview.",
   "signedFile.noSigners": "No signer details were found.",
