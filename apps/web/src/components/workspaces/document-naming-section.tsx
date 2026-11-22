@@ -74,7 +74,8 @@ export const DocumentNamingSection = ({
         </div>
         <FieldDescription>
           {t("workspaces.documentNaming.description", {
-            pattern: settingsView.items.documentNamePattern,
+            // Isolated left-to-right so an RTL sentence does not reverse its tokens.
+            pattern: `\u2066${settingsView.items.documentNamePattern}\u2069`,
           })}
         </FieldDescription>
       </Field>
