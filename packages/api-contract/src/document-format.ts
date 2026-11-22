@@ -1,4 +1,7 @@
-import { CONVERTED_DOCUMENT_FORMATS } from "./converted-document-formats";
+import {
+  CONVERTED_DOCUMENT_FORMATS,
+  HTML_RENDERED_DOCUMENT_FORMATS,
+} from "./converted-document-formats";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
 import {
@@ -142,7 +145,7 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
     mimeTypes: ["image/webp"],
     extensions: [".webp"],
   },
-  ...CONVERTED_DOCUMENT_FORMATS.map(
+  ...[...CONVERTED_DOCUMENT_FORMATS, ...HTML_RENDERED_DOCUMENT_FORMATS].map(
     ({ label, mimeType, mimeAliases, extensions }): FormatEntry => ({
       kind: "file",
       label,

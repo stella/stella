@@ -1,5 +1,9 @@
 import { desktopEditFileTypeForMimeType } from "@stll/api-contract";
-import type { ConvertedDocumentMimeType } from "@stll/api-contract/converted-document-formats";
+import {
+  type ConvertedDocumentMimeType,
+  htmlRenderedDocumentFormatOfMimeType,
+  type HtmlRenderedDocumentMimeType,
+} from "@stll/api-contract/converted-document-formats";
 
 /**
  * MIME types accepted by Gotenberg's LibreOffice conversion route, every
@@ -47,6 +51,19 @@ export const isConvertibleMimeType = (
 ): mimeType is ConvertibleMime =>
   Object.hasOwn(CONVERTIBLE_MIME_TYPES, mimeType);
 
+/**
+ * Whether `mimeType` declares a format rendered from HTML stella builds out
+ * of it (a web archive, an e-book) before the converter sees it.
+ */
+export const isHtmlRenderedMimeType = (
+  mimeType: string,
+): mimeType is HtmlRenderedDocumentMimeType =>
+  htmlRenderedDocumentFormatOfMimeType(mimeType) !== undefined;
+
+/** Whether a file of `mimeType` can become a PDF, as stored or rendered. */
+export const canConvertToPdf = (mimeType: string): boolean =>
+  isConvertibleMimeType(mimeType) || isHtmlRenderedMimeType(mimeType);
+
 /** OOXML formats rendered in-browser and therefore excluded from the derivative queue. */
 export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
   desktopEditFileTypeForMimeType(mimeType) !== null;
@@ -61,7 +78,7 @@ export const shouldGeneratePdfDerivative = ({
   mimeType,
 }: ShouldGeneratePdfDerivativeOptions): boolean =>
   !encrypted &&
-  isConvertibleMimeType(mimeType) &&
+  canConvertToPdf(mimeType) &&
   !isNativelyRenderableMimeType(mimeType);
 
 export const pdfDerivativeStateForFile = (

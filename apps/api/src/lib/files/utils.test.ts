@@ -88,6 +88,8 @@ describe("resolveUploadMime", () => {
       ["dopis.wps", "application/vnd.ms-works"],
       ["nabidka.pages", "application/vnd.apple.pages"],
       ["rozpocet.numbers", "application/vnd.apple.numbers"],
+      ["vestnik.mht", "multipart/related"],
+      ["vestnik.MHTML", "multipart/related"],
     ] as const) {
       expect(resolveUploadMime({ declaredMime: "", fileName })).toBe(mimeType);
     }
@@ -101,6 +103,7 @@ describe("resolveUploadMime", () => {
         "rozpocet.numbers",
         "application/vnd.apple.numbers",
       ],
+      ["application/zip", "kniha.epub", "application/epub+zip"],
       ["application/zip", "smlouva.wpd", "application/zip"],
       ["application/zip", "archiv.zip", "application/zip"],
       ["application/pdf", "nabidka.pages", "application/pdf"],
