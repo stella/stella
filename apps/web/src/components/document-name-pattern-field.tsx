@@ -4,7 +4,7 @@ import { renderDocumentName } from "@stll/api-contract/document-name";
 import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 
-import { MatterNumberPreview } from "./matter-numbering-card.pending";
+import { MatterNumberPreview } from "@/components/matter-number-preview.pending";
 
 const EXAMPLE_PATTERN = "{date}_{matterNumber}_{docType}_{title}";
 

@@ -31,10 +31,8 @@ import {
   DOCUMENT_OCR_PROCESSOR_VERSION,
 } from "@/api/lib/document-processing-contract";
 import * as modelTransport from "@/api/lib/tanstack-ai-generate";
-import {
-  dispatchDocumentNaming,
-  runDocumentNaming,
-} from "@/api/lib/uploads/document-naming/document-naming";
+import { dispatchDocumentNaming } from "@/api/lib/uploads/document-naming/dispatch";
+import { runDocumentNaming } from "@/api/lib/uploads/document-naming/document-naming";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,

@@ -17,6 +17,8 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { DocumentNamePatternField } from "@/components/document-name-pattern-field";
+import { MatterNumberPreview } from "@/components/matter-number-preview.pending";
 import {
   QueryViewFeedback,
   SettledQueryViewFeedback,
@@ -33,12 +35,9 @@ import {
   MATTER_NUMBERING_TOGGLE_ROW_CLASS,
   MatterNumberingCardFrame,
   MatterNumberingCardPending,
-  MatterNumberPreview,
   MatterNumberPreviewPending,
 } from "@/routes/_protected.settings/organization/-components/organization/matter-numbering-card.pending";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
-
-import { DocumentNamePatternField } from "./document-name-pattern-field";
 
 const PATTERN_PRESETS = [
   { value: "{SEQ}", key: "sequential" as const },

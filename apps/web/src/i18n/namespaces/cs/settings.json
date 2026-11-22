@@ -212,7 +212,7 @@
     "creationRefused": "Organizaci se nepodařilo vytvořit. Zkontrolujte údaje a zkuste to znovu.",
     "creationSlugConflict": "Tuto adresu organizace už někdo používá. Zvolte jiný název nebo adresu.",
     "documentNaming": {
-      "description": "Přejmenuje nově nahrané dokumenty ve spisech, které to mají zapnuté. Stella přečte datum, typ a název každého dokumentu a doplní je do tohoto vzoru. Prázdné pole ponechá původní názvy.",
+      "description": "Přejmenuje nově nahrané dokumenty ve spisech, které to mají zapnuté. stella přečte datum, typ a název každého dokumentu a doplní je do tohoto vzoru. Prázdné pole ponechá původní názvy.",
       "invalid": "Použijte jen uvedené tokeny a žádné znaky \\ / : * ? \" < > |.",
       "pattern": "Vzor názvu",
       "preview": "Podepsaná smlouva by se jmenovala:",

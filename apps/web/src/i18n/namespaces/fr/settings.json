@@ -212,7 +212,7 @@
     "creationRefused": "L’organisation n’a pas pu être créée. Vérifiez les informations et réessayez.",
     "creationSlugConflict": "Cette adresse d’organisation est déjà utilisée. Choisissez un autre nom ou une autre adresse.",
     "documentNaming": {
-      "description": "Renomme les nouveaux fichiers téléversés dans les dossiers qui l'activent. Stella lit la date, le type et le titre de chaque document et complète ce modèle. Laissez vide pour conserver les noms d'origine.",
+      "description": "Renomme les nouveaux fichiers téléversés dans les dossiers qui l'activent. stella lit la date, le type et le titre de chaque document et complète ce modèle. Laissez vide pour conserver les noms d'origine.",
       "invalid": "Utilisez uniquement les jetons indiqués et aucun des caractères \\ / : * ? \" < > |.",
       "pattern": "Modèle de nom",
       "preview": "Un contrat signé s'appellerait :",

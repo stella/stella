@@ -19,7 +19,7 @@ import { initListVerificationRunWorker } from "@/api/lib/lists/verification/run-
 import { initPushDeliveryWorker } from "@/api/lib/push/push-delivery-worker";
 import { initTimerActivityWorker } from "@/api/lib/push/timer-activity-worker";
 import { initStyleSetPackageCleanupWorker } from "@/api/lib/style-set-package-cleanup-queue";
-import { initDocumentNamingWorker } from "@/api/lib/uploads/document-naming/queue";
+import { initDocumentNamingWorker } from "@/api/lib/uploads/document-naming/worker";
 import { initWorkflowWorkers } from "@/api/lib/workflow-queue";
 
 /**

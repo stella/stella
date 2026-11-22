@@ -109,6 +109,11 @@ export const documentNamingRuns = p.pgTable(
         name: "document_naming_runs_version_entity_workspace_fk",
       })
       .onDelete("cascade"),
+    // A run holds a claim exactly while it is running.
+    p.check(
+      "document_naming_runs_claim_check",
+      sql`(${table.status} = 'running') = (${table.claimedAt} IS NOT NULL)`,
+    ),
     p
       .index("document_naming_runs_entity_workspace_idx")
       .on(table.entityId, table.workspaceId),
@@ -141,6 +146,10 @@ export const documentNamingRuns = p.pgTable(
           { target: "entity_versions", kind: "owned-content" },
         ],
         [table.entityId, { target: "entities", kind: "owned-content" }],
+        [
+          table.id,
+          { kind: "owned-by-parent", parent: documentProcessingRuns },
+        ],
       ]),
     }),
   ],

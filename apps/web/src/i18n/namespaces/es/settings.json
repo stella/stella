@@ -212,7 +212,7 @@
     "creationRefused": "No se ha podido crear la organización. Revisa los datos e inténtalo de nuevo.",
     "creationSlugConflict": "Esta dirección de organización ya está en uso. Elige otro nombre u otra dirección.",
     "documentNaming": {
-      "description": "Renombra las nuevas subidas en los asuntos que lo activen. Stella lee la fecha, el tipo y el título de cada documento y completa este patrón. Déjelo vacío para conservar los nombres originales.",
+      "description": "Renombra las nuevas subidas en los asuntos que lo activen. stella lee la fecha, el tipo y el título de cada documento y completa este patrón. Déjelo vacío para conservar los nombres originales.",
       "invalid": "Use solo los marcadores indicados y ninguno de los caracteres \\ / : * ? \" < > |.",
       "pattern": "Patrón de nombre",
       "preview": "Un contrato firmado se llamaría:",

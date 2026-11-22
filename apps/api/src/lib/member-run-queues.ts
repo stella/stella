@@ -135,7 +135,7 @@ export const QUEUE_AUTHORITY = {
   },
   "document-naming": {
     authority: "org-automation",
-    worker: "apps/api/src/lib/uploads/document-naming/queue.ts",
+    worker: "apps/api/src/lib/uploads/document-naming/worker.ts",
     reason:
       "Renames a new upload in a matter that opted in, acting as a matter member who may update it.",
   },

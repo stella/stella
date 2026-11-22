@@ -19,7 +19,8 @@ CREATE TABLE "document_naming_runs" (
 	"error_code" varchar(128),
 	"skipped_until" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "document_naming_runs_claim_check" CHECK (("status" = 'running') = ("claimed_at" IS NOT NULL))
 );--> statement-breakpoint
 ALTER TABLE "document_naming_runs" ADD CONSTRAINT "document_naming_runs_source_run_fk" FOREIGN KEY ("id") REFERENCES "document_processing_runs"("id") ON DELETE CASCADE;--> statement-breakpoint
 ALTER TABLE "document_naming_runs" ADD CONSTRAINT "document_naming_runs_organization_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE;--> statement-breakpoint

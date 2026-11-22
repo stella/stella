@@ -2,7 +2,7 @@ import type { ComponentProps } from "react";
 
 import { documentNamePatternProblem } from "@stll/api-contract/document-name";
 
-import { DocumentNamePatternField } from "@/routes/_protected.settings/organization/-components/organization/document-name-pattern-field";
+import { DocumentNamePatternField } from "@/components/document-name-pattern-field";
 
 const states = [
   { key: "preview", value: "{dateCompact}_{matterNumber}_{docType}_{title}" },

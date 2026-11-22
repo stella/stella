@@ -212,7 +212,7 @@
     "creationRefused": "Organisatsiooni ei saanud luua. Kontrolli andmeid ja proovi uuesti.",
     "creationSlugConflict": "See organisatsiooni aadress on juba kasutusel. Vali teine nimi või aadress.",
     "documentNaming": {
-      "description": "Nimetab ümber uued üleslaadimised toimikutes, kus see on sisse lülitatud. Stella loeb iga dokumendi kuupäeva, liigi ja pealkirja ning täidab selle mustri. Jätke tühjaks, et säilitada algsed nimed.",
+      "description": "Nimetab ümber uued üleslaadimised toimikutes, kus see on sisse lülitatud. stella loeb iga dokumendi kuupäeva, liigi ja pealkirja ning täidab selle mustri. Jätke tühjaks, et säilitada algsed nimed.",
       "invalid": "Kasutage ainult loetletud märgendeid ja mitte märke \\ / : * ? \" < > |.",
       "pattern": "Nimemuster",
       "preview": "Allkirjastatud leping saaks nime:",

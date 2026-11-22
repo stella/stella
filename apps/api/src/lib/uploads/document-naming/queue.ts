@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import { and, asc, eq, isNull, lt, lte, or, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -7,28 +6,19 @@ import type { RootDatabase } from "@/api/db/root";
 import { documentNamingRuns } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
-import { BullMqWorker, createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
-import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
+import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import { requeueDeterministicJob } from "@/api/lib/bullmq-requeue";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { transition } from "@/api/lib/db/transitions";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { createQueueWorkerErrorLogger } from "@/api/lib/queue-worker-error-log";
-import { createBullMqConnection } from "@/api/lib/redis-client";
-import { DOCUMENT_NAMING_LEASE_TIMEOUT_MS } from "@/api/lib/uploads/document-naming/document-naming";
 import { DOCUMENT_NAMING_TRANSITIONS } from "@/api/lib/uploads/document-naming/transitions";
 
-const DOCUMENT_NAMING_QUEUE_NAME = "document-naming";
+export const DOCUMENT_NAMING_QUEUE_NAME = "document-naming";
 const DOCUMENT_NAMING_JOB_NAME = "name-document";
-const DOCUMENT_NAMING_WORKER_CONCURRENCY = 1;
 const RECOVERY_BATCH_SIZE = 100;
-const JOB_FAILED_SINK = failureSink({
-  event: "document_naming.failed",
-  expected: [],
-});
+/** A claim older than this is returned to `pending` by recovery. */
+const DOCUMENT_NAMING_LEASE_TIMEOUT_MS = 5 * 60 * 1000;
 
-type DocumentNamingJobData = { runId: SafeId<"documentProcessingRun"> };
+export type DocumentNamingJobData = { runId: SafeId<"documentProcessingRun"> };
 
 const getDocumentNamingQueue = createLazyBullMqQueue<DocumentNamingJobData>({
   name: DOCUMENT_NAMING_QUEUE_NAME,
@@ -51,43 +41,6 @@ export const enqueueDocumentNaming = async (
     name: DOCUMENT_NAMING_JOB_NAME,
     queue: getDocumentNamingQueue(),
   });
-};
-
-export const initDocumentNamingWorker = ({ db }: BullMqWorkerContext) => {
-  const worker = new BullMqWorker<DocumentNamingJobData>(
-    DOCUMENT_NAMING_QUEUE_NAME,
-    async ({ data }) => {
-      const { runDocumentNaming } =
-        await import("@/api/lib/uploads/document-naming/document-naming");
-      const outcome = await runDocumentNaming({ db, sourceRunId: data.runId });
-      if (Result.isError(outcome)) {
-        // BullMQ retries a job only when its processor throws.
-        throw outcome.error;
-      }
-    },
-    {
-      connection: createBullMqConnection({
-        storeClass: "durable-coordination",
-      }),
-      concurrency: DOCUMENT_NAMING_WORKER_CONCURRENCY,
-    },
-  );
-  worker.on("failed", (job, error) => {
-    observeFailure(error, {
-      sink: JOB_FAILED_SINK,
-      ctx: job === undefined ? {} : { runId: job.data.runId },
-    });
-  });
-  worker.on(
-    "error",
-    createQueueWorkerErrorLogger("document_naming.worker_error"),
-  );
-  return {
-    queues: [DOCUMENT_NAMING_QUEUE_NAME] as const,
-    close: async (): Promise<void> => {
-      await worker.close();
-    },
-  };
 };
 
 type RecoverDocumentNamingOptions = {

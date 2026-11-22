@@ -212,7 +212,7 @@
     "creationRefused": "Die Organisation konnte nicht erstellt werden. Prüfen Sie die Angaben und versuchen Sie es erneut.",
     "creationSlugConflict": "Diese Organisationsadresse wird bereits verwendet. Wählen Sie einen anderen Namen oder eine andere Adresse.",
     "documentNaming": {
-      "description": "Benennt neue Uploads in Akten um, die dies aktiviert haben. Stella liest Datum, Art und Titel jedes Dokuments und setzt sie in dieses Muster ein. Leer lassen, um die hochgeladenen Namen zu behalten.",
+      "description": "Benennt neue Uploads in Akten um, die dies aktiviert haben. stella liest Datum, Art und Titel jedes Dokuments und setzt sie in dieses Muster ein. Leer lassen, um die hochgeladenen Namen zu behalten.",
       "invalid": "Verwenden Sie nur die aufgeführten Platzhalter und keine Zeichen \\ / : * ? \" < > |.",
       "pattern": "Namensmuster",
       "preview": "Ein unterzeichneter Vertrag hieße:",

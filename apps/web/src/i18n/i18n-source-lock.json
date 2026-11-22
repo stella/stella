@@ -4701,7 +4701,7 @@
   "organization.creationRateLimited": "Too many organizations were created recently. Try again later.",
   "organization.creationRefused": "The organization could not be created. Check the details and try again.",
   "organization.creationSlugConflict": "This organization address is already in use. Choose another name or address.",
-  "organization.documentNaming.description": "Rename new uploads in matters that opt in. Stella reads each document's date, type and title and fills in this pattern. Leave it empty to keep uploaded names.",
+  "organization.documentNaming.description": "Rename new uploads in matters that opt in. stella reads each document's date, type and title and fills in this pattern. Leave it empty to keep uploaded names.",
   "organization.documentNaming.invalid": "Use only the listed tokens, and no \\ / : * ? \" < > | characters.",
   "organization.documentNaming.pattern": "Name pattern",
   "organization.documentNaming.preview": "A signed contract would be named:",

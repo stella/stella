@@ -12,6 +12,7 @@ import {
 } from "@stll/ui/control-face";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
+import { MatterNumberPreview } from "@/components/matter-number-preview.pending";
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
 
@@ -69,21 +70,6 @@ export const MatterNumberingCardFrame = ({
 export const MATTER_NUMBERING_TOGGLE_ROW_CLASS = "flex items-center gap-2";
 
 /** The next number: its caption, then the number in a code chip. */
-export const MatterNumberPreview = ({
-  children,
-  label,
-}: {
-  label: ReactNode;
-  /** The next number, or a bar while it is worked out. */
-  children: ReactNode;
-}) => (
-  <div className="flex items-center gap-2">
-    <span className="text-muted-foreground text-xs">{label}</span>
-    <span className="bg-muted rounded-sm border px-2 py-1 font-mono text-sm">
-      {children}
-    </span>
-  </div>
-);
 
 /** The preview while the next number is worked out: its chip holds a bar. */
 export const MatterNumberPreviewPending = () => (

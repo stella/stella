@@ -161,7 +161,7 @@ import {
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
-import { dispatchDocumentNaming } from "@/api/lib/uploads/document-naming/document-naming";
+import { dispatchDocumentNaming } from "@/api/lib/uploads/document-naming/dispatch";
 import {
   enqueueDocumentNaming,
   recoverDocumentNamingRuns,
