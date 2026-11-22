@@ -382,7 +382,26 @@ export const drawStampRows = ({
   pdf: PDF;
   rows: readonly PositionedStampRow[];
 }): { fonts: PdfDict; operators: string[] } => {
-  const usage = usageOf(rows.map(({ row }) => row));
+  const {
+    fonts,
+    operators: [operators = []],
+  } = drawStampRowGroups({ pdf, groups: [rows] });
+  return { fonts, operators };
+};
+
+/**
+ * {@link drawStampRows} for rows drawn in separate content streams (the
+ * pages of a text preview) that share one set of embedded fonts: one
+ * operator list per group, each starting from the default fill colour.
+ */
+export const drawStampRowGroups = ({
+  groups,
+  pdf,
+}: {
+  pdf: PDF;
+  groups: readonly (readonly PositionedStampRow[])[];
+}): { fonts: PdfDict; operators: string[][] } => {
+  const usage = usageOf(groups.flatMap((rows) => rows.map(({ row }) => row)));
   // Face order, not first use: the same stamp names its fonts the same way.
   const faces = [...usage.keys()].toSorted((a, b) => {
     if (a.key === b.key) {
@@ -400,36 +419,39 @@ export const drawStampRows = ({
       ),
     ]),
   );
-  const operators: string[] = [];
-  let fill: SrgbColor | null = null;
-  for (const { color, fontSize, row, x, y } of rows) {
-    if (color !== fill) {
-      operators.push(pdfFillColor(color));
-      fill = color;
+  const groupOperators = groups.map((rows) => {
+    const operators: string[] = [];
+    let fill: SrgbColor | null = null;
+    for (const { color, fontSize, row, x, y } of rows) {
+      if (color !== fill) {
+        operators.push(pdfFillColor(color));
+        fill = color;
+      }
+      let pen = x;
+      for (const run of row.runs) {
+        const face =
+          embedded.get(run.face) ?? panic(`${run.face.key} was not embedded`);
+        operators.push(
+          `/${face.resource} ${pdfNumber(fontSize)} Tf`,
+          `1 0 0 1 ${pdfNumber(pen)} ${pdfNumber(y)} Tm`,
+          ...runOperators({
+            embedded: face,
+            fontSize,
+            run,
+            usage: usage.get(run.face) ?? panic("face usage vanished"),
+          }),
+        );
+        pen +=
+          (run.glyphs.reduce((sum, { xAdvance }) => sum + xAdvance, 0) *
+            fontSize) /
+          STAMP_UNITS_PER_EM;
+      }
     }
-    let pen = x;
-    for (const run of row.runs) {
-      const face =
-        embedded.get(run.face) ?? panic(`${run.face.key} was not embedded`);
-      operators.push(
-        `/${face.resource} ${pdfNumber(fontSize)} Tf`,
-        `1 0 0 1 ${pdfNumber(pen)} ${pdfNumber(y)} Tm`,
-        ...runOperators({
-          embedded: face,
-          fontSize,
-          run,
-          usage: usage.get(run.face) ?? panic("face usage vanished"),
-        }),
-      );
-      pen +=
-        (run.glyphs.reduce((sum, { xAdvance }) => sum + xAdvance, 0) *
-          fontSize) /
-        STAMP_UNITS_PER_EM;
-    }
-  }
+    return operators;
+  });
   const fonts = new PdfDict();
   for (const face of embedded.values()) {
     fonts.set(face.resource, face.ref);
   }
-  return { fonts, operators };
+  return { fonts, operators: groupOperators };
 };

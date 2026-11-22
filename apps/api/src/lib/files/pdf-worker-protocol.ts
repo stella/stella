@@ -6,6 +6,8 @@ import {
 } from "@/api/lib/runtime-worker-path";
 
 export const PDF_WORKER_PARSE_ERROR_EXIT_CODE = 65;
+/** A rendered PDF larger than `LIMITS.fileDerivativePdfMaxBytes`. */
+export const PDF_WORKER_TOO_LARGE_EXIT_CODE = 66;
 
 export const pdfWorkerPath = () =>
   resolveRuntimeWorkerPath({
@@ -16,6 +18,8 @@ export const pdfWorkerPath = () =>
 
 export const PDF_WORKER_OPERATION = {
   encryption: "encryption",
+  /** Renders stdin, of the type in the next argument, as a PDF on stdout. */
+  render: "render",
   textLines: "text-lines",
 } as const;
 
