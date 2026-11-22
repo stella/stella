@@ -219,6 +219,7 @@ describe("email viewer", () => {
       ],
       bodyHtml:
         '<p>Message body</p><details data-stella-email-fold="quoted-history"><summary data-stella-email-fold-summary="fold-0"></summary><blockquote>Previous message</blockquote></details><details data-stella-email-fold="signature"><summary data-stella-email-fold-summary="fold-1"></summary><p>Kind regards</p></details>',
+      certified: null,
       citationBlocks: [{ id: "body-0001", text: "Message body" }],
       cc: ["copy@example.org"],
       date: "Mon, 02 Jun 2026 10:00:00 +0000",

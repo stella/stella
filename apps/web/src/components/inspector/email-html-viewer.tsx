@@ -1,4 +1,11 @@
-import { Fragment, type ReactNode, useRef, useState } from "react";
+import {
+  Fragment,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useRef,
+  useState,
+} from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -53,6 +60,13 @@ import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 import { formatFullTimestamp } from "@/lib/relative-time";
+
+// Only a certified email needs its envelope; other emails never load it.
+const CertifiedEmailEnvelope = lazy(async () => {
+  const m =
+    await import("@/features/correspondence/certified-email/certified-email-envelope");
+  return { default: m.CertifiedEmailEnvelope };
+});
 
 /** A header field a citation points at wears the active text mark. */
 const ACTIVE_CITATION_CLASS = textMarkClass({
@@ -456,6 +470,13 @@ export const EmailHtmlViewer = ({
           </section>
         ) : null}
       </header>
+      {preview.certified ? (
+        <div className="shrink-0 border-b p-4">
+          <Suspense fallback={null}>
+            <CertifiedEmailEnvelope envelope={preview.certified} />
+          </Suspense>
+        </div>
+      ) : null}
       <div className="bg-muted/30 min-w-0 shrink-0 p-2">
         <iframe
           className="bg-background w-full border-0"

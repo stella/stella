@@ -1,4 +1,43 @@
 {
+  "certifiedEmail": {
+    "attachments": "Pièces jointes",
+    "certifiedAt": "Certifié le",
+    "deliveredTo": "Remis à",
+    "error": "Erreur signalée",
+    "errors": {
+      "noDomain": "Domaine inconnu",
+      "noRecipient": "Destinataire inconnu",
+      "other": "Autre erreur",
+      "virus": "Virus détecté"
+    },
+    "handedOverFor": "Pris en charge pour",
+    "kinds": {
+      "acceptance": "Accusé d’acceptation (PEC)",
+      "delivery": "Accusé de remise (PEC)",
+      "deliveryError": "Avis de non-remise (PEC)",
+      "deliveryErrorWarning": "Avis de dépassement du délai de remise (PEC)",
+      "nonAcceptance": "Avis de non-acceptation (PEC)",
+      "takenInCharge": "Accusé de prise en charge (PEC)",
+      "transport": "Courriel certifié (PEC)",
+      "virusDetected": "Avis de détection de virus (PEC)"
+    },
+    "messageId": "Identifiant du message PEC",
+    "notDeliveredTo": "Non remis à",
+    "ordinaryMailbox": "Boîte ordinaire",
+    "originalNotIncluded": "Ce fichier ne contient pas le message original.",
+    "provider": "Fournisseur PEC",
+    "receipt": "Accusé demandé",
+    "receiptTypes": {
+      "full": "Accusé complet",
+      "short": "Accusé bref",
+      "summary": "Accusé synthétique"
+    },
+    "recipients": "Destinataires indiqués",
+    "sender": "Expéditeur indiqué",
+    "signatureNotVerified": "La signature du fournisseur est conservée dans le fichier et n’est pas vérifiée.",
+    "signedBy": "Signé par {name}",
+    "statedInFile": "Tel qu’indiqué dans le fichier"
+  },
   "chat": {
     "alreadyAnswered": "Une réponse a déjà été donnée.",
     "answerAwaitingInput": "Cette réponse attend votre intervention.",

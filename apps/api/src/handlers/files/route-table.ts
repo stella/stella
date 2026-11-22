@@ -3,6 +3,7 @@ import {
   cadesContentEndpoint,
   cadesPreviewEndpoint,
 } from "@/api/handlers/files/cades";
+import certifiedEmailEndpoint from "@/api/handlers/files/certified-email";
 import dataBoxEndpoint from "@/api/handlers/files/data-box";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -37,6 +38,7 @@ export const filesRoute = routes(
     "/signed-dossier/:fieldId": { GET: signedDossierPreviewEndpoint },
     "/signed-dossier/:fieldId/content": { GET: signedDossierContentEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },
+    "/certified-email/:fieldId": { GET: certifiedEmailEndpoint },
     "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
     "/office-citation/:entityId/:fieldId/:blockId": {
       GET: officeCitationEndpoint,

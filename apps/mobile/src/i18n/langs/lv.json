@@ -1,4 +1,43 @@
 {
+  "certifiedEmail": {
+    "attachments": "Pielikumi",
+    "certifiedAt": "Sertifikācijas laiks",
+    "deliveredTo": "Piegādāts uz adresi",
+    "error": "Ziņotā kļūda",
+    "errors": {
+      "noDomain": "Nezināms domēns",
+      "noRecipient": "Nezināms saņēmējs",
+      "other": "Cita kļūda",
+      "virus": "Konstatēts vīruss"
+    },
+    "handedOverFor": "Pārņemts saņēmējam",
+    "kinds": {
+      "acceptance": "Pieņemšanas apstiprinājums (PEC)",
+      "delivery": "Piegādes apstiprinājums (PEC)",
+      "deliveryError": "Paziņojums par nepiegādi (PEC)",
+      "deliveryErrorWarning": "Paziņojums par piegādes termiņa pārsniegšanu (PEC)",
+      "nonAcceptance": "Paziņojums par nepieņemšanu (PEC)",
+      "takenInCharge": "Pārņemšanas apstiprinājums (PEC)",
+      "transport": "Sertificēts e-pasts (PEC)",
+      "virusDetected": "Paziņojums par vīrusa konstatēšanu (PEC)"
+    },
+    "messageId": "PEC ziņojuma ID",
+    "notDeliveredTo": "Nav piegādāts uz adresi",
+    "ordinaryMailbox": "Parasta pastkaste",
+    "originalNotIncluded": "Šajā failā nav sākotnējā ziņojuma.",
+    "provider": "PEC pakalpojumu sniedzējs",
+    "receipt": "Pieprasītais apstiprinājums",
+    "receiptTypes": {
+      "full": "Pilns apstiprinājums",
+      "short": "Īss apstiprinājums",
+      "summary": "Kopsavilkuma apstiprinājums"
+    },
+    "recipients": "Norādītie saņēmēji",
+    "sender": "Norādītais sūtītājs",
+    "signatureNotVerified": "Pakalpojumu sniedzēja paraksts paliek failā un netiek pārbaudīts.",
+    "signedBy": "Parakstītājs: {name}",
+    "statedInFile": "Kā norādīts failā"
+  },
   "chat": {
     "alreadyAnswered": "Uz šo jau ir atbildēts.",
     "answerAwaitingInput": "Šai atbildei nepieciešama jūsu ievade.",

@@ -258,6 +258,25 @@ export const readCmsSigners = (
     : Result.ok(readSigners(decoded.value, layerId));
 };
 
+/**
+ * The stated signers of a SignedData whose content travels beside it, as in
+ * an S/MIME `multipart/signed` signature part. Nothing is verified.
+ */
+export const readDetachedCmsSigners = (
+  bytes: Uint8Array,
+): Result<CmsSigner[], "not_signed_data" | "not_detached"> => {
+  const decoded = decodeSignedData(bytes);
+  if (decoded.isErr() || decoded.value === null) {
+    return Result.err("not_signed_data");
+  }
+  // A SignedData that carries its own content is a signed document, such as
+  // an attached .p7m, not a signature over the message beside it.
+  if (decoded.value.encapContentInfo.eContent !== undefined) {
+    return Result.err("not_detached");
+  }
+  return Result.ok(readSigners(decoded.value, OUTER_CMS_LAYER_ID));
+};
+
 /** Extracts CMS content and stated signer metadata without verifying signatures. */
 export const readCmsSignedData = (
   bytes: Uint8Array,

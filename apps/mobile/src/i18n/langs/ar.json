@@ -1,4 +1,43 @@
 {
+  "certifiedEmail": {
+    "attachments": "المرفقات",
+    "certifiedAt": "وقت الاعتماد",
+    "deliveredTo": "سُلّم إلى",
+    "error": "الخطأ المُبلّغ عنه",
+    "errors": {
+      "noDomain": "نطاق غير معروف",
+      "noRecipient": "مستلم غير معروف",
+      "other": "خطأ آخر",
+      "virus": "تم اكتشاف فيروس"
+    },
+    "handedOverFor": "تسلّمه لصالح",
+    "kinds": {
+      "acceptance": "إيصال القبول (PEC)",
+      "delivery": "إيصال التسليم (PEC)",
+      "deliveryError": "إشعار عدم التسليم (PEC)",
+      "deliveryErrorWarning": "إشعار تجاوز مهلة التسليم (PEC)",
+      "nonAcceptance": "إشعار عدم القبول (PEC)",
+      "takenInCharge": "إيصال التسلّم (PEC)",
+      "transport": "بريد إلكتروني معتمد (PEC)",
+      "virusDetected": "إشعار اكتشاف فيروس (PEC)"
+    },
+    "messageId": "معرّف رسالة PEC",
+    "notDeliveredTo": "لم يُسلَّم إلى",
+    "ordinaryMailbox": "صندوق بريد عادي",
+    "originalNotIncluded": "لا يتضمن هذا الملف الرسالة الأصلية.",
+    "provider": "مزود خدمة PEC",
+    "receipt": "الإيصال المطلوب",
+    "receiptTypes": {
+      "full": "إيصال كامل",
+      "short": "إيصال مختصر",
+      "summary": "إيصال موجز"
+    },
+    "recipients": "المستلمون المذكورون",
+    "sender": "المرسل المذكور",
+    "signatureNotVerified": "يبقى توقيع مزود الخدمة مع الملف ولا يتم التحقق منه.",
+    "signedBy": "وقّعه {name}",
+    "statedInFile": "كما هو مذكور في الملف"
+  },
   "chat": {
     "alreadyAnswered": "تمت الإجابة على هذا بالفعل.",
     "answerAwaitingInput": "تحتاج هذه الإجابة إلى إدخالك.",

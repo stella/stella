@@ -1,4 +1,43 @@
 {
+  "certifiedEmail": {
+    "attachments": "Prílohy",
+    "certifiedAt": "Čas certifikácie",
+    "deliveredTo": "Doručené na adresu",
+    "error": "Ohlásená chyba",
+    "errors": {
+      "noDomain": "Neznáma doména",
+      "noRecipient": "Neznámy príjemca",
+      "other": "Iná chyba",
+      "virus": "Zistený vírus"
+    },
+    "handedOverFor": "Prevzaté pre",
+    "kinds": {
+      "acceptance": "Potvrdenie o prijatí (PEC)",
+      "delivery": "Doručenka (PEC)",
+      "deliveryError": "Oznámenie o nedoručení (PEC)",
+      "deliveryErrorWarning": "Oznámenie o prekročení lehoty doručenia (PEC)",
+      "nonAcceptance": "Oznámenie o neprijatí (PEC)",
+      "takenInCharge": "Potvrdenie o prevzatí (PEC)",
+      "transport": "Certifikovaný e-mail (PEC)",
+      "virusDetected": "Oznámenie o zistení vírusu (PEC)"
+    },
+    "messageId": "ID správy PEC",
+    "notDeliveredTo": "Nedoručené na adresu",
+    "ordinaryMailbox": "Bežná schránka",
+    "originalNotIncluded": "Tento súbor neobsahuje pôvodnú správu.",
+    "provider": "Poskytovateľ PEC",
+    "receipt": "Požadované potvrdenie",
+    "receiptTypes": {
+      "full": "Úplné potvrdenie",
+      "short": "Skrátené potvrdenie",
+      "summary": "Súhrnné potvrdenie"
+    },
+    "recipients": "Uvedení príjemcovia",
+    "sender": "Uvedený odosielateľ",
+    "signatureNotVerified": "Podpis poskytovateľa zostáva v súbore a nie je overený.",
+    "signedBy": "Podpis: {name}",
+    "statedInFile": "Ako je uvedené v súbore"
+  },
   "chat": {
     "alreadyAnswered": "Na toto už bolo odpovedané.",
     "answerAwaitingInput": "Táto odpoveď čaká na váš vstup.",
