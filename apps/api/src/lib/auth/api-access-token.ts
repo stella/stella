@@ -286,9 +286,9 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/files/data-box.ts",
     uncataloged: "upload_mechanics",
   },
-  "GET /v1/files/:workspaceId/certified-email/:fieldId": {
+  "GET /v1/files/:workspaceId/email-reading/:fieldId": {
     scope: "stella:read",
-    handler: "apps/api/src/handlers/files/certified-email.ts",
+    handler: "apps/api/src/handlers/files/email-reading.ts",
     uncataloged: "upload_mechanics",
   },
   "POST /v1/entities/:workspaceId/upload-version": {

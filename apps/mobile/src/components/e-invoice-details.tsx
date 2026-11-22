@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { View } from "react-native";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type {
   E_INVOICE_DOCUMENT_TYPES,
@@ -10,11 +10,9 @@ import type {
   EInvoice,
   EInvoicePreview,
 } from "@stll/api-contract/e-invoice";
-import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
-import { formatFileSize } from "@stll/ui/file-size";
 import { Text } from "@stll/ui/text";
 
-import { OpenFilePart } from "@/components/file-part-opener";
+import { FilePartList } from "@/components/file-part-list";
 
 type Syntax = (typeof E_INVOICE_SYNTAXES)[number];
 
@@ -314,11 +312,11 @@ const InvoiceDetails = ({
 
 /**
  * A structured invoice as its file states it: every value verbatim, nothing
- * recomputed. Each attachment opens like a document where the phone can.
+ * recomputed. Its attached files are listed as every container lists its
+ * parts.
  */
 export const EInvoiceDetails = ({ preview }: { preview: EInvoicePreview }) => {
   const t = useTranslations("eInvoice");
-  const format = useFormatter();
   const syntax = SYNTAX_LABELS[preview.syntax];
   return (
     <View className="gap-6">
@@ -339,32 +337,12 @@ export const EInvoiceDetails = ({ preview }: { preview: EInvoicePreview }) => {
           position={index + 1}
         />
       ))}
-      {preview.attachments.length > 0 && (
-        <Section title={t("attachments")}>
-          {preview.attachments.map((attachment) => (
-            <View className="gap-0.5" key={attachment.index}>
-              <Text selectable variant="label">
-                {attachment.fileName}
-              </Text>
-              {attachment.description !== null && (
-                <Text selectable variant="caption">
-                  {attachment.description}
-                </Text>
-              )}
-              <Text variant="caption">
-                {formatFileSize(attachment.sizeBytes, format)}
-              </Text>
-              <OpenFilePart
-                fileName={attachment.fileName}
-                part={filePartId({
-                  kind: FILE_PART_KINDS.attachment,
-                  index: attachment.index,
-                })}
-              />
-            </View>
-          ))}
-        </Section>
-      )}
+      <FilePartList
+        items={preview.attachments.map(({ description, ...attachment }) => ({
+          ...attachment,
+          detail: description,
+        }))}
+      />
     </View>
   );
 };

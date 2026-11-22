@@ -1,8 +1,8 @@
 import asicPreviewEndpoint from "@/api/handlers/files/asic";
 import { cadesPreviewEndpoint } from "@/api/handlers/files/cades";
-import certifiedEmailEndpoint from "@/api/handlers/files/certified-email";
 import dataBoxEndpoint from "@/api/handlers/files/data-box";
 import { eInvoicePreviewEndpoint } from "@/api/handlers/files/e-invoice";
+import emailReadingEndpoint from "@/api/handlers/files/email-reading";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import saveFilePartEndpoint from "@/api/handlers/files/part-save";
 import { readFileContentEndpoint } from "@/api/handlers/files/read-content";
@@ -31,7 +31,7 @@ export const filesRoute = routes(
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
     "/signed-dossier/:fieldId": { GET: signedDossierPreviewEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },
-    "/certified-email/:fieldId": { GET: certifiedEmailEndpoint },
+    "/email-reading/:fieldId": { GET: emailReadingEndpoint },
     "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
     "/office-citation/:entityId/:fieldId/:blockId": {
       GET: officeCitationEndpoint,

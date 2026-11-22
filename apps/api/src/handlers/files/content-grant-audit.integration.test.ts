@@ -53,13 +53,13 @@ import {
   cadesContentEndpoint,
   cadesPreviewEndpoint,
 } from "@/api/handlers/files/cades";
-import certifiedEmailEndpoint from "@/api/handlers/files/certified-email";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
 import {
   eInvoiceAttachmentEndpoint,
   eInvoicePreviewEndpoint,
 } from "@/api/handlers/files/e-invoice";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
+import emailReadingEndpoint from "@/api/handlers/files/email-reading";
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
@@ -139,12 +139,12 @@ import {
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
 } from "@/api/tests/read-scaling/cades-preview";
-import { certifiedEmailScalingScenario } from "@/api/tests/read-scaling/certified-email";
 import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
 import {
   eInvoiceAttachmentScalingScenario,
   eInvoicePreviewScalingScenario,
 } from "@/api/tests/read-scaling/e-invoice";
+import { emailReadingScalingScenario } from "@/api/tests/read-scaling/email-reading";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import {
   signedDossierContentScalingScenario,
@@ -1483,7 +1483,7 @@ test("plain XML is never read as an invoice and nothing is delivered", async () 
   expect(await auditRowsFor(entityId)).toEqual([]);
 });
 
-describe("certified email text preview", () => {
+describe("email text reading", () => {
   const stored = {
     fileName: "posta-certificata.eml",
     mimeType: EML_MIME_TYPE,
@@ -1491,13 +1491,13 @@ describe("certified email text preview", () => {
   };
   const seed = async () => await seedStored(stored, await pecMessage());
 
-  test("returns the envelope, the original message and its attachments, audited once", async () => {
+  test("returns a certified email's envelope, its original message and attachments, audited once", async () => {
     const { fieldId, entityId } = await seed();
-    const read = await certifiedEmailEndpoint.handler(
+    const read = await emailReadingEndpoint.handler(
       legalFileContext(fieldId, scopedDbA()),
     );
     expect(read).toMatchObject({
-      envelope: {
+      certified: {
         system: "pec",
         kind: "transport",
         sender: PEC_FIXTURE.sender,
@@ -1505,6 +1505,8 @@ describe("certified email text preview", () => {
         includesOriginal: true,
         signature: { status: "unverified", signerName: PEC_SIGNER_NAME },
       },
+      subject: PEC_FIXTURE.subject,
+      to: [PEC_FIXTURE.certifiedRecipient],
       attachments: [
         { part: "attachment:0", fileName: PEC_FIXTURE.attachmentName },
       ],
@@ -1512,6 +1514,7 @@ describe("certified email text preview", () => {
     if (read instanceof HttpStatusResponse) {
       panic("Expected the certified email reading");
     }
+    expect(read.from).toContain(PEC_FIXTURE.sender);
     expect(read.text).toContain(PEC_FIXTURE.body);
     await expectOneContentRow(entityId, {
       action: "access",
@@ -1524,22 +1527,65 @@ describe("certified email text preview", () => {
     });
   });
 
-  test("an ordinary email is refused as unavailable and records nothing", async () => {
+  test("an ordinary email is read with its header, body and attachments, audited once", async () => {
     const seeded = await seedEmail();
-    const read = await certifiedEmailEndpoint.handler(
+    const read = await emailReadingEndpoint.handler(
       legalFileContext(seeded.fieldId, scopedDbA()),
+    );
+    expect(read).toMatchObject({
+      certified: null,
+      subject: "Smlouva o dílo",
+      to: ["kancelar@example.test"],
+      cc: [],
+      attachments: [
+        {
+          part: "attachment:0",
+          fileName: "poznamky.txt",
+          mediaType: "text/plain",
+          sizeBytes: expect.any(Number),
+        },
+      ],
+    });
+    if (read instanceof HttpStatusResponse) {
+      panic("Expected the email reading");
+    }
+    expect(read.from).toContain("jana@example.test");
+    expect(read.date).not.toBeNull();
+    // The header is returned as fields; the text is the body alone.
+    expect(read.text).toContain("Dobrý den, v příloze posílám návrh smlouvy.");
+    expect(read.text).not.toContain("Smlouva o dílo");
+    expect(read.text).not.toContain("jana@example.test");
+    await expectOneContentRow(seeded.entityId, {
+      action: "access",
+      metadata: {
+        fieldId: seeded.fieldId,
+        format: "email",
+        disposition: "inline",
+        mimeType: EML_MIME_TYPE,
+      },
+    });
+  });
+
+  test("a file that is not an email is refused as unavailable and records nothing", async () => {
+    const { fieldId, entityId } = await seedFile({
+      fileName: "smlouva-o-dilo.pdf",
+      mimeType: "application/pdf",
+      pdfFileId: null,
+    });
+    const read = await emailReadingEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
     );
     expect(read).toMatchObject({
       code: 422,
       response: { code: PREVIEW_UNAVAILABLE_ERROR_CODE },
     });
-    expect(await auditRowsFor(seeded.entityId)).toEqual([]);
+    expect(await auditRowsFor(entityId)).toEqual([]);
   });
 
   test("another matter's certified email is not found and records nothing", async () => {
     const { fieldId, entityId } = await seedFile(stored, "b");
     expectStatus(
-      await certifiedEmailEndpoint.handler(
+      await emailReadingEndpoint.handler(
         legalFileContext(fieldId, scopedDbA()),
       ),
       404,
@@ -1550,7 +1596,7 @@ describe("certified email text preview", () => {
   test("returns nothing when its audit record fails", async () => {
     const { fieldId, entityId } = await seed();
     expectStatus(
-      await certifiedEmailEndpoint.handler(
+      await emailReadingEndpoint.handler(
         legalFileContext(fieldId, scopedDbA(), failingRecorder),
       ),
       500,
@@ -1561,7 +1607,7 @@ describe("certified email text preview", () => {
   test("discards the reading when the source version is withdrawn", async () => {
     const { fieldId, entityId, entityVersionId } = await seed();
     expectStatus(
-      await certifiedEmailEndpoint.handler(
+      await emailReadingEndpoint.handler(
         legalFileContext(fieldId, withdrawnAfterLookup(entityVersionId)),
       ),
       404,
@@ -1581,7 +1627,7 @@ describe("certified email text preview", () => {
       }));
       seededEntityIds.push(...unrelated.map(({ id }) => id));
       await testDb.insert(entities).values(unrelated);
-      return await certifiedEmailScalingScenario.measure(context);
+      return await emailReadingScalingScenario.measure(context);
     };
 
     const small = await measureWithAddedDocuments(10);

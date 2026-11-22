@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Pièces jointes",
     "certifiedAt": "Certifié le",
     "deliveredTo": "Remis à",
     "error": "Erreur signalée",
@@ -462,7 +461,6 @@
     },
     "fit": "Largeur",
     "openOriginal": "Ouvrir l’original",
-    "openPart": "Ouvrir {fileName}",
     "preview": "Ouvrir l’aperçu",
     "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
     "retry": "Réessayer",
@@ -475,7 +473,6 @@
   "eInvoice": {
     "accountNumber": "Numéro de compte bancaire",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Fichiers joints",
     "bankCode": "Code banque",
     "batchPosition": "Document {position, number} sur {count, number}",
     "bic": "Code BIC",
@@ -521,11 +518,24 @@
     "vatBreakdown": "Ventilation de la TVA",
     "vatId": "Numéro de TVA"
   },
+  "email": {
+    "cc": "Copie",
+    "date": "Date d’envoi",
+    "from": "Expéditeur",
+    "noSubject": "(Sans objet)",
+    "subject": "Objet",
+    "to": "Destinataires"
+  },
   "entity": {
     "currentVersion": "Version actuelle",
     "loadFailed": "Cet élément n’a pas pu être chargé.",
     "reference": "Référence",
     "type": "Type"
+  },
+  "fileParts": {
+    "attachments": "Pièces jointes",
+    "open": "Ouvrir {fileName} ({details})",
+    "unnamed": "Fichier sans nom"
   },
   "header": {
     "search": "Rechercher"
@@ -854,6 +864,7 @@
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
     "noSigners": "Aucune information sur les signataires n’a été trouvée.",
+    "signedContent": "Document signé",
     "signers": "Signataires",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",

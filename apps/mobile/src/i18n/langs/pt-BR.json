@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Anexos",
     "certifiedAt": "Certificado em",
     "deliveredTo": "Entregue a",
     "error": "Erro informado",
@@ -462,7 +461,6 @@
     },
     "fit": "Largura",
     "openOriginal": "Abrir original",
-    "openPart": "Abrir {fileName}",
     "preview": "Abrir pré-visualização",
     "previewDescription": "Este arquivo abre na pré-visualização do sistema.",
     "retry": "Tentar novamente",
@@ -475,7 +473,6 @@
   "eInvoice": {
     "accountNumber": "Número da conta bancária",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Arquivos anexados",
     "bankCode": "Código do banco",
     "batchPosition": "Documento {position, number} de {count, number}",
     "bic": "Código BIC",
@@ -521,11 +518,24 @@
     "vatBreakdown": "Detalhamento do IVA",
     "vatId": "Número de IVA"
   },
+  "email": {
+    "cc": "Cópia",
+    "date": "Data",
+    "from": "Remetente",
+    "noSubject": "(Sem assunto)",
+    "subject": "Assunto",
+    "to": "Destinatários"
+  },
   "entity": {
     "currentVersion": "Versão atual",
     "loadFailed": "Não foi possível carregar este item.",
     "reference": "Referência",
     "type": "Tipo"
+  },
+  "fileParts": {
+    "attachments": "Anexos",
+    "open": "Abrir {fileName} ({details})",
+    "unnamed": "Arquivo sem nome"
   },
   "header": {
     "search": "Pesquisar"
@@ -854,6 +864,7 @@
     "layer": "Camada de assinaturas {number, number}",
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
     "noSigners": "Nenhum dado de signatário foi encontrado.",
+    "signedContent": "Documento assinado",
     "signers": "Signatários",
     "unknownSigner": "Signatário desconhecido",
     "unreadable": "Não foi possível ler o arquivo assinado.",

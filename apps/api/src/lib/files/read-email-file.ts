@@ -4,8 +4,8 @@ import {
   EMAIL_CITATION_BLOCK_MODE,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
-import type { CertifiedEmailRead } from "@stll/api-contract/certified-email";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import type { EmailReading } from "@stll/api-contract/email-reading";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { HTTP_FAILURE } from "@/api/http/errors";
@@ -17,7 +17,7 @@ import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import {
   buildEmailPreview,
   describeEmailAttachments,
-  emailMessageText,
+  emailBodyToText,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
 import {
@@ -28,7 +28,7 @@ import {
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
-type ReadCertifiedEmailFileOptions = {
+type ReadEmailFileOptions = {
   scopedDb: ScopedDb;
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
@@ -55,19 +55,19 @@ const unavailable = (message: string) =>
   );
 
 /**
- * A certified email's envelope and text, read from the stored file by the
- * same email reader the web viewer, search and AI use. Any other file is
- * refused as preview-unavailable, so a reader can fall back to its own view.
+ * An email file's header, body text and attachments (and a certified
+ * email's certification data), read from the stored file by the same email
+ * reader the web viewer, search and AI use. A file that is not an email, or
+ * cannot be read as one, is refused as preview-unavailable, so a reader can
+ * fall back to its own view.
  */
-export const readCertifiedEmailFile = async ({
+export const readEmailFile = async ({
   scopedDb,
   workspaceId,
   organizationId,
   fieldId,
   recordAuditEvent,
-}: ReadCertifiedEmailFileOptions): Promise<
-  Result<CertifiedEmailRead, HandlerError>
-> => {
+}: ReadEmailFileOptions): Promise<Result<EmailReading, HandlerError>> => {
   const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   if (row?.content.type !== "file") {
     return missingFile();
@@ -78,7 +78,7 @@ export const readCertifiedEmailFile = async ({
     mimeType: content.mimeType,
   });
   if (content.encrypted || emailMimeType === null) {
-    return unavailable("This file is not a certified email");
+    return unavailable("This file is not an email");
   }
   if (content.sizeBytes > FILE_SIZE_LIMIT_BYTES.document) {
     return unavailable("The email exceeds the preview size limit");
@@ -93,11 +93,10 @@ export const readCertifiedEmailFile = async ({
     mimeType: content.mimeType,
   });
   const parsed = await parseEmail(bytes, emailMimeType);
-  const email = parsed.isOk() ? parsed.value : null;
-  const envelope = email?.certified ?? null;
-  if (email === null || envelope === null) {
-    return unavailable("This file is not a certified email");
+  if (parsed.isErr()) {
+    return unavailable("The email could not be read");
   }
+  const email = parsed.value;
   // The same attachments the web viewer lists, inline images left out.
   const attachments = await describeEmailAttachments(
     email,
@@ -118,7 +117,7 @@ export const readCertifiedEmailFile = async ({
         metadata: {
           disposition: "inline",
           fieldId,
-          format: "certified-email",
+          format: email.certified === null ? "email" : "certified-email",
           mimeType: content.mimeType,
           sizeBytes: content.sizeBytes,
         },
@@ -128,8 +127,13 @@ export const readCertifiedEmailFile = async ({
     return missingFile();
   }
   return Result.ok({
-    envelope,
-    text: emailMessageText(email),
+    certified: email.certified,
+    subject: email.subject,
+    from: email.from,
+    to: email.to,
+    cc: email.cc,
+    date: email.date,
+    text: emailBodyToText(email.body),
     attachments: attachments.map(
       ({ part, fileName, mediaType, sizeBytes }) => ({
         part,

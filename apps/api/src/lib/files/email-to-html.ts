@@ -306,7 +306,7 @@ export const parseEmail = async (
 };
 
 /** The message's headers and body as text, without its certification data. */
-export const emailMessageText = (parsed: ParsedEmail): string => {
+const emailMessageText = (parsed: ParsedEmail): string => {
   const parts: string[] = [];
   const rows = [
     ["From", parsed.from],

@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Mellékletek",
     "certifiedAt": "Hitelesítés ideje",
     "deliveredTo": "Kézbesítve ide",
     "error": "Jelentett hiba",
@@ -462,7 +461,6 @@
     },
     "fit": "Szélesség",
     "openOriginal": "Eredeti megnyitása",
-    "openPart": "{fileName} megnyitása",
     "preview": "Előnézet megnyitása",
     "previewDescription": "Ez a fájl a rendszer előnézetében nyílik meg.",
     "retry": "Újra",
@@ -475,7 +473,6 @@
   "eInvoice": {
     "accountNumber": "Bankszámlaszám",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Csatolt fájlok",
     "bankCode": "Bankkód",
     "batchPosition": "{position, number}. bizonylat ({count, number} közül)",
     "bic": "BIC-kód",
@@ -521,11 +518,24 @@
     "vatBreakdown": "ÁFA-összesítő",
     "vatId": "Áfaazonosító"
   },
+  "email": {
+    "cc": "Másolat",
+    "date": "Dátum",
+    "from": "Feladó",
+    "noSubject": "(Nincs tárgy)",
+    "subject": "Tárgy",
+    "to": "Címzettek"
+  },
   "entity": {
     "currentVersion": "Aktuális verzió",
     "loadFailed": "Az elemet nem sikerült betölteni.",
     "reference": "Ügyszám",
     "type": "Típus"
+  },
+  "fileParts": {
+    "attachments": "Mellékletek",
+    "open": "{fileName} ({details}) megnyitása",
+    "unnamed": "Névtelen fájl"
   },
   "header": {
     "search": "Keresés"
@@ -854,6 +864,7 @@
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
     "noSigners": "Nem találhatók adatok az aláírókról.",
+    "signedContent": "Aláírt dokumentum",
     "signers": "Aláírók",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",

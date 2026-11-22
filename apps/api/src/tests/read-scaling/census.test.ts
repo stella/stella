@@ -24,7 +24,6 @@ import {
   browseCalendarScalingScenario,
   browseCourtsScalingScenario,
 } from "./case-law-browse-hubs";
-import { certifiedEmailScalingScenario } from "./certified-email";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -66,6 +65,7 @@ import {
   eInvoiceAttachmentScalingScenario,
   eInvoicePreviewScalingScenario,
 } from "./e-invoice";
+import { emailReadingScalingScenario } from "./email-reading";
 import { fileContentScalingScenario } from "./file-content";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
@@ -170,7 +170,7 @@ const measuredApiScenarios = [
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,
-  certifiedEmailScalingScenario,
+  emailReadingScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
