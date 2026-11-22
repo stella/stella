@@ -95,7 +95,7 @@ const renderApp = async ({
   const commands: string[] = [];
   mockWindows("main");
   mockIPC(
-    (command) => {
+    async (command) => {
       commands.push(command);
       switch (command) {
         case "account_get_state":
@@ -103,7 +103,7 @@ const renderApp = async ({
         case "get_state":
           return snapshot === "ready"
             ? APP_STATE
-            : Promise.withResolvers<never>().promise;
+            : await Promise.withResolvers<never>().promise;
         case "check_for_updates":
           return { status: "up_to_date" };
         case "is_activity_enabled":
