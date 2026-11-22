@@ -202,8 +202,8 @@ describe("Table density", () => {
 
   test("a compact table keeps a gutter between body columns, as its header does", () => {
     const markup = matrix("compact");
-    const cell = markup.match(/<td class="([^"]*)"/u)?.[1] ?? "";
-    const header = markup.match(/<th class="([^"]*)"/u)?.[1] ?? "";
+    const cell = /<td class="([^"]*)"/u.exec(markup)?.[1] ?? "";
+    const header = /<th class="([^"]*)"/u.exec(markup)?.[1] ?? "";
     // Without it an end-aligned amount runs into the next column's text.
     expect(cell.split(" ")).toContain("in-data-[density=compact]:pe-3");
     expect(header.split(" ")).toContain("in-data-[density=compact]:pe-3");
