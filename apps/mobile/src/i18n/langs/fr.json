@@ -462,6 +462,7 @@
     },
     "fit": "Largeur",
     "openOriginal": "Ouvrir l’original",
+    "openPart": "Ouvrir {fileName}",
     "preview": "Ouvrir l’aperçu",
     "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
     "retry": "Réessayer",

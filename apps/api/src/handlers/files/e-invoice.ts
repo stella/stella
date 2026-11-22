@@ -1,18 +1,17 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { FILE_PART_KINDS } from "@stll/api-contract/file-parts";
 import { numberFromString } from "@stll/api-contract/http-input";
 import { E_INVOICE_KINDS } from "@stll/api-contract/legal-file-formats";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import {
-  readEInvoiceAttachment,
-  readEInvoicePreview,
-} from "@/api/lib/files/e-invoice-preview";
-import { loadLegalFileSource } from "@/api/lib/files/legal-file-source";
+import { readEInvoicePreview } from "@/api/lib/files/e-invoice-preview";
+import { readFilePart } from "@/api/lib/files/file-part";
 import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 const config = {
@@ -54,8 +53,6 @@ export const eInvoicePreviewEndpoint = createSafeHandler(
   },
 );
 
-// A signed `.xml.p7m` invoice lists the same attachments in its CAdES preview.
-const ATTACHMENT_SOURCE_KINDS = [...E_INVOICE_KINDS, "cades"] as const;
 const MAX_ATTACHMENT_INDEX = 9999;
 
 const attachmentConfig = {
@@ -87,46 +84,28 @@ export const eInvoiceAttachmentEndpoint = createSafeHandler(
     session,
     recordAuditEvent,
   }) {
-    const loaded = yield* Result.await(
+    const result = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await loadLegalFileSource(
-            {
-              fieldId,
-              scopedDb,
-              workspaceId,
-              organizationId: session.activeOrganizationId,
-              recordAuditEvent,
-            },
-            ATTACHMENT_SOURCE_KINDS,
-          ),
-      ),
-    );
-    const { source, mimeType, deliver } = yield* loaded;
-    const attachment = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readEInvoiceAttachment(index)(source.withMimeType(mimeType)),
-      ),
-    );
-    const read = yield* attachment;
-    const delivered = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await deliver(() => Result.ok(read), {
+          await readFilePart({
+            fieldId,
+            scopedDb,
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+            part: { kind: FILE_PART_KINDS.attachment, index },
             disposition: "attachment",
-            attachmentIndex: index,
           }),
       ),
     );
-    const { bytes, fileName, mimeType: contentType } = yield* delivered;
+    const { bytes, fileName, mimeType: contentType } = yield* result;
     return Result.ok(
       secureDocumentResponse({
         body: new Uint8Array(bytes),
         contentType,
         contentLength: bytes.byteLength,
         disposition: "attachment",
-        fileName,
+        fileName: sanitizeFilename(fileName),
       }),
     );
   },

@@ -551,6 +551,7 @@ const compareDocumentDependencies = {
       testScannedFile({ bytes: new ArrayBuffer(1), mimeType: DOCX_MIME_TYPE }),
     ),
   readFileHandler: async () => ({
+    kind: "file" as const,
     fileId: compareTargetFileB,
     mimeType: DOCX_MIME_TYPE,
     originalMimeType: DOCX_MIME_TYPE,

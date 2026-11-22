@@ -177,6 +177,7 @@
     "./preview-text": "./src/preview-text.ts",
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
+    "./file-parts": "./src/file-parts.ts",
     "./document-format": "./src/document-format.ts",
     "./converted-document-formats": "./src/converted-document-formats.ts",
     "./entity-views": "./src/entity-views.ts",

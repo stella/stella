@@ -244,6 +244,7 @@ const createHarness = ({
         });
       }
       return {
+        kind: "file" as const,
         fileId: "file",
         mimeType: DOCX_MIME_TYPE,
         originalMimeType: DOCX_MIME_TYPE,

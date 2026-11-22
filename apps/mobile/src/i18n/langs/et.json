@@ -462,6 +462,7 @@
     },
     "fit": "Laius",
     "openOriginal": "Ava originaal",
+    "openPart": "Ava {fileName}",
     "preview": "Ava eelvaade",
     "previewDescription": "See fail avaneb süsteemi eelvaates.",
     "retry": "Proovi uuesti",

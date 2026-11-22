@@ -462,6 +462,7 @@
     },
     "fit": "Fit",
     "openOriginal": "Open original",
+    "openPart": "Open {fileName}",
     "preview": "Open preview",
     "previewDescription": "This file opens in the system preview.",
     "retry": "Try again",
