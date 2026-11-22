@@ -33,6 +33,17 @@ class TiffPagesError extends TaggedError("TiffPagesError")<{
 
 type TiffDirectory = ReturnType<typeof UTIF.decode>[number];
 
+/**
+ * utif2's page decoder. Its published types omit the third parameter, the
+ * file's other directories, which an old-style JPEG page reads its tables
+ * from.
+ */
+const decodeImage: (
+  buffer: ArrayBuffer,
+  directory: TiffDirectory,
+  directories: readonly TiffDirectory[],
+) => void = UTIF.decodeImage;
+
 const firstNumber = (value: unknown): number | null => {
   if (typeof value === "number") {
     return value;
@@ -123,7 +134,7 @@ export const readTiffPages = (
     count: pages.length,
     pages: (function* decodePages() {
       for (const { directory, height, orientation, width } of pages) {
-        UTIF.decodeImage(buffer, directory, all);
+        decodeImage(buffer, directory, all);
         const rgba = UTIF.toRGBA8(directory);
         // The page's compressed strips are no longer needed once decoded.
         directory.data = new Uint8Array();

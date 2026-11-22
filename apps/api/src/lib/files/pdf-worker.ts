@@ -48,12 +48,13 @@ if (!operation.success) {
 }
 const operationName = operation.output;
 
-const refuse = (error: unknown): never => {
+// A declaration, so control flow knows it never returns.
+function refuse(error: unknown): never {
   const outputError = sanitizeErrorForOutput(error);
   const type = outputError instanceof Error ? outputError.name : "UnknownError";
   process.stderr.write(`pdf-worker error: ${type}\n`);
   process.exit(PDF_WORKER_PARSE_ERROR_EXIT_CODE);
-};
+}
 
 if (operationName === PDF_WORKER_OPERATION.render) {
   // Only the decoders' refusal is a verdict on the file. Anything else that
@@ -90,9 +91,6 @@ try {
             ),
         ),
       );
-      break;
-    case PDF_WORKER_OPERATION.render:
-      panic("Render answers before a PDF is loaded");
       break;
     default:
       operationName satisfies never;
