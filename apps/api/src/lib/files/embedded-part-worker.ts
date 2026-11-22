@@ -10,6 +10,7 @@
 import { panic, Result } from "better-result";
 
 import { EMAIL_CITATION_BLOCK_MODE } from "@stll/api-contract";
+import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import {
   FILE_PART_KINDS_BY_FORMAT,
@@ -154,9 +155,19 @@ export const containerOf = ({
 const asicMembers = async ({
   bytes,
   mimeType,
-}: Container): Promise<SlotsResult> =>
-  (await readAsicContainer(bytes, mimeType)).map(({ members }) =>
-    members.map((member) =>
+}: Container): Promise<SlotsResult> => {
+  const format = ASIC_FILE_FORMATS.find(
+    (candidate) => candidate.mimeType === mimeType,
+  );
+  if (format === undefined) {
+    return Result.ok([]);
+  }
+  const container = await readAsicContainer(bytes, format.mimeType);
+  if (container.isErr()) {
+    return Result.err(container.error);
+  }
+  return Result.ok(
+    container.value.members.map((member) =>
       part({
         fileName: member.fileName,
         bytes: member.bytes,
@@ -164,6 +175,7 @@ const asicMembers = async ({
       }),
     ),
   );
+};
 
 const zipFiles = async ({ bytes }: Container): Promise<SlotsResult> =>
   (await readZipArchive(bytes)).map((files) =>
@@ -211,9 +223,13 @@ const dataBoxFiles = ({ bytes }: Container): SlotsResult =>
 const dossierDocuments = async ({
   bytes,
   mimeType,
-}: Container): Promise<SlotsResult> =>
-  (await readSignedDossier(bytes, mimeType)).map(({ documents }) =>
-    documents.map((document): ContainerSlot =>
+}: Container): Promise<SlotsResult> => {
+  const dossier = await readSignedDossier(bytes, mimeType);
+  if (dossier.isErr()) {
+    return Result.err(dossier.error);
+  }
+  return Result.ok(
+    dossier.value.documents.map((document): ContainerSlot =>
       document.opaque === true
         ? {
             type: "unavailable",
@@ -229,6 +245,7 @@ const dossierDocuments = async ({
           }),
     ),
   );
+};
 
 /** The signed document a `.p7m` wraps, named after its envelope. */
 export const cadesContentCandidate = (

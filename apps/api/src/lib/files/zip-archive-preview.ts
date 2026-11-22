@@ -3,7 +3,7 @@
  * holds, typed and scanned as its part link delivers it, with the text of
  * readable files within one character budget, in archive order.
  */
-import { Result } from "better-result";
+import { Result, type UnhandledException } from "better-result";
 
 import {
   FILE_PART_KINDS,
@@ -12,11 +12,16 @@ import {
 } from "@stll/api-contract/file-parts";
 import type { ZipArchivePreview } from "@stll/api-contract/zip-archive";
 
+import type {
+  FileScanFailedError,
+  FileScanRejectedError,
+} from "@/api/lib/file-scan/scan-upload";
 import {
   type ContainerMember,
   readContainerMemberTexts,
   type ReadMemberText,
 } from "@/api/lib/files/asic-preview-worker";
+import type { DocumentPackageError } from "@/api/lib/files/document-archive";
 import {
   readZipArchive,
   readZipArchiveFile,
@@ -41,7 +46,15 @@ export const extractZipArchivePreview = async ({
   fileBytes: Uint8Array;
   maxChars: number;
   readText: ReadMemberText;
-}) => {
+}): Promise<
+  Result<
+    ZipArchivePreview,
+    | DocumentPackageError
+    | FileScanFailedError
+    | FileScanRejectedError
+    | UnhandledException
+  >
+> => {
   const archive = await readZipArchive(fileBytes);
   if (archive.isErr()) {
     return Result.err(archive.error);
