@@ -1,3 +1,5 @@
+import { lazy, Suspense } from "react";
+
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi, Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -39,6 +41,13 @@ import {
   HANDLING_BUTTON,
   handlingActionLabelKey,
 } from "./-correspondence-detail.pending";
+
+// Only a certified email record needs its envelope; its strings load with it.
+const CertifiedEmailEnvelope = lazy(async () => {
+  const m =
+    await import("@/features/correspondence/certified-email/certified-email-envelope");
+  return { default: m.CertifiedEmailEnvelope };
+});
 
 const routeApi = getRouteApi(
   "/_protected/workspaces/$workspaceId/correspondence/$correspondenceId",
@@ -126,6 +135,11 @@ export function CorrespondenceDetailPage() {
           sourceEntityId={record.sourceEntityId}
           workspaceId={workspaceId}
         />
+      )}
+      {record.channel === "pec" && (
+        <Suspense fallback={null}>
+          <CertifiedEmailEnvelope envelope={record.certifiedEmail} />
+        </Suspense>
       )}
       {record.channel === "data_box" ? (
         <DataBoxEnvelope contacts={dataBoxContacts} envelope={record.dataBox} />

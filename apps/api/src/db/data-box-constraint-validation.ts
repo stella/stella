@@ -5,18 +5,19 @@ import type { OnlineRepair } from "./online-migration-connection";
 
 /**
  * The checks and foreign key the data-box migrations add NOT VALID; the
- * online phase validates them through the contention gate.
+ * online phase validates them through the contention gate. The certified
+ * email channel replaces the channel and direction checks NOT VALID again.
  */
 export const DATA_BOX_CONSTRAINTS = [
   {
     tableName: "correspondence",
     constraintName: "correspondence_direction_check",
-    introducedBy: "20261102071100_data_box_correspondence",
+    introducedBy: "20261122080000_correspondence_pec_channel",
   },
   {
     tableName: "correspondence",
     constraintName: "correspondence_channel_check",
-    introducedBy: "20261102071100_data_box_correspondence",
+    introducedBy: "20261122080000_correspondence_pec_channel",
   },
   {
     tableName: "correspondence",
