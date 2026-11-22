@@ -279,9 +279,13 @@ const invoiceAttachments = async ({
   if (invoice.isErr()) {
     return Result.err(invoice.error);
   }
+  // An XML file that is not an invoice has no attachments.
+  if (invoice.value === null) {
+    return Result.ok([]);
+  }
   // One attachment that does not decode does not keep the others closed.
   return Result.ok(
-    (invoice.value?.attachments ?? []).map((attachment): ContainerSlot => {
+    invoice.value.attachments.map((attachment): ContainerSlot => {
       const read = invoiceAttachmentPart(attachment);
       return read.isErr()
         ? {
