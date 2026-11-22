@@ -661,6 +661,28 @@ describe("converter upload filenames", () => {
     },
   );
 
+  test("a type declared with parameters converts as its type", async () => {
+    const bytes = webArchiveFile({ body: "<p>Synthetic notice</p>" });
+    expect(
+      await uploadedFileName(
+        async () =>
+          await convertToPdf(
+            namedFileOf(
+              bytes,
+              'multipart/related; type="text/html"; boundary="x"',
+              "notice.mht",
+            ),
+          ),
+      ),
+    ).toBe("notice.html");
+    expect(
+      shouldGeneratePdfDerivative({
+        encrypted: false,
+        mimeType: "Multipart/Related; boundary=x",
+      }),
+    ).toBe(true);
+  });
+
   test("a web archive with no page never reaches the converter", async () => {
     const { result, urls } = await withConverterFetch(
       () => new Response("unexpected", { status: 500 }),

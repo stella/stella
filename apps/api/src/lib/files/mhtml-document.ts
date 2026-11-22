@@ -28,6 +28,18 @@ type ArchivePart = {
   readonly location: string | null;
   readonly contentId: string | null;
   readonly bytes: Uint8Array;
+  /** The part as text in its declared charset, as the parser decodes it. */
+  readonly text: () => string | null;
+};
+
+/** The parser's own charset-aware decoding of one part, if it offers it. */
+const partText = (node: Record<string, unknown>) => (): string | null => {
+  const decode = node["getTextContent"];
+  if (typeof decode !== "function") {
+    return null;
+  }
+  const text: unknown = Reflect.apply(decode, node, []);
+  return typeof text === "string" ? text : null;
 };
 
 const headerValue = (node: Record<string, unknown>, key: string) => {
@@ -78,6 +90,7 @@ const archiveParts = (
         contentId:
           headerValue(node, "content-id")?.replace(/^<|>$/gu, "") ?? null,
         bytes: new Uint8Array(content),
+        text: partText(node),
       });
     }
     const children = node["childNodes"];
@@ -115,23 +128,30 @@ export const webArchiveToHtml = async (
   if (Result.isError(parsed)) {
     return parsed;
   }
-  const html = parsed.value.html;
-  if (html === undefined || html.trim() === "") {
-    return Result.err(
-      new WebArchiveError({ message: "The web archive has no page" }),
-    );
-  }
-  if (html.length > RENDERED_HTML_MAX_CHARS) {
-    return Result.err(
-      new WebArchiveError({ message: "The web archive's page is too large" }),
-    );
-  }
   const parts = archiveParts(parser);
   if (Result.isError(parts)) {
     return parts;
   }
+  // The page is the archive's first HTML part, on its own: other HTML parts
+  // are resources of the page (a frame's document), not more of it.
   const page = parts.value.find((part) => part.type.startsWith("text/html"));
-  const base = page?.location ?? null;
+  if (page === undefined || page.bytes.byteLength > RENDERED_HTML_MAX_CHARS) {
+    return Result.err(
+      new WebArchiveError({
+        message:
+          page === undefined
+            ? "The web archive has no page"
+            : "The web archive's page is too large",
+      }),
+    );
+  }
+  const html = page.text();
+  if (html === null || html.trim() === "") {
+    return Result.err(
+      new WebArchiveError({ message: "The web archive has no page" }),
+    );
+  }
+  const base = page.location;
   const byLocation = new Map(
     parts.value.flatMap((part) =>
       part.location === null

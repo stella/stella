@@ -94,8 +94,6 @@ const packagePath = (owner: string, reference: string): string | null => {
   return parts.length === 0 ? null : parts.join("/");
 };
 
-type Manifest = ReadonlyMap<string, { href: string; type: string }>;
-
 /** The package document's path, from the container's first root file. */
 const packageDocumentPath = (container: DocumentXmlNode): string | null => {
   for (const rootFile of descendants(container, CONTAINER_NS, "rootfile")) {
@@ -107,9 +105,22 @@ const packageDocumentPath = (container: DocumentXmlNode): string | null => {
   return null;
 };
 
-/** The chapters in reading order, as package paths. */
-const spineChapters = (opf: DocumentXmlNode, opfPath: string): string[] => {
-  const manifest: Manifest = new Map(
+type PackageContents = {
+  /** The chapters in reading order, as package paths. */
+  readonly chapters: readonly string[];
+  /** Each manifest item's declared media type, by package path. */
+  readonly typeByPath: ReadonlyMap<string, string>;
+};
+
+/**
+ * The package's manifest and reading order. A linear spine entry that names
+ * no manifest item is a broken book, not a chapter to leave out.
+ */
+const packageContents = (
+  opf: DocumentXmlNode,
+  opfPath: string,
+): Result<PackageContents, EbookError> => {
+  const items = new Map(
     [...descendants(opf, OPF_NS, "item")].flatMap((item) => {
       const id = item.attributes.get("id");
       const href = item.attributes.get("href");
@@ -120,22 +131,62 @@ const spineChapters = (opf: DocumentXmlNode, opfPath: string): string[] => {
             [
               id,
               {
-                href: path,
+                path,
                 type: (item.attributes.get("media-type") ?? "").toLowerCase(),
               },
             ] as const,
           ];
     }),
   );
-  return [...descendants(opf, OPF_NS, "itemref")]
-    .filter((itemref) => itemref.attributes.get("linear") !== "no")
-    .flatMap((itemref) => {
-      const item = manifest.get(itemref.attributes.get("idref") ?? "");
-      return item !== undefined && CHAPTER_TYPES.has(item.type)
-        ? [item.href]
-        : [];
-    })
-    .slice(0, MAX_CHAPTERS);
+  const chapters: string[] = [];
+  for (const itemref of descendants(opf, OPF_NS, "itemref")) {
+    if (itemref.attributes.get("linear") === "no") {
+      continue;
+    }
+    const item = items.get(itemref.attributes.get("idref") ?? "");
+    if (item === undefined) {
+      return Result.err(
+        ebookError("The e-book's reading order names a missing chapter"),
+      );
+    }
+    if (CHAPTER_TYPES.has(item.type) && chapters.length < MAX_CHAPTERS) {
+      chapters.push(item.path);
+    }
+  }
+  return Result.ok({
+    chapters,
+    typeByPath: new Map(
+      [...items.values()].map(({ path, type }) => [path, type] as const),
+    ),
+  });
+};
+
+/**
+ * A chapter's text: UTF-16 by its byte order mark, else UTF-8, which EPUB
+ * requires of its content documents. A chapter declaring another encoding,
+ * or whose bytes are not valid in its encoding, fails rather than being read
+ * as corrupted text.
+ */
+const decodeChapter = (bytes: Uint8Array): Result<string, EbookError> => {
+  const declared = /^<\?xml[^>]*\bencoding\s*=\s*["']([\w.:-]{1,40})["']/u
+    .exec(Buffer.from(bytes.subarray(0, 512)).toString("latin1"))?.[1]
+    ?.toLowerCase();
+  let encoding: "utf-8" | "utf-16le" | "utf-16be" = "utf-8";
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) {
+    encoding = "utf-16le";
+  } else if (bytes[0] === 0xfe && bytes[1] === 0xff) {
+    encoding = "utf-16be";
+  } else if (declared !== undefined && !/^utf-?8$/u.test(declared)) {
+    return Result.err(
+      ebookError("An e-book chapter uses an unsupported encoding"),
+    );
+  }
+  const decoded = Result.try(() =>
+    new TextDecoder(encoding, { fatal: true }).decode(bytes),
+  );
+  return Result.isOk(decoded)
+    ? Result.ok(decoded.value)
+    : Result.err(ebookError("An e-book chapter is not readable text"));
 };
 
 /** An e-book's chapters as one self-contained, sanitized HTML document. */
@@ -191,8 +242,12 @@ export const ebookToHtml = async (
   if (opfPath === null || opf === null) {
     return Result.err(ebookError("The e-book has no readable package"));
   }
+  const contents = packageContents(opf, opfPath);
+  if (Result.isError(contents)) {
+    return contents;
+  }
   // A chapter the spine lists twice renders once.
-  const chapters = [...new Set(spineChapters(opf, opfPath))];
+  const chapters = [...new Set(contents.value.chapters)];
   if (chapters.length === 0) {
     return Result.err(ebookError("The e-book lists no chapters"));
   }
@@ -213,7 +268,11 @@ export const ebookToHtml = async (
     if (length > RENDERED_HTML_MAX_CHARS) {
       return Result.err(ebookError("The e-book exceeds the reading limits"));
     }
-    const $ = load(new TextDecoder().decode(source.value));
+    const text = decodeChapter(source.value);
+    if (Result.isError(text)) {
+      return text;
+    }
+    const $ = load(text.value);
     // An image drawn through SVG (a cover, a full-page plate) becomes a
     // plain image, since the sanitizer keeps no SVG.
     $("svg image").each((_, element) => {
@@ -225,7 +284,10 @@ export const ebookToHtml = async (
     const imageRead: { failure: EbookError | null } = { failure: null };
     embedImages($, (reference) => {
       const path = packagePath(chapter, reference);
-      const type = path === null ? null : embeddableImageType(null, path);
+      const type =
+        path === null
+          ? null
+          : embeddableImageType(contents.value.typeByPath.get(path), path);
       if (path === null || type === null) {
         return null;
       }

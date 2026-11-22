@@ -72,6 +72,32 @@ describe("web archives", () => {
     await expectConvertibleHtml(source);
   });
 
+  test("render only the page, not other HTML parts, decoded in its own charset", async () => {
+    const archive = new TextEncoder().encode(
+      [
+        "MIME-Version: 1.0",
+        'Content-Type: multipart/related; boundary="b"',
+        "",
+        "--b",
+        "Content-Type: text/html; charset=windows-1250",
+        "Content-Transfer-Encoding: quoted-printable",
+        "Content-Location: https://example.test/page.html",
+        "",
+        "<html><body><p>Smlouva o d=EDle</p></body></html>",
+        "--b",
+        "Content-Type: text/html; charset=utf-8",
+        "Content-Location: https://example.test/frame.html",
+        "",
+        "<html><body><p>Frame resource</p></body></html>",
+        "--b--",
+        "",
+      ].join("\r\n"),
+    );
+    const source = html(await webArchiveToHtml(archive));
+    expect(source).toContain("Smlouva o díle");
+    expect(source).not.toContain("Frame resource");
+  });
+
   test("refuse a message with no page", async () => {
     const rendered = await webArchiveToHtml(
       new TextEncoder().encode(
@@ -158,6 +184,57 @@ describe("e-books", () => {
     const damaged = book.slice();
     damaged[at] = 0x58;
     expect(Result.isError(await ebookToHtml(damaged))).toBe(true);
+  });
+
+  test("fail when the reading order names a chapter the manifest lacks", async () => {
+    const book = await packageOf({
+      mimetype: "application/epub+zip",
+      "META-INF/container.xml":
+        '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf"/></rootfiles></container>',
+      "content.opf":
+        '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c0" href="one.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c0"/><itemref idref="missing"/><itemref idref="note" linear="no"/></spine></package>',
+      "one.xhtml": "<html><body><p>Present</p></body></html>",
+    });
+    expect(Result.isError(await ebookToHtml(book))).toBe(true);
+  });
+
+  test("read UTF-16 chapters and images the manifest types without an extension", async () => {
+    const chapter = Buffer.concat([
+      Buffer.from([0xff, 0xfe]),
+      Buffer.from(
+        '<html xmlns="http://www.w3.org/1999/xhtml"><body><p>Dvojbajtová kapitola</p><img src="plate"/></body></html>',
+        "utf16le",
+      ),
+    ]);
+    const book = await packageOf({
+      mimetype: "application/epub+zip",
+      "META-INF/container.xml":
+        '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf"/></rootfiles></container>',
+      "content.opf":
+        '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c0" href="one.xhtml" media-type="application/xhtml+xml"/><item id="p" href="plate" media-type="image/png"/></manifest><spine><itemref idref="c0"/></spine></package>',
+      "one.xhtml": new Uint8Array(chapter),
+      plate: PNG,
+    });
+    const source = html(await ebookToHtml(book));
+    expect(source).toContain("Dvojbajtová kapitola");
+    expect(source).toContain(PNG_DATA_URI);
+  });
+
+  test("refuse a chapter declaring an encoding other than UTF-8", async () => {
+    const book = await ebookFile({
+      chapters: [{ file: "one.xhtml", body: "<p>x</p>" }],
+    });
+    const declared = await packageOf({
+      mimetype: "application/epub+zip",
+      "META-INF/container.xml":
+        '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="content.opf"/></rootfiles></container>',
+      "content.opf":
+        '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c0" href="one.xhtml" media-type="application/xhtml+xml"/></manifest><spine><itemref idref="c0"/></spine></package>',
+      "one.xhtml":
+        '<?xml version="1.0" encoding="windows-1250"?><html><body><p>x</p></body></html>',
+    });
+    expect(Result.isOk(await ebookToHtml(book))).toBe(true);
+    expect(Result.isError(await ebookToHtml(declared))).toBe(true);
   });
 
   test("refuse a package with no readable package document", async () => {

@@ -60,9 +60,18 @@ export const isHtmlRenderedMimeType = (
 ): mimeType is HtmlRenderedDocumentMimeType =>
   htmlRenderedDocumentFormatOfMimeType(mimeType) !== undefined;
 
+/**
+ * A stored media type without its parameters, lower-cased: a web archive
+ * declared `multipart/related; boundary=...` is a web archive.
+ */
+export const mediaTypeEssence = (mimeType: string): string =>
+  (mimeType.split(";", 1)[0] ?? "").trim().toLowerCase();
+
 /** Whether a file of `mimeType` can become a PDF, as stored or rendered. */
-export const canConvertToPdf = (mimeType: string): boolean =>
-  isConvertibleMimeType(mimeType) || isHtmlRenderedMimeType(mimeType);
+export const canConvertToPdf = (mimeType: string): boolean => {
+  const essence = mediaTypeEssence(mimeType);
+  return isConvertibleMimeType(essence) || isHtmlRenderedMimeType(essence);
+};
 
 /** OOXML formats rendered in-browser and therefore excluded from the derivative queue. */
 export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
@@ -79,7 +88,7 @@ export const shouldGeneratePdfDerivative = ({
 }: ShouldGeneratePdfDerivativeOptions): boolean =>
   !encrypted &&
   canConvertToPdf(mimeType) &&
-  !isNativelyRenderableMimeType(mimeType);
+  !isNativelyRenderableMimeType(mediaTypeEssence(mimeType));
 
 export const pdfDerivativeStateForFile = (
   options: ShouldGeneratePdfDerivativeOptions,

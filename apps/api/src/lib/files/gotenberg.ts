@@ -41,6 +41,7 @@ import {
   type ConvertibleMime,
   isConvertibleMimeType,
   isHtmlRenderedMimeType,
+  mediaTypeEssence,
 } from "@/api/lib/files/pdf-derivative-policy";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { LIMITS } from "@/api/lib/limits";
@@ -396,7 +397,10 @@ export const convertToPdf = async (
   file: ScannedFile,
   { retry = "in-call" }: ConvertToPdfOptions = {},
 ): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
-  const { fileName, mimeType } = file;
+  const { fileName } = file;
+  // Decided on the type alone: a declared parameter (a charset, a boundary)
+  // changes nothing about how the file converts.
+  const mimeType = mediaTypeEssence(file.mimeType);
   const bytes = new Uint8Array(file.bytes);
   const admission = admitDerivativeImage(bytes, mimeType);
   if (admission.type === "refused") {
