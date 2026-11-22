@@ -37,8 +37,8 @@ describe("documentFormat", () => {
     ["application/zip", "fapiao.ofd", "ofd"],
     ["application/zip", "smlouva.docx", "word"],
     ["application/x-zip-compressed", "vykaz.xlsx", "excel"],
-    ["application/zip", "kniha.epub", "file"],
-    ["application/zip", "podklady.pages", "file"],
+    ["application/zip", "kniha.epub", "epub"],
+    ["application/zip", "podklady.pages", "pages"],
     // A plain archive, or one whose name names nothing, is an archive.
     ["application/zip", "spis-23-C-118-2026.zip", "zip"],
     ["application/x-zip-compressed", "spis", "zip"],
