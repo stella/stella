@@ -1,0 +1,5 @@
+{
+  "metric": "lib-to-handler-imports",
+  "delta": 1,
+  "reason": "Document naming renames through renameEntityHandler so the rename keeps its permission, read-only and audit checks instead of a second copy of them."
+}

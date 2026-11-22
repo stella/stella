@@ -8,26 +8,40 @@ import {
   FILE_PART_TEXT_PREVIEW_MAX_BYTES,
   type FilePartDescriptor,
   type FilePartUnavailableReason,
+  isFilePartConvertedMediaType,
   isFilePartTextMediaType,
 } from "@stll/api-contract/file-parts";
 
 import type { TranslationKey } from "@/i18n/types";
+import { DOCX_MIME, getNativeOfficeViewerFormat } from "@/lib/consts";
 
 /**
  * How a part of a file (an email's attachment, a data-box file, a signed
- * container's document, an invoice's attachment) previews in place. Only
- * passive renderings: a PDF in the PDF viewer, a raster image, text as text.
- * Anything else is listed with its type and offered for download and saving.
+ * container's document, an invoice's attachment) previews in place, the way
+ * a stored file of its type does: a PDF in the PDF viewer, a Word document
+ * in the read-only document view, a spreadsheet or presentation in the
+ * office viewer, a document no viewer draws as the PDF the server converts
+ * it to (`converted`), a raster image, text as text. Anything else is listed
+ * with its type and offered for download and saving.
  */
 export const FILE_PART_PREVIEW_KIND = {
   image: "image",
   pdf: "pdf",
+  converted: "converted",
+  docx: "docx",
+  xlsx: "xlsx",
+  pptx: "pptx",
   text: "text",
   none: "none",
 } as const;
 
 export type FilePartPreviewKind =
   (typeof FILE_PART_PREVIEW_KIND)[keyof typeof FILE_PART_PREVIEW_KIND];
+
+/** Kinds the PDF viewer draws, with its zoom controls. */
+export const isFilePartPdfPreviewKind = (kind: FilePartPreviewKind) =>
+  kind === FILE_PART_PREVIEW_KIND.pdf ||
+  kind === FILE_PART_PREVIEW_KIND.converted;
 
 const essence = (mediaType: string) =>
   (mediaType.split(";").at(0) ?? "").trim().toLowerCase();
@@ -36,6 +50,16 @@ export const filePartPreviewKind = (mediaType: string): FilePartPreviewKind => {
   const normalized = essence(mediaType);
   if (normalized === "application/pdf") {
     return FILE_PART_PREVIEW_KIND.pdf;
+  }
+  if (normalized === DOCX_MIME) {
+    return FILE_PART_PREVIEW_KIND.docx;
+  }
+  const office = getNativeOfficeViewerFormat(normalized);
+  if (office !== null) {
+    return FILE_PART_PREVIEW_KIND[office];
+  }
+  if (isFilePartConvertedMediaType(normalized)) {
+    return FILE_PART_PREVIEW_KIND.converted;
   }
   if (isFilePartTextMediaType(normalized)) {
     return FILE_PART_PREVIEW_KIND.text;

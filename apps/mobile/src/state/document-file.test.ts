@@ -944,6 +944,7 @@ describe("reading a document's file", () => {
       workspaceId: "matter-1",
       fieldId: "field-1",
       part: "attachment:0",
+      mediaType: "application/pdf",
     });
     expect(part.unwrap()).toMatchObject({
       fileName: "usneseni.pdf",
@@ -997,11 +998,42 @@ describe("reading a document's file", () => {
       workspaceId: "matter-1",
       fieldId: "field-1",
       part: "member:9",
+      mediaType: "text/plain",
     });
     expect(part.isErr() && part.error).toMatchObject({
       status: 404,
       code: "not_found",
     });
+  });
+
+  test("opens a document part no viewer draws as the PDF the server converts it to", async () => {
+    const { fetch, calls } = server(() =>
+      Response.json(delivered("application/pdf", { fileName: "zaloba.pdf" })),
+    );
+    const open = async (part: string, mediaType: string) =>
+      await readDocumentPart({
+        fetch,
+        source: sourceFor(fetch),
+        workspaceId: "matter-1",
+        fieldId: "field-1",
+        part,
+        mediaType,
+      });
+
+    // A Word 97 and a WordPerfect attachment open as their PDF renditions,
+    expect(
+      (await open("attachment:3", "application/msword")).isOk(),
+    ).toBeTrue();
+    expect(calls.at(-1)).toBe(
+      "/v1/files/matter-1/url/field-1?purpose=display&part=attachment%3A3",
+    );
+    await open("attachment:4", "application/vnd.wordperfect");
+    expect(calls.at(-1)).toContain("purpose=display");
+    // while a Word document, a PDF and text open whole, as themselves.
+    for (const mediaType of [DOCX, "application/pdf", "text/plain"]) {
+      await open("attachment:0", mediaType);
+      expect(calls.at(-1)).toContain("purpose=download");
+    }
   });
 
   test("sends a password-protected file to Quick Look", async () => {

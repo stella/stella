@@ -566,6 +566,7 @@
       "download": "Lejupielādēt {fileName}",
       "noFilesInside": "Iekšā nav neviena faila.",
       "noPreview": "Šim faila veidam nav priekšskatījuma. Lejupielādējiet to vai saglabājiet lietā.",
+      "notConverted": "Šo failu neizdevās pārveidot priekšskatījumam. Lejupielādējiet to vai saglabājiet lietā.",
       "open": "Atvērt {fileName}",
       "unavailable": {
         "encrypted": "Aizsargāts ar paroli, nevar atvērt",

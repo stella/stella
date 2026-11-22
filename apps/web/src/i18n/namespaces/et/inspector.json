@@ -566,6 +566,7 @@
       "download": "Laadi alla {fileName}",
       "noFilesInside": "Selles pole ühtegi faili.",
       "noPreview": "Seda failitüüpi ei saa eelvaadata. Laadige see alla või salvestage toimikusse.",
+      "notConverted": "Seda faili ei õnnestunud eelvaate jaoks teisendada. Laadige see alla või salvestage toimikusse.",
       "open": "Ava {fileName}",
       "unavailable": {
         "encrypted": "Parooliga kaitstud, ei saa avada",

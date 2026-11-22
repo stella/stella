@@ -13,6 +13,11 @@ import * as v from "valibot";
 
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
+import {
+  CONVERTED_DOCUMENT_FORMATS,
+  HTML_RENDERED_DOCUMENT_FORMATS,
+} from "./converted-document-formats";
+
 export const FILE_PART_KINDS = {
   /** The document a signed envelope (`.p7m`) carries. */
   content: "content",
@@ -118,6 +123,34 @@ const FILE_PART_TEXT_MEDIA_TYPES: ReadonlySet<string> = new Set([
 /** Whether a part of this media type previews as text. */
 export const isFilePartTextMediaType = (mediaType: string): boolean =>
   FILE_PART_TEXT_MEDIA_TYPES.has(
+    (mediaType.split(";", 1).at(0) ?? "").trim().toLowerCase(),
+  );
+
+/**
+ * Documents a part displays as the PDF the converter makes of it, as a
+ * stored file of the same type displays its PDF rendition: word-processing,
+ * spreadsheet and presentation formats no viewer draws as they are, the
+ * converted formats and the formats rendered from HTML. The part link
+ * converts such a part when it delivers it for display; a download is the
+ * part itself. Word, Excel and PowerPoint (OOXML) parts are drawn as they
+ * are, by the viewers that draw a stored file of the type.
+ */
+export const FILE_PART_CONVERTED_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  "application/msword",
+  "application/vnd.ms-excel",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.oasis.opendocument.text",
+  "application/vnd.oasis.opendocument.spreadsheet",
+  "application/vnd.oasis.opendocument.presentation",
+  "application/rtf",
+  ...[...CONVERTED_DOCUMENT_FORMATS, ...HTML_RENDERED_DOCUMENT_FORMATS].flatMap(
+    ({ mimeType, mimeAliases }) => [mimeType, ...mimeAliases],
+  ),
+]);
+
+/** Whether a part of this media type displays as the PDF made of it. */
+export const isFilePartConvertedMediaType = (mediaType: string): boolean =>
+  FILE_PART_CONVERTED_MEDIA_TYPES.has(
     (mediaType.split(";", 1).at(0) ?? "").trim().toLowerCase(),
   );
 

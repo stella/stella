@@ -39,7 +39,11 @@ import { useUiColors } from "@/theme";
  * native viewer.
  */
 type FilePartOpener = {
-  readonly open: (part: string) => void;
+  /**
+   * Opens `part`; its media type decides whether it opens as itself or as
+   * the PDF the server converts it to, as a stored file of the type would.
+   */
+  readonly open: (part: string, mediaType: string) => void;
   /** The part being fetched, whose row shows that it is busy. */
   readonly opening: string | null;
   /** The files of a part that is itself a container, such as an email. */
@@ -190,7 +194,7 @@ export const FilePartRow = ({
           void toggleInside(opener.list);
           return;
         }
-        opener.open(part);
+        opener.open(part, mediaType);
       }}
       size="row"
       variant="ghost"
@@ -215,7 +219,7 @@ export const FilePartRow = ({
         <Button
           loading={opener.opening === part}
           onPress={() => {
-            opener.open(part);
+            opener.open(part, mediaType);
           }}
           size="sm"
           variant="outline"

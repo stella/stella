@@ -14,6 +14,7 @@ import { emailReadingSchema } from "@stll/api-contract/email-reading";
 import {
   filePartDescriptorSchema,
   filePartListSchema,
+  isFilePartConvertedMediaType,
 } from "@stll/api-contract/file-parts";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
@@ -223,6 +224,15 @@ export const readOriginalDocumentFile = async ({
   });
 
 /**
+ * What a part is fetched as to open it: a document no viewer draws (a Word
+ * 97 file, an OpenDocument text, a WordPerfect file) as the PDF the server
+ * converts it to, the way a stored file of its type opens; any other part
+ * as itself, whole.
+ */
+const partPurposeFor = (mediaType: string): FilePurpose =>
+  isFilePartConvertedMediaType(mediaType) ? "display" : "download";
+
+/**
  * A short-lived, audited link to one part of a document's file: an email's
  * attachment, the document a signed file wraps, a container's member.
  */
@@ -232,6 +242,7 @@ export const readDocumentPart = async ({
   workspaceId,
   fieldId,
   part,
+  mediaType,
 }: {
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
@@ -239,11 +250,13 @@ export const readDocumentPart = async ({
   readonly fieldId: string;
   /** A part address such as `attachment:0` (`@stll/api-contract/file-parts`). */
   readonly part: string;
+  /** The part's media type, as its container's preview lists it. */
+  readonly mediaType: string;
 }) =>
   await requestApi({
     fetch,
     source,
-    path: `${fileUrlPath(workspaceId, fieldId, "download")}&part=${encodeURIComponent(part)}`,
+    path: `${fileUrlPath(workspaceId, fieldId, partPurposeFor(mediaType))}&part=${encodeURIComponent(part)}`,
     schema: fileUrlSchema,
   });
 

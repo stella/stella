@@ -552,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Ar tikrai norite ištrinti šią bylą? Šio veiksmo negalima atšaukti.",
     "deletedItem": "Ištrinta: {name}",
     "deletingWorkspace": "Byla trinama",
+    "documentNaming": {
+      "description": "Nauji dokumentai gauna organizacijos pavadinimo šabloną: {pattern}",
+      "label": "Pervadinti naujai įkeltus failus"
+    },
     "documentSwitcher": {
       "download": "Atsisiųsti šį failą",
       "renditionsFailed": "Įkelkite dokumentą iš naujo ir bandykite jį atsisiųsti dar kartą.",
