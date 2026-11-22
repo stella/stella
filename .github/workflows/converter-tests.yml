@@ -19,7 +19,6 @@ on:
       - "apps/api/src/lib/files/pdf-derivative-policy.ts"
       - "apps/api/src/tests/helpers/converted-document-fixtures.ts"
       - "packages/api-contract/src/converted-document-formats.ts"
-  workflow_dispatch:
 
 defaults:
   run:
@@ -37,7 +36,7 @@ env:
   GIT_CONFIG_VALUE_2: "false"
 
 concurrency:
-  group: converter-tests-${{ github.ref }}
+  group: converter-tests-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
