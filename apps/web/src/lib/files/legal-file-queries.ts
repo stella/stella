@@ -6,6 +6,7 @@ import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
+import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
 
 import { api } from "@/lib/api";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -34,7 +35,39 @@ const legalFileKeys = {
     workspaceId,
     fieldId,
   ],
+  zip: ({ fieldId, workspaceId }: LegalFileKey) => [
+    ...filesKeys.all(),
+    "zip",
+    workspaceId,
+    fieldId,
+  ],
 };
+
+export const zipArchivePreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: legalFileKeys.zip(props),
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .zip({ fieldId: props.fieldId })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          zipArchivePreviewSchema,
+          unwrapApiResponse(response),
+          "ZIP archive preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
 
 export const signedDossierPreviewOptions = (props: FileOptionsProps) =>
   resourceQueryOptions(

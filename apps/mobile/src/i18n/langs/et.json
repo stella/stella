@@ -534,8 +534,19 @@
     "type": "Tüüp"
   },
   "fileParts": {
+    "archiveUnreadable": "Arhiivi ei õnnestunud lugeda.",
     "attachments": "Manused",
+    "files": "Failid",
+    "insideFailed": "Selles olevaid faile ei õnnestunud laadida. Puudutage, et uuesti proovida.",
+    "noFilesInside": "Selles pole ühtegi faili.",
     "open": "Ava {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Parooliga kaitstud, ei saa avada",
+      "link": "Viide teisele failile, seda ei avata",
+      "tooLarge": "Avamiseks liiga suur",
+      "unreadable": "Kahjustatud, ei saa avada",
+      "unsupported": "Pakitud viisil, mida ei saa avada"
+    },
     "unnamed": "Nimetu fail"
   },
   "header": {

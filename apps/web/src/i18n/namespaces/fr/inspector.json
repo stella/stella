@@ -561,11 +561,20 @@
       "anonymization": "Anonymisation"
     },
     "fileParts": {
+      "archiveUnreadable": "Impossible de lire l’archive.",
       "back": "Retour à la liste",
       "download": "Télécharger {fileName}",
+      "noFilesInside": "Aucun fichier à l’intérieur.",
       "noPreview": "Ce type de fichier n’a pas d’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
       "notConverted": "Ce fichier n’a pas pu être converti pour l’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
-      "open": "Ouvrir {fileName}"
+      "open": "Ouvrir {fileName}",
+      "unavailable": {
+        "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
+        "link": "Lien vers un autre fichier, non ouvert",
+        "tooLarge": "Trop volumineux pour être ouvert",
+        "unreadable": "Endommagé, impossible à ouvrir",
+        "unsupported": "Compressé d’une manière impossible à ouvrir"
+      }
     },
     "firstSourceReached": "Il s’agit de la première source.",
     "groups": {

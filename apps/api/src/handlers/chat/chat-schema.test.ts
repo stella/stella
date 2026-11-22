@@ -811,7 +811,7 @@ describe("validateChatFileParts", () => {
     const result = validateChatFileParts({
       parts: createUserFilePart({
         fileId: "file_test",
-        mediaType: "application/zip",
+        mediaType: "application/x-7z-compressed",
       }),
     });
 

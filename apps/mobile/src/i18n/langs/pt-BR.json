@@ -534,8 +534,19 @@
     "type": "Tipo"
   },
   "fileParts": {
+    "archiveUnreadable": "Não foi possível ler o arquivo compactado.",
     "attachments": "Anexos",
+    "files": "Arquivos",
+    "insideFailed": "Não foi possível carregar os arquivos dentro dele. Toque para tentar de novo.",
+    "noFilesInside": "Não há arquivos dentro.",
     "open": "Abrir {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Protegido por senha, não pode ser aberto",
+      "link": "Link para outro arquivo, não é aberto",
+      "tooLarge": "Grande demais para abrir",
+      "unreadable": "Danificado, não pode ser aberto",
+      "unsupported": "Compactado de um modo que não pode ser aberto"
+    },
     "unnamed": "Arquivo sem nome"
   },
   "header": {
