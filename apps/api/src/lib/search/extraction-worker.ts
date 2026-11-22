@@ -62,6 +62,7 @@ import {
   ASIC_PREVIEW_WORKER_MODE,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
+  ZIP_ARCHIVE_PREVIEW_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
 import type { AsicParseError } from "@/api/lib/files/asic-container";
 import { asicDocumentText } from "@/api/lib/files/asic-document-text";
@@ -90,13 +91,16 @@ import {
   parseEmail,
 } from "@/api/lib/files/email-to-html";
 import {
+  EMBEDDED_PART_LIST_WORKER_MODE,
   EMBEDDED_PART_WORKER_EXIT,
   EMBEDDED_PART_WORKER_MODE,
   encodeEmbeddedPart,
 } from "@/api/lib/files/embedded-part-protocol";
 import {
   cadesContentCandidate,
+  type EmbeddedPartError,
   extractEmbeddedPart,
+  listEmbeddedParts,
 } from "@/api/lib/files/embedded-part-worker";
 import { XML_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
 import type { P7mParseError } from "@/api/lib/files/p7m";
@@ -105,6 +109,8 @@ import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
 import { extractSignedDossierPreview } from "@/api/lib/files/signed-dossier-worker";
 import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
+import { extractZipArchivePreview } from "@/api/lib/files/zip-archive-preview";
+import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -487,6 +493,20 @@ const extractSignedDossierText = async ({
   return preview.map(signedDossierText);
 };
 
+const extractZipText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const preview = await extractZipArchivePreview({
+    fileBytes,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  return preview.map(zipArchiveText);
+};
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -505,6 +525,7 @@ const LEGAL_TEXT_READERS = {
   isdoc: extractEInvoiceText,
   isdocx: extractEInvoiceText,
   xml: extractEInvoiceText,
+  zip: extractZipText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -880,36 +901,86 @@ const writeSignedDossier = async (options: {
   return Result.ok(0);
 };
 
-const writeEmbeddedPart = async (options: {
+/** The exit a container that cannot be read, or a refused part, ends with. */
+const embeddedPartExit = (error: EmbeddedPartError) => {
+  switch (error._tag) {
+    case "AsicParseError":
+    case "DataBoxMessageParseError":
+    case "DocumentPackageError":
+    case "EmailParseError":
+    case "P7mParseError":
+    case "SignedDossierParseError":
+      return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
+    case "FileScanRejectedError":
+      return Result.ok(EMBEDDED_PART_WORKER_EXIT.rejected);
+    case "FileScanFailedError":
+    case "UnhandledException":
+      return Result.err(error);
+    default:
+      error satisfies never;
+      return panic("Unhandled embedded part error");
+  }
+};
+
+type EmbeddedPartRequest = {
   fileBytes: Uint8Array;
   containerMimeType: string;
   containerName: string;
   partId: string;
-}) => {
+};
+
+const writeEmbeddedPart = async (options: EmbeddedPartRequest) => {
   const part = parseFilePartId(options.partId);
   if (part === null) {
     return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
   }
   const read = await extractEmbeddedPart({ ...options, part });
   if (read.isErr()) {
-    switch (read.error._tag) {
-      case "AsicParseError":
-      case "DataBoxMessageParseError":
-      case "DocumentPackageError":
-      case "P7mParseError":
-      case "SignedDossierParseError":
-        return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
-      case "FileScanRejectedError":
-        return Result.ok(EMBEDDED_PART_WORKER_EXIT.rejected);
-      case "FileScanFailedError":
-      case "UnhandledException":
-        return Result.err(read.error);
-    }
+    return embeddedPartExit(read.error);
   }
   if (read.value === null) {
     return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
   }
   await writeWorkerStdout(encodeEmbeddedPart(read.value));
+  return Result.ok(0);
+};
+
+const writeEmbeddedPartList = async (options: EmbeddedPartRequest) => {
+  const part = parseFilePartId(options.partId);
+  if (part === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  const listed = await listEmbeddedParts({ ...options, part });
+  if (listed.isErr()) {
+    return embeddedPartExit(listed.error);
+  }
+  if (listed.value === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  await writeWorkerStdout(JSON.stringify({ files: listed.value }));
+  return Result.ok(0);
+};
+
+const writeZipArchivePreview = async (options: {
+  fileBytes: Uint8Array;
+  maxChars: number;
+}) => {
+  const preview = await extractZipArchivePreview({
+    ...options,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "DocumentPackageError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(preview.error);
+    }
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value));
   return Result.ok(0);
 };
 
@@ -978,6 +1049,25 @@ try {
       exitWithWorkerError(written.error);
     }
     process.exit(written.value);
+  }
+  if (mimeType === EMBEDDED_PART_LIST_WORKER_MODE) {
+    const written = await writeEmbeddedPartList({
+      fileBytes,
+      containerMimeType: process.argv[4] ?? "",
+      partId: process.argv[5] ?? "",
+      containerName: process.argv[6] ?? "",
+    });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
+  }
+  if (mimeType === ZIP_ARCHIVE_PREVIEW_MODE) {
+    const preview = await writeZipArchivePreview({ fileBytes, maxChars });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
   }
   if (mimeType === ASIC_PREVIEW_WORKER_MODE) {
     const preview = await writeAsicPreview({

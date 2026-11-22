@@ -2,10 +2,16 @@ import {
   EMAIL_TEXT_ATTACHMENT_CHARSET,
   type EmailTextAttachmentCharset,
 } from "@stll/api-contract";
+import { opensToFilesInside } from "@stll/api-contract/file-part-containers";
 import {
+  type ContainedFile,
   FILE_PART_TEXT_PREVIEW_MAX_BYTES,
+  type FilePartDescriptor,
+  type FilePartUnavailableReason,
   isFilePartTextMediaType,
 } from "@stll/api-contract/file-parts";
+
+import type { TranslationKey } from "@/i18n/types";
 
 /**
  * How a part of a file (an email's attachment, a data-box file, a signed
@@ -39,6 +45,46 @@ export const filePartPreviewKind = (mediaType: string): FilePartPreviewKind => {
   }
   return FILE_PART_PREVIEW_KIND.none;
 };
+
+/**
+ * Whether a part that has no preview of its own opens to the files inside
+ * it: it is a container (an email, an archive, a data-box message, a signed
+ * file) and its own parts would still sit within the deepest path a part may
+ * have.
+ */
+export const filePartOpensInside = (
+  part: Pick<FilePartDescriptor, "fileName" | "mediaType" | "part">,
+): boolean =>
+  filePartPreviewKind(part.mediaType) === FILE_PART_PREVIEW_KIND.none &&
+  opensToFilesInside(part);
+
+/** Why a file inside a container does not open, as its row says it. */
+export const FILE_PART_UNAVAILABLE_LABEL = {
+  encrypted: "inspector.fileParts.unavailable.encrypted",
+  unsupported: "inspector.fileParts.unavailable.unsupported",
+  link: "inspector.fileParts.unavailable.link",
+  tooLarge: "inspector.fileParts.unavailable.tooLarge",
+  unreadable: "inspector.fileParts.unavailable.unreadable",
+} as const satisfies Record<FilePartUnavailableReason, TranslationKey>;
+
+/**
+ * A container's files as list rows, in its order: a file that opens as its
+ * part (its folder as the row's second line), any other with its reason.
+ */
+export const containedFileRows = (files: readonly ContainedFile[]) =>
+  files.map((file, position) =>
+    file.part === null
+      ? {
+          type: "unavailable" as const,
+          key: `unavailable:${String(position)}`,
+          file,
+        }
+      : {
+          type: "part" as const,
+          key: file.part.part,
+          part: { ...file.part, detail: file.folder },
+        },
+  );
 
 /**
  * What a person can do with a part: every part opens in place (a preview, or

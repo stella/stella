@@ -534,8 +534,19 @@
     "type": "النوع"
   },
   "fileParts": {
+    "archiveUnreadable": "تعذّرت قراءة الأرشيف.",
     "attachments": "المرفقات",
+    "files": "الملفات",
+    "insideFailed": "تعذّر تحميل الملفات الموجودة بداخله. اضغط للمحاولة مرة أخرى.",
+    "noFilesInside": "لا توجد ملفات بداخله.",
     "open": "فتح {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "محمي بكلمة مرور، لا يمكن فتحه",
+      "link": "رابط إلى ملف آخر، لا يُفتح",
+      "tooLarge": "كبير جدًا بحيث لا يمكن فتحه",
+      "unreadable": "تالف، لا يمكن فتحه",
+      "unsupported": "مضغوط بطريقة لا يمكن فتحها"
+    },
     "unnamed": "ملف بلا اسم"
   },
   "header": {

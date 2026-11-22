@@ -26,6 +26,27 @@ describe("documentFormat", () => {
     },
   );
 
+  test.each([
+    // Every ZIP-based format its name names keeps its own reader.
+    ["application/zip", "smlouva-o-dilo.asice", "asicE"],
+    ["application/zip", "rozhodnuti.asics", "asicS"],
+    ["application/x-zip-compressed", "leping.bdoc", "asicE"],
+    ["application/zip", "FV-2026-0042.isdocx", "isdocx"],
+    ["application/zip", "podanie.zep", "zep"],
+    ["application/zip", "dava.udf", "uyap"],
+    ["application/zip", "fapiao.ofd", "ofd"],
+    ["application/zip", "smlouva.docx", "word"],
+    ["application/x-zip-compressed", "vykaz.xlsx", "excel"],
+    ["application/zip", "kniha.epub", "file"],
+    ["application/zip", "podklady.pages", "file"],
+    // A plain archive, or one whose name names nothing, is an archive.
+    ["application/zip", "spis-23-C-118-2026.zip", "zip"],
+    ["application/x-zip-compressed", "spis", "zip"],
+    [null, "prilohy.ZIP", "zip"],
+  ] as const)("a ZIP type %s named %s is %s", (mimeType, fileName, kind) => {
+    expect(documentFormat(mimeType, fileName).kind).toBe(kind);
+  });
+
   test("uses the email mark for EML and Outlook MSG files", () => {
     expect(kindOf(EML_MIME_TYPE)).toBe("email");
     expect(kindOf(MSG_MIME_TYPE)).toBe("email");
@@ -63,7 +84,8 @@ describe("documentFormat", () => {
       ["firma.p7s", "file"],
       ["readme.md", "markdown"],
       ["notes.txt", "text"],
-      ["archive.zip", "file"],
+      ["archive.zip", "zip"],
+      ["archive.7z", "file"],
     ] as const satisfies readonly (readonly [string, DocumentFormatKind])[];
 
     for (const [fileName, kind] of files) {
@@ -79,7 +101,7 @@ describe("documentFormat", () => {
     });
     expect(kindOf("image/tiff")).toBe("image");
     expect(kindOf("text/html")).toBe("text");
-    expect(kindOf("application/zip", "bundle")).toBe("file");
+    expect(kindOf("application/x-7z-compressed", "bundle")).toBe("file");
   });
 
   // text/csv also starts with text/, so it must win over the text fallback.

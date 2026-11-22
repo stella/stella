@@ -5,6 +5,7 @@ import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
+import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
 import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -15,6 +16,7 @@ import {
   DOCUMENT_ARCHIVE_MAX_BYTES,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
+  ZIP_ARCHIVE_PREVIEW_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
 import { LIMITS } from "@/api/lib/limits";
 import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
@@ -103,6 +105,11 @@ export const readStructuredDocumentPreview = archivePreviewReader({
   mode: STRUCTURED_DOCUMENT_PREVIEW_MODE,
   schema: structuredDocumentPreviewSchema,
   label: "document",
+});
+export const readZipArchivePreview = archivePreviewReader({
+  mode: ZIP_ARCHIVE_PREVIEW_MODE,
+  schema: zipArchivePreviewSchema,
+  label: "ZIP archive",
 });
 export const readSignedDossierPreview = archivePreviewReader({
   mode: SIGNED_DOSSIER_WORKER_MODE.preview,

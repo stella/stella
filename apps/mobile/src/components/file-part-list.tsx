@@ -1,9 +1,15 @@
-import { createContext, type ReactNode, use } from "react";
+import { createContext, type ReactNode, use, useState } from "react";
 
+import { Result } from "better-result";
 import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
-import type { FilePartDescriptor } from "@stll/api-contract/file-parts";
+import { opensToFilesInside } from "@stll/api-contract/file-part-containers";
+import type {
+  ContainedFile,
+  FilePartDescriptor,
+  FilePartList as ContainedFiles,
+} from "@stll/api-contract/file-parts";
 import { Button } from "@stll/ui/button";
 import { DocumentMark } from "@stll/ui/document-mark";
 import { formatFileSize } from "@stll/ui/file-size";
@@ -37,7 +43,14 @@ type FilePartOpener = {
   readonly open: (part: string) => void;
   /** The part being fetched, whose row shows that it is busy. */
   readonly opening: string | null;
+  /** The files of a part that is itself a container, such as an email. */
+  readonly list: (part: string) => Promise<Result<ContainedFiles, unknown>>;
 };
+
+/** A container part's files, as its row shows them under itself. */
+type FilesInside =
+  | { readonly status: "closed" | "loading" | "failed" }
+  | { readonly status: "open"; readonly files: readonly ContainedFile[] };
 
 const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
 
@@ -104,6 +117,23 @@ export const FilePartRow = ({
   const t = useTranslations("fileParts");
   const format = useFormatter();
   const ui = useUiColors();
+  const [inside, setInside] = useState<FilesInside>({ status: "closed" });
+  // A container (an email, an archive) opens to its own files under its row.
+  const container =
+    opener !== null && opensToFilesInside({ fileName, mediaType, part });
+  const toggleInside = async (list: FilePartOpener["list"]) => {
+    if (inside.status === "open" || inside.status === "loading") {
+      setInside({ status: "closed" });
+      return;
+    }
+    setInside({ status: "loading" });
+    const listed = await list(part);
+    setInside(
+      Result.isOk(listed)
+        ? { status: "open", files: listed.value.files }
+        : { status: "failed" },
+    );
+  };
   const name = fileName ?? t("unnamed");
   const details = [
     fileTypeLabel(mediaType, fileName),
@@ -147,12 +177,19 @@ export const FilePartRow = ({
       </View>
     );
   }
-  return (
+  const row = (
     <Button
       accessibilityLabel={t("open", { fileName: name, details })}
+      {...(container
+        ? { accessibilityState: { expanded: inside.status === "open" } }
+        : {})}
       icon={icon}
-      loading={opener.opening === part}
+      loading={opener.opening === part || inside.status === "loading"}
       onPress={() => {
+        if (container) {
+          void toggleInside(opener.list);
+          return;
+        }
         opener.open(part);
       }}
       size="row"
@@ -161,6 +198,110 @@ export const FilePartRow = ({
       {separator}
       {text}
     </Button>
+  );
+  if (!container || inside.status === "closed" || inside.status === "loading") {
+    return row;
+  }
+  return (
+    <View>
+      {row}
+      <View className="ps-6">
+        {inside.status === "failed" ? (
+          <Text variant="caption">{t("insideFailed")}</Text>
+        ) : (
+          <ContainedFileList files={inside.files} />
+        )}
+      </View>
+    </View>
+  );
+};
+
+/** A file a container lists that does not open, and why. */
+const UnavailableFileRow = ({
+  divided,
+  file,
+}: {
+  divided: boolean;
+  file: ContainedFile;
+}) => {
+  const t = useTranslations("fileParts");
+  const format = useFormatter();
+  const ui = useUiColors();
+  const details = [
+    file.folder,
+    file.unavailable === null ? null : t(`unavailable.${file.unavailable}`),
+    formatFileSize(file.sizeBytes, format),
+  ]
+    .filter((value): value is string => value !== null)
+    .join(" · ");
+  return (
+    <View
+      accessible
+      accessibilityLabel={`${file.fileName}, ${details}`}
+      className="min-h-11 w-full flex-row items-start gap-3 py-3 opacity-70"
+    >
+      {divided ? <Separator className="absolute inset-x-0 bottom-0" /> : null}
+      <View className="pt-0.5">
+        <FileTypeGlyph
+          color={ui.mutedForeground}
+          fileName={file.fileName}
+          mediaType="application/octet-stream"
+        />
+      </View>
+      <View className="flex-1 gap-0.5">
+        <Text numberOfLines={2} variant="rowTitle">
+          {file.fileName}
+        </Text>
+        <Text numberOfLines={2} variant="caption">
+          {details}
+        </Text>
+      </View>
+    </View>
+  );
+};
+
+/**
+ * The files a container holds, in its order, whether or not they open: a
+ * ZIP archive's files with their folders, or the files of a part that is
+ * itself a container. A file that opens is a part row; one that does not
+ * says why.
+ */
+export const ContainedFileList = ({
+  files,
+  title,
+}: {
+  files: readonly ContainedFile[];
+  /** The list's heading, when it stands on its own. */
+  title?: string | undefined;
+}) => {
+  const t = useTranslations("fileParts");
+  if (files.length === 0) {
+    return <Text variant="caption">{t("noFilesInside")}</Text>;
+  }
+  return (
+    <View>
+      {title === undefined ? null : (
+        <Text accessibilityRole="header" variant="section">
+          {title}
+        </Text>
+      )}
+      {files.map((file, index) => {
+        const divided = index < files.length - 1;
+        return file.part === null ? (
+          <UnavailableFileRow
+            divided={divided}
+            file={file}
+            key={`unavailable:${String(index)}`}
+          />
+        ) : (
+          <FilePartRow
+            divided={divided}
+            item={{ ...file.part, detail: file.folder }}
+            key={file.part.part}
+          />
+        );
+      })}
+    </View>
   );
 };
 

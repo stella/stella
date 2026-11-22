@@ -179,6 +179,8 @@
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
     "./file-parts": "./src/file-parts.ts",
+    "./file-part-containers": "./src/file-part-containers.ts",
+    "./zip-archive": "./src/zip-archive.ts",
     "./document-format": "./src/document-format.ts",
     "./converted-document-formats": "./src/converted-document-formats.ts",
     "./entity-views": "./src/entity-views.ts",

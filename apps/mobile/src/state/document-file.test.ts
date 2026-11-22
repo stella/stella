@@ -10,6 +10,7 @@ import {
 import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import type { EmailReading } from "@stll/api-contract/email-reading";
 import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
+import type { ZipArchivePreview } from "@stll/api-contract/zip-archive";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -24,6 +25,7 @@ import {
   isOffline,
   readDocumentFile,
   readDocumentPart,
+  readDocumentPartList,
   readOriginalDocumentFile,
   versionsPath,
   viewerFor,
@@ -685,6 +687,58 @@ describe("reading a document's file", () => {
     },
   );
 
+  test.each([
+    ["spis-23-C-118-2026.zip", "application/zip"],
+    ["Prilohy.ZIP", "application/octet-stream"],
+    ["podklady", "application/x-zip-compressed"],
+  ])(
+    "reads the archive %s (%s) through the archive preview",
+    async (fileName, mimeType) => {
+      const preview = {
+        files: [
+          {
+            fileName: "žaloba.pdf",
+            folder: "podání",
+            sizeBytes: 88_310,
+            part: {
+              part: "member:0",
+              fileName: "žaloba.pdf",
+              mediaType: "application/pdf",
+              sizeBytes: 88_310,
+            },
+            unavailable: null,
+            text: "Žaloba",
+            textFormat: "markdown",
+            status: "readable",
+          },
+          {
+            fileName: "posudek.pdf",
+            folder: null,
+            sizeBytes: 120_400,
+            part: null,
+            unavailable: "encrypted",
+            text: "",
+            textFormat: "plain",
+            status: "unavailable",
+          },
+        ],
+      } satisfies ZipArchivePreview;
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, mimeType)
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "zip" && file.preview.unwrap()).toEqual(preview);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/zip/field%3F1",
+      ]);
+    },
+  );
+
   test.each([".ES3", ".et3", ".dosszie", ".zep", ".xzep", ".ZEPX"])(
     "reads a signed container with the %s extension through its preview",
     async (extension) => {
@@ -898,6 +952,35 @@ describe("reading a document's file", () => {
     // A part opens through the file's own audited link, for download.
     expect(calls.at(-1)).toBe(
       "/v1/files/matter-1/url/field-1?purpose=download&part=attachment%3A0",
+    );
+  });
+
+  test("the files inside a part are listed by its path, each with its own", async () => {
+    const files = [
+      {
+        fileName: "usneseni.pdf",
+        folder: null,
+        sizeBytes: 4210,
+        part: {
+          part: "member:2/attachment:0",
+          fileName: "usneseni.pdf",
+          mediaType: "application/pdf",
+          sizeBytes: 4210,
+        },
+        unavailable: null,
+      },
+    ];
+    const { fetch, calls } = server(() => Response.json({ files }));
+    const listed = await readDocumentPartList({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "matter-1",
+      fieldId: "field-1",
+      part: "member:2",
+    });
+    expect(listed.unwrap().files).toEqual(files);
+    expect(calls.at(-1)).toBe(
+      "/v1/files/matter-1/parts/field-1?part=member%3A2",
     );
   });
 

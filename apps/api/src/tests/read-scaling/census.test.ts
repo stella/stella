@@ -61,6 +61,7 @@ import {
 import { eInvoicePreviewScalingScenario } from "./e-invoice";
 import { emailReadingScalingScenario } from "./email-reading";
 import { fileContentScalingScenario } from "./file-content";
+import { filePartListScalingScenario } from "./file-part-list";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { invoiceSendScalingScenarios } from "./invoice-sends";
@@ -113,6 +114,7 @@ import {
 } from "./verification-graph";
 import { verifyQuoteApiScalingScenario } from "./verify-quote";
 import { writeScalingScenarios } from "./write-scenarios";
+import { zipArchiveScalingScenario } from "./zip-archive";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
@@ -155,6 +157,8 @@ const measuredApiScenarios = [
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
   asicPreviewScalingScenario,
+  zipArchiveScalingScenario,
+  filePartListScalingScenario,
   signedDossierPreviewScalingScenario,
   structuredDocumentScalingScenario,
   eInvoicePreviewScalingScenario,

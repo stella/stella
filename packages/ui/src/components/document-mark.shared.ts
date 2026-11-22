@@ -403,6 +403,7 @@ export const DOCUMENT_MARKS = {
     lines: [["I", "S", "D", "O", "C"], ["X"]],
   }),
   xml: legalFormatMark({ color: "#5c6470", lines: [["X", "M", "L"]] }),
+  zip: legalFormatMark({ color: "#7a5c2e", lines: [["Z", "I", "P"]] }),
   eAkta: legalFormatMark({ color: "#8c2f5d", lines: [["E", "S", "3"]] }),
   et3: legalFormatMark({ color: "#a2481f", lines: [["E", "T", "3"]] }),
   zep: legalFormatMark({ color: "#24529c", lines: [["Z", "E", "P"]] }),

@@ -561,10 +561,19 @@
       "anonymization": "Anonymization"
     },
     "fileParts": {
+      "archiveUnreadable": "This archive couldn’t be read.",
       "back": "Back to the list",
       "download": "Download {fileName}",
+      "noFilesInside": "There are no files inside.",
       "noPreview": "This file type has no preview. Download it or save it to a matter.",
-      "open": "Open {fileName}"
+      "open": "Open {fileName}",
+      "unavailable": {
+        "encrypted": "Password-protected, can’t be opened",
+        "link": "A link to another file, not followed",
+        "tooLarge": "Too large to open",
+        "unreadable": "Damaged, can’t be opened",
+        "unsupported": "Compressed in a way that can’t be opened"
+      }
     },
     "firstSourceReached": "This is the first source.",
     "groups": {

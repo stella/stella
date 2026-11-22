@@ -2249,7 +2249,8 @@
       "word",
       "xadesZep",
       "xml",
-      "zep"
+      "zep",
+      "zip"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],

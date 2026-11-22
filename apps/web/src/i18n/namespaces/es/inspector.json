@@ -561,10 +561,19 @@
       "anonymization": "Anonimización"
     },
     "fileParts": {
+      "archiveUnreadable": "No se pudo leer el archivo comprimido.",
       "back": "Volver a la lista",
       "download": "Descargar {fileName}",
+      "noFilesInside": "No contiene ningún archivo.",
       "noPreview": "Este tipo de archivo no tiene vista previa. Descárguelo o guárdelo en un asunto.",
-      "open": "Abrir {fileName}"
+      "open": "Abrir {fileName}",
+      "unavailable": {
+        "encrypted": "Protegido con contraseña, no se puede abrir",
+        "link": "Enlace a otro archivo, no se abre",
+        "tooLarge": "Demasiado grande para abrirlo",
+        "unreadable": "Dañado, no se puede abrir",
+        "unsupported": "Comprimido de un modo que no se puede abrir"
+      }
     },
     "firstSourceReached": "Esta es la primera fuente.",
     "groups": {

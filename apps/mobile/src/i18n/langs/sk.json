@@ -534,8 +534,19 @@
     "type": "Typ"
   },
   "fileParts": {
+    "archiveUnreadable": "Archív sa nepodarilo prečítať.",
     "attachments": "Prílohy",
+    "files": "Súbory",
+    "insideFailed": "Súbory vo vnútri sa nepodarilo načítať. Ťuknutím to skúsite znova.",
+    "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
     "open": "Otvoriť {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Chránené heslom, nedá sa otvoriť",
+      "link": "Odkaz na iný súbor, neotvára sa",
+      "tooLarge": "Príliš veľký, nedá sa otvoriť",
+      "unreadable": "Poškodený, nedá sa otvoriť",
+      "unsupported": "Komprimované spôsobom, ktorý sa nedá otvoriť"
+    },
     "unnamed": "Súbor bez názvu"
   },
   "header": {

@@ -534,8 +534,19 @@
     "type": "Veids"
   },
   "fileParts": {
+    "archiveUnreadable": "Arhīvu neizdevās nolasīt.",
     "attachments": "Pielikumi",
+    "files": "Faili",
+    "insideFailed": "Neizdevās ielādēt iekšā esošos failus. Pieskarieties, lai mēģinātu vēlreiz.",
+    "noFilesInside": "Iekšā nav neviena faila.",
     "open": "Atvērt {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Aizsargāts ar paroli, nevar atvērt",
+      "link": "Saite uz citu failu, netiek atvērta",
+      "tooLarge": "Pārāk liels, lai atvērtu",
+      "unreadable": "Bojāts, nevar atvērt",
+      "unsupported": "Saspiests veidā, ko nevar atvērt"
+    },
     "unnamed": "Datne bez nosaukuma"
   },
   "header": {

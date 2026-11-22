@@ -24,6 +24,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   readAsicPreview,
   readSignedDossierPreview,
+  readZipArchivePreview,
 } from "@/api/lib/files/archive-preview";
 import { readCadesPreview } from "@/api/lib/files/cades-preview";
 import { readEInvoicePreview } from "@/api/lib/files/e-invoice-preview";
@@ -50,6 +51,7 @@ import {
   makeZepFixture,
 } from "@/api/tests/fixtures/signed-dossier";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
+import { makeZipArchive } from "@/api/tests/fixtures/zip-archive";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 import { LEGAL_FILE_PARTS, readPartOfFile } from "./file-part";
@@ -113,6 +115,12 @@ const dossierDocuments = async (source: ScannedFile) =>
     .unwrap()
     .documents.flatMap(({ part }) => (part === null ? [] : [listedOf(part)]));
 
+// A file that does not open (encrypted, a link) is listed without a part.
+const zipFiles = async (source: ScannedFile) =>
+  (await readZipArchivePreview(source))
+    .unwrap()
+    .files.flatMap(({ part }) => (part === null ? [] : [listedOf(part)]));
+
 const invoiceAttachments = async (source: ScannedFile) =>
   (await readEInvoicePreview(source)).unwrap().attachments.map(listedOf);
 
@@ -162,6 +170,25 @@ const CASES: PartCase[] = [
       }),
     list: asicMembers,
     parts: 1,
+  },
+  {
+    name: "a ZIP archive's files in folders, a locked one without a part",
+    format: "zip",
+    kind: FILE_PART_KINDS.member,
+    fileName: "spis-23-C-118-2026.zip",
+    storedMimeType: "application/x-zip-compressed",
+    bytes: async () =>
+      await Promise.resolve(
+        makeZipArchive([
+          { name: "podání/žaloba.pdf", data: DECISION },
+          { name: "zaheslovaný posudek.pdf", data: DECISION, flags: 0x00_01 },
+          { name: "podání/přílohy/plánek.png", data: PNG, method: 0 },
+          { name: "smlouva.bin", data: DOCX },
+          { name: "poznámka.txt", data: "Lhůta k vyjádření: 15 dnů" },
+        ]),
+      ),
+    list: zipFiles,
+    parts: 4,
   },
   {
     name: "a data-box message's files, whatever their stated names",
