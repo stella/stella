@@ -293,7 +293,8 @@ const decodeString8 = (bytes: Uint8Array, codePage: number): string =>
 
 /** A string without its terminating NULs and surrounding space; null if empty. */
 const cleanString = (value: string): string | null => {
-  const cleaned = value.replaceAll("\u0000", "").trim();
+  // A string ends at its first NUL; what a writer leaves after it is not text.
+  const cleaned = (value.split("\u0000", 1).at(0) ?? "").trim();
   return cleaned === "" ? null : cleaned;
 };
 
