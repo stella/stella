@@ -198,7 +198,8 @@ export const extractAsicPreview = async ({
         index,
       ) => ({
         part: filePartId({ kind: FILE_PART_KINDS.member, index }),
-        fileName,
+        // Listed by the name the part link delivers it under.
+        fileName: sanitizeFilenamePreservingExtension(fileName),
         mediaType,
         sizeBytes,
         status,

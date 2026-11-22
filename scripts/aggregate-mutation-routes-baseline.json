@@ -1055,7 +1055,7 @@
     "reason": "Existing POST route awaits ownership declaration at its route definition."
   },
   {
-    "key": "POST /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId/save",
+    "key": "POST /v1/files/:workspaceId/part/:fieldId/save",
     "count": 1,
     "reason": "Existing POST route awaits ownership declaration at its route definition."
   },

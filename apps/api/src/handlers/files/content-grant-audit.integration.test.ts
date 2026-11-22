@@ -49,16 +49,9 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
 import asicPreviewEndpoint from "@/api/handlers/files/asic";
-import {
-  cadesContentEndpoint,
-  cadesPreviewEndpoint,
-} from "@/api/handlers/files/cades";
+import { cadesPreviewEndpoint } from "@/api/handlers/files/cades";
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
-import {
-  eInvoiceAttachmentEndpoint,
-  eInvoicePreviewEndpoint,
-} from "@/api/handlers/files/e-invoice";
-import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
+import { eInvoicePreviewEndpoint } from "@/api/handlers/files/e-invoice";
 import emailReadingEndpoint from "@/api/handlers/files/email-reading";
 import {
   printPdfHandler,
@@ -66,13 +59,10 @@ import {
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
 import { readMarkedDownload } from "@/api/handlers/files/marked-download";
+import saveFilePartEndpoint from "@/api/handlers/files/part-save";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
-import {
-  signedDossierContentEndpoint,
-  signedDossierPreviewEndpoint,
-} from "@/api/handlers/files/signed-dossier";
+import { signedDossierPreviewEndpoint } from "@/api/handlers/files/signed-dossier";
 import structuredDocumentEndpoint from "@/api/handlers/files/structured-document";
-import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -85,7 +75,6 @@ import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
 import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
-import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import {
   checkFileContentGrant,
   FILE_CONTENT_GRANT_TTL_MS,
@@ -100,7 +89,6 @@ import {
 } from "@/api/lib/files/read-file";
 import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import { createFileKey } from "@/api/lib/files/utils";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
@@ -135,21 +123,12 @@ import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { withTestFetch } from "@/api/tests/helpers/test-fetch";
 import { asFetchMock, asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { asicPreviewScalingScenario } from "@/api/tests/read-scaling/asic-preview";
-import {
-  cadesContentScalingScenario,
-  cadesPreviewScalingScenario,
-} from "@/api/tests/read-scaling/cades-preview";
+import { cadesPreviewScalingScenario } from "@/api/tests/read-scaling/cades-preview";
 import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
-import {
-  eInvoiceAttachmentScalingScenario,
-  eInvoicePreviewScalingScenario,
-} from "@/api/tests/read-scaling/e-invoice";
+import { eInvoicePreviewScalingScenario } from "@/api/tests/read-scaling/e-invoice";
 import { emailReadingScalingScenario } from "@/api/tests/read-scaling/email-reading";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
-import {
-  signedDossierContentScalingScenario,
-  signedDossierPreviewScalingScenario,
-} from "@/api/tests/read-scaling/signed-dossier";
+import { signedDossierPreviewScalingScenario } from "@/api/tests/read-scaling/signed-dossier";
 import { structuredDocumentScalingScenario } from "@/api/tests/read-scaling/structured-document";
 import {
   getRlsFixture,
@@ -391,6 +370,53 @@ const readUrl = async (
     purpose,
     recordAuditEvent,
   });
+
+const readPartUrl = async (
+  fieldId: SafeId<"field">,
+  partId: string,
+  {
+    purpose = "download",
+    recordAuditEvent = recorderA(),
+    scopedDb = scopedDbA(),
+  }: {
+    purpose?: "download" | "display";
+    recordAuditEvent?: AuditRecorder;
+    scopedDb?: ScopedDb;
+  } = {},
+) =>
+  await readFilePartUrlHandler({
+    part: parseFilePartId(partId) ?? panic(`Not a part address: ${partId}`),
+    readSessionAuthority: async () => null,
+    source: { kind: "request", sessionId: "fixture-session" },
+    scopedDb,
+    fieldId,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    purpose,
+    recordAuditEvent,
+  });
+
+/** Redeems a part link as `/file-content/:grant` does. */
+const redeemPartUrl = async (presignedUrl: string) => {
+  const checked = checkFileContentGrant({
+    grant: contentGrantFromUrl(presignedUrl),
+    now: await databaseClockMs("after"),
+    secret: env.BETTER_AUTH_SECRET,
+  });
+  if (checked.status !== "valid" || checked.grant.part === null) {
+    return panic("Expected a valid part grant");
+  }
+  const { grant } = checked;
+  return await readFilePartContentHandler({
+    fieldId: grant.fieldId,
+    organizationId: grant.organizationId,
+    part: grant.part ?? panic("Expected a part grant"),
+    purpose: grant.purpose,
+    scopedDb: scopedDbA(),
+    workspaceId: grant.workspaceId,
+  });
+};
 
 const setupDedicatedDownload = async () => {
   const store = createSyntheticSessionStore(asTestRaw(testDb));
@@ -871,89 +897,60 @@ describe("email preview", () => {
   });
 });
 
-type AttachmentContext = Parameters<typeof emailAttachmentEndpoint.handler>[0];
-
-const readAttachment = async ({
-  seeded,
-  disposition,
-  recordAuditEvent,
-  scopedDb = scopedDbA(),
-}: {
-  seeded: SeededFile;
-  disposition: "inline" | "download";
-  recordAuditEvent: AuditRecorder;
-  scopedDb?: ScopedDb;
-}) =>
-  await emailAttachmentEndpoint.handler(
-    asTestRaw<AttachmentContext>({
-      memberRole: sessionMemberRole("owner"),
-      params: {
-        attachmentId: createEmailAttachmentDescriptor({
-          attachmentIndex: 0,
-          secret: env.BETTER_AUTH_SECRET,
-          sourceFileId: seeded.fileId,
-          sourceVersionId: seeded.entityVersionId,
-        }),
-        fieldId: seeded.fieldId,
-        workspaceId: ids.wsA1,
-      },
-      query: { disposition },
-      recordAuditEvent,
-      request: new Request("https://api.example.test/files/email-attachment"),
-      route:
-        "/v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId" satisfies ApiRoutePath,
-      scopedDb,
-      safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-      session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
-      workspaceId: ids.wsA1,
-    }),
-  );
-
 describe("email attachment", () => {
   test.each([
-    ["inline", "access", "inline"],
+    ["display", "access", "inline"],
     ["download", "download", "attachment"],
   ] as const)(
-    "a %s read commits one %s row bound to the actor, matter and document",
-    async (disposition, action, recorded) => {
+    "a %s part link commits one %s row bound to the actor, matter and document",
+    async (purpose, action, recorded) => {
       const seeded = await seedEmail();
 
-      const response = await readAttachment({
-        seeded,
-        disposition,
-        recordAuditEvent: recorderA(),
-      });
+      const issued = (
+        await readPartUrl(seeded.fieldId, "attachment:0", { purpose })
+      ).unwrap();
 
-      expect(response).toBeInstanceOf(Response);
-      if (!(response instanceof Response)) {
-        return;
-      }
-      expect(response.status).toBe(200);
-      expect(await response.text()).toContain("Lhůta");
+      expect(issued).toMatchObject({
+        fileName: "poznamky.txt",
+        mimeType: "text/plain",
+      });
       await expectOneContentRow(seeded.entityId, {
         action,
-        metadata: { disposition: recorded, fieldId: seeded.fieldId },
+        metadata: {
+          disposition: recorded,
+          fieldId: seeded.fieldId,
+          format: "email",
+          part: "attachment:0",
+        },
       });
+      const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
+      expect(await response.text()).toContain("Lhůta");
     },
   );
 
-  test.each(["inline", "download"] as const)(
-    "a %s read returns no content when the audit row cannot be written",
-    async (disposition) => {
+  test.each(["display", "download"] as const)(
+    "a %s part link is not issued when the audit row cannot be written",
+    async (purpose) => {
       const seeded = await seedEmail();
 
-      const response = await readAttachment({
-        seeded,
-        disposition,
-        recordAuditEvent: failingRecorder,
-      });
-
-      const delivered = response instanceof Response && response.status === 200;
-      expect(delivered).toBe(false);
+      expect(
+        await rejectionMessage(
+          readPartUrl(seeded.fieldId, "attachment:0", {
+            purpose,
+            recordAuditEvent: failingRecorder,
+          }),
+        ),
+      ).toBe("audit store unavailable");
       expect(await auditRowsFor(seeded.entityId)).toEqual([]);
     },
   );
+
+  test("an attachment the email does not list is not found and records nothing", async () => {
+    const seeded = await seedEmail();
+    const read = await readPartUrl(seeded.fieldId, "attachment:1");
+    expect(read.isErr() && read.error.status).toBe(404);
+    expect(await auditRowsFor(seeded.entityId)).toEqual([]);
+  });
 });
 
 // Streamed deliveries read or derive the bytes outside any lock and record the
@@ -1088,24 +1085,6 @@ const seedEAkta = async (pdf?: Uint8Array) =>
       frameSigners: ["Example frame signer"],
     }),
   );
-
-const signedDossierPdfContext = (
-  fieldId: SafeId<"field">,
-  scopedDb: ScopedDb,
-  document = 1,
-) =>
-  createTestHandlerContext<
-    Parameters<typeof signedDossierContentEndpoint.handler>[0]
-  >({
-    workspaceId: ids.wsA1,
-    session: { activeOrganizationId: ids.orgA },
-    user: { id: ids.userA1 },
-    audit: recorderA(),
-    scopedDb,
-    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-    params: { workspaceId: ids.wsA1, fieldId },
-    query: { document },
-  });
 
 const UYAP_FIXTURE_TEXT = "İçtihat özeti";
 const structuredFixtures = {
@@ -1273,24 +1252,6 @@ const eInvoiceFixtures = [
   },
 ] as const;
 
-const eInvoiceAttachmentContext = (
-  fieldId: SafeId<"field">,
-  index: number,
-  scopedDb: ScopedDb,
-  audit = recorderA(),
-) =>
-  createTestHandlerContext<
-    Parameters<typeof eInvoiceAttachmentEndpoint.handler>[0]
-  >({
-    workspaceId: ids.wsA1,
-    session: { activeOrganizationId: ids.orgA },
-    user: { id: ids.userA1 },
-    audit,
-    scopedDb,
-    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
-    params: { workspaceId: ids.wsA1, fieldId, index },
-  });
-
 describe.each(eInvoiceFixtures)(
   "$format.label invoice delivery",
   ({ format, stored: file, bytes, attachment }) => {
@@ -1344,12 +1305,8 @@ describe.each(eInvoiceFixtures)(
         ),
         404,
       );
-      expectStatus(
-        await eInvoiceAttachmentEndpoint.handler(
-          eInvoiceAttachmentContext(fieldId, 0, scopedDbA()),
-        ),
-        404,
-      );
+      const part = await readPartUrl(fieldId, "attachment:0");
+      expect(part.isErr() && part.error.status).toBe(404);
       const agent = await LEGAL_FILE_READERS[format.kind]({
         fieldId,
         scopedDb: scopedDbA(),
@@ -1391,21 +1348,10 @@ describe.each(eInvoiceFixtures)(
     });
 
     if (attachment !== null) {
-      test("delivers an attachment as an audited download", async () => {
+      test("delivers an attachment through the part link as an audited download", async () => {
         const { fieldId, entityId } = await seed();
-        const response = await eInvoiceAttachmentEndpoint.handler(
-          eInvoiceAttachmentContext(fieldId, 0, scopedDbA()),
-        );
-        if (!(response instanceof Response)) {
-          panic("Expected the attachment download");
-        }
-        expect(response.headers.get("content-disposition")).toContain(
-          "attachment",
-        );
-        expect(response.headers.get("content-disposition")).toContain(
-          attachment,
-        );
-        expect(await response.text()).toBe(SAMPLE_ATTACHMENT_TEXT);
+        const issued = (await readPartUrl(fieldId, "attachment:0")).unwrap();
+        expect(issued.fileName).toBe(attachment);
         await expectOneContentRow(entityId, {
           action: "download",
           metadata: {
@@ -1415,33 +1361,17 @@ describe.each(eInvoiceFixtures)(
             part: "attachment:0",
           },
         });
-        expectStatus(
-          await eInvoiceAttachmentEndpoint.handler(
-            eInvoiceAttachmentContext(fieldId, 1, scopedDbA()),
-          ),
-          404,
+        const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
+        expect(response.headers.get("content-disposition")).toContain(
+          "attachment",
         );
+        expect(response.headers.get("content-disposition")).toContain(
+          attachment,
+        );
+        expect(await response.text()).toBe(SAMPLE_ATTACHMENT_TEXT);
+        const missing = await readPartUrl(fieldId, "attachment:1");
+        expect(missing.isErr() && missing.error.status).toBe(404);
         expect(await auditRowsFor(entityId)).toHaveLength(1);
-      });
-
-      test(`${format.label} attachment query cost stays bounded as the matter grows`, async () => {
-        const { fieldId } = await seed();
-        const context = eInvoiceAttachmentContext(fieldId, 0, scopedDbA());
-        const measureWithAddedDocuments = async (count: number) => {
-          const unrelated = Array.from({ length: count }, () => ({
-            id: createSafeId<"entity">(),
-            workspaceId: ids.wsA1,
-            kind: "document" as const,
-            name: "Ledger entry",
-          }));
-          seededEntityIds.push(...unrelated.map(({ id }) => id));
-          await testDb.insert(entities).values(unrelated);
-          return await eInvoiceAttachmentScalingScenario.measure(context);
-        };
-        const small = await measureWithAddedDocuments(10);
-        const large = await measureWithAddedDocuments(190);
-        expect(small.statements).toBeGreaterThan(0);
-        expect(readScalingViolations({ small, large })).toEqual([]);
       });
     }
 
@@ -1636,48 +1566,6 @@ describe("email text reading", () => {
     expect(readScalingViolations({ small, large })).toEqual([]);
   });
 });
-
-const readPartUrl = async (
-  fieldId: SafeId<"field">,
-  partId: string,
-  {
-    recordAuditEvent = recorderA(),
-    scopedDb = scopedDbA(),
-  }: { recordAuditEvent?: AuditRecorder; scopedDb?: ScopedDb } = {},
-) =>
-  await readFilePartUrlHandler({
-    part: parseFilePartId(partId) ?? panic(`Not a part address: ${partId}`),
-    readSessionAuthority: async () => null,
-    source: { kind: "request", sessionId: "fixture-session" },
-    scopedDb,
-    fieldId,
-    organizationId: ids.orgA,
-    workspaceId: ids.wsA1,
-    userId: ids.userA1,
-    purpose: "download",
-    recordAuditEvent,
-  });
-
-/** Redeems a part link as `/file-content/:grant` does. */
-const redeemPartUrl = async (presignedUrl: string) => {
-  const checked = checkFileContentGrant({
-    grant: contentGrantFromUrl(presignedUrl),
-    now: await databaseClockMs("after"),
-    secret: env.BETTER_AUTH_SECRET,
-  });
-  if (checked.status !== "valid" || checked.grant.part === null) {
-    return panic("Expected a valid part grant");
-  }
-  const { grant } = checked;
-  return await readFilePartContentHandler({
-    fieldId: grant.fieldId,
-    organizationId: grant.organizationId,
-    part: grant.part ?? panic("Expected a part grant"),
-    purpose: grant.purpose,
-    scopedDb: scopedDbA(),
-    workspaceId: grant.workspaceId,
-  });
-};
 
 const PART_CASES = [
   {
@@ -2049,9 +1937,12 @@ describe("signed container delivery", () => {
           fileName: "kérelem.txt",
           text: "Kérelem szövege",
           status: "readable",
-          pdf: false,
+          part: { part: "document:0", mediaType: "text/plain" },
         },
-        { fileName: "végzés.pdf", pdf: true },
+        {
+          fileName: "végzés.pdf",
+          part: { part: "document:1", mediaType: PDF_MIME_TYPE },
+        },
       ],
     });
     await expectOneContentRow(entityId, {
@@ -2073,40 +1964,42 @@ describe("signed container delivery", () => {
     expect(text).toContain("unverified");
   });
 
-  test("serves the exact embedded PDF, scoped and audited", async () => {
+  test("serves the exact embedded PDF through the part link, scoped and audited", async () => {
     const pdf = await pdfBytes();
     const { fieldId, entityId } = await seedEAkta(pdf);
-    const response = await signedDossierContentEndpoint.handler(
-      signedDossierPdfContext(fieldId, scopedDbA()),
-    );
-    if (!(response instanceof Response)) {
-      panic("Expected a PDF response");
-    }
+    const issued = (await readPartUrl(fieldId, "document:1")).unwrap();
+    expect(issued).toMatchObject({
+      fileName: "végzés.pdf",
+      mimeType: PDF_MIME_TYPE,
+    });
+    const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
     expect(response.headers.get("content-type")).toBe(PDF_MIME_TYPE);
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(
       new Uint8Array(pdf),
     );
     await expectOneContentRow(entityId, {
-      action: "access",
-      metadata: { fieldId, format: E_AKTA_FILE_FORMAT.auditFormat },
+      action: "download",
+      metadata: {
+        fieldId,
+        format: E_AKTA_FILE_FORMAT.auditFormat,
+        part: "document:1",
+      },
     });
   });
 
-  test("refuses a document that is not a PDF without recording a delivery", async () => {
-    const { fieldId, entityId } = await seedEAkta();
-    expect(
-      answeredStatus(
-        await signedDossierContentEndpoint.handler(
-          signedDossierPdfContext(fieldId, scopedDbA(), 0),
-        ),
-      ),
-    ).toBe(422);
-    expect(await auditRowsFor(entityId)).toEqual([]);
+  test("serves a document of any type, as its preview lists it", async () => {
+    const { fieldId } = await seedEAkta();
+    const issued = (await readPartUrl(fieldId, "document:0")).unwrap();
+    expect(issued).toMatchObject({
+      fileName: "kérelem.txt",
+      mimeType: "text/plain",
+    });
+    const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
+    expect(await response.text()).toBe("Kérelem szövege");
   });
 
-  test("both endpoints refuse a signed container in another matter", async () => {
-    const { fieldId } = await seedFile(
+  test("the preview and the part link refuse a signed container in another matter", async () => {
+    const { fieldId, entityId } = await seedFile(
       {
         fileName: "podanie.zep",
         mimeType: "application/zip",
@@ -2121,13 +2014,9 @@ describe("signed container delivery", () => {
         ),
       ),
     ).toBe(404);
-    expect(
-      answeredStatus(
-        await signedDossierContentEndpoint.handler(
-          signedDossierPdfContext(fieldId, scopedDbA()),
-        ),
-      ),
-    ).toBe(404);
+    const read = await readPartUrl(fieldId, "document:0");
+    expect(read.isErr() && read.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
   });
 
   const growMatter = async () => {
@@ -2151,37 +2040,22 @@ describe("signed container delivery", () => {
     expect(small.rows).toBe(2);
     expect(readScalingViolations({ small, large })).toEqual([]);
   });
-
-  test("PDF cost stays bounded as a matter grows", async () => {
-    const { fieldId } = await seedEAkta();
-    const context = signedDossierPdfContext(fieldId, scopedDbA());
-    const small = await signedDossierContentScalingScenario.measure(context);
-    await growMatter();
-    const large = await signedDossierContentScalingScenario.measure(context);
-    expect(small.statements).toBeGreaterThan(0);
-    expect(readScalingViolations({ small, large })).toEqual([]);
-  });
 });
 
 describe("CAdES file delivery", () => {
-  test("serves the exact embedded PDF, scoped and audited", async () => {
+  test("serves the exact embedded PDF through the part link, scoped and audited", async () => {
     const bytes = await pdfBytes();
     const file = await seedCades(bytes);
-    const response = await cadesContentEndpoint.handler(
-      legalFileContext(file.fieldId, scopedDbA()),
-    );
-    if (!(response instanceof Response)) {
-      panic("Expected a PDF response");
-    }
+    const issued = (await readPartUrl(file.fieldId, "content:0")).unwrap();
+    const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
     expect(response.headers.get("content-type")).toBe(PDF_MIME_TYPE);
-    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(new Uint8Array(await response.arrayBuffer())).toEqual(
       new Uint8Array(bytes),
     );
     await expectOneContentRow(file.entityId, {
-      action: "access",
-      metadata: { format: "cades", fieldId: file.fieldId },
+      action: "download",
+      metadata: { format: "cades", fieldId: file.fieldId, part: "content:0" },
     });
   });
 
@@ -2211,7 +2085,7 @@ describe("CAdES file delivery", () => {
     expect(read.unwrap().text).toContain("unverified");
   });
 
-  test("both endpoints refuse files from another matter", async () => {
+  test("the preview and the part link refuse files from another matter", async () => {
     const { fieldId } = await seedFile(
       {
         fileName: "contratto.p7m",
@@ -2221,16 +2095,14 @@ describe("CAdES file delivery", () => {
       "b",
     );
     const context = legalFileContext(fieldId, scopedDbA());
-    expect(answeredStatus(await cadesContentEndpoint.handler(context))).toBe(
-      404,
-    );
+    const read = await readPartUrl(fieldId, "content:0");
+    expect(read.isErr() && read.error.status).toBe(404);
     expect(answeredStatus(await cadesPreviewEndpoint.handler(context))).toBe(
       404,
     );
   });
 
   test.each([
-    { scenario: cadesContentScalingScenario, seed: seedCades },
     { scenario: cadesPreviewScalingScenario, seed: seedCades },
     { scenario: asicPreviewScalingScenario, seed: seedAsic },
   ])(
@@ -2253,6 +2125,112 @@ describe("CAdES file delivery", () => {
       expect(readScalingViolations({ small, large })).toEqual([]);
     },
   );
+});
+
+const savePartContext = (fieldId: SafeId<"field">, part: string) =>
+  createTestHandlerContext<Parameters<typeof saveFilePartEndpoint.handler>[0]>({
+    workspaceId: ids.wsA1,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userA1 },
+    audit: recorderA(),
+    createAuditRecorder: ({ workspaceId } = {}) =>
+      createAuditRecorder({
+        organizationId: ids.orgA,
+        workspaceId: workspaceId ?? ids.wsA1,
+        userId: ids.userA1,
+        request: new Request("https://api.example.test/files"),
+        server: null,
+      }),
+    getWorkspaceAccess: async (workspaceId) =>
+      await Promise.resolve(
+        workspaceId === ids.wsA1
+          ? { id: workspaceId, status: "active" as const }
+          : null,
+      ),
+    scopedDb: scopedDbA(),
+    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    params: { workspaceId: ids.wsA1, fieldId },
+    body: { part, destinationWorkspaceId: ids.wsA1, parentId: null },
+    server: null,
+  });
+
+const documentsInMatterA = async () =>
+  (
+    await testDb
+      .select({ id: entities.id })
+      .from(entities)
+      .where(eq(entities.workspaceId, ids.wsA1))
+  ).length;
+
+describe("saving a file part", () => {
+  test("a listed part becomes a document whose creation records the part it came from", async () => {
+    const source = await seedAsic();
+    const saved = await saveFilePartEndpoint.handler(
+      savePartContext(source.fieldId, "member:0"),
+    );
+    if (saved instanceof HttpStatusResponse) {
+      return panic(`Expected the part to be saved, got ${String(saved.code)}`);
+    }
+    seededEntityIds.push(saved.entityId);
+    expect(saved.fileName).toBe("lisa.txt");
+    const [created] = await testDb
+      .select({ content: fields.content })
+      .from(fields)
+      .where(eq(fields.id, saved.fieldId));
+    // Stored as the part link delivers it: its name, type and bytes.
+    expect(created?.content).toMatchObject({
+      type: "file",
+      fileName: "lisa.txt",
+      mimeType: "text/plain",
+      sizeBytes: new TextEncoder().encode("Töölepingu lisa").byteLength,
+    });
+    expect(await auditRowsFor(saved.entityId)).toEqual([
+      expect.objectContaining({
+        workspaceId: ids.wsA1,
+        userId: ids.userA1,
+        metadata: expect.objectContaining({
+          provenance: {
+            type: "file_part",
+            part: "member:0",
+            sourceEntityId: source.entityId,
+            sourceFieldId: source.fieldId,
+            sourceWorkspaceId: ids.wsA1,
+          },
+        }),
+      }),
+    ]);
+    // The copy's creation is the record; the source logs no separate delivery.
+    expect(await auditRowsFor(source.entityId)).toEqual([]);
+  });
+
+  test("a part the file's preview does not list is refused and nothing is created", async () => {
+    const source = await seedAsic();
+    const before = await documentsInMatterA();
+    for (const part of ["member:1", "attachment:0", "content:0"]) {
+      expectStatus(
+        await saveFilePartEndpoint.handler(
+          savePartContext(source.fieldId, part),
+        ),
+        404,
+      );
+    }
+    expect(await documentsInMatterA()).toBe(before);
+    expect(await auditRowsFor(source.entityId)).toEqual([]);
+  });
+
+  test("another matter's file part is not saved", async () => {
+    const { fieldId, entityId } = await seedFile(
+      { fileName: "toimik.BDOC", mimeType: "application/zip", pdfFileId: null },
+      "b",
+    );
+    const before = await documentsInMatterA();
+    expectStatus(
+      await saveFilePartEndpoint.handler(savePartContext(fieldId, "member:0")),
+      404,
+    );
+    expect(await documentsInMatterA()).toBe(before);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
 });
 
 const readDataBox = async (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
@@ -2517,12 +2495,12 @@ const STREAMED_PATHS: readonly StreamedPath[] = [
       ),
   },
   {
-    name: "a signed document's PDF",
+    name: "a signed document's content",
     seed: seedCades,
-    read: async ({ fieldId }, scopedDb) =>
-      answeredStatus(
-        await cadesContentEndpoint.handler(legalFileContext(fieldId, scopedDb)),
-      ),
+    read: async ({ fieldId }, scopedDb) => {
+      const result = await readPartUrl(fieldId, "content:0", { scopedDb });
+      return result.isErr() ? result.error.status : 200;
+    },
   },
   {
     name: "a data-box preview",
@@ -2549,15 +2527,10 @@ const STREAMED_PATHS: readonly StreamedPath[] = [
   {
     name: "an email attachment",
     seed: seedEmail,
-    read: async (seeded, scopedDb) =>
-      answeredStatus(
-        await readAttachment({
-          seeded,
-          disposition: "download",
-          recordAuditEvent: recorderA(),
-          scopedDb,
-        }),
-      ),
+    read: async ({ fieldId }, scopedDb) => {
+      const result = await readPartUrl(fieldId, "attachment:0", { scopedDb });
+      return result.isErr() ? result.error.status : 200;
+    },
   },
   {
     name: "a print PDF",

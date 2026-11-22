@@ -96,7 +96,15 @@ export const extractEInvoicePreview = async ({
 }: {
   fileBytes: Uint8Array;
   mimeType: string;
-}) => {
+}): Promise<
+  Result<
+    EInvoicePreview | null,
+    | DocumentPackageError
+    | FileScanFailedError
+    | FileScanRejectedError
+    | P7mParseError
+  >
+> => {
   const read = await readStoredInvoice(fileBytes, mimeType);
   if (read.isErr()) {
     return Result.err(read.error);

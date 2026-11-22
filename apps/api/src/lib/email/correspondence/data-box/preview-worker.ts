@@ -26,12 +26,16 @@ export const extractDataBoxPreview = async (
       const files = await Promise.all(
         identity.files.map(async (file, index) => {
           const fileBytes = document.files[index]?.bytes ?? new Uint8Array();
+          // Listed by the name the part link delivers it under; the payload
+          // identity keeps the stated one.
+          const fileName = sanitizeFilenamePreservingExtension(file.fileName);
           return {
             ...file,
+            fileName,
             mediaType: await partMediaType({
               bytes: fileBytes,
               stated: file.mimeType,
-              fileName: sanitizeFilenamePreservingExtension(file.fileName),
+              fileName,
             }),
             sizeBytes: fileBytes.byteLength,
           };

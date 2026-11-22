@@ -8,6 +8,7 @@
  */
 import { panic, Result } from "better-result";
 
+import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
 import { FILE_PART_KINDS, type FilePart } from "@stll/api-contract/file-parts";
 import {
   LEGAL_FILE_FORMATS,
@@ -65,13 +66,19 @@ const asicMember = async (
   containerMimeType: string,
   index: number,
 ): Promise<CandidateResult> => {
-  const container = await readAsicContainer(fileBytes, containerMimeType);
+  const format = ASIC_FILE_FORMATS.find(
+    ({ mimeType }) => mimeType === containerMimeType,
+  );
+  if (format === undefined) {
+    return Result.ok(null);
+  }
+  const container = await readAsicContainer(fileBytes, format.mimeType);
   if (container.isErr()) {
     return Result.err(container.error);
   }
   const member = container.value.members.at(index);
   return Result.ok(
-    member === undefined || member.opaque === true
+    member === undefined
       ? null
       : {
           fileName: member.fileName,
@@ -123,15 +130,21 @@ const dossierDocument = async (
 export const cadesContentCandidate = (
   fileBytes: Uint8Array,
   outerName: string,
-): Result<PartCandidate, P7mParseError> =>
-  parseP7m(fileBytes).map(({ bytes }) => ({
+): Result<PartCandidate, P7mParseError> => {
+  const parsed = parseP7m(fileBytes);
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
+  }
+  const { bytes } = parsed.value;
+  return Result.ok({
     fileName: derivePayloadName(
       outerName,
       detectEmbeddedPayload(bytes).extension,
     ),
     bytes,
     statedMimeType: null,
-  }));
+  });
+};
 
 const invoiceAttachment = async (
   fileBytes: Uint8Array,

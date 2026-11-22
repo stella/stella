@@ -24,6 +24,7 @@ const read = async (
   const result = await extractEmbeddedPart({
     fileBytes,
     containerMimeType,
+    containerName: "container",
     part: { kind, index },
   });
   if (result.isErr()) {
@@ -108,6 +109,7 @@ describe("a part read from a stored container", () => {
     const result = await extractEmbeddedPart({
       fileBytes: new TextEncoder().encode("not a container"),
       containerMimeType: ASIC_E_FILE_FORMAT.mimeType,
+      containerName: "filing.asice",
       part: { kind: FILE_PART_KINDS.member, index: 0 },
     });
     expect(result.isErr() && result.error._tag).toBe("AsicParseError");

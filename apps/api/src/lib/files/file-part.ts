@@ -155,7 +155,7 @@ const containerDocument = embeddedPart(FILE_PART_KINDS.document);
 const containerMember = embeddedPart(FILE_PART_KINDS.member);
 const embeddedAttachment = embeddedPart(FILE_PART_KINDS.attachment);
 
-const LEGAL_FILE_PARTS = {
+export const LEGAL_FILE_PARTS = {
   cades: {
     [FILE_PART_KINDS.content]: signedContent,
     // A signed `.xml.p7m` invoice lists its attachments in its preview.
@@ -261,6 +261,29 @@ const partSourceFormat =
         };
   };
 
+const readPart = async (
+  source: ScannedFile,
+  format: PartSourceFormat,
+  { index }: FilePart,
+) =>
+  format.reader === undefined
+    ? Result.err(noSuchPart())
+    : await format.reader(source.withMimeType(format.mimeType), index);
+
+/**
+ * One part of a stored file's bytes, read as the part link reads it once the
+ * file is loaded: by the same format table, reader, typing and scan.
+ */
+export const readPartOfFile = async (
+  source: ScannedFile,
+  part: FilePart,
+): Promise<Result<FilePartRead, HandlerError>> => {
+  const format = partSourceFormat(part)(source);
+  return format === null
+    ? Result.err(noSuchPart())
+    : await readPart(source, format, part);
+};
+
 export type FilePartReadOptions = LegalFileReadOptions & {
   readonly part: FilePart;
   readonly disposition: "attachment" | "inline";
@@ -283,13 +306,7 @@ export const readFilePart = async ({
     return Result.err(loaded.error);
   }
   const { source, format, entityId, deliver } = loaded.value;
-  if (format.reader === undefined) {
-    return Result.err(noSuchPart());
-  }
-  const read = await format.reader(
-    source.withMimeType(format.mimeType),
-    part.index,
-  );
+  const read = await readPart(source, format, part);
   if (read.isErr()) {
     return Result.err(read.error);
   }

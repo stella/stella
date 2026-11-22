@@ -12,16 +12,15 @@ import { load } from "@stll/html";
 
 import {
   buildEmailPreview,
+  emailAttachmentMediaType,
   EmailParseError,
   emailToHtml,
   emailToPreview,
-  isEmailAttachmentPreviewable,
   type ParsedEmail,
   parsedEmailToText,
   parseEmail,
   renderEmailBodyHtml,
   renderEmailHtml,
-  resolveEmailAttachmentMimeType,
   sanitizeEmailBodyHtml,
 } from "./email-to-html";
 
@@ -102,44 +101,33 @@ describe("resolveEmailMimeType", () => {
   });
 });
 
-describe("email attachment preview policy", () => {
-  test("allows passive document types but not active or unknown content", () => {
-    expect(isEmailAttachmentPreviewable("application/pdf")).toBe(true);
-    expect(isEmailAttachmentPreviewable("image/png")).toBe(true);
-    expect(isEmailAttachmentPreviewable("text/plain; charset=utf-8")).toBe(
-      true,
-    );
-    expect(isEmailAttachmentPreviewable("image/bmp")).toBe(false);
-    expect(isEmailAttachmentPreviewable("image/tiff")).toBe(false);
-    expect(isEmailAttachmentPreviewable("image/svg+xml")).toBe(false);
-    expect(isEmailAttachmentPreviewable("text/html")).toBe(false);
-    expect(isEmailAttachmentPreviewable(null)).toBe(false);
-  });
+describe("email attachment media type", () => {
+  const attachment = (
+    fileName: string,
+    mimeType: string | null,
+    bytes: Uint8Array,
+  ) => ({ charset: null, contentId: null, fileName, mimeType, bytes });
 
-  test("recovers passive preview types from generic MIME declarations", () => {
+  test("types an attachment from its bytes, whatever it claims", async () => {
+    const png = Buffer.from(PNG_BASE64, "base64");
     expect(
-      resolveEmailAttachmentMimeType({
-        fileName: "EVIDENCE.PDF",
-        mimeType: "application/octet-stream",
-      }),
-    ).toBe("application/pdf");
-    expect(
-      resolveEmailAttachmentMimeType({
-        fileName: "scan.PNG",
-        mimeType: null,
-      }),
+      await emailAttachmentMediaType(
+        attachment("scan.PNG", "application/octet-stream", png),
+      ),
     ).toBe("image/png");
     expect(
-      resolveEmailAttachmentMimeType({
-        fileName: "NOTES.TXT",
-        mimeType: "application/octet-stream",
-      }),
+      await emailAttachmentMediaType(
+        attachment("NOTES.TXT", null, new TextEncoder().encode("Notes")),
+      ),
     ).toBe("text/plain");
+  });
+
+  test("keeps a claim its bytes do not show only when nothing contradicts it", async () => {
+    // A PDF claim on bytes without the PDF signature is not a PDF.
     expect(
-      resolveEmailAttachmentMimeType({
-        fileName: "payload.SVG",
-        mimeType: "application/octet-stream",
-      }),
+      await emailAttachmentMediaType(
+        attachment("EVIDENCE.PDF", "application/pdf", Uint8Array.of(1, 2, 3)),
+      ),
     ).toBe("application/octet-stream");
   });
 });
@@ -439,25 +427,8 @@ describe("renderEmailHtml", () => {
       to: ["李雷 <li@example.cn>"],
       cc: ["Renée <renee@example.fr>"],
       bcc: ["عائشة <aisha@example.ae>"],
-      attachments: [
-        {
-          charset: null,
-          id: "attachment-0",
-          fileName: "evidence.pdf",
-          mimeType: "application/pdf",
-          sizeBytes: 3,
-          previewable: true,
-        },
-      ],
+      attachments: [0],
     });
-    expect(Object.keys(preview.attachments.at(0) ?? {})).toEqual([
-      "charset",
-      "id",
-      "fileName",
-      "mimeType",
-      "sizeBytes",
-      "previewable",
-    ]);
     expect(preview.bodyHtml).toStartWith("<!DOCTYPE html>");
     expect(preview.bodyHtml).toContain(
       "Content-Security-Policy\" content=\"default-src 'none'; img-src data:",
@@ -518,16 +489,7 @@ describe("renderEmailHtml", () => {
       }),
     );
 
-    expect(preview.attachments).toEqual([
-      {
-        charset: null,
-        id: "attachment-0",
-        fileName: "evidence.png",
-        mimeType: "image/png",
-        sizeBytes: 3,
-        previewable: true,
-      },
-    ]);
+    expect(preview.attachments).toEqual([0]);
     expect(preview.bodyHtml).toContain("Visible body");
     expect(preview.bodyHtml).not.toContain("cid:evidence");
     expect(preview.bodyHtml).not.toContain("<form");
@@ -570,16 +532,7 @@ describe("renderEmailHtml", () => {
       }),
     );
 
-    expect(preview.attachments).toEqual([
-      {
-        charset: null,
-        id: "attachment-100",
-        fileName: "evidence.pdf",
-        mimeType: "application/pdf",
-        sizeBytes: 3,
-        previewable: true,
-      },
-    ]);
+    expect(preview.attachments).toEqual([100]);
   });
 
   test("folds trailing HTML history and signatures without removing content", () => {
@@ -1122,20 +1075,18 @@ describe("emailToHtml (.eml)", () => {
 
     expect(result.value.attachments).toEqual([
       {
+        part: "attachment:1",
         charset: "utf-8",
-        id: "attachment-1",
         fileName: "notes.txt",
-        mimeType: "text/plain",
+        mediaType: "text/plain",
         sizeBytes: new TextEncoder().encode(attachmentText).byteLength,
-        previewable: true,
       },
       {
+        part: "attachment:2",
         charset: null,
-        id: "attachment-2",
         fileName: "evidence.png",
-        mimeType: "image/png",
+        mediaType: "image/png",
         sizeBytes: Buffer.from(PNG_BASE64, "base64").byteLength,
-        previewable: true,
       },
     ]);
   });

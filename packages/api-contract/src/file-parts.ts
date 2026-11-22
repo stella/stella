@@ -11,9 +11,9 @@ import * as v from "valibot";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 
 export const FILE_PART_KINDS = {
-  /** The document a signed envelope (`.p7m`) carries, as a PDF. */
+  /** The document a signed envelope (`.p7m`) carries. */
   content: "content",
-  /** A document of a signed container (ES3, ZEP, XZEP), as a PDF. */
+  /** A document of a signed container (ES3, ZEP, XZEP). */
   document: "document",
   /** A member of an ASiC or BDOC container, as it is stored. */
   member: "member",
