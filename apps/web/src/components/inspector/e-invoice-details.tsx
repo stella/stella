@@ -1,7 +1,5 @@
-import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type {
@@ -12,11 +10,8 @@ import type {
   EInvoicePreview,
 } from "@stll/api-contract/e-invoice";
 import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { DocumentMark, type DocumentMarkKind } from "@stll/ui/document-mark";
-import { formatFileSize } from "@stll/ui/file-size";
-import { DownloadIcon } from "@stll/ui/icons";
 import {
   Table,
   TableBody,
@@ -26,13 +21,9 @@ import {
   TableRow,
 } from "@stll/ui/table";
 
-import { DocumentIcon } from "@/components/document-icon";
-import { useFormatter } from "@/i18n/formatting-context";
+import { FilePartList } from "@/components/file-parts/file-parts";
+import type { FilePartActions } from "@/components/file-parts/use-file-part-actions";
 import type { TranslationKey } from "@/i18n/types";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { fetchEInvoiceAttachment } from "@/lib/files/legal-file-queries";
-import { downloadFile } from "@/lib/utils";
 
 type Syntax = (typeof E_INVOICE_SYNTAXES)[number];
 
@@ -84,7 +75,6 @@ const DOCUMENT_TYPE_LABELS = {
   TranslationKey
 >;
 
-type Attachment = EInvoicePreview["attachments"][number];
 type Party = EInvoice["seller"];
 
 /**
@@ -495,105 +485,19 @@ const InvoiceDetails = ({
   );
 };
 
-const Attachments = ({
-  attachments,
-  fieldId,
-  workspaceId,
-}: {
-  attachments: readonly Attachment[];
-  fieldId: string;
-  workspaceId: string;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  const [downloading, setDownloading] = useState<ReadonlySet<number>>(
-    () => new Set(),
-  );
-  if (attachments.length === 0) {
-    return null;
-  }
-
-  const download = async ({ fileName, index }: Attachment) => {
-    setDownloading((current) => new Set(current).add(index));
-    const fetched = await Result.tryPromise(
-      async () =>
-        await fetchEInvoiceAttachment({ fieldId, index, workspaceId }),
-    );
-    setDownloading((current) => {
-      const next = new Set(current);
-      next.delete(index);
-      return next;
-    });
-    if (Result.isError(fetched)) {
-      notifyUserError(fetched.error, t("workspaces.files.downloadFailed"));
-      return;
-    }
-    downloadFile(fetched.value, fileName);
-  };
-
-  return (
-    <Section title={t("eInvoice.attachments")}>
-      <ul className="divide-y rounded-lg border">
-        {attachments.map((attachment) => (
-          <li
-            className="flex items-center gap-3 px-3 py-2"
-            key={attachment.index}
-          >
-            <DocumentIcon
-              className="size-5 shrink-0"
-              fileName={attachment.fileName}
-            />
-            <div className="min-w-0 flex-1 text-sm">
-              <BidiText as="p" className="font-medium wrap-break-word">
-                {attachment.fileName}
-              </BidiText>
-              {attachment.description !== null && (
-                <BidiText
-                  as="p"
-                  className="text-muted-foreground wrap-break-word"
-                >
-                  {attachment.description}
-                </BidiText>
-              )}
-              <p className="text-muted-foreground text-xs tabular-nums">
-                {formatFileSize(attachment.sizeBytes, format)}
-              </p>
-            </div>
-            <Button
-              aria-label={t("eInvoice.downloadAttachment", {
-                fileName: attachment.fileName,
-              })}
-              loading={downloading.has(attachment.index)}
-              onClick={() => {
-                detached(download(attachment), "e-invoice-details.attachment");
-              }}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <DownloadIcon />
-              {t("common.download")}
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </Section>
-  );
-};
-
 /**
  * A structured invoice as its file states it: every value verbatim, nothing
- * recomputed. `fieldId` is the stored file the attachments are opened from,
- * the invoice itself or the signed envelope around it.
+ * recomputed. Its attachments are parts of the stored file (the invoice, or
+ * the signed envelope around it), listed and opened like any other part.
  */
 export const EInvoiceDetails = ({
-  fieldId,
+  actions,
+  onOpenAttachment,
   preview,
-  workspaceId,
 }: {
-  fieldId: string;
+  actions: FilePartActions;
+  onOpenAttachment: (part: string) => void;
   preview: EInvoicePreview;
-  workspaceId: string;
 }) => {
   const t = useTranslations();
   const format = SYNTAX_LABELS[preview.syntax];
@@ -626,10 +530,14 @@ export const EInvoiceDetails = ({
           position={index + 1}
         />
       ))}
-      <Attachments
-        attachments={preview.attachments}
-        fieldId={fieldId}
-        workspaceId={workspaceId}
+      <FilePartList
+        actions={actions}
+        onOpen={onOpenAttachment}
+        parts={preview.attachments.map((attachment) => ({
+          ...attachment,
+          detail: attachment.description,
+        }))}
+        title={t("eInvoice.attachments")}
       />
     </div>
   );

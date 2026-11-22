@@ -540,7 +540,6 @@
       "waitForMatches": "Palaukite, kol baigsis nuasmeninimo patikra.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
-    "attachmentNotPreviewable": "Atsisiųskite priedą, kad galėtumėte jį atidaryti.",
     "closeAllTabs": "Uždaryti {count, plural, one {# kortelę} few {visas # korteles} many {# kortelės} other {visas # kortelių}}",
     "closeOtherTabs": "Uždaryti {count, plural, one {# kitą kortelę} few {# kitas korteles} many {# kitos kortelės} other {# kitų kortelių}}",
     "closeTab": "Uždaryti <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonimizavimas"
+    },
+    "fileParts": {
+      "back": "Grįžti į sąrašą",
+      "download": "Atsisiųsti {fileName}",
+      "noPreview": "Šio tipo failo peržiūra negalima. Atsisiųskite jį arba išsaugokite byloje.",
+      "open": "Atidaryti {fileName}"
     },
     "firstSourceReached": "Tai pirmas šaltinis.",
     "groups": {
@@ -814,7 +819,6 @@
       "why": "Kodėl",
       "whyItMatters": "Kodėl tai svarbu:"
     },
-    "selectAttachmentToSave": "Pasirinkite priedą, kurį norite išsaugoti.",
     "showPane": "Rodyti polangį",
     "swapViews": "Sukeisti pagrindinį rodinį ir šoninį skydelį",
     "title": "Inspektorius"

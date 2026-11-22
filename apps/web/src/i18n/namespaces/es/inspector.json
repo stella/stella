@@ -540,7 +540,6 @@
       "waitForMatches": "Espere a que termine el análisis de anonimización.",
       "workspaceTermsHeading": "Términos del espacio de trabajo ({count})"
     },
-    "attachmentNotPreviewable": "Descargue este adjunto para abrirlo.",
     "closeAllTabs": "Cerrar {count, plural, one {# pestaña} many {las # pestañas} other {las # pestañas}}",
     "closeOtherTabs": "Cerrar {count, plural, one {la otra pestaña} many {las otras # pestañas} other {las otras # pestañas}}",
     "closeTab": "Cerrar <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonimización"
+    },
+    "fileParts": {
+      "back": "Volver a la lista",
+      "download": "Descargar {fileName}",
+      "noPreview": "Este tipo de archivo no tiene vista previa. Descárguelo o guárdelo en un asunto.",
+      "open": "Abrir {fileName}"
     },
     "firstSourceReached": "Esta es la primera fuente.",
     "groups": {
@@ -814,7 +819,6 @@
       "why": "Por qué",
       "whyItMatters": "Por qué importa:"
     },
-    "selectAttachmentToSave": "Seleccione un adjunto para guardarlo.",
     "showPane": "Mostrar panel",
     "swapViews": "Intercambiar la vista principal y el panel lateral",
     "title": "Panel de inspección"

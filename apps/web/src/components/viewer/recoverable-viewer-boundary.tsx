@@ -31,7 +31,7 @@ export type ViewerSurface =
   | "document-docx"
   | "document-office"
   | "document-pdf"
-  | "email-attachment-pdf"
+  | "file-part-pdf"
   | "external-reference-pdf"
   | "inspector-asic"
   | "inspector-structured-document"

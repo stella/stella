@@ -540,7 +540,6 @@
       "waitForMatches": "Oodake anonüümimiskontrolli lõppu.",
       "workspaceTermsHeading": "Tööruumi terminid ({count})"
     },
-    "attachmentNotPreviewable": "Manuse avamiseks laadige see alla.",
     "closeAllTabs": "Sulge {count, plural, one {# vaheleht} other {kõik # vahelehte}}",
     "closeOtherTabs": "Sulge {count, plural, one {# teine vaheleht} other {# teist vahelehte}}",
     "closeTab": "Sulge <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonüümimine"
+    },
+    "fileParts": {
+      "back": "Tagasi loendisse",
+      "download": "Laadi alla {fileName}",
+      "noPreview": "Seda failitüüpi ei saa eelvaadata. Laadige see alla või salvestage toimikusse.",
+      "open": "Ava {fileName}"
     },
     "firstSourceReached": "See on esimene allikas.",
     "groups": {
@@ -814,7 +819,6 @@
       "why": "Miks",
       "whyItMatters": "Miks see on oluline:"
     },
-    "selectAttachmentToSave": "Valige salvestatav manus.",
     "showPane": "Kuva paneel",
     "swapViews": "Vaheta põhivaade ja külgpaneel",
     "title": "Inspektor"

@@ -540,7 +540,6 @@
       "waitForMatches": "Attendez la fin de l’analyse d’anonymisation.",
       "workspaceTermsHeading": "Termes de l’espace de travail ({count})"
     },
-    "attachmentNotPreviewable": "Téléchargez cette pièce jointe pour l’ouvrir.",
     "closeAllTabs": "Fermer {count, plural, one {# onglet} many {les # onglets} other {les # onglets}}",
     "closeOtherTabs": "Fermer {count, plural, one {l’autre onglet} many {les # autres onglets} other {les # autres onglets}}",
     "closeTab": "Fermer <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonymisation"
+    },
+    "fileParts": {
+      "back": "Retour à la liste",
+      "download": "Télécharger {fileName}",
+      "noPreview": "Ce type de fichier n’a pas d’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
+      "open": "Ouvrir {fileName}"
     },
     "firstSourceReached": "Il s’agit de la première source.",
     "groups": {
@@ -814,7 +819,6 @@
       "why": "Pourquoi",
       "whyItMatters": "Pourquoi c'est important :"
     },
-    "selectAttachmentToSave": "Sélectionnez une pièce jointe à enregistrer.",
     "showPane": "Afficher le volet",
     "swapViews": "Échanger la vue principale et le panneau latéral",
     "title": "Inspecteur"

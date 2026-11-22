@@ -540,7 +540,6 @@
       "waitForMatches": "Aguarde a conclusão da análise de anonimização.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
-    "attachmentNotPreviewable": "Baixe este anexo para abri-lo.",
     "closeAllTabs": "Fechar {count, plural, one {# aba} many {todas as # abas} other {todas as # abas}}",
     "closeOtherTabs": "Fechar {count, plural, one {a outra aba} many {as outras # abas} other {as outras # abas}}",
     "closeTab": "Fechar <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonimização"
+    },
+    "fileParts": {
+      "back": "Voltar para a lista",
+      "download": "Baixar {fileName}",
+      "noPreview": "Este tipo de arquivo não tem pré-visualização. Baixe-o ou salve-o em um caso.",
+      "open": "Abrir {fileName}"
     },
     "firstSourceReached": "Esta é a primeira fonte.",
     "groups": {
@@ -814,7 +819,6 @@
       "why": "Por quê",
       "whyItMatters": "Por que importa:"
     },
-    "selectAttachmentToSave": "Selecione um anexo para salvar.",
     "showPane": "Mostrar painel",
     "swapViews": "Trocar a visualização principal e o painel lateral",
     "title": "Inspetor"

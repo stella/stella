@@ -540,7 +540,6 @@
       "waitForMatches": "Wait for the anonymization scan to finish.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
-    "attachmentNotPreviewable": "Download this attachment to open it.",
     "closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
     "closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
     "closeTab": "Close <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonymization"
+    },
+    "fileParts": {
+      "back": "Back to the list",
+      "download": "Download {fileName}",
+      "noPreview": "This file type has no preview. Download it or save it to a matter.",
+      "open": "Open {fileName}"
     },
     "firstSourceReached": "This is the first source.",
     "groups": {
@@ -814,7 +819,6 @@
       "why": "Why",
       "whyItMatters": "Why it matters:"
     },
-    "selectAttachmentToSave": "Select an attachment to save.",
     "showPane": "Show pane",
     "swapViews": "Swap main and side views",
     "title": "Inspector"

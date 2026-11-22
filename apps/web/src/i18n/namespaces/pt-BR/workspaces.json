@@ -31,7 +31,6 @@
       "sent": "Enviada",
       "statedInFile": "Mensagem de caixa de dados (conforme o arquivo)",
       "toHands": "Aos cuidados de {name}",
-      "unlinkedFiles": "Para abrir os anexos exibidos sem link, baixe o arquivo ZFO original.",
       "unreadable": "Não foi possível ler o arquivo como uma mensagem da caixa de dados nem como um comprovante de entrega.",
       "uploaded": "Mensagem de caixa de dados enviada"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Nota de débito",
       "other": "Outro documento"
     },
-    "downloadAttachment": "Baixar {fileName}",
     "exemptionReason": "Motivo da isenção",
     "formatVersion": "{format}, versão {version}",
     "grossTotal": "Total com IVA",
@@ -369,6 +367,7 @@
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
     "noSigners": "Nenhum dado de signatário foi encontrado.",
     "pdfUnavailable": "A prévia do PDF não está disponível.",
+    "signedDocument": "Documento assinado",
     "signers": "Signatários",
     "unknownSigner": "Signatário desconhecido",
     "unreadable": "Não foi possível ler o arquivo assinado.",
