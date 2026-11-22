@@ -8,7 +8,7 @@ import {
 } from "@/lib/pdf/manual-redaction.logic";
 
 /** Whether the reader's pages take drags as new areas. */
-export type ManualRedactionMode = "viewing" | "drawing";
+type ManualRedactionMode = "viewing" | "drawing";
 
 /** The areas drawn on one file tab's PDF; kept in memory only. */
 type FieldManualRedaction = {
