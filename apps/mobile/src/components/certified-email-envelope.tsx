@@ -11,6 +11,7 @@ import type {
 } from "@stll/api-contract/certified-email";
 import { Text } from "@stll/ui/text";
 
+import { OpenFilePart } from "@/components/file-part-opener";
 import { keyedBy } from "@/components/keyed";
 
 const KIND_TITLE_KEYS = {
@@ -160,9 +161,9 @@ export const CertifiedEmailReading = ({
       {text.trim() ? <Text selectable>{text}</Text> : null}
       {attachments.length > 0 && (
         <Field label={t("attachments")}>
-          {keyedBy(attachments, ({ fileName }) => fileName ?? "").map(
-            ({ item: { fileName, sizeBytes }, key }) => (
-              <Text key={key} selectable>
+          {attachments.map(({ part, fileName, sizeBytes }) => (
+            <View key={part}>
+              <Text selectable>
                 {fileName ?? chat("attachment")}
                 <Text variant="caption">{` · ${format.number(sizeBytes, {
                   style: "unit",
@@ -170,8 +171,12 @@ export const CertifiedEmailReading = ({
                   unitDisplay: "short",
                 })}`}</Text>
               </Text>
-            ),
-          )}
+              <OpenFilePart
+                fileName={fileName ?? chat("attachment")}
+                part={part}
+              />
+            </View>
+          ))}
         </Field>
       )}
     </>

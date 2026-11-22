@@ -462,6 +462,7 @@
     },
     "fit": "Plotis",
     "openOriginal": "Atidaryti originalą",
+    "openPart": "Atidaryti {fileName}",
     "preview": "Atidaryti peržiūrą",
     "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
     "retry": "Bandyti dar kartą",

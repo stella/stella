@@ -1,16 +1,15 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { FILE_PART_KINDS } from "@stll/api-contract/file-parts";
 import { numberFromString } from "@stll/api-contract/http-input";
 import { SIGNED_DOSSIER_KINDS } from "@stll/api-contract/legal-file-formats";
 
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import {
-  readSignedDossierPdf,
-  readSignedDossierPreview,
-} from "@/api/lib/files/archive-preview";
+import { readSignedDossierPreview } from "@/api/lib/files/archive-preview";
+import { readFilePart } from "@/api/lib/files/file-part";
 import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
 import { MAX_DOSSIER_DOCUMENTS } from "@/api/lib/files/signed-dossier";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -87,27 +86,25 @@ export const signedDossierContentEndpoint = createSafeHandler(
     const result = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await readLegalFilePreview(
-            {
-              fieldId,
-              scopedDb,
-              workspaceId,
-              organizationId: session.activeOrganizationId,
-              recordAuditEvent,
-            },
-            SIGNED_DOSSIER_KINDS,
-            async (source) => await readSignedDossierPdf(source, document),
-          ),
+          await readFilePart({
+            fieldId,
+            scopedDb,
+            workspaceId,
+            organizationId: session.activeOrganizationId,
+            recordAuditEvent,
+            part: { kind: FILE_PART_KINDS.document, index: document },
+            disposition: "inline",
+          }),
       ),
     );
-    const bytes = yield* result;
+    const { bytes, fileName, mimeType } = yield* result;
     return Result.ok(
       secureDocumentResponse({
         body: new Uint8Array(bytes),
-        contentType: "application/pdf",
+        contentType: mimeType,
         contentLength: bytes.byteLength,
         disposition: "inline",
-        fileName: sanitizeFilename("document.pdf"),
+        fileName: sanitizeFilename(fileName),
       }),
     );
   },

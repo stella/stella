@@ -23,6 +23,7 @@ import {
   fileUrlPath,
   isOffline,
   readDocumentFile,
+  readDocumentPart,
   readOriginalDocumentFile,
   versionsPath,
   viewerFor,
@@ -321,6 +322,7 @@ describe("reading a document's file", () => {
       expect(file.viewer === "dataBox" && file.preview.unwrap()).toEqual({
         kind,
         text,
+        files: [],
       });
       expect(file.fileName).toBe(fileName);
       expect(calls).toEqual([
@@ -359,7 +361,9 @@ describe("reading a document's file", () => {
       },
     },
     text: "Subject: Notifica\nSi trasmette l'atto.",
-    attachments: [{ fileName: "atto.pdf", sizeBytes: 2048 }],
+    attachments: [
+      { part: "attachment:0", fileName: "atto.pdf", sizeBytes: 2048 },
+    ],
   } satisfies CertifiedEmailRead;
 
   test("opens an .eml its content shows to be a certified email through the audited reading", async () => {
@@ -762,6 +766,74 @@ describe("reading a document's file", () => {
       );
     },
   );
+
+  test("lists a data-box message's files, which open as its parts", async () => {
+    const { fetch, calls } = server((path) => {
+      if (path.endsWith("/versions")) {
+        return Response.json(
+          history("version-1", [
+            {
+              id: "version-1",
+              file: {
+                fieldId: "field-1",
+                fileName: "zprava.zfo",
+                mimeType: "application/octet-stream",
+              },
+            },
+          ]),
+        );
+      }
+      if (path.includes("/data-box/")) {
+        return Response.json({
+          kind: "message",
+          text: "Datová zpráva",
+          files: [{ fileName: "usneseni.pdf", entityId: null }],
+        });
+      }
+      return Response.json(
+        delivered("application/pdf", { fileName: "usneseni.pdf" }),
+      );
+    });
+    const file = (await read(fetch)).unwrap();
+    expect(file.viewer === "dataBox" && file.preview.unwrap().files).toEqual([
+      { fileName: "usneseni.pdf" },
+    ]);
+    const part = await readDocumentPart({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "matter-1",
+      fieldId: "field-1",
+      part: "attachment:0",
+    });
+    expect(part.unwrap()).toMatchObject({
+      fileName: "usneseni.pdf",
+      presignedUrl: "https://storage.example.com/file-1?signature=abc",
+    });
+    // A part opens through the file's own audited link, for download.
+    expect(calls.at(-1)).toBe(
+      "/v1/files/matter-1/url/field-1?purpose=download&part=attachment%3A0",
+    );
+  });
+
+  test("a refused part is the server's refusal, not an empty file", async () => {
+    const { fetch } = server(() =>
+      Response.json(
+        { message: "The file has no such part", code: "not_found" },
+        { status: 404 },
+      ),
+    );
+    const part = await readDocumentPart({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "matter-1",
+      fieldId: "field-1",
+      part: "member:9",
+    });
+    expect(part.isErr() && part.error).toMatchObject({
+      status: 404,
+      code: "not_found",
+    });
+  });
 
   test("sends a password-protected file to Quick Look", async () => {
     const { fetch } = server((path) =>

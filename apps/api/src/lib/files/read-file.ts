@@ -4,6 +4,7 @@ import {
   buildVersionedApiUrl,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
+import type { FilePart } from "@stll/api-contract/file-parts";
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -18,11 +19,13 @@ import {
 } from "@/api/lib/audited-download";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isStampableDocx } from "@/api/lib/docx-stamp";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { markContentDeliveryIntent } from "@/api/lib/files/content-delivery";
 import {
   createFileContentGrant,
   type FileContentPurpose,
 } from "@/api/lib/files/file-content-grant";
+import { readFilePart } from "@/api/lib/files/file-part";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
 import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { openWithinDeadline } from "@/api/lib/files/storage-open-deadline";
@@ -313,6 +316,123 @@ export const readFileHandler = async ({
       stampable: delivery.stampable,
     };
   });
+
+/** A part is delivered inline for display, as an attachment for download. */
+const partDisposition = (purpose: FileContentPurpose) =>
+  purpose === "download" ? "attachment" : "inline";
+
+/**
+ * Issue a grant for one part of a matter file: an attachment, a signed
+ * envelope's document, a container's member. The part is read and scanned
+ * now, and its delivery recorded while the version is share-locked; the grant
+ * reads it again, under the same liveness check, when it is redeemed.
+ */
+export const readFilePartUrlHandler = async ({
+  part,
+  scopedDb,
+  source,
+  fieldId,
+  organizationId,
+  workspaceId,
+  userId,
+  purpose,
+  recordAuditEvent,
+  readSessionAuthority,
+}: ReadFileHandlerProps & { part: FilePart }): Promise<
+  Result<
+    {
+      fileName: string;
+      mimeType: string;
+      originalMimeType: string;
+      presignedUrl: string;
+      stampable: false;
+    },
+    HandlerError
+  >
+> => {
+  const read = await readFilePart({
+    scopedDb,
+    workspaceId,
+    organizationId,
+    fieldId,
+    recordAuditEvent,
+    part,
+    disposition: partDisposition(purpose),
+  });
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  const now = Temporal.Now.instant().epochMilliseconds;
+  const expiresIn = await issueSessionBoundCredentialTtl("signedDownload", {
+    userId,
+    organizationId,
+    fileOrganizationId: organizationId,
+    requestedTtlSeconds: FILE_READ_URL_EXPIRY_SECONDS,
+    now: new Date(now),
+    sessionId: source.kind === "request" ? source.sessionId : null,
+    readSessionAuthority:
+      source.kind === "request"
+        ? readSessionAuthority
+        : refuseBackgroundSessionAuthority,
+  });
+  const grant = createFileContentGrant({
+    expiresAt: now + expiresIn * 1000,
+    fieldId,
+    now,
+    organizationId,
+    part,
+    purpose,
+    secret: env.BETTER_AUTH_SECRET,
+    userId,
+    workspaceId,
+  });
+  markContentDeliveryIntent();
+  return Result.ok({
+    fileName: read.value.fileName,
+    mimeType: read.value.mimeType,
+    originalMimeType: read.value.mimeType,
+    presignedUrl: fileContentGrantUrl(grant),
+    stampable: false,
+  });
+};
+
+/** The grant's issuance recorded the part's delivery. */
+const deliveryRecordedAtIssuance: AuditRecorder = async () => {
+  await Promise.resolve();
+};
+
+/** Redeems a part grant: the part read again, under the liveness check. */
+export const readFilePartContentHandler = async ({
+  fieldId,
+  organizationId,
+  part,
+  purpose,
+  scopedDb,
+  workspaceId,
+}: Omit<ReadFileContentHandlerProps, "abortSignal"> & { part: FilePart }) => {
+  const read = await readFilePart({
+    scopedDb,
+    workspaceId,
+    organizationId,
+    fieldId,
+    recordAuditEvent: deliveryRecordedAtIssuance,
+    part,
+    disposition: partDisposition(purpose),
+  });
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  const { bytes, fileName, mimeType } = read.value;
+  return Result.ok(
+    secureDocumentResponse({
+      body: bytes,
+      contentLength: bytes.byteLength,
+      contentType: mimeType,
+      disposition: partDisposition(purpose),
+      fileName: sanitizeFilename(fileName),
+    }),
+  );
+};
 
 type ReadFileContentHandlerProps = {
   abortSignal: AbortSignal;

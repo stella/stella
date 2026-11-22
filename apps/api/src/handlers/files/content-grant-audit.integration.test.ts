@@ -14,6 +14,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { parseFilePartId } from "@stll/api-contract/file-parts";
 import {
   ASIC_E_FILE_FORMAT,
   ASIC_S_FILE_FORMAT,
@@ -77,6 +78,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import { runWithMeasuredQueryCounter } from "@/api/lib/db-query-counter";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "@/api/lib/desktop-edit-file-types";
 import { dataBoxPayloadIdentity } from "@/api/lib/email/correspondence/data-box/payload-hash";
 import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
@@ -93,6 +95,8 @@ import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import {
   readFileContentHandler,
   readFileHandler,
+  readFilePartContentHandler,
+  readFilePartUrlHandler,
 } from "@/api/lib/files/read-file";
 import { LEGAL_FILE_READERS } from "@/api/lib/files/read-legal-file";
 import { createFileKey } from "@/api/lib/files/utils";
@@ -1408,7 +1412,7 @@ describe.each(eInvoiceFixtures)(
             fieldId,
             format: format.auditFormat,
             disposition: "attachment",
-            attachmentIndex: 0,
+            part: "attachment:0",
           },
         });
         expectStatus(
@@ -1501,7 +1505,9 @@ describe("certified email text preview", () => {
         includesOriginal: true,
         signature: { status: "unverified", signerName: PEC_SIGNER_NAME },
       },
-      attachments: [{ fileName: PEC_FIXTURE.attachmentName }],
+      attachments: [
+        { part: "attachment:0", fileName: PEC_FIXTURE.attachmentName },
+      ],
     });
     if (read instanceof HttpStatusResponse) {
       panic("Expected the certified email reading");
@@ -1578,6 +1584,199 @@ describe("certified email text preview", () => {
       return await certifiedEmailScalingScenario.measure(context);
     };
 
+    const small = await measureWithAddedDocuments(10);
+    const large = await measureWithAddedDocuments(190);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
+
+const readPartUrl = async (
+  fieldId: SafeId<"field">,
+  partId: string,
+  {
+    recordAuditEvent = recorderA(),
+    scopedDb = scopedDbA(),
+  }: { recordAuditEvent?: AuditRecorder; scopedDb?: ScopedDb } = {},
+) =>
+  await readFilePartUrlHandler({
+    part: parseFilePartId(partId) ?? panic(`Not a part address: ${partId}`),
+    readSessionAuthority: async () => null,
+    source: { kind: "request", sessionId: "fixture-session" },
+    scopedDb,
+    fieldId,
+    organizationId: ids.orgA,
+    workspaceId: ids.wsA1,
+    userId: ids.userA1,
+    purpose: "download",
+    recordAuditEvent,
+  });
+
+/** Redeems a part link as `/file-content/:grant` does. */
+const redeemPartUrl = async (presignedUrl: string) => {
+  const checked = checkFileContentGrant({
+    grant: contentGrantFromUrl(presignedUrl),
+    now: await databaseClockMs("after"),
+    secret: env.BETTER_AUTH_SECRET,
+  });
+  if (checked.status !== "valid" || checked.grant.part === null) {
+    return panic("Expected a valid part grant");
+  }
+  const { grant } = checked;
+  return await readFilePartContentHandler({
+    fieldId: grant.fieldId,
+    organizationId: grant.organizationId,
+    part: grant.part ?? panic("Expected a part grant"),
+    purpose: grant.purpose,
+    scopedDb: scopedDbA(),
+    workspaceId: grant.workspaceId,
+  });
+};
+
+const PART_CASES = [
+  {
+    name: "an ASiC member",
+    seed: seedAsic,
+    part: "member:0",
+    format: "asic-e",
+    fileName: "lisa.txt",
+    text: "Töölepingu lisa",
+  },
+  {
+    name: "a data-box file",
+    seed: seedDataBox,
+    part: "attachment:1",
+    format: "data-box",
+    fileName: "pouceni.txt",
+    text: "Synthetic instructions.",
+  },
+  {
+    name: "a certified email's attachment",
+    seed: async () =>
+      await seedStored(
+        {
+          fileName: "posta-certificata.eml",
+          mimeType: EML_MIME_TYPE,
+          pdfFileId: null,
+        },
+        await pecMessage(),
+      ),
+    part: "attachment:0",
+    format: "email",
+    fileName: PEC_FIXTURE.attachmentName,
+    text: PEC_FIXTURE.attachmentText,
+  },
+] as const;
+
+describe("file part links", () => {
+  test.each(PART_CASES)(
+    "$name opens through one audited link that reads it again when redeemed",
+    async ({ seed, part, format, fileName, text }) => {
+      const { fieldId, entityId } = await seed();
+      const issued = (await readPartUrl(fieldId, part)).unwrap();
+      expect(issued).toMatchObject({ fileName });
+      expect(issued.presignedUrl).toContain("/v1/file-content/fc1.");
+      await expectOneContentRow(entityId, {
+        action: "download",
+        metadata: { fieldId, part, format, disposition: "attachment" },
+      });
+      const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
+      expect(response.headers.get("content-disposition")).toContain(
+        "attachment",
+      );
+      expect(await response.text()).toBe(text);
+      // Issuing the link recorded the delivery; redeeming it records nothing more.
+      expect(await auditRowsFor(entityId)).toHaveLength(1);
+    },
+  );
+
+  test("the document a signed envelope wraps opens as its PDF", async () => {
+    const { fieldId, entityId } = await seedCades();
+    const issued = (await readPartUrl(fieldId, "content:0")).unwrap();
+    expect(issued).toMatchObject({
+      fileName: "contratto.PDF",
+      mimeType: PDF_MIME_TYPE,
+    });
+    const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
+    expect(response.headers.get("content-type")).toBe(PDF_MIME_TYPE);
+    expect((await response.bytes()).subarray(0, 5)).toEqual(
+      new TextEncoder().encode("%PDF-"),
+    );
+    expect(await auditRowsFor(entityId)).toHaveLength(1);
+  });
+
+  test("a part the file does not have is not found and records nothing", async () => {
+    const { fieldId, entityId } = await seedAsic();
+    for (const part of ["member:5", "attachment:0", "document:0"]) {
+      const read = await readPartUrl(fieldId, part);
+      expect(read.isErr() && read.error.status).toBe(404);
+    }
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("another matter's file part is not found and records nothing", async () => {
+    const { fieldId, entityId } = await seedFile(
+      { fileName: "toimik.BDOC", mimeType: "application/zip", pdfFileId: null },
+      "b",
+    );
+    const read = await readPartUrl(fieldId, "member:0");
+    expect(read.isErr() && read.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("issues no link when the delivery cannot be recorded", async () => {
+    const { fieldId, entityId } = await seedDataBox();
+    expect(
+      await rejectionMessage(
+        readPartUrl(fieldId, "attachment:0", {
+          recordAuditEvent: failingRecorder,
+        }),
+      ),
+    ).toBe("audit store unavailable");
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("a part read while its version is withdrawn is not delivered", async () => {
+    const { fieldId, entityId, entityVersionId } = await seedAsic();
+    const read = await readPartUrl(fieldId, "member:0", {
+      scopedDb: withdrawnAfterLookup(entityVersionId),
+    });
+    expect(read.isErr() && read.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("a link redeemed after its version is withdrawn delivers nothing", async () => {
+    const { fieldId, entityVersionId } = await seedAsic();
+    const issued = (await readPartUrl(fieldId, "member:0")).unwrap();
+    await testDb
+      .update(entityVersions)
+      .set({ deletedAt: new Date("2026-02-01T00:00:00.000Z") })
+      .where(eq(entityVersions.id, entityVersionId));
+    const redeemed = await redeemPartUrl(issued.presignedUrl);
+    expect(redeemed.isErr() && redeemed.error.status).toBe(404);
+  });
+
+  test("part link query cost stays bounded as the matter grows", async () => {
+    const { fieldId } = await seedDataBox();
+    const measureWithAddedDocuments = async (count: number) => {
+      const unrelated = Array.from({ length: count }, () => ({
+        id: createSafeId<"entity">(),
+        workspaceId: ids.wsA1,
+        kind: "document" as const,
+        name: "Spis",
+      }));
+      seededEntityIds.push(...unrelated.map(({ id }) => id));
+      await testDb.insert(entities).values(unrelated);
+      return await runWithMeasuredQueryCounter(async (counter) => {
+        const issued = (await readPartUrl(fieldId, "attachment:0")).unwrap();
+        return {
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(JSON.stringify(issued)),
+          rows: 1,
+        };
+      });
+    };
     const small = await measureWithAddedDocuments(10);
     const large = await measureWithAddedDocuments(190);
     expect(small.statements).toBeGreaterThan(0);
