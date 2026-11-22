@@ -93,6 +93,20 @@ describe("parseCSV", () => {
     ).toEqual({ status: CSV_PARSE_STATUS.INVALID });
   });
 
+  test("a prefix ends before the record its cut leaves inside quotes", () => {
+    const start =
+      'Číslo,Poznámka\n1,"Jednání odročeno"\n2,"Svědek nedostavil se,\nomluva';
+    expect(parseCSV(start, { prefix: true })).toEqual({
+      rows: [
+        ["Číslo", "Poznámka"],
+        ["1", "Jednání odročeno"],
+      ],
+      status: CSV_PARSE_STATUS.SUCCESS,
+    });
+    // The same text as a whole file is still refused.
+    expect(parseCSV(start)).toEqual({ status: CSV_PARSE_STATUS.INVALID });
+  });
+
   test("rejects characters after a closing quote", () => {
     expect(
       parseCSV('slug,title,body,tags\nfirst,"First"suffix,Body,two'),

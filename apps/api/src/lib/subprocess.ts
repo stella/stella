@@ -1,10 +1,12 @@
 import { Result } from "better-result";
+import { existsSync } from "node:fs";
 
 import {
   SUBPROCESS_TERMINATION_REASON,
   SubprocessError,
   type SubprocessTerminationReason,
 } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Writes a worker's answer to stdout and resolves once the pipe has taken all
@@ -35,6 +37,13 @@ type SpawnWorkerOptions = {
   signal?: AbortSignal;
   /** Receives what a worker that exited successfully wrote to stderr. */
   onStderr?: (stderr: string) => void;
+  /**
+   * Resident memory the worker may reach. The parent reads it every
+   * `LIMITS.workerRssPollMs` and kills the worker past it, which fails as a
+   * `memory` termination. Without it the worker is bounded only by its
+   * timeout and its container's limit.
+   */
+  maxRssBytes?: number | undefined;
 };
 
 type SpawnBinaryWorkerOptions = SpawnWorkerOptions & {
@@ -79,13 +88,18 @@ const readBoundedOutput = async (
 
 export const classifySubprocessTermination = ({
   callerAbort,
+  memoryAbort,
   signalCode,
   timeoutAbort,
 }: {
   callerAbort: boolean;
+  memoryAbort: boolean;
   signalCode: NonNullable<SpawnedWorker["signalCode"]>;
   timeoutAbort: boolean;
 }): SubprocessTerminationReason => {
+  if (memoryAbort) {
+    return SUBPROCESS_TERMINATION_REASON.memory;
+  }
   if (timeoutAbort) {
     return SUBPROCESS_TERMINATION_REASON.timeout;
   }
@@ -101,11 +115,13 @@ export const classifySubprocessTermination = ({
 const exitFailure = ({
   callerAbort,
   exitCode,
+  memoryAbort,
   signalCode,
   stderr,
   timeoutAbort,
 }: {
   callerAbort: boolean;
+  memoryAbort: boolean;
   exitCode: number;
   signalCode: SpawnedWorker["signalCode"];
   stderr: string;
@@ -114,6 +130,7 @@ const exitFailure = ({
   if (signalCode !== null) {
     const reason = classifySubprocessTermination({
       callerAbort,
+      memoryAbort,
       signalCode,
       timeoutAbort,
     });
@@ -141,19 +158,96 @@ type SpawnWorkerProcessOptions = {
 type WorkerTermination = {
   callerAbort: boolean;
   dispose: () => void;
+  memoryAbort: boolean;
   timeoutAbort: boolean;
 };
 
+const HAS_PROC_FS = existsSync("/proc/self/status");
+const VM_RSS = /^VmRSS:\s+(?<kilobytes>\d+) kB$/mu;
+const DECIMAL = /^\d+$/u;
+const BYTES_PER_KIB = 1024;
+
+/**
+ * Another process's resident memory in bytes, or `null` once it has exited
+ * (or when it cannot be read). Linux, where every deployed process runs,
+ * answers from `/proc/<pid>/status`; elsewhere (development on macOS) `ps`
+ * does.
+ */
+export const readProcessRssBytes = async (
+  pid: number,
+): Promise<number | null> => {
+  if (HAS_PROC_FS) {
+    const status = await Result.tryPromise(
+      async () => await Bun.file(`/proc/${pid}/status`).text(),
+    );
+    const kilobytes = Result.isOk(status)
+      ? VM_RSS.exec(status.value)?.groups?.["kilobytes"]
+      : undefined;
+    return kilobytes === undefined ? null : Number(kilobytes) * BYTES_PER_KIB;
+  }
+  const answer = await Result.tryPromise(async () => {
+    const ps = Bun.spawn(["ps", "-o", "rss=", "-p", String(pid)], {
+      stdout: "pipe",
+      stderr: "ignore",
+    });
+    const [kilobytes] = await Promise.all([
+      new Response(ps.stdout).text(),
+      ps.exited,
+    ]);
+    return kilobytes.trim();
+  });
+  return Result.isOk(answer) && DECIMAL.test(answer.value)
+    ? Number(answer.value) * BYTES_PER_KIB
+    : null;
+};
+
+/**
+ * Reads a worker's resident memory every `LIMITS.workerRssPollMs` and calls
+ * `onExceeded` once it is past `maxRssBytes`. A read still running when the
+ * next one is due is not doubled up.
+ */
+const watchWorkerMemory = ({
+  maxRssBytes,
+  onExceeded,
+  pid,
+}: {
+  maxRssBytes: number;
+  onExceeded: () => void;
+  pid: number;
+}): (() => void) => {
+  // The read in progress; it never rejects (an unreadable RSS is `null`).
+  let reading: Promise<void> | null = null;
+  const check = async () => {
+    const rssBytes = await readProcessRssBytes(pid);
+    reading = null;
+    if (rssBytes !== null && rssBytes > maxRssBytes) {
+      onExceeded();
+    }
+  };
+  const poll = () => {
+    if (reading === null) {
+      reading = check();
+    }
+  };
+  const timer = setInterval(poll, LIMITS.workerRssPollMs);
+  return () => {
+    clearInterval(timer);
+  };
+};
+
 const watchWorkerTermination = ({
+  maxRssBytes,
   signal,
   subprocess,
   timeoutSignal,
 }: {
+  maxRssBytes: number | undefined;
   signal: AbortSignal | undefined;
   subprocess: SpawnedWorker;
   timeoutSignal: AbortSignal;
 }): (() => WorkerTermination) => {
   let callerAbort = false;
+  let memoryAbort = false;
   let timeoutAbort = false;
   const killForCallerAbort = () => {
     callerAbort = true;
@@ -165,11 +259,25 @@ const watchWorkerTermination = ({
   };
   signal?.addEventListener("abort", killForCallerAbort, { once: true });
   timeoutSignal.addEventListener("abort", killForTimeout, { once: true });
+  const stopMemoryWatch =
+    maxRssBytes === undefined
+      ? () => undefined
+      : watchWorkerMemory({
+          maxRssBytes,
+          pid: subprocess.pid,
+          // SIGKILL: a worker past its ceiling gets no time to grow further.
+          onExceeded: () => {
+            memoryAbort = true;
+            subprocess.kill("SIGKILL");
+          },
+        });
 
   return () => ({
     callerAbort,
+    memoryAbort,
     timeoutAbort,
     dispose: () => {
+      stopMemoryWatch();
       signal?.removeEventListener("abort", killForCallerAbort);
       timeoutSignal.removeEventListener("abort", killForTimeout);
     },
@@ -191,11 +299,13 @@ export const spawnWorker = async ({
   timeoutMs,
   signal,
   onStderr,
+  maxRssBytes,
 }: SpawnWorkerOptions): Promise<Result<string, SubprocessError>> => {
   signal?.throwIfAborted();
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const subprocess = spawn({ args, stdin, workerPath });
   const getTermination = watchWorkerTermination({
+    maxRssBytes,
     signal,
     subprocess,
     timeoutSignal,
@@ -248,11 +358,13 @@ export const spawnBinaryWorker = async ({
   timeoutMs,
   signal,
   maxOutputBytes,
+  maxRssBytes,
 }: SpawnBinaryWorkerOptions): Promise<Result<Uint8Array, SubprocessError>> => {
   signal?.throwIfAborted();
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
   const subprocess = spawn({ args, stdin, workerPath });
   const getTermination = watchWorkerTermination({
+    maxRssBytes,
     signal,
     subprocess,
     timeoutSignal,

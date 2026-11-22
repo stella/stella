@@ -15,6 +15,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as UTIF from "utif2";
 
+import { declareFingerprintFields } from "@stll/errors";
+
 import type { ImageOrientation } from "@/api/lib/files/image-header";
 import type { ImagePage } from "@/api/lib/files/image-pdf";
 
@@ -37,8 +39,14 @@ const RGBA_CHANNELS = 4;
 
 class TiffPagesError extends TaggedError("TiffPagesError")<{
   message: string;
+  /** `too-large`: a page would decode past the budget; otherwise unreadable. */
+  reason: "unreadable" | "too-large";
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+  }
+}
 
 type TiffDirectory = ReturnType<typeof UTIF.decode>[number];
 
@@ -148,35 +156,61 @@ type TiffPage = {
 };
 
 type TiffPages = {
-  /** How many pages the file shows. */
+  /** How many pages the file has, shown or not. */
   count: number;
   /**
-   * The pages, decoded one at a time as they are iterated, so only one
-   * page's pixels are held at once.
+   * The shown pages, decoded one at a time as they are iterated, so only
+   * one page's pixels are held at once.
    */
   pages: Iterable<ImagePage>;
 };
 
 /**
- * Read the page directories of `bytes` and check each page's declared size
- * against `maxPixels` before any pixels are decoded (admission has already
- * bounded the largest page the same way). Decoding a page that turns out to
- * be corrupt throws from the iterator.
+ * The bytes a page holds once decoded: utif2's samples, then the RGBA they
+ * are converted to.
+ */
+const decodedPageBytes = (
+  directory: TiffDirectory,
+  width: number,
+  height: number,
+) => {
+  const samples = firstNumber(directory[SAMPLES_PER_PIXEL_TAG]) ?? 1;
+  const bits = firstNumber(directory[BITS_PER_SAMPLE_TAG]) ?? 1;
+  return width * height * (RGBA_CHANNELS + (samples * bits) / 8);
+};
+
+type ReadTiffPagesOptions = {
+  /** Bytes one shown page may decode to; a larger page is `too-large`. */
+  decodedBytesMax: number;
+  /** Pages shown; the rest are counted, not checked or decoded. */
+  pagesMax: number;
+};
+
+/**
+ * Read the page directories of `bytes` and check each shown page's declared
+ * size against `decodedBytesMax` before any pixels are decoded (admission
+ * has already bounded its pixels). Decoding a page that turns out to be
+ * corrupt throws from the iterator.
  */
 export const readTiffPages = (
   bytes: Uint8Array,
-  maxPixels: number,
+  { decodedBytesMax, pagesMax }: ReadTiffPagesOptions,
 ): Result<TiffPages, TiffPagesError> => {
   const buffer = bytes.slice().buffer;
   const directories = Result.try({
     try: () => UTIF.decode(buffer),
     catch: (cause) =>
-      new TiffPagesError({ message: "The TIFF does not parse", cause }),
+      new TiffPagesError({
+        message: "The TIFF does not parse",
+        reason: "unreadable",
+        cause,
+      }),
   });
   if (Result.isError(directories)) {
     return directories;
   }
   const pages: TiffPage[] = [];
+  let count = 0;
   for (const directory of directories.value) {
     const subfileType = firstNumber(directory[NEW_SUBFILE_TYPE_TAG]) ?? 0;
     if (subfileType % 2 === REDUCED_RESOLUTION) {
@@ -187,10 +221,16 @@ export const readTiffPages = (
     if (width === null || height === null || width <= 0 || height <= 0) {
       continue;
     }
-    if (width * height > maxPixels) {
+    count += 1;
+    if (count > pagesMax) {
+      continue;
+    }
+    const decodedBytes = decodedPageBytes(directory, width, height);
+    if (decodedBytes > decodedBytesMax) {
       return Result.err(
         new TiffPagesError({
-          message: `A TIFF page declares ${width * height} pixels, above the ${maxPixels}-pixel budget`,
+          message: `A TIFF page decodes to ${decodedBytes} bytes, above the ${decodedBytesMax}-byte budget`,
+          reason: "too-large",
         }),
       );
     }
@@ -198,6 +238,7 @@ export const readTiffPages = (
       return Result.err(
         new TiffPagesError({
           message: "A TIFF page's image data lies outside the file",
+          reason: "unreadable",
         }),
       );
     }
@@ -207,6 +248,7 @@ export const readTiffPages = (
       return Result.err(
         new TiffPagesError({
           message: "A CMYK TIFF page is not 8 bits per sample",
+          reason: "unreadable",
         }),
       );
     }
@@ -220,12 +262,15 @@ export const readTiffPages = (
   }
   if (pages.length === 0) {
     return Result.err(
-      new TiffPagesError({ message: "The TIFF has no page to show" }),
+      new TiffPagesError({
+        message: "The TIFF has no page to show",
+        reason: "unreadable",
+      }),
     );
   }
   const all = directories.value;
   return Result.ok({
-    count: pages.length,
+    count,
     pages: (function* decodePages() {
       for (const { directory, height, orientation, width } of pages) {
         decodeImage(buffer, directory, all);

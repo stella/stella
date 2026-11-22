@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
+import { waitFor } from "@stll/test-kit";
 
 import {
   SUBPROCESS_TERMINATION_REASON,
@@ -10,6 +11,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import {
   classifySubprocessTermination,
+  readProcessRssBytes,
   spawnBinaryWorker,
   spawnWorker,
 } from "@/api/lib/subprocess";
@@ -103,6 +105,7 @@ describe("spawnWorker", () => {
     expect(
       classifySubprocessTermination({
         callerAbort: false,
+        memoryAbort: false,
         signalCode: "SIGABRT",
         timeoutAbort: false,
       }),
@@ -115,6 +118,7 @@ describe("spawnWorker", () => {
       expect(
         classifySubprocessTermination({
           callerAbort: false,
+          memoryAbort: false,
           signalCode,
           timeoutAbort: false,
         }),
@@ -203,5 +207,64 @@ describe("spawnBinaryWorker", () => {
         signalCode: "SIGTERM",
       });
     }
+  });
+});
+
+const GROW_WORKER = path.resolve(FIXTURES_DIR, "grow-worker.ts");
+const MIB = 1024 * 1024;
+
+describe("a worker's memory ceiling", () => {
+  // The fixture grows to 1 GiB and then exits 0, so only the ceiling can
+  // turn its run into a failure.
+  test("kills a worker past it and fails as a memory termination", async () => {
+    const result = await spawnBinaryWorker({
+      workerPath: GROW_WORKER,
+      stdin: new Blob([""]),
+      timeoutMs: 30_000,
+      maxOutputBytes: 1024,
+      maxRssBytes: 256 * MIB,
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.termination).toEqual({
+        reason: SUBPROCESS_TERMINATION_REASON.memory,
+        signalCode: "SIGKILL",
+      });
+    }
+  });
+
+  test("leaves a worker under it alone", async () => {
+    const result = await spawnWorker({
+      workerPath: ECHO_WORKER,
+      stdin: new Blob(["Rozsudek ze dne 12. 3. 2025"]),
+      timeoutMs: 30_000,
+      maxRssBytes: 256 * MIB,
+    });
+
+    expect(Result.isOk(result) && result.value.trim()).toBe(
+      "Rozsudek ze dne 12. 3. 2025",
+    );
+  });
+
+  test("reads another process's resident memory until it exits", async () => {
+    const child = Bun.spawn(["bun", "run", "--no-env-file", SLEEP_WORKER], {
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    // Once Bun has loaded it holds its runtime, megabytes; no host gives a
+    // sleeping one a gigabyte.
+    const running = await waitFor(
+      async () => {
+        const rssBytes = await readProcessRssBytes(child.pid);
+        return rssBytes !== null && rssBytes > MIB ? rssBytes : undefined;
+      },
+      { description: "the child's runtime to load" },
+    );
+    child.kill();
+    await child.exited;
+
+    expect(running).toBeLessThan(1024 * MIB);
+    expect(await readProcessRssBytes(child.pid)).toBeNull();
   });
 });
