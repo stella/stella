@@ -2233,6 +2233,7 @@
       "csv",
       "dataBox",
       "eAkta",
+      "et3",
       "excel",
       "markdown",
       "ofd",
@@ -2243,6 +2244,7 @@
       "rtf",
       "uyap",
       "word",
+      "xadesZep",
       "zep"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],

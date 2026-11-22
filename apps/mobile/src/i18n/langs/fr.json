@@ -800,6 +800,7 @@
     "useStella": "Utiliser stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Accusé de réception d’un dossier électronique",
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
     "noSigners": "Aucune information sur les signataires n’a été trouvée.",

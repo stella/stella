@@ -698,7 +698,7 @@ test("isolates member names in the Arabic ASiC preview", async () => {
   ).toBeTruthy();
 });
 
-test.each([".es3", ".dosszie", ".zep"])(
+test.each([".es3", ".et3", ".dosszie", ".zep", ".xzep"])(
   "lists the signers and documents of a %s container and previews its PDFs",
   async (extension) => {
     const tab = {
@@ -710,6 +710,7 @@ test.each([".es3", ".dosszie", ".zep"])(
     const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
     const mounted = renderFileTab(tab, (client) => {
       client.setQueryData(signedDossierPreviewOptions(key).queryKey, {
+        receipt: extension === ".et3",
         signers: [
           { id: "signature-0", name: "Example signer" },
           { id: "signature-1", name: null },
@@ -756,6 +757,11 @@ test.each([".es3", ".dosszie", ".zep"])(
     ).toBeTruthy();
     expect(mounted.getByText("Kérelem szövege")).toBeTruthy();
     expect(mounted.getByText("Example signer")).toBeTruthy();
+    expect(
+      mounted.queryByRole("heading", {
+        name: "Delivery receipt for an electronic dossier",
+      }) !== null,
+    ).toBe(extension === ".et3");
     expect(mounted.getByText("Unknown signer")).toBeTruthy();
     expect(
       mounted.getByText("The signatures have not been verified."),

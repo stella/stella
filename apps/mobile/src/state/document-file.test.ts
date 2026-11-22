@@ -460,11 +460,12 @@ describe("reading a document's file", () => {
     },
   );
 
-  test.each([".ES3", ".et3", ".dosszie", ".zep"])(
+  test.each([".ES3", ".et3", ".dosszie", ".zep", ".xzep", ".ZEPX"])(
     "reads a signed container with the %s extension through its preview",
     async (extension) => {
       const fileName = `podanie${extension}`;
       const preview = {
+        receipt: extension === ".et3",
         signers: [
           { id: "signature-0", name: "Example signer" },
           { id: "signature-1", name: null },

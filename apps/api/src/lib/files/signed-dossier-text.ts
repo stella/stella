@@ -22,9 +22,11 @@ const documentText = ({ status, text }: Preview["documents"][number]) => {
 };
 
 /** The container as text for search, chat, workflows and document reads. */
-export const signedDossierText = ({ documents, signers }: Preview) =>
+export const signedDossierText = ({ receipt, documents, signers }: Preview) =>
   [
-    "Signed container. Signatures are unverified.",
+    receipt
+      ? "Signed delivery receipt. Signatures are unverified."
+      : "Signed container. Signatures are unverified.",
     ...signers.map(({ name }) => `Signer: ${name ?? "Unknown signer"}`),
     ...documents.map(
       (document) => `Document: ${document.fileName}\n${documentText(document)}`,

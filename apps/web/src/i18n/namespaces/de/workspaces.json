@@ -317,6 +317,7 @@
     "title": "SharePoint und OneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "Zustellnachweis für eine elektronische Akte",
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
     "noSigners": "Es wurden keine Angaben zu Unterzeichnern gefunden.",

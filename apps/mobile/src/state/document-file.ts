@@ -302,6 +302,7 @@ export const readDocumentFile = async ({
         return Result.ok({ viewer: kind, fileName, fieldId, preview });
       }
       case "eAkta":
+      case "xadesZep":
       case "zep": {
         const preview = await requestApi({
           fetch,

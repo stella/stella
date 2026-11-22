@@ -566,6 +566,11 @@ const LegalFilePreview = ({
         const { documents, signers } = preview.value;
         return (
           <>
+            {preview.value.receipt && (
+              <Text accessibilityRole="header" variant="headline">
+                {signedFile("deliveryReceipt")}
+              </Text>
+            )}
             <Text variant="caption">{signedFile("unverified")}</Text>
             <View>
               <Text accessibilityRole="header" variant="label">

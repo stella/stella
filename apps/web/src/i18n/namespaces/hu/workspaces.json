@@ -317,6 +317,7 @@
     "title": "SharePoint és OneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "Elektronikus akta átvételi elismervénye",
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
     "noSigners": "Nem találhatók adatok az aláírókról.",

@@ -800,6 +800,7 @@
     "useStella": "Usar o stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Comprovante de entrega de um dossiê eletrônico",
     "layer": "Camada de assinaturas {number, number}",
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
     "noSigners": "Nenhum dado de signatário foi encontrado.",

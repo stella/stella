@@ -800,6 +800,7 @@
     "useStella": "Naudoti stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Elektroninės bylos įteikimo patvirtinimas",
     "layer": "Parašų sluoksnis {number, number}",
     "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
     "noSigners": "Pasirašiusiųjų duomenų nerasta.",

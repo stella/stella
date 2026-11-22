@@ -112,6 +112,7 @@ const legalFileViewers = {
   asicS: asicFileViewer,
   eAkta: signedDossierViewer,
   zep: signedDossierViewer,
+  xadesZep: signedDossierViewer,
   cades: {
     Viewer: CadesFileViewer,
     unreadable: "signedFile.unreadable",
@@ -277,6 +278,7 @@ const FileTabViewerComponent = ({
       case "cades":
       case "dataBox":
       case "eAkta":
+      case "xadesZep":
       case "zep":
       case "ofd":
       case "uyap": {

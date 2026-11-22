@@ -3,6 +3,7 @@ import { expect, test } from "bun:test";
 
 import {
   E_AKTA_FILE_FORMAT,
+  XADES_ZEP_FILE_FORMAT,
   ZEP_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
@@ -14,6 +15,7 @@ import {
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import {
   makeEAktaFixture,
+  makeXadesZepFixture,
   makeZepEnvelope,
   makeZepFixture,
 } from "@/api/tests/fixtures/signed-dossier";
@@ -65,6 +67,7 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
     await readSignedDossierPreview(source, E_AKTA_FILE_FORMAT.mimeType)
   ).unwrap();
   expect(preview).toEqual({
+    receipt: false,
     signers: [{ id: "signature-0", name: "Example frame signer" }],
     documents: [
       {
@@ -229,4 +232,67 @@ test("delivers a zipped PDF that inflates past the size of its container", async
     0,
   );
   expect(delivered.unwrap()).toEqual(padded);
+});
+
+test("previews a XAdES_ZEP envelope stored under a generic type, PDF included", async () => {
+  const pdf = await pdfBytes();
+  const bytes = await makeXadesZepFixture({
+    form: "enveloping",
+    objects: [
+      {
+        id: "Data1",
+        description: "Rozhodnutie",
+        mimeType: "application/pdf",
+        content: pdf,
+      },
+      {
+        id: "Data2",
+        description: "Podanie",
+        mimeType: "application/xml",
+        content: {
+          xml: "<podanie><vec>Návrh na začatie konania</vec></podanie>",
+        },
+      },
+    ],
+  });
+  const source = stored(bytes, "podanie.xzep", "application/xml");
+  const preview = (
+    await readSignedDossierPreview(source, XADES_ZEP_FILE_FORMAT.mimeType)
+  ).unwrap();
+  expect(preview.signers.map(({ name }) => name)).toEqual([
+    "Example envelope signer",
+  ]);
+  expect(preview.documents).toMatchObject([
+    { fileName: "Rozhodnutie.pdf", pdf: true, status: "readable" },
+    {
+      fileName: "Podanie.xml",
+      pdf: false,
+      text: "Návrh na začatie konania",
+      textFormat: "plain",
+    },
+  ]);
+  const delivered = await readSignedDossierPdf(
+    source.withMimeType(XADES_ZEP_FILE_FORMAT.mimeType),
+    0,
+  );
+  expect(delivered.unwrap()).toEqual(pdf);
+  const extracted = (await extractFileTextResult(source)).unwrap();
+  expect(extracted).toContain("Návrh na začatie konania");
+  expect(extracted).toContain(marker);
+});
+
+test("says in search text that an e-akta receipt is a delivery receipt", async () => {
+  const bytes = await makeEAktaFixture({
+    category: "electronic acknowledgement",
+    documents: [
+      { title: "elismervény.txt", extension: "txt", bytes: "Átvéve" },
+    ],
+  });
+  const source = stored(bytes, "elismervény.et3", "application/octet-stream");
+  const preview = (
+    await readSignedDossierPreview(source, E_AKTA_FILE_FORMAT.mimeType)
+  ).unwrap();
+  expect(preview.receipt).toBe(true);
+  const extracted = (await extractFileTextResult(source)).unwrap();
+  expect(extracted?.startsWith("Signed delivery receipt.")).toBe(true);
 });

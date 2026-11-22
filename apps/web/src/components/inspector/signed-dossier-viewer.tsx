@@ -66,6 +66,11 @@ export const SignedDossierViewer = ({
           {...(shown ? {} : DOCKED_COMPOSER_CLEARANCE)}
           className="space-y-3 p-4"
         >
+          {data.receipt && (
+            <h2 className="text-base font-medium">
+              {t("signedFile.deliveryReceipt")}
+            </h2>
+          )}
           <p className="text-muted-foreground text-sm">
             {t("signedFile.unverified")}
           </p>

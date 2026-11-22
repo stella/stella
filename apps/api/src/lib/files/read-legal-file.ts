@@ -79,6 +79,7 @@ export const LEGAL_FILE_READERS = {
   asicS: readAsicContent,
   eAkta: readSignedDossierContent,
   zep: readSignedDossierContent,
+  xadesZep: readSignedDossierContent,
   cades: async (options) => {
     const read = await readLegalFilePreview(
       options,

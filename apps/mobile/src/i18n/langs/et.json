@@ -800,6 +800,7 @@
     "useStella": "Kasuta rakendust stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Elektroonilise toimiku kättesaamise kinnitus",
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
     "noSigners": "Allkirjastajate andmeid ei leitud.",
