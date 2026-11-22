@@ -9,7 +9,10 @@
  */
 import { panic, Result } from "better-result";
 
-import { EMAIL_CITATION_BLOCK_MODE } from "@stll/api-contract";
+import {
+  EMAIL_CITATION_BLOCK_MODE,
+  type EmailTextAttachmentCharset,
+} from "@stll/api-contract";
 import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import {
@@ -80,7 +83,7 @@ export type PartCandidate = {
   /** What the container states the part is; a claim the bytes may overrule. */
   statedMimeType: string | null;
   /** The charset the container states for the part's text, if any. */
-  charset?: string | null;
+  charset?: EmailTextAttachmentCharset | null;
 };
 
 /**
@@ -504,6 +507,8 @@ export const listEmbeddedParts = async (
           sizeBytes: candidate.bytes.byteLength,
         },
         unavailable: null,
+        // A text part decodes with the charset its container declares.
+        charset: candidate.charset ?? null,
       });
     }
   }

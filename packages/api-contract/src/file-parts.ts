@@ -173,6 +173,11 @@ export const containedFileEntries = {
   part: v.nullable(filePartDescriptorSchema),
   /** Why it does not open; null when it does. */
   unavailable: v.nullable(v.picklist(FILE_PART_UNAVAILABLE_REASONS)),
+  /**
+   * The charset its container declares for its text, such as an email's
+   * (one of `EMAIL_TEXT_ATTACHMENT_CHARSET`); a reader ignores any other.
+   */
+  charset: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(64)))),
 };
 
 export const containedFileSchema = v.object(containedFileEntries);
