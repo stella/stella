@@ -36,7 +36,10 @@ import type {
   ChatProjectionSchema,
   DehydratedInput,
 } from "@/api/lib/chat/projection-schema";
-import { READ_DOCUMENT_VERSION_PROJECTION } from "@/api/lib/chat/projections";
+import {
+  LIST_DOCUMENTS_PROJECTION,
+  READ_DOCUMENT_VERSION_PROJECTION,
+} from "@/api/lib/chat/projections";
 import type {
   LIST_MATTERS_LIST_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
@@ -689,6 +692,89 @@ describe("projectForChat", () => {
     });
     // The avatar URL is still web-UI plumbing the model never sees.
     expect(JSON.stringify(projected)).not.toContain("avatar.png");
+  });
+
+  test("document and file names are content: embedded UUIDs are masked without a defect", () => {
+    const refRegistry = createChatRefRegistry();
+    const documentRef = refRegistry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+
+    const projected = project({
+      dehydration: {
+        ...emptyDehydration(),
+        dehydratedEntityRefs: new Map([[ENTITY_UUID, documentRef]]),
+        resolvedEntityParams: { entity_id: toSafeId<"workspace">(WS_UUID) },
+      },
+      payload: {
+        entityId: ENTITY_UUID,
+        name: `${ROGUE_UUID}.pdf`,
+        version: {
+          id: "version-1",
+          versionNumber: 1,
+          stamp: null,
+          label: null,
+          description: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          fields: [
+            {
+              id: "field-1",
+              propertyId: PROPERTY_UUID,
+              content: {
+                version: 1,
+                type: "file",
+                id: LINKED_ENTITY_UUID,
+                fileName: `${ROGUE_UUID}.pdf`,
+                mimeType: "application/pdf",
+                sizeBytes: 1,
+                encrypted: false,
+                sha256Hex: "00",
+                pdfFileId: null,
+              },
+            },
+          ],
+        },
+      },
+      refRegistry,
+      schema: READ_DOCUMENT_VERSION_PROJECTION,
+    }).unwrap();
+
+    expect(projected).toMatchObject({
+      name: `${MASKED_CONTENT_ID}.pdf`,
+      version: {
+        fields: [{ content: { fileName: `${MASKED_CONTENT_ID}.pdf` } }],
+      },
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+  });
+
+  test("list_documents masks a UUID inside a document name without a defect", () => {
+    const projected = project({
+      dehydration: {
+        ...emptyDehydration(),
+        resolvedMatterParams: { matter_id: toSafeId<"workspace">(WS_UUID) },
+      },
+      payload: {
+        documents: [
+          {
+            id: ENTITY_UUID,
+            name: `Scan ${ROGUE_UUID}.pdf`,
+            kind: "document",
+            parentId: null,
+          },
+        ],
+        nextCursor: null,
+      },
+      schema: LIST_DOCUMENTS_PROJECTION,
+    }).unwrap();
+
+    expect(projected).toMatchObject({
+      documents: [{ name: `Scan ${MASKED_CONTENT_ID}.pdf` }],
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([]);
   });
 
   test("an entity echo reuses the dehydrated ref even under another workspace source", () => {
