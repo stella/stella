@@ -575,6 +575,25 @@
       "descriptionCloud": "stella DI taip pat ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui.",
       "title": "Taisyti su DI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Išlaiko laisvą toną ir saikingus skyrybos ženklus.",
+        "title": "Laisvas"
+      },
+      "notes": {
+        "description": "Trumpi punktai, po vieną eilutėje, be žodžių parazitų.",
+        "title": "Pastabos"
+      },
+      "polished": {
+        "description": "Ištaiso atpažinimo klaidas ir išlaiko jūsų formuluotes.",
+        "title": "Nušlifuotas"
+      },
+      "title": "Stilius",
+      "verbatim": {
+        "description": "Kiekvienas žodis taip, kaip buvo pasakytas; pridedami tik skyrybos ženklai ir didžiosios raidės.",
+        "title": "Pažodinis"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Iki {limit, number} simbolių iš dokumento, kuriame esate, kad diktuojamas tekstas derėtų prie to, ką rašote.",
@@ -606,6 +625,7 @@
       "local": "Šį kompiuterį",
       "localDescription": "Kalba perrašoma šiame kompiuteryje ir nesaugoma.",
       "model": "Pavertimo modelis",
+      "modelWithdrawn": "Pasirinktas modelis nebesiūlomas. Pasirinkite kitą; iki tol diktuojamas tekstas perrašomas šiame kompiuteryje.",
       "outsideRegion": "Už jūsų regiono ribų",
       "retainsData": "Saugo jūsų garsą",
       "retainsDataTitle": "{provider} saugo tai, ką diktuojate",
@@ -677,10 +697,13 @@
       "checkBodyMac": "Patikrinkite prieigą prie mikrofono sistemos nustatymuose ir bandykite dar kartą.",
       "checkBodyPc": "Patikrinkite prieigą prie mikrofono „Windows“ nustatymuose ir bandykite dar kartą.",
       "chooseMicrophone": "Pasirinkti mikrofoną…",
+      "chooseModel": "Pasirinkti modelį…",
       "dismiss": "Uždaryti",
       "inputDevice": "Įvestis: {device}",
       "missingBody": "Diktuojant vietoje jo naudojama {device}.",
       "missingTitle": "{missing} neprijungta",
+      "modelBody": "Pasirinkite kitą skiltyje Nustatymai → Diktavimas. Šis įrašas perrašytas šiame kompiuteryje.",
+      "modelTitle": "Jūsų transkribavimo modelis nebesiūlomas",
       "nothingBody": "Kalbėkite laikydami klavišą arba garso nustatymuose pasirinkite kitą įvestį.",
       "nothingTitle": "„stella“ negirdėjo jokios kalbos",
       "openSettingsMac": "Atidaryti sistemos nustatymus",
@@ -742,6 +765,11 @@
       "failed": "Nepavyko atidaryti lango. Bandykite dar kartą.",
       "open": "Atidaryti",
       "title": "Įrašo transkribavimas"
+    },
+    "translateTo": {
+      "description": "Sutvarkytą tekstą parašo šia kalba, kad ir kokia kalba kalbėtumėte.",
+      "off": "Kalba, kuria kalbate",
+      "title": "Rašyti kalba"
     },
     "whileDictating": {
       "choices": {

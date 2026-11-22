@@ -575,6 +575,25 @@
       "descriptionCloud": "stella IA también corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo.",
       "title": "Corregir con IA"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Mantiene un tono relajado con puntuación ligera.",
+        "title": "Informal"
+      },
+      "notes": {
+        "description": "Puntos breves, uno por línea, sin muletillas.",
+        "title": "Notas"
+      },
+      "polished": {
+        "description": "Corrige los errores de reconocimiento y mantiene tu redacción.",
+        "title": "Pulido"
+      },
+      "title": "Estilo",
+      "verbatim": {
+        "description": "Cada palabra tal como se dijo; solo se añaden puntuación y mayúsculas.",
+        "title": "Literal"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Hasta {limit, number} caracteres del documento en el que estás, para que el dictado encaje con lo que escribes.",
@@ -606,6 +625,7 @@
       "local": "Este ordenador",
       "localDescription": "La voz se transcribe en este ordenador y no se guarda.",
       "model": "Modelo de transcripción",
+      "modelWithdrawn": "El modelo elegido ya no se ofrece. Elija otro; mientras tanto, el dictado se transcribe en este ordenador.",
       "outsideRegion": "Fuera de tu región",
       "retainsData": "Conserva tu audio",
       "retainsDataTitle": "{provider} conserva lo que dictas",
@@ -677,10 +697,13 @@
       "checkBodyMac": "Comprueba el acceso al micrófono en Ajustes del Sistema y vuelve a intentarlo.",
       "checkBodyPc": "Comprueba el acceso al micrófono en la Configuración de Windows y vuelve a intentarlo.",
       "chooseMicrophone": "Elegir micrófono…",
+      "chooseModel": "Elegir modelo…",
       "dismiss": "Cerrar",
       "inputDevice": "Entrada: {device}",
       "missingBody": "El dictado usa {device} en su lugar.",
       "missingTitle": "{missing} no está conectado",
+      "modelBody": "Elija uno en Configuración → Dictado. Este dictado se transcribió en este ordenador.",
+      "modelTitle": "Su modelo de transcripción ya no se ofrece",
       "nothingBody": "Habla mientras mantienes la tecla, o elige otra entrada en los ajustes de Sonido.",
       "nothingTitle": "stella no oyó ninguna voz",
       "openSettingsMac": "Abrir Ajustes del Sistema",
@@ -742,6 +765,11 @@
       "failed": "No se pudo abrir la ventana. Inténtalo de nuevo.",
       "open": "Abrir",
       "title": "Transcribir una grabación"
+    },
+    "translateTo": {
+      "description": "Escribe el texto limpio en este idioma, hables el idioma que hables.",
+      "off": "Idioma en que hablas",
+      "title": "Escribir en"
     },
     "whileDictating": {
       "choices": {

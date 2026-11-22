@@ -575,6 +575,25 @@
       "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail.",
       "title": "Corriger avec l’IA"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Garde un ton détendu, avec une ponctuation légère.",
+        "title": "Décontracté"
+      },
+      "notes": {
+        "description": "Des points courts, un par ligne, sans mots de remplissage.",
+        "title": "Notes"
+      },
+      "polished": {
+        "description": "Corrige les erreurs de reconnaissance et conserve votre formulation.",
+        "title": "Soigné"
+      },
+      "title": "Style",
+      "verbatim": {
+        "description": "Chaque mot tel qu’il a été dit ; seules la ponctuation et les majuscules sont ajoutées.",
+        "title": "Mot à mot"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Jusqu’à {limit, number} caractères du document où vous êtes, pour que la dictée s’accorde avec ce que vous écrivez.",
@@ -606,6 +625,7 @@
       "local": "Cet ordinateur",
       "localDescription": "La parole est transcrite sur cet ordinateur et n'est pas conservée.",
       "model": "Modèle de transcription",
+      "modelWithdrawn": "Le modèle choisi n’est plus proposé. Choisissez-en un autre ; en attendant, la dictée est transcrite sur cet ordinateur.",
       "outsideRegion": "Hors de votre région",
       "retainsData": "Conserve votre audio",
       "retainsDataTitle": "{provider} conserve ce que vous dictez",
@@ -677,10 +697,13 @@
       "checkBodyMac": "Vérifiez l'accès au micro dans les Réglages Système, puis réessayez.",
       "checkBodyPc": "Vérifiez l'accès au micro dans les Paramètres Windows, puis réessayez.",
       "chooseMicrophone": "Choisir le micro…",
+      "chooseModel": "Choisir un modèle…",
       "dismiss": "Fermer",
       "inputDevice": "Entrée : {device}",
       "missingBody": "La dictée utilise {device} à la place.",
       "missingTitle": "{missing} n'est pas connecté",
+      "modelBody": "Choisissez-en un dans Paramètres → Dictée. Cette dictée a été transcrite sur cet ordinateur.",
+      "modelTitle": "Votre modèle de transcription n’est plus proposé",
       "nothingBody": "Parlez en maintenant la touche, ou choisissez une autre entrée dans les réglages Son.",
       "nothingTitle": "stella n'a entendu aucune parole",
       "openSettingsMac": "Ouvrir les Réglages Système",
@@ -742,6 +765,11 @@
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez.",
       "open": "Ouvrir",
       "title": "Transcrire un enregistrement"
+    },
+    "translateTo": {
+      "description": "Écrit le texte nettoyé dans cette langue, quelle que soit la langue que vous parlez.",
+      "off": "Langue parlée",
+      "title": "Écrire en"
     },
     "whileDictating": {
       "choices": {

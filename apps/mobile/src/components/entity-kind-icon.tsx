@@ -28,9 +28,14 @@ const DocumentFormatIcon = ({
   format: DocumentFormat;
   size: number;
 }) => {
-  const { kind } = format;
+  const { kind, mark } = format;
+  // The format's mark: its family's, or a profile's own (BDOC within
+  // ASiC-E), which the web's document-icon.test.tsx keeps registered.
   if (isDocumentMarkKind(kind)) {
-    return <DocumentMark color={color} kind={kind} size={size} />;
+    if (!isDocumentMarkKind(mark)) {
+      return panic(`Unregistered document mark: ${mark}`);
+    }
+    return <DocumentMark color={color} kind={mark} size={size} />;
   }
   switch (kind) {
     case "image":

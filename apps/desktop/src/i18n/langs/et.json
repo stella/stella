@@ -575,6 +575,25 @@
       "descriptionCloud": "stella AI parandab ka tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga.",
       "title": "Paranda tehisintellektiga"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Hoiab vaba tooni ja kerget kirjavahemärgistust.",
+        "title": "Vaba"
+      },
+      "notes": {
+        "description": "Lühikesed punktid, igaüks eraldi real, ilma täitesõnadeta.",
+        "title": "Märkmed"
+      },
+      "polished": {
+        "description": "Parandab tuvastusvead ja säilitab teie sõnastuse.",
+        "title": "Viimistletud"
+      },
+      "title": "Stiil",
+      "verbatim": {
+        "description": "Iga sõna nii, nagu see kõlas; lisatakse ainult kirjavahemärgid ja suurtähed.",
+        "title": "Sõnasõnaline"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Kuni {limit, number} märki dokumendist, milles olete, et dikteeritu sobiks kirjutatavaga.",
@@ -606,6 +625,7 @@
       "local": "Seda arvutit",
       "localDescription": "Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
       "model": "Teisendusmudel",
+      "modelWithdrawn": "Valitud mudelit enam ei pakuta. Valige mõni muu; seni transkribeeritakse dikteering selles arvutis.",
       "outsideRegion": "Väljaspool teie piirkonda",
       "retainsData": "Säilitab teie heli",
       "retainsDataTitle": "{provider} säilitab, mida dikteerite",
@@ -677,10 +697,13 @@
       "checkBodyMac": "Kontrollige mikrofoni juurdepääsu süsteemiseadetes ja proovige uuesti.",
       "checkBodyPc": "Kontrollige mikrofoni juurdepääsu Windowsi sätetes ja proovige uuesti.",
       "chooseMicrophone": "Vali mikrofon…",
+      "chooseModel": "Vali mudel…",
       "dismiss": "Sulge",
       "inputDevice": "Sisend: {device}",
       "missingBody": "Dikteerimine kasutab selle asemel seadet {device}.",
       "missingTitle": "{missing} pole ühendatud",
+      "modelBody": "Valige üks jaotises Seaded → Dikteerimine. See dikteering transkribeeriti selles arvutis.",
+      "modelTitle": "Teie transkribeerimismudelit enam ei pakuta",
       "nothingBody": "Rääkige klahvi all hoides või valige heliseadetes muu sisend.",
       "nothingTitle": "stella ei kuulnud kõnet",
       "openSettingsMac": "Ava süsteemiseaded",
@@ -742,6 +765,11 @@
       "failed": "Akent ei õnnestunud avada. Proovige uuesti.",
       "open": "Ava",
       "title": "Salvestise transkribeerimine"
+    },
+    "translateTo": {
+      "description": "Kirjutab puhastatud teksti selles keeles, olenemata sellest, mis keelt te räägite.",
+      "off": "Räägitav keel",
+      "title": "Kirjuta keeles"
     },
     "whileDictating": {
       "choices": {

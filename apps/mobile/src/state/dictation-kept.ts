@@ -1,7 +1,20 @@
 import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import {
+  DESKTOP_DICTATION_CLEANUP_STYLES,
+  DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+
 import type { ApiError } from "@/state/api-request";
+import { modelClassSchema } from "@/state/dictation-fallback";
+import type { ModelClass } from "@/state/dictation-fallback";
 
 /**
  * A dictation that could not be transcribed is kept on the phone, never
@@ -27,6 +40,11 @@ export type KeptPiece =
   /** The recording still to transcribe: a file in the dictation's folder. */
   | { readonly type: "audio"; readonly file: string };
 
+/** Why a refused dictation waits, where the person can do more than retry. */
+const KEPT_REFUSALS = ["model"] as const;
+
+export type KeptRefusal = (typeof KEPT_REFUSALS)[number];
+
 /** Where a kept dictation stands. */
 type KeptState =
   | {
@@ -34,6 +52,8 @@ type KeptState =
       readonly pieces: readonly KeptPiece[];
       /** Refused, or unreadable: tried again only when the person retries. */
       readonly refused: boolean;
+      /** `model`: refused because the picked model is no longer offered. */
+      readonly refusedFor: KeptRefusal | null;
     }
   | {
       readonly type: "recovered";
@@ -46,7 +66,8 @@ type KeptState =
 /**
  * A kept dictation with what it is transcribed with, as when it was
  * recorded: the account, the matter whose names the model expects, the
- * model, and the language and cleanup choice of its text.
+ * model, and the language, cleanup choice, style and language to write in
+ * of its text.
  */
 export type KeptDictation = {
   readonly id: string;
@@ -55,8 +76,11 @@ export type KeptDictation = {
   readonly field: DictationField;
   readonly matterId: string | null;
   readonly modelId: string | null;
+  readonly modelClass: ModelClass | null;
   readonly locale: string;
   readonly cleanup: boolean;
+  readonly style: DesktopDictationCleanupStyle;
+  readonly translateTo: DesktopDictationTranslationLanguage | null;
   readonly keptAt: number;
   readonly state: KeptState;
 };
@@ -77,14 +101,28 @@ export const keptDictationSchema = v.object({
   field: v.picklist(DICTATION_FIELDS),
   matterId: v.nullable(v.string()),
   modelId: v.nullable(v.string()),
+  // Kept before the class was: unknown, so a withdrawn model falls back to
+  // none.
+  modelClass: v.optional(v.nullable(modelClassSchema), null),
   locale: v.string(),
   cleanup: v.boolean(),
+  // Kept before the style and language were: the defaults.
+  style: v.fallback(
+    v.picklist(DESKTOP_DICTATION_CLEANUP_STYLES),
+    DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
+  ),
+  translateTo: v.fallback(
+    v.nullable(v.picklist(DESKTOP_DICTATION_TRANSLATION_LANGUAGES)),
+    null,
+  ),
   keptAt: v.number(),
   state: v.variant("type", [
     v.object({
       type: v.literal("waiting"),
       pieces: v.array(pieceSchema),
       refused: v.boolean(),
+      // Kept before the reason was: no reason of its own.
+      refusedFor: v.optional(v.nullable(v.picklist(KEPT_REFUSALS)), null),
     }),
     v.object({
       type: v.literal("recovered"),
@@ -120,6 +158,11 @@ export const keptFor = (
 export const retriesByItself = (error: PieceFailure): boolean => {
   switch (error._tag) {
     case "ApiRequestError":
+      // The picked model is not served at all: trying it again by itself
+      // would only fail again until the person retries or picks another.
+      if (error.code !== undefined && MODEL_UNSERVED_CODES.has(error.code)) {
+        return false;
+      }
       return (
         error.status === undefined ||
         error.status === 408 ||
@@ -136,6 +179,20 @@ export const retriesByItself = (error: PieceFailure): boolean => {
       return panic("A transcription failed with an error of no known kind");
   }
 };
+
+/** Why a failure waits for the person: `model` when the picked model is not served. */
+export const refusalOf = (error: PieceFailure): KeptRefusal | null =>
+  error._tag === "ApiRequestError" &&
+  error.code !== undefined &&
+  MODEL_UNSERVED_CODES.has(error.code)
+    ? "model"
+    : null;
+
+/** What the server answers for a model it does not serve in the organization's region. */
+const MODEL_UNSERVED_CODES: ReadonlySet<string> = new Set([
+  "transcription_model_unavailable",
+  AI_FAILURE_CODES.managed_provider_unavailable,
+]);
 
 const FIRST_RETRY_MS = 30_000;
 const LONGEST_RETRY_MS = 10 * 60 * 1000;

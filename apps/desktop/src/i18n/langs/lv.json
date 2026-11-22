@@ -575,6 +575,25 @@
       "descriptionCloud": "stella AI arī izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam.",
       "title": "Labot ar AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Saglabā nepiespiestu toni ar vieglu pieturzīmju lietojumu.",
+        "title": "Brīvs"
+      },
+      "notes": {
+        "description": "Īsi punkti, katrs savā rindā, bez liekiem vārdiem.",
+        "title": "Piezīmes"
+      },
+      "polished": {
+        "description": "Izlabo atpazīšanas kļūdas un saglabā jūsu formulējumu.",
+        "title": "Noslīpēts"
+      },
+      "title": "Stils",
+      "verbatim": {
+        "description": "Katrs vārds tā, kā izskanēja; tiek pievienotas tikai pieturzīmes un lielie burti.",
+        "title": "Burtisks"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Līdz {limit, number} rakstzīmēm no dokumenta, kurā strādājat, lai diktētais atbilstu rakstītajam.",
@@ -606,6 +625,7 @@
       "local": "Šo datoru",
       "localDescription": "Runa tiek pārveidota šajā datorā un netiek saglabāta.",
       "model": "Pārvēršanas modelis",
+      "modelWithdrawn": "Izvēlētais modelis vairs netiek piedāvāts. Izvēlieties citu; līdz tam diktāts tiek pārrakstīts šajā datorā.",
       "outsideRegion": "Ārpus jūsu reģiona",
       "retainsData": "Saglabā jūsu audio",
       "retainsDataTitle": "{provider} saglabā to, ko diktējat",
@@ -677,10 +697,13 @@
       "checkBodyMac": "Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos un mēģiniet vēlreiz.",
       "checkBodyPc": "Pārbaudiet piekļuvi mikrofonam Windows iestatījumos un mēģiniet vēlreiz.",
       "chooseMicrophone": "Izvēlēties mikrofonu…",
+      "chooseModel": "Izvēlēties modeli…",
       "dismiss": "Aizvērt",
       "inputDevice": "Ievade: {device}",
       "missingBody": "Diktēšana tā vietā izmanto {device}.",
       "missingTitle": "{missing} nav pievienota",
+      "modelBody": "Izvēlieties citu sadaļā Iestatījumi → Diktēšana. Šis diktāts tika pārrakstīts šajā datorā.",
+      "modelTitle": "Jūsu transkripcijas modelis vairs netiek piedāvāts",
       "nothingBody": "Runājiet, kamēr turat taustiņu, vai skaņas iestatījumos izvēlieties citu ievadi.",
       "nothingTitle": "stella nedzirdēja runu",
       "openSettingsMac": "Atvērt sistēmas iestatījumus",
@@ -742,6 +765,11 @@
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz.",
       "open": "Atvērt",
       "title": "Ieraksta transkribēšana"
+    },
+    "translateTo": {
+      "description": "Uzraksta notīrīto tekstu šajā valodā neatkarīgi no tā, kādā valodā jūs runājat.",
+      "off": "Runātā valoda",
+      "title": "Rakstīt valodā"
     },
     "whileDictating": {
       "choices": {

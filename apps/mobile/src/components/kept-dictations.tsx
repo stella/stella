@@ -33,6 +33,8 @@ import {
   withTranscribed,
 } from "@/state/dictation-kept";
 import { readLearnedFixes } from "@/state/dictation-learned";
+import { readDictationPreferences } from "@/state/dictation-preferences";
+import type { DictationPreferences } from "@/state/dictation-preferences";
 import { createKeptDictations } from "@/state/kept-dictations";
 import type {
   KeptDictations,
@@ -137,7 +139,8 @@ const AccountKeptDictations = ({
 /**
  * Transcribes a kept dictation's recordings that have no text yet, with
  * the model, matter and cleanup it was recorded with; the matter's names
- * are read again, as they may have grown since.
+ * are read again, as they may have grown since. One refused for its model
+ * goes with the model picked now (`modelFor`).
  */
 const retryKept = async (
   source: AccessTokenSource,
@@ -149,8 +152,10 @@ const retryKept = async (
       : (
           await readMatterVocabulary({ fetch, source, matterId: kept.matterId })
         ).unwrapOr([]);
+  const model = await modelFor(source, kept);
   const choice = {
-    modelId: kept.modelId ?? undefined,
+    modelId: model.modelId ?? undefined,
+    modelClass: model.modelClass,
     matterId: kept.matterId ?? undefined,
     vocabulary,
   };
@@ -191,6 +196,8 @@ const retryKept = async (
   const text = await finalText({
     source,
     cleanup: kept.cleanup,
+    style: kept.style,
+    translateTo: kept.translateTo,
     joined,
     locale: kept.locale,
   });
@@ -207,4 +214,24 @@ const retryKept = async (
       names: vocabulary,
     },
   };
+};
+
+/**
+ * The model a retry names: the one the dictation was recorded with, or,
+ * for one refused because that model is no longer offered, the one the
+ * person has picked since, as the refusal told them to.
+ */
+const modelFor = async (
+  source: AccessTokenSource,
+  kept: WaitingDictation,
+): Promise<Pick<DictationPreferences, "modelId" | "modelClass">> => {
+  const session = source.session();
+  if (kept.state.refusedFor !== "model" || session === undefined) {
+    return { modelId: kept.modelId, modelClass: kept.modelClass };
+  }
+  const { modelId, modelClass } = await readDictationPreferences(
+    deviceAccountStore,
+    session,
+  ).catch(() => ({ modelId: kept.modelId, modelClass: kept.modelClass }));
+  return { modelId, modelClass };
 };

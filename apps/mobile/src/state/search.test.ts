@@ -79,7 +79,7 @@ const documentResult: SearchResult = {
   matterName: "Matter One",
   title: "Lease agreement",
   updatedAt: UPDATED,
-  format: { kind: "pdf", label: "PDF" },
+  format: { kind: "pdf", mark: "pdf", label: "PDF" },
 };
 
 const pageOf = (results: readonly SearchResult[]): SearchPage => ({

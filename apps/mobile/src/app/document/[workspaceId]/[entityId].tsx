@@ -18,10 +18,13 @@ import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
+import { CertifiedEmailReading } from "@/components/certified-email-envelope";
 import DocumentView from "@/components/document-viewer/document-view.dom";
 import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
 import type { ViewerAppearance } from "@/components/document-viewer/zoom";
+import { EInvoiceDetails } from "@/components/e-invoice-details";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
+import { LegalFilePreviewText } from "@/components/legal-file-preview-text";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { useDocumentEditing } from "@/components/use-document-editing";
 import {
@@ -85,8 +88,11 @@ const openDocument = async ({
   }
   if (
     file.value.viewer === "asic" ||
+    file.value.viewer === "signed-dossier" ||
     file.value.viewer === "cades" ||
+    file.value.viewer === "certifiedEmail" ||
     file.value.viewer === "dataBox" ||
+    file.value.viewer === "e-invoice" ||
     file.value.viewer === "structured-document"
   ) {
     return { status: "legalPreview", file: file.value };
@@ -435,6 +441,7 @@ const LegalFilePreview = ({
   const common = useTranslations("common");
   const signedFile = useTranslations("signedFile");
   const structuredDocument = useTranslations("structuredDocument");
+  const eInvoice = useTranslations("eInvoice");
   const { fieldId, preview, viewer } = file;
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const originalInFlight = useRef(false);
@@ -500,7 +507,7 @@ const LegalFilePreview = ({
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
-      const { fileName, layers, text } = preview.value;
+      const { fileName, invoice, layers, text, textFormat } = preview.value;
       return (
         <>
           <Text accessibilityRole="header" selectable variant="headline">
@@ -519,26 +526,81 @@ const LegalFilePreview = ({
               ))}
             </View>
           ))}
-          {text.trim() ? (
-            <Text selectable>{text}</Text>
-          ) : (
-            <Text variant="caption">{signedFile("noReadableContent")}</Text>
-          )}
+          {invoice !== null && <EInvoiceDetails preview={invoice} />}
+          {invoice === null &&
+            (text.trim() ? (
+              <LegalFilePreviewText format={textFormat} text={text} />
+            ) : (
+              <Text variant="caption">{signedFile("noReadableContent")}</Text>
+            ))}
         </>
       );
     }
     if (preview.status === "ok") {
+      if (viewer === "certifiedEmail") {
+        return <CertifiedEmailReading read={preview.value} />;
+      }
       if (viewer === "asic") {
         return (
           <>
             <Text variant="caption">{signedFile("unverified")}</Text>
-            {preview.value.members.map(({ fileName, status, text }) => (
-              <View key={fileName}>
+            {preview.value.members.map(
+              ({ fileName, status, text, textFormat }) => (
+                <View key={fileName}>
+                  <Text accessibilityRole="header" selectable variant="label">
+                    {fileName}
+                  </Text>
+                  {status !== "unavailable" && text.trim() ? (
+                    <LegalFilePreviewText format={textFormat} text={text} />
+                  ) : null}
+                  {status === "truncated" && (
+                    <Text variant="caption">{common("previewTruncated")}</Text>
+                  )}
+                  {status === "unavailable" && (
+                    <Text variant="caption">
+                      {signedFile("noReadableContent")}
+                    </Text>
+                  )}
+                </View>
+              ),
+            )}
+          </>
+        );
+      }
+      if (viewer === "e-invoice") {
+        return <EInvoiceDetails preview={preview.value} />;
+      }
+      if (viewer === "signed-dossier") {
+        const { documents, signers } = preview.value;
+        return (
+          <>
+            {preview.value.receipt && (
+              <Text accessibilityRole="header" variant="headline">
+                {signedFile("deliveryReceipt")}
+              </Text>
+            )}
+            <Text variant="caption">{signedFile("unverified")}</Text>
+            <View>
+              <Text accessibilityRole="header" variant="label">
+                {signedFile("signers")}
+              </Text>
+              {signers.length === 0 ? (
+                <Text variant="caption">{signedFile("noSigners")}</Text>
+              ) : (
+                signers.map((signer) => (
+                  <Text key={signer.id} selectable>
+                    {signer.name ?? signedFile("unknownSigner")}
+                  </Text>
+                ))
+              )}
+            </View>
+            {documents.map(({ id, fileName, status, text, textFormat }) => (
+              <View key={id}>
                 <Text accessibilityRole="header" selectable variant="label">
                   {fileName}
                 </Text>
                 {status !== "unavailable" && text.trim() ? (
-                  <Text selectable>{text}</Text>
+                  <LegalFilePreviewText format={textFormat} text={text} />
                 ) : null}
                 {status === "truncated" && (
                   <Text variant="caption">{common("previewTruncated")}</Text>
@@ -557,7 +619,7 @@ const LegalFilePreview = ({
         return (
           <>
             <Text variant="caption">{structuredDocument("textOnly")}</Text>
-            <Text selectable>{preview.value.text}</Text>
+            <LegalFilePreviewText format="plain" text={preview.value.text} />
             {preview.value.truncated && (
               <Text variant="caption">{common("previewTruncated")}</Text>
             )}
@@ -576,8 +638,16 @@ const LegalFilePreview = ({
     const unreadableMessages = {
       dataBox: t("failure.dataBoxUnreadable"),
       "structured-document": structuredDocument("noReadableContent"),
+      // Any XML file is offered to the invoice reader; refused, it is not one.
+      "e-invoice": eInvoice(
+        file.viewer === "e-invoice" && file.format === "xml"
+          ? "notRecognized"
+          : "unreadable",
+      ),
       asic: signedFile("unreadable"),
       cades: signedFile("unreadable"),
+      certifiedEmail: t(requestFailure),
+      "signed-dossier": signedFile("unreadable"),
     } satisfies Record<typeof viewer, string>;
     const unreadableMessage = unreadableMessages[viewer];
     return (

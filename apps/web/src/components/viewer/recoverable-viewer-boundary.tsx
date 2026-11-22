@@ -36,7 +36,9 @@ export type ViewerSurface =
   | "inspector-asic"
   | "inspector-structured-document"
   | "inspector-cades"
+  | "inspector-signed-dossier"
   | "inspector-data-box"
+  | "inspector-e-invoice"
   | "inspector-pdf"
   | "inspector-text"
   | "search-preview-pdf";

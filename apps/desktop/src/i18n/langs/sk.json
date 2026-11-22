@@ -575,6 +575,25 @@
       "descriptionCloud": "stella AI navyše opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu.",
       "title": "Upraviť pomocou AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Zachová uvoľnený tón s ľahkou interpunkciou.",
+        "title": "Neformálny"
+      },
+      "notes": {
+        "description": "Krátke body, každý na samostatnom riadku, bez výplňových slov.",
+        "title": "Poznámky"
+      },
+      "polished": {
+        "description": "Opraví chyby rozpoznávania a zachová vaše formulácie.",
+        "title": "Uhladený"
+      },
+      "title": "Štýl",
+      "verbatim": {
+        "description": "Každé slovo tak, ako zaznelo; doplní sa len interpunkcia a veľké písmená.",
+        "title": "Doslovný"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Najviac {limit, number} znakov dokumentu, v ktorom ste, aby diktát nadviazal na to, čo píšete.",
@@ -606,6 +625,7 @@
       "local": "Tento počítač",
       "localDescription": "Reč sa prevádza na tomto počítači a neukladá sa.",
       "model": "Model prevodu",
+      "modelWithdrawn": "Zvolený model už nie je k dispozícii. Vyberte iný; dovtedy sa diktát prepisuje v tomto počítači.",
       "outsideRegion": "Mimo vášho regiónu",
       "retainsData": "Uchováva váš zvuk",
       "retainsDataTitle": "{provider} si ponecháva, čo diktujete",
@@ -677,10 +697,13 @@
       "checkBodyMac": "Skontrolujte prístup k mikrofónu v Systémových nastaveniach a skúste to znova.",
       "checkBodyPc": "Skontrolujte prístup k mikrofónu v Nastaveniach Windows a skúste to znova.",
       "chooseMicrophone": "Vybrať mikrofón…",
+      "chooseModel": "Vybrať model…",
       "dismiss": "Zavrieť",
       "inputDevice": "Vstup: {device}",
       "missingBody": "Diktovanie namiesto toho používa {device}.",
       "missingTitle": "{missing} nie je pripojené",
+      "modelBody": "Vyberte iný v Nastaveniach → Diktovanie. Tento diktát bol prepísaný v tomto počítači.",
+      "modelTitle": "Váš model na prepis už nie je k dispozícii",
       "nothingBody": "Hovorte, kým držíte kláves, alebo v nastaveniach Zvuku vyberte iný vstup.",
       "nothingTitle": "stella nepočula žiadnu reč",
       "openSettingsMac": "Otvoriť Systémové nastavenia",
@@ -742,6 +765,11 @@
       "failed": "Okno sa nepodarilo otvoriť. Skúste to znova.",
       "open": "Otvoriť",
       "title": "Prepísať nahrávku"
+    },
+    "translateTo": {
+      "description": "Upravený text napíše v tomto jazyku, nech hovoríte akýmkoľvek jazykom.",
+      "off": "Jazyk, ktorým hovoríte",
+      "title": "Písať v jazyku"
     },
     "whileDictating": {
       "choices": {

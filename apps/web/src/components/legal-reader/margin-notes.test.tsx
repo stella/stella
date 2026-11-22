@@ -19,6 +19,8 @@ const { DecisionReaderProvider } =
   await import("@stll/decision-reader/reader-adapters");
 const { IntlProvider } = await import("use-intl");
 const { MarginNotes } = await import("@/components/legal-reader/margin-notes");
+const { FakeCollectionAttribution } =
+  await import("../../../../../packages/decision-reader/tests/reader-adapters");
 const messages = (await import("@/i18n/langs/en.json")).default;
 
 class ResizeObserverProbe implements ResizeObserver {
@@ -159,6 +161,7 @@ const provision = {
 } satisfies CitedProvisionTarget;
 
 const readerAdapters = {
+  CollectionAttribution: FakeCollectionAttribution,
   messages: {
     "statutes.diffRemoved": "Removed",
     "statutes.diffInserted": "Inserted",

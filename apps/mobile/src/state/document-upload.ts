@@ -40,9 +40,13 @@ const uploadsPath = (matterId: string) =>
 
 /**
  * Where the file a save sheet uploads came from: a scan reviewed before it,
- * or a document picked from Files.
+ * a document picked from Files, or a dictation's text (`src/app/dictation.tsx`).
  */
-export const UPLOAD_ORIGIN = { file: "file", scan: "scan" } as const;
+export const UPLOAD_ORIGIN = {
+  dictation: "dictation",
+  file: "file",
+  scan: "scan",
+} as const;
 
 /** A picked file as the save sheet's route parameters. */
 export const pickedFileSaveParams = ({

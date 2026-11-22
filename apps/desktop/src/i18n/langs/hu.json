@@ -575,6 +575,25 @@
       "descriptionCloud": "A stella AI emellett kijavítja a felismerési hibákat és a kimondott formázást, például „új sor” vagy „félkövér”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez.",
       "title": "Javítás AI-jal"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Laza hangnemet tart, takarékos írásjelekkel.",
+        "title": "Közvetlen"
+      },
+      "notes": {
+        "description": "Rövid pontok, soronként egy, töltelékszavak nélkül.",
+        "title": "Jegyzetek"
+      },
+      "polished": {
+        "description": "Kijavítja a felismerési hibákat, és megtartja a megfogalmazását.",
+        "title": "Csiszolt"
+      },
+      "title": "Stílus",
+      "verbatim": {
+        "description": "Minden szó úgy, ahogy elhangzott; csak írásjelek és nagybetűk kerülnek bele.",
+        "title": "Szó szerinti"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Legfeljebb {limit, number} karakter abból a dokumentumból, amelyben dolgozik, hogy a diktálás illeszkedjen az íráshoz.",
@@ -606,6 +625,7 @@
       "local": "Ez a számítógép",
       "localDescription": "A beszéd átírása ezen a számítógépen történik, és nem kerül tárolásra.",
       "model": "Átírási modell",
+      "modelWithdrawn": "A választott modell már nem érhető el. Válasszon másikat; addig a diktálás ezen a számítógépen íródik le.",
       "outsideRegion": "A régióján kívül",
       "retainsData": "Megőrzi a hangfelvételt",
       "retainsDataTitle": "A(z) {provider} megőrzi, amit diktál",
@@ -677,10 +697,13 @@
       "checkBodyMac": "Ellenőrizze a mikrofon-hozzáférést a Rendszerbeállításokban, majd próbálja újra.",
       "checkBodyPc": "Ellenőrizze a mikrofon-hozzáférést a Windows beállításaiban, majd próbálja újra.",
       "chooseMicrophone": "Mikrofon kiválasztása…",
+      "chooseModel": "Modell választása…",
       "dismiss": "Bezárás",
       "inputDevice": "Bemenet: {device}",
       "missingBody": "A diktálás helyette ezt használja: {device}.",
       "missingTitle": "{missing} nincs csatlakoztatva",
+      "modelBody": "Válasszon egyet a Beállítások → Diktálás alatt. Ezt a diktálást ezen a számítógépen írtuk le.",
+      "modelTitle": "Az átírási modellje már nem érhető el",
       "nothingBody": "Beszéljen, amíg lenyomva tartja a billentyűt, vagy válasszon másik bemenetet a Hang beállításaiban.",
       "nothingTitle": "A stella nem hallott beszédet",
       "openSettingsMac": "Rendszerbeállítások megnyitása",
@@ -742,6 +765,11 @@
       "failed": "Az ablakot nem sikerült megnyitni. Próbálja újra.",
       "open": "Megnyitás",
       "title": "Felvétel átírása"
+    },
+    "translateTo": {
+      "description": "A megtisztított szöveget ezen a nyelven írja, bármilyen nyelven beszél is.",
+      "off": "A beszélt nyelv",
+      "title": "Írás nyelve"
     },
     "whileDictating": {
       "choices": {

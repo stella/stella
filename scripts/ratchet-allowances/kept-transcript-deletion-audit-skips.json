@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 4,
-  "reason": "The kept-transcript deletion table holds only a transcription provider's ids for transcripts still to be deleted there, never audio, text or member data. Recording an id, recording a refusal and dropping it once the provider confirms the delete are system bookkeeping of one deletion; the dictation request that kept the transcript is already audited with its usage event."
-}

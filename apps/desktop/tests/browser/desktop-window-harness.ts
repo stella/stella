@@ -232,6 +232,8 @@ const openWindow = async (
           [
             ["dictation_set_enabled", "enabled", "enabled"],
             ["dictation_set_cleanup", "enabled", "cleanup"],
+            ["dictation_set_cleanup_style", "style", "cleanupStyle"],
+            ["dictation_set_translate_to", "language", "translateTo"],
             ["dictation_set_sounds", "enabled", "sounds"],
             ["dictation_set_retype_shortcut", "enabled", "retypeShortcut"],
             ["dictation_set_while_dictating", "choice", "whileDictating"],

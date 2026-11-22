@@ -2,8 +2,8 @@ import * as v from "valibot";
 
 import { useUserStorageState } from "@/lib/account/use-user-storage-state";
 import { readStoredJson, serializeStoredJson } from "@/lib/stored-json";
+import { MIN_COLUMN_WIDTH_PX } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view-columns.logic";
 
-const MIN_COL_WIDTH_PX = 80;
 const MAX_COL_WIDTH_PX = 800;
 const ColumnWidthsRecordSchema = v.record(v.string(), v.unknown());
 
@@ -27,7 +27,7 @@ export const useColumnWidths = (baseKey: string) => {
   });
   const setWidth = (id: string, width: number) => {
     const clamped = Math.max(
-      MIN_COL_WIDTH_PX,
+      MIN_COLUMN_WIDTH_PX,
       Math.min(MAX_COL_WIDTH_PX, Math.round(width)),
     );
     updateValue((previous) =>

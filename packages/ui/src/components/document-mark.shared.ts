@@ -247,8 +247,110 @@ const openDocumentMark = ({
   };
 };
 
-const legalDocumentMark = (details: string) =>
-  ({
+// The legal formats' marks share one design: the format's page in its own
+// colour, with the format's tag drawn on it in white strokes, the way the
+// data-box mark letters "ZFO" on its envelope. A format added to the legal
+// registry gets its mark from a colour and a tag, never another's artwork.
+
+/**
+ * The letters a tag is drawn with, as strokes in a box three wide and four
+ * tall (the data-box mark's letters): points "x y" joined by commas, strokes
+ * by "|". A stroke that ends where it starts is closed.
+ */
+const MARK_GLYPHS = {
+  A: "0 4,0 1.5,1.5 0,3 1.5,3 4|0 2.5,3 2.5",
+  B: "0 2,2.2 2,3 1.3,3 0.7,2.2 0,0 0,0 4,2.2 4,3 3.3,3 2.7,2.2 2",
+  C: "3 0,0 0,0 4,3 4",
+  D: "0 0,2 0,3 1,3 3,2 4,0 4,0 0",
+  E: "3 0,0 0,0 4,3 4|0 2,2.2 2",
+  F: "3 0,0 0,0 4|0 2,2.2 2",
+  I: "0.5 0,2.5 0|1.5 0,1.5 4|0.5 4,2.5 4",
+  L: "0 0,0 4,3 4",
+  M: "0 4,0 0,1.5 2,3 0,3 4",
+  O: "0 0,3 0,3 4,0 4,0 0",
+  P: "0 4,0 0,3 0,3 2,0 2",
+  S: "3 0,0 0,0 2,3 2,3 4,0 4",
+  T: "0 0,3 0|1.5 0,1.5 4",
+  U: "0 0,0 4,3 4,3 0",
+  X: "0 0,3 4|3 0,0 4",
+  Z: "0 0,3 0,0 4,3 4",
+  "3": "0 0,3 0,1.5 2,3 2,3 4,0 4",
+  "7": "0 0,3 0,1 4",
+} as const satisfies Record<string, string>;
+
+type MarkGlyph = keyof typeof MARK_GLYPHS;
+
+const GLYPH_WIDTH = 3;
+const GLYPH_HEIGHT = 4;
+const GLYPH_GAP = 2;
+/** The page's room for its widest line, clear of the page's edges. */
+const TAG_MAX_WIDTH = 14;
+const TAG_MAX_SCALE = 1.15;
+const TAG_LINE_GAP = 2;
+const TAG_CENTER_X = 11;
+/** The middle of the page below its fold. */
+const TAG_CENTER_Y = 15;
+const TAG_STROKE_WIDTH = 1.2;
+
+const coordinate = (value: number) => String(Math.round(value * 100) / 100);
+
+const lineWidth = (line: readonly MarkGlyph[]) =>
+  line.length * GLYPH_WIDTH + (line.length - 1) * GLYPH_GAP;
+
+const glyphStrokes = (glyph: MarkGlyph) =>
+  MARK_GLYPHS[glyph].split("|").map((stroke) =>
+    stroke.split(",").map((point) => {
+      const [x = 0, y = 0] = point.split(" ").map(Number);
+      return { x, y };
+    }),
+  );
+
+/** One stroke path for every letter of the tag, centred on the page. */
+const tagPath = (lines: readonly (readonly MarkGlyph[])[]) => {
+  // Every line takes the widest line's scale, so the letters match.
+  const scale = Math.min(
+    TAG_MAX_SCALE,
+    TAG_MAX_WIDTH / Math.max(...lines.map(lineWidth)),
+  );
+  const lineHeight = GLYPH_HEIGHT * scale;
+  const blockHeight =
+    lines.length * lineHeight + (lines.length - 1) * TAG_LINE_GAP;
+  const top = TAG_CENTER_Y - blockHeight / 2;
+  const strokes = lines.flatMap((line, lineIndex) => {
+    const left = TAG_CENTER_X - (lineWidth(line) * scale) / 2;
+    const y0 = top + lineIndex * (lineHeight + TAG_LINE_GAP);
+    return line.flatMap((glyph, glyphIndex) => {
+      const x0 = left + glyphIndex * (GLYPH_WIDTH + GLYPH_GAP) * scale;
+      return glyphStrokes(glyph).map((points) => {
+        const first = points.at(0);
+        const last = points.at(-1);
+        const closed =
+          points.length > 2 && first?.x === last?.x && first?.y === last?.y;
+        const drawn = (closed ? points.slice(0, -1) : points).map(
+          ({ x, y }) =>
+            `${coordinate(x0 + x * scale)} ${coordinate(y0 + y * scale)}`,
+        );
+        return `M${drawn.join("L")}${closed ? "Z" : ""}`;
+      });
+    });
+  });
+  return {
+    d: strokes.join(""),
+    strokeWidth: coordinate(TAG_STROKE_WIDTH * Math.min(1, scale)),
+  };
+};
+
+const legalFormatMark = ({
+  color,
+  lines,
+}: {
+  /** The page's fill, the format's own colour. */
+  readonly color: string;
+  /** The format's tag, a line or two of letters. */
+  readonly lines: readonly (readonly MarkGlyph[])[];
+}): DocumentMarkArtwork => {
+  const tag = tagPath(lines);
+  return {
     viewBox: "0 0 24 24",
     gradients: [],
     shapes: [
@@ -256,39 +358,58 @@ const legalDocumentMark = (details: string) =>
         tag: "path",
         attrs: {
           d: "M5 1h9l5 5v15a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2z",
-          fill: "#566275",
+          fill: color,
         },
       },
       {
         tag: "path",
-        attrs: {
-          d: "M14 1v5h5",
-          fill: "#c2c9d2",
-        },
+        attrs: { d: "M14 1v5h5", fill: "#fff", fillOpacity: "0.5" },
       },
       {
         tag: "path",
         attrs: {
-          d: details,
+          d: tag.d,
           fill: "none",
           stroke: "#fff",
-          strokeWidth: "1.4",
           strokeLinecap: "round",
           strokeLinejoin: "round",
+          strokeWidth: tag.strokeWidth,
         },
       },
     ],
-  }) satisfies DocumentMarkArtwork;
-
-const signedDocumentMark = legalDocumentMark("M7 11h8m-8 3h5m1 4 2 2 4-5");
-const structuredDocumentMark = legalDocumentMark("M7 11h8m-8 4h8m-8 4h5");
+  };
+};
 
 export const DOCUMENT_MARKS = {
-  ofd: structuredDocumentMark,
-  uyap: structuredDocumentMark,
-  asicE: signedDocumentMark,
-  asicS: signedDocumentMark,
-  cades: signedDocumentMark,
+  ofd: legalFormatMark({ color: "#9a5b00", lines: [["O", "F", "D"]] }),
+  uyap: legalFormatMark({ color: "#b3261e", lines: [["U", "D", "F"]] }),
+  asicE: legalFormatMark({
+    color: "#2e6b4f",
+    lines: [["A", "S", "I", "C"], ["E"]],
+  }),
+  asicS: legalFormatMark({
+    color: "#4f7a2e",
+    lines: [["A", "S", "I", "C"], ["S"]],
+  }),
+  bdoc: legalFormatMark({ color: "#0f6e7a", lines: [["B", "D", "O", "C"]] }),
+  cades: legalFormatMark({ color: "#6b4c9a", lines: [["P", "7", "M"]] }),
+  fatturaPA: legalFormatMark({ color: "#1d6f42", lines: [["F", "P", "A"]] }),
+  isdoc: legalFormatMark({
+    color: "#1f5fa8",
+    lines: [["I", "S", "D", "O", "C"]],
+  }),
+  isdocx: legalFormatMark({
+    color: "#2a4f8f",
+    lines: [["I", "S", "D", "O", "C"], ["X"]],
+  }),
+  xml: legalFormatMark({ color: "#5c6470", lines: [["X", "M", "L"]] }),
+  eAkta: legalFormatMark({ color: "#8c2f5d", lines: [["E", "S", "3"]] }),
+  et3: legalFormatMark({ color: "#a2481f", lines: [["E", "T", "3"]] }),
+  zep: legalFormatMark({ color: "#24529c", lines: [["Z", "E", "P"]] }),
+  xadesZep: legalFormatMark({
+    color: "#3d4f8f",
+    lines: [["X", "Z", "E", "P"]],
+  }),
   dataBox: {
     viewBox: "0 0 24 24",
     gradients: [],

@@ -24,6 +24,7 @@ import {
 } from "@/components/inspector/inspector-pdf-error-fallback";
 import { InspectorRestoreHold } from "@/components/inspector/inspector-restore-hold";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
+import type { LegalFilePdfView } from "@/components/inspector/legal-file-pdf-view";
 import { MarkdownFileViewer } from "@/components/inspector/markdown-file-viewer";
 import { PlainTextFileViewer } from "@/components/inspector/plain-text-file-viewer";
 import type { DesktopOpenTarget } from "@/components/inspector/use-desktop-file-open";
@@ -64,13 +65,27 @@ const DataBoxFileViewer = lazy(async () => {
   return { default: m.DataBoxFileViewer };
 });
 
+const EInvoiceViewer = lazy(async () => {
+  const m = await import("@/components/inspector/e-invoice-viewer");
+  return { default: m.EInvoiceViewer };
+});
+
+const SignedDossierViewer = lazy(async () => {
+  const m = await import("@/components/inspector/signed-dossier-viewer");
+  return { default: m.SignedDossierViewer };
+});
+
 const StructuredDocumentViewer = lazy(async () => {
   const m = await import("@/components/inspector/structured-document-viewer");
   return { default: m.StructuredDocumentViewer };
 });
 
 type LegalFileViewer = {
-  Viewer: ComponentType<{ onDownload: () => void; tab: FileTab }>;
+  Viewer: ComponentType<{
+    onDownload: () => void;
+    pdfView: LegalFilePdfView;
+    tab: FileTab;
+  }>;
   unreadable: TranslationKey;
   download: TranslationKey;
   surface: ViewerSurface;
@@ -83,6 +98,13 @@ const asicFileViewer = {
   surface: "inspector-asic",
 } as const satisfies LegalFileViewer;
 
+const signedDossierViewer = {
+  Viewer: SignedDossierViewer,
+  unreadable: "signedFile.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-signed-dossier",
+} as const satisfies LegalFileViewer;
+
 const structuredDocumentViewer = {
   Viewer: StructuredDocumentViewer,
   unreadable: "structuredDocument.noReadableContent",
@@ -90,9 +112,19 @@ const structuredDocumentViewer = {
   surface: "inspector-structured-document",
 } as const satisfies LegalFileViewer;
 
+const eInvoiceViewer = {
+  Viewer: EInvoiceViewer,
+  unreadable: "eInvoice.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-e-invoice",
+} as const satisfies LegalFileViewer;
+
 const legalFileViewers = {
   asicE: asicFileViewer,
   asicS: asicFileViewer,
+  eAkta: signedDossierViewer,
+  zep: signedDossierViewer,
+  xadesZep: signedDossierViewer,
   cades: {
     Viewer: CadesFileViewer,
     unreadable: "signedFile.unreadable",
@@ -101,6 +133,10 @@ const legalFileViewers = {
   },
   ofd: structuredDocumentViewer,
   uyap: structuredDocumentViewer,
+  isdoc: eInvoiceViewer,
+  isdocx: eInvoiceViewer,
+  // Any XML file opens here; the reader refuses one that is not an invoice.
+  xml: { ...eInvoiceViewer, unreadable: "eInvoice.notRecognized" },
   dataBox: {
     Viewer: DataBoxFileViewer,
     unreadable: "correspondence.dataBox.unreadable",
@@ -212,6 +248,29 @@ const FileTabViewerComponent = ({
   const handleReset = () => handleResetZoom(tab.id);
   const handleZoomDirection = (direction: "in" | "out") =>
     handleZoom(tab.id, direction);
+  const zoomOverlay = (
+    colorControl: ReturnType<typeof getPeekPDFColorControl>,
+  ) => (
+    <ViewerOverlayBar>
+      <PeekPdfControls
+        onReset={handleReset}
+        onZoom={handleZoomDirection}
+        pdfColorControl={colorControl}
+        scaleOffset={scaleOffset}
+      />
+    </ViewerOverlayBar>
+  );
+  // A legal file that holds a PDF draws it with the same zoom, colour mode
+  // and controls as a PDF tab; the viewer places the controls over its PDF.
+  const legalFilePdfView: LegalFilePdfView = {
+    colorMode: pdfColorMode,
+    controls: zoomOverlay({
+      colorMode: pdfColorMode,
+      onColorModeChange: onPdfColorModeChange,
+    }),
+    onWheelZoom: handlePdfWheelZoom,
+    scaleOffset,
+  };
 
   const handleDownload = () => {
     detached(
@@ -234,8 +293,14 @@ const FileTabViewerComponent = ({
       case "asicS":
       case "cades":
       case "dataBox":
+      case "eAkta":
+      case "xadesZep":
+      case "zep":
       case "ofd":
-      case "uyap": {
+      case "uyap":
+      case "isdoc":
+      case "isdocx":
+      case "xml": {
         const { Viewer, unreadable, download, surface } =
           legalFileViewers[nativePreviewKind];
         return (
@@ -254,7 +319,11 @@ const FileTabViewerComponent = ({
             surface={surface}
           >
             <Suspense fallback={<PeekSuspenseFallback />}>
-              <Viewer onDownload={handleDownload} tab={tab} />
+              <Viewer
+                onDownload={handleDownload}
+                pdfView={legalFilePdfView}
+                tab={tab}
+              />
             </Suspense>
           </RecoverableViewerBoundary>
         );
@@ -415,16 +484,7 @@ const FileTabViewerComponent = ({
           {/* Floating preview-only toolbar mounted on top of the
               viewer body — zoom controls only. The edit-mode exit
               (Save / Create version) lives in the tab header. */}
-          {isZoomOverlayVisible ? (
-            <ViewerOverlayBar>
-              <PeekPdfControls
-                onReset={handleReset}
-                onZoom={handleZoomDirection}
-                pdfColorControl={pdfColorControl}
-                scaleOffset={scaleOffset}
-              />
-            </ViewerOverlayBar>
-          ) : null}
+          {isZoomOverlayVisible ? zoomOverlay(pdfColorControl) : null}
         </div>
       </div>
     </div>

@@ -24,6 +24,7 @@ import {
   browseCalendarScalingScenario,
   browseCourtsScalingScenario,
 } from "./case-law-browse-hubs";
+import { certifiedEmailScalingScenario } from "./certified-email";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -61,6 +62,10 @@ import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import {
+  eInvoiceAttachmentScalingScenario,
+  eInvoicePreviewScalingScenario,
+} from "./e-invoice";
 import { fileContentScalingScenario } from "./file-content";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
@@ -90,6 +95,10 @@ import {
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
+import {
+  signedDossierContentScalingScenario,
+  signedDossierPreviewScalingScenario,
+} from "./signed-dossier";
 import { similarDocumentsScalingScenarios } from "./similar-documents";
 import { skillExportScalingScenarios } from "./skill-export";
 import {
@@ -154,10 +163,15 @@ const measuredApiScenarios = [
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
   asicPreviewScalingScenario,
+  signedDossierContentScalingScenario,
+  signedDossierPreviewScalingScenario,
   structuredDocumentScalingScenario,
+  eInvoicePreviewScalingScenario,
+  eInvoiceAttachmentScalingScenario,
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,
+  certifiedEmailScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,

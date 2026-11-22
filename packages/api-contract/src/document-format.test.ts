@@ -4,11 +4,28 @@ import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
 import { documentFormat } from "./document-format";
 import type { DocumentFormatKind } from "./document-format";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
+import {
+  ASIC_E_FILE_FORMAT,
+  LEGAL_FILE_FORMATS,
+  legalFileFormatProfiles,
+} from "./legal-file-formats";
 
 const kindOf = (mimeType: string | null, fileName?: string) =>
   documentFormat(mimeType, fileName).kind;
 
 describe("documentFormat", () => {
+  test.each([
+    ["application/xml", "podanie.xzep", "xadesZep"],
+    ["text/xml", "faktura.isdoc", "isdoc"],
+    ["application/xml", "IT00000000001_00001.xml", "xml"],
+    ["text/xml", "data", "xml"],
+  ] as const)(
+    "a generic XML type %s yields to the format %s names",
+    (mimeType, fileName, kind) => {
+      expect(documentFormat(mimeType, fileName).kind).toBe(kind);
+    },
+  );
+
   test("uses the email mark for EML and Outlook MSG files", () => {
     expect(kindOf(EML_MIME_TYPE)).toBe("email");
     expect(kindOf(MSG_MIME_TYPE)).toBe("email");
@@ -57,6 +74,7 @@ describe("documentFormat", () => {
   test("names an unlisted image or text type by its family", () => {
     expect(documentFormat("image/heic", "IMG_0042.HEIC")).toEqual({
       kind: "image",
+      mark: "image",
       label: "HEIC",
     });
     expect(kindOf("image/tiff")).toBe("image");
@@ -103,5 +121,81 @@ describe("documentFormat", () => {
     expect(labelOf(undefined, "bez přípony")).toBeUndefined();
     expect(labelOf("constructor", "a.pdf")).toBe("PDF");
     expect(labelOf("__proto__")).toBeUndefined();
+  });
+
+  test("tags converted formats by any declared type or extension, under the generic mark", () => {
+    const formatOf = (mimeType: string | null, fileName?: string) =>
+      documentFormat(mimeType, fileName);
+    expect(formatOf("application/x-iwork-pages-sffpages")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "PAGES",
+    });
+    expect(formatOf("application/vnd.apple.numbers")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "NUMBERS",
+    });
+    expect(formatOf("application/vnd.wordperfect")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "WPD",
+    });
+    expect(formatOf("application/octet-stream", "smlouva.wp5")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "WPD",
+    });
+    expect(formatOf("application/octet-stream", "vestnik.mhtml")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "MHT",
+    });
+    expect(formatOf("application/epub+zip")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "EPUB",
+    });
+    expect(formatOf("application/vnd.ms-works", "dopis")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "WPS",
+    });
+  });
+
+  test("keeps a profile's tag and mark under its format's media type", () => {
+    const asicE = ASIC_E_FILE_FORMAT.mimeType;
+    expect(documentFormat(asicE, "smlouva.BDOC")).toEqual({
+      kind: "asicE",
+      mark: "bdoc",
+      label: "BDOC",
+    });
+    expect(documentFormat(null, "smlouva.bdoc")).toEqual({
+      kind: "asicE",
+      mark: "bdoc",
+      label: "BDOC",
+    });
+    expect(documentFormat(asicE, "contract.asice")).toEqual({
+      kind: "asicE",
+      mark: "asicE",
+      label: "ASiC-E",
+    });
+    // Only a profile of the same family overrides the media type: a name
+    // naming another family, or the same mark, leaves it as it was.
+    expect(documentFormat(asicE, "contract.p7m").mark).toBe("asicE");
+    expect(documentFormat("application/msword", "legacy.docx").label).toBe(
+      "DOC",
+    );
+  });
+
+  test("declares every profile's extensions on its format", () => {
+    for (const format of LEGAL_FILE_FORMATS) {
+      for (const profile of legalFileFormatProfiles(format)) {
+        expect(format.extensions).toEqual(
+          expect.arrayContaining([...profile.extensions]),
+        );
+        expect(profile.mark).not.toBe(format.kind);
+      }
+    }
   });
 });

@@ -28,6 +28,8 @@
     "allow-dictation-get-snapshot",
     "allow-dictation-set-enabled",
     "allow-dictation-set-cleanup",
+    "allow-dictation-set-cleanup-style",
+    "allow-dictation-set-translate-to",
     "allow-dictation-set-sounds",
     "allow-dictation-set-retype-shortcut",
     "allow-dictation-set-app-settings",
