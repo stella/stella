@@ -564,6 +564,7 @@
       "back": "Back to the list",
       "download": "Download {fileName}",
       "noPreview": "This file type has no preview. Download it or save it to a matter.",
+      "notConverted": "This file couldn't be converted for preview. Download it or save it to a matter.",
       "open": "Open {fileName}"
     },
     "firstSourceReached": "This is the first source.",

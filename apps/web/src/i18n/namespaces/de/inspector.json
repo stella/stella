@@ -564,6 +564,7 @@
       "back": "Zurück zur Liste",
       "download": "{fileName} herunterladen",
       "noPreview": "Für diesen Dateityp gibt es keine Vorschau. Laden Sie die Datei herunter oder speichern Sie sie in einer Akte.",
+      "notConverted": "Diese Datei konnte nicht für die Vorschau umgewandelt werden. Laden Sie sie herunter oder speichern Sie sie in einer Akte.",
       "open": "{fileName} öffnen"
     },
     "firstSourceReached": "Dies ist die erste Quelle.",

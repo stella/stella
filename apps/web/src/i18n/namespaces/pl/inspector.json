@@ -564,6 +564,7 @@
       "back": "Wróć do listy",
       "download": "Pobierz {fileName}",
       "noPreview": "Tego typu pliku nie można wyświetlić w podglądzie. Pobierz go lub zapisz w sprawie.",
+      "notConverted": "Nie udało się przekonwertować tego pliku do podglądu. Pobierz go lub zapisz w sprawie.",
       "open": "Otwórz {fileName}"
     },
     "firstSourceReached": "To pierwsze źródło.",

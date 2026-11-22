@@ -564,6 +564,7 @@
       "back": "Vissza a listához",
       "download": "{fileName} letöltése",
       "noPreview": "Ehhez a fájltípushoz nincs előnézet. Töltse le, vagy mentse egy ügybe.",
+      "notConverted": "Ezt a fájlt nem sikerült átalakítani az előnézethez. Töltse le, vagy mentse egy ügybe.",
       "open": "{fileName} megnyitása"
     },
     "firstSourceReached": "Ez az első forrás.",

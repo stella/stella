@@ -1,4 +1,11 @@
-import { type ReactNode, useId, useState } from "react";
+import {
+  lazy,
+  type ReactElement,
+  type ReactNode,
+  Suspense,
+  useId,
+  useState,
+} from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -26,8 +33,10 @@ import { DocumentIcon } from "@/components/document-icon";
 import {
   decodeFilePartText,
   FILE_PART_PREVIEW_KIND,
+  type FilePartPreviewKind,
   filePartPreviewKind,
   filePartViewId,
+  isFilePartPdfPreviewKind,
 } from "@/components/file-parts/file-parts.logic";
 import type { FilePartActions } from "@/components/file-parts/use-file-part-actions";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
@@ -36,6 +45,7 @@ import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
+import { APIError } from "@/lib/errors/api";
 import { filePartContentOptions } from "@/lib/files/file-part-queries";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -43,6 +53,23 @@ import {
   getPDFScaleOffset,
   PDF_SCALE_OFFSET_STEP,
 } from "@/lib/pdf/pdf-zoom.logic";
+
+// A Word part draws in the read-only document view, a spreadsheet or a
+// presentation in the office canvas: the views a stored file of the type
+// opens in. Both load with the first such part opened.
+const ReadOnlyDocxDocument = lazy(async () => {
+  const m = await import("@/components/docx/read-only-docx-document");
+  return { default: m.ReadOnlyDocxDocument };
+});
+
+const OfficeDocumentCanvas = lazy(async () => {
+  const m = await import("@/components/office/office-document-canvas");
+  return { default: m.OfficeDocumentCanvas };
+});
+
+/** Kinds whose preview zooms with the header's controls. */
+const isZoomablePreviewKind = (kind: FilePartPreviewKind) =>
+  isFilePartPdfPreviewKind(kind) || kind === FILE_PART_PREVIEW_KIND.docx;
 
 /** A part as a list shows it; a container may add one line under its name. */
 export type FilePartRow = FilePartDescriptor & {
@@ -314,7 +341,7 @@ export const FilePartViewer = ({
         <span className="text-muted-foreground hidden shrink-0 text-xs tabular-nums sm:inline">
           {formatFileSize(row.sizeBytes, format)}
         </span>
-        {kind === FILE_PART_PREVIEW_KIND.pdf ? (
+        {isZoomablePreviewKind(kind) ? (
           <div className="flex shrink-0 items-center gap-1">
             <PeekPdfControls
               onReset={onResetZoom}
@@ -355,6 +382,15 @@ export const FilePartViewer = ({
           <FilePartPreview
             fileName={fileName}
             kind={kind}
+            notConverted={
+              <NoPreview
+                actions={actions}
+                fallback={fallback}
+                fileName={fileName}
+                message={t("inspector.fileParts.notConverted")}
+                row={row}
+              />
+            }
             row={row}
             scaleOffset={scaleOffset}
             source={source}
@@ -369,11 +405,14 @@ const NoPreview = ({
   actions,
   fallback,
   fileName,
+  message,
   row,
 }: {
   actions: FilePartActions;
   fallback: ReactNode;
   fileName: string;
+  /** Why there is no preview; by default, that the type has none. */
+  message?: string;
   row: FilePartRow;
 }) => {
   const t = useTranslations();
@@ -396,7 +435,7 @@ const NoPreview = ({
             </p>
           </div>
           <p className="text-muted-foreground max-w-sm text-sm text-pretty">
-            {t("inspector.fileParts.noPreview")}
+            {message ?? t("inspector.fileParts.noPreview")}
           </p>
           <PartDownloadButton
             actions={actions}
@@ -430,18 +469,26 @@ const PreviewMessage = ({
   </div>
 );
 
+/**
+ * A converted part's display the server answered without a PDF: the
+ * conversion refused it (too large, turned away by the converter's checks,
+ * a document it cannot render). Another attempt gives the same answer.
+ */
+const isConversionRefusal = (error: unknown) =>
+  APIError.is(error) && error.status === 422;
+
 const FilePartPreview = ({
   fileName,
   kind,
+  notConverted,
   row,
   scaleOffset,
   source,
 }: {
   fileName: string;
-  kind: Exclude<
-    (typeof FILE_PART_PREVIEW_KIND)[keyof typeof FILE_PART_PREVIEW_KIND],
-    "none"
-  >;
+  kind: Exclude<FilePartPreviewKind, "none">;
+  /** What shows when the server could not convert a converted part. */
+  notConverted: ReactElement;
   row: FilePartRow;
   scaleOffset: number;
   source: FilePartSource;
@@ -452,6 +499,13 @@ const FilePartPreview = ({
   );
   const viewId = filePartViewId({ ...source, part: row.part });
 
+  if (
+    content.isError &&
+    kind === FILE_PART_PREVIEW_KIND.converted &&
+    isConversionRefusal(content.error)
+  ) {
+    return notConverted;
+  }
   if (content.isError) {
     return (
       <PreviewMessage
@@ -503,6 +557,40 @@ const FilePartPreview = ({
       </div>
     );
   }
+  if (kind === FILE_PART_PREVIEW_KIND.docx) {
+    return (
+      <div className="bg-background size-full min-h-0 overflow-hidden rounded-sm">
+        <Suspense fallback={<Skeleton className="size-full rounded-sm" />}>
+          <ReadOnlyDocxDocument
+            documentBuffer={content.data}
+            fileName={fileName}
+            scaleOffset={scaleOffset}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+  if (
+    kind === FILE_PART_PREVIEW_KIND.xlsx ||
+    kind === FILE_PART_PREVIEW_KIND.pptx
+  ) {
+    return (
+      <div
+        aria-label={fileName}
+        className="bg-muted flex size-full min-h-0 flex-col overflow-hidden rounded-sm"
+        role="document"
+      >
+        <Suspense fallback={<Skeleton className="size-full rounded-sm" />}>
+          <OfficeDocumentCanvas
+            documentBuffer={content.data}
+            documentKey={viewId}
+            format={kind}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+  // A PDF part, or the PDF the server converted a document part to.
   return (
     <MeasuredPdfProvider
       active

@@ -564,6 +564,7 @@
       "back": "Tagasi loendisse",
       "download": "Laadi alla {fileName}",
       "noPreview": "Seda failitüüpi ei saa eelvaadata. Laadige see alla või salvestage toimikusse.",
+      "notConverted": "Seda faili ei õnnestunud eelvaate jaoks teisendada. Laadige see alla või salvestage toimikusse.",
       "open": "Ava {fileName}"
     },
     "firstSourceReached": "See on esimene allikas.",

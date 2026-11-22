@@ -564,6 +564,7 @@
       "back": "Volver a la lista",
       "download": "Descargar {fileName}",
       "noPreview": "Este tipo de archivo no tiene vista previa. Descárguelo o guárdelo en un asunto.",
+      "notConverted": "No se pudo convertir este archivo para la vista previa. Descárguelo o guárdelo en un asunto.",
       "open": "Abrir {fileName}"
     },
     "firstSourceReached": "Esta es la primera fuente.",
