@@ -1,3 +1,5 @@
+import { parseDecimalToken } from "@stll/agent-input/numeric-token";
+
 import type { EInvoice } from "./e-invoice";
 
 /**
@@ -75,10 +77,8 @@ export const eInvoiceUnit = (code: string): EInvoiceUnit => {
  * when the literal is not a plain decimal number.
  */
 export const eInvoiceQuantityCount = (quantity: string): number | null => {
-  const literal = quantity.trim();
-  return /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/u.test(literal)
-    ? Number(literal)
-    : null;
+  const count = parseDecimalToken(quantity.trim());
+  return count.isOk() ? count.value : null;
 };
 
 /**

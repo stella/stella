@@ -38,12 +38,11 @@ describe("eInvoiceQuantityCount", () => {
     ["0.5", 0.5],
     [" 32 ", 32],
     ["-2", -2],
-    [".25", 0.25],
   ] as const)("reads %p as %p", (literal, count) => {
     expect(eInvoiceQuantityCount(literal)).toBe(count);
   });
 
-  test.each(["1,5", "1e3", "", "dvě", "0x10"])(
+  test.each(["1,5", "1e3", "", "dvě", "0x10", ".25", "+2"])(
     "does not read %p as a number",
     (literal) => {
       expect(eInvoiceQuantityCount(literal)).toBeNull();

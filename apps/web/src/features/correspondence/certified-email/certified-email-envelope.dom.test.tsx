@@ -134,6 +134,6 @@ test("long addresses wrap inside a narrow card instead of running past it", asyn
     expect(value.className).not.toContain("wrap-break-word");
   }
   expect(
-    values.some((value) => value.textContent?.includes(longAddress)),
+    values.some((value) => value.textContent.includes(longAddress)),
   ).toBeTrue();
 });

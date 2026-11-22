@@ -95,7 +95,7 @@ const identifierKey = (value: string) =>
  * scheme); it is listed where the first one stood, under the more specific
  * of the two kinds.
  */
-export const distinctIdentifiers = (
+const distinctIdentifiers = (
   identifiers: readonly PartyIdentifier[],
 ): PartyIdentifier[] => {
   const byValue = new Map<string, PartyIdentifier>();
