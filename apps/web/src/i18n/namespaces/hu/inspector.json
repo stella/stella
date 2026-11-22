@@ -540,7 +540,6 @@
       "waitForMatches": "Várja meg az anonimizálási vizsgálat végét.",
       "workspaceTermsHeading": "Munkaterületi kifejezések ({count})"
     },
-    "attachmentNotPreviewable": "A melléklet megnyitásához töltse le.",
     "closeAllTabs": "{count, plural, one {# lap} other {Mind a # lap}} bezárása",
     "closeOtherTabs": "{count, plural, one {# másik lap} other {# másik lap}} bezárása",
     "closeTab": "<bdi>{name}</bdi> bezárása",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonimizálás"
+    },
+    "fileParts": {
+      "back": "Vissza a listához",
+      "download": "{fileName} letöltése",
+      "noPreview": "Ehhez a fájltípushoz nincs előnézet. Töltse le, vagy mentse egy ügybe.",
+      "open": "{fileName} megnyitása"
     },
     "firstSourceReached": "Ez az első forrás.",
     "groups": {
@@ -818,7 +823,6 @@
       "why": "Miért",
       "whyItMatters": "Miért fontos:"
     },
-    "selectAttachmentToSave": "Válassza ki a mentendő mellékletet.",
     "showPane": "Panel megjelenítése",
     "swapViews": "A fő nézet és az oldalsó panel felcserélése",
     "title": "Ellenőrző panel"

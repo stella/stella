@@ -540,7 +540,6 @@
       "waitForMatches": "Warten Sie, bis die Prüfung zur Anonymisierung abgeschlossen ist.",
       "workspaceTermsHeading": "Kanzleibegriffe ({count})"
     },
-    "attachmentNotPreviewable": "Laden Sie den Anhang herunter, um ihn zu öffnen.",
     "closeAllTabs": "{count, plural, one {# Tab} other {Alle # Tabs}} schließen",
     "closeOtherTabs": "{count, plural, one {# anderen Tab} other {# andere Tabs}} schließen",
     "closeTab": "<bdi>{name}</bdi> schließen",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonymisierung"
+    },
+    "fileParts": {
+      "back": "Zurück zur Liste",
+      "download": "{fileName} herunterladen",
+      "noPreview": "Für diesen Dateityp gibt es keine Vorschau. Laden Sie die Datei herunter oder speichern Sie sie in einer Akte.",
+      "open": "{fileName} öffnen"
     },
     "firstSourceReached": "Dies ist die erste Quelle.",
     "groups": {
@@ -818,7 +823,6 @@
       "why": "Warum",
       "whyItMatters": "Warum es wichtig ist:"
     },
-    "selectAttachmentToSave": "Wählen Sie einen Anhang zum Speichern aus.",
     "showPane": "Bereich anzeigen",
     "swapViews": "Hauptansicht und Seitenleiste tauschen",
     "title": "Inspektor"

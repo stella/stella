@@ -1328,8 +1328,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "Retains native processing-run deduplication by source version.",
   "src/handlers/feedback/create.ts":
     "Submits to the detached feedback store outside the organization transaction.",
-  "src/handlers/files/email-attachment/create.ts":
-    "Saves attachment bytes through the durable upload lifecycle.",
   "src/handlers/flows/create.ts":
     "Synchronizes the scheduled trigger after the database mutation.",
   "src/handlers/lists/items/comments/create.ts":

@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Załączniki",
     "certifiedAt": "Data certyfikacji",
     "deliveredTo": "Doręczono do",
     "error": "Zgłoszony błąd",
@@ -462,6 +461,7 @@
     },
     "fit": "Szerokość",
     "openOriginal": "Otwórz oryginał",
+    "openPart": "Otwórz {fileName}",
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "retry": "Spróbuj ponownie",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Numer rachunku bankowego",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Załączone pliki",
     "bankCode": "Kod banku",
     "batchPosition": "Dokument {position, number} z {count, number}",
     "bic": "Kod BIC",
@@ -520,11 +519,24 @@
     "vatBreakdown": "Zestawienie VAT",
     "vatId": "Numer VAT"
   },
+  "email": {
+    "cc": "DW",
+    "date": "Data",
+    "from": "Nadawca",
+    "noSubject": "(Brak tematu)",
+    "subject": "Temat",
+    "to": "Odbiorcy"
+  },
   "entity": {
     "currentVersion": "Bieżąca wersja",
     "loadFailed": "Nie udało się wczytać tej pozycji.",
     "reference": "Sygnatura",
     "type": "Typ"
+  },
+  "fileParts": {
+    "attachments": "Załączniki",
+    "open": "Otwórz {fileName} ({details})",
+    "unnamed": "Plik bez nazwy"
   },
   "header": {
     "search": "Szukaj"
@@ -853,6 +865,7 @@
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "noSigners": "Nie znaleziono danych podpisujących.",
+    "signedContent": "Podpisany dokument",
     "signers": "Podpisujący",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",

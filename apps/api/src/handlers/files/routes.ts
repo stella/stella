@@ -2,6 +2,10 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { AUTHORED_DOCUMENT_PROPERTY_KEYS } from "@stll/api-contract";
+import {
+  filePartIdSchema,
+  parseFilePartId,
+} from "@stll/api-contract/file-parts";
 import { MARKED_PDF_EXPORT_MODES } from "@stll/api-contract/marked-pdf-export";
 
 import { readDocumentProperties } from "@/api/handlers/files/document-properties";
@@ -23,7 +27,10 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { readFileHandler } from "@/api/lib/files/read-file";
+import {
+  readFileHandler,
+  readFilePartUrlHandler,
+} from "@/api/lib/files/read-file";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { callerDownloadSource } from "@/api/lib/s3-presign";
 
@@ -37,12 +44,14 @@ export const readFileEndpoint = createSafeHandler(
     mcp: { type: "internal", reason: "upload_mechanics" },
     query: v.object({
       purpose: v.picklist(["download", "display", "native-display"]),
+      /** A part of the file, such as `attachment:0`; the file itself when omitted. */
+      part: v.optional(filePartIdSchema),
     }),
     params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
-    query: { purpose },
+    query: { purpose, part: partId },
     user,
     scopedDb,
     session,
@@ -52,22 +61,28 @@ export const readFileEndpoint = createSafeHandler(
     if (purpose === "download") {
       yield* checkDemoAccountOperation(user.email);
     }
-    const response = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readFileHandler({
-            fieldId,
-            userId: user.id,
-            source: callerDownloadSource(session),
-            organizationId: session.activeOrganizationId,
-            workspaceId,
-            purpose,
-            scopedDb,
-            recordAuditEvent,
-            readSessionAuthority: ownerSyntheticSessionAuthorityReader,
-          }),
-      ),
-    );
+    const part = partId === undefined ? null : parseFilePartId(partId);
+    const caller = {
+      fieldId,
+      userId: user.id,
+      source: callerDownloadSource(session),
+      organizationId: session.activeOrganizationId,
+      workspaceId,
+      purpose,
+      scopedDb,
+      recordAuditEvent,
+      readSessionAuthority: ownerSyntheticSessionAuthorityReader,
+    };
+    const response =
+      part === null
+        ? yield* Result.await(
+            Result.tryPromise(async () => await readFileHandler(caller)),
+          )
+        : yield* yield* Result.await(
+            Result.tryPromise(
+              async () => await readFilePartUrlHandler({ ...caller, part }),
+            ),
+          );
 
     return Result.ok(response);
   },

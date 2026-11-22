@@ -31,7 +31,6 @@
       "sent": "Odoslaná",
       "statedInFile": "Dátová správa (podľa údajov v súbore)",
       "toHands": "K rukám: {name}",
-      "unlinkedFiles": "Prílohy bez odkazu otvoríte po stiahnutí pôvodného súboru ZFO.",
       "unreadable": "Súbor sa nepodarilo prečítať ako dátovú správu ani ako doručenku.",
       "uploaded": "Nahraná dátová správa"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Ťarchopis",
       "other": "Iný doklad"
     },
-    "downloadAttachment": "Stiahnuť {fileName}",
     "exemptionReason": "Dôvod oslobodenia",
     "formatVersion": "{format}, verzia {version}",
     "grossTotal": "Spolu s DPH",
@@ -369,6 +367,7 @@
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
     "noSigners": "Nenašli sa žiadne údaje o podpisovateľoch.",
     "pdfUnavailable": "Náhľad PDF nie je k dispozícii.",
+    "signedDocument": "Podpísaný dokument",
     "signers": "Podpisovatelia",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",

@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "المرفقات",
     "certifiedAt": "وقت الاعتماد",
     "deliveredTo": "سُلّم إلى",
     "error": "الخطأ المُبلّغ عنه",
@@ -462,6 +461,7 @@
     },
     "fit": "العرض",
     "openOriginal": "فتح الأصل",
+    "openPart": "فتح {fileName}",
     "preview": "فتح المعاينة",
     "previewDescription": "يُفتح هذا الملف في معاينة النظام.",
     "retry": "إعادة المحاولة",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "رقم الحساب المصرفي",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "الملفات المرفقة",
     "bankCode": "رمز البنك",
     "batchPosition": "المستند {position, number} من {count, number}",
     "bic": "رمز BIC",
@@ -520,11 +519,24 @@
     "vatBreakdown": "تفصيل ضريبة القيمة المضافة",
     "vatId": "رقم ضريبة القيمة المضافة"
   },
+  "email": {
+    "cc": "نسخة",
+    "date": "التاريخ",
+    "from": "المرسل",
+    "noSubject": "(بلا موضوع)",
+    "subject": "الموضوع",
+    "to": "المستلمون"
+  },
   "entity": {
     "currentVersion": "الإصدار الحالي",
     "loadFailed": "تعذّر تحميل هذا العنصر.",
     "reference": "المرجع",
     "type": "النوع"
+  },
+  "fileParts": {
+    "attachments": "المرفقات",
+    "open": "فتح {fileName} ({details})",
+    "unnamed": "ملف بلا اسم"
   },
   "header": {
     "search": "بحث"
@@ -853,6 +865,7 @@
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
     "noSigners": "لم يُعثر على بيانات أي موقّع.",
+    "signedContent": "المستند الموقّع",
     "signers": "الموقّعون",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",

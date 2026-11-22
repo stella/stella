@@ -23,7 +23,6 @@ export const STRUCTURED_DOCUMENT_PREVIEW_MODE = "structured-document-preview";
 
 export const SIGNED_DOSSIER_WORKER_MODE = {
   preview: "signed-dossier-preview",
-  pdf: "signed-dossier-pdf",
 } as const;
 
 export const ARCHIVE_PREVIEW_WORKER_EXIT = {

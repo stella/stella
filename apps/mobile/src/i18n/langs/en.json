@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Attachments",
     "certifiedAt": "Certified at",
     "deliveredTo": "Delivered to",
     "error": "Reported error",
@@ -462,6 +461,7 @@
     },
     "fit": "Fit",
     "openOriginal": "Open original",
+    "openPart": "Open {fileName}",
     "preview": "Open preview",
     "previewDescription": "This file opens in the system preview.",
     "retry": "Try again",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Bank account number",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Attached files",
     "bankCode": "Bank code",
     "batchPosition": "Document {position, number} of {count, number}",
     "bic": "BIC code",
@@ -520,11 +519,24 @@
     "vatBreakdown": "VAT breakdown",
     "vatId": "VAT ID"
   },
+  "email": {
+    "cc": "Cc",
+    "date": "Date",
+    "from": "Sender",
+    "noSubject": "(No subject)",
+    "subject": "Subject",
+    "to": "Recipients"
+  },
   "entity": {
     "currentVersion": "Current version",
     "loadFailed": "This item could not be loaded.",
     "reference": "Reference",
     "type": "Type"
+  },
+  "fileParts": {
+    "attachments": "Attachments",
+    "open": "Open {fileName} ({details})",
+    "unnamed": "Unnamed file"
   },
   "header": {
     "search": "Search"
@@ -853,6 +865,7 @@
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
     "noSigners": "No signer details were found.",
+    "signedContent": "Signed document",
     "signers": "Signers",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",

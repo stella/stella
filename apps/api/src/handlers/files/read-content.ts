@@ -11,7 +11,10 @@ import {
   checkFileContentGrant,
   FILE_CONTENT_GRANT_MAX_LENGTH,
 } from "@/api/lib/files/file-content-grant";
-import { readFileContentHandler } from "@/api/lib/files/read-file";
+import {
+  readFileContentHandler,
+  readFilePartContentHandler,
+} from "@/api/lib/files/read-file";
 import type { TokenScopedDatabase } from "@/api/lib/root-scoped-db";
 import { tokenScopedDatabase } from "@/api/lib/root-scoped-db";
 
@@ -68,6 +71,28 @@ export const createReadFileContentEndpoint = ({
     config,
     verifyFileContentGrant(now),
     async function* ({ caller: grant, request }) {
+      const scopedDb = database.scoped({
+        organizationId: grant.organizationId,
+        userId: grant.userId,
+        workspaceIds: [grant.workspaceId],
+      });
+      if (grant.part !== null) {
+        const { part } = grant;
+        const delivered = yield* Result.await(
+          Result.tryPromise(
+            async () =>
+              await readFilePartContentHandler({
+                fieldId: grant.fieldId,
+                organizationId: grant.organizationId,
+                part,
+                purpose: grant.purpose,
+                scopedDb,
+                workspaceId: grant.workspaceId,
+              }),
+          ),
+        );
+        return Result.ok(yield* delivered);
+      }
       const response = yield* Result.await(
         Result.tryPromise(
           async () =>
@@ -76,11 +101,7 @@ export const createReadFileContentEndpoint = ({
               fieldId: grant.fieldId,
               organizationId: grant.organizationId,
               purpose: grant.purpose,
-              scopedDb: database.scoped({
-                organizationId: grant.organizationId,
-                userId: grant.userId,
-                workspaceIds: [grant.workspaceId],
-              }),
+              scopedDb,
               workspaceId: grant.workspaceId,
             }),
         ),

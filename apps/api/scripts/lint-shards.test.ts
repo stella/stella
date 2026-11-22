@@ -4,7 +4,12 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { API_LINT_SHARDS, apiLintCommands } from "./lint-shards";
+import {
+  API_LINT_SHARD_NAMES,
+  API_LINT_SHARDS,
+  apiLintCommandForShard,
+  apiLintCommands,
+} from "./lint-shards";
 
 const repositoryRoot = path.resolve(import.meta.dir, "../../..");
 const script = path.join(import.meta.dir, "lint-shards.ts");
@@ -89,4 +94,28 @@ test("a run whose shards all pass succeeds", () => {
     { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" },
   );
   expect(result.exitCode).toBe(0);
+});
+
+test("API_LINT_SHARD selects a single shard and rejects unknown shard names", () => {
+  const commands = apiLintCommands(["oxlint", "--type-aware"]);
+  expect(apiLintCommandForShard(["oxlint", "--type-aware"], "lib")).toEqual(
+    commands[0] ?? [],
+  );
+  expect(
+    apiLintCommandForShard(["oxlint", "--type-aware"], "handlers"),
+  ).toEqual(commands[1] ?? []);
+  expect(apiLintCommandForShard(["oxlint", "--type-aware"], "rest")).toEqual(
+    commands[2] ?? [],
+  );
+  expect(API_LINT_SHARD_NAMES).toEqual(["lib", "handlers", "rest"]);
+  const invalid = Bun.spawnSync(
+    [process.execPath, script, process.execPath, "-e", "process.exit(0)"],
+    {
+      cwd: repositoryRoot,
+      env: { ...process.env, API_LINT_SHARD: "bogus" },
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  expect(invalid.exitCode).toBe(2);
 });

@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Adjuntos",
     "certifiedAt": "Certificado el",
     "deliveredTo": "Entregado a",
     "error": "Error notificado",
@@ -462,6 +461,7 @@
     },
     "fit": "Ancho",
     "openOriginal": "Abrir original",
+    "openPart": "Abrir {fileName}",
     "preview": "Abrir vista previa",
     "previewDescription": "Este archivo se abre en la vista previa del sistema.",
     "retry": "Reintentar",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Número de cuenta bancaria",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Archivos adjuntos",
     "bankCode": "Código bancario",
     "batchPosition": "Documento {position, number} de {count, number}",
     "bic": "Código BIC",
@@ -520,11 +519,24 @@
     "vatBreakdown": "Desglose del IVA",
     "vatId": "Número de IVA"
   },
+  "email": {
+    "cc": "Copia",
+    "date": "Fecha",
+    "from": "Remitente",
+    "noSubject": "(Sin asunto)",
+    "subject": "Asunto",
+    "to": "Destinatarios"
+  },
   "entity": {
     "currentVersion": "Versión actual",
     "loadFailed": "No se pudo cargar este elemento.",
     "reference": "Referencia",
     "type": "Tipo"
+  },
+  "fileParts": {
+    "attachments": "Adjuntos",
+    "open": "Abrir {fileName} ({details})",
+    "unnamed": "Archivo sin nombre"
   },
   "header": {
     "search": "Buscar"
@@ -853,6 +865,7 @@
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
     "noSigners": "No se encontraron datos de los firmantes.",
+    "signedContent": "Documento firmado",
     "signers": "Firmantes",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",

@@ -132,18 +132,6 @@ export type EmbeddedInvoiceFile = {
   base64: string;
 };
 
-/** Bytes a base64 text decodes to, without decoding it. */
-export const base64DecodedSize = (base64: string): number => {
-  const compact = base64.replace(/[^A-Za-z0-9+/=_-]/gu, "");
-  let padding = 0;
-  if (compact.endsWith("==")) {
-    padding = 2;
-  } else if (compact.endsWith("=")) {
-    padding = 1;
-  }
-  return Math.max(0, Math.floor((compact.length * 3) / 4) - padding);
-};
-
 export type ParsedEInvoice = {
   version: string | null;
   invoices: EInvoice[];
