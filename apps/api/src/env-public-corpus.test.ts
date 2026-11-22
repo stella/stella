@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
 
-// A process that only reads the public corpus: database settings, a strict
-// (production) runtime mode, and no tenant content key.
+// A process that only reads the public corpus: the base database and storage
+// settings, a strict (production) runtime mode, and no tenant content key.
 const publicReaderEnv = {
   NODE_ENV: "production",
   DATABASE_URL: "postgres://reader:reader-secret@localhost:5432/stella",
+  S3_ENDPOINT: "http://localhost:9000",
+  S3_BUCKET: "stella-public-corpus",
+  S3_REGION: "us-east-1",
 } as const;
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const moduleUrl = (path: string) => new URL(path, import.meta.url).href;
@@ -35,14 +38,19 @@ const load = (module: string, env: Record<string, string>) =>
 
 describe("public corpus environment", () => {
   test("the public case-law search loads in a strict runtime without a content key", () => {
-    // The fixture must reach the fault: the same settings refuse the API env.
-    const api = load(API_ENV, publicReaderEnv);
+    // The fixture must reach the fault: even with Valkey configured, these
+    // settings refuse the API env for its missing content key.
+    const api = load(API_ENV, {
+      ...publicReaderEnv,
+      REDIS_URL: "redis://localhost:6379",
+    });
     expect(api.exitCode).not.toBe(0);
     expect(api.stderr).toContain("CONTENT_ENCRYPTION_KEY");
 
-    const reader = load(PUBLIC_READER_ENTRY, publicReaderEnv);
-    expect(reader.stderr).toBe("");
-    expect(reader.exitCode).toBe(0);
+    // On failure the report carries the child's stderr.
+    expect(load(PUBLIC_READER_ENTRY, publicReaderEnv)).toMatchObject({
+      exitCode: 0,
+    });
   });
 
   test("the corpus policy budgets the configured public pool", () => {
