@@ -28,7 +28,7 @@ const IMAGE_TYPE_BY_EXTENSION: ReadonlyMap<string, string> = new Map([
 ]);
 
 /** The total bytes of images one rendered document embeds. */
-export const RENDERED_HTML_IMAGE_BUDGET_BYTES = 24 * 1024 * 1024;
+const RENDERED_HTML_IMAGE_BUDGET_BYTES = 24 * 1024 * 1024;
 
 /** The longest HTML a rendered document may be, before sanitizing. */
 export const RENDERED_HTML_MAX_CHARS = 16 * 1024 * 1024;
@@ -58,7 +58,7 @@ export const createImageEmbedder = () => {
   };
 };
 
-export type HtmlDocument = ReturnType<typeof load>;
+type HtmlDocument = ReturnType<typeof load>;
 
 /**
  * Rewrites every `img` source in `$` through `resolve`: a data URI it returns
