@@ -2205,7 +2205,6 @@ jobs:
       contents: read
       actions: write
     env:
-      API_LINT_SHARD: ${{ matrix.shard }}
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
@@ -3736,6 +3735,7 @@ jobs:
       contents: read
       actions: write
     env:
+      API_LINT_SHARD: ${{ matrix.shard }}
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
