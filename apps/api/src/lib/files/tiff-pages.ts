@@ -176,7 +176,9 @@ const decodedPageBytes = (
 ) => {
   const samples = firstNumber(directory[SAMPLES_PER_PIXEL_TAG]) ?? 1;
   const bits = firstNumber(directory[BITS_PER_SAMPLE_TAG]) ?? 1;
-  return width * height * (RGBA_CHANNELS + (samples * bits) / 8);
+  // utif2 holds each source row in whole bytes.
+  const sourceRowBytes = Math.ceil((width * samples * bits) / 8);
+  return width * height * RGBA_CHANNELS + height * sourceRowBytes;
 };
 
 type ReadTiffPagesOptions = {

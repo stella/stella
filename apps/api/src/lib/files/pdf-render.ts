@@ -198,34 +198,43 @@ const renderImage = async (
   );
 };
 
+/** The longest byte sequence of one character in any charset decoded here. */
+const SPLIT_CHARACTER_BYTES_MAX = 4;
+
 /**
  * The start of a text file that its preview lays out: the first
  * `LIMITS.pdfRenderTextSourceBytesMax` bytes, decoded, and cut back to the
  * last line break among them, so the preview ends on a whole line (a whole
  * record of a CSV) and never on a character the cut split. Without a line
- * break, only the replacement character a split one decodes to is dropped.
+ * break, it ends where the decoding of a few bytes more agrees with it: a
+ * character the cut split decodes differently once whole, while one the
+ * file really holds, a replacement character included, does not.
  */
 export const previewText = (
   bytes: Uint8Array,
   declaredType: string,
 ): TextPreviewSource => {
   const limit = LIMITS.pdfRenderTextSourceBytesMax;
+  const decode = (end: number) =>
+    decodeDeclared(bytes.subarray(0, end), { contentType: declaredType }).text;
   if (bytes.byteLength <= limit) {
-    const { text } = decodeDeclared(bytes, { contentType: declaredType });
-    return { text, shortened: false };
+    return { text: decode(bytes.byteLength), shortened: false };
   }
-  const { text } = decodeDeclared(bytes.subarray(0, limit), {
-    contentType: declaredType,
-  });
+  const text = decode(limit);
   const lastBreak = Math.max(text.lastIndexOf("\n"), text.lastIndexOf("\r"));
-  return {
-    text:
-      lastBreak === -1
-        ? text.replace(/�$/u, "")
-        : // A CRLF cut after its LF keeps no stray CR.
-          text.slice(0, lastBreak).replace(/\r$/u, ""),
-    shortened: true,
-  };
+  if (lastBreak !== -1) {
+    return {
+      // A CRLF cut after its LF keeps no stray CR.
+      text: text.slice(0, lastBreak).replace(/\r$/u, ""),
+      shortened: true,
+    };
+  }
+  const further = decode(limit + SPLIT_CHARACTER_BYTES_MAX);
+  let agreed = 0;
+  while (agreed < text.length && text[agreed] === further[agreed]) {
+    agreed += 1;
+  }
+  return { text: text.slice(0, agreed), shortened: true };
 };
 
 const renderText = async (
