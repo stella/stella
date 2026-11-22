@@ -33,7 +33,7 @@ const buildHoldTarget = (
       };
     case "thread":
       return { type: "thread", threadId: createSafeId<"chatThread">() };
-    case "organization":
+    default:
       return { type: "organization" };
   }
 };
