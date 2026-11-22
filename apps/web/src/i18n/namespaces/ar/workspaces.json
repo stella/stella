@@ -101,7 +101,6 @@
     "linesShown": "عرض {shown, number} من {count, plural, zero {# بند} one {بند واحد} two {بندين} few {# بنود} many {# بندًا} other {# بند}}",
     "netAmount": "المبلغ الصافي",
     "netTotal": "الإجمالي غير شامل ضريبة القيمة المضافة",
-    "notRecognized": "ملف XML هذا ليس فاتورة منظمة معروفة.",
     "otherIdentifier": "معرّف آخر",
     "payableAmount": "المبلغ المستحق",
     "paymentAmount": "مبلغ الدفعة",
@@ -122,7 +121,8 @@
     "unitPrice": "سعر الوحدة",
     "unreadable": "تعذّرت قراءة الفاتورة.",
     "vat": "ضريبة القيمة المضافة",
-    "vatBreakdown": "تفصيل ضريبة القيمة المضافة"
+    "vatBreakdown": "تفصيل ضريبة القيمة المضافة",
+    "xmlUnreadable": "تعذّرت قراءة ملف XML هذا."
   },
   "emailViewer": {
     "attachments": "المرفقات",

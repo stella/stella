@@ -33,7 +33,6 @@ import {
 import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
-  XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 import type {
   PreviewText,
@@ -75,7 +74,10 @@ import {
   E_INVOICE_WORKER_EXIT,
   E_INVOICE_WORKER_MODE,
 } from "@/api/lib/files/e-invoice-protocol";
-import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+import {
+  eInvoiceDocumentText,
+  xmlDocumentPreviewText,
+} from "@/api/lib/files/e-invoice-text";
 import {
   extractEInvoiceAttachment,
   extractEInvoicePreview,
@@ -442,25 +444,21 @@ const extractAsicText = async ({
   return Result.ok(asicDocumentText(preview.value));
 };
 
-// Only an invoice is read from an XML file; any other XML, readable or not,
-// keeps having no extracted text, as before it had a reader.
+// Search and AI read the same text the Files preview shows: the invoice, or
+// an XML file's own indented text.
 const extractEInvoiceText = async ({
   fileBytes,
   mimeType,
+  maxChars,
 }: LegalTextReadOptions): Promise<
   Result<string | null, LegalTextReadError | EmailParseError>
 > => {
-  const preview = await extractEInvoicePreview({ fileBytes, mimeType });
-  if (
-    preview.isErr() &&
-    preview.error._tag === "DocumentPackageError" &&
-    mimeType === XML_FILE_FORMAT.mimeType
-  ) {
-    return Result.ok(null);
-  }
-  return preview.map((value) =>
-    value === null ? null : eInvoiceDocumentText(value),
-  );
+  const preview = await extractEInvoicePreview({
+    fileBytes,
+    mimeType,
+    maxChars,
+  });
+  return preview.map(xmlDocumentPreviewText);
 };
 
 const extractSignedDossierText = async ({
@@ -815,6 +813,7 @@ const writeAsicPreview = async (options: {
 const writeEInvoicePreview = async (options: {
   fileBytes: Uint8Array;
   mimeType: string;
+  maxChars: number;
 }) => {
   const preview = await extractEInvoicePreview(options);
   if (preview.isErr()) {
@@ -827,9 +826,6 @@ const writeEInvoicePreview = async (options: {
       case "FileScanFailedError":
         return Result.err(preview.error);
     }
-  }
-  if (preview.value === null) {
-    return Result.ok(E_INVOICE_WORKER_EXIT.notInvoice);
   }
   await writeWorkerStdout(JSON.stringify(preview.value));
   return Result.ok(0);
@@ -954,7 +950,7 @@ try {
     const options = { fileBytes, mimeType: process.argv[4] ?? "" };
     const written =
       mimeType === E_INVOICE_WORKER_MODE.preview
-        ? await writeEInvoicePreview(options)
+        ? await writeEInvoicePreview({ ...options, maxChars })
         : await writeEInvoiceAttachment({
             ...options,
             index: parseIntegerToken(process.argv[5] ?? "", {

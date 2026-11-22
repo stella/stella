@@ -1,4 +1,8 @@
-import type { EInvoice, EInvoicePreview } from "@stll/api-contract/e-invoice";
+import type {
+  EInvoice,
+  EInvoicePreview,
+  XmlDocumentPreview,
+} from "@stll/api-contract/e-invoice";
 
 /**
  * The invoice as text for search and AI reads: the same fields, in the same
@@ -165,3 +169,9 @@ export const eInvoiceDocumentText = (preview: EInvoicePreview): string =>
           ),
         ]),
   ].join("\n");
+
+/** The text search and AI read for what an invoice reader shows. */
+export const xmlDocumentPreviewText = (preview: XmlDocumentPreview): string =>
+  preview.type === "invoice"
+    ? eInvoiceDocumentText(preview.invoice)
+    : `XML document.\n\n${preview.text}${preview.truncated ? "\nDocument text was truncated." : ""}`;

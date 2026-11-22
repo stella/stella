@@ -101,7 +101,6 @@
     "linesShown": "Zobrazuje sa {shown, number} z {count, plural, one {# položky} few {# položiek} many {# položky} other {# položiek}}",
     "netAmount": "Cena bez DPH",
     "netTotal": "Spolu bez DPH",
-    "notRecognized": "Tento súbor XML nie je rozpoznaná štruktúrovaná faktúra.",
     "otherIdentifier": "Iný identifikátor",
     "payableAmount": "Na úhradu",
     "paymentAmount": "Suma platby",
@@ -122,7 +121,8 @@
     "unitPrice": "Jednotková cena",
     "unreadable": "Faktúru sa nepodarilo prečítať.",
     "vat": "DPH",
-    "vatBreakdown": "Rekapitulácia DPH"
+    "vatBreakdown": "Rekapitulácia DPH",
+    "xmlUnreadable": "Tento súbor XML sa nepodarilo prečítať."
   },
   "emailViewer": {
     "attachments": "Prílohy",

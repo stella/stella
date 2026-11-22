@@ -101,7 +101,6 @@
     "linesShown": "Kuvatakse {shown, number} rida {count, plural, one {#-st} other {#-st}}",
     "netAmount": "Netosumma",
     "netTotal": "Kokku käibemaksuta",
-    "notRecognized": "See XML-fail ei ole tuvastatud struktureeritud arve.",
     "otherIdentifier": "Muu tunnus",
     "payableAmount": "Tasumisele kuuluv summa",
     "paymentAmount": "Makse summa",
@@ -122,7 +121,8 @@
     "unitPrice": "Ühiku hind",
     "unreadable": "Arvet ei õnnestunud lugeda.",
     "vat": "Käibemaks",
-    "vatBreakdown": "Käibemaksu jaotus"
+    "vatBreakdown": "Käibemaksu jaotus",
+    "xmlUnreadable": "Seda XML-faili ei õnnestunud lugeda."
   },
   "emailViewer": {
     "attachments": "Manused",

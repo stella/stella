@@ -101,7 +101,6 @@
     "linesShown": "{shown, number} von {count, plural, one {# Position} other {# Positionen}} angezeigt",
     "netAmount": "Nettobetrag",
     "netTotal": "Gesamtbetrag ohne USt.",
-    "notRecognized": "Diese XML-Datei ist keine erkannte strukturierte Rechnung.",
     "otherIdentifier": "Andere Kennung",
     "payableAmount": "Zahlbetrag",
     "paymentAmount": "Zahlungsbetrag",
@@ -122,7 +121,8 @@
     "unitPrice": "Einzelpreis",
     "unreadable": "Die Rechnung konnte nicht gelesen werden.",
     "vat": "USt.",
-    "vatBreakdown": "USt.-Aufschlüsselung"
+    "vatBreakdown": "USt.-Aufschlüsselung",
+    "xmlUnreadable": "Diese XML-Datei konnte nicht gelesen werden."
   },
   "emailViewer": {
     "attachments": "Anhänge",

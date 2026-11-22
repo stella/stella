@@ -119,3 +119,18 @@ export const eInvoicePreviewSchema = v.object({
 
 export type EInvoice = v.InferOutput<typeof eInvoiceSchema>;
 export type EInvoicePreview = v.InferOutput<typeof eInvoicePreviewSchema>;
+
+/**
+ * What an invoice reader shows for a file: the invoice it holds, or, for XML
+ * that is not an invoice, the document's own markup, indented and bounded.
+ */
+export const xmlDocumentPreviewSchema = v.variant("type", [
+  v.object({ type: v.literal("invoice"), invoice: eInvoicePreviewSchema }),
+  v.object({
+    type: v.literal("xml"),
+    text: v.string(),
+    truncated: v.boolean(),
+  }),
+]);
+
+export type XmlDocumentPreview = v.InferOutput<typeof xmlDocumentPreviewSchema>;

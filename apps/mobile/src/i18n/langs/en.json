@@ -493,7 +493,6 @@
     "linesShown": "Showing {shown, number} of {count, plural, one {# line} other {# lines}}",
     "netAmount": "Net amount",
     "netTotal": "Total without VAT",
-    "notRecognized": "This XML file is not a recognized structured invoice.",
     "notes": "Invoice notes",
     "otherIdentifier": "Other identifier",
     "payableAmount": "Amount due",
@@ -518,7 +517,8 @@
     "unreadable": "The invoice could not be read.",
     "vat": "VAT",
     "vatBreakdown": "VAT breakdown",
-    "vatId": "VAT ID"
+    "vatId": "VAT ID",
+    "xmlUnreadable": "This XML file could not be read."
   },
   "entity": {
     "currentVersion": "Current version",

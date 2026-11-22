@@ -493,7 +493,6 @@
     "linesShown": "Exibindo {shown, number} de {count, plural, one {# item} many {# itens} other {# itens}}",
     "netAmount": "Valor líquido",
     "netTotal": "Total sem IVA",
-    "notRecognized": "Este arquivo XML não é uma fatura estruturada reconhecida.",
     "notes": "Observações da fatura",
     "otherIdentifier": "Outro identificador",
     "payableAmount": "Valor a pagar",
@@ -518,7 +517,8 @@
     "unreadable": "Não foi possível ler a fatura.",
     "vat": "IVA",
     "vatBreakdown": "Detalhamento do IVA",
-    "vatId": "Número de IVA"
+    "vatId": "Número de IVA",
+    "xmlUnreadable": "Não foi possível ler este arquivo XML."
   },
   "entity": {
     "currentVersion": "Versão atual",

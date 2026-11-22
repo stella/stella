@@ -12,7 +12,10 @@ import {
   readEInvoiceAttachment,
   readEInvoicePreview,
 } from "@/api/lib/files/e-invoice-preview";
-import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+import {
+  eInvoiceDocumentText,
+  xmlDocumentPreviewText,
+} from "@/api/lib/files/e-invoice-text";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import {
   fatturaPaXml,
@@ -71,38 +74,50 @@ describe("structured invoice files", () => {
       const preview = (
         await readEInvoicePreview(storedFile(source, mimeType, file))
       ).unwrap();
-      expect(preview.invoices.length).toBeGreaterThan(0);
+      expect(
+        preview.type === "invoice" && preview.invoice.invoices.length,
+      ).toBeGreaterThan(0);
       const extracted = await extractFileTextResult(
         storedFile(source, declared, file),
       );
-      expect(extracted.unwrap()).toBe(eInvoiceDocumentText(preview));
+      expect(extracted.unwrap()).toBe(xmlDocumentPreviewText(preview));
     },
   );
 
   test.each([
-    ["plain XML", plainXml()],
-    ["an XAdES signature", xadesSignatureXml()],
+    ["plain XML", plainXml(), "<item>Not an invoice</item>"],
+    ["an XAdES signature", xadesSignatureXml(), "<SignatureValue>AAAA"],
   ])(
-    "leaves %s unclaimed: no preview and no extracted text",
-    async (_, xml) => {
-      const preview = await readEInvoicePreview(
-        storedFile(xmlBytes(xml), XML_FILE_FORMAT.mimeType, "data.xml"),
-      );
-      expect(preview.isErr() && preview.error).toMatchObject({
-        status: 422,
-        code: "preview_unavailable",
-        message: "The file is not a recognised structured invoice",
-      });
+    "shows %s as its indented text, never as an invoice",
+    async (_, xml, expected) => {
+      const preview = (
+        await readEInvoicePreview(
+          storedFile(xmlBytes(xml), XML_FILE_FORMAT.mimeType, "data.xml"),
+        )
+      ).unwrap();
+      expect(preview).toMatchObject({ type: "xml", truncated: false });
+      expect(preview.type === "xml" && preview.text).toContain(expected);
       const extracted = await extractFileTextResult(
         storedFile(xmlBytes(xml), "text/xml", "data.xml"),
       );
-      expect(extracted.unwrap()).toBeNull();
+      expect(extracted.unwrap()).toBe(xmlDocumentPreviewText(preview));
     },
   );
 
-  test("an unreadable ISDOC file is refused as unreadable", async () => {
+  test("shows XML the bounded parser refuses as the text it holds", async () => {
+    const xml =
+      '<?xml version="1.0"?><!DOCTYPE note SYSTEM "note.dtd"><note>Kept as text</note>';
+    const preview = (
+      await readEInvoicePreview(
+        storedFile(xmlBytes(xml), XML_FILE_FORMAT.mimeType, "note.xml"),
+      )
+    ).unwrap();
+    expect(preview).toEqual({ type: "xml", text: xml, truncated: false });
+  });
+
+  test("an ISDOC file that is not text is refused as unreadable", async () => {
     const file = storedFile(
-      xmlBytes("ordinary text"),
+      new Uint8Array([0xff, 0xfe, 0xfd, 0x00, 0xc3, 0x28]),
       ISDOC_FILE_FORMAT.mimeType,
       "broken.isdoc",
     );
@@ -192,7 +207,7 @@ describe("structured invoice files", () => {
         storedFile(bytes, XML_FILE_FORMAT.mimeType, "IT00000000001_00003.xml"),
       )
     ).unwrap();
-    expect(preview.invoice).toEqual(unsigned);
+    expect(unsigned).toEqual({ type: "invoice", invoice: preview.invoice });
   });
 
   test("a signed invoice too large to list in full still previews with its signers", async () => {

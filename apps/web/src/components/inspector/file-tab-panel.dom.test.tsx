@@ -37,10 +37,17 @@ globalThis.fetch = Object.assign(
       });
     }
     if (url.includes("/e-invoice/field-e-invoice-single")) {
-      return Response.json(singleInvoicePreview);
+      return Response.json({ type: "invoice", invoice: singleInvoicePreview });
     }
     if (url.includes("/e-invoice/field-e-invoice-batch")) {
-      return Response.json(invoiceBatchPreview);
+      return Response.json({ type: "invoice", invoice: invoiceBatchPreview });
+    }
+    if (url.includes("/e-invoice/field-xml-text")) {
+      return Response.json({
+        type: "xml",
+        text: "<catalog>\n  <item>Sample entry</item>\n</catalog>",
+        truncated: true,
+      });
     }
     if (url.includes("/signed-dossier/field-dossier/content?document=")) {
       signedDossierPdfRequests.push(new URL(url).searchParams.get("document"));
@@ -1037,7 +1044,7 @@ test("shows each invoice of an Italian batch under its own heading", async () =>
 test.each([
   {
     extension: ".xml",
-    message: "This XML file is not a recognized structured invoice.",
+    message: "This XML file could not be read.",
   },
   { extension: ".isdoc", message: "The invoice could not be read." },
   { extension: ".isdocx", message: "The invoice could not be read." },
@@ -1057,6 +1064,23 @@ test.each([
     expect(pdfEngineCommitCount).toBe(0);
   },
 );
+
+test("shows XML that holds no invoice as its text", async () => {
+  const mounted = renderFileTab({
+    ...pdfTab,
+    id: toSafeId<"field">("field-xml-text"),
+    fileName: "catalog.xml",
+    mimeType: "application/xml",
+  });
+  expect(await mounted.findByText(/<item>Sample entry<\/item>/u)).toBeTruthy();
+  expect(
+    mounted.getByText("The full text is unavailable in this preview."),
+  ).toBeTruthy();
+  expect(
+    mounted.getByRole("button", { name: "Download original" }),
+  ).toBeTruthy();
+  expect(pdfEngineCommitCount).toBe(0);
+});
 
 test("reads the invoice inside a signed FatturaPA file", async () => {
   const tab = {

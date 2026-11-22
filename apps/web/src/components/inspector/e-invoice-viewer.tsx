@@ -47,11 +47,28 @@ export const EInvoiceViewer = ({
             <DownloadIcon />
             {t("common.downloadOriginal")}
           </Button>
-          <EInvoiceDetails
-            fieldId={tab.id}
-            preview={data}
-            workspaceId={tab.workspaceId}
-          />
+          {data.type === "invoice" ? (
+            <EInvoiceDetails
+              fieldId={tab.id}
+              preview={data.invoice}
+              workspaceId={tab.workspaceId}
+            />
+          ) : (
+            // XML that holds no invoice: its own markup, indented.
+            <>
+              <pre
+                className="font-mono text-sm leading-relaxed wrap-break-word whitespace-pre-wrap"
+                dir="ltr"
+              >
+                {data.text}
+              </pre>
+              {data.truncated && (
+                <p className="text-muted-foreground text-sm">
+                  {t("common.previewTruncated")}
+                </p>
+              )}
+            </>
+          )}
         </article>
       </ScrollArea>
     </FileViewerWithAI>
