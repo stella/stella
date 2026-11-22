@@ -1543,6 +1543,7 @@
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
+        "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
