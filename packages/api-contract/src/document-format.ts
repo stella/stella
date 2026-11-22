@@ -75,7 +75,7 @@ export type RecognisedDocumentFormat = {
 };
 
 /** Outlook's TNEF stream: a message, read as an email. */
-const TNEF: FormatEntry = {
+const TNEF: RecognisedDocumentFormat = {
   kind: "email",
   label: "TNEF",
   mimeTypes: [TNEF_MIME_TYPE, ...TNEF_MIME_ALIASES],
