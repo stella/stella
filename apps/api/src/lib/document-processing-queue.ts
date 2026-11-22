@@ -127,7 +127,9 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   isLocalDocumentOcrConfigured,
   recognizePdfTextLocally,
@@ -159,10 +161,16 @@ import {
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { recordNearDuplicateSignature } from "@/api/lib/uploads/near-duplicates/record-signature";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
+
+const OCR_NEAR_DUPLICATE_SIGNATURE_SINK = failureSink({
+  event: "document_processing.ocr_near_duplicate_signature_failed",
+  expected: [],
+});
 export const RECONCILE_BATCH_SIZE = 100;
 const OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 export const NATIVE_CONTENT_SEARCH_BOUND_MS = 2 * 60 * 1000;
@@ -1375,6 +1383,26 @@ export const processDocumentProcessingRun = async (
           panic(`Unhandled persistence outcome: ${String(persistenceOutcome)}`);
       }
       attemptSignal.throwIfAborted();
+
+      if (persistenceOutcome === "persisted") {
+        const recorded = await Result.tryPromise({
+          try: async () =>
+            await recordNearDuplicateSignature(database, {
+              entityId: run.entityId,
+              entityVersionId: run.entityVersionId,
+              organizationId: run.organizationId,
+              workspaceId: run.workspaceId,
+              text: result.value.text,
+            }),
+          catch: (cause) => cause,
+        }).then((attempt) => attempt.andThen((written) => written));
+        if (Result.isError(recorded)) {
+          observeFailure(recorded.error, {
+            sink: OCR_NEAR_DUPLICATE_SIGNATURE_SINK,
+            ctx: { entityId: run.entityId, workspaceId: run.workspaceId },
+          });
+        }
+      }
 
       // The derivative is written before indexing: a failed index leaves a
       // retryable run that `recoverFailedSearchIndex` completes without

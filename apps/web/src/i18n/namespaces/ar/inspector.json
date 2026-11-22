@@ -632,6 +632,10 @@
       "lastUpdatedBy": "آخر تحديث بواسطة",
       "matterColumnsHeading": "بيانات الملف القانوني",
       "noMatterColumns": "لم يُسجَّل أي شيء عن هذا المستند بعد",
+      "similarDocuments": {
+        "heading": "مستندات مشابهة",
+        "similarity": "تشابه بنسبة {percent}"
+      },
       "stellaHeading": "مخزَّن في stella",
       "versionCurrent": "الإصدار {version} (الحالي)"
     },

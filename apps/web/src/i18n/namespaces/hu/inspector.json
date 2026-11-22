@@ -632,6 +632,10 @@
       "lastUpdatedBy": "Utoljára frissítette",
       "matterColumnsHeading": "Ügyadatok",
       "noMatterColumns": "Ehhez a dokumentumhoz még nincs rögzítve adat",
+      "similarDocuments": {
+        "heading": "Hasonló dokumentumok",
+        "similarity": "{percent} hasonlóság"
+      },
       "stellaHeading": "A stella alkalmazásban tárolva",
       "versionCurrent": "v{version} (aktuális)"
     },

@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 8.0.1
+
+### Patch Changes
+
+- [#9185](https://github.com/stella/stella/pull/9185) [`7192259`](https://github.com/stella/stella/commit/7192259afbb8e3e3ffbbb906b9be3129e1ab3882) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read the document names, available text and stated signers of Hungarian e-akta dossiers and Slovak ZEPf containers through document content commands.
+
+- [#8962](https://github.com/stella/stella/pull/8962) [`f656590`](https://github.com/stella/stella/commit/f6565905a3c1b8d322efb026432aa8a70757f4c1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read an attached official collection text when a published decision's host has no body, preserving source provenance and licence restrictions.
+
+- [#9202](https://github.com/stella/stella/pull/9202) [`f55e84a`](https://github.com/stella/stella/commit/f55e84a17a4847c2d6722799990f5932fdd7b004) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read the signed data objects and stated signers of Slovak XAdES_ZEP envelopes, and name Hungarian e-akta delivery receipts as receipts, through document content commands.
+
+- [#9189](https://github.com/stella/stella/pull/9189) [`b0f575f`](https://github.com/stella/stella/commit/b0f575f1ef2b403299e222e2dc21293b916785c7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read Czech ISDOC, Italian FatturaPA and EN 16931 UBL and CII invoices through document content commands.
+
 ## 8.0.0
 
 ### Major Changes

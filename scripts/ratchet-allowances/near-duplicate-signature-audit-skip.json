@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 1,
+  "reason": "The extraction worker stores a near-duplicate MinHash signature and its band keys derived from text the audited upload already stored. The rows change no member data, carry no actor, and are deleted with the entity version."
+}
