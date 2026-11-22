@@ -839,7 +839,11 @@ test("lists a ZIP archive's files with their folders and opens an email inside i
     mimeType: "application/zip",
   };
   const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
-  const unread = { text: "", textFormat: "plain", status: "unavailable" };
+  const unread = {
+    text: "",
+    textFormat: "plain",
+    status: "unavailable",
+  } as const;
   const mounted = renderFileTab(tab, (client) => {
     client.setQueryData(zipArchivePreviewOptions(key).queryKey, {
       files: [

@@ -42,13 +42,18 @@ const fileText = ({ status, text, unavailable }: FileReading): string => {
  */
 export const zipArchiveText = ({
   files,
+  maxChars,
 }: {
   files: readonly FileReading[];
-}): string =>
-  [
+  /** The most characters the text may hold; unbounded when absent. */
+  maxChars?: number;
+}): string => {
+  const text = [
     "ZIP archive.",
     ...files.map(
       (file) =>
         `File: ${file.folder === null ? "" : `${file.folder}/`}${file.fileName}\n${fileText(file)}`,
     ),
   ].join("\n\n");
+  return maxChars === undefined ? text : text.slice(0, maxChars);
+};

@@ -504,7 +504,7 @@ const extractZipText = async ({
     maxChars,
     readText: extractEmbeddedPayloadText,
   });
-  return preview.map(zipArchiveText);
+  return preview.map(({ files }) => zipArchiveText({ files, maxChars }));
 };
 
 const extractStructuredText = async (options: LegalTextReadOptions) => {

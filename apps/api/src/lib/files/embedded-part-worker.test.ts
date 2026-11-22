@@ -13,7 +13,7 @@ import {
   decodeEmbeddedPart,
   encodeEmbeddedPart,
 } from "./embedded-part-protocol";
-import { extractEmbeddedPart } from "./embedded-part-worker";
+import { containerOf, extractEmbeddedPart } from "./embedded-part-worker";
 
 const read = async (
   fileBytes: Uint8Array,
@@ -113,6 +113,19 @@ describe("a part read from a stored container", () => {
       part: { kind: FILE_PART_KINDS.member, index: 0 },
     });
     expect(result.isErr() && result.error._tag).toBe("AsicParseError");
+  });
+
+  test("a part declared as a generic ZIP is the format its name names", () => {
+    const of = (fileName: string) =>
+      containerOf({
+        bytes: new Uint8Array(),
+        mimeType: "application/zip",
+        fileName,
+      })?.format;
+    expect(of("leping.asice")).toBe("asicE");
+    expect(of("FV-2026-0042.isdocx")).toBe("isdocx");
+    expect(of("podklady.zip")).toBe("zip");
+    expect(of("smlouva.docx")).toBeUndefined();
   });
 
   test("the reply carries any name and any bytes through unchanged", () => {

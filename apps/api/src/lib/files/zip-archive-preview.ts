@@ -81,15 +81,15 @@ export const extractZipArchivePreview = async ({
         };
   });
 
-  // Reserve room for every path, heading and potential clipping notice.
+  // Reserve room for every path, heading, reason and clipping notice.
   const layoutChars =
     zipArchiveText({
-      files: rows.map(({ fileName, folder }) => ({
+      files: rows.map(({ fileName, folder, unavailable }) => ({
         fileName,
         folder,
         status: "truncated",
         text: "",
-        unavailable: null,
+        unavailable,
       })),
     }).length + rows.length;
   const members = rows.flatMap(({ member }) =>

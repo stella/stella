@@ -141,6 +141,23 @@ describe("a ZIP archive's files", () => {
     ]);
   });
 
+  test("a file under folders longer than a shown name stays a file", async () => {
+    const folders = `${"a".repeat(255)}/`.repeat(4);
+    const files = await read([
+      { name: `${folders}smlouva.pdf`, data: "%PDF-1.7" },
+      {
+        name: folders,
+        externalAttributes: unixExternalAttributes(UNIX_DIRECTORY),
+      },
+    ]);
+    expect(files.map(({ fileName }) => fileName)).toEqual(["smlouva.pdf"]);
+    expect(files.at(0)?.folder?.length).toBe(1024);
+  });
+
+  test("an archive of no files lists none", async () => {
+    expect(await read([])).toEqual([]);
+  });
+
   test("a control character in a name is never kept", async () => {
     const [file] = await read([
       { name: "faktura\u0007\u001b[31m.txt", data: "x" },

@@ -140,10 +140,11 @@ export const containerOf = ({
   fileName: string;
 }): Container | null => {
   const email = resolveEmailMimeType({ mimeType, fileName });
-  const format =
-    LEGAL_FILE_FORMATS.find((candidate) => candidate.mimeType === mimeType)
-      ?.kind ?? filePartContainerFormat(mimeType, fileName);
-  if (format === null || format === undefined) {
+  // The type and the name together: a part declared as a generic ZIP or
+  // XML type that its name says is an ASiC container is one, and one its
+  // name says is an Office document is no container.
+  const format = filePartContainerFormat(mimeType, fileName);
+  if (format === null) {
     return null;
   }
   if (format === "email") {
@@ -278,15 +279,23 @@ const invoiceAttachments = async ({
   if (invoice.isErr()) {
     return Result.err(invoice.error);
   }
-  const slots: ContainerSlot[] = [];
-  for (const attachment of invoice.value?.attachments ?? []) {
-    const read = invoiceAttachmentPart(attachment);
-    if (read.isErr()) {
-      return Result.err(read.error);
-    }
-    slots.push(part({ ...read.value, statedMimeType: null }));
-  }
-  return Result.ok(slots);
+  // One attachment that does not decode does not keep the others closed.
+  return Result.ok(
+    (invoice.value?.attachments ?? []).map((attachment): ContainerSlot => {
+      const read = invoiceAttachmentPart(attachment);
+      return read.isErr()
+        ? {
+            type: "unavailable",
+            fileName: sanitizeFilenamePreservingExtension(
+              attachment.fileName.split("/").at(-1)?.trim() || "attachment",
+            ),
+            folder: null,
+            sizeBytes: 0,
+            reason: "unreadable",
+          }
+        : part({ ...read.value, statedMimeType: null });
+    }),
+  );
 };
 
 /** An email's attachments at their positions, as its preview lists them. */
