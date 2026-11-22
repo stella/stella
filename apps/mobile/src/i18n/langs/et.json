@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Manused",
     "certifiedAt": "Sertifitseerimise aeg",
     "deliveredTo": "Kätte toimetatud aadressile",
     "error": "Teatatud viga",
@@ -475,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Pangakonto number",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Lisatud failid",
     "bankCode": "Panga kood",
     "batchPosition": "Dokument {position, number}/{count, number}",
     "bic": "BIC-kood",
@@ -521,11 +519,24 @@
     "vatBreakdown": "Käibemaksu jaotus",
     "vatId": "Käibemaksukohustuslase number"
   },
+  "email": {
+    "cc": "Koopia",
+    "date": "Kuupäev",
+    "from": "Saatja",
+    "noSubject": "(Teema puudub)",
+    "subject": "Teema",
+    "to": "Saajad"
+  },
   "entity": {
     "currentVersion": "Praegune versioon",
     "loadFailed": "Kirjet ei õnnestunud laadida.",
     "reference": "Viitenumber",
     "type": "Tüüp"
+  },
+  "fileParts": {
+    "attachments": "Manused",
+    "open": "Ava {fileName} ({details})",
+    "unnamed": "Nimetu fail"
   },
   "header": {
     "search": "Otsing"
@@ -854,6 +865,7 @@
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
     "noSigners": "Allkirjastajate andmeid ei leitud.",
+    "signedContent": "Allkirjastatud dokument",
     "signers": "Allkirjastajad",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",

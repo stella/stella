@@ -1463,7 +1463,6 @@ const bunNativeFiles = [
   "apps/api/src/lib/email/inbound/original-signature.test.ts",
   "apps/api/src/lib/email/inbound/upload.db.test.ts",
   "apps/api/src/lib/entities/window-cursor.ts",
-  "apps/api/src/lib/files/email-attachment-token.ts",
   "apps/api/src/lib/files/email-to-html.test.ts",
   "apps/api/src/lib/files/email-to-html.ts",
   "apps/api/src/lib/files/organization-file-usage-reconcile.ts",

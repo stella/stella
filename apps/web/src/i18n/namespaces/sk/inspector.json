@@ -540,7 +540,6 @@
       "waitForMatches": "Počkajte na dokončenie kontroly na anonymizáciu.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
-    "attachmentNotPreviewable": "Stiahnite si prílohu, aby ste ju mohli otvoriť.",
     "closeAllTabs": "Zavrieť {count, plural, one {# kartu} few {všetky # karty} many {# karty} other {všetkých # kariet}}",
     "closeOtherTabs": "Zavrieť {count, plural, one {# ďalšiu kartu} few {# ďalšie karty} many {# ďalšej karty} other {# ďalších kariet}}",
     "closeTab": "Zavrieť <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonymizácia"
+    },
+    "fileParts": {
+      "back": "Späť na zoznam",
+      "download": "Stiahnuť {fileName}",
+      "noPreview": "Tento typ súboru nemá náhľad. Stiahnite si ho alebo ho uložte do spisu.",
+      "open": "Otvoriť {fileName}"
     },
     "firstSourceReached": "Toto je prvý zdroj.",
     "groups": {
@@ -818,7 +823,6 @@
       "why": "Prečo",
       "whyItMatters": "Prečo je to podstatné:"
     },
-    "selectAttachmentToSave": "Vyberte prílohu na uloženie.",
     "showPane": "Zobraziť panel",
     "swapViews": "Vymeniť hlavné zobrazenie a bočný panel",
     "title": "Inšpektor"

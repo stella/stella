@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 /**
  * Inspector facet — workspace-scoped anonymization vocabulary.
  *
@@ -55,6 +55,7 @@ import {
 } from "@/components/inspector/inspector-anonymization-store";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import Tooltip from "@/components/tooltip";
+import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
@@ -72,6 +73,22 @@ import { toSafeId } from "@/lib/safe-id";
 import { useQueryViewError } from "@/lib/use-query-view";
 import { anonymizationAllowlistOptions } from "@/lib/workspaces/queries/anonymization-allowlist";
 import { anonymizationTermsOptions } from "@/lib/workspaces/queries/anonymization-terms";
+
+const ManualRedactionSection = lazy(async () => {
+  const m =
+    await import("@/components/pdf/manual-redaction/manual-redaction-section");
+  return { default: m.ManualRedactionSection };
+});
+
+/** The areas marked over the reader's pages, behind the area-marking switch. */
+const readManualRedaction = async (fieldId: string) => {
+  if (!env.VITE_FEATURE_PDF_AREA_REDACTION) {
+    return null;
+  }
+  const { readManualRedactionExport } =
+    await import("@/components/pdf/manual-redaction/manual-redaction-store");
+  return readManualRedactionExport(fieldId);
+};
 
 // Org-wide ignore lands behind a dedicated org-settings handler
 // with `organizationSettings` permissions; until that ships, the
@@ -525,11 +542,14 @@ export const AnonymizationFacet = ({
     }
     setDownloadStatus("running");
     const download = await Result.tryPromise(async () => {
-      const { downloadAnonymizedFile } =
-        await import("@/components/inspector/anonymized-file-download");
+      const [{ downloadAnonymizedFile }, manualRedaction] = await Promise.all([
+        import("@/components/inspector/anonymized-file-download"),
+        readManualRedaction(activeFieldId),
+      ]);
       return await downloadAnonymizedFile({
         entityId,
         fieldId: activeFieldId,
+        manualRedaction,
         queryClient,
         workspaceId,
       });
@@ -771,6 +791,11 @@ export const AnonymizationFacet = ({
             {t("inspector.anonymization.downloadHint")}
           </p>
         </div>
+      )}
+      {env.VITE_FEATURE_PDF_AREA_REDACTION && activeFieldId !== null && (
+        <Suspense fallback={null}>
+          <ManualRedactionSection fieldId={activeFieldId} />
+        </Suspense>
       )}
       {pipelineStatus === "error" && activeFieldId !== null && (
         <Button

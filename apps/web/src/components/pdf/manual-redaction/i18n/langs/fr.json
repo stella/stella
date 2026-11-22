@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Faites glisser sur une page pour masquer tout ce que la détection a manqué. Le PDF anonymisé noircit chaque zone marquée.",
+    "markingSurface": "Faites glisser pour marquer une zone à noircir",
+    "pageArea": "Zone sur la page {page}",
+    "removeArea": "Supprimer la zone marquée de la page {page}",
+    "startMarking": "Marquer des zones",
+    "stopMarking": "Terminer le marquage",
+    "title": "Zones marquées"
+  }
+}

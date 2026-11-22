@@ -31,7 +31,6 @@
       "sent": "Išsiųstas",
       "statedInFile": "Duomenų dėžutės pranešimas (pagal failą)",
       "toHands": "Asmeniškai: {name}",
-      "unlinkedFiles": "Norėdami atidaryti priedus, prie kurių nėra nuorodos, atsisiųskite originalų ZFO failą.",
       "unreadable": "Failo nepavyko perskaityti nei kaip duomenų dėžutės pranešimo, nei kaip pristatymo patvirtinimo.",
       "uploaded": "Įkeltas duomenų dėžutės pranešimas"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Debetinė sąskaita faktūra",
       "other": "Kitas dokumentas"
     },
-    "downloadAttachment": "Atsisiųsti {fileName}",
     "exemptionReason": "Atleidimo priežastis",
     "formatVersion": "{format}, versija {version}",
     "grossTotal": "Iš viso su PVM",
@@ -369,6 +367,7 @@
     "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
     "noSigners": "Pasirašiusiųjų duomenų nerasta.",
     "pdfUnavailable": "PDF peržiūra nepasiekiama.",
+    "signedDocument": "Pasirašytas dokumentas",
     "signers": "Pasirašiusieji",
     "unknownSigner": "Nežinomas pasirašęs asmuo",
     "unreadable": "Nepavyko perskaityti pasirašyto failo.",

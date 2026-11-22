@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
+
 import { CompoundFile } from "@/api/lib/files/compound-file";
 import type { CompoundFileParseError } from "@/api/lib/files/compound-file";
 
@@ -245,7 +247,9 @@ const getBinaryText = (
   if (!property) {
     return null;
   }
-  return normalizeString(new TextDecoder().decode(property.bytes));
+  return normalizeString(
+    decodeDeclared(property.bytes, { contentType: null }).text,
+  );
 };
 
 const getBinary = (
@@ -290,8 +294,13 @@ const getFileTime = (
 const decodeUtf16 = (bytes: Uint8Array): string =>
   Buffer.from(bytes).toString("utf16le");
 
+/**
+ * An 8-bit string property, written in the sender's ANSI code page, which
+ * the message does not reliably state: read as the owner reads bytes that
+ * declare no charset.
+ */
 const decodeAnsi = (bytes: Uint8Array): string =>
-  new TextDecoder("windows-1252").decode(bytes);
+  decodeDeclared(bytes, { contentType: null }).text;
 
 const normalizeString = (value: string): string | null => {
   const trimmed = value.replaceAll("\u0000", "").trim();

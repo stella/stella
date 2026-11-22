@@ -6,21 +6,18 @@
 export const CLASSIFICATION_DECISIONS_PATH =
   ".github/ci-job-classification-decisions";
 
+export const CLASSIFICATION_DECISIONS_FILE = `${CLASSIFICATION_DECISIONS_PATH}/decisions.json`;
+
 export type ClassificationDecision = {
   kind: unknown;
   qualifier: unknown;
-  approvedDigests?: unknown;
-  reviewedDigest?: unknown;
 };
 
-export const decisionDirectoryForKey = (key: string) =>
-  `${CLASSIFICATION_DECISIONS_PATH}/${encodeURIComponent(key)}`;
+export const decisionDirectoryForKey = (_key: string) =>
+  CLASSIFICATION_DECISIONS_FILE;
 
-export const decisionPathForKey = (key: string) =>
-  `${decisionDirectoryForKey(key)}/decision.json`;
-
-export const approvalPathForKey = (key: string, digest: string) =>
-  `${decisionDirectoryForKey(key)}/${digest}.json`;
+export const decisionPathForKey = (_key: string) =>
+  CLASSIFICATION_DECISIONS_FILE;
 
 export const CLASSIFICATION_INPUT_PATHS = [
   ".github/workflows",

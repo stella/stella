@@ -31,6 +31,7 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
 import { ownEntry } from "@stll/api-contract/own-key";
 import type { Cheerio } from "@stll/html";
 import {
@@ -46,27 +47,14 @@ import {
   mayBeCertificationData,
   readCertifiedEmailParts,
 } from "@/api/lib/files/certified-email";
-import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
 import { EMAIL_PREVIEW_PALETTE as PALETTE } from "@/api/lib/files/email-preview-palette";
 import { EMAIL_SENDER_CLASS_CSS } from "@/api/lib/files/email-sender-styles";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
+import { partMediaType } from "@/api/lib/files/part-media-type";
 import { isRecord } from "@/api/lib/type-guards";
 
-const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES = {
-  gif: "image/gif",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  pdf: "application/pdf",
-  png: "image/png",
-  txt: "text/plain",
-  webp: "image/webp",
-} as const;
-
-const GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES = {
-  "": null,
-  "application/octet-stream": null,
-  "binary/octet-stream": null,
-} as const;
+/** The most attachments an email's preview lists. */
+const MAX_EMAIL_ATTACHMENT_DESCRIPTORS = 100;
 
 const EMAIL_WRITING_DIRECTIONS = {
   auto: null,
@@ -159,8 +147,41 @@ export const emailToHtml = async (
 
 type EmailPreviewOptions = {
   citationBlockMode?: EmailCitationBlockMode;
-  createAttachmentId?: (attachmentIndex: number) => string;
 };
+
+/** The type an email's attachment is listed and delivered as. */
+export const emailAttachmentMediaType = async ({
+  bytes,
+  charset,
+  fileName,
+  mimeType,
+}: EmailAttachment): Promise<string> =>
+  await partMediaType({ bytes, stated: mimeType, charset, fileName });
+
+const describeEmailAttachment = async (
+  attachment: EmailAttachment,
+  index: number,
+): Promise<EmailAttachmentDescriptor> => ({
+  part: filePartId({ kind: FILE_PART_KINDS.attachment, index }),
+  charset: attachment.charset,
+  fileName: attachment.fileName,
+  mediaType: await emailAttachmentMediaType(attachment),
+  sizeBytes: attachment.bytes.byteLength,
+});
+
+/** An email's attachments as its preview lists them: parts of the file. */
+export const describeEmailAttachments = async (
+  parsed: ParsedEmail,
+  listed: EmailPreviewListing["attachments"],
+): Promise<EmailAttachmentDescriptor[]> =>
+  await Promise.all(
+    listed.flatMap((index) => {
+      const attachment = parsed.attachments.at(index);
+      return attachment === undefined
+        ? []
+        : [describeEmailAttachment(attachment, index)];
+    }),
+  );
 
 export const emailToPreview = async (
   fileBuffer: ArrayBuffer,
@@ -171,27 +192,46 @@ export const emailToPreview = async (
   if (parsed.isErr()) {
     return parsed;
   }
-  return Result.try({
+  const toParseError = (cause: unknown) =>
+    cause instanceof EmailParseError
+      ? cause
+      : new EmailParseError({
+          message: "Failed to parse email preview",
+          mimeType,
+          cause,
+        });
+  const listing = Result.try({
     try: () => buildEmailPreview(parsed.value, options),
-    catch: (cause) =>
-      cause instanceof EmailParseError
-        ? cause
-        : new EmailParseError({
-            message: "Failed to parse email preview",
-            mimeType,
-            cause,
-          }),
+    catch: toParseError,
   });
+  if (listing.isErr()) {
+    return listing;
+  }
+  const attachments = await Result.tryPromise({
+    try: async () =>
+      await describeEmailAttachments(parsed.value, listing.value.attachments),
+    catch: toParseError,
+  });
+  return attachments.map((described) => ({
+    ...listing.value,
+    attachments: described,
+  }));
+};
+
+/**
+ * An email's preview before its attachments are typed: the attachments are
+ * their positions in the parsed email, which address them as parts.
+ */
+export type EmailPreviewListing = Omit<EmailPreview, "attachments"> & {
+  attachments: readonly number[];
 };
 
 export const buildEmailPreview = (
   parsed: ParsedEmail,
   {
     citationBlockMode = EMAIL_CITATION_BLOCK_MODE.include,
-    createAttachmentId = (attachmentIndex) =>
-      `attachment-${String(attachmentIndex)}`,
   }: EmailPreviewOptions = {},
-): EmailPreview => {
+): EmailPreviewListing => {
   const inlineContentIds = new Set(
     parsed.inlineImages.map(({ cid }) => cid.toLowerCase()),
   );
@@ -222,20 +262,7 @@ export const buildEmailPreview = (
           !renderedBody.referencedContentIds.has(contentId.toLowerCase()),
       )
       .slice(0, MAX_EMAIL_ATTACHMENT_DESCRIPTORS)
-      .map(({ attachment, attachmentIndex }) => {
-        const mimeType = resolveEmailAttachmentMimeType({
-          fileName: attachment.fileName,
-          mimeType: attachment.mimeType,
-        });
-        return {
-          charset: attachment.charset,
-          id: createAttachmentId(attachmentIndex),
-          fileName: attachment.fileName,
-          mimeType,
-          sizeBytes: attachment.bytes.byteLength,
-          previewable: isEmailAttachmentPreviewable(mimeType),
-        };
-      }),
+      .map(({ attachmentIndex }) => attachmentIndex),
     bodyFolds: renderedBody.bodyFolds,
     bodyHtml: renderedBody.bodyHtml,
     citationBlocks: [...headerCitationBlocks, ...renderedBody.citationBlocks],
@@ -261,39 +288,6 @@ const buildEmailHeaderCitationBlocks = (
   });
 };
 
-export const isEmailAttachmentPreviewable = (
-  mimeType: string | null,
-): boolean => {
-  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
-  return (
-    normalized === "application/pdf" ||
-    normalized === "text/plain" ||
-    /^image\/(?:png|jpe?g|gif|webp)$/u.test(normalized)
-  );
-};
-
-export const resolveEmailAttachmentMimeType = ({
-  fileName,
-  mimeType,
-}: {
-  fileName: string | null;
-  mimeType: string | null;
-}): string | null => {
-  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
-  if (!Object.hasOwn(GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES, normalized)) {
-    return normalized;
-  }
-  const dotIndex = fileName?.lastIndexOf(".") ?? -1;
-  if (!fileName || dotIndex === -1) {
-    return mimeType;
-  }
-  const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return (
-    ownEntry(EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES, extension) ??
-    mimeType
-  );
-};
-
 export const parseEmail = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
@@ -313,7 +307,7 @@ export const parseEmail = async (
 };
 
 /** The message's headers and body as text, without its certification data. */
-export const emailMessageText = (parsed: ParsedEmail): string => {
+const emailMessageText = (parsed: ParsedEmail): string => {
   const parts: string[] = [];
   const rows = [
     ["From", parsed.from],

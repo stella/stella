@@ -495,17 +495,48 @@ const isExcludedRawNumericCoercionSource = (file: string): boolean =>
   file.includes("/evals/") ||
   file === "packages/agent-input/src/numeric-token.ts";
 
-// One per `new TextDecoder(…)` without a literal `fatal: true` option: a
-// decoder that turns bytes it cannot read into U+FFFD instead of refusing
-// them. On a user's file that silently loses a legacy charset; such bytes go
-// through `decodeDeclared` (@stll/mojibake), which owns the decision.
+const TEXT_DECODER_CONSTRUCTORS: ReadonlySet<string> = new Set([
+  "TextDecoder",
+  "TextDecoderStream",
+]);
+
+// Buffer#toString encodings that read bytes as text without refusing any.
+const LENIENT_BUFFER_ENCODINGS: ReadonlySet<string> = new Set([
+  "utf-8",
+  "latin1",
+  "binary",
+]);
+
+// One per lenient reading of bytes as text: `new TextDecoder(…)` or
+// `new TextDecoderStream(…)` without a literal `fatal: true` option, and
+// `.toString("utf-8" | "latin1" | "binary")`. Each turns bytes it
+// cannot read into U+FFFD or reads them in a fixed charset instead of
+// refusing them. On a user's file that silently loses a legacy charset;
+// such bytes go through `decodeDeclared` (@stll/mojibake), which owns the
+// decision.
 const countLenientTextDecoders: FileCounter = (content, { file }) => {
   const { program } = parseSyntax({ fileName: file, text: content });
   let total = 0;
   walk(program, (node) => {
+    if (node.type === "CallExpression") {
+      const encoding = node.arguments.at(0);
+      const encodingText =
+        encoding === undefined ? null : stringLiteralValue(encoding);
+      if (
+        isPropertyAccess(node.callee) &&
+        node.callee.property.name === "toString" &&
+        node.arguments.length === 1 &&
+        encodingText !== null &&
+        LENIENT_BUFFER_ENCODINGS.has(encodingText.toLowerCase())
+      ) {
+        total += 1;
+      }
+      return;
+    }
     if (
       node.type !== "NewExpression" ||
-      !isIdentifierNamed(node.callee, "TextDecoder")
+      node.callee.type !== "Identifier" ||
+      !TEXT_DECODER_CONSTRUCTORS.has(node.callee.name)
     ) {
       return;
     }
@@ -3333,7 +3364,7 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     scope: "file",
     id: "lenient-text-decoders",
     description:
-      "`new TextDecoder(…)` without a literal `fatal: true` in app and package source, outside @stll/mojibake; a lenient decoder turns a legacy-charset file into U+FFFD, so user file bytes go through decodeDeclared; tests, scripts and evals are excluded; each file only shrinks",
+      '`new TextDecoder(…)`/`new TextDecoderStream(…)` without a literal `fatal: true`, and `.toString("utf-8" | "latin1" | "binary")`, in app and package source outside @stll/mojibake; a lenient reading turns a legacy-charset file into U+FFFD or the wrong letters, so user file bytes go through decodeDeclared; tests, scripts and evals are excluded; a new file starts at zero and each file only shrinks',
     include: LENIENT_TEXT_DECODER_SOURCE_GLOBS,
     exclude: isExcludedLenientTextDecoderSource,
     perFile: true,
@@ -4968,10 +4999,18 @@ const SELF_TEST_LENIENT_TEXT_DECODERS = [
   'new TextDecoder("utf-8", { fatal: true }).decode(bytes);',
   'new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });',
   "new TextEncoder().encode(text);",
+  "new TextDecoderStream();",
+  'new TextDecoderStream("utf-8", { fatal: true });',
+  'Buffer.from(bytes).toString("utf-8");',
+  'bytes.toString("UTF-8");',
+  'bytes.toString("latin1");',
+  'bytes.toString("base64");',
+  "value.toString();",
+  "value.toString(16);",
   "// new TextDecoder().decode(bytes)",
   'const example = "new TextDecoder()";',
 ].join("\n");
-const EXPECTED_LENIENT_TEXT_DECODERS = 5;
+const EXPECTED_LENIENT_TEXT_DECODERS = 9;
 
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const directClass = "transition transition-colors";`,

@@ -19,33 +19,25 @@ export const discoverMcpIconUrl = async (
   }
 
   const rootUrl = new URL("/", parsed.value.origin);
-  const htmlResult = await Result.tryPromise({
-    try: async () => {
-      const response = await safeOutboundFetchBytes({
-        permit,
-        headers: { Accept: "text/html" },
-        maxBytes: ICON_HTML_MAX_BYTES,
-        timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
-        url: rootUrl,
-      });
-      if (Result.isError(response) || !response.value.ok) {
-        return null;
-      }
-
-      return new TextDecoder()
-        .decode(response.value.body)
-        .slice(0, ICON_HTML_MAX_CHARS);
-    },
-    catch: () => null,
+  const response = await safeOutboundFetchBytes({
+    permit,
+    headers: { Accept: "text/html" },
+    maxBytes: ICON_HTML_MAX_BYTES,
+    timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
+    url: rootUrl,
   });
-
-  if (Result.isOk(htmlResult) && htmlResult.value) {
-    const discovered = findIconInHtml({
-      html: htmlResult.value,
-      rootUrl,
-    });
-    if (discovered) {
-      return discovered;
+  if (Result.isOk(response) && response.value.ok) {
+    const html = new TextDecoder()
+      .decode(response.value.body)
+      .slice(0, ICON_HTML_MAX_CHARS);
+    if (html.length > 0) {
+      const discovered = findIconInHtml({
+        html,
+        rootUrl,
+      });
+      if (discovered) {
+        return discovered;
+      }
     }
   }
 

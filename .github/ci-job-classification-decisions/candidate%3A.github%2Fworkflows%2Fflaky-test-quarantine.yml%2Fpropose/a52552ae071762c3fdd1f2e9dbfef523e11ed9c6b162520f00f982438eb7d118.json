@@ -1,5 +1,0 @@
-{
-  "kind": "priority",
-  "qualifier": "Publishes flaky-test quarantine proposals as a signed-commit pull request.",
-  "reviewedDigest": "a52552ae071762c3fdd1f2e9dbfef523e11ed9c6b162520f00f982438eb7d118"
-}

@@ -31,7 +31,6 @@
       "sent": "Envoyé",
       "statedInFile": "Message de boîte de données (selon le fichier)",
       "toHands": "À l’attention de {name}",
-      "unlinkedFiles": "Pour ouvrir les pièces jointes sans lien, téléchargez le fichier ZFO d’origine.",
       "unreadable": "Ce fichier n’a pu être lu ni comme message de boîte de données ni comme accusé de réception.",
       "uploaded": "Message de boîte de données importé"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Note de débit",
       "other": "Autre document"
     },
-    "downloadAttachment": "Télécharger {fileName}",
     "exemptionReason": "Motif d’exonération",
     "formatVersion": "{format} (version {version})",
     "grossTotal": "Total TTC",
@@ -369,6 +367,7 @@
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
     "noSigners": "Aucune information sur les signataires n’a été trouvée.",
     "pdfUnavailable": "L’aperçu PDF est indisponible.",
+    "signedDocument": "Document signé",
     "signers": "Signataires",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",

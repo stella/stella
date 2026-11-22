@@ -8,6 +8,11 @@ import type {
   DataBoxDeliveryEvent,
   DataBoxEnvelope,
 } from "@stll/api-contract/data-box";
+import {
+  FILE_PART_KINDS,
+  type FilePartDescriptor,
+  filePartId,
+} from "@stll/api-contract/file-parts";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -47,10 +52,13 @@ type DataBoxFileRead =
       readonly annotation: string;
       readonly envelope: DataBoxEnvelope;
       readonly text: string;
-      readonly files: readonly {
-        fileName: string;
+      /**
+       * The message's files, as parts of the stored file, each with the
+       * document it was filed as, if any, which an agent reads instead.
+       */
+      readonly files: readonly (FilePartDescriptor & {
         entityId: SafeId<"entity"> | null;
-      }[];
+      })[];
     };
 
 type FiledAttachmentOptions = {
@@ -257,8 +265,11 @@ export const readDataBoxFile = async (
         annotation: doc.annotation,
         envelope,
         text,
-        files: doc.files.map(({ fileName }, index) => ({
+        files: doc.files.map(({ fileName, mediaType, sizeBytes }, index) => ({
+          part: filePartId({ kind: FILE_PART_KINDS.attachment, index }),
           fileName,
+          mediaType,
+          sizeBytes,
           entityId: byOrdinal.get(index) ?? null,
         })),
       } as const);

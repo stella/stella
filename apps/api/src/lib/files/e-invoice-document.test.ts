@@ -7,6 +7,7 @@ import {
 } from "@/api/lib/files/e-invoice-document";
 import { E_INVOICE_PREVIEW_MAX_LINES } from "@/api/lib/files/e-invoice-nodes";
 import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+import { listEInvoiceParts } from "@/api/lib/files/e-invoice-worker";
 import {
   classifyXmlDocument,
   type XmlDocumentClass,
@@ -31,6 +32,10 @@ const read = async (bytes: Uint8Array) => {
   }
   return document;
 };
+
+/** The preview as it leaves the reader, its attachments listed as parts. */
+const listed = async (document: Awaited<ReturnType<typeof read>>) =>
+  (await listEInvoiceParts(document)).unwrap();
 
 const attachmentText = (
   document: Awaited<ReturnType<typeof read>>,
@@ -151,7 +156,7 @@ describe("structured invoice reading", () => {
 
   test("keeps the line count when a long invoice is cut short", async () => {
     const lines = E_INVOICE_PREVIEW_MAX_LINES + 5;
-    const { preview } = await read(xmlBytes(isdocXml({ lines })));
+    const preview = await listed(await read(xmlBytes(isdocXml({ lines }))));
     expect(preview.invoices[0]?.lines).toHaveLength(
       E_INVOICE_PREVIEW_MAX_LINES,
     );
@@ -167,11 +172,13 @@ describe("structured invoice reading", () => {
       const document = await read(await isdocxPackage({ manifest }));
       expect(document.preview.syntax).toBe("isdoc");
       expect(document.preview.invoices[0]?.number).toBe("FV-2026-0042");
-      expect(document.preview.attachments).toEqual([
+      // The package's path is a claim; the part is named by its base name.
+      expect((await listed(document)).attachments).toEqual([
         {
-          index: 0,
-          fileName: "supplements/delivery-note.txt",
+          part: "attachment:0",
+          fileName: "delivery-note.txt",
           description: null,
+          mediaType: "text/plain",
           sizeBytes: SAMPLE_ATTACHMENT_TEXT.length,
         },
       ]);
@@ -230,11 +237,12 @@ describe("structured invoice reading", () => {
       ],
       notes: ["Synthetic consulting fees"],
     });
-    expect(preview.attachments).toEqual([
+    expect((await listed(document)).attachments).toEqual([
       {
-        index: 0,
+        part: "attachment:0",
         fileName: "bolla.txt",
         description: "Delivery note",
+        mediaType: "text/plain",
         sizeBytes: SAMPLE_ATTACHMENT_TEXT.length,
       },
     ]);
@@ -291,7 +299,7 @@ describe("structured invoice reading", () => {
       ],
     });
     expect(attachmentText(invoice, 0)).toBe(SAMPLE_ATTACHMENT_TEXT);
-    expect(invoice.preview.attachments[0]).toMatchObject({
+    expect((await listed(invoice)).attachments[0]).toMatchObject({
       fileName: "delivery-note.txt",
       description: "Delivery note",
     });
@@ -404,8 +412,9 @@ describe("structured invoice reading", () => {
   });
 
   test("search and AI text carries the same fields the preview shows", async () => {
-    const { preview } = await read(xmlBytes(isdocXml()));
-    const text = eInvoiceDocumentText(preview);
+    const text = eInvoiceDocumentText(
+      await listed(await read(xmlBytes(isdocXml()))),
+    );
     for (const value of [
       "ISDOC structured invoice, 6.0.2.",
       "Invoice FV-2026-0042 (type 1)",

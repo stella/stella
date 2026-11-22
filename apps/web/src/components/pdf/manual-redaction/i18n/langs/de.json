@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Ziehen Sie über eine Seite, um alles abzudecken, was die Erkennung übersehen hat. Die anonymisierte PDF schwärzt jeden markierten Bereich.",
+    "markingSurface": "Ziehen, um einen zu schwärzenden Bereich zu markieren",
+    "pageArea": "Bereich auf Seite {page}",
+    "removeArea": "Markierten Bereich auf Seite {page} entfernen",
+    "startMarking": "Bereiche markieren",
+    "stopMarking": "Markieren beenden",
+    "title": "Markierte Bereiche"
+  }
+}

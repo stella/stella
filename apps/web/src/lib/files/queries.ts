@@ -13,10 +13,8 @@ import {
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 import type { CertifiedEmailEnvelope } from "@stll/api-contract/certified-email";
-import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
-import { apiUrl } from "@/lib/api-url";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import {
   APIError,
@@ -71,13 +69,6 @@ type TextFileData = {
   originalMimeType: string;
   text: string;
 };
-
-const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
-  entityId: v.string(),
-  fieldId: v.string(),
-  fileName: v.string(),
-  workspaceId: v.string(),
-});
 
 // Saving an attachment copies and re-derives the file, and a property update
 // rewrites it; both keep the longer bound they had before the typed client.
@@ -281,82 +272,12 @@ export const officeCitationOptions = ({
     retry: shouldRetryAPIRequest,
   });
 
-const emailAttachmentPreviewUrl = ({
-  attachmentId,
-  fieldId,
-  workspaceId,
-}: FileOptionsProps & { attachmentId: string }): string =>
-  apiUrl(
-    `/files/${encodeURIComponent(workspaceId)}/email-attachment/${encodeURIComponent(fieldId)}/${encodeURIComponent(attachmentId)}?disposition=inline`,
-  );
-
-export const emailAttachmentPreviewOptions = ({
-  attachmentId,
-  fieldId,
-  workspaceId,
-}: FileOptionsProps & { attachmentId: string }) =>
-  // Cached like a file's own bytes, so going back to an attachment shows it
-  // at once instead of downloading it again.
-  queryOptions({
-    enabled: attachmentId.length > 0,
-    retry: false,
-    queryKey: [
-      ...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }),
-      "attachment-preview",
-      attachmentId,
-    ],
-    queryFn: async ({ signal }) => {
-      const response = await fetchWithTimeout(
-        emailAttachmentPreviewUrl({ attachmentId, fieldId, workspaceId }),
-        { credentials: "include", signal, timeoutMs: 60_000 },
-      );
-      if (!response.ok) {
-        throw new APIError({
-          status: response.status,
-          message: "Failed to preview email attachment",
-        });
-      }
-      return await response.arrayBuffer();
-    },
-  });
-
-type SaveEmailAttachmentInput = {
-  attachmentId: string;
-  destinationWorkspaceId: string;
-  fieldId: string;
-  parentId: string | null;
-  sourceWorkspaceId: string;
-};
-
 type UpdateDocumentPropertyInput = FileOptionsProps & {
   propertyKey: AuthoredDocumentPropertyKey;
   value: string;
 };
 
 export const createFileWrites = (apiClient: typeof api) => ({
-  saveEmailAttachment: async ({
-    attachmentId,
-    destinationWorkspaceId,
-    fieldId,
-    parentId,
-    sourceWorkspaceId,
-  }: SaveEmailAttachmentInput) => {
-    const fileRoutes = apiClient.files({ workspaceId: sourceWorkspaceId });
-    return await invokeAppOnlyWrite("files.email-attachment.save", async () =>
-      parseSuccessBody(
-        EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA,
-        unwrapApiResponse(
-          await fileRoutes["email-attachment"]({ fieldId })({
-            attachmentId,
-          }).save.post(
-            { destinationWorkspaceId, parentId },
-            { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
-          ),
-        ),
-        "Invalid email attachment save response",
-      ),
-    );
-  },
   updateDocumentProperty: async ({
     workspaceId,
     fieldId,
@@ -375,8 +296,7 @@ export const createFileWrites = (apiClient: typeof api) => ({
   },
 });
 
-export const { saveEmailAttachment, updateDocumentProperty } =
-  createFileWrites(api);
+export const { updateDocumentProperty } = createFileWrites(api);
 
 /**
  * The file's own embedded properties (DOCX Author and Company, PDF Producer,
