@@ -1146,8 +1146,9 @@ const CORPUS_PROJECTION_SERVED_COPY_RISKS = [
   /** The desired action flips while the state names an upsert copy. */
   "desired_action_change",
   /**
-   * A copy queued for cleanup that the cleanup claim would still restore
-   * would lose that proof, so the claim would delete it while it is named.
+   * A copy queued for cleanup that the projection rows alone still prove
+   * restorable would lose that proof, and the cleanup claim would decide it by
+   * the erasure records instead.
    */
   "restorable_cleanup",
   /**
@@ -1456,16 +1457,18 @@ const requireServedCopyRisk = (value: string): CorpusProjectionServedCopyRisk =>
  * through `reconcileCorpusProjectionDesiredStateTx`. The caller holds the
  * canonical rows and the states it writes.
  *
- * One risk it resolves instead of holding: a queued copy the cleanup claim
- * would still restore (`restorable_cleanup`). When that is every risk the
- * write carries, the writer restores those copies first, before any epoch
- * moves, through the claim's own transition (`restoreQueuedNamedCopiesTx`),
- * then runs the whole guard again over every generation it writes. Only a
- * clean second guard lets the write through; otherwise the restores roll
- * back with it and the write is held as before. Any other risk (an action
- * change, which covers an erasure and its undo, a copy whose cleanup stalled,
- * or one the legacy pass would take) holds the write without restoring
- * anything.
+ * One risk it resolves instead of holding: a queued copy the projection rows
+ * alone still prove restorable (`restorable_cleanup`). When that is every
+ * risk the write carries, the writer restores those copies first, before any
+ * epoch moves, through the claim's own transition
+ * (`restoreQueuedNamedCopiesTx`), then runs the whole guard again over every
+ * generation it writes. Only a clean second guard lets the write through;
+ * otherwise the restores roll back with it and the write is held as before.
+ * Any other risk (an action change, which covers an erasure and its undo, a
+ * copy whose cleanup stalled, or one the legacy pass would take) holds the
+ * write without restoring anything. A queued copy that lost that proof before
+ * the repair is no risk of its own: the repair takes nothing more from it, and
+ * the claim decides it by the erasure records.
  */
 export const writeRepairedCorpusProjectionDesiredStatesTx = async (
   tx: Transaction,
