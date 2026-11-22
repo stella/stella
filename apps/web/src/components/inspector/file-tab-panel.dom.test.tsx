@@ -66,15 +66,18 @@ globalThis.fetch = Object.assign(
   { preconnect: originalFetch.preconnect },
 );
 
-let docxEngineRenderCount = 0;
-let pdfEngineRenderCount = 0;
+// Commits, not render calls: React may call a component more than once for
+// one commit, as when a concurrent render yields and restarts, so only the
+// renders that reach the screen measure the engines' render budget.
+let docxEngineCommitCount = 0;
+let pdfEngineCommitCount = 0;
 
 Object.assign(globalThis, {
-  recordDocxEngineRender: () => {
-    docxEngineRenderCount += 1;
+  recordDocxEngineCommit: () => {
+    docxEngineCommitCount += 1;
   },
-  recordPdfEngineRender: () => {
-    pdfEngineRenderCount += 1;
+  recordPdfEngineCommit: () => {
+    pdfEngineCommitCount += 1;
   },
 });
 
@@ -90,7 +93,9 @@ Bun.plugin({
       contents: `
         import React from "react";
         export const DocxBrowserEditor = ({ onScrollTopChange }) => {
-          globalThis.recordDocxEngineRender();
+          React.useLayoutEffect(() => {
+            globalThis.recordDocxEngineCommit();
+          });
           return React.createElement("button", {
             "aria-label": "DOCX engine",
             "data-testid": "docx-engine",
@@ -108,7 +113,9 @@ Bun.plugin({
         // Reports how the viewer would draw: the width its pages fit (from
         // the provider), the zoom over it, and whether the wheel zooms.
         export const PDFViewport = ({ onWheelZoom, scaleOffset }) => {
-          globalThis.recordPdfEngineRender();
+          React.useLayoutEffect(() => {
+            globalThis.recordPdfEngineCommit();
+          });
           const fitToWidth = usePDFStore((state) => state.fitToWidth);
           return React.createElement("div", {
             "data-fit-width": String(fitToWidth),
@@ -218,8 +225,8 @@ afterEach(async () => {
     registry: {},
     slotElements: {},
   });
-  docxEngineRenderCount = 0;
-  pdfEngineRenderCount = 0;
+  docxEngineCommitCount = 0;
+  pdfEngineCommitCount = 0;
   cadesPdfRequests.length = 0;
   signedDossierPdfRequests.length = 0;
 });
@@ -233,11 +240,7 @@ test("native DOCX keeps the host registry and editor inside the render budget", 
   const mounted = renderFileTab(docxTab);
   const engine = await waitFor(() => mounted.getByTestId("docx-engine"));
   expect(engine.isConnected).toBeTrue();
-  // Mounting renders the engine once with a cold editor chunk and twice with
-  // a loaded one, which is what a randomized or repeated run sees. The budget
-  // below then bounds every later render.
-  expect(docxEngineRenderCount).toBeGreaterThanOrEqual(1);
-  expect(docxEngineRenderCount).toBeLessThanOrEqual(2);
+  expect(docxEngineCommitCount).toBe(1);
 
   const registryAfterMount = useDocxEditorHostStore.getState().registry;
   const claim = Object.values(registryAfterMount).at(0)?.lastClaim;
@@ -247,7 +250,7 @@ test("native DOCX keeps the host registry and editor inside the render budget", 
     );
   }
   expect(claim.bindings.onScrollTopChange).toBeFunction();
-  const rendersAfterMount = docxEngineRenderCount;
+  const commitsAfterMount = docxEngineCommitCount;
 
   for (let index = 0; index < 5; index += 1) {
     await act(async () => {
@@ -261,17 +264,17 @@ test("native DOCX keeps the host registry and editor inside the render budget", 
   }
 
   expect(useDocxEditorHostStore.getState().registry).toBe(registryAfterMount);
-  expect(docxEngineRenderCount - rendersAfterMount).toBeLessThanOrEqual(1);
+  expect(docxEngineCommitCount - commitsAfterMount).toBeLessThanOrEqual(1);
 });
 
 test("PDF keeps the host registry and PDF engine inside the render budget", async () => {
   const mounted = renderFileTab(pdfTab);
   const engine = await waitFor(() => mounted.getByTestId("pdf-engine"));
   expect(engine.isConnected).toBeTrue();
-  expect(pdfEngineRenderCount).toBe(1);
+  expect(pdfEngineCommitCount).toBe(1);
 
   const registryAfterMount = useDocxEditorHostStore.getState().registry;
-  const rendersAfterMount = pdfEngineRenderCount;
+  const commitsAfterMount = pdfEngineCommitCount;
 
   for (let index = 0; index < 5; index += 1) {
     await act(async () => {
@@ -285,7 +288,7 @@ test("PDF keeps the host registry and PDF engine inside the render budget", asyn
   }
 
   expect(useDocxEditorHostStore.getState().registry).toBe(registryAfterMount);
-  expect(pdfEngineRenderCount - rendersAfterMount).toBeLessThanOrEqual(1);
+  expect(pdfEngineCommitCount - commitsAfterMount).toBeLessThanOrEqual(1);
 });
 
 type DataBoxPreviewData = InferDataFromTag<
@@ -383,7 +386,7 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
       ).toBeTruthy();
       expect(mounted.getByText("Message accepted")).toBeTruthy();
     }
-    expect(pdfEngineRenderCount).toBe(0);
+    expect(pdfEngineCommitCount).toBe(0);
   },
 );
 
@@ -458,7 +461,7 @@ test.each([
       expect(cadesPdfRequests).toEqual(["include"]);
     } else {
       expect(cadesPdfRequests).toHaveLength(0);
-      expect(pdfEngineRenderCount).toBe(0);
+      expect(pdfEngineCommitCount).toBe(0);
       expect(
         mounted.getByText(
           embedded.text || "No readable content is available for preview.",
@@ -574,7 +577,7 @@ test("keeps the original available when the signed container cannot be opened", 
   expect(
     mounted.getByRole("button", { name: "Download original" }),
   ).toBeTruthy();
-  expect(pdfEngineRenderCount).toBe(0);
+  expect(pdfEngineCommitCount).toBe(0);
 });
 
 test.each([".asice", ".asics"])(
@@ -643,7 +646,7 @@ test.each([".asice", ".asics"])(
     expect(
       mounted.getByRole("button", { name: "Download original" }),
     ).toBeTruthy();
-    expect(pdfEngineRenderCount).toBe(0);
+    expect(pdfEngineCommitCount).toBe(0);
   },
 );
 
@@ -789,7 +792,7 @@ test("keeps the original signed container available when preview is unavailable"
   expect(
     mounted.getByRole("button", { name: "Download original" }),
   ).toBeTruthy();
-  expect(pdfEngineRenderCount).toBe(0);
+  expect(pdfEngineCommitCount).toBe(0);
 });
 
 test.each([".udf", ".ofd"])(
@@ -820,7 +823,7 @@ test.each([".udf", ".ofd"])(
         name: arabicMessages.common.downloadOriginal,
       }),
     ).toBeTruthy();
-    expect(pdfEngineRenderCount).toBe(0);
+    expect(pdfEngineCommitCount).toBe(0);
   },
 );
 
