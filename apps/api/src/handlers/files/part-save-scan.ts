@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
+
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   FileScanRejectedError,
@@ -20,6 +22,7 @@ export const scanFilePartForSave = async ({
     return Result.err(
       new HandlerError({
         status: 422,
+        code: "file_empty",
         message: "File rejected: file is empty",
       }),
     );
@@ -34,7 +37,11 @@ export const scanFilePartForSave = async ({
     observeScanFailures(scanResult.error);
     if (!FileScanRejectedError.is(scanResult.error)) {
       return Result.err(
-        new HandlerError({ status: 422, message: "File security scan failed" }),
+        new HandlerError({
+          status: 422,
+          code: "file_scan_failed",
+          message: "File security scan failed",
+        }),
       );
     }
     const reasons = scanResult.error.rejection.issues.map(
@@ -43,6 +50,7 @@ export const scanFilePartForSave = async ({
     return Result.err(
       new HandlerError({
         status: 422,
+        code: API_FILE_SECURITY_REJECTED_ERROR_CODE,
         message: `File rejected: ${reasons.join("; ")}`,
       }),
     );

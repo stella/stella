@@ -1,7 +1,10 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  DOCUMENT_TOO_LARGE_ERROR_CODE,
+  RESOURCE_TYPE,
+} from "@stll/api-contract";
 import {
   filePartId,
   filePartIdSchema,
@@ -94,6 +97,7 @@ const saveFilePart = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 429,
+          code: "rate_limited",
           message: "Too many saves. Try again shortly.",
         }),
       );
@@ -106,7 +110,11 @@ const saveFilePart = createSafeHandler(
     );
     if (!workspaceAcceptsWrites(destinationWorkspace?.status)) {
       return Result.err(
-        new HandlerError({ status: 404, message: "Target matter not found" }),
+        new HandlerError({
+          status: 404,
+          code: "not_found",
+          message: "Target matter not found",
+        }),
       );
     }
 
@@ -159,6 +167,7 @@ const saveFilePart = createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 422,
+          code: "file_corrupted",
           message: "Failed to open PDF: file appears corrupted",
         }),
       );
@@ -249,21 +258,25 @@ const toSaveHandlerError = (
     case "DocumentTooLargeError":
       return new HandlerError({
         status: 413,
+        code: DOCUMENT_TOO_LARGE_ERROR_CODE,
         message: "The file exceeds the document size limit",
       });
     case "EntityLimitError":
       return new HandlerError({
         status: 409,
+        code: "entity_limit_reached",
         message: "The target matter has reached its document limit",
       });
     case "InvalidParentError":
       return new HandlerError({
         status: 404,
+        code: "folder_not_found",
         message: "The target folder was not found",
       });
     case "MissingFilePropertyError":
       return new HandlerError({
         status: 422,
+        code: "matter_cannot_store_documents",
         message: "The target matter cannot store documents",
       });
     default:
