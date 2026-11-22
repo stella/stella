@@ -331,6 +331,5 @@ if (import.meta.main) {
         }),
       );
       process.exitCode = EXIT_CODE.CONFIGURATION_OR_QUERY_FAILURE;
-      return undefined;
     });
 }
