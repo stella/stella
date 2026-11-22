@@ -462,6 +462,7 @@
     },
     "fit": "Breite",
     "openOriginal": "Original öffnen",
+    "openPart": "{fileName} öffnen",
     "preview": "Vorschau öffnen",
     "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
     "retry": "Erneut versuchen",

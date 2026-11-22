@@ -22,7 +22,7 @@ import { entityPath } from "@/state/matter-entities";
 
 export const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-const PDF_MIME_TYPE = "application/pdf";
+export const PDF_MIME_TYPE = "application/pdf";
 
 /**
  * Where a file opens: a Word document in folio and a PDF in pdf.js, both the
@@ -106,6 +106,8 @@ const fileUrlSchema = v.object({
 const dataBoxPreviewSchema = v.object({
   kind: v.picklist(DATA_BOX_DOCUMENT_KINDS),
   text: v.string(),
+  /** A message's files, in its order; a receipt has none. */
+  files: v.optional(v.array(v.object({ fileName: v.string() })), []),
 });
 
 type DataBoxDocumentFile = {
@@ -204,6 +206,31 @@ export const readOriginalDocumentFile = async ({
     fetch,
     source,
     path: fileUrlPath(workspaceId, fieldId, "download"),
+    schema: fileUrlSchema,
+  });
+
+/**
+ * A short-lived, audited link to one part of a document's file: an email's
+ * attachment, the document a signed file wraps, a container's member.
+ */
+export const readDocumentPart = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+  part,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  /** A part address such as `attachment:0` (`@stll/api-contract/file-parts`). */
+  readonly part: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `${fileUrlPath(workspaceId, fieldId, "download")}&part=${encodeURIComponent(part)}`,
     schema: fileUrlSchema,
   });
 

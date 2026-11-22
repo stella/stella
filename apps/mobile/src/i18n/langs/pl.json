@@ -462,6 +462,7 @@
     },
     "fit": "Szerokość",
     "openOriginal": "Otwórz oryginał",
+    "openPart": "Otwórz {fileName}",
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "retry": "Spróbuj ponownie",

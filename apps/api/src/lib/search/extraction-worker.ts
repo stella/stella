@@ -30,6 +30,7 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { parseFilePartId } from "@stll/api-contract/file-parts";
 import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
@@ -86,6 +87,12 @@ import {
   parsedEmailToText,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
+import {
+  EMBEDDED_PART_WORKER_EXIT,
+  EMBEDDED_PART_WORKER_MODE,
+  encodeEmbeddedPart,
+} from "@/api/lib/files/embedded-part-protocol";
+import { extractEmbeddedPart } from "@/api/lib/files/embedded-part-worker";
 import { XML_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
 import type { P7mParseError } from "@/api/lib/files/p7m";
 import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
@@ -901,6 +908,34 @@ const writeSignedDossier = async (options: {
   return Result.ok(0);
 };
 
+const writeEmbeddedPart = async (options: {
+  fileBytes: Uint8Array;
+  containerMimeType: string;
+  partId: string;
+}) => {
+  const part = parseFilePartId(options.partId);
+  if (part === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  const read = await extractEmbeddedPart({ ...options, part });
+  if (read.isErr()) {
+    switch (read.error._tag) {
+      case "AsicParseError":
+      case "DataBoxMessageParseError":
+        return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(EMBEDDED_PART_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+        return Result.err(read.error);
+    }
+  }
+  if (read.value === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  await writeWorkerStdout(encodeEmbeddedPart(read.value));
+  return Result.ok(0);
+};
+
 function exitWithWorkerError(error: unknown): never {
   const errorClass = getWorkerErrorClass(error);
   const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
@@ -961,6 +996,17 @@ try {
               sign: "unsigned",
             }).unwrapOr(-1),
           });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
+  }
+  if (mimeType === EMBEDDED_PART_WORKER_MODE) {
+    const written = await writeEmbeddedPart({
+      fileBytes,
+      containerMimeType: process.argv[4] ?? "",
+      partId: process.argv[5] ?? "",
+    });
     if (written.isErr()) {
       exitWithWorkerError(written.error);
     }

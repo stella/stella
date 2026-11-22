@@ -10,8 +10,11 @@ import type {
   EInvoice,
   EInvoicePreview,
 } from "@stll/api-contract/e-invoice";
+import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
 import { formatFileSize } from "@stll/ui/file-size";
 import { Text } from "@stll/ui/text";
+
+import { OpenFilePart } from "@/components/file-part-opener";
 
 type Syntax = (typeof E_INVOICE_SYNTAXES)[number];
 
@@ -311,7 +314,7 @@ const InvoiceDetails = ({
 
 /**
  * A structured invoice as its file states it: every value verbatim, nothing
- * recomputed. Attachments are listed; the phone has no way to open them yet.
+ * recomputed. Each attachment opens like a document where the phone can.
  */
 export const EInvoiceDetails = ({ preview }: { preview: EInvoicePreview }) => {
   const t = useTranslations("eInvoice");
@@ -351,6 +354,13 @@ export const EInvoiceDetails = ({ preview }: { preview: EInvoicePreview }) => {
               <Text variant="caption">
                 {formatFileSize(attachment.sizeBytes, format)}
               </Text>
+              <OpenFilePart
+                fileName={attachment.fileName}
+                part={filePartId({
+                  kind: FILE_PART_KINDS.attachment,
+                  index: attachment.index,
+                })}
+              />
             </View>
           ))}
         </Section>
