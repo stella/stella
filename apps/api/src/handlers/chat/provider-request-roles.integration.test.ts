@@ -657,6 +657,7 @@ const OUTSIDE_THE_CHAT_SURFACE: Readonly<Record<string, string>> = {
   "lib/scheduler/tasks/memory-extractor.ts":
     "AI memory (a scheduled job over compaction summaries)",
   "lib/scouts/document-deadlines.ts": "deadline scouting",
+  "lib/uploads/document-naming/document-naming.ts": "document naming",
   "lib/workflow/ai-generate-batch.ts": "workflows",
   "lib/workflow/decisions/decide.ts": "typed decisions",
   "lib/workflow/verdict-engine.ts": "workflows",

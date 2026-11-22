@@ -161,6 +161,11 @@ import {
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { dispatchDocumentNaming } from "@/api/lib/uploads/document-naming/dispatch";
+import {
+  enqueueDocumentNaming,
+  recoverDocumentNamingRuns,
+} from "@/api/lib/uploads/document-naming/queue";
 import { recordNearDuplicateSignature } from "@/api/lib/uploads/near-duplicates/record-signature";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -169,6 +174,10 @@ const WORKER_CONCURRENCY = 2;
 
 const OCR_NEAR_DUPLICATE_SIGNATURE_SINK = failureSink({
   event: "document_processing.ocr_near_duplicate_signature_failed",
+  expected: [],
+});
+const DOCUMENT_NAMING_DISPATCH_FAILED_SINK = failureSink({
+  event: "document_processing.document_naming_dispatch_failed",
   expected: [],
 });
 export const RECONCILE_BATCH_SIZE = 100;
@@ -971,6 +980,18 @@ const completeDocumentProcessingRun = async ({
         runId: run.id,
       });
     }
+  }
+  const named = await Result.tryPromise(async () => {
+    if (await dispatchDocumentNaming(database, run)) {
+      await enqueueDocumentNaming(run.id);
+    }
+  });
+  if (Result.isError(named)) {
+    // A created run left unqueued is woken by the recovery sweep.
+    observeFailure(named.error, {
+      sink: DOCUMENT_NAMING_DISPATCH_FAILED_SINK,
+      ctx: { runId: run.id },
+    });
   }
   broadcastWorkspaceResourceUpdated(
     run.workspaceId,
@@ -2001,6 +2022,8 @@ export type DocumentProcessingReconciliationDependencies = {
   database: typeof rootDb;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
   enqueueDocumentDeadlineScout: typeof enqueueDocumentDeadlineScout;
+  /** The naming wake-up; the real queue when omitted. */
+  enqueueDocumentNaming?: typeof enqueueDocumentNaming;
   indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
   /** Epoch milliseconds, for the repair sweep's rest between passes. */
   now: () => number;
@@ -3105,6 +3128,7 @@ export const handleDocumentProcessingFailure = ({
 const RECONCILIATION_PHASE = {
   DEADLINE_SCOUT: "deadline-scout",
   DELIVERY: "delivery",
+  DOCUMENT_NAMING: "document-naming",
   REINDEX: "reindex",
   REPAIR: "repair",
   RETRY: "retry",
@@ -3153,6 +3177,13 @@ const createReconciliationPhaseRunners = (
       await recoverDocumentDeadlineScoutDispatches(dependencies),
     [RECONCILIATION_PHASE.DELIVERY]: async () =>
       await dispatchScheduledDocumentProcessingRetries(dependencies),
+    [RECONCILIATION_PHASE.DOCUMENT_NAMING]: async () =>
+      await recoverDocumentNamingRuns({
+        database: dependencies.database,
+        ...(dependencies.enqueueDocumentNaming === undefined
+          ? {}
+          : { enqueue: dependencies.enqueueDocumentNaming }),
+      }),
     [RECONCILIATION_PHASE.REINDEX]: async () =>
       await recoverFailedOcrSearchIndexes(dependencies),
     [RECONCILIATION_PHASE.REPAIR]: async () =>
@@ -3188,6 +3219,7 @@ const createReconciliationPhaseRunners = (
 export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
   [RECONCILIATION_PHASE.DEADLINE_SCOUT]: [],
   [RECONCILIATION_PHASE.DELIVERY]: [],
+  [RECONCILIATION_PHASE.DOCUMENT_NAMING]: [],
   [RECONCILIATION_PHASE.REINDEX]: [],
   [RECONCILIATION_PHASE.REPAIR]: [
     RECONCILIATION_PHASE.REINDEX,
@@ -3211,6 +3243,7 @@ export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
  */
 const RECONCILIATION_PHASE_ORDER = [
   RECONCILIATION_PHASE.DEADLINE_SCOUT,
+  RECONCILIATION_PHASE.DOCUMENT_NAMING,
   RECONCILIATION_PHASE.REPAIR,
   RECONCILIATION_PHASE.RETRY,
   RECONCILIATION_PHASE.STALE_LEASE,
@@ -3302,6 +3335,7 @@ export const runDocumentProcessingReconciliationPhases = async ({
   const results: ReconciliationResults = {
     [RECONCILIATION_PHASE.DEADLINE_SCOUT]: drained(),
     [RECONCILIATION_PHASE.DELIVERY]: drained(),
+    [RECONCILIATION_PHASE.DOCUMENT_NAMING]: drained(),
     [RECONCILIATION_PHASE.REINDEX]: drained(),
     [RECONCILIATION_PHASE.REPAIR]: drained(),
     [RECONCILIATION_PHASE.RETRY]: drained(),

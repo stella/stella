@@ -552,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Vai tiešām vēlaties dzēst šo lietu? Šo darbību nevar atsaukt.",
     "deletedItem": "Izdzēsts: {name}",
     "deletingWorkspace": "Dzēš lietu",
+    "documentNaming": {
+      "description": "Jaunie dokumenti saņem organizācijas nosaukuma veidni: {pattern}",
+      "label": "Pārdēvēt jaunās augšupielādes"
+    },
     "documentSwitcher": {
       "download": "Lejupielādēt šo failu",
       "renditionsFailed": "Pārlādējiet dokumentu un mēģiniet to lejupielādēt vēlreiz.",
