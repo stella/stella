@@ -103,7 +103,7 @@ test("API_LINT_SHARD selects a single shard and rejects unknown shard names", ()
   );
   expect(
     apiLintCommandForShard(["oxlint", "--type-aware"], "handlers"),
-  ).toEqual(commands[1]);
+  ).toEqual(commands[1] ?? []);
   expect(apiLintCommandForShard(["oxlint", "--type-aware"], "rest")).toEqual(
     commands[2] ?? [],
   );

@@ -39,20 +39,16 @@ export const apiLintCommands = (oxlint: readonly string[]): string[][] => [
 ];
 
 /** The single command for a named shard (`lib`, `handlers`, or `rest`). */
+const API_LINT_SHARD_INDEX: Record<ApiLintShard, number> = {
+  lib: 0,
+  handlers: 1,
+  rest: 2,
+};
+
 export const apiLintCommandForShard = (
   oxlint: readonly string[],
   shard: ApiLintShard,
-): string[] => {
-  const commands = apiLintCommands(oxlint);
-  switch (shard) {
-    case "lib":
-      return commands[0] ?? [];
-    case "handlers":
-      return commands[1] ?? [];
-    case "rest":
-      return commands[2] ?? [];
-  }
-};
+): string[] => apiLintCommands(oxlint)[API_LINT_SHARD_INDEX[shard]] ?? [];
 
 if (import.meta.main) {
   const oxlint = process.argv.slice(2);
