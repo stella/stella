@@ -49,7 +49,13 @@
  *   a new desired-state writer must run under it;
  * - whether a decision is erased does not depend on the generation, except
  *   through a jurisdiction-serving pointer (`vacatedFrom`) or a partial
- *   generation's scope. The read refuses both.
+ *   generation's scope. The read refuses both, except a pointer that serves
+ *   a jurisdiction from the candidate in place of the serving generation (a
+ *   fallback's): the flip does not move that jurisdiction's readers, so its
+ *   decisions are left out of the comparison, as are those of a jurisdiction
+ *   a recorded fallback policy keeps on the serving generation
+ *   (`corpus-index-fallback-policy.ts`). Which decisions those are is read
+ *   from each canonical decision's jurisdiction, never from its route.
  *
  * Order matters. A candidate state that is missing altogether is found by the
  * coverage walk, page by page over every serving state that wants an upsert,
@@ -102,6 +108,7 @@ import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
 import {
+  caseLawDecisions,
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
@@ -112,7 +119,8 @@ import {
   type CorpusFamily,
   isActiveCorpusIndexGenerationStatus,
 } from "@/api/lib/legal-search/corpus-generation-contract";
-import { readJurisdictionServingGenerationsTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
+import { readCorpusIndexFallbackKeepTx } from "@/api/lib/legal-search/corpus-index-fallback-policy";
+import { readJurisdictionServingPointersTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   corpusIndexManifestIsPartial,
   requireCorpusIndexManifest,
@@ -134,6 +142,44 @@ type CorpusIndexFlipPair = {
   serving: string;
   /** The generation the flip would move them to. */
   candidate: string;
+  /**
+   * Jurisdictions a recorded fallback policy keeps on the serving generation
+   * (`corpus-index-fallback-policy.ts`): the flip does not move their
+   * readers, so they are not compared. Empty without such a policy.
+   */
+  keptOnServing: readonly string[];
+  /**
+   * Jurisdictions already served by the candidate through a pointer a
+   * fallback left (moved from the serving generation): their readers do not
+   * move either. Any other pointer refuses the comparison.
+   */
+  pinnedOnCandidate: readonly string[];
+};
+
+/** The jurisdictions whose readers the flip leaves where they are, sorted. */
+export const corpusIndexFlipUnmovedJurisdictions = (
+  pair: Pick<CorpusIndexFlipPair, "keptOnServing" | "pinnedOnCandidate">,
+): readonly string[] =>
+  [...new Set([...pair.keptOnServing, ...pair.pinnedOnCandidate])].toSorted();
+
+/**
+ * Whether the decision `entity` names belongs to a jurisdiction whose readers
+ * the flip does not move. Read from the canonical decision by primary key, so
+ * a jurisdiction is never told from a route: one physical index can hold
+ * several jurisdictions. A decision with no canonical row is compared.
+ */
+const unmovedEntity = (pair: CorpusIndexFlipPair, entity: SQL): SQL => {
+  const unmoved = corpusIndexFlipUnmovedJurisdictions(pair);
+  return unmoved.length === 0
+    ? sql`false`
+    : sql`EXISTS (
+        SELECT 1 FROM ${caseLawDecisions}
+        WHERE ${caseLawDecisions.id} = ${entity}
+          AND ${caseLawDecisions.country} IN (${sql.join(
+            unmoved.map((jurisdiction) => sql`${jurisdiction}`),
+            sql`, `,
+          )})
+      )`;
 };
 
 /**
@@ -409,6 +455,7 @@ export const corpusIndexFlipRegressionQuery = (
           ${candidateShows}
           AND ${candidateState.appliedEpoch} >= ${servingState.appliedEpoch}
         )
+        AND NOT ${unmovedEntity(pair, sql`walked.entity_id`)}
     ),
     regressions AS (
       SELECT * FROM behind WHERE NOT behind.exempt
@@ -536,7 +583,10 @@ const regressionKind = (value: string): CorpusIndexFlipRegressionKind =>
   CORPUS_INDEX_FLIP_REGRESSION_KINDS.find((kind) => kind === value) ??
   panic(`Unknown flip regression kind: ${value}`);
 
-const readError = (pair: CorpusIndexFlipPair, cause: unknown) =>
+const readError = (
+  pair: Pick<CorpusIndexFlipPair, "family" | "serving" | "candidate">,
+  cause: unknown,
+) =>
   new CorpusIndexFlipParityReadError({
     message: `Could not read the flip parity of ${pair.family}: ${pair.serving} -> ${pair.candidate}`,
     cause,
@@ -594,8 +644,13 @@ const refused = (
  * and the candidate. Refused when the read cannot answer it exactly: no
  * generation serves, the candidate is the serving one, the candidate does not
  * take every change (not active), the candidate is partial, or the family
- * has a jurisdiction-serving pointer. Erasures depend on the generation in
- * the last two cases.
+ * has a jurisdiction-serving pointer other than one a fallback left on the
+ * candidate. Erasures depend on the generation in the last two cases.
+ *
+ * The pair also names the jurisdictions whose readers the flip leaves where
+ * they are: those a recorded fallback policy keeps on the serving generation,
+ * and those a fallback pinned on the candidate. Their decisions are not
+ * compared; every other decision, on a shared index too, is.
  */
 const readComparablePairTx = async (
   tx: Transaction,
@@ -664,17 +719,34 @@ const readComparablePairTx = async (
       "generation_not_active",
     );
   }
-  const pointers = await Result.tryPromise({
-    try: async () => await readJurisdictionServingGenerationsTx(tx, family),
+  const unmoved = await Result.tryPromise({
+    try: async () => ({
+      pointers: await readJurisdictionServingPointersTx(tx, family),
+      keep: await readCorpusIndexFallbackKeepTx(tx, {
+        family,
+        serving: serving.generation,
+        target: candidate,
+      }),
+    }),
     catch: failed,
   });
-  if (Result.isError(pointers)) {
-    return pointers;
+  if (Result.isError(unmoved)) {
+    return unmoved;
   }
-  const [pointer] = pointers.value.keys();
-  if (pointer !== undefined) {
+  const { pointers, keep } = unmoved.value;
+  // A pointer a fallback left on the candidate moves no reader (the candidate
+  // serves the jurisdiction now and after), so the comparison leaves it out.
+  // Any other pointer makes a jurisdiction's erasures depend on a generation
+  // the comparison does not follow.
+  const foreign = pointers.find(
+    (pointer) =>
+      family !== "case_law" ||
+      pointer.generation !== candidate ||
+      pointer.fromGeneration !== serving.generation,
+  );
+  if (foreign !== undefined) {
     return refused(
-      `${pointer} is served through a jurisdiction-serving pointer, which makes its erasures depend on the generation; a whole-family flip is not compared while one exists`,
+      `${foreign.jurisdiction} is served through a jurisdiction-serving pointer to ${foreign.generation}, which makes its erasures depend on the generation; a whole-family flip is compared only while every pointer serves the candidate in place of the serving generation`,
       "jurisdiction_serving_pointer",
     );
   }
@@ -682,6 +754,8 @@ const readComparablePairTx = async (
     family,
     serving: serving.generation,
     candidate,
+    keptOnServing: keep?.keepOnNewer ?? [],
+    pinnedOnCandidate: pointers.map(({ jurisdiction }) => jurisdiction),
     servingUpdatedAtUs: serving.updatedAtUs,
     candidateUpdatedAtUs: candidateRow.updatedAtUs,
   });
@@ -778,6 +852,7 @@ export const corpusIndexFlipCoveragePageQuery = (
         LIMIT 1
       ) candidate_presence ON true
       WHERE candidate_presence.present IS NULL
+        AND NOT ${unmovedEntity(pair, sql`walked.entity_id`)}
     )
     SELECT
       (SELECT count(*) FROM walked)::int AS walked,
@@ -888,7 +963,8 @@ export const corpusIndexFlipBehindCursorQuery = (
     probed AS MATERIALIZED (
       SELECT reread.entity_id::text AS entity_id,
         serving_now.desired_action,
-        candidate_presence.present
+        candidate_presence.present,
+        ${unmovedEntity(pair, sql`reread.entity_id`)} AS unmoved
       FROM reread
       LEFT JOIN LATERAL (
         SELECT ${states.desiredAction} AS desired_action
@@ -911,12 +987,14 @@ export const corpusIndexFlipBehindCursorQuery = (
       (
         SELECT count(*) FROM probed
         WHERE probed.desired_action = 'upsert' AND probed.present IS NULL
+          AND NOT probed.unmoved
       )::int AS missing,
       coalesce((
         SELECT json_agg(sampled.entity_id ORDER BY sampled.entity_id)
         FROM (
           SELECT entity_id FROM probed
           WHERE probed.desired_action = 'upsert' AND probed.present IS NULL
+            AND NOT probed.unmoved
           ORDER BY entity_id
           LIMIT ${CORPUS_INDEX_FLIP_SAMPLE_MAX}
         ) AS sampled
@@ -1477,6 +1555,15 @@ export const decideCorpusIndexFlipParityTx = async (
     return refused(
       `${family}/${walk.pair.serving} or ${family}/${candidate} changed its registration during the read`,
       "generation_changed",
+    );
+  }
+  if (
+    corpusIndexFlipUnmovedJurisdictions(again.value).join(",") !==
+    corpusIndexFlipUnmovedJurisdictions(walk.pair).join(",")
+  ) {
+    return refused(
+      `The jurisdictions ${family} keeps where they are changed during the read`,
+      "jurisdiction_serving_pointer",
     );
   }
   const tail = await readTailTx(tx, walk);

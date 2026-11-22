@@ -153,6 +153,7 @@ const request = (
   exemptMinutes: 0,
   coverage: { pageSize: 2, pageBudget: 100 },
   maxProofAgeHours: 24,
+  rollbackPolicy: null,
   ...overrides,
 });
 

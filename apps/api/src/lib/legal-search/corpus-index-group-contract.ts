@@ -296,6 +296,25 @@ export const caseLawManifestGroups = (
   );
 };
 
+/**
+ * Each physical index of a case-law generation with the jurisdictions it
+ * covers there, in declaration order: one index can hold several, so a
+ * jurisdiction-scoped decision (a fallback keeping one of them on another
+ * generation) reads which ones from here, never from an index name.
+ */
+export const caseLawManifestRouteJurisdictions = (
+  manifest: Extract<CorpusIndexManifest, { family: "case_law" }>,
+): readonly { indexId: string; jurisdictions: readonly string[] }[] => {
+  const order = caseLawGroupedOrder(manifest);
+  return caseLawManifestGroups(manifest).map((indexGroup) => ({
+    indexId: resolveCorpusIndexGroupContract({ manifest, indexGroup }).indexId,
+    jurisdictions: caseLawIndexGroupCountriesAt(order, indexGroup).filter(
+      (jurisdiction) =>
+        corpusIndexManifestCoversJurisdiction(manifest, jurisdiction),
+    ),
+  }));
+};
+
 const groupIndexId = (
   manifest: CorpusIndexManifest,
   indexGroup: string,

@@ -144,10 +144,19 @@ test("the SQL acceptance of an indexed hit resolves its generation through the p
   ]);
 });
 
-test("the pointer is written only by the gated flip and cleared only by a promotion", () => {
+test("the pointer is written only by the gated flip and a promotion that keeps a fallback's jurisdictions, and cleared only by a promotion", () => {
+  // The store's writer is called by the serving mutation alone, for the
+  // jurisdictions a recorded fallback policy keeps.
   expect(
     modulesMatching(/\.insert\(corpusIndexJurisdictionServing\)/u),
-  ).toEqual(["lib/legal-search/case-law-serving-flip.ts"]);
+  ).toEqual([
+    "lib/legal-search/case-law-serving-flip.ts",
+    "lib/legal-search/corpus-index-jurisdiction-serving-store.ts",
+  ]);
+  expect(modulesMatching(/\bkeepJurisdictionsOnGenerationTx\(/u)).toEqual([
+    "lib/legal-search/corpus-index-generation-store.ts",
+    "lib/legal-search/corpus-index-jurisdiction-serving-store.ts",
+  ]);
   expect(
     modulesMatching(/\.delete\(corpusIndexJurisdictionServing\)/u),
   ).toEqual(["lib/legal-search/corpus-index-jurisdiction-serving-store.ts"]);

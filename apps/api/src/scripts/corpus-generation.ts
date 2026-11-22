@@ -5,7 +5,7 @@ import { panic, Result, TaggedError } from "better-result";
  *
  *   bun run src/scripts/corpus-generation.ts status
  *   bun run src/scripts/corpus-generation.ts register --family case_law --generation case_law_v7 [--apply]
- *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v10 [--replacing case_law_v7 --actor <id> --reason <text> --apply]
+ *   bun run src/scripts/corpus-generation.ts serve --family case_law --generation case_law_v10 [--replacing case_law_v7 --actor <id> --reason <text> --apply] [--keep-on-fallback case_law_v7:case_law_v10:<J>[,<J>]]
  *   bun run src/scripts/corpus-generation.ts parity --family case_law --generation case_law_v10 [--exempt-minutes 20] [--coverage-pages 2000] [--coverage-from <entity|start>] [--list]
  *   bun run src/scripts/corpus-generation.ts seed --family case_law --generation case_law_v10 [--pages 1000]
  *   bun run src/scripts/corpus-generation.ts prove --family case_law --generation case_law_v10 [--hours 11] [--until-current] [--concurrency 4]
@@ -98,6 +98,7 @@ import {
   getCorpusIndexClient,
   readCorpusIndexSearchBaseUrl,
 } from "@/api/lib/legal-search/corpus-index-client";
+import type { CorpusIndexFallbackPolicy } from "@/api/lib/legal-search/corpus-index-fallback-policy";
 import {
   type CorpusIndexFlipCoverageCursor,
   type CorpusIndexFlipPairRefusedError,
@@ -242,6 +243,11 @@ Options (serve):
   --max-proof-age-hours <n>
                          Oldest route proof accepted, from its pass's start
                          (default and most ${String(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS)}).
+  --keep-on-fallback <from>:<to>:<J>[,<J>...]
+                         Record in the receipt that a later serve of <from>
+                         keeps these case-law jurisdictions on <to>. <from>
+                         and <to> must be this flip's pair; each code must be
+                         a declared jurisdiction both generations hold.
 
 Options (serve, parity):
   --exempt-minutes <n>   Serving applies newer than this many minutes are the
@@ -269,7 +275,8 @@ Options (prove):
 
 Exit codes (serve): 0 flipped (or, dry run, every check passed), 3 parity
 regressions, 4 undecided, 10 registry, 11 route proofs, 12 seeding, 13 engine
-evidence, 14 busy (a fence or read timed out; nothing changed), 1 refused.
+evidence, 14 busy (a fence or read timed out; nothing changed), 15 fallback
+policy refused, 1 refused.
 Exit codes (parity): 0 no regression, 3 regressions, 4 undecided, 1 refused.
 Exit codes (seed): 0 every route seeded, 5 page budget spent, 6 paused by
 the database-load brake (after 15 minutes of waiting), 7 next row held by a
@@ -377,6 +384,7 @@ type CorpusGenerationCommand =
       exemptMinutes: number;
       coveragePages: number;
       maxProofAgeHours: number;
+      rollbackPolicy: CorpusIndexFallbackPolicy | null;
     }
   | {
       type: "parity";
@@ -482,6 +490,7 @@ type CommandValues = {
   actor?: string | undefined;
   reason?: string | undefined;
   "max-proof-age-hours"?: string | undefined;
+  "keep-on-fallback"?: string | undefined;
   "defer-cleanup"?: boolean | undefined;
   hours?: string | undefined;
   "until-current"?: boolean | undefined;
@@ -505,6 +514,13 @@ const proveOptionRefusal = (
     : null;
 };
 
+/** The options only `serve` takes (`--actor` and `--reason` also go to retire). */
+const SERVE_ONLY_OPTIONS = [
+  "replacing",
+  "max-proof-age-hours",
+  "keep-on-fallback",
+] as const satisfies readonly (keyof CommandValues)[];
+
 /** Why the options do not fit the named command, or null when they do. */
 const commandOptionRefusal = (
   name: (typeof COMMAND_NAMES)[number],
@@ -517,10 +533,10 @@ const commandOptionRefusal = (
     values["coverage-from"] !== undefined || values.list === true;
   const receiptOptions =
     values.actor !== undefined || values.reason !== undefined;
-  const serveOptions =
-    receiptOptions ||
-    values.replacing !== undefined ||
-    values["max-proof-age-hours"] !== undefined;
+  const serveOnlyOptions = SERVE_ONLY_OPTIONS.some(
+    (option) => values[option] !== undefined,
+  );
+  const serveOptions = receiptOptions || serveOnlyOptions;
   const proveRefusal = proveOptionRefusal(name, values);
   if (proveRefusal !== null) {
     return proveRefusal;
@@ -545,13 +561,12 @@ const commandOptionRefusal = (
     return "--coverage-from and --list belong to parity.";
   }
   if (name === "retire") {
-    return values.replacing === undefined &&
-      values["max-proof-age-hours"] === undefined
-      ? null
-      : "--replacing and --max-proof-age-hours belong to serve.";
+    return serveOnlyOptions
+      ? "--replacing, --max-proof-age-hours and --keep-on-fallback belong to serve."
+      : null;
   }
   if (name !== "serve" && serveOptions) {
-    return "--replacing, --actor, --reason and --max-proof-age-hours belong to serve (--actor and --reason also to retire).";
+    return "--replacing, --actor, --reason, --max-proof-age-hours and --keep-on-fallback belong to serve (--actor and --reason also to retire).";
   }
   if (
     name === "parity" &&
@@ -581,6 +596,33 @@ const parseServeCommand = (
       `--max-proof-age-hours must be a whole number from 1 to ${String(CORPUS_INDEX_ROUTE_PROOF_MAX_AGE_HOURS)}.`,
     );
   }
+  const keep = values["keep-on-fallback"];
+  const keepParts = keep?.split(":") ?? [];
+  const [fromGeneration, toGeneration, jurisdictions] = keepParts;
+  if (
+    keep !== undefined &&
+    (keepParts.length !== 3 ||
+      fromGeneration === undefined ||
+      fromGeneration === "" ||
+      toGeneration === undefined ||
+      toGeneration === "" ||
+      jurisdictions === undefined ||
+      jurisdictions === "")
+  ) {
+    return usageError(
+      "--keep-on-fallback takes <from>:<to>:<J>[,<J>...], e.g. case_law_v7:case_law_v10:EU.",
+    );
+  }
+  const rollbackPolicy =
+    fromGeneration === undefined ||
+    toGeneration === undefined ||
+    jurisdictions === undefined
+      ? null
+      : {
+          fromGeneration,
+          toGeneration,
+          keepOnNewer: jurisdictions.split(","),
+        };
   const replacing =
     values.replacing === undefined
       ? ({ type: "unchecked" } as const)
@@ -618,6 +660,7 @@ const parseServeCommand = (
     exemptMinutes,
     coveragePages,
     maxProofAgeHours,
+    rollbackPolicy,
   });
 };
 
@@ -679,6 +722,7 @@ const parseCorpusGenerationCommand = (
           actor: { type: "string" },
           reason: { type: "string" },
           "max-proof-age-hours": { type: "string" },
+          "keep-on-fallback": { type: "string" },
           "defer-cleanup": { type: "boolean" },
           hours: { type: "string" },
           "until-current": { type: "boolean" },
@@ -1313,6 +1357,7 @@ const SERVE_EXIT = {
   seeding: 12,
   engine: 13,
   busy: 14,
+  rollbackPolicy: 15,
 } as const satisfies Record<string, number>;
 
 const serveExitCode = ({ class: refusalClass }: CorpusIndexFlipRefusal) => {
@@ -1331,6 +1376,8 @@ const serveExitCode = ({ class: refusalClass }: CorpusIndexFlipRefusal) => {
       return SERVE_EXIT.engine;
     case "busy":
       return SERVE_EXIT.busy;
+    case "rollback_policy":
+      return SERVE_EXIT.rollbackPolicy;
     default:
       refusalClass satisfies never;
       return panic(`Unhandled flip refusal class: ${String(refusalClass)}`);
@@ -1344,6 +1391,16 @@ const describePlan = (
   plan.serving === null
     ? `checked: no generation serves ${plan.request.family}; nothing to compare against`
     : `checked: ${plan.serving.generation} serves ${plan.request.family}; ${plan.request.candidate} is building`,
+  ...(plan.fallback === null
+    ? []
+    : [
+        `checked: a fallback under the policy of receipt ${plan.fallback.receiptId}; ${plan.fallback.keepOnNewer.join(", ")} stay on ${plan.serving?.generation ?? "(none)"} and are not compared`,
+      ]),
+  ...(plan.rollbackPolicy === null
+    ? []
+    : [
+        `checked: fallback policy to record: a later serve of ${plan.rollbackPolicy.fromGeneration} keeps ${plan.rollbackPolicy.keepOnNewer.join(", ")} on ${plan.rollbackPolicy.toGeneration}`,
+      ]),
   ...plan.proofs.map(
     ({ indexId, incarnation, provenPassStartedAtUs, inspected }) =>
       `checked: ${indexId} proven by a pass started ${Temporal.Instant.fromEpochMilliseconds(Math.floor(Number(provenPassStartedAtUs) / 1000)).toString()} (${String(inspected)} revisions), engine incarnation ${incarnation} still held`,
@@ -1439,6 +1496,7 @@ const runServe = async (
       pageBudget: command.coveragePages,
     },
     maxProofAgeHours: command.maxProofAgeHours,
+    rollbackPolicy: command.rollbackPolicy,
   };
   // Phase 1: no lock held, read-only transactions.
   const prepared = await withDatabase(
@@ -1587,6 +1645,16 @@ const describeParity = (
   })();
   return [
     `checked: compared with ${parity.pair.serving}, which serves ${parity.pair.family}; pending changes younger than ${parity.watermark.toString()} are expected lag`,
+    ...(parity.pair.keptOnServing.length === 0
+      ? []
+      : [
+          `not compared: ${parity.pair.keptOnServing.join(", ")}, kept on ${parity.pair.serving} by the fallback policy of its flip`,
+        ]),
+    ...(parity.pair.pinnedOnCandidate.length === 0
+      ? []
+      : [
+          `not compared: ${parity.pair.pinnedOnCandidate.join(", ")}, served by ${parity.pair.candidate} already`,
+        ]),
     coverageLine,
     behindCursorLine(parity.behindCursor),
     `checked: unconverged states of the candidate walked: ${String(walked.pending)} pending, ${String(walked.blocked)} blocked, ${String(walked.absent)} proven gone, ${String(walked.atRisk)} with a delete in flight; ${String(regressions.exempt)} exempt as expected lag`,

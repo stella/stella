@@ -917,10 +917,24 @@ describe("corpus index flip parity", () => {
       .insert(corpusIndexGenerations)
       .values(registerGeneration("case_law_v9", "building"));
     expect(await refusal("case_law_v9")).toBe("partial_generation");
+    // A pointer that serves a jurisdiction from the candidate in place of the
+    // serving generation (a fallback's) moves no reader: the pair compares,
+    // and names it as left out.
     await run(`
       INSERT INTO corpus_index_jurisdiction_serving
         (family, jurisdiction, generation, from_generation)
       VALUES ('case_law', 'CZE', 'case_law_v10', 'case_law_v7')
+    `);
+    expect(requireParity(await readParity()).pair).toMatchObject({
+      keptOnServing: [],
+      pinnedOnCandidate: ["CZE"],
+    });
+    // Any other pointer makes erasures depend on a generation the read does
+    // not follow.
+    await run(`
+      INSERT INTO corpus_index_jurisdiction_serving
+        (family, jurisdiction, generation, from_generation)
+      VALUES ('case_law', 'SVK', 'case_law_v9', 'case_law_v7')
     `);
     expect(await refusal(CANDIDATE)).toBe("jurisdiction_serving_pointer");
     await run(`TRUNCATE TABLE corpus_index_generations CASCADE`);

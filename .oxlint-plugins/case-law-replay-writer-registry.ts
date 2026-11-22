@@ -350,22 +350,22 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 304,
+    line: 323,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 313,
+    line: 332,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 380,
+    line: 417,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/legal-search/corpus-index-generation-store.ts",
-    line: 490,
+    line: 527,
     kind: "transition",
     invariant: {
       file: "apps/api/src/lib/legal-search/corpus-index-generation-retire.db.test.ts",

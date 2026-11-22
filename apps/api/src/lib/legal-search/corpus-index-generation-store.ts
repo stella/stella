@@ -16,7 +16,12 @@ import {
   parseCorpusIndexClusterForGeneration,
   type QuickwitCluster,
 } from "@/api/lib/legal-search/corpus-generation-contract";
-import { clearJurisdictionServingTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
+import { readCorpusIndexFallbackKeepTx } from "@/api/lib/legal-search/corpus-index-fallback-policy";
+import {
+  clearJurisdictionServingTx,
+  keepJurisdictionsOnGenerationTx,
+  readJurisdictionServingGenerationsTx,
+} from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
   type CorpusIndexManifest,
   corpusIndexManifestDigest,
@@ -251,6 +256,8 @@ export const registerCorpusIndexGenerationTx = async (
  * Atomically flip one family to a registered generation. The generation that
  * served before stays `building`: it keeps taking every change, so the same
  * guarded flip (`corpus-index-generation-flip.ts`) can move readers back to it.
+ * A move back under a fallback policy the replaced generation's flip recorded
+ * keeps that policy's jurisdictions on the replaced generation, whoever calls.
  * Families route and roll back independently; retired generations cannot be
  * resurrected.
  */
@@ -299,7 +306,19 @@ export const setServingCorpusIndexGenerationTx = async (
     return requireServingCorpusIndexGeneration(targetRow, target.family);
   }
   // A whole generation holds every jurisdiction itself, so no jurisdiction is
-  // served by another generation once it serves.
+  // served by another generation once it serves, except one a recorded
+  // fallback policy keeps on the generation it replaces
+  // (`corpus-index-fallback-policy.ts`): read before anything moves, and
+  // kept here so no caller of this mutation can move it back.
+  const replaced = rows.find((row) => row.status === "serving");
+  const keep =
+    replaced === undefined
+      ? null
+      : await readCorpusIndexFallbackKeepTx(tx, {
+          family: target.family,
+          serving: replaced.generation,
+          target: target.generation,
+        });
   await clearJurisdictionServingTx(tx, target.family);
   await tx
     .update(corpusIndexGenerations)
@@ -325,6 +344,14 @@ export const setServingCorpusIndexGenerationTx = async (
     return panic(
       `Corpus serving target was lost: ${target.family}/${target.generation}`,
     );
+  }
+  if (keep !== null && replaced !== undefined) {
+    await keepJurisdictionsOnGenerationTx(tx, {
+      family: target.family,
+      jurisdictions: keep.keepOnNewer,
+      generation: replaced.generation,
+      fromGeneration: target.generation,
+    });
   }
   return requireServingCorpusIndexGeneration(promotedRow, target.family);
 };
@@ -377,6 +404,16 @@ export const beginCorpusIndexGenerationRebuildTx = async (
 ): Promise<void> => {
   const row = await requireRebuildTarget(tx, target, "building");
   requireRegisteredCorpusIndexManifest(row);
+  // A generation a jurisdiction-serving pointer names still answers that
+  // jurisdiction's readers; leaving the active set would strand them.
+  const pointed = [
+    ...(await readJurisdictionServingGenerationsTx(tx, target.family)),
+  ].filter(([, generation]) => generation === target.generation);
+  if (pointed.length > 0) {
+    return panic(
+      `Corpus generation still serves ${pointed.map(([jurisdiction]) => jurisdiction).join(", ")} through a jurisdiction-serving pointer: ${target.family}/${target.generation}`,
+    );
+  }
   const retired = await tx
     .update(corpusIndexGenerations)
     .set({ status: "retiring", updatedAt: sql`clock_timestamp()` })

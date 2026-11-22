@@ -45,6 +45,17 @@
  * or statement timeout, a deadlock, the operator lane's budget) is `busy`:
  * nothing was written, and a retry when the projection is quieter may pass.
  *
+ * A flip may record a fallback policy (`rollbackPolicy`, validated in phase
+ * 1; `corpus-index-fallback-policy.ts`): named jurisdictions stay on the
+ * candidate if the family is later served by the generation it replaces. A
+ * flip back over exactly that pair applies it: the parity compares only the
+ * jurisdictions whose readers move (every decision of another jurisdiction
+ * is compared, on a shared index too), the route proofs and engine counts
+ * cover the routes readers reach afterwards (the kept routes of the
+ * generation they stay on included), and the serving mutation points the
+ * kept jurisdictions at the newer generation in the same transaction, for
+ * any caller. The forward flip's own checks do not change with a policy.
+ *
  * What it does not check: the search evaluation (run by hand and attached to
  * the go), and that every revision's documents are in the engine one by one:
  * the count is a total, which superseded copies not yet cleaned up also add
@@ -72,6 +83,13 @@ import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
+  type CorpusIndexFallbackKeep,
+  type CorpusIndexFallbackPolicy,
+  type CorpusIndexFallbackPolicyRefusalReason,
+  readCorpusIndexFallbackKeepTx,
+  validateCorpusIndexFallbackPolicy,
+} from "@/api/lib/legal-search/corpus-index-fallback-policy";
+import {
   type CorpusIndexFlipCoverageWalk,
   type CorpusIndexFlipPairRefusedError,
   type CorpusIndexFlipParity,
@@ -84,7 +102,10 @@ import {
   lockCorpusIndexGenerationActivationTx,
   setServingCorpusIndexGenerationTx,
 } from "@/api/lib/legal-search/corpus-index-generation-store";
+import { caseLawManifestRouteJurisdictions } from "@/api/lib/legal-search/corpus-index-group-contract";
+import { readJurisdictionServingPointersTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import {
+  type CorpusIndexManifest,
   corpusIndexManifestDigest,
   corpusIndexManifestIsPartial,
   requireCorpusIndexManifest,
@@ -120,8 +141,8 @@ export type CorpusIndexFlipEngine = Pick<
 
 /**
  * Why a flip did not happen, by class, so a caller can tell a refusal to fix
- * (registry, parity, proofs, seeding, engine) from one to retry (busy) or to
- * finish reading (undecided).
+ * (registry, parity, fallback policy, proofs, seeding, engine) from one to
+ * retry (busy) or to finish reading (undecided).
  */
 export type CorpusIndexFlipRefusal =
   | {
@@ -136,6 +157,7 @@ export type CorpusIndexFlipRefusal =
         | "jurisdiction_serving_pointer";
     }
   | { class: "parity"; reason: "regressions" }
+  | { class: "rollback_policy"; reason: CorpusIndexFallbackPolicyRefusalReason }
   | { class: "route_proofs"; reason: "not_current" | "proof_changed" }
   | { class: "seeding"; reason: "candidate_unseeded" | "serving_unseeded" }
   | { class: "engine"; reason: "index_replaced" | "documents_missing" }
@@ -241,6 +263,12 @@ export type CorpusIndexFlipRequest = {
   coverage: { pageSize: number; pageBudget: number };
   /** The oldest route proof (from its pass's start) the flip accepts. */
   maxProofAgeHours: number;
+  /**
+   * Jurisdictions a later fallback to the generation this flip replaces
+   * keeps on the candidate (`corpus-index-fallback-policy.ts`); recorded in
+   * the receipt once validated, never inferred. Null records none.
+   */
+  rollbackPolicy: CorpusIndexFallbackPolicy | null;
 };
 
 /** A registry row as the flip identifies it. */
@@ -248,6 +276,8 @@ type RegistryIdentity = { generation: string; updatedAtUs: string };
 
 /** One route's proof, as phase 1 checked it against the engine. */
 type CheckedRouteProof = {
+  /** The candidate, or the serving generation for a route a fallback keeps. */
+  generation: string;
   indexId: string;
   incarnation: string;
   provenPassStartedAtUs: string;
@@ -257,6 +287,7 @@ type CheckedRouteProof = {
 
 /** One route's applied documents: PostgreSQL's sum, then the engine's count. */
 type RouteDocuments = {
+  generation: string;
   indexId: string;
   appliedRevisions: number;
   expected: number;
@@ -274,6 +305,13 @@ export type CorpusIndexFlipPlan =
       documents: readonly RouteDocuments[];
       /** Null on a family's first flip: nothing serves, nothing to lose. */
       walk: CorpusIndexFlipCoverageWalk | null;
+      /** The request's policy as validated, to record in the receipt. */
+      rollbackPolicy: CorpusIndexFallbackPolicy | null;
+      /**
+       * A fallback under a policy the serving generation's flip recorded:
+       * these jurisdictions stay on the serving generation.
+       */
+      fallback: CorpusIndexFallbackKeep | null;
     };
 
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
@@ -305,6 +343,8 @@ type RegistryReading =
       type: "flip";
       candidate: RegistryIdentity;
       serving: RegistryIdentity | null;
+      rollbackPolicy: CorpusIndexFallbackPolicy | null;
+      fallback: CorpusIndexFallbackKeep | null;
     };
 
 /** The pair the registry names, or why it cannot be flipped. */
@@ -364,6 +404,20 @@ const readPairTx = async (
       `${family} is served by ${serving?.generation ?? "no generation"}, not ${request.replacing.generation ?? "no generation"} as the flip names`,
     );
   }
+  const policy =
+    request.rollbackPolicy === null
+      ? Result.ok(null)
+      : validateCorpusIndexFallbackPolicy(request.rollbackPolicy, {
+          family,
+          from: serving?.generation ?? null,
+          to: candidate,
+        });
+  if (policy.isErr()) {
+    return refuse(
+      { class: "rollback_policy", reason: policy.error.reason },
+      policy.error.message,
+    );
+  }
   return Result.ok({
     type: "flip",
     candidate: {
@@ -371,6 +425,15 @@ const readPairTx = async (
       updatedAtUs: candidateRow.updatedAtUs,
     },
     serving,
+    rollbackPolicy: policy.value,
+    fallback:
+      serving === null
+        ? null
+        : await readCorpusIndexFallbackKeepTx(tx, {
+            family,
+            serving: serving.generation,
+            target: candidate,
+          }),
   });
 };
 
@@ -408,26 +471,130 @@ const routeProofLines = (
   }
 };
 
+/**
+ * The routes readers reach once the flip commits, per generation: every
+ * route of the candidate, except, on a fallback that keeps jurisdictions on
+ * the serving generation, a candidate route that holds kept jurisdictions
+ * only; and the serving generation's routes that hold a kept jurisdiction.
+ * A route shared with a jurisdiction that moves is always the candidate's.
+ */
+type EffectiveRoutes = readonly {
+  generation: string;
+  reaches: (indexId: string) => boolean;
+}[];
+
+const effectiveRoutes = (
+  request: CorpusIndexFlipRequest,
+  serving: string | null,
+  fallback: CorpusIndexFallbackKeep | null,
+): EffectiveRoutes => {
+  if (serving === null || fallback === null) {
+    return [{ generation: request.candidate, reaches: () => true }];
+  }
+  const kept = new Set(fallback.keepOnNewer);
+  const routesOf = (generation: string) => {
+    const manifest: CorpusIndexManifest = requireCorpusIndexManifest(
+      request.family,
+      generation,
+    );
+    return manifest.family === "case_law"
+      ? caseLawManifestRouteJurisdictions(manifest)
+      : panic(`A fallback policy keeps case law only: ${generation}`);
+  };
+  const keptOnly = new Set(
+    routesOf(request.candidate).flatMap(({ indexId, jurisdictions }) =>
+      jurisdictions.length > 0 &&
+      jurisdictions.every((jurisdiction) => kept.has(jurisdiction))
+        ? [indexId]
+        : [],
+    ),
+  );
+  const keptOnServing = new Set(
+    routesOf(serving).flatMap(({ indexId, jurisdictions }) =>
+      jurisdictions.some((jurisdiction) => kept.has(jurisdiction))
+        ? [indexId]
+        : [],
+    ),
+  );
+  return [
+    {
+      generation: request.candidate,
+      reaches: (indexId) => !keptOnly.has(indexId),
+    },
+    { generation: serving, reaches: (indexId) => keptOnServing.has(indexId) },
+  ];
+};
+
+/**
+ * The current proof of every route readers reach after the flip, or the
+ * refusal that lists the ones not current. A line about a route of another
+ * generation than the candidate names that generation.
+ */
 const readCurrentProofsTx = async (
   tx: Transaction,
   request: CorpusIndexFlipRequest,
+  routes: EffectiveRoutes,
 ): Promise<
-  Result<
-    Extract<CorpusIndexGenerationRouteProofs, { type: "all_current" }>,
-    CorpusIndexGenerationFlipRefusedError
-  >
+  Result<CheckedRouteProof[], CorpusIndexGenerationFlipRefusedError>
 > => {
-  const proofs = await readCorpusIndexRouteProofsTx(
-    tx,
-    { family: request.family, generation: request.candidate },
-    { maxAgeHours: request.maxProofAgeHours },
-  );
-  return proofs.type === "all_current"
-    ? Result.ok(proofs)
+  const proven: CheckedRouteProof[] = [];
+  const lines: string[] = [];
+  for (const { generation, reaches } of routes) {
+    // db-await-in-loop: one bounded proof read per generation, at most two
+    const proofs = await readCorpusIndexRouteProofsTx(
+      tx,
+      { family: request.family, generation },
+      { maxAgeHours: request.maxProofAgeHours },
+    );
+    const named = (line: string) =>
+      generation === request.candidate ? line : `${generation}/${line}`;
+    switch (proofs.type) {
+      case "all_current":
+        proven.push(
+          ...proofs.routes
+            .filter(({ indexId }) => reaches(indexId))
+            .map((route) => ({ generation, ...route })),
+        );
+        break;
+      case "not_ready": {
+        const reached = proofs.routes.filter(({ indexId }) => reaches(indexId));
+        for (const { indexId, status } of reached) {
+          if (status.type === "current") {
+            proven.push({
+              generation,
+              indexId,
+              incarnation: status.incarnation,
+              provenPassStartedAtUs: status.provenPassStartedAtUs,
+              provenAtUs: status.provenAtUs,
+              inspected: status.inspected,
+            });
+          }
+        }
+        // Every reached route is listed, current ones too, once one is not.
+        lines.push(
+          ...(reached.every(({ status }) => status.type === "current")
+            ? []
+            : routeProofLines({ ...proofs, routes: reached }).map(named)),
+        );
+        break;
+      }
+      case "generation_absent":
+      case "open_route_set":
+        lines.push(...routeProofLines(proofs).map(named));
+        break;
+      default:
+        proofs satisfies never;
+        return panic("Unhandled route proofs");
+    }
+  }
+  return lines.length === 0 && proven.length > 0
+    ? Result.ok(proven)
     : refuse(
         { class: "route_proofs", reason: "not_current" },
-        `Not every route of ${request.family}/${request.candidate} has a current proof (at most ${String(request.maxProofAgeHours)} h old)`,
-        routeProofLines(proofs),
+        routes.length === 1
+          ? `Not every route of ${request.family}/${request.candidate} has a current proof (at most ${String(request.maxProofAgeHours)} h old)`
+          : `Not every route readers reach after the flip of ${request.family}/${request.candidate} has a current proof (at most ${String(request.maxProofAgeHours)} h old)`,
+        lines,
       );
 };
 
@@ -505,6 +672,7 @@ const checkEngine = async (
   runInTransaction: ProjectionTransactionRunner,
   engine: CorpusIndexFlipEngine,
   request: CorpusIndexFlipRequest,
+  routes: EffectiveRoutes,
 ): Promise<
   Result<
     { proofs: readonly CheckedRouteProof[]; documents: RouteDocuments[] },
@@ -513,14 +681,14 @@ const checkEngine = async (
 > => {
   const { family, candidate } = request;
   const proofs = await runInTransaction(
-    async (tx) => await readCurrentProofsTx(tx, request),
+    async (tx) => await readCurrentProofsTx(tx, request, routes),
   );
   if (proofs.isErr()) {
     return Result.err(proofs.error);
   }
   const held = await checkCorpusIndexRouteProofIncarnations({
     client: engine,
-    proofs: proofs.value,
+    proofs: { type: "all_current", routes: proofs.value, undeclared: [] },
   });
   if (held.isErr()) {
     return refuse(
@@ -536,15 +704,11 @@ const checkEngine = async (
     );
   }
   const documents: RouteDocuments[] = [];
-  for (const { indexId } of proofs.value.routes) {
+  for (const { generation, indexId } of proofs.value) {
     // db-await-in-loop: one PostgreSQL sum, then one engine count, per route, in that order
     const applied = await runInTransaction(
       async (tx) =>
-        await readAppliedDocumentsTx(
-          tx,
-          { family, generation: candidate },
-          indexId,
-        ),
+        await readAppliedDocumentsTx(tx, { family, generation }, indexId),
     );
     const counted = await engine.search({
       observer: "unobserved",
@@ -558,7 +722,12 @@ const checkEngine = async (
         `Could not count the documents of ${indexId}: ${counted.error.message}`,
       );
     }
-    documents.push({ indexId, ...applied, engine: counted.value.numHits });
+    documents.push({
+      generation,
+      indexId,
+      ...applied,
+      engine: counted.value.numHits,
+    });
   }
   const short = documents.filter(
     ({ expected, engine: counted }) => counted < expected,
@@ -573,7 +742,7 @@ const checkEngine = async (
       ),
     );
   }
-  return Result.ok({ proofs: proofs.value.routes, documents });
+  return Result.ok({ proofs: proofs.value, documents });
 };
 
 /**
@@ -642,10 +811,15 @@ const prepareFlip = async ({
   if (pair.value.type === "already_serving") {
     return Result.ok({ type: "already_serving", family, candidate });
   }
-  const { serving } = pair.value;
+  const { serving, fallback } = pair.value;
+  const routes = effectiveRoutes(
+    request,
+    serving?.generation ?? null,
+    fallback,
+  );
   // Fail fast: a route with no current proof refuses before the long walk.
   const proven = await runInTransaction(
-    async (tx) => await readCurrentProofsTx(tx, request),
+    async (tx) => await readCurrentProofsTx(tx, request, routes),
   );
   if (proven.isErr()) {
     return Result.err(proven.error);
@@ -657,8 +831,20 @@ const prepareFlip = async ({
   if (walk.isErr()) {
     return Result.err(walk.error);
   }
+  // The walk read the fallback policy again with the pair; a policy that
+  // moved in between leaves the routes proven for another one.
+  if (
+    walk.value !== null &&
+    walk.value.pair.keptOnServing.join(",") !==
+      (fallback?.keepOnNewer ?? []).join(",")
+  ) {
+    return refuse(
+      { class: "registry", reason: "generation_changed" },
+      `The fallback policy of ${family} changed while the flip was prepared; run it again`,
+    );
+  }
   // Last before the fence: the engine read, against the proofs current now.
-  const checked = await checkEngine(runInTransaction, engine, request);
+  const checked = await checkEngine(runInTransaction, engine, request, routes);
   if (checked.isErr()) {
     return Result.err(checked.error);
   }
@@ -670,6 +856,8 @@ const prepareFlip = async ({
     proofs: checked.value.proofs,
     documents: checked.value.documents,
     walk: walk.value,
+    rollbackPolicy: pair.value.rollbackPolicy,
+    fallback,
   });
 };
 
@@ -715,7 +903,27 @@ type CorpusIndexFlipEvidence = {
     walked: CorpusIndexFlipParity["regressions"]["walked"];
     exempt: number;
   } | null;
-  /** Read in phase 1 against the engine; under the fence every one was unchanged. */
+  /**
+   * Recorded for a later fallback to `from`: these jurisdictions stay on
+   * `to` (`corpus-index-fallback-policy.ts`). Null records none.
+   */
+  rollbackPolicy: CorpusIndexFallbackPolicy | null;
+  /**
+   * This flip is such a fallback: the receipt whose policy it applies, and
+   * the jurisdictions that stay on `from`, now pointed at it. Read in phase
+   * 1 and again under the fence.
+   */
+  fallback: (CorpusIndexFallbackKeep & { keptOn: string }) | null;
+  /**
+   * Jurisdictions `to` served already through a pointer a fallback left;
+   * the flip moves none of their readers, so parity left them out.
+   */
+  pinnedOnCandidate: readonly string[];
+  /**
+   * Read in phase 1 against the engine; under the fence every one was
+   * unchanged. Every route readers reach after the flip: the candidate's,
+   * and on a fallback the kept routes of `from`.
+   */
   routeProofs: readonly CheckedRouteProof[];
   /** Read in phase 1: PostgreSQL's sum, then the engine's total (a lower bound). */
   documents: readonly RouteDocuments[];
@@ -740,6 +948,7 @@ export type CorpusIndexFlipOutcome =
     };
 
 const sameProof = (left: CheckedRouteProof, right: CheckedRouteProof) =>
+  left.generation === right.generation &&
   left.indexId === right.indexId &&
   left.incarnation === right.incarnation &&
   left.provenPassStartedAtUs === right.provenPassStartedAtUs &&
@@ -815,6 +1024,17 @@ const recordFlipTx = async (
     family: evidence.family,
     generation: evidence.to,
   });
+  // The mutation applies the policy it reads itself; it read the receipt
+  // this plan was checked against, under the same fence.
+  const pointed = await readJurisdictionServingPointersTx(tx, evidence.family);
+  const expected = evidence.fallback?.keepOnNewer ?? [];
+  if (
+    pointed.map(({ jurisdiction }) => jurisdiction).join(",") !==
+      expected.join(",") ||
+    pointed.some(({ generation }) => generation !== evidence.fallback?.keptOn)
+  ) {
+    return panic("The serving mutation kept other jurisdictions than the plan");
+  }
   const auditRun = createSafeId<"systemScriptRun">();
   const recorded = { ...evidence, auditRun };
   const receiptId = createSafeId<"corpusIndexGenerationFlip">();
@@ -884,7 +1104,19 @@ const requireSamePairTx = async (
       ? servingRow === undefined
       : servingRow?.generation === plan.serving.generation &&
         servingRow.updatedAtUs === plan.serving.updatedAtUs);
-  return same
+  const fallback =
+    plan.serving === null
+      ? null
+      : await readCorpusIndexFallbackKeepTx(tx, {
+          family,
+          serving: plan.serving.generation,
+          target: candidate,
+        });
+  const samePolicy =
+    (fallback?.receiptId ?? null) === (plan.fallback?.receiptId ?? null) &&
+    (fallback?.keepOnNewer ?? []).join(",") ===
+      (plan.fallback?.keepOnNewer ?? []).join(",");
+  return same && samePolicy
     ? Result.ok()
     : refuse(
         { class: "registry", reason: "generation_changed" },
@@ -965,15 +1197,22 @@ const commitCorpusIndexGenerationFlipTx = async (
   if (unsafe !== null) {
     return unsafe;
   }
-  const proofs = await readCurrentProofsTx(tx, plan.request);
+  const proofs = await readCurrentProofsTx(
+    tx,
+    plan.request,
+    effectiveRoutes(
+      plan.request,
+      plan.serving?.generation ?? null,
+      plan.fallback,
+    ),
+  );
   if (proofs.isErr()) {
     return Result.err(proofs.error);
   }
   const changed = plan.proofs.filter(
-    (checked) =>
-      !proofs.value.routes.some((current) => sameProof(checked, current)),
+    (checked) => !proofs.value.some((current) => sameProof(checked, current)),
   );
-  if (changed.length > 0 || proofs.value.routes.length !== plan.proofs.length) {
+  if (changed.length > 0 || proofs.value.length !== plan.proofs.length) {
     return refuse(
       { class: "route_proofs", reason: "proof_changed" },
       `A route proof of ${family}/${candidate} changed since the engine was checked; run the flip again`,
@@ -1021,6 +1260,12 @@ const commitCorpusIndexGenerationFlipTx = async (
             walked: decided.regressions.walked,
             exempt: decided.regressions.exempt,
           },
+    rollbackPolicy: plan.rollbackPolicy,
+    fallback:
+      plan.fallback === null || plan.serving === null
+        ? null
+        : { ...plan.fallback, keptOn: plan.serving.generation },
+    pinnedOnCandidate: decided?.pair.pinnedOnCandidate ?? [],
     routeProofs: plan.proofs,
     documents: plan.documents,
     seedings: {

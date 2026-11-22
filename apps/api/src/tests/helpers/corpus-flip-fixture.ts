@@ -20,7 +20,10 @@ import {
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { CorpusIndexFlipEngine } from "@/api/lib/legal-search/corpus-index-generation-flip";
-import { registeredCorpusIndexGroups } from "@/api/lib/legal-search/corpus-index-group-contract";
+import {
+  corpusIndexGroupContractForJurisdiction,
+  registeredCorpusIndexGroups,
+} from "@/api/lib/legal-search/corpus-index-group-contract";
 import {
   attestCorpusIndexGroupEnrollmentTx,
   bindCorpusIndexGroupEnrollmentTx,
@@ -50,6 +53,19 @@ const revisionId = (generation: FlipGeneration, n: number, epoch: number) =>
   );
 export const flipRouteOf = (generation: FlipGeneration) => `${generation}_pol`;
 
+/** The jurisdictions fixture decisions are of: POL by default, and two that share an index in v7. */
+export type FlipJurisdiction = "POL" | "CZE" | "SVK";
+
+/** The index a jurisdiction's decisions are written to in the generation. */
+export const flipRouteIn = (
+  generation: FlipGeneration,
+  jurisdiction: FlipJurisdiction,
+) =>
+  corpusIndexGroupContractForJurisdiction(
+    CORPUS_INDEX_MANIFESTS[generation],
+    jurisdiction,
+  ).indexId;
+
 /** The source every fixture decision belongs to. */
 const FIXTURE_SOURCE = toSafeId<"caseLawSource">(
   "0198e331-e578-7000-8000-00000000f11f",
@@ -61,7 +77,12 @@ const FIXTURE_SOURCE = toSafeId<"caseLawSource">(
  * one generation at a time, so its transaction sets the seeding guard's off
  * switch.
  */
-const standCanonicalTx = async (tx: Transaction, n: number, epoch: number) => {
+const standCanonicalTx = async (
+  tx: Transaction,
+  n: number,
+  epoch: number,
+  jurisdiction: FlipJurisdiction,
+) => {
   await tx.execute(
     sql`SELECT set_config(${CORPUS_PROJECTION_SEEDING_GUARD_OFF_SETTING}, 'off', true)`,
   );
@@ -80,7 +101,7 @@ const standCanonicalTx = async (tx: Transaction, n: number, epoch: number) => {
       sourceId: FIXTURE_SOURCE,
       caseNumber: `${String(n)} As 1/2026`,
       court: "Naczelny Sąd Administracyjny",
-      country: "POL",
+      country: jurisdiction,
       language: "pl",
       contentHash: String(n).padStart(64, "c"),
       projectionEpoch: BigInt(epoch),
@@ -245,9 +266,10 @@ export const createCorpusFlipFixture = (runInTransaction: Runner) => {
     generation: FlipGeneration,
     n: number,
     epoch = 1,
+    jurisdiction: FlipJurisdiction = "POL",
   ) => {
     const revision = revisionId(generation, n, epoch);
-    const indexId = flipRouteOf(generation);
+    const indexId = flipRouteIn(generation, jurisdiction);
     const desired = {
       desiredAction: "upsert" as const,
       desiredEpoch: BigInt(epoch),
@@ -260,7 +282,7 @@ export const createCorpusFlipFixture = (runInTransaction: Runner) => {
       eq(corpusIndexProjectionStates.entityId, flipEntityId(n)),
     );
     await runInTransaction(async (tx) => {
-      await standCanonicalTx(tx, n, epoch);
+      await standCanonicalTx(tx, n, epoch, jurisdiction);
       await tx
         .insert(corpusIndexProjectionStates)
         .values({

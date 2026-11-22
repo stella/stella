@@ -129,12 +129,15 @@ const stalePlan = (): Extract<CorpusIndexFlipPlan, { type: "flip" }> => ({
     exemptMinutes: 20,
     coverage: { pageSize: 1000, pageBudget: 1 },
     maxProofAgeHours: 24,
+    rollbackPolicy: null,
   },
   candidate: { generation: TARGET.generation, updatedAtUs: "0" },
   serving: null,
   proofs: [],
   documents: [],
   walk: null,
+  rollbackPolicy: null,
+  fallback: null,
 });
 
 const refusalOf = (
