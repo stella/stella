@@ -495,6 +495,43 @@ const isExcludedRawNumericCoercionSource = (file: string): boolean =>
   file.includes("/evals/") ||
   file === "packages/agent-input/src/numeric-token.ts";
 
+// One per `new TextDecoder(…)` without a literal `fatal: true` option: a
+// decoder that turns bytes it cannot read into U+FFFD instead of refusing
+// them. On a user's file that silently loses a legacy charset; such bytes go
+// through `decodeDeclared` (@stll/mojibake), which owns the decision.
+const countLenientTextDecoders: FileCounter = (content, { file }) => {
+  const { program } = parseSyntax({ fileName: file, text: content });
+  let total = 0;
+  walk(program, (node) => {
+    if (
+      node.type !== "NewExpression" ||
+      !isIdentifierNamed(node.callee, "TextDecoder")
+    ) {
+      return;
+    }
+    const options = node.arguments.at(1);
+    const fatal =
+      options?.type === "ObjectExpression"
+        ? specProperty(options, "fatal")?.value
+        : undefined;
+    if (fatal?.type !== "Literal" || fatal.value !== true) {
+      total += 1;
+    }
+  });
+  return total;
+};
+
+const LENIENT_TEXT_DECODER_SOURCE_GLOBS = [
+  "apps/*/src/**/*.{ts,tsx}",
+  "packages/*/src/**/*.{ts,tsx}",
+] as const;
+
+const isExcludedLenientTextDecoderSource = (file: string): boolean =>
+  isExcludedSource(file) ||
+  file.includes("/scripts/") ||
+  file.includes("/evals/") ||
+  file.startsWith("packages/mojibake/src/");
+
 // `transition` is also an ordinary word and a discriminator value
 // (`kind: "transition"`), so it counts only in a class-list position.
 const BARE_TRANSITION_UTILITY = "transition";
@@ -3294,6 +3331,17 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
   },
   {
     scope: "file",
+    id: "lenient-text-decoders",
+    description:
+      "`new TextDecoder(…)` without a literal `fatal: true` in app and package source, outside @stll/mojibake; a lenient decoder turns a legacy-charset file into U+FFFD, so user file bytes go through decodeDeclared; tests, scripts and evals are excluded; each file only shrinks",
+    include: LENIENT_TEXT_DECODER_SOURCE_GLOBS,
+    exclude: isExcludedLenientTextDecoderSource,
+    perFile: true,
+    growth: "shrink-only",
+    count: countLenientTextDecoders,
+  },
+  {
+    scope: "file",
     id: "legacy-paint-transitions",
     description:
       "Tailwind utilities and CSS declarations (in TS, CSS and .astro sources) that transition paint properties instead of transform/opacity; at 0 — keep it there",
@@ -4911,6 +4959,20 @@ const SELF_TEST_RAW_NUMERIC_COERCIONS = [
 ].join("\n");
 const EXPECTED_RAW_NUMERIC_COERCIONS = 5;
 
+const SELF_TEST_LENIENT_TEXT_DECODERS = [
+  "new TextDecoder().decode(bytes);",
+  'new TextDecoder("utf-8").decode(bytes);',
+  'new TextDecoder("windows-1250", { ignoreBOM: true });',
+  'new TextDecoder("utf-8", { fatal: false });',
+  'new TextDecoder("utf-8", options);',
+  'new TextDecoder("utf-8", { fatal: true }).decode(bytes);',
+  'new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });',
+  "new TextEncoder().encode(text);",
+  "// new TextDecoder().decode(bytes)",
+  'const example = "new TextDecoder()";',
+].join("\n");
+const EXPECTED_LENIENT_TEXT_DECODERS = 5;
+
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const directClass = "transition transition-colors";`,
   `const helper = cn("rounded", active && "transition");`,
@@ -6275,6 +6337,57 @@ const asCastSelfTestFailures = (snapshot: Baseline): string[] => {
   return failures;
 };
 
+const LENIENT_TEXT_DECODER_EXCLUDED_FIXTURES = [
+  "apps/api/src/lenient-text-decoders.test.ts",
+  "apps/api/src/lenient-text-decoders.gen.ts",
+  "apps/api/src/scripts/lenient-text-decoders.ts",
+  "packages/mojibake/src/lenient-text-decoders.ts",
+] as const;
+
+const lenientTextDecoderSelfTestFailures = (snapshot: Baseline): string[] => {
+  const failures: string[] = [];
+  const id = "lenient-text-decoders";
+  const file = "apps/api/src/lenient-text-decoders.ts";
+  const metric = RATCHET_METRICS.find((entry) => entry.id === id);
+  const measured = requireSnapshot(snapshot, id);
+  if (metric?.scope !== "file") {
+    return [`${id} is not registered as a file metric`];
+  }
+  if (metric.growth !== "shrink-only" || metric.perFile !== true) {
+    failures.push(`${id} is not per-file shrink-only`);
+  }
+  if (measured.count !== EXPECTED_LENIENT_TEXT_DECODERS) {
+    failures.push(
+      `${id} counted ${measured.count}, expected ${EXPECTED_LENIENT_TEXT_DECODERS}`,
+    );
+  }
+  for (const excluded of LENIENT_TEXT_DECODER_EXCLUDED_FIXTURES) {
+    if (excluded in measured.files) {
+      failures.push(`${id} counted excluded source ${excluded}`);
+    }
+  }
+  const after = metric.count(
+    `${SELF_TEST_LENIENT_TEXT_DECODERS}\nnew TextDecoder().decode(upload);`,
+    { file, role: "head" },
+  );
+  const change = diffMetric(
+    id,
+    { count: after, files: { [file]: after } },
+    {
+      count: EXPECTED_LENIENT_TEXT_DECODERS,
+      files: { [file]: EXPECTED_LENIENT_TEXT_DECODERS },
+    },
+    metricGate(metric),
+  );
+  if (
+    after !== EXPECTED_LENIENT_TEXT_DECODERS + 1 ||
+    change.status !== "regressed"
+  ) {
+    failures.push(`${id} did not reject a newly added lenient TextDecoder`);
+  }
+  return failures;
+};
+
 const rawNumericCoercionSelfTestFailures = (snapshot: Baseline): string[] => {
   const failures: string[] = [];
   const id = "raw-numeric-coercions";
@@ -6816,6 +6929,14 @@ const runSelfTest = (): number => {
     );
     writeFixture(
       root,
+      "apps/api/src/lenient-text-decoders.ts",
+      SELF_TEST_LENIENT_TEXT_DECODERS,
+    );
+    for (const excluded of LENIENT_TEXT_DECODER_EXCLUDED_FIXTURES) {
+      writeFixture(root, excluded, "new TextDecoder().decode(bytes);");
+    }
+    writeFixture(
+      root,
       "apps/web/src/legacy-paint-transitions.tsx",
       SELF_TEST_LEGACY_PAINT_TRANSITIONS,
     );
@@ -7236,6 +7357,7 @@ const runSelfTest = (): number => {
 
     failures.push(...asCastSelfTestFailures(snapshot));
     failures.push(...rawNumericCoercionSelfTestFailures(snapshot));
+    failures.push(...lenientTextDecoderSelfTestFailures(snapshot));
     failures.push(...failureSinkSelfTestFailures(snapshot));
     failures.push(...ownerHandleAllowlistSelfTestFailures(snapshot));
 

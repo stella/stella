@@ -116,14 +116,14 @@ describe("bytes read as the charset they declare", () => {
     });
   });
 
-  test("nothing declared, or a label the platform does not know, reads as UTF-8", () => {
+  test("nothing declared, or a label the platform does not know, reads valid UTF-8 as UTF-8", () => {
     const bytes = new TextEncoder().encode(`<p>${SENTENCE}</p>`);
     expect(
       decodeDeclared(bytes, { contentType: "text/html; charset=x-unknown" }),
     ).toEqual({
       text: `<p>${SENTENCE}</p>`,
       charset: "utf-8",
-      source: "default",
+      source: "undeclared",
     });
   });
 });
@@ -166,7 +166,7 @@ describe("text that only looks like a declaration", () => {
     const html = `<meta content="text/html; charset=windows-1250"><p>${SENTENCE}</p>`;
     expect(
       decodeDeclared(windows1250(html), { contentType: null }).source,
-    ).toBe("default");
+    ).toBe("undeclared");
   });
 
   test("a declaration past the first kilobyte is not read", () => {
@@ -174,6 +174,6 @@ describe("text that only looks like a declaration", () => {
     expect(
       decodeDeclared(new TextEncoder().encode(html), { contentType: null })
         .source,
-    ).toBe("default");
+    ).toBe("undeclared");
   });
 });

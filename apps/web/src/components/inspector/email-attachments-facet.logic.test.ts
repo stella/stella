@@ -34,6 +34,19 @@ describe("email attachment preview kind", () => {
     ).toBe("A");
   });
 
+  test("reads an attachment that declares no charset in the one it was saved in", () => {
+    // "Výpis z účtu" saved in windows-1250, as a Czech bank exports it.
+    expect(
+      decodeEmailTextAttachment({
+        buffer: Uint8Array.from([
+          0x56, 0xfd, 0x70, 0x69, 0x73, 0x20, 0x7a, 0x20, 0xfa, 0xe8, 0x74,
+          0x75,
+        ]).buffer,
+        charset: null,
+      }),
+    ).toBe("Výpis z účtu");
+  });
+
   test("preserves generic UTF-16 byte order", () => {
     expect(
       decodeEmailTextAttachment({

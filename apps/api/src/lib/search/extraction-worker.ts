@@ -43,6 +43,7 @@ import type {
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import { DATA_BOX_PREVIEW_MODE } from "@/api/lib/email/correspondence/data-box/preview-contract";
@@ -213,9 +214,17 @@ const extractOfficeDocumentMarkdown = async (
 ): Promise<string> =>
   normalizeExtractedText(await toMarkdownBytes(Buffer.from(fileBytes)));
 
-const extractDirectText = (fileBytes: Uint8Array, mimeType: string): string => {
-  const text = new TextDecoder().decode(fileBytes);
-  if (normalizeMimeType(mimeType) !== "text/html") {
+/**
+ * A text file's text, read in the charset its `contentType` (parameters
+ * included) or its own bytes declare, or in the one it was most likely saved
+ * in when nothing does.
+ */
+const extractDirectText = (
+  fileBytes: Uint8Array,
+  contentType: string,
+): string => {
+  const { text } = decodeDeclared(fileBytes, { contentType });
+  if (normalizeMimeType(contentType) !== "text/html") {
     return normalizeExtractedText(text);
   }
 
@@ -544,7 +553,7 @@ const extract = async ({
   } else if (isOfficeDocumentMimeType(normalizedMimeType)) {
     text = await extractOfficeDocumentMarkdown(fileBytes);
   } else if (isDirectTextMimeType(normalizedMimeType)) {
-    text = extractDirectText(fileBytes, normalizedMimeType);
+    text = extractDirectText(fileBytes, mimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
     return await extractEmailPlaintext({
       fileBytes,
