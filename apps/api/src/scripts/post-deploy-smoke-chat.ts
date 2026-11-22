@@ -53,9 +53,9 @@ type SmokeCheck = {
 
 /** The one model the smoke organization runs, on every role: the
  *  lowest-cost OpenAI model in the catalog. */
-const cancelReaderOnTimeout = (
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-): void => {
+const cancelReaderOnTimeout = (reader: {
+  cancel: () => Promise<unknown>;
+}): void => {
   reader.cancel().catch(() => {
     // Stream already closed or aborted.
   });
