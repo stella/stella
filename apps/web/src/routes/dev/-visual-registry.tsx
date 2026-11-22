@@ -94,6 +94,13 @@ const visualLoaders = {
       return { default: UploadRejectionsPlayground };
     },
   },
+  "document-naming": {
+    load: async () => {
+      const { DocumentNamingPlayground } =
+        await import("./-components/document-naming-playground");
+      return { default: DocumentNamingPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =
