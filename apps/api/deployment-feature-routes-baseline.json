@@ -1588,10 +1588,6 @@
     "reason": "pending gate classification"
   },
   {
-    "key": "unclassified-route:POST /v1/files/:workspaceId/part/:fieldId/save",
-    "reason": "pending gate classification"
-  },
-  {
     "key": "unclassified-route:POST /v1/flows",
     "reason": "pending gate classification"
   },

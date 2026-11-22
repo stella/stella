@@ -379,38 +379,37 @@ const NoPreview = ({
   const t = useTranslations();
   const format = useFormatter();
   return (
-    <ScrollArea
-      axis="vertical"
-      className="bg-background min-h-0 flex-1 rounded-sm"
-    >
-      <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
-        <DocumentIcon
-          className="size-10"
-          fileName={fileName}
-          mimeType={row.mediaType}
-        />
-        <div className="space-y-1">
-          <BidiText as="p" className="text-sm font-medium wrap-break-word">
-            {fileName}
-          </BidiText>
-          <p className="text-muted-foreground text-xs tabular-nums">
-            {formatFileSize(row.sizeBytes, format)}
+    <div className="bg-background flex min-h-0 flex-1 flex-col rounded-sm">
+      <ScrollArea axis="vertical" className="min-h-0 flex-1">
+        <div className="flex flex-col items-center gap-3 px-6 py-10 text-center">
+          <DocumentIcon
+            className="size-10"
+            fileName={fileName}
+            mimeType={row.mediaType}
+          />
+          <div className="space-y-1">
+            <BidiText as="p" className="text-sm font-medium wrap-break-word">
+              {fileName}
+            </BidiText>
+            <p className="text-muted-foreground text-xs tabular-nums">
+              {formatFileSize(row.sizeBytes, format)}
+            </p>
+          </div>
+          <p className="text-muted-foreground max-w-sm text-sm text-pretty">
+            {t("inspector.fileParts.noPreview")}
           </p>
+          <PartDownloadButton
+            actions={actions}
+            compact={false}
+            fileName={fileName}
+            part={row.part}
+          />
         </div>
-        <p className="text-muted-foreground max-w-sm text-sm text-pretty">
-          {t("inspector.fileParts.noPreview")}
-        </p>
-        <PartDownloadButton
-          actions={actions}
-          compact={false}
-          fileName={fileName}
-          part={row.part}
-        />
-      </div>
-      {fallback === null || fallback === undefined ? null : (
-        <div className="border-t p-4">{fallback}</div>
-      )}
-    </ScrollArea>
+        {fallback === null || fallback === undefined ? null : (
+          <div className="border-t p-4">{fallback}</div>
+        )}
+      </ScrollArea>
+    </div>
   );
 };
 
