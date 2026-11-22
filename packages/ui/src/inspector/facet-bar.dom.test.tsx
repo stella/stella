@@ -15,7 +15,8 @@ const { INLINE_OVERFLOW_ITEM_ATTRIBUTE, INLINE_OVERFLOW_TRIGGER_ATTRIBUTE } =
 const { InspectorFacetBar } = await import("./facet-bar");
 
 // happy-dom lays nothing out. Every chip is 100px wide, the overflow trigger
-// 24px, and the bar `barWidth` wide, so the policy has real numbers to split.
+// 24px, and the row inside the bar `barWidth` wide, so the policy has real
+// numbers to split.
 const CHIP_WIDTH = 100;
 const TRIGGER_WIDTH = 24;
 let barWidth = 250;
@@ -31,7 +32,7 @@ HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect(
   if (this.hasAttribute(INLINE_OVERFLOW_TRIGGER_ATTRIBUTE)) {
     return rect(TRIGGER_WIDTH);
   }
-  if (this.dataset["slot"] === "inspector-facet-bar") {
+  if (this.dataset["slot"] === "inspector-facet-row") {
     return rect(barWidth);
   }
   return originalRect.call(this);

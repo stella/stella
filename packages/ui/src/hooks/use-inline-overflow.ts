@@ -25,21 +25,6 @@ const itemGap = (items: readonly DOMRect[]): number => {
   return Math.max(0, second.left - first.right, first.left - second.right);
 };
 
-/**
- * The room inside a row: its border box less padding and border, read in the
- * same client-rect units as the copies so the policy compares like with like.
- */
-const contentBoxWidth = (element: HTMLElement): number => {
-  const style = getComputedStyle(element);
-  const inset = [
-    style.paddingLeft,
-    style.paddingRight,
-    style.borderLeftWidth,
-    style.borderRightWidth,
-  ].reduce((sum, value) => sum + (Number.parseFloat(value) || 0), 0);
-  return Math.max(0, element.getBoundingClientRect().width - inset);
-};
-
 type UseInlineOverflowOptions = {
   /** The active item's index; the policy keeps it on screen. */
   activeIndex: number;
@@ -54,8 +39,10 @@ type UseInlineOverflowOptions = {
  * Measures a single-line row and decides how many of its items fit, by
  * `resolveInlineOverflow`. The caller renders two things:
  *
- * - the row (`containerRef`), whose content box is the room the items and
- *   the overflow trigger share, independent of how many items it shows;
+ * - the row (`containerRef`), whose box is the room the items and the
+ *   overflow trigger share, independent of how many items it shows. It
+ *   carries no inline padding or border of its own (an inset belongs on a
+ *   wrapper), so its client rect is that room, in the copies' own units;
  * - an invisible, inert copy of every item at its natural width plus the
  *   trigger (`measureRef`), each marked with `INLINE_OVERFLOW_ITEM_ATTRIBUTE`
  *   (set to the item's key) or `INLINE_OVERFLOW_TRIGGER_ATTRIBUTE`, inside
@@ -108,7 +95,7 @@ export const useInlineOverflow = ({
       setVisibleCount(
         resolveInlineOverflow({
           activeIndex,
-          availableWidth: contentBoxWidth(container),
+          availableWidth: container.getBoundingClientRect().width,
           gap: itemGap(copies.map(({ box }) => box)),
           itemWidths: keys.map((key) => boxByKey.get(key)?.width ?? 0),
           triggerWidth: trigger?.getBoundingClientRect().width ?? 0,
