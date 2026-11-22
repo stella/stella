@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
 
 import { resolveInlineOverflow } from "../lib/inline-overflow";
 
@@ -23,6 +23,21 @@ const itemGap = (items: readonly DOMRect[]): number => {
     return 0;
   }
   return Math.max(0, second.left - first.right, first.left - second.right);
+};
+
+/**
+ * The room inside a row: its border box less padding and border, read in the
+ * same client-rect units as the copies so the policy compares like with like.
+ */
+const contentBoxWidth = (element: HTMLElement): number => {
+  const style = getComputedStyle(element);
+  const inset = [
+    style.paddingLeft,
+    style.paddingRight,
+    style.borderLeftWidth,
+    style.borderRightWidth,
+  ].reduce((sum, value) => sum + (Number.parseFloat(value) || 0), 0);
+  return Math.max(0, element.getBoundingClientRect().width - inset);
 };
 
 type UseInlineOverflowOptions = {
@@ -52,9 +67,12 @@ type UseInlineOverflowOptions = {
  * and the count is recomputed whenever either element resizes (a docked
  * pane narrows the row, an added view or a rename widens the copy), the
  * active item changes, or the items change order: swapping two items keeps
- * the measuring row's size, which no observer reports. The first count
- * arrives with the observer's first report, before the row paints; until
- * then every item shows.
+ * the measuring row's size, which no observer reports.
+ *
+ * The first count is taken in a layout effect, in the same task that commits
+ * the row: a `ResizeObserver` reports only at the browser's next rendering
+ * update, and until that count lands the row would hold every item, the last
+ * ones clipped, for a paint or any script that reads the layout to see.
  */
 export const useInlineOverflow = ({
   activeIndex,
@@ -67,16 +85,12 @@ export const useInlineOverflow = ({
   const [visibleCount, setVisibleCount] = useState(itemCount);
   const [measured, setMeasured] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!container || !measure) {
       return undefined;
     }
 
     const keys = order === "" ? [] : order.split(KEY_SEPARATOR);
-    // The row's content box as its observer reports it: the room inside its
-    // padding. Observing reports every element once, so it is known before
-    // the first count.
-    let availableWidth = 0;
 
     const recompute = () => {
       const copies = Array.from(
@@ -94,7 +108,7 @@ export const useInlineOverflow = ({
       setVisibleCount(
         resolveInlineOverflow({
           activeIndex,
-          availableWidth,
+          availableWidth: contentBoxWidth(container),
           gap: itemGap(copies.map(({ box }) => box)),
           itemWidths: keys.map((key) => boxByKey.get(key)?.width ?? 0),
           triggerWidth: trigger?.getBoundingClientRect().width ?? 0,
@@ -103,14 +117,10 @@ export const useInlineOverflow = ({
       setMeasured(true);
     };
 
-    const observer = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        if (entry.target === container) {
-          availableWidth = entry.contentRect.width;
-        }
-      }
-      recompute();
-    });
+    recompute();
+    // Later changes (a docked pane narrows the row, a web font or a rename
+    // widens the copy) arrive through the observer.
+    const observer = new ResizeObserver(recompute);
     observer.observe(container);
     observer.observe(measure);
     return () => observer.disconnect();
