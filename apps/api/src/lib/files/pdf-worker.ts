@@ -1,38 +1,77 @@
 /**
  * Sandboxed PDF worker.
  *
- * Runs as a standalone Bun subprocess. Receives raw PDF bytes
- * on stdin and inspects encryption or extracts every text line.
+ * Runs as a standalone Bun subprocess. Inspects a PDF's encryption, extracts
+ * every text line of a PDF, or renders a file stella lays out itself (an
+ * image, plain text, CSV) as a PDF.
  *
- * Usage:  bun run pdf-worker.ts encryption|text-lines
- *   stdin  → raw PDF bytes
- *   stdout → "true"/"false" for encryption, a JSON string array for text
+ * Usage:  bun run pdf-worker.ts encryption|text-lines|render [mime type]
+ *   stdin  → raw PDF bytes; for `render`, the file of the given type
+ *   stdout → "true"/"false" for encryption, a JSON string array for text,
+ *            the PDF bytes for render
  *   stderr → error messages (captured by parent)
- *   exit 0 = success, exit 65 (EX_DATAERR) = the parser refused the bytes.
- *   Any other exit (Bun failing to start or to load a module exits 1) is a
- *   worker failure, not a verdict on the file.
+ *   exit 0 = success, exit 65 (EX_DATAERR) = the parser or decoder refused
+ *   the bytes, exit 66 = the rendered PDF is over the derivative size
+ *   limit. Any other exit (Bun failing to start or to load a module exits
+ *   1) is a worker failure, not a verdict on the file.
  */
 
 import { PDF } from "@libpdf/core";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { sanitizeErrorForOutput } from "@stll/errors";
 
+import { renderPdf } from "@/api/lib/files/pdf-render";
+import { LIMITS } from "@/api/lib/limits";
 import { writeWorkerStdout } from "@/api/lib/subprocess";
 
 import {
   PDF_WORKER_OPERATION,
   PDF_WORKER_PARSE_ERROR_EXIT_CODE,
+  PDF_WORKER_TOO_LARGE_EXIT_CODE,
   pdfWorkerOperationSchema,
 } from "./pdf-worker-protocol";
 
+// stdout carries the answer; a decoder library that logs must not corrupt it.
+// oxlint-disable-next-line no-console -- routes library logging to stderr
+console.log = console.error;
+// oxlint-disable-next-line no-console -- routes library logging to stderr
+console.info = console.error;
+
 const operation = v.safeParse(pdfWorkerOperationSchema, process.argv.at(2));
 if (!operation.success) {
-  process.stderr.write("pdf-worker: expected encryption or text-lines\n");
+  process.stderr.write(
+    "pdf-worker: expected encryption, text-lines or render\n",
+  );
   process.exit(64);
 }
 const operationName = operation.output;
+
+const refuse = (error: unknown): never => {
+  const outputError = sanitizeErrorForOutput(error);
+  const type = outputError instanceof Error ? outputError.name : "UnknownError";
+  process.stderr.write(`pdf-worker error: ${type}\n`);
+  process.exit(PDF_WORKER_PARSE_ERROR_EXIT_CODE);
+};
+
+if (operationName === PDF_WORKER_OPERATION.render) {
+  // Only the decoders' refusal is a verdict on the file. Anything else that
+  // throws while rendering is a defect here and exits as Bun does (1).
+  const rendered = await renderPdf(
+    process.argv.at(3) ?? "",
+    new Uint8Array(await Bun.stdin.arrayBuffer()),
+  );
+  if (Result.isError(rendered)) {
+    refuse(rendered.error);
+  } else if (rendered.value.byteLength > LIMITS.fileDerivativePdfMaxBytes) {
+    process.stderr.write("pdf-worker: the rendered PDF is too large\n");
+    process.exit(PDF_WORKER_TOO_LARGE_EXIT_CODE);
+  } else {
+    await writeWorkerStdout(rendered.value);
+    process.exit(0);
+  }
+}
 
 try {
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
@@ -52,14 +91,14 @@ try {
         ),
       );
       break;
+    case PDF_WORKER_OPERATION.render:
+      panic("Render answers before a PDF is loaded");
+      break;
     default:
       operationName satisfies never;
       panic("Unhandled PDF worker operation");
   }
   process.exit(0);
 } catch (error) {
-  const outputError = sanitizeErrorForOutput(error);
-  const type = outputError instanceof Error ? outputError.name : "UnknownError";
-  process.stderr.write(`pdf-worker error: ${type}\n`);
-  process.exit(PDF_WORKER_PARSE_ERROR_EXIT_CODE);
+  refuse(error);
 }

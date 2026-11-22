@@ -564,6 +564,9 @@ export const LIMITS = {
   imageDerivativeSourcePixelsMax: 40_000_000,
   /** Wall-clock ceiling for one thumbnail plus blur placeholder. */
   imageDerivativeTimeoutMs: 30_000,
+  /** Hard timeout for the PDF worker rendering one image, text or CSV
+   *  file as its preview PDF (every page of a TIFF, every row of a CSV). */
+  pdfRenderTimeoutMs: 60_000,
   /** Largest stored source (bytes) a PDF or thumbnail derivative is built
    *  from. Checked against the recorded size before the object is read and
    *  again against the store's declared length, so a refused file is never
