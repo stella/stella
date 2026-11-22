@@ -2,7 +2,10 @@ import {
   GLOBAL_SEARCH_RESULT_TYPES,
   type GlobalSearchResultType,
 } from "@stll/api-contract";
-import { convertedDocumentFormatOfMimeType } from "@stll/api-contract/converted-document-formats";
+import {
+  convertedDocumentFormatOfMimeType,
+  htmlRenderedDocumentFormatOfMimeType,
+} from "@stll/api-contract/converted-document-formats";
 import { Temporal } from "@stll/time";
 import { SEARCH_HIT_DESCENDANT_MARK_CLASS } from "@stll/ui/text-mark";
 import { cn } from "@stll/ui/utils";
@@ -97,7 +100,8 @@ const MIME_TYPE_LABELS: ReadonlyMap<string, string> = new Map([
 export const formatMimeTypeLabel = (mimeType: string): string => {
   const known =
     MIME_TYPE_LABELS.get(mimeType) ??
-    convertedDocumentFormatOfMimeType(mimeType)?.label;
+    convertedDocumentFormatOfMimeType(mimeType)?.label ??
+    htmlRenderedDocumentFormatOfMimeType(mimeType)?.label;
   if (known !== undefined) {
     return known;
   }

@@ -4,6 +4,8 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import {
   convertedDocumentFormatOfMimeType,
   type ConvertedDocumentMimeType,
+  htmlRenderedDocumentFormatOfMimeType,
+  type HtmlRenderedDocumentMimeType,
   isConvertedDocumentMimeType,
 } from "@stll/api-contract/converted-document-formats";
 import { declareFingerprintFields } from "@stll/errors";
@@ -21,6 +23,7 @@ import {
 import { gotenbergConvertTarget } from "@/api/lib/files/converter-settings";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
 import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
+import { type EbookError, ebookToHtml } from "@/api/lib/files/epub-document";
 import type { ImageHeader } from "@/api/lib/files/image-header";
 import { readImageHeader } from "@/api/lib/files/image-header";
 import type { EmbeddableImageMimeType } from "@/api/lib/files/image-pdf";
@@ -29,10 +32,16 @@ import {
   imageToPdf,
   isEmbeddableImageMimeType,
 } from "@/api/lib/files/image-pdf";
+import {
+  type WebArchiveError,
+  webArchiveToHtml,
+} from "@/api/lib/files/mhtml-document";
 import { streamMultipartForm } from "@/api/lib/files/multipart-stream";
 import {
   type ConvertibleMime,
   isConvertibleMimeType,
+  isHtmlRenderedMimeType,
+  mediaTypeEssence,
 } from "@/api/lib/files/pdf-derivative-policy";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { LIMITS } from "@/api/lib/limits";
@@ -42,6 +51,7 @@ import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export {
+  canConvertToPdf,
   isConvertibleMimeType,
   isNativelyRenderableMimeType,
   pdfDerivativeStateForFile,
@@ -238,6 +248,33 @@ const withConverterExtension = (
   return `${stem}.${canonical}`;
 };
 
+/** A file name without its extension, for the HTML a document renders to. */
+const fileStem = (fileName: string): string => {
+  const segmentStart =
+    Math.max(fileName.lastIndexOf("/"), fileName.lastIndexOf("\\")) + 1;
+  const lastDot = fileName.lastIndexOf(".");
+  return lastDot > segmentStart ? fileName.slice(0, lastDot) : fileName;
+};
+
+/** The HTML a web archive or an e-book renders to. */
+const renderDocumentHtml = async (
+  mimeType: HtmlRenderedDocumentMimeType,
+  bytes: Uint8Array,
+): Promise<Result<Uint8Array, WebArchiveError | EbookError>> => {
+  const format = htmlRenderedDocumentFormatOfMimeType(mimeType);
+  switch (format?.mimeType) {
+    case "application/epub+zip":
+      return await ebookToHtml(bytes);
+    case "multipart/related":
+      return await webArchiveToHtml(bytes);
+    case undefined:
+      return panic(`No HTML-rendered format declares ${mimeType}`);
+    default:
+      format satisfies never;
+      return panic("Unhandled HTML-rendered format");
+  }
+};
+
 const gotenbergAuth = (): string =>
   basicAuthorizationHeader(
     envConverter.GOTENBERG_USERNAME,
@@ -360,7 +397,10 @@ export const convertToPdf = async (
   file: ScannedFile,
   { retry = "in-call" }: ConvertToPdfOptions = {},
 ): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
-  const { fileName, mimeType } = file;
+  const { fileName } = file;
+  // Decided on the type alone: a declared parameter (a charset, a boundary)
+  // changes nothing about how the file converts.
+  const mimeType = mediaTypeEssence(file.mimeType);
   const bytes = new Uint8Array(file.bytes);
   const admission = admitDerivativeImage(bytes, mimeType);
   if (admission.type === "refused") {
@@ -398,16 +438,27 @@ export const convertToPdf = async (
     });
   }
 
-  if (!isConvertibleMimeType(mimeType)) {
+  // A web archive or an e-book converts as the HTML stella builds from it,
+  // under the same checks as any HTML file.
+  const prepared = await documentSource(fileName, mimeType, bytes);
+  if (Result.isError(prepared)) {
+    return prepared;
+  }
+  const {
+    fileName: documentName,
+    mimeType: documentType,
+    bytes: documentBytes,
+  } = prepared.value;
+  if (!isConvertibleMimeType(documentType)) {
     return Result.err(
       new ConversionInputError({
-        message: `Files of type ${mimeType} cannot be converted.`,
+        message: `Files of type ${documentType} cannot be converted.`,
         reason: { kind: "inspection_failed" },
       }),
     );
   }
   const inspection = await Result.tryPromise({
-    try: async () => await checkConversionInput(mimeType, bytes),
+    try: async () => await checkConversionInput(documentType, documentBytes),
     catch: (cause) =>
       new ConversionInputError({
         message: "The document could not be inspected for conversion.",
@@ -429,7 +480,8 @@ export const convertToPdf = async (
   // The converter opens a file by its content: the inspection above holds
   // only for a file that is the format it was inspected as.
   const contentMatches = await Result.tryPromise({
-    try: async () => await contentMatchesConvertibleMime(mimeType, bytes),
+    try: async () =>
+      await contentMatchesConvertibleMime(documentType, documentBytes),
     catch: (cause) =>
       new ConversionInputError({
         message: "The document could not be inspected for conversion.",
@@ -443,7 +495,7 @@ export const convertToPdf = async (
   if (!contentMatches.value) {
     return Result.err(
       new ConversionInputError({
-        message: `The document's content is not the ${mimeType} format it is declared as.`,
+        message: `The document's content is not the ${documentType} format it is declared as.`,
         reason: { kind: "inspection_failed" },
       }),
     );
@@ -452,9 +504,9 @@ export const convertToPdf = async (
   const converted = await Result.tryPromise(
     {
       try: async () => {
-        const source = XLSX_MIME_TYPES.has(mimeType)
-          ? new Uint8Array(await applyFitToPage(file.bytes))
-          : bytes;
+        const source = XLSX_MIME_TYPES.has(documentType)
+          ? new Uint8Array(await applyFitToPage(toArrayBuffer(documentBytes)))
+          : documentBytes;
         // Streamed from the caller's buffer, so the request holds no second
         // copy of the source.
         const form = streamMultipartForm({
@@ -462,7 +514,7 @@ export const convertToPdf = async (
             fieldName: "files",
             // The converter picks its import filter by extension.
             fileName: sanitizeFilenamePreservingExtension(
-              withConverterExtension(fileName, mimeType),
+              withConverterExtension(documentName, documentType),
             ),
             bytes: source,
           },
@@ -539,4 +591,45 @@ export const convertToPdf = async (
   return converted.value.type === "too-large"
     ? Result.err(tooLargeConverterResponse())
     : Result.ok(converted.value.converted);
+};
+
+type DocumentSource = {
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly bytes: Uint8Array;
+};
+
+/**
+ * What the converter receives for a document: the file itself, or for a
+ * format rendered from HTML, the HTML built from it under an `.html` name.
+ */
+const documentSource = async (
+  uploadedName: string,
+  mimeType: string,
+  bytes: Uint8Array,
+): Promise<Result<DocumentSource, ConversionInputError>> => {
+  if (!isHtmlRenderedMimeType(mimeType)) {
+    return Result.ok({
+      fileName: sanitizeFilenamePreservingExtension(uploadedName),
+      mimeType,
+      bytes,
+    });
+  }
+  const rendered = await renderDocumentHtml(mimeType, bytes);
+  if (Result.isError(rendered)) {
+    return Result.err(
+      new ConversionInputError({
+        message: rendered.error.message,
+        reason: { kind: "inspection_failed" },
+        cause: rendered.error,
+      }),
+    );
+  }
+  return Result.ok({
+    fileName: sanitizeFilenamePreservingExtension(
+      `${fileStem(uploadedName)}.html`,
+    ),
+    mimeType: "text/html",
+    bytes: rendered.value,
+  });
 };

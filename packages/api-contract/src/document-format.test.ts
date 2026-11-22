@@ -146,6 +146,16 @@ describe("documentFormat", () => {
       mark: "file",
       label: "WPD",
     });
+    expect(formatOf("application/octet-stream", "vestnik.mhtml")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "MHT",
+    });
+    expect(formatOf("application/epub+zip")).toEqual({
+      kind: "file",
+      mark: "file",
+      label: "EPUB",
+    });
     expect(formatOf("application/vnd.ms-works", "dopis")).toEqual({
       kind: "file",
       mark: "file",

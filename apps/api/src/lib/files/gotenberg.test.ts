@@ -25,7 +25,9 @@ import {
 } from "@/api/mime-types";
 import {
   compoundFileWithStreams,
+  ebookFile,
   iworkPackage,
+  webArchiveFile,
   wordPerfectFile,
 } from "@/api/tests/helpers/converted-document-fixtures";
 import {
@@ -629,6 +631,78 @@ describe("converter upload filenames", () => {
       ).toBe(uploaded);
     },
   );
+
+  test.each([
+    [
+      "multipart/related",
+      "notice.mht",
+      () => webArchiveFile({ body: "<p>Synthetic notice</p>" }),
+    ],
+    [
+      "application/epub+zip",
+      "book.epub",
+      async () =>
+        await ebookFile({
+          chapters: [{ file: "one.xhtml", body: "<p>Synthetic chapter</p>" }],
+        }),
+    ],
+  ] as const)(
+    "a %s file goes to the converter as the HTML rendered from it",
+    async (mimeType, name, build) => {
+      const bytes = await build();
+      expect(
+        await uploadedFileName(
+          async () => await convertToPdf(namedFileOf(bytes, mimeType, name)),
+        ),
+      ).toBe(`${name.slice(0, name.lastIndexOf("."))}.html`);
+      expect(shouldGeneratePdfDerivative({ encrypted: false, mimeType })).toBe(
+        true,
+      );
+    },
+  );
+
+  test("a type declared with parameters converts as its type", async () => {
+    const bytes = webArchiveFile({ body: "<p>Synthetic notice</p>" });
+    expect(
+      await uploadedFileName(
+        async () =>
+          await convertToPdf(
+            namedFileOf(
+              bytes,
+              'multipart/related; type="text/html"; boundary="x"',
+              "notice.mht",
+            ),
+          ),
+      ),
+    ).toBe("notice.html");
+    expect(
+      shouldGeneratePdfDerivative({
+        encrypted: false,
+        mimeType: "Multipart/Related; boundary=x",
+      }),
+    ).toBe(true);
+  });
+
+  test("a web archive with no page never reaches the converter", async () => {
+    const { result, urls } = await withConverterFetch(
+      () => new Response("unexpected", { status: 500 }),
+      async () =>
+        await convertToPdf(
+          fileOf(
+            new TextEncoder().encode(
+              "MIME-Version: 1.0\r\nContent-Type: text/plain\r\n\r\nText\r\n",
+            ),
+            "multipart/related",
+          ),
+        ),
+    );
+    expect(urls).toEqual([]);
+    expect(
+      Result.isError(result) &&
+        result.error instanceof ConversionInputError &&
+        result.error.reason,
+    ).toEqual({ kind: "inspection_failed" });
+  });
 
   test("a file keeps an extension the converter accepts for its type", async () => {
     expect(
