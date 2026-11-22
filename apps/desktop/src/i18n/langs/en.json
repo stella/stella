@@ -221,6 +221,14 @@
     "writeDescription": "Enter a description for this entry."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Check again",
+      "notInstalled": "Install Antigravity 1.5 or later, then sign in from it.",
+      "signedIn": "Signed in to Antigravity",
+      "signedOut": "Sign in from the Antigravity CLI to use it in stella.",
+      "title": "Antigravity",
+      "tooOld": "Update Antigravity to 1.5 or later, then sign in from it."
+    },
     "callbackAccount": "Account",
     "callbackCloseTab": "You can close this tab.",
     "callbackConnectedBody": "AI requests in stella now use your ChatGPT plan.",

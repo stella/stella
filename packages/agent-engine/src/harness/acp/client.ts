@@ -83,6 +83,8 @@ export type AcpClient = {
   pid: number;
   /** Settles when the process has exited, however that happened. */
   exited: Promise<HarnessExit>;
+  /** Bounded tail of stderr captured in memory for error classification. */
+  stderr: () => string;
   /** Ends stdin, which asks the agent to exit. */
   closeInput: () => void;
   /** SIGTERM, then SIGKILL once the termination deadline passes. */
@@ -96,6 +98,7 @@ type StartAcpAgentOptions = {
   deadlines: HarnessProcessDeadlines;
   cwd: string;
   env: Readonly<Record<string, string>>;
+  captureStderr?: boolean | undefined;
   handlers: AcpHandlers;
 };
 
@@ -109,6 +112,7 @@ export const startAcpAgent = ({
   deadlines,
   cwd,
   env,
+  captureStderr = false,
   handlers,
 }: StartAcpAgentOptions): Result<AcpClient, HarnessSpawnError> => {
   const state = { nextId: 1, exited: false };
@@ -161,6 +165,7 @@ export const startAcpAgent = ({
     detached,
     deadlines,
     name: "acp-agent",
+    captureStderr,
     protocol: { channel: "acp", log: protocolLog },
     unanswered: (reason, message) =>
       new AcpRequestError({ reason, code: null, message }),
@@ -227,6 +232,7 @@ export const startAcpAgent = ({
       agent.write({ jsonrpc: "2.0", id, error: { code, message } });
     },
     exited: agent.exited,
+    stderr: agent.stderr,
     closeInput: agent.closeInput,
     kill: agent.kill,
   });

@@ -5,6 +5,7 @@
 //! Agent Client Protocol. The agent keeps its own sign-in; the member signs
 //! in from the agent itself.
 
+use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
@@ -159,6 +160,60 @@ fn stamp(path: &Path) -> Option<FileStamp> {
 /// regular probe and every run start do not run `--version` again.
 static VERSIONS: Mutex<Option<(FileStamp, String)>> = Mutex::new(None);
 
+/// Status of the member-installed Antigravity CLI for desktop Settings.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum AntigravityCliStatus {
+  NotInstalled,
+  TooOld { version: String },
+  SignedOut { version: String },
+  SignedIn { version: String },
+}
+
+const ANTIGRAVITY_MIN_VERSION: (u64, u64, u64) = (1, 5, 0);
+
+pub(crate) fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
+  let mut parts = version.split('.').filter_map(|part| part.parse::<u64>().ok());
+  let Some(major) = parts.next() else { return false; };
+  let Some(minor) = parts.next() else { return false; };
+  let Some(patch) = parts.next() else { return false; };
+  parts.next().is_none() && (major, minor, patch) >= min
+}
+
+pub(crate) fn antigravity_cli_token_path(
+  gemini_home: Option<&Path>,
+  home: Option<&Path>,
+) -> Option<PathBuf> {
+  let base = match gemini_home {
+    Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+    _ => home?.join(".gemini"),
+  };
+  Some(base.join("antigravity-cli").join("antigravity-oauth-token"))
+}
+
+pub(crate) fn antigravity_status(refresh: bool) -> AntigravityCliStatus {
+  if refresh {
+    *VERSIONS
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+  }
+  let Some((_executable, version)) = antigravity() else {
+    return AntigravityCliStatus::NotInstalled;
+  };
+  if !version_at_least(&version, ANTIGRAVITY_MIN_VERSION) {
+    return AntigravityCliStatus::TooOld { version };
+  }
+  let gemini_home = std::env::var_os("GEMINI_HOME").map(PathBuf::from);
+  let home = dirs::home_dir().filter(|home| home.is_absolute());
+  let signed_in = antigravity_cli_token_path(gemini_home.as_deref(), home.as_deref())
+    .is_some_and(|token| token.is_file());
+  if signed_in {
+    AntigravityCliStatus::SignedIn { version }
+  } else {
+    AntigravityCliStatus::SignedOut { version }
+  }
+}
+
 /// The Antigravity CLI on this computer and its version; `None` when it is
 /// not installed or does not say its version.
 pub(crate) fn antigravity() -> Option<(PathBuf, String)> {
@@ -194,6 +249,22 @@ pub(crate) fn antigravity() -> Option<(PathBuf, String)> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn checks_antigravity_minimum_version_and_token_path() {
+    assert!(!version_at_least("1.4.9", ANTIGRAVITY_MIN_VERSION));
+    assert!(version_at_least("1.5.0", ANTIGRAVITY_MIN_VERSION));
+    assert!(version_at_least("1.6.12", ANTIGRAVITY_MIN_VERSION));
+    assert!(version_at_least("2.0.0", ANTIGRAVITY_MIN_VERSION));
+    assert_eq!(
+      antigravity_cli_token_path(None, Some(Path::new("/home/m"))),
+      Some(PathBuf::from("/home/m/.gemini/antigravity-cli/antigravity-oauth-token"))
+    );
+    assert_eq!(
+      antigravity_cli_token_path(Some(Path::new("/g")), Some(Path::new("/home/m"))),
+      Some(PathBuf::from("/g/antigravity-cli/antigravity-oauth-token"))
+    );
+  }
 
   #[test]
   fn reads_the_version_word() {

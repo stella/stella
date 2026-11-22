@@ -1,5 +1,10 @@
+import type { Temporal } from "temporal-polyfill/full";
+
 import type { AgentHarness } from "@stll/api-contract/agent-harness";
 import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
+
+import type { HarnessFailure } from "../events";
+import type { AcpToolCallState } from "./tool-calls";
 
 /**
  * The approval modes an ACP agent can run in. Full auto is not one: without
@@ -37,6 +42,21 @@ type AcpStoredSignIn = {
     configDir: string,
     environment: Readonly<Record<string, string>>,
   ) => boolean;
+};
+
+/** Context for cleaning up a throwaway probe session from an agent's history. */
+export type AcpDiscardSessionContext = {
+  configDir: string;
+  sessionId: string;
+  environment: Readonly<Record<string, string>>;
+  cwd: string;
+};
+
+/** Classification of a failure detected from an agent's stderr or error text. */
+export type AcpErrorClassification = {
+  failure: HarnessFailure;
+  /** True when the agent's saved session cannot be continued on the next turn. */
+  brokenSession: boolean;
 };
 
 /**
@@ -91,11 +111,29 @@ export type AcpAgentDefinition = {
    */
   readonly brokenSession: (message: string) => boolean;
   /**
+   * A tool the agent keeps running after `session/prompt` settles and reports
+   * back on when it finishes (such as a background shell command in
+   * Antigravity). While any such tool is in progress, the turn stays open.
+   */
+  readonly toolOutlivesPrompt?: (call: AcpToolCallState) => boolean;
+  /**
+   * Classifies failures from the agent's captured stderr or error text
+   * (e.g. quota exhaustion with reset time, invalid thinking signature,
+   * mid-turn 404, auth failure). `null` when the agent needs no stderr
+   * inspection.
+   */
+  readonly classifyErrorOutput?: (input: {
+    stderr: string;
+    errorMessage: string | null;
+    stopReason: string | null;
+    reachedModel: boolean;
+    now: Temporal.Instant;
+  }) => AcpErrorClassification | null;
+  /**
    * Remove what the agent saved of a session stella opened only to read
    * the agent's models; `null` when it keeps nothing worth removing.
    */
-  readonly discardSession:
-    ((configDir: string, sessionId: string) => void) | null;
+  readonly discardSession: ((context: AcpDiscardSessionContext) => void) | null;
   /**
    * For an agent the member installed themselves, which may predate its ACP
    * server: the oldest version that serves ACP, and how to read the

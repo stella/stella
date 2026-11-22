@@ -221,6 +221,14 @@
     "writeDescription": "أدخل وصفًا لهذا الإدخال."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "التحقق مرة أخرى",
+      "notInstalled": "ثبّت Antigravity 1.5 أو أحدث، ثم سجّل الدخول منه.",
+      "signedIn": "تم تسجيل الدخول إلى Antigravity",
+      "signedOut": "سجّل الدخول من واجهة سطر أوامر Antigravity لاستخدامه في stella.",
+      "title": "Antigravity",
+      "tooOld": "حدّث Antigravity إلى 1.5 أو أحدث، ثم سجّل الدخول منه."
+    },
     "callbackAccount": "الحساب",
     "callbackCloseTab": "يمكنك إغلاق علامة التبويب هذه.",
     "callbackConnectedBody": "تستخدم طلبات الذكاء الاصطناعي في stella الآن خطة ChatGPT الخاصة بك.",

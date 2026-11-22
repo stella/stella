@@ -1,9 +1,21 @@
 import { Result } from "better-result";
-import { existsSync, readdirSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
+import { Temporal } from "temporal-polyfill/full";
 
-import type { AcpAgentDefinition } from "./definition";
+import type {
+  AcpAgentDefinition,
+  AcpDiscardSessionContext,
+  AcpErrorClassification,
+} from "./definition";
+import type { AcpToolCallState } from "./tool-calls";
 
 /**
  * Google Antigravity's ACP server, as its release ships it: the server
@@ -43,16 +55,276 @@ const ANTIGRAVITY_SIGN_IN_METHOD = "oauth-personal";
 const LOST_THINKING_SIGNATURE =
   /thinking\.signature|invalid `?signature`? in `?thinking`? block/iu;
 
+/**
+ * Upstream Google API / Antigravity error patterns (ported from t3code, MIT,
+ * `AntigravityTurnOutcome.ts`).
+ */
+const API_ERROR = /Error (\d{3}), Message: (.+?), Status: ([A-Z_]+)/su;
+const STATUS_ERROR = /(?<![A-Z_])([A-Z_]+) \(code (\d{3})\): (\P{Cc}+)/u;
+const QUOTA_EXHAUSTED = /\breason:QUOTA_EXHAUSTED\b/u;
+const RESET_TIMESTAMP = /\bquotaResetTimeStamp:([^\s\]]+)/u;
+const RESET_DELAY =
+  /\bquotaResetDelay:((?:\d+(?:\.\d+)?(?:ns|us|µs|μs|ms|h|m|s))+)(?=[\s\],]|$)/u;
+const RETRY_DELAY =
+  /\bretryDelay:((?:\d+(?:\.\d+)?(?:ns|us|µs|μs|ms|h|m|s))+)(?=[\s\],]|$)/u;
+const GO_DURATION_PART = /(\d+(?:\.\d+)?)(ns|us|µs|μs|ms|h|m|s)/gu;
+const GO_DURATION_UNIT_MS: Readonly<Record<string, number>> = {
+  ns: 1e-6,
+  us: 1e-3,
+  µs: 1e-3,
+  μs: 1e-3,
+  ms: 1,
+  s: 1000,
+  m: 60_000,
+  h: 3_600_000,
+};
+
+const SAFE_SESSION_ID = /^[\w-]+$/u;
+const SESSION_CONVERSATION_SUFFIXES = [
+  ".db",
+  ".db-wal",
+  ".db-shm",
+  ".db-journal",
+  ".meta",
+] as const;
+
 /** Every launch unpacks the server, so a probe's answer is kept this long. */
 const PROBE_CACHE_MS = 6 * 60 * 60 * 1000;
 
-/** Whether `target` is gone; one the system still holds stays for later. */
-const removeQuietly = (target: string): boolean =>
-  Result.isOk(
+/**
+ * Antigravity ends `session/prompt` while a backgrounded shell command is
+ * still running, and replies once the command exits. A daemon never finishes
+ * on its own, so it does not hold the turn open (approach from t3code, MIT,
+ * pingdotgg/t3code#38916).
+ */
+export const antigravityCommandOutlivesPrompt = (
+  call: AcpToolCallState,
+): boolean => {
+  if (call.kind !== "execute") {
+    return false;
+  }
+  const input = call.rawInput;
+  return !(
+    typeof input === "object" &&
+    input !== null &&
+    Reflect.get(input, "IsDaemon") === true
+  );
+};
+
+const parseResetAt = (text: string, now: Temporal.Instant): string | null => {
+  const timestamp = RESET_TIMESTAMP.exec(text)?.[1];
+  if (timestamp !== undefined) {
+    const parsed = Result.try(() => Temporal.Instant.from(timestamp));
+    if (Result.isOk(parsed)) {
+      return parsed.value.toString();
+    }
+  }
+  const delay = RESET_DELAY.exec(text)?.[1] ?? RETRY_DELAY.exec(text)?.[1];
+  if (delay === undefined) {
+    return null;
+  }
+  let delayMs = 0;
+  for (const match of delay.matchAll(GO_DURATION_PART)) {
+    const amount = Number(match[1]);
+    const unit = match[2] ?? "";
+    const factor = GO_DURATION_UNIT_MS[unit] ?? 0;
+    delayMs += amount * factor;
+  }
+  if (delayMs <= 0) {
+    return null;
+  }
+  return Temporal.Instant.fromEpochMilliseconds(
+    now.epochMilliseconds + Math.ceil(delayMs),
+  ).toString();
+};
+
+const parseApiError = (
+  text: string,
+): readonly [httpStatus: string, message: string, status: string] | null => {
+  const apiMatch = API_ERROR.exec(text);
+  if (apiMatch !== null) {
+    return [apiMatch[1] ?? "", (apiMatch[2] ?? "").trim(), apiMatch[3] ?? ""];
+  }
+  const statusMatch = STATUS_ERROR.exec(text);
+  if (statusMatch !== null) {
+    return [
+      statusMatch[2] ?? "",
+      (statusMatch[3] ?? "").trim(),
+      statusMatch[1] ?? "",
+    ];
+  }
+  return null;
+};
+
+/**
+ * Classifies Antigravity failures from captured stderr and prompt errors
+ * (ported from t3code, MIT, `AntigravityTurnOutcome.ts` / #39869).
+ */
+export const classifyAntigravityError = ({
+  stderr,
+  errorMessage,
+  stopReason,
+  reachedModel,
+  now,
+}: {
+  stderr: string;
+  errorMessage: string | null;
+  stopReason: string | null;
+  reachedModel: boolean;
+  now: Temporal.Instant;
+}): AcpErrorClassification | null => {
+  const text = [errorMessage ?? "", stderr]
+    .filter((part) => part !== "")
+    .join("\n");
+  if (text === "" && stopReason !== "refusal") {
+    return null;
+  }
+  if (LOST_THINKING_SIGNATURE.test(text)) {
+    return {
+      failure: {
+        type: "provider_error",
+        message:
+          "Antigravity's saved conversation can no longer be sent to the model. Send another message to continue in a fresh session.",
+        code: "INVALID_THINKING_SIGNATURE",
+      },
+      brokenSession: true,
+    };
+  }
+  const apiError = parseApiError(text);
+  if (stopReason === "refusal" || QUOTA_EXHAUSTED.test(text)) {
+    return {
+      failure: {
+        type: "usage_limit",
+        message: "You have reached your Antigravity quota for this period.",
+        resetsAt: parseResetAt(text, now),
+      },
+      brokenSession: false,
+    };
+  }
+  if (apiError === null) {
+    return null;
+  }
+  const [httpStatus, message, status] = apiError;
+  if (httpStatus === "401" || status === "UNAUTHENTICATED") {
+    return {
+      failure: {
+        type: "auth_required",
+        message:
+          message || "Antigravity is not signed in. Sign in and try again.",
+      },
+      brokenSession: false,
+    };
+  }
+  if (httpStatus === "429" || status === "RESOURCE_EXHAUSTED") {
+    return {
+      failure: {
+        type: "usage_limit",
+        message:
+          message || "You have reached your Antigravity quota for this period.",
+        resetsAt: parseResetAt(text, now),
+      },
+      brokenSession: false,
+    };
+  }
+  if (httpStatus === "404" && reachedModel) {
+    return {
+      failure: {
+        type: "provider_error",
+        message:
+          message ||
+          "Antigravity hit a transient 404 error mid-turn. Send another message to continue.",
+        code: status || "NOT_FOUND",
+      },
+      brokenSession: false,
+    };
+  }
+  return {
+    failure: {
+      type: "provider_error",
+      message: message || "Antigravity stopped this turn because of an error.",
+      code: status || httpStatus || "error",
+    },
+    brokenSession: false,
+  };
+};
+
+/** Removes `target` only if it is not a symlink; ignores missing or busy entries. */
+const removeUnlinkedQuietly = (target: string): boolean => {
+  const stat = Result.try(() => lstatSync(target));
+  if (Result.isError(stat) || stat.value.isSymbolicLink()) {
+    return false;
+  }
+  return Result.isOk(
     Result.try(() => {
       rmSync(target, { recursive: true, force: true });
     }),
   );
+};
+
+const normalizedPathKey = (target: string): string => {
+  const real = Result.try(() => realpathSync.native(target));
+  const resolved = Result.isOk(real) ? real.value : path.resolve(target);
+  return path.sep === "\\" ? resolved.toLowerCase() : resolved;
+};
+
+/**
+ * Removes a throwaway probe session from `<home>/antigravity-acp` without
+ * following symlinks. When `verifyCwd` is set (for the member's own CLI
+ * home), `.meta` — if present — must match `cwd` so another session is never
+ * touched.
+ */
+const discardFromAntigravityHome = ({
+  homeDir,
+  sessionId,
+  cwd,
+  verifyCwd,
+}: {
+  homeDir: string;
+  sessionId: string;
+  cwd: string;
+  verifyCwd: boolean;
+}) => {
+  if (!SAFE_SESSION_ID.test(sessionId)) {
+    return;
+  }
+  const state = path.join(homeDir, "antigravity-acp");
+  const stateStat = Result.try(() => lstatSync(state));
+  if (
+    Result.isError(stateStat) ||
+    stateStat.value.isSymbolicLink() ||
+    !stateStat.value.isDirectory()
+  ) {
+    return;
+  }
+  const conversations = path.join(state, "conversations");
+  const base = path.join(conversations, sessionId);
+  if (verifyCwd && existsSync(`${base}.meta`)) {
+    const metaRaw = Result.try(() => readFileSync(`${base}.meta`, "utf-8"));
+    if (Result.isError(metaRaw)) {
+      return;
+    }
+    const metaParsed = Result.try((): unknown => JSON.parse(metaRaw.value));
+    if (
+      Result.isError(metaParsed) ||
+      typeof metaParsed.value !== "object" ||
+      metaParsed.value === null
+    ) {
+      return;
+    }
+    const metaCwd: unknown = Reflect.get(metaParsed.value, "cwd");
+    if (
+      typeof metaCwd !== "string" ||
+      normalizedPathKey(metaCwd) !== normalizedPathKey(cwd)
+    ) {
+      return;
+    }
+  }
+  for (const suffix of SESSION_CONVERSATION_SUFFIXES) {
+    removeUnlinkedQuietly(`${base}${suffix}`);
+  }
+  removeUnlinkedQuietly(path.join(state, "brain", sessionId));
+  removeUnlinkedQuietly(path.join(state, "annotations", `${sessionId}.pbtxt`));
+};
 
 export const ANTIGRAVITY: AcpAgentDefinition = {
   harness: "antigravity",
@@ -87,18 +359,17 @@ export const ANTIGRAVITY: AcpAgentDefinition = {
   // A model request that lost its thinking block's signature fails every
   // later request of the saved session too.
   brokenSession: (message) => LOST_THINKING_SIGNATURE.test(message),
+  toolOutlivesPrompt: antigravityCommandOutlivesPrompt,
+  classifyErrorOutput: classifyAntigravityError,
   minimumVersion: null,
   // A probe's session would otherwise stay in the member's history.
-  discardSession: (configDir, sessionId) => {
-    const state = path.join(configDir, "antigravity-acp");
-    removeQuietly(path.join(state, "brain", sessionId));
-    const conversations = path.join(state, "conversations");
-    const entries = Result.try(() => readdirSync(conversations));
-    for (const entry of Result.isOk(entries) ? entries.value : []) {
-      if (entry.startsWith(sessionId)) {
-        removeQuietly(path.join(conversations, entry));
-      }
-    }
+  discardSession: ({ configDir, sessionId, cwd }: AcpDiscardSessionContext) => {
+    discardFromAntigravityHome({
+      homeDir: configDir,
+      sessionId,
+      cwd,
+      verifyCwd: false,
+    });
   },
 };
 
@@ -126,16 +397,22 @@ const cliVersion = async (executable: string): Promise<string | null> => {
   return exitCode === 0 ? (VERSION_WORD.exec(output)?.[0] ?? null) : null;
 };
 
+/** Where the member's own Antigravity CLI keeps its home. */
+export const antigravityCliHome = (
+  environment: Readonly<Record<string, string | undefined>>,
+) =>
+  environment["GEMINI_HOME"] ??
+  path.join(
+    environment["HOME"] ?? environment["USERPROFILE"] ?? homedir(),
+    ".gemini",
+  );
+
 /** Where the member's own Antigravity CLI keeps its sign-in. */
 export const antigravityCliTokenPath = (
   environment: Readonly<Record<string, string | undefined>>,
 ) =>
   path.join(
-    environment["GEMINI_HOME"] ??
-      path.join(
-        environment["HOME"] ?? environment["USERPROFILE"] ?? homedir(),
-        ".gemini",
-      ),
+    antigravityCliHome(environment),
     "antigravity-cli",
     "antigravity-oauth-token",
   );
@@ -160,8 +437,19 @@ export const ANTIGRAVITY_CLI: AcpAgentDefinition = {
       existsSync(antigravityCliTokenPath(environment)),
   },
   ownTempDir: false,
-  // Where the CLI keeps a session is its own; a probe's stays there.
-  discardSession: null,
+  // Remove throwaway probe sessions from the member's own Antigravity home.
+  discardSession: ({
+    sessionId,
+    environment,
+    cwd,
+  }: AcpDiscardSessionContext) => {
+    discardFromAntigravityHome({
+      homeDir: antigravityCliHome(environment),
+      sessionId,
+      cwd,
+      verifyCwd: true,
+    });
+  },
   minimumVersion: { version: CLI_ACP_VERSION, read: cliVersion },
 };
 

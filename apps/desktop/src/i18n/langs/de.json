@@ -221,6 +221,14 @@
     "writeDescription": "Geben Sie eine Beschreibung für diesen Eintrag ein."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Erneut prüfen",
+      "notInstalled": "Installieren Sie Antigravity 1.5 oder neuer und melden Sie sich dort an.",
+      "signedIn": "Bei Antigravity angemeldet",
+      "signedOut": "Melden Sie sich in der Antigravity-CLI an, um es in stella zu verwenden.",
+      "title": "Antigravity",
+      "tooOld": "Aktualisieren Sie Antigravity auf 1.5 oder neuer und melden Sie sich dort an."
+    },
     "callbackAccount": "Konto",
     "callbackCloseTab": "Sie können diesen Tab schließen.",
     "callbackConnectedBody": "KI-Anfragen in stella nutzen jetzt Ihren ChatGPT-Tarif.",

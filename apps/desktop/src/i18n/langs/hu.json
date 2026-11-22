@@ -221,6 +221,14 @@
     "writeDescription": "Adjon meg leírást ehhez a bejegyzéshez."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Ellenőrzés újra",
+      "notInstalled": "Telepítse az Antigravity 1.5 vagy újabb verzióját, majd jelentkezzen be benne.",
+      "signedIn": "Bejelentkezve az Antigravity fiókba",
+      "signedOut": "Jelentkezzen be az Antigravity CLI-ben, hogy a stellában használhassa.",
+      "title": "Antigravity",
+      "tooOld": "Frissítse az Antigravity alkalmazást 1.5 vagy újabb verzióra, majd jelentkezzen be benne."
+    },
     "callbackAccount": "Fiók",
     "callbackCloseTab": "Ezt a lapot bezárhatja.",
     "callbackConnectedBody": "A stella MI-kérései mostantól a ChatGPT-csomagját használják.",

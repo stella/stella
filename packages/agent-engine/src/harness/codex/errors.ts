@@ -128,6 +128,13 @@ type ClassifyTurnFailureOptions = {
  * pingdotgg/t3code#25341).
  */
 const SHARING_LIMIT_TEXT = "has reached their Subscription Sharing usage limit";
+/** Codex rejects a thread whose encrypted history cannot be verified (t3code, MIT, pingdotgg/t3code#36643). */
+const INVALID_ENCRYPTED_CONTENT = "invalid_encrypted_content";
+export const isEncryptedHistoryRejection = (
+  error: CodexTurnError | null,
+): boolean =>
+  errorCode(error?.codexErrorInfo ?? null) === INVALID_ENCRYPTED_CONTENT ||
+  (error?.message?.includes(INVALID_ENCRYPTED_CONTENT) ?? false);
 
 export const classifyTurnFailure = ({
   error,
@@ -154,6 +161,14 @@ export const classifyTurnFailure = ({
   if (message.includes(SHARING_LIMIT_TEXT)) {
     // This allowance has its own reset, which the plan's rate limits do not say.
     return { type: "usage_limit", message, resetsAt: null };
+  }
+  if (isEncryptedHistoryRejection(error)) {
+    return {
+      type: "provider_error",
+      message:
+        "Codex could not verify this session's encrypted conversation history. Send another message to continue in a fresh session with the visible conversation history.",
+      code: INVALID_ENCRYPTED_CONTENT,
+    };
   }
   return { type: "provider_error", message, code };
 };
