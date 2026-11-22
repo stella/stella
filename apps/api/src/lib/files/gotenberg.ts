@@ -8,12 +8,17 @@ import {
   type HtmlRenderedDocumentMimeType,
   isConvertedDocumentMimeType,
 } from "@stll/api-contract/converted-document-formats";
-import { declareFailureClass, declareFingerprintFields } from "@stll/errors";
+import {
+  declareFailureClass,
+  declareFingerprintFields,
+  type FailureReason,
+} from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { envConverter } from "@/api/env-converter";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
+import { SUBPROCESS_TERMINATION_REASON } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { contentMatchesConvertibleMime } from "@/api/lib/files/conversion-content";
 import {
@@ -54,6 +59,7 @@ import {
 } from "@/api/lib/files/pdf-worker-protocol";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { LIMITS } from "@/api/lib/limits";
+import { admitWork, WorkRefusal } from "@/api/lib/load/work-admission";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -94,25 +100,38 @@ class ImagePdfError extends TaggedError("ImagePdfError")<{
   cause?: unknown;
 }> {}
 
+type PdfRenderFailureReason =
+  "unreadable" | "too-large" | "memory" | "busy" | "failed";
+
+/** How each reason a render fails for grades. */
+const PDF_RENDER_FAILURE = {
+  // The file's answer, not a defect.
+  unreadable: "file_preview_unrenderable",
+  "too-large": "file_preview_unrenderable",
+  // A source bound let work through past the ceiling.
+  memory: "tagged_failure",
+  busy: "work_capacity_unavailable",
+  failed: "tagged_failure",
+} as const satisfies Record<PdfRenderFailureReason, FailureReason>;
+
 /**
  * A file stella renders itself (see `pdf-render-protocol.ts`) whose PDF
  * could not be made. It is never sent to the converter instead, so this is
  * the conversion's answer: `unreadable` and `too-large` are properties of
- * the file and a retry gives the same answer; `failed` (the worker timed
- * out, crashed or could not start) says nothing about the file.
+ * the file and a retry gives the same answer. `memory` (the worker passed
+ * `LIMITS.pdfRenderWorkerRssMaxBytes` and was killed) is too, but the
+ * source bounds should have kept it under that, so it grades as a defect.
+ * `busy` (no render slot came free in time) and `failed` (the worker timed
+ * out, crashed or could not start) say nothing about the file.
  */
 export class PdfRenderError extends TaggedError("PdfRenderError")<{
   message: string;
-  reason: "unreadable" | "too-large" | "failed";
+  reason: PdfRenderFailureReason;
   cause?: unknown;
 }> {
   static {
     declareFingerprintFields(this, ["reason"]);
-    // A file the decoders refuse, or that renders past the size limit, is
-    // the file's answer, not a defect; a worker that did not finish is.
-    declareFailureClass(this, ({ reason }) =>
-      reason === "failed" ? "tagged_failure" : "file_preview_unrenderable",
-    );
+    declareFailureClass(this, ({ reason }) => PDF_RENDER_FAILURE[reason]);
   }
 }
 
@@ -338,24 +357,64 @@ const embedImage = async (
  * Render a file stella lays out itself in the PDF worker subprocess, so
  * decoding and layout never hold the API's event loop and the timeout can
  * stop them. One attempt: the same bytes render the same way every time.
+ *
+ * Renders queue for the process's `pdf-render` work pool, so a process runs
+ * `LIMITS.workPoolPdfRenderSlots` workers at once, and each worker is killed
+ * past `LIMITS.pdfRenderWorkerRssMaxBytes`: together they bound what
+ * rendering adds to the container's memory.
  */
 const renderPdfInWorker = async (
   declaredType: string,
   bytes: Uint8Array,
 ): Promise<Result<ConvertToPdfResult, PdfRenderError>> => {
-  const rendered = await spawnBinaryWorker({
-    workerPath: pdfWorkerPath(),
-    args: [PDF_WORKER_OPERATION.render, declaredType],
-    stdin: new Blob([bytes]),
-    timeoutMs: LIMITS.pdfRenderTimeoutMs,
-    // The worker refuses a larger PDF itself; this bounds what is read.
-    maxOutputBytes: LIMITS.fileDerivativePdfMaxBytes,
+  const admitted = await admitWork({
+    pool: "pdf-render",
+    kind: "render-pdf",
+    bytes: bytes.byteLength,
+    run: async ({ signal }) =>
+      await spawnBinaryWorker({
+        workerPath: pdfWorkerPath(),
+        args: [PDF_WORKER_OPERATION.render, declaredType],
+        stdin: new Blob([bytes]),
+        timeoutMs: LIMITS.pdfRenderTimeoutMs,
+        signal,
+        // The worker refuses a larger PDF itself; this bounds what is read.
+        maxOutputBytes: LIMITS.fileDerivativePdfMaxBytes,
+        maxRssBytes: LIMITS.pdfRenderWorkerRssMaxBytes,
+      }),
   });
+  if (Result.isError(admitted)) {
+    return Result.err(
+      WorkRefusal.is(admitted.error)
+        ? new PdfRenderError({
+            message: "No PDF render slot came free",
+            reason: "busy",
+            cause: admitted.error,
+          })
+        : new PdfRenderError({
+            message: "The PDF render did not finish",
+            reason: "failed",
+            cause: admitted.error,
+          }),
+    );
+  }
+  const rendered = admitted.value;
   if (Result.isOk(rendered)) {
     return Result.ok({
       buffer: toArrayBuffer(rendered.value),
       sizeBytes: rendered.value.byteLength,
     });
+  }
+  if (
+    rendered.error.termination?.reason === SUBPROCESS_TERMINATION_REASON.memory
+  ) {
+    return Result.err(
+      new PdfRenderError({
+        message: `The PDF worker passed its ${LIMITS.pdfRenderWorkerRssMaxBytes}-byte memory ceiling`,
+        reason: "memory",
+        cause: rendered.error,
+      }),
+    );
   }
   const { exitCode } = rendered.error;
   if (exitCode === PDF_WORKER_PARSE_ERROR_EXIT_CODE) {

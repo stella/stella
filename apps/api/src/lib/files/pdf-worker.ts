@@ -78,11 +78,14 @@ if (operationName === PDF_WORKER_OPERATION.render) {
   );
   if (Result.isError(rendered)) {
     refuse(rendered.error);
-  } else if (rendered.value.byteLength > LIMITS.fileDerivativePdfMaxBytes) {
+  } else if (
+    rendered.value.type === "too-large" ||
+    rendered.value.bytes.byteLength > LIMITS.fileDerivativePdfMaxBytes
+  ) {
     process.stderr.write("pdf-worker: the rendered PDF is too large\n");
     process.exit(PDF_WORKER_TOO_LARGE_EXIT_CODE);
   } else {
-    await writeWorkerStdout(rendered.value);
+    await writeWorkerStdout(rendered.value.bytes);
     process.exit(0);
   }
 }

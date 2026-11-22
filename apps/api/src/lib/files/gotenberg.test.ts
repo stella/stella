@@ -4,6 +4,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 import { failureGradeOf, readFailureBrand } from "@stll/errors";
+import { waitFor } from "@stll/test-kit";
 
 import {
   DERIVATIVE_REFUSAL,
@@ -19,6 +20,7 @@ import {
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
 import { LIMITS } from "@/api/lib/limits";
+import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { logger } from "@/api/lib/observability/logger";
 import {
   DOCX_MIME_TYPE,
@@ -585,7 +587,38 @@ describe("images, plain text and CSV are rendered by stella, never the converter
       );
     expect(grade("unreadable")).toBe("anticipated");
     expect(grade("too-large")).toBe("anticipated");
+    // Past the memory ceiling, a bound on the source let it through.
+    expect(grade("memory")).toBe("defect");
+    expect(grade("busy")).toBe("transient");
     expect(grade("failed")).toBe("defect");
+  });
+
+  test("renders run one at a time; the others wait for the slot", async () => {
+    const pool = () => readWorkPoolMetrics()["pdf-render"];
+    const minutes = (index: number) =>
+      new TextEncoder().encode(
+        `Zápis z jednání představenstva č. ${index}\nPřítomni: Ing. Marek Doležal, JUDr. Hana Kratochvílová\n`,
+      );
+    const renders = Promise.all(
+      [1, 2, 3].map(
+        async (index) =>
+          await convertToPdf(fileOf(minutes(index), "text/plain")),
+      ),
+    );
+    const waiting = await waitFor(
+      () => {
+        const stats = pool();
+        return stats.queued === 3 - LIMITS.workPoolPdfRenderSlots
+          ? stats
+          : undefined;
+      },
+      { description: "the renders past the slot to queue for it" },
+    );
+    expect(waiting.inFlight).toBe(LIMITS.workPoolPdfRenderSlots);
+    // Queued, not refused: every render past the slot waited for it.
+    const results = await renders;
+    expect(results.every((result) => Result.isOk(result))).toBe(true);
+    expect(pool()).toMatchObject({ inFlight: 0, queued: 0, refusedBusy: 0 });
   });
 
   test("a refusal is the same answer on every attempt", async () => {

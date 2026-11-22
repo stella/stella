@@ -43,6 +43,12 @@ type CSVParseOptions = {
    * oversized upload is rejected without parsing its whole suffix.
    */
   maxRows?: number;
+  /**
+   * The text is the start of a longer file, cut at a line break. A quoted
+   * field still open at its end belongs to the record the cut split, so the
+   * records before it are the result instead of the text being invalid.
+   */
+  prefix?: boolean;
 };
 
 const restoreGuardedFormula = (value: string): string => {
@@ -62,7 +68,7 @@ const restoreGuardedFormula = (value: string): string => {
  */
 export const parseCSVWithMetadata = (
   text: string,
-  { delimiter = ",", maxRows }: CSVParseOptions = {},
+  { delimiter = ",", maxRows, prefix }: CSVParseOptions = {},
 ): CSVParseResultWithMetadata => {
   const rows: string[][] = [];
   const rowNumbers: number[] = [];
@@ -94,6 +100,18 @@ export const parseCSVWithMetadata = (
     row = [];
     return true;
   };
+
+  // A quoted field still open at the end: invalid, unless the text is a
+  // prefix, whose cut split that record off.
+  const unterminatedEnd = (): CSVParseResultWithMetadata =>
+    prefix === true
+      ? {
+          rowNumbers,
+          rows,
+          skippedBlankRowCount,
+          status: CSV_PARSE_STATUS.SUCCESS,
+        }
+      : { status: CSV_PARSE_STATUS.INVALID };
 
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
@@ -176,7 +194,7 @@ export const parseCSVWithMetadata = (
   }
 
   if (inQuotes) {
-    return { status: CSV_PARSE_STATUS.INVALID };
+    return unterminatedEnd();
   }
 
   if ((row.length > 0 || cell.length > 0 || closedQuote) && !finishRow()) {

@@ -753,12 +753,21 @@ const readSourceWithinBudget = async <T>(
     timeoutMs: OBJECT_READ_TIMEOUT_MS,
   });
 
+/**
+ * What a render refusal records, or `null` to retry. A file the renderer
+ * refuses, renders too large or renders past the worker's memory ceiling
+ * gets the same answer on every attempt, so its preview is unavailable at
+ * once; a busy render slot or a worker that did not finish is retried.
+ */
 const FAILURE_REASON_FOR_RENDER = {
   unreadable: DERIVATIVE_FAILURE_REASON.PROCESSING,
   "too-large": DERIVATIVE_FAILURE_REASON.TOO_LARGE,
+  memory: DERIVATIVE_FAILURE_REASON.TOO_LARGE,
+  busy: null,
+  failed: null,
 } as const satisfies Record<
-  Exclude<PdfRenderError["reason"], "failed">,
-  DerivativeFailureReason
+  PdfRenderError["reason"],
+  DerivativeFailureReason | null
 >;
 
 /**
@@ -806,16 +815,12 @@ const buildPdfDerivative = async (
         reason: FAILURE_REASON_FOR_REFUSAL[conversion.error.refusal],
       };
     }
-    // A file the renderer refuses, or renders too large, gets the same
-    // answer on every attempt; a worker that did not finish is retried.
-    if (
-      conversion.error instanceof PdfRenderError &&
-      conversion.error.reason !== "failed"
-    ) {
-      return {
-        type: "refused",
-        reason: FAILURE_REASON_FOR_RENDER[conversion.error.reason],
-      };
+    const renderRefusal =
+      conversion.error instanceof PdfRenderError
+        ? FAILURE_REASON_FOR_RENDER[conversion.error.reason]
+        : null;
+    if (renderRefusal !== null) {
+      return { type: "refused", reason: renderRefusal };
     }
     throw conversion.error;
   }
