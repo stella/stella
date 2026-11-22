@@ -66,7 +66,11 @@ const piece = (index: number) =>
     type: "audio/mp4",
   });
 
-type Sent = { readonly path: string; readonly form: FormData | undefined };
+type Sent = {
+  readonly path: string;
+  readonly form: FormData | undefined;
+  readonly body: string | undefined;
+};
 
 /**
  * A server that answers each transcription by the piece it was sent, and
@@ -85,7 +89,11 @@ const server = ({
   const fetch: Fetch = async (url, init) => {
     const { pathname } = new URL(url);
     const form = init?.body instanceof ExpoFormData ? init.body : undefined;
-    sent.push({ path: pathname, form });
+    sent.push({
+      path: pathname,
+      form,
+      body: typeof init?.body === "string" ? init.body : undefined,
+    });
     if (pathname === "/v1/dictation/models") {
       return Response.json({
         models: models.map((model) => ({ ...model, displayName: model.id })),
@@ -280,6 +288,30 @@ describe("a dictation started outside the app", () => {
     expect(result).toEqual({
       type: "text",
       text: "Prosím o návrh smlouvy.",
+    });
+  });
+
+  test("cleanup writes in the style and language the person picked", async () => {
+    const { fetch, sent } = server({
+      transcribe: () => text("zavolat klientovi"),
+    });
+    await transcribeQuickDictation({
+      fetch,
+      learned: [],
+      locale: "cs",
+      pieces: [piece(0)],
+      preferences: {
+        ...DEFAULT_DICTATION_PREFERENCES,
+        cleanup: true,
+        style: "notes",
+        translateTo: "en",
+      },
+      source: sourceFor(fetch),
+    });
+    const cleanup = sent.find(({ path }) => path === "/v1/dictation/cleanup");
+    expect(JSON.parse(cleanup?.body ?? "")).toMatchObject({
+      style: "notes",
+      translateTo: "en",
     });
   });
 

@@ -17,6 +17,8 @@ const SETUP = {
   modelClass: null,
   locale: "en",
   cleanup: false,
+  style: "polished",
+  translateTo: null,
 } as const;
 
 /** The phone's files, in memory: each dictation's description and its recordings. */

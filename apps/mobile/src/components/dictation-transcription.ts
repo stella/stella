@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import { File } from "expo-file-system";
 
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+
 import type { AccessTokenSource } from "@/connection/session";
 import { cleanUpDictation, transcribeWithinClass } from "@/state/dictation";
 import type { ModelClass } from "@/state/dictation-fallback";
@@ -58,11 +63,16 @@ export const transcribePiece = async ({
 export const finalText = async ({
   source,
   cleanup,
+  style,
+  translateTo,
   joined,
   locale,
 }: {
   readonly source: AccessTokenSource;
   readonly cleanup: boolean;
+  readonly style: DesktopDictationCleanupStyle;
+  /** The language to write the text in; null keeps the spoken one. */
+  readonly translateTo: DesktopDictationTranslationLanguage | null;
   readonly joined: string;
   readonly locale: string;
 }): Promise<string> => {
@@ -74,6 +84,8 @@ export const finalText = async ({
     source,
     transcript: joined,
     locale,
+    style,
+    translateTo,
   });
   return cleaned.isOk() && cleaned.value !== "" ? cleaned.value : joined;
 };

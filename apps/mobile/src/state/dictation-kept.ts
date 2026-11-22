@@ -2,6 +2,15 @@ import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
+import {
+  DESKTOP_DICTATION_CLEANUP_STYLES,
+  DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
 
 import type { ApiError } from "@/state/api-request";
 import { modelClassSchema } from "@/state/dictation-fallback";
@@ -57,7 +66,8 @@ type KeptState =
 /**
  * A kept dictation with what it is transcribed with, as when it was
  * recorded: the account, the matter whose names the model expects, the
- * model, and the language and cleanup choice of its text.
+ * model, and the language, cleanup choice, style and language to write in
+ * of its text.
  */
 export type KeptDictation = {
   readonly id: string;
@@ -69,6 +79,8 @@ export type KeptDictation = {
   readonly modelClass: ModelClass | null;
   readonly locale: string;
   readonly cleanup: boolean;
+  readonly style: DesktopDictationCleanupStyle;
+  readonly translateTo: DesktopDictationTranslationLanguage | null;
   readonly keptAt: number;
   readonly state: KeptState;
 };
@@ -94,6 +106,15 @@ export const keptDictationSchema = v.object({
   modelClass: v.optional(v.nullable(modelClassSchema), null),
   locale: v.string(),
   cleanup: v.boolean(),
+  // Kept before the style and language were: the defaults.
+  style: v.fallback(
+    v.picklist(DESKTOP_DICTATION_CLEANUP_STYLES),
+    DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
+  ),
+  translateTo: v.fallback(
+    v.nullable(v.picklist(DESKTOP_DICTATION_TRANSLATION_LANGUAGES)),
+    null,
+  ),
   keptAt: v.number(),
   state: v.variant("type", [
     v.object({
