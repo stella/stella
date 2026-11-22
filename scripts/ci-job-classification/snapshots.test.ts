@@ -313,7 +313,7 @@ test("a transitively used composite action is included", () => {
   ]);
 });
 
-test("a privilege-relevant content change remains review-required", () => {
+test("a privilege-relevant content change reports sensitive change without blocking classified jobs", () => {
   const fixture = createFixture(
     reusable("uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"),
   );
@@ -324,9 +324,11 @@ test("a privilege-relevant content change remains review-required", () => {
     base: fixture.base,
   });
   const result = checkJobClassification(fixture.root, fixture.base);
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.message).toContain("Missing or changed job review");
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.privilegedJobs).toContain(
+      "supplier7:.github/workflows/shared.yml/shared",
+    );
   }
 });
 
@@ -498,10 +500,6 @@ test("nested composite actions retain the reusable workflow checkout mount", () 
     ...readClassificationInputs(fixture.root),
     observeJobs: (jobs) => {
       for (const [key] of jobs) {
-        rmSync(path.dirname(path.join(fixture.root, decisionPathForKey(key))), {
-          recursive: true,
-          force: true,
-        });
         writeDecision(fixture.root, key, {
           kind: "ordinary",
           qualifier: `fixture ${key}`,

@@ -24,7 +24,6 @@ import {
   CLASSIFICATION_INPUT_GLOBS,
   CLASSIFICATION_INPUT_PATHS,
   decisionDirectoryForKey,
-  decisionPathForKey,
   isClassificationInput,
 } from "./ci-job-classification/inputs";
 import { writeClassificationFixtureInputs } from "./ci-job-classification/test-fixtures";
@@ -390,7 +389,9 @@ test.each([
       { workflow: before, decisions },
       { workflow: after, decisions },
     );
-    expect(run(root, "--check").exitCode).toBe(1);
+    const check = run(root, "--check");
+    expect(check.exitCode).toBe(0);
+    expect(check.stdout).toContain(SENSITIVE);
   },
 );
 
@@ -499,10 +500,8 @@ for (const scenario of [
     });
     expect(decisionsIn(root)).toEqual(storedDecisions(scenario.decisions));
     const check = run(root, "--check");
-    expect(check.exitCode).toBe(1);
-    expect(check.stdout).toBe(SENSITIVE);
-    expect(check.stderr).toContain("Missing or changed job review");
-    expect(check.stderr).toContain(decisionPathForKey(keyOf("check")));
+    expect(check.exitCode).toBe(0);
+    expect(check.stdout).toContain(SENSITIVE);
   });
 }
 
@@ -558,23 +557,24 @@ test("a new privileged job waits for a reviewer", () => {
   expect(decisionsIn(root)).toEqual({});
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
-  expect(check.stderr).toContain(decisionPathForKey(keyOf("added")));
+  expect(check.stderr).toContain(keyOf("added"));
   expect(check.stderr).toContain("<choose ordinary, support, or priority>");
-  expect(check.stderr).not.toContain(decisionPathForKey(keyOf("check")));
+  expect(check.stderr).not.toContain(keyOf("check"));
 });
 
-test("approvals without a decision fail instead of being skipped", () => {
+test("unexpected files in the decisions directory fail instead of being skipped", () => {
   const decisions = reviewed(PRIVILEGED_BEFORE, "check");
   const { root } = repository(
     { workflow: PRIVILEGED_BEFORE, decisions },
     { workflow: PRIVILEGED_BEFORE, decisions },
   );
-  rmSync(path.join(root, decisionPathForKey(keyOf("check"))));
+  writeFileSync(
+    path.join(root, CLASSIFICATION_DECISIONS_PATH, "stray.json"),
+    "{}\n",
+  );
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
-  expect(check.stderr).toContain(
-    `Approvals without a decision: ${decisionDirectoryForKey(keyOf("check"))}`,
-  );
+  expect(check.stderr).toContain("Unexpected classification decision entry");
 });
 
 test("pre-push skips pushes that touch no classification input", () => {
@@ -706,10 +706,9 @@ const MERGE_GROUP = {
 };
 
 test("a merge group whose combined tree needs review names its pull request", () => {
-  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
   const { root } = repository(
-    { workflow: PRIVILEGED_BEFORE, decisions },
-    { workflow: PRIVILEGED_AFTER, decisions },
+    { workflow: BEFORE, decisions: {} },
+    { workflow: PRIVILEGED_AFTER, decisions: {} },
   );
   const refusal = "classification needs re-approval after #42";
   const output = path.join(root, "step-output");

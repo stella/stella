@@ -4,7 +4,7 @@ import path from "node:path";
 
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { pruneStaleJobClassificationDecisions } from "../check-ci-job-classification";
-import { readDecisions, writeDecisionsMap } from "./decisions";
+import { readDecisions, removeDecision, writeDecision } from "./decisions";
 import { readClassificationInputs } from "./generate";
 import { createGitProvider } from "./git-provider";
 import {
@@ -147,7 +147,25 @@ const reconcileDecisions = ({
       next.delete(key);
     }
   }
-  writeDecisionsMap(root, Object.fromEntries(next));
+  for (const key of Object.keys(current)) {
+    if (!next.has(key)) {
+      removeDecision(root, key);
+    }
+  }
+  for (const [key, entry] of next) {
+    if (
+      typeof entry === "object" &&
+      entry !== null &&
+      "kind" in entry &&
+      "qualifier" in entry &&
+      !Object.hasOwn(current, key)
+    ) {
+      writeDecision(root, key, {
+        kind: entry.kind,
+        qualifier: entry.qualifier,
+      });
+    }
+  }
 };
 
 // Pairs each previous supplier with the new ones its callers moved to:

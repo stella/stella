@@ -425,7 +425,7 @@ const reviewJobs = ({
   const messages: string[] = [];
   if (staleJobs.length > 0) {
     messages.push(
-      `Sensitive classification change: ${staleJobs.join(", ")}\nMissing job classification. Add each entry to ${decisionPathForKey(staleJobs[0] ?? "")}:\n${JSON.stringify(entries, null, 2)}`,
+      `Sensitive classification change: ${staleJobs.join(", ")}\nMissing or changed job review. Add each entry to ${decisionPathForKey(staleJobs[0] ?? "")}:\n${JSON.stringify(entries, null, 2)}`,
     );
   }
   if (staleDecisions.length > 0) {

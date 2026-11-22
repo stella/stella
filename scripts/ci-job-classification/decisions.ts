@@ -138,7 +138,7 @@ export const readDecisions = (
   return parseRecord(readFileSync(file, "utf-8"));
 };
 
-export const writeDecisionsMap = (
+const writeDecisionsMap = (
   root: string,
   decisions: Record<string, unknown>,
 ) => {
