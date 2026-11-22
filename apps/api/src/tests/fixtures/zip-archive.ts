@@ -28,7 +28,7 @@ const MS_DOS_DATE_1980_01_01 = 0x00_21;
 export const unixExternalAttributes = (mode: number): number =>
   mode * 0x1_00_00;
 
-export const UNIX_REGULAR_FILE = 0o10_0644;
+const UNIX_REGULAR_FILE = 0o10_0644;
 export const UNIX_SYMLINK = 0o12_0777;
 export const UNIX_DIRECTORY = 0o04_0755;
 
