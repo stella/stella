@@ -521,9 +521,7 @@ type RootConnectionScan = {
   exemptOperations: RootOperationName[];
 };
 const mayReferenceRootModule = (content: string): boolean =>
-  content.includes("root") ||
-  content.includes("\\u") ||
-  content.includes("\\x");
+  content.includes("root") || content.includes("\\");
 
 const scanRootConnectionShapes = (
   content: string,

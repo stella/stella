@@ -457,11 +457,15 @@ const keyText = (key: Node): string | null =>
 const propertyNameText = (property: ObjectProperty): string | null =>
   property.computed ? null : keyText(property.key);
 
+// An identifier spells its name, or writes it with a `\u` escape.
+const mayNameIdentifier = (content: string, name: string): boolean =>
+  content.includes(name) || content.includes("\\u");
+
 const countRawNumericCoercions: FileCounter = (content, { file }) => {
   if (
-    !content.includes("Number") &&
-    !content.includes("parseInt") &&
-    !content.includes("parseFloat")
+    !mayNameIdentifier(content, "Number") &&
+    !mayNameIdentifier(content, "parseInt") &&
+    !mayNameIdentifier(content, "parseFloat")
   ) {
     return 0;
   }
@@ -1155,10 +1159,6 @@ const stripComments = ({ content, file }: SourceText): string =>
   recentStrippedComments[syntaxDialect(file)](content, () =>
     stripCommentTrivia({ content, file }),
   );
-
-// An identifier spells its name, or writes it with a `\u` escape.
-const mayNameIdentifier = (content: string, name: string): boolean =>
-  content.includes(name) || content.includes("\\u");
 
 // The export a `{ name }` or `{ name as local }` import entry reads; null for
 // default and namespace imports.
@@ -2332,7 +2332,7 @@ const countDirectFailureSinks: FileCounter = (content, { file }) =>
 // `callbacks.captureError(…)`-shaped seams: adapters that also do generation
 // bookkeeping, inventoried apart from the terminal sinks above.
 const countAnalyticsCallbackSeams: FileCounter = (content, { file }) => {
-  if (!content.includes("captureError")) {
+  if (!mayNameIdentifier(content, "captureError")) {
     return 0;
   }
   const { program } = parseSyntax({ fileName: file, text: content });
@@ -2356,7 +2356,7 @@ const failureSinkSpecs = ({
   content,
   file,
 }: SourceText): ObjectExpression[] => {
-  if (!content.includes(FAILURE_SINK_FACTORY)) {
+  if (!mayNameIdentifier(content, FAILURE_SINK_FACTORY)) {
     return [];
   }
   const { program } = parseSyntax({ fileName: file, text: content });
