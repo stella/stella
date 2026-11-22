@@ -24,6 +24,11 @@ import {
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
 import {
+  compoundFileWithStreams,
+  iworkPackage,
+  wordPerfectFile,
+} from "@/api/tests/helpers/converted-document-fixtures";
+import {
   declaredPng,
   declaredSizePng,
   splitJpeg,
@@ -226,6 +231,61 @@ describe("PDF conversion routes", () => {
         await convertToPdf(
           fileOf(legacyWordFile(["ordinary text"]), "application/msword"),
         ),
+    );
+
+    expect(urls).toHaveLength(1);
+    expect(urls[0]).toEndWith("/forms/libreoffice/convert");
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test.each([
+    ["application/rtf", "a spreadsheet declared as RTF"],
+    ["application/vnd.apple.pages", "a spreadsheet declared as Pages"],
+    ["application/vnd.ms-works", "a spreadsheet declared as Works"],
+    ["text/html", "a spreadsheet declared as HTML"],
+  ] as const)(
+    "never sends the converter %s's content of another format",
+    async (mimeType) => {
+      const spreadsheet = compoundFileWithStreams(["Workbook"]);
+      const { result, urls } = await withConverterFetch(
+        () => new Response("unexpected", { status: 500 }),
+        async () => await convertToPdf(fileOf(spreadsheet, mimeType)),
+      );
+
+      expect(urls).toEqual([]);
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBeInstanceOf(ConversionInputError);
+        expect(
+          result.error instanceof ConversionInputError && result.error.reason,
+        ).toEqual({ kind: "inspection_failed" });
+      }
+    },
+  );
+
+  test("never sends the converter a type it does not convert", async () => {
+    const { result, urls } = await withConverterFetch(
+      () => new Response("unexpected", { status: 500 }),
+      async () =>
+        await convertToPdf(
+          fileOf(new TextEncoder().encode("bytes"), "application/x-unknown"),
+        ),
+    );
+
+    expect(urls).toEqual([]);
+    expect(Result.isError(result)).toBe(true);
+  });
+
+  test.each([
+    ["application/vnd.wordperfect", () => wordPerfectFile(["Synthetic text"])],
+    ["application/x-iwork-pages-sffpages", async () => await iworkPackage()],
+    ["application/vnd.apple.numbers", async () => await iworkPackage()],
+    ["application/vnd.ms-works", () => compoundFileWithStreams(["MN0"])],
+  ] as const)("%s goes to the LibreOffice route", async (mimeType, build) => {
+    const bytes = await build();
+    const { result, urls } = await withConverterFetch(
+      () => new Response(new TextEncoder().encode("%PDF-1.7 converted")),
+      async () => await convertToPdf(fileOf(bytes, mimeType)),
     );
 
     expect(urls).toHaveLength(1);
@@ -533,7 +593,44 @@ describe("converter upload filenames", () => {
     ).toBe("Photo.JPEG");
   });
 
-  test("other types keep the uploaded name", async () => {
+  test.each([
+    [
+      "application/vnd.wordperfect",
+      "smlouva.wp5",
+      "smlouva.wpd",
+      () => wordPerfectFile(["Synthetic text"]),
+    ],
+    [
+      "application/x-wordperfect",
+      "smlouva",
+      "smlouva.wpd",
+      () => wordPerfectFile(["Synthetic text"]),
+    ],
+    [
+      "application/x-iwork-pages-sffpages",
+      "nabidka",
+      "nabidka.pages",
+      async () => await iworkPackage(),
+    ],
+    [
+      "application/msword",
+      "brief",
+      "brief.doc",
+      () => legacyWordFile(["ordinary text"]),
+    ],
+  ] as const)(
+    "a %s file named %s is uploaded as %s",
+    async (mimeType, name, uploaded, build) => {
+      const bytes = await build();
+      expect(
+        await uploadedFileName(
+          async () => await convertToPdf(namedFileOf(bytes, mimeType, name)),
+        ),
+      ).toBe(uploaded);
+    },
+  );
+
+  test("a file keeps an extension the converter accepts for its type", async () => {
     expect(
       await uploadedFileName(
         async () =>

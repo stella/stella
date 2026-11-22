@@ -246,6 +246,7 @@ const rangeDecision = {
   language: "en",
   metadata: {},
   sourceAttributionUrl: null,
+  bodySource: { textSource: "host" },
   source: {
     id: toSafeId<"caseLawSource">("00000000-0000-4000-8000-000000000103"),
     name: "Test publisher",

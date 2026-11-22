@@ -12,16 +12,16 @@
       },
       "errors": {
         "analysisDisabled": "Tehisintellekti analüüside loomine on selles serveris välja lülitatud. Lugege kohtulahendi teksti või proovige hiljem uuesti.",
-        "answerIncomplete": "{source, select, organization {Sinu organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
+        "answerIncomplete": "{source, select, organization {Teie organisatsiooni {provider}-võti andis puuduliku vastuse.} other {AI-mudel andis puuduliku vastuse.}}",
         "decisionNotFound": "Seda kohtulahendit ei leitud. Avage see uuesti otsingust.",
         "documentUnparseable": "Kohtulahendi tekst ei ole analüüsiks valmis. Lugege algallikat.",
         "languageUnsupported": "AI-analüüs on saadaval ainult nendes keeltes lahenditele: {languages}.",
         "openLanguageVersion": "Ava keeleversioon: {language}",
-        "providerRefused": "{source, select, organization {{provider} lükkas sinu organisatsiooni võtmega tehtud päringu tagasi. Kontrolli võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
-        "providerUnavailable": "{source, select, organization {{provider} pole sinu organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
+        "providerRefused": "{source, select, organization {{provider} lükkas teie organisatsiooni võtmega tehtud päringu tagasi. Kontrollige võtit, selle limiiti ja arveldust organisatsiooni seadetes.} other {AI-teenusepakkuja lükkas päringu tagasi.}}",
+        "providerUnavailable": "{source, select, organization {{provider} pole teie organisatsiooni võtmega praegu saadaval.} other {AI-teenusepakkuja pole praegu saadaval.}}",
         "retryAfter": "Uuesti saate proovida alates {time}.",
         "sourceRestricted": "Allikas ei luba tehisintellekti analüüsi. Lugege kohtulahendi teksti või algallikat.",
-        "timedOut": "{source, select, organization {{provider} ei vastanud sinu organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}"
+        "timedOut": "{source, select, organization {{provider} ei vastanud teie organisatsiooni võtmega õigel ajal.} other {AI-mudel ei vastanud õigel ajal.}}"
       },
       "generate": "Koosta AI lühikokkuvõtted",
       "invitation": "Tasuta kontoga koostab AI selle lahendi kohta töömärkmed.",
@@ -297,7 +297,7 @@
     "searchPlaceholder": "Kohtuasja number, ECLI või sõnad, nt 22 Cdo 2653/2012",
     "searchStillSearching": "Otsinguteenus on hõivatud. Otsing jätkub…",
     "searchUnavailable": {
-      "description": "Kohtupraktika otsinguga ei õnnestunud ühendust saada. Sinu päring säilib aadressiribal, proovi hetke pärast uuesti.",
+      "description": "Kohtupraktika otsinguga ei õnnestunud ühendust saada. Teie päring säilib aadressiribal, proovige hetke pärast uuesti.",
       "title": "Otsing pole ajutiselt saadaval"
     },
     "searchWarnings": {
@@ -538,12 +538,12 @@
         "description": "Kasuta oskusi või ühenda muid kasulikke tööriistu",
         "steps": {
           "mcp": {
-            "body": "Lülitab ühendatud serveri tööriistad sinu vestlustes sisse või välja: äriregistrid, sisemised süsteemid, kõik, mille sinu meeskond on ühendanud.",
+            "body": "Lülitab ühendatud serveri tööriistad teie vestlustes sisse või välja: äriregistrid, sisemised süsteemid, kõik, mille teie meeskond on ühendanud.",
             "title": "Ühendatud tööriistaserverid",
             "when": "Lülita sisse, kui vastus vajab värskeid andmeid väljastpoolt tööruumi. Ülejäänud jäta välja: mida vähem tööriistu mängus, seda kitsam ja etteaimatavam on vastus."
           },
           "models": {
-            "body": "Vahetab mudelit ainult selles vestluses. Kõik teised lõimed jäävad sinu tööruumi vaikemudeli juurde.",
+            "body": "Vahetab mudelit ainult selles vestluses. Kõik teised lõimed jäävad teie tööruumi vaikemudeli juurde.",
             "title": "Milline mudel"
           },
           "plusMenu": {
@@ -551,7 +551,7 @@
             "title": "Veel nupu + taga"
           },
           "skills": {
-            "body": "Lisab salvestatud viiba või sinu meeskonna kirjutatud oskuse: üle vaadatud juhiste kogumi, mis lahendab sama ülesande iga kord ühtmoodi.",
+            "body": "Lisab salvestatud viiba või teie meeskonna kirjutatud oskuse: üle vaadatud juhiste kogumi, mis lahendab sama ülesande iga kord ühtmoodi.",
             "title": "Oskused ja salvestatud viibad",
             "when": "Kasuta siis, kui ülesanne kordub ja sõnastus loeb, näiteks tavapärase lepingu ülevaatamisel või vastuvõtu kokkuvõttes. / tühjas redaktoris avab selle loendi otse."
           }
@@ -566,7 +566,7 @@
             "title": "Leia dokument uuesti"
           },
           "upload": {
-            "body": "Nupp „Laadi üles“ avab failivalija; faile saab ka toimikusse lohistada. Igast failist saab selles toimikus dokument, mille sinu meeskond leiab ja mida stella saab ülevaatusel kasutada.",
+            "body": "Nupp „Laadi üles“ avab failivalija; faile saab ka toimikusse lohistada. Igast failist saab selles toimikus dokument, mille teie meeskond leiab ja mida stella saab ülevaatusel kasutada.",
             "title": "Lisa dokument toimikusse",
             "when": "Laadi fail siia, kui see kuulub toimikusse ja peab jääma kättesaadavaks. Lisa fail otse vestlusesse ainult siis, kui see on ajutine kontekst ühe vestluse jaoks."
           }
@@ -759,7 +759,7 @@
     },
     "catalogue": {
       "addToLibrary": "Lisa teeki",
-      "added": "{name} on sinu teegis",
+      "added": "{name} on teie teegis",
       "confirmAddTitle": "Kas lisada {name} organisatsioonile {organization}?",
       "confirmDescription": "Selle malli koopia salvestatakse organisatsiooni {organization} teeki.",
       "confirmDownloadTitle": "Kas laadida {name} alla organisatsioonile {organization}?",
@@ -943,7 +943,7 @@
       "outline": "Struktuur",
       "pendingPane": {
         "description": "Vasta vestluses küsimustele. Kui kinnitad esimese salvestamise, avaneb playbook siin ja saad seda vestluse kõrval muuta.",
-        "title": "Sinu playbook ilmub siia"
+        "title": "Teie playbook ilmub siia"
       },
       "positionOfTotal": "Seisukoht {index}/{total}",
       "positionRemoved": "Seisukoht eemaldatud",
@@ -1248,7 +1248,7 @@
         "skillsBody": "Korduvkasutatavad juriidilised töövood koos juhistega, mida saate enne lisamist kontrollida."
       },
       "heroBody": "Otsi ülesande, jurisdiktsiooni või allika järgi. Iga tööriista saad enne tööruumi lisamist üle vaadata.",
-      "heroTitle": "Millega sa tegeled?",
+      "heroTitle": "Millega te tegelete?",
       "howBody": "Oskus esitab õigusmeetodi kontrollitavate juhistena. Lisa see üks kord ja kasuta sama lähenemist alati, kui ülesanne kordub.",
       "howTitle": "Mis on oskus?",
       "includedBadge": "Kaasas",
@@ -1263,7 +1263,7 @@
         "outsidePlaybook": "Ei vasta playbookile",
         "termination": "Lepingu lõpetamine"
       },
-      "searchPlaceholder": "Mida sa tegema pead?",
+      "searchPlaceholder": "Mida te tegema peate?",
       "tasks": {
         "prepareDocuments": "Valmistage ette dokumendid",
         "protectClientData": "Kaitske kliendi andmeid",

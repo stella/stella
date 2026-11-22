@@ -228,10 +228,11 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   // (e.g. keys configured elsewhere and refetched). Adjust-state-during-render on
   // the availability transition rather than in an effect; `open` stays
   // independent user-controlled state the rest of the time.
-  const [prevAvailable, setPrevAvailable] = useState(data?.available);
-  if (data?.available !== prevAvailable) {
-    setPrevAvailable(data?.available);
-    if (data?.available) {
+  const isAvailable = data?.available;
+  const [prevAvailable, setPrevAvailable] = useState(isAvailable);
+  if (isAvailable !== prevAvailable) {
+    setPrevAvailable(isAvailable);
+    if (isAvailable) {
       setOpen(false);
     }
   }
@@ -503,11 +504,10 @@ export const AIKeyRequiredDialog = ({
   // setState calls loop-safe. A key-based remount cannot replace this
   // because the dialog is rendered in more than one place and remounting
   // would also reset mutation state and re-suspend the config query.
-  const [lastOpen, setLastOpen] = useState(open);
-  const [lastConfigured, setLastConfigured] = useState(config?.configured);
-  if (open !== lastOpen || config?.configured !== lastConfigured) {
-    setLastOpen(open);
-    setLastConfigured(config?.configured);
+  const syncKey = `${String(open)}:${String(config?.configured)}`;
+  const [prevSyncKey, setPrevSyncKey] = useState(syncKey);
+  if (prevSyncKey !== syncKey) {
+    setPrevSyncKey(syncKey);
 
     if (open) {
       if (config?.configured) {

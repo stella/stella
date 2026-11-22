@@ -3,6 +3,7 @@ import {
   cadesContentEndpoint,
   cadesPreviewEndpoint,
 } from "@/api/handlers/files/cades";
+import certifiedEmailEndpoint from "@/api/handlers/files/certified-email";
 import dataBoxEndpoint from "@/api/handlers/files/data-box";
 import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
 import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
@@ -19,6 +20,10 @@ import {
   stampedDownloadEndpoint,
   updateDocumentPropertiesEndpoint,
 } from "@/api/handlers/files/routes";
+import {
+  signedDossierContentEndpoint,
+  signedDossierPreviewEndpoint,
+} from "@/api/handlers/files/signed-dossier";
 import structuredDocumentPreviewEndpoint from "@/api/handlers/files/structured-document";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
 import { routes } from "@/api/http/route";
@@ -30,7 +35,10 @@ export const filesRoute = routes(
     "/asic/:fieldId": { GET: asicPreviewEndpoint },
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
     "/cades/:fieldId/content": { GET: cadesContentEndpoint },
+    "/signed-dossier/:fieldId": { GET: signedDossierPreviewEndpoint },
+    "/signed-dossier/:fieldId/content": { GET: signedDossierContentEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },
+    "/certified-email/:fieldId": { GET: certifiedEmailEndpoint },
     "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
     "/office-citation/:entityId/:fieldId/:blockId": {
       GET: officeCitationEndpoint,

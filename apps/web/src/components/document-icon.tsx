@@ -51,7 +51,7 @@ export const DocumentIcon = ({
   className,
   thumbnail,
 }: DocumentIconProps) => {
-  const { kind } = documentFormat(mimeType, fileName);
+  const { kind, mark } = documentFormat(mimeType, fileName);
 
   if (kind === "image" && thumbnail?.hasThumbnail) {
     return (
@@ -65,8 +65,13 @@ export const DocumentIcon = ({
     );
   }
 
+  // The format's mark: its family's, or a profile's own (BDOC within
+  // ASiC-E), which document-icon.test.tsx keeps registered.
   if (isDocumentMarkKind(kind)) {
-    return <DocumentMark className={className} kind={kind} />;
+    if (!isDocumentMarkKind(mark)) {
+      return panic(`Unregistered document mark: ${mark}`);
+    }
+    return <DocumentMark className={className} kind={mark} />;
   }
 
   switch (kind) {

@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "Veröffentlichte Abschnitte werden angezeigt; die Vollständigkeit wurde nicht festgestellt.",
+    "provenanceOmitted": "Ausgelassene Veröffentlichungsnachweise: {omittedCount, number} von {totalCount, number}.",
+    "sourceAttribution": "Veröffentlichung in der Sammlung: <link>{source}</link>. Abgerufen am {date}.",
+    "sourceAttributionUnknownDate": "Veröffentlichung in der Sammlung: <link>{source}</link>. Abrufdatum unbekannt.",
+    "unclassifiedText": "Der Umfang dieses Sammlungstextes ist unbekannt."
+  }
+}

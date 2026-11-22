@@ -26,7 +26,7 @@ use std::{
   sync::{Mutex, mpsc::Sender},
 };
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use tauri::{AppHandle, Emitter, EventId, Listener, Manager, State};
 use tauri_plugin_global_shortcut::{
@@ -39,7 +39,8 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
   dictation_app_settings::{self, AppSetting, RecentApp},
-  dictation_cloud::{self, CloudModels, Destination},
+  dictation_cleanup::{self, CleanupForm, CleanupStyle},
+  dictation_cloud::{self, CloudModels, Destination, ModelClass},
   dictation_context::{self, Sharing},
   dictation_fix,
   dictation_focus::{self, FocusTarget},
@@ -55,6 +56,11 @@ use crate::{
 const PREFERENCE_FILE_NAME: &str = "dictation-enabled";
 /// On unless the user turned it off.
 const CLEANUP_PREFERENCE_FILE_NAME: &str = "dictation-cleanup";
+/// The cleanup style; absent or unknown: polished.
+const CLEANUP_STYLE_PREFERENCE_FILE_NAME: &str = "dictation-cleanup-style";
+/// A language the cleanup contract lists to write the text in, or `off`
+/// (and absent): the spoken language.
+const TRANSLATE_TO_PREFERENCE_FILE_NAME: &str = "dictation-translate-to";
 /// `auto` or a language code the speech model lists.
 const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
 /// `local` (this computer, the default) or `cloud` (stella AI).
@@ -62,6 +68,19 @@ const DESTINATION_PREFERENCE_FILE_NAME: &str = "dictation-destination";
 /// The stella AI transcription model the user picked; absent: the default.
 /// A recording transcribed with stella AI uses it too.
 const CLOUD_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model";
+/// Who runs the stored model, on which side of the region and whether its
+/// provider keeps the audio, as the list said when it was stored, with the
+/// id it was stored for; empty where the list named no provider.
+const CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME: &str = "dictation-cloud-model-class";
+
+/// A model's class as kept, with the model it belongs to: a class written
+/// beside an id that was not (a write cut short) belongs to no model.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct StoredClass {
+  model_id: String,
+  class: ModelClass,
+}
 /// Off unless the user turned it on: cleanup also gets the window title.
 const SHARE_WINDOW_TITLE_PREFERENCE_FILE_NAME: &str = "dictation-share-window-title";
 /// Off unless the user turned it on: cleanup also gets the text before the
@@ -185,6 +204,10 @@ pub struct DictationSnapshot {
   available: bool,
   enabled: bool,
   cleanup: bool,
+  /// How cleanup writes the text.
+  cleanup_style: CleanupStyle,
+  /// The language cleanup writes the text in; `None` for the spoken one.
+  translate_to: Option<&'static str>,
   /// Whether a short sound marks the start and the end of listening.
   sounds: bool,
   /// What happens to other sound while recording, what this computer
@@ -266,6 +289,8 @@ enum Listening {
 struct Inner {
   enabled: bool,
   cleanup: bool,
+  cleanup_style: CleanupStyle,
+  translate_to: Option<&'static str>,
   app_settings: Vec<AppSetting>,
   /// Only in memory.
   recent_apps: Vec<RecentApp>,
@@ -277,6 +302,7 @@ struct Inner {
   language: Choice,
   destination: Destination,
   cloud_model: Option<String>,
+  cloud_model_class: Option<StoredClass>,
   model: ModelState,
   phase: Phase,
   failure: Option<Failed>,
@@ -307,6 +333,14 @@ impl DictationState {
       .read()
       .as_deref()
       != Some(DISABLED_VALUE);
+    let cleanup_style = CleanupStyle::parse(
+      DevicePreference::in_app_data(CLEANUP_STYLE_PREFERENCE_FILE_NAME)
+        .read()
+        .as_deref(),
+    );
+    let translate_to = DevicePreference::in_app_data(TRANSLATE_TO_PREFERENCE_FILE_NAME)
+      .read()
+      .and_then(|stored| dictation_cleanup::translation_language(&stored));
     let sounds = DevicePreference::in_app_data(SOUNDS_PREFERENCE_FILE_NAME)
       .read()
       .as_deref()
@@ -355,6 +389,10 @@ impl DictationState {
     let cloud_model = DevicePreference::in_app_data(CLOUD_MODEL_PREFERENCE_FILE_NAME)
       .read()
       .filter(|model_id| valid_model_id(model_id));
+    let cloud_model_class =
+      DevicePreference::in_app_data(CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME)
+        .read()
+        .and_then(|stored| serde_json::from_str(&stored).ok());
     let hold_key = HoldChoice::parse(
       DevicePreference::in_app_data(HOLD_KEY_PREFERENCE_FILE_NAME)
         .read()
@@ -363,6 +401,8 @@ impl DictationState {
     Self(Mutex::new(Inner {
       enabled,
       cleanup,
+      cleanup_style,
+      translate_to,
       app_settings,
       recent_apps: Vec::new(),
       sounds,
@@ -373,6 +413,7 @@ impl DictationState {
       language,
       destination,
       cloud_model,
+      cloud_model_class,
       model: if installed_model().is_some() {
         ModelState::Ready
       } else {
@@ -407,6 +448,8 @@ impl DictationState {
       available,
       enabled: inner.enabled,
       cleanup: inner.cleanup,
+      cleanup_style: inner.cleanup_style,
+      translate_to: inner.translate_to,
       sounds: inner.sounds,
       while_dictating: inner.while_dictating,
       while_dictating_offered: WhileDictating::OFFERED,
@@ -562,19 +605,26 @@ pub fn recording(app: &AppHandle) -> bool {
 
 /// What the tray offers for dictation: `None` wherever the Settings window
 /// shows no Dictation page.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TrayDictation {
   pub enabled: bool,
   pub hold_key: HoldChoice,
+  /// The dictation language choice and this computer's languages, for the
+  /// quick switch.
+  pub language: Choice,
+  pub inferred: Vec<&'static str>,
   /// Whether there is a last dictation to type again.
   pub can_retype: bool,
 }
 
 pub fn tray_state(app: &AppHandle) -> Option<TrayDictation> {
   available(app).then(|| {
+    let inferred = dictation_language::inferred(app);
     app.state::<DictationState>().update(|inner| TrayDictation {
       enabled: inner.enabled,
       hold_key: inner.hold_key,
+      language: inner.language.clone(),
+      inferred,
       can_retype: inner.last.is_some(),
     })
   })
@@ -654,6 +704,17 @@ pub fn destination(app: &AppHandle) -> (Destination, Option<String>) {
   })
 }
 
+/// The stored model's class, as the list gave it when the model was stored.
+pub fn cloud_model_class(app: &AppHandle) -> Option<ModelClass> {
+  app.state::<DictationState>().update(|inner| {
+    inner
+      .cloud_model_class
+      .clone()
+      .filter(|kept| inner.cloud_model.as_deref() == Some(kept.model_id.as_str()))
+      .map(|kept| kept.class)
+  })
+}
+
 /// Read before every chunk sent to stella AI: dictation is still on and
 /// still set to stella AI, and the server still enables both.
 pub fn cloud_chosen(app: &AppHandle) -> bool {
@@ -663,18 +724,41 @@ pub fn cloud_chosen(app: &AppHandle) -> bool {
   })
 }
 
-/// Replaces a stored model the region no longer offers, or none, with the
-/// one dictation now uses, so the window shows and keeps what is used.
-pub fn adopt_cloud_model(app: &AppHandle, model_id: &str) -> Result<(), String> {
+/// Stores the model dictation now uses with its class, so the window shows
+/// and keeps what is used and a withdrawn model can later give way only to
+/// one of its class; nothing is written when both are already stored.
+pub fn adopt_cloud_model(
+  app: &AppHandle,
+  model_id: &str,
+  class: Option<ModelClass>,
+) -> Result<(), String> {
   if !valid_model_id(model_id) {
     return Err("this transcription model is not offered".to_string());
   }
-  let stored = app
+  let stored_class = class.map(|class| StoredClass {
+    model_id: model_id.to_string(),
+    class,
+  });
+  let (stored, kept_class) = app
     .state::<DictationState>()
-    .update(|inner| inner.cloud_model.clone());
-  if stored.as_deref() == Some(model_id) {
+    .update(|inner| (inner.cloud_model.clone(), inner.cloud_model_class.clone()));
+  if stored.as_deref() == Some(model_id) && kept_class == stored_class {
     return Ok(());
   }
+  // The class names its model, so a write cut short between the two files
+  // never gives one model another's class.
+  let encoded = stored_class
+    .as_ref()
+    .and_then(|class| serde_json::to_string(class).ok())
+    .unwrap_or_default();
+  change_preference(
+    app,
+    CLOUD_MODEL_CLASS_PREFERENCE_FILE_NAME,
+    &encoded,
+    |inner| {
+      inner.cloud_model_class = stored_class;
+    },
+  )?;
   change_preference(app, CLOUD_MODEL_PREFERENCE_FILE_NAME, model_id, |inner| {
     inner.cloud_model = Some(model_id.to_string());
   })
@@ -733,6 +817,14 @@ pub fn for_app(app: &AppHandle, focus: Option<&FocusTarget>) -> ForApp {
 /// Whether a finished dictation goes through AI cleanup before it is typed.
 pub fn cleanup_enabled(app: &AppHandle) -> bool {
   app.state::<DictationState>().update(|inner| inner.cleanup)
+}
+
+/// How cleanup is asked to write a dictation.
+pub fn cleanup_form(app: &AppHandle) -> CleanupForm {
+  app.state::<DictationState>().update(|inner| CleanupForm {
+    style: inner.cleanup_style,
+    translate_to: inner.translate_to,
+  })
 }
 
 /// Whether a short sound marks the start and the end of listening.
@@ -1252,6 +1344,55 @@ pub fn dictation_set_cleanup(
   Ok(read_snapshot(&app, &state))
 }
 
+/// How cleanup writes the text: one of the contract's styles.
+#[tauri::command]
+pub fn dictation_set_cleanup_style(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  style: String,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let chosen = CleanupStyle::parse(Some(&style));
+  if chosen.stored() != style {
+    return Err("this cleanup style is not available".to_string());
+  }
+  change_preference(
+    &app,
+    CLEANUP_STYLE_PREFERENCE_FILE_NAME,
+    chosen.stored(),
+    |inner| inner.cleanup_style = chosen,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The language cleanup writes the text in, or `None` for the spoken one.
+#[tauri::command]
+pub fn dictation_set_translate_to(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  language: Option<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let translate_to = match language.as_deref() {
+    None => None,
+    Some(tag) => Some(
+      dictation_cleanup::translation_language(tag)
+        .ok_or_else(|| "cleanup cannot write in this language".to_string())?,
+    ),
+  };
+  change_preference(
+    &app,
+    TRANSLATE_TO_PREFERENCE_FILE_NAME,
+    translate_to.unwrap_or(DISABLED_VALUE),
+    |inner| inner.translate_to = translate_to,
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
 /// Whether a short sound marks the start and the end of listening.
 #[tauri::command]
 pub fn dictation_set_sounds(
@@ -1417,20 +1558,32 @@ pub fn dictation_set_language(
   state: State<'_, DictationState>,
   language: String,
 ) -> Result<DictationSnapshot, String> {
-  if !available(&app) {
-    return Err("dictation is not available on this computer".to_string());
-  }
-  let choice = Choice::parse(Some(&language));
-  if choice.stored() != language {
-    return Err("this language is not available for dictation".to_string());
-  }
-  change_preference(
-    &app,
-    LANGUAGE_PREFERENCE_FILE_NAME,
-    choice.stored(),
-    |inner| inner.language = choice,
-  )?;
+  store_language(&app, &language)?;
   Ok(read_snapshot(&app, &state))
+}
+
+/// Stores the dictation language, `auto` or a model language, from Settings
+/// or the tray's quick switch, and redraws that switch, also when nothing
+/// was stored: a clicked item keeps its native check until the menu is
+/// rebuilt from the stored choice.
+pub fn store_language(app: &AppHandle, language: &str) -> Result<(), String> {
+  let stored = if available(app) {
+    let choice = Choice::parse(Some(language));
+    if choice.stored() == language {
+      change_preference(
+        app,
+        LANGUAGE_PREFERENCE_FILE_NAME,
+        choice.stored(),
+        |inner| inner.language = choice,
+      )
+    } else {
+      Err("this language is not available for dictation".to_string())
+    }
+  } else {
+    Err("dictation is not available on this computer".to_string())
+  };
+  crate::activity::refresh_tray(app);
+  stored
 }
 
 /// Settings for apps and kinds of app over the global ones, replacing the
@@ -1545,10 +1698,15 @@ pub async fn dictation_get_cloud_models(app: AppHandle) -> Result<CloudModels, S
   let stored = app
     .state::<DictationState>()
     .update(|inner| inner.cloud_model.clone());
-  if let Some(choice) = dictation_cloud::choose_model(stored.as_deref(), &offered)
-    && choice.replaces_stored
+  let stored_class = cloud_model_class(&app);
+  // A withdrawn model with no same-class successor stays stored, and the
+  // window shows it as no longer offered until another is picked. A model
+  // still offered gets its class kept, as one stored before classes were.
+  if let Ok(choice) =
+    dictation_cloud::choose_model(stored.as_deref(), stored_class.as_ref(), &offered)
+    && (choice.replaces_stored || stored_class.is_none())
   {
-    adopt_cloud_model(&app, &choice.model_id)?;
+    adopt_cloud_model(&app, &choice.model_id, offered.class_of(&choice.model_id))?;
   }
   Ok(offered)
 }
@@ -1562,12 +1720,11 @@ pub async fn dictation_set_cloud_model(
     return Err("stella AI transcription is not available".to_string());
   }
   // Only a model the organization is offered right now can be chosen.
-  if !valid_model_id(&model_id)
-    || !dictation_cloud::models(&app).await?.offers(&model_id)
-  {
+  let offered = dictation_cloud::models(&app).await?;
+  if !valid_model_id(&model_id) || !offered.offers(&model_id) {
     return Err("this transcription model is not offered".to_string());
   }
-  adopt_cloud_model(&app, &model_id)?;
+  adopt_cloud_model(&app, &model_id, offered.class_of(&model_id))?;
   let state = app.state::<DictationState>();
   Ok(read_snapshot(&app, &state))
 }
@@ -1771,6 +1928,8 @@ mod tests {
     DictationState(Mutex::new(Inner {
       enabled: true,
       cleanup,
+      cleanup_style: CleanupStyle::Polished,
+      translate_to: None,
       app_settings: Vec::new(),
       recent_apps: Vec::new(),
       sounds: true,
@@ -1781,6 +1940,7 @@ mod tests {
       language: Choice::Automatic,
       destination: Destination::parse(None),
       cloud_model: None,
+      cloud_model_class: None,
       model: ModelState::Missing,
       phase: Phase::Idle,
       failure: None,
@@ -1848,6 +2008,23 @@ mod tests {
       Some(HoldChoice::OFFERED.len())
     );
     assert_eq!(snapshot["holdKeyWaiting"], serde_json::json!(false));
+  }
+
+  #[test]
+  fn the_snapshot_names_the_cleanup_style_and_the_language_to_write_in() {
+    let state = state(true);
+    let polished =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(polished["cleanupStyle"], serde_json::json!("polished"));
+    assert_eq!(polished["translateTo"], serde_json::Value::Null);
+    state.update(|inner| {
+      inner.cleanup_style = CleanupStyle::Notes;
+      inner.translate_to = Some("en");
+    });
+    let notes =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(notes["cleanupStyle"], serde_json::json!("notes"));
+    assert_eq!(notes["translateTo"], serde_json::json!("en"));
   }
 
   #[test]

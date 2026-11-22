@@ -171,8 +171,8 @@ describe("listing a matter's entities", () => {
         ? result.value.items.map((entity) => entity.format)
         : result.error._tag,
     ).toEqual([
-      { kind: "pdf", label: "PDF" },
-      { kind: "word", label: "DOCX" },
+      { kind: "pdf", mark: "pdf", label: "PDF" },
+      { kind: "word", mark: "word", label: "DOCX" },
       undefined,
     ]);
     const [call] = calls;

@@ -34,6 +34,7 @@ const source = ({ decisionId, texts }: FixtureOptions) =>
       decisionDate: "2026-01-01",
       ecli: null,
       extractionWarnings: [],
+      bodySource: { textSource: "host" },
       language: "cs",
       languageAlternates: [],
       slug: null,

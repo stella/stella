@@ -176,6 +176,7 @@ type DecisionWorkspaceDecision = Pick<
   | "metadata"
   | "source"
   | "sourceAttributionUrl"
+  | "bodySource"
   | "textFields"
   | "updatedAt"
 > &

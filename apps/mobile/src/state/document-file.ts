@@ -1,10 +1,16 @@
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
+import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
+import { certifiedEmailReadSchema } from "@stll/api-contract/certified-email";
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
-import { legalFileFormat } from "@stll/api-contract/document-format";
+import {
+  documentFormat,
+  legalFileFormat,
+} from "@stll/api-contract/document-format";
+import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 
 import type { Fetch } from "@/connection/http";
@@ -125,6 +131,16 @@ type AsicDocumentFile = {
   readonly preview: Result<v.InferOutput<typeof asicPreviewSchema>, ApiError>;
 };
 
+type SignedDossierDocumentFile = {
+  readonly viewer: "signed-dossier";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof signedDossierPreviewSchema>,
+    ApiError
+  >;
+};
+
 type StructuredDocumentFile = {
   readonly viewer: "structured-document";
   readonly fileName: string;
@@ -135,10 +151,23 @@ type StructuredDocumentFile = {
   >;
 };
 
+/** An .eml file its content shows to be a certified email (Italian PEC). */
+type CertifiedEmailDocumentFile = {
+  readonly viewer: "certifiedEmail";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof certifiedEmailReadSchema>,
+    ApiError
+  >;
+};
+
 export type LegalDocumentFile =
   | AsicDocumentFile
   | CadesDocumentFile
+  | CertifiedEmailDocumentFile
   | DataBoxDocumentFile
+  | SignedDossierDocumentFile
   | StructuredDocumentFile;
 
 export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
@@ -272,6 +301,21 @@ export const readDocumentFile = async ({
         });
         return Result.ok({ viewer: kind, fileName, fieldId, preview });
       }
+      case "eAkta":
+      case "zep": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/signed-dossier/${encodeURIComponent(fieldId)}`,
+          schema: signedDossierPreviewSchema,
+        });
+        return Result.ok({
+          viewer: "signed-dossier",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies SignedDossierDocumentFile);
+      }
       case "ofd":
       case "uyap": {
         const preview = await requestApi({
@@ -292,6 +336,29 @@ export const readDocumentFile = async ({
       default:
         kind satisfies never;
         return panic("Unsupported legal file viewer");
+    }
+    // Only the content tells a certified email from any other .eml: the
+    // server reads it and refuses any other email, which opens as before.
+    const format = documentFormat(mimeType, fileName);
+    if (format.kind === "email" && format.label === "EML") {
+      const preview = await requestApi({
+        fetch,
+        source,
+        path: `/v1/files/${encodeURIComponent(workspaceId)}/certified-email/${encodeURIComponent(fieldId)}`,
+        schema: certifiedEmailReadSchema,
+      });
+      const notCertified =
+        Result.isError(preview) &&
+        preview.error._tag === "ApiRequestError" &&
+        preview.error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
+      if (!notCertified) {
+        return Result.ok({
+          viewer: "certifiedEmail",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies CertifiedEmailDocumentFile);
+      }
     }
     const display = await requestApi({
       fetch,

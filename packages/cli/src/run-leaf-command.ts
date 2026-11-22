@@ -402,7 +402,7 @@ export const parseInputObject = async ({
 }: {
   inputRaw: string;
   writers: Writers;
-}): Promise<Record<string, unknown> | undefined> => {
+}): Promise<Result<Record<string, unknown>, "invalid-input">> => {
   let jsonText: string;
   if (inputRaw === "-") {
     jsonText = await readAllStdin();
@@ -413,7 +413,7 @@ export const parseInputObject = async ({
     });
     if (Result.isError(read)) {
       writers.stderr(`--input could not read file ${inputRaw.slice(1)}\n`);
-      return undefined;
+      return Result.err("invalid-input");
     }
     jsonText = read.value;
   } else {
@@ -423,17 +423,37 @@ export const parseInputObject = async ({
   const parsed = Result.try((): unknown => JSON.parse(jsonText));
   if (Result.isError(parsed)) {
     writers.stderr("--input is not valid JSON.\n");
-    return undefined;
+    return Result.err("invalid-input");
   }
   if (!isRecord(parsed.value)) {
     writers.stderr("--input must be a JSON object.\n");
-    return undefined;
+    return Result.err("invalid-input");
   }
   // Parse only. Value flags overlay their paths next, then the shared server
   // boundary normalizes and validates the composed object. Validating here
   // would reject lenient agent spellings before that canonical reader sees
   // them.
-  return parsed.value;
+  return Result.ok(parsed.value);
+};
+
+export const loadValidatedInput = async ({
+  context,
+  flags,
+  writers,
+}: {
+  context: Context;
+  flags: Record<string, unknown>;
+  writers: Writers;
+}): Promise<Result<Record<string, unknown>, "invalid-input">> => {
+  const inputRaw = flags[RESERVED_FLAG_KEYS.input];
+  const parsed =
+    typeof inputRaw === "string"
+      ? await parseInputObject({ inputRaw, writers })
+      : Result.ok<Record<string, unknown>>({});
+  if (Result.isError(parsed)) {
+    setExit(context, EXIT_CODES.validation);
+  }
+  return parsed;
 };
 
 export const confirmDestructive = async ({
@@ -1312,20 +1332,15 @@ export const runLeafCommand = async ({
   // flag (e.g. --matter-id, advertised on the usage line) coexist with a body
   // passed through --input, instead of forcing the caller to hand-relocate it
   // into the JSON under a different key.
-  const inputRaw = flags[RESERVED_FLAG_KEYS.input];
-  const argsBase =
-    typeof inputRaw === "string"
-      ? await parseInputObject({ inputRaw, writers })
-      : {};
-  if (argsBase === undefined) {
-    setExit(context, EXIT_CODES.validation);
+  const parsedInput = await loadValidatedInput({ context, flags, writers });
+  if (Result.isError(parsedInput)) {
     return;
   }
 
   // Responses are camelCase and inputs snake_case; a payload handed back from
   // a list (the natural scripting loop) is accepted under either casing.
   const cased = normalizeInputKeyCasing({
-    args: argsBase,
+    args: parsedInput.value,
     inputSchema: spec.inputSchema,
   });
   if (cased.status === "conflict") {

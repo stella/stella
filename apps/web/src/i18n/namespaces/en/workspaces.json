@@ -20,7 +20,6 @@
       "delivery": "Delivery terms",
       "deliveryEvents": "Delivery events",
       "deliveryReceipt": "Delivery receipt",
-      "directionUnknown": "Direction unknown",
       "messageId": "Message ID",
       "moreContacts": "More contacts match this data box.",
       "openFile": "Open .zfo file",
@@ -320,7 +319,9 @@
   "signedFile": {
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
+    "noSigners": "No signer details were found.",
     "pdfUnavailable": "The PDF preview is unavailable.",
+    "signers": "Signers",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."

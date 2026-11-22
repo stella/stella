@@ -1,5 +1,6 @@
 import { panic, TaggedError } from "better-result";
 
+import { decisionBodyAllowsDerivedAi } from "@stll/api-contract/case-law-body-source";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { statuteAnchorNestingFor } from "@stll/api-contract/statute-anchor-schemes";
 import { buildFulltextParagraphBlocks } from "@stll/legal-ast/case-law-reader";
@@ -230,12 +231,22 @@ export const readDecisionReaderSource = defineWindowedRead(
             blocks: buildFulltextParagraphBlocks(decision.fulltext),
           };
         }
-        const textAccess = readerTextAccess({
-          allowsDerivedAi: decision.source.allowsDerivedAi,
+        const hostTextAccess = readerTextAccess({
+          allowsDerivedAi: decisionBodyAllowsDerivedAi(decision),
           adapterKey: decision.source.adapterKey,
           audience,
           appReaderTextOf,
         });
+        const textAccess =
+          hostTextAccess === "readable" &&
+          decision.bodySource.textSource === "collection"
+            ? readerTextAccess({
+                allowsDerivedAi: decisionBodyAllowsDerivedAi(decision),
+                adapterKey: decision.bodySource.source.adapterKey,
+                audience,
+                appReaderTextOf,
+              })
+            : hostTextAccess;
         const canRead = textAccess === "readable";
         const citations =
           canRead && ast !== null && phase === "citations"
@@ -320,6 +331,7 @@ export const readDecisionReaderSource = defineWindowedRead(
       status: "read" as const,
       decision: {
         extractionWarnings: decision.extractionWarnings,
+        bodySource: decision.bodySource,
         id: decision.id,
         caseNumber: decision.caseNumber,
         appealReviews: decision.appealReviews,

@@ -5,15 +5,20 @@
 
 import type { DesktopPlatform } from "../shared/shortcut-keys";
 
-/** `microphone`: nothing could be heard; `nothingHeard`: sound, no words. */
-type DictationNoticeKind = "microphone" | "microphoneMissing" | "nothingHeard";
+/**
+ * `microphone`: nothing could be heard; `nothingHeard`: sound, no words;
+ * `modelWithdrawn`: the chosen stella AI model is no longer offered, so this
+ * computer transcribed.
+ */
+type DictationNoticeKind =
+  "microphone" | "microphoneMissing" | "modelWithdrawn" | "nothingHeard";
 
 /**
  * `request` asks the OS for the microphone, `openSettings` opens its privacy
  * page, `openSound` opens the sound input settings.
  */
 type DictationNoticeFix =
-  "chooseMicrophone" | "openSettings" | "openSound" | "request";
+  "chooseMicrophone" | "chooseModel" | "openSettings" | "openSound" | "request";
 
 export type DictationNoticeSnapshot = {
   fix: DictationNoticeFix | null;
@@ -29,11 +34,13 @@ export type DictationNoticeAction = "chooseMicrophone" | "dismiss" | "fix";
 const KINDS: readonly unknown[] = [
   "microphone",
   "microphoneMissing",
+  "modelWithdrawn",
   "nothingHeard",
 ];
 const FIXES: readonly unknown[] = [
   null,
   "chooseMicrophone",
+  "chooseModel",
   "openSettings",
   "openSound",
   "request",
@@ -62,17 +69,19 @@ export const isDictationNoticeSnapshot = (
 
 /** Message keys under `dictation.notice`. */
 type DictationNoticeCopy = {
-  title: "missingTitle" | "nothingTitle" | "title";
+  title: "missingTitle" | "modelTitle" | "nothingTitle" | "title";
   body:
     | "allowBody"
     | "checkBodyMac"
     | "checkBodyPc"
     | "missingBody"
+    | "modelBody"
     | "nothingBody";
   /** The action button's key, or null where there is nothing to open. */
   action:
     | "allow"
     | "chooseMicrophone"
+    | "chooseModel"
     | "openSettingsMac"
     | "openSettingsPc"
     | "openSoundMac"
@@ -91,6 +100,9 @@ export const dictationNoticeCopy = (
       body: "missingBody",
       title: "missingTitle",
     };
+  }
+  if (kind === "modelWithdrawn") {
+    return { action: "chooseModel", body: "modelBody", title: "modelTitle" };
   }
   if (kind === "nothingHeard") {
     return {

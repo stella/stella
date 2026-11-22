@@ -380,6 +380,7 @@ const sanitizeBodyHtml = (
     body: { type: "html", html },
     inlineImages: [],
     attachments: [],
+    certified: null,
   } satisfies ParsedEmail;
   // A MIME part's closing line break is transport framing, not content; the
   // text body is trimmed the same way, so both formats hash alike.

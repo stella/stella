@@ -9,6 +9,7 @@ import {
   transcribeDesktopDictation,
 } from "./desktop-transcription";
 import memberCleanup from "./member-cleanup";
+import memberRecordingCleanup from "./member-recording-cleanup";
 import models from "./models";
 import recordingCleanup from "./recording-cleanup";
 import transcribe from "./transcribe";
@@ -17,6 +18,7 @@ export const dictationRoute = routes(
   {
     "/cleanup": { POST: memberCleanup },
     "/models": { GET: models },
+    "/recording-cleanup": { POST: memberRecordingCleanup },
     "/transcribe": { POST: transcribe },
   },
   { prefix: "/dictation" },

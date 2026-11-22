@@ -4,6 +4,7 @@ import { panic } from "better-result";
 import { randomUUID } from "expo-crypto";
 import { AppState } from "react-native";
 
+import { applyLearnedFixes } from "@stll/transcript/corrections";
 import { respell } from "@stll/transcript/spelling";
 
 import {
@@ -13,6 +14,7 @@ import {
 import { epochMilliseconds } from "@/connection/clock";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
+import { deviceAccountStore } from "@/native/account-store";
 import { watchNetwork } from "@/native/dictation-device";
 import {
   forgetKeptDictation,
@@ -30,6 +32,9 @@ import {
   transcribedTexts,
   withTranscribed,
 } from "@/state/dictation-kept";
+import { readLearnedFixes } from "@/state/dictation-learned";
+import { readDictationPreferences } from "@/state/dictation-preferences";
+import type { DictationPreferences } from "@/state/dictation-preferences";
 import { createKeptDictations } from "@/state/kept-dictations";
 import type {
   KeptDictations,
@@ -134,7 +139,8 @@ const AccountKeptDictations = ({
 /**
  * Transcribes a kept dictation's recordings that have no text yet, with
  * the model, matter and cleanup it was recorded with; the matter's names
- * are read again, as they may have grown since.
+ * are read again, as they may have grown since. One refused for its model
+ * goes with the model picked now (`modelFor`).
  */
 const retryKept = async (
   source: AccessTokenSource,
@@ -146,8 +152,10 @@ const retryKept = async (
       : (
           await readMatterVocabulary({ fetch, source, matterId: kept.matterId })
         ).unwrapOr([]);
+  const model = await modelFor(source, kept);
   const choice = {
-    modelId: kept.modelId ?? undefined,
+    modelId: model.modelId ?? undefined,
+    modelClass: model.modelClass,
     matterId: kept.matterId ?? undefined,
     vocabulary,
   };
@@ -188,11 +196,42 @@ const retryKept = async (
   const text = await finalText({
     source,
     cleanup: kept.cleanup,
+    style: kept.style,
+    translateTo: kept.translateTo,
     joined,
     locale: kept.locale,
   });
+  const session = source.session();
+  // Fixes the phone cannot read are not applied; the text stays as heard.
+  const learned =
+    session === undefined
+      ? []
+      : await readLearnedFixes(deviceAccountStore, session).catch(() => []);
   return {
     type: "transcribed",
-    dictated: { text: respell(text, vocabulary), names: vocabulary },
+    dictated: {
+      text: respell(applyLearnedFixes(text, learned), vocabulary),
+      names: vocabulary,
+    },
   };
+};
+
+/**
+ * The model a retry names: the one the dictation was recorded with, or,
+ * for one refused because that model is no longer offered, the one the
+ * person has picked since, as the refusal told them to.
+ */
+const modelFor = async (
+  source: AccessTokenSource,
+  kept: WaitingDictation,
+): Promise<Pick<DictationPreferences, "modelId" | "modelClass">> => {
+  const session = source.session();
+  if (kept.state.refusedFor !== "model" || session === undefined) {
+    return { modelId: kept.modelId, modelClass: kept.modelClass };
+  }
+  const { modelId, modelClass } = await readDictationPreferences(
+    deviceAccountStore,
+    session,
+  ).catch(() => ({ modelId: kept.modelId, modelClass: kept.modelClass }));
+  return { modelId, modelClass };
 };

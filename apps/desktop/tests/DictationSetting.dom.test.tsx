@@ -10,14 +10,22 @@ const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DictationSetting } = await import("../src/mainview/DictationSetting");
 
-afterEach(() => {
+/** One macrotask, for the mocked IPC promises and React's scheduler. */
+const nextMacrotask = async () =>
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+// A native answer that lands after a test's last assertion still renders,
+// and React schedules its effects; both settle before the DOM goes away.
+afterEach(async () => {
+  await act(nextMacrotask);
   cleanup();
   clearMocks();
 });
 
 afterAll(async () => {
-  // React work a last test left scheduled runs while the page still exists.
-  await act(async () => {});
+  await nextMacrotask();
   await GlobalRegistrator.unregister();
 });
 
@@ -41,6 +49,8 @@ const ENABLED_SNAPSHOT = {
   sounds: true,
   speakersOnly: true,
   textBeforeCursorAvailable: true,
+  cleanupStyle: "polished",
+  translateTo: null,
   failure: null,
   failureKeptInHistory: false,
   fixKeys: { code: "KeyT", modifiers: ["control", "alt", "shift"] },
@@ -236,6 +246,87 @@ test("turning cleanup off asks the native side and shows its answer", async () =
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
   expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("the speaker picks a cleanup style, and its description follows", async () => {
+  const picked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_cleanup_style") {
+      return undefined;
+    }
+    picked.push(payload);
+    return { ...ENABLED_SNAPSHOT, cleanupStyle: "notes" };
+  });
+  const { cleanupStyle } = defaultMessages.dictation;
+  expect(
+    view.container.querySelector("#dictation-cleanup-style-description")
+      ?.textContent,
+  ).toBe(cleanupStyle.polished.description);
+
+  const listbox = await openSelect(view, cleanupStyle.title);
+  expect(within(listbox).getAllByRole("option")).toHaveLength(4);
+  const notes = within(listbox).getByRole("option", {
+    name: cleanupStyle.notes.title,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(notes, { pointerType: "mouse" });
+    fireEvent.click(notes);
+  });
+
+  await waitFor(() => {
+    expect(picked).toEqual([{ style: "notes" }]);
+  });
+  await waitFor(() => {
+    expect(
+      view.container.querySelector("#dictation-cleanup-style-description")
+        ?.textContent,
+    ).toBe(cleanupStyle.notes.description);
+  });
+});
+
+test("the speaker picks a language to write in, and turns it off again", async () => {
+  const asked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_translate_to") {
+      return undefined;
+    }
+    asked.push(payload);
+    return { ...ENABLED_SNAPSHOT, translateTo: "en" };
+  });
+  const { translateTo } = defaultMessages.dictation;
+
+  const listbox = await openSelect(view, translateTo.title);
+  // Off, then every language cleanup can write in.
+  expect(within(listbox).getAllByRole("option")).toHaveLength(14);
+  const english = within(listbox).getByRole("option", { name: "English" });
+  await act(async () => {
+    fireEvent.pointerDown(english, { pointerType: "mouse" });
+    fireEvent.click(english);
+  });
+  await waitFor(() => {
+    expect(asked).toEqual([{ language: "en" }]);
+  });
+
+  const again = await openSelect(view, translateTo.title);
+  const off = within(again).getByRole("option", { name: translateTo.off });
+  await act(async () => {
+    fireEvent.pointerDown(off, { pointerType: "mouse" });
+    fireEvent.click(off);
+  });
+  await waitFor(() => {
+    expect(asked).toEqual([{ language: "en" }, { language: null }]);
+  });
+});
+
+test("the cleanup style and language are offered only while cleanup runs", async () => {
+  const view = await renderSetting({ ...ENABLED_SNAPSHOT, cleanup: false });
+  const { cleanupStyle, translateTo } = defaultMessages.dictation;
+
+  for (const name of [cleanupStyle.title, translateTo.title]) {
+    expect(
+      Object.hasOwn(view.getByRole("combobox", { name }).dataset, "disabled"),
+    ).toBe(true);
+  }
 });
 
 test("hides the cleanup switch while dictation is off", async () => {
@@ -834,7 +925,7 @@ test("without the stella AI decision only this computer is named and no models a
   expect(commands).not.toContain("dictation_get_cloud_models");
 });
 
-test("picking the shown model stores it when the stored one is no longer offered", async () => {
+test("a stored model no longer offered stays the choice until another is picked", async () => {
   const stored: unknown[] = [];
   const snapshot = {
     ...ENABLED_SNAPSHOT,
@@ -853,13 +944,18 @@ test("picking the shown model stores it when the stored one is no longer offered
     }
     return undefined;
   });
+  // Not shown as the default: the picker asks for a model and says why.
   await waitFor(() => {
     expect(
       view.getByRole("combobox", {
         name: defaultMessages.dictation.destination.model,
       }).textContent,
-    ).toContain("Voxtral Mini Transcribe");
+    ).toContain(defaultMessages.dictation.destination.chooseModel);
   });
+  expect(
+    view.getByText(defaultMessages.dictation.destination.modelWithdrawn),
+  ).toBeTruthy();
+  expect(stored).toEqual([]);
   const listbox = await openSelect(
     view,
     defaultMessages.dictation.destination.model,

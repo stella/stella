@@ -131,6 +131,7 @@ const decision = {
   judges: [],
   language: "cs",
   sourceAttributionUrl: null,
+  bodySource: { textSource: "host" },
   textFields: {
     abstract: absent,
     headnote: absent,

@@ -14,11 +14,15 @@ import { Textarea } from "@stll/ui/textarea";
 
 import { ChatAttachmentChip } from "@/components/chat-attachment-chip";
 import { ComposerAttachMenu } from "@/components/composer-attach-menu";
-import { dictationClock, KeptDictationBar } from "@/components/dictate-button";
+import {
+  dictationClock,
+  DictationLevel,
+  KeptDictationBar,
+} from "@/components/dictate-button";
 import { ThreadMatter } from "@/components/thread-matter";
 import { useChatAttachments } from "@/components/use-chat-attachments";
 import type { AttachmentNotice } from "@/components/use-chat-attachments";
-import { useDictation } from "@/components/use-dictation";
+import { HOLD_TO_TALK_MS, useDictation } from "@/components/use-dictation";
 import type { DictationNotice } from "@/components/use-dictation";
 import { useDictationField } from "@/components/use-dictation-field";
 import { useSharedDraft } from "@/components/use-shared-draft";
@@ -77,6 +81,7 @@ export type ChatComposerHandle = {
 export const ChatComposer = ({
   busy,
   canStop,
+  dictated,
   handle,
   onQueue,
   onSend,
@@ -88,6 +93,8 @@ export const ChatComposer = ({
 }: {
   busy: boolean;
   canStop: boolean;
+  /** Dictated text the box starts with, to read over before sending. */
+  dictated: string | undefined;
   /** What the thread may do to the box from outside it. */
   handle?: Ref<ChatComposerHandle> | undefined;
   /**
@@ -116,7 +123,7 @@ export const ChatComposer = ({
   shareId: string | undefined;
 }) => {
   const t = useTranslations("chat");
-  const [draft, setDraft] = useState("");
+  const [draft, setDraft] = useState(dictated ?? "");
   useImperativeHandle(handle, () => ({
     handBack: (text: string) => {
       setDraft((typed) => (typed === "" ? text : `${text}\n\n${typed}`));
@@ -136,6 +143,7 @@ export const ChatComposer = ({
     field: "chat",
     matterId: use(ThreadMatter),
   });
+  const dictationLine = useDictationLine(dictation);
   const message = draft.trim();
   const notice = useNoticeText({
     notice: files.notice,
@@ -153,6 +161,7 @@ export const ChatComposer = ({
     // A refusal of this send is what the composer shows next, not an older
     // dictation's failure.
     dictation.settleForSend();
+    const learned = field.learnOnceSent(message);
     const taken = files.attachments;
     const accepted = onSend(
       { text: message, files: readyFiles(taken) },
@@ -165,6 +174,7 @@ export const ChatComposer = ({
       mode,
     );
     if (accepted) {
+      learned();
       setDraft("");
       files.clear();
     }
@@ -174,6 +184,7 @@ export const ChatComposer = ({
     if (onQueue === undefined || !canSend) {
       return;
     }
+    const learned = field.learnOnceSent(message);
     const taken = files.attachments;
     const accepted = onQueue(
       { text: message, files: readyFiles(taken) },
@@ -187,6 +198,7 @@ export const ChatComposer = ({
       },
     );
     if (accepted) {
+      learned();
       setDraft("");
       files.clear();
     }
@@ -199,6 +211,7 @@ export const ChatComposer = ({
     if (onSteer === undefined || !canSteer) {
       return;
     }
+    const learned = field.learnOnceSent(message);
     if (
       onSteer({ text: message, files: [] }, () => {
         // A steer is settled later than a send, often after the member typed
@@ -208,6 +221,7 @@ export const ChatComposer = ({
         );
       })
     ) {
+      learned();
       setDraft("");
     }
   };
@@ -221,6 +235,7 @@ export const ChatComposer = ({
       Icon: CheckIcon,
       label: t("dictationFinish"),
       onPress: dictation.finish,
+      onPressOut: dictation.release,
     };
   } else if (busy) {
     action = {
@@ -245,7 +260,12 @@ export const ChatComposer = ({
       filled: false,
       Icon: DictateIcon,
       label: t("dictate"),
+      hint: t("dictateHoldHint"),
       onPress: dictation.start,
+      // Held, the microphone records until let go; the done button that
+      // replaces it is the same press, so letting go there finishes.
+      onLongPress: dictation.hold,
+      onPressOut: dictation.release,
     };
   }
 
@@ -321,18 +341,22 @@ export const ChatComposer = ({
                 value={draft}
               />
             ) : (
-              <Text
-                accessibilityLiveRegion="polite"
-                className="text-muted-foreground"
-                variant="body"
-              >
-                {dictation.phase === "recording"
-                  ? t("dictationListening", {
-                      elapsed: dictationClock(dictation.elapsedMs),
-                      limit: dictationClock(DICTATION_TOTAL_MAX_MS),
-                    })
-                  : t("dictationTranscribing")}
-              </Text>
+              <View className="flex-row items-center gap-2">
+                <Text
+                  accessibilityLiveRegion="polite"
+                  className={
+                    dictation.noSignal
+                      ? "flex-1"
+                      : "text-muted-foreground flex-1"
+                  }
+                  variant={dictation.noSignal ? "error" : "body"}
+                >
+                  {dictationLine}
+                </Text>
+                {dictation.phase === "recording" ? (
+                  <DictationLevel level={dictation.level} />
+                ) : null}
+              </View>
             )}
           </View>
           {busy && onQueue !== undefined && hasDraft ? (
@@ -378,7 +402,31 @@ type RoundButtonProps = {
   readonly Icon: LucideIcon;
   readonly iconSize?: number;
   readonly label: string;
+  readonly hint?: string;
   readonly onPress: () => void;
+  readonly onLongPress?: () => void;
+  readonly onPressOut?: () => void;
+};
+
+/** What the box says while dictating: a dead microphone, the clock, or that it transcribes. */
+const useDictationLine = ({
+  elapsedMs,
+  noSignal,
+  phase,
+}: Pick<
+  ReturnType<typeof useDictation>,
+  "elapsedMs" | "noSignal" | "phase"
+>): string => {
+  const t = useTranslations("chat");
+  if (noSignal) {
+    return t("dictationNoSignal");
+  }
+  return phase === "recording"
+    ? t("dictationListening", {
+        elapsed: dictationClock(elapsedMs),
+        limit: dictationClock(DICTATION_TOTAL_MAX_MS),
+      })
+    : t("dictationTranscribing");
 };
 
 /** One of the composer's round controls. */
@@ -388,7 +436,10 @@ const RoundButton = ({
   Icon,
   iconSize = 18,
   label,
+  hint,
   onPress,
+  onLongPress,
+  onPressOut,
 }: RoundButtonProps) => {
   const ui = useUiColors();
   let color: string = ui.mutedForeground;
@@ -399,10 +450,14 @@ const RoundButton = ({
   }
   return (
     <Button
+      accessibilityHint={hint}
       accessibilityLabel={label}
       className={ROUND_BOX}
+      delayLongPress={HOLD_TO_TALK_MS}
       disabled={!enabled}
+      onLongPress={onLongPress}
       onPress={onPress}
+      onPressOut={onPressOut}
       variant="plain"
     >
       <View className={`${ROUND} ${filled ? "bg-foreground" : "bg-secondary"}`}>

@@ -1,11 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import type { InferOutput } from "valibot";
 
+import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import type { asicPreviewSchema } from "@stll/api-contract/asic";
+import type { CertifiedEmailRead } from "@stll/api-contract/certified-email";
 import {
   DATA_BOX_DOCUMENT_KIND,
   DATA_BOX_MESSAGE_MIME_TYPE,
 } from "@stll/api-contract/data-box";
+import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -272,18 +275,116 @@ describe("reading a document's file", () => {
     },
   );
 
+  const certifiedRead = {
+    envelope: {
+      system: "pec",
+      kind: "delivery",
+      error: "none",
+      errorDetail: null,
+      sender: "mittente@pec.example.com",
+      recipients: [
+        { address: "destinatario@pec.example.com", certified: true },
+      ],
+      replyTo: null,
+      subject: "Notifica",
+      provider: "Example PEC provider",
+      certifiedAt: "2026-11-21T09:15:30.000Z",
+      messageId: "opec-fixture@pec.example.com",
+      originalMessageId: null,
+      receiptType: "full",
+      deliveredTo: "destinatario@pec.example.com",
+      receivedFor: [],
+      includesOriginal: true,
+      signature: {
+        status: "unverified",
+        signerName: null,
+        issuerName: null,
+        serialNumber: null,
+        signedAt: null,
+      },
+    },
+    text: "Subject: Notifica\nSi trasmette l'atto.",
+    attachments: [{ fileName: "atto.pdf", sizeBytes: 2048 }],
+  } satisfies CertifiedEmailRead;
+
+  test("opens an .eml its content shows to be a certified email through the audited reading", async () => {
+    const { fetch, calls } = server((path) =>
+      Response.json(
+        path.endsWith("/versions")
+          ? legalFileVersion("Consegna.eml", "message/rfc822")
+          : certifiedRead,
+      ),
+    );
+    const file = (await read(fetch)).unwrap();
+    expect(file.viewer === "certifiedEmail" && file.preview.unwrap()).toEqual(
+      certifiedRead,
+    );
+    expect(calls).toEqual([
+      "/v1/entities/matter-1/entity/entity-1/versions",
+      "/v1/files/matter-1/certified-email/field%3F1",
+    ]);
+  });
+
+  test("opens any other .eml as before once the server says it is not certified", async () => {
+    const { fetch, calls } = server((path) => {
+      if (path.endsWith("/versions")) {
+        return Response.json(legalFileVersion("Lettera.eml", "message/rfc822"));
+      }
+      return path.includes("/certified-email/")
+        ? Response.json(
+            { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Not certified" },
+            { status: 422 },
+          )
+        : Response.json(delivered("application/pdf"));
+    });
+    const file = (await read(fetch)).unwrap();
+    expect(file.viewer).toBe("pdf");
+    expect(calls).toEqual([
+      "/v1/entities/matter-1/entity/entity-1/versions",
+      "/v1/files/matter-1/certified-email/field%3F1",
+      "/v1/files/matter-1/url/field%3F1?purpose=display",
+    ]);
+  });
+
+  test("keeps a certified email's failed reading for a retry", async () => {
+    const { fetch } = server((path) =>
+      path.endsWith("/versions")
+        ? Response.json(legalFileVersion("Consegna.eml", "message/rfc822"))
+        : Response.json({ message: "Unavailable" }, { status: 503 }),
+    );
+    const file = (await read(fetch)).unwrap();
+    expect(file.viewer).toBe("certifiedEmail");
+    expect(file.viewer === "certifiedEmail" && file.preview.isErr()).toBe(true);
+  });
+
+  test("never asks an Outlook message for a certified reading", async () => {
+    const { fetch, calls } = server((path) =>
+      path.endsWith("/versions")
+        ? Response.json(
+            legalFileVersion("Lettera.msg", "application/vnd.ms-outlook"),
+          )
+        : Response.json(delivered("application/pdf")),
+    );
+    await read(fetch);
+    expect(calls.some((path) => path.includes("/certified-email/"))).toBe(
+      false,
+    );
+  });
+
   test.each([
     {
       fileName: "Verbale.pdf",
       mimeType: "application/pdf",
       text: "Il testo del verbale",
+      textFormat: "markdown",
     },
     {
       fileName: "Allegato.bin",
       mimeType: "application/octet-stream",
       text: "",
+      textFormat: "plain",
     },
-  ])(
+  ] as const)(
     "keeps $mimeType signed-file metadata without requesting the original",
     async (embedded) => {
       const fileName = `${embedded.fileName}.P7M`;
@@ -326,12 +427,19 @@ describe("reading a document's file", () => {
             fileName: "submission.pdf",
             status: "readable",
             text: "The enclosed submission",
+            textFormat: "markdown",
           },
-          { fileName: "attachment.bin", status: "unavailable", text: "" },
+          {
+            fileName: "attachment.bin",
+            status: "unavailable",
+            text: "",
+            textFormat: "plain",
+          },
           {
             fileName: "notes.txt",
             status: "truncated",
             text: "The first page",
+            textFormat: "plain",
           },
         ],
       } satisfies InferOutput<typeof asicPreviewSchema>;
@@ -348,6 +456,53 @@ describe("reading a document's file", () => {
       expect(calls).toEqual([
         "/v1/entities/matter-1/entity/entity-1/versions",
         "/v1/files/matter-1/asic/field%3F1",
+      ]);
+    },
+  );
+
+  test.each([".ES3", ".et3", ".dosszie", ".zep"])(
+    "reads a signed container with the %s extension through its preview",
+    async (extension) => {
+      const fileName = `podanie${extension}`;
+      const preview = {
+        signers: [
+          { id: "signature-0", name: "Example signer" },
+          { id: "signature-1", name: null },
+        ],
+        documents: [
+          {
+            id: "document-0",
+            fileName: "határozat.pdf",
+            status: "readable",
+            text: "Az első oldal",
+            textFormat: "markdown",
+            pdf: true,
+          },
+          {
+            id: "document-1",
+            fileName: "príloha.bin",
+            status: "unavailable",
+            text: "",
+            textFormat: "plain",
+            pdf: false,
+          },
+        ],
+      } satisfies InferOutput<typeof signedDossierPreviewSchema>;
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "signed-dossier" && file.preview.unwrap()).toEqual(
+        preview,
+      );
+      expect(file.fileName).toBe(fileName);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/signed-dossier/field%3F1",
       ]);
     },
   );
@@ -381,6 +536,11 @@ describe("reading a document's file", () => {
       viewer: "asic",
       fileName: "Detached.asice",
       mimeType: "application/vnd.etsi.asic-e+zip",
+    },
+    {
+      viewer: "signed-dossier",
+      fileName: "Podanie.zep",
+      mimeType: "application/zip",
     },
     {
       viewer: "structured-document",
