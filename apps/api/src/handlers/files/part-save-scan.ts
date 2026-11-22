@@ -7,7 +7,7 @@ import {
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 
-export const scanEmailAttachmentForSave = async ({
+export const scanFilePartForSave = async ({
   bytes,
   fileName,
   mimeType,

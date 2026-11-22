@@ -6,7 +6,6 @@ import {
 } from "@stll/api-contract";
 import type { CertifiedEmailRead } from "@stll/api-contract/certified-email";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
-import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { HTTP_FAILURE } from "@/api/http/errors";
@@ -17,6 +16,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import {
   buildEmailPreview,
+  describeEmailAttachments,
   emailMessageText,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
@@ -99,11 +99,12 @@ export const readCertifiedEmailFile = async ({
     return unavailable("This file is not a certified email");
   }
   // The same attachments the web viewer lists, inline images left out.
-  const { attachments } = buildEmailPreview(email, {
-    citationBlockMode: EMAIL_CITATION_BLOCK_MODE.omit,
-    createAttachmentId: (index) =>
-      filePartId({ kind: FILE_PART_KINDS.attachment, index }),
-  });
+  const attachments = await describeEmailAttachments(
+    email,
+    buildEmailPreview(email, {
+      citationBlockMode: EMAIL_CITATION_BLOCK_MODE.omit,
+    }).attachments,
+  );
   const delivery = await recordLiveVersionDelivery({
     scopedDb,
     fieldId,
@@ -129,10 +130,13 @@ export const readCertifiedEmailFile = async ({
   return Result.ok({
     envelope,
     text: emailMessageText(email),
-    attachments: attachments.map(({ id, fileName, sizeBytes }) => ({
-      part: id,
-      fileName,
-      sizeBytes,
-    })),
+    attachments: attachments.map(
+      ({ part, fileName, mediaType, sizeBytes }) => ({
+        part,
+        fileName,
+        mediaType,
+        sizeBytes,
+      }),
+    ),
   });
 };

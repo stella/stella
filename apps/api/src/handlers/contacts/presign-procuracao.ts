@@ -10,7 +10,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { resolveUploadMime } from "@/api/lib/files/utils";
+import { resolveUploadMime } from "@/api/lib/files/upload-mime";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { presignUploadUrl } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";

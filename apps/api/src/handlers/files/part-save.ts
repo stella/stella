@@ -2,15 +2,20 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import {
+  filePartId,
+  filePartIdSchema,
+  parseFilePartId,
+} from "@stll/api-contract/file-parts";
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
-import { env } from "@/api/env";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import {
   ACCOUNT_ACCESS,
   createSafeHandler,
   type WorkspaceHandlerConfig,
 } from "@/api/lib/api-handlers";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import {
   documentWriteRefusalHandlerError,
@@ -23,6 +28,7 @@ import {
   detectFileEncryption,
   uploadFileEncryption,
 } from "@/api/lib/files/detect-file-encryption";
+import { readFilePart } from "@/api/lib/files/file-part";
 import {
   OrganizationFileUsageError,
   organizationFileUsageHandlerError,
@@ -31,30 +37,30 @@ import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-uplo
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { broadcastOrganizationResourceSetUpdated } from "@/api/lib/resource-realtime";
 
-import {
-  EMAIL_ATTACHMENT_LOAD_STATUS,
-  loadEmailAttachment,
-} from "../email-attachment-loader";
-import { consumeEmailAttachmentSaveRateLimit } from "../email-attachment-save-rate-limit";
-import { scanEmailAttachmentForSave } from "../email-attachment-save-scan";
+import { consumeFilePartSaveRateLimit } from "./part-save-rate-limit";
+import { scanFilePartForSave } from "./part-save-scan";
+
+/** The saved copy's creation records where its bytes came from instead. */
+const copyRecordedOnCreation: AuditRecorder = async () => {
+  await Promise.resolve();
+};
 
 const config = {
   contract: "patch",
   contentDelivery: {
     type: "none",
     reason:
-      "Saves an attachment as a document without returning stored-file bytes.",
+      "Saves a part of a file as a document without returning stored-file bytes.",
   },
   description:
-    "Save one attachment from an email into an accessible matter as a document. Returns the created entity and file field identifiers.",
+    "Save one part of a file (an email's attachment, a container's member, a signed envelope's document) into an accessible matter as a document. Returns the created entity and file field identifiers.",
   permissions: { workspace: ["read"], entity: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "document_processing" },
-  params: workspaceParams({
-    fieldId: resourceIdSchema("field"),
-    attachmentId: v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
-  }),
+  params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   body: v.object({
+    /** The part, such as `attachment:0`, as the file's preview lists it. */
+    part: filePartIdSchema,
     destinationWorkspaceId: resourceIdSchema("workspace"),
     parentId: v.nullable(resourceIdSchema("entity")),
   }),
@@ -63,10 +69,10 @@ const config = {
 export default createSafeHandler(
   config,
   async function* ({
-    body: { destinationWorkspaceId, parentId },
+    body: { destinationWorkspaceId, parentId, part: partId },
     createAuditRecorder,
     getWorkspaceAccess,
-    params: { attachmentId, fieldId },
+    params: { fieldId },
     request,
     scopedDb,
     server,
@@ -77,7 +83,7 @@ export default createSafeHandler(
     const withinRateLimit = yield* Result.await(
       Result.tryPromise(
         async () =>
-          await consumeEmailAttachmentSaveRateLimit({
+          await consumeFilePartSaveRateLimit({
             request,
             server: server ?? null,
           }),
@@ -87,7 +93,7 @@ export default createSafeHandler(
       return Result.err(
         new HandlerError({
           status: 429,
-          message: "Too many attachment saves. Try again shortly.",
+          message: "Too many saves. Try again shortly.",
         }),
       );
     }
@@ -103,38 +109,38 @@ export default createSafeHandler(
       );
     }
 
-    const attachment = yield* loadEmailAttachment({
-      attachmentId,
-      fieldId,
-      organizationId: session.activeOrganizationId,
-      scopedDb,
-      secret: env.BETTER_AUTH_SECRET,
-      workspaceId,
-    });
-    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.notFound) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Attachment not found" }),
-      );
-    }
-    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.tooLarge) {
+    const part = parseFilePartId(partId);
+    if (part === null) {
       return Result.err(
         new HandlerError({
-          status: 413,
-          message: "Email exceeds the preview size limit",
+          status: 404,
+          code: "not_found",
+          message: "The file has no such part",
         }),
       );
     }
-    if (attachment.status === EMAIL_ATTACHMENT_LOAD_STATUS.unreadable) {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "The source email could not be parsed",
-        }),
-      );
-    }
+    // The same read, access and liveness check as the part link; the copy's
+    // creation is what the audit trail records.
+    const read = yield* Result.await(
+      readFilePart({
+        scopedDb,
+        workspaceId,
+        organizationId: session.activeOrganizationId,
+        fieldId,
+        recordAuditEvent: copyRecordedOnCreation,
+        part,
+        disposition: "attachment",
+      }),
+    );
+    const attachment = {
+      bytes: read.bytes,
+      fileName: read.fileName,
+      mimeType: read.mimeType,
+      sourceEntityId: read.entityId,
+    };
 
     const { scanned, scanWarnings } = yield* Result.await(
-      scanEmailAttachmentForSave({
+      scanFilePartForSave({
         bytes: attachment.bytes,
         fileName: attachment.fileName,
         mimeType: attachment.mimeType,
@@ -143,7 +149,7 @@ export default createSafeHandler(
 
     const encryption = uploadFileEncryption(
       await detectFileEncryption({ mimeType: attachment.mimeType, scanned }),
-      handlerErrorContext("emailAttachment.detectEncryption", {
+      handlerErrorContext("filePart.detectEncryption", {
         mimeType: attachment.mimeType,
         sizeBytes: String(attachment.bytes.byteLength),
       }),
@@ -173,8 +179,8 @@ export default createSafeHandler(
         encryption,
         parentId,
         provenance: {
-          type: "email_attachment",
-          attachmentId,
+          type: "file_part",
+          part: filePartId(part),
           sourceEntityId: attachment.sourceEntityId,
           sourceFieldId: fieldId,
           sourceWorkspaceId: workspaceId,
@@ -193,13 +199,13 @@ export default createSafeHandler(
         }).catch((error: unknown) => {
           captureError(
             error,
-            handlerErrorContext("emailattachment.capture", {
+            handlerErrorContext("filePart.save.capture", {
               entityId: created.entityId,
               workspaceId: destinationWorkspaceId,
             }),
           );
         }),
-      "email-attachment-create.maybe-start-upload-triggered-flows",
+      "file-part-save.maybe-start-upload-triggered-flows",
     );
     broadcastOrganizationResourceSetUpdated(
       session.activeOrganizationId,
@@ -234,7 +240,7 @@ const toSaveHandlerError = (
     case "DocumentTooLargeError":
       return new HandlerError({
         status: 413,
-        message: "The attachment exceeds the document size limit",
+        message: "The file exceeds the document size limit",
       });
     case "EntityLimitError":
       return new HandlerError({
@@ -252,6 +258,6 @@ const toSaveHandlerError = (
         message: "The target matter cannot store documents",
       });
     default:
-      return unreachable("Unhandled email attachment save error");
+      return unreachable("Unhandled file part save error");
   }
 };

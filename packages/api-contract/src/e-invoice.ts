@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { filePartDescriptorEntries } from "./file-parts";
+
 /**
  * A structured invoice as its file states it. Amounts, quantities, rates and
  * codes are the source's own literals, never recomputed or reformatted; dates
@@ -106,13 +108,12 @@ export const eInvoicePreviewSchema = v.object({
   syntax: v.picklist(E_INVOICE_SYNTAXES),
   version: stated,
   invoices: v.array(eInvoiceSchema),
-  /** Files the invoice embeds or packages; `index` opens one. */
+  /** Files the invoice embeds or packages, as parts of the stored file. */
   attachments: v.array(
     v.object({
-      index: v.number(),
+      ...filePartDescriptorEntries,
       fileName: v.string(),
       description: stated,
-      sizeBytes: v.number(),
     }),
   ),
 });

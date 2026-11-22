@@ -8,7 +8,6 @@ import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-d
 import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
@@ -20,7 +19,6 @@ import {
 import { LIMITS } from "@/api/lib/limits";
 import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
 import { spawnBinaryWorker } from "@/api/lib/subprocess";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const ARCHIVE_PREVIEW_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
@@ -111,64 +109,3 @@ export const readSignedDossierPreview = archivePreviewReader({
   schema: signedDossierPreviewSchema,
   label: "signed container",
 });
-
-/** One PDF document of a signed container, scanned like an upload. */
-export const readSignedDossierPdf = async (
-  source: ScannedFile,
-  document: number,
-): Promise<Result<Uint8Array, HandlerError<422 | 500 | 503>>> => {
-  const { bytes } = source;
-  if (bytes.byteLength > DOCUMENT_ARCHIVE_MAX_BYTES) {
-    return Result.err(
-      unavailable("The signed container exceeds the preview size limit"),
-    );
-  }
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
-    args: [
-      SIGNED_DOSSIER_WORKER_MODE.pdf,
-      String(LIMITS.extractedContentMaxChars),
-      source.mimeType,
-      String(document),
-    ],
-    stdin: new Blob([bytes]),
-    timeoutMs: LIMITS.extractionTimeoutMs,
-    // A compressed document can inflate past its container, never past the
-    // archive reader's retained-content budget.
-    maxOutputBytes: DOCUMENT_ARCHIVE_MAX_BYTES,
-  });
-  if (result.isErr()) {
-    const { exitCode } = result.error;
-    if (exitCode === ARCHIVE_PREVIEW_WORKER_EXIT.unreadable) {
-      return Result.err(
-        unavailable(
-          "The signed container has no readable PDF at this position",
-        ),
-      );
-    }
-    if (exitCode === ARCHIVE_PREVIEW_WORKER_EXIT.rejected) {
-      return Result.err(
-        unavailable("An embedded file did not pass the security scan"),
-      );
-    }
-    return Result.err(
-      new HandlerError({
-        status: 503,
-        code: "upstream_unavailable",
-        message: "The signed container reader is unavailable",
-        cause: result.error,
-      }),
-    );
-  }
-  return declaredMimeMatchesMagic(PDF_MIME_TYPE, result.value)
-    ? Result.ok(result.value)
-    : Result.err(
-        classifyFailure(
-          new HandlerError({
-            status: 500,
-            message: "Invalid PDF response from the signed container reader",
-          }),
-          "response_invalid",
-        ),
-      );
-};

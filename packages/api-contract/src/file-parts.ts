@@ -52,3 +52,22 @@ export const filePartIdSchema = v.pipe(
   v.maxLength(16),
   v.regex(FILE_PART_PATTERN, "Expected a file part such as attachment:0"),
 );
+
+/**
+ * One part as its file's preview lists it, ready for the shared part list:
+ * where it opens, its name, what it is and how large it is. The media type
+ * is read from the part's own bytes on the server, falling back to what the
+ * container states (or the part's name implies) when the bytes do not show
+ * it; the part link delivers the part as that type.
+ */
+export const filePartDescriptorEntries = {
+  /** Opens the part through the file's link (`?part=`). */
+  part: filePartIdSchema,
+  /** Its name in the container; null when the container gives none. */
+  fileName: v.nullable(v.string()),
+  mediaType: v.pipe(v.string(), v.minLength(1), v.maxLength(255)),
+  sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
+};
+
+export const filePartDescriptorSchema = v.object(filePartDescriptorEntries);
+export type FilePartDescriptor = v.InferOutput<typeof filePartDescriptorSchema>;
