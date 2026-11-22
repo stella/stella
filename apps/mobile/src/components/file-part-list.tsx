@@ -49,7 +49,9 @@ type FilePartOpener = {
 
 /** A container part's files, as its row shows them under itself. */
 type FilesInside =
-  | { readonly status: "closed" | "loading" | "failed" }
+  | { readonly status: "closed" }
+  | { readonly status: "loading" }
+  | { readonly status: "failed" }
   | { readonly status: "open"; readonly files: readonly ContainedFile[] };
 
 const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
