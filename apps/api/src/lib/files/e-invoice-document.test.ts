@@ -339,6 +339,20 @@ describe("structured invoice reading", () => {
     });
   });
 
+  test("keeps two addresses that differ only in punctuation", async () => {
+    // Peppol scheme 0202 carries certified mailboxes: a.b@ and ab@ differ.
+    const xml = ublXml().replace(
+      '<cbc:EndpointID schemeID="0088">0000000000001</cbc:EndpointID>',
+      '<cbc:EndpointID schemeID="0202">a.b@pec.example.invalid</cbc:EndpointID><cac:PartyIdentification><cbc:ID schemeID="0202">ab@pec.example.invalid</cbc:ID></cac:PartyIdentification>',
+    );
+    const { preview } = await read(xmlBytes(xml));
+    const values = preview.invoices[0]?.seller.identifiers.map(
+      ({ value }) => value,
+    );
+    expect(values).toContain("a.b@pec.example.invalid");
+    expect(values).toContain("ab@pec.example.invalid");
+  });
+
   test("search and AI text names units and identifier schemes", async () => {
     const text = eInvoiceDocumentText(
       await listed(await read(xmlBytes(ublXml()))),

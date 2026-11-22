@@ -85,9 +85,16 @@ const KIND_RANK = {
   other: 3,
 } as const satisfies Record<PartyIdentifier["kind"], number>;
 
-/** An identifier's value as written apart from spacing, dots and dashes. */
-const identifierKey = (value: string) =>
-  value.replace(/[\s.-]/gu, "").toUpperCase();
+/**
+ * An identifier's value apart from how it is written: case and spacing
+ * never count, and a number's dots and dashes ("0123.456.789") do not
+ * either. An address (a certified mailbox, a URL) keeps its punctuation,
+ * since `a.b@` and `ab@` are two mailboxes.
+ */
+const identifierKey = (value: string) => {
+  const compact = value.replace(/\s/gu, "").toUpperCase();
+  return /[@:/]/u.test(compact) ? compact : compact.replace(/[.-]/gu, "");
+};
 
 /**
  * A party's identifiers, each value once. A file often states one number in
