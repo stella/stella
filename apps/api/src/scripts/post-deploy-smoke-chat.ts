@@ -53,6 +53,27 @@ type SmokeCheck = {
 
 /** The one model the smoke organization runs, on every role: the
  *  lowest-cost OpenAI model in the catalog. */
+const cancelReaderOnTimeout = (
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): void => {
+  reader.cancel().catch(() => {
+    // Stream already closed or aborted.
+  });
+};
+
+const cancelBodyQuietly = async (
+  body: ReadableStream<Uint8Array> | null | undefined,
+): Promise<void> => {
+  if (!body) {
+    return;
+  }
+  try {
+    await body.cancel();
+  } catch {
+    // Stream already closed or aborted.
+  }
+};
+
 const SMOKE_AI_PROVIDER = "openai";
 export const SMOKE_AI_MODEL_ID = "gpt-6-luna";
 
@@ -195,7 +216,7 @@ export const readWithDeadline = async (
   const timeout = new Promise<never>((_resolve, reject) => {
     timeoutId = setTimeout(() => {
       reject(new StreamDeadlineError({ message: timeoutMessage }));
-      reader.cancel().catch(() => undefined);
+      cancelReaderOnTimeout(reader);
     }, remainingMs);
   });
 
@@ -244,7 +265,13 @@ export const readTurnStream = async (
   } catch (error) {
     return { error: error instanceof Error ? error.message : String(error) };
   } finally {
-    await reader.cancel().catch(() => undefined);
+    try {
+      await reader.cancel();
+    } catch {
+      // Stream already closed or aborted.
+    } finally {
+      reader.releaseLock();
+    }
     reader.releaseLock();
   }
 };
@@ -799,7 +826,7 @@ const provisionAIConfig = async (
     timeoutMs: AI_CONFIG_TIMEOUT_MS,
   });
   if (isSuccess(response.status)) {
-    await response.body?.cancel().catch(() => undefined);
+    await cancelBodyQuietly(response.body);
     return {
       name,
       ok: true,
@@ -886,7 +913,7 @@ const cleanUp = async (
       method: "DELETE",
       timeoutMs: CLEANUP_TIMEOUT_MS,
     });
-    await response.body?.cancel().catch(() => undefined);
+    await cancelBodyQuietly(response.body);
     return {
       name,
       ok: isSuccess(response.status),
