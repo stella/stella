@@ -25,14 +25,13 @@ const objects: XadesZepFixtureObject[] = [
   },
 ];
 
-const read = async (bytes: Uint8Array) =>
-  (await readXadesZepEnvelope(bytes)).unwrap();
+const read = (bytes: Uint8Array) => readXadesZepEnvelope(bytes).unwrap();
 
 describe("XAdES_ZEP envelopes", () => {
   test.each(["detached", "enveloping", "manifest"] as const)(
     "names each %s data object from its stated format and reads its content",
     async (form) => {
-      const envelope = await read(await makeXadesZepFixture({ objects, form }));
+      const envelope = read(await makeXadesZepFixture({ objects, form }));
       expect(envelope.receipt).toBe(false);
       expect(
         envelope.documents.map(({ fileName, bytes }) => [
@@ -50,7 +49,7 @@ describe("XAdES_ZEP envelopes", () => {
   );
 
   test("lists every signer of the composite form", async () => {
-    const envelope = await read(
+    const envelope = read(
       await makeXadesZepFixture({
         objects,
         form: "composite",
@@ -70,7 +69,7 @@ describe("XAdES_ZEP envelopes", () => {
       throw new Error("Expected a fixture object");
     }
     const { description: _, ...undescribed } = first;
-    const envelope = await read(
+    const envelope = read(
       await makeXadesZepFixture({ objects: [undescribed] }),
     );
     expect(envelope.documents.map(({ fileName }) => fileName)).toEqual([
@@ -84,7 +83,7 @@ describe("XAdES_ZEP envelopes", () => {
     expect(new TextDecoder().decode(bytes)).toContain(
       "<ds:Object><xades:QualifyingProperties",
     );
-    const envelope = await read(bytes);
+    const envelope = read(bytes);
     expect(envelope.documents).toHaveLength(objects.length);
   });
 
@@ -93,9 +92,7 @@ describe("XAdES_ZEP envelopes", () => {
       id: "S0",
       signer: "Example signer",
     });
-    const plain = await readXadesZepEnvelope(
-      new TextEncoder().encode(signature),
-    );
+    const plain = readXadesZepEnvelope(new TextEncoder().encode(signature));
     expect(plain.isErr() && plain.error.reason).toBe("invalid");
 
     const valid = new TextDecoder().decode(
@@ -103,9 +100,7 @@ describe("XAdES_ZEP envelopes", () => {
     );
     const corrupted = valid.replace(/(Id="Data1">)[^<]+/u, "$1%%%");
     expect(corrupted).not.toBe(valid);
-    const result = await readXadesZepEnvelope(
-      new TextEncoder().encode(corrupted),
-    );
+    const result = readXadesZepEnvelope(new TextEncoder().encode(corrupted));
     expect(result.isErr() && result.error.reason).toBe("invalid");
   });
 });

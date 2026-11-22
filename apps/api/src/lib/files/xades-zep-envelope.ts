@@ -87,6 +87,12 @@ const isXades = (node: DocumentXmlNode, localName: string) =>
 const fragmentId = (uri: string | undefined) =>
   uri?.startsWith("#") === true ? uri.slice(1) : undefined;
 
+/** The local fragment Ids a set of references point at. */
+const fragmentTargets = (references: readonly DocumentXmlNode[]) =>
+  references
+    .map((reference) => fragmentId(reference.attributes.get("URI")))
+    .filter((id) => id !== undefined);
+
 type DataObjectFormat = {
   description: string | undefined;
   mimeType: string | undefined;
@@ -126,9 +132,7 @@ const objectFormats = (root: DocumentXmlNode) => {
     }
     const manifest = manifests.get(target);
     const objectIds = manifest
-      ? childElements(manifest, XMLDSIG_NAMESPACE, "Reference").flatMap(
-          (entry) => fragmentId(entry.attributes.get("URI")) ?? [],
-        )
+      ? fragmentTargets(childElements(manifest, XMLDSIG_NAMESPACE, "Reference"))
       : [target];
     const stated = {
       description: format.children
@@ -157,9 +161,7 @@ const inlineXmlText = (object: DocumentXmlNode) =>
 
 const referencedIds = (root: DocumentXmlNode) =>
   new Set(
-    descendants(root, (node) => isDsig(node, "Reference")).flatMap(
-      (reference) => fragmentId(reference.attributes.get("URI")) ?? [],
-    ),
+    fragmentTargets(descendants(root, (node) => isDsig(node, "Reference"))),
   );
 
 const readObject = (
@@ -205,9 +207,9 @@ const readObject = (
 };
 
 /** Reads a XAdES_ZEP envelope's signed data objects and stated signers. */
-export const readXadesZepEnvelope = async (
+export const readXadesZepEnvelope = (
   bytes: Uint8Array,
-): Promise<Result<SignedDossier, SignedDossierParseError>> => {
+): Result<SignedDossier, SignedDossierParseError> => {
   const parsed = parseStandaloneXml(bytes, DOCUMENT_ARCHIVE_MAX_BYTES);
   if (parsed.isErr()) {
     return Result.err(

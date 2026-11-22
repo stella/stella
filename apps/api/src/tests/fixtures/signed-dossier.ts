@@ -340,11 +340,10 @@ export const makeXadesZepFixture = async ({
         }),
     ),
   );
-  const [root, namespace] =
+  const [prefix, root, namespace] =
     form === "composite"
-      ? ["xzepds:DataSignatures", XADES_ZEP_DATA_SIGNATURES_NAMESPACE]
-      : ["xzep:DataEnvelope", XADES_ZEP_NAMESPACE];
-  const prefix = root.split(":", 1)[0];
+      ? ["xzepds", "xzepds:DataSignatures", XADES_ZEP_DATA_SIGNATURES_NAMESPACE]
+      : ["xzep", "xzep:DataEnvelope", XADES_ZEP_NAMESPACE];
   return new TextEncoder().encode(
     `<?xml version="1.0" encoding="UTF-8"?>\n<${root} xmlns:${prefix}="${namespace}" xmlns:ds="${XMLDSIG}" Id="Envelope">${
       form === "enveloping" ? "" : objectXml

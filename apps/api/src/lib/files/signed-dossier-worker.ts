@@ -38,7 +38,11 @@ const readers = {
   xadesZep: readXadesZepEnvelope,
 } satisfies Record<
   (typeof SIGNED_DOSSIER_FORMATS)[number]["kind"],
-  (bytes: Uint8Array) => Promise<Result<SignedDossier, SignedDossierParseError>>
+  (
+    bytes: Uint8Array,
+  ) =>
+    | Result<SignedDossier, SignedDossierParseError>
+    | Promise<Result<SignedDossier, SignedDossierParseError>>
 >;
 
 const readSignedDossier = async (bytes: Uint8Array, mimeType: string) => {
