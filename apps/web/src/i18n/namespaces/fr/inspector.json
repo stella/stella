@@ -637,6 +637,10 @@
       "lastUpdatedBy": "Dernière mise à jour par",
       "matterColumnsHeading": "Informations du dossier",
       "noMatterColumns": "Rien n'est encore renseigné pour ce document",
+      "similarDocuments": {
+        "heading": "Documents similaires",
+        "similarity": "{percent} de similarité"
+      },
       "stellaHeading": "Enregistré dans stella",
       "versionCurrent": "v{version} (actuelle)"
     },

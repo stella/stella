@@ -461,6 +461,7 @@
     },
     "fit": "Szélesség",
     "openOriginal": "Eredeti megnyitása",
+    "openPart": "{fileName} megnyitása",
     "preview": "Előnézet megnyitása",
     "previewDescription": "Ez a fájl a rendszer előnézetében nyílik meg.",
     "retry": "Újra",

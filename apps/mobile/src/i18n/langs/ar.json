@@ -461,6 +461,7 @@
     },
     "fit": "العرض",
     "openOriginal": "فتح الأصل",
+    "openPart": "فتح {fileName}",
     "preview": "فتح المعاينة",
     "previewDescription": "يُفتح هذا الملف في معاينة النظام.",
     "retry": "إعادة المحاولة",

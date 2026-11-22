@@ -41,6 +41,7 @@ import readPropertyFacets from "@/api/handlers/entities/read-property-facets";
 import releaseDesktopEditLock from "@/api/handlers/entities/release-desktop-edit-lock";
 import renameEntity from "@/api/handlers/entities/rename";
 import requestDesktopEditTakeover from "@/api/handlers/entities/request-desktop-edit-takeover";
+import readSimilarDocuments from "@/api/handlers/entities/similar/list";
 import checkStamp from "@/api/handlers/entities/stamps/check";
 import readEntitySummariesCount from "@/api/handlers/entities/summaries/count";
 import readEntitySummaries from "@/api/handlers/entities/summaries/list";
@@ -123,6 +124,7 @@ const entities = routes({
     POST: releaseEntityLegalHold,
   },
   "/entity/:entityId/versions": { GET: readVersions },
+  "/entity/:entityId/similar": { GET: readSimilarDocuments },
   "/entity/:entityId/versions/:versionId": {
     GET: readVersionById,
     DELETE: deleteVersion,

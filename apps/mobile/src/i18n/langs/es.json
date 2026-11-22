@@ -461,6 +461,7 @@
     },
     "fit": "Ancho",
     "openOriginal": "Abrir original",
+    "openPart": "Abrir {fileName}",
     "preview": "Abrir vista previa",
     "previewDescription": "Este archivo se abre en la vista previa del sistema.",
     "retry": "Reintentar",

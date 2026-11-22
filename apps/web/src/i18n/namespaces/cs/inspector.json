@@ -637,6 +637,10 @@
       "lastUpdatedBy": "Naposledy upravil(a)",
       "matterColumnsHeading": "Údaje ve spisu",
       "noMatterColumns": "K tomuto dokumentu zatím nejsou vyplněné žádné údaje",
+      "similarDocuments": {
+        "heading": "Podobné dokumenty",
+        "similarity": "shoda {percent}"
+      },
       "stellaHeading": "Uloženo v aplikaci stella",
       "versionCurrent": "v{version} (aktuální)"
     },

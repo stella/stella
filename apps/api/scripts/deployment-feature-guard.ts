@@ -107,6 +107,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Data-box previews use the matter file read permission on every deployment",
   ],
   [
+    "/v1/entities/:workspaceId/entity/:entityId/similar",
+    "Listing similar documents in a matter uses the matter read permission on every deployment",
+  ],
+  [
     "/v1/organization-settings/correspondence/data-boxes",
     "Organization data-box settings support matter correspondence on every deployment",
   ],

@@ -408,6 +408,7 @@
   "document.failure.unsupported": "Update the app to open documents.",
   "document.fit": "Fit",
   "document.openOriginal": "Open original",
+  "document.openPart": "Open {fileName}",
   "document.preview": "Open preview",
   "document.previewDescription": "This file opens in the system preview.",
   "document.retry": "Try again",

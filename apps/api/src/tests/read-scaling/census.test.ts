@@ -91,6 +91,7 @@ import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
 import { signedDossierPreviewScalingScenario } from "./signed-dossier";
+import { similarDocumentsScalingScenarios } from "./similar-documents";
 import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
@@ -167,6 +168,7 @@ const measuredApiScenarios = [
   memberRoleScalingScenario,
   outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  ...similarDocumentsScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
   memberCandidatesScalingScenario,

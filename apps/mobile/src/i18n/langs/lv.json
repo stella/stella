@@ -461,6 +461,7 @@
     },
     "fit": "Platums",
     "openOriginal": "Atvērt oriģinālu",
+    "openPart": "Atvērt {fileName}",
     "preview": "Atvērt priekšskatījumu",
     "previewDescription": "Šis fails tiek atvērts sistēmas priekšskatījumā.",
     "retry": "Mēģināt vēlreiz",

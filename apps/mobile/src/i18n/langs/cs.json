@@ -461,6 +461,7 @@
     },
     "fit": "Šířka",
     "openOriginal": "Otevřít originál",
+    "openPart": "Otevřít {fileName}",
     "preview": "Otevřít náhled",
     "previewDescription": "Tento soubor se otevře v systémovém náhledu.",
     "retry": "Zkusit znovu",

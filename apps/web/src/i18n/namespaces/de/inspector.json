@@ -637,6 +637,10 @@
       "lastUpdatedBy": "Zuletzt aktualisiert von",
       "matterColumnsHeading": "Angaben in der Akte",
       "noMatterColumns": "Zu diesem Dokument ist noch nichts erfasst",
+      "similarDocuments": {
+        "heading": "Ähnliche Dokumente",
+        "similarity": "{percent} ähnlich"
+      },
       "stellaHeading": "In stella gespeichert",
       "versionCurrent": "v{version} (aktuell)"
     },

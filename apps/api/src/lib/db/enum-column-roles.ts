@@ -378,6 +378,12 @@ export const ENUM_COLUMN_ROLES = {
   entity_version_ai_summaries: {
     entity_feature_gate: ATTRIBUTE,
   },
+  entity_version_minhash_bands: {
+    entity_feature_gate: ATTRIBUTE,
+  },
+  entity_version_minhash_signatures: {
+    entity_feature_gate: ATTRIBUTE,
+  },
   entity_versions: {
     entity_feature_gate: ATTRIBUTE,
   },

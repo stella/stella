@@ -637,6 +637,10 @@
       "lastUpdatedBy": "Viimati uuendas",
       "matterColumnsHeading": "Toimiku andmed",
       "noMatterColumns": "Selle dokumendi kohta pole veel midagi märgitud",
+      "similarDocuments": {
+        "heading": "Sarnased dokumendid",
+        "similarity": "{percent} sarnasus"
+      },
       "stellaHeading": "Salvestatud rakenduses stella",
       "versionCurrent": "v{version} (praegune)"
     },
