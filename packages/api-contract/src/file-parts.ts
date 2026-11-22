@@ -8,6 +8,8 @@
 
 import * as v from "valibot";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
+
 export const FILE_PART_KINDS = {
   /** The document a signed envelope (`.p7m`) carries, as a PDF. */
   content: "content",
@@ -39,10 +41,10 @@ export const parseFilePartId = (value: string): FilePart | null => {
   const kind = Object.values(FILE_PART_KINDS).find(
     (candidate) => candidate === match?.[1],
   );
-  const index = Number(match?.[2]);
-  return kind === undefined || !Number.isSafeInteger(index)
+  const index = parseIntegerToken(match?.[2], { sign: "unsigned" });
+  return kind === undefined || index.isErr()
     ? null
-    : { kind, index };
+    : { kind, index: index.value };
 };
 
 export const filePartIdSchema = v.pipe(

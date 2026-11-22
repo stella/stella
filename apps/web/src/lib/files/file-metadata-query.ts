@@ -1,13 +1,10 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
 import { api } from "@/lib/api";
-import {
-  APIError,
-  shouldRetryAPIRequest,
-  unwrapApiResponse,
-} from "@/lib/errors/api";
+import { shouldRetryAPIRequest, unwrapApiResponse } from "@/lib/errors/api";
 import {
   type FileMetadataQueryKey,
   fileMetadataQueryKey,
@@ -41,7 +38,7 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
         const data = unwrapApiResponse(response);
         // Without a `part` the endpoint answers with the file itself.
         if (data.kind !== "file") {
-          throw new APIError({ status: 502, message: "Expected a file link" });
+          return panic("The file link answered with a part");
         }
 
         return {

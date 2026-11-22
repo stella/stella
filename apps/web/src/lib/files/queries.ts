@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -151,7 +152,7 @@ export const fileOptions = (props: FileOptionsProps) =>
         const data = unwrapApiResponse(response);
         // Without a `part` the endpoint answers with the file itself.
         if (data.kind !== "file") {
-          throw new APIError({ status: 502, message: "Expected a file link" });
+          return panic("The file link answered with a part");
         }
 
         const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
@@ -434,7 +435,7 @@ export const textFileOptions = (props: FileOptionsProps) =>
         const data = unwrapApiResponse(response);
         // Without a `part` the endpoint answers with the file itself.
         if (data.kind !== "file") {
-          throw new APIError({ status: 502, message: "Expected a file link" });
+          return panic("The file link answered with a part");
         }
 
         const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
