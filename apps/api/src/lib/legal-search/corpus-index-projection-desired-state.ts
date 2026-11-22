@@ -1046,7 +1046,7 @@ export const retireLegacyErasedServedCopiesTx = async (
  * - `repair`: no canonical change stands behind the write; it only brings
  *   desired state back in line with the canonical rows. A repair never takes
  *   a copy away from readers: the owner holds it first
- *   (`readServedCopiesAtRiskTx`), so it never reaches the retirement.
+ *   (`readNamedCopiesTx`), so it never reaches the retirement.
  */
 type DesiredStateWriteCause = "canonical" | "repair";
 
@@ -1146,6 +1146,12 @@ const CORPUS_PROJECTION_SERVED_COPY_RISKS = [
    */
   "restorable_cleanup",
   /**
+   * A cleanup claim owns or owned the copy, a delete may have reached it, or
+   * a cleanup writer recorded why it queued it. The writer never moves past
+   * such a copy while a state names it, and never restores it.
+   */
+  "unrestorable_cleanup",
+  /**
    * A copy two changes behind that the legacy pass keeps only because its
    * work is blocked or its epoch is not canonical would lose that protection.
    */
@@ -1157,13 +1163,13 @@ export type CorpusProjectionServedCopyRisk =
 const MAX_HELD_COPIES = 16;
 
 /**
- * What a repair did with each named copy it would have taken away from
- * readers. Exhaustive, so a caller can count every kind:
+ * What a repair did with each named copy of the states it writes. Exhaustive,
+ * so a caller can count every kind:
  *
  * - `restored`: a queued copy still provably the one readers are served went
  *   back to `applied` before the repair moved any epoch.
- * - `already_current`: found at risk, then found `applied` and still named
- *   when re-read under its lock, so nothing was needed.
+ * - `already_current`: the write costs the copy nothing, so nothing was
+ *   needed (a copy a cleanup claim restored first is one).
  * - `held`: the repair was held for it, and nothing was written.
  */
 const CORPUS_PROJECTION_SERVED_COPY_OUTCOMES = [
@@ -1231,12 +1237,13 @@ type DesiredStateValues =
   readonly (typeof corpusIndexProjectionStates.$inferInsert)[];
 
 /**
- * The named copies this write would take away from readers, judged on each
- * state before the write (`current`) and as the write leaves it (`next`).
+ * The named copies of the states this write changes, each with the way the
+ * write would take it away from readers, if any: judged on the state before
+ * the write (`current`) and as the write leaves it (`next`).
  * The caller holds the canonical rows and the states it writes, as every
  * desired writer does, so neither can move before the write.
  */
-const readServedCopiesAtRiskTx = async (
+const readNamedCopiesTx = async (
   tx: Transaction,
   values: DesiredStateValues,
 ) => {
@@ -1280,6 +1287,11 @@ const readServedCopiesAtRiskTx = async (
     revisionAppliedAt: intents.appliedAt,
     lastError: intents.lastError,
   };
+  const unrestorableCleanup = sql`(
+    ${intents.status} = 'cleanup_started'
+    OR ${intents.cleanupAttempts} > 0
+    OR ${intents.lastError} IS NOT NULL
+  )`;
   const namedCopy = {
     appliedRevision: states.appliedRevision,
     appliedAction: states.appliedAction,
@@ -1311,12 +1323,15 @@ const readServedCopiesAtRiskTx = async (
       generation: states.generation,
       entityId: states.entityId,
       revisionId: intents.id,
-      risk: sql<CorpusProjectionServedCopyRisk>`CASE
+      risk: sql<CorpusProjectionServedCopyRisk | null>`CASE
         WHEN ${actionChanges}
           THEN ${"desired_action_change" satisfies CorpusProjectionServedCopyRisk}
         WHEN ${restoreProofLost}
           THEN ${"restorable_cleanup" satisfies CorpusProjectionServedCopyRisk}
-        ELSE ${"legacy_retirement" satisfies CorpusProjectionServedCopyRisk}
+        WHEN ${unrestorableCleanup}
+          THEN ${"unrestorable_cleanup" satisfies CorpusProjectionServedCopyRisk}
+        WHEN ${legacyProtectionLost}
+          THEN ${"legacy_retirement" satisfies CorpusProjectionServedCopyRisk}
       END`,
     })
     .from(states)
@@ -1330,20 +1345,22 @@ const readServedCopiesAtRiskTx = async (
         AND proposal.generation = ${states.generation}
         AND proposal.entity_id = ${states.entityId}`,
     )
-    .where(
-      and(
-        eq(states.appliedAction, "upsert"),
-        or(actionChanges, restoreProofLost, legacyProtectionLost),
-      ),
-    )
+    .where(eq(states.appliedAction, "upsert"))
     .orderBy(asc(states.entityId), asc(states.generation))
     .limit(values.length);
-  return rows.map((row) => ({ ...row, risk: requireServedCopyRisk(row.risk) }));
+  return rows.map((row) => ({
+    ...row,
+    risk: row.risk === null ? null : requireServedCopyRisk(row.risk),
+  }));
 };
 
-type ServedCopyAtRisk = Awaited<
-  ReturnType<typeof readServedCopiesAtRiskTx>
->[number];
+type NamedCopy = Awaited<ReturnType<typeof readNamedCopiesTx>>[number];
+type ServedCopyAtRisk = NamedCopy & { risk: CorpusProjectionServedCopyRisk };
+
+const copiesAtRisk = (named: readonly NamedCopy[]): ServedCopyAtRisk[] =>
+  named.flatMap((copy) =>
+    copy.risk === null ? [] : [{ ...copy, risk: copy.risk }],
+  );
 
 const servedCopyKey = ({ generation, entityId }: ServedCopyKey) =>
   `${entityId}/${generation}`;
@@ -1407,8 +1424,9 @@ const requireServedCopyRisk = (value: string): CorpusProjectionServedCopyRisk =>
  * then runs the whole guard again over every generation it writes. Only a
  * clean second guard lets the write through; otherwise the restores roll
  * back with it and the write is held as before. Any other risk (an action
- * change, which covers an erasure and its undo, or a copy the legacy pass
- * would take) holds the write without restoring anything.
+ * change, which covers an erasure and its undo, a copy a cleanup claim took
+ * or a delete may have reached, or one the legacy pass would take) holds the
+ * write without restoring anything.
  */
 export const writeRepairedCorpusProjectionDesiredStatesTx = async (
   tx: Transaction,
@@ -1428,10 +1446,16 @@ export const writeRepairedCorpusProjectionDesiredStatesTx = async (
     }
     await writeDesiredStates(writer, values, "repair");
   };
-  const atRisk = await readServedCopiesAtRiskTx(tx, values);
+  const named = await readNamedCopiesTx(tx, values);
+  const atRisk = copiesAtRisk(named);
+  const alreadyCurrent = named.flatMap(({ generation, entityId, risk }) =>
+    risk === null
+      ? [{ generation, entityId, outcome: "already_current" } as const]
+      : [],
+  );
   if (atRisk.length === 0) {
     await write(tx);
-    return Result.ok({ servedCopies: [] });
+    return Result.ok({ servedCopies: alreadyCurrent });
   }
   if (atRisk.some(({ risk }) => risk !== "restorable_cleanup")) {
     return servedCopyHold(atRisk);
@@ -1440,30 +1464,32 @@ export const writeRepairedCorpusProjectionDesiredStatesTx = async (
   const attempted = await Result.tryPromise(
     async () =>
       await withAggregateSavepoint(tx, async (savepoint) => {
-        const restored = await restoreQueuedNamedCopiesTx(savepoint, atRisk);
-        const stillAtRisk = await readServedCopiesAtRiskTx(savepoint, values);
-        const unrestored = restored.flatMap(({ copy, outcome }) =>
-          outcome === "held"
-            ? atRisk.filter(
-                (risky) => servedCopyKey(risky) === servedCopyKey(copy),
-              )
-            : [],
+        const unrestored = new Set(
+          await restoreQueuedNamedCopiesTx(savepoint, atRisk),
         );
-        if (stillAtRisk.length > 0 || unrestored.length > 0) {
-          held = [...unrestored, ...stillAtRisk];
+        const stillAtRisk = copiesAtRisk(
+          await readNamedCopiesTx(savepoint, values),
+        );
+        if (unrestored.size > 0 || stillAtRisk.length > 0) {
+          held = [
+            ...atRisk.filter(({ revisionId }) => unrestored.has(revisionId)),
+            ...stillAtRisk,
+          ];
           return savepoint.rollback();
         }
-        await write(savepoint);
-        return restored.flatMap(
-          ({ copy: { generation, entityId }, outcome }) =>
-            outcome === "held"
-              ? []
-              : [{ generation, entityId, outcome } as const],
-        );
+        return await write(savepoint);
       }),
   );
   if (attempted.isOk()) {
-    return Result.ok({ servedCopies: attempted.value });
+    return Result.ok({
+      servedCopies: [
+        ...atRisk.map(
+          ({ generation, entityId }) =>
+            ({ generation, entityId, outcome: "restored" }) as const,
+        ),
+        ...alreadyCurrent,
+      ],
+    });
   }
   if (
     held !== undefined &&

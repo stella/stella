@@ -45,6 +45,9 @@ const {
   changeDesired,
   previousPrepare,
   previousClaim,
+  previousRecordDelete,
+  previousRepair,
+  previousSweepCleanup,
   previousErasureFence,
   seedGeneration,
   subjectOf,
@@ -279,7 +282,9 @@ describe("a repair restores a queued copy before it moves the epoch", () => {
     if (outcome.isErr()) {
       return panic("Expected the repair to go through");
     }
-    expect(outcome.value.servedCopies).toEqual([]);
+    expect(outcome.value.servedCopies).toEqual([
+      { generation: SERVED, entityId, outcome: "already_current" },
+    ]);
     expect(await intentOf(revision)).toMatchObject({
       status: "applied",
       cleanupAttempts: 0,
@@ -289,26 +294,93 @@ describe("a repair restores a queued copy before it moves the epoch", () => {
       desiredEpoch: 3n,
     });
   });
-
-  test("a copy a cleanup claim already took is not restored", async () => {
-    const { entityId, revision } = await queuedRestorableCopy();
-    await previousClaim(revision);
-    const claimed = await revisionOf(revision);
-    expect(claimed).toMatchObject({
-      status: "cleanup_started",
-      cleanupAttempts: 1,
-    });
-
-    const outcome = await continuousReconciles(entityId);
-
-    // A delete may be on its way: the claim keeps the copy, and the repair
-    // restores nothing.
-    expect(outcome.isOk() && outcome.value.servedCopies).toEqual([]);
-    expect(await revisionOf(revision)).toEqual(claimed);
-  });
 });
 
 describe("a repair with any other risk is held whole, restores included", () => {
+  type Queued = { entityId: string; revision: string };
+  const taken: {
+    name: string;
+    queue: () => Promise<Queued>;
+    reached: Record<string, unknown>;
+  }[] = [
+    {
+      name: "a cleanup claim holds",
+      queue: async () => {
+        const copy = await queuedRestorableCopy();
+        await previousClaim(copy.revision);
+        return copy;
+      },
+      reached: {
+        status: "cleanup_started",
+        cleanupAttempts: 1,
+        lastError: null,
+      },
+    },
+    {
+      name: "a claim held and its delete receipt is recorded",
+      queue: async () => {
+        const copy = await queuedRestorableCopy();
+        await previousClaim(copy.revision);
+        await previousRecordDelete(copy.revision, 1);
+        return copy;
+      },
+      reached: {
+        status: "cleanup_committed",
+        cleanupAttempts: 1,
+        lastError: null,
+      },
+    },
+    {
+      name: "a claim held and its lease expired",
+      queue: async () => {
+        const copy = await queuedRestorableCopy();
+        await previousClaim(copy.revision);
+        await previousSweepCleanup(copy.revision);
+        return copy;
+      },
+      reached: { status: "cleanup_pending", cleanupAttempts: 1 },
+    },
+    {
+      name: "a drift repair queued with its reason",
+      queue: async () => {
+        const copy = await servedEntity();
+        await previousRepair(copy.entityId, copy.revision);
+        return copy;
+      },
+      reached: {
+        status: "cleanup_pending",
+        cleanupAttempts: 0,
+        lastError: "applied census observed engine drift",
+      },
+    },
+  ];
+  for (const { name, queue, reached } of taken) {
+    test(`a copy ${name} holds the repair and is not restored`, async () => {
+      const { entityId, revision } = await queue();
+      const states = await statesOf(entityId);
+      const queued = await revisionOf(revision);
+      const epoch = await canonicalEpochOf(entityId);
+      expect(queued).toMatchObject(reached);
+
+      const outcome = await continuousReconciles(entityId);
+
+      if (outcome.isOk()) {
+        return panic("Expected the repair to be held");
+      }
+      expect(outcome.error.copies).toEqual([
+        {
+          generation: SERVED,
+          entityId,
+          outcome: "held",
+          risk: "unrestorable_cleanup",
+        },
+      ]);
+      expect(await revisionOf(revision)).toEqual(queued);
+      expect(await statesOf(entityId)).toEqual(states);
+      expect(await canonicalEpochOf(entityId)).toBe(epoch);
+    });
+  }
+
   test("a sibling generation at risk keeps the restorable copy queued and writes nothing", async () => {
     const { entityId, revision } = await servedEntity();
     const sibling = await servedInBuilding(entityId);
