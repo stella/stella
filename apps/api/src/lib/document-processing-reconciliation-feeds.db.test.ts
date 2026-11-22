@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 
 import type { rootDb } from "@/api/db/root";
 import {
+  documentNamingRuns,
   documentProcessingRuns,
   entityVersions,
   extractedContent,
@@ -43,6 +44,8 @@ const SETTLED_BEFORE_MS = 10 * 60 * 1000;
 const STALE_LEASE_MS = 60 * 60 * 1000;
 /** Older than the deadline-scout dispatch lease, which is its own timeout. */
 const STALE_DEADLINE_SCOUT_LEASE_MS = 10 * 60 * 1000;
+/** Older than the document naming claim lease. */
+const STALE_NAMING_LEASE_MS = 10 * 60 * 1000;
 const EXTRACTABLE_FILE = {
   encrypted: false,
   fileName: "scan.pdf",
@@ -69,6 +72,7 @@ beforeAll(async () => {
     broadcastWorkspaceResourceUpdated: () => undefined,
     database: asTestRaw<typeof rootDb>(testDb),
     enqueueDocumentDeadlineScout: async () => undefined,
+    enqueueDocumentNaming: async () => undefined,
     enqueueDocumentProcessingRun: async () => undefined,
     indexEntity: async () => undefined,
     now: () => Date.now(),
@@ -133,6 +137,29 @@ const FIXTURES = [
         deadlineScoutStatus: "running",
         finishedAt: past(STALE_DEADLINE_SCOUT_LEASE_MS),
         status: "succeeded",
+      });
+    },
+  },
+  {
+    label: "document-naming returns an expired naming claim to pending",
+    producer: "document-naming",
+    seed: async () => {
+      const id = toSafeId<"documentProcessingRun">(Bun.randomUUIDv7());
+      await insertRun({
+        id,
+        finishedAt: past(STALE_NAMING_LEASE_MS),
+        status: "succeeded",
+      });
+      await testDb.insert(documentNamingRuns).values({
+        attempt: 1,
+        claimedAt: past(STALE_NAMING_LEASE_MS),
+        entityId: ids.entityA1,
+        entityVersionId: ids.entityVersionA1,
+        id,
+        organizationId: ids.orgA,
+        sourceName: "scan.pdf",
+        status: "running",
+        workspaceId: ids.wsA1,
       });
     },
   },
@@ -252,14 +279,20 @@ const resetFixtureState = async () => {
 beforeEach(resetFixtureState);
 
 const snapshotRuns = async () =>
-  new Map(
-    (
+  new Map([
+    ...(
       await testDb
         .select()
         .from(documentProcessingRuns)
         .where(eq(documentProcessingRuns.organizationId, ids.orgA))
-    ).map((run) => [run.id, JSON.stringify(run)]),
-  );
+    ).map((run): [string, string] => [run.id, JSON.stringify(run)]),
+    ...(
+      await testDb
+        .select()
+        .from(documentNamingRuns)
+        .where(eq(documentNamingRuns.organizationId, ids.orgA))
+    ).map((run): [string, string] => [`naming:${run.id}`, JSON.stringify(run)]),
+  ]);
 
 const changedSince = (
   before: Map<string, string>,

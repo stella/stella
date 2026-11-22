@@ -18,7 +18,12 @@ type RenameEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
-  body: { entityId: SafeId<"entity">; name: string };
+  body: {
+    entityId: SafeId<"entity">;
+    name: string;
+    /** Rename only while the entity still has this name; a rename since wins. */
+    expectedName?: string;
+  };
 };
 
 type RenameEntityDependencies = {
@@ -69,6 +74,16 @@ export const createRenameEntityHandler = ({
             ok: false as const,
             status: 409 as const,
             message: "Entity is read-only",
+          };
+        }
+        if (
+          body.expectedName !== undefined &&
+          entity.name !== body.expectedName
+        ) {
+          return {
+            ok: false as const,
+            status: 409 as const,
+            message: "Entity was renamed",
           };
         }
 

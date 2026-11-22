@@ -56,6 +56,11 @@ export default {
           "Queue transport: worker owns its dedicated blocking connection.",
       },
       {
+        path: "apps/api/src/lib/uploads/document-naming/queue.ts",
+        reason:
+          "Queue transport: worker owns its dedicated blocking connection.",
+      },
+      {
         path: "apps/api/src/lib/document-processing-queue.ts",
         reason:
           "Queue transport: worker owns its dedicated blocking connection.",

@@ -114,6 +114,12 @@ export const KILL_SWITCHES = {
     offHint:
       "Deadline scanning is turned off. Do not retry until it is turned back on.",
   },
+  "document-naming": {
+    default: KILL_SWITCH_STATE.on,
+    owner: "apps/api/src/lib/uploads/document-naming",
+    offHint:
+      "Automatic document naming is turned off. Do not retry until it is turned back on.",
+  },
   templates: {
     default: KILL_SWITCH_STATE.on,
     owner: "apps/api/src/handlers/templates",
@@ -239,6 +245,7 @@ export const ACTION_KIND_KILL_SWITCH = {
   "case-law.research-answers": "case-law-research",
   "documents.bounding-boxes": "bounding-boxes",
   "documents.scan-deadlines": "deadline-scan",
+  "documents.suggest-name": "document-naming",
   "document-reviews.parties": "document-reviews",
   "document-reviews.propose-positions": "document-reviews",
   "document-reviews.start": "document-reviews",
