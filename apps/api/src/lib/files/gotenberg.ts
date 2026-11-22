@@ -434,65 +434,27 @@ export const convertToPdf = async (
     });
   }
 
-  if (isHtmlRenderedMimeType(mimeType)) {
-    // A web archive or an e-book converts as the HTML stella builds from it,
-    // under the same checks as any HTML file.
-    const rendered = await renderDocumentHtml(mimeType, bytes);
-    if (Result.isError(rendered)) {
-      return Result.err(
-        new ConversionInputError({
-          message: rendered.error.message,
-          reason: { kind: "inspection_failed" },
-          cause: rendered.error,
-        }),
-      );
-    }
-    return await convertDocument(
-      {
-        fileName: sanitizeFilenamePreservingExtension(
-          `${fileStem(fileName)}.html`,
-        ),
-        mimeType: "text/html",
-        bytes: rendered.value,
-      },
-      retry,
-    );
+  // A web archive or an e-book converts as the HTML stella builds from it,
+  // under the same checks as any HTML file.
+  const prepared = await documentSource(fileName, mimeType, bytes);
+  if (Result.isError(prepared)) {
+    return prepared;
   }
-  return await convertDocument(
-    {
-      fileName: sanitizeFilenamePreservingExtension(fileName),
-      mimeType,
-      bytes,
-    },
-    retry,
-  );
-};
-
-type DocumentSource = {
-  readonly fileName: string;
-  readonly mimeType: string;
-  readonly bytes: Uint8Array;
-};
-
-/**
- * Convert a document (not an in-process image) through the converter, once
- * the input checks have read it and its content is the format it is
- * declared as.
- */
-const convertDocument = async (
-  { fileName, mimeType, bytes }: DocumentSource,
-  retry: NonNullable<ConvertToPdfOptions["retry"]>,
-): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
-  if (!isConvertibleMimeType(mimeType)) {
+  const {
+    fileName: documentName,
+    mimeType: documentType,
+    bytes: documentBytes,
+  } = prepared.value;
+  if (!isConvertibleMimeType(documentType)) {
     return Result.err(
       new ConversionInputError({
-        message: `Files of type ${mimeType} cannot be converted.`,
+        message: `Files of type ${documentType} cannot be converted.`,
         reason: { kind: "inspection_failed" },
       }),
     );
   }
   const inspection = await Result.tryPromise({
-    try: async () => await checkConversionInput(mimeType, bytes),
+    try: async () => await checkConversionInput(documentType, documentBytes),
     catch: (cause) =>
       new ConversionInputError({
         message: "The document could not be inspected for conversion.",
@@ -514,7 +476,8 @@ const convertDocument = async (
   // The converter opens a file by its content: the inspection above holds
   // only for a file that is the format it was inspected as.
   const contentMatches = await Result.tryPromise({
-    try: async () => await contentMatchesConvertibleMime(mimeType, bytes),
+    try: async () =>
+      await contentMatchesConvertibleMime(documentType, documentBytes),
     catch: (cause) =>
       new ConversionInputError({
         message: "The document could not be inspected for conversion.",
@@ -528,7 +491,7 @@ const convertDocument = async (
   if (!contentMatches.value) {
     return Result.err(
       new ConversionInputError({
-        message: `The document's content is not the ${mimeType} format it is declared as.`,
+        message: `The document's content is not the ${documentType} format it is declared as.`,
         reason: { kind: "inspection_failed" },
       }),
     );
@@ -537,9 +500,9 @@ const convertDocument = async (
   const converted = await Result.tryPromise(
     {
       try: async () => {
-        const source = XLSX_MIME_TYPES.has(mimeType)
-          ? new Uint8Array(await applyFitToPage(toArrayBuffer(bytes)))
-          : bytes;
+        const source = XLSX_MIME_TYPES.has(documentType)
+          ? new Uint8Array(await applyFitToPage(toArrayBuffer(documentBytes)))
+          : documentBytes;
         // Streamed from the caller's buffer, so the request holds no second
         // copy of the source.
         const form = streamMultipartForm({
@@ -547,7 +510,7 @@ const convertDocument = async (
             fieldName: "files",
             // The converter picks its import filter by extension.
             fileName: sanitizeFilenamePreservingExtension(
-              withConverterExtension(fileName, mimeType),
+              withConverterExtension(documentName, documentType),
             ),
             bytes: source,
           },
@@ -624,4 +587,45 @@ const convertDocument = async (
   return converted.value.type === "too-large"
     ? Result.err(tooLargeConverterResponse())
     : Result.ok(converted.value.converted);
+};
+
+type DocumentSource = {
+  readonly fileName: string;
+  readonly mimeType: string;
+  readonly bytes: Uint8Array;
+};
+
+/**
+ * What the converter receives for a document: the file itself, or for a
+ * format rendered from HTML, the HTML built from it under an `.html` name.
+ */
+const documentSource = async (
+  uploadedName: string,
+  mimeType: string,
+  bytes: Uint8Array,
+): Promise<Result<DocumentSource, ConversionInputError>> => {
+  if (!isHtmlRenderedMimeType(mimeType)) {
+    return Result.ok({
+      fileName: sanitizeFilenamePreservingExtension(uploadedName),
+      mimeType,
+      bytes,
+    });
+  }
+  const rendered = await renderDocumentHtml(mimeType, bytes);
+  if (Result.isError(rendered)) {
+    return Result.err(
+      new ConversionInputError({
+        message: rendered.error.message,
+        reason: { kind: "inspection_failed" },
+        cause: rendered.error,
+      }),
+    );
+  }
+  return Result.ok({
+    fileName: sanitizeFilenamePreservingExtension(
+      `${fileStem(uploadedName)}.html`,
+    ),
+    mimeType: "text/html",
+    bytes: rendered.value,
+  });
 };
