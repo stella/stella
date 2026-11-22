@@ -387,6 +387,21 @@ describe("CSV rendered in-process", () => {
     }
   });
 
+  test("a comma file whose values contain semicolons stays a comma table", async () => {
+    const { items } = await textItems(
+      await rendered(
+        "text/csv",
+        new TextEncoder().encode(
+          "Jméno,Pobočky (Praha; Brno; Ostrava)\nAlice,Praha\nBob,Brno",
+        ),
+      ),
+    );
+    expect(items.some(({ text }) => text === "Alice")).toBe(true);
+    expect(
+      items.some(({ text }) => text === "Pobočky (Praha; Brno; Ostrava)"),
+    ).toBe(true);
+  });
+
   test("text that is not CSV is shown as text", async () => {
     const { items } = await textItems(
       await rendered(

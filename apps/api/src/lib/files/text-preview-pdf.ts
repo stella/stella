@@ -233,12 +233,15 @@ export const plainTextToPdf = async (
 
 /**
  * The records of a CSV file, read with the delimiter (comma, semicolon or
- * tab) that yields the widest consistent table, or `null` when no delimiter
- * reads it as CSV.
+ * tab) under which the most records are as wide as the header, the wider
+ * table on a tie (and the earlier delimiter after that), or `null` when no
+ * delimiter reads it as CSV. Consistency comes first: a comma file whose
+ * values contain semicolons must not read as a ragged semicolon table.
  */
 const readCsvRecords = (text: string): string[][] | null => {
   const source = text.replace(/^\uFEFF/u, "");
-  let best: { rows: string[][]; score: number } | null = null;
+  let best: { rows: string[][]; consistent: number; width: number } | null =
+    null;
   for (const delimiter of CSV_DELIMITERS) {
     const parsed = parseCSVWithMetadata(source, { delimiter });
     if (parsed.status !== CSV_PARSE_STATUS.SUCCESS) {
@@ -246,9 +249,12 @@ const readCsvRecords = (text: string): string[][] | null => {
     }
     const width = parsed.rows[0]?.length ?? 0;
     const consistent = parsed.rows.filter((row) => row.length === width).length;
-    const score = width * 10_000 + consistent;
-    if (best === null || score > best.score) {
-      best = { rows: parsed.rows, score };
+    if (
+      best === null ||
+      consistent > best.consistent ||
+      (consistent === best.consistent && width > best.width)
+    ) {
+      best = { consistent, rows: parsed.rows, width };
     }
   }
   return best === null || best.rows.length === 0 ? null : best.rows;
@@ -423,20 +429,27 @@ export const csvToPdf = async (
   const base = baseFace(fonts);
   const layout = textLayout(fonts);
   const boldLayout = textLayout(boldStampFonts(fonts));
-  const columnCount = Math.max(...records.map((record) => record.length));
+  // Looped, not spread: a tall file has more records than a call takes
+  // arguments.
+  let columnCount = 0;
+  for (const record of records) {
+    columnCount = Math.max(columnCount, record.length);
+  }
   const [header = [], ...body] = records;
   const cellText = (record: readonly string[], column: number) =>
     record[column] ?? "";
-  const naturalWidth = (cellLayout: TextLayout, value: string) =>
-    Math.max(
-      0,
-      ...layoutLines(
-        cellLayout,
-        value,
-        Number.POSITIVE_INFINITY,
-        TABLE_FONT_SIZE,
-      ).map(({ row }) => toPoints(row.width, TABLE_FONT_SIZE)),
-    );
+  const naturalWidth = (cellLayout: TextLayout, value: string) => {
+    let widest = 0;
+    for (const { row } of layoutLines(
+      cellLayout,
+      value,
+      Number.POSITIVE_INFINITY,
+      TABLE_FONT_SIZE,
+    )) {
+      widest = Math.max(widest, toPoints(row.width, TABLE_FONT_SIZE));
+    }
+    return widest;
+  };
   const natural = Array.from(
     { length: columnCount },
     (_, column) =>
