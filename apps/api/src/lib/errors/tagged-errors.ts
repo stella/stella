@@ -760,7 +760,10 @@ export const SUBPROCESS_TERMINATION_REASON = {
   cancelled: "cancelled",
   crashed: "crashed",
   external: "external",
-  /** The parent killed the worker past its resident-memory ceiling. */
+  /**
+   * The parent killed the worker past its resident-memory ceiling, or when
+   * its memory could no longer be read, so the ceiling could not be held.
+   */
   memory: "memory",
 } as const;
 

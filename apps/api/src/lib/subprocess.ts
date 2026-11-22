@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { existsSync } from "node:fs";
 
 import {
@@ -39,9 +39,10 @@ type SpawnWorkerOptions = {
   onStderr?: (stderr: string) => void;
   /**
    * Resident memory the worker may reach. The parent reads it every
-   * `LIMITS.workerRssPollMs` and kills the worker past it, which fails as a
-   * `memory` termination. Without it the worker is bounded only by its
-   * timeout and its container's limit.
+   * `LIMITS.workerRssPollMs` and kills the worker past it, or when the read
+   * fails while the worker runs, which fails as a `memory` termination.
+   * Without it the worker is bounded only by its timeout and its
+   * container's limit.
    */
   maxRssBytes?: number | undefined;
 };
@@ -167,44 +168,79 @@ const VM_RSS = /^VmRSS:\s+(?<kilobytes>\d+) kB$/mu;
 const DECIMAL = /^\d+$/u;
 const BYTES_PER_KIB = 1024;
 
+/** A zombie: exited, not yet reaped, and holding no memory. */
+const ZOMBIE_STATE = /^State:\s+Z/mu;
+const EXITED_ERROR_CODES = new Set(["ENOENT", "ESRCH"]);
+
 /**
- * Another process's resident memory in bytes, or `null` once it has exited
- * (or when it cannot be read). Linux, where every deployed process runs,
- * answers from `/proc/<pid>/status`; elsewhere (development on macOS) `ps`
- * does.
+ * What reading another process's resident memory found: its size, that the
+ * process has exited, or that the read failed while it may still be running.
  */
-export const readProcessRssBytes = async (
-  pid: number,
-): Promise<number | null> => {
-  if (HAS_PROC_FS) {
-    const status = await Result.tryPromise(
-      async () => await Bun.file(`/proc/${pid}/status`).text(),
-    );
-    const kilobytes = Result.isOk(status)
-      ? VM_RSS.exec(status.value)?.groups?.["kilobytes"]
-      : undefined;
-    return kilobytes === undefined ? null : Number(kilobytes) * BYTES_PER_KIB;
+export type ProcessRss =
+  | { type: "resident"; bytes: number }
+  | { type: "exited" }
+  | { type: "unreadable"; cause: unknown };
+
+const readProcStatusRss = async (pid: number): Promise<ProcessRss> => {
+  const status = await Result.tryPromise(
+    async () => await Bun.file(`/proc/${pid}/status`).text(),
+  );
+  if (Result.isError(status)) {
+    const cause = status.error.cause;
+    const code =
+      cause instanceof Error && "code" in cause ? String(cause.code) : null;
+    return code !== null && EXITED_ERROR_CODES.has(code)
+      ? { type: "exited" }
+      : { type: "unreadable", cause };
   }
+  const kilobytes = VM_RSS.exec(status.value)?.groups?.["kilobytes"];
+  if (kilobytes !== undefined) {
+    return { type: "resident", bytes: Number(kilobytes) * BYTES_PER_KIB };
+  }
+  return ZOMBIE_STATE.test(status.value)
+    ? { type: "exited" }
+    : { type: "unreadable", cause: "VmRSS is missing from a live process" };
+};
+
+const readPsRss = async (pid: number): Promise<ProcessRss> => {
   const answer = await Result.tryPromise(async () => {
     const ps = Bun.spawn(["ps", "-o", "rss=", "-p", String(pid)], {
       stdout: "pipe",
       stderr: "ignore",
     });
-    const [kilobytes] = await Promise.all([
+    const [kilobytes, exitCode] = await Promise.all([
       new Response(ps.stdout).text(),
       ps.exited,
     ]);
-    return kilobytes.trim();
+    return { exitCode, kilobytes: kilobytes.trim() };
   });
-  return Result.isOk(answer) && DECIMAL.test(answer.value)
-    ? Number(answer.value) * BYTES_PER_KIB
-    : null;
+  if (Result.isError(answer)) {
+    return { type: "unreadable", cause: answer.error };
+  }
+  const { exitCode, kilobytes } = answer.value;
+  if (DECIMAL.test(kilobytes)) {
+    return { type: "resident", bytes: Number(kilobytes) * BYTES_PER_KIB };
+  }
+  // ps lists nothing and exits 1 for a process that is gone.
+  return exitCode === 1 && kilobytes === ""
+    ? { type: "exited" }
+    : { type: "unreadable", cause: `ps exited ${exitCode}` };
 };
 
 /**
+ * Another process's resident memory. Linux, where every deployed process
+ * runs, answers from `/proc/<pid>/status`; elsewhere (development on macOS)
+ * `ps` does.
+ */
+export const readProcessRss = async (pid: number): Promise<ProcessRss> =>
+  HAS_PROC_FS ? await readProcStatusRss(pid) : await readPsRss(pid);
+
+/**
  * Reads a worker's resident memory every `LIMITS.workerRssPollMs` and calls
- * `onExceeded` once it is past `maxRssBytes`. A read still running when the
- * next one is due is not doubled up.
+ * `onExceeded` once it is past `maxRssBytes`, or once it cannot be read
+ * while the worker runs: a ceiling nobody can check is not held, so the
+ * watch fails closed. A read still running when the next one is due is not
+ * doubled up.
  */
 const watchWorkerMemory = ({
   maxRssBytes,
@@ -215,13 +251,29 @@ const watchWorkerMemory = ({
   onExceeded: () => void;
   pid: number;
 }): (() => void) => {
-  // The read in progress; it never rejects (an unreadable RSS is `null`).
+  // The read in progress; it never rejects.
   let reading: Promise<void> | null = null;
   const check = async () => {
-    const rssBytes = await readProcessRssBytes(pid);
+    const rss = await readProcessRss(pid);
     reading = null;
-    if (rssBytes !== null && rssBytes > maxRssBytes) {
-      onExceeded();
+    switch (rss.type) {
+      case "resident": {
+        if (rss.bytes > maxRssBytes) {
+          onExceeded();
+        }
+        return;
+      }
+      case "exited": {
+        return;
+      }
+      case "unreadable": {
+        onExceeded();
+        return;
+      }
+      default: {
+        rss satisfies never;
+        panic("Unhandled process RSS reading");
+      }
     }
   };
   const poll = () => {

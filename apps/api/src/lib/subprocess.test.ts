@@ -11,7 +11,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import {
   classifySubprocessTermination,
-  readProcessRssBytes,
+  readProcessRss,
   spawnBinaryWorker,
   spawnWorker,
 } from "@/api/lib/subprocess";
@@ -256,8 +256,10 @@ describe("a worker's memory ceiling", () => {
     // sleeping one a gigabyte.
     const running = await waitFor(
       async () => {
-        const rssBytes = await readProcessRssBytes(child.pid);
-        return rssBytes !== null && rssBytes > MIB ? rssBytes : undefined;
+        const rss = await readProcessRss(child.pid);
+        return rss.type === "resident" && rss.bytes > MIB
+          ? rss.bytes
+          : undefined;
       },
       { description: "the child's runtime to load" },
     );
@@ -265,6 +267,7 @@ describe("a worker's memory ceiling", () => {
     await child.exited;
 
     expect(running).toBeLessThan(1024 * MIB);
-    expect(await readProcessRssBytes(child.pid)).toBeNull();
+    // Gone, which is not the same answer as a read that failed.
+    expect(await readProcessRss(child.pid)).toEqual({ type: "exited" });
   });
 });
