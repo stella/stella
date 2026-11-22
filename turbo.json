@@ -1798,6 +1798,7 @@
       "outputs": []
     },
     "@stll/api#lint": {
+      "env": ["API_LINT_SHARD"],
       "dependsOn": [
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime",
