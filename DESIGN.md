@@ -367,7 +367,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DetailsGrid` `variant`: `list`, `sheet`
 - `DetailsItem` `span`: `wide`
 - `DialogContent`, `DialogPopup` `size`: `default`, `lg`, `sm`, `xl`
-- `DocumentMark` `kind`: `asicE`, `asicS`, `bdoc`, `cades`, `csv`, `dataBox`, `eAkta`, `et3`, `excel`, `markdown`, `ofd`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `uyap`, `word`, `xadesZep`, `zep`
+- `DocumentMark` `kind`: `asicE`, `asicS`, `bdoc`, `cades`, `csv`, `dataBox`, `eAkta`, `et3`, `excel`, `fatturaPA`, `isdoc`, `isdocx`, `markdown`, `ofd`, `openDocumentSheet`, `openDocumentText`, `pdf`, `powerpoint`, `rtf`, `uyap`, `word`, `xadesZep`, `xml`, `zep`
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`

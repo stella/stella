@@ -887,7 +887,8 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
   {
     path: "apps/web/src/lib/files/legal-file-queries.ts",
     class: "operator-configured-infrastructure",
-    reason: "Reads PDFs embedded in signed files through the configured API.",
+    reason:
+      "Reads PDFs embedded in signed files and files an invoice embeds through the configured API.",
     transports: ["module:@stll/fetch"],
   },
   {

@@ -65,6 +65,11 @@ const DataBoxFileViewer = lazy(async () => {
   return { default: m.DataBoxFileViewer };
 });
 
+const EInvoiceViewer = lazy(async () => {
+  const m = await import("@/components/inspector/e-invoice-viewer");
+  return { default: m.EInvoiceViewer };
+});
+
 const SignedDossierViewer = lazy(async () => {
   const m = await import("@/components/inspector/signed-dossier-viewer");
   return { default: m.SignedDossierViewer };
@@ -107,6 +112,13 @@ const structuredDocumentViewer = {
   surface: "inspector-structured-document",
 } as const satisfies LegalFileViewer;
 
+const eInvoiceViewer = {
+  Viewer: EInvoiceViewer,
+  unreadable: "eInvoice.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-e-invoice",
+} as const satisfies LegalFileViewer;
+
 const legalFileViewers = {
   asicE: asicFileViewer,
   asicS: asicFileViewer,
@@ -121,6 +133,10 @@ const legalFileViewers = {
   },
   ofd: structuredDocumentViewer,
   uyap: structuredDocumentViewer,
+  isdoc: eInvoiceViewer,
+  isdocx: eInvoiceViewer,
+  // Any XML file opens here; the reader refuses one that is not an invoice.
+  xml: { ...eInvoiceViewer, unreadable: "eInvoice.notRecognized" },
   dataBox: {
     Viewer: DataBoxFileViewer,
     unreadable: "correspondence.dataBox.unreadable",
@@ -281,7 +297,10 @@ const FileTabViewerComponent = ({
       case "xadesZep":
       case "zep":
       case "ofd":
-      case "uyap": {
+      case "uyap":
+      case "isdoc":
+      case "isdocx":
+      case "xml": {
         const { Viewer, unreadable, download, surface } =
           legalFileViewers[nativePreviewKind];
         return (

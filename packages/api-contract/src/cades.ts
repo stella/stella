@@ -1,5 +1,6 @@
 import * as v from "valibot";
 
+import { eInvoicePreviewSchema } from "./e-invoice";
 import { previewTextFormatSchema } from "./preview-text";
 
 /**
@@ -20,4 +21,6 @@ export const cadesPreviewSchema = v.object({
       ),
     }),
   ),
+  /** The signed file read as a structured invoice, when it is one. */
+  invoice: v.nullable(eInvoicePreviewSchema),
 });

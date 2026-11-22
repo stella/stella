@@ -2235,6 +2235,9 @@
       "eAkta",
       "et3",
       "excel",
+      "fatturaPA",
+      "isdoc",
+      "isdocx",
       "markdown",
       "ofd",
       "openDocumentSheet",
@@ -2245,6 +2248,7 @@
       "uyap",
       "word",
       "xadesZep",
+      "xml",
       "zep"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],

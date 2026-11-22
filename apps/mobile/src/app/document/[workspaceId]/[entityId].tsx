@@ -22,6 +22,7 @@ import { CertifiedEmailReading } from "@/components/certified-email-envelope";
 import DocumentView from "@/components/document-viewer/document-view.dom";
 import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
 import type { ViewerAppearance } from "@/components/document-viewer/zoom";
+import { EInvoiceDetails } from "@/components/e-invoice-details";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import { LegalFilePreviewText } from "@/components/legal-file-preview-text";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
@@ -91,6 +92,7 @@ const openDocument = async ({
     file.value.viewer === "cades" ||
     file.value.viewer === "certifiedEmail" ||
     file.value.viewer === "dataBox" ||
+    file.value.viewer === "e-invoice" ||
     file.value.viewer === "structured-document"
   ) {
     return { status: "legalPreview", file: file.value };
@@ -439,6 +441,7 @@ const LegalFilePreview = ({
   const common = useTranslations("common");
   const signedFile = useTranslations("signedFile");
   const structuredDocument = useTranslations("structuredDocument");
+  const eInvoice = useTranslations("eInvoice");
   const { fieldId, preview, viewer } = file;
   const [openingOriginal, setOpeningOriginal] = useState(false);
   const originalInFlight = useRef(false);
@@ -504,7 +507,7 @@ const LegalFilePreview = ({
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
-      const { fileName, layers, text, textFormat } = preview.value;
+      const { fileName, invoice, layers, text, textFormat } = preview.value;
       return (
         <>
           <Text accessibilityRole="header" selectable variant="headline">
@@ -523,11 +526,13 @@ const LegalFilePreview = ({
               ))}
             </View>
           ))}
-          {text.trim() ? (
-            <LegalFilePreviewText format={textFormat} text={text} />
-          ) : (
-            <Text variant="caption">{signedFile("noReadableContent")}</Text>
-          )}
+          {invoice !== null && <EInvoiceDetails preview={invoice} />}
+          {invoice === null &&
+            (text.trim() ? (
+              <LegalFilePreviewText format={textFormat} text={text} />
+            ) : (
+              <Text variant="caption">{signedFile("noReadableContent")}</Text>
+            ))}
         </>
       );
     }
@@ -561,6 +566,9 @@ const LegalFilePreview = ({
             )}
           </>
         );
+      }
+      if (viewer === "e-invoice") {
+        return <EInvoiceDetails preview={preview.value} />;
       }
       if (viewer === "signed-dossier") {
         const { documents, signers } = preview.value;
@@ -630,6 +638,12 @@ const LegalFilePreview = ({
     const unreadableMessages = {
       dataBox: t("failure.dataBoxUnreadable"),
       "structured-document": structuredDocument("noReadableContent"),
+      // Any XML file is offered to the invoice reader; refused, it is not one.
+      "e-invoice": eInvoice(
+        file.viewer === "e-invoice" && file.format === "xml"
+          ? "notRecognized"
+          : "unreadable",
+      ),
       asic: signedFile("unreadable"),
       cades: signedFile("unreadable"),
       certifiedEmail: t(requestFailure),

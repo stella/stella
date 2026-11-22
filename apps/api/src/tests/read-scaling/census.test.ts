@@ -62,6 +62,10 @@ import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import {
+  eInvoiceAttachmentScalingScenario,
+  eInvoicePreviewScalingScenario,
+} from "./e-invoice";
 import { fileContentScalingScenario } from "./file-content";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
@@ -161,6 +165,8 @@ const measuredApiScenarios = [
   signedDossierContentScalingScenario,
   signedDossierPreviewScalingScenario,
   structuredDocumentScalingScenario,
+  eInvoicePreviewScalingScenario,
+  eInvoiceAttachmentScalingScenario,
   cadesContentScalingScenario,
   cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,

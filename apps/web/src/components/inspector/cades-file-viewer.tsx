@@ -9,6 +9,7 @@ import { cn } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import { EInvoiceDetails } from "@/components/inspector/e-invoice-details";
 import type { FileTab } from "@/components/inspector/file-tab";
 import type { LegalFilePdfView } from "@/components/inspector/legal-file-pdf-view";
 import { LegalFilePreviewText } from "@/components/inspector/legal-file-preview-text";
@@ -93,7 +94,15 @@ export const CadesFileViewer = ({
               </ul>
             </section>
           ))}
+          {!hasPdf && data.invoice !== null && (
+            <EInvoiceDetails
+              fieldId={tab.id}
+              preview={data.invoice}
+              workspaceId={tab.workspaceId}
+            />
+          )}
           {!hasPdf &&
+            data.invoice === null &&
             (textPreview ?? (
               <p className="text-muted-foreground text-sm">
                 {t("signedFile.noReadableContent")}

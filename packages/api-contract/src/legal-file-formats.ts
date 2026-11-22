@@ -1,10 +1,16 @@
 import { ASIC_FILE_FORMATS } from "./asic-file-formats";
+import { E_INVOICE_FILE_FORMATS } from "./e-invoice-formats";
 import { SIGNED_DOSSIER_FORMATS } from "./signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "./structured-document-formats";
 
 export const STRUCTURED_DOCUMENT_KINDS = STRUCTURED_DOCUMENT_FORMATS.map(
   ({ kind }) => kind,
 );
+
+export const E_INVOICE_KINDS = E_INVOICE_FILE_FORMATS.map(({ kind }) => kind);
+
+export const [ISDOC_FILE_FORMAT, ISDOCX_FILE_FORMAT, XML_FILE_FORMAT] =
+  E_INVOICE_FILE_FORMATS;
 
 export const DATA_BOX_FILE_FORMAT = {
   kind: "dataBox",
@@ -42,6 +48,7 @@ export const LEGAL_FILE_FORMATS = [
   ...ASIC_FILE_FORMATS,
   ...SIGNED_DOSSIER_FORMATS,
   ...STRUCTURED_DOCUMENT_FORMATS,
+  ...E_INVOICE_FILE_FORMATS,
 ] as const;
 
 export type LegalFileFormat = (typeof LEGAL_FILE_FORMATS)[number];

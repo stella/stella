@@ -130,6 +130,14 @@ export const loadLegalFileSource = async (
   // source is share-locked, after its delivery has been recorded.
   const deliver = async <T extends Result<unknown, HandlerError>>(
     prepare: (tx: Transaction) => Promise<T> | T,
+    {
+      disposition = "inline",
+      attachmentIndex,
+    }: {
+      disposition?: "attachment" | "inline";
+      /** The embedded file delivered, when it is not the stored file itself. */
+      attachmentIndex?: number;
+    } = {},
   ) =>
     await scopedDb(async (tx) => {
       const live = await lockLiveVersionField(tx, fieldId, workspaceId);
@@ -152,13 +160,14 @@ export const loadLegalFileSource = async (
       const prepared = await prepare(tx);
       if (prepared.isOk()) {
         await recordAuditEvent(tx, {
-          action: CONTENT_DELIVERY_AUDIT_ACTION.inline,
+          action: CONTENT_DELIVERY_AUDIT_ACTION[disposition],
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: entityId,
           workspaceId,
           metadata: {
-            disposition: "inline",
+            disposition,
             fieldId,
+            ...(attachmentIndex === undefined ? {} : { attachmentIndex }),
             format: format.auditFormat,
             mimeType: content.mimeType,
             sizeBytes: content.sizeBytes,

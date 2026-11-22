@@ -8,6 +8,7 @@ import {
   DATA_BOX_DOCUMENT_KIND,
   DATA_BOX_MESSAGE_MIME_TYPE,
 } from "@stll/api-contract/data-box";
+import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 
 import type { Fetch } from "@/connection/http";
@@ -97,6 +98,60 @@ const history = (
           },
   })),
 });
+
+const invoicePreview = {
+  syntax: "ubl",
+  version: "2.1",
+  invoices: [
+    {
+      documentType: "invoice",
+      typeCode: "380",
+      number: "INV-TEST-0001",
+      issueDate: "2026-01-15",
+      taxPointDate: null,
+      dueDate: "2026-01-29",
+      currency: "EUR",
+      seller: {
+        name: "Sample Supplier Test",
+        identifiers: [{ kind: "vat", scheme: null, value: "XX0000000001" }],
+        address: ["1 Sample Street"],
+      },
+      buyer: { name: "Sample Customer Test", identifiers: [], address: [] },
+      lines: [
+        {
+          id: "1",
+          description: "Sample service",
+          quantity: "1",
+          unitCode: "C62",
+          unitPrice: "100.00",
+          priceBasis: null,
+          vatRate: "20",
+          vatCategory: "S",
+          netAmount: "100.00",
+        },
+      ],
+      lineCount: 1,
+      vatBreakdown: [],
+      totals: {
+        netAmount: "100.00",
+        taxAmount: "20.00",
+        grossAmount: "120.00",
+        prepaidAmount: null,
+        payableAmount: "120.00",
+      },
+      payments: [],
+      notes: [],
+    },
+  ],
+  attachments: [
+    {
+      index: 0,
+      fileName: "sample.pdf",
+      description: null,
+      sizeBytes: 1024,
+    },
+  ],
+} satisfies EInvoicePreview;
 
 const delivered = (mimeType: string, extra: object = {}) => ({
   fileId: "file-1",
@@ -346,6 +401,30 @@ describe("reading a document's file", () => {
     ]);
   });
 
+  test("opens a plain .xml as before once the server says it is no invoice", async () => {
+    const { fetch, calls } = server((path) => {
+      if (path.endsWith("/versions")) {
+        return Response.json(legalFileVersion("settings.xml", "text/xml"));
+      }
+      if (path.includes("/e-invoice/")) {
+        return Response.json(
+          { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Not an invoice" },
+          { status: 422 },
+        );
+      }
+      return path.endsWith("purpose=display")
+        ? Response.json({ message: "Not displayable" }, { status: 400 })
+        : Response.json(delivered("text/xml", { fileName: "settings.xml" }));
+    });
+    const file = (await read(fetch)).unwrap();
+    expect(file.viewer).toBe("quick-look");
+    expect(calls.slice(0, 3)).toEqual([
+      "/v1/entities/matter-1/entity/entity-1/versions",
+      "/v1/files/matter-1/e-invoice/field%3F1",
+      "/v1/files/matter-1/url/field%3F1?purpose=display",
+    ]);
+  });
+
   test("keeps a certified email's failed reading for a retry", async () => {
     const { fetch } = server((path) =>
       path.endsWith("/versions")
@@ -399,6 +478,7 @@ describe("reading a document's file", () => {
             ],
           },
         ],
+        invoice: null,
       };
       const { fetch, calls } = server((path) =>
         Response.json(
@@ -414,6 +494,80 @@ describe("reading a document's file", () => {
         "/v1/entities/matter-1/entity/entity-1/versions",
         "/v1/files/matter-1/cades/field%3F1",
       ]);
+    },
+  );
+
+  test("keeps the invoice a signed file holds", async () => {
+    const fileName = "IT00000000000_TEST1.xml.p7m";
+    const preview = {
+      fileName: "IT00000000000_TEST1.xml",
+      mimeType: "application/xml",
+      text: "<FatturaElettronica/>",
+      textFormat: "plain" as const,
+      layers: [
+        {
+          id: "layer-0",
+          signers: [{ id: "layer-0.signer-0", name: "Sample signer" }],
+        },
+      ],
+      invoice: {
+        ...invoicePreview,
+        syntax: "fatturaPA" as const,
+        version: "FPR12",
+      },
+    };
+    const { fetch } = server((path) =>
+      Response.json(
+        path.endsWith("/versions")
+          ? legalFileVersion(fileName, "application/pkcs7-mime")
+          : preview,
+      ),
+    );
+    const file = (await read(fetch)).unwrap();
+    expect(file.viewer === "cades" && file.preview.unwrap().invoice).toEqual(
+      preview.invoice,
+    );
+  });
+
+  test.each([
+    { fileName: "INV-TEST-0001.isdoc", format: "isdoc" },
+    { fileName: "INV-TEST-0001.ISDOCX", format: "isdocx" },
+    { fileName: "INV-TEST-0001.xml", format: "xml" },
+  ] as const)(
+    "reads $fileName through the structured invoice preview",
+    async ({ fileName, format }) => {
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, "application/octet-stream")
+            : invoicePreview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file).toMatchObject({ viewer: "e-invoice", format, fileName });
+      expect(file.viewer === "e-invoice" && file.preview.unwrap()).toEqual(
+        invoicePreview,
+      );
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/e-invoice/field%3F1",
+      ]);
+    },
+  );
+
+  test.each(["application/xml", "text/xml"])(
+    "reads an XML file typed %s as a possible invoice",
+    async (mimeType) => {
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion("export", mimeType)
+            : invoicePreview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file).toMatchObject({ viewer: "e-invoice", format: "xml" });
+      expect(calls.at(-1)).toBe("/v1/files/matter-1/e-invoice/field%3F1");
     },
   );
 
@@ -557,6 +711,11 @@ describe("reading a document's file", () => {
       viewer: "dataBox",
       fileName: "Doručenka.zfo",
       mimeType: DATA_BOX_MESSAGE_MIME_TYPE,
+    },
+    {
+      viewer: "e-invoice",
+      fileName: "INV-TEST-0001.isdocx",
+      mimeType: "application/octet-stream",
     },
     {
       viewer: "cades",
