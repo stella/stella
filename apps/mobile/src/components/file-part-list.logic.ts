@@ -9,15 +9,7 @@ import {
  * family of what it holds.
  */
 export type FileGlyphFamily =
-  | "image"
-  | "text"
-  | "wordProcessing"
-  | "spreadsheet"
-  | "presentation"
-  | "email"
-  | "archive"
-  | "xml"
-  | "unknown";
+  "image" | "text" | "presentation" | "email" | "archive" | "xml" | "unknown";
 
 /**
  * How a part (or any file) is drawn: its format's own mark (the PDF, Word or
@@ -29,10 +21,6 @@ export type FileTypeIcon =
 
 /** Families of media types the format table holds no mark for. */
 const FAMILY_BY_MEDIA_TYPE: ReadonlyMap<string, FileGlyphFamily> = new Map([
-  ["application/vnd.wordperfect", "wordProcessing"],
-  ["application/vnd.ms-works", "wordProcessing"],
-  ["application/vnd.apple.pages", "wordProcessing"],
-  ["application/vnd.apple.numbers", "spreadsheet"],
   ["application/vnd.oasis.opendocument.presentation", "presentation"],
   ["application/vnd.apple.keynote", "presentation"],
   ["application/zip", "archive"],
@@ -48,10 +36,6 @@ const FAMILY_BY_MEDIA_TYPE: ReadonlyMap<string, FileGlyphFamily> = new Map([
 
 /** The same families by a name's extension, for a type that says nothing. */
 const FAMILY_BY_EXTENSION: ReadonlyMap<string, FileGlyphFamily> = new Map([
-  ["wpd", "wordProcessing"],
-  ["wps", "wordProcessing"],
-  ["pages", "wordProcessing"],
-  ["numbers", "spreadsheet"],
   ["odp", "presentation"],
   ["key", "presentation"],
   ["zip", "archive"],

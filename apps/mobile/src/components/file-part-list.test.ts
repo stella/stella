@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  CONVERTED_DOCUMENT_FORMATS,
+  HTML_RENDERED_DOCUMENT_FORMATS,
+} from "@stll/api-contract/converted-document-formats";
+import { LEGAL_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
+
 import { fileTypeIcon, fileTypeLabel } from "./file-part-list.logic";
 
 describe("a part's icon by the family of its media type", () => {
@@ -33,6 +39,19 @@ describe("a part's icon by the family of its media type", () => {
     ["xml", "application/xml", "faktura.xml", "xml"],
     ["xml stated as text", "text/xml", "podani.xml", "xml"],
     ["a signed file", "application/pkcs7-mime", "smlouva.pdf.p7m", "cades"],
+    ["a Pages document", "application/vnd.apple.pages", "dopis.pages", "pages"],
+    [
+      "a Numbers spreadsheet",
+      "application/vnd.apple.numbers",
+      "rozpocet.numbers",
+      "numbers",
+    ],
+    [
+      "a WordPerfect document",
+      "application/octet-stream",
+      "kupni-smlouva.wpd",
+      "wordPerfect",
+    ],
   ] as const)("%s draws its format's mark", (_, mediaType, fileName, mark) => {
     expect(fileTypeIcon(mediaType, fileName)).toEqual({ type: "mark", mark });
   });
@@ -51,18 +70,6 @@ describe("a part's icon by the family of its media type", () => {
       "skoleni.odp",
       "presentation",
     ],
-    [
-      "a Pages document",
-      "application/vnd.apple.pages",
-      "dopis.pages",
-      "wordProcessing",
-    ],
-    [
-      "a Numbers spreadsheet",
-      "application/vnd.apple.numbers",
-      "rozpocet.numbers",
-      "spreadsheet",
-    ],
     ["an XML-based type", "application/vnd.etsi.tsl+xml", null, "xml"],
     ["an unknown type", "application/octet-stream", "data.bin", "unknown"],
     ["an unnamed unknown type", "application/octet-stream", null, "unknown"],
@@ -75,6 +82,25 @@ describe("a part's icon by the family of its media type", () => {
       });
     },
   );
+});
+
+describe("every format a registry declares draws its own mark", () => {
+  test("under its media type and under its extension alone", () => {
+    const formats = [
+      ...LEGAL_FILE_FORMATS,
+      ...CONVERTED_DOCUMENT_FORMATS,
+      ...HTML_RENDERED_DOCUMENT_FORMATS,
+    ];
+    for (const format of formats) {
+      for (const extension of format.extensions) {
+        const fileName = `podani${extension}`;
+        expect(fileTypeIcon(format.mimeType, fileName).type).toBe("mark");
+        expect(fileTypeIcon("application/octet-stream", fileName).type).toBe(
+          "mark",
+        );
+      }
+    }
+  });
 });
 
 describe("the name settles a type that says nothing", () => {
