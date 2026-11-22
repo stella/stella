@@ -102,6 +102,7 @@ export const readContainerMemberTexts = async ({
       bytes: member.bytes,
       detected: mimeType,
       stated: null,
+      charset: null,
       fileName: member.fileName,
     });
     const sizeBytes = member.bytes.byteLength;

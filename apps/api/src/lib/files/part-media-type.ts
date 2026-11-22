@@ -4,6 +4,8 @@
  * preview that lists parts and every reader that delivers one takes the type
  * from here, so a part opens as the type its list showed.
  */
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
+
 import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import { hasZipMagic, readZipIndex } from "@/api/lib/file-scan/zip";
 import {
@@ -79,9 +81,32 @@ const TEXTUAL_MEDIA_TYPE =
 const essence = (mediaType: string) =>
   (mediaType.split(";", 1).at(0) ?? "").trim().toLowerCase();
 
+// Code points no text holds: control characters other than tab, line feed
+// and carriage return, and the replacement character a decoder writes for
+// bytes its charset does not have.
+const NOT_TEXT = /[^\P{Cc}\t\n\r]|\uFFFD/u;
+
+/**
+ * Whether the bytes are text in the charset they declare: their byte-order
+ * mark, else the charset their container states. Only these two count, as
+ * they are what a reader decodes the part with; bytes without either are
+ * text only where the detector read them as UTF-8.
+ */
+const isDeclaredText = (bytes: Uint8Array, charset: string | null) => {
+  if (bytes.byteLength === 0) {
+    return false;
+  }
+  const { text, source } = decodeDeclared(bytes, {
+    contentType: charset === null ? null : `text/plain; charset=${charset}`,
+  });
+  return (source === "bom" || source === "http") && !NOT_TEXT.test(text);
+};
+
 type PartMediaTypeClaim = {
   /** What the container states the part is, if anything. */
   stated: string | null;
+  /** The charset the container states for the part's text, if any. */
+  charset: string | null;
   /** The part's name, whose extension stands in for a generic statement. */
   fileName: string | null;
 };
@@ -90,13 +115,14 @@ type PartMediaTypeClaim = {
  * The type a part is, given what its bytes show (`detected`, from
  * `containerMemberMimeType`). The bytes decide wherever they show a type;
  * otherwise the container's claim stands unless the bytes contradict it (a
- * signature the bytes lack, or text that is not text), and an unsupported
- * claim leaves the part opaque.
+ * signature the bytes lack, or text that is not text in the charset it
+ * declares), and an unsupported claim leaves the part opaque.
  */
 export const partMediaTypeOf = ({
   bytes,
   detected,
   stated,
+  charset,
   fileName,
 }: PartMediaTypeClaim & { bytes: Uint8Array; detected: string }): string => {
   if (detected !== OPAQUE_EMBEDDED_MIME_TYPE) {
@@ -108,12 +134,11 @@ export const partMediaTypeOf = ({
       fileName: fileName ?? "",
     }),
   );
-  if (
-    claimed === "" ||
-    // Text the detector would have recognized; these bytes are not text.
-    TEXTUAL_MEDIA_TYPE.test(claimed) ||
-    !declaredMimeMatchesMagic(claimed, bytes)
-  ) {
+  if (TEXTUAL_MEDIA_TYPE.test(claimed)) {
+    // The detector reads only UTF-8 as text; other text declares its charset.
+    return isDeclaredText(bytes, charset) ? claimed : OPAQUE_EMBEDDED_MIME_TYPE;
+  }
+  if (claimed === "" || !declaredMimeMatchesMagic(claimed, bytes)) {
     return OPAQUE_EMBEDDED_MIME_TYPE;
   }
   return claimed;

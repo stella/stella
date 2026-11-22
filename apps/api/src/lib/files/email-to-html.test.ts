@@ -130,6 +130,51 @@ describe("email attachment media type", () => {
       ),
     ).toBe("application/octet-stream");
   });
+
+  test("keeps a text attachment in the charset its part declares as text", async () => {
+    // "Lhůta běží" in windows-1250, which a UTF-8 reading rejects.
+    const windows1250 = Uint8Array.of(
+      0x4c,
+      0x68,
+      0xf9,
+      0x74,
+      0x61,
+      0x20,
+      0x62,
+      0xec,
+      0x9e,
+      0xed,
+    );
+    const eml = [
+      "From: kancelar@example.test",
+      "To: klient@example.test",
+      "Subject: Lhuta",
+      "MIME-Version: 1.0",
+      'Content-Type: multipart/mixed; boundary="hranice"',
+      "",
+      "--hranice",
+      "Content-Type: text/plain; charset=utf-8",
+      "",
+      "V priloze.",
+      "--hranice",
+      'Content-Type: text/plain; charset=windows-1250; name="lhuta.txt"',
+      'Content-Disposition: attachment; filename="lhuta.txt"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      windows1250.toBase64(),
+      "--hranice--",
+      "",
+    ].join("\r\n");
+    const parsed = (
+      await parseEmail(toArrayBuffer(eml), EML_MIME_TYPE)
+    ).unwrap();
+    const [listed] = parsed.attachments;
+
+    expect(listed?.charset).toBe("windows-1250");
+    expect(
+      listed === undefined ? null : await emailAttachmentMediaType(listed),
+    ).toBe("text/plain");
+  });
 });
 
 describe("renderEmailHtml", () => {

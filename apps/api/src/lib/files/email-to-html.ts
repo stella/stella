@@ -152,10 +152,11 @@ type EmailPreviewOptions = {
 /** The type an email's attachment is listed and delivered as. */
 export const emailAttachmentMediaType = async ({
   bytes,
+  charset,
   fileName,
   mimeType,
 }: EmailAttachment): Promise<string> =>
-  await partMediaType({ bytes, stated: mimeType, fileName });
+  await partMediaType({ bytes, stated: mimeType, charset, fileName });
 
 const describeEmailAttachment = async (
   attachment: EmailAttachment,

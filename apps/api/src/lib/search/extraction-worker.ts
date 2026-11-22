@@ -796,6 +796,7 @@ const writeCadesPreview = async ({
       mediaType: await partMediaType({
         bytes,
         stated: null,
+        charset: null,
         fileName: signed.value.fileName,
       }),
       sizeBytes: bytes.byteLength,

@@ -241,6 +241,7 @@ export const extractEmbeddedPart = async (options: {
   const mimeType = await partMediaType({
     bytes,
     stated: statedMimeType,
+    charset: null,
     fileName,
   });
   const scanned = await scanContainerMember({ fileName, bytes }, mimeType);

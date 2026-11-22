@@ -35,6 +35,7 @@ export const extractDataBoxPreview = async (
             mediaType: await partMediaType({
               bytes: fileBytes,
               stated: file.mimeType,
+              charset: null,
               fileName,
             }),
             sizeBytes: fileBytes.byteLength,

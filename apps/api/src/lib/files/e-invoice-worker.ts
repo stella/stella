@@ -83,7 +83,12 @@ export const listEInvoiceParts = async ({
       fileName,
       description: attachment.description,
       // The invoice's stated type is a claim; the bytes and name decide.
-      mediaType: await partMediaType({ bytes, stated: null, fileName }),
+      mediaType: await partMediaType({
+        bytes,
+        stated: null,
+        charset: null,
+        fileName,
+      }),
       sizeBytes: bytes.byteLength,
     });
   }
