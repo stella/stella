@@ -58,11 +58,10 @@ const classifiedFixture = (
       jobs = value;
     },
   });
-  for (const [key, derived] of jobs ?? []) {
+  for (const [key] of jobs ?? []) {
     writeDecision(root, key, {
       kind,
       qualifier: `reviewed ${key}`,
-      reviewedDigest: derived.digest,
     });
   }
   return { root, jobs: jobs ?? new Map<string, DerivedJob>() };

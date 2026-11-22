@@ -1,5 +1,0 @@
-{
-  "kind": "priority",
-  "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed.",
-  "reviewedDigest": "8775083a344948b3f845ef22730c4d973e16ec84f640eafd9b0a5e635cff2f8f"
-}

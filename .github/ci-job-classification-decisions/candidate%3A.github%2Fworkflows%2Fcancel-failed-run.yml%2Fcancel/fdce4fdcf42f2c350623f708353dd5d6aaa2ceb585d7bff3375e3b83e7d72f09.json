@@ -1,5 +1,0 @@
-{
-  "kind": "ordinary",
-  "qualifier": "Cancels a CI Checks run after its named job failed and ended; no publication or deployment.",
-  "reviewedDigest": "fdce4fdcf42f2c350623f708353dd5d6aaa2ceb585d7bff3375e3b83e7d72f09"
-}

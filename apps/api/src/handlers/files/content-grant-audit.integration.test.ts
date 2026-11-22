@@ -2080,6 +2080,7 @@ describe("ZIP archive delivery", () => {
             fileName: "plna-moc.txt",
           }),
           unavailable: null,
+          charset: "utf-8",
         },
       ],
     });

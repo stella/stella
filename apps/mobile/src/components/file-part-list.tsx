@@ -26,7 +26,6 @@ import {
   FileCodeIcon,
   FileIcon,
   FileImageIcon,
-  FileSpreadsheetIcon,
   FileTextIcon,
   MailIcon,
   MonitorIcon,
@@ -67,8 +66,6 @@ export const FilePartOpenerProvider = ({
 const GLYPHS = {
   image: FileImageIcon,
   text: FileTextIcon,
-  wordProcessing: FileTextIcon,
-  spreadsheet: FileSpreadsheetIcon,
   presentation: MonitorIcon,
   email: MailIcon,
   archive: ArchiveIcon,
