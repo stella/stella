@@ -98,9 +98,19 @@ export const filePartForDisplay = async (
     const { error } = converted;
     if (
       error instanceof ConversionInputError ||
-      error instanceof DerivativeAdmissionError ||
-      (error instanceof PdfRenderError && error.reason !== "failed")
+      error instanceof DerivativeAdmissionError
     ) {
+      return Result.err(
+        notConverted("The file could not be converted for preview", error),
+      );
+    }
+    // A renderer's refusal and a PDF over the output cap are the file's
+    // answer: another attempt converts it to the same result.
+    const final =
+      error instanceof PdfRenderError
+        ? error.reason !== "failed"
+        : error.kind === "response-too-large";
+    if (final) {
       return Result.err(
         notConverted("The file could not be converted for preview", error),
       );

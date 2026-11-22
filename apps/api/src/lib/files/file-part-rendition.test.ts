@@ -177,6 +177,24 @@ describe("a part delivered for display", () => {
     expect(result.isErr() && result.error.status).toBe(502);
   });
 
+  test("a rendition over the PDF size cap has no preview, as another attempt gives the same", async () => {
+    const { result, urls } = await withConverter(
+      () =>
+        new Response("", {
+          headers: {
+            "Content-Length": String(LIMITS.fileDerivativePdfMaxBytes + 1),
+          },
+        }),
+      async () => await filePartForDisplay(wordEnclosure),
+    );
+
+    expect(urls).toHaveLength(1);
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 422,
+      code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+    });
+  });
+
   test("every converted part type is one the converter takes and no viewer draws", () => {
     expect(FILE_PART_CONVERTED_MEDIA_TYPES.size).toBeGreaterThan(0);
     for (const mediaType of FILE_PART_CONVERTED_MEDIA_TYPES) {
