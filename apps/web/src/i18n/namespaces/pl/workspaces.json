@@ -31,7 +31,6 @@
       "sent": "Wysłana",
       "statedInFile": "Wiadomość ze skrzynki danych (według pliku)",
       "toHands": "Do rąk: {name}",
-      "unlinkedFiles": "Aby otworzyć załączniki wyświetlane bez odnośnika, pobierz oryginalny plik ZFO.",
       "unreadable": "Nie można odczytać tego pliku jako wiadomości ze skrzynki danych ani jako potwierdzenia doręczenia.",
       "uploaded": "Przesłana wiadomość ze skrzynki danych"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Nota obciążeniowa",
       "other": "Inny dokument"
     },
-    "downloadAttachment": "Pobierz {fileName}",
     "exemptionReason": "Podstawa zwolnienia",
     "formatVersion": "{format}, wersja {version}",
     "grossTotal": "Razem brutto",
@@ -369,6 +367,7 @@
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "noSigners": "Nie znaleziono danych podpisujących.",
     "pdfUnavailable": "Podgląd pliku PDF jest niedostępny.",
+    "signedDocument": "Podpisany dokument",
     "signers": "Podpisujący",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",

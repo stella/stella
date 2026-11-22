@@ -14,21 +14,21 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale, useTranslations } from "use-intl";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
-import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
-import { CertifiedEmailReading } from "@/components/certified-email-envelope";
 import DocumentView from "@/components/document-viewer/document-view.dom";
 import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
 import type { ViewerAppearance } from "@/components/document-viewer/zoom";
 import { EInvoiceDetails } from "@/components/e-invoice-details";
+import { EmailReading } from "@/components/email-reading";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import {
+  FilePartList,
   FilePartOpenerProvider,
-  OpenFilePart,
-} from "@/components/file-part-opener";
+  FilePartRow,
+} from "@/components/file-part-list";
 import { LegalFilePreviewText } from "@/components/legal-file-preview-text";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { useDocumentEditing } from "@/components/use-document-editing";
@@ -49,7 +49,6 @@ import {
 import type { OpenedFile } from "@/native/document-files";
 import {
   isOffline,
-  PDF_MIME_TYPE,
   readDocumentFile,
   readDocumentPart,
   readOriginalDocumentFile,
@@ -101,7 +100,7 @@ const openDocument = async ({
     file.value.viewer === "asic" ||
     file.value.viewer === "signed-dossier" ||
     file.value.viewer === "cades" ||
-    file.value.viewer === "certifiedEmail" ||
+    file.value.viewer === "email" ||
     file.value.viewer === "dataBox" ||
     file.value.viewer === "e-invoice" ||
     file.value.viewer === "structured-document"
@@ -483,17 +482,18 @@ const LegalFilePreview = ({
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
-      const { fileName, invoice, layers, mimeType, text, textFormat } =
+      const { content, fileName, invoice, layers, text, textFormat } =
         preview.value;
       return (
         <>
-          <Text accessibilityRole="header" selectable variant="headline">
-            {fileName}
-          </Text>
-          {mimeType === PDF_MIME_TYPE && (
-            <OpenFilePart
-              fileName={fileName}
-              part={filePartId({ kind: FILE_PART_KINDS.content, index: 0 })}
+          {content === null ? (
+            <Text accessibilityRole="header" selectable variant="headline">
+              {fileName}
+            </Text>
+          ) : (
+            <FilePartList
+              items={[content]}
+              title={signedFile("signedContent")}
             />
           )}
           <Text variant="caption">{signedFile("unverified")}</Text>
@@ -520,23 +520,17 @@ const LegalFilePreview = ({
       );
     }
     if (preview.status === "ok") {
-      if (viewer === "certifiedEmail") {
-        return <CertifiedEmailReading read={preview.value} />;
+      if (viewer === "email") {
+        return <EmailReading read={preview.value} />;
       }
       if (viewer === "asic") {
         return (
           <>
             <Text variant="caption">{signedFile("unverified")}</Text>
             {preview.value.members.map(
-              ({ fileName, status, text, textFormat }, index) => (
-                <View key={fileName}>
-                  <Text accessibilityRole="header" selectable variant="label">
-                    {fileName}
-                  </Text>
-                  <OpenFilePart
-                    fileName={fileName}
-                    part={filePartId({ kind: FILE_PART_KINDS.member, index })}
-                  />
+              ({ status, text, textFormat, ...member }) => (
+                <View key={member.part}>
+                  <FilePartRow item={member} />
                   {status !== "unavailable" && text.trim() ? (
                     <LegalFilePreviewText format={textFormat} text={text} />
                   ) : null}
@@ -582,19 +576,14 @@ const LegalFilePreview = ({
               )}
             </View>
             {documents.map(
-              ({ id, fileName, pdf, status, text, textFormat }, index) => (
+              ({ id, fileName, part, status, text, textFormat }) => (
                 <View key={id}>
-                  <Text accessibilityRole="header" selectable variant="label">
-                    {fileName}
-                  </Text>
-                  {pdf && (
-                    <OpenFilePart
-                      fileName={fileName}
-                      part={filePartId({
-                        kind: FILE_PART_KINDS.document,
-                        index,
-                      })}
-                    />
+                  {part === null ? (
+                    <Text accessibilityRole="header" selectable variant="label">
+                      {fileName}
+                    </Text>
+                  ) : (
+                    <FilePartRow item={{ ...part, fileName }} />
                   )}
                   {status !== "unavailable" && text.trim() ? (
                     <LegalFilePreviewText format={textFormat} text={text} />
@@ -630,17 +619,7 @@ const LegalFilePreview = ({
       return (
         <>
           <Text selectable>{preview.value.text}</Text>
-          {preview.value.files.map(({ fileName }, index) => (
-            <View key={`${fileName}#${String(index)}`}>
-              <Text selectable variant="label">
-                {fileName}
-              </Text>
-              <OpenFilePart
-                fileName={fileName}
-                part={filePartId({ kind: FILE_PART_KINDS.attachment, index })}
-              />
-            </View>
-          ))}
+          <FilePartList items={preview.value.files} />
         </>
       );
     }
@@ -662,7 +641,7 @@ const LegalFilePreview = ({
       ),
       asic: signedFile("unreadable"),
       cades: signedFile("unreadable"),
-      certifiedEmail: t(requestFailure),
+      email: t(requestFailure),
       "signed-dossier": signedFile("unreadable"),
     } satisfies Record<typeof viewer, string>;
     const unreadableMessage = unreadableMessages[viewer];

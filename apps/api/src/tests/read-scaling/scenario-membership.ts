@@ -3,7 +3,7 @@ import path from "node:path";
 
 import { type Expression, parseSource } from "@stll/scripts/src/syntax-tree";
 
-type HandlerOwner = { file: string; exportName: string };
+export type HandlerOwner = { file: string; exportName: string };
 
 export type ScenarioMembership =
   | { kind: "api"; name: string; handlerOwner: HandlerOwner }
@@ -341,16 +341,17 @@ const membershipKey = (entry: ScenarioMembership) =>
 type ScenarioMembershipOptions = {
   base: readonly ScenarioMembership[];
   current: readonly ScenarioMembership[];
-  /** Whether a handler module is still in the current tree. */
-  handlerExists: (file: string) => boolean;
+  /** Whether a handler (its module's export) is still in the current tree. */
+  handlerExists: (owner: HandlerOwner) => boolean;
 };
 
 /**
  * A measured scenario that left the registry. One may leave only with its
- * route: its handler module is gone from the tree, and no scenario of that
- * handler is measured anywhere any more, so nothing is left to measure. A
- * handler that moved keeps a scenario somewhere, and then every case it had
- * must remain, as for any route that stays.
+ * route: its handler is gone from the tree (its module, or its export from a
+ * module that stays), and no scenario of that handler is measured anywhere
+ * any more, so nothing is left to measure. A handler that moved keeps a
+ * scenario somewhere, and then every case it had must remain, as for any
+ * route that stays.
  */
 export const scenarioMembershipViolations = ({
   base,
@@ -361,19 +362,20 @@ export const scenarioMembershipViolations = ({
   const currentApiNames = new Set(
     current.flatMap((entry) => (entry.kind === "api" ? [entry.name] : [])),
   );
-  const retiredHandler = (file: string) =>
-    !handlerExists(file) &&
+  const retiredHandler = (owner: HandlerOwner) =>
+    !handlerExists(owner) &&
     base.every(
       (entry) =>
         entry.kind !== "api" ||
-        entry.handlerOwner.file !== file ||
+        entry.handlerOwner.file !== owner.file ||
+        entry.handlerOwner.exportName !== owner.exportName ||
         !currentApiNames.has(entry.name),
     );
   return base
     .filter(
       (entry) =>
         !retained.has(membershipKey(entry)) &&
-        (entry.kind === "mcp" || !retiredHandler(entry.handlerOwner.file)),
+        (entry.kind === "mcp" || !retiredHandler(entry.handlerOwner)),
     )
     .map(
       (entry) =>

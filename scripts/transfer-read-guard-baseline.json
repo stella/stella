@@ -1862,20 +1862,6 @@
     "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
   },
   {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/emailAttachmentPreviewOptions",
-    "kind": "numeric-timeout",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
-    "file": "apps/web/src/lib/files/queries.ts",
-    "function": "module/emailAttachmentPreviewOptions",
-    "kind": "total-timeout-body",
-    "count": 1,
-    "reason": "Existing total timeout; use a headers policy and an explicit idle-bounded body reader at the fetch owner."
-  },
-  {
     "file": "apps/web/src/lib/files/storage-fetch.ts",
     "function": "module/fetchStorageArrayBuffer",
     "kind": "numeric-timeout",

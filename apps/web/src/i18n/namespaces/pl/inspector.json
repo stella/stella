@@ -540,7 +540,6 @@
       "waitForMatches": "Poczekaj na zakończenie analizy do anonimizacji.",
       "workspaceTermsHeading": "Terminy obszaru roboczego ({count})"
     },
-    "attachmentNotPreviewable": "Pobierz załącznik, aby go otworzyć.",
     "closeAllTabs": "Zamknij {count, plural, one {# kartę} few {wszystkie # karty} many {wszystkie # kart} other {wszystkie # karty}}",
     "closeOtherTabs": "Zamknij {count, plural, one {# inną kartę} few {# inne karty} many {# innych kart} other {# innej karty}}",
     "closeTab": "Zamknij <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonimizacja"
+    },
+    "fileParts": {
+      "back": "Wróć do listy",
+      "download": "Pobierz {fileName}",
+      "noPreview": "Tego typu pliku nie można wyświetlić w podglądzie. Pobierz go lub zapisz w sprawie.",
+      "open": "Otwórz {fileName}"
     },
     "firstSourceReached": "To pierwsze źródło.",
     "groups": {
@@ -818,7 +823,6 @@
       "why": "Dlaczego",
       "whyItMatters": "Dlaczego to istotne:"
     },
-    "selectAttachmentToSave": "Wybierz załącznik do zapisania.",
     "showPane": "Pokaż panel",
     "swapViews": "Zamień widok główny z panelem bocznym",
     "title": "Inspektor"

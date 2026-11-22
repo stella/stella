@@ -4,14 +4,16 @@ import { View } from "react-native";
 import { useFormatter, useTranslations } from "use-intl";
 
 import type {
+  CertifiedEmailEnvelope,
   CertifiedEmailError,
   CertifiedEmailKind,
-  CertifiedEmailRead,
   CertifiedEmailReceiptType,
 } from "@stll/api-contract/certified-email";
+import type { EmailReading as EmailReadingData } from "@stll/api-contract/email-reading";
 import { Text } from "@stll/ui/text";
 
-import { OpenFilePart } from "@/components/file-part-opener";
+import { parseEmailDate } from "@/components/email-reading.logic";
+import { FilePartList } from "@/components/file-part-list";
 import { keyedBy } from "@/components/keyed";
 
 const KIND_TITLE_KEYS = {
@@ -59,31 +61,36 @@ const Field = ({ label, children }: { label: string; children: ReactNode }) => (
   </View>
 );
 
+const Lines = ({ lines }: { lines: readonly string[] }) => (
+  <>
+    {keyedBy(lines, (line) => line).map(({ item, key }) => (
+      <Text key={key} selectable>
+        {item}
+      </Text>
+    ))}
+  </>
+);
+
 /**
- * A certified email (Italian PEC) as the web shows it: the provider's
- * certification data, the original message's text and its attachments. The
- * provider's signature is shown as found, never verified.
+ * The certification data a certified email's provider states (Italian PEC),
+ * shown in the envelope where a plain email shows its header's sender,
+ * recipients and date. The provider's signature is shown as found, never
+ * verified.
  */
-export const CertifiedEmailReading = ({
-  read: { envelope, text, attachments },
+const CertificationFields = ({
+  copies,
+  envelope,
 }: {
-  read: CertifiedEmailRead;
+  /** The message header's copies, shown after the stated recipients. */
+  copies: ReactNode;
+  envelope: CertifiedEmailEnvelope;
 }) => {
   const t = useTranslations("certifiedEmail");
-  const chat = useTranslations("chat");
   const format = useFormatter();
   const errorKey = ERROR_KEYS[envelope.error];
   const deliveryKey = DELIVERY_LABEL_KEYS[envelope.kind];
-  const { signerName } = envelope.signature;
   return (
     <>
-      <Text accessibilityRole="header" variant="headline">
-        {t(KIND_TITLE_KEYS[envelope.kind])}
-      </Text>
-      <Text variant="caption">{t("statedInFile")}</Text>
-      {!envelope.includesOriginal && (
-        <Text variant="caption">{t("originalNotIncluded")}</Text>
-      )}
       {envelope.sender && (
         <Field label={t("sender")}>
           <Text selectable>{envelope.sender}</Text>
@@ -103,6 +110,7 @@ export const CertifiedEmailReading = ({
           )}
         </Field>
       )}
+      {copies}
       {deliveryKey !== null && envelope.deliveredTo && (
         <Field label={t(deliveryKey)}>
           <Text selectable>{envelope.deliveredTo}</Text>
@@ -110,13 +118,7 @@ export const CertifiedEmailReading = ({
       )}
       {envelope.receivedFor.length > 0 && (
         <Field label={t("handedOverFor")}>
-          {keyedBy(envelope.receivedFor, (address) => address).map(
-            ({ item, key }) => (
-              <Text key={key} selectable>
-                {item}
-              </Text>
-            ),
-          )}
+          <Lines lines={envelope.receivedFor} />
         </Field>
       )}
       {envelope.certifiedAt && (
@@ -155,30 +157,86 @@ export const CertifiedEmailReading = ({
         </Field>
       )}
       <Text variant="caption">
-        {signerName ? `${t("signedBy", { name: signerName })}\n` : ""}
+        {envelope.signature.signerName
+          ? `${t("signedBy", { name: envelope.signature.signerName })}\n`
+          : ""}
         {t("signatureNotVerified")}
       </Text>
-      {text.trim() ? <Text selectable>{text}</Text> : null}
-      {attachments.length > 0 && (
-        <Field label={t("attachments")}>
-          {attachments.map(({ part, fileName, sizeBytes }) => (
-            <View key={part}>
+    </>
+  );
+};
+
+/**
+ * An email file as the web shows it: its envelope, its text and its
+ * attachments in the list every file inside a file uses. A plain email's
+ * envelope is its header (subject, sender, recipients, copies, date); a
+ * certified email (Italian PEC) heads it with what the provider's message is
+ * and states the provider's certification data in place of the header's
+ * sender, recipients and date.
+ */
+export const EmailReading = ({
+  read: { attachments, cc, certified, date, from, subject, text, to },
+}: {
+  read: EmailReadingData;
+}) => {
+  const t = useTranslations("email");
+  const pec = useTranslations("certifiedEmail");
+  const format = useFormatter();
+  const subjectText = subject?.trim() ? subject : t("noSubject");
+  const sentAt = parseEmailDate(date);
+  const copies =
+    cc.length > 0 ? (
+      <Field label={t("cc")}>
+        <Lines lines={cc} />
+      </Field>
+    ) : null;
+  return (
+    <>
+      <Text accessibilityRole="header" selectable variant="headline">
+        {certified === null
+          ? subjectText
+          : pec(KIND_TITLE_KEYS[certified.kind])}
+      </Text>
+      {certified === null ? (
+        <>
+          {from ? (
+            <Field label={t("from")}>
+              <Text selectable>{from}</Text>
+            </Field>
+          ) : null}
+          {to.length > 0 && (
+            <Field label={t("to")}>
+              <Lines lines={to} />
+            </Field>
+          )}
+          {copies}
+          {date !== null && date.trim() !== "" && (
+            <Field label={t("date")}>
               <Text selectable>
-                {fileName ?? chat("attachment")}
-                <Text variant="caption">{` · ${format.number(sizeBytes, {
-                  style: "unit",
-                  unit: "byte",
-                  unitDisplay: "short",
-                })}`}</Text>
+                {sentAt === null
+                  ? date
+                  : format.dateTime(sentAt, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
               </Text>
-              <OpenFilePart
-                fileName={fileName ?? chat("attachment")}
-                part={part}
-              />
-            </View>
-          ))}
-        </Field>
+            </Field>
+          )}
+        </>
+      ) : (
+        <>
+          <Text variant="caption">{pec("statedInFile")}</Text>
+          {!certified.includesOriginal && (
+            <Text variant="caption">{pec("originalNotIncluded")}</Text>
+          )}
+          <Field label={t("subject")}>
+            <Text selectable>{subjectText}</Text>
+          </Field>
+          <CertificationFields copies={copies} envelope={certified} />
+        </>
       )}
+      {text.trim() ? <Text selectable>{text}</Text> : null}
+      <FilePartList items={attachments} />
     </>
   );
 };

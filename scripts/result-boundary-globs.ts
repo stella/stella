@@ -189,6 +189,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/catalogue/**/*.{ts,tsx}",
   "apps/web/src/components/conditions/**/*.{ts,tsx}",
   "apps/web/src/components/entity-views/**/*.{ts,tsx}",
+  "apps/web/src/components/file-parts/**/*.{ts,tsx}",
   "apps/web/src/components/file-tree/**/*.{ts,tsx}",
   "apps/web/src/components/flows/**/*.{ts,tsx}",
   "apps/web/src/components/inbox/**/*.{ts,tsx}",

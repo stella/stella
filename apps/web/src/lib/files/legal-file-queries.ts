@@ -4,19 +4,11 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
-import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
-import { fetchWithTimeout } from "@stll/fetch";
-import {
-  readBodyJsonWithIdleDeadline,
-  readBodyWithIdleDeadline,
-} from "@stll/fetch/body-reader";
 
 import { api } from "@/lib/api";
-import { apiUrl } from "@/lib/api-url";
-import { PDF_MIME } from "@/lib/consts";
-import { type ApiResponse, unwrapApiResponse } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   type FileOptionsProps,
   filesKeys,
@@ -26,49 +18,6 @@ import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 // Only the legal file viewers, each a lazy chunk, read these, so none of it
 // loads at startup.
-
-/** An audited PDF the API derives from a signed file, read within the upload limit. */
-const fetchDerivedPdf = async (path: `/${string}`, signal: AbortSignal) => {
-  const response = await fetchWithTimeout(apiUrl(path), {
-    credentials: "include",
-    signal,
-    timeout: { type: "headers", ms: 60_000 },
-  });
-  let result: ApiResponse<ArrayBuffer>;
-  if (!response.ok) {
-    const value = await readBodyJsonWithIdleDeadline(response, {
-      idleMs: 30_000,
-      maxBytes: 64 * 1024,
-      signal,
-    });
-    result = { data: null, error: { status: response.status, value } };
-  } else if (response.headers.get("content-type") !== PDF_MIME) {
-    await Promise.allSettled([response.body?.cancel()]);
-    result = {
-      data: null,
-      error: {
-        status: 502,
-        value: {
-          message: "Invalid PDF response from the signed file preview",
-        },
-      },
-    };
-  } else {
-    const bytes = await readBodyWithIdleDeadline(response, {
-      idleMs: 30_000,
-      maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
-      signal,
-    });
-    result = {
-      data:
-        bytes.buffer instanceof ArrayBuffer
-          ? bytes.buffer
-          : new Uint8Array(bytes).buffer,
-      error: null,
-    };
-  }
-  return unwrapApiResponse(result);
-};
 
 type LegalFileKey = Pick<FileOptionsProps, "fieldId" | "workspaceId">;
 
@@ -110,36 +59,6 @@ export const signedDossierPreviewOptions = (props: FileOptionsProps) =>
         RESOURCE_TYPE.USER_FILE,
       ],
       scope: { type: "workspace", workspaceId: props.workspaceId },
-    },
-  );
-
-export const signedDossierPdfOptions = ({
-  document,
-  fieldId,
-  workspaceId,
-}: FileOptionsProps & { document: number }) =>
-  resourceQueryOptions(
-    // Cached like the signed file's own PDF, for the same reason.
-    queryOptions({
-      retry: false,
-      queryKey: [
-        ...legalFileKeys.signedDossier({ fieldId, workspaceId }),
-        "pdf",
-        document,
-      ],
-      queryFn: async ({ signal }) =>
-        await fetchDerivedPdf(
-          `/files/${encodeURIComponent(workspaceId)}/signed-dossier/${encodeURIComponent(fieldId)}/content?document=${document}`,
-          signal,
-        ),
-    }),
-    {
-      resources: [
-        RESOURCE_TYPE.ENTITY,
-        RESOURCE_TYPE.FIELD,
-        RESOURCE_TYPE.USER_FILE,
-      ],
-      scope: { type: "workspace", workspaceId },
     },
   );
 
@@ -232,27 +151,6 @@ export const cadesPreviewOptions = (props: FileOptionsProps) =>
 // Cached like a file's own bytes (`fileOptions`): reopening the tab reuses
 // them, and with them the parsed document, instead of extracting the PDF
 // from the signed container again behind a loading state.
-export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
-  resourceQueryOptions(
-    queryOptions({
-      retry: false,
-      queryKey: [...legalFileKeys.cades({ fieldId, workspaceId }), "pdf"],
-      queryFn: async ({ signal }) =>
-        await fetchDerivedPdf(
-          `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
-          signal,
-        ),
-    }),
-    {
-      resources: [
-        RESOURCE_TYPE.ENTITY,
-        RESOURCE_TYPE.FIELD,
-        RESOURCE_TYPE.USER_FILE,
-      ],
-      scope: { type: "workspace", workspaceId },
-    },
-  );
-
 export const eInvoicePreviewOptions = (props: FileOptionsProps) =>
   resourceQueryOptions(
     queryOptions({
@@ -283,48 +181,3 @@ export const eInvoicePreviewOptions = (props: FileOptionsProps) =>
       scope: { type: "workspace", workspaceId: props.workspaceId },
     },
   );
-
-/**
- * One file a structured invoice embeds or packages, as its bytes. The same
- * route serves an invoice inside a signed envelope, so the CAdES viewer opens
- * its invoice's attachments through it too.
- */
-export const fetchEInvoiceAttachment = async ({
-  fieldId,
-  index,
-  workspaceId,
-}: FileOptionsProps & { index: number }): Promise<Blob> => {
-  const response = await fetchWithTimeout(
-    apiUrl(
-      `/files/${encodeURIComponent(workspaceId)}/e-invoice/${encodeURIComponent(fieldId)}/attachments/${encodeURIComponent(String(index))}`,
-    ),
-    {
-      credentials: "include",
-      timeout: { type: "headers", ms: 60_000 },
-    },
-  );
-  let result: ApiResponse<Blob>;
-  if (response.ok) {
-    const bytes = await readBodyWithIdleDeadline(response, {
-      idleMs: 30_000,
-      maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
-    });
-    const buffer =
-      bytes.buffer instanceof ArrayBuffer
-        ? bytes.buffer
-        : new Uint8Array(bytes).buffer;
-    result = {
-      data: new Blob([buffer], {
-        type: response.headers.get("content-type") ?? "",
-      }),
-      error: null,
-    };
-  } else {
-    const value = await readBodyJsonWithIdleDeadline(response, {
-      idleMs: 30_000,
-      maxBytes: 64 * 1024,
-    });
-    result = { data: null, error: { status: response.status, value } };
-  }
-  return unwrapApiResponse(result);
-};

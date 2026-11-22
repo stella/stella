@@ -31,7 +31,6 @@
       "sent": "Outgoing",
       "statedInFile": "Data-box message (as stated in the file)",
       "toHands": "To the attention of {name}",
-      "unlinkedFiles": "To open attachments shown without a link, download the original ZFO file.",
       "unreadable": "This file could not be read as a data-box message or delivery receipt.",
       "uploaded": "Uploaded data-box message"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Debit note",
       "other": "Other document"
     },
-    "downloadAttachment": "Download {fileName}",
     "exemptionReason": "Exemption reason",
     "formatVersion": "{format}, version {version}",
     "grossTotal": "Total with VAT",
@@ -369,6 +367,7 @@
     "noReadableContent": "No readable content is available for preview.",
     "noSigners": "No signer details were found.",
     "pdfUnavailable": "The PDF preview is unavailable.",
+    "signedDocument": "Signed document",
     "signers": "Signers",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",

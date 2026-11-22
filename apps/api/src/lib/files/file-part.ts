@@ -30,14 +30,15 @@ import {
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { readSignedDossierPdf } from "@/api/lib/files/archive-preview";
 import {
   DOCUMENT_ARCHIVE_MAX_BYTES,
   isDocumentArchiveMimeType,
 } from "@/api/lib/files/archive-preview-protocol";
-import { readCadesPdf } from "@/api/lib/files/cades-preview";
-import { readEInvoiceAttachment } from "@/api/lib/files/e-invoice-preview";
-import { buildEmailPreview, parseEmail } from "@/api/lib/files/email-to-html";
+import {
+  buildEmailPreview,
+  emailAttachmentMediaType,
+  parseEmail,
+} from "@/api/lib/files/email-to-html";
 import {
   decodeEmbeddedPart,
   EMBEDDED_PART_WORKER_EXIT,
@@ -47,12 +48,13 @@ import {
   type LegalFileReadOptions,
   loadFileSource,
 } from "@/api/lib/files/legal-file-source";
-import { resolveUploadMime } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
 import { spawnBinaryWorker } from "@/api/lib/subprocess";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
+
+/** Room for the reply's header line: a part's name and type. */
+const EMBEDDED_PART_HEADER_MAX_BYTES = 4096;
 
 /** A part of a stored file, scanned and ready to deliver. */
 export type FilePartRead = {
@@ -80,41 +82,16 @@ const noSuchPart = () =>
     message: "The file has no such part",
   });
 
-/** The name a signed envelope's document had before it was signed. */
-const unsignedName = (fileName: string) => {
-  const name = fileName.replace(/\.p7m$/iu, "");
-  return /\.pdf$/iu.test(name) ? name : `${name}.pdf`;
-};
-
-const cadesContent: PartReader = async (source, index) => {
-  if (index !== 0) {
-    return Result.err(noSuchPart());
-  }
-  const pdf = await readCadesPdf(source);
-  return pdf.map((bytes) => ({
-    bytes,
-    fileName: unsignedName(source.fileName),
-    mimeType: PDF_MIME_TYPE,
-  }));
-};
-
-const dossierDocument: PartReader = async (source, index) =>
-  (await readSignedDossierPdf(source, index)).map((bytes) => ({
-    bytes,
-    fileName: `document-${String(index + 1)}.pdf`,
-    mimeType: PDF_MIME_TYPE,
-  }));
-
-const invoiceAttachment: PartReader = async (source, index) =>
-  await readEInvoiceAttachment(index)(source);
-
-/** An ASiC member or a data-box file, read and scanned in the worker. */
+/**
+ * A part of a container (an ASiC member, a data-box file, a signed
+ * container's document, a signed envelope's document, an invoice's
+ * attachment), read, typed and scanned in the worker.
+ */
 const embeddedPart =
   (kind: FilePartKind): PartReader =>
   async (source, index) => {
-    if (source.bytes.byteLength > DOCUMENT_ARCHIVE_MAX_BYTES) {
-      return Result.err(unavailable("The file exceeds the preview size limit"));
-    }
+    // The stored file's own size bound applies when it is loaded; an archive
+    // is held to the archive reader's budget there.
     const result = await spawnBinaryWorker({
       workerPath: EXTRACTION_WORKER_PATH,
       args: [
@@ -122,12 +99,16 @@ const embeddedPart =
         String(LIMITS.extractedContentMaxChars),
         source.mimeType,
         filePartId({ kind, index }),
+        source.fileName,
       ],
       stdin: new Blob([source.bytes]),
       timeoutMs: LIMITS.extractionTimeoutMs,
       // A compressed member can inflate past its container, never past the
-      // archive reader's retained-content budget.
-      maxOutputBytes: DOCUMENT_ARCHIVE_MAX_BYTES,
+      // archive reader's retained-content budget; a signed envelope's
+      // document is never larger than the envelope.
+      maxOutputBytes:
+        Math.max(DOCUMENT_ARCHIVE_MAX_BYTES, source.bytes.byteLength) +
+        EMBEDDED_PART_HEADER_MAX_BYTES,
     });
     if (result.isErr()) {
       const { exitCode } = result.error;
@@ -169,23 +150,26 @@ const embeddedPart =
   };
 
 /** Every stored format and the parts it has; a format with none has `{}`. */
-const LEGAL_FILE_PARTS = {
+const signedContent = embeddedPart(FILE_PART_KINDS.content);
+const containerDocument = embeddedPart(FILE_PART_KINDS.document);
+const containerMember = embeddedPart(FILE_PART_KINDS.member);
+const embeddedAttachment = embeddedPart(FILE_PART_KINDS.attachment);
+
+export const LEGAL_FILE_PARTS = {
   cades: {
-    [FILE_PART_KINDS.content]: cadesContent,
+    [FILE_PART_KINDS.content]: signedContent,
     // A signed `.xml.p7m` invoice lists its attachments in its preview.
-    [FILE_PART_KINDS.attachment]: invoiceAttachment,
+    [FILE_PART_KINDS.attachment]: embeddedAttachment,
   },
-  asicE: { [FILE_PART_KINDS.member]: embeddedPart(FILE_PART_KINDS.member) },
-  asicS: { [FILE_PART_KINDS.member]: embeddedPart(FILE_PART_KINDS.member) },
-  eAkta: { [FILE_PART_KINDS.document]: dossierDocument },
-  zep: { [FILE_PART_KINDS.document]: dossierDocument },
-  xadesZep: { [FILE_PART_KINDS.document]: dossierDocument },
-  dataBox: {
-    [FILE_PART_KINDS.attachment]: embeddedPart(FILE_PART_KINDS.attachment),
-  },
-  isdoc: { [FILE_PART_KINDS.attachment]: invoiceAttachment },
-  isdocx: { [FILE_PART_KINDS.attachment]: invoiceAttachment },
-  xml: { [FILE_PART_KINDS.attachment]: invoiceAttachment },
+  asicE: { [FILE_PART_KINDS.member]: containerMember },
+  asicS: { [FILE_PART_KINDS.member]: containerMember },
+  eAkta: { [FILE_PART_KINDS.document]: containerDocument },
+  zep: { [FILE_PART_KINDS.document]: containerDocument },
+  xadesZep: { [FILE_PART_KINDS.document]: containerDocument },
+  dataBox: { [FILE_PART_KINDS.attachment]: embeddedAttachment },
+  isdoc: { [FILE_PART_KINDS.attachment]: embeddedAttachment },
+  isdocx: { [FILE_PART_KINDS.attachment]: embeddedAttachment },
+  xml: { [FILE_PART_KINDS.attachment]: embeddedAttachment },
   uyap: {},
   ofd: {},
 } as const satisfies Record<
@@ -203,8 +187,7 @@ const emailAttachment: PartReader = async (source, index) => {
   }
   const listed = buildEmailPreview(parsed.value, {
     citationBlockMode: EMAIL_CITATION_BLOCK_MODE.omit,
-    createAttachmentId: String,
-  }).attachments.some(({ id }) => id === String(index));
+  }).attachments.includes(index);
   const attachment = listed ? parsed.value.attachments.at(index) : undefined;
   if (attachment === undefined) {
     return Result.err(noSuchPart());
@@ -212,12 +195,7 @@ const emailAttachment: PartReader = async (source, index) => {
   const fileName = sanitizeFilenamePreservingExtension(
     attachment.fileName ?? "attachment",
   );
-  const mimeType = resolveUploadMime({
-    declaredMime:
-      attachment.mimeType?.split(";").at(0)?.trim().toLowerCase() ||
-      "application/octet-stream",
-    fileName,
-  });
+  const mimeType = await emailAttachmentMediaType(attachment);
   if (attachment.bytes.byteLength === 0) {
     return Result.err(unavailable("The attachment is empty"));
   }
@@ -283,6 +261,29 @@ const partSourceFormat =
         };
   };
 
+const readPart = async (
+  source: ScannedFile,
+  format: PartSourceFormat,
+  { index }: FilePart,
+) =>
+  format.reader === undefined
+    ? Result.err(noSuchPart())
+    : await format.reader(source.withMimeType(format.mimeType), index);
+
+/**
+ * One part of a stored file's bytes, read as the part link reads it once the
+ * file is loaded: by the same format table, reader, typing and scan.
+ */
+export const readPartOfFile = async (
+  source: ScannedFile,
+  part: FilePart,
+): Promise<Result<FilePartRead, HandlerError>> => {
+  const format = partSourceFormat(part)(source);
+  return format === null
+    ? Result.err(noSuchPart())
+    : await readPart(source, format, part);
+};
+
 export type FilePartReadOptions = LegalFileReadOptions & {
   readonly part: FilePart;
   readonly disposition: "attachment" | "inline";
@@ -305,13 +306,7 @@ export const readFilePart = async ({
     return Result.err(loaded.error);
   }
   const { source, format, entityId, deliver } = loaded.value;
-  if (format.reader === undefined) {
-    return Result.err(noSuchPart());
-  }
-  const read = await format.reader(
-    source.withMimeType(format.mimeType),
-    part.index,
-  );
+  const read = await readPart(source, format, part);
   if (read.isErr()) {
     return Result.err(read.error);
   }

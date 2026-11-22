@@ -540,7 +540,6 @@
       "waitForMatches": "Uzgaidiet, līdz beidzas anonimizācijas pārbaude.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
-    "attachmentNotPreviewable": "Lejupielādējiet pielikumu, lai to atvērtu.",
     "closeAllTabs": "Aizvērt {count, plural, zero {visas # cilnes} one {# cilni} other {visas # cilnes}}",
     "closeOtherTabs": "Aizvērt {count, plural, zero {# citu cilņu} one {# citu cilni} other {# citas cilnes}}",
     "closeTab": "Aizvērt <bdi>{name}</bdi>",
@@ -560,6 +559,12 @@
     },
     "facet": {
       "anonymization": "Anonimizācija"
+    },
+    "fileParts": {
+      "back": "Atpakaļ uz sarakstu",
+      "download": "Lejupielādēt {fileName}",
+      "noPreview": "Šim faila veidam nav priekšskatījuma. Lejupielādējiet to vai saglabājiet lietā.",
+      "open": "Atvērt {fileName}"
     },
     "firstSourceReached": "Šis ir pirmais avots.",
     "groups": {
@@ -818,7 +823,6 @@
       "why": "Kāpēc",
       "whyItMatters": "Kāpēc tas ir svarīgi:"
     },
-    "selectAttachmentToSave": "Atlasiet saglabājamo pielikumu.",
     "showPane": "Rādīt paneli",
     "swapViews": "Apmainīt galveno skatu un sānu paneli",
     "title": "Inspektors"

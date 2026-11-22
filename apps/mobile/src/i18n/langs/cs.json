@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Přílohy",
     "certifiedAt": "Čas certifikace",
     "deliveredTo": "Doručeno na adresu",
     "error": "Ohlášená chyba",
@@ -475,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Číslo bankovního účtu",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Přiložené soubory",
     "bankCode": "Kód banky",
     "batchPosition": "Doklad {position, number} z {count, number}",
     "bic": "Kód BIC",
@@ -521,11 +519,24 @@
     "vatBreakdown": "Rekapitulace DPH",
     "vatId": "DIČ"
   },
+  "email": {
+    "cc": "Kopie",
+    "date": "Datum",
+    "from": "Odesílatel",
+    "noSubject": "(Bez předmětu)",
+    "subject": "Předmět",
+    "to": "Příjemci"
+  },
   "entity": {
     "currentVersion": "Aktuální verze",
     "loadFailed": "Položku se nepodařilo načíst.",
     "reference": "Číslo jednací",
     "type": "Typ"
+  },
+  "fileParts": {
+    "attachments": "Přílohy",
+    "open": "Otevřít {fileName} ({details})",
+    "unnamed": "Soubor bez názvu"
   },
   "header": {
     "search": "Hledat"
@@ -854,6 +865,7 @@
     "layer": "Vrstva podpisů {number, number}",
     "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
     "noSigners": "Nebyly nalezeny žádné údaje o podepisujících.",
+    "signedContent": "Podepsaný dokument",
     "signers": "Podepisující",
     "unknownSigner": "Neznámý podepisující",
     "unreadable": "Podepsaný soubor se nepodařilo přečíst.",

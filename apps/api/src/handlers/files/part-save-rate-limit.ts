@@ -2,7 +2,7 @@ import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { scopedRateLimitKey } from "@/api/lib/rate-limit/rate-limit";
 import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
 
-const EMAIL_ATTACHMENT_SAVE_RATE_LIMIT_SCOPE = "upload";
+const FILE_PART_SAVE_RATE_LIMIT_SCOPE = "upload";
 
 type RateLimitCounterContext = Pick<RedisRateLimitContext, "increment">;
 
@@ -15,7 +15,7 @@ const getDefaultContext = (): RedisRateLimitContext => {
   return defaultContext;
 };
 
-export const consumeEmailAttachmentSaveRateLimit = async ({
+export const consumeFilePartSaveRateLimit = async ({
   context = getDefaultContext(),
   request,
   server,
@@ -26,7 +26,7 @@ export const consumeEmailAttachmentSaveRateLimit = async ({
 }): Promise<boolean> => {
   const counter = await context.increment(
     scopedRateLimitKey({
-      scope: EMAIL_ATTACHMENT_SAVE_RATE_LIMIT_SCOPE,
+      scope: FILE_PART_SAVE_RATE_LIMIT_SCOPE,
       request,
       server,
     }),

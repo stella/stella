@@ -1,13 +1,19 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { cn } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import {
+  FilePartList,
+  FilePartViewer,
+  useOpenFilePart,
+} from "@/components/file-parts/file-parts";
+import { useFilePartActions } from "@/components/file-parts/use-file-part-actions";
 import type { FileTab } from "@/components/inspector/file-tab";
 import { LegalFilePreviewText } from "@/components/inspector/legal-file-preview-text";
 import { asicPreviewOptions } from "@/lib/files/legal-file-queries";
@@ -23,6 +29,9 @@ export const AsicFileViewer = ({
     asicPreviewOptions({ fieldId: tab.id, workspaceId: tab.workspaceId }),
   );
   const t = useTranslations();
+  const source = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const actions = useFilePartActions(source);
+  const { open, openPart, close } = useOpenFilePart(data.members);
 
   return (
     <FileViewerWithAI
@@ -34,8 +43,27 @@ export const AsicFileViewer = ({
       className="flex h-full min-h-0 flex-col"
       workspaceId={tab.workspaceId}
     >
-      <ScrollArea axis="vertical" className="min-h-0 flex-1">
-        <article className="space-y-3 p-4" {...DOCKED_COMPOSER_CLEARANCE}>
+      {open === null ? null : (
+        <FilePartViewer
+          actions={actions}
+          // A member without a preview of its own still shows the text the
+          // server read from it.
+          fallback={
+            open.status !== "unavailable" && open.text.trim() ? (
+              <LegalFilePreviewText format={open.textFormat} text={open.text} />
+            ) : null
+          }
+          key={open.part}
+          onBack={close}
+          row={open}
+          source={source}
+        />
+      )}
+      <ScrollArea
+        axis="vertical"
+        className={cn("min-h-0 flex-1", open !== null && "hidden")}
+      >
+        <article className="space-y-4 p-4" {...DOCKED_COMPOSER_CLEARANCE}>
           <p className="text-muted-foreground text-sm">
             {t("signedFile.unverified")}
           </p>
@@ -48,30 +76,15 @@ export const AsicFileViewer = ({
             <DownloadIcon />
             {t("common.downloadOriginal")}
           </Button>
-          <ul className="divide-y">
-            {data.members.map(({ fileName, status, text, textFormat }) => (
-              <li className="space-y-2 py-3" key={fileName}>
-                <h2 className="text-sm font-medium wrap-break-word">
-                  <BidiText>{fileName}</BidiText>
-                </h2>
-                {status !== "unavailable" && text.trim() ? (
-                  <LegalFilePreviewText format={textFormat} text={text} />
-                ) : null}
-                {status === "truncated" && (
-                  <p className="text-muted-foreground text-sm">
-                    {t("common.previewTruncated")}
-                  </p>
-                )}
-                {status === "unavailable" && (
-                  <p className="text-muted-foreground text-sm">
-                    {t("signedFile.noReadableContent")}
-                  </p>
-                )}
-              </li>
-            ))}
-          </ul>
+          <FilePartList
+            actions={actions}
+            onOpen={openPart}
+            parts={data.members}
+            title={t("common.documents")}
+          />
         </article>
       </ScrollArea>
+      {actions.dialog}
     </FileViewerWithAI>
   );
 };

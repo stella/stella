@@ -3,12 +3,12 @@ import type { InferOutput } from "valibot";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import type { asicPreviewSchema } from "@stll/api-contract/asic";
-import type { CertifiedEmailRead } from "@stll/api-contract/certified-email";
 import {
   DATA_BOX_DOCUMENT_KIND,
   DATA_BOX_MESSAGE_MIME_TYPE,
 } from "@stll/api-contract/data-box";
 import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
+import type { EmailReading } from "@stll/api-contract/email-reading";
 import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 
 import type { Fetch } from "@/connection/http";
@@ -107,21 +107,25 @@ const invoicePreview = {
     {
       documentType: "invoice",
       typeCode: "380",
-      number: "INV-TEST-0001",
+      number: "FV-2026-0117",
       issueDate: "2026-01-15",
       taxPointDate: null,
       dueDate: "2026-01-29",
       currency: "EUR",
       seller: {
-        name: "Sample Supplier Test",
+        name: "Tiskárna Vltava s.r.o.",
         identifiers: [{ kind: "vat", scheme: null, value: "XX0000000001" }],
-        address: ["1 Sample Street"],
+        address: ["Na Poříčí 1041/12", "110 00 Praha 1"],
       },
-      buyer: { name: "Sample Customer Test", identifiers: [], address: [] },
+      buyer: {
+        name: "Dvořák & Šimek, advokátní kancelář",
+        identifiers: [],
+        address: [],
+      },
       lines: [
         {
           id: "1",
-          description: "Sample service",
+          description: "Tisk podání, leden 2026",
           quantity: "1",
           unitCode: "C62",
           unitPrice: "100.00",
@@ -146,10 +150,11 @@ const invoicePreview = {
   ],
   attachments: [
     {
-      index: 0,
-      fileName: "sample.pdf",
-      description: null,
-      sizeBytes: 1024,
+      part: "attachment:0",
+      fileName: "dodaci-list-0117.pdf",
+      mediaType: "application/pdf",
+      description: "Dodací list k faktuře",
+      sizeBytes: 48_213,
     },
   ],
 } satisfies EInvoicePreview;
@@ -333,7 +338,7 @@ describe("reading a document's file", () => {
   );
 
   const certifiedRead = {
-    envelope: {
+    certified: {
       system: "pec",
       kind: "delivery",
       error: "none",
@@ -344,7 +349,7 @@ describe("reading a document's file", () => {
       ],
       replyTo: null,
       subject: "Notifica",
-      provider: "Example PEC provider",
+      provider: "Posta Sicura Lombardia S.p.A.",
       certifiedAt: "2026-11-21T09:15:30.000Z",
       messageId: "opec-fixture@pec.example.com",
       originalMessageId: null,
@@ -360,38 +365,82 @@ describe("reading a document's file", () => {
         signedAt: null,
       },
     },
-    text: "Subject: Notifica\nSi trasmette l'atto.",
+    subject: "Notifica atto di citazione",
+    from: "Studio legale Ferraro <segreteria@pec.example.com>",
+    to: ["destinatario@pec.example.com"],
+    cc: [],
+    date: "2026-11-21T09:15:00.000Z",
+    text: "Si trasmette in allegato l'atto di citazione.",
     attachments: [
-      { part: "attachment:0", fileName: "atto.pdf", sizeBytes: 2048 },
+      {
+        part: "attachment:0",
+        fileName: "atto-di-citazione.pdf",
+        mediaType: "application/pdf",
+        sizeBytes: 182_406,
+      },
     ],
-  } satisfies CertifiedEmailRead;
+  } satisfies EmailReading;
 
-  test("opens an .eml its content shows to be a certified email through the audited reading", async () => {
-    const { fetch, calls } = server((path) =>
-      Response.json(
-        path.endsWith("/versions")
-          ? legalFileVersion("Consegna.eml", "message/rfc822")
-          : certifiedRead,
-      ),
-    );
-    const file = (await read(fetch)).unwrap();
-    expect(file.viewer === "certifiedEmail" && file.preview.unwrap()).toEqual(
-      certifiedRead,
-    );
-    expect(calls).toEqual([
-      "/v1/entities/matter-1/entity/entity-1/versions",
-      "/v1/files/matter-1/certified-email/field%3F1",
-    ]);
-  });
+  const plainRead = {
+    certified: null,
+    subject: "Návrh smlouvy o dílo",
+    from: "Jana Procházková <prochazkova@example.cz>",
+    to: ["kancelar@example.cz"],
+    cc: ["Petr Vlček <vlcek@example.cz>"],
+    date: "Thu, 01 Oct 2026 09:30:00 +0200",
+    text: "Dobrý den, v příloze posílám návrh smlouvy.",
+    attachments: [
+      {
+        part: "attachment:0",
+        fileName: "smlouva-o-dilo-navrh.docx",
+        mediaType: DOCX,
+        sizeBytes: 38_912,
+      },
+      {
+        part: "attachment:2",
+        fileName: null,
+        mediaType: "application/octet-stream",
+        sizeBytes: 512,
+      },
+    ],
+  } satisfies EmailReading;
 
-  test("opens any other .eml as before once the server says it is not certified", async () => {
+  test.each([
+    ["a certified email", "Consegna.eml", "message/rfc822", certifiedRead],
+    ["a plain email", "Návrh smlouvy.eml", "message/rfc822", plainRead],
+    [
+      "an Outlook message",
+      "Návrh smlouvy.msg",
+      "application/vnd.ms-outlook",
+      plainRead,
+    ],
+  ] as const)(
+    "opens %s through the audited email reading",
+    async (_, fileName, mimeType, reading) => {
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, mimeType)
+            : reading,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "email" && file.preview.unwrap()).toEqual(reading);
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/email-reading/field%3F1",
+      ]);
+    },
+  );
+
+  test("opens an email the server cannot read as before", async () => {
     const { fetch, calls } = server((path) => {
       if (path.endsWith("/versions")) {
         return Response.json(legalFileVersion("Lettera.eml", "message/rfc822"));
       }
-      return path.includes("/certified-email/")
+      return path.includes("/email-reading/")
         ? Response.json(
-            { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Not certified" },
+            { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Unreadable" },
             { status: 422 },
           )
         : Response.json(delivered("application/pdf"));
@@ -400,7 +449,7 @@ describe("reading a document's file", () => {
     expect(file.viewer).toBe("pdf");
     expect(calls).toEqual([
       "/v1/entities/matter-1/entity/entity-1/versions",
-      "/v1/files/matter-1/certified-email/field%3F1",
+      "/v1/files/matter-1/email-reading/field%3F1",
       "/v1/files/matter-1/url/field%3F1?purpose=display",
     ]);
   });
@@ -429,29 +478,25 @@ describe("reading a document's file", () => {
     ]);
   });
 
-  test("keeps a certified email's failed reading for a retry", async () => {
+  test("keeps an email's failed reading for a retry", async () => {
     const { fetch } = server((path) =>
       path.endsWith("/versions")
         ? Response.json(legalFileVersion("Consegna.eml", "message/rfc822"))
         : Response.json({ message: "Unavailable" }, { status: 503 }),
     );
     const file = (await read(fetch)).unwrap();
-    expect(file.viewer).toBe("certifiedEmail");
-    expect(file.viewer === "certifiedEmail" && file.preview.isErr()).toBe(true);
+    expect(file.viewer).toBe("email");
+    expect(file.viewer === "email" && file.preview.isErr()).toBe(true);
   });
 
-  test("never asks an Outlook message for a certified reading", async () => {
+  test("never asks a file that is not an email for an email reading", async () => {
     const { fetch, calls } = server((path) =>
       path.endsWith("/versions")
-        ? Response.json(
-            legalFileVersion("Lettera.msg", "application/vnd.ms-outlook"),
-          )
+        ? Response.json(legalFileVersion("Smlouva.pdf", "application/pdf"))
         : Response.json(delivered("application/pdf")),
     );
     await read(fetch);
-    expect(calls.some((path) => path.includes("/certified-email/"))).toBe(
-      false,
-    );
+    expect(calls.some((path) => path.includes("/email-reading/"))).toBe(false);
   });
 
   test.each([
@@ -460,12 +505,19 @@ describe("reading a document's file", () => {
       mimeType: "application/pdf",
       text: "Il testo del verbale",
       textFormat: "markdown",
+      content: {
+        part: "content:0",
+        fileName: "Verbale.pdf",
+        mediaType: "application/pdf",
+        sizeBytes: 96_310,
+      },
     },
     {
       fileName: "Allegato.bin",
       mimeType: "application/octet-stream",
       text: "",
       textFormat: "plain",
+      content: null,
     },
   ] as const)(
     "keeps $mimeType signed-file metadata without requesting the original",
@@ -502,18 +554,24 @@ describe("reading a document's file", () => {
   );
 
   test("keeps the invoice a signed file holds", async () => {
-    const fileName = "IT00000000000_TEST1.xml.p7m";
+    const fileName = "IT00000000000_00A7K.xml.p7m";
     const preview = {
-      fileName: "IT00000000000_TEST1.xml",
+      fileName: "IT00000000000_00A7K.xml",
       mimeType: "application/xml",
       text: "<FatturaElettronica/>",
       textFormat: "plain" as const,
       layers: [
         {
           id: "layer-0",
-          signers: [{ id: "layer-0.signer-0", name: "Sample signer" }],
+          signers: [{ id: "layer-0.signer-0", name: "Marco Bellini" }],
         },
       ],
+      content: {
+        part: "content:0",
+        fileName: "IT00000000000_00A7K.xml",
+        mediaType: "application/xml",
+        sizeBytes: 5812,
+      },
       invoice: {
         ...invoicePreview,
         syntax: "fatturaPA" as const,
@@ -534,9 +592,9 @@ describe("reading a document's file", () => {
   });
 
   test.each([
-    { fileName: "INV-TEST-0001.isdoc", format: "isdoc" },
-    { fileName: "INV-TEST-0001.ISDOCX", format: "isdocx" },
-    { fileName: "INV-TEST-0001.xml", format: "xml" },
+    { fileName: "FV-2026-0117.isdoc", format: "isdoc" },
+    { fileName: "FV-2026-0117.ISDOCX", format: "isdocx" },
+    { fileName: "FV-2026-0117.xml", format: "xml" },
   ] as const)(
     "reads $fileName through the structured invoice preview",
     async ({ fileName, format }) => {
@@ -582,21 +640,30 @@ describe("reading a document's file", () => {
       const preview = {
         members: [
           {
-            fileName: "submission.pdf",
+            part: "member:0",
+            fileName: "hagi-avaldus.pdf",
+            mediaType: "application/pdf",
+            sizeBytes: 211_004,
             status: "readable",
-            text: "The enclosed submission",
+            text: "Hagiavaldus Harju Maakohtule",
             textFormat: "markdown",
           },
           {
-            fileName: "attachment.bin",
+            part: "member:1",
+            fileName: "lisa-1.bin",
+            mediaType: "application/octet-stream",
+            sizeBytes: 4096,
             status: "unavailable",
             text: "",
             textFormat: "plain",
           },
           {
-            fileName: "notes.txt",
+            part: "member:2",
+            fileName: "markused.txt",
+            mediaType: "text/plain",
+            sizeBytes: 90_112,
             status: "truncated",
-            text: "The first page",
+            text: "Esimene lehekülg",
             textFormat: "plain",
           },
         ],
@@ -625,7 +692,7 @@ describe("reading a document's file", () => {
       const preview = {
         receipt: extension === ".et3",
         signers: [
-          { id: "signature-0", name: "Example signer" },
+          { id: "signature-0", name: "Tóth Eszter" },
           { id: "signature-1", name: null },
         ],
         documents: [
@@ -635,7 +702,12 @@ describe("reading a document's file", () => {
             status: "readable",
             text: "Az első oldal",
             textFormat: "markdown",
-            pdf: true,
+            part: {
+              part: "document:0",
+              fileName: "határozat.pdf",
+              mediaType: "application/pdf",
+              sizeBytes: 154_880,
+            },
           },
           {
             id: "document-1",
@@ -643,7 +715,7 @@ describe("reading a document's file", () => {
             status: "unavailable",
             text: "",
             textFormat: "plain",
-            pdf: false,
+            part: null,
           },
         ],
       } satisfies InferOutput<typeof signedDossierPreviewSchema>;
@@ -718,7 +790,7 @@ describe("reading a document's file", () => {
     },
     {
       viewer: "e-invoice",
-      fileName: "INV-TEST-0001.isdocx",
+      fileName: "FV-2026-0117.isdocx",
       mimeType: "application/octet-stream",
     },
     {
@@ -787,7 +859,15 @@ describe("reading a document's file", () => {
         return Response.json({
           kind: "message",
           text: "Datová zpráva",
-          files: [{ fileName: "usneseni.pdf", entityId: null }],
+          files: [
+            {
+              part: "attachment:0",
+              fileName: "usneseni.pdf",
+              mediaType: "application/pdf",
+              sizeBytes: 73_216,
+              entityId: null,
+            },
+          ],
         });
       }
       return Response.json(
@@ -795,8 +875,14 @@ describe("reading a document's file", () => {
       );
     });
     const file = (await read(fetch)).unwrap();
+    // Listed as parts; which document a file was filed as is not shown here.
     expect(file.viewer === "dataBox" && file.preview.unwrap().files).toEqual([
-      { fileName: "usneseni.pdf" },
+      {
+        part: "attachment:0",
+        fileName: "usneseni.pdf",
+        mediaType: "application/pdf",
+        sizeBytes: 73_216,
+      },
     ]);
     const part = await readDocumentPart({
       fetch,

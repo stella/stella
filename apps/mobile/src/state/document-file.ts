@@ -4,13 +4,14 @@ import * as v from "valibot";
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
-import { certifiedEmailReadSchema } from "@stll/api-contract/certified-email";
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import {
   documentFormat,
   legalFileFormat,
 } from "@stll/api-contract/document-format";
 import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
+import { emailReadingSchema } from "@stll/api-contract/email-reading";
+import { filePartDescriptorSchema } from "@stll/api-contract/file-parts";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 
@@ -22,7 +23,7 @@ import { entityPath } from "@/state/matter-entities";
 
 export const DOCX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-export const PDF_MIME_TYPE = "application/pdf";
+const PDF_MIME_TYPE = "application/pdf";
 
 /**
  * Where a file opens: a Word document in folio and a PDF in pdf.js, both the
@@ -106,8 +107,8 @@ const fileUrlSchema = v.object({
 const dataBoxPreviewSchema = v.object({
   kind: v.picklist(DATA_BOX_DOCUMENT_KINDS),
   text: v.string(),
-  /** A message's files, in its order; a receipt has none. */
-  files: v.optional(v.array(v.object({ fileName: v.string() })), []),
+  /** A message's files as parts, in its order; a receipt has none. */
+  files: v.optional(v.array(filePartDescriptorSchema), []),
 });
 
 type DataBoxDocumentFile = {
@@ -169,23 +170,20 @@ type EInvoiceDocumentFile = {
   >;
 };
 
-/** An .eml file its content shows to be a certified email (Italian PEC). */
-type CertifiedEmailDocumentFile = {
-  readonly viewer: "certifiedEmail";
+/** An email file (.eml, .msg), certified (Italian PEC) or not. */
+type EmailDocumentFile = {
+  readonly viewer: "email";
   readonly fileName: string;
   readonly fieldId: string;
-  readonly preview: Result<
-    v.InferOutput<typeof certifiedEmailReadSchema>,
-    ApiError
-  >;
+  readonly preview: Result<v.InferOutput<typeof emailReadingSchema>, ApiError>;
 };
 
 export type LegalDocumentFile =
   | AsicDocumentFile
   | CadesDocumentFile
-  | CertifiedEmailDocumentFile
   | DataBoxDocumentFile
   | EInvoiceDocumentFile
+  | EmailDocumentFile
   | SignedDossierDocumentFile
   | StructuredDocumentFile;
 
@@ -409,27 +407,27 @@ export const readDocumentFile = async ({
         kind satisfies never;
         return panic("Unsupported legal file viewer");
     }
-    // Only the content tells a certified email from any other .eml: the
-    // server reads it and refuses any other email, which opens as before.
-    const format = documentFormat(mimeType, fileName);
-    if (format.kind === "email" && format.label === "EML") {
+    // Every email file is read by the server: its header, its text, its
+    // attachments and a certified email's certification data. An email the
+    // server cannot read opens as before, in the system preview.
+    if (documentFormat(mimeType, fileName).kind === "email") {
       const preview = await requestApi({
         fetch,
         source,
-        path: `/v1/files/${encodeURIComponent(workspaceId)}/certified-email/${encodeURIComponent(fieldId)}`,
-        schema: certifiedEmailReadSchema,
+        path: `/v1/files/${encodeURIComponent(workspaceId)}/email-reading/${encodeURIComponent(fieldId)}`,
+        schema: emailReadingSchema,
       });
-      const notCertified =
+      const unreadable =
         Result.isError(preview) &&
         preview.error._tag === "ApiRequestError" &&
         preview.error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
-      if (!notCertified) {
+      if (!unreadable) {
         return Result.ok({
-          viewer: "certifiedEmail",
+          viewer: "email",
           fileName,
           fieldId,
           preview,
-        } satisfies CertifiedEmailDocumentFile);
+        } satisfies EmailDocumentFile);
       }
     }
     const display = await requestApi({

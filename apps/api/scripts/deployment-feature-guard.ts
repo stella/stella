@@ -99,8 +99,12 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Signed document previews use the matter file read permission on every deployment",
   ],
   [
-    "/v1/files/:workspaceId/certified-email",
-    "Certified email previews use the matter file read permission on every deployment",
+    "/v1/files/:workspaceId/part",
+    "Saving a part of a file to a matter uses the matter file read and document create permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/email-reading",
+    "Email readings use the matter file read permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/data-box",
