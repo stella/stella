@@ -2,9 +2,9 @@ import { panic } from "better-result";
 
 /** The operator limits behind the tenant action size policy. */
 export type ActionSizeLimitSettings = {
-  readonly ACTION_REQUEST_MAX_BYTES: number | undefined;
-  readonly ACTION_RESPONSE_MAX_BYTES: number | undefined;
-  readonly ACTION_PAGE_SIZE_MAX: number | undefined;
+  readonly ACTION_REQUEST_MAX_BYTES?: number | undefined;
+  readonly ACTION_RESPONSE_MAX_BYTES?: number | undefined;
+  readonly ACTION_PAGE_SIZE_MAX?: number | undefined;
 };
 
 let limitsReader: (() => ActionSizeLimitSettings) | null = null;
