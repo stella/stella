@@ -1,5 +1,13 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  or,
+  sql,
+  TransactionRollbackError,
+} from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
@@ -21,7 +29,9 @@ import {
   lockCaseLawProjectionRepairRows,
   lockCaseLawProjectionRepairStates,
   lockCorpusProjectionRevisionsAfterStates,
+  withAggregateSavepoint,
 } from "@/api/lib/db/aggregate-lock";
+import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { transitionBatch } from "@/api/lib/db/transitions";
 import type { CaseLawRankingSignals } from "@/api/lib/legal-search/case-law-ranking-signals";
 import { CORPUS_INDEX_ACTIVE_GENERATION_STATUSES } from "@/api/lib/legal-search/corpus-generation-contract";
@@ -51,6 +61,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
 import { readCaseLawRankingSignals } from "@/api/lib/legal-search/corpus-index-projection-ranking-signals";
 import { lockCorpusIndexProjectionWriterTx } from "@/api/lib/legal-search/corpus-index-projection-revision";
+import { restoreQueuedNamedCopiesTx } from "@/api/lib/legal-search/corpus-index-projection-served-copy-restore";
 import {
   corpusIndexProjectionIsBlocked,
   corpusIndexProjectionNamedCopyTrailsTwoChanges,
@@ -1146,22 +1157,75 @@ export type CorpusProjectionServedCopyRisk =
 const MAX_HELD_COPIES = 16;
 
 /**
- * A repair was held before it wrote anything: no desired state and no
- * canonical epoch moved. It goes through once the copy no longer needs the
- * protection, for example once the outstanding erasure or replacement
+ * What a repair did with each named copy it would have taken away from
+ * readers. Exhaustive, so a caller can count every kind:
+ *
+ * - `restored`: a queued copy still provably the one readers are served went
+ *   back to `applied` before the repair moved any epoch.
+ * - `already_current`: found at risk, then found `applied` and still named
+ *   when re-read under its lock, so nothing was needed.
+ * - `held`: the repair was held for it, and nothing was written.
+ */
+const CORPUS_PROJECTION_SERVED_COPY_OUTCOMES = [
+  "restored",
+  "already_current",
+  "held",
+] as const;
+export type CorpusProjectionServedCopyOutcome =
+  (typeof CORPUS_PROJECTION_SERVED_COPY_OUTCOMES)[number];
+
+type ServedCopyKey = { generation: string; entityId: string };
+
+export type CorpusProjectionServedCopyReport =
+  | (ServedCopyKey & { outcome: "restored" })
+  | (ServedCopyKey & { outcome: "already_current" })
+  | (ServedCopyKey & {
+      outcome: "held";
+      risk: CorpusProjectionServedCopyRisk;
+    });
+
+type CorpusProjectionHeldServedCopy = Extract<
+  CorpusProjectionServedCopyReport,
+  { outcome: "held" }
+>;
+
+/** The named copies a written repair kept for readers, none of them held. */
+export type CorpusProjectionWrittenServedCopy = Exclude<
+  CorpusProjectionServedCopyReport,
+  { outcome: "held" }
+>;
+
+/** How many named copies ended each way. */
+export const countCorpusProjectionServedCopies = (
+  reports: readonly CorpusProjectionServedCopyReport[],
+): Record<CorpusProjectionServedCopyOutcome, number> => {
+  const count = (outcome: CorpusProjectionServedCopyOutcome) =>
+    reports.filter((report) => report.outcome === outcome).length;
+  return {
+    restored: count("restored"),
+    already_current: count("already_current"),
+    held: count("held"),
+  };
+};
+
+/**
+ * A repair was held before it wrote anything: no desired state, no canonical
+ * epoch and no restore moved. It goes through once the copy no longer needs
+ * the protection, for example once the outstanding erasure or replacement
  * settles; until then the subject keeps its current desired state.
  */
 export class CorpusProjectionServedCopyHold extends TaggedError(
   "CorpusProjectionServedCopyHold",
 )<{
   message: string;
-  copies: {
-    generation: string;
-    entityId: string;
-    risk: CorpusProjectionServedCopyRisk;
-  }[];
+  copies: CorpusProjectionHeldServedCopy[];
   omittedCopies: number;
 }> {}
+
+/** What a written repair reports beside its desired states. */
+export type CorpusProjectionRepairWrite = {
+  servedCopies: CorpusProjectionWrittenServedCopy[];
+};
 
 type DesiredStateValues =
   readonly (typeof corpusIndexProjectionStates.$inferInsert)[];
@@ -1243,8 +1307,10 @@ const readServedCopiesAtRiskTx = async (
   )`;
   const rows = await tx
     .select({
+      family: states.family,
       generation: states.generation,
       entityId: states.entityId,
+      revisionId: intents.id,
       risk: sql<CorpusProjectionServedCopyRisk>`CASE
         WHEN ${actionChanges}
           THEN ${"desired_action_change" satisfies CorpusProjectionServedCopyRisk}
@@ -1272,11 +1338,52 @@ const readServedCopiesAtRiskTx = async (
     )
     .orderBy(asc(states.entityId), asc(states.generation))
     .limit(values.length);
-  return rows.map(({ generation, entityId, risk }) => ({
-    generation,
-    entityId,
-    risk: requireServedCopyRisk(risk),
-  }));
+  return rows.map((row) => ({ ...row, risk: requireServedCopyRisk(row.risk) }));
+};
+
+type ServedCopyAtRisk = Awaited<
+  ReturnType<typeof readServedCopiesAtRiskTx>
+>[number];
+
+const servedCopyKey = ({ generation, entityId }: ServedCopyKey) =>
+  `${entityId}/${generation}`;
+
+const compareServedCopyKeys = (left: string, right: string) => {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
+};
+
+/**
+ * The hold for these copies. A copy found at risk before a rolled-back
+ * restore keeps its first risk unless the re-run guard found another.
+ */
+const servedCopyHold = (
+  ...findings: readonly (readonly ServedCopyAtRisk[])[]
+) => {
+  const held = new Map<string, CorpusProjectionHeldServedCopy>();
+  for (const finding of findings) {
+    for (const { generation, entityId, risk } of finding) {
+      held.set(servedCopyKey({ generation, entityId }), {
+        generation,
+        entityId,
+        outcome: "held",
+        risk,
+      });
+    }
+  }
+  // The guard's own order: by entity, then generation.
+  const copies = [...held.entries()]
+    .toSorted(([left], [right]) => compareServedCopyKeys(left, right))
+    .map(([, copy]) => copy);
+  return Result.err(
+    new CorpusProjectionServedCopyHold({
+      message: `Corpus projection repair held: ${copies.length} named copies would leave readers`,
+      copies: copies.slice(0, MAX_HELD_COPIES),
+      omittedCopies: Math.max(0, copies.length - MAX_HELD_COPIES),
+    }),
+  );
 };
 
 const requireServedCopyRisk = (value: string): CorpusProjectionServedCopyRisk =>
@@ -1292,6 +1399,16 @@ const requireServedCopyRisk = (value: string): CorpusProjectionServedCopyRisk =>
  * repair, in this repository or outside it, writes through this function or
  * through `reconcileCorpusProjectionDesiredStateTx`. The caller holds the
  * canonical rows and the states it writes.
+ *
+ * One risk it resolves instead of holding: a queued copy the cleanup claim
+ * would still restore (`restorable_cleanup`). When that is every risk the
+ * write carries, the writer restores those copies first, before any epoch
+ * moves, through the claim's own transition (`restoreQueuedNamedCopiesTx`),
+ * then runs the whole guard again over every generation it writes. Only a
+ * clean second guard lets the write through; otherwise the restores roll
+ * back with it and the write is held as before. Any other risk (an action
+ * change, which covers an erasure and its undo, or a copy the legacy pass
+ * would take) holds the write without restoring anything.
  */
 export const writeRepairedCorpusProjectionDesiredStatesTx = async (
   tx: Transaction,
@@ -1302,22 +1419,59 @@ export const writeRepairedCorpusProjectionDesiredStatesTx = async (
     epochs: CanonicalProjectionEpochUpdate | null;
     values: DesiredStateValues;
   },
-): Promise<Result<void, CorpusProjectionServedCopyHold>> => {
+): Promise<
+  Result<CorpusProjectionRepairWrite, CorpusProjectionServedCopyHold>
+> => {
+  const write = async (writer: Transaction) => {
+    if (epochs !== null) {
+      await setCanonicalProjectionEpoch(writer, epochs);
+    }
+    await writeDesiredStates(writer, values, "repair");
+  };
   const atRisk = await readServedCopiesAtRiskTx(tx, values);
-  if (atRisk.length > 0) {
-    return Result.err(
-      new CorpusProjectionServedCopyHold({
-        message: `Corpus projection repair held: ${atRisk.length} named copies would leave readers`,
-        copies: atRisk.slice(0, MAX_HELD_COPIES),
-        omittedCopies: Math.max(0, atRisk.length - MAX_HELD_COPIES),
+  if (atRisk.length === 0) {
+    await write(tx);
+    return Result.ok({ servedCopies: [] });
+  }
+  if (atRisk.some(({ risk }) => risk !== "restorable_cleanup")) {
+    return servedCopyHold(atRisk);
+  }
+  let held: ServedCopyAtRisk[] | undefined;
+  const attempted = await Result.tryPromise(
+    async () =>
+      await withAggregateSavepoint(tx, async (savepoint) => {
+        const restored = await restoreQueuedNamedCopiesTx(savepoint, atRisk);
+        const stillAtRisk = await readServedCopiesAtRiskTx(savepoint, values);
+        const unrestored = restored.flatMap(({ copy, outcome }) =>
+          outcome === "held"
+            ? atRisk.filter(
+                (risky) => servedCopyKey(risky) === servedCopyKey(copy),
+              )
+            : [],
+        );
+        if (stillAtRisk.length > 0 || unrestored.length > 0) {
+          held = [...unrestored, ...stillAtRisk];
+          return savepoint.rollback();
+        }
+        await write(savepoint);
+        return restored.flatMap(
+          ({ copy: { generation, entityId }, outcome }) =>
+            outcome === "held"
+              ? []
+              : [{ generation, entityId, outcome } as const],
+        );
       }),
-    );
+  );
+  if (attempted.isOk()) {
+    return Result.ok({ servedCopies: attempted.value });
   }
-  if (epochs !== null) {
-    await setCanonicalProjectionEpoch(tx, epochs);
+  if (
+    held !== undefined &&
+    attempted.error.cause instanceof TransactionRollbackError
+  ) {
+    return servedCopyHold(atRisk, held);
   }
-  await writeDesiredStates(tx, values, "repair");
-  return Result.ok(undefined);
+  return abortTransaction(attempted.error.cause);
 };
 
 type DesiredStateSnapshot = {
@@ -1447,6 +1601,8 @@ type ReconcileOutcome = {
   epoch: bigint;
   changed: boolean;
   generationCount: number;
+  /** The named copies the repair kept for readers (`CorpusProjectionRepairWrite`). */
+  servedCopies: CorpusProjectionWrittenServedCopy[];
 };
 
 /**
@@ -1516,7 +1672,12 @@ export const reconcileCorpusProjectionDesiredStateTx = async (
   if (written.isErr()) {
     return Result.err(written.error);
   }
-  return Result.ok({ epoch, changed: values.length > 0, generationCount });
+  return Result.ok({
+    epoch,
+    changed: values.length > 0,
+    generationCount,
+    servedCopies: written.value.servedCopies,
+  });
 };
 
 /**

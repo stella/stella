@@ -155,7 +155,12 @@ describe("a repair that would take a served copy away is held", () => {
       panic("Expected the repair to be held");
     }
     expect(outcome.error.copies).toEqual([
-      { generation: SERVED, entityId, risk: "desired_action_change" },
+      {
+        generation: SERVED,
+        entityId,
+        outcome: "held",
+        risk: "desired_action_change",
+      },
     ]);
     expect(await stateOf(entityId)).toEqual({
       desiredAction: "erase",
@@ -181,7 +186,12 @@ describe("a repair that would take a served copy away is held", () => {
       panic("Expected the second repair to be held");
     }
     expect(second.error.copies).toEqual([
-      { generation: SERVED, entityId, risk: "desired_action_change" },
+      {
+        generation: SERVED,
+        entityId,
+        outcome: "held",
+        risk: "desired_action_change",
+      },
     ]);
     expect(await stateOf(entityId)).toMatchObject({
       appliedRevision: toSafeId<"corpusIndexProjectionIntent">(revision),
@@ -220,7 +230,7 @@ describe("a repair that would take a served copy away is held", () => {
     expect((await boundedRepairWrites(entityId)).isOk()).toBe(true);
   });
 
-  test("a queued copy the cleanup claim would restore keeps its proof", async () => {
+  test("a queued copy the cleanup claim would restore is restored before the repair", async () => {
     const { entityId, revision } = await servedEntity();
     await changeDesired(entityId, 2, {
       action: "upsert",
@@ -230,16 +240,18 @@ describe("a repair that would take a served copy away is held", () => {
 
     const outcome = await continuousReconciles(entityId);
 
-    if (outcome.isOk()) {
-      panic("Expected the repair to be held");
+    if (outcome.isErr()) {
+      panic("Expected the repair to restore the copy and go through");
     }
-    expect(outcome.error.copies).toEqual([
-      { generation: SERVED, entityId, risk: "restorable_cleanup" },
+    expect(outcome.value.servedCopies).toEqual([
+      { generation: SERVED, entityId, outcome: "restored" },
     ]);
-    expect(await canonicalEpochOf(entityId)).toBe(2n);
-    expect((await claim()).restoredIntentIds).toEqual([
-      toSafeId<"corpusIndexProjectionIntent">(revision),
-    ]);
+    expect(await intentOf(revision)).toMatchObject({ status: "applied" });
+    expect(await stateOf(entityId)).toMatchObject({
+      appliedRevision: toSafeId<"corpusIndexProjectionIntent">(revision),
+    });
+    expect(await canonicalEpochOf(entityId)).toBe(3n);
+    expect((await claim()).restoredIntentIds).toEqual([]);
   });
 
   test("a copy two changes behind is not handed to the legacy pass by an epoch jump", async () => {
@@ -264,7 +276,12 @@ describe("a repair that would take a served copy away is held", () => {
       panic("Expected the repair to be held");
     }
     expect(outcome.error.copies).toEqual([
-      { generation: SERVED, entityId, risk: "legacy_retirement" },
+      {
+        generation: SERVED,
+        entityId,
+        outcome: "held",
+        risk: "legacy_retirement",
+      },
     ]);
     expect(await intentOf(revision)).toMatchObject({ status: "applied" });
     expect(await canonicalEpochOf(entityId)).toBe(5n);
