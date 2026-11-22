@@ -14,7 +14,10 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
-import { parseFilePartId } from "@stll/api-contract/file-parts";
+import {
+  FILE_PART_TEXT_PREVIEW_MAX_BYTES,
+  parseFilePartId,
+} from "@stll/api-contract/file-parts";
 import {
   ASIC_E_FILE_FORMAT,
   ASIC_S_FILE_FORMAT,
@@ -830,7 +833,7 @@ const EMAIL_WITH_ATTACHMENT = [
   "",
 ].join("\r\n");
 
-const seedEmail = async () => {
+const seedEmail = async (eml: string = EMAIL_WITH_ATTACHMENT) => {
   const seeded = await seedFile({
     fileName: "smlouva.eml",
     mimeType: EML_MIME_TYPE,
@@ -839,11 +842,18 @@ const seedEmail = async () => {
   fake.put(
     envBase.S3_BUCKET,
     fileKeyFor(seeded.fileId, EML_MIME_TYPE),
-    new TextEncoder().encode(EMAIL_WITH_ATTACHMENT),
+    new TextEncoder().encode(eml),
     EML_MIME_TYPE,
   );
   return seeded;
 };
+
+/** An email whose text attachment is longer than a preview shows. */
+const LONG_TEXT_ATTACHMENT_BYTES = FILE_PART_TEXT_PREVIEW_MAX_BYTES * 2;
+const EMAIL_WITH_LONG_TEXT_ATTACHMENT = EMAIL_WITH_ATTACHMENT.replace(
+  "Lhůta: 15. 10. 2026",
+  () => "a".repeat(LONG_TEXT_ATTACHMENT_BYTES),
+);
 
 const previewEmail = async (
   fieldId: SafeId<"field">,
@@ -944,6 +954,30 @@ describe("email attachment", () => {
       expect(await auditRowsFor(seeded.entityId)).toEqual([]);
     },
   );
+
+  test("a display carries a long text part's preview and a download all of it", async () => {
+    const seeded = await seedEmail(EMAIL_WITH_LONG_TEXT_ATTACHMENT);
+
+    const delivered = async (purpose: "display" | "download") => {
+      const issued = (
+        await readPartUrl(seeded.fieldId, "attachment:0", { purpose })
+      ).unwrap();
+      const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
+      return {
+        contentLength: response.headers.get("content-length"),
+        bytes: new Uint8Array(await response.arrayBuffer()),
+      };
+    };
+
+    const display = await delivered("display");
+    expect(display.bytes.byteLength).toBe(FILE_PART_TEXT_PREVIEW_MAX_BYTES + 1);
+    expect(display.contentLength).toBe(
+      String(FILE_PART_TEXT_PREVIEW_MAX_BYTES + 1),
+    );
+    const download = await delivered("download");
+    expect(download.bytes.byteLength).toBe(LONG_TEXT_ATTACHMENT_BYTES);
+    expect(download.contentLength).toBe(String(LONG_TEXT_ATTACHMENT_BYTES));
+  });
 
   test("an attachment the email does not list is not found and records nothing", async () => {
     const seeded = await seedEmail();

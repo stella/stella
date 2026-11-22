@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES } from "@stll/api-contract";
+import { FILE_PART_TEXT_PREVIEW_MAX_BYTES } from "@stll/api-contract/file-parts";
 
 import {
   decodeFilePartText,
@@ -122,10 +122,10 @@ describe("a text part's preview", () => {
   });
 
   test("shows only the first bytes of a long part and says so", () => {
-    const bytes = new Uint8Array(MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES + 3);
+    const bytes = new Uint8Array(FILE_PART_TEXT_PREVIEW_MAX_BYTES + 3);
     bytes.fill(0x61);
     const decoded = decodeFilePartText({ buffer: bytes.buffer, charset: null });
     expect(decoded.truncated).toBe(true);
-    expect(decoded.text).toHaveLength(MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES);
+    expect(decoded.text).toHaveLength(FILE_PART_TEXT_PREVIEW_MAX_BYTES);
   });
 });

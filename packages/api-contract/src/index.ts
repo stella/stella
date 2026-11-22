@@ -635,7 +635,6 @@ export type {
 } from "./resource-link";
 
 export { STELLA_API_VERSION_PREFIX } from "./api-version";
-export const MAX_EMAIL_TEXT_ATTACHMENT_PREVIEW_BYTES = 1024 * 1024;
 export const EMAIL_TEXT_ATTACHMENT_CHARSET = {
   big5: "big5",
   eucJp: "euc-jp",

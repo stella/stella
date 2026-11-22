@@ -69,5 +69,39 @@ export const filePartDescriptorEntries = {
   sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
 };
 
+/**
+ * Text a part previews as, shown and never rendered: plain, CSV and XML.
+ * Every other type previews as itself or not at all.
+ */
+const FILE_PART_TEXT_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  "text/plain",
+  "text/csv",
+  "text/xml",
+  "application/xml",
+]);
+
+/** Whether a part of this media type previews as text. */
+export const isFilePartTextMediaType = (mediaType: string): boolean =>
+  FILE_PART_TEXT_MEDIA_TYPES.has(
+    (mediaType.split(";", 1).at(0) ?? "").trim().toLowerCase(),
+  );
+
+/** How much of a text part its in-place preview shows. */
+export const FILE_PART_TEXT_PREVIEW_MAX_BYTES = 1024 * 1024;
+
+/**
+ * The bytes the part link delivers inline (for display): a text part is cut
+ * one byte past what its preview shows, so the reader knows it was cut
+ * without fetching the rest; anything else, and every download, is whole.
+ */
+export const filePartInlineBytes = (
+  bytes: Uint8Array,
+  mediaType: string,
+): Uint8Array =>
+  isFilePartTextMediaType(mediaType) &&
+  bytes.byteLength > FILE_PART_TEXT_PREVIEW_MAX_BYTES + 1
+    ? bytes.subarray(0, FILE_PART_TEXT_PREVIEW_MAX_BYTES + 1)
+    : bytes;
+
 export const filePartDescriptorSchema = v.object(filePartDescriptorEntries);
 export type FilePartDescriptor = v.InferOutput<typeof filePartDescriptorSchema>;

@@ -4,7 +4,10 @@ import {
   buildVersionedApiUrl,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
-import type { FilePart } from "@stll/api-contract/file-parts";
+import {
+  type FilePart,
+  filePartInlineBytes,
+} from "@stll/api-contract/file-parts";
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -426,12 +429,16 @@ export const readFilePartContentHandler = async ({
     return Result.err(read.error);
   }
   const { bytes, fileName, mimeType } = read.value;
+  const disposition = partDisposition(purpose);
+  // A display shows a text part's head only; a download is always whole.
+  const body =
+    disposition === "inline" ? filePartInlineBytes(bytes, mimeType) : bytes;
   return Result.ok(
     secureDocumentResponse({
-      body: bytes,
-      contentLength: bytes.byteLength,
+      body,
+      contentLength: body.byteLength,
       contentType: mimeType,
-      disposition: partDisposition(purpose),
+      disposition,
       fileName: sanitizeFilename(fileName),
     }),
   );
