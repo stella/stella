@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
-import { documentFormat } from "./document-format";
+import { documentFormat, RECOGNISED_DOCUMENT_FORMATS } from "./document-format";
 import type { DocumentFormatKind } from "./document-format";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
 import {
@@ -141,44 +141,60 @@ describe("documentFormat", () => {
     expect(labelOf("__proto__")).toBeUndefined();
   });
 
-  test("tags converted formats by any declared type or extension, under the generic mark", () => {
+  test("tags and marks converted formats by any declared type or extension", () => {
     const formatOf = (mimeType: string | null, fileName?: string) =>
       documentFormat(mimeType, fileName);
     expect(formatOf("application/x-iwork-pages-sffpages")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "pages",
+      mark: "pages",
       label: "PAGES",
     });
     expect(formatOf("application/vnd.apple.numbers")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "numbers",
+      mark: "numbers",
       label: "NUMBERS",
     });
     expect(formatOf("application/vnd.wordperfect")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "wordPerfect",
+      mark: "wordPerfect",
       label: "WPD",
     });
     expect(formatOf("application/octet-stream", "smlouva.wp5")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "wordPerfect",
+      mark: "wordPerfect",
       label: "WPD",
     });
     expect(formatOf("application/octet-stream", "vestnik.mhtml")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "webArchive",
+      mark: "webArchive",
       label: "MHT",
     });
     expect(formatOf("application/epub+zip")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "epub",
+      mark: "epub",
       label: "EPUB",
     });
     expect(formatOf("application/vnd.ms-works", "dopis")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "works",
+      mark: "works",
       label: "WPS",
     });
+    // A name naming another converted format does not override the type.
+    expect(formatOf("application/vnd.wordperfect", "dopis.pages").label).toBe(
+      "WPD",
+    );
+  });
+
+  test("gives no recognised format the unknown-file kind", () => {
+    for (const format of RECOGNISED_DOCUMENT_FORMATS) {
+      expect(format.kind).not.toBe("file");
+      for (const mimeType of format.mimeTypes) {
+        expect(documentFormat(mimeType).kind).not.toBe("file");
+      }
+      for (const extension of format.extensions) {
+        expect(documentFormat(null, `a${extension}`).kind).not.toBe("file");
+      }
+    }
   });
 
   test("keeps a profile's tag and mark under its format's media type", () => {

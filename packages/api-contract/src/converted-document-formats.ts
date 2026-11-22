@@ -1,8 +1,8 @@
 /**
  * Word-processing and spreadsheet formats stella reads by converting them to
  * PDF: the PDF is their preview, and the text read from it is what search,
- * chat, workflows and document reads see. They have no mark of their own, so
- * they show the generic file mark with their tag.
+ * chat, workflows and document reads see. Each `kind` names the format's own
+ * mark (`@stll/ui`'s `DOCUMENT_MARKS`), so every list draws it as itself.
  *
  * `mimeAliases` are the other types clients declare for the same files (a
  * Mac names a Pages file `application/x-iwork-pages-sffpages`).
@@ -13,6 +13,7 @@
  */
 export const CONVERTED_DOCUMENT_FORMATS = [
   {
+    kind: "wordPerfect",
     label: "WPD",
     mimeType: "application/vnd.wordperfect",
     mimeAliases: [
@@ -25,6 +26,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     zipPackage: false,
   },
   {
+    kind: "works",
     label: "WPS",
     mimeType: "application/vnd.ms-works",
     mimeAliases: [],
@@ -33,6 +35,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     zipPackage: false,
   },
   {
+    kind: "pages",
     label: "PAGES",
     mimeType: "application/vnd.apple.pages",
     mimeAliases: ["application/x-iwork-pages-sffpages"],
@@ -41,6 +44,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     zipPackage: true,
   },
   {
+    kind: "numbers",
     label: "NUMBERS",
     mimeType: "application/vnd.apple.numbers",
     mimeAliases: ["application/x-iwork-numbers-sffnumbers"],
@@ -77,10 +81,12 @@ export const isConvertedDocumentMimeType = (
 /**
  * Formats whose preview is rendered from HTML stella builds out of them: a
  * web archive's page with its own images, an e-book's chapters in reading
- * order. That HTML converts like any other HTML file.
+ * order. That HTML converts like any other HTML file. Each `kind` names the
+ * format's own mark, as for the converted formats.
  */
 export const HTML_RENDERED_DOCUMENT_FORMATS = [
   {
+    kind: "webArchive",
     label: "MHT",
     mimeType: "multipart/related",
     mimeAliases: ["application/x-mimearchive", "message/x-mht"],
@@ -88,6 +94,7 @@ export const HTML_RENDERED_DOCUMENT_FORMATS = [
     zipPackage: false,
   },
   {
+    kind: "epub",
     label: "EPUB",
     mimeType: "application/epub+zip",
     mimeAliases: [],
