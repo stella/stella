@@ -3,7 +3,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -14,7 +13,6 @@ import { checkJobClassification } from "../check-ci-job-classification";
 import { readDecisions, writeDecision } from "./decisions";
 import { generateClassification, readClassificationInputs } from "./generate";
 import type { DerivedJob } from "./generate";
-import { decisionPathForKey } from "./inputs";
 import { verifyPublicMetadata } from "./public-metadata";
 import { writeSnapshots } from "./snapshots";
 
@@ -177,10 +175,16 @@ test("a pin bumped in one of two callers copies the decision to the new revision
 
   const snapshots = readClassificationInputs(fixture.root).snapshots;
   expect(Object.keys(snapshots).toSorted()).toEqual(["supplier6", "supplier7"]);
-  const decisionKind = (key: string) =>
-    JSON.parse(
-      readFileSync(path.join(fixture.root, decisionPathForKey(key)), "utf-8"),
-    ).kind;
+  const allDecisions = readDecisions({
+    type: "working-tree",
+    root: fixture.root,
+  });
+  const decisionKind = (key: string) => {
+    const entry = allDecisions[key];
+    return typeof entry === "object" && entry !== null && "kind" in entry
+      ? entry.kind
+      : undefined;
+  };
   // The revision still pinned keeps its decision; the new one starts from
   // a copy, which passes only while the job's digest is unchanged.
   expect(decisionKind("supplier6:.github/workflows/shared.yml/shared")).toBe(

@@ -372,8 +372,8 @@ test.each([
   ],
   [
     "untrusted checkouts",
-    `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
-    `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
+    `jobs: {check: {steps: [{uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
+    `jobs: {check: {steps: [{uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
   ],
   [
     "untrusted checkouts through the shared retrying checkout",
@@ -472,6 +472,7 @@ for (const scenario of [
     before: BEFORE,
     after: "jobs: {check: {permissions: {contents: write}, steps: []}}",
     decisions: {},
+    expectedExitCode: 1,
   },
   {
     name: "a privileged job",
@@ -479,15 +480,17 @@ for (const scenario of [
     before: SECRET_BEFORE,
     after: "jobs: {check: {env: {TOKEN: secrets.TOKEN, MODE: two}, steps: []}}",
     decisions: reviewed(SECRET_BEFORE, "check"),
+    expectedExitCode: 0,
   },
   {
     name: "a priority job",
     before: BEFORE,
     after: AFTER,
     decisions: reviewed(BEFORE, "check", "priority"),
+    expectedExitCode: 0,
   },
 ] as const) {
-  test(`a sensitive digest change still fails: ${scenario.name}`, () => {
+  test(`a sensitive digest change is reported: ${scenario.name}`, () => {
     const { root } = repository(
       { workflow: scenario.before, decisions: scenario.decisions },
       { workflow: scenario.after, decisions: scenario.decisions },
@@ -500,7 +503,7 @@ for (const scenario of [
     });
     expect(decisionsIn(root)).toEqual(storedDecisions(scenario.decisions));
     const check = run(root, "--check");
-    expect(check.exitCode).toBe(0);
+    expect(check.exitCode).toBe(scenario.expectedExitCode);
     expect(check.stdout).toContain(SENSITIVE);
   });
 }
