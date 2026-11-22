@@ -494,7 +494,7 @@
     "netAmount": "Nettobetrag",
     "netTotal": "Gesamtbetrag ohne USt.",
     "notRecognized": "Diese XML-Datei ist keine erkannte strukturierte Rechnung.",
-    "notes": "Notizen",
+    "notes": "Rechnungshinweise",
     "otherIdentifier": "Andere Kennung",
     "payableAmount": "Zahlbetrag",
     "paymentAmount": "Zahlungsbetrag",

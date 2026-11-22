@@ -494,7 +494,7 @@
     "netAmount": "Summa bez PVN",
     "netTotal": "Kopā bez PVN",
     "notRecognized": "Šī XML datne nav atpazīts strukturēts rēķins.",
-    "notes": "Piezīmes",
+    "notes": "Rēķina piezīmes",
     "otherIdentifier": "Cits identifikators",
     "payableAmount": "Summa apmaksai",
     "paymentAmount": "Maksājuma summa",

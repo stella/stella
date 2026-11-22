@@ -494,7 +494,7 @@
     "netAmount": "Importe neto",
     "netTotal": "Total sin IVA",
     "notRecognized": "Este archivo XML no es una factura estructurada reconocida.",
-    "notes": "Notas",
+    "notes": "Notas de la factura",
     "otherIdentifier": "Otro identificador",
     "payableAmount": "Importe a pagar",
     "paymentAmount": "Importe del pago",

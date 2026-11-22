@@ -439,7 +439,7 @@
   "eInvoice.netAmount": "Net amount",
   "eInvoice.netTotal": "Total without VAT",
   "eInvoice.notRecognized": "This XML file is not a recognized structured invoice.",
-  "eInvoice.notes": "Notes",
+  "eInvoice.notes": "Invoice notes",
   "eInvoice.otherIdentifier": "Other identifier",
   "eInvoice.payableAmount": "Amount due",
   "eInvoice.paymentAmount": "Payment amount",

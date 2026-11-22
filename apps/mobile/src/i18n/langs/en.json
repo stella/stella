@@ -494,7 +494,7 @@
     "netAmount": "Net amount",
     "netTotal": "Total without VAT",
     "notRecognized": "This XML file is not a recognized structured invoice.",
-    "notes": "Notes",
+    "notes": "Invoice notes",
     "otherIdentifier": "Other identifier",
     "payableAmount": "Amount due",
     "paymentAmount": "Payment amount",

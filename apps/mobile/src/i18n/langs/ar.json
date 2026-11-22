@@ -494,7 +494,7 @@
     "netAmount": "المبلغ الصافي",
     "netTotal": "الإجمالي غير شامل ضريبة القيمة المضافة",
     "notRecognized": "ملف XML هذا ليس فاتورة منظمة معروفة.",
-    "notes": "الملاحظات",
+    "notes": "ملاحظات الفاتورة",
     "otherIdentifier": "معرّف آخر",
     "payableAmount": "المبلغ المستحق",
     "paymentAmount": "مبلغ الدفعة",

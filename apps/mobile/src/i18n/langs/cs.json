@@ -494,7 +494,7 @@
     "netAmount": "Cena bez DPH",
     "netTotal": "Celkem bez DPH",
     "notRecognized": "Tento soubor XML není rozpoznaná strukturovaná faktura.",
-    "notes": "Poznámky",
+    "notes": "Poznámky k faktuře",
     "otherIdentifier": "Jiný identifikátor",
     "payableAmount": "K úhradě",
     "paymentAmount": "Částka platby",

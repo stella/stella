@@ -494,7 +494,7 @@
     "netAmount": "Montant HT",
     "netTotal": "Total HT",
     "notRecognized": "Ce fichier XML n’est pas une facture structurée reconnue.",
-    "notes": "Remarques",
+    "notes": "Remarques sur la facture",
     "otherIdentifier": "Autre identifiant",
     "payableAmount": "Montant à payer",
     "paymentAmount": "Montant du paiement",

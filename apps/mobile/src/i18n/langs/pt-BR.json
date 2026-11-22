@@ -494,7 +494,7 @@
     "netAmount": "Valor líquido",
     "netTotal": "Total sem IVA",
     "notRecognized": "Este arquivo XML não é uma fatura estruturada reconhecida.",
-    "notes": "Notas",
+    "notes": "Observações da fatura",
     "otherIdentifier": "Outro identificador",
     "payableAmount": "Valor a pagar",
     "paymentAmount": "Valor do pagamento",
