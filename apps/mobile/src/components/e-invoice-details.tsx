@@ -74,11 +74,11 @@ const keyed = <Item,>(
 /** Label and value pairs, leaving out what the file does not state. */
 const Rows = ({ rows }: { rows: readonly Row[] }) => (
   <View className="gap-1">
-    {rows.flatMap(({ label, value }) =>
+    {keyed(rows).flatMap(({ item: { label, value }, key }) =>
       value === null
         ? []
         : [
-            <View className="flex-row flex-wrap gap-x-2" key={label}>
+            <View className="flex-row flex-wrap gap-x-2" key={key}>
               <Text variant="caption">{label}</Text>
               <Text className="shrink" selectable variant="label">
                 {value}

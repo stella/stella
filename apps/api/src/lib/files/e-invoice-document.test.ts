@@ -385,6 +385,24 @@ describe("structured invoice reading", () => {
     expect(invoice?.totals.payableAmount).toBe("119.00");
   });
 
+  test("refuses an invoice that cannot fit without dropping more than lines", async () => {
+    const notes = `<cbc:Note>${"n".repeat(9000)}</cbc:Note>`.repeat(400);
+    const xml = ublXml().replace(
+      "<cbc:Note>Synthetic order 7</cbc:Note>",
+      () => notes,
+    );
+    const refused = await readEInvoiceFile(xmlBytes(xml));
+    expect(refused.isErr() && refused.error).toMatchObject({
+      reason: "limit",
+    });
+  });
+
+  test("never drops an invoice of a batch to fit it", async () => {
+    const bodies = 40;
+    const { preview } = await read(xmlBytes(fatturaPaXml({ bodies })));
+    expect(preview.invoices).toHaveLength(bodies);
+  });
+
   test("search and AI text carries the same fields the preview shows", async () => {
     const { preview } = await read(xmlBytes(isdocXml()));
     const text = eInvoiceDocumentText(preview);

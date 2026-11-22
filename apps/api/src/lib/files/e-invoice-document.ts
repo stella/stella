@@ -1,12 +1,12 @@
 import { Result } from "better-result";
 
-import type { EInvoice, EInvoicePreview } from "@stll/api-contract/e-invoice";
+import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import { compareCodeUnit } from "@stll/collation";
 
 import { hasZipMagic } from "@/api/lib/file-scan/zip";
 import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
 import {
-  type DocumentPackageError,
+  DocumentPackageError,
   openDocumentArchive,
   readArchiveEntry,
 } from "@/api/lib/files/document-archive";
@@ -59,90 +59,46 @@ export type EInvoiceDocument = {
  */
 export const E_INVOICE_PREVIEW_MAX_JSON_BYTES = 3 * 1024 * 1024;
 
-type PreviewList =
-  "lines" | "notes" | "vatBreakdown" | "payments" | "invoices" | "attachments";
-
-type InvoiceList = Exclude<PreviewList, "invoices" | "attachments">;
-
-const listLength = (preview: EInvoicePreview, list: PreviewList): number => {
-  if (list === "invoices" || list === "attachments") {
-    return preview[list].length;
-  }
-  return Math.max(0, ...preview.invoices.map((i) => i[list].length));
-};
-
-const halveInvoiceList = (
-  invoice: EInvoice,
-  list: InvoiceList,
-  keep: number,
-): EInvoice => {
-  if (list === "lines") {
-    return { ...invoice, lines: invoice.lines.slice(0, keep) };
-  }
-  if (list === "notes") {
-    return { ...invoice, notes: invoice.notes.slice(0, keep) };
-  }
-  if (list === "vatBreakdown") {
-    return { ...invoice, vatBreakdown: invoice.vatBreakdown.slice(0, keep) };
-  }
-  return { ...invoice, payments: invoice.payments.slice(0, keep) };
-};
-
-const halveList = (
-  preview: EInvoicePreview,
-  list: PreviewList,
-  keep: number,
-): EInvoicePreview => {
-  if (list === "invoices") {
-    return { ...preview, invoices: preview.invoices.slice(0, keep) };
-  }
-  if (list === "attachments") {
-    return { ...preview, attachments: preview.attachments.slice(0, keep) };
-  }
-  return {
-    ...preview,
-    invoices: preview.invoices.map((invoice) =>
-      halveInvoiceList(invoice, list, keep),
-    ),
-  };
-};
-
-const PREVIEW_LISTS: readonly PreviewList[] = [
-  "lines",
-  "notes",
-  "vatBreakdown",
-  "payments",
-  "invoices",
-  "attachments",
-];
-
 /**
- * Halves the longest list until the preview fits. Counts the file states,
- * such as `lineCount`, keep their values, so a viewer can say what is left out.
+ * Halves every invoice's lines until the preview fits; `lineCount` keeps the
+ * file's own count, so a viewer says how many are shown. Nothing else is cut:
+ * an invoice that does not fit without its lines is refused as too large.
  */
-const fitPreview = (preview: EInvoicePreview): EInvoicePreview => {
+const fitPreview = (
+  preview: EInvoicePreview,
+): Result<EInvoicePreview, DocumentPackageError> => {
+  const withLines = (keep: number): EInvoicePreview => ({
+    ...preview,
+    invoices: preview.invoices.map((invoice) => ({
+      ...invoice,
+      lines: invoice.lines.slice(0, keep),
+    })),
+  });
+  const fits = (candidate: EInvoicePreview) =>
+    Buffer.byteLength(JSON.stringify(candidate)) <=
+    E_INVOICE_PREVIEW_MAX_JSON_BYTES;
+  let keep = Math.max(0, ...preview.invoices.map((i) => i.lines.length));
   let fitted = preview;
-  while (
-    Buffer.byteLength(JSON.stringify(fitted)) > E_INVOICE_PREVIEW_MAX_JSON_BYTES
-  ) {
-    const current = fitted;
-    const [longest] = PREVIEW_LISTS.map((list) => ({
-      list,
-      length: listLength(current, list),
-    })).toSorted((left, right) => right.length - left.length);
-    if (longest === undefined || longest.length <= 1) {
-      break;
+  while (!fits(fitted)) {
+    if (keep === 0) {
+      return Result.err(
+        new DocumentPackageError({
+          message: "The invoice exceeds the preview size limit",
+          reason: "limit",
+        }),
+      );
     }
-    fitted = halveList(fitted, longest.list, Math.floor(longest.length / 2));
+    keep = Math.floor(keep / 2);
+    fitted = withLines(keep);
   }
-  return fitted;
+  return Result.ok(fitted);
 };
 
 const withAttachments = (
   syntax: EInvoicePreview["syntax"],
   parsed: ParsedEInvoice,
   packaged: readonly InvoiceAttachment[],
-): EInvoiceDocument => {
+): Result<EInvoiceDocument, DocumentPackageError> => {
   const attachments = [
     ...parsed.embedded.map(
       ({ fileName, description, base64 }): InvoiceAttachment => ({
@@ -154,22 +110,19 @@ const withAttachments = (
     ),
     ...packaged,
   ];
-  return {
-    preview: fitPreview({
-      syntax,
-      version: parsed.version,
-      invoices: parsed.invoices,
-      attachments: attachments.map(
-        ({ fileName, description, sizeBytes }, index) => ({
-          index,
-          fileName,
-          description,
-          sizeBytes,
-        }),
-      ),
-    }),
-    attachments,
-  };
+  return fitPreview({
+    syntax,
+    version: parsed.version,
+    invoices: parsed.invoices,
+    attachments: attachments.map(
+      ({ fileName, description, sizeBytes }, index) => ({
+        index,
+        fileName,
+        description,
+        sizeBytes,
+      }),
+    ),
+  }).map((preview) => ({ preview, attachments }));
 };
 
 /**
@@ -190,7 +143,7 @@ export const readEInvoiceXml = (
   const parsed = SYNTAX_READERS[documentClass](root.value);
   return parsed.invoices.length === 0
     ? Result.err(documentPackageError("The invoice holds no document"))
-    : Result.ok(withAttachments(documentClass, parsed, []));
+    : withAttachments(documentClass, parsed, []);
 };
 
 const manifestMainDocument = (manifest: DocumentXmlNode): string | undefined =>
@@ -263,9 +216,7 @@ const readIsdocx = async (
       sizeBytes: entry.uncompressedSize,
       read: () => readArchiveEntry(entry),
     }));
-  return Result.ok(
-    withAttachments("isdoc", readIsdocInvoice(root.value), packaged),
-  );
+  return withAttachments("isdoc", readIsdocInvoice(root.value), packaged);
 };
 
 /**
