@@ -185,15 +185,14 @@ const digestOf = (workflow: string, job: string) => {
   return digest;
 };
 
-type Decision = { kind: string; qualifier: string; reviewedDigest: string };
+type Decision = { kind: string; qualifier: string };
 type Fixture = { workflow: string; decisions: Record<string, Decision> };
 
 const keyOf = (job: string) => `candidate:.github/workflows/ci.yml/${job}`;
-const reviewed = (workflow: string, job: string, kind = "ordinary") => ({
+const reviewed = (_workflow: string, job: string, kind = "ordinary") => ({
   [keyOf(job)]: {
     kind,
     qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(workflow, job),
   },
 });
 
@@ -288,7 +287,6 @@ const storedDecisions = (decisions: Record<string, Decision>) =>
       {
         kind: decision.kind,
         qualifier: decision.qualifier,
-        approvedDigests: [decision.reviewedDigest],
       },
     ]),
   );
@@ -682,7 +680,6 @@ test("independent approvals of privileged jobs merge without conflict", () => {
   writeDecision(root, keyOf("x"), {
     kind: "ordinary",
     qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(workflowX, "x"),
   });
   commitAll("approve x");
 
@@ -692,7 +689,6 @@ test("independent approvals of privileged jobs merge without conflict", () => {
   writeDecision(root, keyOf("y"), {
     kind: "ordinary",
     qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(workflowY, "y"),
   });
   commitAll("approve y");
   git("merge", "--no-edit", "approve-x");

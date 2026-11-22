@@ -1,4 +1,0 @@
-{
-  "kind": "priority",
-  "qualifier": "Builds, pushes and attests API image digests for the resolved release."
-}

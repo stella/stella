@@ -7,7 +7,6 @@ import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { CLASSIFICATIONS, sha256 } from "./classification-values";
 import { readDecisions } from "./decisions";
 import {
-  approvalPathForKey,
   CLASSIFICATION_DECISIONS_PATH,
   decisionDirectoryForKey,
   decisionPathForKey,
@@ -38,7 +37,6 @@ const DECISIONS = v.record(
   v.strictObject({
     kind: v.picklist(CLASSIFICATIONS),
     qualifier: v.pipe(v.string(), v.minLength(1)),
-    approvedDigests: v.array(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u))),
   }),
 );
 // The decision shape the generator accepts, as readDecisions produces it.
@@ -346,10 +344,7 @@ const reviewJobs = ({
   documentDigest,
   observeJobs,
 }: ReviewJobsOptions) => {
-  const entries: Record<
-    string,
-    { kind: string; qualifier: string; reviewedDigest: string }
-  > = {};
+  const entries: Record<string, { kind: string; qualifier: string }> = {};
   const derivedJobs = new Map<string, DerivedJob>();
 
   const { jobPrivileges, inheritedGrants } = deriveJobPrivileges({
@@ -401,13 +396,10 @@ const reviewJobs = ({
       });
       // Review is owed by the job as derived here, never by the presence of
       // a record: a job that turns privileged fails although it had none.
-      if (privileged && !decision?.approvedDigests.includes(digest)) {
+      if (privileged && decision === undefined) {
         entries[key] = {
-          kind: decision?.kind ?? "<choose ordinary, support, or priority>",
-          qualifier:
-            decision?.qualifier ?? "<describe the reviewed classification>",
-          // The approval file format the decision reader validates.
-          reviewedDigest: digest,
+          kind: "<choose ordinary, support, or priority>",
+          qualifier: "<describe the reviewed classification>",
         };
       }
       return decision
@@ -433,19 +425,12 @@ const reviewJobs = ({
   const messages: string[] = [];
   if (staleJobs.length > 0) {
     messages.push(
-      `Sensitive classification change: ${staleJobs.join(", ")}\nMissing or changed job review. Re-review kind and qualifier, then create or update each listed file (choose kind and qualifier for new jobs):\n${Object.entries(
-        entries,
-      )
-        .map(
-          ([key, value]) =>
-            `${decisionPathForKey(key)}\n${approvalPathForKey(key, value.reviewedDigest)}\n${JSON.stringify(value, null, 2)}`,
-        )
-        .join("\n")}`,
+      `Sensitive classification change: ${staleJobs.join(", ")}\nMissing job classification. Add each entry to ${decisionPathForKey(staleJobs[0] ?? "")}:\n${JSON.stringify(entries, null, 2)}`,
     );
   }
   if (staleDecisions.length > 0) {
     messages.push(
-      `Stale decisions: ${staleDecisions.join(", ")}. Only privileged jobs keep a decision, and these jobs are not privileged or no longer exist. Remove these directories (bun scripts/check-ci-job-classification.ts --write does it):\n${staleDecisions.map(decisionDirectoryForKey).join("\n")}`,
+      `Stale decisions: ${staleDecisions.join(", ")}. Only privileged jobs keep a decision, and these jobs are not privileged or no longer exist. Remove them from ${decisionDirectoryForKey("")} (bun scripts/check-ci-job-classification.ts --write does it).`,
     );
   }
   throw new ReviewRequiredError({

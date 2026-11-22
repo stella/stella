@@ -1,19 +1,12 @@
 import { Result } from "better-result";
-import {
-  cpSync,
-  existsSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import { compareCodeUnit } from "../../packages/collation/src/collation";
 import { pruneStaleJobClassificationDecisions } from "../check-ci-job-classification";
-import { decisionKeyFromPath } from "./decisions";
+import { readDecisions, writeDecisionsMap } from "./decisions";
 import { readClassificationInputs } from "./generate";
 import { createGitProvider } from "./git-provider";
-import { decisionPathForKey } from "./inputs";
 import {
   parseRemoteReference,
   recordMetadataMount,
@@ -93,13 +86,6 @@ type ReconcileDecisionsOptions = {
   copies: ReadonlyMap<string, readonly string[]>;
 };
 
-const decisionKind = (file: string): unknown => {
-  const decision: unknown = JSON.parse(readFileSync(file, "utf-8"));
-  return typeof decision === "object" && decision !== null && "kind" in decision
-    ? decision.kind
-    : undefined;
-};
-
 const reconcileDecisions = ({
   root,
   previous,
@@ -107,16 +93,14 @@ const reconcileDecisions = ({
   replacements,
   copies,
 }: ReconcileDecisionsOptions) => {
-  const decisionDirectory = path.resolve(
-    root,
-    ".github/ci-job-classification-decisions",
-  );
+  const current = readDecisions({ type: "working-tree", root });
+  const next = new Map<string, unknown>(Object.entries(current));
   const conflicted = new Set<string>();
-  // Places one decision under a new supplier. A job the new revision no
-  // longer has gets none. Two decisions converging on one job keep the one
-  // in place when they agree on the kind; when they disagree both are
-  // dropped, so the job is reviewed afresh.
-  const place = (key: string, oldFile: string, target: string) => {
+  const kindOf = (entry: unknown) =>
+    typeof entry === "object" && entry !== null && "kind" in entry
+      ? entry.kind
+      : undefined;
+  const place = (key: string, entry: unknown, target: string) => {
     const separator = key.indexOf(":");
     const remainder = key.slice(separator + 1);
     const targetDocuments = retained[target]?.documents ?? {};
@@ -128,49 +112,42 @@ const reconcileDecisions = ({
       return;
     }
     const renamedKey = `${target}${key.slice(separator)}`;
-    const newFile = path.resolve(root, decisionPathForKey(renamedKey));
     if (conflicted.has(renamedKey)) {
       return;
     }
-    if (existsSync(newFile)) {
-      if (decisionKind(newFile) !== decisionKind(path.resolve(root, oldFile))) {
-        rmSync(path.dirname(newFile), { recursive: true });
+    if (next.has(renamedKey)) {
+      if (kindOf(next.get(renamedKey)) !== kindOf(entry)) {
+        next.delete(renamedKey);
         conflicted.add(renamedKey);
       }
       return;
     }
-    cpSync(path.dirname(path.resolve(root, oldFile)), path.dirname(newFile), {
-      recursive: true,
-    });
+    next.set(renamedKey, entry);
   };
-  for (const name of new Bun.Glob("*/decision.json").scanSync({
-    cwd: decisionDirectory,
-  })) {
-    const oldFile = `.github/ci-job-classification-decisions/${name}`;
-    const key = decisionKeyFromPath(oldFile);
-    const oldSupplier = key.slice(0, key.indexOf(":"));
+  for (const [key, entry] of Object.entries(current)) {
+    const separator = key.indexOf(":");
+    const oldSupplier = key.slice(0, separator);
+    const remainder = key.slice(separator + 1);
     const replacement = replacements.get(oldSupplier);
     for (const target of copies.get(oldSupplier) ?? []) {
-      place(key, oldFile, target);
+      place(key, entry, target);
     }
     const kept = retained[oldSupplier];
-    const remainder = key.slice(key.indexOf(":") + 1);
     if (replacement) {
-      place(key, oldFile, replacement);
-      rmSync(path.dirname(path.resolve(root, oldFile)), { recursive: true });
+      place(key, entry, replacement);
+      next.delete(key);
     } else if (previous[oldSupplier] !== undefined && kept === undefined) {
-      rmSync(path.dirname(path.resolve(root, oldFile)), { recursive: true });
+      next.delete(key);
     } else if (
       kept !== undefined &&
       !Object.keys(kept.documents).some((file) =>
         remainder.startsWith(`${file}/`),
       )
     ) {
-      // A supplier still in use no longer carries this job's document: its
-      // callers moved to another revision (copied above) or dropped it.
-      rmSync(path.dirname(path.resolve(root, oldFile)), { recursive: true });
+      next.delete(key);
     }
   }
+  writeDecisionsMap(root, Object.fromEntries(next));
 };
 
 // Pairs each previous supplier with the new ones its callers moved to:
