@@ -573,7 +573,10 @@ const encode = (text: string) => new TextEncoder().encode(text);
 const endsWithNote = ({
   items,
   pageCount,
-}: Pick<Awaited<ReturnType<typeof textItems>>, "items" | "pageCount">) =>
+}: {
+  items: readonly TextItem[];
+  pageCount: number;
+}) =>
   readsBack(
     items.filter(({ page }) => page === pageCount),
     PREVIEW_SHORTENED_NOTE,
@@ -656,6 +659,21 @@ describe("what a text preview lays out is bounded", () => {
     expect(text).toBe(
       `a${"ž".repeat((LIMITS.pdfRenderTextSourceBytesMax - 2) / 2)}`,
     );
+  });
+
+  test("a replacement character the file holds at the budget is kept", () => {
+    // ASCII up to three bytes before the budget, then U+FFFD (three bytes)
+    // ending exactly at it: the cut splits nothing.
+    const head = "x".repeat(LIMITS.pdfRenderTextSourceBytesMax - 3);
+    const bytes = encode(`${head}�${"y".repeat(16)}`);
+    expect(encode(`${head}�`).byteLength).toBe(
+      LIMITS.pdfRenderTextSourceBytesMax,
+    );
+
+    expect(previewText(bytes, "text/plain")).toEqual({
+      text: `${head}�`,
+      shortened: true,
+    });
   });
 
   test("a shortened file ends with the note even within the page limit", async () => {

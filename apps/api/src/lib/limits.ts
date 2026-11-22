@@ -604,9 +604,6 @@ export const LIMITS = {
    *  gets no preview. The source bounds above keep every measured input
    *  well under it; this is the backstop for one they missed. */
   pdfRenderWorkerRssMaxBytes: 512 * 1024 * 1024,
-  /** How often a parent reads the resident memory of a worker that has a
-   *  ceiling. */
-  workerRssPollMs: 50,
   /** Largest stored source (bytes) a PDF or thumbnail derivative is built
    *  from. Checked against the recorded size before the object is read and
    *  again against the store's declared length, so a refused file is never
