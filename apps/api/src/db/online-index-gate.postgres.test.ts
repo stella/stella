@@ -20,7 +20,11 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationParam,
 } from "./online-migration-connection";
-import { ensureOnlineIndexValid, retireOnlineIndex } from "./online-migrations";
+import {
+  analyzeExpressionIndexesWithoutStatistics,
+  ensureOnlineIndexValid,
+  retireOnlineIndex,
+} from "./online-migrations";
 import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -456,6 +460,35 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           { count: number }[]
         >`SELECT count(*)::integer AS count FROM pg_stats WHERE schemaname = 'public' AND tablename = ${fixture.name}`;
       await repair(fixture);
+      expect((await expressionStats()).at(0)?.count).toBe(1);
+    });
+  });
+
+  test("the statistics census analyzes a table whose expression index was built outside the runner", async () => {
+    await withFixture(async (fixture) => {
+      await fixture.owner.unsafe(
+        `CREATE INDEX ${fixture.name} ON public.${fixture.table} USING btree (((id + other)))`,
+      );
+      const expressionStats = async () =>
+        await fixture.observer<
+          { count: number }[]
+        >`SELECT count(*)::integer AS count FROM pg_stats WHERE schemaname = 'public' AND tablename = ${fixture.name}`;
+      expect((await expressionStats()).at(0)?.count).toBe(0);
+      expect(
+        await analyzeExpressionIndexesWithoutStatistics({
+          connection: fixture.connection,
+          mode: {
+            indexGate: fixture.gate,
+            reserveObserver: async () => ({
+              ...fixture.observation,
+              release: () => undefined,
+            }),
+            timing: { clock: () => 0, emit: () => undefined },
+          },
+          minIndexBytes: 0,
+          tableName: fixture.table,
+        }),
+      ).toEqual({ type: "complete" });
       expect((await expressionStats()).at(0)?.count).toBe(1);
     });
   });
