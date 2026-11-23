@@ -198,6 +198,8 @@ pub enum DesktopAccountSnapshot {
     #[serde(rename = "expiresAt")]
     expires_at: String,
     server: String,
+    // The account's picture as a `data:` URL (`account_avatar`), or none.
+    avatar: Option<String>,
   },
 }
 

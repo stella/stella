@@ -77,6 +77,7 @@ const ACCOUNT = {
   identity: { organizationId: "organization-1", userId: "user-1" },
   server: "https://app.example.test",
   status: "connected",
+  avatar: null,
 } satisfies DesktopAccountSnapshot;
 
 type Native = {

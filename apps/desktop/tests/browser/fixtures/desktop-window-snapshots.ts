@@ -153,6 +153,7 @@ export const ACCOUNT = {
   identity: { organizationId: "organization-1", userId: "user-1" },
   server: "https://app.example.test",
   status: "connected",
+  avatar: null,
 } as const satisfies DesktopAccountSnapshot;
 
 export const APP_STATE = {

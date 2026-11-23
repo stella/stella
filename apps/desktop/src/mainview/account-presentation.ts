@@ -105,6 +105,17 @@ export const accountStatusTone = (status: AccountStatus) => {
   }
 };
 
+/**
+ * The account picture the native side sends: a base64 raster `data:` URL,
+ * the only image source the webview's policy allows besides its own files.
+ * Anything else shows the initials.
+ */
+const ACCOUNT_AVATAR_DATA_URL =
+  /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z\d+/]+={0,2}$/u;
+
+export const accountAvatar = (avatar: string | null) =>
+  avatar !== null && ACCOUNT_AVATAR_DATA_URL.test(avatar) ? avatar : null;
+
 const initialsOf = (account: LinkedAccountSnapshot) => {
   const name = account.name?.trim();
   if (name) {
@@ -123,10 +134,17 @@ const initialsOf = (account: LinkedAccountSnapshot) => {
 export const accountDisplay = (state: DesktopAccountState) => {
   const presentation = accountPresentation(state);
   if (state.status !== "connected") {
-    return { email: null, initials: null, name: null, presentation };
+    return {
+      avatar: null,
+      email: null,
+      initials: null,
+      name: null,
+      presentation,
+    };
   }
   const { account } = state;
   return {
+    avatar: accountAvatar(state.avatar),
     email: account.email,
     initials: initialsOf(account),
     name: account.name?.trim() || account.email,
