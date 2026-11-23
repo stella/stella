@@ -319,9 +319,11 @@ export const carryOverDecisions = async ({
   // The prior rows are joined back by id rather than having their decision,
   // decider, timestamp, and flags shipped out and back as bind parameters:
   // only ids cross the boundary, so no value is re-encoded on the way.
-  const pairs = carried.map(
-    ({ findingId, priorFindingId }) =>
-      sql`(${findingId}::uuid, ${priorFindingId}::uuid)`,
+  const pairsPayload = JSON.stringify(
+    carried.map(({ findingId, priorFindingId }) => ({
+      finding_id: findingId,
+      prior_finding_id: priorFindingId,
+    })),
   );
   // The `WHERE` repeats the matcher's untouched test so a concurrent decision
   // taken between the match and this statement wins over the inheritance.
@@ -335,7 +337,7 @@ export const carryOverDecisions = async ({
            decided_by = prior.decided_by,
            decided_at = prior.decided_at,
            flags = prior.flags
-      FROM (VALUES ${sql.join(pairs, sql`, `)}) AS pair(finding_id, prior_finding_id)
+      FROM jsonb_to_recordset(${pairsPayload}::text::jsonb) AS pair(finding_id uuid, prior_finding_id uuid)
       JOIN ${documentReviewFindings} AS prior ON prior.id = pair.prior_finding_id
      WHERE target.id = pair.finding_id
        AND target.workspace_id = ${workspaceId}

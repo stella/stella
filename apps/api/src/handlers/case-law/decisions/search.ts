@@ -1991,13 +1991,13 @@ const partitionProvisionRecords = async <
           await tx
             .select({ id: sql<string>`continuation.id` })
             .from(
-              sql`(VALUES ${sql.join(
-                continuations.map(
-                  ({ id, after }) =>
-                    sql`(${id}::uuid, ${after.anchor}::text, ${after.spanStart}::integer)`,
-                ),
-                sql`, `,
-              )}) AS continuation(id, anchor, span_start)`,
+              sql`jsonb_to_recordset(${JSON.stringify(
+                continuations.map(({ id, after }) => ({
+                  id,
+                  anchor: after.anchor,
+                  span_start: after.spanStart,
+                })),
+              )}::text::jsonb) AS continuation(id uuid, anchor text, span_start integer)`,
             )
             .where(
               provisionLinkMatchSql({

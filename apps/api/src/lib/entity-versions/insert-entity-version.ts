@@ -184,7 +184,9 @@ export const carryVerificationCodes = async (
   );
   const carried = transfers.flatMap(({ sourceVersionId, targetVersionId }) => {
     const code = codeBySourceId.get(sourceVersionId);
-    return code ? [sql`(${targetVersionId}::uuid, ${code}::varchar)`] : [];
+    return code
+      ? [{ target_id: targetVersionId, verification_code: code }]
+      : [];
   });
   if (carried.length === 0) {
     return;
@@ -199,7 +201,7 @@ export const carryVerificationCodes = async (
   await tx.execute(sql`
     UPDATE ${entityVersions} AS target
        SET verification_code = carried.verification_code
-      FROM (VALUES ${sql.join(carried, sql`, `)})
-           AS carried(target_id, verification_code)
+      FROM jsonb_to_recordset(${JSON.stringify(carried)}::text::jsonb)
+           AS carried(target_id uuid, verification_code varchar)
      WHERE target.id = carried.target_id`);
 };
