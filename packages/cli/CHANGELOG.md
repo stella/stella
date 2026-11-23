@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.2.1
+
+### Patch Changes
+
+- [#9294](https://github.com/stella/stella/pull/9294) [`1798f66`](https://github.com/stella/stella/commit/1798f6615a61ddf02e091d925269ed735bef75fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read Outlook mailboxes (`.pst`) through document content commands: each message's folder, sender, recipients, date, subject, text and attachments' names.
+
 ## 8.2.0
 
 ### Minor Changes
