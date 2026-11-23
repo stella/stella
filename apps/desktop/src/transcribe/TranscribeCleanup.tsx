@@ -11,7 +11,8 @@ import {
 import type { CleanedBlock, CleanedRun } from "@stll/transcript/cleanup";
 import { Button } from "@stll/ui/button";
 import { CopyButton } from "@stll/ui/copy-button";
-import { ChevronDownIcon, InfoIcon } from "@stll/ui/icons";
+import { DocumentMark } from "@stll/ui/document-mark";
+import { ChevronDownIcon, FileTextIcon, InfoIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,
@@ -426,7 +427,23 @@ export const useCopyFormat = (): [CopyFormat, (next: CopyFormat) => void] => {
   return [format, choose];
 };
 
-type SaveOption = { id: string; label: string; onSave: () => void };
+/** The file a save writes, which picks the icon beside its label. */
+type SaveFileKind = "docx" | "text";
+
+export type SaveOption = {
+  id: string;
+  file: SaveFileKind;
+  label: string;
+  onSave: () => void;
+};
+
+/** A Word document shows Word's own mark, as files do on the web. */
+const SaveFileIcon = ({ file }: { file: SaveFileKind }) =>
+  file === "docx" ? (
+    <DocumentMark className="size-4" kind="word" />
+  ) : (
+    <FileTextIcon aria-hidden="true" className="text-muted-foreground" />
+  );
 
 /** Copy (in the remembered format, with a menu to change it) and Save as,
  *  for one pane. */
@@ -518,6 +535,7 @@ export const PaneActions = ({
         <MenuPopup align="end" className="w-64">
           {saveOptions.map((option) => (
             <MenuItem key={option.id} onClick={option.onSave}>
+              <SaveFileIcon file={option.file} />
               {option.label}
             </MenuItem>
           ))}
