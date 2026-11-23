@@ -103,7 +103,7 @@
     "detectCalls": "Reģistrēt zvanus",
     "detectCallsDescription": "Kamēr Teams, Zoom vai pārlūks izmanto mikrofonu, šis laiks tiek skaitīts kā zvans, pat ja jūs tikai klausāties vai strādājat citā lietotnē. Skaņa netiek ierakstīta.",
     "disclosure": {
-      "control": "Nekas netiek ierakstīts, kamēr sadaļā Aktivitāte nenospiežat Sākt ierakstīšanu. Jebkurā laikā varat pauzēt, izslēgt lietotnes vai dzēst jebkuru dienu.",
+      "control": "Nekas netiek ierakstīts, kamēr nenospiežat Sākt ierakstīšanu. Jebkurā laikā varat pauzēt, izslēgt lietotnes vai dzēst jebkuru dienu.",
       "never": {
         "audio": "Skaņa no mikrofona",
         "keystrokes": "Taustiņu nospiešana vai ievadītais teksts",
@@ -866,6 +866,30 @@
   },
   "onboarding": {
     "activityBody": "Redziet, kur pagāja jūsu darba diena, un pārvērtiet to laika ierakstu melnrakstos. Jūs izlemjat, kas tiek ierakstīts un kas tiek nosūtīts.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Sagatavot aprakstus ar stella AI",
+        "body": "stella AI var sagatavot katra laika ieraksta apraksta melnrakstu. Atļaujiet to tagad vai tad, kad pirmo reizi pārskatīsiet dienu.",
+        "withdraw": "Piekrišanu varat jebkurā laikā atsaukt iestatījumos."
+      },
+      "calls": {
+        "body": "Uzskaitiet zvanos pavadīto laiku.",
+        "title": "Zvani"
+      },
+      "details": {
+        "appNamesOnly": "Tiek ierakstīti tikai lietotņu nosaukumi.",
+        "body": "Tie palīdz atšķirt lietas, kad pārskatāt dienu.",
+        "browsers": "Pārlūkprogrammas ieraksta cilņu nosaukumus tikai pēc jūsu atļaujas. Aktivitāte jautā par katru pārlūkprogrammu, kad to redz pirmo reizi.",
+        "title": "Logu virsraksti un dokumenti"
+      },
+      "screens": {
+        "aiDrafts": "AI melnraksti",
+        "calls": "Zvani",
+        "details": "Detaļas",
+        "recording": "Pārskats"
+      },
+      "starting": "Sāk ierakstīšanu…"
+    },
     "activityStoryDraft": "Melnraksts",
     "activityStoryRecordTitle": "Ierakstīts",
     "activityStoryReviewCaption": "Jūs pārskatāt dienu un izvēlaties lietu",
@@ -904,7 +928,6 @@
         "choose": "Mikrofons diktēšanai",
         "title": "Ļaujiet stella jūs dzirdēt"
       },
-      "progress": "{current}. darbība no {total}",
       "screens": {
         "app": "Labošana",
         "context": "Konteksts",
@@ -912,7 +935,6 @@
         "transcription": "Transkripcija",
         "words": "Vārdi"
       },
-      "skipRest": "Izlaist pārējo",
       "transcription": {
         "body": "To varēsiet vēlāk mainīt iestatījumos.",
         "bodyLocal": "Runas modelis darbojas šeit, tāpēc diktēšana darbojas arī bezsaistē.",
@@ -982,6 +1004,7 @@
     "permissionsTitlePc": "Iestatiet šo datoru",
     "progress": "{current}. darbība no {total}",
     "skip": "Izlaist",
+    "skipRest": "Izlaist pārējo",
     "staysLocalMac": "Paliek šajā Mac datorā",
     "staysLocalPc": "Paliek šajā datorā",
     "tryAgain": "Mēģināt vēlreiz",

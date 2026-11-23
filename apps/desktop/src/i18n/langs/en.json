@@ -103,7 +103,7 @@
     "detectCalls": "Record calls",
     "detectCallsDescription": "While Teams, Zoom or a browser uses your microphone, that time counts as the call, even if you only listen or work in another app. Audio is never recorded.",
     "disclosure": {
-      "control": "Nothing is recorded until you press Start recording in Activity. Pause, exclude apps or delete any day whenever you like.",
+      "control": "Nothing is recorded until you press Start recording. Pause, exclude apps or delete any day whenever you like.",
       "never": {
         "audio": "Sound from the microphone",
         "keystrokes": "Keystrokes or typed text",
@@ -866,6 +866,30 @@
   },
   "onboarding": {
     "activityBody": "See where your working day went and turn it into draft time entries. You decide what is recorded and what is sent.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Draft descriptions with stella AI",
+        "body": "stella AI can draft the description of each time entry. Allow it now, or when you first review a day.",
+        "withdraw": "You can withdraw consent at any time in Settings."
+      },
+      "calls": {
+        "body": "Count the time you spend on calls.",
+        "title": "Calls"
+      },
+      "details": {
+        "appNamesOnly": "Only app names are recorded.",
+        "body": "They help you tell matters apart when you review the day.",
+        "browsers": "Browsers record tab titles only once you allow it. Activity asks about each browser the first time it sees it.",
+        "title": "Window titles and documents"
+      },
+      "screens": {
+        "aiDrafts": "AI drafts",
+        "calls": "Calls",
+        "details": "Details",
+        "recording": "Overview"
+      },
+      "starting": "Starting recording…"
+    },
     "activityStoryDraft": "Draft",
     "activityStoryRecordTitle": "Recorded",
     "activityStoryReviewCaption": "You check the day and choose the matter",
@@ -904,7 +928,6 @@
         "choose": "Microphone to dictate with",
         "title": "Let stella hear you"
       },
-      "progress": "Step {current} of {total}",
       "screens": {
         "app": "Cleanup",
         "context": "Context",
@@ -912,7 +935,6 @@
         "transcription": "Transcription",
         "words": "Words"
       },
-      "skipRest": "Skip the rest",
       "transcription": {
         "body": "You can change this later in Settings.",
         "bodyLocal": "The speech model runs here, so dictation also works offline.",
@@ -982,6 +1004,7 @@
     "permissionsTitlePc": "Set up this PC",
     "progress": "Step {current} of {total}",
     "skip": "Skip",
+    "skipRest": "Skip the rest",
     "staysLocalMac": "Stays on this Mac",
     "staysLocalPc": "Stays on this PC",
     "tryAgain": "Try again",
