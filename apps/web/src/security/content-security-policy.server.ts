@@ -121,7 +121,10 @@ const withScriptHashPolicy = async (
 /** Every byte the body yields, and the error that ended it early, if any. */
 const readBody = async (
   body: ReadableStream<Uint8Array> | null,
-): Promise<{ bytes: Uint8Array; failure: { error: unknown } | null }> => {
+): Promise<{
+  bytes: Uint8Array<ArrayBuffer>;
+  failure: { error: unknown } | null;
+}> => {
   const chunks: Uint8Array[] = [];
   let failure: { error: unknown } | null = null;
   if (body !== null) {
