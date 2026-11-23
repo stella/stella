@@ -17,8 +17,8 @@ import type {
   SkillPackageSource,
 } from "@stll/skills/package";
 
-import type { Transaction } from "@/api/db/root";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { originalFromColumns } from "@/api/lib/agent-skills/resource-originals";
 import type { SkillResourceOriginal } from "@/api/lib/agent-skills/resource-originals";
 import { renderSkillFile } from "@/api/lib/agent-skills/skill-file";

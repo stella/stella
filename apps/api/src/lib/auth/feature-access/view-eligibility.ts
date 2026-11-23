@@ -2,8 +2,8 @@ import { and, eq, inArray, sql, type SQLWrapper } from "drizzle-orm";
 
 import type { UnavailableWorkspaceView } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { workspaceViews, workspaceViewTemplates } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type {
   FeatureAccessRequirement,
   FeatureResourceContext,

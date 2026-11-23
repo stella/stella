@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";

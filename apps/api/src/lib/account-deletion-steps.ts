@@ -34,7 +34,6 @@ import {
   twoFactor,
 } from "@/api/db/auth-schema";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
   accountDeletionEffectChunks,
   accountDeletionRequests,
@@ -94,6 +93,7 @@ import {
   workspaceViewTemplates,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import {
   ACTIVE_TASK_REASSIGNMENT_STATUSES,
   buildAccountDeletionTaskReassignmentTargets,

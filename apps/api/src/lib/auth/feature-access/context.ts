@@ -2,9 +2,9 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { featureEnrolments } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { readFeatureAccessGrants } from "@/api/env-feature-access";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureAccessGrants } from "@/api/lib/feature-access/grants-schema";

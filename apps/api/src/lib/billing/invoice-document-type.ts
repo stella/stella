@@ -4,8 +4,8 @@ import * as v from "valibot";
 
 import type { InvoiceDocumentType } from "@stll/invoicing";
 
-import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS, invoices } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockOriginalInvoice } from "@/api/lib/db/aggregate-lock";

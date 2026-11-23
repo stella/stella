@@ -7,7 +7,6 @@ import type { InvoicePaymentMethod } from "@stll/api-contract";
 import { currencyMinorUnitDigits, toMajorUnits } from "@stll/money";
 import { Temporal, todayFor } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   INVOICE_PAYMENT_ORIGIN,
   INVOICE_STATUS,
@@ -15,6 +14,7 @@ import {
   invoicePayments,
 } from "@/api/db/schema";
 import type { InvoiceStatus } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -10,12 +10,12 @@ import {
 
 import { member } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
 import {
   organizationProfessionalUseAcceptances,
   PROFESSIONAL_USE_ACCEPTANCE_SOURCE,
   userProfessionalUseAcceptances,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

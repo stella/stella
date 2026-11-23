@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 
 import { apikey } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseDesktopRegistryMetadata } from "@/api/lib/business-registries/desktop/config";
 import { desktopRegistryKeyOrganizationScope } from "@/api/lib/business-registries/desktop/scope";

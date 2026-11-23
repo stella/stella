@@ -4,9 +4,9 @@ import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { GazetteerEntry } from "@stll/anonymize";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { loadOrganizationAnonymizationTermsForWrite } from "@/api/lib/anonymization-write-cap";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { createSafeId } from "@/api/lib/branded-types";

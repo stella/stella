@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import { and, eq, gt, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { vatRates } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

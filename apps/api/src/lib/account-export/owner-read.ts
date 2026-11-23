@@ -5,9 +5,9 @@ import {
   SETTING_ACCOUNT_EXPORT_ORGANIZATION_ID,
   SETTING_ACCOUNT_EXPORT_USER_ID,
 } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import { legalReaderAnnotations } from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 

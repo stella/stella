@@ -2,9 +2,9 @@ import { panic, Result, TaggedError } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { Transaction } from "@/api/db/root";
 import { CHAT_TITLE_SOURCE, chatThreads } from "@/api/db/schema";
 import type { ChatTitleSource } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { ModelOperationId } from "@/api/lib/ai-generation/model-operation-registry";
 import { aiTitlingMayReplace } from "@/api/lib/ai-generation/thread-title";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

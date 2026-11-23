@@ -12,7 +12,7 @@ import {
   readOrganizationRequestSsoRefusal,
   readSignedAccessTokenSsoAccess,
 } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { getAuth } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

@@ -4,9 +4,9 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadTransaction } from "@/api/lib/case-law-public-read-db";
 import { observedCensusCourt } from "@/api/lib/case-law/census-listing-identity";

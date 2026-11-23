@@ -6,7 +6,7 @@ import * as v from "valibot";
 import { DEFAULT_VARCHAR_MAX_LENGTH } from "@stll/api-contract/limits";
 
 import { account } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import {
   createAuditRecorder,
   createBackgroundAuditRecorder,

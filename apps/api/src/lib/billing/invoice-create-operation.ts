@@ -6,7 +6,6 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -18,6 +17,7 @@ import {
   invoices,
   timeEntries,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { INVOICE_ENTRIES_MODIFIED_MESSAGE } from "@/api/lib/billing/invoice-concurrent-modification";

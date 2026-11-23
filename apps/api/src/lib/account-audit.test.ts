@@ -3,8 +3,8 @@ import { eq, sql } from "drizzle-orm";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { Transaction } from "@/api/db/root";
 import { accountAuditLogs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   createAuditRecorder,
   createBackgroundAuditRecorder,

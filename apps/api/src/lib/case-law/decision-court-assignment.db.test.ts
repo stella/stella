@@ -5,7 +5,6 @@ import { drizzle } from "drizzle-orm/pglite";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   caseLawSources,
@@ -13,6 +12,7 @@ import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   assignDecisionCourtIdsTx,
