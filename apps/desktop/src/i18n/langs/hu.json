@@ -1347,6 +1347,7 @@
       "audioMissing": "A felvétel már nincs megnyitva ebben az ablakban, ezért nem került az ügybe.",
       "audioTooLarge": "A felvétel nagyobb, mint {size}, ezért nem került az ügybe.",
       "cleanedDocxFileName": "{title} – szerkesztett szöveg.docx",
+      "cleanedNotFiled": "A javított szöveget nem sikerült az ügybe menteni.",
       "cleanedTitle": "{title} – szerkesztett szöveg",
       "documents": "A Word-dokumentumok mentése…",
       "docxFileName": "{title} – átirat.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "Az átiratot nem sikerült az ügybe menteni. Próbálja újra.",
       "saveWithTimestamps": "Szöveg időbélyegekkel (.txt)",
       "saveWithoutTimestamps": "Szöveg időbélyegek nélkül (.txt)",
-      "savedToMatter": "Elmentve ide: {matter}, ezen a néven: {fileName}.",
       "savingToMatter": "Mentés…",
       "thisComputer": "Ez a számítógép",
       "transcriptTitle": "Átirat"

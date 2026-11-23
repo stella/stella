@@ -1347,6 +1347,7 @@
       "audioMissing": "Įrašas šiame lange nebeatidarytas, todėl jis neišsaugotas byloje.",
       "audioTooLarge": "Įrašas didesnis nei {size}, todėl jis neišsaugotas byloje.",
       "cleanedDocxFileName": "{title} – sutvarkytas tekstas.docx",
+      "cleanedNotFiled": "Nepavyko išsaugoti sutvarkyto teksto byloje.",
       "cleanedTitle": "{title} – sutvarkytas tekstas",
       "documents": "Išsaugomi Word dokumentai…",
       "docxFileName": "{title} – transkripcija.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "Nepavyko išsaugoti transkripcijos byloje. Bandykite dar kartą.",
       "saveWithTimestamps": "Tekstas su laiko žymomis (.txt)",
       "saveWithoutTimestamps": "Tekstas be laiko žymų (.txt)",
-      "savedToMatter": "Išsaugota byloje {matter} kaip {fileName}.",
       "savingToMatter": "Išsaugoma…",
       "thisComputer": "Šis kompiuteris",
       "transcriptTitle": "Transkripcija"

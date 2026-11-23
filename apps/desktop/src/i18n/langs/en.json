@@ -1347,6 +1347,7 @@
       "audioMissing": "The recording is no longer open in this window, so it was not saved to the matter.",
       "audioTooLarge": "The recording is larger than {size}, so it was not saved to the matter.",
       "cleanedDocxFileName": "{title} cleaned up.docx",
+      "cleanedNotFiled": "The cleaned-up text could not be saved to the matter.",
       "cleanedTitle": "{title} cleaned up",
       "documents": "Saving the Word documents…",
       "docxFileName": "{title} transcript.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "The transcript could not be saved to the matter. Try again.",
       "saveWithTimestamps": "Text with timestamps (.txt)",
       "saveWithoutTimestamps": "Text without timestamps (.txt)",
-      "savedToMatter": "Saved to {matter} as {fileName}.",
       "savingToMatter": "Saving…",
       "thisComputer": "This computer",
       "transcriptTitle": "Transcript"

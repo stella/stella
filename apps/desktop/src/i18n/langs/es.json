@@ -1347,6 +1347,7 @@
       "audioMissing": "La grabación ya no está abierta en esta ventana, así que no se guardó en el asunto.",
       "audioTooLarge": "La grabación supera {size}, así que no se guardó en el asunto.",
       "cleanedDocxFileName": "{title} - texto revisado.docx",
+      "cleanedNotFiled": "No se pudo guardar el texto depurado en el asunto.",
       "cleanedTitle": "{title} - texto revisado",
       "documents": "Guardando los documentos de Word…",
       "docxFileName": "{title} - transcripción.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "No se pudo guardar la transcripción en el asunto. Inténtalo de nuevo.",
       "saveWithTimestamps": "Texto con marcas de tiempo (.txt)",
       "saveWithoutTimestamps": "Texto sin marcas de tiempo (.txt)",
-      "savedToMatter": "Guardado en {matter} como {fileName}.",
       "savingToMatter": "Guardando…",
       "thisComputer": "Este ordenador",
       "transcriptTitle": "Transcripción"

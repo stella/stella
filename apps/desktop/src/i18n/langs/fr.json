@@ -1347,6 +1347,7 @@
       "audioMissing": "L’enregistrement n’est plus ouvert dans cette fenêtre et n’a donc pas été enregistré dans le dossier.",
       "audioTooLarge": "L’enregistrement dépasse {size} et n’a donc pas été enregistré dans le dossier.",
       "cleanedDocxFileName": "{title} - texte révisé.docx",
+      "cleanedNotFiled": "Impossible d’enregistrer le texte nettoyé dans le dossier.",
       "cleanedTitle": "{title} - texte révisé",
       "documents": "Enregistrement des documents Word…",
       "docxFileName": "{title} - transcription.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "Impossible d’enregistrer la transcription dans le dossier. Réessayez.",
       "saveWithTimestamps": "Texte avec horodatage (.txt)",
       "saveWithoutTimestamps": "Texte sans horodatage (.txt)",
-      "savedToMatter": "Enregistré dans {matter} sous {fileName}.",
       "savingToMatter": "Enregistrement…",
       "thisComputer": "Cet ordinateur",
       "transcriptTitle": "Transcription"

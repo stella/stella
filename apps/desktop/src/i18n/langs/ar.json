@@ -1347,6 +1347,7 @@
       "audioMissing": "لم يعد التسجيل مفتوحًا في هذه النافذة، لذا لم يُحفظ في الملف.",
       "audioTooLarge": "التسجيل أكبر من {size}، لذا لم يُحفظ في الملف.",
       "cleanedDocxFileName": "{title} - النص المنقح.docx",
+      "cleanedNotFiled": "تعذّر حفظ النص المنقّح في الملف.",
       "cleanedTitle": "{title} - النص المنقح",
       "documents": "جارٍ حفظ مستندات Word…",
       "docxFileName": "{title} - نص.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "تعذّر حفظ النص في الملف. حاول مرة أخرى.",
       "saveWithTimestamps": "نص مع الطوابع الزمنية (.txt)",
       "saveWithoutTimestamps": "نص بدون الطوابع الزمنية (.txt)",
-      "savedToMatter": "تم الحفظ في {matter} باسم {fileName}.",
       "savingToMatter": "جارٍ الحفظ…",
       "thisComputer": "هذا الكمبيوتر",
       "transcriptTitle": "النص المفرّغ"

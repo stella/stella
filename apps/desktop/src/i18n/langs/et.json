@@ -1347,6 +1347,7 @@
       "audioMissing": "Salvestis pole selles aknas enam avatud, seega seda toimikusse ei salvestatud.",
       "audioTooLarge": "Salvestis on suurem kui {size}, seega seda toimikusse ei salvestatud.",
       "cleanedDocxFileName": "{title} – toimetatud tekst.docx",
+      "cleanedNotFiled": "Puhastatud teksti ei õnnestunud toimikusse salvestada.",
       "cleanedTitle": "{title} – toimetatud tekst",
       "documents": "Wordi dokumentide salvestamine…",
       "docxFileName": "{title} – transkriptsioon.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "Transkriptsiooni ei õnnestunud toimikusse salvestada. Proovige uuesti.",
       "saveWithTimestamps": "Tekst ajatemplitega (.txt)",
       "saveWithoutTimestamps": "Tekst ajatempliteta (.txt)",
-      "savedToMatter": "Salvestatud toimikusse {matter} nimega {fileName}.",
       "savingToMatter": "Salvestamine…",
       "thisComputer": "See arvuti",
       "transcriptTitle": "Transkriptsioon"

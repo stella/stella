@@ -1347,6 +1347,7 @@
       "audioMissing": "Nagranie nie jest już otwarte w tym oknie, więc nie zapisano go w sprawie.",
       "audioTooLarge": "Nagranie jest większe niż {size}, więc nie zapisano go w sprawie.",
       "cleanedDocxFileName": "{title} – tekst poprawiony.docx",
+      "cleanedNotFiled": "Nie udało się zapisać tekstu po korekcie w sprawie.",
       "cleanedTitle": "{title} – tekst poprawiony",
       "documents": "Zapisywanie dokumentów Word…",
       "docxFileName": "{title} – transkrypcja.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "Nie udało się zapisać transkrypcji w sprawie. Spróbuj ponownie.",
       "saveWithTimestamps": "Tekst ze znacznikami czasu (.txt)",
       "saveWithoutTimestamps": "Tekst bez znaczników czasu (.txt)",
-      "savedToMatter": "Zapisano w sprawie {matter} jako {fileName}.",
       "savingToMatter": "Zapisywanie…",
       "thisComputer": "Ten komputer",
       "transcriptTitle": "Transkrypcja"

@@ -36,11 +36,18 @@ type Variant = {
   cleanupHeld?: boolean;
   /** The first cleanup request gets no answer. */
   firstCleanupFails?: boolean;
+  /** A save to the matter stops mid-upload until the spec releases it. */
+  saveHeld?: boolean;
+  /** What did not reach the matter folder; everything did by default. */
+  folderShortfall?: {
+    notFiled: string[];
+    audio: { outcome: string; maxBytes?: number };
+  };
 };
 
 /** The page flag that keeps snapshot reads failing. */
 const SNAPSHOT_FAILS = "__TRANSCRIBE_SNAPSHOT_FAILS__";
-/** The page function that lets held cleanup requests answer. */
+/** The page function that lets held cleanup and save requests answer. */
 const RELEASE_CLEANUP = "__TRANSCRIBE_RELEASE_CLEANUP__";
 /** Where the page keeps the bytes of the last Word document saved. */
 const SAVED_DOCX = "__TRANSCRIBE_SAVED_DOCX__";
@@ -74,6 +81,8 @@ const open = async (
           firstStartRefused,
           cleanupHeld,
           firstCleanupFails,
+          saveHeld,
+          folderShortfall,
         },
         failsFlag,
         releaseCleanup,
@@ -151,6 +160,45 @@ const open = async (
         transcribe_copy_text: () => null,
         transcribe_copy_rich: () => null,
         transcribe_save_text: () => true,
+        // Files the folder as native code does: progress first, then what
+        // became of each document and of the recording.
+        transcribe_save_to_matter_folder: async () => {
+          ipc.emit("transcribe-save-progress", { stage: "preparing" });
+          ipc.emit("transcribe-save-progress", { stage: "documents" });
+          ipc.emit("transcribe-save-progress", {
+            stage: "uploading",
+            sentBytes: 1_250_000,
+            totalBytes: 2_500_000,
+          });
+          if (saveHeld === true) {
+            await new Promise<void>((resolve) => {
+              held.push(resolve);
+            });
+          }
+          ipc.emit("transcribe-save-progress", { stage: "finishing" });
+          return {
+            folderName: "Memo to file 2026-11-14",
+            files: [
+              {
+                kind: "transcript",
+                fileName: "Memo to file 2026-11-14 transcript.docx",
+              },
+              ...(folderShortfall?.notFiled.includes("cleaned") === true
+                ? []
+                : [
+                    {
+                      kind: "cleaned",
+                      fileName: "Memo to file 2026-11-14 cleaned up.docx",
+                    },
+                  ]),
+            ],
+            notFiled: folderShortfall?.notFiled ?? [],
+            audio: folderShortfall?.audio ?? {
+              outcome: "saved",
+              fileName: "Memo to file 2026-11-14.m4a",
+            },
+          };
+        },
         transcribe_save_docx: (bytes) => {
           Reflect.set(
             window,
@@ -618,3 +666,123 @@ test("the shipped CSP is in force while the editor runs", async ({ page }) => {
     .poll(async () => desktopCspViolations(page))
     .toEqual(["img-src https://example.com/pixel.png"]);
 });
+
+/** Chooses the matter, then transcribes the recording into it. */
+const transcribeIntoMatter = async (page: Page) => {
+  await page.getByRole("button", { name: en.transcribe.matter.none }).click();
+  await page
+    .getByRole("button", { name: new RegExp(MATTER.name, "u") })
+    .click();
+  await transcribeAll(page);
+};
+
+const saveToMatterButton = (page: Page) =>
+  page.getByRole("button", { name: en.transcribe.result.saveToMatter });
+
+const statusRow = (page: Page) => page.getByRole("status");
+
+test("Save to matter files the transcript and the edited text as one folder, showing its progress", async ({
+  page,
+}) => {
+  const { pageErrors } = await open(page, "light", { saveHeld: true });
+  const t = en.transcribe;
+  await transcribeIntoMatter(page);
+  await typeAfter(page, "with costs", ` ${EDIT}`);
+  await saveToMatterButton(page).click();
+
+  // The upload's progress shows in the status row while it runs.
+  await expect(statusRow(page)).toHaveText(
+    t.matterFolder.uploading.replace("{percent, number}", "50"),
+  );
+  const request = requestOf(
+    await lastCall(page, "transcribe_save_to_matter_folder"),
+  );
+  expect(request["matterId"]).toBe(MATTER.id);
+  expect(request["title"]).toBe("Memo to file 2026-11-14");
+  expect(request["transcriptName"]).toBe(
+    t.result.documentTitle.replace("{title}", "Memo to file 2026-11-14"),
+  );
+  expect(request["cleanedName"]).toBe(
+    t.matterFolder.cleanedTitle.replace("{title}", "Memo to file 2026-11-14"),
+  );
+  // The pieces as the transcript pane shows them: close pieces share a
+  // paragraph.
+  expect(request["paragraphs"]).toEqual([
+    { startMs: 0, text: `${PIECES[0][2]} ${PIECES[1][2]}` },
+    { startMs: PIECES[2][1], text: PIECES[2][2] },
+    { startMs: PIECES[3][1], text: PIECES[3][2] },
+  ]);
+  // The cleaned-up document is the text as edited, with the instructions
+  // apart.
+  expect(request["cleaned"]).toEqual({
+    markdown: expect.stringContaining(EDIT),
+    instructions: ["File it in the matter."],
+  });
+
+  await page.evaluate((global) => {
+    const release: unknown = Reflect.get(window, global);
+    if (typeof release === "function") {
+      Reflect.apply(release, window, []);
+    }
+  }, RELEASE_CLEANUP);
+  await expect(statusRow(page)).toHaveText(
+    t.matterFolder.saved
+      .replace("{matter}", () => MATTER.name)
+      .replace("{folder}", "Memo to file 2026-11-14"),
+  );
+  await expect(saveToMatterButton(page)).toBeDisabled();
+  expect(pageErrors).toEqual([]);
+  expect(await desktopCspViolations(page)).toEqual([]);
+  expect(await unexpectedTauriCalls(page)).toEqual([]);
+});
+
+test("Save to matter without edits files the AI text", async ({ page }) => {
+  await open(page, "light");
+  await transcribeIntoMatter(page);
+  await expect(cleanedEditor(page)).toBeVisible();
+  await saveToMatterButton(page).click();
+  await expect(statusRow(page)).toContainText(MATTER.name);
+  const cleaned = requestOf(
+    await lastCall(page, "transcribe_save_to_matter_folder"),
+  )["cleaned"];
+  expect(cleaned).toEqual({
+    markdown: expect.stringContaining("## Memo to file"),
+    instructions: ["File it in the matter."],
+  });
+  expect(JSON.stringify(cleaned)).not.toContain(EDIT);
+});
+
+for (const { name, shortfall, said } of [
+  {
+    name: "a recording too large for the matter",
+    shortfall: { notFiled: [], audio: { outcome: "tooLarge", maxBytes: 2e9 } },
+    said: [en.transcribe.matterFolder.audioTooLarge.replace("{size}", "2 GB")],
+  },
+  {
+    name: "a recording no longer open",
+    shortfall: { notFiled: [], audio: { outcome: "missing" } },
+    said: [en.transcribe.matterFolder.audioMissing],
+  },
+  {
+    name: "a recording that failed and cleaned-up text the matter did not take",
+    shortfall: { notFiled: ["cleaned"], audio: { outcome: "failed" } },
+    said: [
+      en.transcribe.matterFolder.cleanedNotFiled,
+      en.transcribe.matterFolder.audioFailed,
+    ],
+  },
+]) {
+  test(`a saved folder says plainly what it lacks: ${name}`, async ({
+    page,
+  }) => {
+    await open(page, "light", { folderShortfall: shortfall });
+    await transcribeIntoMatter(page);
+    await expect(cleanedEditor(page)).toBeVisible();
+    await saveToMatterButton(page).click();
+    const saved = en.transcribe.matterFolder.saved
+      .replace("{matter}", () => MATTER.name)
+      .replace("{folder}", "Memo to file 2026-11-14");
+    await expect(statusRow(page)).toHaveText([saved, ...said].join(""));
+    expect(await unexpectedTauriCalls(page)).toEqual([]);
+  });
+}
