@@ -1,0 +1,46 @@
+{
+  "name": "@stll/markdown-editor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The hybrid Markdown source editor the web app and the desktop share",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": [
+    "**/*.css",
+    "./src/markdown-hybrid-editor.impl.tsx"
+  ],
+  "exports": {
+    ".": "./src/markdown-hybrid-editor.tsx",
+    "./impl": "./src/markdown-hybrid-editor.impl.tsx"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/markdown-editor",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/markdown-editor"
+  },
+  "dependencies": {
+    "@neftaly/editcontext-polyfill": "^0.1.1",
+    "@stll/ui": "workspace:*",
+    "@vscode/markdown-editor": "0.0.2-184",
+    "@vscode/observables": "0.1.1-0",
+    "better-result": "catalog:",
+    "katex": "^0.16.47",
+    "use-debounce": "^10.1.1"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "21.0.4",
+    "@stll/property-testing": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
+    "@types/react": "catalog:react19",
+    "@types/react-dom": "catalog:react19",
+    "bun-types": "catalog:",
+    "react": "catalog:react19",
+    "react-dom": "catalog:react19"
+  },
+  "peerDependencies": {
+    "react": ">=19",
+    "react-dom": ">=19"
+  }
+}

@@ -3,8 +3,10 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import type { MarkdownEditorComment } from "@/components/markdown/markdown-hybrid-editor";
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
+import type { MarkdownEditorComment } from "@stll/markdown-editor";
+
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { toEditorMarkdown } from "@/components/skill-body-markdown";
 import { roleOptions } from "@/lib/auth-queries";
@@ -17,6 +19,7 @@ import {
   skillRevisionOptions,
   skillRevisionsOptions,
 } from "@/lib/knowledge/queries";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { organizationOptions } from "@/lib/organization/queries";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
@@ -245,7 +248,9 @@ export const SkillBodyWorkspace = ({
 
   const renderLiveEditor = (baseline: string | undefined) => (
     <MarkdownHybridEditor
-      imagePolicy="data-only"
+      allowsImageSource={isSafeMarkdownPreviewImageSrc}
+      label={t("markdownEditor.rawLabel")}
+      onOpenLink={openIsolatedWindow}
       baseline={baseline}
       comments={editorComments}
       key={`live:${String(editorGeneration)}:${String(commenting)}`}

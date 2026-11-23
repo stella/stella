@@ -34,6 +34,7 @@
     "@stll/concurrency": "workspace:*",
     "@stll/docx-authoring": "workspace:*",
     "@stll/locales": "workspace:*",
+    "@stll/markdown-editor": "workspace:*",
     "@stll/text-normalize": "workspace:*",
     "@stll/time": "0.4.3",
     "@stll/transcript": "workspace:*",
