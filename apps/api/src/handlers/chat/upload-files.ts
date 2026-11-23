@@ -892,24 +892,9 @@ type UploadUserFileInput = {
 
 const prepareChatAttachmentText = async (
   file: ScannedFile,
-  {
-    organizationId,
-    safeDb,
-  }: { organizationId: SafeId<"organization">; safeDb: SafeDb },
+  zipNameCodePage: ZipNameCodePage,
 ) => {
-  if (chatFileSource(file.mimeType) !== "extracted-text") {
-    return Result.ok(null);
-  }
-  const zipNameCodePage = await safeDb(
-    async (tx) => await readZipNameCodePage(tx, organizationId),
-  );
-  if (zipNameCodePage.isErr()) {
-    return Result.err(zipNameCodePage.error);
-  }
-  const extracted = await extractChatAttachmentText(
-    file,
-    zipNameCodePage.value,
-  );
+  const extracted = await extractChatAttachmentText(file, zipNameCodePage);
   if (extracted.isErr()) {
     const cause = extracted.error;
     return Result.err(
@@ -1024,9 +1009,20 @@ export const uploadUserFile = async ({
     const scanWarnings = scanned.scanWarnings;
     yield* Result.await(refuseEncryptedAttachment(scanned));
 
-    const extractedText = yield* Result.await(
-      prepareChatAttachmentText(scanned, { organizationId, safeDb }),
-    );
+    // The organization's code page is read only for a file whose text is
+    // extracted, before it reaches the worker.
+    const extractsText = chatFileSource(scanned.mimeType) === "extracted-text";
+    const zipNameCodePage = extractsText
+      ? yield* Result.await(
+          safeDb(async (tx) => await readZipNameCodePage(tx, organizationId)),
+        )
+      : null;
+    const extractedText =
+      zipNameCodePage === null
+        ? null
+        : yield* Result.await(
+            prepareChatAttachmentText(scanned, zipNameCodePage),
+          );
 
     // Best-effort image thumbnail + blur placeholder. A failure here never
     // blocks the upload: the original still serves; the row just carries no

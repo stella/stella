@@ -2247,7 +2247,7 @@ describe("ZIP names in the organization's code page", () => {
       ]),
     );
 
-  const practising = async (countryCode: string) =>
+  const practising = async (countryCode: "CZ" | "DE") =>
     await testDb
       .insert(organizationSettings)
       .values({

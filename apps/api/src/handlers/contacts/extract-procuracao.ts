@@ -140,6 +140,10 @@ const extractProcuracao = createSafeRootHandler(
       task: "short-text",
     });
 
+    // Read before the upload is claimed, so a failed read leaves no lease.
+    const zipNameCodePage = yield* Result.await(
+      safeDb(async (tx) => await readZipNameCodePage(tx, organizationId)),
+    );
     const claimToken = Bun.randomUUIDv7();
     const processingStartedAt = new Date();
     const upload = yield* Result.await(
@@ -268,24 +272,12 @@ const extractProcuracao = createSafeRootHandler(
         return scanned;
       }
 
-      const zipNameCodePage = await safeDb(
-        async (tx) => await readZipNameCodePage(tx, organizationId),
-      );
-      if (zipNameCodePage.isErr()) {
-        return Result.err(
-          new HandlerError({
-            status: 500,
-            message: "Failed to read the source document",
-            cause: zipNameCodePage.error,
-          }),
-        );
-      }
       const textResult = await Result.tryPromise({
         try: async () =>
           await extractFileText(
             scanned.value,
             { source: "contacts-extract-procuracao" },
-            { zipNameCodePage: zipNameCodePage.value },
+            { zipNameCodePage },
           ),
         catch: (cause) =>
           new HandlerError({

@@ -86,7 +86,7 @@ const extractionWorkerEnv = ({ zipNameCodePage }: ExtractionWorkerRun) =>
  * here or `runExtractionBinaryWorker`, so none starts without the code page
  * its archives' names are read in.
  */
-export const runExtractionWorker = async ({
+const runExtractionWorker = async ({
   zipNameCodePage,
   ...options
 }: Omit<Parameters<typeof spawnWorker>[0], "env" | "workerPath"> &

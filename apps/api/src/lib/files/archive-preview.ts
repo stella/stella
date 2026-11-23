@@ -107,7 +107,7 @@ function archivePreviewReader<Schema extends v.GenericSchema>({
  * How a preview that reads the files it holds is run: one of them may be a
  * ZIP archive, whose names tie in the reading organization's code page.
  */
-export type ArchivePreviewRun = {
+type ArchivePreviewRun = {
   zipNameCodePage: ZipNameCodePage;
   expectedMimeType?: string | undefined;
 };

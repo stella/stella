@@ -30,8 +30,7 @@ export const ZIP_NAME_CODE_PAGES = [
 export type ZipNameCodePage = (typeof ZIP_NAME_CODE_PAGES)[number];
 
 /** The ZIP specification's code page for names that declare none. */
-export const SPECIFICATION_ZIP_NAME_CODE_PAGE =
-  "ibm437" satisfies ZipNameCodePage;
+const SPECIFICATION_ZIP_NAME_CODE_PAGE = "ibm437" satisfies ZipNameCodePage;
 
 /** Practice jurisdictions whose Windows writes ZIP names in code page 852. */
 const CODE_PAGE_852_JURISDICTIONS: ReadonlySet<string> = new Set([
