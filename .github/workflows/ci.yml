@@ -943,7 +943,7 @@ jobs:
         if: steps.completed-depth.outputs.run_required != 'false' && (steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch') && github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
         timeout-minutes: 2
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -2017,7 +2017,7 @@ jobs:
         name: Log in to the CI image mirror
         continue-on-error: true
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -4335,7 +4335,7 @@ jobs:
 
       - name: Login to GHCR for corpus engine
         if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' && startsWith(needs.ci-plan.outputs.quickwit, 'ghcr.io/') }}
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -4749,7 +4749,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Login to GitHub Container Registry
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -5360,7 +5360,7 @@ jobs:
         timeout-minutes: 2
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
