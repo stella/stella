@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -11,42 +12,68 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { XIcon } from "@stll/ui/icons";
-import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
-type ImagePreviewDialogProps = {
+type ImagePreviewTriggerProps = {
   alt: string;
-  fullSrc: string;
-  onOpenChange: (open: boolean) => void;
-  open: boolean;
+  children: ReactNode;
+  className: string;
+  fullSrc: string | undefined;
+  tooltip?: ReactNode | undefined;
 };
 
-const ImagePreviewDialog = ({
+const ImagePreviewTrigger = ({
   alt,
+  children,
+  className,
   fullSrc,
-  onOpenChange,
-  open,
-}: ImagePreviewDialogProps) => (
-  <Dialog onOpenChange={onOpenChange} open={open}>
-    <DialogPopup
-      className="max-w-4xl"
-      mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
-    >
-      <DialogTitle className="sr-only">{alt}</DialogTitle>
-      <DialogPanel className="flex justify-center p-2">
-        <img
-          alt={alt}
-          className="max-h-[min(70dvh,48rem)] w-full object-contain"
-          decoding="async"
-          src={fullSrc}
-        />
-      </DialogPanel>
-    </DialogPopup>
-  </Dialog>
-);
+  tooltip,
+}: ImagePreviewTriggerProps) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <>
+      <Button
+        aria-label={`${t("common.preview")}: ${alt}`}
+        className={cn(
+          className,
+          fullSrc !== undefined ? "cursor-zoom-in" : "cursor-default",
+        )}
+        onClick={() => {
+          if (fullSrc !== undefined) {
+            setOpen(true);
+          }
+        }}
+        tooltip={tooltip}
+        variant="plain"
+      >
+        {children}
+      </Button>
+      {fullSrc !== undefined && (
+        <Dialog onOpenChange={setOpen} open={open}>
+          <DialogPopup
+            className="max-w-4xl"
+            mobileLayout={DIALOG_MOBILE_LAYOUT.centered}
+          >
+            <DialogTitle className="sr-only">{alt}</DialogTitle>
+            <DialogPanel className="flex justify-center p-2">
+              <img
+                alt={alt}
+                className="max-h-[min(70dvh,48rem)] w-full object-contain"
+                decoding="async"
+                src={fullSrc}
+              />
+            </DialogPanel>
+          </DialogPopup>
+        </Dialog>
+      )}
+    </>
+  );
+};
 
 type ChatImageAttachmentProps = {
   alt: string;
@@ -60,37 +87,19 @@ export const ChatImageAttachment = ({
   fullSrc,
   thumbnailSrc,
   thumbnailStyle,
-}: ChatImageAttachmentProps) => {
-  const t = useTranslations();
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <Button
-        aria-label={`${t("common.preview")}: ${alt}`}
-        className="cursor-zoom-in overflow-hidden"
-        onClick={() => setOpen(true)}
-        variant="plain"
-      >
-        <img
-          alt={alt}
-          className="border-border/80 max-h-32 rounded-xl border object-cover"
-          decoding="async"
-          height={128}
-          src={thumbnailSrc}
-          style={thumbnailStyle}
-          width={128}
-        />
-      </Button>
-      <ImagePreviewDialog
-        alt={alt}
-        fullSrc={fullSrc}
-        onOpenChange={setOpen}
-        open={open}
-      />
-    </>
-  );
-};
+}: ChatImageAttachmentProps) => (
+  <ImagePreviewTrigger alt={alt} className="overflow-hidden" fullSrc={fullSrc}>
+    <img
+      alt={alt}
+      className="border-border/80 max-h-32 rounded-xl border object-cover"
+      decoding="async"
+      height={128}
+      src={thumbnailSrc}
+      style={thumbnailStyle}
+      width={128}
+    />
+  </ImagePreviewTrigger>
+);
 
 type ChatImageThumbnailCardProps = {
   filename: string;
@@ -112,9 +121,7 @@ export const ChatImageThumbnailCard = ({
   remove,
   thumbnailSrc,
 }: ChatImageThumbnailCardProps) => {
-  const t = useTranslations();
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
 
   const visibleThumbnailSrc =
     thumbnailSrc !== undefined && failedSrc !== thumbnailSrc
@@ -127,64 +134,39 @@ export const ChatImageThumbnailCard = ({
       className="bg-muted/50 border-border/80 group relative size-20 shrink-0 overflow-hidden rounded-xl border"
       data-draft-image-attachment=""
     >
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              aria-label={`${t("common.preview")}: ${filename}`}
-              className={cn(
-                "block size-full overflow-hidden",
-                dialogSrc !== undefined ? "cursor-zoom-in" : "cursor-default",
-              )}
-              onClick={() => {
-                if (dialogSrc !== undefined) {
-                  setOpen(true);
-                }
-              }}
-              variant="plain"
-            />
-          }
-        >
-          {visibleThumbnailSrc !== undefined ? (
-            <img
-              alt={filename}
-              className="size-full object-cover"
-              decoding="async"
-              height={80}
-              onError={() => setFailedSrc(visibleThumbnailSrc)}
-              src={visibleThumbnailSrc}
-              width={80}
-            />
-          ) : (
-            <span className="flex size-full items-center justify-center">
-              <DocumentIcon className="size-5" mimeType={mimeType} />
-            </span>
-          )}
-        </TooltipTrigger>
-        <TooltipPopup>
-          <bdi>{filename}</bdi>
-        </TooltipPopup>
-      </Tooltip>
+      <ImagePreviewTrigger
+        alt={filename}
+        className="block size-full overflow-hidden"
+        fullSrc={dialogSrc}
+        tooltip={<bdi>{filename}</bdi>}
+      >
+        {visibleThumbnailSrc !== undefined ? (
+          <img
+            alt={filename}
+            className="size-full object-cover"
+            decoding="async"
+            height={80}
+            onError={() => setFailedSrc(visibleThumbnailSrc)}
+            src={visibleThumbnailSrc}
+            width={80}
+          />
+        ) : (
+          <span className="flex size-full items-center justify-center">
+            <DocumentIcon className="size-5" mimeType={mimeType} />
+          </span>
+        )}
+      </ImagePreviewTrigger>
       {remove !== undefined && (
         <Button
           aria-label={remove.label}
-          className="absolute end-1 top-1 inline-flex size-5 items-center justify-center opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:size-7 pointer-coarse:opacity-100"
+          className="absolute end-1 top-1 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100"
           onClick={remove.onRemove}
+          size="icon-2xs"
           tooltip={remove.label}
-          variant="plain"
+          variant="secondary"
         >
-          <span className="bg-background/85 text-foreground hover:bg-background border-border/80 inline-flex size-full items-center justify-center rounded-full border shadow-xs backdrop-blur-xs">
-            <XIcon aria-hidden="true" className="size-3" />
-          </span>
+          <XIcon aria-hidden="true" className="size-3" />
         </Button>
-      )}
-      {dialogSrc !== undefined && (
-        <ImagePreviewDialog
-          alt={filename}
-          fullSrc={dialogSrc}
-          onOpenChange={setOpen}
-          open={open}
-        />
       )}
     </div>
   );
@@ -215,8 +197,7 @@ export const ChatDraftImageAttachment = ({
     return () => URL.revokeObjectURL(src);
   }, [file]);
 
-  const previewSrc =
-    preview !== null && preview.file === file ? preview.src : undefined;
+  const previewSrc = preview?.file === file ? preview.src : undefined;
 
   return (
     <ChatImageThumbnailCard
