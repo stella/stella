@@ -1274,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Annuler mes modifications",
+      "editorLabel": "Éditeur du texte nettoyé",
       "failedCount": "{count, plural, one {# partie non nettoyée} other {# parties non nettoyées}}",
       "fileNameMarkdown": "{title} nettoyé.md",
       "fileNameText": "{title} nettoyé.txt",

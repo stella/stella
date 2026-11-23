@@ -1,10 +1,14 @@
+import { useTranslations } from "use-intl";
+
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import {
   toEditorMarkdown,
   toStoredMarkdown,
 } from "@/components/skill-body-markdown";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 
 type ProposalBodyEditorProps = {
   /** Undefined while the proposal is still loading. */
@@ -25,6 +29,7 @@ export const ProposalBodyEditor = ({
   editable,
   onBodyChange,
 }: ProposalBodyEditorProps) => {
+  const t = useTranslations();
   if (proposal === undefined) {
     return (
       <div className="flex min-h-0 flex-1 flex-col gap-2 p-4">
@@ -38,7 +43,9 @@ export const ProposalBodyEditor = ({
 
   return (
     <MarkdownHybridEditor
-      imagePolicy="data-only"
+      allowsImageSource={isSafeMarkdownPreviewImageSrc}
+      label={t("markdownEditor.rawLabel")}
+      onOpenLink={openIsolatedWindow}
       baseline={toEditorMarkdown(proposal.baseBody)}
       key={`${proposal.id}:${String(editable)}`}
       markdown={toEditorMarkdown(proposal.body)}

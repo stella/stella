@@ -60,6 +60,7 @@ import {
   CleanedText,
   CleanupOffer,
   PaneActions,
+  useCleanedEditing,
   useCopyFormat,
   useRecordingCleanup,
 } from "./TranscribeCleanup";
@@ -826,8 +827,9 @@ const ResultScreen = ({
     finished: !running,
     autoStart: session.autoCleanup,
   });
+  const editing = useCleanedEditing(cleanup);
   const [copyFormat, setCopyFormat] = useCopyFormat();
-  const cleanedBlocks = cleanup.blocks;
+  const cleanedBlocks = editing.blocks;
   const reasons = transcriptActionReasons(
     { hasText, running, saving, cleanup },
     t,
@@ -844,7 +846,7 @@ const ResultScreen = ({
   let cleanedStatus = "";
   if (cleanup.running && hasText) {
     cleanedStatus = t("cleaned.running");
-  } else if (cleanup.failed > 0) {
+  } else if (cleanup.failed > 0 && !editing.edited) {
     cleanedStatus = t("cleaned.failedCount", { count: cleanup.failed });
   }
   const instructionsLabel = t("cleaned.instructionsLabel");
@@ -865,7 +867,7 @@ const ResultScreen = ({
   const saveOptions = useTranscriptSaveOptions({
     title,
     paragraphs,
-    cleanup,
+    cleaned: { instructions: cleanup.instructions, markdown: editing.markdown },
     cleanedPlain,
     onResult: setActionFailed,
   });
@@ -986,6 +988,11 @@ const ResultScreen = ({
                 {cleanedStatus}
               </TruncatedText>
             </div>
+            {editing.edited ? (
+              <Button onClick={editing.discard} size="xs" variant="ghost">
+                {t("cleaned.discardEdits")}
+              </Button>
+            ) : null}
             <PaneActions
               copyFormat={copyFormat}
               disabledReason={reasons.cleaned}
@@ -1002,7 +1009,11 @@ const ResultScreen = ({
           <ScrollArea className="min-h-0 flex-1">
             <div className="px-7 pt-5 pb-6">
               {hasText && cleanup.started ? (
-                <CleanedText cleanup={cleanup} transcribing={running} />
+                <CleanedText
+                  cleanup={cleanup}
+                  editing={editing}
+                  transcribing={running}
+                />
               ) : null}
               {hasText && !cleanup.started ? (
                 <CleanupOffer onStart={cleanup.start} />

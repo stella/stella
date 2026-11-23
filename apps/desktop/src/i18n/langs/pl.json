@@ -1274,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Odrzuć moje zmiany",
+      "editorLabel": "Edytor tekstu po korekcie",
       "failedCount": "{count, plural, one {# część niepoprawiona} few {# części niepoprawione} many {# części niepoprawionych} other {# części niepoprawionych}}",
       "fileNameMarkdown": "{title} po korekcie.md",
       "fileNameText": "{title} po korekcie.txt",

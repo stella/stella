@@ -1274,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Atmesti mano pakeitimus",
+      "editorLabel": "Sutvarkyto teksto redaktorius",
       "failedCount": "{count, plural, one {# dalis nesutvarkyta} few {# dalys nesutvarkytos} other {# dalių nesutvarkyta}}",
       "fileNameMarkdown": "{title} sutvarkytas.md",
       "fileNameText": "{title} sutvarkytas.txt",

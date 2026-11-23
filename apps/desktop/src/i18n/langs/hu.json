@@ -1274,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Módosításaim elvetése",
+      "editorLabel": "A javított szöveg szerkesztője",
       "failedCount": "{count, plural, one {# rész nincs javítva} other {# rész nincs javítva}}",
       "fileNameMarkdown": "{title} javított.md",
       "fileNameText": "{title} javított.txt",

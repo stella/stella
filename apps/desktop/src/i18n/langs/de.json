@@ -1274,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Meine Änderungen verwerfen",
+      "editorLabel": "Editor für den bereinigten Text",
       "failedCount": "{count, plural, one {# Teil nicht bereinigt} other {# Teile nicht bereinigt}}",
       "fileNameMarkdown": "{title} bereinigt.md",
       "fileNameText": "{title} bereinigt.txt",
