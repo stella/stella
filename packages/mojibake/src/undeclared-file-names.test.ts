@@ -171,7 +171,7 @@ describe("file names that declare no charset", () => {
         .map((word) => ({ language, word })),
     );
     assertProperty(
-      "names in code page 852 read back",
+      "Czech, Slovak and Polish names in code page 852 read back, whichever words they hold",
       fc.property(
         fc.constantFrom("cs", "sk", "pl").chain((language) =>
           fc
