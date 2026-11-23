@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.86.0
+
+### Minor Changes
+
+- [#9226](https://github.com/stella/stella/pull/9226) [`b280d21`](https://github.com/stella/stella/commit/b280d21b8b6bc7149a342a08f2d78036f1099186) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export OpenAI, Claude, Gemini, and Antigravity brand icons from `@stll/ui/brand-icons`.
+
 ## 0.85.0
 
 ### Minor Changes
