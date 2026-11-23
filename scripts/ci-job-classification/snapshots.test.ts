@@ -3,7 +3,6 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
-  readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -11,10 +10,9 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 
 import { checkJobClassification } from "../check-ci-job-classification";
-import { decisionKeyFromPath, writeDecision } from "./decisions";
+import { readDecisions, writeDecision } from "./decisions";
 import { generateClassification, readClassificationInputs } from "./generate";
 import type { DerivedJob } from "./generate";
-import { decisionPathForKey } from "./inputs";
 import { verifyPublicMetadata } from "./public-metadata";
 import { writeSnapshots } from "./snapshots";
 
@@ -119,11 +117,10 @@ const createFixture = (
   if (!jobs) {
     throw new Error("fixture jobs missing");
   }
-  for (const [key, job] of jobs) {
+  for (const [key] of jobs) {
     writeDecision(root, key, {
       kind: "ordinary",
       qualifier: `reviewed ${key}`,
-      reviewedDigest: job.digest,
     });
   }
   const base = commit(root, "base");
@@ -147,29 +144,21 @@ test("a bumped pin snapshots the new revision and preserves the review decision"
   const snapshots = readClassificationInputs(fixture.root).snapshots;
   expect(Object.keys(snapshots)).toEqual(["supplier7"]);
   expect(snapshots["supplier7"]?.origin.sha).toBe(fixture.newSha);
-  const remoteDecision = readdirSync(
-    path.join(fixture.root, ".github/ci-job-classification-decisions"),
-  )
-    .map((name) =>
-      decisionKeyFromPath(
-        `.github/ci-job-classification-decisions/${name}/decision.json`,
-      ),
-    )
-    .find((key) => key.startsWith("supplier7:"));
+  const allDecisions = readDecisions({
+    type: "working-tree",
+    root: fixture.root,
+  });
+  const remoteDecision = Object.keys(allDecisions).find((key) =>
+    key.startsWith("supplier7:"),
+  );
   expect(remoteDecision).toBe("supplier7:.github/workflows/shared.yml/shared");
   if (!remoteDecision) {
     throw new Error("renamed remote decision missing");
   }
-  const decision = JSON.parse(
-    readFileSync(
-      path.join(fixture.root, decisionPathForKey(remoteDecision)),
-      "utf-8",
-    ),
-  );
-  expect(decision.kind).toBe("ordinary");
-  expect(decision.qualifier).toBe(
-    "reviewed supplier6:.github/workflows/shared.yml/shared",
-  );
+  expect(allDecisions[remoteDecision]).toEqual({
+    kind: "ordinary",
+    qualifier: "reviewed supplier6:.github/workflows/shared.yml/shared",
+  });
 });
 
 test("a pin bumped in one of two callers copies the decision to the new revision", () => {
@@ -186,10 +175,16 @@ test("a pin bumped in one of two callers copies the decision to the new revision
 
   const snapshots = readClassificationInputs(fixture.root).snapshots;
   expect(Object.keys(snapshots).toSorted()).toEqual(["supplier6", "supplier7"]);
-  const decisionKind = (key: string) =>
-    JSON.parse(
-      readFileSync(path.join(fixture.root, decisionPathForKey(key)), "utf-8"),
-    ).kind;
+  const allDecisions = readDecisions({
+    type: "working-tree",
+    root: fixture.root,
+  });
+  const decisionKind = (key: string) => {
+    const entry = allDecisions[key];
+    return typeof entry === "object" && entry !== null && "kind" in entry
+      ? entry.kind
+      : undefined;
+  };
   // The revision still pinned keeps its decision; the new one starts from
   // a copy, which passes only while the job's digest is unchanged.
   expect(decisionKind("supplier6:.github/workflows/shared.yml/shared")).toBe(
@@ -255,25 +250,19 @@ test("a bump of one of two workflows from one source moves only that job's decis
       jobs = value;
     },
   });
-  for (const [key, job] of jobs ?? new Map<string, DerivedJob>()) {
+  for (const [key] of jobs ?? new Map<string, DerivedJob>()) {
     writeDecision(root, key, {
       kind: "ordinary",
       qualifier: `reviewed ${key}`,
-      reviewedDigest: job.digest,
     });
   }
   const base = commit(root, "base");
   write(root, ".github/workflows/caller.yml", caller(newSha));
   writeSnapshots({ root, sources: sources(source, newSha), base });
 
-  const remoteDecisions = readdirSync(
-    path.join(root, ".github/ci-job-classification-decisions"),
+  const remoteDecisions = Object.keys(
+    readDecisions({ type: "working-tree", root }),
   )
-    .map((name) =>
-      decisionKeyFromPath(
-        `.github/ci-job-classification-decisions/${name}/decision.json`,
-      ),
-    )
     .filter((key) => key.startsWith("supplier"))
     .toSorted();
   expect(remoteDecisions).toEqual([
@@ -328,7 +317,7 @@ test("a transitively used composite action is included", () => {
   ]);
 });
 
-test("a privilege-relevant content change remains review-required", () => {
+test("a privilege-relevant content change reports sensitive change without blocking classified jobs", () => {
   const fixture = createFixture(
     reusable("uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"),
   );
@@ -339,9 +328,11 @@ test("a privilege-relevant content change remains review-required", () => {
     base: fixture.base,
   });
   const result = checkJobClassification(fixture.root, fixture.base);
-  expect(result.isErr()).toBe(true);
-  if (result.isErr()) {
-    expect(result.error.message).toContain("Missing or changed job review");
+  expect(result.isOk()).toBe(true);
+  if (result.isOk()) {
+    expect(result.value.privilegedJobs).toContain(
+      "supplier7:.github/workflows/shared.yml/shared",
+    );
   }
 });
 
@@ -394,12 +385,11 @@ const createConvergingFixture = (
   if (!jobs) {
     throw new Error("fixture jobs missing");
   }
-  for (const [key, job] of jobs) {
+  for (const [key] of jobs) {
     const kind = key.startsWith("supplier7:") ? kinds[1] : kinds[0];
     writeDecision(root, key, {
       kind,
       qualifier: `reviewed ${key}`,
-      reviewedDigest: job.digest,
     });
   }
   const base = commit(root, "base");
@@ -410,25 +400,19 @@ const createConvergingFixture = (
     sources: { ...sources(source, newSha), ...sources(source, otherSha) },
     base,
   });
-  const remoteDecisions = readdirSync(
-    path.join(root, ".github/ci-job-classification-decisions"),
-  )
-    .map((name) =>
-      decisionKeyFromPath(
-        `.github/ci-job-classification-decisions/${name}/decision.json`,
-      ),
-    )
-    .filter((key) => key.startsWith("supplier"));
+  const allDecisions = readDecisions({ type: "working-tree", root });
+  const remoteDecisions = Object.keys(allDecisions).filter((key) =>
+    key.startsWith("supplier"),
+  );
   const kindOf = (sha: string) => {
     const supplier =
       Object.entries(readClassificationInputs(root).snapshots).find(
         ([, entry]) => entry.origin.sha === sha,
       )?.[0] ?? "missing";
     const key = `${supplier}:.github/workflows/shared.yml/shared`;
-    return remoteDecisions.includes(key)
-      ? JSON.parse(
-          readFileSync(path.join(root, decisionPathForKey(key)), "utf-8"),
-        ).kind
+    const entry = allDecisions[key];
+    return typeof entry === "object" && entry !== null && "kind" in entry
+      ? entry.kind
       : undefined;
   };
   return { root, base, remoteDecisions, kindOf, newSha, otherSha };
@@ -519,15 +503,10 @@ test("nested composite actions retain the reusable workflow checkout mount", () 
   generateClassification({
     ...readClassificationInputs(fixture.root),
     observeJobs: (jobs) => {
-      for (const [key, job] of jobs) {
-        rmSync(path.dirname(path.join(fixture.root, decisionPathForKey(key))), {
-          recursive: true,
-          force: true,
-        });
+      for (const [key] of jobs) {
         writeDecision(fixture.root, key, {
           kind: "ordinary",
           qualifier: `fixture ${key}`,
-          reviewedDigest: job.digest,
         });
       }
     },

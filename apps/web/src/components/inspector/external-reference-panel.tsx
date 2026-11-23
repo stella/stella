@@ -236,7 +236,7 @@ const ExternalPdfPreview = ({
         pageSource="portfolio"
         buffer={buffer}
         className="document-preview-surface h-full"
-        contentClassName="relative space-y-2 px-2 pt-2"
+        contentClassName="relative space-y-2 pt-2"
         fileId={fileId}
         renderPage={(props) => <PDFPage {...props} />}
       />

@@ -69,6 +69,7 @@ import type {
 import { TitlesAccessStrip } from "./ActivityCaptureDetails";
 import type { CaptureDetailsCommand } from "./ActivityCaptureDetails";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
+import { aiDraftsChoice } from "./billing-draft-logic";
 import { useBillingDraftSettings } from "./billing-draft-settings";
 import {
   CAPTURE_MODES,
@@ -1097,6 +1098,37 @@ export const ActivitySettingsPane = () => {
   );
 };
 
+/** Withdraw while consent is given; send the withdrawal again once the server
+ *  did not confirm it; nothing while it is on its way. */
+const WithdrawConsentButton = ({
+  consent,
+  onWithdraw,
+}: {
+  consent: "granted" | "pending-withdrawal" | "withdrawal-unconfirmed";
+  onWithdraw: () => void;
+}) => {
+  const t = useTranslations("activity");
+  switch (consent) {
+    case "granted":
+      return (
+        <Button onClick={onWithdraw} variant="outline">
+          {t("billingDraftsWithdraw")}
+        </Button>
+      );
+    case "withdrawal-unconfirmed":
+      return (
+        <Button onClick={onWithdraw} variant="outline">
+          {t("retry")}
+        </Button>
+      );
+    case "pending-withdrawal":
+      return null;
+    default:
+      consent satisfies never;
+      return panic("Unhandled stella AI draft withdrawal");
+  }
+};
+
 /**
  * Consent to stella AI drafts, kept on the server. Withdrawing stays possible
  * whenever consent exists, even where the firm has drafting off; it applies
@@ -1106,9 +1138,7 @@ export const ActivitySettingsPane = () => {
 const BillingDraftConsentSettings = () => {
   const t = useTranslations("activity");
   const { settings, setConsent, setPreference } = useBillingDraftSettings(true);
-  if (settings.type === "loading" || settings.type === "unavailable") {
-    return null;
-  }
+  // A read that failed is said, not hidden as a choice that does not apply.
   if (settings.type === "failed") {
     return (
       <SettingsRow
@@ -1117,10 +1147,14 @@ const BillingDraftConsentSettings = () => {
       />
     );
   }
+  if (settings.type !== "ready" || aiDraftsChoice(settings) === "notOffered") {
+    return null;
+  }
   const { consent } = settings;
   switch (consent) {
     case "granted":
     case "pending-withdrawal":
+    case "withdrawal-unconfirmed":
       return (
         <>
           <SettingsRow
@@ -1131,16 +1165,12 @@ const BillingDraftConsentSettings = () => {
             }
             title={t("billingDraftsTitle")}
           >
-            {consent === "granted" ? (
-              <Button
-                onClick={() => {
-                  void setConsent("revoked");
-                }}
-                variant="outline"
-              >
-                {t("billingDraftsWithdraw")}
-              </Button>
-            ) : null}
+            <WithdrawConsentButton
+              consent={consent}
+              onWithdraw={() => {
+                void setConsent("revoked");
+              }}
+            />
           </SettingsRow>
           {settings.preference === null ? null : (
             <SettingsRow
@@ -1163,8 +1193,8 @@ const BillingDraftConsentSettings = () => {
     case "unavailable":
     case "revoked":
     case "pending-grant":
-      // Where the firm has drafting off there is nothing to allow.
-      return settings.mode === "off" ? null : (
+    case "grant-refused":
+      return (
         <SettingsRow
           description={t("billingDraftsRevoked")}
           footer={
@@ -1172,7 +1202,7 @@ const BillingDraftConsentSettings = () => {
               onAllow={() => {
                 void setConsent("granted");
               }}
-              pending={consent === "pending-grant"}
+              status={consent}
             />
           }
           title={t("billingDraftsTitle")}

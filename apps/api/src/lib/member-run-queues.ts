@@ -133,6 +133,12 @@ export const QUEUE_AUTHORITY = {
     worker: "apps/api/src/lib/document-deadline-scout-worker.ts",
     reason: "Scheduled scan the organization runs over its own documents.",
   },
+  "document-naming": {
+    authority: "org-automation",
+    worker: "apps/api/src/lib/uploads/document-naming/worker.ts",
+    reason:
+      "Renames a new upload in a matter that opted in, acting as a matter member who may update it.",
+  },
   "document-processing": {
     authority: "org-automation",
     worker: "apps/api/src/lib/document-processing-queue.ts",

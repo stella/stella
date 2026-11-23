@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Pielikumi",
     "certifiedAt": "Sertifikācijas laiks",
     "deliveredTo": "Piegādāts uz adresi",
     "error": "Ziņotā kļūda",
@@ -462,6 +461,7 @@
     },
     "fit": "Platums",
     "openOriginal": "Atvērt oriģinālu",
+    "openPart": "Atvērt {fileName}",
     "preview": "Atvērt priekšskatījumu",
     "previewDescription": "Šis fails tiek atvērts sistēmas priekšskatījumā.",
     "retry": "Mēģināt vēlreiz",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Bankas konta numurs",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Pievienotās datnes",
     "bankCode": "Bankas kods",
     "batchPosition": "Dokuments {position, number} no {count, number}",
     "bic": "BIC kods",
@@ -504,6 +503,7 @@
     "paymentReference": "Maksājuma mērķis",
     "prepaidAmount": "Samaksāts avansā",
     "quantity": "Daudzums un mērvienība",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "Reģistrācijas numurs",
@@ -515,16 +515,48 @@
     "taxableAmount": "Ar nodokli apliekamā vērtība",
     "totals": "Kopsummas",
     "unitPrice": "Vienības cena",
+    "units": {
+      "day": "{count, plural, zero {{quantity} dienu} one {{quantity} diena} other {{quantity} dienas}}",
+      "hour": "{count, plural, zero {{quantity} stundu} one {{quantity} stunda} other {{quantity} stundas}}",
+      "month": "{count, plural, zero {{quantity} mēnešu} one {{quantity} mēnesis} other {{quantity} mēneši}}",
+      "unit": "{count, plural, zero {{quantity} gab.} one {{quantity} gab.} other {{quantity} gab.}}",
+      "week": "{count, plural, zero {{quantity} nedēļu} one {{quantity} nedēļa} other {{quantity} nedēļas}}",
+      "year": "{count, plural, zero {{quantity} gadu} one {{quantity} gads} other {{quantity} gadi}}"
+    },
     "unreadable": "Rēķinu neizdevās nolasīt.",
     "vat": "PVN",
     "vatBreakdown": "PVN sadalījums",
     "vatId": "PVN numurs"
+  },
+  "email": {
+    "cc": "Kopija",
+    "date": "Datums",
+    "from": "Sūtītājs",
+    "noSubject": "(Bez tēmas)",
+    "subject": "Tēma",
+    "to": "Saņēmēji"
   },
   "entity": {
     "currentVersion": "Pašreizējā versija",
     "loadFailed": "Šo ierakstu neizdevās ielādēt.",
     "reference": "Numurs",
     "type": "Veids"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Arhīvu neizdevās nolasīt.",
+    "attachments": "Pielikumi",
+    "files": "Faili",
+    "insideFailed": "Neizdevās ielādēt iekšā esošos failus. Pieskarieties, lai mēģinātu vēlreiz.",
+    "noFilesInside": "Iekšā nav neviena faila.",
+    "open": "Atvērt {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Aizsargāts ar paroli, nevar atvērt",
+      "link": "Saite uz citu failu, netiek atvērta",
+      "tooLarge": "Pārāk liels, lai atvērtu",
+      "unreadable": "Bojāts, nevar atvērt",
+      "unsupported": "Saspiests veidā, ko nevar atvērt"
+    },
+    "unnamed": "Datne bez nosaukuma"
   },
   "header": {
     "search": "Meklēt"
@@ -853,6 +885,7 @@
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
     "noSigners": "Dati par parakstītājiem netika atrasti.",
+    "signedContent": "Parakstītais dokuments",
     "signers": "Parakstītāji",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",

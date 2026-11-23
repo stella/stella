@@ -8,12 +8,17 @@ import {
   type HtmlRenderedDocumentMimeType,
   isConvertedDocumentMimeType,
 } from "@stll/api-contract/converted-document-formats";
-import { declareFingerprintFields } from "@stll/errors";
+import {
+  declareFailureClass,
+  declareFingerprintFields,
+  type FailureReason,
+} from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readCappedBytes } from "@stll/skills/streaming";
 
 import { envConverter } from "@/api/env-converter";
 import { basicAuthorizationHeader } from "@/api/lib/auth/http-basic-auth";
+import { SUBPROCESS_TERMINATION_REASON } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { contentMatchesConvertibleMime } from "@/api/lib/files/conversion-content";
 import {
@@ -22,10 +27,17 @@ import {
 } from "@/api/lib/files/conversion-input";
 import { gotenbergConvertTarget } from "@/api/lib/files/converter-settings";
 import type { DerivativeAdmissionError } from "@/api/lib/files/derivative-admission";
-import { admitDerivativeImage } from "@/api/lib/files/derivative-admission";
+import {
+  admitDerivativeImage,
+  DERIVATIVE_REFUSAL,
+} from "@/api/lib/files/derivative-admission";
 import { type EbookError, ebookToHtml } from "@/api/lib/files/epub-document";
+import {
+  heifFormatLabel,
+  type HeifMimeType,
+  isHeifMimeType,
+} from "@/api/lib/files/heif";
 import type { ImageHeader } from "@/api/lib/files/image-header";
-import { readImageHeader } from "@/api/lib/files/image-header";
 import type { EmbeddableImageMimeType } from "@/api/lib/files/image-pdf";
 import {
   canEmbedInProcess,
@@ -43,12 +55,29 @@ import {
   isHtmlRenderedMimeType,
   mediaTypeEssence,
 } from "@/api/lib/files/pdf-derivative-policy";
+import { pdfRenderBudget } from "@/api/lib/files/pdf-render-budget";
+import {
+  isRenderedPdfMimeType,
+  type RenderedPdfMimeType,
+} from "@/api/lib/files/pdf-render-protocol";
+import {
+  PDF_WORKER_OPERATION,
+  PDF_WORKER_OVER_BUDGET_EXIT_CODE,
+  PDF_WORKER_PARSE_ERROR_EXIT_CODE,
+  PDF_WORKER_TOO_LARGE_EXIT_CODE,
+  pdfWorkerPath,
+} from "@/api/lib/files/pdf-worker-protocol";
 import { applyFitToPage } from "@/api/lib/files/xlsx-preprocess";
 import { LIMITS } from "@/api/lib/limits";
+import { admitWork, WorkRefusal } from "@/api/lib/load/work-admission";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  type ProcessMemoryLimit,
+  readProcessMemoryLimit,
+} from "@/api/lib/observability/process-memory-limit";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { withTimeout } from "@/api/lib/with-timeout";
+import { spawnBinaryWorker } from "@/api/lib/subprocess";
 
 export {
   canConvertToPdf,
@@ -85,15 +114,40 @@ class ImagePdfError extends TaggedError("ImagePdfError")<{
   cause?: unknown;
 }> {}
 
+type PdfRenderFailureReason =
+  "unreadable" | "too-large" | "memory" | "busy" | "failed";
+
+/** How each reason a render fails for grades. */
+const PDF_RENDER_FAILURE = {
+  // The file's answer, not a defect.
+  unreadable: "file_preview_unrenderable",
+  "too-large": "file_preview_unrenderable",
+  // A source bound let work through past the ceiling.
+  memory: "tagged_failure",
+  busy: "work_capacity_unavailable",
+  failed: "tagged_failure",
+} as const satisfies Record<PdfRenderFailureReason, FailureReason>;
+
 /**
- * An image the converter cannot import that could not be turned into a PDF
- * in-process either. Sending it to the converter instead would fail on every
- * attempt, so this is the conversion's final answer.
+ * A file stella renders itself (see `pdf-render-protocol.ts`) whose PDF
+ * could not be made. It is never sent to the converter instead, so this is
+ * the conversion's answer: `unreadable` and `too-large` are properties of
+ * the file and a retry gives the same answer. `memory` (the worker passed
+ * `LIMITS.pdfRenderWorkerRssMaxBytes` and was killed) is too, but the
+ * source bounds should have kept it under that, so it grades as a defect.
+ * `busy` (no render slot came free in time) and `failed` (the worker timed
+ * out, crashed or could not start) say nothing about the file.
  */
-export class ImageTranscodeError extends TaggedError("ImageTranscodeError")<{
+export class PdfRenderError extends TaggedError("PdfRenderError")<{
   message: string;
+  reason: PdfRenderFailureReason;
   cause?: unknown;
-}> {}
+}> {
+  static {
+    declareFingerprintFields(this, ["reason"]);
+    declareFailureClass(this, ({ reason }) => PDF_RENDER_FAILURE[reason]);
+  }
+}
 
 export type ConversionInputErrorReason = ConversionInputRefusal;
 
@@ -121,6 +175,10 @@ const conversionInputRefusalMessage = (
       return `The document field ${reason.fieldType} cannot be converted.`;
     case "legacy_format":
       return `Re-save this document as ${reason.replacementExtension} to convert it.`;
+    case "no_preview":
+      return reason.cause === "decoding_off"
+        ? `This server makes no previews of ${reason.format} images.`
+        : `This ${reason.format} image cannot be read for a preview.`;
     case "inspection_failed":
       return "The document could not be inspected for conversion.";
     default:
@@ -133,37 +191,29 @@ type ConvertToPdfError =
   | DerivativeAdmissionError
   | ConversionInputError
   | GotenbergError
-  | ImageTranscodeError;
+  | PdfRenderError;
 
 const IMAGE_EMBED_FAILED_SINK = failureSink({
   event: "file_conversion.image_embed_failed",
   expected: [],
 });
 
-const IMAGE_TRANSCODE_FAILED_SINK = failureSink({
-  event: "file_conversion.image_transcode_failed",
+const PDF_RENDER_FAILED_SINK = failureSink({
+  event: "file_conversion.render_failed",
   expected: [],
 });
 
-/**
- * Image types the converter's LibreOffice route has no import filter for:
- * Gotenberg 8.37 accepts .bmp, .gif, .tif/.tiff, .png and .jpg/.jpeg, but
- * not .webp. These are re-encoded as PNG in-process and embedded directly.
- */
-const IN_PROCESS_ONLY_IMAGE_MIME_TYPES = {
-  "image/webp": null,
-} as const satisfies Record<string, null>;
-
-const isInProcessOnlyImageMimeType = (mimeType: string): boolean =>
-  Object.hasOwn(IN_PROCESS_ONLY_IMAGE_MIME_TYPES, mimeType);
+/** Convertible types the converter receives: everything stella does not render. */
+type ConverterMime = Exclude<ConvertibleMime, RenderedPdfMimeType>;
 
 /**
  * Extensions the converter's LibreOffice route accepts for each convertible
  * type, canonical first. The route picks its import filter by the uploaded
  * filename's extension and refuses one it does not list, so a file named
  * without one, or with one the route does not take (a WordPerfect `.wp5`),
- * would fail to convert. WebP never reaches the route. A converted document
- * format names its one extension in its registry entry.
+ * would fail to convert. Images, plain text and CSV never reach the route.
+ * A converted document format names its one extension in its registry
+ * entry.
  */
 const CONVERTER_EXTENSIONS = {
   "application/msword": ["doc", "dot"],
@@ -194,23 +244,15 @@ const CONVERTER_EXTENSIONS = {
   "application/vnd.oasis.opendocument.text": ["odt", "ott"],
   "application/rtf": ["rtf"],
   "application/xhtml+xml": ["xhtml", "html", "htm"],
-  "image/bmp": ["bmp"],
-  "image/gif": ["gif"],
-  "image/jpeg": ["jpg", "jpeg"],
-  "image/png": ["png"],
-  "image/tiff": ["tiff", "tif"],
-  "image/webp": ["webp"],
-  "text/csv": ["csv"],
   "text/html": ["html", "htm"],
-  "text/plain": ["txt"],
 } as const satisfies Record<
-  Exclude<ConvertibleMime, ConvertedDocumentMimeType>,
+  Exclude<ConverterMime, ConvertedDocumentMimeType>,
   readonly [string, ...string[]]
 >;
 
 /** The extensions the converter accepts for `mimeType`, canonical first. */
 const converterExtensions = (
-  mimeType: ConvertibleMime,
+  mimeType: ConverterMime,
 ): readonly [string, ...string[]] => {
   if (!isConvertedDocumentMimeType(mimeType)) {
     return CONVERTER_EXTENSIONS[mimeType];
@@ -228,7 +270,7 @@ const converterExtensions = (
  */
 const withConverterExtension = (
   fileName: string,
-  mimeType: ConvertibleMime,
+  mimeType: ConverterMime,
 ): string => {
   const accepted: readonly string[] = converterExtensions(mimeType);
   // A dot only starts an extension inside the last path segment, and not as
@@ -305,6 +347,11 @@ type ConvertToPdfOptions = {
    * the two never multiply into repeated full-size conversions.
    */
   retry?: "in-call" | "caller";
+  /**
+   * Whether HEIC/HEIF photos are decoded for their preview. Defaults to the
+   * deployment's `HEIC_PREVIEW_DECODING_ENABLED`.
+   */
+  heifDecoding?: boolean;
 };
 
 /** The bytes of `view` as an `ArrayBuffer`, without a copy when they already are one. */
@@ -329,113 +376,250 @@ const embedImage = async (
       new ImagePdfError({ message: "Failed to embed image", cause }),
   });
 
+let processMemoryLimit: ProcessMemoryLimit | undefined;
+/** The container's memory limit, read once: it is fixed for the process. */
+const containerMemoryLimit = (): ProcessMemoryLimit => {
+  processMemoryLimit ??= readProcessMemoryLimit();
+  return processMemoryLimit;
+};
+
 /**
- * Re-encode an admitted image the converter cannot import as PNG and embed
- * that. Admission already bounded the declared pixel count; the decoder
- * enforces the same budget and the pipeline runs under the derivative
- * wall-clock ceiling. The PNG carries no EXIF, so its header's orientation
- * (1) is what the WebP header reader reports for the source too.
+ * Render a file stella lays out itself in the PDF worker subprocess, so
+ * decoding and layout never hold the API's event loop and the timeout can
+ * stop them. One attempt: the same bytes render the same way every time.
+ *
+ * Renders queue for the process's `pdf-render` work pool, so a process runs
+ * `LIMITS.workPoolPdfRenderSlots` workers at once, and each worker gets the
+ * budget its container has room for as it starts (`pdf-render-budget.ts`)
+ * and is killed past that budget's ceiling: together they bound what
+ * rendering adds to the container's memory.
  */
-const transcodeImageToPdf = async (
+const renderPdfInWorker = async (
+  declaredType: string,
   bytes: Uint8Array,
-): Promise<Result<ConvertToPdfResult, ImageTranscodeError>> => {
-  Bun.Image.backend = "bun";
-  const png = await Result.tryPromise({
-    try: async () =>
-      await withTimeout(
-        async () =>
-          await new Bun.Image(bytes, {
-            maxPixels: LIMITS.imageDerivativeSourcePixelsMax,
-          })
-            .png()
-            .bytes(),
-        {
-          label: "image-transcode",
-          timeoutMs: LIMITS.imageDerivativeTimeoutMs,
-        },
-      ),
-    catch: (cause) =>
-      new ImageTranscodeError({ message: "Failed to decode image", cause }),
+): Promise<Result<ConvertToPdfResult, PdfRenderError>> => {
+  const admitted = await admitWork({
+    pool: "pdf-render",
+    kind: "render-pdf",
+    bytes: bytes.byteLength,
+    run: async ({ signal }) => {
+      // Read as the render starts: the parent's RSS is what it is now.
+      const budget = pdfRenderBudget({
+        limit: containerMemoryLimit(),
+        parentRssBytes: process.memoryUsage.rss(),
+      });
+      if (budget === null) {
+        return null;
+      }
+      return {
+        budget,
+        rendered: await spawnBinaryWorker({
+          workerPath: pdfWorkerPath(),
+          args: [
+            PDF_WORKER_OPERATION.render,
+            declaredType,
+            JSON.stringify(budget),
+          ],
+          stdin: new Blob([bytes]),
+          timeoutMs: LIMITS.pdfRenderTimeoutMs,
+          signal,
+          // The worker refuses a larger PDF itself; this bounds what is read.
+          maxOutputBytes: LIMITS.fileDerivativePdfMaxBytes,
+          maxRssBytes: budget.workerRssMaxBytes,
+        }),
+      };
+    },
   });
-  if (Result.isError(png)) {
-    return png;
-  }
-  const header = readImageHeader(png.value, "image/png");
-  if (header === null || !canEmbedInProcess(header)) {
+  if (Result.isError(admitted)) {
     return Result.err(
-      new ImageTranscodeError({
-        message: "Transcoded image is not an embeddable PNG",
+      WorkRefusal.is(admitted.error)
+        ? new PdfRenderError({
+            message: "No PDF render slot came free",
+            reason: "busy",
+            cause: admitted.error,
+          })
+        : new PdfRenderError({
+            message: "The PDF render did not finish",
+            reason: "failed",
+            cause: admitted.error,
+          }),
+    );
+  }
+  if (admitted.value === null) {
+    return Result.err(
+      new PdfRenderError({
+        message:
+          "The container has too little memory left for a PDF render now",
+        reason: "busy",
       }),
     );
   }
-  const embedded = await embedImage(png.value, header, "image/png");
-  if (Result.isError(embedded)) {
+  const { budget, rendered } = admitted.value;
+  if (Result.isOk(rendered)) {
+    return Result.ok({
+      buffer: toArrayBuffer(rendered.value),
+      sizeBytes: rendered.value.byteLength,
+    });
+  }
+  if (
+    rendered.error.termination?.reason === SUBPROCESS_TERMINATION_REASON.memory
+  ) {
     return Result.err(
-      new ImageTranscodeError({
-        message: "Failed to embed transcoded image",
-        cause: embedded.error,
+      new PdfRenderError({
+        message: `The PDF worker passed its ${budget.workerRssMaxBytes}-byte memory ceiling`,
+        reason: "memory",
+        cause: rendered.error,
       }),
     );
   }
-  return Result.ok(embedded.value);
+  const { exitCode } = rendered.error;
+  if (exitCode === PDF_WORKER_PARSE_ERROR_EXIT_CODE) {
+    return Result.err(
+      new PdfRenderError({
+        message: "The file could not be decoded",
+        reason: "unreadable",
+        cause: rendered.error,
+      }),
+    );
+  }
+  if (exitCode === PDF_WORKER_OVER_BUDGET_EXIT_CODE) {
+    // The file fits a render with the full budget; this one had less room.
+    return Result.err(
+      new PdfRenderError({
+        message: "The image needs more memory than the container has left now",
+        reason: "busy",
+        cause: rendered.error,
+      }),
+    );
+  }
+  if (exitCode === PDF_WORKER_TOO_LARGE_EXIT_CODE) {
+    return Result.err(
+      new PdfRenderError({
+        message: `The rendered PDF exceeds the ${LIMITS.fileDerivativePdfMaxBytes}-byte limit`,
+        reason: "too-large",
+        cause: rendered.error,
+      }),
+    );
+  }
+  return Result.err(
+    new PdfRenderError({
+      message: "The PDF worker did not finish",
+      reason: "failed",
+      cause: rendered.error,
+    }),
+  );
+};
+
+/**
+ * A HEIC/HEIF photo, rendered by the PDF worker when `decoding` is on (the
+ * deployment's `HEIC_PREVIEW_DECODING_ENABLED`). Decoding off, a container that
+ * cannot be read and pictures the decoder refuses are each a `no_preview`
+ * refusal, which the file's viewer shows with the original to download; a
+ * photo over the decode budget is too large, as any image is.
+ */
+const convertHeifToPdf = async (
+  mimeType: HeifMimeType,
+  fileName: string,
+  bytes: Uint8Array,
+  decoding: boolean,
+): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
+  const noPreview = (cause: "decoding_off" | "unreadable") => {
+    const reason = {
+      kind: "no_preview",
+      format: heifFormatLabel(mimeType, fileName),
+      cause,
+    } as const;
+    return Result.err(
+      new ConversionInputError({
+        message: conversionInputRefusalMessage(reason),
+        reason,
+      }),
+    );
+  };
+  if (!decoding) {
+    return noPreview("decoding_off");
+  }
+  const admission = admitDerivativeImage(bytes, mimeType);
+  if (admission.type === "refused") {
+    return admission.error.refusal === DERIVATIVE_REFUSAL.UNREADABLE_HEADER
+      ? noPreview("unreadable")
+      : Result.err(admission.error);
+  }
+  const rendered = await renderPdfInWorker(mimeType, bytes);
+  if (Result.isOk(rendered)) {
+    return rendered;
+  }
+  observeFailure(rendered.error, {
+    sink: PDF_RENDER_FAILED_SINK,
+    ctx: { operation: "render-pdf" },
+  });
+  return rendered.error.reason === "unreadable"
+    ? noPreview("unreadable")
+    : rendered;
 };
 
 /**
  * Convert a scanned file to PDF. Images are admitted by the pixel count
  * their header declares before anything decodes them. JPEG and PNG whose
  * header shows an encoding the in-process embedder handles become a
- * one-page PDF directly. WebP, which the converter cannot import, is
- * re-encoded as PNG in-process and embedded; a failure there is observed
- * and returned as an `ImageTranscodeError`, never sent to the converter.
- * Every other image (BMP, GIF, TIFF, and JPEG/PNG encodings the embedder
- * does not handle), an embed that fails anyway, and every other convertible
- * type go to Gotenberg's LibreOffice route, once the input checks have read
- * it and its content is the format it is declared as. A type that is not
- * convertible never reaches the converter.
+ * one-page PDF directly. Every other image (BMP, GIF first frame, every
+ * page of a TIFF, WebP, JPEG and PNG encodings the embedder does not take,
+ * and an embed that fails anyway), plain text and CSV are rendered by the
+ * PDF worker; a failure there is observed and returned as a
+ * `PdfRenderError`, never sent to the converter. Every other convertible
+ * type goes to Gotenberg's LibreOffice route, once the input checks have
+ * read it and its content is the format it is declared as. A type that is
+ * not convertible never reaches the converter.
  */
 export const convertToPdf = async (
   file: ScannedFile,
-  { retry = "in-call" }: ConvertToPdfOptions = {},
+  {
+    retry = "in-call",
+    heifDecoding = envConverter.HEIC_PREVIEW_DECODING_ENABLED,
+  }: ConvertToPdfOptions = {},
 ): Promise<Result<ConvertToPdfResult, ConvertToPdfError>> => {
   const { fileName } = file;
   // Decided on the type alone: a declared parameter (a charset, a boundary)
-  // changes nothing about how the file converts.
+  // changes nothing about which route the file takes.
   const mimeType = mediaTypeEssence(file.mimeType);
   const bytes = new Uint8Array(file.bytes);
+  if (isHeifMimeType(mimeType)) {
+    return await convertHeifToPdf(mimeType, fileName, bytes, heifDecoding);
+  }
   const admission = admitDerivativeImage(bytes, mimeType);
   if (admission.type === "refused") {
     return Result.err(admission.error);
   }
 
   const { header } = admission;
-  if (header !== null && isInProcessOnlyImageMimeType(mimeType)) {
-    const transcoded = await transcodeImageToPdf(bytes);
-    if (Result.isError(transcoded)) {
-      observeFailure(transcoded.error, {
-        sink: IMAGE_TRANSCODE_FAILED_SINK,
-        ctx: { operation: "image-transcode-to-pdf" },
-      });
-    }
-    return transcoded;
-  }
-
   if (
     header !== null &&
     isEmbeddableImageMimeType(mimeType) &&
     canEmbedInProcess(header)
   ) {
     const embedded = await embedImage(bytes, header, mimeType);
-    // An embed failure never reaches the caller (it falls back below), so
-    // only the value crosses into the caller-facing error type.
+    // An embed failure never reaches the caller (the worker renders the
+    // image instead), so only the value crosses into the caller-facing type.
     if (Result.isOk(embedded)) {
       return Result.ok(embedded.value);
     }
-    // The header promised an encoding the embedder then refused: observe
-    // it and let the converter render the image instead.
+    // The header promised an encoding the embedder then refused.
     observeFailure(embedded.error, {
       sink: IMAGE_EMBED_FAILED_SINK,
       ctx: { operation: "image-to-pdf" },
     });
+  }
+
+  if (isRenderedPdfMimeType(mimeType)) {
+    // The declared type keeps its parameters: a text file's charset.
+    const rendered = await renderPdfInWorker(file.mimeType, bytes);
+    if (Result.isError(rendered)) {
+      observeFailure(rendered.error, {
+        sink: PDF_RENDER_FAILED_SINK,
+        ctx: { operation: "render-pdf" },
+      });
+    }
+    return rendered;
   }
 
   // A web archive or an e-book converts as the HTML stella builds from it,
@@ -449,7 +633,11 @@ export const convertToPdf = async (
     mimeType: documentType,
     bytes: documentBytes,
   } = prepared.value;
-  if (!isConvertibleMimeType(documentType)) {
+  // Rendered types returned above; an HTML rendering is never one of them.
+  if (
+    !isConvertibleMimeType(documentType) ||
+    isRenderedPdfMimeType(documentType)
+  ) {
     return Result.err(
       new ConversionInputError({
         message: `Files of type ${documentType} cannot be converted.`,

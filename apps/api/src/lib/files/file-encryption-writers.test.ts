@@ -69,8 +69,7 @@ const EXPECTED_SITES: Record<string, string> = {
   "src/handlers/entities/upload.ts:fileContentWithMintedObject:0": "encryption",
   "src/handlers/entities/versions/upload.ts:createEntityVersionFromBuffer:0":
     "encryption",
-  "src/handlers/files/email-attachment/create.ts:createEntityFromBuffer:0":
-    "encryption",
+  "src/handlers/files/part-save.ts:createEntityFromBuffer:0": "encryption",
   "src/handlers/files/update-document-properties.ts:createEntityVersionFromBuffer:0":
     "serverBuiltFileEncryption()",
   "src/handlers/sharepoint/import-file.ts:createEntityFromBuffer:0":

@@ -19,6 +19,10 @@ export default {
         path: "apps/api/src/lib/file-scan/scan-upload.ts",
         reason: "Upload security scans hold the file-scan pool.",
       },
+      {
+        path: "apps/api/src/lib/files/gotenberg.ts",
+        reason: "Image, text and CSV preview renders hold the pdf-render pool.",
+      },
     ],
   },
 } as const satisfies OwnershipEntry;

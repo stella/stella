@@ -452,6 +452,9 @@ jobs:
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          # Clusters a suite starts for itself run the image the service
+          # container already pulled.
+          STELLA_ISOLATED_POSTGRES_IMAGE: ${{ needs.full-test-plan.outputs.postgres }}
         # Includes the full 20k/10k sanctions volume benchmark; required service
         # CI selects its bounded correctness slice through the same runner.
         run: bun run test:postgres

@@ -22,12 +22,16 @@ type NumberFormatter = {
       maximumFractionDigits: number;
       style: "unit";
       unit: string;
-      unitDisplay: "short";
+      unitDisplay: "long" | "short";
     },
   ) => string;
 };
 
-/** A file size in the reader's locale, at most one decimal ("1.2 MB"). */
+/**
+ * A file size in the reader's locale, at most one decimal ("1.2 MB"). Bytes
+ * use the long, plural-aware unit ("333 bytes", "333 bajtů"): the short
+ * English unit has no plural ("333 byte").
+ */
 export const formatFileSize = (
   sizeBytes: number,
   format: NumberFormatter,
@@ -37,6 +41,6 @@ export const formatFileSize = (
     maximumFractionDigits: 1,
     style: "unit",
     unit: size.unit,
-    unitDisplay: "short",
+    unitDisplay: size.unit === "byte" ? "long" : "short",
   });
 };

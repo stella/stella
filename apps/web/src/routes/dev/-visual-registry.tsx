@@ -94,11 +94,25 @@ const visualLoaders = {
       return { default: UploadRejectionsPlayground };
     },
   },
+  "document-naming": {
+    load: async () => {
+      const { DocumentNamingPlayground } =
+        await import("./-components/document-naming-playground");
+      return { default: DocumentNamingPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =
         await import("./-components/page-crop-playground");
       return { default: PageCropPlayground };
+    },
+  },
+  "pdf-fit-width": {
+    load: async () => {
+      const { PdfFitWidthPlayground } =
+        await import("./-components/pdf-fit-width-playground");
+      return { default: PdfFitWidthPlayground };
     },
   },
   "chat-long-paste": {

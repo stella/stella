@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Anhänge",
     "certifiedAt": "Zertifiziert am",
     "deliveredTo": "Zugestellt an",
     "error": "Gemeldeter Fehler",
@@ -462,6 +461,7 @@
     },
     "fit": "Breite",
     "openOriginal": "Original öffnen",
+    "openPart": "{fileName} öffnen",
     "preview": "Vorschau öffnen",
     "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
     "retry": "Erneut versuchen",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Bankkontonummer",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Angehängte Dateien",
     "bankCode": "Bankleitzahl",
     "batchPosition": "Beleg {position, number} von {count, number}",
     "bic": "BIC-Code",
@@ -504,6 +503,7 @@
     "paymentReference": "Verwendungszweck",
     "prepaidAmount": "Bereits gezahlt",
     "quantity": "Menge und Einheit",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "registrationNumber": "Registernummer",
@@ -515,16 +515,48 @@
     "taxableAmount": "Bemessungsgrundlage",
     "totals": "Summen",
     "unitPrice": "Einzelpreis",
+    "units": {
+      "day": "{count, plural, one {{quantity} Tag} other {{quantity} Tage}}",
+      "hour": "{count, plural, one {{quantity} Stunde} other {{quantity} Stunden}}",
+      "month": "{count, plural, one {{quantity} Monat} other {{quantity} Monate}}",
+      "unit": "{count, plural, one {{quantity} Stk.} other {{quantity} Stk.}}",
+      "week": "{count, plural, one {{quantity} Woche} other {{quantity} Wochen}}",
+      "year": "{count, plural, one {{quantity} Jahr} other {{quantity} Jahre}}"
+    },
     "unreadable": "Die Rechnung konnte nicht gelesen werden.",
     "vat": "USt.",
     "vatBreakdown": "USt.-Aufschlüsselung",
     "vatId": "Umsatzsteuer-ID"
+  },
+  "email": {
+    "cc": "Kopie",
+    "date": "Datum",
+    "from": "Absender",
+    "noSubject": "(Kein Betreff)",
+    "subject": "Betreff",
+    "to": "Empfänger"
   },
   "entity": {
     "currentVersion": "Aktuelle Version",
     "loadFailed": "Dieser Eintrag konnte nicht geladen werden.",
     "reference": "Aktenzeichen",
     "type": "Typ"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Das Archiv konnte nicht gelesen werden.",
+    "attachments": "Anhänge",
+    "files": "Dateien",
+    "insideFailed": "Die Dateien darin konnten nicht geladen werden. Zum erneuten Versuch tippen.",
+    "noFilesInside": "Darin sind keine Dateien.",
+    "open": "{fileName} ({details}) öffnen",
+    "unavailable": {
+      "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",
+      "link": "Verweis auf eine andere Datei, wird nicht geöffnet",
+      "tooLarge": "Zu groß zum Öffnen",
+      "unreadable": "Beschädigt, lässt sich nicht öffnen",
+      "unsupported": "Mit einem Verfahren komprimiert, das sich nicht öffnen lässt"
+    },
+    "unnamed": "Unbenannte Datei"
   },
   "header": {
     "search": "Suchen"
@@ -853,6 +885,7 @@
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
     "noSigners": "Es wurden keine Angaben zu Unterzeichnern gefunden.",
+    "signedContent": "Signiertes Dokument",
     "signers": "Unterzeichner",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",

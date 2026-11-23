@@ -8,7 +8,7 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { type PendingUploadPurposeData, pendingUploads } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { resolveUploadMime } from "@/api/lib/files/utils";
+import { resolveUploadMime } from "@/api/lib/files/upload-mime";
 import {
   type PresignedUploadHeaders,
   presignUploadUrl,

@@ -31,7 +31,6 @@
       "sent": "Outgoing",
       "statedInFile": "Data-box message (as stated in the file)",
       "toHands": "To the attention of {name}",
-      "unlinkedFiles": "To open attachments shown without a link, download the original ZFO file.",
       "unreadable": "This file could not be read as a data-box message or delivery receipt.",
       "uploaded": "Uploaded data-box message"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Debit note",
       "other": "Other document"
     },
-    "downloadAttachment": "Download {fileName}",
     "exemptionReason": "Exemption reason",
     "formatVersion": "{format}, version {version}",
     "grossTotal": "Total with VAT",
@@ -111,6 +109,7 @@
     "paymentReference": "Payment reference",
     "prepaidAmount": "Paid in advance",
     "quantity": "Quantity and unit",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "supplier": "Supplier",
@@ -120,6 +119,14 @@
     "taxableAmount": "Tax base",
     "totals": "Totals",
     "unitPrice": "Unit price",
+    "units": {
+      "day": "{count, plural, one {{quantity} day} other {{quantity} days}}",
+      "hour": "{count, plural, one {{quantity} hour} other {{quantity} hours}}",
+      "month": "{count, plural, one {{quantity} month} other {{quantity} months}}",
+      "unit": "{count, plural, one {{quantity} unit} other {{quantity} units}}",
+      "week": "{count, plural, one {{quantity} week} other {{quantity} weeks}}",
+      "year": "{count, plural, one {{quantity} year} other {{quantity} years}}"
+    },
     "unreadable": "The invoice could not be read.",
     "vat": "VAT",
     "vatBreakdown": "VAT breakdown"
@@ -369,6 +376,7 @@
     "noReadableContent": "No readable content is available for preview.",
     "noSigners": "No signer details were found.",
     "pdfUnavailable": "The PDF preview is unavailable.",
+    "signedDocument": "Signed document",
     "signers": "Signers",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
@@ -553,6 +561,10 @@
     "deleteWorkspaceConfirmDescription": "Are you sure you want to delete this matter? This action cannot be undone.",
     "deletedItem": "Deleted: {name}",
     "deletingWorkspace": "Deleting matter",
+    "documentNaming": {
+      "description": "New documents get the organization's name pattern: {pattern}",
+      "label": "Rename new uploads"
+    },
     "documentSwitcher": {
       "download": "Download this file",
       "renditionsFailed": "Reload the document to try the download again.",

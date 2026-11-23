@@ -1,25 +1,42 @@
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/button";
-
-import { ActivityExplainer } from "./ActivityExplainer";
+import { useBillingDraftSettings } from "../activity/billing-draft-settings";
+import { ActivitySetupFlow } from "./ActivitySetupFlow";
 import type { StepProps } from "./step-props";
 import { StepFooter } from "./StepFooter";
+import { useActivitySetup } from "./use-activity-setup";
 
+/**
+ * Activity, for an account that has it: one choice per screen inside this
+ * one step of the tour, with the tour's own Back, dots and Continue. The
+ * native flow moves between steps; the screens follow the activity state,
+ * which the native flow does not hold.
+ */
 export const ActivityStep = ({ onBack, onContinue, snapshot }: StepProps) => {
   const t = useTranslations("onboarding");
+  const activityT = useTranslations("activity");
+  const controls = useActivitySetup();
+  const drafts = useBillingDraftSettings(true);
   return (
-    <>
-      <h1 className="text-xl font-semibold">{t("activityTitle")}</h1>
-      <p className="text-muted-foreground mt-1 mb-4 text-sm text-pretty">
-        {t("activityBody")}
-      </p>
-      <ActivityExplainer permissions={snapshot.activityPermissions} />
-      <StepFooter
-        onBack={onBack}
-        primary={<Button onClick={onContinue}>{t("continue")}</Button>}
-        snapshot={snapshot}
-      />
-    </>
+    <ActivitySetupFlow
+      controls={controls}
+      drafts={drafts}
+      finishLabel={t("continue")}
+      label={activityT("title")}
+      onLeaveBack={onBack}
+      onLeaveForward={onContinue}
+      permissions={snapshot.activityPermissions}
+      recordingBody={t("activityBody")}
+      renderFooter={(actions) => (
+        <StepFooter
+          backDisabledReason={actions.backDisabledReason}
+          onBack={actions.onBack}
+          primary={actions.primary}
+          secondary={actions.secondary}
+          snapshot={snapshot}
+        />
+      )}
+      skipLabel={t("skip")}
+    />
   );
 };

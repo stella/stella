@@ -1,6 +1,7 @@
 import { PDF, StandardFonts } from "@libpdf/core";
 import { expect, test } from "bun:test";
 
+import { FILE_PART_KINDS } from "@stll/api-contract/file-parts";
 import {
   E_AKTA_FILE_FORMAT,
   XADES_ZEP_FILE_FORMAT,
@@ -8,11 +9,10 @@ import {
 } from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 
-import {
-  readSignedDossierPdf,
-  readSignedDossierPreview,
-} from "@/api/lib/files/archive-preview";
+import { readSignedDossierPreview } from "@/api/lib/files/archive-preview";
+import { readPartOfFile } from "@/api/lib/files/file-part";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import { PDF_MIME_TYPE } from "@/api/mime-types";
 import {
   makeEAktaFixture,
   makeXadesZepFixture,
@@ -40,6 +40,11 @@ const stored = (bytes: Uint8Array, fileName: string, mimeType: string) =>
     path: `org/ws/${fileName}`,
     mimeType,
   });
+
+const document = (index: number) => ({
+  kind: FILE_PART_KINDS.document,
+  index,
+});
 
 test("previews an e-akta dossier uploaded under a generic type, and search reads the same text", async () => {
   const pdf = await pdfBytes();
@@ -76,7 +81,12 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
         text: "Kérelem száma 47",
         status: "readable",
         textFormat: "plain",
-        pdf: false,
+        part: {
+          part: "document:0",
+          fileName: "kérelem.txt",
+          mediaType: "text/plain",
+          sizeBytes: new TextEncoder().encode("Kérelem száma 47").byteLength,
+        },
       },
       {
         id: "document-1",
@@ -84,7 +94,12 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
         text: expect.stringContaining(marker),
         status: "readable",
         textFormat: "markdown",
-        pdf: true,
+        part: {
+          part: "document:1",
+          fileName: "végzés.pdf",
+          mediaType: PDF_MIME_TYPE,
+          sizeBytes: pdf.byteLength,
+        },
       },
       {
         id: "document-2",
@@ -92,7 +107,8 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
         text: "",
         status: "unavailable",
         textFormat: "plain",
-        pdf: false,
+        // A document without readable text is still a part of the file.
+        part: expect.objectContaining({ part: "document:2" }),
       },
     ],
   });
@@ -105,18 +121,17 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
   expect(extracted).toContain("csomag.zip");
   expect(extracted).not.toContain("Private draft inside an opaque ZIP");
 
-  const delivered = await readSignedDossierPdf(
-    source.withMimeType(E_AKTA_FILE_FORMAT.mimeType),
-    1,
-  );
-  expect(delivered.unwrap()).toEqual(pdf);
-  for (const position of [0, 2, 3]) {
-    const refused = await readSignedDossierPdf(
-      source.withMimeType(E_AKTA_FILE_FORMAT.mimeType),
-      position,
-    );
-    expect(refused.isErr() && refused.error.status).toBe(422);
-  }
+  const dossier = source.withMimeType(E_AKTA_FILE_FORMAT.mimeType);
+  const delivered = await readPartOfFile(dossier, document(1));
+  expect(delivered.unwrap()).toEqual({
+    fileName: "végzés.pdf",
+    mimeType: PDF_MIME_TYPE,
+    bytes: pdf,
+  });
+  const text = (await readPartOfFile(dossier, document(0))).unwrap();
+  expect(new TextDecoder().decode(text.bytes)).toBe("Kérelem száma 47");
+  const beyond = await readPartOfFile(dossier, document(3));
+  expect(beyond.isErr() && beyond.error.status).toBe(404);
 });
 
 test("previews a ZEPf container stored as a generic ZIP", async () => {
@@ -147,7 +162,10 @@ test("previews a ZEPf container stored as a generic ZIP", async () => {
       text: "Žiadosť",
       status: "readable",
       textFormat: "plain",
-      pdf: false,
+      part: expect.objectContaining({
+        part: "document:0",
+        mediaType: "text/plain",
+      }),
     },
     {
       id: "document-1",
@@ -155,14 +173,19 @@ test("previews a ZEPf container stored as a generic ZIP", async () => {
       text: expect.stringContaining(marker),
       status: "readable",
       textFormat: "markdown",
-      pdf: true,
+      part: {
+        part: "document:1",
+        fileName: "rozhodnutie.pdf",
+        mediaType: PDF_MIME_TYPE,
+        sizeBytes: pdf.byteLength,
+      },
     },
   ]);
-  const delivered = await readSignedDossierPdf(
+  const delivered = await readPartOfFile(
     source.withMimeType(ZEP_FILE_FORMAT.mimeType),
-    1,
+    document(1),
   );
-  expect(delivered.unwrap()).toEqual(pdf);
+  expect(delivered.unwrap().bytes).toEqual(pdf);
   expect((await extractFileTextResult(source)).unwrap()).toContain("Žiadosť");
 });
 
@@ -227,11 +250,11 @@ test("delivers a zipped PDF that inflates past the size of its container", async
     ],
   });
   expect(bytes.byteLength).toBeLessThan(padded.byteLength);
-  const delivered = await readSignedDossierPdf(
+  const delivered = await readPartOfFile(
     stored(bytes, "record.es3", E_AKTA_FILE_FORMAT.mimeType),
-    0,
+    document(0),
   );
-  expect(delivered.unwrap()).toEqual(padded);
+  expect(delivered.unwrap().bytes).toEqual(padded);
 });
 
 test("previews a XAdES_ZEP envelope stored under a generic type, PDF included", async () => {
@@ -263,19 +286,26 @@ test("previews a XAdES_ZEP envelope stored under a generic type, PDF included", 
     "Example envelope signer",
   ]);
   expect(preview.documents).toMatchObject([
-    { fileName: "Rozhodnutie.pdf", pdf: true, status: "readable" },
+    {
+      fileName: "Rozhodnutie.pdf",
+      part: { part: "document:0", mediaType: PDF_MIME_TYPE },
+      status: "readable",
+    },
     {
       fileName: "Podanie.xml",
-      pdf: false,
+      part: { part: "document:1", fileName: "Podanie.xml" },
       text: "Návrh na začatie konania",
       textFormat: "plain",
     },
   ]);
-  const delivered = await readSignedDossierPdf(
-    source.withMimeType(XADES_ZEP_FILE_FORMAT.mimeType),
-    0,
+  const envelope = source.withMimeType(XADES_ZEP_FILE_FORMAT.mimeType);
+  const delivered = await readPartOfFile(envelope, document(0));
+  expect(delivered.unwrap().bytes).toEqual(pdf);
+  // A document of any type opens, not only a PDF.
+  const xml = (await readPartOfFile(envelope, document(1))).unwrap();
+  expect(new TextDecoder().decode(xml.bytes)).toContain(
+    "Návrh na začatie konania",
   );
-  expect(delivered.unwrap()).toEqual(pdf);
   const extracted = (await extractFileTextResult(source)).unwrap();
   expect(extracted).toContain("Návrh na začatie konania");
   expect(extracted).toContain(marker);

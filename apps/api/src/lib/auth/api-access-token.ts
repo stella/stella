@@ -257,16 +257,24 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/files/asic.ts",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/zip/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/zip-archive.ts",
+    exportName: "zipArchivePreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  // The files of a part that is itself a container, such as an email in an
+  // archive; each opens through the part link above.
+  "GET /v1/files/:workspaceId/parts/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/part-list.ts",
+    exportName: "readFilePartListEndpoint",
+    uncataloged: "upload_mechanics",
+  },
   "GET /v1/files/:workspaceId/cades/:fieldId": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/cades.ts",
     exportName: "cadesPreviewEndpoint",
-    uncataloged: "upload_mechanics",
-  },
-  "GET /v1/files/:workspaceId/cades/:fieldId/content": {
-    scope: "stella:read",
-    handler: "apps/api/src/handlers/files/cades.ts",
-    exportName: "cadesContentEndpoint",
     uncataloged: "upload_mechanics",
   },
   "GET /v1/files/:workspaceId/signed-dossier/:fieldId": {
@@ -275,20 +283,14 @@ export const API_OAUTH_ROUTES = {
     exportName: "signedDossierPreviewEndpoint",
     uncataloged: "upload_mechanics",
   },
-  "GET /v1/files/:workspaceId/signed-dossier/:fieldId/content": {
-    scope: "stella:read",
-    handler: "apps/api/src/handlers/files/signed-dossier.ts",
-    exportName: "signedDossierContentEndpoint",
-    uncataloged: "upload_mechanics",
-  },
   "GET /v1/files/:workspaceId/data-box/:fieldId": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/data-box.ts",
     uncataloged: "upload_mechanics",
   },
-  "GET /v1/files/:workspaceId/certified-email/:fieldId": {
+  "GET /v1/files/:workspaceId/email-reading/:fieldId": {
     scope: "stella:read",
-    handler: "apps/api/src/handlers/files/certified-email.ts",
+    handler: "apps/api/src/handlers/files/email-reading.ts",
     uncataloged: "upload_mechanics",
   },
   "POST /v1/entities/:workspaceId/upload-version": {

@@ -70,17 +70,22 @@ export const normalizeDateFieldValue = (
  *  normalizer's own wording when the value names no calendar date, and
  *  returning the formatted display string (or null when the value is
  *  absent/empty/unreadable and nothing should be written back). */
+type FormatDateValueOutcome =
+  | { status: "formatted"; value: string }
+  | { status: "empty" }
+  | { status: "invalid" };
+
 const formatDateValue = (
   path: string,
   incoming: unknown,
   dateFormat: FieldDateFormat,
   errors: DateFieldError[],
-): string | null => {
+): FormatDateValueOutcome => {
   if (incoming === undefined) {
-    return null;
+    return { status: "empty" };
   }
   if (typeof incoming === "string" && incoming.trim() === "") {
-    return null;
+    return { status: "empty" };
   }
   const normalized = normalizeDateFieldValue(incoming, dateFormat);
   if (!normalized.ok) {
@@ -88,7 +93,7 @@ const formatDateValue = (
       path,
       message: `Field "${path}": ${askSentence(normalized)} ${normalized.hint}`,
     });
-    return null;
+    return { status: "invalid" };
   }
   const formatted = formatDate(normalized.value, dateFormat);
   if (formatted === null) {
@@ -96,7 +101,7 @@ const formatDateValue = (
       `Field "${path}": the normalizer produced ${normalized.value}, which the formatter refused`,
     );
   }
-  return formatted;
+  return { status: "formatted", value: formatted };
 };
 
 /**
@@ -134,15 +139,15 @@ export const resolveDateFields = ({
           dateFormat,
           errors,
         );
-        if (formatted !== null) {
-          writeRowSubPath(row, subPath, formatted);
+        if (formatted.status === "formatted") {
+          writeRowSubPath(row, subPath, formatted.value);
         }
       });
       continue;
     }
     const formatted = formatDateValue(field.path, incoming, dateFormat, errors);
-    if (formatted !== null) {
-      replaceResolvedValue(values, field.path, formatted);
+    if (formatted.status === "formatted") {
+      replaceResolvedValue(values, field.path, formatted.value);
     }
   }
 
