@@ -1002,6 +1002,6 @@ describe("scanFile integration", () => {
         fileName: "large.pdf",
       }),
     );
-    expect(result.findings).toEqual([]);
+    expect(result.findings.map((f) => f.rule)).toEqual(["mime-magic-mismatch"]);
   });
 });
