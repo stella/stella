@@ -846,6 +846,8 @@
       "instructionsEmpty": "Kohandatud juhiseid pole",
       "instructionsPlaceholder": "nt kasuta eestikeelseid kaustanimesid, rühmita vastaspoole järgi, alusta kuupäeva aastaga.",
       "instructionsTitle": "AI juhised",
+      "newClientHint": "Rakendamisel luuakse uus kontakt.",
+      "newMatterFromDocuments": "Uus toimik dokumentidest",
       "noChangesToApply": "Korraldatavaid faile ega kaustu pole.",
       "noFilesToOrganize": "Lisage korraldatavad failid.",
       "organized": "Failid korraldatud",

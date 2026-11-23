@@ -1,7 +1,8 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { panic } from "better-result";
+import { useNavigate } from "@tanstack/react-router";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
@@ -15,7 +16,7 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { openFilePicker } from "@stll/ui/file-picker";
-import { UploadIcon } from "@stll/ui/icons";
+import { SparklesIcon, UploadIcon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
 
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
@@ -28,10 +29,16 @@ import {
 import type { MatterOption } from "@/components/workspaces/matter-combobox";
 import { WorkflowQueryFeedback } from "@/components/workspaces/workflow-query-feedback";
 import { usePermissions } from "@/hooks/use-permissions";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
+import {
+  useCreateWorkspace,
+  useDeleteWorkspace,
+} from "@/lib/workspaces/mutations";
 import { useCreateFileEntities } from "@/lib/workspaces/mutations/use-create-file-entities";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
 import { useIsWorkflowRunning } from "@/lib/workspaces/queries/workspace";
@@ -51,6 +58,32 @@ export const UploadDocumentDialog = ({
   // The picked matter, or the one the caller opened the dialog for, resolved
   // from the same list the picker offers so both paths show the same name.
   const [picked, setPicked] = useState<MatterOption | null>(null);
+  // A personal matter made here to hold the files until the organizer
+  // suggests its name and client; the upload then opens it.
+  const [draftMatterId, setDraftMatterId] = useState<string | null>(null);
+  const createWorkspace = useCreateWorkspace();
+  const draftOnce = useSingleFlight();
+  const deleteWorkspace = useDeleteWorkspace();
+  // Closing before any upload discards the still-empty draft matter.
+  const cancel = () => {
+    if (draftMatterId !== null) {
+      deleteWorkspace.mutate({ workspaceId: draftMatterId });
+    }
+    onClose();
+  };
+  const navigate = useNavigate();
+  const createDraftMatter = async () => {
+    const name = t("common.newMatter");
+    const result = await Result.tryPromise(
+      async () => await createWorkspace.mutateAsync({ name }),
+    );
+    if (Result.isError(result)) {
+      notifyUserError(result.error, t("errors.actionFailed"));
+      return;
+    }
+    setDraftMatterId(result.value.id);
+    setPicked({ clientName: null, color: null, id: result.value.id, name });
+  };
   const mattersQuery = useQuery({
     ...workspacesNavigationOptions({
       organizationId: activeOrganizationId,
@@ -72,7 +105,7 @@ export const UploadDocumentDialog = ({
     <Dialog
       onOpenChange={(open) => {
         if (!open) {
-          onClose();
+          cancel();
         }
       }}
       open
@@ -95,9 +128,33 @@ export const UploadDocumentDialog = ({
                 activeOrganizationId={activeOrganizationId}
                 userId={userId}
                 id="upload-matter"
-                onChange={setPicked}
+                onChange={(matter) => {
+                  if (draftMatterId !== null) {
+                    deleteWorkspace.mutate({ workspaceId: draftMatterId });
+                    setDraftMatterId(null);
+                  }
+                  setPicked(matter);
+                }}
                 value={picked}
               />
+              {draftMatterId === null && (
+                <Button
+                  className="self-start"
+                  disabled={draftOnce.pending}
+                  disabledReason={t("common.loading")}
+                  onClick={() =>
+                    detached(
+                      draftOnce.run(createDraftMatter),
+                      "upload-document.create-draft-matter",
+                    )
+                  }
+                  size="sm"
+                  variant="ghost"
+                >
+                  <SparklesIcon className="size-4" />
+                  {t("workspaces.importOrganizer.newMatterFromDocuments")}
+                </Button>
+              )}
             </div>
           )}
           {workspaceId !== undefined && (
@@ -147,14 +204,25 @@ export const UploadDocumentDialog = ({
             >
               <UploadDocumentForMatter
                 key={selectedMatter.id}
-                onClose={onClose}
+                onClose={() => {
+                  onClose();
+                  if (draftMatterId === selectedMatter.id) {
+                    detached(
+                      navigate({
+                        to: "/workspaces/$workspaceId",
+                        params: { workspaceId: draftMatterId },
+                      }),
+                      "upload-document.open-draft-matter",
+                    );
+                  }
+                }}
                 workspaceId={selectedMatter.id}
               />
             </QuerySuspenseBoundary>
           )}
         </DialogPanel>
         <DialogFooter>
-          <Button onClick={onClose} variant="ghost">
+          <Button onClick={cancel} variant="ghost">
             {t("common.cancel")}
           </Button>
         </DialogFooter>

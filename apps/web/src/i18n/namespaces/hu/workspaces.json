@@ -846,6 +846,8 @@
       "instructionsEmpty": "Nincs egyedi utasítás",
       "instructionsPlaceholder": "pl. Magyar mappaneveket használj, csoportosíts ellenfél szerint, az évszámot tedd a dátum elé.",
       "instructionsTitle": "AI utasítások",
+      "newClientHint": "Alkalmazáskor új kapcsolat jön létre.",
+      "newMatterFromDocuments": "Új ügy dokumentumokból",
       "noChangesToApply": "Nincs rendezhető fájl vagy mappa.",
       "noFilesToOrganize": "Adja hozzá a rendezni kívánt fájlokat.",
       "organized": "Fájlok rendezve",

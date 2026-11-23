@@ -846,6 +846,8 @@
       "instructionsEmpty": "Nav pielāgotu norādījumu",
       "instructionsPlaceholder": "piem., izmanto latviešu mapju nosaukumus, grupē pēc pretpuses, datumus sāc ar gadu.",
       "instructionsTitle": "AI norādījumi",
+      "newClientHint": "Piemērojot tiks izveidota jauna kontaktpersona.",
+      "newMatterFromDocuments": "Jauna lieta no dokumentiem",
       "noChangesToApply": "Nav kārtojamu failu vai mapju.",
       "noFilesToOrganize": "Pievienojiet failus, ko vēlaties sakārtot.",
       "organized": "Faili sakārtoti",

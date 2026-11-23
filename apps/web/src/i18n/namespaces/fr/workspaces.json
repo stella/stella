@@ -846,6 +846,8 @@
       "instructionsEmpty": "Aucune instruction personnalisée",
       "instructionsPlaceholder": "ex. Utiliser des noms de dossiers en français, regrouper par contrepartie, préfixer les dates par l’année.",
       "instructionsTitle": "Instructions IA",
+      "newClientHint": "Un nouveau contact est créé lors de l’application.",
+      "newMatterFromDocuments": "Nouveau dossier à partir de documents",
       "noChangesToApply": "Il n’y a aucun fichier ni dossier à organiser.",
       "noFilesToOrganize": "Ajoutez des fichiers à organiser.",
       "organized": "Fichiers organisés",

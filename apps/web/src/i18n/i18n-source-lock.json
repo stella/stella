@@ -6626,6 +6626,8 @@
   "workspaces.importOrganizer.instructionsEmpty": "No custom instructions",
   "workspaces.importOrganizer.instructionsPlaceholder": "e.g. Use English folder names, group by counterparty, prefix dates with year.",
   "workspaces.importOrganizer.instructionsTitle": "AI instructions",
+  "workspaces.importOrganizer.newClientHint": "A new contact is created when you apply.",
+  "workspaces.importOrganizer.newMatterFromDocuments": "New matter from documents",
   "workspaces.importOrganizer.noChangesToApply": "There are no files or folders to organize.",
   "workspaces.importOrganizer.noFilesToOrganize": "Add files to organize.",
   "workspaces.importOrganizer.organized": "Files organized",

@@ -35,6 +35,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
+import { contactPickerSearchOptions } from "@/components/contact-picker-queries";
 import {
   withDragAnnouncementData,
   withDropAnnouncementData,
@@ -42,11 +43,14 @@ import {
 import { EntityKindIcon } from "@/components/workspaces/entity-kind-icon";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
+import { useSingleFlight } from "@/hooks/use-single-flight";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { useUserStorageState } from "@/lib/account/use-user-storage-state";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useCreateContact } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
 import {
   draggable,
@@ -56,6 +60,7 @@ import { toAPIError, unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentSubmit } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
+import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspacesKeys } from "@/lib/workspaces/queries";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import {
@@ -64,6 +69,8 @@ import {
   normalizeSuggestedFileName,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
 import type { FileNameSuggestion } from "@/routes/_protected.workspaces/$workspaceId/-components/import-organizer.logic";
+import { OrganizerMatterFields } from "@/routes/_protected.workspaces/$workspaceId/-components/organizer-matter-fields";
+import type { OrganizerMatterDraft } from "@/routes/_protected.workspaces/$workspaceId/-components/organizer-matter-fields";
 
 type ExistingImportFolder = {
   entityId: string;
@@ -88,6 +95,8 @@ type ExistingFileOrganizerDialogProps = {
   existingFolders: ExistingImportFolder[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Personal matter: also suggest a matter name and client to promote it. */
+  suggestMatter?: boolean;
 };
 
 type ExistingOrganizerRow = FileNameSuggestion & {
@@ -102,6 +111,7 @@ type OrganizerCache = {
   key: string;
   rows: ExistingOrganizerRow[];
   deleteFolders: FolderDeletionSuggestion[];
+  matter: OrganizerMatterDraft | null;
 };
 
 type FolderPreviewNode = {
@@ -130,8 +140,16 @@ export const ExistingFileOrganizerDialog = ({
   existingFolders,
   open,
   onOpenChange,
+  suggestMatter = false,
 }: ExistingFileOrganizerDialogProps) => {
   const submit = useIdempotentSubmit();
+  const { activeOrganizationId } = useAuthenticatedUser();
+  const createContact = useCreateContact();
+  const updateWorkspace = useUpdateWorkspace();
+  const applyOnce = useSingleFlight();
+  const [matterDraft, setMatterDraft] = useState<OrganizerMatterDraft | null>(
+    null,
+  );
   const t = useTranslations();
   // organize-suggestions caps locale at 16 chars; send the base language.
   const locale = useI18nStore((s) => s.loadedLang);
@@ -243,6 +261,7 @@ export const ExistingFileOrganizerDialog = ({
     if (cachedSuggestions?.key === requestKey) {
       setRows(cachedSuggestions.rows);
       setDeleteFolders(cachedSuggestions.deleteFolders);
+      setMatterDraft(suggestMatter ? cachedSuggestions.matter : null);
       setSuggestionStatus("ready");
       return;
     }
@@ -256,6 +275,7 @@ export const ExistingFileOrganizerDialog = ({
     // Generate/Regenerate button handler below.
     setRows(initialRows);
     setDeleteFolders([]);
+    setMatterDraft(null);
     setSuggestionStatus("ready");
   }, [
     cachedSuggestions,
@@ -263,6 +283,7 @@ export const ExistingFileOrganizerDialog = ({
     initialRows,
     open,
     requestKey,
+    suggestMatter,
     suggestionStatus,
   ]);
 
@@ -398,10 +419,11 @@ export const ExistingFileOrganizerDialog = ({
     };
   })();
 
-  const handleApply = () => {
+  const handleApply = async () => {
     const rowsSnapshot = rows;
     const deleteSnapshot = selectedDeleteFolders;
     const existingFoldersSnapshot = existingFolders;
+    const matterSnapshot = matterDraft;
 
     onOpenChange(false);
 
@@ -411,6 +433,35 @@ export const ExistingFileOrganizerDialog = ({
     });
 
     const run = async () => {
+      if (matterSnapshot) {
+        const name = matterSnapshot.name.trim();
+        if (name.length > 0) {
+          await updateWorkspace.mutateAsync({
+            workspaceId,
+            update: { type: "name", value: name },
+          });
+        }
+        const { client } = matterSnapshot;
+        if (client) {
+          const clientId =
+            client.id ??
+            (
+              await createContact.mutateAsync({
+                type: client.type,
+                displayName: client.displayName,
+              })
+            ).id;
+          await updateWorkspace.mutateAsync({
+            workspaceId,
+            update: {
+              type: "clientId",
+              value: clientId,
+              expectedClientId: null,
+            },
+          });
+        }
+      }
+
       const folderIds = await ensureFolders({
         submit,
         workspaceId,
@@ -502,7 +553,7 @@ export const ExistingFileOrganizerDialog = ({
       ]);
     };
 
-    run()
+    await run()
       .then(() => {
         stellaToast.update(toastId, {
           type: "success",
@@ -530,6 +581,7 @@ export const ExistingFileOrganizerDialog = ({
     setCachedSuggestions(null);
     setRows(initialRows);
     setDeleteFolders([]);
+    setMatterDraft(null);
     setSuggestionStatus("generating");
 
     try {
@@ -544,6 +596,7 @@ export const ExistingFileOrganizerDialog = ({
           suggestionRequestFiles,
           requestLocale,
           trimmedInstructions,
+          suggestMatter,
         ],
         queryFn: async ({ signal }) => {
           const entitiesApi = api.entities({
@@ -555,6 +608,7 @@ export const ExistingFileOrganizerDialog = ({
               existingFolders: suggestionRequestFolders,
               files: suggestionRequestFiles,
               locale: requestLocale,
+              ...(suggestMatter ? { suggestMatter: true } : {}),
               ...(trimmedInstructions.length > 0
                 ? { userInstructions: trimmedInstructions }
                 : {}),
@@ -592,6 +646,33 @@ export const ExistingFileOrganizerDialog = ({
         reason: folder.reason,
         selected: true,
       }));
+      const suggestedClient = suggestMatter ? data.matter?.client : undefined;
+      const matchedClient = suggestedClient
+        ? (
+            await queryClient.query(
+              contactPickerSearchOptions({
+                organizationId: activeOrganizationId,
+                q: suggestedClient.displayName,
+                type: undefined,
+              }),
+            )
+          ).find(
+            (contact) =>
+              contact.displayName.toLocaleLowerCase() ===
+              suggestedClient.displayName.toLocaleLowerCase(),
+          )
+        : undefined;
+      const draftClient = suggestedClient
+        ? {
+            id: matchedClient?.id ?? null,
+            displayName:
+              matchedClient?.displayName ?? suggestedClient.displayName,
+            type: matchedClient?.type ?? suggestedClient.type,
+          }
+        : null;
+      const nextMatterDraft = suggestMatter
+        ? { name: data.matter?.name ?? "", client: draftClient }
+        : null;
       const latestRequestState = getSuggestionRequestState();
       if (
         suggestionRequestTokenRef.current !== requestToken ||
@@ -603,10 +684,12 @@ export const ExistingFileOrganizerDialog = ({
 
       setRows(nextRows);
       setDeleteFolders(nextDeleteFolders);
+      setMatterDraft(nextMatterDraft);
       setCachedSuggestions({
         key: requestKey,
         rows: nextRows,
         deleteFolders: nextDeleteFolders,
+        matter: nextMatterDraft,
       });
       setSuggestionStatus("ready");
     } catch (error) {
@@ -683,6 +766,13 @@ export const ExistingFileOrganizerDialog = ({
               }}
             />
           )}
+          {matterDraft && !isGeneratingSuggestions && (
+            <OrganizerMatterFields
+              disabled={interactionsDisabled}
+              onChange={setMatterDraft}
+              value={matterDraft}
+            />
+          )}
           {isGeneratingSuggestions ? (
             <OrganizerSkeleton />
           ) : (
@@ -746,7 +836,12 @@ export const ExistingFileOrganizerDialog = ({
                 ? t("common.loading")
                 : t("workspaces.importOrganizer.noChangesToApply")
             }
-            onClick={handleApply}
+            onClick={() =>
+              detached(
+                applyOnce.run(handleApply),
+                "existing-file-organizer-dialog.apply",
+              )
+            }
             type="button"
           >
             <Rows3Icon />

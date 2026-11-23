@@ -846,6 +846,8 @@
       "instructionsEmpty": "Žiadne vlastné pokyny",
       "instructionsPlaceholder": "napr. Používaj slovenské názvy priečinkov, zoskupuj podľa protistrany, dátum uvádzaj s rokom na začiatku.",
       "instructionsTitle": "Pokyny pre AI",
+      "newClientHint": "Pri použití sa vytvorí nový kontakt.",
+      "newMatterFromDocuments": "Nový spis z dokumentov",
       "noChangesToApply": "Nie sú tu žiadne súbory ani priečinky na usporiadanie.",
       "noFilesToOrganize": "Pridajte súbory na usporiadanie.",
       "organized": "Súbory usporiadané",

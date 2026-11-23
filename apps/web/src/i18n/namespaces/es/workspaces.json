@@ -846,6 +846,8 @@
       "instructionsEmpty": "Sin instrucciones personalizadas",
       "instructionsPlaceholder": "p. ej. Usar nombres de carpetas en español, agrupar por contraparte, anteponer el año a las fechas.",
       "instructionsTitle": "Instrucciones de IA",
+      "newClientHint": "Al aplicar se crea un contacto nuevo.",
+      "newMatterFromDocuments": "Nuevo asunto a partir de documentos",
       "noChangesToApply": "No hay archivos ni carpetas que organizar.",
       "noFilesToOrganize": "Añada archivos para organizarlos.",
       "organized": "Archivos organizados",
