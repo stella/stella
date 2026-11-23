@@ -11,7 +11,7 @@ export type MboxVariant = (typeof MBOX_VARIANTS)[number];
 
 const encoder = new TextEncoder();
 
-export type MailAttachment = {
+type MailAttachment = {
   readonly fileName: string;
   readonly mediaType: string;
   readonly bytes: Uint8Array;

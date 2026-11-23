@@ -240,7 +240,7 @@ export const openFileSource = async <TFormat extends FileSourceFormat>(
  * back `deliver`, which releases a result only while the same live version is
  * share-locked and after its delivery has been recorded.
  */
-export const loadFileSource = async <TFormat extends FileSourceFormat>(
+const loadFileSource = async <TFormat extends FileSourceFormat>(
   options: LegalFileReadOptions,
   accept: (content: StoredFileContent) => TFormat | null,
 ) => {

@@ -1765,6 +1765,8 @@ type FetchObjectOptions<T> = {
   consume: (response: Response) => Promise<T>;
   signal?: AbortSignal | undefined;
   s3Policy?: S3CredentialRefreshOptions | undefined;
+  /** Request headers, such as the `Range` a range read asks for. */
+  headers?: Record<string, string> | undefined;
 };
 
 const fetchObject = async <T>({
@@ -1773,6 +1775,7 @@ const fetchObject = async <T>({
   consume,
   signal,
   s3Policy,
+  headers,
 }: FetchObjectOptions<T>): Promise<T> =>
   await withPublicReadIo(
     "object-storage",
@@ -1784,7 +1787,11 @@ const fetchObject = async <T>({
             store.client().presign(key, {
               expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
             }),
-            { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
+            {
+              ...(headers === undefined ? {} : { headers }),
+              signal,
+              timeoutMs: OBJECT_READ_TIMEOUT_MS,
+            },
             async (response) => {
               if (!response.ok) {
                 return await throwCorpusObjectResponseError({
@@ -1969,76 +1976,56 @@ const readObjectRange = async ({
     return panic(`Range read length must be a positive integer, got ${length}`);
   }
   const last = offset + length - 1;
-  // The status check runs inside the guard: a refused credential arrives as a
-  // response, not as a thrown request failure, so the retry only sees it once
-  // the response has been turned into an error.
-  return await withPublicReadIo(
-    "object-storage",
-    async (io) =>
-      await store.run(
-        async () =>
-          await io.fetch(
-            // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- store is one of this module's ObjectStore records, whose client() is getS3 or getCorpusS3
-            store.client().presign(key, {
-              expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
-            }),
-            {
-              headers: { Range: `bytes=${offset}-${last}` },
-              signal,
-              // The store must start answering in time; the range then
-              // streams for as long as it keeps moving.
-              timeout: { type: "headers", ms: OBJECT_READ_TIMEOUT_MS },
-            },
-            async (served) => {
-              if (served.status !== 206) {
-                return await throwCorpusObjectResponseError({
-                  response: served,
-                  key,
-                  message: `Range read for ${key} answered ${served.status}, not 206`,
-                });
-              }
-              const contentRange = CONTENT_RANGE_PATTERN.exec(
-                served.headers.get("content-range") ?? "",
-              );
-              const first = contentRange?.groups?.["first"];
-              const servedLast = contentRange?.groups?.["last"];
-              if (
-                first === undefined ||
-                servedLast === undefined ||
-                Number(first) !== offset ||
-                Number(servedLast) !== last
-              ) {
-                throw new S3ObjectReadError({
-                  message: `Range read for ${key} served a different range than bytes=${offset}-${last}`,
-                });
-              }
-              const contentLength = served.headers.get("content-length");
-              if (
-                contentLength === null ||
-                Number(contentLength.trim()) !== length
-              ) {
-                throw new S3ObjectReadError({
-                  message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
-                });
-              }
-              const bytes = meterStorageRead(
-                await readBodyWithIdleDeadline(served, {
-                  idleMs: OBJECT_RANGE_READ_IDLE_MS,
-                  maxBytes: length,
-                  signal,
-                }),
-              );
-              if (bytes.byteLength !== length) {
-                throw new S3ObjectReadError({
-                  message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
-                });
-              }
-              return bytes;
-            },
-          ),
-        s3Policy,
-      ),
-  );
+  return await fetchObject({
+    store,
+    key,
+    signal,
+    s3Policy,
+    headers: { Range: `bytes=${offset}-${last}` },
+    consume: async (served) => {
+      if (served.status !== 206) {
+        return await throwCorpusObjectResponseError({
+          response: served,
+          key,
+          message: `Range read for ${key} answered ${served.status}, not 206`,
+        });
+      }
+      const contentRange = CONTENT_RANGE_PATTERN.exec(
+        served.headers.get("content-range") ?? "",
+      );
+      const first = contentRange?.groups?.["first"];
+      const servedLast = contentRange?.groups?.["last"];
+      if (
+        first === undefined ||
+        servedLast === undefined ||
+        Number(first) !== offset ||
+        Number(servedLast) !== last
+      ) {
+        throw new S3ObjectReadError({
+          message: `Range read for ${key} served a different range than bytes=${offset}-${last}`,
+        });
+      }
+      const contentLength = served.headers.get("content-length");
+      if (contentLength === null || Number(contentLength.trim()) !== length) {
+        throw new S3ObjectReadError({
+          message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
+        });
+      }
+      const bytes = meterStorageRead(
+        await readBodyWithIdleDeadline(served, {
+          idleMs: OBJECT_RANGE_READ_IDLE_MS,
+          maxBytes: length,
+          signal,
+        }),
+      );
+      if (bytes.byteLength !== length) {
+        throw new S3ObjectReadError({
+          message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
+        });
+      }
+      return bytes;
+    },
+  });
 };
 
 /** A range of a legal-corpus object. See {@link readObjectRange}. */

@@ -20,6 +20,7 @@
  */
 import { TaggedError } from "better-result";
 
+import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { MAILBOX_MAX_MESSAGES } from "@stll/api-contract/mailbox";
 
 /** One message is at most this large; a larger one is listed, never read. */
@@ -151,14 +152,14 @@ const CONTENT_LENGTH_VALUE = /^[ \t]*(\d{1,10})[ \t]*\r?$/u;
  * The body length a header states; null when it states none, states one
  * that is not a number, or has the field more than once.
  */
-export const statedContentLength = (header: Uint8Array): number | null => {
+const statedContentLength = (header: Uint8Array): number | null => {
   const text = new TextDecoder("latin1").decode(header);
   const fields = [...text.matchAll(CONTENT_LENGTH_FIELD)];
   const value =
     fields.length === 1
       ? CONTENT_LENGTH_VALUE.exec(fields[0]?.[1] ?? "")?.[1]
       : undefined;
-  return value === undefined ? null : Number(value);
+  return parseIntegerToken(value, { sign: "unsigned" }).unwrapOr(null);
 };
 
 type Pending =

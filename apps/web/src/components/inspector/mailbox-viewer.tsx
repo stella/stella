@@ -32,11 +32,7 @@ import {
 import type { FileTab } from "@/components/inspector/file-tab";
 import { useFormatter } from "@/i18n/formatting-context";
 import { mailboxPreviewOptions } from "@/lib/files/legal-file-queries";
-
-const MESSAGE_DATE_FORMAT = {
-  dateStyle: "medium",
-  timeStyle: "short",
-} as const satisfies Intl.DateTimeFormatOptions;
+import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 /** One message as its row shows it: its subject, then who, when and where. */
 const MessageRow = ({
@@ -54,7 +50,7 @@ const MessageRow = ({
   const subject = message.subject ?? t("emailViewer.noSubject");
   const details = [
     ...mailboxMessageDetails(message, (date) =>
-      format.dateTime(date, MESSAGE_DATE_FORMAT),
+      format.dateTime(date, MEDIUM_DATE_SHORT_TIME_FORMAT),
     ),
     ...(message.unavailable === null
       ? []
