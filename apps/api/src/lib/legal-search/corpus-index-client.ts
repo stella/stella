@@ -1076,24 +1076,15 @@ const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> =>
         try: async () => await response.text(),
         catch: (cause) => cause,
       });
-      if (Result.isError(bodyRead)) {
-        const readDetail =
-          bodyRead.error instanceof Error
-            ? bodyRead.error.message
-            : String(bodyRead.error);
-        throw new CorpusIndexError({
-          message: `corpus index ${requestLabel(request)} -> ${response.status} (error body unreadable: ${readDetail})`,
-          status: response.status,
-          rejection: rejectionForHttpStatus(response.status),
-          reach: reachForHttpStatus(response.status),
-          cause: bodyRead.error,
-        });
-      }
+      const detail = Result.isError(bodyRead)
+        ? `(error body unreadable: ${bodyRead.error instanceof Error ? bodyRead.error.message : String(bodyRead.error)})`
+        : `: ${bodyRead.value.slice(0, 500)}`;
       throw new CorpusIndexError({
-        message: `corpus index ${requestLabel(request)} -> ${response.status}: ${bodyRead.value.slice(0, 500)}`,
+        message: `corpus index ${requestLabel(request)} -> ${response.status}${Result.isError(bodyRead) ? ` ${detail}` : detail}`,
         status: response.status,
         rejection: rejectionForHttpStatus(response.status),
         reach: reachForHttpStatus(response.status),
+        ...(Result.isError(bodyRead) ? { cause: bodyRead.error } : {}),
       });
     }
     return await response.json().catch((error: unknown) => {
