@@ -72,6 +72,7 @@ import { accountDisplay, accountStatusTone } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
+import { ClipboardSettingsSections } from "./ClipboardSettings";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting, useDictationAvailability } from "./DictationSetting";
 import { KeepAwakeSection } from "./KeepAwakeSection";
@@ -555,6 +556,7 @@ const ClipboardPane = () => {
           <ShortcutSetting />
         </SettingsPanel>
       </SettingsSection>
+      <ClipboardSettingsSections />
     </>
   );
 };

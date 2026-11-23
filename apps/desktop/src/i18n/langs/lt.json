@@ -462,6 +462,21 @@
     "welcomeStart": "Pradėti kopijuoti",
     "welcomeTitle": "Susipažinkite su iškarpine"
   },
+  "clipboardSettings": {
+    "capture": "Išsaugoti naujas iškarpas",
+    "captureDescription": "Išjungus nieko, ką nukopijuojate, neišsaugoma.",
+    "errorSave": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
+    "excludedDescription": "Tai, ką nukopijuojate šiose programose, neišsaugoma.",
+    "excludedEmpty": "Norėdami neįtraukti programos, iškarpinėje dešiniuoju pelės mygtuku spustelėkite vieną jos iškarpą ir pasirinkite nebesaugoti naujų iš jos iškarpų.",
+    "groupActions": "Grupės „{groupName}“ veiksmai",
+    "groupsDescription": "Vilkite grupę, kad pakeistumėte jos vietą iškarpinėje.",
+    "groupsEmpty": "Sukurkite grupę ir iškarpinėje nuvilkite į ją iškarpas.",
+    "history": "Istorija",
+    "moveGroupDown": "Perkelti žemyn",
+    "moveGroupUp": "Perkelti aukštyn",
+    "recordingsDescription": "Leisti iškarpinę rodyti ekrano kopijose, įrašuose ir bendrinant ekraną.",
+    "retentionDescription": "Senesnės iškarpos ištrinamos. Grupėse esančios iškarpos išlieka."
+  },
   "dialog": {
     "accountEmail": "Paskyra",
     "accountSubtitle": "Prijunkite stella desktop prie šios paskyros ir organizacijos.",
