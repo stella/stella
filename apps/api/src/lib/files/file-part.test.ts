@@ -121,8 +121,12 @@ const zipFiles = async (source: ScannedFile) =>
     .unwrap()
     .files.flatMap(({ part }) => (part === null ? [] : [listedOf(part)]));
 
-const invoiceAttachments = async (source: ScannedFile) =>
-  (await readEInvoicePreview(source)).unwrap().attachments.map(listedOf);
+const invoiceAttachments = async (source: ScannedFile) => {
+  const preview = (await readEInvoicePreview(source)).unwrap();
+  return preview.type === "invoice"
+    ? preview.invoice.attachments.map(listedOf)
+    : [];
+};
 
 // `readDataBoxFile` lists a message's files at their positions.
 const dataBoxFiles = async (source: ScannedFile) => {

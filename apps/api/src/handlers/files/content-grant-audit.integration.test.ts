@@ -81,7 +81,7 @@ import { dataBoxPayloadIdentity } from "@/api/lib/email/correspondence/data-box/
 import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
-import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+import { xmlDocumentPreviewText } from "@/api/lib/files/e-invoice-text";
 import {
   checkFileContentGrant,
   FILE_CONTENT_GRANT_TTL_MS,
@@ -1430,7 +1430,9 @@ describe.each(eInvoiceFixtures)(
       if (preview instanceof HttpStatusResponse) {
         panic("Expected a structured invoice preview");
       }
-      expect(preview.invoices.length).toBeGreaterThan(0);
+      expect(
+        preview.type === "invoice" && preview.invoice.invoices.length,
+      ).toBeGreaterThan(0);
       await expectOneContentRow(entityId, {
         action: "access",
         metadata: {
@@ -1448,7 +1450,7 @@ describe.each(eInvoiceFixtures)(
         purpose: "agent",
       });
       expect(agent.unwrap()).toEqual({
-        text: eInvoiceDocumentText(preview),
+        text: xmlDocumentPreviewText(preview),
         attachments: [],
       });
       const rows = await auditRowsFor(entityId);
@@ -1556,20 +1558,35 @@ describe.each(eInvoiceFixtures)(
   },
 );
 
-test("plain XML is never read as an invoice and nothing is delivered", async () => {
-  const { fieldId, entityId } = await seedStored(
+test("plain XML is never read as an invoice: Files and the agent get its text", async () => {
+  const { fieldId, entityId, entityVersionId } = await seedStored(
     { fileName: "catalog.xml", mimeType: "application/xml", pdfFileId: null },
     xmlBytes(plainXml()),
   );
-  expect(
-    await eInvoicePreviewEndpoint.handler(
-      legalFileContext(fieldId, scopedDbA()),
-    ),
-  ).toMatchObject({
-    code: 422,
-    response: { code: PREVIEW_UNAVAILABLE_ERROR_CODE },
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: entityVersionId })
+    .where(eq(entities.id, entityId));
+  const preview = await eInvoicePreviewEndpoint.handler(
+    legalFileContext(fieldId, scopedDbA()),
+  );
+  if (preview instanceof HttpStatusResponse) {
+    panic("Expected the XML text preview");
+  }
+  expect(preview).toMatchObject({ type: "xml", truncated: false });
+  await expectOneContentRow(entityId, {
+    action: "access",
+    metadata: { fieldId, format: "xml", disposition: "inline" },
   });
-  expect(await auditRowsFor(entityId)).toEqual([]);
+  const agent = await LEGAL_FILE_READERS.xml({
+    fieldId,
+    scopedDb: scopedDbA(),
+    workspaceId: ids.wsA1,
+    organizationId: ids.orgA,
+    recordAuditEvent: recorderA(),
+    purpose: "agent",
+  });
+  expect(agent.unwrap().text).toBe(xmlDocumentPreviewText(preview));
 });
 
 describe("email text reading", () => {

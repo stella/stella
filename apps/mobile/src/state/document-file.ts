@@ -9,7 +9,7 @@ import {
   documentFormat,
   legalFileFormat,
 } from "@stll/api-contract/document-format";
-import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
+import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
 import { emailReadingSchema } from "@stll/api-contract/email-reading";
 import {
   filePartDescriptorSchema,
@@ -171,7 +171,7 @@ type EInvoiceDocumentFile = {
   readonly fileName: string;
   readonly fieldId: string;
   readonly preview: Result<
-    v.InferOutput<typeof eInvoicePreviewSchema>,
+    v.InferOutput<typeof xmlDocumentPreviewSchema>,
     ApiError
   >;
 };
@@ -499,10 +499,10 @@ export const readDocumentFile = async ({
           fetch,
           source,
           path: `/v1/files/${encodeURIComponent(workspaceId)}/e-invoice/${encodeURIComponent(fieldId)}`,
-          schema: eInvoicePreviewSchema,
+          schema: xmlDocumentPreviewSchema,
         });
-        // Any XML file is tried as an invoice; one the server does not read
-        // as an invoice opens as before, like any other file.
+        // Any XML file is read as an invoice or as its text; one the server
+        // cannot read as text at all opens as before, like any other file.
         const notAnInvoice =
           kind === "xml" &&
           Result.isError(preview) &&

@@ -492,7 +492,6 @@
     "linesShown": "Rāda {shown, number} no {count, plural, zero {# pozīcijām} one {# pozīcijas} other {# pozīcijām}}",
     "netAmount": "Summa bez PVN",
     "netTotal": "Kopā bez PVN",
-    "notRecognized": "Šī XML datne nav atpazīts strukturēts rēķins.",
     "notes": "Rēķina piezīmes",
     "otherIdentifier": "Cits identifikators",
     "payableAmount": "Summa apmaksai",
@@ -526,7 +525,8 @@
     "unreadable": "Rēķinu neizdevās nolasīt.",
     "vat": "PVN",
     "vatBreakdown": "PVN sadalījums",
-    "vatId": "PVN numurs"
+    "vatId": "PVN numurs",
+    "xmlUnreadable": "Šo XML failu neizdevās nolasīt."
   },
   "email": {
     "cc": "Kopija",

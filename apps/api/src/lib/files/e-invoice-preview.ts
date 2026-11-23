@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
-import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
+import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
 import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -20,7 +20,7 @@ const E_INVOICE_PREVIEW_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const previewReplySchema = v.pipe(
   v.string(),
   v.parseJson(),
-  eInvoicePreviewSchema,
+  xmlDocumentPreviewSchema,
 );
 
 const unavailable = (message: string) =>
@@ -78,10 +78,6 @@ const runEInvoiceWorker = async (
   switch (exitCode) {
     case E_INVOICE_WORKER_EXIT.unreadable:
       return Result.err(unavailable("The invoice file could not be read"));
-    case E_INVOICE_WORKER_EXIT.notInvoice:
-      return Result.err(
-        unavailable("The file is not a recognised structured invoice"),
-      );
     case E_INVOICE_WORKER_EXIT.rejected:
       return Result.err(
         unavailable("An embedded file did not pass the security scan"),
@@ -91,13 +87,13 @@ const runEInvoiceWorker = async (
   }
 };
 
-/** Reads a stored ISDOC, ISDOCX or XML file as a structured invoice. */
+/** Reads a stored ISDOC, ISDOCX or XML file: its invoice, or an XML file's text. */
 export const readEInvoicePreview = async (
   source: ScannedFile,
   expectedMimeType = source.mimeType,
 ): Promise<
   Result<
-    v.InferOutput<typeof eInvoicePreviewSchema>,
+    v.InferOutput<typeof xmlDocumentPreviewSchema>,
     HandlerError<422 | 500 | 503>
   >
 > => {
