@@ -45,6 +45,8 @@ const RECONCILE_SCAN_CONCURRENCY = 10;
  */
 const RECONCILE_MAX_PAGES = 20;
 
+export type ReconcileRowOutcome = "handed-off" | "skipped" | "failed";
+
 export type ReconcileScanResult = {
   handedOff: number;
   scanned: number;
@@ -146,7 +148,7 @@ type ScanPendingRowsOptions<Row> = {
    * on — an unusable actor, a queue lookup that failed — advances the cursor
    * instead of pinning the sweep to the page it sits on.
    */
-  handle: (row: Row) => Promise<boolean | "handed-off" | "skipped" | "failed">;
+  handle: (row: Row) => Promise<boolean | ReconcileRowOutcome>;
   /** Reads the next page after `cursor`, ordered by the same key. */
   readPage: (cursor: Row | null) => Promise<readonly Row[]>;
 };
@@ -271,7 +273,7 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
 >): Promise<ReconcileQueuedRunsResult> => {
   let unattributed = 0;
 
-  const handle = async (run: Row): Promise<boolean> => {
+  const handle = async (run: Row): Promise<ReconcileRowOutcome> => {
     const admitted = admit === undefined ? true : await admit(run);
     if (run.requestedBy === null) {
       unattributed += 1;

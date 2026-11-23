@@ -202,7 +202,9 @@ export const reconcileQueuedReportExports = async ({
       .orderBy(asc(reportExports.createdAt), asc(reportExports.id))
       .limit(RECONCILE_SCAN_PAGE_SIZE);
 
-  const handle = async (row: QueuedReportExportRow): Promise<boolean> => {
+  const handle = async (
+    row: QueuedReportExportRow,
+  ): Promise<"handed-off" | "skipped" | "failed"> => {
     const { aiNarrative, format, requestedBy } = row;
     if (requestedBy === null) {
       unattributed += 1;
