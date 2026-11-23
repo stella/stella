@@ -190,6 +190,8 @@ const connect = async ({
       ...(tempDir === null ? {} : tempEnvironment(tempDir, options.platform)),
     }),
     handlers,
+    // A definition that reads the agent's errors from stderr needs it kept.
+    captureStderr: options.definition.classifyErrorOutput !== undefined,
   });
   if (Result.isError(started)) {
     if (tempDir !== null) {
