@@ -21,10 +21,13 @@ import { asicDocumentText } from "@/api/lib/files/asic-document-text";
 import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
 import { readCadesPreview } from "@/api/lib/files/cades-preview";
 import { readEInvoicePreview } from "@/api/lib/files/e-invoice-preview";
-import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+import { xmlDocumentPreviewText } from "@/api/lib/files/e-invoice-text";
 import type { LegalFileReadOptions } from "@/api/lib/files/legal-file-source";
 import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
-import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
+import {
+  readingZipNames,
+  readLegalFilePreview,
+} from "@/api/lib/files/read-legal-file-preview";
 import { readMailboxContent } from "@/api/lib/files/read-mailbox-file";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
 import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
@@ -44,7 +47,7 @@ const readAsicContent: LegalContentReader = async (options) => {
   const read = await readLegalFilePreview(
     options,
     ASIC_FILE_KINDS,
-    readAsicPreview,
+    readingZipNames(readAsicPreview),
   );
   if (read.isErr()) {
     return Result.err(read.error);
@@ -56,7 +59,7 @@ const readSignedDossierContent: LegalContentReader = async (options) => {
   const read = await readLegalFilePreview(
     options,
     SIGNED_DOSSIER_KINDS,
-    readSignedDossierPreview,
+    readingZipNames(readSignedDossierPreview),
   );
   if (read.isErr()) {
     return Result.err(read.error);
@@ -68,7 +71,7 @@ const readStructuredDocumentContent: LegalContentReader = async (options) => {
   const read = await readLegalFilePreview(
     options,
     STRUCTURED_DOCUMENT_KINDS,
-    readStructuredDocumentPreview,
+    async (source) => await readStructuredDocumentPreview(source),
   );
   if (read.isErr()) {
     return Result.err(read.error);
@@ -84,19 +87,22 @@ const readEInvoiceContent: LegalContentReader = async (options) => {
   const read = await readLegalFilePreview(
     options,
     E_INVOICE_KINDS,
-    readEInvoicePreview,
+    async (source) => await readEInvoicePreview(source),
   );
   if (read.isErr()) {
     return Result.err(read.error);
   }
-  return Result.ok({ text: eInvoiceDocumentText(read.value), attachments: [] });
+  return Result.ok({
+    text: xmlDocumentPreviewText(read.value),
+    attachments: [],
+  });
 };
 
 const readZipArchiveContent: LegalContentReader = async (options) => {
   const read = await readLegalFilePreview(
     options,
     [ZIP_FILE_FORMAT.kind],
-    readZipArchivePreview,
+    readingZipNames(readZipArchivePreview),
   );
   if (read.isErr()) {
     return Result.err(read.error);
@@ -127,7 +133,7 @@ export const LEGAL_FILE_READERS = {
     const read = await readLegalFilePreview(
       options,
       ["cades"],
-      readCadesPreview,
+      readingZipNames(readCadesPreview),
     );
     if (read.isErr()) {
       return Result.err(read.error);

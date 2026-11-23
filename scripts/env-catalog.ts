@@ -1479,6 +1479,11 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_SIDECAR_VERSION",
   "STELLA_TIMING",
   "STELLA_WEB_PORT",
+  // Set by the API for each extraction worker run, never deployed: the code
+  // page a tie between readings of a ZIP archive's undeclared file names
+  // goes to (`ibm437` or `ibm852`). apps/api/src/lib/files/zip-name-code-page.ts
+  // reads it in the worker.
+  "STELLA_ZIP_NAME_CODE_PAGE",
   "XDG_CACHE_HOME",
   "XDG_CONFIG_HOME",
   "XDG_STATE_HOME",

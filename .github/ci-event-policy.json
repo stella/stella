@@ -151,6 +151,7 @@
     "publish-npm.yml/release-summary": "main",
     "publish-npm.yml/verify-npm": "main",
     "mirror-ci-service-images.yml/mirror": "main",
+    "publish-ocr-models.yml/publish": "dispatch-only",
     "ai-provider-canary.yml/provider-canary": "main",
     "ai-provider-canary.yml/require-provider-coverage": "main",
     "cancel-stale-merge-groups.yml/cancel": "main",

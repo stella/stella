@@ -73,6 +73,7 @@ import {
   readZipArchive,
   readZipArchiveFile,
 } from "@/api/lib/files/zip-archive";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 export type EmbeddedPartError =
@@ -196,8 +197,11 @@ const asicMembers = async ({
   );
 };
 
-const zipFiles = async ({ bytes }: Container): Promise<SlotsResult> =>
-  (await readZipArchive(bytes)).map((files) =>
+const zipFiles = async (
+  { bytes }: Container,
+  nameCodePage: ZipNameCodePage,
+): Promise<SlotsResult> =>
+  (await readZipArchive(bytes, { nameCodePage })).map((files) =>
     files.map((file): ContainerSlot => {
       // A stated name is shown, never used as a path; it is listed and
       // delivered as the safe name its part link gives it.
@@ -396,6 +400,7 @@ const emailAttachments = async ({
 const containerSlots = async (
   container: Container,
   kind: FilePartKind,
+  zipNameCodePage: ZipNameCodePage,
 ): Promise<SlotsResult> => {
   const kinds: readonly FilePartKind[] =
     FILE_PART_KINDS_BY_FORMAT[container.format];
@@ -408,7 +413,7 @@ const containerSlots = async (
     case "asicS":
       return await asicMembers(container);
     case "zip":
-      return await zipFiles(container);
+      return await zipFiles(container, zipNameCodePage);
     case "mbox":
       return await mailboxMessages(container);
     case "dataBox":
@@ -485,6 +490,8 @@ type StoredContainer = {
   containerMimeType: string;
   /** The stored file's name, which a signed envelope's document takes. */
   containerName: string;
+  /** The code page a ZIP archive's names settle a tie in, at any depth. */
+  zipNameCodePage: ZipNameCodePage;
 };
 
 const outermostFirst = (target: FilePart): FilePart[] => [
@@ -500,6 +507,7 @@ export const extractEmbeddedPart = async ({
   fileBytes,
   containerMimeType,
   containerName,
+  zipNameCodePage,
   part: target,
 }: StoredContainer & { part: FilePart | null }): Promise<
   Result<EmbeddedPart | null, EmbeddedPartError>
@@ -514,7 +522,7 @@ export const extractEmbeddedPart = async ({
     if (container === null) {
       return Result.ok(null);
     }
-    const slots = await containerSlots(container, kind);
+    const slots = await containerSlots(container, kind, zipNameCodePage);
     if (slots.isErr()) {
       return Result.err(slots.error);
     }
@@ -550,7 +558,11 @@ export const listEmbeddedParts = async (
   }
   const files: ContainedFile[] = [];
   for (const kind of FILE_PART_KINDS_BY_FORMAT[container.format]) {
-    const slots = await containerSlots(container, kind);
+    const slots = await containerSlots(
+      container,
+      kind,
+      options.zipNameCodePage,
+    );
     if (slots.isErr()) {
       return Result.err(slots.error);
     }

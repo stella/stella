@@ -33,7 +33,9 @@ export const EInvoiceViewer = ({
   const t = useTranslations();
   const source = { fieldId: tab.id, workspaceId: tab.workspaceId };
   const actions = useFilePartActions(source);
-  const { open, openPart, close } = useOpenFilePart(data.attachments);
+  const { open, openPart, close } = useOpenFilePart(
+    data.type === "invoice" ? data.invoice.attachments : [],
+  );
 
   return (
     <FileViewerWithAI
@@ -68,11 +70,28 @@ export const EInvoiceViewer = ({
             <DownloadIcon />
             {t("common.downloadOriginal")}
           </Button>
-          <EInvoiceDetails
-            actions={actions}
-            onOpenAttachment={openPart}
-            preview={data}
-          />
+          {data.type === "invoice" ? (
+            <EInvoiceDetails
+              actions={actions}
+              onOpenAttachment={openPart}
+              preview={data.invoice}
+            />
+          ) : (
+            // XML that holds no invoice: its own markup, indented.
+            <>
+              <pre
+                className="font-mono text-sm leading-relaxed wrap-break-word whitespace-pre-wrap"
+                dir="ltr"
+              >
+                {data.text}
+              </pre>
+              {data.truncated && (
+                <p className="text-muted-foreground text-sm">
+                  {t("common.previewTruncated")}
+                </p>
+              )}
+            </>
+          )}
         </article>
       </ScrollArea>
       {actions.dialog}

@@ -566,7 +566,18 @@ const LegalFilePreview = ({
         );
       }
       if (viewer === "e-invoice") {
-        return <EInvoiceDetails preview={preview.value} />;
+        if (preview.value.type === "invoice") {
+          return <EInvoiceDetails preview={preview.value.invoice} />;
+        }
+        // XML that holds no invoice shows its own indented text.
+        return (
+          <>
+            <LegalFilePreviewText format="plain" text={preview.value.text} />
+            {preview.value.truncated && (
+              <Text variant="caption">{common("previewTruncated")}</Text>
+            )}
+          </>
+        );
       }
       if (viewer === "zip") {
         return (
@@ -675,10 +686,10 @@ const LegalFilePreview = ({
     const unreadableMessages = {
       dataBox: t("failure.dataBoxUnreadable"),
       "structured-document": structuredDocument("noReadableContent"),
-      // Any XML file is offered to the invoice reader; refused, it is not one.
+      // Any XML file is offered to the invoice reader; refused, it is not text.
       "e-invoice": eInvoice(
         file.viewer === "e-invoice" && file.format === "xml"
-          ? "notRecognized"
+          ? "xmlUnreadable"
           : "unreadable",
       ),
       asic: signedFile("unreadable"),
