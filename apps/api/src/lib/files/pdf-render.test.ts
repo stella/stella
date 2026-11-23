@@ -3,6 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import { readImageHeader } from "@/api/lib/files/image-header";
 import { previewText, renderPdf } from "@/api/lib/files/pdf-render";
+import {
+  FULL_PDF_RENDER_BUDGET,
+  pdfRenderBudget,
+} from "@/api/lib/files/pdf-render-budget";
 import { loadStampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
 import { openPdfiumDocument } from "@/api/lib/files/pdfium";
 import {
@@ -72,8 +76,17 @@ const isRed = ([r, g, b]: readonly [number, number, number]) =>
 const isBlue = ([r, g, b]: readonly [number, number, number]) =>
   b > 200 && r < 60 && g < 60;
 
+const FULL_TEXT_PAGES = {
+  pagesMax: FULL_PDF_RENDER_BUDGET.textPagesMax,
+  pagesPerFontRun: FULL_PDF_RENDER_BUDGET.textPagesPerFontRun,
+};
+
+/** A render within the budget a container with room to spare gives. */
+const renderFull = async (mimeType: string, bytes: Uint8Array) =>
+  await renderPdf(mimeType, bytes, FULL_PDF_RENDER_BUDGET);
+
 const rendered = async (mimeType: string, bytes: Uint8Array) => {
-  const result = await renderPdf(mimeType, bytes);
+  const result = await renderFull(mimeType, bytes);
   if (Result.isError(result)) {
     throw result.error;
   }
@@ -156,7 +169,7 @@ describe("images rendered in-process", () => {
 
   test("a TIFF whose strip runs past the end of the file is refused", async () => {
     const tiff = tiffFile([splitTiffPage(64, 32)]);
-    expect(Result.isOk(await renderPdf("image/tiff", tiff))).toBe(true);
+    expect(Result.isOk(await renderFull("image/tiff", tiff))).toBe(true);
     // The directory stays readable; only its StripOffsets value (tag 273,
     // LONG, one value) moves so the strip's bytes would end past the file.
     const entry = indexOfBytes(
@@ -166,7 +179,7 @@ describe("images rendered in-process", () => {
     expect(entry).toBeGreaterThan(0);
     const cut = tiff.slice();
     new DataView(cut.buffer).setUint32(entry + 8, tiff.length - 16, true);
-    expect(Result.isError(await renderPdf("image/tiff", cut))).toBe(true);
+    expect(Result.isError(await renderFull("image/tiff", cut))).toBe(true);
   });
 
   test("a CMYK TIFF renders in colour", async () => {
@@ -188,7 +201,7 @@ describe("images rendered in-process", () => {
     const corrupt = splitBmp(64, 32);
     // A BMP header declaring a compression the decoder has no codec for.
     new DataView(corrupt.buffer).setUint32(30, 99, true);
-    const result = await renderPdf("image/bmp", corrupt);
+    const result = await renderFull("image/bmp", corrupt);
     expect(Result.isError(result)).toBe(true);
   });
 });
@@ -566,6 +579,29 @@ describe("what a text preview lays out is bounded", () => {
     expect(readsBack(past.items, `Strana ${max + 1} ${FILING}`)).toBe(false);
   });
 
+  test("a smaller container's budget is the page limit the render keeps", async () => {
+    const mib = 1024 * 1024;
+    const budget = pdfRenderBudget({
+      limit: { type: "limited", bytes: 512 * mib },
+      parentRssBytes: 200 * mib,
+    });
+    const max = budget?.textPagesMax ?? 0;
+    expect(max).toBeGreaterThan(0);
+    expect(max).toBeLessThan(LIMITS.pdfRenderTextPagesMax);
+
+    const result = await renderPdf(
+      "text/plain",
+      encode(sections(max + 1)),
+      budget ?? FULL_PDF_RENDER_BUDGET,
+    );
+    if (Result.isError(result) || result.value.type !== "pdf") {
+      throw new Error("The text did not render");
+    }
+    const past = await textItems(result.value.bytes);
+    expect(past.pageCount).toBe(max + 1);
+    expect(endsWithNote(past)).toBe(true);
+  });
+
   test("a file at the byte budget is read whole", () => {
     const line =
       "Žalobce se domáhá zaplacení částky 125 400 Kč s příslušenstvím.\n";
@@ -577,7 +613,13 @@ describe("what a text preview lays out is bounded", () => {
     const text = `${body}${"x".repeat(LIMITS.pdfRenderTextSourceBytesMax - encode(body).byteLength)}`;
     expect(encode(text).byteLength).toBe(LIMITS.pdfRenderTextSourceBytesMax);
 
-    expect(previewText(encode(text), "text/plain")).toEqual({
+    expect(
+      previewText(
+        encode(text),
+        "text/plain",
+        LIMITS.pdfRenderTextSourceBytesMax,
+      ),
+    ).toEqual({
       text,
       shortened: false,
     });
@@ -597,7 +639,11 @@ describe("what a text preview lays out is bounded", () => {
     expect(into).toBeGreaterThan(0);
     expect(into).toBeLessThan(lineBytes - 2);
 
-    const { shortened, text } = previewText(bytes, "text/plain");
+    const { shortened, text } = previewText(
+      bytes,
+      "text/plain",
+      LIMITS.pdfRenderTextSourceBytesMax,
+    );
     expect(shortened).toBe(true);
     const kept = Math.floor(LIMITS.pdfRenderTextSourceBytesMax / lineBytes);
     // Every whole line inside the budget, and not the CR of the last one.
@@ -610,7 +656,11 @@ describe("what a text preview lays out is bounded", () => {
     const bytes = encode(`a${"ž".repeat(LIMITS.pdfRenderTextSourceBytesMax)}`);
     expect(LIMITS.pdfRenderTextSourceBytesMax % 2).toBe(0);
 
-    const { shortened, text } = previewText(bytes, "text/plain");
+    const { shortened, text } = previewText(
+      bytes,
+      "text/plain",
+      LIMITS.pdfRenderTextSourceBytesMax,
+    );
     expect(shortened).toBe(true);
     expect(text).toBe(
       `a${"ž".repeat((LIMITS.pdfRenderTextSourceBytesMax - 2) / 2)}`,
@@ -626,7 +676,9 @@ describe("what a text preview lays out is bounded", () => {
       LIMITS.pdfRenderTextSourceBytesMax,
     );
 
-    expect(previewText(bytes, "text/plain")).toEqual({
+    expect(
+      previewText(bytes, "text/plain", LIMITS.pdfRenderTextSourceBytesMax),
+    ).toEqual({
       text: `${head}�`,
       shortened: true,
     });
@@ -637,12 +689,12 @@ describe("what a text preview lays out is bounded", () => {
     const text = `Strana 1 ${FILING}`;
     for (const toPdf of [plainTextToPdf, csvToPdf]) {
       const shortened = await textItems(
-        await toPdf({ text, shortened: true }, fonts),
+        await toPdf({ text, shortened: true }, fonts, FULL_TEXT_PAGES),
       );
       expect(shortened.pageCount).toBe(2);
       expect(endsWithNote(shortened)).toBe(true);
       const whole = await textItems(
-        await toPdf({ text, shortened: false }, fonts),
+        await toPdf({ text, shortened: false }, fonts, FULL_TEXT_PAGES),
       );
       expect(whole.pageCount).toBe(1);
       expect(endsWithNote(whole)).toBe(false);
@@ -696,7 +748,11 @@ describe("what a text preview lays out is bounded", () => {
       ].join("\n"),
     );
     // The cut lands inside a quoted cell: its quotes are left unbalanced.
-    const cut = previewText(bytes, "text/csv");
+    const cut = previewText(
+      bytes,
+      "text/csv",
+      LIMITS.pdfRenderTextSourceBytesMax,
+    );
     expect(cut.shortened).toBe(true);
     expect(cut.text.split('"').length % 2).toBe(0);
 
@@ -736,12 +792,12 @@ describe("what an image preview decodes is bounded", () => {
 
       // A header with no pixel data: the decoder, when it is reached,
       // refuses it.
-      const atBudget = await renderPdf(
+      const atBudget = await renderFull(
         "image/png",
         declaredPng({ bitDepth, height, width }),
       );
       expect(Result.isError(atBudget)).toBe(true);
-      const past = await renderPdf(
+      const past = await renderFull(
         "image/png",
         declaredPng({ bitDepth, height, width: width + 1 }),
       );

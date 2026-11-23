@@ -5,7 +5,8 @@
  * every text line of a PDF, or renders a file stella lays out itself (an
  * image, plain text, CSV) as a PDF.
  *
- * Usage:  bun run pdf-worker.ts encryption|text-lines|render [mime type]
+ * Usage:  bun run pdf-worker.ts encryption|text-lines|render [type budget]
+ *   (`render` takes the file's type and a `PdfRenderBudget` as JSON)
  *   stdin  → raw PDF bytes; for `render`, the file of the given type
  *   stdout → "true"/"false" for encryption, a JSON string array for text,
  *            the PDF bytes for render
@@ -24,6 +25,7 @@ import * as v from "valibot";
 import { sanitizeErrorForOutput } from "@stll/errors";
 
 import { renderPdf } from "@/api/lib/files/pdf-render";
+import { pdfRenderBudgetSchema } from "@/api/lib/files/pdf-render-budget";
 import { LIMITS } from "@/api/lib/limits";
 import { writeWorkerStdout } from "@/api/lib/subprocess";
 
@@ -70,11 +72,22 @@ function refuse(error: unknown): never {
 }
 
 if (operationName === PDF_WORKER_OPERATION.render) {
+  const budget = v.safeParse(
+    pdfRenderBudgetSchema,
+    Result.try((): unknown => JSON.parse(process.argv.at(4) ?? "")).unwrapOr(
+      null,
+    ),
+  );
+  if (!budget.success) {
+    process.stderr.write("pdf-worker: render expects a type and a budget\n");
+    process.exit(64);
+  }
   // Only the decoders' refusal is a verdict on the file. Anything else that
   // throws while rendering is a defect here and exits as Bun does (1).
   const rendered = await renderPdf(
     process.argv.at(3) ?? "",
     new Uint8Array(await Bun.stdin.arrayBuffer()),
+    budget.output,
   );
   if (Result.isError(rendered)) {
     refuse(rendered.error);

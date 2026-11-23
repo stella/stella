@@ -18,7 +18,10 @@ export const pdfWorkerPath = () =>
 
 export const PDF_WORKER_OPERATION = {
   encryption: "encryption",
-  /** Renders stdin, of the type in the next argument, as a PDF on stdout. */
+  /**
+   * Renders stdin, of the type in the next argument, as a PDF on stdout,
+   * within the `PdfRenderBudget` (JSON) in the argument after it.
+   */
   render: "render",
   textLines: "text-lines",
 } as const;

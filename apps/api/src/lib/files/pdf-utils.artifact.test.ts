@@ -30,6 +30,7 @@ describe("PDF worker runtime artifact", () => {
 import { readPdfTextLines } from ${JSON.stringify(path.join(import.meta.dir, "pdf-text-lines.ts"))};
 import { PDF_WORKER_OPERATION, pdfWorkerPath } from ${JSON.stringify(path.join(import.meta.dir, "pdf-worker-protocol.ts"))};
 import { spawnBinaryWorker } from ${JSON.stringify(path.join(import.meta.dir, "../subprocess.ts"))};
+import { FULL_PDF_RENDER_BUDGET } from ${JSON.stringify(path.join(import.meta.dir, "pdf-render-budget.ts"))};
 
 const result = await isEncryptedPdf({ bytes: new ArrayBuffer(0) });
 if (result.status !== "unreadable") {
@@ -51,7 +52,7 @@ if (JSON.stringify(text.value) !== JSON.stringify(["isolated PDF text"])) {
 // Rendering loads the fonts and the shaper as assets of the bundle.
 const rendered = await spawnBinaryWorker({
   workerPath: pdfWorkerPath(),
-  args: [PDF_WORKER_OPERATION.render, "text/plain"],
+  args: [PDF_WORKER_OPERATION.render, "text/plain", JSON.stringify(FULL_PDF_RENDER_BUDGET)],
   stdin: new Blob(["Synthetic text, \u010Desky, \u4E2D\u6587, \u0639\u0631\u0628\u064A"]),
   timeoutMs: 60_000,
   maxOutputBytes: 10_000_000,

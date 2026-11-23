@@ -4,24 +4,24 @@
  * and layout are synchronous work bounded only by the worker's timeout.
  *
  * What a render holds is bounded by the file's first part, never by all of
- * it:
+ * it, within the `PdfRenderBudget` the parent derived from its container's
+ * memory (`pdf-render-budget.ts`):
  *
- * - TIFF: the first `LIMITS.pdfRenderImagePagesMax` pages, decoded one at a
- *   time by `tiff-pages.ts`, each with its own orientation and decoding to
- *   at most `LIMITS.pdfRenderTiffPageDecodedBytesMax`.
- * - Every other image type: at most `LIMITS.pdfRenderImageDecodedBytesMax`
- *   decoded, by Bun's built-in image pipeline in its static-codec mode
- *   (identical on Linux and macOS), which applies EXIF orientation, reads
- *   only the first frame of a GIF, scales the image down to
- *   `LIMITS.pdfRenderImagePixelsMax`, and re-encodes the pixels as an 8-bit
- *   PNG the embedder takes.
+ * - TIFF: the first `imagePagesMax` pages, decoded one at a time by
+ *   `tiff-pages.ts`, each with its own orientation and decoding to at most
+ *   `tiffPageDecodedBytesMax`.
+ * - Every other image type: at most `imageDecodedBytesMax` decoded, by Bun's
+ *   built-in image pipeline in its static-codec mode (identical on Linux and
+ *   macOS), which applies EXIF orientation, reads only the first frame of a
+ *   GIF, scales the image down to `imagePixelsMax`, and re-encodes the
+ *   pixels as an 8-bit PNG the embedder takes.
  * - An image larger than its budget is too large to preview, and so is one
  *   whose pages hold more than `LIMITS.fileDerivativePdfMaxBytes` of image
  *   data between them.
- * - Plain text and CSV: the first `LIMITS.pdfRenderTextSourceBytesMax`
- *   bytes, decoded by their byte-order mark or declared charset, otherwise
- *   as UTF-8, and laid out by `text-preview-pdf.ts` on at most
- *   `LIMITS.pdfRenderTextPagesMax` pages.
+ * - Plain text and CSV: the first `textSourceBytesMax` bytes, decoded by
+ *   their byte-order mark or declared charset, otherwise as UTF-8, and laid
+ *   out by `text-preview-pdf.ts` on at most `textPagesMax` pages, held
+ *   `textPagesPerFontRun` at a time.
  *
  * A preview that leaves part of the file out ends with a page saying so.
  */
@@ -37,6 +37,7 @@ import {
 } from "@/api/lib/files/image-header";
 import { type ImagePage, imagePagesToPdf } from "@/api/lib/files/image-pdf";
 import { mediaTypeEssence } from "@/api/lib/files/pdf-derivative-policy";
+import type { PdfRenderBudget } from "@/api/lib/files/pdf-render-budget";
 import {
   isRenderedPdfMimeType,
   RENDERED_PDF_MIME_TYPES,
@@ -50,6 +51,7 @@ import {
   addShortenedNotePage,
   csvToPdf,
   plainTextToPdf,
+  type TextPages,
   type TextPreviewSource,
 } from "@/api/lib/files/text-preview-pdf";
 import { readTiffPages } from "@/api/lib/files/tiff-pages";
@@ -83,10 +85,11 @@ function* collectedBetween(
 
 const renderTiff = async (
   bytes: Uint8Array,
+  budget: PdfRenderBudget,
 ): Promise<Result<RenderedPdf, PdfRenderInputError>> => {
   const tiff = readTiffPages(bytes, {
-    decodedBytesMax: LIMITS.pdfRenderTiffPageDecodedBytesMax,
-    pagesMax: LIMITS.pdfRenderImagePagesMax,
+    decodedBytesMax: budget.tiffPageDecodedBytesMax,
+    pagesMax: budget.imagePagesMax,
   });
   if (Result.isError(tiff)) {
     return tiff.error.reason === "too-large"
@@ -99,8 +102,7 @@ const renderTiff = async (
         );
   }
   const { count, pages } = tiff.value;
-  const fonts =
-    count > LIMITS.pdfRenderImagePagesMax ? await loadStampFonts() : null;
+  const fonts = count > budget.imagePagesMax ? await loadStampFonts() : null;
   return await Result.tryPromise({
     try: async () =>
       await imagePagesToPdf(collectedBetween(pages), {
@@ -122,19 +124,19 @@ const decodedBytesPerPixel = (header: ImageHeader | null) =>
   header?.encoding?.format === "png" && header.encoding.bitDepth === 16 ? 8 : 4;
 
 /**
- * The pipeline's image, scaled down to fit `LIMITS.pdfRenderImagePixelsMax`
- * when it is larger. The box is square, so the scale is the same whichever
- * way EXIF orientation turns the image.
+ * The pipeline's image, scaled down to fit `targetPixels` when it is larger.
+ * The box is square, so the scale is the same whichever way EXIF
+ * orientation turns the image.
  */
 const scaledImage = async (
   bytes: Uint8Array,
-  maxPixels: number,
+  { maxPixels, targetPixels }: { maxPixels: number; targetPixels: number },
 ): Promise<Bun.Image> => {
   const image = new Bun.Image(bytes, { maxPixels });
   const { height, width } = await new Bun.Image(bytes, {
     maxPixels,
   }).metadata();
-  const scale = Math.sqrt(LIMITS.pdfRenderImagePixelsMax / (width * height));
+  const scale = Math.sqrt(targetPixels / (width * height));
   if (scale >= 1) {
     return image;
   }
@@ -145,9 +147,10 @@ const scaledImage = async (
 const renderImage = async (
   mimeType: string,
   bytes: Uint8Array,
+  budget: PdfRenderBudget,
 ): Promise<Result<RenderedPdf, PdfRenderInputError>> => {
   if (mimeType === "image/tiff") {
-    return await renderTiff(bytes);
+    return await renderTiff(bytes, budget);
   }
   const header = isHeaderReadableImageMimeType(mimeType)
     ? readImageHeader(bytes, mimeType)
@@ -155,8 +158,7 @@ const renderImage = async (
   const perPixel = decodedBytesPerPixel(header);
   if (
     header !== null &&
-    header.width * header.height * perPixel >
-      LIMITS.pdfRenderImageDecodedBytesMax
+    header.width * header.height * perPixel > budget.imageDecodedBytesMax
   ) {
     return Result.ok({ type: "too-large" });
   }
@@ -166,10 +168,10 @@ const renderImage = async (
       // The pipeline reads the header itself too, so a header this module
       // did not read is held to the same budget.
       await (
-        await scaledImage(
-          bytes,
-          Math.floor(LIMITS.pdfRenderImageDecodedBytesMax / perPixel),
-        )
+        await scaledImage(bytes, {
+          maxPixels: Math.floor(budget.imageDecodedBytesMax / perPixel),
+          targetPixels: budget.imagePixelsMax,
+        })
       )
         // Stored, not compressed: the pixels are read straight back.
         .png({ compressionLevel: 0 })
@@ -202,8 +204,8 @@ const renderImage = async (
 const SPLIT_CHARACTER_BYTES_MAX = 4;
 
 /**
- * The start of a text file that its preview lays out: the first
- * `LIMITS.pdfRenderTextSourceBytesMax` bytes, decoded, and cut back to the
+ * The start of a text file that its preview lays out: the first `limit`
+ * bytes, decoded, and cut back to the
  * last line break among them, so the preview ends on a whole line (a whole
  * record of a CSV) and never on a character the cut split. Without a line
  * break, it ends where the decoding of a few bytes more agrees with it: a
@@ -213,8 +215,8 @@ const SPLIT_CHARACTER_BYTES_MAX = 4;
 export const previewText = (
   bytes: Uint8Array,
   declaredType: string,
+  limit: number,
 ): TextPreviewSource => {
-  const limit = LIMITS.pdfRenderTextSourceBytesMax;
   const decode = (end: number) =>
     decodeDeclared(bytes.subarray(0, end), { contentType: declaredType }).text;
   if (bytes.byteLength <= limit) {
@@ -241,22 +243,24 @@ const renderText = async (
   mimeType: string,
   source: TextPreviewSource,
   fonts: StampFonts,
+  pages: TextPages,
 ): Promise<RenderedPdf> => ({
   type: "pdf",
   bytes:
     mimeType === "text/csv"
-      ? await csvToPdf(source, fonts)
-      : await plainTextToPdf(source, fonts),
+      ? await csvToPdf(source, fonts, pages)
+      : await plainTextToPdf(source, fonts, pages),
 });
 
 /**
  * Render `bytes`, declared as `declaredType` (parameters such as a charset
- * included), as a PDF. A file the decoders refuse is a `PdfRenderInputError`;
- * anything else that fails is a defect and throws.
+ * included), as a PDF within `budget`. A file the decoders refuse is a
+ * `PdfRenderInputError`; anything else that fails is a defect and throws.
  */
 export const renderPdf = async (
   declaredType: string,
   bytes: Uint8Array,
+  budget: PdfRenderBudget,
 ): Promise<Result<RenderedPdf, PdfRenderInputError>> => {
   const mimeType = mediaTypeEssence(declaredType);
   if (!isRenderedPdfMimeType(mimeType)) {
@@ -265,14 +269,18 @@ export const renderPdf = async (
   const kind = RENDERED_PDF_MIME_TYPES[mimeType];
   switch (kind) {
     case "image": {
-      return await renderImage(mimeType, bytes);
+      return await renderImage(mimeType, bytes, budget);
     }
     case "text": {
       return Result.ok(
         await renderText(
           mimeType,
-          previewText(bytes, declaredType),
+          previewText(bytes, declaredType, budget.textSourceBytesMax),
           await loadStampFonts(),
+          {
+            pagesMax: budget.textPagesMax,
+            pagesPerFontRun: budget.textPagesPerFontRun,
+          },
         ),
       );
     }
