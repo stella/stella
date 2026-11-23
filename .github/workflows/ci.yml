@@ -3433,8 +3433,7 @@ jobs:
           path: ${{ runner.temp }}/postgres-test-durations.json
           key: postgres-test-durations-${{ github.run_id }}
 
-  # The browser-backed suites. They share one Playwright install, so they stay
-  # in a single job rather than one per suite.
+  # Browser-backed suites (shared Playwright container).
   ci-browser:
     needs: [ci-plan, pr-heavy-gate]
     if: >-
@@ -3653,10 +3652,8 @@ jobs:
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (startsWith(matrix.suite, 'desktop-') && steps.desktop-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
-          DESKTOP_SUITE: ${{ matrix.suite }}
-        run: |
-          cd apps/desktop
-          bun run test:browser -- --shard="${DESKTOP_SUITE#desktop-}/3"
+          S: ${{ matrix.suite }}
+        run: bun --cwd=apps/desktop run test:browser -- --shard="${S#desktop-}/3"
 
       - name: Upload desktop browser failures
         if: startsWith(matrix.suite, 'desktop-') && failure() && steps.desktop-browser-tests.outputs.required == 'true'
