@@ -35,12 +35,16 @@ const isInlineImage = ({
   mimeType: string | null;
 }) => contentId !== null && (mimeType ?? "").startsWith("image/");
 
-const headerLines = (entry: MailboxEntry) =>
-  [
+const headerLines = (entry: MailboxEntry): string[] => {
+  const rows: readonly (readonly [string, string | null])[] = [
     ["From", entry.from],
     ["Date", entry.date],
     ["Subject", entry.subject],
-  ].flatMap(([label, value]) => (value ? [`${label}: ${value}`] : []));
+  ];
+  return rows.flatMap(([label, value]) =>
+    value === null ? [] : [`${label}: ${value}`],
+  );
+};
 
 /** One message's text: its header, body and attachments' names. */
 const messageText = async (

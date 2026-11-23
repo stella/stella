@@ -680,10 +680,9 @@ export const scanMbox = (
   failure: MboxParseError | null;
 } => {
   const messages: MboxMessage[] = [];
-  const scanner = new MboxScanner(
-    (message) => messages.push(message),
-    options.keepMessages ?? false,
-  );
+  const scanner = new MboxScanner((message) => {
+    messages.push(message);
+  }, options.keepMessages ?? false);
   scanner.push(bytes);
   scanner.finish();
   return { messages, truncated: scanner.truncated, failure: scanner.failure };

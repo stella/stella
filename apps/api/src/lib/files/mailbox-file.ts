@@ -47,12 +47,15 @@ const scanStoredMailbox = async (
 ): Promise<Result<{ truncated: boolean }, MboxParseError>> => {
   const opened = await openStoredMailbox({ key, signal });
   const found: MboxMessage[] = [];
-  const scanner = new MboxScanner((message) => found.push(message));
-  let stopped = false;
+  const scanner = new MboxScanner((message) => {
+    found.push(message);
+  });
+  // Set from inside `take`, so read through an object.
+  const state = { stopped: false };
   const take = async () => {
     for (let message = found.shift(); message; message = found.shift()) {
       if (await onMessage(message)) {
-        stopped = true;
+        state.stopped = true;
         return;
       }
     }
@@ -61,11 +64,11 @@ const scanStoredMailbox = async (
     scanner.push(chunk);
     await take();
     // Leaving the loop cancels the rest of the object's body.
-    if (stopped || scanner.done) {
+    if (state.stopped || scanner.done) {
       break;
     }
   }
-  if (!stopped) {
+  if (!state.stopped) {
     scanner.finish();
     await take();
   }

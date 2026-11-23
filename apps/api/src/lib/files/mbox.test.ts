@@ -28,7 +28,9 @@ const decode = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 /** The mailbox read in chunks cut at `cuts`, as a stream delivers it. */
 const scanInChunks = (bytes: Uint8Array, cuts: readonly number[]) => {
   const messages: MboxMessage[] = [];
-  const scanner = new MboxScanner((message) => messages.push(message), true);
+  const scanner = new MboxScanner((message) => {
+    messages.push(message);
+  }, true);
   let from = 0;
   for (const cut of [...cuts].toSorted((a, b) => a - b)) {
     scanner.push(bytes.subarray(from, cut));
@@ -149,7 +151,9 @@ describe("a mailbox in every variant", () => {
     const count = 3000;
     const bytes = new TextEncoder().encode(one.repeat(count));
     const messages: MboxMessage[] = [];
-    const scanner = new MboxScanner((found) => messages.push(found));
+    const scanner = new MboxScanner((found) => {
+      messages.push(found);
+    });
     scanner.push(bytes);
     scanner.finish();
     expect(messages).toHaveLength(count);

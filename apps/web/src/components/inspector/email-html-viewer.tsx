@@ -453,7 +453,7 @@ export const EmailHtmlViewer = ({
                     className="max-w-full"
                     onClick={() => {
                       if (onOpenPart === undefined) {
-                        onOpenAttachment?.(attachment.part);
+                        onOpenAttachment(attachment.part);
                       } else {
                         onOpenPart(attachment);
                       }
