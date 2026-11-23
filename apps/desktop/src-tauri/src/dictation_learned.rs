@@ -402,15 +402,11 @@ fn changed(app: &AppHandle) {
   }
 }
 
-/// The fixes that are on for the account dictation runs for, as the
-/// spelling pass takes them: none without an account, an error when the
-/// file cannot be read.
-fn on_fixes(app: &AppHandle) -> Result<Vec<LearnedFix>, String> {
-  let Some(namespace) = dictation_namespace(app) else {
-    return Ok(Vec::new());
-  };
+/// The fixes that are on for `namespace`, as the spelling pass takes them:
+/// an error when the file cannot be read.
+fn on_fixes(namespace: &str) -> Result<Vec<LearnedFix>, String> {
   Ok(
-    read(&namespace)?
+    read(namespace)?
       .fixes
       .into_iter()
       .filter(|fix| fix.status == FixStatus::On)
@@ -418,10 +414,21 @@ fn on_fixes(app: &AppHandle) -> Result<Vec<LearnedFix>, String> {
   )
 }
 
-/// `text` with every fix that is on applied. A file that cannot be read
-/// leaves the text as dictated and says so in the log, never what it holds.
+/// `text` with every fix that is on for the account dictation runs for
+/// applied; without an account it is left as dictated.
 pub fn apply(app: &AppHandle, text: &str) -> String {
-  let fixes = match on_fixes(app) {
+  match dictation_namespace(app) {
+    Some(namespace) => apply_for(&namespace, text),
+    None => text.to_string(),
+  }
+}
+
+/// `text` with every fix that is on for `namespace` applied, so a caller
+/// that started for one account keeps its fixes if the account changes. A
+/// file that cannot be read leaves the text as dictated and says so in the
+/// log, never what it holds.
+pub fn apply_for(namespace: &str, text: &str) -> String {
+  let fixes = match on_fixes(namespace) {
     Ok(fixes) => fixes,
     Err(error) => {
       tracing::warn!(%error, "learned dictation fixes not applied");
