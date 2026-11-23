@@ -17,7 +17,8 @@
  * - a word read as U+FFFD or a C1 control character costs its occurrences;
  * - a candidate's score is the occurrences of the words that one language
  *   writes entirely in its letters and punctuation, for the language that
- *   explains the most, less those costs.
+ *   explains the most, less those costs; lossy UTF-8 instead counts every
+ *   word it reads without U+FFFD, in any script.
  *
  * The right reading explains every word in the text's own language; a wrong
  * one turns some of them into letters no single language writes together
@@ -174,15 +175,23 @@ const scoredAlphabets = (): Alphabet[] =>
 
 const score = (
   words: readonly ScoredWord[],
-  read: (bytes: Uint8Array) => string,
+  charset: UndeclaredCharset | FileNameCharset,
   alphabets: readonly Alphabet[],
 ): number => {
+  const read = reader(charset);
   const explained = alphabets.map(() => 0);
+  // A word whose bytes form valid UTF-8 sequences is UTF-8 whatever script
+  // it writes: legacy text does not form them by chance.
+  let validUtf8 = 0;
   let cost = 0;
   for (const { bytes, occurrences } of words) {
     const word = read(bytes);
     if (isBroken(word)) {
       cost += occurrences;
+      continue;
+    }
+    if (charset === "utf-8") {
+      validUtf8 += occurrences;
       continue;
     }
     for (const [index, alphabet] of alphabets.entries()) {
@@ -191,7 +200,7 @@ const score = (
       }
     }
   }
-  return Math.max(0, ...explained) - cost;
+  return Math.max(validUtf8, ...explained) - cost;
 };
 
 /**
@@ -220,7 +229,7 @@ const bestReading = <Charset extends UndeclaredCharset | FileNameCharset>(
   let [best] = candidates;
   let bestScore = Number.NEGATIVE_INFINITY;
   for (const charset of candidates) {
-    const candidate = score(words, reader(charset), alphabets);
+    const candidate = score(words, charset, alphabets);
     if (candidate > bestScore) {
       best = charset;
       bestScore = candidate;

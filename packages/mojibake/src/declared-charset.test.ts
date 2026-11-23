@@ -41,6 +41,19 @@ describe("bytes read as the charset they declare", () => {
     );
   });
 
+  test("a declaration quoted in plain text is content, not its charset", () => {
+    const text = `<meta charset="windows-1252">\nPříloha: nájemné`;
+    const bytes = new TextEncoder().encode(text);
+    expect(decodeDeclared(bytes, { contentType: "text/plain" })).toEqual({
+      text,
+      charset: "utf-8",
+      source: "undeclared",
+    });
+    expect(decodeDeclared(bytes, { contentType: "text/html" }).charset).toBe(
+      "windows-1252",
+    );
+  });
+
   test("the HTTP charset outranks the document's", () => {
     const html = `<html><head><meta charset="utf-8"></head><body>${SENTENCE}</body></html>`;
     expect(

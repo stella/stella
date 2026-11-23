@@ -3,7 +3,7 @@
  * a byte-order mark, then the HTTP `Content-Type` charset, then the
  * document's own declaration (a UTF-16 `<?x` prefix, `<?xml encoding>`,
  * `<meta charset>`, `<meta http-equiv="Content-Type">`) in its first
- * kilobyte. Bytes that declare nothing are read by `decodeUndeclared`: as
+ * kilobyte, for a markup type or an unknown one. Bytes that declare nothing are read by `decodeUndeclared`: as
  * UTF-8 when they are UTF-8, else as the legacy charset they read best in.
  *
  * `Response.text()`, `Buffer.toString("utf-8")` and `new TextDecoder()`
@@ -369,6 +369,27 @@ const documentDecoder = (bytes: Uint8Array): TextDecoder | null => {
   return declared;
 };
 
+/**
+ * Markup media types: a document of one of these may declare its own charset.
+ * In plain text, Markdown or CSV a `<meta charset>` or `<?xml encoding>` is
+ * content (an example, a quotation), not an instruction.
+ */
+const MARKUP_TYPE =
+  /^(?:text\/html|text\/xml|application\/xml|application\/xhtml\+xml|image\/svg\+xml|application\/[\w.-]+\+xml)$/u;
+
+/** Whether bytes of `contentType`, or of an unknown type, declare their charset. */
+const readsOwnDeclaration = (contentType: string | null): boolean => {
+  if (contentType === null) {
+    return true;
+  }
+  const essence = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  return (
+    essence === "" ||
+    essence === "application/octet-stream" ||
+    MARKUP_TYPE.test(essence)
+  );
+};
+
 export const decodeDeclared = (
   bytes: Uint8Array,
   { contentType }: DecodeDeclaredOptions,
@@ -392,7 +413,9 @@ export const decodeDeclared = (
   if (http !== null) {
     return { text: http.decode(bytes), charset: http.encoding, source: "http" };
   }
-  const document = documentDecoder(bytes);
+  const document = readsOwnDeclaration(contentType)
+    ? documentDecoder(bytes)
+    : null;
   if (document !== null) {
     return {
       text: document.decode(bytes),
