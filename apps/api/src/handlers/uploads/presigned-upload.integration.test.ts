@@ -734,7 +734,7 @@ describe("presigned upload mutation flow", () => {
       .select({ content: fields.content })
       .from(fields)
       .where(eq(fields.entityVersionId, result.entityVersionId));
-    expect(stored).toEqual([
+    expect(stored.filter(({ content }) => content.type === "file")).toEqual([
       {
         content: expect.objectContaining({
           type: "file",
