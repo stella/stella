@@ -92,6 +92,7 @@ const sourceMessage = async (sourceEntityId: SafeId<"entity">) => {
     direction: null,
     messageId: envelope.messageId,
     dataBox: envelope,
+    certifiedEmail: null,
   } satisfies ParsedCorrespondence;
 };
 

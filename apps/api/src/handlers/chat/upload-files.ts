@@ -14,6 +14,7 @@ import {
   isRunOutputMimeType,
 } from "@stll/api-contract/chat-file-types";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
@@ -590,9 +591,9 @@ export const hydrateFilePart = async ({
             fileName,
             // Cap like the DOCX branch: a text/csv/md attachment can be up to
             // the full upload size, and the model context budget is bounded.
-            content: new TextDecoder()
-              .decode(bytes)
-              .slice(0, LIMITS.chatContextFileMaxChars),
+            content: decodeDeclared(bytes, {
+              contentType: storedMimeType,
+            }).text.slice(0, LIMITS.chatContextFileMaxChars),
           }),
         ),
         type: "anonymizable",

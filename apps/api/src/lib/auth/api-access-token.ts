@@ -283,6 +283,12 @@ export const API_OAUTH_ROUTES = {
     exportName: "zipArchivePreviewEndpoint",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/mbox/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/mailbox.ts",
+    exportName: "mailboxPreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
   // The files of a part that is itself a container, such as an email in an
   // archive; each opens through the part link above.
   "GET /v1/files/:workspaceId/parts/:fieldId": {

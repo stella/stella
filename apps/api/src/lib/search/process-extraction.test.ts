@@ -105,6 +105,15 @@ const extractFileTextResultMock = mock(
   ): Promise<Result<string | null, ExtractionWorkerError>> =>
     Result.ok("native text"),
 );
+const MAILBOX_TEXT = "Mailbox.\n\nMessage 1\nSubject: Spis 23 C 118/2026";
+const extractMailboxTextMock = mock(
+  async (
+    _input: Parameters<
+      ExecuteNativeExtractionDependencies["extractMailboxText"]
+    >[0],
+  ): Promise<Result<string | null, ExtractionWorkerError>> =>
+    Result.ok(MAILBOX_TEXT),
+);
 const requestAutomaticDocumentOcrMock = mock(
   async (
     _input: Parameters<
@@ -177,6 +186,7 @@ const persistProjectionSpy = mock(
 const executeDependencies = {
   enqueueUploadedMail: enqueueUploadedMailMock,
   extractText: extractFileTextResultMock,
+  extractMailboxText: extractMailboxTextMock,
   persistProjection: persistProjectionSpy,
   recordLanguage: recordLanguageMock,
   recordSignature: recordSignatureMock,
@@ -289,6 +299,7 @@ beforeEach(() => {
   extractFileTextResultMock.mockImplementation(async () =>
     Result.ok("native text"),
   );
+  extractMailboxTextMock.mockClear();
   requestAutomaticDocumentOcrMock.mockClear();
   restoreManualOcrRunAfterProjectionLossMock.mockClear();
   recordLanguageMock.mockClear();
@@ -544,6 +555,43 @@ describe("processExtraction", () => {
     expect(executeMock).toHaveBeenCalledTimes(4);
     expect(requestAutomaticDocumentOcrMock).not.toHaveBeenCalled();
     expect(restoreManualOcrRunAfterProjectionLossMock).not.toHaveBeenCalled();
+  });
+
+  test("streams a mailbox into the worker and never reads it whole", async () => {
+    const mailbox = {
+      ...fileContent,
+      fileName: "spis-23-C-118-2026.mbox",
+      id: "file_mbox",
+      // Browsers declare a mailbox as bytes; its name says what it is.
+      mimeType: "application/octet-stream",
+    } satisfies FieldContent;
+    const readSource = mock(async ({ mimeType }: { mimeType: string }) =>
+      testScannedFile({ bytes: new ArrayBuffer(8), mimeType }),
+    );
+
+    const outcome = await executeNativeExtraction({
+      fileField: mailbox,
+      lifecycleSignal: new AbortController().signal,
+      readSource,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: mailbox.id,
+        sourceSha256Hex: mailbox.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(extractMailboxTextMock).toHaveBeenCalledTimes(1);
+    expect(extractMailboxTextMock.mock.calls.at(0)?.[0]).toMatchObject({
+      fileName: mailbox.fileName,
+    });
+    expect(readSource).not.toHaveBeenCalled();
+    expect(extractFileTextResultMock).not.toHaveBeenCalled();
+    expect((await persistedProjection()).text).toBe(MAILBOX_TEXT);
   });
 
   test("reads native extraction input through the caller-provided storage scope", async () => {

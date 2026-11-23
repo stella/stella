@@ -14,7 +14,7 @@ import {
   type LegalFileFormatKind,
 } from "./legal-file-formats";
 
-const { attachment, content, document, member } = FILE_PART_KINDS;
+const { attachment, content, document, member, message } = FILE_PART_KINDS;
 
 /**
  * Every stored format and the kinds of part its files have, in the order
@@ -37,6 +37,7 @@ export const FILE_PART_KINDS_BY_FORMAT = {
   uyap: [],
   ofd: [],
   zip: [member],
+  mbox: [message],
   email: [attachment],
 } as const satisfies Record<
   LegalFileFormatKind | "email",
@@ -53,7 +54,8 @@ const CONTAINER_FORMATS = [
 /**
  * The format of a file whose parts open in turn, from its media type and
  * name: a signed envelope, a signed or ASiC container, a data-box message,
- * an invoice, a ZIP archive or an email. Null for a file without parts.
+ * an invoice, a ZIP archive, a mailbox or an email. Null for a file without
+ * parts.
  */
 export const filePartContainerFormat = (
   mediaType: string | null | undefined,

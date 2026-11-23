@@ -98,12 +98,14 @@ describe("current-settings correspondence projection", () => {
       const stored = {
         channel: "data_box",
         dataBox: statedEnvelope,
+        certifiedEmail: null,
         direction: null,
       } as const;
       const projected = readCorrespondenceChannel(stored, boxes);
       expect(projected).toEqual({
         channel: "data_box",
         dataBox: { ...statedEnvelope, directionBasis: basis },
+        certifiedEmail: null,
         direction,
       });
       expect(stored.dataBox).not.toHaveProperty("directionBasis");
@@ -114,7 +116,12 @@ describe("current-settings correspondence projection", () => {
   test.each(["in", "out"] as const)(
     "retains email direction %s",
     (direction) => {
-      const stored = { channel: "email", dataBox: null, direction } as const;
+      const stored = {
+        channel: "email",
+        dataBox: null,
+        certifiedEmail: null,
+        direction,
+      } as const;
       expect(readCorrespondenceChannel(stored, [ORGANIZATION_BOX])).toEqual(
         stored,
       );
@@ -124,7 +131,12 @@ describe("current-settings correspondence projection", () => {
   test("refuses stored derived metadata and missing email direction", () => {
     expect(() =>
       readCorrespondenceChannel(
-        { channel: "data_box", dataBox: statedEnvelope, direction: "in" },
+        {
+          channel: "data_box",
+          dataBox: statedEnvelope,
+          certifiedEmail: null,
+          direction: "in",
+        },
         [],
       ),
     ).toThrow("invalid stored metadata");
@@ -137,6 +149,7 @@ describe("current-settings correspondence projection", () => {
         {
           channel: "data_box",
           dataBox: storedDerivedEnvelope,
+          certifiedEmail: null,
           direction: null,
         },
         [],
@@ -144,7 +157,12 @@ describe("current-settings correspondence projection", () => {
     ).toThrow("invalid stored metadata");
     expect(() =>
       readCorrespondenceChannel(
-        { channel: "email", dataBox: null, direction: null },
+        {
+          channel: "email",
+          dataBox: null,
+          certifiedEmail: null,
+          direction: null,
+        },
         [],
       ),
     ).toThrow("invalid channel metadata");

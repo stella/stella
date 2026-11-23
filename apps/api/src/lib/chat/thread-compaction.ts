@@ -27,6 +27,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
+import { declareFailureClass, readFailureBrand } from "@stll/errors";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
@@ -69,6 +71,7 @@ import {
 import type { ThreadStoredContentSendMode } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
 import type { TimestampIdCursor } from "@/api/lib/db-pagination";
+import { ProviderCallError } from "@/api/lib/errors/provider-call-error";
 import { isThreadMemoryEnabled } from "@/api/lib/memory/memory-access";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -84,7 +87,16 @@ export class ChatCompactionError extends TaggedError("ChatCompactionError")<{
   message: string;
   cause?: unknown;
   threadId: SafeId<"chatThread">;
-}> {}
+}> {
+  static {
+    // A provider call keeps its own grade; any other cause is a defect.
+    declareFailureClass(this, ({ cause }) =>
+      cause instanceof ProviderCallError
+        ? (readFailureBrand(cause)?.reason ?? "tagged_failure")
+        : "tagged_failure",
+    );
+  }
+}
 
 type PersistedMessageContent = typeof chatMessages.$inferSelect.content;
 

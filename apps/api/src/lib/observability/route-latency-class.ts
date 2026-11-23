@@ -255,6 +255,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/files/:workspaceId/email-html/:fieldId": "crud",
   "GET /v1/files/:workspaceId/email-reading/:fieldId": "crud",
   "GET /v1/files/:workspaceId/marked/:fieldId": "crud",
+  "GET /v1/files/:workspaceId/mbox/:fieldId": "crud",
   "GET /v1/files/:workspaceId/ocr-export/:fieldId": "crud",
   "GET /v1/files/:workspaceId/parts/:fieldId": "crud",
   "GET /v1/files/:workspaceId/office-citation/:entityId/:fieldId/:blockId":

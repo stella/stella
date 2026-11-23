@@ -69,6 +69,7 @@ import { invoiceSendScalingScenarios } from "./invoice-sends";
 import { legalHoldScalingScenarios } from "./legal-holds";
 import { legislationMatterLinkScalingScenarios } from "./legislation-matter-links";
 import { exactIconScalingScenario } from "./link-icons";
+import { mailboxScalingScenario } from "./mailbox";
 import { matterVocabularyScalingScenario } from "./matter-vocabulary";
 import mcpLedger from "./mcp-scaling-ledger.json";
 import { mcpScalingScenarios } from "./mcp-scenarios";
@@ -159,6 +160,7 @@ const measuredApiScenarios = [
   ...graphToolsScalingScenarios,
   asicPreviewScalingScenario,
   zipArchiveScalingScenario,
+  mailboxScalingScenario,
   filePartListScalingScenario,
   signedDossierPreviewScalingScenario,
   structuredDocumentScalingScenario,

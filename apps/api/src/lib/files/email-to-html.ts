@@ -575,6 +575,42 @@ const withoutHeaderNames = ({
   ...message
 }: ParsedEmlMessage): Omit<ParsedEmail, "certified"> => message;
 
+/**
+ * A certified email's certification data and the RFC 822 bytes of the
+ * original message it carries, read by the same rule `parseEmail` applies;
+ * null for any other .eml file.
+ */
+export const readCertifiedEmailMessage = async (
+  fileBuffer: ArrayBuffer,
+): Promise<
+  Result<
+    { envelope: CertifiedEmailEnvelope; original: ArrayBuffer | null } | null,
+    EmailParseError
+  >
+> => {
+  const provider = await parseEmlMessage(fileBuffer, {
+    keepMessageParts: true,
+  });
+  if (provider.isErr()) {
+    return provider;
+  }
+  const certified = readCertifiedEmailParts({
+    headerNames: provider.value.headerNames,
+    parts: provider.value.attachments,
+  });
+  return Result.ok(
+    certified === null
+      ? null
+      : {
+          envelope: certified.envelope,
+          original:
+            certified.original === null
+              ? null
+              : toOwnedArrayBuffer(certified.original),
+        },
+  );
+};
+
 const toOwnedArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
   bytes.byteOffset === 0 &&
   bytes.byteLength === bytes.buffer.byteLength &&

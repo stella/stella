@@ -172,6 +172,37 @@ describe("parseOutlookMsg", () => {
     expect(html).not.toContain("cid:generic-logo");
   });
 
+  test("reads 8-bit strings in the code page the message states", () => {
+    const ansi = (bytes: number[]) => new Uint8Array([...bytes, 0]);
+    const ascii = (text: string) => [...Buffer.from(text, "ascii")];
+    const message = (codePage: number, subject: number[]) =>
+      parseOutlookMsg(
+        toArrayBuffer(
+          buildCompoundFile([
+            rootProperty("3ffd", "0003", int32(codePage)),
+            rootProperty("0037", "001e", ansi(subject)),
+          ]),
+        ),
+      );
+
+    // "Procès-verbal" in windows-1252; read as windows-1250 it is "Procčs".
+    expect(
+      message(1252, [...ascii("Proc"), 0xe8, ...ascii("s-verbal")]).subject,
+    ).toBe("Procès-verbal");
+    // "Předávací protokol" in windows-1250.
+    expect(
+      message(1250, [
+        0x50,
+        0xf8,
+        ...ascii("ed"),
+        0xe1,
+        ...ascii("vac"),
+        0xed,
+        ...ascii(" protokol"),
+      ]).subject,
+    ).toBe("Předávací protokol");
+  });
+
   test("reads the internet message identity and the submit time", () => {
     const message = parseOutlookMsg(
       buildOutlookMessage({

@@ -183,6 +183,8 @@
     "./file-parts": "./src/file-parts.ts",
     "./file-part-containers": "./src/file-part-containers.ts",
     "./zip-archive": "./src/zip-archive.ts",
+    "./mailbox": "./src/mailbox.ts",
+    "./list-search": "./src/list-search.ts",
     "./document-format": "./src/document-format.ts",
     "./converted-document-formats": "./src/converted-document-formats.ts",
     "./entity-views": "./src/entity-views.ts",

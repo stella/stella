@@ -10,9 +10,14 @@ import type {
   FilePartDescriptor,
   FilePartList as ContainedFiles,
 } from "@stll/api-contract/file-parts";
+import {
+  LIST_SEARCH_MIN_ROWS,
+  listRowMatches,
+} from "@stll/api-contract/list-search";
 import { Button } from "@stll/ui/button";
 import { DocumentMark } from "@stll/ui/document-mark";
 import { formatFileSize } from "@stll/ui/file-size";
+import { Input } from "@stll/ui/input";
 import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
@@ -57,7 +62,7 @@ type FilesInside =
   | { readonly status: "failed" }
   | { readonly status: "open"; readonly files: readonly ContainedFile[] };
 
-const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
+export const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
 
 export const FilePartOpenerProvider = ({
   children,
@@ -284,38 +289,63 @@ const UnavailableFileRow = ({
 export const ContainedFileList = ({
   files,
   title,
+  searchable = false,
 }: {
   files: readonly ContainedFile[];
   /** The list's heading, when it stands on its own. */
   title?: string | undefined;
+  /** A long list standing on its own can be searched by name and folder. */
+  searchable?: boolean;
 }) => {
   const t = useTranslations("fileParts");
+  const [query, setQuery] = useState("");
   if (files.length === 0) {
     return <Text variant="caption">{t("noFilesInside")}</Text>;
   }
+  const search = searchable && files.length >= LIST_SEARCH_MIN_ROWS;
+  const shown = files.flatMap((file, position) =>
+    listRowMatches([file.fileName, file.folder], query)
+      ? [{ file, position }]
+      : [],
+  );
   return (
-    <View>
+    <View className="gap-2">
       {title === undefined ? null : (
         <Text accessibilityRole="header" variant="section">
           {title}
         </Text>
       )}
-      {files.map((file, index) => {
-        const divided = index < files.length - 1;
-        return file.part === null ? (
-          <UnavailableFileRow
-            divided={divided}
-            file={file}
-            key={`unavailable:${String(index)}`}
-          />
-        ) : (
-          <FilePartRow
-            divided={divided}
-            item={{ ...file.part, detail: file.folder }}
-            key={file.part.part}
-          />
-        );
-      })}
+      {search ? (
+        <Input
+          accessibilityLabel={t("search")}
+          autoCapitalize="none"
+          onChangeText={setQuery}
+          placeholder={t("search")}
+          type="search"
+          value={query}
+        />
+      ) : null}
+      {shown.length === 0 ? (
+        <Text variant="caption">{t("noMatches", { query: query.trim() })}</Text>
+      ) : null}
+      <View>
+        {shown.map(({ file, position: index }, row) => {
+          const divided = row < shown.length - 1;
+          return file.part === null ? (
+            <UnavailableFileRow
+              divided={divided}
+              file={file}
+              key={`unavailable:${String(index)}`}
+            />
+          ) : (
+            <FilePartRow
+              divided={divided}
+              item={{ ...file.part, detail: file.folder }}
+              key={file.part.part}
+            />
+          );
+        })}
+      </View>
     </View>
   );
 };
