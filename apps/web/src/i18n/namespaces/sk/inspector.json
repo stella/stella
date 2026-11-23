@@ -576,7 +576,9 @@
         "tooLarge": "Príliš veľký, nedá sa otvoriť",
         "unreadable": "Poškodený, nedá sa otvoriť",
         "unsupported": "Komprimované spôsobom, ktorý sa nedá otvoriť"
-      }
+      },
+      "search": "Nájsť súbor podľa názvu alebo priečinka",
+      "noMatches": "Výrazu „{query}“ nezodpovedá žiadny súbor."
     },
     "firstSourceReached": "Toto je prvý zdroj.",
     "groups": {
@@ -837,6 +839,14 @@
     },
     "showPane": "Zobraziť panel",
     "swapViews": "Vymeniť hlavné zobrazenie a bočný panel",
-    "title": "Inšpektor"
+    "title": "Inšpektor",
+    "mailbox": {
+      "messages": "Správy",
+      "noMatches": "Výrazu „{query}“ nezodpovedá žiadna správa.",
+      "noMessages": "Táto poštová schránka neobsahuje žiadne správy.",
+      "search": "Hľadať v správach",
+      "truncated": "Zobrazuje sa len prvých {count, number} správ.",
+      "unreadable": "Túto poštovú schránku sa nepodarilo prečítať."
+    }
   }
 }

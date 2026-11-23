@@ -260,7 +260,8 @@ const hasAdmissibleProvenance = (parsed: ParsedCorrespondence) => {
 };
 
 // A data-box message is only ever read from an uploaded file, and its record
-// keeps the envelope's message ID.
+// keeps the envelope's message ID. A certified email is only ever read from
+// an uploaded file too.
 const hasConsistentChannel = (parsed: ParsedCorrespondence) => {
   switch (parsed.channel) {
     case "email":
@@ -270,6 +271,8 @@ const hasConsistentChannel = (parsed: ParsedCorrespondence) => {
         parsed.source === "upload" &&
         parsed.messageId === parsed.dataBox.messageId
       );
+    case "pec":
+      return parsed.source === "upload";
     default:
       parsed satisfies never;
       return panic("Unhandled correspondence channel");

@@ -548,7 +548,9 @@
     "files": "Dateien",
     "insideFailed": "Die Dateien darin konnten nicht geladen werden. Zum erneuten Versuch tippen.",
     "noFilesInside": "Darin sind keine Dateien.",
+    "noMatches": "Keine Datei entspricht „{query}“.",
     "open": "{fileName} ({details}) öffnen",
+    "search": "Datei nach Name oder Ordner suchen",
     "unavailable": {
       "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",
       "link": "Verweis auf eine andere Datei, wird nicht geöffnet",
@@ -586,6 +588,16 @@
     "refused": "Ihr Server hat die Anfrage abgelehnt (Fehler {status}).",
     "server": "Auf Ihrem Server ist ein Fehler aufgetreten (Fehler {status}). Versuchen Sie es gleich noch einmal.",
     "session": "Ihre Anmeldung ist abgelaufen. Melden Sie sich erneut an."
+  },
+  "mailbox": {
+    "back": "Zurück zu den Nachrichten",
+    "messages": "Nachrichten",
+    "noMatches": "Keine Nachricht entspricht „{query}“.",
+    "noMessages": "Dieses Postfach enthält keine Nachrichten.",
+    "openFailed": "Die Nachricht konnte nicht geöffnet werden. Zum erneuten Versuchen tippen.",
+    "search": "Nachrichten durchsuchen",
+    "truncated": "Nur die ersten {count, number} Nachrichten werden angezeigt.",
+    "unreadable": "Dieses Postfach konnte nicht gelesen werden."
   },
   "matter": {
     "add": "Hinzufügen",

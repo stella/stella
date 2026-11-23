@@ -32,6 +32,7 @@
     "apps/web/src/components/inspector/external-reference-panel.tsx": 1,
     "apps/web/src/components/inspector/inspector-tab-header.tsx": 1,
     "apps/web/src/components/inspector/inspector-title.tsx": 1,
+    "apps/web/src/components/inspector/mailbox-viewer.tsx": 1,
     "apps/web/src/components/inspector/pdf-sign-placement.tsx": 1,
     "apps/web/src/components/inspector/playbook-facet.tsx": 4,
     "apps/web/src/components/legal-reader/citation-copy-options.tsx": 1,
