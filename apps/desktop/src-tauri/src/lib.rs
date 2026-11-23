@@ -360,6 +360,7 @@ pub fn run() {
               dictation::apply_feature_gate(app, enabled);
               if enabled {
                 onboarding::feature_enabled(app, feature);
+                dictation_words::seed_organization_name(app);
               }
             }
             // Either decision changes which models the server lists.
