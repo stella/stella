@@ -207,6 +207,7 @@ if (!databaseUrl || !enabled) {
               bodyHtml: null,
               channel: "email",
               dataBox: null,
+              certifiedEmail: null,
               direction: "in",
               messageId: `${hashLabel}@example.test`,
             } satisfies ParsedCorrespondence,

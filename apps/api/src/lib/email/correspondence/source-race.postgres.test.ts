@@ -80,6 +80,7 @@ const dataBoxCopy = (
   originalSignature: { status: "unverified" },
   channel: "data_box",
   dataBox: envelope(messageId),
+  certifiedEmail: null,
   direction: null,
   messageId,
   contentHash: sha256Hex(messageId),

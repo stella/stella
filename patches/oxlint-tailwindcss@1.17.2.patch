@@ -1,7 +1,7 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
-@@ -2304,10 +2304,10 @@ var DesignSystemCache = class DesignSystemCache {
+@@ -2311,10 +2311,10 @@ var DesignSystemCache = class DesignSystemCache {
  		const memo = this.declMemo.get(key);
  		if (memo) return memo;
  		const byClass = this.declIndex?.byClass;
@@ -14,7 +14,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  		}
  		const decoded = this.decodeDecls?.(packed) ?? EMPTY_DECLARATIONS;
  		this.declMemo.set(key, decoded);
-@@ -2506,7 +2506,8 @@ function isFatalError(err) {
+@@ -2521,7 +2521,8 @@ function isFatalError(err) {
  * editor without the docs site open.
  */
  function formatFatalError(err) {
@@ -24,7 +24,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  }
  /**
  * Helper for DS-dependent rules to convert a caught fatal error into a
-@@ -2514,8 +2515,22 @@ function formatFatalError(err) {
+@@ -2529,8 +2530,22 @@ function formatFatalError(err) {
  * visitor should bail out), `false` otherwise — the rule layer rethrows
  * non-fatal errors to surface real bugs.
  */
@@ -47,7 +47,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3745,6 +3760,15 @@ function resolveCacheDir() {
+@@ -3763,6 +3778,15 @@ function resolveCacheDir() {
  	return (0, node_path.join)((0, node_os.tmpdir)(), cacheDirName());
  }
  const CACHE_DIR = resolveCacheDir();
@@ -63,7 +63,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -3884,6 +3908,90 @@ function packageVersionFrom(fromDir, name) {
+@@ -3902,6 +3926,90 @@ function packageVersionFrom(fromDir, name) {
  		dir = parent;
  	}
  }
@@ -154,7 +154,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /**
  * Everything a design system is built from besides the Tailwind engine, as one
  * string for the cache key — so the cache invalidates when any of it changes,
-@@ -3937,7 +4045,17 @@ function hashableContent(entryPath, entryContent) {
+@@ -3955,7 +4063,17 @@ function hashableContent(entryPath, entryContent) {
  		const baseDir = (0, node_path.dirname)(cssPath);
  		for (const spec of collect(IMPORT_RE, content)) {
  			if (!isPathSpecifier(spec)) {
@@ -173,7 +173,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  				continue;
  			}
  			const importPath = (0, node_path.resolve)(baseDir, spec);
-@@ -4195,7 +4313,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4213,7 +4331,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -182,7 +182,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4203,6 +4321,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4221,6 +4339,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -190,7 +190,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4705,6 +4824,7 @@ var DesignSystemWorker = class {
+@@ -4726,6 +4845,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -198,7 +198,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5640,6 +5760,73 @@ function answersFor(cache) {
+@@ -5670,6 +5790,73 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -272,7 +272,7 @@ diff --git a/dist/index.cjs b/dist/index.cjs
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5658,14 +5845,32 @@ function answersFor(cache) {
+@@ -5688,14 +5875,32 @@ function answersFor(cache) {
  * `designSystemUnavailable` (what `enforce-canonical` does with the canonicalize
  * worker), a DS-OPTIONAL rule catches it and degrades.
  */
@@ -339,7 +339,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  import { tmpdir, userInfo } from "node:os";
  // \0rolldown/runtime.js
  var __require = /* #__PURE__ */ (() => createRequire(import.meta.url))();
-@@ -2306,10 +2306,10 @@ var DesignSystemCache = class DesignSystemCache {
+@@ -2313,10 +2313,10 @@ var DesignSystemCache = class DesignSystemCache {
  		const memo = this.declMemo.get(key);
  		if (memo) return memo;
  		const byClass = this.declIndex?.byClass;
@@ -352,7 +352,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  		}
  		const decoded = this.decodeDecls?.(packed) ?? EMPTY_DECLARATIONS;
  		this.declMemo.set(key, decoded);
-@@ -2508,7 +2508,8 @@ function isFatalError(err) {
+@@ -2523,7 +2523,8 @@ function isFatalError(err) {
  * editor without the docs site open.
  */
  function formatFatalError(err) {
@@ -362,7 +362,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  }
  /**
  * Helper for DS-dependent rules to convert a caught fatal error into a
-@@ -2516,8 +2517,22 @@ function formatFatalError(err) {
+@@ -2531,8 +2532,22 @@ function formatFatalError(err) {
  * visitor should bail out), `false` otherwise — the rule layer rethrows
  * non-fatal errors to surface real bugs.
  */
@@ -385,7 +385,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  	context.report({
  		node,
  		messageId: DS_UNAVAILABLE_MESSAGE_ID,
-@@ -3747,6 +3762,15 @@ function resolveCacheDir() {
+@@ -3765,6 +3780,15 @@ function resolveCacheDir() {
  	return join(tmpdir(), cacheDirName());
  }
  const CACHE_DIR = resolveCacheDir();
@@ -401,7 +401,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  /** How long a cache file nobody uses is kept; a cache hit refreshes its mtime. */
  const CACHE_MAX_AGE_MS = 2592e6;
  /** This plugin's cache files: a 32-hex content hash, then the kind (`.json`, `.lock`, `.canon-…`). */
-@@ -3886,6 +3910,90 @@ function packageVersionFrom(fromDir, name) {
+@@ -3904,6 +3928,90 @@ function packageVersionFrom(fromDir, name) {
  		dir = parent;
  	}
  }
@@ -492,7 +492,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  /**
  * Everything a design system is built from besides the Tailwind engine, as one
  * string for the cache key — so the cache invalidates when any of it changes,
-@@ -3939,7 +4047,17 @@ function hashableContent(entryPath, entryContent) {
+@@ -3957,7 +4065,17 @@ function hashableContent(entryPath, entryContent) {
  		const baseDir = dirname(cssPath);
  		for (const spec of collect(IMPORT_RE, content)) {
  			if (!isPathSpecifier(spec)) {
@@ -511,7 +511,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  				continue;
  			}
  			const importPath = resolve(baseDir, spec);
-@@ -4197,7 +4315,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4215,7 +4333,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  	const cached = tryReadCache(contentCachePath);
  	const readMs = since(readStart);
  	if (cached) {
@@ -520,7 +520,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  		lastLoadReport = {
  			source: "cache",
  			hashMs,
-@@ -4205,6 +4323,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
+@@ -4223,6 +4341,7 @@ function loadDesignSystemSync(cssPath, timeout, onPrecompute) {
  		};
  		return cached;
  	}
@@ -528,7 +528,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  	if (engine.nodePath === null) throw new DesignSystemLoadError(`Could not resolve '@tailwindcss/node' while loading "${resolvedPath}".`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run.");
  	onPrecompute?.();
  	const computeStart = performance.now();
-@@ -4707,6 +4826,7 @@ var DesignSystemWorker = class {
+@@ -4728,6 +4847,7 @@ var DesignSystemWorker = class {
  	}
  	/** Create the worker and its buffers; `ready` is false until `waitReady`. */
  	spawn(cssPath, warm) {
@@ -536,7 +536,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  		const { nodePath: tailwindNodePath } = resolveTailwindNodeFor(cssPath);
  		if (tailwindNodePath === null) throw this.remember(cssPath, new SortServiceError(`Could not resolve '@tailwindcss/node' for the ${this.opts.serviceName} worker.`, "Install '@tailwindcss/node' (or upgrade oxlint-tailwindcss) and re-run."));
  		const sharedBuffer = new SharedArrayBuffer(BUFFER_SIZE);
-@@ -5574,8 +5694,7 @@ function resolveEntryPointForFile(ruleOptionEntry, settingsEntry, filePath, cwd
+@@ -5604,8 +5724,7 @@ function resolveEntryPointForFile(ruleOptionEntry, settingsEntry, filePath, cwd
  	}
  	throw new MissingEntryPointError(`\`settings.tailwindcss.entryPoint\` is required${filePath ? ` (linting \`${filePath}\`)` : ""}.`, "Set it to a string (single-project) or an array of `{ files, use }` mappings (monorepo).");
  }
@@ -546,7 +546,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
    const decls = {};
    const values = {};
    const invalid = [];
-@@ -5618,7 +5737,9 @@ const declWorker = new DesignSystemWorker({
+@@ -5648,7 +5767,9 @@ const declWorker = new DesignSystemWorker({
      if (list.length > 0) decls[cls] = list;
    }
    return { decls, values, invalid };
@@ -557,7 +557,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  	serviceName: "declarations"
  });
  /**
-@@ -5642,6 +5763,142 @@ function answersFor(cache) {
+@@ -5672,6 +5793,142 @@ function answersFor(cache) {
  	}
  	return map;
  }
@@ -700,7 +700,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  /**
  * Ask the design system about every class there is no answer for yet, intern the
  * declarations it returns, and record which classes produce no CSS at all.
-@@ -5662,12 +5919,18 @@ function answersFor(cache) {
+@@ -5692,12 +5949,18 @@ function answersFor(cache) {
  */
  function ask(cssPath, cache, classes) {
  	const known = answersFor(cache);
@@ -719,7 +719,7 @@ diff --git a/dist/index.mjs b/dist/index.mjs
  }
  /**
  * Resolve and intern declarations for `classes` that the precompute doesn't know.
-@@ -10857,4 +11120,4 @@ const plugin = definePlugin({
+@@ -10888,4 +11151,4 @@ const plugin = definePlugin({
  		})
  	}
  });

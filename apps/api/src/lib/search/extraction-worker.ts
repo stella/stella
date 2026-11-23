@@ -47,6 +47,7 @@ import type {
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import { DATA_BOX_PREVIEW_MODE } from "@/api/lib/email/correspondence/data-box/preview-contract";
@@ -60,6 +61,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
   ASIC_PREVIEW_WORKER_MODE,
+  MAILBOX_TEXT_WORKER_MODE,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
   ZIP_ARCHIVE_PREVIEW_MODE,
@@ -103,6 +105,11 @@ import {
   listEmbeddedParts,
 } from "@/api/lib/files/embedded-part-worker";
 import { XML_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
+import {
+  readMailboxBytesText,
+  readMailboxText,
+} from "@/api/lib/files/mailbox-text";
+import type { MboxParseError } from "@/api/lib/files/mbox";
 import type { P7mParseError } from "@/api/lib/files/p7m";
 import { partMediaType } from "@/api/lib/files/part-media-type";
 import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
@@ -222,9 +229,17 @@ const extractOfficeDocumentMarkdown = async (
 ): Promise<string> =>
   normalizeExtractedText(await toMarkdownBytes(Buffer.from(fileBytes)));
 
-const extractDirectText = (fileBytes: Uint8Array, mimeType: string): string => {
-  const text = new TextDecoder().decode(fileBytes);
-  if (normalizeMimeType(mimeType) !== "text/html") {
+/**
+ * A text file's text, read in the charset its `contentType` (parameters
+ * included) or its own bytes declare, or in the one it was most likely saved
+ * in when nothing does.
+ */
+const extractDirectText = (
+  fileBytes: Uint8Array,
+  contentType: string,
+): string => {
+  const { text } = decodeDeclared(fileBytes, { contentType });
+  if (normalizeMimeType(contentType) !== "text/html") {
     return normalizeExtractedText(text);
   }
 
@@ -365,6 +380,7 @@ type LegalTextReadOptions = {
 type LegalTextReadError =
   | AsicParseError
   | DocumentPackageError
+  | MboxParseError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -507,6 +523,18 @@ const extractZipText = async ({
   return preview.map(({ files }) => zipArchiveText({ files, maxChars }));
 };
 
+const extractMailboxText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> =>
+  await readMailboxBytesText({
+    bytes: fileBytes,
+    maxChars,
+    mailboxName: "mailbox",
+  });
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -526,6 +554,7 @@ const LEGAL_TEXT_READERS = {
   isdocx: extractEInvoiceText,
   xml: extractEInvoiceText,
   zip: extractZipText,
+  mbox: extractMailboxText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -568,7 +597,7 @@ const extract = async ({
   } else if (isOfficeDocumentMimeType(normalizedMimeType)) {
     text = await extractOfficeDocumentMarkdown(fileBytes);
   } else if (isDirectTextMimeType(normalizedMimeType)) {
-    text = extractDirectText(fileBytes, normalizedMimeType);
+    text = extractDirectText(fileBytes, mimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
     return await extractEmailPlaintext({
       fileBytes,
@@ -908,6 +937,7 @@ const embeddedPartExit = (error: EmbeddedPartError) => {
     case "DataBoxMessageParseError":
     case "DocumentPackageError":
     case "EmailParseError":
+    case "MboxParseError":
     case "P7mParseError":
     case "SignedDossierParseError":
       return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
@@ -946,8 +976,9 @@ const writeEmbeddedPart = async (options: EmbeddedPartRequest) => {
 };
 
 const writeEmbeddedPartList = async (options: EmbeddedPartRequest) => {
-  const part = parseFilePartId(options.partId);
-  if (part === null) {
+  // No part lists the file's own parts, as for a mailbox's message.
+  const part = options.partId === "" ? null : parseFilePartId(options.partId);
+  if (part === null && options.partId !== "") {
     return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
   }
   const listed = await listEmbeddedParts({ ...options, part });
@@ -995,9 +1026,29 @@ function exitWithWorkerError(error: unknown): never {
 
 // ── Main ──────────────────────────────────────────────────
 
+/**
+ * A mailbox's text, read as its bytes stream in, one message at a time:
+ * the mailbox is never held whole.
+ */
+const writeMailboxText = async (maxChars: number) => {
+  const text = await readMailboxText({
+    chunks: Bun.stdin.stream(),
+    maxChars,
+    mailboxName: process.argv[4] ?? "",
+  });
+  if (text.isErr()) {
+    return ARCHIVE_PREVIEW_WORKER_EXIT.unreadable;
+  }
+  await writeWorkerStdout(text.value);
+  return 0;
+};
+
 try {
   const mimeType = process.argv[2] ?? "";
   const maxChars = readMaxCharsArgument(process.argv[3]);
+  if (mimeType === MAILBOX_TEXT_WORKER_MODE) {
+    process.exit(await writeMailboxText(maxChars));
+  }
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   if (mimeType === DATA_BOX_PREVIEW_MODE) {
     await writeWorkerStdout(

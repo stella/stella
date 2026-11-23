@@ -36,7 +36,10 @@ import type {
   ChatProjectionSchema,
   DehydratedInput,
 } from "@/api/lib/chat/projection-schema";
-import { READ_DOCUMENT_VERSION_PROJECTION } from "@/api/lib/chat/projections";
+import {
+  READ_DOCUMENT_VERSION_PROJECTION,
+  SEARCH_ACROSS_MATTERS_PROJECTION,
+} from "@/api/lib/chat/projections";
 import type {
   LIST_MATTERS_LIST_PROJECTION,
   LIST_PROPERTIES_PROJECTION,
@@ -865,6 +868,33 @@ describe("projectForChat", () => {
       }),
     ]);
     expect(allTelemetry()).not.toContain(ROGUE_UUID);
+  });
+
+  test("a search hit name is content text: an embedded UUID is masked without a degrade report", () => {
+    const projected = project({
+      payload: {
+        hits: [
+          {
+            entityId: ENTITY_UUID,
+            headline: null,
+            kind: "document",
+            name: `scan-${ROGUE_UUID}.pdf`,
+            workspaceId: WS_UUID,
+            workspaceName: "Lindqvist lease renewal",
+          },
+        ],
+        nextCursor: null,
+        totalCount: 1,
+      },
+      schema: SEARCH_ACROSS_MATTERS_PROJECTION,
+    }).unwrap();
+
+    expect(projected).toMatchObject({
+      hits: [{ name: `scan-${MASKED_CONTENT_ID}.pdf` }],
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+    expect(exceptionProperties()).toEqual([]);
   });
 
   test("a bare string array item carrying a UUID keeps its place, masked", () => {

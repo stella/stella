@@ -5,6 +5,7 @@ import { createPipelineContext, deanonymise } from "@stll/anonymize";
 import type { PipelineContext } from "@stll/anonymize";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
@@ -1031,7 +1032,9 @@ const anonymizePlainTextFile = ({
     );
   }
 
-  const text = Buffer.from(parsed.value.bytes).toString("utf-8");
+  const { text } = decodeDeclared(parsed.value.bytes, {
+    contentType: parsed.value.mimeType,
+  });
   let anonymizedText = text;
   let filename = getChatAttachmentFilename(part);
 

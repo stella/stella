@@ -368,6 +368,7 @@ export const TAGGED_FAILURE_REASON = {
   ManualCallbackParseError: "tagged_failure",
   ManualEntitlementRefusedError: "tagged_failure",
   MarkedPdfWriteError: "tagged_failure",
+  MboxParseError: "tagged_failure",
   McpAuthenticationError: "tagged_failure",
   McpClientError: "tagged_failure",
   McpDiscoveryError: "tagged_failure",

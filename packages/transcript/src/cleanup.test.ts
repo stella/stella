@@ -7,10 +7,10 @@ import {
   FIRST_PART_CHARACTERS,
   nextCleanupPart,
   paragraphsToHtml,
-  parseInline,
-  parseMarkdown,
+  parseCleanedInline,
+  parseCleanedMarkdown,
   PART_CHARACTERS,
-} from "../src/transcribe/cleaned-text";
+} from "./cleanup";
 
 const LETTER = `Ahoj Petře,
 
@@ -25,9 +25,9 @@ K tebou **navrženým termínům jednání** této záležitosti:
 - doručení na adresu sídla,
 - doručení *datovou schránkou*.`;
 
-describe("parseMarkdown", () => {
+describe("parseCleanedMarkdown", () => {
   test("reads paragraphs, bold, lists and headings", () => {
-    const blocks = parseMarkdown(LETTER);
+    const blocks = parseCleanedMarkdown(LETTER);
     expect(blocks.map((block) => block.kind)).toEqual([
       "paragraph",
       "paragraph",
@@ -52,7 +52,7 @@ describe("parseMarkdown", () => {
   });
 
   test("a list a later part continues keeps its numbering", () => {
-    const blocks = parseMarkdown("4. čtvrtý bod\n5. pátý bod");
+    const blocks = parseCleanedMarkdown("4. čtvrtý bod\n5. pátý bod");
     expect(blocks[0]).toMatchObject({ kind: "list", ordered: true, start: 4 });
     expect(blocksToText(blocks)).toBe("4. čtvrtý bod\n5. pátý bod");
     expect(blocksToHtml(blocks)).toBe(
@@ -64,15 +64,15 @@ describe("parseMarkdown", () => {
   // would run billions of steps here and time the test out.
   test("many unmatched italic marks stay text", () => {
     const source = "*a ".repeat(50_000);
-    const runs = parseInline(source);
+    const runs = parseCleanedInline(source);
     expect(runs).toEqual([{ text: source, bold: false, italic: false }]);
   });
 
   test("keeps unmatched marks and markup as text", () => {
-    expect(parseInline("5 * 3 = 15 a <b>x</b>")).toEqual([
+    expect(parseCleanedInline("5 * 3 = 15 a <b>x</b>")).toEqual([
       { text: "5 * 3 = 15 a <b>x</b>", bold: false, italic: false },
     ]);
-    expect(parseInline("snake_case_name")).toEqual([
+    expect(parseCleanedInline("snake_case_name")).toEqual([
       { text: "snake_case_name", bold: false, italic: false },
     ]);
   });
@@ -80,17 +80,19 @@ describe("parseMarkdown", () => {
 
 describe("copying", () => {
   test("HTML escapes text and keeps structure", () => {
-    const html = blocksToHtml(parseMarkdown("**A & B** <script>\n\n1. one"));
+    const html = blocksToHtml(
+      parseCleanedMarkdown("**A & B** <script>\n\n1. one"),
+    );
     expect(html).toBe(
       "<p><strong>A &amp; B</strong> &lt;script&gt;</p>\n<ol><li>one</li></ol>",
     );
   });
 
   test("plain text drops marks but keeps list numbers", () => {
-    expect(blocksToText(parseMarkdown(LETTER))).toContain(
+    expect(blocksToText(parseCleanedMarkdown(LETTER))).toContain(
       "1. čtvrtek (3. 12. 2026): bohužel ten den nemůžu.",
     );
-    expect(blocksToText(parseMarkdown(LETTER))).not.toContain("**");
+    expect(blocksToText(parseCleanedMarkdown(LETTER))).not.toContain("**");
   });
 
   test("raw paragraphs carry their timestamps", () => {

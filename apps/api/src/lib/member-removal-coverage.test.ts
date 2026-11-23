@@ -127,6 +127,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "contacts.bank_accounts",
   "contacts.billing_address",
   "correspondence.data_box_envelope",
+  // A PEC provider's certification data: addresses as stated in the file.
+  "correspondence.certified_email_envelope",
   "correspondence.original_signature",
   "correspondence.sender",
   "correspondence.recipients_to",
