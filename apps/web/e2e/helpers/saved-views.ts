@@ -103,9 +103,16 @@ export const openSavedView = async (
     (await measuredCopy.count()) === 1 &&
     (await anyTab.count()) === 0 &&
     (await moreViews(page).count()) === 1;
+  // `count()` never runs the page's locator handlers, so a modal a test
+  // dismisses through one (such as the AI key dialog on a deployment without
+  // a provider) would hide the strip's roles for the whole poll. The
+  // auto-waiting assertion first runs them on every attempt.
   await expect
     .poll(
-      async () => (await selectedTab.count()) > 0 || (await onlyTheMenu()),
+      async () => {
+        await expect(viewStrip(page)).toBeVisible();
+        return (await selectedTab.count()) > 0 || (await onlyTheMenu());
+      },
       {
         message: `"${name}" is the open view`,
         ...within(options.timeout),
