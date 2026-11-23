@@ -25,13 +25,13 @@ import type {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { Transaction } from "@/api/db/root";
 import {
   BILLING_STATUS,
   expenses,
   INVOICE_ATTACHMENT,
   timeEntries,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   AUDIT_ACTION,

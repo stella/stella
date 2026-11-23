@@ -38,7 +38,6 @@ import {
   desktopRunnerServerMessageSchema,
 } from "@stll/api-contract/desktop-runner";
 
-import type { RootDatabase, Transaction } from "@/api/db/root";
 import {
   chatMessageRevisions,
   chatMessages,
@@ -50,6 +49,7 @@ import {
   desktopRunners,
   userFiles,
 } from "@/api/db/schema";
+import type { RootDatabase, Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

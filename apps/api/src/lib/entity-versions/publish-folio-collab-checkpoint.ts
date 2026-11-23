@@ -4,7 +4,6 @@ import { and, asc, eq } from "drizzle-orm";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
@@ -13,6 +12,7 @@ import {
   folioCollabPublications,
   folioCollabRooms,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";

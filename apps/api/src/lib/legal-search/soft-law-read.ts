@@ -2,12 +2,12 @@ import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { GuidanceKind } from "@stll/legal-ast/document-kind";
 
-import type { Transaction } from "@/api/db/root";
 import {
   softLawDocumentLocators,
   softLawDocuments,
   softLawDocumentVersions,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   decodePaginationCursor,

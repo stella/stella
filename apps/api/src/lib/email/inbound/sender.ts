@@ -2,11 +2,11 @@ import { panic } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   correspondenceAllowedSenderMatters,
   correspondenceAllowedSenders,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { correspondenceUserHasAccess } from "@/api/lib/email/correspondence/access";
 import type { SenderMembership } from "@/api/lib/email/inbound/acceptance";

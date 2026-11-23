@@ -9,8 +9,8 @@ import type { CaseEvent, CaseSearchResult, HearingEvent } from "@stll/infosoud";
 import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { entities, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { normalizeEntityName } from "@/api/lib/entities/entity-name";

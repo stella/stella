@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import {

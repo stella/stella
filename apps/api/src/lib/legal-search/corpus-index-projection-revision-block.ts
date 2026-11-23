@@ -4,8 +4,8 @@ import { and, eq, inArray } from "drizzle-orm";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { corpusIndexProjectionStates } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import type { ChunkBudgetError } from "@/api/lib/corpus-index/chunking";
 import { settleBoth } from "@/api/lib/corpus-index/core";

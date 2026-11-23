@@ -7,12 +7,12 @@ import { compareCodeUnit } from "@stll/collation";
 import { declareFingerprintFields } from "@stll/errors";
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legislationAmendments,
   legislationAmendmentSnapshots,
   legislationSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { stripDangerousChars } from "@/api/lib/legal-search/corpus-sanitize";

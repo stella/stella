@@ -19,12 +19,12 @@ import { sleep } from "@stll/concurrency/sleep";
 import { Temporal } from "@stll/time";
 
 import { CORPUS_SCHEMA_LANE_SHARED_PG_LOCK_SQL } from "@/api/db/corpus-schema-lane";
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusProjectionReservationQueueKey } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";

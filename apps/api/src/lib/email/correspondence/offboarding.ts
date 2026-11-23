@@ -1,7 +1,6 @@
 import { panic } from "better-result";
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   correspondence,
   CORRESPONDENCE_ERASURE_SETTING,
@@ -9,6 +8,7 @@ import {
   correspondenceAllowedSenders,
   correspondenceFilers,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

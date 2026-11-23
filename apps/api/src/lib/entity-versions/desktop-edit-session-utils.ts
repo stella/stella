@@ -1,8 +1,8 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   desktopEditFileTypeForMimeType,
