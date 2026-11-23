@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import path from "node:path";
 
+import { isRuntimeCrashOutcome, runWithCrashRetry } from "./lint";
 import {
   formatLintCommand,
   lintCommand,
@@ -138,5 +139,43 @@ describe("lint entry script", () => {
       { cwd: ROOT, stderr: "pipe" },
     );
     expect(result.exitCode).toBe(2);
+  });
+
+  test("retries once on a native runtime crash signal and never retries normal lint errors", async () => {
+    expect(
+      isRuntimeCrashOutcome({ exitCode: null, signalCode: "SIGSEGV" }),
+    ).toBe(true);
+    expect(isRuntimeCrashOutcome({ exitCode: 139, signalCode: null })).toBe(
+      true,
+    );
+    expect(isRuntimeCrashOutcome({ exitCode: 1, signalCode: null })).toBe(
+      false,
+    );
+    expect(
+      isRuntimeCrashOutcome({ exitCode: null, signalCode: "SIGTERM" }),
+    ).toBe(false);
+
+    let crashAttempts = 0;
+    const warnings: string[] = [];
+    const recovered = await runWithCrashRetry(
+      async () => {
+        crashAttempts += 1;
+        return crashAttempts === 1
+          ? { exitCode: null, signalCode: "SIGSEGV" }
+          : { exitCode: 0, signalCode: null };
+      },
+      (msg) => warnings.push(msg),
+    );
+    expect(recovered).toEqual({ exitCode: 0, signalCode: null });
+    expect(crashAttempts).toBe(2);
+    expect(warnings).toHaveLength(1);
+
+    let lintErrorAttempts = 0;
+    const failed = await runWithCrashRetry(async () => {
+      lintErrorAttempts += 1;
+      return { exitCode: 1, signalCode: null };
+    });
+    expect(failed).toEqual({ exitCode: 1, signalCode: null });
+    expect(lintErrorAttempts).toBe(1);
   });
 });
