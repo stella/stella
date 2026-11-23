@@ -285,11 +285,9 @@
       "Test .claude/mcp",
       "Test API or rest",
       "Test the stella browser host",
-      "Test web",
       "Turbo remote cache",
       "Upload API test timings",
       "Upload failed API or rest test output",
-      "Upload failed web test output",
       "Upload quarantined test outcomes",
       "Upload test diagnostics",
       "Verify planned API test durations"
