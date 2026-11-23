@@ -313,6 +313,29 @@ fn update<T>(
   apply: impl FnOnce(&mut Stored) -> T,
 ) -> Result<T, String> {
   let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
+  change(namespace, apply)
+}
+
+/// Changes the file of the account `resolve` names, resolving it under the
+/// files lock: a disconnect that erased the files first leaves no account,
+/// so a change arriving after it never recreates a file. `None` without an
+/// account.
+fn update_resolved<T>(
+  resolve: impl FnOnce() -> Option<String>,
+  apply: impl FnOnce(&mut Stored) -> T,
+) -> Result<Option<T>, String> {
+  let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
+  let Some(namespace) = resolve() else {
+    return Ok(None);
+  };
+  change(&namespace, apply).map(Some)
+}
+
+/// Reads, changes and writes the file; the caller holds the files lock.
+fn change<T>(
+  namespace: &str,
+  apply: impl FnOnce(&mut Stored) -> T,
+) -> Result<T, String> {
   let mut stored = read(namespace)?;
   let value = apply(&mut stored);
   write(namespace, &stored)?;
@@ -369,16 +392,19 @@ pub fn teach(app: &AppHandle, from: &str, to: &str) -> Result<(), TeachFailure> 
   if from == to {
     return Err(TeachFailure::Refused(Refusal::Same));
   }
-  let namespace = dictation_namespace(app).ok_or(TeachFailure::NotSaved)?;
-  update(&namespace, |stored| {
-    stored.fixes = taught(&stored.fixes, &from, &to);
-    stored.pending.push(Change::Taught {
-      id: uuid::Uuid::new_v4().to_string(),
-      from,
-      to,
-    });
-  })
-  .map_err(|_error| TeachFailure::NotSaved)?;
+  update_resolved(
+    || dictation_namespace(app),
+    |stored| {
+      stored.fixes = taught(&stored.fixes, &from, &to);
+      stored.pending.push(Change::Taught {
+        id: uuid::Uuid::new_v4().to_string(),
+        from,
+        to,
+      });
+    },
+  )
+  .map_err(|_error| TeachFailure::NotSaved)?
+  .ok_or(TeachFailure::NotSaved)?;
   changed(app);
   sync_soon(app);
   Ok(())
@@ -663,6 +689,22 @@ async fn send(
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_change_resolves_its_account_under_the_files_lock() {
+    let mut applied = false;
+    let changed = update_resolved(
+      || {
+        // A disconnect erases under the same lock, so it cannot run between
+        // this lookup and the write.
+        assert!(FILES.try_lock().is_err());
+        None
+      },
+      |_stored| applied = true,
+    );
+    assert_eq!(changed, Ok(None));
+    assert!(!applied);
+  }
 
   fn fix(from: &str, to: &str, status: FixStatus) -> LearnedFix {
     LearnedFix {
