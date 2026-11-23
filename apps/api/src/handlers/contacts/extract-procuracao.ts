@@ -22,6 +22,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { readZipNameCodePage } from "@/api/lib/files/organization-zip-name-code-page";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { getS3 } from "@/api/lib/s3";
 import {
@@ -267,11 +268,25 @@ const extractProcuracao = createSafeRootHandler(
         return scanned;
       }
 
+      const zipNameCodePage = await safeDb(
+        async (tx) => await readZipNameCodePage(tx, organizationId),
+      );
+      if (zipNameCodePage.isErr()) {
+        return Result.err(
+          new HandlerError({
+            status: 500,
+            message: "Failed to read the source document",
+            cause: zipNameCodePage.error,
+          }),
+        );
+      }
       const textResult = await Result.tryPromise({
         try: async () =>
-          await extractFileText(scanned.value, {
-            source: "contacts-extract-procuracao",
-          }),
+          await extractFileText(
+            scanned.value,
+            { source: "contacts-extract-procuracao" },
+            { zipNameCodePage: zipNameCodePage.value },
+          ),
         catch: (cause) =>
           new HandlerError({
             status: 500,

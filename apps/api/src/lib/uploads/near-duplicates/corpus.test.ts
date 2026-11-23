@@ -107,6 +107,7 @@ const docxText = async (text: string): Promise<string> => {
       bytes: new Uint8Array(bytes).buffer,
       mimeType: DOCX_MIME_TYPE,
     }),
+    { zipNameCodePage: "ibm437" },
   );
   return extracted.unwrap() ?? "";
 };
@@ -134,6 +135,7 @@ const pdfText = async (text: string): Promise<string> => {
       bytes: new Uint8Array(await pdf.save()).buffer,
       mimeType: PDF_MIME_TYPE,
     }),
+    { zipNameCodePage: "ibm437" },
   );
   return extracted.unwrap() ?? "";
 };

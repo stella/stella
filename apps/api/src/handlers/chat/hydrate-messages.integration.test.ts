@@ -192,6 +192,7 @@ const hydrate = async (message: ChatMessage) =>
     safeDb,
     sendMode: CHAT_SEND_MODE.rawOverride,
     userId: ids.userA1,
+    zipNameCodePage: "ibm437",
   });
 
 const textOf = (result: Awaited<ReturnType<typeof hydrate>>): string => {
@@ -239,6 +240,7 @@ describe("chat attachment hydration provenance", () => {
       safeDb,
       sendMode: CHAT_SEND_MODE.rawOverride,
       userId: ids.userA1,
+      zipNameCodePage: "ibm437",
     });
     const text = textOf(hydrated);
     expect(text).toContain(`attachments/${ownFileId}/`);
@@ -334,6 +336,7 @@ describe("chat attachment hydration provenance", () => {
           safeDb,
           sendMode,
           userId: ids.userA1,
+          zipNameCodePage: "ibm437",
         });
 
         expect(Result.isOk(hydrated)).toBe(true);

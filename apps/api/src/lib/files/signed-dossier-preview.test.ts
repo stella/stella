@@ -69,7 +69,10 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
   });
   const source = stored(bytes, "kérelem.dosszie", "application/octet-stream");
   const preview = (
-    await readSignedDossierPreview(source, E_AKTA_FILE_FORMAT.mimeType)
+    await readSignedDossierPreview(source, {
+      zipNameCodePage: "ibm437",
+      expectedMimeType: E_AKTA_FILE_FORMAT.mimeType,
+    })
   ).unwrap();
   expect(preview).toEqual({
     receipt: false,
@@ -113,7 +116,9 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
     ],
   });
 
-  const extracted = (await extractFileTextResult(source)).unwrap();
+  const extracted = (
+    await extractFileTextResult(source, { zipNameCodePage: "ibm437" })
+  ).unwrap();
   expect(extracted).toContain("Signatures are unverified.");
   expect(extracted).toContain("Signer: Example frame signer");
   expect(extracted).toContain("Kérelem száma 47");
@@ -122,15 +127,15 @@ test("previews an e-akta dossier uploaded under a generic type, and search reads
   expect(extracted).not.toContain("Private draft inside an opaque ZIP");
 
   const dossier = source.withMimeType(E_AKTA_FILE_FORMAT.mimeType);
-  const delivered = await readPartOfFile(dossier, document(1));
+  const delivered = await readPartOfFile(dossier, document(1), "ibm437");
   expect(delivered.unwrap()).toEqual({
     fileName: "végzés.pdf",
     mimeType: PDF_MIME_TYPE,
     bytes: pdf,
   });
-  const text = (await readPartOfFile(dossier, document(0))).unwrap();
+  const text = (await readPartOfFile(dossier, document(0), "ibm437")).unwrap();
   expect(new TextDecoder().decode(text.bytes)).toBe("Kérelem száma 47");
-  const beyond = await readPartOfFile(dossier, document(3));
+  const beyond = await readPartOfFile(dossier, document(3), "ibm437");
   expect(beyond.isErr() && beyond.error.status).toBe(404);
 });
 
@@ -150,7 +155,10 @@ test("previews a ZEPf container stored as a generic ZIP", async () => {
   });
   const source = stored(bytes, "podanie.zep", "application/zip");
   const preview = (
-    await readSignedDossierPreview(source, ZEP_FILE_FORMAT.mimeType)
+    await readSignedDossierPreview(source, {
+      zipNameCodePage: "ibm437",
+      expectedMimeType: ZEP_FILE_FORMAT.mimeType,
+    })
   ).unwrap();
   expect(preview.signers).toEqual([
     { id: "signature-0.signer-0", name: "Example first signer" },
@@ -184,9 +192,14 @@ test("previews a ZEPf container stored as a generic ZIP", async () => {
   const delivered = await readPartOfFile(
     source.withMimeType(ZEP_FILE_FORMAT.mimeType),
     document(1),
+    "ibm437",
   );
   expect(delivered.unwrap().bytes).toEqual(pdf);
-  expect((await extractFileTextResult(source)).unwrap()).toContain("Žiadosť");
+  expect(
+    (
+      await extractFileTextResult(source, { zipNameCodePage: "ibm437" })
+    ).unwrap(),
+  ).toContain("Žiadosť");
 });
 
 test("within the indexing budget, keeps later names and marks clipping", async () => {
@@ -202,7 +215,9 @@ test("within the indexing budget, keeps later names and marks clipping", async (
   });
   const source = stored(bytes, "record.es3", E_AKTA_FILE_FORMAT.mimeType);
   const maxChars = 300;
-  const text = (await extractFileTextResult(source, { maxChars })).unwrap();
+  const text = (
+    await extractFileTextResult(source, { zipNameCodePage: "ibm437", maxChars })
+  ).unwrap();
   expect(text).toContain("Filing text");
   expect(text).toContain("Document: short.txt");
   expect(text?.match(/Document text was truncated\./gu)).toHaveLength(2);
@@ -220,7 +235,9 @@ test("refuses preview when an embedded file fails the upload scan", async () => 
     ],
   });
   const source = stored(bytes, "record.es3", E_AKTA_FILE_FORMAT.mimeType);
-  const preview = await readSignedDossierPreview(source);
+  const preview = await readSignedDossierPreview(source, {
+    zipNameCodePage: "ibm437",
+  });
   expect(preview.isErr() && preview.error.message).toBe(
     "An embedded file did not pass the security scan",
   );
@@ -230,6 +247,7 @@ test("refuses preview when an embedded file fails the upload scan", async () => 
       "x.es3",
       E_AKTA_FILE_FORMAT.mimeType,
     ),
+    { zipNameCodePage: "ibm437" },
   );
   expect(unreadable.isErr() && unreadable.error.status).toBe(422);
 });
@@ -253,6 +271,7 @@ test("delivers a zipped PDF that inflates past the size of its container", async
   const delivered = await readPartOfFile(
     stored(bytes, "record.es3", E_AKTA_FILE_FORMAT.mimeType),
     document(0),
+    "ibm437",
   );
   expect(delivered.unwrap().bytes).toEqual(padded);
 });
@@ -280,7 +299,10 @@ test("previews a XAdES_ZEP envelope stored under a generic type, PDF included", 
   });
   const source = stored(bytes, "podanie.xzep", "application/xml");
   const preview = (
-    await readSignedDossierPreview(source, XADES_ZEP_FILE_FORMAT.mimeType)
+    await readSignedDossierPreview(source, {
+      zipNameCodePage: "ibm437",
+      expectedMimeType: XADES_ZEP_FILE_FORMAT.mimeType,
+    })
   ).unwrap();
   expect(preview.signers.map(({ name }) => name)).toEqual([
     "Example envelope signer",
@@ -299,14 +321,16 @@ test("previews a XAdES_ZEP envelope stored under a generic type, PDF included", 
     },
   ]);
   const envelope = source.withMimeType(XADES_ZEP_FILE_FORMAT.mimeType);
-  const delivered = await readPartOfFile(envelope, document(0));
+  const delivered = await readPartOfFile(envelope, document(0), "ibm437");
   expect(delivered.unwrap().bytes).toEqual(pdf);
   // A document of any type opens, not only a PDF.
-  const xml = (await readPartOfFile(envelope, document(1))).unwrap();
+  const xml = (await readPartOfFile(envelope, document(1), "ibm437")).unwrap();
   expect(new TextDecoder().decode(xml.bytes)).toContain(
     "Návrh na začatie konania",
   );
-  const extracted = (await extractFileTextResult(source)).unwrap();
+  const extracted = (
+    await extractFileTextResult(source, { zipNameCodePage: "ibm437" })
+  ).unwrap();
   expect(extracted).toContain("Návrh na začatie konania");
   expect(extracted).toContain(marker);
 });
@@ -320,9 +344,14 @@ test("says in search text that an e-akta receipt is a delivery receipt", async (
   });
   const source = stored(bytes, "elismervény.et3", "application/octet-stream");
   const preview = (
-    await readSignedDossierPreview(source, E_AKTA_FILE_FORMAT.mimeType)
+    await readSignedDossierPreview(source, {
+      zipNameCodePage: "ibm437",
+      expectedMimeType: E_AKTA_FILE_FORMAT.mimeType,
+    })
   ).unwrap();
   expect(preview.receipt).toBe(true);
-  const extracted = (await extractFileTextResult(source)).unwrap();
+  const extracted = (
+    await extractFileTextResult(source, { zipNameCodePage: "ibm437" })
+  ).unwrap();
   expect(extracted?.startsWith("Signed delivery receipt.")).toBe(true);
 });

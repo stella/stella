@@ -9,7 +9,7 @@
  * security sandbox.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { legalFileFormat } from "@stll/api-contract/document-format";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
@@ -30,6 +30,10 @@ import {
   isDocumentArchiveMimeType,
   MAILBOX_TEXT_WORKER_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
+import {
+  ZIP_NAME_CODE_PAGE_ENV,
+  type ZipNameCodePage,
+} from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { logger } from "@/api/lib/observability/logger";
@@ -39,6 +43,7 @@ import {
 } from "@/api/lib/runtime-worker-path";
 import {
   canExtractMimeType,
+  isOfficeDocumentMimeType,
   normalizeMimeType,
 } from "@/api/lib/search/extractable-mime-types";
 import {
@@ -47,7 +52,7 @@ import {
   STANDALONE_ATTACHMENT_MODE,
 } from "@/api/lib/search/extraction-worker-attachments";
 import { parseWorkerErrorClass } from "@/api/lib/search/extraction-worker-error";
-import { spawnWorker } from "@/api/lib/subprocess";
+import { spawnBinaryWorker, spawnWorker } from "@/api/lib/subprocess";
 import {
   DOC_MIME_TYPE,
   EPUB_MIME_TYPE,
@@ -57,11 +62,52 @@ import {
   XLS_MIME_TYPE,
 } from "@/api/mime-types";
 
-export const EXTRACTION_WORKER_PATH = resolveRuntimeWorkerPath({
+const EXTRACTION_WORKER_PATH = resolveRuntimeWorkerPath({
   outputFile: RUNTIME_WORKER_FILES.extraction,
   sourceDir: import.meta.dir,
   sourceFile: "extraction-worker.ts",
 });
+
+type ExtractionWorkerRun = {
+  /**
+   * The code page a tie between readings of a ZIP archive's undeclared file
+   * names goes to, from the organization whose file the run reads
+   * (`readZipNameCodePage`). Null only for a mode that opens no ZIP archive
+   * at any depth; such a run keeps the specification's.
+   */
+  zipNameCodePage: ZipNameCodePage | null;
+};
+
+const extractionWorkerEnv = ({ zipNameCodePage }: ExtractionWorkerRun) =>
+  zipNameCodePage === null ? {} : { [ZIP_NAME_CODE_PAGE_ENV]: zipNameCodePage };
+
+/**
+ * Runs the extraction worker in one of its modes. Every run goes through
+ * here or `runExtractionBinaryWorker`, so none starts without the code page
+ * its archives' names are read in.
+ */
+export const runExtractionWorker = async ({
+  zipNameCodePage,
+  ...options
+}: Omit<Parameters<typeof spawnWorker>[0], "env" | "workerPath"> &
+  ExtractionWorkerRun) =>
+  await spawnWorker({
+    ...options,
+    workerPath: EXTRACTION_WORKER_PATH,
+    env: extractionWorkerEnv({ zipNameCodePage }),
+  });
+
+/** `runExtractionWorker` for a mode that answers in bytes. */
+export const runExtractionBinaryWorker = async ({
+  zipNameCodePage,
+  ...options
+}: Omit<Parameters<typeof spawnBinaryWorker>[0], "env" | "workerPath"> &
+  ExtractionWorkerRun) =>
+  await spawnBinaryWorker({
+    ...options,
+    workerPath: EXTRACTION_WORKER_PATH,
+    env: extractionWorkerEnv({ zipNameCodePage }),
+  });
 
 /**
  * Recovers a usable MIME type for files stored under a generic type
@@ -156,20 +202,45 @@ type ExtractFileTextResultOptions = {
   includeContainerAttachments?: boolean;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** The reading organization's (`readZipNameCodePage`). */
+  zipNameCodePage: ZipNameCodePage;
 };
 
+const extractionMimeTypeOf = ({ mimeType, fileName }: ScannedFile) =>
+  legalFileFormat(mimeType, fileName)?.mimeType ?? normalizeMimeType(mimeType);
+
 export const extractFileTextResult = async (
-  { bytes: buffer, mimeType, fileName }: ScannedFile,
+  file: ScannedFile,
+  options: ExtractFileTextResultOptions,
+): Promise<Result<string | null, ExtractionWorkerError>> =>
+  await extractTextInWorker(file, options);
+
+/**
+ * An Office document's text, which the worker reads with the Office reader:
+ * it opens no ZIP archive's names, so it needs no organization's code page.
+ * Any other type is a caller's defect, never read without one.
+ */
+export const extractOfficeDocumentTextResult = async (
+  file: ScannedFile,
+  options: Omit<ExtractFileTextResultOptions, "zipNameCodePage">,
+): Promise<Result<string | null, ExtractionWorkerError>> =>
+  isOfficeDocumentMimeType(extractionMimeTypeOf(file))
+    ? await extractTextInWorker(file, { ...options, zipNameCodePage: null })
+    : panic("Only an Office document is read without a ZIP name code page");
+
+const extractTextInWorker = async (
+  file: ScannedFile,
   {
     maxChars = LIMITS.extractedContentMaxChars,
     includeContainerAttachments = false,
     signal,
     timeoutMs = LIMITS.extractionTimeoutMs,
-  }: ExtractFileTextResultOptions = {},
+    zipNameCodePage,
+  }: Omit<ExtractFileTextResultOptions, "zipNameCodePage"> &
+    ExtractionWorkerRun,
 ): Promise<Result<string | null, ExtractionWorkerError>> => {
-  const normalizedMimeType =
-    legalFileFormat(mimeType, fileName)?.mimeType ??
-    normalizeMimeType(mimeType);
+  const { bytes: buffer } = file;
+  const normalizedMimeType = extractionMimeTypeOf(file);
   if (!canExtractMimeType(normalizedMimeType)) {
     return Result.ok(null);
   }
@@ -191,8 +262,8 @@ export const extractFileTextResult = async (
     );
   }
 
-  const result = await spawnWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionWorker({
+    zipNameCodePage,
     args: [
       normalizedMimeType,
       String(maxChars),
@@ -260,8 +331,9 @@ export const extractMailboxStreamText = async ({
   signal?: AbortSignal;
   timeoutMs?: number;
 }): Promise<Result<string | null, ExtractionWorkerError>> => {
-  const result = await spawnWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionWorker({
+    // A mailbox's text is its messages' own text; no attachment is opened.
+    zipNameCodePage: null,
     args: [MAILBOX_TEXT_WORKER_MODE, String(maxChars), fileName],
     ...(signal ? { signal } : {}),
     stdin: stream,
@@ -284,8 +356,8 @@ export const extractMailboxStreamText = async ({
  */
 export const extractFileText = async (
   file: ScannedFile,
-  context?: Record<string, string>,
-  options: Pick<ExtractFileTextResultOptions, "maxChars"> = {},
+  context: Record<string, string> | undefined,
+  options: Pick<ExtractFileTextResultOptions, "maxChars" | "zipNameCodePage">,
 ): Promise<string | null> => {
   const first = await extractFileTextResult(file, options);
   if (!Result.isError(first)) {

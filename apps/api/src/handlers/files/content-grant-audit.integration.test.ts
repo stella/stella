@@ -31,6 +31,7 @@ import {
 import { SIGNED_DOSSIER_FORMATS } from "@stll/api-contract/signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
+import { encodeDosCodePage } from "@stll/mojibake/dos-code-pages";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 import { dbClock } from "@stll/test-kit/db";
@@ -44,6 +45,7 @@ import {
   entities,
   entityVersions,
   fields,
+  organizationSettings,
   properties,
   syntheticSessionControl,
   workspaceMembers,
@@ -2216,6 +2218,106 @@ describe("ZIP archive delivery", () => {
     const large = await filePartListScalingScenario.measure(context);
     expect(small.statements).toBeGreaterThan(0);
     expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
+
+describe("ZIP names in the organization's code page", () => {
+  // "Důkazy.pdf" written by Windows set to code page 852, without the UTF-8
+  // flag: its one byte above 0x7F is "ů" in 852 and "à" in 437, a tie.
+  const TIED_NAME =
+    encodeDosCodePage("Důkazy.pdf", "ibm852") ?? panic("852 writes the name");
+
+  /** An archive holding the name, and an archive in it holding it too. */
+  const seedTiedZip = async () =>
+    await seedStored(
+      {
+        fileName: "dukazy-ke-sporu.zip",
+        mimeType: "application/zip",
+        pdfFileId: null,
+      },
+      makeZipArchive([
+        { name: TIED_NAME, data: "%PDF-1.7", flags: 0 },
+        {
+          name: "spis.zip",
+          data: makeZipArchive([
+            { name: TIED_NAME, data: "%PDF-1.7", flags: 0 },
+          ]),
+          method: 0,
+        },
+      ]),
+    );
+
+  const practising = async (countryCode: string) =>
+    await testDb
+      .insert(organizationSettings)
+      .values({
+        organizationId: ids.orgA,
+        practiceJurisdictions: [{ countryCode, isPrimary: true }],
+      })
+      .onConflictDoUpdate({
+        target: organizationSettings.organizationId,
+        set: { practiceJurisdictions: [{ countryCode, isPrimary: true }] },
+      });
+
+  /**
+   * The tied name as the preview, the part list of the archive inside and
+   * the text an agent reads all show it: `shown`, never `other`.
+   */
+  const expectShown = async (
+    fieldId: SafeId<"field">,
+    { shown, other }: { shown: string; other: string },
+  ) => {
+    expect(
+      await zipArchivePreviewEndpoint.handler(
+        legalFileContext(fieldId, scopedDbA()),
+      ),
+    ).toMatchObject({
+      files: [{ fileName: shown }, { fileName: "spis.zip" }],
+    });
+    expect(
+      await readFilePartListEndpoint.handler(
+        partListContext(fieldId, "member:1", scopedDbA()),
+      ),
+    ).toMatchObject({ files: [{ fileName: shown }] });
+    const { text } = (
+      await LEGAL_FILE_READERS.zip({
+        fieldId,
+        scopedDb: scopedDbA(),
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        recordAuditEvent: recorderA(),
+        purpose: "agent",
+      })
+    ).unwrap();
+    expect(text).toContain(shown);
+    expect(text).not.toContain(other);
+  };
+
+  test("a tie reads in 852 for a Czech practice and in 437 for a German one", async () => {
+    const before = await testDb.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: ids.orgA } },
+      columns: { practiceJurisdictions: true },
+    });
+    const { fieldId, entityId, entityVersionId } = await seedTiedZip();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    try {
+      await practising("CZ");
+      await expectShown(fieldId, { shown: "Důkazy.pdf", other: "Dàkazy.pdf" });
+      await practising("DE");
+      await expectShown(fieldId, { shown: "Dàkazy.pdf", other: "Důkazy.pdf" });
+    } finally {
+      await (before === undefined
+        ? testDb
+            .delete(organizationSettings)
+            .where(eq(organizationSettings.organizationId, ids.orgA))
+        : testDb
+            .update(organizationSettings)
+            .set({ practiceJurisdictions: before.practiceJurisdictions })
+            .where(eq(organizationSettings.organizationId, ids.orgA)));
+    }
   });
 });
 

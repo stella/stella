@@ -25,6 +25,7 @@ const read = async (
     fileBytes,
     containerMimeType,
     containerName: "container",
+    zipNameCodePage: "ibm437",
     part: { kind, index },
   });
   if (result.isErr()) {
@@ -110,6 +111,7 @@ describe("a part read from a stored container", () => {
       fileBytes: new TextEncoder().encode("not a container"),
       containerMimeType: ASIC_E_FILE_FORMAT.mimeType,
       containerName: "filing.asice",
+      zipNameCodePage: "ibm437",
       part: { kind: FILE_PART_KINDS.member, index: 0 },
     });
     expect(result.isErr() && result.error._tag).toBe("AsicParseError");
