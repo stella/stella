@@ -123,6 +123,8 @@ export async function runDockerLogin(options) {
       input: `${password}\n`,
       encoding: "utf-8",
       maxBuffer: 1024 * 1024,
+      timeout: 30_000,
+      killSignal: "SIGKILL",
       stdio: ["pipe", "pipe", "pipe"],
     });
 
