@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Všetky klipy",
+    "allResults": "Všetky výsledky",
     "bold": "Tučné",
     "bulletedList": "Odrážkový zoznam",
     "cancel": "Zrušiť",
@@ -378,6 +379,7 @@
     "moveToGroup": "Presunúť do skupiny",
     "newGroupOption": "Nová skupina…",
     "noGroup": "Bez skupiny",
+    "noGroupMatches": "V tejto skupine nič nezodpovedá",
     "noResults": "Žiadne zodpovedajúce výstrižky",
     "noResultsSearchRegistries": "Hľadať „{query}“ v registroch",
     "numberedList": "Číslovaný zoznam",

@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Alle Clips",
+    "allResults": "Alle Ergebnisse",
     "bold": "Fett",
     "bulletedList": "Aufzählung",
     "cancel": "Abbrechen",
@@ -378,6 +379,7 @@
     "moveToGroup": "In Gruppe verschieben",
     "newGroupOption": "Neue Gruppe…",
     "noGroup": "Keine Gruppe",
+    "noGroupMatches": "Keine Treffer in dieser Gruppe",
     "noResults": "Keine passenden Inhalte",
     "noResultsSearchRegistries": "In Registern nach „{query}“ suchen",
     "numberedList": "Nummerierte Liste",

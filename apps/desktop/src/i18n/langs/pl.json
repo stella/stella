@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Wszystkie wycinki",
+    "allResults": "Wszystkie wyniki",
     "bold": "Pogrubienie",
     "bulletedList": "Lista punktowana",
     "cancel": "Anuluj",
@@ -378,6 +379,7 @@
     "moveToGroup": "Przenieś do grupy",
     "newGroupOption": "Nowa grupa…",
     "noGroup": "Bez grupy",
+    "noGroupMatches": "Brak wyników w tej grupie",
     "noResults": "Brak pasujących wycinków",
     "noResultsSearchRegistries": "Szukaj „{query}” w rejestrach",
     "numberedList": "Lista numerowana",
