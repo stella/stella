@@ -5,13 +5,13 @@ import { normalizeMatterSuggestion } from "./matter-suggestion";
 test("matter suggestion collapses whitespace and defaults the client type", () => {
   expect(
     normalizeMatterSuggestion({
-      name: "  Novák v.\n Dvořák  ",
-      clientName: " Jan   Novák ",
+      name: "  Doležalová v.\n Hrubý  ",
+      clientName: "  Kateřina   Doležalová ",
       clientType: null,
     }),
   ).toEqual({
-    name: "Novák v. Dvořák",
-    client: { displayName: "Jan Novák", type: "person" },
+    name: "Doležalová v. Hrubý",
+    client: { displayName: "Kateřina Doležalová", type: "person" },
   });
 });
 
