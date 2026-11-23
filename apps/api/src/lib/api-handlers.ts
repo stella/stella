@@ -24,18 +24,6 @@ import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { RouteCachePolicy } from "@/api/http/cache";
 import type { ResponseSet } from "@/api/http/context";
-import { decodeRequestInput } from "@/api/http/input";
-import type { QueryRecord } from "@/api/http/input";
-import type { AnySchema, RouteAccess, RouteRequest } from "@/api/http/route";
-import { decodeRouteInput, routeContext } from "@/api/http/route-input";
-import type { RawParams, RouteContext } from "@/api/http/route-input";
-import { HttpStatusResponse, status, unwrapStatus } from "@/api/http/status";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
-import {
-  memberAssignmentRequiredError,
-  orgAIConfigStatusError,
-} from "@/api/lib/ai-config-response";
-import { captureObservedError } from "@/api/lib/analytics/capture";
 import type {
   CapabilityAccess,
   CapabilityDescription,
@@ -48,7 +36,19 @@ import type {
   McpToolName,
   UsageMeteringConfig,
   WorkspaceHandlerConfig,
-} from "@/api/lib/api-handlers-types";
+} from "@/api/http/handler-config-types";
+import { decodeRequestInput } from "@/api/http/input";
+import type { QueryRecord } from "@/api/http/input";
+import type { AnySchema, RouteAccess, RouteRequest } from "@/api/http/route";
+import { decodeRouteInput, routeContext } from "@/api/http/route-input";
+import type { RawParams, RouteContext } from "@/api/http/route-input";
+import { HttpStatusResponse, status, unwrapStatus } from "@/api/http/status";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  memberAssignmentRequiredError,
+  orgAIConfigStatusError,
+} from "@/api/lib/ai-config-response";
+import { captureObservedError } from "@/api/lib/analytics/capture";
 import {
   authenticateMember,
   authenticateSession,
