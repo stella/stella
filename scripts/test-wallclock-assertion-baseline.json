@@ -44,32 +44,12 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/search/highlight.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/subprocess.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/tanstack-ai-generate.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/mcp/search-index-unavailable.test.ts": {
-    "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/mcp/tool-name-suggestions.test.ts": {
     "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -99,31 +79,6 @@
     "owner": "cli",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/legal-atlas/src/document-stage-observer.test.ts": {
-    "count": 1,
-    "owner": "legal-atlas",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/legal-atlas/src/provision-citation-grammars.property.test.ts": {
-    "count": 1,
-    "owner": "legal-atlas",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/mcp-kit/src/envelope.test.ts": {
-    "count": 2,
-    "owner": "mcp-kit",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/scripts/src/process-stderr.test.ts": {
-    "count": 1,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/template-conditions/src/parse.test.ts": {
-    "count": 1,
-    "owner": "template-conditions",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/ui/src/components/animated-preview.dom.test.tsx": {
     "count": 1,
     "owner": "ui",
@@ -141,11 +96,6 @@
   },
   "scripts/code-quality-task-budget.test.ts": {
     "count": 3,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/generate-tailwind-classes.test.ts": {
-    "count": 1,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   }
