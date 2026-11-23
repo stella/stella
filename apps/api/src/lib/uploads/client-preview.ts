@@ -34,6 +34,7 @@ import {
   readImageHeader,
 } from "@/api/lib/files/image-header";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 import {
   deleteS3ObjectWithSignal,
   readS3ObjectBoundedIfPresent,
@@ -195,9 +196,15 @@ export const loadClientPreview = async ({
     maxBytes: queued.size,
     signal,
   });
-  await Result.tryPromise(
+  const removed = await Result.tryPromise(
     async () => await deleteS3ObjectWithSignal(queued.key, signal),
   );
+  if (Result.isError(removed)) {
+    // The bucket's temporary-upload rule removes it later.
+    logger.info("file_derivative.client_preview_not_removed", {
+      key: queued.key,
+    });
+  }
   if (bytes === null) {
     return { type: "refused", reason: "missing" };
   }
