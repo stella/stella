@@ -106,6 +106,9 @@ export const fetchBoundedSsrResponse = async ({
       }
       const headers = new Headers(response.headers);
       // A stream can fail after headers are sent; never cache a partial document.
+      // The server entry alone may share an anonymous public document: a stream
+      // that fails errors the response body, and a shared cache never stores
+      // a body that ended in an error.
       headers.set("Cache-Control", "private, no-store");
       headers.delete("Content-Length");
       return new Response(

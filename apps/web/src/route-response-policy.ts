@@ -9,6 +9,109 @@ export type CacheClass =
 
 export const SSR_CACHE_CLASS_HEADER = "x-stella-cache-class";
 
+export const PRIVATE_CACHE_CONTROL = "private, no-store";
+
+/**
+ * A public document rendered for a request without credentials. Browsers
+ * revalidate it every time; a shared cache may serve it for a few minutes
+ * and a little longer while it fetches a fresh copy.
+ */
+export const ANONYMOUS_DOCUMENT_CACHE_CONTROL =
+  "public, max-age=0, s-maxage=300, stale-while-revalidate=600";
+
+/**
+ * What a shared cache may do with a response of each class:
+ * - `never`: nothing; the response is private.
+ * - `origin-policy`: keep the route's own Cache-Control (a sitemap or a file
+ *   that is the same for every viewer and is never HTML).
+ * - `anonymous-document`: an HTML document that is the same for every viewer
+ *   without credentials, so only such a request's response may be cached.
+ */
+type SharedCachePolicy = "never" | "origin-policy" | "anonymous-document";
+
+export const CACHE_CLASS_POLICIES = {
+  "private-no-store": { indexable: false, sharedCache: "never" },
+  "public-anonymous": { indexable: false, sharedCache: "origin-policy" },
+  "public-indexable": { indexable: true, sharedCache: "anonymous-document" },
+} as const satisfies Record<
+  CacheClass,
+  { indexable: boolean; sharedCache: SharedCachePolicy }
+>;
+
+const isCacheClass = (value: string | null): value is CacheClass =>
+  value !== null && Object.hasOwn(CACHE_CLASS_POLICIES, value);
+
+type ResponseCachePolicyInput = {
+  /** The class the route declared, or null when it declared none. */
+  cacheClass: string | null;
+  status: number;
+  isHtml: boolean;
+  /** The request carried no cookie and no authorization. */
+  isAnonymous: boolean;
+  /** The response sets a cookie. */
+  setsCookie: boolean;
+  /** The Cache-Control the route sent, if any. */
+  routeCacheControl: string | null;
+};
+
+type ResponseCachePolicy = {
+  cacheControl: string;
+  /** Headers a shared cache must key on, when it may store the response. */
+  vary: string | null;
+  indexable: boolean;
+};
+
+const PRIVATE_POLICY = {
+  cacheControl: PRIVATE_CACHE_CONTROL,
+  vary: null,
+} as const;
+
+/**
+ * The final Cache-Control, Vary and indexability of a server response. Only a
+ * successful response may be shared, and never one that sets a cookie; an
+ * error, a redirect or a not-found is always private.
+ */
+export const responseCachePolicy = ({
+  cacheClass,
+  status,
+  isHtml,
+  isAnonymous,
+  setsCookie,
+  routeCacheControl,
+}: ResponseCachePolicyInput): ResponseCachePolicy => {
+  const isSuccessful = status >= 200 && status < 300;
+  if (!isCacheClass(cacheClass) || !isSuccessful) {
+    return { ...PRIVATE_POLICY, indexable: false };
+  }
+  const policy = CACHE_CLASS_POLICIES[cacheClass];
+  const indexable = policy.indexable && isHtml;
+  if (setsCookie) {
+    return { ...PRIVATE_POLICY, indexable };
+  }
+  switch (policy.sharedCache) {
+    case "never":
+      return { ...PRIVATE_POLICY, indexable };
+    case "origin-policy":
+      return isHtml || routeCacheControl === null
+        ? { ...PRIVATE_POLICY, indexable }
+        : { cacheControl: routeCacheControl, vary: null, indexable };
+    case "anonymous-document":
+      return isHtml && isAnonymous
+        ? {
+            cacheControl: ANONYMOUS_DOCUMENT_CACHE_CONTROL,
+            // The document is rendered in the request's language, and a
+            // request with a cookie gets its own private document.
+            vary: "Accept-Language, Cookie",
+            indexable,
+          }
+        : { ...PRIVATE_POLICY, indexable };
+    default: {
+      policy satisfies never;
+      return panic(`Unhandled shared cache policy: ${String(policy)}`);
+    }
+  }
+};
+
 export const ROUTE_CACHE_CLASSES = {
   "/": "private-no-store",
   "/auth": "private-no-store",

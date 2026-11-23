@@ -9,6 +9,14 @@ import {
 } from "@stll/start-runtime";
 import { loadLocalModule } from "@stll/start-runtime/local-module-loader";
 
+import {
+  createSsrAdmission,
+  createSsrShedReporter,
+  isFetchHandler,
+  readSsrAdmissionLimits,
+  withSsrAdmission,
+} from "./ssr-admission";
+
 const DEFAULT_PORT = 3002;
 const DEFAULT_HOST = "0.0.0.0";
 const SERVER_DIRECTORY_URL = new URL("server/", import.meta.url);
@@ -29,6 +37,26 @@ const handler =
     ? serverEntry.default
     : null;
 
+const admissionLimits = readSsrAdmissionLimits(env);
+const admission = createSsrAdmission(
+  admissionLimits.isErr()
+    ? panic(admissionLimits.error.message, admissionLimits.error)
+    : admissionLimits.value,
+);
+const SHED_REPORT_INTERVAL_MS = 10_000;
+const reportShed = createSsrShedReporter({
+  intervalMs: SHED_REPORT_INTERVAL_MS,
+  now: () => performance.now(),
+  writeDiagnostic: (line) => {
+    process.stderr.write(line);
+  },
+});
+// Only requests that reach the server renderer are admitted; the runtime
+// answers health checks and static files before it.
+const admittedHandler = isFetchHandler(handler)
+  ? withSsrAdmission({ admission, handler, onShed: reportShed })
+  : handler;
+
 const CROSS_ORIGIN_ISOLATION_HEADERS = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "credentialless",
@@ -36,7 +64,7 @@ const CROSS_ORIGIN_ISOLATION_HEADERS = {
 
 const runtime = createStartRuntime({
   clientDirectoryUrl: CLIENT_DIRECTORY_URL,
-  handler,
+  handler: admittedHandler,
   responseHeaders: CROSS_ORIGIN_ISOLATION_HEADERS,
 });
 
