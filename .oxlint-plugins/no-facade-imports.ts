@@ -55,6 +55,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/shared-pool-timeout-policy",
   "@/api/db/shared-pool-timeouts",
   "@/api/db/sql-client",
+  "@/api/db/types",
   "@/api/db/sql-close",
   "@/api/db/stored-chat-part-codec",
   "@/api/lib/analytics/capture",

@@ -1,7 +1,7 @@
 import { and, asc, eq, gt, isNull, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { chatTurns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 

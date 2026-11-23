@@ -7,7 +7,6 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -17,6 +16,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { updateCategoryHandler } from "@/api/handlers/clauses/categories";
 import { updateTemplateCategoryHandler } from "@/api/handlers/templates/categories";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";

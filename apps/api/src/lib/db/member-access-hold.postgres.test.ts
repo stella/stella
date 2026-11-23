@@ -5,7 +5,6 @@ import { eq, sql } from "drizzle-orm";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import {
   ORGANIZATION_ACCESS_STATE,
@@ -14,6 +13,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createMembershipSafeDb, markRlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { createSafeId } from "@/api/lib/branded-types";
 import { holdMemberAccessOnTx } from "@/api/lib/db/member-access-hold";

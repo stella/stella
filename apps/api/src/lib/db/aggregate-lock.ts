@@ -36,7 +36,6 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
-import type { Transaction } from "@/api/db/root";
 import type { caseLawDecisions, InvoiceStatus } from "@/api/db/schema";
 import {
   billingArrangements,
@@ -72,6 +71,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
