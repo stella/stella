@@ -129,10 +129,13 @@ describe("an RTF message body", () => {
             ),
         ),
         (bytes) => {
+          // Any bytes read to a body that shows something, or to none.
           const body = rtfMessageBody(bytes);
-          expect(
-            body === null || body.type === "html" || body.type === "text",
-          ).toBe(true);
+          if (body !== null) {
+            expect(
+              (body.type === "html" ? body.html : body.text).trim(),
+            ).not.toBe("");
+          }
         },
       ),
     );

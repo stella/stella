@@ -223,7 +223,7 @@ class Cursor {
     return this.bytes.byteLength - this.at;
   }
 
-  get failed(): boolean {
+  failed(): boolean {
     return this.failure.error !== null;
   }
 
@@ -233,7 +233,7 @@ class Cursor {
 
   /** Where `length` bytes start, or null when they run past the span. */
   private advance(length: number): number | null {
-    if (this.failed) {
+    if (this.failed()) {
       return null;
     }
     if (length < 0 || length > this.remaining) {
@@ -372,7 +372,7 @@ const readProperties = (cursor: Cursor, count: number): Properties => {
     );
     return properties;
   }
-  for (let index = 0; index < count && !cursor.failed; index += 1) {
+  for (let index = 0; index < count && !cursor.failed(); index += 1) {
     const type = cursor.uint16();
     const id = cursor.uint16();
     if (id >= 0x80_00) {
@@ -399,7 +399,7 @@ const readProperties = (cursor: Cursor, count: number): Properties => {
       cursor.fail(limit("A TNEF property holds more values than allowed"));
       break;
     }
-    for (let value = 0; value < values && !cursor.failed; value += 1) {
+    for (let value = 0; value < values && !cursor.failed(); value += 1) {
       const read = readValue(cursor, base);
       if (value === 0 && !multiple && !properties.has(id)) {
         properties.set(id, read);
@@ -490,7 +490,7 @@ const legacySender = (cursor: Cursor, codePage: number) => {
   const addressLength = cursor.uint16();
   const name = legacyString(cursor.take(nameLength), codePage);
   const address = legacyString(cursor.take(addressLength), codePage);
-  if (cursor.failed) {
+  if (cursor.failed()) {
     return null;
   }
   return { name, email: smtpAddress(address) };
@@ -510,7 +510,7 @@ const readRecipients = (cursor: Cursor, codePage: number) => {
     cursor.fail(limit("A TNEF recipient table holds more rows than allowed"));
     return recipients;
   }
-  for (let row = 0; row < rows && !cursor.failed; row += 1) {
+  for (let row = 0; row < rows && !cursor.failed(); row += 1) {
     const properties = readProperties(cursor, cursor.uint32());
     recipients.push({
       name: stringOf(properties, PROPERTY.displayName, codePage),
@@ -724,7 +724,7 @@ const parse = (bytes: Uint8Array): Result<TnefMessage, TnefParseError> => {
   };
   const drafts: AttachmentDraft[] = [];
   let attributes = 0;
-  while (cursor.remaining > 0 && !cursor.failed) {
+  while (cursor.remaining > 0 && !cursor.failed()) {
     attributes += 1;
     if (attributes > TNEF_LIMITS.attributes) {
       cursor.fail(limit("The TNEF stream holds more attributes than allowed"));
