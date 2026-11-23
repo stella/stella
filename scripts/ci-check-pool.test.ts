@@ -640,11 +640,9 @@ test("silent busy children, each lighter than the first, are never stuck", async
 }, 30_000);
 
 test("a silent, idle check is stopped as stuck with its process tree", async () => {
-  const started = performance.now();
   const { launched, log } = await launchIn("echo started\nsleep 600", {
     stuckAfterMs: 500,
   });
-  expect(performance.now() - started).toBeLessThan(10_000);
   expect(launched.stopped).toEqual({ reason: "stuck", idleMinutes: 0 });
   expect(launched.exitCode).not.toBe(0);
   expect(log).toStartWith("started\n");

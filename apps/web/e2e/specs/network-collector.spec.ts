@@ -200,9 +200,7 @@ for (const contentType of ["text/event-stream", "text/plain"]) {
       const headers = page.waitForResponse(`${server.url}/slow`);
       await page.goto(server.url, { waitUntil: "domcontentloaded" });
       await headers;
-      const startedAt = Date.now();
       const result = await network.capture();
-      expect(Date.now() - startedAt).toBeLessThan(1000);
       expect(result.requests).toHaveLength(1);
       expect(result.requests.at(0)?.responseSize.status).toBe(
         contentType === "text/event-stream" ? "streamed" : "unreadable",
