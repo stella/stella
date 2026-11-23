@@ -109,6 +109,7 @@
         "@stll/fetch": "workspace:*",
         "@stll/folio-agents": "catalog:",
         "@stll/folio-core": "catalog:",
+        "@stll/heic-decoder": "workspace:*",
         "@stll/html": "workspace:*",
         "@stll/infosoud": "workspace:*",
         "@stll/invoicing": "workspace:*",
@@ -969,7 +970,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.6.9",
+      "version": "0.6.10",
       "dependencies": {
         "@ag-ui/core": "1.0.4",
         "@stll/ai-catalog": "workspace:^",
@@ -1018,7 +1019,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "8.0.1",
+      "version": "8.1.2",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1221,6 +1222,14 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+      },
+    },
+    "packages/heic-decoder": {
+      "name": "@stll/heic-decoder",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/html": {
@@ -1750,7 +1759,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.83.0",
+      "version": "0.84.1",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1850,7 +1859,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.23.2",
+      "version": "0.24.0",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -3541,6 +3550,8 @@
     "@stll/fuzzy-search-wasm32-wasi": ["@stll/fuzzy-search-wasm32-wasi@1.4.2", "", { "dependencies": { "@emnapi/core": "2.0.0-beta.2", "@emnapi/runtime": "2.0.0-beta.2", "@napi-rs/wasm-runtime": "1.2.6" }, "cpu": "none" }, "sha512-9KalIQNISNnXvLC9/T5d389lj9P6YJEuMHp/cC4Or7vefeb8HobWiMNrM9q2EklrEbsotkr5apc4uNRDwDhY6g=="],
 
     "@stll/fuzzy-search-win32-x64-msvc": ["@stll/fuzzy-search-win32-x64-msvc@1.4.2", "", { "os": "win32", "cpu": "x64" }, "sha512-QN39sybmF5yVLlVpFLIm4TUL+SMgvIW0cILxL7jldfG7I+j73SZWHEyiZjUUvLOs6HxJVWDRPlTZRIPVxiFzlQ=="],
+
+    "@stll/heic-decoder": ["@stll/heic-decoder@workspace:packages/heic-decoder"],
 
     "@stll/html": ["@stll/html@workspace:packages/html"],
 

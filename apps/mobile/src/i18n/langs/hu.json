@@ -503,6 +503,7 @@
     "paymentReference": "Közlemény",
     "prepaidAmount": "Előlegként fizetve",
     "quantity": "Mennyiség és egység",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "Cégjegyzékszám",
@@ -514,6 +515,14 @@
     "taxableAmount": "Adóalap",
     "totals": "Összesítés",
     "unitPrice": "Egységár",
+    "units": {
+      "day": "{count, plural, one {{quantity} nap} other {{quantity} nap}}",
+      "hour": "{count, plural, one {{quantity} óra} other {{quantity} óra}}",
+      "month": "{count, plural, one {{quantity} hónap} other {{quantity} hónap}}",
+      "unit": "{count, plural, one {{quantity} db} other {{quantity} db}}",
+      "week": "{count, plural, one {{quantity} hét} other {{quantity} hét}}",
+      "year": "{count, plural, one {{quantity} év} other {{quantity} év}}"
+    },
     "unreadable": "A számlát nem sikerült beolvasni.",
     "vat": "ÁFA",
     "vatBreakdown": "ÁFA-összesítő",
@@ -534,8 +543,19 @@
     "type": "Típus"
   },
   "fileParts": {
+    "archiveUnreadable": "Az archívumot nem sikerült beolvasni.",
     "attachments": "Mellékletek",
+    "files": "Fájlok",
+    "insideFailed": "A benne lévő fájlokat nem sikerült betölteni. Koppintson az újrapróbáláshoz.",
+    "noFilesInside": "Nincsenek benne fájlok.",
     "open": "{fileName} ({details}) megnyitása",
+    "unavailable": {
+      "encrypted": "Jelszóval védett, nem nyitható meg",
+      "link": "Hivatkozás egy másik fájlra, nem nyitjuk meg",
+      "tooLarge": "Túl nagy a megnyitáshoz",
+      "unreadable": "Sérült, nem nyitható meg",
+      "unsupported": "Olyan módon tömörített, amely nem nyitható meg"
+    },
     "unnamed": "Névtelen fájl"
   },
   "header": {

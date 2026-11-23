@@ -20,7 +20,11 @@ export const E_INVOICE_DOCUMENT_TYPES = [
   "other",
 ] as const;
 
-/** What a party identifier is; `scheme` keeps the source's own scheme code. */
+/**
+ * What a party identifier is; `scheme` keeps the source's own scheme code. A
+ * party lists each identifier once: one the file states twice (as its VAT
+ * number and as its electronic address) is listed under its kind.
+ */
 export const E_INVOICE_IDENTIFIER_KINDS = [
   "vat",
   "tax",
@@ -60,10 +64,12 @@ export const eInvoiceSchema = v.object({
       unitCode: stated,
       unitPrice: stated,
       /**
-       * The quantity the unit price is for, with its unit, when the file
+       * The quantity the unit price is for, with its unit code, when the file
        * states one (UBL BaseQuantity, CII BasisQuantity): 50 per 100 units.
        */
-      priceBasis: stated,
+      priceBasis: v.nullable(
+        v.object({ quantity: v.string(), unitCode: stated }),
+      ),
       vatRate: stated,
       vatCategory: stated,
       netAmount: stated,

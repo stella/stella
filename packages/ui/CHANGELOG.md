@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.84.1
+
+### Patch Changes
+
+- [#9245](https://github.com/stella/stella/pull/9245) [`98abe28`](https://github.com/stella/stella/commit/98abe2841a69b052cdfd34cfd8e42fe5d7a53105) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep a gutter between body columns of a compact table, as its header already has.
+
+## 0.84.0
+
+### Minor Changes
+
+- [#9242](https://github.com/stella/stella/pull/9242) [`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for ZIP archives.
+
 ## 0.83.0
 
 ### Minor Changes

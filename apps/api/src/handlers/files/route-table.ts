@@ -4,6 +4,7 @@ import dataBoxEndpoint from "@/api/handlers/files/data-box";
 import { eInvoicePreviewEndpoint } from "@/api/handlers/files/e-invoice";
 import emailReadingEndpoint from "@/api/handlers/files/email-reading";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
+import { readFilePartListEndpoint } from "@/api/handlers/files/part-list";
 import saveFilePartEndpoint from "@/api/handlers/files/part-save";
 import { readFileContentEndpoint } from "@/api/handlers/files/read-content";
 import {
@@ -20,6 +21,7 @@ import {
 import { signedDossierPreviewEndpoint } from "@/api/handlers/files/signed-dossier";
 import structuredDocumentPreviewEndpoint from "@/api/handlers/files/structured-document";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
+import { zipArchivePreviewEndpoint } from "@/api/handlers/files/zip-archive";
 import { routes } from "@/api/http/route";
 
 export const filesRoute = routes(
@@ -28,6 +30,7 @@ export const filesRoute = routes(
     "/structured-document/:fieldId": { GET: structuredDocumentPreviewEndpoint },
     "/e-invoice/:fieldId": { GET: eInvoicePreviewEndpoint },
     "/asic/:fieldId": { GET: asicPreviewEndpoint },
+    "/zip/:fieldId": { GET: zipArchivePreviewEndpoint },
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
     "/signed-dossier/:fieldId": { GET: signedDossierPreviewEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },
@@ -47,6 +50,7 @@ export const filesRoute = routes(
     "/marked/:fieldId": { GET: markedDownloadEndpoint },
     "/thumbnail/:fieldId": { GET: readFileThumbnailEndpoint },
     "/part/:fieldId/save": { POST: saveFilePartEndpoint },
+    "/parts/:fieldId": { GET: readFilePartListEndpoint },
   },
   { prefix: "/files/:workspaceId" },
 );

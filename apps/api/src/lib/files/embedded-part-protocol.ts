@@ -3,6 +3,9 @@ import * as v from "valibot";
 /** One file inside a stored container, read in the extraction worker. */
 export const EMBEDDED_PART_WORKER_MODE = "embedded-part";
 
+/** The files of a part that is itself a container, listed in the worker. */
+export const EMBEDDED_PART_LIST_WORKER_MODE = "embedded-part-list";
+
 export const EMBEDDED_PART_WORKER_EXIT = {
   unreadable: 20,
   rejected: 21,

@@ -1,4 +1,5 @@
 import type { EInvoice } from "@stll/api-contract/e-invoice";
+import { isVatAddressScheme } from "@stll/api-contract/e-invoice-codes";
 
 import {
   addressLines,
@@ -12,7 +13,7 @@ import {
   isIbanShaped,
   joined,
   type ParsedEInvoice,
-  quantityWithUnit,
+  statedQuantity,
   statedValues,
   textAt,
   textOf,
@@ -68,11 +69,15 @@ const party = (node: DocumentXmlNode | undefined): EInvoice["seller"] => {
               },
             ];
       }),
+      // The electronic address (BT-34, BT-49): a VAT number when its
+      // scheme is a VAT one, so it is listed once, as the VAT id.
       ...(textOf(endpoint) === null
         ? []
         : [
             {
-              kind: "other" as const,
+              kind: isVatAddressScheme(attributeOf(endpoint, "schemeID"))
+                ? ("vat" as const)
+                : ("other" as const),
               scheme: attributeOf(endpoint, "schemeID"),
               value: textOf(endpoint) ?? "",
             },
@@ -131,7 +136,7 @@ export const readUblInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
           quantity: textOf(quantity),
           unitCode: attributeOf(quantity, "unitCode"),
           unitPrice: textAt(line, "Price", "PriceAmount"),
-          priceBasis: quantityWithUnit(at(line, "Price", "BaseQuantity")),
+          priceBasis: statedQuantity(at(line, "Price", "BaseQuantity")),
           vatRate: textAt(item, "ClassifiedTaxCategory", "Percent"),
           vatCategory: textAt(item, "ClassifiedTaxCategory", "ID"),
           netAmount: textAt(line, "LineExtensionAmount"),

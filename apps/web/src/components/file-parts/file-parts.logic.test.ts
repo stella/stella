@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { FILE_PART_TEXT_PREVIEW_MAX_BYTES } from "@stll/api-contract/file-parts";
 
 import {
+  containedFileRows,
   decodeFilePartText,
   FILE_PART_PREVIEW_KIND,
   filePartActions,
+  filePartOpensInside,
   filePartPreviewKind,
   filePartViewId,
   isFilePartPdfPreviewKind,
@@ -160,5 +162,77 @@ describe("a text part's preview", () => {
     const decoded = decodeFilePartText({ buffer: bytes.buffer, charset: null });
     expect(decoded.truncated).toBe(true);
     expect(decoded.text).toHaveLength(FILE_PART_TEXT_PREVIEW_MAX_BYTES);
+  });
+});
+
+describe("a part that is itself a container", () => {
+  test.each([
+    ["message/rfc822", "podklady.eml", "member:2"],
+    ["application/zip", "starsi-spis.zip", "attachment:0"],
+    ["application/octet-stream", "DZ_5528193.zfo", "member:0/attachment:1"],
+    [
+      "application/pkcs7-mime",
+      "rozsudek.pdf.p7m",
+      "member:1/member:0/member:3",
+    ],
+  ] as const)(
+    "a %s named %s opens to the files inside it",
+    (mediaType, fileName, part) => {
+      expect(filePartOpensInside({ mediaType, fileName, part })).toBe(true);
+    },
+  );
+
+  test("a part that previews as itself, holds no parts or sits deepest does not", () => {
+    expect(
+      filePartOpensInside({
+        mediaType: "application/pdf",
+        fileName: "usneseni.pdf",
+        part: "member:0",
+      }),
+    ).toBe(false);
+    // An XML file may be an invoice, yet it previews as its text.
+    expect(
+      filePartOpensInside({
+        mediaType: "application/xml",
+        fileName: "faktura.xml",
+        part: "member:0",
+      }),
+    ).toBe(false);
+    expect(
+      filePartOpensInside({
+        mediaType: "application/zip",
+        fileName: "nejhlubsi.zip",
+        part: "member:0/member:0/member:0/member:0",
+      }),
+    ).toBe(false);
+  });
+
+  test("lists every file in the container's order, the ones that open as parts", () => {
+    const rows = containedFileRows([
+      {
+        fileName: "zaloba.pdf",
+        folder: "podani",
+        sizeBytes: 10,
+        part: {
+          part: "member:0",
+          fileName: "zaloba.pdf",
+          mediaType: "application/pdf",
+          sizeBytes: 10,
+        },
+        unavailable: null,
+      },
+      {
+        fileName: "posudek.pdf",
+        folder: null,
+        sizeBytes: 20,
+        part: null,
+        unavailable: "encrypted",
+      },
+    ]);
+    expect(rows.map(({ type, key }) => [type, key])).toEqual([
+      ["part", "member:0"],
+      ["unavailable", "unavailable:1"],
+    ]);
+    expect(rows.at(0)).toMatchObject({ part: { detail: "podani" } });
   });
 });

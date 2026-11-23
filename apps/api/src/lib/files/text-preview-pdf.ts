@@ -10,7 +10,7 @@
  * of consecutive columns, each band a table of its own with every record.
  *
  * Fonts are embedded as subsets shared by each run of
- * {@link PAGES_PER_FONT_SUBSET} pages, so the laid-out glyphs held at once
+ * `TextPages.pagesPerFontRun` pages, so the laid-out glyphs held at once
  * stay bounded however long the file is.
  */
 
@@ -57,8 +57,12 @@ const A4 = { width: 595.28, height: 841.89 } as const;
 const A4_LANDSCAPE = { width: A4.height, height: A4.width } as const;
 type PageSize = { width: number; height: number };
 
-/** Pages that share one subset of each embedded font. */
-const PAGES_PER_FONT_SUBSET = 50;
+/**
+ * How many pages a text preview lays out, and how many it holds before
+ * writing them out with one subset of each font: the pages held, and the
+ * layout garbage collected after them, are what its memory peaks with.
+ */
+export type TextPages = { pagesMax: number; pagesPerFontRun: number };
 
 const TEXT_FONT_SIZE = 10;
 /** 2 cm. */
@@ -93,8 +97,9 @@ const encoder = new TextEncoder();
  * Collects pages and writes them, in the order they are added, in runs that
  * share their font subsets.
  */
-const pageWriter = (pdf: PDF) => {
+const pageWriter = (pdf: PDF, pagesPerFontRun: number) => {
   let pending: PreviewPage[] = [];
+  let written = 0;
   const flush = () => {
     if (pending.length === 0) {
       return;
@@ -122,15 +127,23 @@ const pageWriter = (pdf: PDF) => {
       );
       page.dict.set("Resources", PdfDict.of({ Font: fonts }));
     }
+    written += pending.length;
     pending = [];
+    // Previews render only in the PDF worker, a process of their own: a full
+    // collection after each run returns the run's layout before the next
+    // one is set, instead of whenever the heap next grows.
+    Bun.gc(true);
   };
   return {
     add: (page: PreviewPage) => {
       pending.push(page);
-      if (pending.length >= PAGES_PER_FONT_SUBSET) {
+      if (pending.length >= pagesPerFontRun) {
         flush();
       }
     },
+    /** Pages added so far. */
+    count: () => written + pending.length,
+    flush,
     finish: async (): Promise<Uint8Array> => {
       flush();
       if (pdf.getPageCount() === 0) {
@@ -187,12 +200,62 @@ const layoutLines = (
 const baseFace = (fonts: StampFonts): StampFace =>
   fonts.faces[0] ?? panic("The preview fonts have no face");
 
-/** Plain text as an A4 PDF. */
+/**
+ * What a text preview lays out: the start of the file, and whether there is
+ * more of it (see `PdfRenderBudget.textSourceBytesMax`).
+ */
+export type TextPreviewSource = { text: string; shortened: boolean };
+
+/**
+ * Said on a page of its own at the end of a preview that does not show the
+ * whole file. A preview PDF is built once per file and shown to every
+ * reader, so it is in English, as the text of other derived previews is.
+ */
+export const PREVIEW_SHORTENED_NOTE =
+  "This preview shows only the beginning of the file. The original file is unchanged: download it to see all of it.";
+
+/** The shortened note set as an A4 page. */
+const shortenedNotePage = (fonts: StampFonts): PreviewPage => {
+  const base = baseFace(fonts);
+  const size = TEXT_FONT_SIZE;
+  let y = A4.height - TEXT_MARGIN;
+  const rows: PositionedStampRow[] = [];
+  for (const { row } of layoutLines(
+    textLayout(boldStampFonts(fonts)),
+    PREVIEW_SHORTENED_NOTE,
+    A4.width - 2 * TEXT_MARGIN,
+    size,
+  )) {
+    const { ascent, pitch } = rowMetrics(row, base);
+    rows.push({
+      color: PDF_NEUTRALS.black,
+      fontSize: size,
+      row,
+      x: TEXT_MARGIN,
+      y: y - ascent * size,
+    });
+    y -= pitch * size;
+  }
+  return { rows, size: A4, underlay: [] };
+};
+
+/** Adds the shortened note to `pdf` as its next page. */
+export const addShortenedNotePage = (pdf: PDF, fonts: StampFonts): void => {
+  const writer = pageWriter(pdf, 1);
+  writer.add(shortenedNotePage(fonts));
+  writer.flush();
+};
+
+/**
+ * Plain text as an A4 PDF of at most `pages.pagesMax` pages, then the
+ * shortened note when the file has more than that or than the text given.
+ */
 export const plainTextToPdf = async (
-  text: string,
+  { shortened, text }: TextPreviewSource,
   fonts: StampFonts,
+  { pagesMax, pagesPerFontRun }: TextPages,
 ): Promise<Uint8Array> => {
-  const writer = pageWriter(PdfDocument.create());
+  const writer = pageWriter(PdfDocument.create(), pagesPerFontRun);
   const layout = textLayout(fonts);
   const base = baseFace(fonts);
   const size = TEXT_FONT_SIZE;
@@ -200,43 +263,57 @@ export const plainTextToPdf = async (
   const width = A4.width - 2 * TEXT_MARGIN;
   let rows: PositionedStampRow[] = [];
   let y = top;
-  const endPage = () => {
+  /** Writes the page; `false` once the page limit is reached. */
+  const endPage = (): boolean => {
     writer.add({ rows, size: A4, underlay: [] });
     rows = [];
     y = top;
+    return writer.count() < pagesMax;
   };
-  for (const [sectionIndex, section] of text.split("\f").entries()) {
-    if (sectionIndex > 0) {
-      endPage();
-    }
-    for (const line of section.split(LINE_BREAK)) {
-      // Piece by piece, so a line of megabytes is placed as it is set
-      // instead of being held whole.
-      for (const piece of paragraphPieces(expandTabs(line))) {
-        for (const { row, rtl } of layoutParagraph(
-          layout,
-          piece,
-          toEms(width, size),
-        )) {
-          const { ascent, pitch } = rowMetrics(row, base);
-          if (rows.length > 0 && y - pitch * size < TEXT_MARGIN) {
-            endPage();
+  /** Sets the text page by page; `true` when the page limit cut it short. */
+  const place = (): boolean => {
+    for (const [sectionIndex, section] of text.split("\f").entries()) {
+      if (sectionIndex > 0 && !endPage()) {
+        return true;
+      }
+      for (const line of section.split(LINE_BREAK)) {
+        // Piece by piece, so a line of megabytes is placed as it is set
+        // instead of being held whole.
+        for (const piece of paragraphPieces(expandTabs(line))) {
+          for (const { row, rtl } of layoutParagraph(
+            layout,
+            piece,
+            toEms(width, size),
+          )) {
+            const { ascent, pitch } = rowMetrics(row, base);
+            if (
+              rows.length > 0 &&
+              y - pitch * size < TEXT_MARGIN &&
+              !endPage()
+            ) {
+              return true;
+            }
+            const rowWidth = toPoints(row.width, size);
+            rows.push({
+              color: PDF_NEUTRALS.black,
+              fontSize: size,
+              row,
+              x: rtl ? A4.width - TEXT_MARGIN - rowWidth : TEXT_MARGIN,
+              y: y - ascent * size,
+            });
+            y -= pitch * size;
           }
-          const rowWidth = toPoints(row.width, size);
-          rows.push({
-            color: PDF_NEUTRALS.black,
-            fontSize: size,
-            row,
-            x: rtl ? A4.width - TEXT_MARGIN - rowWidth : TEXT_MARGIN,
-            y: y - ascent * size,
-          });
-          y -= pitch * size;
         }
       }
     }
-  }
+    return false;
+  };
+  const cut = place();
   if (rows.length > 0) {
     endPage();
+  }
+  if (shortened || cut) {
+    writer.add(shortenedNotePage(fonts));
   }
   return await writer.finish();
 };
@@ -250,12 +327,20 @@ export const plainTextToPdf = async (
  * semicolon table; and a reading of one field per line counts no consistent
  * records, so it never outranks a table with a ragged record.
  */
-const readCsvRecords = (text: string): string[][] | null => {
+const readCsvRecords = ({
+  shortened,
+  text,
+}: TextPreviewSource): string[][] | null => {
   const source = text.replace(/^\uFEFF/u, "");
   let best: { rows: string[][]; consistent: number; width: number } | null =
     null;
   for (const delimiter of CSV_DELIMITERS) {
-    const parsed = parseCSVWithMetadata(source, { delimiter });
+    // A shortened file was cut at a line break, which may fall inside a
+    // quoted field: that record is the one the cut split.
+    const parsed = parseCSVWithMetadata(source, {
+      delimiter,
+      prefix: shortened,
+    });
     if (parsed.status !== CSV_PARSE_STATUS.SUCCESS) {
       continue;
     }
@@ -456,14 +541,20 @@ const takeLines = (cursor: CellCursor, height: number): PlacedCell => {
   };
 };
 
-/** CSV as a PDF table, or as plain text when it does not read as CSV. */
+/**
+ * CSV as a PDF table of at most `pages.pagesMax` pages, then
+ * the shortened note when the file has more; or as plain text when it does
+ * not read as CSV.
+ */
 export const csvToPdf = async (
-  text: string,
+  source: TextPreviewSource,
   fonts: StampFonts,
+  pages: TextPages,
 ): Promise<Uint8Array> => {
-  const records = readCsvRecords(text);
+  const { shortened } = source;
+  const records = readCsvRecords(source);
   if (records === null) {
-    return await plainTextToPdf(text, fonts);
+    return await plainTextToPdf(source, fonts, pages);
   }
   const base = baseFace(fonts);
   const layout = textLayout(fonts);
@@ -507,9 +598,12 @@ export const csvToPdf = async (
   );
   const total = natural.reduce((sum, width) => sum + width, 0);
   const size = total <= A4.width - 2 * TABLE_MARGIN ? A4 : A4_LANDSCAPE;
-  const writer = pageWriter(PdfDocument.create());
+  const writer = pageWriter(PdfDocument.create(), pages.pagesPerFontRun);
+  const full = () => writer.count() >= pages.pagesMax;
+  const bands = columnBands(natural, size.width - 2 * TABLE_MARGIN);
 
-  for (const band of columnBands(natural, size.width - 2 * TABLE_MARGIN)) {
+  /** One band's table; `true` when the page limit cut it short. */
+  const placeBand = (band: (typeof bands)[number]): boolean => {
     let x = TABLE_MARGIN;
     const columns: Column[] = band.map(({ column, width }) => {
       const placed = { column, width, x };
@@ -540,16 +634,30 @@ export const csvToPdf = async (
       }
       return page;
     };
+    // Without a repeated header, the header is the band's first record.
+    const recordCount = body.length + (repeatHeader ? 0 : 1);
+    const cellsAt = (index: number) => {
+      if (!repeatHeader && index === 0) {
+        return headerCells;
+      }
+      return cellsOf(
+        body[repeatHeader ? index : index - 1] ??
+          panic("A record index is inside the body"),
+        layout,
+      );
+    };
     let page = startPage();
-    for (const cells of (function* recordCells() {
-      if (!repeatHeader) {
-        yield headerCells;
+    /** Writes the page and starts the next; `false` at the page limit. */
+    const turnPage = () => {
+      writer.add(page.take());
+      if (full()) {
+        return false;
       }
-      for (const record of body) {
-        yield cellsOf(record, layout);
-      }
-    })()) {
-      const cursors = cells.map((cell) => cellCursor(cell, base));
+      page = startPage();
+      return true;
+    };
+    for (let index = 0; index < recordCount; index += 1) {
+      const cursors = cellsAt(index).map((cell) => cellCursor(cell, base));
       for (;;) {
         const rest =
           Math.max(0, ...cursors.map(remainingHeight)) + 2 * CELL_PADDING_Y;
@@ -559,22 +667,46 @@ export const csvToPdf = async (
           break;
         }
         if (page.hasBody()) {
-          writer.add(page.take());
-          page = startPage();
+          if (!turnPage()) {
+            return true;
+          }
           continue;
         }
         // Taller than a whole page: place what fits and carry the rest.
         const room = page.room();
         const placed = cursors.map((cursor) => takeLines(cursor, room));
         page.place(placed, cellsHeight(placed, base), false);
-        writer.add(page.take());
-        page = startPage();
-        if (cursors.every((cursor) => remainingHeight(cursor) === 0)) {
+        const placedWhole = cursors.every(
+          (cursor) => remainingHeight(cursor) === 0,
+        );
+        if (!turnPage()) {
+          return !placedWhole || index < recordCount - 1;
+        }
+        if (placedWhole) {
           break;
         }
       }
     }
     writer.add(page.take());
+    return false;
+  };
+
+  /** Sets every band, page by page; `true` when the page limit cut it short. */
+  const place = (): boolean => {
+    for (const [bandIndex, band] of bands.entries()) {
+      if (placeBand(band)) {
+        return true;
+      }
+      if (full() && bandIndex < bands.length - 1) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  const cut = place();
+  if (shortened || cut) {
+    writer.add(shortenedNotePage(fonts));
   }
   return await writer.finish();
 };

@@ -25,6 +25,7 @@ import { EInvoiceDetails } from "@/components/e-invoice-details";
 import { EmailReading } from "@/components/email-reading";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import {
+  ContainedFileList,
   FilePartList,
   FilePartOpenerProvider,
   FilePartRow,
@@ -51,6 +52,7 @@ import {
   isOffline,
   readDocumentFile,
   readDocumentPart,
+  readDocumentPartList,
   readOriginalDocumentFile,
 } from "@/state/document-file";
 import type { DocumentFile, LegalDocumentFile } from "@/state/document-file";
@@ -103,7 +105,8 @@ const openDocument = async ({
     file.value.viewer === "email" ||
     file.value.viewer === "dataBox" ||
     file.value.viewer === "e-invoice" ||
-    file.value.viewer === "structured-document"
+    file.value.viewer === "structured-document" ||
+    file.value.viewer === "zip"
   ) {
     return { status: "legalPreview", file: file.value };
   }
@@ -452,6 +455,7 @@ const LegalFilePreview = ({
   const signedFile = useTranslations("signedFile");
   const structuredDocument = useTranslations("structuredDocument");
   const eInvoice = useTranslations("eInvoice");
+  const fileParts = useTranslations("fileParts");
   const { fieldId, preview, viewer } = file;
   const { opening, open: openDelivered } = useOpenDeliveredFile(showPreview);
   const openOriginal = async () => {
@@ -478,6 +482,14 @@ const LegalFilePreview = ({
               }),
           );
         },
+        list: async (part: string) =>
+          await readDocumentPartList({
+            fetch,
+            source,
+            workspaceId,
+            fieldId,
+            part,
+          }),
       }
     : null;
 
@@ -551,6 +563,14 @@ const LegalFilePreview = ({
       }
       if (viewer === "e-invoice") {
         return <EInvoiceDetails preview={preview.value} />;
+      }
+      if (viewer === "zip") {
+        return (
+          <ContainedFileList
+            files={preview.value.files}
+            title={fileParts("files")}
+          />
+        );
       }
       if (viewer === "signed-dossier") {
         const { documents, signers } = preview.value;
@@ -641,6 +661,7 @@ const LegalFilePreview = ({
           : "unreadable",
       ),
       asic: signedFile("unreadable"),
+      zip: fileParts("archiveUnreadable"),
       cades: signedFile("unreadable"),
       email: t(requestFailure),
       "signed-dossier": signedFile("unreadable"),

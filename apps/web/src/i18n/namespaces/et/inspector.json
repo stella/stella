@@ -545,6 +545,8 @@
     "closeTab": "Sulge <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "See on pärandvormingus {format}-fail. Teisendamiseks salvesta see uuesti vormingus {replacementExtension}.",
+      "noPreviewDecodingOff": "See server ei loo {format}-piltidest eelvaateid. Avamiseks laadi fail alla.",
+      "noPreviewUnreadable": "Seda {format}-pilti ei saa eelvaate jaoks lugeda. Avamiseks laadi fail alla.",
       "unsupportedEncoding": "See dokument kasutab toetamata kodeeringut {encoding}, mistõttu ei saa seda teisendada.",
       "unsupportedField": "See dokument sisaldab välja {fieldType}, mida ei saa teisendada.",
       "unsupportedReference": "See dokument viitab välisele ressursile asukohas {element} {attribute}, mistõttu ei saa seda teisendada."
@@ -561,11 +563,20 @@
       "anonymization": "Anonüümimine"
     },
     "fileParts": {
+      "archiveUnreadable": "Arhiivi ei õnnestunud lugeda.",
       "back": "Tagasi loendisse",
       "download": "Laadi alla {fileName}",
+      "noFilesInside": "Selles pole ühtegi faili.",
       "noPreview": "Seda failitüüpi ei saa eelvaadata. Laadige see alla või salvestage toimikusse.",
       "notConverted": "Seda faili ei õnnestunud eelvaate jaoks teisendada. Laadige see alla või salvestage toimikusse.",
-      "open": "Ava {fileName}"
+      "open": "Ava {fileName}",
+      "unavailable": {
+        "encrypted": "Parooliga kaitstud, ei saa avada",
+        "link": "Viide teisele failile, seda ei avata",
+        "tooLarge": "Avamiseks liiga suur",
+        "unreadable": "Kahjustatud, ei saa avada",
+        "unsupported": "Pakitud viisil, mida ei saa avada"
+      }
     },
     "firstSourceReached": "See on esimene allikas.",
     "groups": {

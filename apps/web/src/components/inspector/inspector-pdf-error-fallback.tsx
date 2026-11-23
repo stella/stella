@@ -13,9 +13,15 @@ const LEGACY_FORMAT = {
   string
 >;
 
+/**
+ * Why a file has no preview, from the refusal its conversion recorded. The
+ * original is unchanged, so it offers the download when the host has one.
+ */
 export const ConversionRefusalFallback = ({
+  onDownload,
   refusal,
 }: {
+  onDownload?: (() => void) | undefined;
   refusal: ConversionRefusal;
 }) => {
   const t = useTranslations();
@@ -43,6 +49,16 @@ export const ConversionRefusalFallback = ({
         replacementExtension: refusal.replacementExtension,
       });
       break;
+    case "no_preview":
+      message =
+        refusal.cause === "decoding_off"
+          ? t("inspector.conversionRefusal.noPreviewDecodingOff", {
+              format: refusal.format,
+            })
+          : t("inspector.conversionRefusal.noPreviewUnreadable", {
+              format: refusal.format,
+            });
+      break;
     default:
       refusal satisfies never;
       return panic("Unexpected conversion refusal");
@@ -52,6 +68,12 @@ export const ConversionRefusalFallback = ({
     <div className="flex h-full min-h-0 min-w-0 flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <AlertTriangleIcon className="text-foreground-disabled size-8" />
       <p className="text-muted-foreground text-sm">{message}</p>
+      {onDownload === undefined ? null : (
+        <Button onClick={onDownload} size="sm" variant="outline">
+          <DownloadIcon />
+          {t("common.download")}
+        </Button>
+      )}
     </div>
   );
 };

@@ -109,6 +109,7 @@
     "paymentReference": "Viitenumber",
     "prepaidAmount": "Ettemakstud",
     "quantity": "Kogus ja ühik",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "supplier": "Müüja",
@@ -118,6 +119,14 @@
     "taxableAmount": "Maksustatav väärtus",
     "totals": "Kokkuvõte",
     "unitPrice": "Ühiku hind",
+    "units": {
+      "day": "{count, plural, one {{quantity} päev} other {{quantity} päeva}}",
+      "hour": "{count, plural, one {{quantity} tund} other {{quantity} tundi}}",
+      "month": "{count, plural, one {{quantity} kuu} other {{quantity} kuud}}",
+      "unit": "{count, plural, one {{quantity} tk} other {{quantity} tk}}",
+      "week": "{count, plural, one {{quantity} nädal} other {{quantity} nädalat}}",
+      "year": "{count, plural, one {{quantity} aasta} other {{quantity} aastat}}"
+    },
     "unreadable": "Arvet ei õnnestunud lugeda.",
     "vat": "Käibemaks",
     "vatBreakdown": "Käibemaksu jaotus"

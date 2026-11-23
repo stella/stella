@@ -109,6 +109,7 @@
     "paymentReference": "Mokėjimo paskirtis",
     "prepaidAmount": "Sumokėta avansu",
     "quantity": "Kiekis ir matavimo vienetas",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Pardavėjas",
@@ -118,6 +119,14 @@
     "taxableAmount": "Apmokestinamoji vertė",
     "totals": "Sumos",
     "unitPrice": "Vieneto kaina",
+    "units": {
+      "day": "{count, plural, one {{quantity} diena} few {{quantity} dienos} many {{quantity} dienos} other {{quantity} dienų}}",
+      "hour": "{count, plural, one {{quantity} valanda} few {{quantity} valandos} many {{quantity} valandos} other {{quantity} valandų}}",
+      "month": "{count, plural, one {{quantity} mėnuo} few {{quantity} mėnesiai} many {{quantity} mėnesio} other {{quantity} mėnesių}}",
+      "unit": "{count, plural, one {{quantity} vnt.} few {{quantity} vnt.} many {{quantity} vnt.} other {{quantity} vnt.}}",
+      "week": "{count, plural, one {{quantity} savaitė} few {{quantity} savaitės} many {{quantity} savaitės} other {{quantity} savaičių}}",
+      "year": "{count, plural, one {{quantity} metai} few {{quantity} metai} many {{quantity} metų} other {{quantity} metų}}"
+    },
     "unreadable": "Nepavyko perskaityti sąskaitos faktūros.",
     "vat": "PVM",
     "vatBreakdown": "PVM suvestinė"

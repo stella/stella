@@ -503,6 +503,7 @@
     "paymentReference": "Verwendungszweck",
     "prepaidAmount": "Bereits gezahlt",
     "quantity": "Menge und Einheit",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "registrationNumber": "Registernummer",
@@ -514,6 +515,14 @@
     "taxableAmount": "Bemessungsgrundlage",
     "totals": "Summen",
     "unitPrice": "Einzelpreis",
+    "units": {
+      "day": "{count, plural, one {{quantity} Tag} other {{quantity} Tage}}",
+      "hour": "{count, plural, one {{quantity} Stunde} other {{quantity} Stunden}}",
+      "month": "{count, plural, one {{quantity} Monat} other {{quantity} Monate}}",
+      "unit": "{count, plural, one {{quantity} Stk.} other {{quantity} Stk.}}",
+      "week": "{count, plural, one {{quantity} Woche} other {{quantity} Wochen}}",
+      "year": "{count, plural, one {{quantity} Jahr} other {{quantity} Jahre}}"
+    },
     "unreadable": "Die Rechnung konnte nicht gelesen werden.",
     "vat": "USt.",
     "vatBreakdown": "USt.-Aufschlüsselung",
@@ -534,8 +543,19 @@
     "type": "Typ"
   },
   "fileParts": {
+    "archiveUnreadable": "Das Archiv konnte nicht gelesen werden.",
     "attachments": "Anhänge",
+    "files": "Dateien",
+    "insideFailed": "Die Dateien darin konnten nicht geladen werden. Zum erneuten Versuch tippen.",
+    "noFilesInside": "Darin sind keine Dateien.",
     "open": "{fileName} ({details}) öffnen",
+    "unavailable": {
+      "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",
+      "link": "Verweis auf eine andere Datei, wird nicht geöffnet",
+      "tooLarge": "Zu groß zum Öffnen",
+      "unreadable": "Beschädigt, lässt sich nicht öffnen",
+      "unsupported": "Mit einem Verfahren komprimiert, das sich nicht öffnen lässt"
+    },
     "unnamed": "Unbenannte Datei"
   },
   "header": {

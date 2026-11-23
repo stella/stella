@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
+import { filePartListSchema } from "@stll/api-contract/file-parts";
 
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
@@ -52,7 +53,45 @@ const filePartKeys = {
     fieldId,
     part,
   ],
+  list: ({ workspaceId, fieldId, part }: FilePartKey) => [
+    ...filesKeys.all(),
+    "part-list",
+    workspaceId,
+    fieldId,
+    part,
+  ],
 };
+
+/**
+ * The files of a part that is itself a container (an email in an archive,
+ * an archive in a data-box message), each addressed through `part`.
+ */
+export const filePartListOptions = (key: FilePartKey) =>
+  resourceQueryOptions(
+    queryOptions({
+      retry: false,
+      queryKey: filePartKeys.list(key),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .files({ workspaceId: toSafeId<"workspace">(key.workspaceId) })
+          .parts({ fieldId: toSafeId<"field">(key.fieldId) })
+          .get({ query: { part: key.part }, fetch: { signal } });
+        return parseSuccessBody(
+          filePartListSchema,
+          unwrapApiResponse(response),
+          "A part's file list must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: key.workspaceId },
+    },
+  );
 
 /** A part's bytes for an in-place preview, cached like a file's own. */
 export const filePartContentOptions = (key: FilePartKey) =>

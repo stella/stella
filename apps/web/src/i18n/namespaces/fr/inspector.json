@@ -545,6 +545,8 @@
     "closeTab": "Fermer <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Il s’agit d’un ancien fichier {format}. Enregistrez-le au format {replacementExtension} pour le convertir.",
+      "noPreviewDecodingOff": "Ce serveur ne crée pas d’aperçu des images {format}. Téléchargez le fichier pour l’ouvrir.",
+      "noPreviewUnreadable": "Cette image {format} ne peut pas être lue pour créer un aperçu. Téléchargez le fichier pour l’ouvrir.",
       "unsupportedEncoding": "Ce document utilise l’encodage {encoding}, qui n’est pas pris en charge, et ne peut donc pas être converti.",
       "unsupportedField": "Ce document contient un champ {fieldType} qui ne peut pas être converti.",
       "unsupportedReference": "Ce document fait référence à une ressource externe dans {element} {attribute} et ne peut donc pas être converti."
@@ -561,11 +563,20 @@
       "anonymization": "Anonymisation"
     },
     "fileParts": {
+      "archiveUnreadable": "Impossible de lire l’archive.",
       "back": "Retour à la liste",
       "download": "Télécharger {fileName}",
+      "noFilesInside": "Aucun fichier à l’intérieur.",
       "noPreview": "Ce type de fichier n’a pas d’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
       "notConverted": "Ce fichier n’a pas pu être converti pour l’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
-      "open": "Ouvrir {fileName}"
+      "open": "Ouvrir {fileName}",
+      "unavailable": {
+        "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
+        "link": "Lien vers un autre fichier, non ouvert",
+        "tooLarge": "Trop volumineux pour être ouvert",
+        "unreadable": "Endommagé, impossible à ouvrir",
+        "unsupported": "Compressé d’une manière impossible à ouvrir"
+      }
     },
     "firstSourceReached": "Il s’agit de la première source.",
     "groups": {

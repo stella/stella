@@ -545,6 +545,8 @@
     "closeTab": "Zavrieť <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
+      "noPreviewDecodingOff": "Tento server nevytvára náhľady obrázkov {format}. Ak chcete súbor otvoriť, stiahnite si ho.",
+      "noPreviewUnreadable": "Tento obrázok {format} sa nedá načítať na náhľad. Ak chcete súbor otvoriť, stiahnite si ho.",
       "unsupportedEncoding": "Tento dokument používa nepodporované kódovanie {encoding}, preto ho nemožno konvertovať.",
       "unsupportedField": "Tento dokument obsahuje pole {fieldType}, ktoré nemožno konvertovať.",
       "unsupportedReference": "Tento dokument odkazuje na externý prostriedok v {element} {attribute}, preto ho nemožno konvertovať."
@@ -561,11 +563,20 @@
       "anonymization": "Anonymizácia"
     },
     "fileParts": {
+      "archiveUnreadable": "Archív sa nepodarilo prečítať.",
       "back": "Späť na zoznam",
       "download": "Stiahnuť {fileName}",
+      "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
       "noPreview": "Tento typ súboru nemá náhľad. Stiahnite si ho alebo ho uložte do spisu.",
       "notConverted": "Tento súbor sa nepodarilo previesť na náhľad. Stiahnite si ho alebo ho uložte do spisu.",
-      "open": "Otvoriť {fileName}"
+      "open": "Otvoriť {fileName}",
+      "unavailable": {
+        "encrypted": "Chránené heslom, nedá sa otvoriť",
+        "link": "Odkaz na iný súbor, neotvára sa",
+        "tooLarge": "Príliš veľký, nedá sa otvoriť",
+        "unreadable": "Poškodený, nedá sa otvoriť",
+        "unsupported": "Komprimované spôsobom, ktorý sa nedá otvoriť"
+      }
     },
     "firstSourceReached": "Toto je prvý zdroj.",
     "groups": {

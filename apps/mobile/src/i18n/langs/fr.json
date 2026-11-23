@@ -503,6 +503,7 @@
     "paymentReference": "Référence de paiement",
     "prepaidAmount": "Acompte versé",
     "quantity": "Quantité et unité",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "registrationNumber": "Numéro d’enregistrement",
@@ -514,6 +515,14 @@
     "taxableAmount": "Base d’imposition",
     "totals": "Totaux",
     "unitPrice": "Prix unitaire",
+    "units": {
+      "day": "{count, plural, one {{quantity} jour} many {{quantity} jours} other {{quantity} jours}}",
+      "hour": "{count, plural, one {{quantity} heure} many {{quantity} heures} other {{quantity} heures}}",
+      "month": "{count, plural, one {{quantity} mois} many {{quantity} mois} other {{quantity} mois}}",
+      "unit": "{count, plural, one {{quantity} unité} many {{quantity} unités} other {{quantity} unités}}",
+      "week": "{count, plural, one {{quantity} semaine} many {{quantity} semaines} other {{quantity} semaines}}",
+      "year": "{count, plural, one {{quantity} an} many {{quantity} ans} other {{quantity} ans}}"
+    },
     "unreadable": "Impossible de lire la facture.",
     "vat": "TVA",
     "vatBreakdown": "Ventilation de la TVA",
@@ -534,8 +543,19 @@
     "type": "Type"
   },
   "fileParts": {
+    "archiveUnreadable": "Impossible de lire l’archive.",
     "attachments": "Pièces jointes",
+    "files": "Fichiers",
+    "insideFailed": "Impossible de charger les fichiers qu’il contient. Touchez pour réessayer.",
+    "noFilesInside": "Aucun fichier à l’intérieur.",
     "open": "Ouvrir {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
+      "link": "Lien vers un autre fichier, non ouvert",
+      "tooLarge": "Trop volumineux pour être ouvert",
+      "unreadable": "Endommagé, impossible à ouvrir",
+      "unsupported": "Compressé d’une manière impossible à ouvrir"
+    },
     "unnamed": "Fichier sans nom"
   },
   "header": {

@@ -1,19 +1,34 @@
 /**
- * Reads one file inside a stored container in the extraction worker: an
- * ASiC or BDOC member, a data-box message's file, a signed container's
- * document, the document a signed `.p7m` wraps, or an invoice's attachment.
- * The part is typed by `partMediaType`, as its file's preview lists it, and
- * scanned exactly as an upload of its bytes would be before it leaves the
- * worker.
+ * Reads the files inside a stored container in the extraction worker: an
+ * ASiC or BDOC member, a file in a ZIP archive, a data-box message's file, a
+ * signed container's document, the document a signed `.p7m` wraps, an
+ * invoice's or an email's attachment. A part that is itself a container is
+ * read in turn, down the part's path (`member:2/attachment:0`): every part
+ * on the way is typed by `partMediaType`, as its container's list gives it,
+ * and scanned exactly as an upload of its bytes would be.
  */
 import { panic, Result } from "better-result";
 
-import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
-import { FILE_PART_KINDS, type FilePart } from "@stll/api-contract/file-parts";
 import {
-  LEGAL_FILE_FORMATS,
-  type LegalFileFormatKind,
-} from "@stll/api-contract/legal-file-formats";
+  EMAIL_CITATION_BLOCK_MODE,
+  type EmailTextAttachmentCharset,
+} from "@stll/api-contract";
+import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
+import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import {
+  FILE_PART_KINDS_BY_FORMAT,
+  type FilePartContainerFormat,
+  filePartContainerFormat,
+} from "@stll/api-contract/file-part-containers";
+import {
+  type ContainedFile,
+  FILE_PART_KINDS,
+  type FilePart,
+  filePartId,
+  type FilePartKind,
+  type FilePartUnavailableReason,
+} from "@stll/api-contract/file-parts";
+import { LEGAL_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
 
 import type { DataBoxMessageParseError } from "@/api/lib/email/correspondence/data-box/zfo";
 import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
@@ -32,6 +47,11 @@ import {
   invoiceAttachmentPart,
   readStoredInvoice,
 } from "@/api/lib/files/e-invoice-worker";
+import {
+  buildEmailPreview,
+  type EmailParseError,
+  parseEmail,
+} from "@/api/lib/files/email-to-html";
 import type { EmbeddedPart } from "@/api/lib/files/embedded-part-protocol";
 import { detectEmbeddedPayload } from "@/api/lib/files/embedded-payload-format";
 import { type P7mParseError, parseP7m } from "@/api/lib/files/p7m";
@@ -40,12 +60,17 @@ import {
   readSignedDossier,
   type SignedDossierReadError,
 } from "@/api/lib/files/signed-dossier-worker";
+import {
+  readZipArchive,
+  readZipArchiveFile,
+} from "@/api/lib/files/zip-archive";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
-type EmbeddedPartError =
+export type EmbeddedPartError =
   | AsicParseError
   | DataBoxMessageParseError
   | DocumentPackageError
+  | EmailParseError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -57,72 +82,172 @@ export type PartCandidate = {
   bytes: Uint8Array;
   /** What the container states the part is; a claim the bytes may overrule. */
   statedMimeType: string | null;
+  /** The charset the container states for the part's text, if any. */
+  charset?: EmailTextAttachmentCharset | null;
 };
 
-type CandidateResult = Result<PartCandidate | null, EmbeddedPartError>;
+/**
+ * One position in a container's list of parts of one kind: a part that
+ * opens, a file the container lists but that does not open, or a position
+ * the container's preview does not list (an email's inline image).
+ */
+type ContainerSlot =
+  | {
+      readonly type: "part";
+      readonly candidate: PartCandidate;
+      readonly folder: string | null;
+    }
+  | {
+      readonly type: "unavailable";
+      readonly fileName: string;
+      readonly folder: string | null;
+      readonly sizeBytes: number;
+      readonly reason: FilePartUnavailableReason;
+    }
+  | { readonly type: "unlisted" };
 
-const asicMember = async (
-  fileBytes: Uint8Array,
-  containerMimeType: string,
-  index: number,
-): Promise<CandidateResult> => {
+type SlotsResult = Result<ContainerSlot[], EmbeddedPartError>;
+
+const part = (
+  candidate: PartCandidate,
+  folder: string | null = null,
+): ContainerSlot => ({ type: "part", candidate, folder });
+
+/** A container read so far: the stored file, or a part of it. */
+type Container = {
+  readonly format: FilePartContainerFormat;
+  /** The media type its format's reader takes. */
+  readonly mimeType: string;
+  readonly fileName: string;
+  readonly bytes: Uint8Array;
+};
+
+const legalMimeType = (format: FilePartContainerFormat) =>
+  LEGAL_FILE_FORMATS.find(({ kind }) => kind === format)?.mimeType;
+
+/**
+ * The container a file is, from the media type it is read as and its name:
+ * the stored file's own format type first, else what the type and the name
+ * say together, as for a part whose bytes do not show its format.
+ */
+export const containerOf = ({
+  bytes,
+  mimeType,
+  fileName,
+}: {
+  bytes: Uint8Array;
+  mimeType: string;
+  fileName: string;
+}): Container | null => {
+  const email = resolveEmailMimeType({ mimeType, fileName });
+  // The type and the name together: a part declared as a generic ZIP or
+  // XML type that its name says is an ASiC container is one, and one its
+  // name says is an Office document is no container.
+  const format = filePartContainerFormat(mimeType, fileName);
+  if (format === null) {
+    return null;
+  }
+  if (format === "email") {
+    return email === null ? null : { format, mimeType: email, fileName, bytes };
+  }
+  const readAs = legalMimeType(format);
+  return readAs === undefined
+    ? null
+    : { format, mimeType: readAs, fileName, bytes };
+};
+
+const asicMembers = async ({
+  bytes,
+  mimeType,
+}: Container): Promise<SlotsResult> => {
   const format = ASIC_FILE_FORMATS.find(
-    ({ mimeType }) => mimeType === containerMimeType,
+    (candidate) => candidate.mimeType === mimeType,
   );
   if (format === undefined) {
-    return Result.ok(null);
+    return Result.ok([]);
   }
-  const container = await readAsicContainer(fileBytes, format.mimeType);
+  const container = await readAsicContainer(bytes, format.mimeType);
   if (container.isErr()) {
     return Result.err(container.error);
   }
-  const member = container.value.members.at(index);
   return Result.ok(
-    member === undefined
-      ? null
-      : {
-          fileName: member.fileName,
-          bytes: member.bytes,
-          statedMimeType: null,
-        },
+    container.value.members.map((member) =>
+      part({
+        fileName: member.fileName,
+        bytes: member.bytes,
+        statedMimeType: null,
+      }),
+    ),
   );
 };
 
-const dataBoxFile = (fileBytes: Uint8Array, index: number): CandidateResult => {
-  const message = parseDataBoxMessage(fileBytes);
-  if (message.isErr()) {
-    return Result.err(message.error);
-  }
-  const file = message.value.files.at(index);
-  return Result.ok(
-    file === undefined
-      ? null
-      : {
-          fileName: sanitizeFilenamePreservingExtension(file.fileName),
-          bytes: file.bytes,
-          statedMimeType: file.mimeType,
-        },
+const zipFiles = async ({ bytes }: Container): Promise<SlotsResult> =>
+  (await readZipArchive(bytes)).map((files) =>
+    files.map((file): ContainerSlot => {
+      // A stated name is shown, never used as a path; it is listed and
+      // delivered as the safe name its part link gives it.
+      const fileName = sanitizeFilenamePreservingExtension(file.fileName);
+      const unavailable = (
+        reason: FilePartUnavailableReason,
+      ): ContainerSlot => ({
+        type: "unavailable",
+        fileName,
+        folder: file.folder,
+        sizeBytes: file.sizeBytes,
+        reason,
+      });
+      if (file.unavailable !== null) {
+        return unavailable(file.unavailable);
+      }
+      const read = readZipArchiveFile(file);
+      return read.isErr()
+        ? unavailable("unreadable")
+        : part(
+            {
+              fileName,
+              bytes: new Uint8Array(read.value),
+              statedMimeType: null,
+            },
+            file.folder,
+          );
+    }),
   );
-};
 
-const dossierDocument = async (
-  fileBytes: Uint8Array,
-  containerMimeType: string,
-  index: number,
-): Promise<CandidateResult> => {
-  const dossier = await readSignedDossier(fileBytes, containerMimeType);
+const dataBoxFiles = ({ bytes }: Container): SlotsResult =>
+  parseDataBoxMessage(bytes).map(({ files }) =>
+    files.map((file) =>
+      part({
+        fileName: sanitizeFilenamePreservingExtension(file.fileName),
+        bytes: file.bytes,
+        statedMimeType: file.mimeType,
+      }),
+    ),
+  );
+
+const dossierDocuments = async ({
+  bytes,
+  mimeType,
+}: Container): Promise<SlotsResult> => {
+  const dossier = await readSignedDossier(bytes, mimeType);
   if (dossier.isErr()) {
     return Result.err(dossier.error);
   }
-  const document = dossier.value.documents.at(index);
   return Result.ok(
-    document === undefined || document.opaque === true
-      ? null
-      : {
-          fileName: document.fileName,
-          bytes: document.bytes,
-          statedMimeType: null,
-        },
+    dossier.value.documents.map((document): ContainerSlot =>
+      document.opaque === true
+        ? {
+            type: "unavailable",
+            fileName: document.fileName,
+            folder: null,
+            sizeBytes: document.bytes.byteLength,
+            reason: "unreadable",
+          }
+        : part({
+            fileName: document.fileName,
+            bytes: document.bytes,
+            statedMimeType: null,
+          }),
+    ),
   );
 };
 
@@ -146,102 +271,140 @@ export const cadesContentCandidate = (
   });
 };
 
-const invoiceAttachment = async (
-  fileBytes: Uint8Array,
-  containerMimeType: string,
-  index: number,
-): Promise<CandidateResult> => {
-  const invoice = await readStoredInvoice(fileBytes, containerMimeType);
+const invoiceAttachments = async ({
+  bytes,
+  mimeType,
+}: Container): Promise<SlotsResult> => {
+  const invoice = await readStoredInvoice(bytes, mimeType);
   if (invoice.isErr()) {
     return Result.err(invoice.error);
   }
-  const attachment = invoice.value?.attachments.at(index);
-  if (attachment === undefined) {
-    return Result.ok(null);
+  // An XML file that is not an invoice has no attachments.
+  if (invoice.value === null) {
+    return Result.ok([]);
   }
-  return invoiceAttachmentPart(attachment).map(({ fileName, bytes }) => ({
-    fileName,
-    bytes,
-    statedMimeType: null,
-  }));
+  // One attachment that does not decode does not keep the others closed.
+  return Result.ok(
+    invoice.value.attachments.map((attachment): ContainerSlot => {
+      const read = invoiceAttachmentPart(attachment);
+      return read.isErr()
+        ? {
+            type: "unavailable",
+            fileName: sanitizeFilenamePreservingExtension(
+              attachment.fileName.split("/").at(-1)?.trim() || "attachment",
+            ),
+            folder: null,
+            sizeBytes: 0,
+            reason: "unreadable",
+          }
+        : part({ ...read.value, statedMimeType: null });
+    }),
+  );
 };
 
-const candidateOf = async ({
-  fileBytes,
-  containerMimeType,
-  containerName,
-  part: { kind, index },
-}: {
-  fileBytes: Uint8Array;
-  containerMimeType: string;
-  containerName: string;
-  part: FilePart;
-}): Promise<CandidateResult> => {
-  const format: LegalFileFormatKind | undefined = LEGAL_FILE_FORMATS.find(
-    ({ mimeType }) => mimeType === containerMimeType,
-  )?.kind;
+/** An email's attachments at their positions, as its preview lists them. */
+const emailAttachments = async ({
+  bytes,
+  mimeType,
+}: Container): Promise<SlotsResult> => {
+  const parsed = await parseEmail(bytes.slice().buffer, mimeType);
+  if (parsed.isErr()) {
+    return Result.err(parsed.error);
+  }
+  const listed = new Set(
+    buildEmailPreview(parsed.value, {
+      citationBlockMode: EMAIL_CITATION_BLOCK_MODE.omit,
+    }).attachments,
+  );
+  return Result.ok(
+    parsed.value.attachments.map((attachment, index): ContainerSlot => {
+      const fileName = sanitizeFilenamePreservingExtension(
+        attachment.fileName ?? "attachment",
+      );
+      if (!listed.has(index)) {
+        return { type: "unlisted" };
+      }
+      return attachment.bytes.byteLength === 0
+        ? {
+            type: "unavailable",
+            fileName,
+            folder: null,
+            sizeBytes: 0,
+            reason: "unreadable",
+          }
+        : part({
+            fileName,
+            bytes: attachment.bytes,
+            statedMimeType: attachment.mimeType,
+            charset: attachment.charset,
+          });
+    }),
+  );
+};
+
+/** The container's parts of one kind, at their positions. */
+const containerSlots = async (
+  container: Container,
+  kind: FilePartKind,
+): Promise<SlotsResult> => {
+  const kinds: readonly FilePartKind[] =
+    FILE_PART_KINDS_BY_FORMAT[container.format];
+  if (!kinds.includes(kind)) {
+    return Result.ok([]);
+  }
+  const { format } = container;
   switch (format) {
     case "asicE":
     case "asicS":
-      return kind === FILE_PART_KINDS.member
-        ? await asicMember(fileBytes, containerMimeType, index)
-        : Result.ok(null);
+      return await asicMembers(container);
+    case "zip":
+      return await zipFiles(container);
     case "dataBox":
-      return kind === FILE_PART_KINDS.attachment
-        ? dataBoxFile(fileBytes, index)
-        : Result.ok(null);
+      return dataBoxFiles(container);
     case "eAkta":
     case "zep":
     case "xadesZep":
-      return kind === FILE_PART_KINDS.document
-        ? await dossierDocument(fileBytes, containerMimeType, index)
-        : Result.ok(null);
-    case "cades":
+      return await dossierDocuments(container);
+    case "cades": {
       if (kind === FILE_PART_KINDS.content) {
-        return index === 0
-          ? cadesContentCandidate(fileBytes, containerName)
-          : Result.ok(null);
+        return cadesContentCandidate(container.bytes, container.fileName).map(
+          (candidate) => [part(candidate)],
+        );
       }
-      // A signed `.xml.p7m` invoice lists its attachments.
-      return kind === FILE_PART_KINDS.attachment
-        ? await invoiceAttachment(fileBytes, containerMimeType, index)
-        : Result.ok(null);
+      // A signed `.xml.p7m` invoice lists its attachments; any other signed
+      // document has none.
+      const attachments = await invoiceAttachments(container);
+      return attachments.isErr() &&
+        attachments.error._tag === "DocumentPackageError"
+        ? Result.ok([])
+        : attachments;
+    }
     case "isdoc":
     case "isdocx":
     case "xml":
-      return kind === FILE_PART_KINDS.attachment
-        ? await invoiceAttachment(fileBytes, containerMimeType, index)
-        : Result.ok(null);
+      return await invoiceAttachments(container);
+    case "email":
+      return await emailAttachments(container);
     case "uyap":
     case "ofd":
-    case undefined:
-      return Result.ok(null);
+      return Result.ok([]);
     default:
       format satisfies never;
-      return panic("Unhandled legal file format");
+      return panic("Unhandled file part container");
   }
 };
 
-/** The part a container holds at `part`, typed and scanned; null when none. */
-export const extractEmbeddedPart = async (options: {
-  fileBytes: Uint8Array;
-  containerMimeType: string;
-  /** The stored file's name, which a signed envelope's document takes. */
-  containerName: string;
-  part: FilePart;
-}): Promise<Result<EmbeddedPart | null, EmbeddedPartError>> => {
-  const candidate = await candidateOf(options);
-  if (candidate.isErr()) {
-    return Result.err(candidate.error);
-  }
-  if (candidate.value === null) {
-    return Result.ok(null);
-  }
-  const { fileName, bytes, statedMimeType } = candidate.value;
+/** A part typed and scanned, ready to deliver or to read in turn. */
+const typedPart = async (
+  candidate: PartCandidate,
+): Promise<
+  Result<EmbeddedPart, FileScanFailedError | FileScanRejectedError>
+> => {
+  const { fileName, bytes, statedMimeType, charset = null } = candidate;
   const mimeType = await partMediaType({
     bytes,
     stated: statedMimeType,
-    charset: null,
+    charset,
     fileName,
   });
   const scanned = await scanContainerMember({ fileName, bytes }, mimeType);
@@ -252,4 +415,115 @@ export const extractEmbeddedPart = async (options: {
         mimeType,
         bytes: new Uint8Array(scanned.value.bytes),
       });
+};
+
+type StoredContainer = {
+  fileBytes: Uint8Array;
+  containerMimeType: string;
+  /** The stored file's name, which a signed envelope's document takes. */
+  containerName: string;
+};
+
+const outermostFirst = (target: FilePart): FilePart[] => [
+  ...(target.within === undefined ? [] : outermostFirst(target.within)),
+  target,
+];
+
+/** The part a container holds at `part`, typed and scanned; null when none. */
+export const extractEmbeddedPart = async ({
+  fileBytes,
+  containerMimeType,
+  containerName,
+  part: target,
+}: StoredContainer & { part: FilePart }): Promise<
+  Result<EmbeddedPart | null, EmbeddedPartError>
+> => {
+  let file: EmbeddedPart = {
+    fileName: containerName,
+    mimeType: containerMimeType,
+    bytes: fileBytes,
+  };
+  for (const { kind, index } of outermostFirst(target)) {
+    const container = containerOf(file);
+    if (container === null) {
+      return Result.ok(null);
+    }
+    const slots = await containerSlots(container, kind);
+    if (slots.isErr()) {
+      return Result.err(slots.error);
+    }
+    const slot = slots.value.at(index);
+    if (slot?.type !== "part") {
+      return Result.ok(null);
+    }
+    const typed = await typedPart(slot.candidate);
+    if (typed.isErr()) {
+      return Result.err(typed.error);
+    }
+    file = typed.value;
+  }
+  return Result.ok(file);
+};
+
+/**
+ * The files of the part at `part`, which is itself a container, as its own
+ * preview would list them: each typed as reading it delivers it, addressed
+ * by the path through `part`. Null when the part is not there or holds no
+ * parts.
+ */
+export const listEmbeddedParts = async (
+  options: StoredContainer & { part: FilePart },
+): Promise<Result<ContainedFile[] | null, EmbeddedPartError>> => {
+  const read = await extractEmbeddedPart(options);
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  const container = read.value === null ? null : containerOf(read.value);
+  if (container === null) {
+    return Result.ok(null);
+  }
+  const files: ContainedFile[] = [];
+  for (const kind of FILE_PART_KINDS_BY_FORMAT[container.format]) {
+    const slots = await containerSlots(container, kind);
+    if (slots.isErr()) {
+      return Result.err(slots.error);
+    }
+    for (const [index, slot] of slots.value.entries()) {
+      if (slot.type === "unlisted") {
+        continue;
+      }
+      if (slot.type === "unavailable") {
+        files.push({
+          fileName: slot.fileName,
+          folder: slot.folder,
+          sizeBytes: slot.sizeBytes,
+          part: null,
+          unavailable: slot.reason,
+        });
+        continue;
+      }
+      const { candidate } = slot;
+      const fileName = sanitizeFilenamePreservingExtension(candidate.fileName);
+      files.push({
+        fileName: candidate.fileName,
+        folder: slot.folder,
+        sizeBytes: candidate.bytes.byteLength,
+        part: {
+          part: filePartId({ kind, index, within: options.part }),
+          fileName,
+          mediaType: await partMediaType({
+            bytes: candidate.bytes,
+            stated: candidate.statedMimeType,
+            charset: candidate.charset ?? null,
+            fileName: candidate.fileName,
+          }),
+          sizeBytes: candidate.bytes.byteLength,
+        },
+        unavailable: null,
+        // A text part decodes with the charset its container declares.
+        charset: candidate.charset ?? null,
+      });
+    }
+  }
+  return Result.ok(files);
 };

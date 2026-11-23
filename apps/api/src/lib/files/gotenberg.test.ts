@@ -4,6 +4,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 
 import { ZipArchive } from "@stll/docx-core/zip";
 import { failureGradeOf, readFailureBrand } from "@stll/errors";
+import { waitFor } from "@stll/test-kit";
 
 import {
   DERIVATIVE_REFUSAL,
@@ -19,6 +20,7 @@ import {
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
 import { LIMITS } from "@/api/lib/limits";
+import { readWorkPoolMetrics } from "@/api/lib/load/work-admission";
 import { logger } from "@/api/lib/observability/logger";
 import {
   DOCX_MIME_TYPE,
@@ -35,6 +37,7 @@ import {
 import {
   declaredPng,
   declaredSizePng,
+  heicFixture,
   sixteenBitPng,
   splitBmp,
   splitGif,
@@ -485,6 +488,92 @@ const convertWithConverterStub = async (
 const pageCountOf = async (buffer: ArrayBuffer) =>
   (await PDF.load(new Uint8Array(buffer))).getPageCount();
 
+describe("HEIC/HEIF photos", () => {
+  const noPreview = (cause: "decoding_off" | "unreadable", format = "HEIC") =>
+    ({ kind: "no_preview", format, cause }) as const;
+
+  const refusalOf = (
+    result: Awaited<ReturnType<typeof convertToPdf>>,
+  ): unknown =>
+    Result.isError(result) && result.error instanceof ConversionInputError
+      ? result.error.reason
+      : null;
+
+  test.each([
+    ["image/heic", "HEIC"],
+    ["image/heic-sequence", "HEIC"],
+    ["image/heif", "HEIF"],
+    ["image/heif-sequence", "HEIF"],
+  ] as const)(
+    "with decoding off, a %s file has no preview and nothing decodes it",
+    async (mimeType, format) => {
+      const { failures, result, urls } = await convertWithConverterStub(
+        async () =>
+          await convertToPdf(fileOf(heicFixture("grid.heic"), mimeType), {
+            heifDecoding: false,
+          }),
+      );
+
+      expect(urls).toEqual([]);
+      expect(failures).toEqual([]);
+      expect(refusalOf(result)).toEqual(noPreview("decoding_off", format));
+    },
+  );
+
+  test("with decoding on, a photo renders as one page in the worker", async () => {
+    const { failures, result, urls } = await convertWithConverterStub(
+      async () =>
+        await convertToPdf(fileOf(heicFixture("grid.heic"), "image/heic"), {
+          heifDecoding: true,
+        }),
+    );
+
+    expect(urls).toEqual([]);
+    expect(failures).toEqual([]);
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(await pageCountOf(result.value.buffer)).toBe(1);
+    }
+  });
+
+  test("a 48 MP photo renders under the render worker's memory ceiling", async () => {
+    // 8064 x 6048 is above the whole-image pixel budgets; tile by tile it is
+    // admitted and rendered by the worker the ceiling watches.
+    const { failures, result } = await convertWithConverterStub(
+      async () =>
+        await convertToPdf(
+          fileOf(heicFixture("grid-48mp.heic"), "image/heic"),
+          { heifDecoding: true },
+        ),
+    );
+
+    expect(failures).toEqual([]);
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(await pageCountOf(result.value.buffer)).toBe(1);
+    }
+  });
+
+  test.each([
+    ["a container that cannot be read", new TextEncoder().encode("not HEIF")],
+    // The header reads; the tiles' pictures are cut off.
+    [
+      "pictures that cannot be read",
+      heicFixture("grid.heic").subarray(0, 3000),
+    ],
+  ] as const)("%s has no preview", async (_label, bytes) => {
+    const { result, urls } = await convertWithConverterStub(
+      async () =>
+        await convertToPdf(fileOf(bytes, "image/heic"), {
+          heifDecoding: true,
+        }),
+    );
+
+    expect(urls).toEqual([]);
+    expect(refusalOf(result)).toEqual(noPreview("unreadable"));
+  });
+});
+
 describe("images, plain text and CSV are rendered by stella, never the converter", () => {
   test.each([
     ["image/bmp", () => splitBmp(16, 8), 1],
@@ -585,7 +674,38 @@ describe("images, plain text and CSV are rendered by stella, never the converter
       );
     expect(grade("unreadable")).toBe("anticipated");
     expect(grade("too-large")).toBe("anticipated");
+    // Past the memory ceiling, a bound on the source let it through.
+    expect(grade("memory")).toBe("defect");
+    expect(grade("busy")).toBe("transient");
     expect(grade("failed")).toBe("defect");
+  });
+
+  test("renders run one at a time; the others wait for the slot", async () => {
+    const pool = () => readWorkPoolMetrics()["pdf-render"];
+    const minutes = (index: number) =>
+      new TextEncoder().encode(
+        `Zápis z jednání představenstva č. ${index}\nPřítomni: Ing. Marek Doležal, JUDr. Hana Kratochvílová\n`,
+      );
+    const renders = Promise.all(
+      [1, 2, 3].map(
+        async (index) =>
+          await convertToPdf(fileOf(minutes(index), "text/plain")),
+      ),
+    );
+    const waiting = await waitFor(
+      () => {
+        const stats = pool();
+        return stats.queued === 3 - LIMITS.workPoolPdfRenderSlots
+          ? stats
+          : undefined;
+      },
+      { description: "the renders past the slot to queue for it" },
+    );
+    expect(waiting.inFlight).toBe(LIMITS.workPoolPdfRenderSlots);
+    // Queued, not refused: every render past the slot waited for it.
+    const results = await renders;
+    expect(results.every((result) => Result.isOk(result))).toBe(true);
+    expect(pool()).toMatchObject({ inFlight: 0, queued: 0, refusedBusy: 0 });
   });
 
   test("a refusal is the same answer on every attempt", async () => {

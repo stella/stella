@@ -64,15 +64,81 @@ export const joined = (
 export const addressLines = (...lines: (string | null)[]): string[] =>
   lines.filter((line) => line !== null);
 
-/** A stated quantity with its unit code, as "100 C62". */
-export const quantityWithUnit = (
+/** A stated quantity with its unit code ("100", "C62"). */
+export const statedQuantity = (
   node: DocumentXmlNode | undefined,
-): string | null => {
+): { quantity: string; unitCode: string | null } | null => {
   const quantity = textOf(node);
   return quantity === null
     ? null
-    : joined(" ", quantity, attributeOf(node, "unitCode"));
+    : { quantity, unitCode: attributeOf(node, "unitCode") };
 };
+
+type Party = EInvoice["seller"];
+type PartyIdentifier = Party["identifiers"][number];
+
+/** The more specific a kind, the earlier: a VAT id is more than "other". */
+const KIND_RANK = {
+  vat: 0,
+  tax: 1,
+  registration: 2,
+  other: 3,
+} as const satisfies Record<PartyIdentifier["kind"], number>;
+
+/** An identifier's value apart from case and spacing. */
+const writtenKey = (value: string) => value.replace(/\s/gu, "").toUpperCase();
+
+/**
+ * Whether two identifiers state the same value. A VAT or tax number's dots
+ * and dashes are formatting ("0123.456.789"), so two such numbers match
+ * without them; any other identifier (an address, an opaque code such as
+ * `A-1`) keeps its punctuation.
+ */
+const sameIdentifier = (left: PartyIdentifier, right: PartyIdentifier) => {
+  const leftKey = writtenKey(left.value);
+  const rightKey = writtenKey(right.value);
+  if (leftKey === rightKey) {
+    return true;
+  }
+  const isNumber = (kind: PartyIdentifier["kind"]) =>
+    kind === "vat" || kind === "tax";
+  const digitsOnly = (key: string) => key.replace(/[.-]/gu, "");
+  return (
+    isNumber(left.kind) &&
+    isNumber(right.kind) &&
+    digitsOnly(leftKey) === digitsOnly(rightKey)
+  );
+};
+
+/**
+ * A party's identifiers, each value once. A file often states one number in
+ * two places (the VAT number, and the electronic address in the VAT
+ * scheme); it is listed where the first one stood, under the more specific
+ * of the two kinds.
+ */
+const distinctIdentifiers = (
+  identifiers: readonly PartyIdentifier[],
+): PartyIdentifier[] => {
+  const listed: PartyIdentifier[] = [];
+  for (const identifier of identifiers) {
+    const index = listed.findIndex((known) =>
+      sameIdentifier(known, identifier),
+    );
+    const known = index === -1 ? undefined : listed[index];
+    if (known === undefined) {
+      listed.push(identifier);
+    } else if (KIND_RANK[identifier.kind] < KIND_RANK[known.kind]) {
+      listed[index] = { ...identifier, value: known.value };
+    }
+  }
+  return listed;
+};
+
+/** The party with each identifier listed once. */
+export const withDistinctIdentifiers = (party: Party): Party => ({
+  ...party,
+  identifiers: distinctIdentifiers(party.identifiers),
+});
 
 // ISO 13616: two letters, two check digits, then up to 30 letters or digits.
 const IBAN_SHAPE = /^[A-Z]{2}\d{2}[A-Z\d]{11,30}$/u;

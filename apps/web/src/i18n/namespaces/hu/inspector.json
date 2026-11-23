@@ -545,6 +545,8 @@
     "closeTab": "<bdi>{name}</bdi> bezárása",
     "conversionRefusal": {
       "legacyFormat": "Ez egy régi formátumú {format}-fájl. A konvertáláshoz mentse újra {replacementExtension} formátumban.",
+      "noPreviewDecodingOff": "Ez a szerver nem készít előnézetet {format}-képekről. A megnyitáshoz töltse le a fájlt.",
+      "noPreviewUnreadable": "Ez a {format}-kép nem olvasható be előnézethez. A megnyitáshoz töltse le a fájlt.",
       "unsupportedEncoding": "Ez a dokumentum nem támogatott {encoding} kódolást használ, ezért nem konvertálható.",
       "unsupportedField": "Ez a dokumentum egy nem konvertálható {fieldType} mezőt tartalmaz.",
       "unsupportedReference": "Ez a dokumentum külső erőforrásra hivatkozik a(z) {element} {attribute} helyen, ezért nem konvertálható."
@@ -561,11 +563,20 @@
       "anonymization": "Anonimizálás"
     },
     "fileParts": {
+      "archiveUnreadable": "Az archívumot nem sikerült beolvasni.",
       "back": "Vissza a listához",
       "download": "{fileName} letöltése",
+      "noFilesInside": "Nincsenek benne fájlok.",
       "noPreview": "Ehhez a fájltípushoz nincs előnézet. Töltse le, vagy mentse egy ügybe.",
       "notConverted": "Ezt a fájlt nem sikerült átalakítani az előnézethez. Töltse le, vagy mentse egy ügybe.",
-      "open": "{fileName} megnyitása"
+      "open": "{fileName} megnyitása",
+      "unavailable": {
+        "encrypted": "Jelszóval védett, nem nyitható meg",
+        "link": "Hivatkozás egy másik fájlra, nem nyitjuk meg",
+        "tooLarge": "Túl nagy a megnyitáshoz",
+        "unreadable": "Sérült, nem nyitható meg",
+        "unsupported": "Olyan módon tömörített, amely nem nyitható meg"
+      }
     },
     "firstSourceReached": "Ez az első forrás.",
     "groups": {
