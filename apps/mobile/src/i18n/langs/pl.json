@@ -554,6 +554,8 @@
     "noFilesInside": "W środku nie ma żadnych plików.",
     "noMatches": "Żaden plik nie pasuje do „{query}”.",
     "open": "Otwórz {fileName} ({details})",
+    "saveFailed": "Nie udało się zapisać pliku w sprawie. Spróbuj ponownie.",
+    "saveNamed": "Zapisz {fileName} w sprawie",
     "search": "Znajdź plik po nazwie lub folderze",
     "unavailable": {
       "encrypted": "Chroniony hasłem, nie można otworzyć",

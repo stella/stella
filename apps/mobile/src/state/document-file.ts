@@ -338,6 +338,46 @@ export const readDocumentEmailPart = async ({
     schema: emailReadingSchema,
   });
 
+const savedPartSchema = v.object({
+  entityId: v.string(),
+  fieldId: v.string(),
+  fileName: v.string(),
+  workspaceId: v.string(),
+});
+
+/** Saving copies the part and derives its previews, as an upload does. */
+const PART_SAVE_TIMEOUT_MS = 60_000;
+
+/**
+ * Saves one part of a document's file (an attachment, a container's file, a
+ * mailbox's message) into a matter, at its top, as a document of its own:
+ * the same audited copy the web's save makes.
+ */
+export const saveDocumentPart = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+  part,
+  destinationWorkspaceId,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  readonly part: string;
+  /** The matter the part goes into. */
+  readonly destinationWorkspaceId: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `/v1/files/${encodeURIComponent(workspaceId)}/part/${encodeURIComponent(fieldId)}/save`,
+    body: { part, destinationWorkspaceId, parentId: null },
+    schema: savedPartSchema,
+    timeoutMs: PART_SAVE_TIMEOUT_MS,
+  });
+
 /** The document has no file: it was created empty, or its file was removed. */
 class NoFileError extends TaggedError("NoFileError")<{
   message: string;

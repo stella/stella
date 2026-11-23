@@ -554,6 +554,8 @@
     "noFilesInside": "Uvnitř nejsou žádné soubory.",
     "noMatches": "Výrazu „{query}“ neodpovídá žádný soubor.",
     "open": "Otevřít {fileName} ({details})",
+    "saveFailed": "Soubor se nepodařilo uložit do spisu. Zkuste to znovu.",
+    "saveNamed": "Uložit {fileName} do spisu",
     "search": "Najít soubor podle názvu nebo složky",
     "unavailable": {
       "encrypted": "Chráněno heslem, nelze otevřít",

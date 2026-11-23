@@ -554,6 +554,8 @@
     "noFilesInside": "لا توجد ملفات بداخله.",
     "noMatches": "لا يوجد ملف يطابق «{query}».",
     "open": "فتح {fileName} ({details})",
+    "saveFailed": "تعذّر حفظ الملف في الملف القانوني. حاول مرة أخرى.",
+    "saveNamed": "حفظ {fileName} في ملف قانوني",
     "search": "البحث عن ملف بالاسم أو المجلد",
     "unavailable": {
       "encrypted": "محمي بكلمة مرور، لا يمكن فتحه",

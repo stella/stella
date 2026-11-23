@@ -489,6 +489,8 @@
   "fileParts.noFilesInside": "There are no files inside.",
   "fileParts.noMatches": "No file matches “{query}”.",
   "fileParts.open": "Open {fileName} ({details})",
+  "fileParts.saveFailed": "The file could not be saved to the matter. Try again.",
+  "fileParts.saveNamed": "Save {fileName} to a matter",
   "fileParts.search": "Find a file by name or folder",
   "fileParts.unavailable.encrypted": "Password-protected, can’t be opened",
   "fileParts.unavailable.link": "A link to another file, not followed",

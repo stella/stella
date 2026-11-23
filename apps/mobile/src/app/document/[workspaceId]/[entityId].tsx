@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale, useTranslations } from "use-intl";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
+import type { FilePartDescriptor } from "@stll/api-contract/file-parts";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
@@ -465,6 +466,32 @@ const OpenedDocument = ({
   );
 };
 
+/**
+ * Opens the sheet that saves one part of the file into a matter. Saving a part
+ * only names it to the server, so it needs no native viewer.
+ */
+const usePartSave = ({
+  workspaceId,
+  fieldId,
+}: {
+  workspaceId: string;
+  fieldId: string;
+}) => {
+  const router = useRouter();
+  return ({ part, fileName, sizeBytes }: FilePartDescriptor) => {
+    router.push({
+      pathname: "/part/save",
+      params: {
+        workspaceId,
+        fieldId,
+        part,
+        name: fileName ?? "",
+        size: String(sizeBytes),
+      },
+    });
+  };
+};
+
 const LegalFilePreview = ({
   file,
   onRetry,
@@ -521,6 +548,7 @@ const LegalFilePreview = ({
           }),
       }
     : null;
+  const savePart = usePartSave({ workspaceId, fieldId });
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
@@ -755,7 +783,7 @@ const LegalFilePreview = ({
           {t("openOriginal")}
         </Button>
       ) : null}
-      <FilePartOpenerProvider opener={partOpener}>
+      <FilePartOpenerProvider opener={partOpener} save={savePart}>
         {previewBody}
       </FilePartOpenerProvider>
     </ScrollView>

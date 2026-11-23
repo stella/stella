@@ -554,6 +554,8 @@
     "noFilesInside": "Não há arquivos dentro.",
     "noMatches": "Nenhum arquivo corresponde a “{query}”.",
     "open": "Abrir {fileName} ({details})",
+    "saveFailed": "Não foi possível salvar o arquivo no caso. Tente novamente.",
+    "saveNamed": "Salvar {fileName} em um caso",
     "search": "Encontrar um arquivo por nome ou pasta",
     "unavailable": {
       "encrypted": "Protegido por senha, não pode ser aberto",

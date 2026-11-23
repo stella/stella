@@ -554,6 +554,8 @@
     "noFilesInside": "No contiene ningún archivo.",
     "noMatches": "Ningún archivo coincide con «{query}».",
     "open": "Abrir {fileName} ({details})",
+    "saveFailed": "No se ha podido guardar el archivo en el asunto. Inténtalo de nuevo.",
+    "saveNamed": "Guardar {fileName} en un asunto",
     "search": "Buscar un archivo por nombre o carpeta",
     "unavailable": {
       "encrypted": "Protegido con contraseña, no se puede abrir",

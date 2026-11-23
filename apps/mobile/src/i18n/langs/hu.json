@@ -554,6 +554,8 @@
     "noFilesInside": "Nincsenek benne fájlok.",
     "noMatches": "Egyetlen fájl sem felel meg ennek: „{query}”.",
     "open": "{fileName} ({details}) megnyitása",
+    "saveFailed": "A fájlt nem sikerült az ügybe menteni. Próbálja újra.",
+    "saveNamed": "{fileName} mentése egy ügybe",
     "search": "Fájl keresése név vagy mappa alapján",
     "unavailable": {
       "encrypted": "Jelszóval védett, nem nyitható meg",

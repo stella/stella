@@ -30,6 +30,7 @@ import {
   readDocumentPart,
   readDocumentPartList,
   readOriginalDocumentFile,
+  saveDocumentPart,
   versionsPath,
   viewerFor,
 } from "./document-file";
@@ -1079,6 +1080,44 @@ describe("reading a document's file", () => {
     expect(calls.at(-1)).toBe(
       "/v1/files/matter-1/parts/field-1?part=member%3A2",
     );
+  });
+
+  test("a part is saved into the chosen matter at its top", async () => {
+    const sent: { path: string; method: string | undefined; body: unknown }[] =
+      [];
+    const fetch: Fetch = async (input, init) => {
+      sent.push({
+        path: input.replace(SESSION.serverUrl, ""),
+        method: init?.method,
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+      });
+      return Response.json({
+        entityId: "entity-9",
+        fieldId: "field-9",
+        fileName: "plna-moc.pdf",
+        workspaceId: "matter-2",
+      });
+    };
+    const saved = await saveDocumentPart({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "matter-1",
+      fieldId: "field-1",
+      part: "message:3/attachment:0",
+      destinationWorkspaceId: "matter-2",
+    });
+    expect(saved.unwrap()).toMatchObject({ workspaceId: "matter-2" });
+    expect(sent).toEqual([
+      {
+        path: "/v1/files/matter-1/part/field-1/save",
+        method: "POST",
+        body: {
+          part: "message:3/attachment:0",
+          destinationWorkspaceId: "matter-2",
+          parentId: null,
+        },
+      },
+    ]);
   });
 
   test("a mailbox's message is read as an email by its path", async () => {

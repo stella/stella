@@ -554,6 +554,8 @@
     "noFilesInside": "Selles pole ühtegi faili.",
     "noMatches": "Päringule „{query}“ ei vasta ükski fail.",
     "open": "Ava {fileName} ({details})",
+    "saveFailed": "Faili ei õnnestunud toimikusse salvestada. Proovige uuesti.",
+    "saveNamed": "Salvesta {fileName} toimikusse",
     "search": "Otsi faili nime või kausta järgi",
     "unavailable": {
       "encrypted": "Parooliga kaitstud, ei saa avada",

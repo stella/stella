@@ -554,6 +554,8 @@
     "noFilesInside": "Darin sind keine Dateien.",
     "noMatches": "Keine Datei entspricht „{query}“.",
     "open": "{fileName} ({details}) öffnen",
+    "saveFailed": "Die Datei konnte nicht in der Akte gespeichert werden. Versuchen Sie es erneut.",
+    "saveNamed": "{fileName} in einer Akte speichern",
     "search": "Datei nach Name oder Ordner suchen",
     "unavailable": {
       "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",
