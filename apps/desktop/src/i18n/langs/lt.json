@@ -587,6 +587,19 @@
       "descriptionCloud": "stella DI taip pat ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui.",
       "title": "Taisyti su DI"
     },
+    "cleanupInstructions": {
+      "description": "Kaip norite, kad būtų parašytas jūsų tekstas, pavyzdžiui, rašybos variantas ar vengtini žodžiai. Taisymas jų laikosi ten, kur leidžia jo taisyklės, ir niekada nekeičia to, ką pasakėte.",
+      "placeholder": "Pavyzdžiui: Naudok britišką rašybą. Niekada nenaudok jaustukų. Palik mano nebaigtus sakinius.",
+      "saveFailed": "Nurodymų išsaugoti nepavyko. Bandykite dar kartą.",
+      "title": "Jūsų nurodymai"
+    },
+    "cleanupModel": {
+      "automatic": "Automatiškai",
+      "automaticDescription": "Naudojamas greitasis jūsų organizacijos modelis.",
+      "chosenDescription": "Jei šiam modeliui prireikia daugiau nei kelių sekundžių, tekstas įvedamas netaisytas.",
+      "title": "DI modelis",
+      "withdrawn": "Pasirinktas modelis nebepasiekiamas, todėl taisymas vyksta automatiškai."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Išlaiko laisvą toną ir saikingus skyrybos ženklus.",

@@ -587,6 +587,19 @@
       "descriptionCloud": "stella AI dodatkowo poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail.",
       "title": "Popraw za pomocą AI"
     },
+    "cleanupInstructions": {
+      "description": "Jak ma być napisany Twój tekst, np. wariant pisowni lub słowa, których należy unikać. Poprawianie stosuje się do nich tam, gdzie pozwalają na to jego zasady, i nigdy nie zmienia tego, co zostało powiedziane.",
+      "placeholder": "Na przykład: Używaj brytyjskiej pisowni. Nigdy nie używaj emoji. Zachowuj moje urwane zdania.",
+      "saveFailed": "Nie udało się zapisać instrukcji. Spróbuj ponownie.",
+      "title": "Twoje instrukcje"
+    },
+    "cleanupModel": {
+      "automatic": "Automatycznie",
+      "automaticDescription": "Używa szybkiego modelu Twojej organizacji.",
+      "chosenDescription": "Jeśli ten model potrzebuje więcej niż kilku sekund, tekst zostanie wpisany bez poprawiania.",
+      "title": "Model AI",
+      "withdrawn": "Wybrany model nie jest już dostępny, więc poprawianie działa automatycznie."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Zachowuje swobodny ton i oszczędną interpunkcję.",

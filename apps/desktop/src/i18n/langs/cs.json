@@ -587,6 +587,19 @@
       "descriptionCloud": "stella AI navíc opraví chyby rozpoznávání a vyslovené formátování, například „nový řádek“ nebo „tučně“, a přizpůsobí text aplikaci, například e-mailu.",
       "title": "Upravit pomocí AI"
     },
+    "cleanupInstructions": {
+      "description": "Jak chcete mít text napsaný, například variantu pravopisu nebo slova, kterým se vyhnout. Úprava se jimi řídí, kde to její pravidla dovolí, a nikdy nemění, co jste řekli.",
+      "placeholder": "Například: Používej britský pravopis. Nikdy nepoužívej emoji. Zachovej mé neúplné věty.",
+      "saveFailed": "Pokyny se nepodařilo uložit. Zkuste to znovu.",
+      "title": "Vaše pokyny"
+    },
+    "cleanupModel": {
+      "automatic": "Automaticky",
+      "automaticDescription": "Použije rychlý model vaší organizace.",
+      "chosenDescription": "Když tento model potřebuje víc než pár sekund, text se napíše bez úpravy.",
+      "title": "Model AI",
+      "withdrawn": "Zvolený model už není k dispozici, úprava proto běží automaticky."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Zachová uvolněný tón s lehkou interpunkcí.",

@@ -17,6 +17,10 @@ import {
   markRlsDatabase,
 } from "@/api/db/scoped";
 import {
+  createDesktopDictationCleanupModelsEndpoint,
+  readDesktopDictationCleanupModels,
+} from "@/api/handlers/dictation/cleanup-models";
+import {
   createDesktopDictationModelsEndpoint,
   readDesktopDictationModels,
 } from "@/api/handlers/dictation/desktop-transcription";
@@ -335,6 +339,70 @@ export const desktopDictationModelsScalingScenario = {
       ) {
         return panic(
           "Desktop dictation models scaling requires the region's models",
+        );
+      }
+      return {
+        statements: counter.count,
+        transactionRoundTrips: counter.transactions,
+        responseBytes: Buffer.byteLength(JSON.stringify(response)),
+        rows: response.models.length,
+        response,
+      };
+    });
+  },
+};
+
+const CLEANUP_MODELS_ROUTE =
+  "/v1/desktop/dictation/cleanup-models" satisfies ApiRoutePath;
+
+/**
+ * Listing a linked desktop's cleanup models reads the organization's AI
+ * settings and the member's access; the device credential is the only
+ * collaborator supplied. Nothing it reads grows with other organizations.
+ */
+export const desktopDictationCleanupModelsScalingScenario = {
+  name: "desktop dictation cleanup models",
+  definition: readDesktopDictationCleanupModels,
+  measure: async (fixture: DesktopDictationModelsFixture) => {
+    const request = new Request(`https://example.test${CLEANUP_MODELS_ROUTE}`);
+    const device = await createDesktopDeviceSigner();
+    const credential = "desktop-dictation-cleanup-scaling";
+    const consumedProof = await claimFixtureDeviceProof({
+      request: await device.signRequest({ request, credential }),
+      deviceJkt: device.deviceJkt,
+      keyId: "desktop-dictation-cleanup-scaling",
+      credential,
+    });
+    const endpoint = createDesktopDictationCleanupModelsEndpoint({
+      authorizeAccount: async () =>
+        await Promise.resolve(
+          Result.ok({
+            featureAccessSnapshot: buildFeatureAccessSnapshot({
+              organizationId: fixture.organizationId,
+              userId: fixture.userId,
+              identity: { email: fixture.email, emailVerified: true },
+              enrolments: [],
+            }),
+            consumedProof,
+            organizationId: fixture.organizationId,
+            userId: fixture.userId,
+            keyId: "desktop-dictation-cleanup-scaling",
+            memberRole: sessionMemberRole("member"),
+            scopedDb: fixture.scopedDb,
+          }),
+        ),
+    });
+    return await runWithMeasuredQueryCounter(async (counter) => {
+      const response = await endpoint.handler(
+        asTestRaw<Parameters<typeof endpoint.handler>[0]>({
+          request,
+          route: CLEANUP_MODELS_ROUTE,
+          set: { headers: {} },
+        }),
+      );
+      if (response instanceof HttpStatusResponse) {
+        return panic(
+          "Desktop dictation cleanup models scaling requires the organization's models",
         );
       }
       return {

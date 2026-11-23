@@ -587,6 +587,19 @@
       "descriptionCloud": "stella IA también corrige errores de reconocimiento y el formato dictado, como «nueva línea» o «negrita», y adapta el texto a la aplicación, como el correo.",
       "title": "Corregir con IA"
     },
+    "cleanupInstructions": {
+      "description": "Cómo quieres que se escriba tu texto, por ejemplo una variante ortográfica o palabras que evitar. La corrección las sigue donde sus reglas lo permiten y nunca cambia lo que dijiste.",
+      "placeholder": "Por ejemplo: Usa ortografía británica. No uses emojis. Conserva mis frases incompletas.",
+      "saveFailed": "No se pudieron guardar tus instrucciones. Inténtalo de nuevo.",
+      "title": "Tus instrucciones"
+    },
+    "cleanupModel": {
+      "automatic": "Automático",
+      "automaticDescription": "Usa el modelo rápido de tu organización.",
+      "chosenDescription": "Si este modelo tarda más de unos segundos, el texto se escribe sin corregir.",
+      "title": "Modelo de IA",
+      "withdrawn": "El modelo que elegiste ya no está disponible, así que la corrección usa Automático."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Mantiene un tono relajado con puntuación ligera.",

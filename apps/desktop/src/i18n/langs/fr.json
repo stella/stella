@@ -587,6 +587,19 @@
       "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail.",
       "title": "Corriger avec l’IA"
     },
+    "cleanupInstructions": {
+      "description": "La façon dont vous voulez que votre texte soit écrit, par exemple une variante orthographique ou des mots à éviter. La correction les suit lorsque ses règles le permettent et ne change jamais ce que vous avez dit.",
+      "placeholder": "Par exemple : Utilise l’orthographe britannique. N’utilise jamais d’emoji. Garde mes phrases incomplètes.",
+      "saveFailed": "Vos instructions n’ont pas pu être enregistrées. Réessayez.",
+      "title": "Vos instructions"
+    },
+    "cleanupModel": {
+      "automatic": "Automatique",
+      "automaticDescription": "Utilise le modèle rapide de votre organisation.",
+      "chosenDescription": "Si ce modèle met plus de quelques secondes, le texte est saisi sans correction.",
+      "title": "Modèle d’IA",
+      "withdrawn": "Le modèle choisi n’est plus disponible ; la correction utilise donc le mode automatique."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Garde un ton détendu, avec une ponctuation légère.",

@@ -54,6 +54,10 @@ import type {
   DictationAppSetting,
   DictationRecentApp,
 } from "./DictationAppSettings";
+import {
+  DictationCleanupInstructionsRow,
+  DictationCleanupModelRow,
+} from "./DictationCleanupPreferences";
 import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
@@ -104,6 +108,11 @@ export type DictationSnapshot = {
   cleanupStyle: DesktopDictationCleanupStyle;
   /** The language cleanup writes the text in; null: the spoken one. */
   translateTo: DesktopDictationTranslationLanguage | null;
+  /** What the speaker wrote for cleanup to follow; null: nothing. */
+  cleanupInstructions: string | null;
+  /** The model the speaker chose for cleanup, as the list names it; null:
+   *  automatic, the organization's fast model. */
+  cleanupModel: string | null;
   /** Whether the server enables transcription by stella AI; without it the
    *  choice of destination is not offered. */
   cloudAvailable: boolean;
@@ -903,6 +912,28 @@ const DictationCleanupSection = ({
         }}
         translateTo={snapshot.translateTo}
       />
+      {/* The speaker's own guidance and the model; offered only while
+          cleanup runs. Keyed by what is stored, so a change from elsewhere
+          starts the field afresh. */}
+      {snapshot.cleanup && (
+        <>
+          <DictationCleanupModelRow
+            cleanupModel={snapshot.cleanupModel}
+            onChange={async (model) =>
+              await change("dictation_set_cleanup_model", { model })
+            }
+          />
+          <DictationCleanupInstructionsRow
+            instructions={snapshot.cleanupInstructions}
+            key={snapshot.cleanupInstructions ?? ""}
+            onSave={async (instructions) =>
+              await change("dictation_set_cleanup_instructions", {
+                instructions,
+              })
+            }
+          />
+        </>
+      )}
       {/* What cleanup may also read; offered only while it runs. */}
       <DictationSwitchRow
         checked={snapshot.shareWindowTitle}

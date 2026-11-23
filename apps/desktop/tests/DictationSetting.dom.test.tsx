@@ -51,6 +51,8 @@ const ENABLED_SNAPSHOT = {
   textBeforeCursorAvailable: true,
   cleanupStyle: "polished",
   translateTo: null,
+  cleanupInstructions: null,
+  cleanupModel: null,
   failure: null,
   failureKeptInHistory: false,
   fixKeys: { code: "KeyT", modifiers: ["control", "alt", "shift"] },
@@ -1442,4 +1444,185 @@ test("custom words are offered with the speech model on this computer and cleanu
   });
 
   expect(queryByText(customWords.title)).not.toBeNull();
+});
+
+const { cleanupInstructions, cleanupModel } = defaultMessages.dictation;
+
+const CLEANUP_MODELS = {
+  models: [
+    {
+      value: "anthropic::claude-haiku-4-5",
+      displayName: "Claude Haiku 4.5",
+      provider: "anthropic",
+    },
+    {
+      value: "anthropic::claude-sonnet-4-5",
+      displayName: "Claude Sonnet 4.5",
+      provider: "anthropic",
+    },
+  ],
+};
+
+/** The field a native answer was asked to store, or null. */
+const asked = (payload: unknown, field: string): unknown =>
+  typeof payload === "object" && payload !== null && field in payload
+    ? (payload as Record<string, unknown>)[field]
+    : null;
+
+test("the speaker's instructions are saved when the field is left, and cleared when emptied", async () => {
+  const saved: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_cleanup_instructions") {
+      return undefined;
+    }
+    saved.push(payload);
+    return {
+      ...ENABLED_SNAPSHOT,
+      cleanupInstructions: asked(payload, "instructions"),
+    };
+  });
+  const field = view.getByRole("textbox", { name: cleanupInstructions.title });
+  expect(field.getAttribute("maxlength")).toBe("1000");
+
+  fireEvent.change(field, {
+    target: { value: "Use British spelling.\nNever use emoji." },
+  });
+  // Nothing is sent while the speaker types.
+  expect(saved).toEqual([]);
+  await act(async () => {
+    fireEvent.blur(field);
+  });
+  await waitFor(() => {
+    expect(saved).toEqual([
+      { instructions: "Use British spelling.\nNever use emoji." },
+    ]);
+  });
+
+  const stored = view.getByRole("textbox", { name: cleanupInstructions.title });
+  expect(stored instanceof HTMLTextAreaElement && stored.value).toBe(
+    "Use British spelling.\nNever use emoji.",
+  );
+  // Leaving it unchanged sends nothing again.
+  await act(async () => {
+    fireEvent.blur(stored);
+  });
+  fireEvent.change(stored, { target: { value: "  " } });
+  await act(async () => {
+    fireEvent.blur(stored);
+  });
+  await waitFor(() => {
+    expect(saved).toEqual([
+      { instructions: "Use British spelling.\nNever use emoji." },
+      { instructions: null },
+    ]);
+  });
+});
+
+test("instructions the native side refuses say so beside the field", async () => {
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command) => {
+    if (command === "dictation_set_cleanup_instructions") {
+      throw new TypeError(
+        "cleanup instructions are longer than stella AI accepts",
+      );
+    }
+    return undefined;
+  });
+  const field = view.getByRole("textbox", { name: cleanupInstructions.title });
+  fireEvent.change(field, {
+    target: { value: "Keep my sentence fragments." },
+  });
+  await act(async () => {
+    fireEvent.blur(field);
+  });
+  expect((await view.findByRole("alert")).textContent).toBe(
+    cleanupInstructions.saveFailed,
+  );
+});
+
+test("the speaker picks a cleanup model from the organization's list, or automatic", async () => {
+  const picked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command === "dictation_get_cleanup_models") {
+      return CLEANUP_MODELS;
+    }
+    if (command !== "dictation_set_cleanup_model") {
+      return undefined;
+    }
+    picked.push(payload);
+    return { ...ENABLED_SNAPSHOT, cleanupModel: asked(payload, "model") };
+  });
+  await view.findByRole("combobox", { name: cleanupModel.title });
+  expect(
+    view.container.querySelector("#dictation-cleanup-model-description")
+      ?.textContent,
+  ).toBe(cleanupModel.automaticDescription);
+
+  const listbox = await openSelect(view, cleanupModel.title);
+  // Automatic, chosen, then the organization's models in the list's order.
+  const options = within(listbox).getAllByRole("option");
+  expect(options).toHaveLength(3);
+  expect(options[0]?.getAttribute("aria-selected")).toBe("true");
+  expect(options[0]?.textContent).toContain(cleanupModel.automatic);
+  expect(options[1]?.textContent).toBe("Claude Haiku 4.5");
+  expect(options[2]?.textContent).toBe("Claude Sonnet 4.5");
+  const sonnet = within(listbox).getByRole("option", {
+    name: "Claude Sonnet 4.5",
+  });
+  await act(async () => {
+    fireEvent.pointerDown(sonnet, { pointerType: "mouse" });
+    fireEvent.click(sonnet);
+  });
+  await waitFor(() => {
+    expect(picked).toEqual([{ model: "anthropic::claude-sonnet-4-5" }]);
+  });
+  await waitFor(() => {
+    expect(
+      view.container.querySelector("#dictation-cleanup-model-description")
+        ?.textContent,
+    ).toBe(cleanupModel.chosenDescription);
+  });
+
+  const again = await openSelect(view, cleanupModel.title);
+  const automatic = within(again).getByRole("option", {
+    name: cleanupModel.automatic,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(automatic, { pointerType: "mouse" });
+    fireEvent.click(automatic);
+  });
+  await waitFor(() => {
+    expect(picked).toEqual([
+      { model: "anthropic::claude-sonnet-4-5" },
+      { model: null },
+    ]);
+  });
+});
+
+test("a chosen model the organization no longer offers reads as automatic, and the page says so", async () => {
+  const view = await renderSetting(
+    { ...ENABLED_SNAPSHOT, cleanupModel: "openai::gpt-5" },
+    (command) =>
+      command === "dictation_get_cleanup_models" ? CLEANUP_MODELS : undefined,
+  );
+  const select = await view.findByRole("combobox", {
+    name: cleanupModel.title,
+  });
+  expect(select.textContent).toBe(cleanupModel.automatic);
+  expect(
+    view.container.querySelector("#dictation-cleanup-model-description")
+      ?.textContent,
+  ).toBe(cleanupModel.withdrawn);
+});
+
+test("instructions and the model are offered only while cleanup runs", async () => {
+  const view = await renderSetting(
+    { ...ENABLED_SNAPSHOT, cleanup: false },
+    (command) =>
+      command === "dictation_get_cleanup_models" ? CLEANUP_MODELS : undefined,
+  );
+  await act(nextMacrotask);
+  expect(
+    view.queryByRole("textbox", { name: cleanupInstructions.title }),
+  ).toBeNull();
+  expect(view.queryByRole("combobox", { name: cleanupModel.title })).toBeNull();
 });

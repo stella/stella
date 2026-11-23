@@ -587,6 +587,19 @@
       "descriptionCloud": "stella KI korrigiert außerdem Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ oder „fett“ und passt den Text an die App an, etwa an E-Mail.",
       "title": "Mit KI überarbeiten"
     },
+    "cleanupInstructions": {
+      "description": "Wie Ihr Text geschrieben sein soll, etwa eine Rechtschreibvariante oder Wörter, die zu vermeiden sind. Die Überarbeitung folgt ihnen, soweit ihre Regeln es erlauben, und ändert nie, was Sie gesagt haben.",
+      "placeholder": "Zum Beispiel: Britische Rechtschreibung verwenden. Nie Emojis verwenden. Meine Satzfragmente beibehalten.",
+      "saveFailed": "Ihre Anweisungen konnten nicht gespeichert werden. Versuchen Sie es erneut.",
+      "title": "Ihre Anweisungen"
+    },
+    "cleanupModel": {
+      "automatic": "Automatisch",
+      "automaticDescription": "Verwendet das schnelle Modell Ihrer Organisation.",
+      "chosenDescription": "Braucht dieses Modell länger als ein paar Sekunden, wird der Text ohne Überarbeitung eingegeben.",
+      "title": "KI-Modell",
+      "withdrawn": "Das gewählte Modell ist nicht mehr verfügbar. Die Überarbeitung verwendet daher „Automatisch“."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Behält einen lockeren Ton mit sparsamer Zeichensetzung bei.",

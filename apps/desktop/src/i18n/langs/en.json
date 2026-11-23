@@ -587,6 +587,19 @@
       "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email.",
       "title": "Clean up with AI"
     },
+    "cleanupInstructions": {
+      "description": "How you like your text written, such as a spelling variant or words to avoid. Cleanup follows them where its own rules allow and never changes what you said.",
+      "placeholder": "For example: Use British spelling. Never use emoji. Keep my sentence fragments.",
+      "saveFailed": "Your instructions could not be saved. Try again.",
+      "title": "Your instructions"
+    },
+    "cleanupModel": {
+      "automatic": "Automatic",
+      "automaticDescription": "Uses your organization’s fast model.",
+      "chosenDescription": "If this model takes more than a few seconds, the text is typed without cleanup.",
+      "title": "AI model",
+      "withdrawn": "The model you chose is no longer available, so cleanup uses Automatic."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Keeps a relaxed tone with light punctuation.",

@@ -587,6 +587,19 @@
       "descriptionCloud": "A stella IA também corrige erros de reconhecimento e a formatação ditada, como “nova linha” ou “negrito”, e adapta o texto ao aplicativo, como e-mail.",
       "title": "Revisar com IA"
     },
+    "cleanupInstructions": {
+      "description": "Como você quer que seu texto seja escrito, por exemplo uma variante ortográfica ou palavras a evitar. A revisão as segue quando as regras dela permitem e nunca muda o que você disse.",
+      "placeholder": "Por exemplo: Use ortografia britânica. Nunca use emojis. Mantenha minhas frases incompletas.",
+      "saveFailed": "Não foi possível salvar suas instruções. Tente novamente.",
+      "title": "Suas instruções"
+    },
+    "cleanupModel": {
+      "automatic": "Automático",
+      "automaticDescription": "Usa o modelo rápido da sua organização.",
+      "chosenDescription": "Se este modelo levar mais do que alguns segundos, o texto é digitado sem revisão.",
+      "title": "Modelo de IA",
+      "withdrawn": "O modelo escolhido não está mais disponível, então a revisão usa o Automático."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Mantém um tom descontraído, com pontuação leve.",

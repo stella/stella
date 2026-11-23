@@ -587,6 +587,19 @@
       "descriptionCloud": "A stella AI emellett kijavítja a felismerési hibákat és a kimondott formázást, például „új sor” vagy „félkövér”, és az alkalmazáshoz igazítja a szöveget, például e-mailhez.",
       "title": "Javítás AI-jal"
     },
+    "cleanupInstructions": {
+      "description": "Hogyan szeretné, hogy a szövege íródjon, például helyesírási változat vagy kerülendő szavak. A javítás ott követi őket, ahol a szabályai engedik, és soha nem változtat azon, amit mondott.",
+      "placeholder": "Például: Használj brit helyesírást. Soha ne használj emojit. Tartsd meg a befejezetlen mondataimat.",
+      "saveFailed": "Az utasításokat nem sikerült menteni. Próbálja újra.",
+      "title": "Az Ön utasításai"
+    },
+    "cleanupModel": {
+      "automatic": "Automatikus",
+      "automaticDescription": "A szervezete gyors modelljét használja.",
+      "chosenDescription": "Ha ez a modell néhány másodpercnél tovább dolgozik, a szöveg javítás nélkül kerül beírásra.",
+      "title": "AI-modell",
+      "withdrawn": "A választott modell már nem érhető el, ezért a javítás az automatikus beállítást használja."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Laza hangnemet tart, takarékos írásjelekkel.",
