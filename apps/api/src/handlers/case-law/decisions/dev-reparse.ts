@@ -99,14 +99,24 @@ const reparseNss = async (
  * The decision's document as the current parser reads it, or null when
  * the source is not one this re-parses or the publisher did not answer.
  */
+export type DevReparseOutcome =
+  | { status: "reparsed"; ast: DocumentAst }
+  | { status: "not-applicable" }
+  | { status: "failed" };
+
 export const reparseForDev = async (
   decision: DevReparseDecision,
-): Promise<DocumentAst | null> =>
+): Promise<DevReparseOutcome> =>
   await withPublicReadIo("development", async () => {
     if (decision.adapterKey !== ADAPTER_KEYS.CZ_NSS) {
-      return null;
+      return { status: "not-applicable" };
     }
-    return await reparseNss(decision).catch((error: unknown) => {
+    try {
+      const ast = await reparseNss(decision);
+      return ast === null
+        ? { status: "not-applicable" }
+        : { status: "reparsed", ast };
+    } catch (error: unknown) {
       captureError(
         error,
         handlerErrorContext("decisions.attempt", {
@@ -114,6 +124,6 @@ export const reparseForDev = async (
           decisionId: decision.id,
         }),
       );
-      return null;
-    });
+      return { status: "failed" };
+    }
   });

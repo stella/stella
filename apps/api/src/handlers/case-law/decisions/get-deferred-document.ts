@@ -97,7 +97,7 @@ const reparsedForDev = async (
   if (!devReparseEnabled()) {
     return decision;
   }
-  const documentAst = await reparseForDev({
+  const reparsed = await reparseForDev({
     adapterKey: decision.source.adapterKey,
     caseNumber: decision.caseNumber,
     court: decision.court,
@@ -108,12 +108,12 @@ const reparsedForDev = async (
     id: decision.id,
     metadata: decision.metadata,
   });
-  return documentAst === null
+  return reparsed.status !== "reparsed"
     ? decision
     : {
         ...decision,
         ...(await transientDecisionAstProjection({
-          resolvedAst: documentAst,
+          resolvedAst: reparsed.ast,
           plainText: "include",
         })),
         documentPending: false,

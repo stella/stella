@@ -357,18 +357,21 @@ type StoreSourceRawOptions = {
  * records: a later listing-only refresh must not erase a payload an earlier
  * fetch proved.
  */
+type StoreSourceRawOutcome =
+  { status: "stored"; value: StoredSourceRaw } | { status: "write-failed" };
+
 const storeSourceRaw = async ({
   input,
   existing,
   writeSourceRaw,
-}: StoreSourceRawOptions): Promise<StoredSourceRaw | null> => {
+}: StoreSourceRawOptions): Promise<StoreSourceRawOutcome> => {
   const stored = {
     sourceRawS3Key: existing?.sourceRawS3Key ?? null,
     sourceRawContentType: existing?.sourceRawContentType ?? null,
   };
   const data = input.sourceRaw;
   if (data === undefined) {
-    return stored;
+    return { status: "stored", value: stored };
   }
   const contentType =
     input.sourceRawContentType ?? DEFAULT_SOURCE_RAW_CONTENT_TYPE;
@@ -398,9 +401,12 @@ const storeSourceRaw = async ({
         step: "processLegislationDocument.sourceRawWrite",
       }),
     );
-    return null;
+    return { status: "write-failed" };
   }
-  return { sourceRawS3Key: written.value, sourceRawContentType: contentType };
+  return {
+    status: "stored",
+    value: { sourceRawS3Key: written.value, sourceRawContentType: contentType },
+  };
 };
 
 /**
@@ -1005,14 +1011,15 @@ export const processLegislationDocument = async (
     };
   }
 
-  const sourceRaw = await storeSourceRaw({
+  const sourceRawOutcome = await storeSourceRaw({
     input: revisionInput,
     existing,
     writeSourceRaw,
   });
-  if (sourceRaw === null) {
+  if (sourceRawOutcome.status === "write-failed") {
     return { type: "source-raw-write-failed" };
   }
+  const sourceRaw = sourceRawOutcome.value;
 
   const written = await commitLegislationVersion({
     revision,
