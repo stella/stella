@@ -1,10 +1,11 @@
-import { Suspense, useState, useTransition } from "react";
+import { Suspense, useRef, useState, useTransition } from "react";
 
 import { Result } from "better-result";
 import {
   Stack,
   useLocalSearchParams,
   useNavigation,
+  usePreventRemove,
   useRouter,
 } from "expo-router";
 import { ScrollView, View } from "react-native";
@@ -58,6 +59,14 @@ const SavePartForm = ({ source }: { source: AccessTokenSource }) => {
   const [matterId, setMatterId] = useState<string | null>(params.workspaceId);
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [saving, startSaving] = useTransition();
+  // A save in progress keeps the sheet up, Escape included, so a failure can
+  // still show for a retry; only the save's own success closes it then.
+  const saved = useRef(false);
+  usePreventRemove(saving, ({ repeat }) => {
+    if (saved.current) {
+      repeat();
+    }
+  });
   const [matters] = useState(async () => {
     const result = await listMatters({ fetch, source });
     if (Result.isError(result) && result.error._tag === "SignedOutError") {
@@ -73,7 +82,7 @@ const SavePartForm = ({ source }: { source: AccessTokenSource }) => {
     }
     startSaving(async () => {
       setFailure(null);
-      const saved = await saveDocumentPart({
+      const stored = await saveDocumentPart({
         fetch,
         source,
         workspaceId: params.workspaceId,
@@ -81,19 +90,19 @@ const SavePartForm = ({ source }: { source: AccessTokenSource }) => {
         part: params.part,
         destinationWorkspaceId: matterId,
       });
-      if (Result.isOk(saved)) {
+      if (Result.isOk(stored)) {
         changed("documents");
-        // A sheet closed meanwhile, as Escape can, stays closed.
         if (navigation.isFocused()) {
+          saved.current = true;
           router.back();
         }
         return;
       }
-      if (saved.error._tag === "SignedOutError") {
+      if (stored.error._tag === "SignedOutError") {
         end(source);
         return;
       }
-      setFailure(writeFailure(saved.error));
+      setFailure(writeFailure(stored.error));
     });
   };
 

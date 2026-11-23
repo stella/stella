@@ -54,9 +54,13 @@ type FilePartOpener = {
   readonly opening: string | null;
   /** The files of a part that is itself a container, such as an email. */
   readonly list: (part: string) => Promise<Result<ContainedFiles, unknown>>;
-  /** Offers to save the part into a matter as a document of its own. */
-  readonly save: (part: FilePartDescriptor) => void;
 };
+
+/**
+ * Offers to save a part into a matter as a document of its own. It needs no
+ * native viewer, so it is offered wherever the document shows.
+ */
+type SaveFilePart = (part: FilePartDescriptor) => void;
 
 /** A container part's files, as its row shows them under itself. */
 type FilesInside =
@@ -67,13 +71,21 @@ type FilesInside =
 
 export const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
 
+export const FilePartSaveContext = createContext<SaveFilePart | null>(null);
+
 export const FilePartOpenerProvider = ({
   children,
   opener,
+  save,
 }: {
   children: ReactNode;
   opener: FilePartOpener | null;
-}) => <FilePartOpenerContext value={opener}>{children}</FilePartOpenerContext>;
+  save: SaveFilePart | null;
+}) => (
+  <FilePartSaveContext value={save}>
+    <FilePartOpenerContext value={opener}>{children}</FilePartOpenerContext>
+  </FilePartSaveContext>
+);
 
 const GLYPHS = {
   image: FileImageIcon,
@@ -125,6 +137,7 @@ export const FilePartRow = ({
   item: FilePartRowItem;
 }) => {
   const opener = use(FilePartOpenerContext);
+  const save = use(FilePartSaveContext);
   const t = useTranslations("fileParts");
   const document = useTranslations("document");
   const format = useFormatter();
@@ -180,12 +193,27 @@ export const FilePartRow = ({
   const separator = divided ? (
     <Separator className="absolute inset-x-0 bottom-0" />
   ) : null;
+  const saveButton =
+    save === null ? null : (
+      <Button
+        accessibilityLabel={t("saveNamed", { fileName: name })}
+        icon={<SaveIcon color={ui.mutedForeground} size={ICON_SIZE} />}
+        onPress={() => {
+          save({ part, fileName, mediaType, sizeBytes });
+        }}
+        size="icon"
+        variant="ghost"
+      />
+    );
   if (opener === null) {
     return (
-      <View className="min-h-11 w-full flex-row items-start gap-3 py-3">
-        {separator}
-        {icon}
-        {text}
+      <View className="flex-row items-start">
+        <View className="min-h-11 flex-1 flex-row items-start gap-3 py-3">
+          {separator}
+          {icon}
+          {text}
+        </View>
+        {saveButton}
       </View>
     );
   }
@@ -210,17 +238,6 @@ export const FilePartRow = ({
       {separator}
       {text}
     </Button>
-  );
-  const saveButton = (
-    <Button
-      accessibilityLabel={t("saveNamed", { fileName: name })}
-      icon={<SaveIcon color={ui.mutedForeground} size={ICON_SIZE} />}
-      onPress={() => {
-        opener.save({ part, fileName, mediaType, sizeBytes });
-      }}
-      size="icon"
-      variant="ghost"
-    />
   );
   const rowWithSave = (
     <View className="flex-row items-start">

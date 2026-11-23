@@ -22,7 +22,10 @@ import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
 
 import { EmailReading } from "@/components/email-reading";
-import { FilePartOpenerContext } from "@/components/file-part-list";
+import {
+  FilePartOpenerContext,
+  FilePartSaveContext,
+} from "@/components/file-part-list";
 import { ArrowLeftIcon, MailIcon, SaveIcon } from "@/icons.gen";
 import { useUiColors } from "@/theme";
 
@@ -132,6 +135,7 @@ export const MailboxMessages = ({
   const document = useTranslations("document");
   const scan = useTranslations("scan");
   const opener = use(FilePartOpenerContext);
+  const save = use(FilePartSaveContext);
   const ui = useUiColors();
   const [open, setOpen] = useState<OpenMessage | null>(null);
   const [query, setQuery] = useState("");
@@ -177,11 +181,11 @@ export const MailboxMessages = ({
           </Button>
         ) : null}
         {open.status === "open" ? <EmailReading read={open.reading} /> : null}
-        {opener === null || part === null ? null : (
+        {save === null || part === null ? null : (
           <Button
             icon={<SaveIcon color={ui.foreground} size={ICON_SIZE} />}
             onPress={() => {
-              opener.save(part);
+              save(part);
             }}
             size="sm"
             variant="outline"

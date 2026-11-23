@@ -496,20 +496,21 @@ const LegalFilePreview = ({
             fieldId,
             part,
           }),
-        save: ({ part, fileName, sizeBytes }: FilePartDescriptor) => {
-          router.push({
-            pathname: "/part/save",
-            params: {
-              workspaceId,
-              fieldId,
-              part,
-              name: fileName ?? "",
-              size: String(sizeBytes),
-            },
-          });
-        },
       }
     : null;
+  // Saving a part only names it to the server, so it needs no native viewer.
+  const savePart = ({ part, fileName, sizeBytes }: FilePartDescriptor) => {
+    router.push({
+      pathname: "/part/save",
+      params: {
+        workspaceId,
+        fieldId,
+        part,
+        name: fileName ?? "",
+        size: String(sizeBytes),
+      },
+    });
+  };
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
@@ -733,7 +734,7 @@ const LegalFilePreview = ({
           {t("openOriginal")}
         </Button>
       ) : null}
-      <FilePartOpenerProvider opener={partOpener}>
+      <FilePartOpenerProvider opener={partOpener} save={savePart}>
         {previewBody}
       </FilePartOpenerProvider>
     </ScrollView>
