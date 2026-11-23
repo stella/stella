@@ -1076,9 +1076,21 @@ const requestJson = async (unbounded: CorpusIndexRequest): Promise<unknown> =>
         try: async () => await response.text(),
         catch: (cause) => cause,
       });
-      const body = Result.isOk(bodyRead) ? bodyRead.value : "";
+      if (Result.isError(bodyRead)) {
+        const readDetail =
+          bodyRead.error instanceof Error
+            ? bodyRead.error.message
+            : String(bodyRead.error);
+        throw new CorpusIndexError({
+          message: `corpus index ${requestLabel(request)} -> ${response.status} (error body unreadable: ${readDetail})`,
+          status: response.status,
+          rejection: rejectionForHttpStatus(response.status),
+          reach: reachForHttpStatus(response.status),
+          cause: bodyRead.error,
+        });
+      }
       throw new CorpusIndexError({
-        message: `corpus index ${requestLabel(request)} -> ${response.status}: ${body.slice(0, 500)}`,
+        message: `corpus index ${requestLabel(request)} -> ${response.status}: ${bodyRead.value.slice(0, 500)}`,
         status: response.status,
         rejection: rejectionForHttpStatus(response.status),
         reach: reachForHttpStatus(response.status),
