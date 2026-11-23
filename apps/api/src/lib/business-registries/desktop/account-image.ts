@@ -29,10 +29,13 @@ export const desktopAccountImage = (
     return null;
   }
   const url = new URL(image);
+  // Normalisation percent-encodes non-ASCII, so the cap is checked again on
+  // what is returned: the desktop measures that, not the input.
   return url.protocol === "https:" &&
     url.hostname !== "" &&
     url.username === "" &&
-    url.password === ""
+    url.password === "" &&
+    url.href.length <= DESKTOP_ACCOUNT_IMAGE_MAX_LENGTH
     ? url.href
     : null;
 };

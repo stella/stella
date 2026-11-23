@@ -37,6 +37,20 @@ describe("the picture the desktop is sent", () => {
     }
   });
 
+  test("the cap holds for the URL as normalised, not as given", () => {
+    const base = "https://images.example.test/";
+    // Each "é" is one character in and six once percent-encoded.
+    const path = "é".repeat(
+      Math.floor((DESKTOP_ACCOUNT_IMAGE_MAX_LENGTH - base.length) / 2),
+    );
+    expect(`${base}${path}`.length).toBeLessThanOrEqual(
+      DESKTOP_ACCOUNT_IMAGE_MAX_LENGTH,
+    );
+    expect(desktopAccountImage(`${base}${path}`)).toBeNull();
+    const fits = `${base}${"é".repeat(8)}.png`;
+    expect(desktopAccountImage(fits)).toBe(new URL(fits).href);
+  });
+
   test("the verification keeps the picture beside the saved account, never in it", () => {
     const verified = desktopVerifiedAccount(
       {

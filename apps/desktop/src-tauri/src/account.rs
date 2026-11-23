@@ -1064,6 +1064,8 @@ pub async fn invalidate(
       );
       keychain_clear_failed()
     })?;
+    // The ended link's picture goes with it.
+    crate::account_avatar::clear();
   }
   drop(store);
   Ok(())

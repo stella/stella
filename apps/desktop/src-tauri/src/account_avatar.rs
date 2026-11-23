@@ -131,14 +131,15 @@ pub(crate) fn parse_source(reference: &str) -> Result<AvatarSource, AvatarError>
 }
 
 /// One client for every picture fetch. It never carries an account
-/// credential, and it follows a few redirects only while they stay on
-/// `https`.
+/// credential, it follows a few redirects only while they stay on `https`,
+/// and it sends no `Referer`, so a signed picture URL's query never reaches a
+/// redirect target.
 fn avatar_client() -> Result<&'static DesktopHttpClient, AvatarError> {
   static CLIENT: OnceLock<DesktopHttpClient> = OnceLock::new();
   if let Some(client) = CLIENT.get() {
     return Ok(client);
   }
-  let client = DesktopHttpClient::new(HttpClientOptions {
+  let client = DesktopHttpClient::new_without_referer(HttpClientOptions {
     redirect: reqwest::redirect::Policy::custom(|attempt| {
       if attempt.previous().len() >= MAX_REDIRECTS || attempt.url().scheme() != "https"
       {
@@ -337,11 +338,14 @@ pub(crate) async fn apply(
     return cache.clear().map_err(|_error| AvatarError::Unavailable);
   };
   let source = source_digest(&reference);
-  if cache.holds(namespace, &source) {
-    return Ok(false);
-  }
+  let held = cache.holds(namespace, &source);
   let image = match parse_source(&reference) {
+    // An inline picture is its own content: the same reference is the same
+    // picture.
+    Ok(AvatarSource::Inline(_)) if held => return Ok(false),
     Ok(AvatarSource::Inline(image)) => Ok(image),
+    // A host may replace the picture behind the same URL, so a remote one is
+    // fetched again while the cached one stays shown.
     Ok(AvatarSource::Remote(url)) => match client() {
       Ok(client) => fetch(client, url).await,
       Err(error) => Err(error),
@@ -350,11 +354,18 @@ pub(crate) async fn apply(
   };
   match image {
     Ok(image) => {
-      cache
-        .write(namespace, &source, &image)
-        .map_err(|_error| AvatarError::Unavailable)?;
+      if held && cache.data_url(namespace) == Some(image.data_url()) {
+        return Ok(false);
+      }
+      if cache.write(namespace, &source, &image).is_err() {
+        // The old picture no longer belongs to the account; show the initials.
+        forget(cache);
+        return Err(AvatarError::Unavailable);
+      }
       Ok(true)
     }
+    // Unreachable for now: the picture this same reference last gave stays.
+    Err(AvatarError::Unavailable) if held => Ok(false),
     // The old picture no longer belongs to the account; show the initials.
     Err(error) => {
       forget(cache);
