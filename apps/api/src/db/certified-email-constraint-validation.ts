@@ -12,7 +12,7 @@ import type { OnlineRepair } from "./online-migration-connection";
 export const CERTIFIED_EMAIL_CONSTRAINT = {
   tableName: "correspondence",
   constraintName: "correspondence_certified_email_check",
-  introducedBy: "20261122080000_correspondence_pec_channel",
+  introducedBy: "20261123050000_correspondence_pec_channel",
 } as const satisfies OnlineConstraintValidation & { introducedBy: string };
 
 export const CERTIFIED_EMAIL_CONSTRAINT_VALIDATION = {

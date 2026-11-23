@@ -12,12 +12,12 @@ export const DATA_BOX_CONSTRAINTS = [
   {
     tableName: "correspondence",
     constraintName: "correspondence_direction_check",
-    introducedBy: "20261122080000_correspondence_pec_channel",
+    introducedBy: "20261123050000_correspondence_pec_channel",
   },
   {
     tableName: "correspondence",
     constraintName: "correspondence_channel_check",
-    introducedBy: "20261122080000_correspondence_pec_channel",
+    introducedBy: "20261123050000_correspondence_pec_channel",
   },
   {
     tableName: "correspondence",
