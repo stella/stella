@@ -1993,7 +1993,7 @@
     "@stll/aho-corasick-wasm": "2.0.3",
     "@stll/anonymize": "3.0.7",
     "@stll/anonymize-data": "0.0.10",
-    "@stll/anonymize-wasm": "3.0.7",
+    "@stll/anonymize-wasm": "4.0.0",
     "@stll/docx-core": "0.43.1",
     "@stll/folio-agents": "0.16.12",
     "@stll/folio-core": "0.69.0",
@@ -2853,9 +2853,9 @@
 
     "@litko/yara-x-darwin-x64": ["@litko/yara-x-darwin-x64@0.13.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-Q63OOlyplDkpyvBKewU0bEMQbZMY/xFDYecaYPoQnemLYwZQ7X0X01a9lQrmEYGcLfKtXlLJTW7XtTeeKX9/PA=="],
 
-    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.13.0", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-F35SNKQgdjOhGPogOYQtdfhfTeGtFclacAVmCnsw6JFS60m7Tyfe20TGNAjky2uJzinjxtAgaUpQyJbqcSrgdw=="],
+    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.13.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-F35SNKQgdjOhGPogOYQtdfhfTeGtFclacAVmCnsw6JFS60m7Tyfe20TGNAjky2uJzinjxtAgaUpQyJbqcSrgdw=="],
 
-    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.13.0", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-6U8u8rU8i5tf9qIfhStbNTXaxBzNOJ3PqbDS+6m1Wgi0wXX1N7OqmHspzfRQ7udwW/U4JjSBX3GRSfZDF9YcXw=="],
+    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.13.0", "", { "os": "linux", "cpu": "x64" }, "sha512-6U8u8rU8i5tf9qIfhStbNTXaxBzNOJ3PqbDS+6m1Wgi0wXX1N7OqmHspzfRQ7udwW/U4JjSBX3GRSfZDF9YcXw=="],
 
     "@litko/yara-x-win32-arm64-msvc": ["@litko/yara-x-win32-arm64-msvc@0.13.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-DsGtBjG1yZHZTtbuTaYa6vIoWDDpnkRMTQk/gQyWrmKMAXE2YwiPy9gDYr+79ehMiM911AqR/A4TCGKkm8vxxQ=="],
 
@@ -2959,7 +2959,7 @@
 
     "@oozcitak/util": ["@oozcitak/util@10.0.0", "", {}, "sha512-hAX0pT/73190NLqBPPWSdBVGtbY6VOhWYK3qqHqtXQ1gK7kS2yz4+ivsN07hpJ6I3aeMtKP6J6npsEKOAzuTLA=="],
 
-    "@openrouter/sdk": ["@openrouter/sdk@1.5.103", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" }, "hasInstallScript": true }, "sha512-TfDg7s67+DsqSt4pGH5oIjsVNEwa9FDzigB3C8GJdjO0ebjXb9tHG4pWP5WQjIS8yLYDJK+gmNfBaTgjwgmp/g=="],
+    "@openrouter/sdk": ["@openrouter/sdk@1.5.103", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-TfDg7s67+DsqSt4pGH5oIjsVNEwa9FDzigB3C8GJdjO0ebjXb9tHG4pWP5WQjIS8yLYDJK+gmNfBaTgjwgmp/g=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.10.0", "", {}, "sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ=="],
 
@@ -3467,7 +3467,7 @@
 
     "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@3.0.7", "", { "os": "linux", "cpu": "x64" }, "sha512-qNHZC2dtF4JIDwvcBMuUzAtIKXszhEUYQjYgJ+1mVHQS9F+xyH83Rmc6pN69jOWaC4vlLoLwhHEtQppYLImP9g=="],
 
-    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@3.0.7", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-jHE9OeJIpc9gXngNNj6T15bgVY+h90HCR5ufDdR12QQR1bRM7Ou6yLTu3AC1lLKwgqxsflMrRw1RgDgP0DC/Rg=="],
+    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@4.0.0", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-MU8xWtjt6F91KDLJfBeyIhvndWqE43cUZn9yMJ385Zy155bhFjwp8cztMaW7418Rmd5HwKc2P9bFEH8/1CSfpg=="],
 
     "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@3.0.7", "", { "os": "win32", "cpu": "x64" }, "sha512-barhpyw/U+8gYOxD6PpsgkfypOVLodmHyNlmkdVAfzB5Ek5hIpz2FU2bfmkGMVysV6+mF14DViWHUH1hOIqr9w=="],
 
