@@ -26,6 +26,28 @@ const MAX_LINE_BYTES = 16 * 1024 * 1024;
 /** Maximum stderr tail kept in memory when `captureStderr` is on. */
 const MAX_STDERR_BYTES = 16 * 1024;
 
+const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * A harness's stderr tail as text, for classifying its errors. The tail can
+ * start inside a character, so leading continuation bytes are skipped; bytes
+ * that still are not UTF-8 read as "?" rather than failing the read.
+ */
+export const decodeStderrTail = (bytes: Uint8Array): string => {
+  // UTF-8 continuation bytes are 0x80 to 0xBF.
+  const isContinuation = (byte: number) => byte >= 0x80 && byte <= 0xbf;
+  let start = 0;
+  while (start < bytes.length && isContinuation(bytes[start] ?? 0)) {
+    start += 1;
+  }
+  const body = bytes.subarray(start);
+  return Result.try(() => STRICT_UTF8.decode(body)).unwrapOr(
+    Array.from(body, (byte) =>
+      String.fromCodePoint(byte < 0x80 ? byte : 0x3f),
+    ).join(""),
+  );
+};
+
 export type HarnessProcessDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
   requestMs: number;
@@ -208,7 +230,8 @@ export const startHarnessProcess = <TId, TError>({
     lines.end();
   };
 
-  let stderrTail = "";
+  // The newest bytes of stderr, decoded only when they are read.
+  let stderrTail: Uint8Array = new Uint8Array(0);
   const readStderr = async () => {
     const stderrStream = child.stderr;
     if (
@@ -218,16 +241,14 @@ export const startHarnessProcess = <TId, TError>({
     ) {
       return;
     }
-    const decoder = new TextDecoder("utf-8", { fatal: false });
     for await (const bytes of stderrStream) {
-      stderrTail += decoder.decode(bytes, { stream: true });
-      if (stderrTail.length > MAX_STDERR_BYTES * 2) {
-        stderrTail = stderrTail.slice(-MAX_STDERR_BYTES);
-      }
-    }
-    stderrTail += decoder.decode();
-    if (stderrTail.length > MAX_STDERR_BYTES) {
-      stderrTail = stderrTail.slice(-MAX_STDERR_BYTES);
+      const joined = new Uint8Array(stderrTail.length + bytes.length);
+      joined.set(stderrTail);
+      joined.set(bytes, stderrTail.length);
+      stderrTail =
+        joined.length > MAX_STDERR_BYTES
+          ? joined.slice(-MAX_STDERR_BYTES)
+          : joined;
     }
   };
   const reading = Promise.allSettled([readStdout(), readStderr()]);
@@ -297,7 +318,7 @@ export const startHarnessProcess = <TId, TError>({
     },
     exited,
     missedDeadline: () => state.missedDeadline,
-    stderr: () => stderrTail,
+    stderr: () => decodeStderrTail(stderrTail),
     closeInput: () => {
       if (!state.closed) {
         onInput(() => {

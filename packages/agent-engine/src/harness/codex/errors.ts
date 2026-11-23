@@ -130,9 +130,7 @@ type ClassifyTurnFailureOptions = {
 const SHARING_LIMIT_TEXT = "has reached their Subscription Sharing usage limit";
 /** Codex rejects a thread whose encrypted history cannot be verified (t3code, MIT, pingdotgg/t3code#36643). */
 const INVALID_ENCRYPTED_CONTENT = "invalid_encrypted_content";
-export const isEncryptedHistoryRejection = (
-  error: CodexTurnError | null,
-): boolean =>
+const isEncryptedHistoryRejection = (error: CodexTurnError | null): boolean =>
   errorCode(error?.codexErrorInfo ?? null) === INVALID_ENCRYPTED_CONTENT ||
   (error?.message.includes(INVALID_ENCRYPTED_CONTENT) ?? false);
 

@@ -424,7 +424,7 @@ const cliVersion = async (executable: string): Promise<string | null> => {
 };
 
 /** Where the member's own Antigravity CLI keeps its home. */
-export const antigravityCliHome = (
+const antigravityCliHome = (
   environment: Readonly<Record<string, string | undefined>>,
 ) =>
   environment["GEMINI_HOME"] ??

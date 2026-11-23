@@ -107,7 +107,8 @@ export const runMcpStdioBridge = async ({
   const state: { sessionId: string | null } = { sessionId: null };
   let queue: Promise<void> = Promise.resolve();
   const outOfBand = new Set<Promise<void>>();
-  let oversizedExceeded = false;
+  // Set from the reader's callback, so it is a field, not a narrowed local.
+  const limit = { oversizedExceeded: false };
 
   const isCancellationNotification = (trimmed: string): boolean => {
     const parsed = Result.try((): unknown => JSON.parse(trimmed));
@@ -211,20 +212,20 @@ export const runMcpStdioBridge = async ({
       });
     },
     oversized: () => {
-      oversizedExceeded = true;
+      limit.oversizedExceeded = true;
     },
   });
 
   for await (const chunk of input) {
     lines.push(chunk);
-    if (oversizedExceeded) {
+    if (limit.oversizedExceeded) {
       break;
     }
   }
   lines.end();
   await queue;
   await Promise.all(outOfBand);
-  if (oversizedExceeded) {
+  if (limit.oversizedExceeded) {
     return Result.err("MCP stdio message exceeded the maximum line size.");
   }
   return Result.ok();
