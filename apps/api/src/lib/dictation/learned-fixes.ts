@@ -44,8 +44,12 @@ export type LearnedFixOwner = {
   userId: SafeId<"user">;
 };
 
-/** Change ids remembered, so a retried change is applied once. */
-const REMEMBERED_CHANGE_IDS = 500;
+/**
+ * Change ids remembered in one generation, so a retried change is applied
+ * once. When they fill up the row starts a new generation rather than
+ * forgetting the oldest ids.
+ */
+export const REMEMBERED_CHANGE_IDS = 1000;
 /** Concurrent writes a change waits out before it gives up. */
 const WRITE_ATTEMPTS = 5;
 
@@ -55,11 +59,11 @@ const storedSchema = v.strictObject({
   changeIds: v.array(v.string()),
 });
 
-type Stored = v.InferOutput<typeof storedSchema>;
+export type LearnedFixesStored = v.InferOutput<typeof storedSchema>;
 
-type Row = { generation: number; revision: number; stored: Stored };
+type Row = { generation: number; revision: number; stored: LearnedFixesStored };
 
-const EMPTY: Stored = { fixes: [], changeIds: [] };
+const EMPTY: LearnedFixesStored = { fixes: [], changeIds: [] };
 
 /** The member's row: the primary key, so at most one. */
 const ownedBy = (owner: LearnedFixOwner) =>
@@ -72,7 +76,7 @@ const ownedBy = (owner: LearnedFixOwner) =>
 const decrypted = async (
   organizationId: SafeId<"organization">,
   { ciphertext, iv }: { ciphertext: Buffer; iv: Buffer },
-): Promise<Stored> => {
+): Promise<LearnedFixesStored> => {
   const plaintext = await decryptContent(organizationId, ciphertext, iv);
   const parsed = v.safeParse(storedSchema, JSON.parse(plaintext));
   if (!parsed.success) {
@@ -116,7 +120,7 @@ const writeRow = async (
     read,
     generation,
     next,
-  }: { read: Row | null; generation: number; next: Stored },
+  }: { read: Row | null; generation: number; next: LearnedFixesStored },
 ): Promise<boolean> => {
   const { ciphertext, iv } = await encryptContent(
     owner.organizationId,
@@ -150,14 +154,16 @@ const writeRow = async (
 
 const snapshot = (
   generation: number,
-  { fixes }: Stored,
+  { fixes }: LearnedFixesStored,
 ): DictationLearnedFixes => ({ generation, fixes });
 
 /** Reads, changes and writes the row until no other write came between. */
 const rewrite = async (
   tx: Transaction,
   owner: LearnedFixOwner,
-  change: (read: Row | null) => { generation: number; next: Stored } | null,
+  change: (
+    read: Row | null,
+  ) => { generation: number; next: LearnedFixesStored } | null,
 ): Promise<DictationLearnedFixes> => {
   for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
     // db-await-in-loop: a bounded retry that rereads only after a lost race
@@ -184,42 +190,51 @@ export const readLearnedFixes = async (
 };
 
 /**
- * Applies a device's changes, in order, and answers with the result. Changes
- * made in an older generation (before the member deleted everything stella
- * learned) and changes already applied are skipped.
+ * The row after a device's changes, or `null` when none applies: changes
+ * made in another generation and changes already applied are skipped. Once
+ * the remembered ids would pass `REMEMBERED_CHANGE_IDS`, the result starts
+ * the next generation with none remembered, so a change from before it,
+ * retried or not yet sent, is dropped like one made before a delete instead
+ * of being applied a second time.
  */
+export const applyDeviceChanges = (
+  current: { generation: number; stored: LearnedFixesStored },
+  { generation, changes }: DictationLearnedFixChanges,
+): { generation: number; next: LearnedFixesStored } | null => {
+  if (generation !== current.generation) {
+    return null;
+  }
+  const applied = new Set(current.stored.changeIds);
+  // A change repeated within one request is applied once, too.
+  const fresh = changes.filter(({ id }) => {
+    if (applied.has(id)) {
+      return false;
+    }
+    applied.add(id);
+    return true;
+  });
+  if (fresh.length === 0) {
+    return null;
+  }
+  const fixes = applyLearnedFixChanges(current.stored.fixes, fresh);
+  const changeIds = [...current.stored.changeIds, ...fresh.map(({ id }) => id)];
+  return changeIds.length > REMEMBERED_CHANGE_IDS
+    ? { generation: generation + 1, next: { fixes, changeIds: [] } }
+    : { generation, next: { fixes, changeIds } };
+};
+
+/** Applies a device's changes, in order, and answers with the result. */
 export const changeLearnedFixes = async (
   tx: Transaction,
   owner: LearnedFixOwner,
-  { generation, changes }: DictationLearnedFixChanges,
+  changes: DictationLearnedFixChanges,
 ): Promise<DictationLearnedFixes> =>
-  await rewrite(tx, owner, (read) => {
-    const current = read?.stored ?? EMPTY;
-    if (generation !== (read?.generation ?? 0)) {
-      return null;
-    }
-    const applied = new Set(current.changeIds);
-    // A change repeated within one request is applied once, too.
-    const fresh = changes.filter(({ id }) => {
-      if (applied.has(id)) {
-        return false;
-      }
-      applied.add(id);
-      return true;
-    });
-    if (fresh.length === 0) {
-      return null;
-    }
-    return {
-      generation,
-      next: {
-        fixes: applyLearnedFixChanges(current.fixes, fresh),
-        changeIds: [...current.changeIds, ...fresh.map(({ id }) => id)].slice(
-          -REMEMBERED_CHANGE_IDS,
-        ),
-      },
-    };
-  });
+  await rewrite(tx, owner, (read) =>
+    applyDeviceChanges(
+      { generation: read?.generation ?? 0, stored: read?.stored ?? EMPTY },
+      changes,
+    ),
+  );
 
 /** Deletes everything stella learned for the member, on every device. */
 export const clearLearnedFixes = async (
