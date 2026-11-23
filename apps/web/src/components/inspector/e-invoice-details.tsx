@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type {
@@ -9,6 +10,12 @@ import type {
   EInvoice,
   EInvoicePreview,
 } from "@stll/api-contract/e-invoice";
+import {
+  eInvoiceIdentifierScheme,
+  eInvoiceQuantityCount,
+  eInvoiceUnit,
+  type EInvoiceUnitName,
+} from "@stll/api-contract/e-invoice-codes";
 import { BidiText } from "@stll/ui/bidi-text";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { DocumentMark, type DocumentMarkKind } from "@stll/ui/document-mark";
@@ -77,6 +84,37 @@ const DOCUMENT_TYPE_LABELS = {
 
 type Party = EInvoice["seller"];
 
+type Identifier = Party["identifiers"][number];
+
+/**
+ * An identifier's label: its kind, with the scheme when it says more than
+ * the kind ("Registration number (KvK)"); a known scheme alone names an
+ * otherwise unnamed identifier ("GLN").
+ */
+const useIdentifierLabel = () => {
+  const t = useTranslations();
+  return (identifier: Identifier) => {
+    const kind = t(IDENTIFIER_KIND_LABELS[identifier.kind]);
+    const scheme = eInvoiceIdentifierScheme(identifier);
+    switch (scheme.type) {
+      case "none":
+        return kind;
+      case "named":
+        return identifier.kind === "other"
+          ? scheme.name
+          : t("eInvoice.identifierWithScheme", { kind, scheme: scheme.name });
+      case "code":
+        return t("eInvoice.identifierWithScheme", {
+          kind,
+          scheme: scheme.code,
+        });
+      default:
+        scheme satisfies never;
+        return panic("Unhandled identifier scheme");
+    }
+  };
+};
+
 /**
  * What the file lists without ids (lines, notes, a batch's invoices) is keyed
  * by its content and the how-manieth time that content repeats, so a row keeps
@@ -132,8 +170,56 @@ const Rate = ({
   );
 };
 
-/** The quantity a price is for, as the file writes it ("100 C62"). */
-const PricedPer = ({ basis }: { basis: string }) => <bdi>{` / ${basis}`}</bdi>;
+const UNIT_LABELS = {
+  unit: "eInvoice.units.unit",
+  hour: "eInvoice.units.hour",
+  day: "eInvoice.units.day",
+  week: "eInvoice.units.week",
+  month: "eInvoice.units.month",
+  year: "eInvoice.units.year",
+} as const satisfies Record<EInvoiceUnitName, TranslationKey>;
+
+/**
+ * A quantity with its unit: in words for common units ("14 units", "32
+ * hours"), as a symbol for measures ("240 m"), else as the file's code.
+ */
+const Quantity = ({
+  stated,
+  unitCode,
+}: {
+  /** The quantity as the file writes it. */
+  stated: string;
+  unitCode: string | null;
+}) => {
+  const t = useTranslations();
+  if (unitCode === null) {
+    return <bdi className="tabular-nums">{stated}</bdi>;
+  }
+  const unit = eInvoiceUnit(unitCode);
+  const count = eInvoiceQuantityCount(stated);
+  return (
+    <bdi className="tabular-nums">
+      {unit.type === "named" && count !== null
+        ? t(UNIT_LABELS[unit.name], { count, quantity: stated })
+        : t("eInvoice.quantityWithUnit", {
+            quantity: stated,
+            unit: unit.type === "symbol" ? unit.symbol : unitCode,
+          })}
+    </bdi>
+  );
+};
+
+/** The quantity a price is for ("/ 100 units"). */
+const PricedPer = ({
+  basis,
+}: {
+  basis: NonNullable<EInvoice["lines"][number]["priceBasis"]>;
+}) => (
+  <>
+    {" / "}
+    <Quantity stated={basis.quantity} unitCode={basis.unitCode} />
+  </>
+);
 
 const Section = ({
   children,
@@ -149,7 +235,7 @@ const Section = ({
 );
 
 const PartyDetails = ({ party, title }: { party: Party; title: string }) => {
-  const t = useTranslations();
+  const identifierLabel = useIdentifierLabel();
   if (
     party.name === null &&
     party.identifiers.length === 0 &&
@@ -166,26 +252,11 @@ const PartyDetails = ({ party, title }: { party: Party; title: string }) => {
       )}
       {party.identifiers.length > 0 && (
         <DetailsGrid variant="list">
-          {keyed(party.identifiers).map(({ item: identifier, key }) => {
-            const kind = t(IDENTIFIER_KIND_LABELS[identifier.kind]);
-            return (
-              <DetailsItem
-                key={key}
-                label={
-                  identifier.scheme === null
-                    ? kind
-                    : t("eInvoice.identifierWithScheme", {
-                        kind,
-                        scheme: identifier.scheme,
-                      })
-                }
-              >
-                <BidiText as="span" className="wrap-break-word">
-                  {identifier.value}
-                </BidiText>
-              </DetailsItem>
-            );
-          })}
+          {keyed(party.identifiers).map(({ item: identifier, key }) => (
+            <DetailsItem key={key} label={identifierLabel(identifier)}>
+              <BidiText as="span">{identifier.value}</BidiText>
+            </DetailsItem>
+          ))}
         </DetailsGrid>
       )}
       {party.address.length > 0 && (
@@ -231,11 +302,7 @@ const LineItems = ({ invoice }: { invoice: EInvoice }) => {
               </TableCell>
               <TableCell numeric>
                 {line.quantity !== null && (
-                  <bdi>
-                    {line.unitCode === null
-                      ? line.quantity
-                      : `${line.quantity} ${line.unitCode}`}
-                  </bdi>
+                  <Quantity stated={line.quantity} unitCode={line.unitCode} />
                 )}
               </TableCell>
               <TableCell numeric>
@@ -503,13 +570,14 @@ export const EInvoiceDetails = ({
   const format = SYNTAX_LABELS[preview.syntax];
   return (
     <div className="@container space-y-6">
-      <p className="text-muted-foreground flex items-center gap-2 text-sm">
+      <p className="text-muted-foreground flex items-start gap-2 text-sm">
         <DocumentMark
           aria-hidden="true"
-          className="size-4 shrink-0"
+          className="mt-0.5 size-4 shrink-0"
           kind={SYNTAX_MARKS[preview.syntax]}
         />
-        <bdi>
+        {/* A UBL customization id is one long URN; it wraps anywhere. */}
+        <bdi className="min-w-0 wrap-anywhere">
           {preview.version === null
             ? format
             : t("eInvoice.formatVersion", {

@@ -13,7 +13,10 @@ import {
 import { readCiiInvoice } from "@/api/lib/files/e-invoice-cii";
 import { readFatturaPaInvoice } from "@/api/lib/files/e-invoice-fattura-pa";
 import { readIsdocInvoice } from "@/api/lib/files/e-invoice-isdoc";
-import type { ParsedEInvoice } from "@/api/lib/files/e-invoice-nodes";
+import {
+  type ParsedEInvoice,
+  withDistinctIdentifiers,
+} from "@/api/lib/files/e-invoice-nodes";
 import { readUblInvoice } from "@/api/lib/files/e-invoice-ubl";
 import { classifyXmlDocument } from "@/api/lib/files/xml-document-class";
 import {
@@ -113,7 +116,11 @@ const withAttachments = (
   return fitPreview({
     syntax,
     version: parsed.version,
-    invoices: parsed.invoices,
+    invoices: parsed.invoices.map((invoice) => ({
+      ...invoice,
+      seller: withDistinctIdentifiers(invoice.seller),
+      buyer: withDistinctIdentifiers(invoice.buyer),
+    })),
   }).map((preview) => ({ preview, attachments }));
 };
 

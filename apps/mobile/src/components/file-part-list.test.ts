@@ -39,6 +39,13 @@ describe("a part's icon by the family of its media type", () => {
     ["xml", "application/xml", "faktura.xml", "xml"],
     ["xml stated as text", "text/xml", "podani.xml", "xml"],
     ["a signed file", "application/pkcs7-mime", "smlouva.pdf.p7m", "cades"],
+    ["a zip archive", "application/zip", "prilohy.zip", "zip"],
+    [
+      "a zip archive by its name",
+      "application/octet-stream",
+      "Prilohy.ZIP",
+      "zip",
+    ],
     ["a Pages document", "application/vnd.apple.pages", "dopis.pages", "pages"],
     [
       "a Numbers spreadsheet",
@@ -62,7 +69,6 @@ describe("a part's icon by the family of its media type", () => {
     ["plain text", "text/plain", "poznamky.txt", "text"],
     ["an email", "message/rfc822", "predzalobni-vyzva.eml", "email"],
     ["an Outlook message", "application/vnd.ms-outlook", "vyzva.msg", "email"],
-    ["a zip archive", "application/zip", "prilohy.zip", "archive"],
     ["a 7-Zip archive", "application/x-7z-compressed", "spis.7z", "archive"],
     [
       "an OpenDocument presentation",
@@ -112,7 +118,7 @@ describe("the name settles a type that says nothing", () => {
   });
 
   test("an opaque type with an archive's name draws the archive glyph", () => {
-    expect(fileTypeIcon("application/octet-stream", "Prilohy.ZIP")).toEqual({
+    expect(fileTypeIcon("application/octet-stream", "Prilohy.RAR")).toEqual({
       type: "glyph",
       family: "archive",
     });

@@ -28,3 +28,27 @@ export const ACTIVITY_NEVER_RECORDED = [
 export const ACTIVITY_SENT = ["timeEntries", "aiDrafts"] as const;
 
 export type ActivitySentFact = (typeof ACTIVITY_SENT)[number];
+
+/**
+ * What a stella AI draft is written from, in the order the disclosure and the
+ * consent both list them: first what this computer sends with the request,
+ * then what stella adds from the account. The disclosure test binds the sent
+ * inputs to the request fields, so a field sent without an input here fails.
+ */
+export const AI_DRAFT_SENT_INPUTS = [
+  "matter",
+  "date",
+  "duration",
+  "appNames",
+  "titles",
+  "instructions",
+] as const;
+
+export type AiDraftSentInput = (typeof AI_DRAFT_SENT_INPUTS)[number];
+
+export const AI_DRAFT_INPUTS = [
+  ...AI_DRAFT_SENT_INPUTS,
+  "earlierDescriptions",
+  "billingFormat",
+  "firmGuidelines",
+] as const;

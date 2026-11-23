@@ -3,8 +3,11 @@ import * as v from "valibot";
 
 import {
   FILE_PART_KINDS,
+  FILE_PART_MAX_DEPTH,
   FILE_PART_MAX_INDEX,
   FILE_PART_TEXT_PREVIEW_MAX_BYTES,
+  type FilePart,
+  filePartDepth,
   filePartId,
   filePartIdSchema,
   filePartInlineBytes,
@@ -34,6 +37,42 @@ describe("file part addresses", () => {
     "member:1 ",
     "signature:0",
     "constructor:0",
+  ])("%s addresses nothing", (value) => {
+    expect(parseFilePartId(value)).toBeNull();
+    expect(v.is(filePartIdSchema, value)).toBe(false);
+  });
+});
+
+describe("a part of a part", () => {
+  test("every path up to the deepest a part may sit round-trips through its address", () => {
+    const kinds = Object.values(FILE_PART_KINDS);
+    for (let depth = 1; depth <= FILE_PART_MAX_DEPTH; depth += 1) {
+      let part: FilePart | undefined;
+      for (let level = 0; level < depth; level += 1) {
+        const segment = {
+          kind: kinds[level % kinds.length] ?? FILE_PART_KINDS.member,
+          index: level === 0 ? FILE_PART_MAX_INDEX : level,
+        };
+        part = part === undefined ? segment : { ...segment, within: part };
+      }
+      if (part === undefined) {
+        throw new Error("No part built");
+      }
+      const id = filePartId(part);
+      expect(id.split("/")).toHaveLength(depth);
+      expect(filePartDepth(part)).toBe(depth);
+      expect(parseFilePartId(id)).toEqual(part);
+      expect(v.is(filePartIdSchema, id)).toBe(true);
+    }
+  });
+
+  test.each([
+    "member:0/member:1/member:2/member:3/member:4",
+    "member:0/",
+    "/member:0",
+    "member:0//member:1",
+    "member:0/signature:1",
+    "member:0\\attachment:1",
   ])("%s addresses nothing", (value) => {
     expect(parseFilePartId(value)).toBeNull();
     expect(v.is(filePartIdSchema, value)).toBe(false);

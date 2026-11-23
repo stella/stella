@@ -82,6 +82,11 @@ const SignedDossierViewer = lazy(async () => {
   return { default: m.SignedDossierViewer };
 });
 
+const ZipArchiveViewer = lazy(async () => {
+  const m = await import("@/components/inspector/zip-archive-viewer");
+  return { default: m.ZipArchiveViewer };
+});
+
 const StructuredDocumentViewer = lazy(async () => {
   const m = await import("@/components/inspector/structured-document-viewer");
   return { default: m.StructuredDocumentViewer };
@@ -149,6 +154,12 @@ const legalFileViewers = {
     unreadable: "correspondence.dataBox.unreadable",
     download: "common.download",
     surface: "inspector-data-box",
+  },
+  zip: {
+    Viewer: ZipArchiveViewer,
+    unreadable: "inspector.fileParts.archiveUnreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-zip",
   },
 } as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
 
@@ -307,7 +318,8 @@ const FileTabViewerComponent = ({
       case "uyap":
       case "isdoc":
       case "isdocx":
-      case "xml": {
+      case "xml":
+      case "zip": {
         const { Viewer, unreadable, download, surface } =
           legalFileViewers[nativePreviewKind];
         return (
@@ -433,7 +445,10 @@ const FileTabViewerComponent = ({
       case null:
         if (entity.conversionRefusal !== undefined) {
           return (
-            <ConversionRefusalFallback refusal={entity.conversionRefusal} />
+            <ConversionRefusalFallback
+              onDownload={handleDownload}
+              refusal={entity.conversionRefusal}
+            />
           );
         }
         return (
@@ -464,6 +479,7 @@ const FileTabViewerComponent = ({
                 : undefined
             }
             scaleOffset={scaleOffset}
+            underOverlayBar={isZoomOverlayVisible}
             viewId={peekPdfViewId}
             workspaceId={tab.workspaceId}
           />

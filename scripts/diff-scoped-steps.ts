@@ -144,6 +144,8 @@ export const DIFF_SCOPED_STEPS = {
     operational(GENERATED_CONFLICTS),
   "network-baseline-record.yml:record#Seed write mode from the latest published recording":
     operational("Seeds the recorder from the last published recording."),
+  "route-scale-nightly.yml:measure#Prepare network comparison baseline":
+    fullTree(NETWORK_BUDGET),
   "journey-canary.yml:journeys#Check published versions": operational(
     "Compares the published versions with main before the journeys run.",
   ),

@@ -109,6 +109,7 @@
     "paymentReference": "Référence de paiement",
     "prepaidAmount": "Acompte versé",
     "quantity": "Quantité et unité",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Fournisseur",
@@ -118,6 +119,14 @@
     "taxableAmount": "Base d’imposition",
     "totals": "Totaux",
     "unitPrice": "Prix unitaire",
+    "units": {
+      "day": "{count, plural, one {{quantity} jour} many {{quantity} jours} other {{quantity} jours}}",
+      "hour": "{count, plural, one {{quantity} heure} many {{quantity} heures} other {{quantity} heures}}",
+      "month": "{count, plural, one {{quantity} mois} many {{quantity} mois} other {{quantity} mois}}",
+      "unit": "{count, plural, one {{quantity} unité} many {{quantity} unités} other {{quantity} unités}}",
+      "week": "{count, plural, one {{quantity} semaine} many {{quantity} semaines} other {{quantity} semaines}}",
+      "year": "{count, plural, one {{quantity} an} many {{quantity} ans} other {{quantity} ans}}"
+    },
     "unreadable": "Impossible de lire la facture.",
     "vat": "TVA",
     "vatBreakdown": "Ventilation de la TVA"

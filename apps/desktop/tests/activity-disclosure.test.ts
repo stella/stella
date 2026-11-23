@@ -17,13 +17,19 @@ import { assertProperty } from "@stll/property-testing";
 import {
   ACTIVITY_RECORDED,
   ACTIVITY_SENT,
+  AI_DRAFT_INPUTS,
+  AI_DRAFT_SENT_INPUTS,
 } from "../src/activity/activity-disclosure";
 import type {
   ActivityRecordedFact,
   ActivitySentFact,
+  AiDraftSentInput,
 } from "../src/activity/activity-disclosure";
 import { cardDraftEntry } from "../src/activity/billing-draft-logic";
 import type { MatchedSegment } from "../src/activity/day-review-logic";
+import enMessages from "../src/i18n/langs/en.json" with { type: "json" };
+
+const messages = enMessages.activity;
 
 // Setup and the Activity window tell the user what Activity records and what
 // leaves the computer. Each field the native side keeps per stretch of time,
@@ -80,26 +86,37 @@ const RECORDED_FIELDS = {
   FieldGroup<ActivityRecordedFact | typeof CHOSEN_BY_YOU>
 >;
 
+/** A field that only holds entries, whose own fields are mapped. */
+const HOLDS_ENTRIES = "holdsEntries";
+
+// A draft request's fields map to the input the drafts consent and the
+// drafts fact list, so both name exactly what the request carries.
 const DRAFT_ENTRY = {
-  app_names: "aiDrafts",
-  date: "aiDrafts",
-  duration_minutes: "aiDrafts",
+  app_names: "appNames",
+  date: "date",
+  duration_minutes: "duration",
   entry_id: NOT_ABOUT_THE_DAY,
-  evidence: "aiDrafts",
-  matter_id: "aiDrafts",
-  timezone: "aiDrafts",
-} as const;
+  evidence: "titles",
+  matter_id: "matter",
+  timezone: "date",
+} as const satisfies Record<
+  string,
+  AiDraftSentInput | typeof NOT_ABOUT_THE_DAY
+>;
 
 const DRAFT_EVIDENCE = {
-  document_names: "aiDrafts",
-  window_titles: "aiDrafts",
-} as const;
+  document_names: "titles",
+  window_titles: "titles",
+} as const satisfies Record<string, AiDraftSentInput>;
 
 const DRAFT_REQUEST = {
-  entries: "aiDrafts",
+  entries: HOLDS_ENTRIES,
   previous_result: NOT_ABOUT_THE_DAY,
-  steer: "aiDrafts",
+  steer: "instructions",
 } as const;
+
+const isDraftInput = (value: string): value is AiDraftSentInput =>
+  AI_DRAFT_SENT_INPUTS.some((input) => input === value);
 
 const TIME_ENTRY = {
   billable: "timeEntries",
@@ -166,7 +183,12 @@ const SENT_FIELDS = {
   },
 } as const satisfies Record<
   string,
-  FieldGroup<ActivitySentFact | typeof NOT_ABOUT_THE_DAY>
+  FieldGroup<
+    | ActivitySentFact
+    | AiDraftSentInput
+    | typeof HOLDS_ENTRIES
+    | typeof NOT_ABOUT_THE_DAY
+  >
 >;
 
 const factsOf = (groups: Record<string, FieldGroup<string>>) =>
@@ -213,9 +235,33 @@ describe("the activity disclosure", () => {
   });
 
   test("states every way activity leaves the computer, and no other", () => {
-    const backed = factsOf(SENT_FIELDS);
+    const backed = new Set(
+      [...factsOf(SENT_FIELDS)].map((value) =>
+        isDraftInput(value) || value === HOLDS_ENTRIES ? "aiDrafts" : value,
+      ),
+    );
     backed.delete(NOT_ABOUT_THE_DAY);
     expect([...backed].toSorted()).toEqual([...ACTIVITY_SENT].toSorted());
+  });
+
+  test("lists every input a stella AI draft request sends, and no other", () => {
+    const sent = [...factsOf(SENT_FIELDS)].filter(isDraftInput);
+    expect(sent.toSorted()).toEqual([...AI_DRAFT_SENT_INPUTS].toSorted());
+  });
+
+  // The drafts fact and the drafts consent both list AI_DRAFT_INPUTS through
+  // one hook, and every input has its own text in every catalog.
+  test("gives every stella AI draft input its own text", () => {
+    expect(Object.keys(messages.disclosure.aiDraftInputs).toSorted()).toEqual(
+      [...AI_DRAFT_INPUTS].toSorted(),
+    );
+    for (const message of [
+      messages.aiDraftConsent,
+      messages.disclosure.sent.aiDrafts,
+    ]) {
+      expect(message).toContain("{inputs}");
+      expect(message).toContain("{provider}");
+    }
   });
 
   // A segment keeps a document's full local path; the drafts fact names

@@ -36,6 +36,39 @@ test("shows the named document field conversion refusal", () => {
   ).toBeTruthy();
 });
 
+test("names a photo format this server makes no preview of, with the download", () => {
+  let downloads = 0;
+  render(
+    <IntlProvider locale="en" messages={messages}>
+      <ConversionRefusalFallback
+        onDownload={() => {
+          downloads += 1;
+        }}
+        refusal={{ kind: "no_preview", format: "HEIC", cause: "decoding_off" }}
+      />
+    </IntlProvider>,
+  );
+
+  expect(
+    screen.getByText(
+      "This server makes no previews of HEIC images. Download the file to open it.",
+    ),
+  ).toBeTruthy();
+  screen.getByRole("button", { name: "Download" }).click();
+  expect(downloads).toBe(1);
+});
+
+test("says when a photo cannot be read for a preview", () => {
+  mount({ kind: "no_preview", format: "HEIF", cause: "unreadable" });
+
+  expect(
+    screen.getByText(
+      "This HEIF image can't be read for a preview. Download the file to open it.",
+    ),
+  ).toBeTruthy();
+  expect(screen.queryByRole("button")).toBeNull();
+});
+
 test("shows the legacy format and replacement extension", () => {
   mount({ kind: "legacy_format", replacementExtension: ".xlsx" });
 

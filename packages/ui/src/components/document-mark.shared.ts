@@ -408,6 +408,7 @@ export const DOCUMENT_MARKS = {
     lines: [["I", "S", "D", "O", "C"], ["X"]],
   }),
   xml: taggedFormatMark({ color: "#5c6470", lines: [["X", "M", "L"]] }),
+  zip: taggedFormatMark({ color: "#7a5c2e", lines: [["Z", "I", "P"]] }),
   eAkta: taggedFormatMark({ color: "#8c2f5d", lines: [["E", "S", "3"]] }),
   et3: taggedFormatMark({ color: "#a2481f", lines: [["E", "T", "3"]] }),
   zep: taggedFormatMark({ color: "#24529c", lines: [["Z", "E", "P"]] }),

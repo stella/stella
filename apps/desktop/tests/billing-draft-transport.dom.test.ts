@@ -141,8 +141,21 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
               };
               break;
             }
-            case "save-failed":
-              break; // A failed transport cannot confirm or clear local intent.
+            case "save-failed": {
+              // A failed save confirms nothing and clears no withdrawal, but
+              // it settles: nothing stays on its way.
+              if (intent === null) {
+                break;
+              }
+              const current = consent.isCurrent(intent.generation);
+              consent.fail(intent.generation);
+              if (current) {
+                expect(["pending-grant", "pending-withdrawal"]).not.toContain(
+                  consent.getSnapshot(),
+                );
+              }
+              break;
+            }
             case "save": {
               if (intent === null) {
                 break;
@@ -173,7 +186,7 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
               owner += 1;
               intent = null;
               if (withdrawal !== null) {
-                expect(consent.getSnapshot()).toBe("pending-withdrawal");
+                expect(consent.getSnapshot()).toBe("withdrawal-unconfirmed");
                 intent = {
                   value: "revoked",
                   generation: consent.begin("revoked"),
@@ -196,7 +209,12 @@ test("billing-draft.current-consent-gates-every-random-transport-action", async 
               break;
             }
             case "refresh": {
+              const refused = consent.getSnapshot() === "grant-refused";
               consent.refresh(currentAccount().consent);
+              // A refused grant holds nothing back: the server's answer wins.
+              if (refused) {
+                expect(consent.getSnapshot()).toBe(currentAccount().consent);
+              }
               if (intent?.scopeKey === scopeKey) {
                 intent.revision = currentAccount().revision;
               }

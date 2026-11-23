@@ -58,6 +58,9 @@ export const canEmbedInProcess = (header: ImageHeader): boolean => {
       EMBEDDABLE_PNG_COLOR_TYPES.has(encoding.colorType)
     );
   }
+  if (encoding.format !== "jpeg") {
+    return false;
+  }
   return (
     EMBEDDABLE_JPEG_FRAMES.has(encoding.frameMarker) &&
     encoding.precision === 8 &&
@@ -157,18 +160,26 @@ const pixelShape = (rgba: Uint8Array) => {
   return { grey, opaque };
 };
 
-/** The listed channels of each RGBA pixel, packed. */
+/**
+ * The listed channels of each RGBA pixel, packed. One pass per channel with
+ * plain indices: an iterator per pixel would make garbage in proportion to
+ * the image, which is what a render's memory peak is made of.
+ */
 const pickChannels = (rgba: Uint8Array, channels: readonly number[]) => {
   const pixels = rgba.length / RGBA_CHANNELS;
-  const out = new Uint8Array(pixels * channels.length);
-  for (let pixel = 0; pixel < pixels; pixel += 1) {
-    for (const [index, channel] of channels.entries()) {
-      out[pixel * channels.length + index] =
-        rgba[pixel * RGBA_CHANNELS + channel] ?? 0;
+  const stride = channels.length;
+  const out = new Uint8Array(pixels * stride);
+  for (let index = 0; index < stride; index += 1) {
+    const channel = channels[index] ?? panic("A picked channel is listed");
+    for (let pixel = 0; pixel < pixels; pixel += 1) {
+      out[pixel * stride + index] = rgba[pixel * RGBA_CHANNELS + channel] ?? 0;
     }
   }
   return out;
 };
+
+/** An image stream added to the PDF, and how many bytes it holds. */
+type EmbeddedImage = { image: PDFImage; bytes: number };
 
 const flateImage = (
   pdf: PDF,
@@ -185,8 +196,9 @@ const flateImage = (
     smask?: PdfRef;
     width: number;
   },
-): PdfRef =>
-  pdf.context.registry.register(
+): { ref: PdfRef; bytes: number } => {
+  const data = deflateSync(samples);
+  const ref = pdf.context.registry.register(
     new PdfStream(
       PdfDict.of({
         Type: PdfName.of("XObject"),
@@ -198,9 +210,11 @@ const flateImage = (
         Filter: PdfName.of("FlateDecode"),
         ...(smask === undefined ? {} : { SMask: smask }),
       }),
-      deflateSync(samples),
+      data,
     ),
   );
+  return { ref, bytes: data.byteLength };
+};
 
 /**
  * Decoded pixels as an image XObject: grey when every pixel is, with a soft
@@ -210,7 +224,7 @@ const flateImage = (
 const embedRgba = (
   pdf: PDF,
   page: Extract<ImagePage, { kind: "rgba" }>,
-): PDFImage => {
+): EmbeddedImage => {
   const { height, rgba, width } = page;
   if (rgba.length !== width * height * RGBA_CHANNELS) {
     return panic("Decoded pixels do not match the declared size");
@@ -224,24 +238,46 @@ const embedRgba = (
         samples: pickChannels(rgba, [3]),
         width,
       });
-  const ref = flateImage(pdf, {
+  const color = flateImage(pdf, {
     colorSpace: grey ? "DeviceGray" : "DeviceRGB",
     height,
     samples: pickChannels(rgba, grey ? [0] : [0, 1, 2]),
     width,
-    ...(smask === undefined ? {} : { smask }),
+    ...(smask === undefined ? {} : { smask: smask.ref }),
   });
-  return new PDFImage(ref, width, height);
+  return {
+    image: new PDFImage(color.ref, width, height),
+    bytes: color.bytes + (smask?.bytes ?? 0),
+  };
 };
 
-const embedPage = (pdf: PDF, page: ImagePage): PDFImage => {
+const embedPage = (pdf: PDF, page: ImagePage): EmbeddedImage => {
   if (page.kind === "rgba") {
     return embedRgba(pdf, page);
   }
-  return page.mimeType === "image/jpeg"
-    ? pdf.embedJpeg(page.bytes)
-    : pdf.embedPng(page.bytes);
+  return {
+    image:
+      page.mimeType === "image/jpeg"
+        ? pdf.embedJpeg(page.bytes)
+        : pdf.embedPng(page.bytes),
+    // A JPEG is stored as it is; a PNG's pixels are deflated again, to
+    // about the size they had.
+    bytes: page.bytes.byteLength,
+  };
 };
+
+type ImagePagesOptions = {
+  /**
+   * Image bytes the PDF may hold. Pages are added until one takes it past
+   * this; the result is then `too-large` and no further page is decoded.
+   */
+  maxBytes?: number;
+  /** Adds pages after the images, before the PDF is written. */
+  finish?: (pdf: PDF) => void;
+};
+
+export type ImagePagesPdf =
+  { type: "pdf"; bytes: Uint8Array } | { type: "too-large" };
 
 /**
  * A PDF with one page per image, each page sized to its image as displayed.
@@ -251,12 +287,18 @@ const embedPage = (pdf: PDF, page: ImagePage): PDFImage => {
  */
 export const imagePagesToPdf = async (
   pages: Iterable<ImagePage>,
-): Promise<Uint8Array> => {
+  { finish, maxBytes = Number.POSITIVE_INFINITY }: ImagePagesOptions = {},
+): Promise<ImagePagesPdf> => {
   const pdf = PDF.create();
+  let held = 0;
   // Pages are taken one at a time: a lazily decoded source holds only the
   // page being embedded.
   for (const source of pages) {
-    const image = embedPage(pdf, source);
+    const { bytes, image } = embedPage(pdf, source);
+    held += bytes;
+    if (held > maxBytes) {
+      return { type: "too-large" };
+    }
     const width = image.width * POINTS_PER_PIXEL;
     const height = image.height * POINTS_PER_PIXEL;
     const swapsSides = source.orientation >= 5;
@@ -280,7 +322,8 @@ export const imagePagesToPdf = async (
   if (pdf.getPageCount() === 0) {
     return panic("An image PDF needs at least one page");
   }
-  return await saveCreatedPdf(pdf);
+  finish?.(pdf);
+  return { type: "pdf", bytes: await saveCreatedPdf(pdf) };
 };
 
 /** A one-page PDF showing an embeddable JPEG or PNG at its own size. */
@@ -292,7 +335,12 @@ export const imageToPdf = async ({
   bytes: Uint8Array;
   header: ImageHeader;
   mimeType: EmbeddableImageMimeType;
-}): Promise<Uint8Array> =>
-  await imagePagesToPdf([
+}): Promise<Uint8Array> => {
+  const pdf = await imagePagesToPdf([
     { kind: "encoded", mimeType, bytes, orientation: header.orientation },
   ]);
+  // Without a byte budget every image fits.
+  return pdf.type === "pdf"
+    ? pdf.bytes
+    : panic("An unbounded image PDF was too large");
+};

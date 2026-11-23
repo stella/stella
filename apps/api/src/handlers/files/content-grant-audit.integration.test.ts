@@ -62,10 +62,12 @@ import {
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
 import { readMarkedDownload } from "@/api/handlers/files/marked-download";
+import { readFilePartListEndpoint } from "@/api/handlers/files/part-list";
 import saveFilePartEndpoint from "@/api/handlers/files/part-save";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
 import { signedDossierPreviewEndpoint } from "@/api/handlers/files/signed-dossier";
 import structuredDocumentEndpoint from "@/api/handlers/files/structured-document";
+import { zipArchivePreviewEndpoint } from "@/api/handlers/files/zip-archive";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createAuditRecorder } from "@/api/lib/audit-log";
@@ -120,6 +122,7 @@ import {
 } from "@/api/tests/fixtures/pec";
 import { makeEAktaFixture } from "@/api/tests/fixtures/signed-dossier";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
+import { makeZipArchive } from "@/api/tests/fixtures/zip-archive";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
@@ -130,9 +133,11 @@ import { cadesPreviewScalingScenario } from "@/api/tests/read-scaling/cades-prev
 import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box-preview";
 import { eInvoicePreviewScalingScenario } from "@/api/tests/read-scaling/e-invoice";
 import { emailReadingScalingScenario } from "@/api/tests/read-scaling/email-reading";
+import { filePartListScalingScenario } from "@/api/tests/read-scaling/file-part-list";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import { signedDossierPreviewScalingScenario } from "@/api/tests/read-scaling/signed-dossier";
 import { structuredDocumentScalingScenario } from "@/api/tests/read-scaling/structured-document";
+import { zipArchiveScalingScenario } from "@/api/tests/read-scaling/zip-archive";
 import {
   getRlsFixture,
   releaseRlsFixture,
@@ -1099,6 +1104,61 @@ const seedAsic = async () =>
     }),
   );
 
+/** A plain archive: a filing in a folder, a locked report, a forwarded email. */
+const seedZip = async () =>
+  await seedStored(
+    {
+      fileName: "podklady-ke-sporu.zip",
+      mimeType: "application/x-zip-compressed",
+      pdfFileId: null,
+    },
+    makeZipArchive([
+      { name: "podání/vyjádření.txt", data: "Vyjádření žalovaného k žalobě" },
+      { name: "znalecký posudek.pdf", data: "%PDF-1.7", flags: 0x00_01 },
+      {
+        name: "korespondence/podklady.eml",
+        data: [
+          "From: Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+          "To: Jitka Skořepová <skorepova@stavby-hradec.cz>",
+          "Subject: Podklady k jednání",
+          "MIME-Version: 1.0",
+          'Content-Type: multipart/mixed; boundary="SPIS"',
+          "",
+          "--SPIS",
+          "Content-Type: text/plain; charset=utf-8",
+          "",
+          "Dobrý den, v příloze posílám plnou moc.",
+          "--SPIS",
+          "Content-Type: text/plain; charset=utf-8",
+          'Content-Disposition: attachment; filename="plna-moc.txt"',
+          "",
+          "Plná moc ze dne 2. 11. 2026",
+          "--SPIS--",
+          "",
+        ].join("\r\n"),
+      },
+    ]),
+  );
+
+const partListContext = (
+  fieldId: SafeId<"field">,
+  part: string,
+  scopedDb: ScopedDb,
+  audit = recorderA(),
+) =>
+  createTestHandlerContext<
+    Parameters<typeof readFilePartListEndpoint.handler>[0]
+  >({
+    workspaceId: ids.wsA1,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userA1 },
+    audit,
+    scopedDb,
+    safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+    params: { workspaceId: ids.wsA1, fieldId },
+    query: { part },
+  });
+
 // A generic type models an older upload recognized by its stored extension.
 const seedEAkta = async (pdf?: Uint8Array) =>
   await seedStored(
@@ -1954,6 +2014,146 @@ describe("ASiC file delivery", () => {
   });
 });
 
+describe("ZIP archive delivery", () => {
+  test("an archive shows the same files in Files and AI, a locked one with its reason", async () => {
+    const { fieldId, entityId, entityVersionId } = await seedZip();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const view = await zipArchivePreviewEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    );
+    expect(view).toMatchObject({
+      files: [
+        {
+          fileName: "vyjádření.txt",
+          folder: "podání",
+          part: { part: "member:0", mediaType: "text/plain" },
+          text: "Vyjádření žalovaného k žalobě",
+          status: "readable",
+        },
+        {
+          fileName: "znalecký posudek.pdf",
+          part: null,
+          unavailable: "encrypted",
+        },
+        {
+          fileName: "podklady.eml",
+          folder: "korespondence",
+          part: { part: "member:2" },
+        },
+      ],
+    });
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: "zip" },
+    });
+    const read = await LEGAL_FILE_READERS.zip({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    const { text } = read.unwrap();
+    expect(text).toContain("podání/vyjádření.txt");
+    expect(text).toContain("Vyjádření žalovaného k žalobě");
+    expect(text).toContain("The file is encrypted.");
+  });
+
+  test("an email in an archive lists its attachments, each opening by its path", async () => {
+    const { fieldId, entityId } = await seedZip();
+    const listed = await readFilePartListEndpoint.handler(
+      partListContext(fieldId, "member:2", scopedDbA()),
+    );
+    expect(listed).toEqual({
+      files: [
+        {
+          fileName: "plna-moc.txt",
+          folder: null,
+          sizeBytes: new TextEncoder().encode("Plná moc ze dne 2. 11. 2026")
+            .byteLength,
+          part: expect.objectContaining({
+            part: "member:2/attachment:0",
+            fileName: "plna-moc.txt",
+          }),
+          unavailable: null,
+          charset: "utf-8",
+        },
+      ],
+    });
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: "zip", part: "member:2" },
+    });
+    const issued = (
+      await readPartUrl(fieldId, "member:2/attachment:0")
+    ).unwrap();
+    expect(issued).toMatchObject({ fileName: "plna-moc.txt" });
+    const response = (await redeemPartUrl(issued.presignedUrl)).unwrap();
+    expect(await response.text()).toBe("Plná moc ze dne 2. 11. 2026");
+  });
+
+  test("a locked file and a file that holds no files open nothing, and record nothing", async () => {
+    const { fieldId, entityId } = await seedZip();
+    const locked = await readPartUrl(fieldId, "member:1");
+    expect(locked.isErr() && locked.error.status).toBe(404);
+    expect(
+      answeredStatus(
+        await readFilePartListEndpoint.handler(
+          partListContext(fieldId, "member:0", scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("refuses another matter's archive and its parts", async () => {
+    const { fieldId, entityId } = await seedFile(
+      {
+        fileName: "podklady-ke-sporu.zip",
+        mimeType: "application/zip",
+        pdfFileId: null,
+      },
+      "b",
+    );
+    expect(
+      answeredStatus(
+        await zipArchivePreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+    expect(
+      answeredStatus(
+        await readFilePartListEndpoint.handler(
+          partListContext(fieldId, "member:2", scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("the files inside a part cost the same as a matter grows", async () => {
+    const { fieldId } = await seedZip();
+    const context = partListContext(fieldId, "member:2", scopedDbA());
+    const small = await filePartListScalingScenario.measure(context);
+    const unrelated = Array.from({ length: 80 }, () => ({
+      id: createSafeId<"entity">(),
+      name: "Docket entry",
+      kind: "document" as const,
+      workspaceId: ids.wsA1,
+    }));
+    seededEntityIds.push(...unrelated.map(({ id }) => id));
+    await testDb.insert(entities).values(unrelated);
+    const large = await filePartListScalingScenario.measure(context);
+    expect(small.statements).toBeGreaterThan(0);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
+
 describe("signed container delivery", () => {
   test("an existing generic upload shows the same documents and signers in Files and AI", async () => {
     const { fieldId, entityId, entityVersionId } = await seedEAkta();
@@ -2139,6 +2339,7 @@ describe("CAdES file delivery", () => {
   test.each([
     { scenario: cadesPreviewScalingScenario, seed: seedCades },
     { scenario: asicPreviewScalingScenario, seed: seedAsic },
+    { scenario: zipArchiveScalingScenario, seed: seedZip },
   ])(
     "$scenario.name cost stays bounded as a matter grows",
     async ({ scenario: { measure }, seed }) => {

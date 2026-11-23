@@ -545,6 +545,8 @@
     "closeTab": "Zamknij <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "To jest plik {format} w starszym formacie. Zapisz go ponownie jako {replacementExtension}, aby go przekonwertować.",
+      "noPreviewDecodingOff": "Ten serwer nie tworzy podglądów obrazów {format}. Pobierz plik, aby go otworzyć.",
+      "noPreviewUnreadable": "Nie można odczytać tego obrazu {format} do podglądu. Pobierz plik, aby go otworzyć.",
       "unsupportedEncoding": "Ten dokument używa nieobsługiwanego kodowania {encoding}, dlatego nie można go przekonwertować.",
       "unsupportedField": "Ten dokument zawiera pole {fieldType}, którego nie można przekonwertować.",
       "unsupportedReference": "Ten dokument odwołuje się do zasobu zewnętrznego w {element} {attribute}, dlatego nie można go przekonwertować."
@@ -561,11 +563,20 @@
       "anonymization": "Anonimizacja"
     },
     "fileParts": {
+      "archiveUnreadable": "Nie udało się odczytać archiwum.",
       "back": "Wróć do listy",
       "download": "Pobierz {fileName}",
+      "noFilesInside": "W środku nie ma żadnych plików.",
       "noPreview": "Tego typu pliku nie można wyświetlić w podglądzie. Pobierz go lub zapisz w sprawie.",
       "notConverted": "Nie udało się przekonwertować tego pliku do podglądu. Pobierz go lub zapisz w sprawie.",
-      "open": "Otwórz {fileName}"
+      "open": "Otwórz {fileName}",
+      "unavailable": {
+        "encrypted": "Chroniony hasłem, nie można otworzyć",
+        "link": "Odnośnik do innego pliku, nie jest otwierany",
+        "tooLarge": "Za duży, by go otworzyć",
+        "unreadable": "Uszkodzony, nie można otworzyć",
+        "unsupported": "Skompresowany w sposób, którego nie można otworzyć"
+      }
     },
     "firstSourceReached": "To pierwsze źródło.",
     "groups": {

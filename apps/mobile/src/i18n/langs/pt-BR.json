@@ -503,6 +503,7 @@
     "paymentReference": "Referência de pagamento",
     "prepaidAmount": "Pago antecipadamente",
     "quantity": "Quantidade e unidade",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "Número de registro",
@@ -514,6 +515,14 @@
     "taxableAmount": "Base de cálculo",
     "totals": "Totais",
     "unitPrice": "Preço unitário",
+    "units": {
+      "day": "{count, plural, one {{quantity} dia} many {{quantity} dias} other {{quantity} dias}}",
+      "hour": "{count, plural, one {{quantity} hora} many {{quantity} horas} other {{quantity} horas}}",
+      "month": "{count, plural, one {{quantity} mês} many {{quantity} meses} other {{quantity} meses}}",
+      "unit": "{count, plural, one {{quantity} unidade} many {{quantity} unidades} other {{quantity} unidades}}",
+      "week": "{count, plural, one {{quantity} semana} many {{quantity} semanas} other {{quantity} semanas}}",
+      "year": "{count, plural, one {{quantity} ano} many {{quantity} anos} other {{quantity} anos}}"
+    },
     "unreadable": "Não foi possível ler a fatura.",
     "vat": "IVA",
     "vatBreakdown": "Detalhamento do IVA",
@@ -534,8 +543,19 @@
     "type": "Tipo"
   },
   "fileParts": {
+    "archiveUnreadable": "Não foi possível ler o arquivo compactado.",
     "attachments": "Anexos",
+    "files": "Arquivos",
+    "insideFailed": "Não foi possível carregar os arquivos dentro dele. Toque para tentar de novo.",
+    "noFilesInside": "Não há arquivos dentro.",
     "open": "Abrir {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Protegido por senha, não pode ser aberto",
+      "link": "Link para outro arquivo, não é aberto",
+      "tooLarge": "Grande demais para abrir",
+      "unreadable": "Danificado, não pode ser aberto",
+      "unsupported": "Compactado de um modo que não pode ser aberto"
+    },
     "unnamed": "Arquivo sem nome"
   },
   "header": {

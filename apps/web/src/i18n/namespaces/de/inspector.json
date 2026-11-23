@@ -545,6 +545,8 @@
     "closeTab": "<bdi>{name}</bdi> schließen",
     "conversionRefusal": {
       "legacyFormat": "Dies ist eine ältere {format}-Datei. Speichern Sie sie als {replacementExtension}, um sie zu konvertieren.",
+      "noPreviewDecodingOff": "Dieser Server erstellt keine Vorschauen von {format}-Bildern. Laden Sie die Datei herunter, um sie zu öffnen.",
+      "noPreviewUnreadable": "Dieses {format}-Bild kann für eine Vorschau nicht gelesen werden. Laden Sie die Datei herunter, um sie zu öffnen.",
       "unsupportedEncoding": "Dieses Dokument verwendet die nicht unterstützte Zeichenkodierung {encoding} und kann daher nicht konvertiert werden.",
       "unsupportedField": "Dieses Dokument enthält ein {fieldType}-Feld, das nicht konvertiert werden kann.",
       "unsupportedReference": "Dieses Dokument verweist in {element} {attribute} auf eine externe Ressource und kann daher nicht konvertiert werden."
@@ -561,11 +563,20 @@
       "anonymization": "Anonymisierung"
     },
     "fileParts": {
+      "archiveUnreadable": "Das Archiv konnte nicht gelesen werden.",
       "back": "Zurück zur Liste",
       "download": "{fileName} herunterladen",
+      "noFilesInside": "Darin sind keine Dateien.",
       "noPreview": "Für diesen Dateityp gibt es keine Vorschau. Laden Sie die Datei herunter oder speichern Sie sie in einer Akte.",
       "notConverted": "Diese Datei konnte nicht für die Vorschau umgewandelt werden. Laden Sie sie herunter oder speichern Sie sie in einer Akte.",
-      "open": "{fileName} öffnen"
+      "open": "{fileName} öffnen",
+      "unavailable": {
+        "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",
+        "link": "Verweis auf eine andere Datei, wird nicht geöffnet",
+        "tooLarge": "Zu groß zum Öffnen",
+        "unreadable": "Beschädigt, lässt sich nicht öffnen",
+        "unsupported": "Mit einem Verfahren komprimiert, das sich nicht öffnen lässt"
+      }
     },
     "firstSourceReached": "Dies ist die erste Quelle.",
     "groups": {

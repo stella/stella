@@ -125,7 +125,7 @@ const sampleInvoice = {
       quantity: "10.000",
       unitCode: "HUR",
       unitPrice: "100.00",
-      priceBasis: "1 HUR",
+      priceBasis: { quantity: "1", unitCode: "HUR" },
       vatRate: "21",
       vatCategory: "S",
       netAmount: "1000.00",
@@ -285,9 +285,13 @@ const { useDocxEditorHostStore } =
 const { FileTabPanel } = await import("./file-tab-panel");
 const { dataBoxPreviewOptions, fileOptions } =
   await import("@/lib/files/queries");
-const { asicPreviewOptions, cadesPreviewOptions, signedDossierPreviewOptions } =
-  await import("@/lib/files/legal-file-queries");
-const { filePartContentOptions } =
+const {
+  asicPreviewOptions,
+  cadesPreviewOptions,
+  signedDossierPreviewOptions,
+  zipArchivePreviewOptions,
+} = await import("@/lib/files/legal-file-queries");
+const { filePartContentOptions, filePartListOptions } =
   await import("@/lib/files/file-part-queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
@@ -836,6 +840,112 @@ test.each([".asice", ".asics"])(
   },
 );
 
+test("lists a ZIP archive's files with their folders and opens an email inside it in place", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-zip"),
+    fileName: "podklady-ke-sporu.zip",
+    mimeType: "application/zip",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const unread = {
+    text: "",
+    textFormat: "plain",
+    status: "unavailable",
+  } as const;
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(zipArchivePreviewOptions(key).queryKey, {
+      files: [
+        {
+          fileName: "žaloba.pdf",
+          folder: "podání/2026",
+          sizeBytes: 88_310,
+          part: {
+            part: "member:0",
+            fileName: "žaloba.pdf",
+            mediaType: "application/pdf",
+            sizeBytes: 88_310,
+          },
+          unavailable: null,
+          text: "Žaloba",
+          textFormat: "markdown",
+          status: "readable",
+        },
+        {
+          fileName: "posudek.pdf",
+          folder: null,
+          sizeBytes: 120_400,
+          part: null,
+          unavailable: "encrypted",
+          ...unread,
+        },
+        {
+          fileName: "podklady.eml",
+          folder: "korespondence",
+          sizeBytes: 9120,
+          part: {
+            part: "member:2",
+            fileName: "podklady.eml",
+            mediaType: "message/rfc822",
+            sizeBytes: 9120,
+          },
+          unavailable: null,
+          ...unread,
+        },
+      ],
+    });
+    client.setQueryData(
+      filePartListOptions({ ...key, part: "member:2" }).queryKey,
+      {
+        files: [
+          {
+            fileName: "usneseni.pdf",
+            folder: null,
+            sizeBytes: 4210,
+            part: {
+              part: "member:2/attachment:0",
+              fileName: "usneseni.pdf",
+              mediaType: "application/pdf",
+              sizeBytes: 4210,
+            },
+            unavailable: null,
+          },
+        ],
+      },
+    );
+  });
+
+  expect(
+    await mounted.findByRole("button", { name: "Open žaloba.pdf" }),
+  ).toBeTruthy();
+  expect(mounted.getByText("podání/2026")).toBeTruthy();
+  // A locked file is listed with the reason, and nothing opens it.
+  expect(mounted.getByText("Password-protected, can’t be opened")).toBeTruthy();
+  expect(
+    mounted.queryByRole("button", { name: "Open posudek.pdf" }),
+  ).toBeNull();
+  expect(
+    mounted.queryByRole("button", { name: "Download posudek.pdf" }),
+  ).toBeNull();
+
+  // An email in the archive lists its own attachments, which open in turn.
+  fireEvent.click(mounted.getByRole("button", { name: "Open podklady.eml" }));
+  fireEvent.click(
+    await mounted.findByRole("button", { name: "Open usneseni.pdf" }),
+  );
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(partLinkRequests).toContain("field-zip/member:2/attachment:0");
+  fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+  expect(
+    await mounted.findByRole("button", { name: "Open usneseni.pdf" }),
+  ).toBeTruthy();
+  fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+  expect(
+    await mounted.findByRole("button", { name: "Open žaloba.pdf" }),
+  ).toBeTruthy();
+  expect(partLinkRequests).not.toContain("field-zip/member:2");
+});
+
 test("opens a document member no viewer draws as the PDF the server converts it to", async () => {
   const tab = {
     ...pdfTab,
@@ -1129,9 +1239,11 @@ test.each([
     expect(mounted.getByText("Sample Supplier Test")).toBeTruthy();
     expect(mounted.getByText("Sample Customer Test")).toBeTruthy();
     expect(mounted.getByText("XX0000000001")).toBeTruthy();
-    expect(mounted.getByText("Registration number (0088)")).toBeTruthy();
+    expect(mounted.getByText("Registration number (GLN)")).toBeTruthy();
     expect(mounted.getByText("Sample consulting hours")).toBeTruthy();
-    expect(mounted.getByText("10.000 HUR")).toBeTruthy();
+    // Common units are named in words, with the plural their count takes.
+    expect(mounted.getByText("10.000 hours")).toBeTruthy();
+    expect(mounted.getByText("1 hour")).toBeTruthy();
     expect(mounted.getByText("Showing 1 of 3 lines")).toBeTruthy();
     expect(mounted.getAllByText("21% (S)")).toHaveLength(2);
     expect(mounted.getByText("Total with VAT")).toBeTruthy();
