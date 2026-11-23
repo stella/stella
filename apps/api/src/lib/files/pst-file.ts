@@ -34,7 +34,7 @@ import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
 import { spawnBinaryWorker } from "@/api/lib/subprocess";
 
 /** How long the worker may take over a stored mailbox's list or message. */
-export const PST_READ_TIMEOUT_MS = LIMITS.extractionTimeoutMs;
+const PST_READ_TIMEOUT_MS = LIMITS.extractionTimeoutMs;
 
 /** A list's reply: a row per message, at most the list's bound. */
 const LIST_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
@@ -141,10 +141,14 @@ export const readStoredPstPreview = async ({
   if (reply.isErr()) {
     return Result.err(reply.error);
   }
-  const parsed = v.safeParse(
-    PREVIEW_REPLY,
-    new TextDecoder().decode(reply.value),
+  // The worker writes its reply as UTF-8 JSON; anything else is no reply.
+  const text = Result.try(() =>
+    new TextDecoder("utf-8", { fatal: true }).decode(reply.value),
   );
+  if (text.isErr()) {
+    return Result.err(invalidReply());
+  }
+  const parsed = v.safeParse(PREVIEW_REPLY, text.value);
   return parsed.success ? Result.ok(parsed.output) : Result.err(invalidReply());
 };
 

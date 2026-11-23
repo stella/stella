@@ -122,11 +122,12 @@ class Cursor {
     return value;
   }
 
+  /** The magic (ASCII) and the wire version. */
   magic(expected: string): boolean {
     const read = this.take(expected.length);
     return (
       read !== null &&
-      new TextDecoder().decode(read) === expected &&
+      read.every((byte, index) => byte === expected.codePointAt(index)) &&
       this.u8() === WIRE_VERSION
     );
   }
@@ -297,7 +298,7 @@ export const pstInteger = (
 };
 
 /** FILETIME ticks (100 ns) between 1601-01-01 and 1970-01-01. */
-const FILETIME_UNIX_EPOCH = 116_444_736_000_000_000n;
+const FILETIME_UNIX_EPOCH_TICKS = 116_444_736_000_000_000;
 
 /** A time property's value, or null when it is not a date one can show. */
 export const pstTime = (
@@ -311,12 +312,15 @@ export const pstTime = (
   ) {
     return null;
   }
-  const ticks = new DataView(
+  const view = new DataView(
     property.bytes.buffer,
     property.bytes.byteOffset,
     8,
-  ).getBigInt64(0, true);
-  const milliseconds = Number((ticks - FILETIME_UNIX_EPOCH) / 10_000n);
-  const date = new Date(milliseconds);
+  );
+  // As a float: below a microsecond of rounding for any date one shows.
+  const ticks = view.getInt32(4, true) * 2 ** 32 + view.getUint32(0, true);
+  const date = new Date(
+    Math.round((ticks - FILETIME_UNIX_EPOCH_TICKS) / 10_000),
+  );
   return Number.isNaN(date.getTime()) ? null : date;
 };

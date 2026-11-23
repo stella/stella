@@ -9,6 +9,8 @@
  * read is written empty, under its name, which the email reader lists as
  * one that cannot be read.
  */
+import { Result } from "better-result";
+
 import {
   PST_PROPERTY_TYPE,
   pstInteger,
@@ -68,12 +70,13 @@ export const PST_PROPERTY = {
 const ATTACH_EMBEDDED_MESSAGE = 5;
 
 /** The largest RTF body read out of its compressed stream. */
-export const PST_RTF_MAX_BYTES = 16 * 1024 * 1024;
+const PST_RTF_MAX_BYTES = 16 * 1024 * 1024;
 
 /** Windows-1252, the code page a message that names none is in. */
 const DEFAULT_CODE_PAGE = 1252;
 
-const UTF8 = new TextDecoder("utf-8");
+/** The reader hands Unicode strings on as UTF-8 it wrote itself. */
+const UTF8 = new TextDecoder("utf-8", { fatal: true });
 
 /** The code page an 8-bit string of `properties` is in. */
 export const pstCodePage = (properties: readonly PstProperty[]): number =>
@@ -89,7 +92,7 @@ const decodeText = (
     return null;
   }
   if (property.type === PST_PROPERTY_TYPE.unicode) {
-    return UTF8.decode(property.bytes);
+    return Result.try(() => UTF8.decode(property.bytes)).unwrapOr(null);
   }
   if (property.type === PST_PROPERTY_TYPE.string8) {
     return codePageDecoder(codePage).decode(property.bytes);
@@ -211,7 +214,7 @@ const base64 = (bytes: Uint8Array): string =>
 
 /** Base64 in lines of 76 characters (RFC 2045). */
 const base64Lines = (bytes: Uint8Array): string =>
-  (base64(bytes).match(/.{1,76}/gu) ?? []).join(CRLF);
+  Array.from(base64(bytes).matchAll(/.{1,76}/gu), ([line]) => line).join(CRLF);
 
 /** Printable ASCII without the characters that end a header. */
 const PLAIN_HEADER_TEXT = /^[\x20-\x7e]*$/u;
@@ -286,7 +289,12 @@ const recipientsOf = (
           ? smtpAddress(text(PST_PROPERTY.emailAddress))
           : null),
     };
-    found.set(header, [...(found.get(header) ?? []), mailbox]);
+    const listed = found.get(header);
+    if (listed === undefined) {
+      found.set(header, [mailbox]);
+    } else {
+      listed.push(mailbox);
+    }
   }
   // A message without a recipient table names its recipients only in its
   // display fields: "Name; Name".
