@@ -13,8 +13,7 @@ import {
   E_INVOICE_WORKER_MODE,
 } from "@/api/lib/files/e-invoice-protocol";
 import { LIMITS } from "@/api/lib/limits";
-import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
-import { spawnBinaryWorker } from "@/api/lib/subprocess";
+import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 const E_INVOICE_PREVIEW_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const previewReplySchema = v.pipe(
@@ -48,8 +47,9 @@ const runEInvoiceWorker = async (
       unavailable("The invoice file exceeds the preview size limit"),
     );
   }
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionBinaryWorker({
+    // An invoice's attachments are listed, never opened as archives.
+    zipNameCodePage: null,
     args: [
       E_INVOICE_WORKER_MODE.preview,
       String(LIMITS.extractedContentMaxChars),

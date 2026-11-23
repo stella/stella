@@ -45,6 +45,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "desktop_presence",
   "desktop_runners",
   "desktop_time_entry_batches",
+  "dictation_vocabulary_terms",
   "document_processing_runs",
   "document_review_finding_decisions",
   "document_review_findings",

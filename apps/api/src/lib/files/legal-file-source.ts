@@ -21,6 +21,7 @@ import {
   fileFieldQuery,
   lockLiveVersionField,
 } from "@/api/lib/files/live-version-field";
+import { zipNameCodePageSource } from "@/api/lib/files/organization-zip-name-code-page";
 import { createFileKey } from "@/api/lib/files/utils";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
@@ -232,6 +233,8 @@ export const openFileSource = async <TFormat extends FileSourceFormat>(
     entityId,
     load,
     deliver,
+    /** The code page the reading organization's ZIP names tie in. */
+    zipNameCodePage: zipNameCodePageSource(scopedDb, organizationId),
   });
 };
 

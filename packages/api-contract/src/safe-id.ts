@@ -111,6 +111,7 @@ export type SafeIdType =
   | "usageEvent"
   | "desktopEditHandoff"
   | "desktopEditSession"
+  | "dictationVocabularyTerm"
   | "legalListClaim"
   | "legalListClaimReviewEvent"
   | "legalGraphEdge"

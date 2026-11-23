@@ -7,8 +7,7 @@ import { classifyFailure } from "@stll/errors";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { LIMITS } from "@/api/lib/limits";
-import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
-import { spawnBinaryWorker } from "@/api/lib/subprocess";
+import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 import {
   DATA_BOX_PREVIEW_MODE,
@@ -16,8 +15,9 @@ import {
 } from "./preview-contract";
 
 export const readDataBoxPreview = async ({ bytes }: ScannedFile) => {
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionBinaryWorker({
+    // A data-box message's files are listed, never opened as archives.
+    zipNameCodePage: null,
     args: [DATA_BOX_PREVIEW_MODE],
     stdin: new Blob([bytes]),
     timeoutMs: LIMITS.extractionTimeoutMs,

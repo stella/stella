@@ -152,6 +152,7 @@ const ACCOUNT_DELETION_KNOWN_GAPS: readonly KnownGap[] = [
       ["bilingual_translation_runs", "requested_by", "set null"],
       ["case_law_research_columns", "created_by", "set null"],
       ["cell_metadata", "created_by", "set null"],
+      ["dictation_vocabulary_terms", "created_by", "set null"],
       ["cell_metadata", "updated_by", "set null"],
       ["chat_browser_site_grants", "user_id", "cascade"],
       ["chat_command_receipts", "user_id", "cascade"],
