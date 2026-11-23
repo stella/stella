@@ -29,6 +29,9 @@ describe("root sitemap read failures", () => {
     { caseLawStatus: 200, statuteStatus: 429, expectedStatus: 503 },
     { caseLawStatus: 200, statuteStatus: 502, expectedStatus: 503 },
     { caseLawStatus: 200, statuteStatus: 503, expectedStatus: 503 },
+    // The shard lists always exist: a refusal there is a fault, never a 404.
+    { caseLawStatus: 422, statuteStatus: 200, expectedStatus: 503 },
+    { caseLawStatus: 200, statuteStatus: 404, expectedStatus: 503 },
   ])(
     "upstream response pair %j refuses the entire index",
     async ({ caseLawStatus, statuteStatus, expectedStatus }) => {

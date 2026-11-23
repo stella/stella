@@ -141,6 +141,50 @@ describe("public statute sitemap", () => {
     },
   );
 
+  test.each([400, 404, 410, 422])(
+    "an upstream %d for a requested shard answers 404",
+    async (status) => {
+      const fetchImpl = async () => new Response("missing", { status });
+
+      const works = await fetchPublicStatuteSitemapWorks({
+        fetchImpl,
+        shard: { bucket: "zz", country: "cze" },
+      });
+      const response = createSitemapReadFailureResponse(
+        works.isErr() ? works.error : null,
+      );
+
+      expect(response.status).toBe(404);
+      expect(response.headers.get("Retry-After")).toBeNull();
+    },
+  );
+
+  test("an upstream 422 for the shard list answers 503", async () => {
+    const fetchImpl = async () => new Response("invalid", { status: 422 });
+
+    const shards = await fetchPublicStatuteSitemapShards({ fetchImpl });
+    const response = createSitemapReadFailureResponse(
+      shards.isErr() ? shards.error : null,
+    );
+
+    expect(response.status).toBe(503);
+  });
+
+  test("an unreachable upstream answers 503", async () => {
+    const fetchImpl = async (): Promise<Response> =>
+      await Promise.reject(new TypeError("fetch failed"));
+
+    const works = await fetchPublicStatuteSitemapWorks({
+      fetchImpl,
+      shard: { bucket: "all", country: "cze" },
+    });
+    const response = createSitemapReadFailureResponse(
+      works.isErr() ? works.error : null,
+    );
+
+    expect(response.status).toBe(503);
+  });
+
   test("any other unreadable shard answers 503", async () => {
     const fetchImpl = async () => new Response("nope", { status: 502 });
 
