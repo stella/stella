@@ -6663,14 +6663,7 @@ jobs:
 
       - name: Check generated WebAssembly from a fresh Cargo cache
         id: wasm-check
-        env:
-          SCAN_ENGINE_WASM_OUT_DIR: ${{ runner.temp }}/scan-engine-wasm
-          HEIC_DECODER_WASM_OUT_DIR: ${{ runner.temp }}/heic-decoder-wasm
-          PST_READER_WASM_OUT_DIR: ${{ runner.temp }}/pst-reader-wasm
-        run: |
-          bash packages/scan-engine/scripts/test-wasm-offline.sh
-          bash packages/heic-decoder/scripts/test-wasm-offline.sh
-          bash packages/pst-reader/scripts/test-wasm-offline.sh
+        run: bash scripts/check-generated-wasm.sh
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'

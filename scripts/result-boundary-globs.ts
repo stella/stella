@@ -266,6 +266,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/parameter-store/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
   "packages/portable-path/src/**/*.ts",
+  "packages/pst-reader/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
   "packages/scan-engine/src/**/*.ts",
