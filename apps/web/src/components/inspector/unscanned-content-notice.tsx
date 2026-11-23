@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactElement } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -74,9 +74,9 @@ export const WithUnscannedContentNotice = ({
   children,
   reasons,
 }: {
-  children: ReactNode;
+  children: ReactElement;
   reasons: readonly UnscannedContentReason[];
-}) =>
+}): ReactElement =>
   reasons.length === 0 ? (
     children
   ) : (
