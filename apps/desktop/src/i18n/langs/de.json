@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Alle Clips",
+    "allResults": "Alle Ergebnisse",
     "bold": "Fett",
     "bulletedList": "Aufzählung",
     "cancel": "Abbrechen",
@@ -378,6 +379,7 @@
     "moveToGroup": "In Gruppe verschieben",
     "newGroupOption": "Neue Gruppe…",
     "noGroup": "Keine Gruppe",
+    "noGroupMatches": "Keine Treffer in dieser Gruppe",
     "noResults": "Keine passenden Inhalte",
     "noResultsSearchRegistries": "In Registern nach „{query}“ suchen",
     "numberedList": "Nummerierte Liste",
@@ -1198,6 +1200,8 @@
       "available": "Version {version} ist verfügbar.",
       "checkFailed": "stella desktop konnte nicht nach Aktualisierungen suchen.",
       "deferred": "Version {version} wartet, solange geöffnete Dokumente bearbeitet werden. Prüfen Sie danach erneut, um sie zu installieren, oder sie wird bei der nächsten automatischen Prüfung installiert.",
+      "downloadProgress": "{percent} % heruntergeladen",
+      "downloading": "Version {version} wird heruntergeladen. stella desktop startet nach der Installation neu.",
       "install": "Installieren und neu starten",
       "installFailed": "stella desktop konnte die Aktualisierung nicht installieren.",
       "installInProgress": "Eine Aktualisierung wird installiert.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Wird in Office geöffnet",
     "sessionSavingDraft": "Entwurf wird gespeichert",
     "settings": "Einstellungen",
+    "showTranscription": "Transkript anzeigen",
     "support": "Support",
     "supportCopyDiagnostics": "Diagnose kopieren",
     "supportEmailSupport": "E-Mail-Support",
     "supportRevealAppData": "App-Daten anzeigen",
     "temporaryWorkingCopies": "Temporäre Arbeitskopien",
     "transcribeRecording": "Aufnahme transkribieren…",
-    "updateReady": "Aktualisierung bereit",
+    "transcriptionProgress": "Transkription läuft: {done} von {total} Min.",
+    "transcriptionProgressSoFar": "Transkription läuft: bisher {done} Min.",
+    "transcriptionReady": "Transkript fertig",
     "updatesManaged": "Aktualisierungen werden von Ihrer Organisation verwaltet"
   }
 }

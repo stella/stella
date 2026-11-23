@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Wszystkie wycinki",
+    "allResults": "Wszystkie wyniki",
     "bold": "Pogrubienie",
     "bulletedList": "Lista punktowana",
     "cancel": "Anuluj",
@@ -378,6 +379,7 @@
     "moveToGroup": "Przenieś do grupy",
     "newGroupOption": "Nowa grupa…",
     "noGroup": "Bez grupy",
+    "noGroupMatches": "Brak wyników w tej grupie",
     "noResults": "Brak pasujących wycinków",
     "noResultsSearchRegistries": "Szukaj „{query}” w rejestrach",
     "numberedList": "Lista numerowana",
@@ -1198,6 +1200,8 @@
       "available": "Dostępna jest wersja {version}.",
       "checkFailed": "stella desktop nie mógł sprawdzić aktualizacji.",
       "deferred": "Wersja {version} czeka, dopóki edytujesz otwarte dokumenty. Gdy skończysz, sprawdź ponownie, aby ją zainstalować, w przeciwnym razie zostanie zainstalowana przy następnym automatycznym sprawdzeniu.",
+      "downloadProgress": "Pobrano {percent}%",
+      "downloading": "Pobieranie wersji {version}. Po instalacji stella desktop uruchomi się ponownie.",
       "install": "Zainstaluj i uruchom ponownie",
       "installFailed": "stella desktop nie mógł zainstalować aktualizacji.",
       "installInProgress": "Trwa instalowanie aktualizacji.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Otwieranie w Office",
     "sessionSavingDraft": "Zapisywanie wersji roboczej",
     "settings": "Ustawienia",
+    "showTranscription": "Pokaż transkrypcję",
     "support": "Wsparcie",
     "supportCopyDiagnostics": "Kopiuj diagnostykę",
     "supportEmailSupport": "Wsparcie e-mail",
     "supportRevealAppData": "Pokaż dane aplikacji",
     "temporaryWorkingCopies": "Tymczasowe kopie robocze",
     "transcribeRecording": "Transkrybuj nagranie…",
-    "updateReady": "Aktualizacja gotowa",
+    "transcriptionProgress": "Trwa transkrypcja: {done} z {total} min",
+    "transcriptionProgressSoFar": "Trwa transkrypcja: dotąd {done} min",
+    "transcriptionReady": "Transkrypcja gotowa",
     "updatesManaged": "Aktualizacjami zarządza Twoja organizacja"
   }
 }

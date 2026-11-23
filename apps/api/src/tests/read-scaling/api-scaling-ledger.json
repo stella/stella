@@ -1923,6 +1923,14 @@
       "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
     {
+      "id": "POST /v1/desktop/dictation/learned-fixes",
+      "reason": "Rewrites one member's single row of at most 30 short fixes, with at most 50 changes per request; a scaling fixture for this bounded row is pending."
+    },
+    {
+      "id": "DELETE /v1/desktop/dictation/learned-fixes",
+      "reason": "Rewrites one member's single row of at most 30 short fixes, with at most 50 changes per request; a scaling fixture for this bounded row is pending."
+    },
+    {
       "id": "POST /v1/desktop/dictation/recording-cleanup",
       "reason": "Returns transient formatted text for one bounded part of a recording transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
@@ -1969,6 +1977,14 @@
     {
       "id": "POST /v1/dictation/cleanup",
       "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
+      "id": "POST /v1/dictation/learned-fixes",
+      "reason": "Rewrites one member's single row of at most 30 short fixes, with at most 50 changes per request; a scaling fixture for this bounded row is pending."
+    },
+    {
+      "id": "DELETE /v1/dictation/learned-fixes",
+      "reason": "Rewrites one member's single row of at most 30 short fixes, with at most 50 changes per request; a scaling fixture for this bounded row is pending."
     },
     {
       "id": "POST /v1/dictation/recording-cleanup",

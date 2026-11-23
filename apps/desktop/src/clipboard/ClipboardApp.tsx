@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -150,7 +151,9 @@ import {
   clipboardItemLink,
   clipboardPastePreview,
   clipboardPointerMoved,
+  clipboardRailItems,
   clipboardRailScrollDelta,
+  clipboardRailSpacers,
   clipboardRailWheelDelta,
   clipboardRailWindow,
   clipboardScopeKeyAction,
@@ -222,6 +225,10 @@ import {
 } from "./ClipboardGroupDialog";
 import { nextClipboardGroupColor } from "./ClipboardGroupFields";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
+import {
+  ClipboardRailDivider,
+  clipboardRailDivider,
+} from "./ClipboardRailDivider";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useClipsCopyFailed } from "./clips-copy-routing";
 import { useRailViewport } from "./use-rail-viewport";
@@ -1942,11 +1949,18 @@ const ClipboardApp = () => {
   // newest card in the same flushSync commit.
   const deferredQuery = useDeferredValue(query);
   const filterQuery = query === "" ? query : deferredQuery;
-  const filteredItems = filterClipboardItems(
+  // A search inside a group lists the group's matches, then every other
+  // match after a divider.
+  const railItems = clipboardRailItems(
     snapshot.items,
     filterQuery,
     activeGroupId,
     searchOptions,
+  );
+  const filteredItems = railItems.items;
+  const railDivider = clipboardRailDivider(
+    railItems.dividerIndex,
+    CLIPBOARD_CARD_GAP,
   );
   const groupsById = new Map(snapshot.groups.map((group) => [group.id, group]));
   const sourceAppVisuals = new Map(
@@ -1969,12 +1983,12 @@ const ClipboardApp = () => {
       searchSource,
       query === filterQuery
         ? filteredItems
-        : filterClipboardItems(
+        : clipboardRailItems(
             snapshot.items,
             query,
             activeGroupId,
             searchOptions,
-          ),
+          ).items,
     );
   const resolveActionItem = () => {
     const items = resolveActionItems();
@@ -1982,11 +1996,20 @@ const ClipboardApp = () => {
   };
   const railWindow = clipboardRailWindow({
     activeIndex,
+    divider: railDivider,
     itemCount: filteredItems.length,
     overscan: CLIPBOARD_RAIL_OVERSCAN,
     scrollOffset: railViewport.scrollOffset,
     stride: CLIPBOARD_CARD_STRIDE,
     viewportWidth: railViewport.width,
+  });
+
+  const railSpacers = clipboardRailSpacers({
+    divider: railDivider,
+    gap: CLIPBOARD_CARD_GAP,
+    itemCount: filteredItems.length,
+    stride: CLIPBOARD_CARD_STRIDE,
+    window: railWindow,
   });
 
   const requestHide = () => {
@@ -3051,15 +3074,11 @@ const ClipboardApp = () => {
                     ref={attachTimelineRail}
                     role="list"
                   >
-                    {railWindow.start > 0 ? (
+                    {railSpacers.leading > 0 ? (
                       <div
                         aria-hidden="true"
                         className="shrink-0"
-                        style={{
-                          width:
-                            railWindow.start * CLIPBOARD_CARD_STRIDE -
-                            CLIPBOARD_CARD_GAP,
-                        }}
+                        style={{ width: railSpacers.leading }}
                       />
                     ) : null}
                     {filteredItems
@@ -3076,7 +3095,7 @@ const ClipboardApp = () => {
                         const group = item.groupId
                           ? (groupsById.get(item.groupId) ?? null)
                           : null;
-                        return (
+                        const card = (
                           <ClipboardCard
                             active={index === activeIndex}
                             selected={selection.ids.includes(item.id)}
@@ -3123,17 +3142,21 @@ const ClipboardApp = () => {
                             }
                           />
                         );
+                        return railSpacers.dividerMounted &&
+                          index === railDivider?.index ? (
+                          <Fragment key={item.id}>
+                            <ClipboardRailDivider groupEmpty={index === 0} />
+                            {card}
+                          </Fragment>
+                        ) : (
+                          card
+                        );
                       })}
-                    {railWindow.end < filteredItems.length ? (
+                    {railSpacers.trailing > 0 ? (
                       <div
                         aria-hidden="true"
                         className="shrink-0"
-                        style={{
-                          width:
-                            (filteredItems.length - railWindow.end) *
-                              CLIPBOARD_CARD_STRIDE -
-                            CLIPBOARD_CARD_GAP,
-                        }}
+                        style={{ width: railSpacers.trailing }}
                       />
                     ) : null}
                   </div>

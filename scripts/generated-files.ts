@@ -620,6 +620,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/transactional/i18n/langs/*",
     "packages/transactional/map/*",
     "packages/transactional/render/*",
+    "packages/transcript/src/learned-fixes.ts",
     "packages/user-agent/src/device-kind.ts",
     "packages/user-agent/src/index.ts",
     "packages/user-agent/src/parse-user-agent.ts",

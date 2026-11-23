@@ -623,6 +623,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped history ordering state outlives a matter removal.",
   "search_history_tombstones.user_id":
     "Organization-scoped deletion identities outlive a matter removal.",
+  "dictation_learned_fixes.user_id":
+    "The person's own organization-scoped dictation spellings; they stay an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

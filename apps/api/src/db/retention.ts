@@ -130,6 +130,10 @@ export const TABLE_RETENTION = {
   billing_arrangements: {
     boundedBy: "Organization-owned billing configuration and deletion.",
   },
+  dictation_learned_fixes: {
+    boundedBy:
+      "One row of at most 30 fixes per organization and user, deleted on organization offboarding, account deletion or with its organization or user.",
+  },
   buffer_object_cleanup_intents: {
     boundedBy: "Durable cleanup queue drained by buffer-intent reconciliation.",
   },

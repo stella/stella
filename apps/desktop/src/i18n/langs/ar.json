@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "كل المقتطفات",
+    "allResults": "كل النتائج",
     "bold": "عريض",
     "bulletedList": "قائمة نقطية",
     "cancel": "إلغاء",
@@ -378,6 +379,7 @@
     "moveToGroup": "النقل إلى مجموعة",
     "newGroupOption": "مجموعة جديدة…",
     "noGroup": "بلا مجموعة",
+    "noGroupMatches": "لا توجد نتائج مطابقة في هذه المجموعة",
     "noResults": "لا توجد مقتطفات مطابقة",
     "noResultsSearchRegistries": "البحث عن «{query}» في السجلات",
     "numberedList": "قائمة مرقّمة",
@@ -1198,6 +1200,8 @@
       "available": "الإصدار {version} متاح.",
       "checkFailed": "تعذّر على stella desktop التحقق من التحديثات.",
       "deferred": "ينتظر الإصدار {version} ما دامت المستندات المفتوحة قيد التحرير. عند الانتهاء، تحقّق مجددًا لتثبيته، وإلا فسيُثبَّت عند التحقق التلقائي التالي.",
+      "downloadProgress": "تم تنزيل {percent}%",
+      "downloading": "جارٍ تنزيل الإصدار {version}. سيُعاد تشغيل stella desktop بعد تثبيته.",
       "install": "التثبيت وإعادة التشغيل",
       "installFailed": "تعذّر على stella desktop تثبيت التحديث.",
       "installInProgress": "جارٍ تثبيت تحديث.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "جارٍ الفتح في Office",
     "sessionSavingDraft": "حفظ المسودة",
     "settings": "الإعدادات",
+    "showTranscription": "إظهار النص",
     "support": "الدعم",
     "supportCopyDiagnostics": "نسخ معلومات التشخيص",
     "supportEmailSupport": "مراسلة الدعم بالبريد",
     "supportRevealAppData": "إظهار بيانات التطبيق",
     "temporaryWorkingCopies": "نسخ العمل المؤقتة",
     "transcribeRecording": "تحويل تسجيل إلى نص…",
-    "updateReady": "التحديث جاهز",
+    "transcriptionProgress": "جارٍ التحويل إلى نص: {done} من {total} د",
+    "transcriptionProgressSoFar": "جارٍ التحويل إلى نص: {done} د حتى الآن",
+    "transcriptionReady": "النص جاهز",
     "updatesManaged": "تدير مؤسستك التحديثات"
   }
 }

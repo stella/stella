@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Visi izgriezumi",
+    "allResults": "Visi rezultāti",
     "bold": "Treknraksts",
     "bulletedList": "Saraksts ar aizzīmēm",
     "cancel": "Atcelt",
@@ -378,6 +379,7 @@
     "moveToGroup": "Pārvietot uz grupu",
     "newGroupOption": "Jauna grupa…",
     "noGroup": "Bez grupas",
+    "noGroupMatches": "Šajā grupā nav atbilstību",
     "noResults": "Nav atbilstošu izgriezumu",
     "noResultsSearchRegistries": "Meklēt “{query}” reģistros",
     "numberedList": "Numurēts saraksts",
@@ -1198,6 +1200,8 @@
       "available": "Pieejama versija {version}.",
       "checkFailed": "stella desktop nevarēja pārbaudīt atjauninājumus.",
       "deferred": "Versija {version} gaida, kamēr tiek rediģēti atvērtie dokumenti. Kad pabeigsiet, pārbaudiet vēlreiz, lai to instalētu, citādi tā tiks instalēta nākamajā automātiskajā pārbaudē.",
+      "downloadProgress": "Lejupielādēti {percent}%",
+      "downloading": "Notiek versijas {version} lejupielāde. Pēc instalēšanas stella desktop tiks restartēta.",
       "install": "Instalēt un restartēt",
       "installFailed": "stella desktop nevarēja instalēt atjauninājumu.",
       "installInProgress": "Notiek atjauninājuma instalēšana.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Tiek atvērts Office",
     "sessionSavingDraft": "Tiek saglabāts melnraksts",
     "settings": "Iestatījumi",
+    "showTranscription": "Rādīt transkripciju",
     "support": "Atbalsts",
     "supportCopyDiagnostics": "Kopēt diagnostiku",
     "supportEmailSupport": "E-pasta atbalsts",
     "supportRevealAppData": "Rādīt lietotnes datus",
     "temporaryWorkingCopies": "Pagaidu darba kopijas",
     "transcribeRecording": "Transkribēt ierakstu…",
-    "updateReady": "Atjauninājums gatavs",
+    "transcriptionProgress": "Notiek transkribēšana: {done} no {total} min",
+    "transcriptionProgressSoFar": "Notiek transkribēšana: līdz šim {done} min",
+    "transcriptionReady": "Transkripcija ir gatava",
     "updatesManaged": "Atjauninājumus pārvalda jūsu organizācija"
   }
 }

@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Tous les extraits",
+    "allResults": "Tous les résultats",
     "bold": "Gras",
     "bulletedList": "Liste à puces",
     "cancel": "Annuler",
@@ -378,6 +379,7 @@
     "moveToGroup": "Déplacer vers le groupe",
     "newGroupOption": "Nouveau groupe…",
     "noGroup": "Aucun groupe",
+    "noGroupMatches": "Aucun résultat dans ce groupe",
     "noResults": "Aucun extrait correspondant",
     "noResultsSearchRegistries": "Rechercher « {query} » dans les registres",
     "numberedList": "Liste numérotée",
@@ -1198,6 +1200,8 @@
       "available": "La version {version} est disponible.",
       "checkFailed": "stella desktop n'a pas pu vérifier les mises à jour.",
       "deferred": "La version {version} attend tant que des documents ouverts sont en cours de modification. Une fois terminé, vérifiez à nouveau pour l'installer, sinon elle s'installera lors de la prochaine vérification automatique.",
+      "downloadProgress": "{percent} % téléchargés",
+      "downloading": "Téléchargement de la version {version}. stella desktop redémarrera une fois l'installation terminée.",
       "install": "Installer et redémarrer",
       "installFailed": "stella desktop n'a pas pu installer la mise à jour.",
       "installInProgress": "Une mise à jour est en cours d’installation.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Ouverture dans Office",
     "sessionSavingDraft": "Enregistrement du brouillon",
     "settings": "Paramètres",
+    "showTranscription": "Afficher la transcription",
     "support": "Support",
     "supportCopyDiagnostics": "Copier les diagnostics",
     "supportEmailSupport": "Support par e-mail",
     "supportRevealAppData": "Afficher les données de l'app",
     "temporaryWorkingCopies": "Copies de travail temporaires",
     "transcribeRecording": "Transcrire un enregistrement…",
-    "updateReady": "Mise à jour prête",
+    "transcriptionProgress": "Transcription en cours : {done} sur {total} min",
+    "transcriptionProgressSoFar": "Transcription en cours : {done} min jusqu’ici",
+    "transcriptionReady": "Transcription prête",
     "updatesManaged": "Mises à jour gérées par votre organisation"
   }
 }

@@ -138,6 +138,7 @@
         "@stll/text-search": "catalog:",
         "@stll/time": "0.4.3",
         "@stll/transactional": "workspace:*",
+        "@stll/transcript": "workspace:*",
         "@stll/user-agent": "workspace:*",
         "@stll/uuid-codec": "workspace:*",
         "@t3-oss/env-core": "catalog:",

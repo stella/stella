@@ -3164,7 +3164,7 @@ jobs:
       # and memory (apps/api/scripts/test-lanes.ts); print what it sees.
       - name: Runner resources
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: nproc; free -g
+        run: nproc; free -g; date +CI_T0=%s%3N>>"$GITHUB_ENV"
 
       - name: Test API or rest
         id: test-api-or-rest

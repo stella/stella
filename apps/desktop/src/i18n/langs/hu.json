@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Összes vágólapelem",
+    "allResults": "Összes találat",
     "bold": "Félkövér",
     "bulletedList": "Felsorolás",
     "cancel": "Mégse",
@@ -378,6 +379,7 @@
     "moveToGroup": "Áthelyezés csoportba",
     "newGroupOption": "Új csoport…",
     "noGroup": "Nincs csoport",
+    "noGroupMatches": "Nincs találat ebben a csoportban",
     "noResults": "Nincs egyező kivágás",
     "noResultsSearchRegistries": "„{query}” keresése a nyilvántartásokban",
     "numberedList": "Számozott lista",
@@ -1198,6 +1200,8 @@
       "available": "Elérhető a(z) {version} verzió.",
       "checkFailed": "A stella desktop nem tudta ellenőrizni a frissítéseket.",
       "deferred": "A(z) {version} verzió vár, amíg megnyitott dokumentumokat szerkeszt. Ha végzett, ellenőrizze újra a telepítéshez, különben a következő automatikus ellenőrzéskor települ.",
+      "downloadProgress": "{percent}% letöltve",
+      "downloading": "A(z) {version} verzió letöltése folyamatban. A stella desktop a telepítés után újraindul.",
       "install": "Telepítés és újraindítás",
       "installFailed": "A stella desktop nem tudta telepíteni a frissítést.",
       "installInProgress": "Egy frissítés telepítése folyamatban van.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Megnyitás Office-ban",
     "sessionSavingDraft": "Piszkozat mentése",
     "settings": "Beállítások",
+    "showTranscription": "Átirat megjelenítése",
     "support": "Támogatás",
     "supportCopyDiagnostics": "Diagnosztika másolása",
     "supportEmailSupport": "E-mail támogatás",
     "supportRevealAppData": "Alkalmazásadatok megjelenítése",
     "temporaryWorkingCopies": "Ideiglenes munkamásolatok",
     "transcribeRecording": "Felvétel átírása…",
-    "updateReady": "Frissítés kész",
+    "transcriptionProgress": "Átírás folyamatban: {done} / {total} perc",
+    "transcriptionProgressSoFar": "Átírás folyamatban: eddig {done} perc",
+    "transcriptionReady": "Az átirat elkészült",
     "updatesManaged": "A frissítéseket a szervezete kezeli"
   }
 }

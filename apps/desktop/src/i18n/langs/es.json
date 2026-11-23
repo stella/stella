@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Todos los clips",
+    "allResults": "Todos los resultados",
     "bold": "Negrita",
     "bulletedList": "Lista con viñetas",
     "cancel": "Cancelar",
@@ -378,6 +379,7 @@
     "moveToGroup": "Mover al grupo",
     "newGroupOption": "Grupo nuevo…",
     "noGroup": "Sin grupo",
+    "noGroupMatches": "No hay coincidencias en este grupo",
     "noResults": "No hay recortes coincidentes",
     "noResultsSearchRegistries": "Buscar «{query}» en los registros",
     "numberedList": "Lista numerada",
@@ -1198,6 +1200,8 @@
       "available": "La versión {version} está disponible.",
       "checkFailed": "stella desktop no pudo buscar actualizaciones.",
       "deferred": "La versión {version} espera mientras se editan documentos abiertos. Cuando termine, vuelva a buscar actualizaciones para instalarla, o se instalará en la próxima comprobación automática.",
+      "downloadProgress": "{percent} % descargado",
+      "downloading": "Descargando la versión {version}. stella desktop se reiniciará cuando esté instalada.",
       "install": "Instalar y reiniciar",
       "installFailed": "stella desktop no pudo instalar la actualización.",
       "installInProgress": "Se está instalando una actualización.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Abriendo en Office",
     "sessionSavingDraft": "Guardando borrador",
     "settings": "Configuración",
+    "showTranscription": "Mostrar transcripción",
     "support": "Soporte",
     "supportCopyDiagnostics": "Copiar diagnósticos",
     "supportEmailSupport": "Soporte por correo",
     "supportRevealAppData": "Mostrar datos de la app",
     "temporaryWorkingCopies": "Copias de trabajo temporales",
     "transcribeRecording": "Transcribir una grabación…",
-    "updateReady": "Actualización lista",
+    "transcriptionProgress": "Transcripción en curso: {done} de {total} min",
+    "transcriptionProgressSoFar": "Transcripción en curso: {done} min hasta ahora",
+    "transcriptionReady": "Transcripción lista",
     "updatesManaged": "Las actualizaciones las gestiona tu organización"
   }
 }

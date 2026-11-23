@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Visos iškarpos",
+    "allResults": "Visi rezultatai",
     "bold": "Pusjuodis",
     "bulletedList": "Sąrašas su ženkleliais",
     "cancel": "Atšaukti",
@@ -378,6 +379,7 @@
     "moveToGroup": "Perkelti į grupę",
     "newGroupOption": "Nauja grupė…",
     "noGroup": "Be grupės",
+    "noGroupMatches": "Šioje grupėje atitikmenų nėra",
     "noResults": "Atitinkančių iškarpų nėra",
     "noResultsSearchRegistries": "Ieškoti „{query}“ registruose",
     "numberedList": "Numeruotas sąrašas",
@@ -1198,6 +1200,8 @@
       "available": "Galima versija {version}.",
       "checkFailed": "stella desktop nepavyko patikrinti naujinimų.",
       "deferred": "Versija {version} laukia, kol redaguojami atidaryti dokumentai. Baigę patikrinkite dar kartą, kad ją įdiegtumėte, kitaip ji bus įdiegta per kitą automatinį patikrinimą.",
+      "downloadProgress": "Atsisiųsta {percent} %",
+      "downloading": "Atsisiunčiama versija {version}. Įdiegus stella desktop pasileis iš naujo.",
       "install": "Įdiegti ir paleisti iš naujo",
       "installFailed": "stella desktop nepavyko įdiegti naujinimo.",
       "installInProgress": "Diegiamas naujinimas.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Atidaroma Office programoje",
     "sessionSavingDraft": "Išsaugomas juodraštis",
     "settings": "Nustatymai",
+    "showTranscription": "Rodyti transkripciją",
     "support": "Palaikymas",
     "supportCopyDiagnostics": "Kopijuoti diagnostiką",
     "supportEmailSupport": "El. pašto palaikymas",
     "supportRevealAppData": "Rodyti programos duomenis",
     "temporaryWorkingCopies": "Laikinos darbinės kopijos",
     "transcribeRecording": "Transkribuoti įrašą…",
-    "updateReady": "Naujinimas paruoštas",
+    "transcriptionProgress": "Transkribuojama: {done} iš {total} min.",
+    "transcriptionProgressSoFar": "Transkribuojama: kol kas {done} min.",
+    "transcriptionReady": "Transkripcija paruošta",
     "updatesManaged": "Naujinimus valdo jūsų organizacija"
   }
 }

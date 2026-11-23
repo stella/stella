@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Kõik lõiked",
+    "allResults": "Kõik tulemused",
     "bold": "Paks kiri",
     "bulletedList": "Täpploend",
     "cancel": "Loobu",
@@ -378,6 +379,7 @@
     "moveToGroup": "Teisalda rühma",
     "newGroupOption": "Uus rühm…",
     "noGroup": "Rühmata",
+    "noGroupMatches": "Selles rühmas vasteid pole",
     "noResults": "Sobivaid lõikeid pole",
     "noResultsSearchRegistries": "Otsi „{query}” registritest",
     "numberedList": "Nummerdatud loend",
@@ -1198,6 +1200,8 @@
       "available": "Saadaval on versioon {version}.",
       "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
       "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
+      "downloadProgress": "{percent}% alla laaditud",
+      "downloading": "Laaditakse alla versiooni {version}. Pärast installimist taaskäivitub stella desktop.",
       "install": "Installi ja taaskäivita",
       "installFailed": "stella desktop ei saanud värskendust installida.",
       "installInProgress": "Värskendust installitakse.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine",
     "settings": "Seaded",
+    "showTranscription": "Näita transkriptsiooni",
     "support": "Tugi",
     "supportCopyDiagnostics": "Kopeeri diagnostika",
     "supportEmailSupport": "E-posti tugi",
     "supportRevealAppData": "Kuva rakenduse andmed",
     "temporaryWorkingCopies": "Ajutised töökoopiad",
     "transcribeRecording": "Transkribeeri salvestis…",
-    "updateReady": "Värskendus valmis",
+    "transcriptionProgress": "Transkribeerimine käib: {done} / {total} min",
+    "transcriptionProgressSoFar": "Transkribeerimine käib: seni {done} min",
+    "transcriptionReady": "Transkriptsioon on valmis",
     "updatesManaged": "Värskendusi haldab teie organisatsioon"
   }
 }

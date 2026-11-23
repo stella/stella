@@ -13,6 +13,17 @@ export const QUERY_PERF_CONNECTION_SETTINGS = {
   statement_timeout: 30_000,
   lock_timeout: 3000,
 } as const;
+/**
+ * A template copy (`CREATE DATABASE ... TEMPLATE`) copies a whole database:
+ * on a loaded runner a large seeded template takes longer than the generic
+ * statement bound. Its session is bounded by what is left of the profile's
+ * own budget instead, so the copy fails only once that budget is spent.
+ */
+export const queryPerfTemplateCopySettings = (remainingMs: number) => ({
+  ...QUERY_PERF_CONNECTION_SETTINGS,
+  statement_timeout: Math.max(1, Math.ceil(remainingMs)),
+});
+
 export const QUERY_PERF_DIAGNOSTIC_CONNECTION_SETTINGS = {
   statement_timeout: 2000,
   lock_timeout: 1000,

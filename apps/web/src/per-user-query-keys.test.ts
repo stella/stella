@@ -192,6 +192,8 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [accountDataExportLatestOptions(USER).queryKey],
   },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  // The phone and the desktop sync learned dictation fixes; the web does not dictate.
+  "dictation/learned-fixes/list.ts": { kind: "no-web-caller", calls: [] },
   "organizations/audit-export/get.ts": {
     kind: "keyed",
     calls: ['api.organizations["audit-export"].get'],

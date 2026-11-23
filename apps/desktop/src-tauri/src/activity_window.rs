@@ -23,12 +23,17 @@ pub fn show(app: &AppHandle) {
     }
     return;
   }
-  let builder = crate::app_window::builder(app, ACTIVITY_WINDOW_LABEL, "index.html")
-    .title("Stella")
-    .inner_size(ACTIVITY_WINDOW_WIDTH, ACTIVITY_WINDOW_HEIGHT)
-    .min_inner_size(560.0, 460.0)
-    .resizable(true)
-    .visible(false);
+  let builder = crate::app_window::builder(
+    app,
+    ACTIVITY_WINDOW_LABEL,
+    "index.html",
+    crate::app_window::WindowKind::App,
+  )
+  .title("Stella")
+  .inner_size(ACTIVITY_WINDOW_WIDTH, ACTIVITY_WINDOW_HEIGHT)
+  .min_inner_size(560.0, 460.0)
+  .resizable(true)
+  .visible(false);
   let builder = window_placement::centered_on_target_screen(
     app,
     builder,

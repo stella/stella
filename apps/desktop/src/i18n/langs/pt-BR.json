@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Todos os recortes",
+    "allResults": "Todos os resultados",
     "bold": "Negrito",
     "bulletedList": "Lista com marcadores",
     "cancel": "Cancelar",
@@ -378,6 +379,7 @@
     "moveToGroup": "Mover para grupo",
     "newGroupOption": "Novo grupo…",
     "noGroup": "Sem grupo",
+    "noGroupMatches": "Nenhum resultado neste grupo",
     "noResults": "Nenhum recorte correspondente",
     "noResultsSearchRegistries": "Pesquisar “{query}” nos registros",
     "numberedList": "Lista numerada",
@@ -1198,6 +1200,8 @@
       "available": "A versão {version} está disponível.",
       "checkFailed": "O stella desktop não conseguiu verificar se há atualizações.",
       "deferred": "A versão {version} aguarda enquanto documentos abertos estão sendo editados. Ao terminar, verifique novamente para instalá-la, ou ela será instalada na próxima verificação automática.",
+      "downloadProgress": "{percent}% baixado",
+      "downloading": "Baixando a versão {version}. O stella desktop será reiniciado após a instalação.",
       "install": "Instalar e reiniciar",
       "installFailed": "O stella desktop não conseguiu instalar a atualização.",
       "installInProgress": "Uma atualização está sendo instalada.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Abrindo no Office",
     "sessionSavingDraft": "Salvando rascunho",
     "settings": "Configurações",
+    "showTranscription": "Mostrar transcrição",
     "support": "Suporte",
     "supportCopyDiagnostics": "Copiar diagnósticos",
     "supportEmailSupport": "Enviar e-mail ao suporte",
     "supportRevealAppData": "Mostrar dados do aplicativo",
     "temporaryWorkingCopies": "Cópias de trabalho temporárias",
     "transcribeRecording": "Transcrever uma gravação…",
-    "updateReady": "Atualização pronta",
+    "transcriptionProgress": "Transcrição em andamento: {done} de {total} min",
+    "transcriptionProgressSoFar": "Transcrição em andamento: {done} min até agora",
+    "transcriptionReady": "Transcrição pronta",
     "updatesManaged": "Atualizações gerenciadas pela sua organização"
   }
 }

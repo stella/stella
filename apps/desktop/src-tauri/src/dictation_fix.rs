@@ -215,16 +215,21 @@ fn show(app: &AppHandle, generation: u64) {
     return;
   }
   let size = LogicalSize::new(WIDTH, HEIGHT);
-  let builder = crate::app_window::builder(app, FIX_WINDOW_LABEL, "index.html")
-    .title("stella")
-    .inner_size(size.width, size.height)
-    .resizable(false)
-    .decorations(false)
-    .transparent(true)
-    .shadow(true)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .focused(true);
+  let builder = crate::app_window::builder(
+    app,
+    FIX_WINDOW_LABEL,
+    "index.html",
+    crate::app_window::WindowKind::Panel,
+  )
+  .title("stella")
+  .inner_size(size.width, size.height)
+  .resizable(false)
+  .decorations(false)
+  .transparent(true)
+  .shadow(true)
+  .always_on_top(true)
+  .skip_taskbar(true)
+  .focused(true);
   let builder = crate::window_placement::centered_on_target_screen(app, builder, size);
   let Ok(window) = builder.build() else {
     tracing::warn!("dictation fix panel could not be created");

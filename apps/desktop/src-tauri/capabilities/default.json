@@ -16,6 +16,7 @@
     "allow-update-notification-preferences",
     "allow-copy-diagnostics",
     "allow-email-support",
+    "allow-updater-state",
     "allow-check-for-updates",
     "allow-install-update",
     "allow-reveal-support-root",

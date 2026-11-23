@@ -1,69 +1,136 @@
-import { useRef, useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { SettingsCheck } from "@stll/api-contract/desktop-rpc";
+import type {
+  UpdaterSnapshot,
+  UpdaterState,
+  UpdaterStep,
+} from "@stll/api-contract/desktop-rpc";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
+import { Loader } from "@stll/ui/loader";
 import { SettingsRow } from "@stll/ui/settings";
 
+import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { StellaAppIcon } from "../shared/StellaAppIcon";
+import {
+  DESKTOP_TELEMETRY_ERROR_CODES,
+  DESKTOP_TELEMETRY_OPERATIONS,
+  DESKTOP_TELEMETRY_WINDOWS,
+  reportDesktopError,
+} from "../telemetry/desktop-telemetry";
+import type { DesktopErrorReport } from "../telemetry/desktop-telemetry";
+
+/** The event the native updater announces each state change with. */
+export const UPDATER_STATE_EVENT = "updater-state";
+
+const reportUpdaterFailure = (code: DesktopErrorReport["code"]) => {
+  reportDesktopError({
+    code,
+    operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+    window: DESKTOP_TELEMETRY_WINDOWS.main,
+  });
+};
 
 /**
- * The state of Settings' update check. "Check for updates", on About or in the
- * tray, asks the native updater whether a newer version exists without
- * installing it; an update it finds is installed only when the user asks,
- * through the same check the background schedule runs.
+ * The native updater's state as this window last heard it. The updater owns
+ * it: the startup check, the background schedule, a handoff, the tray and
+ * Settings all move it, so a download started anywhere shows here. Answers
+ * and events can arrive out of order; the higher revision wins.
  */
-export const useUpdateCheck = () => {
-  const [check, setCheck] = useState<CheckState>({ status: "idle" });
-  // Whether a command of this window's is still unanswered. An "installing"
-  // the native side reports is an answer: its install may fail elsewhere.
-  const pending = useRef(false);
+const createUpdaterStore = () => {
+  let latest: UpdaterSnapshot | null = null;
+  let stopListening: (() => void) | null = null;
+  const listeners = new Set<() => void>();
 
-  const run = async () => {
-    if (pending.current) {
+  const accept = (value: unknown) => {
+    if (!isUpdaterSnapshot(value)) {
+      reportUpdaterFailure(DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse);
       return;
     }
-    pending.current = true;
-    setCheck({ status: "checking" });
-    const result = await Result.tryPromise(async () =>
-      invoke<unknown>("check_for_updates"),
-    );
-    pending.current = false;
-    setCheck(nativeCheckState(result, "check"));
-  };
-
-  const install = async (version: string) => {
-    // On success the app quits to relaunch, so this may never resolve.
-    pending.current = true;
-    setCheck({ status: "installing", version });
-    const result = await Result.tryPromise(async () =>
-      invoke<unknown>("install_update"),
-    );
-    pending.current = false;
-    setCheck(nativeCheckState(result, "install"));
-  };
-
-  /** Drops an answer already given; a pending command stays shown. */
-  const dismiss = () => {
-    if (!pending.current) {
-      setCheck({ status: "idle" });
+    if (latest !== null && value.revision <= latest.revision) {
+      return;
+    }
+    latest = value;
+    for (const listener of listeners) {
+      listener();
     }
   };
 
-  return { check, dismiss, install, run };
+  /** Runs a native updater command and keeps its answer. */
+  const command = async (call: () => Promise<unknown>) => {
+    const answer = await Result.tryPromise(call);
+    if (Result.isOk(answer)) {
+      accept(answer.value);
+    } else {
+      reportUpdaterFailure(DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed);
+    }
+  };
+
+  const subscribe = (listener: () => void) => {
+    listeners.add(listener);
+    stopListening ??= subscribeDesktopEvent<unknown>({
+      event: UPDATER_STATE_EVENT,
+      handler: (event) => {
+        accept(event.payload);
+      },
+      onError: () => {
+        reportUpdaterFailure(
+          DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+        );
+      },
+      // Read once the event is live, so no change falls between the two.
+      onSubscribed: () => {
+        void command(async () => invoke<unknown>("updater_state"));
+      },
+    });
+    return () => {
+      listeners.delete(listener);
+      if (listeners.size === 0 && stopListening !== null) {
+        stopListening();
+        stopListening = null;
+      }
+    };
+  };
+
+  return { command, getSnapshot: () => latest, subscribe };
+};
+
+/**
+ * Settings' view of the native updater. "Check for updates", on About or in
+ * the tray, asks whether a newer version exists without installing it; an
+ * update it finds is installed only when the user asks, through the same
+ * check the background schedule runs. Both answer with what is already
+ * under way when a check or install is running.
+ */
+export const useUpdateCheck = () => {
+  const [store] = useState(createUpdaterStore);
+  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot);
+
+  const run = async () => {
+    await store.command(async () => invoke<unknown>("check_for_updates"));
+  };
+
+  const install = async () => {
+    // On success the app quits to relaunch, so this may never resolve.
+    await store.command(async () => invoke<unknown>("install_update"));
+  };
+
+  /** Null until the native state arrives. */
+  const state: UpdaterState | null = snapshot?.state ?? null;
+  return { install, run, state };
 };
 
 export type UpdateCheck = ReturnType<typeof useUpdateCheck>;
 
-/** The About page's version row, with the update check's button and answer. */
+/** The About page's version row, with the updater's button and state. */
 export const AppVersionRow = ({
   onEmailSupport,
   supportEmail,
-  updateCheck: { check, install, run },
+  updateCheck: { install, run, state },
   versionLabel,
 }: {
   onEmailSupport: () => void;
@@ -76,18 +143,21 @@ export const AppVersionRow = ({
   const tTray = useTranslations("tray");
 
   // A check in flight shows as loading, which already blocks a second one.
-  const installing = check.status === "installing";
+  const installing =
+    state?.status === "downloading" || state?.status === "installing";
   return (
     <SettingsRow
       description={versionLabel ?? <VersionPlaceholder />}
       footer={
-        check.status === "idle" || check.status === "checking" ? null : (
+        state === null ||
+        state.status === "idle" ||
+        state.status === "checking" ? null : (
           <div aria-live="polite" className="flex flex-col gap-1 text-sm">
-            <CheckOutcome
-              check={check}
-              onInstall={(version) => {
-                void install(version);
+            <UpdaterOutcome
+              onInstall={() => {
+                void install();
               }}
+              state={state}
             />
             <p className="text-muted-foreground">
               {t.rich("updates.support", {
@@ -109,7 +179,7 @@ export const AppVersionRow = ({
       <Button
         disabled={installing}
         disabledReason={installing ? t("updates.installInProgress") : undefined}
-        loading={check.status === "checking"}
+        loading={state?.status === "checking"}
         onClick={() => {
           void run();
         }}
@@ -129,98 +199,143 @@ const VersionPlaceholder = () => (
   </span>
 );
 
-const CheckOutcome = ({
-  check,
+const UpdaterOutcome = ({
   onInstall,
+  state,
 }: {
-  check: Exclude<CheckState, { status: "idle" } | { status: "checking" }>;
-  onInstall: (version: string) => void;
+  onInstall: () => void;
+  state: Exclude<UpdaterState, { status: "idle" } | { status: "checking" }>;
 }) => {
   const t = useTranslations("settings.updates");
   const tTray = useTranslations("tray");
-  switch (check.status) {
+  switch (state.status) {
     case "up_to_date":
       return <p>{t("upToDate")}</p>;
     case "available":
       return (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <p>{t("available", { version: check.version })}</p>
-          <Button
-            onClick={() => {
-              onInstall(check.version);
-            }}
-            size="sm"
-          >
+          <p>{t("available", { version: state.version })}</p>
+          <Button onClick={onInstall} size="sm">
             {t("install")}
           </Button>
         </div>
       );
+    case "downloading": {
+      const percent = downloadedPercent(state);
+      return (
+        <div className="flex items-start gap-2">
+          <Loader className="mt-0.5" size="sm" variant="decorative" />
+          <div className="flex flex-col gap-0.5">
+            <p>{t("downloading", { version: state.version })}</p>
+            {/* Progress updates several times a second; the line above is
+                what gets announced. */}
+            {percent === null ? null : (
+              <p aria-live="off" className="text-muted-foreground tabular-nums">
+                {t("downloadProgress", { percent })}
+              </p>
+            )}
+          </div>
+        </div>
+      );
+    }
     case "installing":
-      return <p>{t("installing", { version: check.version })}</p>;
+      return <p>{t("installing", { version: state.version })}</p>;
     case "deferred":
-      return <p>{t("deferred", { version: check.version })}</p>;
+      return <p>{t("deferred", { version: state.version })}</p>;
     case "managed":
       return <p>{tTray("updatesManaged")}</p>;
     case "failed":
       return (
         <p className="text-destructive-foreground" role="alert">
-          {check.during === "check" ? t("checkFailed") : t("installFailed")}
+          {state.during === "check" ? t("checkFailed") : t("installFailed")}
         </p>
       );
     default:
-      check satisfies never;
-      return panic("Unknown update check outcome");
+      state satisfies never;
+      return panic("Unknown updater state");
   }
 };
 
-type CheckState =
-  | { status: "idle" }
-  | { status: "checking" }
-  | { status: "failed"; during: "check" | "install" }
-  | SettingsCheck;
+const PERCENT = 100;
 
-type SettingsCheckStatus = SettingsCheck["status"];
+/** How much of the package has arrived, once the server named its size. */
+const downloadedPercent = ({
+  receivedBytes,
+  totalBytes,
+}: Extract<UpdaterState, { status: "downloading" }>) =>
+  totalBytes === null || totalBytes <= 0
+    ? null
+    : Math.min(PERCENT, Math.floor((receivedBytes / totalBytes) * PERCENT));
 
-// Which statuses carry the version they are about, read off the generated
-// contract: a status added, removed or reshaped natively fails to compile
-// here instead of reaching Settings as a generic failure.
-type CheckPayload<Status extends SettingsCheckStatus> =
-  Extract<SettingsCheck, { status: Status }> extends { version: string }
-    ? "version"
-    : "none";
+type UpdaterStatus = UpdaterState["status"];
 
-const CHECK_PAYLOADS = {
+// What each status carries, read off the generated contract: a status added,
+// removed or reshaped natively fails to compile here instead of reaching
+// Settings as something it cannot show.
+type StatePayload<Status extends UpdaterStatus> =
+  Extract<UpdaterState, { status: Status }> extends { receivedBytes: number }
+    ? "download"
+    : Extract<UpdaterState, { status: Status }> extends { during: UpdaterStep }
+      ? "during"
+      : Extract<UpdaterState, { status: Status }> extends { version: string }
+        ? "version"
+        : "none";
+
+const STATE_PAYLOADS = {
+  idle: "none",
+  checking: "none",
   up_to_date: "none",
   available: "version",
-  deferred: "version",
+  downloading: "download",
   installing: "version",
+  deferred: "version",
+  failed: "during",
   managed: "none",
-} as const satisfies { [Status in SettingsCheckStatus]: CheckPayload<Status> };
+} as const satisfies { [Status in UpdaterStatus]: StatePayload<Status> };
 
-const isCheckStatus = (status: unknown): status is SettingsCheckStatus =>
-  typeof status === "string" && Object.hasOwn(CHECK_PAYLOADS, status);
+const UPDATER_STEPS = {
+  check: true,
+  install: true,
+} as const satisfies Record<UpdaterStep, true>;
 
-/** What `check_for_updates` and `install_update` answer; a failure is the
- *  command's error. */
-const isSettingsCheck = (value: unknown): value is SettingsCheck => {
-  if (
-    typeof value !== "object" ||
-    value === null ||
-    !("status" in value) ||
-    !isCheckStatus(value.status)
-  ) {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isUpdaterStatus = (status: unknown): status is UpdaterStatus =>
+  typeof status === "string" && Object.hasOwn(STATE_PAYLOADS, status);
+
+const isUpdaterState = (value: unknown): value is UpdaterState => {
+  if (!isRecord(value) || !isUpdaterStatus(value["status"])) {
     return false;
   }
-  return (
-    CHECK_PAYLOADS[value.status] === "none" ||
-    ("version" in value && typeof value.version === "string")
-  );
+  const payload: (typeof STATE_PAYLOADS)[UpdaterStatus] =
+    STATE_PAYLOADS[value["status"]];
+  switch (payload) {
+    case "none":
+      return true;
+    case "version":
+      return typeof value["version"] === "string";
+    case "download":
+      return (
+        typeof value["version"] === "string" &&
+        typeof value["receivedBytes"] === "number" &&
+        (value["totalBytes"] === null ||
+          typeof value["totalBytes"] === "number")
+      );
+    case "during":
+      return (
+        typeof value["during"] === "string" &&
+        Object.hasOwn(UPDATER_STEPS, value["during"])
+      );
+    default:
+      payload satisfies never;
+      return panic("Unknown updater state payload");
+  }
 };
 
-const nativeCheckState = (
-  result: Result<unknown, unknown>,
-  during: "check" | "install",
-): CheckState =>
-  Result.isOk(result) && isSettingsCheck(result.value)
-    ? result.value
-    : { status: "failed", during };
+/** What `updater_state`, `check_for_updates`, `install_update` and the
+ *  updater's event carry. */
+const isUpdaterSnapshot = (value: unknown): value is UpdaterSnapshot =>
+  isRecord(value) &&
+  typeof value["revision"] === "number" &&
+  isUpdaterState(value["state"]);

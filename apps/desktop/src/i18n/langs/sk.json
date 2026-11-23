@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Všetky klipy",
+    "allResults": "Všetky výsledky",
     "bold": "Tučné",
     "bulletedList": "Odrážkový zoznam",
     "cancel": "Zrušiť",
@@ -378,6 +379,7 @@
     "moveToGroup": "Presunúť do skupiny",
     "newGroupOption": "Nová skupina…",
     "noGroup": "Bez skupiny",
+    "noGroupMatches": "V tejto skupine nič nezodpovedá",
     "noResults": "Žiadne zodpovedajúce výstrižky",
     "noResultsSearchRegistries": "Hľadať „{query}“ v registroch",
     "numberedList": "Číslovaný zoznam",
@@ -1198,6 +1200,8 @@
       "available": "Je k dispozícii verzia {version}.",
       "checkFailed": "stella desktop nemohol skontrolovať aktualizácie.",
       "deferred": "Verzia {version} čaká, kým upravujete otvorené dokumenty. Keď skončíte, skontrolujte aktualizácie znova a nainštalujte ju, inak sa nainštaluje pri ďalšej automatickej kontrole.",
+      "downloadProgress": "Stiahnuté {percent} %",
+      "downloading": "Sťahuje sa verzia {version}. Po inštalácii sa stella desktop reštartuje.",
       "install": "Nainštalovať a reštartovať",
       "installFailed": "stella desktop nemohol nainštalovať aktualizáciu.",
       "installInProgress": "Inštaluje sa aktualizácia.",
@@ -1420,13 +1424,16 @@
     "sessionOpeningInOffice": "Otváranie v Office",
     "sessionSavingDraft": "Ukladanie konceptu",
     "settings": "Nastavenia",
+    "showTranscription": "Zobraziť prepis",
     "support": "Podpora",
     "supportCopyDiagnostics": "Kopírovať diagnostiku",
     "supportEmailSupport": "E-mailová podpora",
     "supportRevealAppData": "Zobraziť dáta aplikácie",
     "temporaryWorkingCopies": "Dočasné pracovné kópie",
     "transcribeRecording": "Prepísať nahrávku…",
-    "updateReady": "Aktualizácia pripravená",
+    "transcriptionProgress": "Prebieha prepis: {done} z {total} min",
+    "transcriptionProgressSoFar": "Prebieha prepis: zatiaľ {done} min",
+    "transcriptionReady": "Prepis je hotový",
     "updatesManaged": "Aktualizácie spravuje vaša organizácia"
   }
 }

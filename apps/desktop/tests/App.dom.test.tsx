@@ -56,17 +56,7 @@ const INITIAL_SNAPSHOT = {
   sessions: [],
   trustedSelfHostConnections: [],
   update: {
-    baseUrl: null,
-    channel: null,
-    currentHash: null,
     currentVersion: null,
-    lastCheckedAt: null,
-    latestHash: null,
-    latestVersion: null,
-    status: "idle",
-    statusMessage: "",
-    updateAvailable: false,
-    updateReady: false,
   },
 } satisfies AppSnapshot;
 
@@ -171,6 +161,9 @@ const createBackend = (order: ResponseOrder) => {
         return false;
       case "dictation_get_snapshot":
         return { available: false };
+      // Settings follows the updater from its first render.
+      case "updater_state":
+        return { revision: 1, state: { status: "idle" } };
       default:
         unexpected.push(command);
         return panic(`Unexpected native command: ${command}`);
