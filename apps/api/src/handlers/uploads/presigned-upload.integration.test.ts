@@ -82,6 +82,15 @@ let fake: FakeS3;
 const seededUploadIds: SafeId<"pendingUpload">[] = [];
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+// The reservation only checks the declaration; the bytes are never decoded here.
+const clientPreviewBytes = new TextEncoder().encode("jpeg preview");
+const clientPreviewDeclaration = {
+  mimeType: "image/jpeg" as const,
+  size: clientPreviewBytes.byteLength,
+  sha256Hex: hashSha256Hex(clientPreviewBytes),
+  width: 2448,
+  height: 3264,
+};
 const ATTACHED_TEMPLATE_MESSAGE =
   "Document contains an external Word template link (potential template injection)";
 const ATTACHED_TEMPLATE_REJECTION_MESSAGE = `File rejected by security rule ${ATTACHED_TEMPLATE_SECURITY_RULE}: ${ATTACHED_TEMPLATE_MESSAGE}`;
@@ -317,6 +326,98 @@ describe("presigned upload mutation flow", () => {
       purposeData: { type: "agent_skill", scope: "private" },
       status: "pending",
     });
+  });
+
+  test("refuses a client preview declared for a file that is not a HEIC or HEIF photo", async () => {
+    const declaredName = "contract-with-preview.pdf";
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: declaredName,
+            mimeType: "application/pdf",
+            size: 12,
+            sha256Hex:
+              "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            preview: clientPreviewDeclaration,
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+
+    expect(presignResult).toEqual({
+      code: 400,
+      response: {
+        code: "upload_preview_unsupported",
+        message: "Only a HEIC or HEIF photo may carry a client preview",
+      },
+    });
+    // Nothing is reserved for the refused request.
+    expect(
+      await testDb
+        .select({ id: pendingUploads.id })
+        .from(pendingUploads)
+        .where(eq(pendingUploads.declaredName, declaredName)),
+    ).toEqual([]);
+  });
+
+  test("reserves a HEIC photo's client preview beside the original", async () => {
+    const presignResult = await presignUpload.handler(
+      asTestRaw<PresignCtx>(
+        createContext({
+          body: {
+            purpose: "entity_version",
+            entityId: ids.entityA1,
+            name: "site-photo.heic",
+            mimeType: "image/heic",
+            size: 12,
+            sha256Hex:
+              "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+            preview: clientPreviewDeclaration,
+          },
+          workspaceId: ids.wsA1,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+        }),
+      ),
+    );
+    const uploadId = getUploadId(presignResult);
+    seededUploadIds.push(uploadId);
+
+    expect(
+      await testDb.query.pendingUploads.findFirst({
+        where: { id: { eq: uploadId } },
+        columns: { purposeData: true },
+      }),
+    ).toEqual({
+      purposeData: {
+        type: "entity_version",
+        entityId: ids.entityA1,
+        clientPreview: clientPreviewDeclaration,
+      },
+    });
+
+    // The preview's URL is signed against its own type, size and checksum,
+    // and stages it beside the original's key.
+    const original = readPresignedUpload(presignResult);
+    const preview = readPresignedPreview(presignResult);
+    const staged = await fetch(preview.url, {
+      method: "PUT",
+      body: clientPreviewBytes,
+      headers: preview.headers,
+    });
+    expect(staged.status).toBe(200);
+    expect(new URL(preview.url).pathname).toBe(
+      `${new URL(original.url).pathname}-preview`,
+    );
+    expect(
+      fake.objects.get(new URL(preview.url).pathname.slice(1)),
+    ).toMatchObject({ contentType: "image/jpeg" });
   });
 
   test("persists upload intent, aborts it, then replays the terminal rejection on finalize", async () => {
@@ -1086,4 +1187,12 @@ const readPresignedUpload = (result: unknown): PresignedUpload => {
   }
 
   throw new Error("Expected presign result to include a url and headers.");
+};
+
+const readPresignedPreview = (result: unknown): PresignedUpload => {
+  if (typeof result === "object" && result !== null && "preview" in result) {
+    return readPresignedUpload(result.preview);
+  }
+
+  throw new Error("Expected presign result to include a preview grant.");
 };
