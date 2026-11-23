@@ -379,7 +379,8 @@ const MARKUP_TYPE =
 
 /** Whether bytes of `contentType`, or of an unknown type, declare their charset. */
 const readsOwnDeclaration = (contentType: string | null): boolean => {
-  if (contentType === null) {
+  // A caller's metadata can lack the type at run time despite its type.
+  if (typeof contentType !== "string") {
     return true;
   }
   const essence = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
