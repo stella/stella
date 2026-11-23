@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
-import { afterAll, beforeAll, expect, test } from "bun:test";
+import { SQL } from "bun";
+import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { drizzle } from "drizzle-orm/pglite";
@@ -47,6 +48,7 @@ import {
 import { refreshCaseLawSourceArrivals } from "@/api/lib/case-law/source-arrivals-refresh";
 import { SOURCE_ARRIVALS_FRESHNESS_MS } from "@/api/lib/case-law/source-arrivals-window";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { logger } from "@/api/lib/observability/logger";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
   createTestPglite,
@@ -1134,6 +1136,42 @@ test(
     // different fact from the read having failed.
     expect(cze?.availability).toBe(CASE_LAW_COVERAGE_AVAILABILITY.SEARCHABLE);
     expect(cze && "courts" in cze ? cze.courts : undefined).toBeNull();
+  },
+  DB_TEST_TIMEOUT_MS,
+);
+
+// timeout: loads coverage against the migrated database, like its neighbours.
+test(
+  "a court breakdown cut off by its statement bound is a warning, not an error",
+  async () => {
+    const warn = spyOn(logger, "warn").mockImplementation(() => undefined);
+    const error = spyOn(logger, "error").mockImplementation(() => undefined);
+    try {
+      const coverage = await loadCoverage({
+        readCourts: async () => {
+          throw new SQL.PostgresError(
+            "canceling statement due to statement timeout",
+            {
+              code: "ERR_POSTGRES_SERVER_ERROR",
+              errno: "57014",
+              detail: "",
+              hint: "",
+              severity: "ERROR",
+            },
+          );
+        },
+      });
+      expect(Result.isOk(coverage)).toBe(true);
+      const events = (spy: typeof warn) =>
+        spy.mock.calls.map(([event]) => event);
+      expect(events(warn)).toContain("case_law.coverage.courts_unavailable");
+      expect(events(error)).not.toContain(
+        "case_law.coverage.courts_unavailable",
+      );
+    } finally {
+      warn.mockRestore();
+      error.mockRestore();
+    }
   },
   DB_TEST_TIMEOUT_MS,
 );
