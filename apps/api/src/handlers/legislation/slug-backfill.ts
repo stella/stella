@@ -71,9 +71,8 @@ const writePage = async (
   db: ScopedDb,
   assignments: readonly SlugAssignment[],
 ): Promise<number> => {
-  const values = sql.join(
-    assignments.map(({ id, slug }) => sql`(${id}::uuid, ${slug}::varchar)`),
-    sql`, `,
+  const valuesPayload = JSON.stringify(
+    assignments.map(({ id, slug }) => ({ id, slug })),
   );
 
   const result = await db((tx) =>
@@ -81,7 +80,7 @@ const writePage = async (
     tx.execute(sql`
       UPDATE ${legislationDocuments} AS d
       SET slug = v.slug
-      FROM (VALUES ${values}) AS v(id, slug)
+      FROM jsonb_to_recordset(${valuesPayload}::text::jsonb) AS v(id uuid, slug varchar)
       WHERE d.id = v.id AND d.slug IS NULL
       RETURNING d.id
     `),

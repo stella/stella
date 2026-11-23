@@ -236,10 +236,9 @@ const settleRuleVerdicts = async (
     UPDATE ${caseLawPolarityRules} AS r
        SET match_count = r.match_count + m.matches,
            updated_at = GREATEST(r.updated_at, ${observedAt})
-      FROM (VALUES ${sql.join(
-        tally.map(([ruleId, count]) => sql`(${ruleId}::uuid, ${count}::int)`),
-        sql.raw(","),
-      )}) AS m(id, matches)
+      FROM jsonb_to_recordset(${JSON.stringify(
+        tally.map(([ruleId, count]) => ({ id: ruleId, matches: count })),
+      )}::text::jsonb) AS m(id uuid, matches int)
      WHERE r.id = m.id
        AND r.source IN (${sql.join(
          ACTIVE_RULE_SOURCES.map((source) => sql`${source}`),

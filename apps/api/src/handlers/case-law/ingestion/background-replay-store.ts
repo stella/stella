@@ -2051,12 +2051,12 @@ export const buildReplayRetirementQuery = (tx: Transaction, limit: number) => {
     .select({ id: staleReceipts.id })
     .from(caseLawSources)
     .innerJoin(
-      sql`(VALUES ${sql.join(
-        Object.entries(PARSER_VERSIONS).map(
-          ([key, version]) => sql`(${key}::text, ${version}::int)`,
-        ),
-        sql`, `,
-      )}) AS current_parsers(adapter_key, parser_version)`,
+      sql`jsonb_to_recordset(${JSON.stringify(
+        Object.entries(PARSER_VERSIONS).map(([key, version]) => ({
+          adapter_key: key,
+          parser_version: version,
+        })),
+      )}::text::jsonb) AS current_parsers(adapter_key text, parser_version int)`,
       eq(caseLawSources.adapterKey, sql`current_parsers.adapter_key`),
     )
     .innerJoinLateral(staleReceipts, sql`true`)
