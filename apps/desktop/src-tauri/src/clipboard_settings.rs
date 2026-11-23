@@ -31,7 +31,7 @@ fn update(
 ) -> Result<ClipboardSettingsSnapshot, String> {
   let settings = {
     let mut manager = state.lock().map_err(lock_error)?;
-    change(&mut *manager)?;
+    change(&mut manager)?;
     manager.settings_snapshot(caller)
   };
   announce(app);

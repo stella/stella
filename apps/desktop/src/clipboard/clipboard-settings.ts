@@ -28,12 +28,9 @@ export const CLIPBOARD_RETENTION_LABEL_KEYS = {
   year: "retentionYear",
 } as const satisfies Record<ClipboardRetention, string>;
 
-export const CLIPBOARD_GROUP_DELETION_MODES = [
-  "keepClips",
-  "deleteClips",
-] as const;
+const CLIPBOARD_GROUP_DELETION_MODES = ["keepClips", "deleteClips"] as const;
 
-export type ClipboardGroupDeletionMode =
+type ClipboardGroupDeletionMode =
   (typeof CLIPBOARD_GROUP_DELETION_MODES)[number];
 
 /** A group dialog: what it creates, edits or deletes, as the user left it. */
