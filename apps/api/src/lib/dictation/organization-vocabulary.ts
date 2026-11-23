@@ -36,7 +36,12 @@ type CachedIndex = { version: string; index: VocabularyIndex };
 const cachedIndexes = new Map<SafeId<"organization">, CachedIndex>();
 let cachedTerms = 0;
 
-const remember = (
+/**
+ * Keeps `entry` as the organization's index. An empty index is never kept
+ * (reading an empty list again costs one count), so organizations without
+ * words cannot grow the cache past its word budget.
+ */
+export const rememberVocabularyIndex = (
   organizationId: SafeId<"organization">,
   entry: CachedIndex,
 ) => {
@@ -44,6 +49,9 @@ const remember = (
   if (replaced !== undefined) {
     cachedIndexes.delete(organizationId);
     cachedTerms -= replaced.index.size;
+  }
+  if (entry.index.size === 0) {
+    return;
   }
   cachedIndexes.set(organizationId, entry);
   cachedTerms += entry.index.size;
@@ -62,6 +70,9 @@ export const forgetOrganizationVocabularyIndexes = () => {
   cachedIndexes.clear();
   cachedTerms = 0;
 };
+
+/** How many indexes are cached; for tests. */
+export const cachedVocabularyIndexCount = (): number => cachedIndexes.size;
 
 /**
  * The list's version: how many words it holds and when the newest was
@@ -107,7 +118,7 @@ const readIndex = async (
   const version = await readVersion(tx, organizationId);
   const cached = cachedIndexes.get(organizationId);
   if (cached?.version === version) {
-    remember(organizationId, cached);
+    rememberVocabularyIndex(organizationId, cached);
     return cached.index;
   }
   const terms = await boundedAll({
@@ -118,7 +129,7 @@ const readIndex = async (
     query: async (limit) => await readNewestFirst(tx, organizationId, limit),
   });
   const index = buildVocabularyIndex(terms);
-  remember(organizationId, { version, index });
+  rememberVocabularyIndex(organizationId, { version, index });
   return index;
 };
 
@@ -189,6 +200,39 @@ type TranscriptionVocabularyOptions = OrganizationVocabularyOptions & {
  * administrator is working on now; the matter's own names already come
  * with the request.
  */
+/**
+ * A Groq prompt's budget in approximate tokens: three Unicode scalars each,
+ * the ", " separators included, as `@stll/transcript` budgets vocabulary.
+ * It stays under the provider's documented 224-token prompt limit.
+ */
+const GROQ_PROMPT_TOKEN_BUDGET = 200;
+
+const promptTokens = (terms: readonly string[]): number =>
+  Math.ceil(Array.from(terms.join(", ")).length / 3);
+
+/**
+ * The words a Groq prompt is sent with: the request's own words as they
+ * came (its own limits already hold them), then organization words, in
+ * order, only while the joined prompt stays within its token budget.
+ */
+export const fitGroqPrompt = (
+  own: readonly string[] | undefined,
+  merged: readonly string[],
+): string[] => {
+  const ownCount =
+    own === undefined
+      ? 0
+      : mergeDictationTerms([own], MAX_TRANSCRIPTION_VOCABULARY_TERMS).length;
+  const fitted = merged.slice(0, ownCount);
+  for (const term of merged.slice(ownCount)) {
+    if (promptTokens([...fitted, term]) > GROQ_PROMPT_TOKEN_BUDGET) {
+      continue;
+    }
+    fitted.push(term);
+  }
+  return fitted;
+};
+
 export const readTranscriptionVocabulary = async ({
   safeDb,
   organizationId,

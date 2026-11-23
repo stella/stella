@@ -97,46 +97,76 @@ export const checkDictationTerms = async (terms: readonly string[]) => {
   };
 };
 
-/** Adds the words a batch at a time (the API takes each under the list's
- *  lock, so the limit holds); returns how many were added. */
-export const addDictationTerms = async (terms: readonly string[]) => {
-  const added = await Promise.all(
-    batches(terms).map(
-      async (batch) =>
-        await invokeCapability(
-          "organization-settings.dictation-vocabulary.add",
-          async (request) =>
-            unwrapApiResponse(
-              await api["organization-settings"]["dictation-vocabulary"].post(
-                { terms: batch },
-                request,
-              ),
-            ),
-        ),
-    ),
-  );
-  return { added: sum(added.map((result) => result.added)) };
+/** A batched write's outcome: what the batches that went through did, and
+ *  the first batch failure, if any. */
+export type DictationBatchFailure = { error: unknown } | null;
+
+/**
+ * Runs every batch to its end. A failed batch leaves the others' changes in
+ * place, so the caller learns both what was done and what failed, and the
+ * write still settles (and refreshes the list) once.
+ */
+const settleBatches = async <T, R>(
+  items: readonly T[],
+  run: (batch: T[]) => Promise<R>,
+): Promise<{ done: R[]; failure: DictationBatchFailure }> => {
+  const settled = await Promise.allSettled(batches(items).map(run));
+  const done: R[] = [];
+  let failure: DictationBatchFailure = null;
+  for (const outcome of settled) {
+    if (outcome.status === "fulfilled") {
+      done.push(outcome.value);
+    } else {
+      failure ??= { error: outcome.reason };
+    }
+  }
+  return { done, failure };
 };
 
+/** Adds one request's words; the API takes them under the list's lock, so
+ *  the limit holds. A failure rejects. */
+const postTerms = async (terms: readonly string[]) =>
+  await invokeCapability(
+    "organization-settings.dictation-vocabulary.add",
+    async (request) =>
+      unwrapApiResponse(
+        await api["organization-settings"]["dictation-vocabulary"].post(
+          { terms: [...terms] },
+          request,
+        ),
+      ),
+  );
+
+/** Adds one word: one request, so its failure is the write's. */
+export const addDictationTerm = async (term: string) => await postTerms([term]);
+
+/** Adds the words a batch at a time; returns how many were added, and the
+ *  first batch that failed. */
+export const addDictationTerms = async (terms: readonly string[]) => {
+  const { done, failure } = await settleBatches(terms, postTerms);
+  return { added: sum(done.map((result) => result.added)), failure };
+};
+
+/** Removes the words a batch at a time; returns how many were removed, and
+ *  the first batch that failed. */
 export const deleteDictationTerms = async (
   ids: readonly DictationVocabularyTerm["id"][],
 ) => {
-  const deleted = await Promise.all(
-    batches(ids).map(
-      async (batch) =>
-        await invokeCapability(
-          "organization-settings.dictation-vocabulary.delete",
-          async (request) =>
-            unwrapApiResponse(
-              await api["organization-settings"]["dictation-vocabulary"].delete(
-                { ids: batch },
-                request,
-              ),
+  const { done, failure } = await settleBatches(
+    ids,
+    async (batch) =>
+      await invokeCapability(
+        "organization-settings.dictation-vocabulary.delete",
+        async (request) =>
+          unwrapApiResponse(
+            await api["organization-settings"]["dictation-vocabulary"].delete(
+              { ids: batch },
+              request,
             ),
-        ),
-    ),
+          ),
+      ),
   );
-  return { deleted: sum(deleted.map((result) => result.deleted)) };
+  return { deleted: sum(done.map((result) => result.deleted)), failure };
 };
 
 export const exportDictationTerms = async () =>

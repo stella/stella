@@ -55,7 +55,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import { managedProviderUnavailable } from "@/api/lib/chat/provider-data-policy";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
-import { readTranscriptionVocabulary } from "@/api/lib/dictation/organization-vocabulary";
+import {
+  fitGroqPrompt,
+  readTranscriptionVocabulary,
+} from "@/api/lib/dictation/organization-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   isFeatureAccessSnapshotForPrincipal,
@@ -352,7 +355,14 @@ const requestVocabulary = async ({
     });
     return own;
   }
-  return words.value.length === 0 ? own : words.value;
+  if (words.value.length === 0) {
+    return own;
+  }
+  // A Groq prompt has a token limit; organization words fill only the room
+  // the request's own words leave in it.
+  return TRANSCRIPTION_MODELS[modelId].vocabularyMechanism === "groq-prompt"
+    ? fitGroqPrompt(own, words.value)
+    : words.value;
 };
 
 export const executeDictation = async (

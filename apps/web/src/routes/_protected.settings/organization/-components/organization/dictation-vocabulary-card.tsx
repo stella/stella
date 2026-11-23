@@ -43,7 +43,7 @@ import { downloadFile } from "@/lib/utils";
 import { resourceMutation } from "@/lib/workspace-realtime";
 import { DictationImportSheet } from "@/routes/_protected.settings/organization/-components/organization/dictation-import-sheet";
 import {
-  addDictationTerms,
+  addDictationTerm,
   deleteDictationTerms,
   dictationVocabularyOptions,
   exportDictationTerms,
@@ -76,28 +76,31 @@ export const DictationVocabularyCard = () => {
     list.data === undefined
       ? []
       : list.data.pages.flatMap(({ items }) => items);
-  // The words' resource contracts refresh the list after every write. The
-  // type arguments are explicit: useMutation's contextual type would
-  // otherwise infer the answer as unknown.
+  // The words' resource contracts refresh the list after every write. Built
+  // outside useMutation so its types are inferred from the write.
+  const deleteTerms = resourceMutation({
+    mutation: "deleteDictationVocabulary",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: deleteDictationTerms,
+  });
+  // A batch that failed leaves the others' words removed; the write still
+  // settles, so the list refreshes either way.
   const remove = useMutation({
-    mutationFn: resourceMutation<
-      "deleteDictationVocabulary",
-      { deleted: number },
-      readonly DictationVocabularyTerm["id"][]
-    >({
-      mutation: "deleteDictationVocabulary",
-      queryClient,
-      scope: { type: "organization" },
-      mutationFn: deleteDictationTerms,
-    }),
-    onSuccess: ({ deleted }) => {
+    mutationFn: deleteTerms,
+    onSuccess: ({ deleted, failure }) => {
       setSelected(new Set());
-      stellaToast.add({
-        title: t("settings.organization.dictation.deletedToast", {
-          count: deleted,
-        }),
-        type: "success",
-      });
+      if (deleted > 0 || failure === null) {
+        stellaToast.add({
+          title: t("settings.organization.dictation.deletedToast", {
+            count: deleted,
+          }),
+          type: "success",
+        });
+      }
+      if (failure !== null) {
+        notifyUserError(failure.error, t("errors.actionFailed"));
+      }
     },
     onError: (error) => {
       notifyUserError(error, t("errors.actionFailed"));
@@ -294,17 +297,14 @@ const AddWordForm = ({ full }: { full: boolean }) => {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
   const reading = readDictationTerm(draft);
+  const addTerm = resourceMutation({
+    mutation: "addDictationVocabulary",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: addDictationTerm,
+  });
   const add = useMutation({
-    mutationFn: resourceMutation<
-      "addDictationVocabulary",
-      { added: number },
-      string
-    >({
-      mutation: "addDictationVocabulary",
-      queryClient,
-      scope: { type: "organization" },
-      mutationFn: async (term: string) => await addDictationTerms([term]),
-    }),
+    mutationFn: addTerm,
     onSuccess: ({ added }, term) => {
       setDraft("");
       stellaToast.add({

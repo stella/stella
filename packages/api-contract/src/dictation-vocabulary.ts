@@ -113,35 +113,75 @@ export const readDictationTermImport = (
 
 /**
  * The lines of a pasted list or an imported file. A CSV file gives the
- * first cell of each row (quotes allowed, so a word may hold a comma);
+ * first cell of each record (quotes allowed, so a word may hold a comma);
  * anything else gives one word per line.
  */
 export const dictationImportLines = (
   text: string,
   format: "lines" | "csv",
 ): string[] => {
-  const lines = text.replace(/^\uFEFF/u, "").split(/\r\n|\r|\n/u);
-  return format === "csv" ? lines.map(firstCsvCell) : lines;
+  const body = text.replace(/^\uFEFF/u, "");
+  return format === "csv" ? csvFirstCells(body) : body.split(/\r\n|\r|\n/u);
 };
 
-const firstCsvCell = (line: string): string => {
-  const trimmed = line.trimStart();
-  if (!trimmed.startsWith('"')) {
-    const end = line.search(/[,;\t]/u);
-    return end === -1 ? line : line.slice(0, end);
-  }
+const isCsvSeparator = (character: string): boolean =>
+  character === "," || character === ";" || character === "\t";
+
+/**
+ * The first cell of each CSV record. A quoted cell in any column may hold
+ * separators and line breaks, so records are found across the whole text,
+ * never by splitting it into lines first.
+ */
+const csvFirstCells = (text: string): string[] => {
+  const cells: string[] = [];
   let cell = "";
-  for (let index = 1; index < trimmed.length; index += 1) {
-    const character = trimmed[index];
-    if (character === '"') {
-      if (trimmed[index + 1] === '"') {
-        cell += '"';
+  let column = 0;
+  // `start`: nothing but spaces read in this cell yet; `quoted`: inside
+  // quotes; `closed`: after a closing quote; `plain`: an unquoted cell.
+  let state: "start" | "quoted" | "closed" | "plain" = "start";
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text.charAt(index);
+    if (state === "quoted") {
+      if (character !== '"') {
+        cell += column === 0 ? character : "";
+      } else if (text.charAt(index + 1) === '"') {
+        cell += column === 0 ? '"' : "";
         index += 1;
-        continue;
+      } else {
+        state = "closed";
       }
-      return cell;
+      continue;
     }
-    cell += character;
+    if (character === "\r" || character === "\n") {
+      if (character === "\r" && text.charAt(index + 1) === "\n") {
+        index += 1;
+      }
+      cells.push(cell);
+      cell = "";
+      column = 0;
+      state = "start";
+      continue;
+    }
+    if (isCsvSeparator(character)) {
+      column += 1;
+      state = "start";
+      continue;
+    }
+    if (state === "start" && character === '"') {
+      if (column === 0) {
+        cell = "";
+      }
+      state = "quoted";
+      continue;
+    }
+    if (state === "closed") {
+      continue;
+    }
+    if (state === "start" && character.trim() !== "") {
+      state = "plain";
+    }
+    cell += column === 0 ? character : "";
   }
-  return cell;
+  cells.push(cell);
+  return cells;
 };

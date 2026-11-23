@@ -60,6 +60,18 @@ describe("which organization words a transcript needs", () => {
     expect(select(["Novák", "Novak"], "novak")).toEqual(["Novák", "Novak"]);
   });
 
+  test("one occurrence counts once, however many lookups reach it", () => {
+    // Both are said once and match exactly; `chance` has more skeleton
+    // readings than `Novak`, which must not make it look said more often.
+    expect(select(["Novak", "chance"], "novak chance", 1)).toEqual(["Novak"]);
+  });
+
+  test("a word said again still outranks a word said once", () => {
+    expect(select(["Novak", "chance"], "chance novak chance", 1)).toEqual([
+      "chance",
+    ]);
+  });
+
   test("an empty list or limit picks nothing", () => {
     expect(select([], "Novák")).toEqual([]);
     expect(select(["Novák"], "Novák", 0)).toEqual([]);

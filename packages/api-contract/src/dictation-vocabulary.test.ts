@@ -83,4 +83,19 @@ describe("an import", () => {
       ),
     ).toEqual(["Novák", "Smith, Jones & Co", 'Say "hi"', "KPMG"]);
   });
+
+  test("a quoted line break in a later CSV column stays inside its record", () => {
+    expect(
+      dictationImportLines(
+        'Novák,"client\r\ninternal note"\r\nKPMG,firm\n"Lee\nLtd",x',
+        "csv",
+      ),
+    ).toEqual(["Novák", "KPMG", "Lee\nLtd"]);
+  });
+
+  test("a CSV cell with spaces before its quote reads as quoted", () => {
+    expect(
+      dictationImportLines('  "Smith, Jones",x\n  Novák ,y', "csv"),
+    ).toEqual(["Smith, Jones", "  Novák "]);
+  });
 });

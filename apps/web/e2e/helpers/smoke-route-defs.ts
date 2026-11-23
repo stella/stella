@@ -76,7 +76,6 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/settings/organization/tools"),
   staticRoute("/settings/organization/ai"),
   staticRoute("/settings/organization/anonymization"),
-  staticRoute("/settings/organization/dictation"),
   staticRoute("/settings/organization/audit-logs"),
   staticRoute("/settings/organization/catalogue", {
     expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
@@ -113,12 +112,6 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     expectation: {
       kind: "redirectsTo",
       to: "/settings/organization/anonymization",
-    },
-  }),
-  staticRoute("/admin/dictation", {
-    expectation: {
-      kind: "redirectsTo",
-      to: "/settings/organization/dictation",
     },
   }),
   staticRoute("/admin/audit-logs", {
@@ -260,6 +253,13 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/time/approvals"),
   staticRoute("/time/report"),
   staticRoute("/settings/account/security"),
+  staticRoute("/settings/organization/dictation"),
+  staticRoute("/admin/dictation", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/dictation",
+    },
+  }),
 ];
 
 /** The validated scale fixture grants lists to both measured organizations. */

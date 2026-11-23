@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -58,8 +58,12 @@ const DictationImportSheetBody = ({
   const [text, setText] = useState("");
   const [review, setReview] = useState<Review | null>(null);
   const [checking, setChecking] = useState(false);
+  // Every edit moves the revision; a review that finishes for an older text
+  // is dropped, so confirming adds the words shown.
+  const revision = useRef(0);
   // The review answers for the text it read; editing waits for it.
   const check = async () => {
+    const checkedRevision = revision.current;
     setChecking(true);
     const read = readDictationTermImport(dictationImportLines(text, "lines"));
     const checked =
@@ -70,6 +74,9 @@ const DictationImportSheetBody = ({
               await checkDictationTerms(read.terms.map(({ term }) => term)),
           );
     setChecking(false);
+    if (revision.current !== checkedRevision) {
+      return;
+    }
     if (checked.isErr()) {
       notifyUserError(checked.error, t("errors.actionFailed"));
       return;
@@ -79,26 +86,32 @@ const DictationImportSheetBody = ({
   const fresh = review === null ? 0 : review.terms.length - review.listed;
   const room =
     review === null ? 0 : MAX_ORGANIZATION_DICTATION_TERMS - review.total;
-  // Explicit type arguments: useMutation's contextual type would otherwise
-  // infer the answer as unknown.
+  // Built outside useMutation so its types are inferred from the write.
+  const addTerms = resourceMutation({
+    mutation: "addDictationVocabulary",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: addDictationTerms,
+  });
+  // A batch that failed leaves the others' words added; the write still
+  // settles, so the list refreshes, and the review is read again before a
+  // retry.
   const add = useMutation({
-    mutationFn: resourceMutation<
-      "addDictationVocabulary",
-      { added: number },
-      readonly string[]
-    >({
-      mutation: "addDictationVocabulary",
-      queryClient,
-      scope: { type: "organization" },
-      mutationFn: addDictationTerms,
-    }),
-    onSuccess: ({ added }) => {
-      stellaToast.add({
-        title: t("settings.organization.dictation.importedToast", {
-          count: added,
-        }),
-        type: "success",
-      });
+    mutationFn: addTerms,
+    onSuccess: ({ added, failure }) => {
+      if (added > 0 || failure === null) {
+        stellaToast.add({
+          title: t("settings.organization.dictation.importedToast", {
+            count: added,
+          }),
+          type: "success",
+        });
+      }
+      if (failure !== null) {
+        notifyUserError(failure.error, t("errors.actionFailed"));
+        setReview(null);
+        return;
+      }
       onOpenChange(false);
     },
     onError: (error) => {
@@ -106,6 +119,7 @@ const DictationImportSheetBody = ({
     },
   });
   const edit = (next: string) => {
+    revision.current += 1;
     setText(next);
     setReview(null);
   };

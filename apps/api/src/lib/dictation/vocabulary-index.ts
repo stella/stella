@@ -423,6 +423,10 @@ export const selectVocabulary = (
     },
   }));
   const candidates = new Map<number, Candidate>();
+  // The terms the current transcript window has already counted: a term
+  // reached by several lookups (its letters and its skeletons) in one window
+  // is one occurrence, so it gains one hit there, not one per lookup.
+  let windowMatches = new Set<number>();
   // One spelling met again needs no second comparison.
   const compared = new Map<string, number>();
   const consider = (termIndex: number, kind: MatchKind, letters: string) => {
@@ -454,8 +458,11 @@ export const selectVocabulary = (
       candidates.set(termIndex, { score, hits: 1 });
     } else {
       known.score = Math.max(known.score, score);
-      known.hits += 1;
+      if (!windowMatches.has(termIndex)) {
+        known.hits += 1;
+      }
     }
+    windowMatches.add(termIndex);
   };
   // Skeletons recur across a transcript; each is resolved once.
   const nearSoundOf = new Map<string, number[]>();
@@ -509,6 +516,7 @@ export const selectVocabulary = (
       if (size < end) {
         break;
       }
+      windowMatches = new Set<number>();
       if (letters.length >= MIN_LETTERS) {
         for (const termIndex of postings(index.byLetters, letters)) {
           consider(termIndex, "letters", letters);
