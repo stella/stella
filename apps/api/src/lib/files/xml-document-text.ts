@@ -20,9 +20,27 @@ import {
 
 const INDENT = "  ";
 
-// C0 controls other than tab, line feed and carriage return, and DEL.
-// oxlint-disable-next-line no-control-regex -- matching control characters is the point
-const BINARY_CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
+const TAB = 0x09;
+const LINE_FEED = 0x0a;
+const CARRIAGE_RETURN = 0x0d;
+const DELETE = 0x7f;
+
+/** C0 controls other than tab, line feed and carriage return, and DEL. */
+const holdsBinaryControl = (text: string) => {
+  for (const char of text) {
+    const code = char.codePointAt(0) ?? 0;
+    if (
+      code === DELETE ||
+      (code < 0x20 &&
+        code !== TAB &&
+        code !== LINE_FEED &&
+        code !== CARRIAGE_RETURN)
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
 
 const escapeText = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
@@ -108,7 +126,7 @@ export const readXmlDocumentText = (
   if (
     decoded.isErr() ||
     !decoded.value.trimStart().startsWith("<") ||
-    BINARY_CONTROL.test(decoded.value)
+    holdsBinaryControl(decoded.value)
   ) {
     return Result.err(
       documentPackageError("The XML file is not readable text"),
