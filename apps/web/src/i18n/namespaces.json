@@ -21,6 +21,7 @@
   "contacts": "billing",
   "correspondence": "workspaces",
   "docxReview": "templates",
+  "eInvoice": "workspaces",
   "emailViewer": "workspaces",
   "errors": "core",
   "feedback": "core",

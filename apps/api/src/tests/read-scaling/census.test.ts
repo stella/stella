@@ -16,15 +16,11 @@ import {
 import { accountExportDownloadScalingScenario } from "./account-exports";
 import apiLedger from "./api-scaling-ledger.json";
 import { asicPreviewScalingScenario } from "./asic-preview";
-import {
-  cadesContentScalingScenario,
-  cadesPreviewScalingScenario,
-} from "./cades-preview";
+import { cadesPreviewScalingScenario } from "./cades-preview";
 import {
   browseCalendarScalingScenario,
   browseCourtsScalingScenario,
 } from "./case-law-browse-hubs";
-import { certifiedEmailScalingScenario } from "./certified-email";
 import { chatActiveRunsScalingScenario } from "./chat-active-runs";
 import { chatBackgroundTasksScalingScenario } from "./chat-background-tasks";
 import { browserSiteGrantsScalingScenario } from "./chat-browser-site-grants";
@@ -62,7 +58,10 @@ import {
   documentAnnotationScalingScenarios,
   markedPdfDownloadScalingScenario,
 } from "./document-annotations";
+import { eInvoicePreviewScalingScenario } from "./e-invoice";
+import { emailReadingScalingScenario } from "./email-reading";
 import { fileContentScalingScenario } from "./file-content";
+import { filePartListScalingScenario } from "./file-part-list";
 import { graphToolsScalingScenarios } from "./graph-tools";
 import { invoicePaymentScalingScenarios } from "./invoice-payments";
 import { invoiceSendScalingScenarios } from "./invoice-sends";
@@ -85,16 +84,15 @@ import { outboundActionScalingScenarios } from "./outbound-actions";
 import { outlookClientMetadataScalingScenario } from "./outlook-client-metadata";
 import { savedSearchReadScalingScenario } from "./saved-searches";
 import {
+  type HandlerOwner,
   readScenarioRegistry,
   scenarioMembershipViolations,
 } from "./scenario-membership";
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
-import {
-  signedDossierContentScalingScenario,
-  signedDossierPreviewScalingScenario,
-} from "./signed-dossier";
+import { signedDossierPreviewScalingScenario } from "./signed-dossier";
+import { similarDocumentsScalingScenarios } from "./similar-documents";
 import { skillExportScalingScenarios } from "./skill-export";
 import {
   softLawReadScalingScenario,
@@ -116,6 +114,7 @@ import {
 } from "./verification-graph";
 import { verifyQuoteApiScalingScenario } from "./verify-quote";
 import { writeScalingScenarios } from "./write-scenarios";
+import { zipArchiveScalingScenario } from "./zip-archive";
 
 const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const measuredApiScenarios = [
@@ -158,13 +157,14 @@ const measuredApiScenarios = [
   ...verificationChronologyScalingScenarios,
   ...graphToolsScalingScenarios,
   asicPreviewScalingScenario,
-  signedDossierContentScalingScenario,
+  zipArchiveScalingScenario,
+  filePartListScalingScenario,
   signedDossierPreviewScalingScenario,
   structuredDocumentScalingScenario,
-  cadesContentScalingScenario,
+  eInvoicePreviewScalingScenario,
   cadesPreviewScalingScenario,
   dataBoxPreviewScalingScenario,
-  certifiedEmailScalingScenario,
+  emailReadingScalingScenario,
   ...dataBoxSettingsScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
@@ -172,6 +172,7 @@ const measuredApiScenarios = [
   memberRoleScalingScenario,
   outlookClientMetadataScalingScenario,
   ...documentAnnotationScalingScenarios,
+  ...similarDocumentsScalingScenarios,
   markedPdfDownloadScalingScenario,
   myOpenTasksScalingScenario,
   memberCandidatesScalingScenario,
@@ -196,6 +197,9 @@ const measuredApiReads = apiApp.routes
     measuredApiScenarios.some((scenario) => scenario.definition === definition),
   )
   .map(({ method, path: routePath }) => `${method} ${routePath}`);
+
+const handlerKey = ({ file, exportName }: HandlerOwner) =>
+  JSON.stringify([file, exportName]);
 
 test("previously measured scenarios retain their handler or tool identity", async () => {
   const base = treeBaseRevision({ repoRoot });
@@ -254,11 +258,34 @@ test("previously measured scenarios retain their handler or tool identity", asyn
       );
       expect(measured?.definition === owner).toBe(true);
     }
+    const baseRegistry = readScenarioRegistry({
+      ...registry,
+      readSource: readBaseSource,
+    });
+    // A base handler is live while its module still exports it.
+    const liveHandlers = new Set<string>();
+    for (const entry of baseRegistry) {
+      if (
+        entry.kind !== "api" ||
+        !existsSync(path.join(repoRoot, entry.handlerOwner.file))
+      ) {
+        continue;
+      }
+      const ownerModule: unknown = await import(
+        path.join(repoRoot, entry.handlerOwner.file)
+      );
+      if (
+        isRecord(ownerModule) &&
+        isRecord(ownerModule[entry.handlerOwner.exportName])
+      ) {
+        liveHandlers.add(handlerKey(entry.handlerOwner));
+      }
+    }
     expect(
       scenarioMembershipViolations({
-        base: readScenarioRegistry({ ...registry, readSource: readBaseSource }),
+        base: baseRegistry,
         current,
-        handlerExists: (file) => existsSync(path.join(repoRoot, file)),
+        handlerExists: (owner) => liveHandlers.has(handlerKey(owner)),
       }),
     ).toEqual([]);
   }

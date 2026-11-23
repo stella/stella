@@ -1,5 +1,41 @@
 # @stll/ui
 
+## 0.83.0
+
+### Minor Changes
+
+- [#9240](https://github.com/stella/stella/pull/9240) [`10ef464`](https://github.com/stella/stella/commit/10ef464329c555633c59a8307bbd6bf85e22fe5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared web and native document marks for WordPerfect, Works, Pages, Numbers, web archive and EPUB files, and export `DOCUMENT_MARK_KINDS`.
+
+## 0.82.0
+
+### Minor Changes
+
+- [#9231](https://github.com/stella/stella/pull/9231) [`39eabb8`](https://github.com/stella/stella/commit/39eabb8eee2640bdda32e928239460602aefc23b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `formatFileSize` writes sizes under 1 kB with the long, plural-aware unit ("333 bytes", "333 bajtů") instead of the short English unit, which has no plural ("333 byte"). Larger sizes keep the short units.
+
+  The `format` argument now receives `unitDisplay: "long"` for bytes, so a formatter passed in must accept `"long" | "short"`.
+
+## 0.81.1
+
+### Patch Changes
+
+- [#9232](https://github.com/stella/stella/pull/9232) [`76bd78b`](https://github.com/stella/stella/commit/76bd78b75de4b4179f90bc3a89d4187ead4bd174) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Count which inline-overflow items fit in the same commit that renders the row, so the first paint never shows items past its edge.
+
+## 0.81.0
+
+### Minor Changes
+
+- [#9186](https://github.com/stella/stella/pull/9186) [`9db6ee1`](https://github.com/stella/stella/commit/9db6ee1cbde7b4e6b85210e46bf93c705034e64b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Give P7M, ASiC-E, ASiC-S, BDOC, UYAP and OFD files document marks of their own, each the format's page in its colour with its tag.
+
+- [#9193](https://github.com/stella/stella/pull/9193) [`94387e7`](https://github.com/stella/stella/commit/94387e7ca464e5f26cf95913f20b0a4a503b79b9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/inline-overflow` holds the policy that decides which items of a single-line row fit and which move into a trailing "show more" menu (`resolveInlineOverflow`, `splitInlineOverflow`), and `@stll/ui/use-inline-overflow` measures a row for it. `InspectorFacetBar` runs on them. `WorkspaceViewSwitcher` takes a required `overflowLabel` and moves the views that do not fit into a menu after the tabs, keeping the active or renamed view on screen, instead of scrolling the tabs; the strip's add control no longer draws a divider.
+
+- [#9185](https://github.com/stella/stella/pull/9185) [`7192259`](https://github.com/stella/stella/commit/7192259afbb8e3e3ffbbb906b9be3129e1ab3882) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared document marks for Hungarian e-akta dossiers and Slovak ZEPf containers.
+
+- [#9202](https://github.com/stella/stella/pull/9202) [`f55e84a`](https://github.com/stella/stella/commit/f55e84a17a4847c2d6722799990f5932fdd7b004) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add document marks for Slovak XAdES_ZEP envelopes and Hungarian e-akta delivery receipts.
+
+- [#9157](https://github.com/stella/stella/pull/9157) [`62c29aa`](https://github.com/stella/stella/commit/62c29aa31dfa732c9962227ae90b54ccb4bddbd6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendarColumn` gains a `pending` variant that shimmers at known ranges and takes no selection; a one-line block shows its caption whole or not at all. `MATTER_SWATCHES` no longer includes `--option-red`, so a matter without a stored colour is never drawn in the error colour.
+
+- [#9189](https://github.com/stella/stella/pull/9189) [`b0f575f`](https://github.com/stella/stella/commit/b0f575f1ef2b403299e222e2dc21293b916785c7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared web and native document marks for structured invoice and XML files.
+
 ## 0.80.1
 
 ### Patch Changes

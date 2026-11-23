@@ -43,6 +43,7 @@ import {
   RecoverableViewerBoundary,
   type ViewerSurface,
 } from "@/components/viewer/recoverable-viewer-boundary";
+import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
 import { PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -65,9 +66,25 @@ const DataBoxFileViewer = lazy(async () => {
   return { default: m.DataBoxFileViewer };
 });
 
+const EInvoiceViewer = lazy(async () => {
+  const m = await import("@/components/inspector/e-invoice-viewer");
+  return { default: m.EInvoiceViewer };
+});
+
+const ManualRedactionPageLayer = lazy(async () => {
+  const m =
+    await import("@/components/pdf/manual-redaction/manual-redaction-page-layer");
+  return { default: m.ManualRedactionPageLayer };
+});
+
 const SignedDossierViewer = lazy(async () => {
   const m = await import("@/components/inspector/signed-dossier-viewer");
   return { default: m.SignedDossierViewer };
+});
+
+const ZipArchiveViewer = lazy(async () => {
+  const m = await import("@/components/inspector/zip-archive-viewer");
+  return { default: m.ZipArchiveViewer };
 });
 
 const StructuredDocumentViewer = lazy(async () => {
@@ -107,6 +124,13 @@ const structuredDocumentViewer = {
   surface: "inspector-structured-document",
 } as const satisfies LegalFileViewer;
 
+const eInvoiceViewer = {
+  Viewer: EInvoiceViewer,
+  unreadable: "eInvoice.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-e-invoice",
+} as const satisfies LegalFileViewer;
+
 const legalFileViewers = {
   asicE: asicFileViewer,
   asicS: asicFileViewer,
@@ -121,11 +145,21 @@ const legalFileViewers = {
   },
   ofd: structuredDocumentViewer,
   uyap: structuredDocumentViewer,
+  isdoc: eInvoiceViewer,
+  isdocx: eInvoiceViewer,
+  // Any XML file opens here; the reader refuses one that is not an invoice.
+  xml: { ...eInvoiceViewer, unreadable: "eInvoice.notRecognized" },
   dataBox: {
     Viewer: DataBoxFileViewer,
     unreadable: "correspondence.dataBox.unreadable",
     download: "common.download",
     surface: "inspector-data-box",
+  },
+  zip: {
+    Viewer: ZipArchiveViewer,
+    unreadable: "inspector.fileParts.archiveUnreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-zip",
   },
 } as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
 
@@ -281,7 +315,11 @@ const FileTabViewerComponent = ({
       case "xadesZep":
       case "zep":
       case "ofd":
-      case "uyap": {
+      case "uyap":
+      case "isdoc":
+      case "isdocx":
+      case "xml":
+      case "zip": {
         const { Viewer, unreadable, download, surface } =
           legalFileViewers[nativePreviewKind];
         return (
@@ -425,6 +463,18 @@ const FileTabViewerComponent = ({
             onError={onViewerError}
             onPeekNavigate={closeAll}
             onWheelZoom={handlePdfWheelZoom}
+            pdfPageOverlay={
+              env.VITE_FEATURE_PDF_AREA_REDACTION
+                ? (pageId) => (
+                    <Suspense fallback={null}>
+                      <ManualRedactionPageLayer
+                        fieldId={tab.id}
+                        pageId={pageId}
+                      />
+                    </Suspense>
+                  )
+                : undefined
+            }
             scaleOffset={scaleOffset}
             viewId={peekPdfViewId}
             workspaceId={tab.workspaceId}

@@ -71,6 +71,7 @@ export const envWebClientSchema = {
   VITE_FEATURE_FOLIO_COLLAB: featureFlagSchema,
   VITE_FEATURE_GOVERNED_WORKFLOW: featureFlagSchema,
   VITE_FEATURE_INBOX: featureFlagSchema,
+  VITE_FEATURE_PDF_AREA_REDACTION: featureFlagSchema,
   /** Lets a production deployment expose per-browser beta previews. */
   VITE_BETA_FEATURES_ENABLED: featureFlagSchema,
   VITE_TERMS_URL: v.optional(linkUrlSchema, "/terms"),

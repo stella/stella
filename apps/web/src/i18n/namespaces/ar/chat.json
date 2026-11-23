@@ -975,7 +975,6 @@
       "waitingForInput": "في انتظار الإدخال",
       "writing": "جارٍ الكتابة"
     },
-    "unsupportedFileType": "نوع ملف غير مدعوم",
     "uploadFailed": "تعذّرت معالجة الملف",
     "usageFallbackNotice": "استُنفدت الحصة اليومية للذكاء الاصطناعي؛ تستمر الردود على النموذج القياسي.",
     "videoContent": "فيديو مُنشأ",

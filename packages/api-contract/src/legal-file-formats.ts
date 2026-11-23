@@ -1,10 +1,16 @@
 import { ASIC_FILE_FORMATS } from "./asic-file-formats";
+import { E_INVOICE_FILE_FORMATS } from "./e-invoice-formats";
 import { SIGNED_DOSSIER_FORMATS } from "./signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "./structured-document-formats";
 
 export const STRUCTURED_DOCUMENT_KINDS = STRUCTURED_DOCUMENT_FORMATS.map(
   ({ kind }) => kind,
 );
+
+export const E_INVOICE_KINDS = E_INVOICE_FILE_FORMATS.map(({ kind }) => kind);
+
+export const [ISDOC_FILE_FORMAT, ISDOCX_FILE_FORMAT, XML_FILE_FORMAT] =
+  E_INVOICE_FILE_FORMATS;
 
 export const DATA_BOX_FILE_FORMAT = {
   kind: "dataBox",
@@ -22,6 +28,19 @@ export const CADES_FILE_FORMAT = {
   extensions: [".p7m"],
   mimeType: "application/pkcs7-mime",
   mimeAliases: ["application/x-pkcs7-mime"],
+} as const;
+
+/**
+ * A plain ZIP archive. A ZIP-based format its name names (an ASiC container,
+ * an ISDOCX invoice, an Office document) is that format instead.
+ */
+export const ZIP_FILE_FORMAT = {
+  kind: "zip",
+  auditFormat: "zip",
+  label: "ZIP",
+  extensions: [".zip"],
+  mimeType: "application/zip",
+  mimeAliases: ["application/x-zip-compressed"],
 } as const;
 
 export const [ASIC_E_FILE_FORMAT, ASIC_S_FILE_FORMAT] = ASIC_FILE_FORMATS;
@@ -42,6 +61,8 @@ export const LEGAL_FILE_FORMATS = [
   ...ASIC_FILE_FORMATS,
   ...SIGNED_DOSSIER_FORMATS,
   ...STRUCTURED_DOCUMENT_FORMATS,
+  ...E_INVOICE_FILE_FORMATS,
+  ZIP_FILE_FORMAT,
 ] as const;
 
 export type LegalFileFormat = (typeof LEGAL_FILE_FORMATS)[number];

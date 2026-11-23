@@ -540,7 +540,6 @@
       "waitForMatches": "Palaukite, kol baigsis nuasmeninimo patikra.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
-    "attachmentNotPreviewable": "Atsisiųskite priedą, kad galėtumėte jį atidaryti.",
     "closeAllTabs": "Uždaryti {count, plural, one {# kortelę} few {visas # korteles} many {# kortelės} other {visas # kortelių}}",
     "closeOtherTabs": "Uždaryti {count, plural, one {# kitą kortelę} few {# kitas korteles} many {# kitos kortelės} other {# kitų kortelių}}",
     "closeTab": "Uždaryti <bdi>{name}</bdi>",
@@ -560,6 +559,22 @@
     },
     "facet": {
       "anonymization": "Anonimizavimas"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Archyvo nepavyko perskaityti.",
+      "back": "Grįžti į sąrašą",
+      "download": "Atsisiųsti {fileName}",
+      "noFilesInside": "Viduje nėra jokių failų.",
+      "noPreview": "Šio tipo failo peržiūra negalima. Atsisiųskite jį arba išsaugokite byloje.",
+      "notConverted": "Šio failo nepavyko konvertuoti peržiūrai. Atsisiųskite jį arba išsaugokite byloje.",
+      "open": "Atidaryti {fileName}",
+      "unavailable": {
+        "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",
+        "link": "Nuoroda į kitą failą, jis neatidaromas",
+        "tooLarge": "Per didelis, kad būtų galima atidaryti",
+        "unreadable": "Sugadintas, negalima atidaryti",
+        "unsupported": "Suglaudintas būdu, kurio negalima atidaryti"
+      }
     },
     "firstSourceReached": "Tai pirmas šaltinis.",
     "groups": {
@@ -632,6 +647,10 @@
       "lastUpdatedBy": "Paskutinį kartą atnaujino",
       "matterColumnsHeading": "Bylos duomenys",
       "noMatterColumns": "Apie šį dokumentą dar nieko neįrašyta",
+      "similarDocuments": {
+        "heading": "Panašūs dokumentai",
+        "similarity": "{percent} panašumas"
+      },
       "stellaHeading": "Saugoma programoje stella",
       "versionCurrent": "v{version} (dabartinė)"
     },
@@ -814,7 +833,6 @@
       "why": "Kodėl",
       "whyItMatters": "Kodėl tai svarbu:"
     },
-    "selectAttachmentToSave": "Pasirinkite priedą, kurį norite išsaugoti.",
     "showPane": "Rodyti polangį",
     "swapViews": "Sukeisti pagrindinį rodinį ir šoninį skydelį",
     "title": "Inspektorius"

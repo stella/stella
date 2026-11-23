@@ -155,6 +155,7 @@ export const OXLINT_CONFIGURATION_CACHE_INPUTS = [
   "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
   "$TURBO_ROOT$/scripts/generated-artifacts.ts",
   "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+  "$TURBO_ROOT$/scripts/parse-memo.ts",
   "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
   "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
   "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -1767,7 +1768,11 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
   );
   return Result.ok(
     await executeCheckCommands({
-      commands: separateApiLintFromTypecheck(commands, memoryLimitBytes()),
+      commands: filterApiLintShardCommands(
+        separateApiLintFromTypecheck(commands, memoryLimitBytes()),
+        leg,
+        process.env["API_LINT_SHARD"],
+      ),
       dryRun: options.dryRun,
       budgetDeadlineMs,
     }),
@@ -1778,6 +1783,29 @@ const main = async (): Promise<Result<number, CommandFailedError>> => {
  * A failed check must never exit 0: a signal-terminated child can report a
  * missing or zero code, which would turn the failure into a pass.
  */
+/**
+ * When CI fans `code-quality-api` across `API_LINT_SHARD=lib|handlers|rest`,
+ * the `lib` and `handlers` runners execute only `@stll/api#lint` (if in scope);
+ * the `rest` runner executes the `rest` lint shard plus the remaining API-leg
+ * workspace checks and typecheck.
+ */
+export const filterApiLintShardCommands = (
+  commands: readonly string[][],
+  leg: CodeCheckLeg | undefined,
+  shard: string | undefined,
+): string[][] => {
+  const normalized = shard?.trim();
+  if (leg !== "api" || (normalized !== "lib" && normalized !== "handlers")) {
+    return [...commands];
+  }
+  return commands.filter(
+    (command) =>
+      command[2] === "turbo" &&
+      (command.includes("@stll/api#lint") ||
+        (command.includes("lint") && command.includes("--filter=./apps/api"))),
+  );
+};
+
 export const failureExitCode = (code: number | null | undefined) =>
   code !== null &&
   code !== undefined &&

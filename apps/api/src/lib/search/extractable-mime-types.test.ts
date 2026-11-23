@@ -78,7 +78,7 @@ describe("classification", () => {
     for (const mimeType of [
       "application/vnd.ms-excel.sheet.macroEnabled.12",
       "application/vnd.apple.pages",
-      "application/zip",
+      "application/x-7z-compressed",
       "image/png",
       "",
     ]) {

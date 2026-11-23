@@ -62,7 +62,48 @@ export const legalSourceChanged = () =>
     }),
   );
 
+/** How a stored file is read: the type it is read as and its read budget. */
+export type FileSourceFormat = {
+  readonly mimeType: string;
+  readonly auditFormat: string;
+  /** The stored file's byte budget; a larger file is not read. */
+  readonly maxBytes?: number | undefined;
+};
+
+type StoredFileContent = {
+  readonly mimeType: string;
+  readonly fileName: string;
+  readonly sizeBytes: number;
+};
+
+const legalSourceFormat =
+  (acceptedKinds: readonly LegalFileFormatKind[]) =>
+  (content: StoredFileContent) => {
+    const format = legalFileFormat(content.mimeType, content.fileName);
+    if (!format || !acceptedKinds.includes(format.kind)) {
+      return null;
+    }
+    return {
+      kind: format.kind,
+      mimeType: format.mimeType,
+      auditFormat: format.auditFormat,
+      ...(isDocumentArchiveMimeType(format.mimeType)
+        ? { maxBytes: DOCUMENT_ARCHIVE_MAX_BYTES }
+        : {}),
+    };
+  };
+
 export const loadLegalFileSource = async (
+  options: LegalFileReadOptions,
+  acceptedKinds: readonly LegalFileFormatKind[],
+) => await loadFileSource(options, legalSourceFormat(acceptedKinds));
+
+/**
+ * Reads a stored file that `accept` recognizes, outside any lock, and hands
+ * back `deliver`, which releases a result only while the same live version is
+ * share-locked and after its delivery has been recorded.
+ */
+export const loadFileSource = async <TFormat extends FileSourceFormat>(
   {
     scopedDb,
     workspaceId,
@@ -71,15 +112,15 @@ export const loadLegalFileSource = async (
     recordAuditEvent,
     purpose = "preview",
   }: LegalFileReadOptions,
-  acceptedKinds: readonly LegalFileFormatKind[],
+  accept: (content: StoredFileContent) => TFormat | null,
 ) => {
   const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   if (row?.content.type !== "file") {
     return missingFile();
   }
   const { content, entityId } = row;
-  const format = legalFileFormat(content.mimeType, content.fileName);
-  if (content.encrypted || !format || !acceptedKinds.includes(format.kind)) {
+  const format = content.encrypted ? null : accept(content);
+  if (format === null) {
     return Result.err(
       new HandlerError({
         status: 422,
@@ -88,8 +129,9 @@ export const loadLegalFileSource = async (
       }),
     );
   }
-  const isArchive = isDocumentArchiveMimeType(format.mimeType);
-  if (isArchive && content.sizeBytes > DOCUMENT_ARCHIVE_MAX_BYTES) {
+  const { maxBytes } = format;
+  const isArchive = maxBytes !== undefined;
+  if (isArchive && content.sizeBytes > maxBytes) {
     return archiveTooLarge();
   }
 
@@ -103,7 +145,7 @@ export const loadLegalFileSource = async (
     key,
     mimeType: content.mimeType,
     fileName: content.fileName,
-    ...(isArchive ? { maxBytes: DOCUMENT_ARCHIVE_MAX_BYTES } : {}),
+    ...(maxBytes === undefined ? {} : { maxBytes }),
   }).then(
     (file) => Result.ok(file),
     async (error: unknown) => {
@@ -130,6 +172,14 @@ export const loadLegalFileSource = async (
   // source is share-locked, after its delivery has been recorded.
   const deliver = async <T extends Result<unknown, HandlerError>>(
     prepare: (tx: Transaction) => Promise<T> | T,
+    {
+      disposition = "inline",
+      part,
+    }: {
+      disposition?: "attachment" | "inline";
+      /** The part delivered (`attachment:2`), when it is not the stored file itself. */
+      part?: string;
+    } = {},
   ) =>
     await scopedDb(async (tx) => {
       const live = await lockLiveVersionField(tx, fieldId, workspaceId);
@@ -152,13 +202,14 @@ export const loadLegalFileSource = async (
       const prepared = await prepare(tx);
       if (prepared.isOk()) {
         await recordAuditEvent(tx, {
-          action: CONTENT_DELIVERY_AUDIT_ACTION.inline,
+          action: CONTENT_DELIVERY_AUDIT_ACTION[disposition],
           resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
           resourceId: entityId,
           workspaceId,
           metadata: {
-            disposition: "inline",
+            disposition,
             fieldId,
+            ...(part === undefined ? {} : { part }),
             format: format.auditFormat,
             mimeType: content.mimeType,
             sizeBytes: content.sizeBytes,
@@ -170,6 +221,7 @@ export const loadLegalFileSource = async (
   return Result.ok({
     source: source.value,
     mimeType: format.mimeType,
+    format,
     entityId,
     deliver,
   });

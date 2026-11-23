@@ -540,7 +540,6 @@
       "waitForMatches": "Počkejte na dokončení kontroly pro anonymizaci.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
     },
-    "attachmentNotPreviewable": "Stáhněte přílohu, abyste ji mohli otevřít.",
     "closeAllTabs": "Zavřít {count, plural, one {# kartu} few {všechny # karty} many {# karty} other {všech # karet}}",
     "closeOtherTabs": "Zavřít {count, plural, one {# další kartu} few {# další karty} many {# další karty} other {# dalších karet}}",
     "closeTab": "Zavřít <bdi>{name}</bdi>",
@@ -560,6 +559,22 @@
     },
     "facet": {
       "anonymization": "Anonymizace"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Archiv se nepodařilo přečíst.",
+      "back": "Zpět na seznam",
+      "download": "Stáhnout {fileName}",
+      "noFilesInside": "Uvnitř nejsou žádné soubory.",
+      "noPreview": "Tento typ souboru nemá náhled. Stáhněte si ho nebo ho uložte do spisu.",
+      "notConverted": "Tento soubor se nepodařilo převést pro náhled. Stáhněte si ho nebo ho uložte do spisu.",
+      "open": "Otevřít {fileName}",
+      "unavailable": {
+        "encrypted": "Chráněno heslem, nelze otevřít",
+        "link": "Odkaz na jiný soubor, neotevírá se",
+        "tooLarge": "Příliš velký, nelze otevřít",
+        "unreadable": "Poškozený, nelze otevřít",
+        "unsupported": "Komprimováno způsobem, který nelze otevřít"
+      }
     },
     "firstSourceReached": "Toto je první zdroj.",
     "groups": {
@@ -632,6 +647,10 @@
       "lastUpdatedBy": "Naposledy upravil(a)",
       "matterColumnsHeading": "Údaje ve spisu",
       "noMatterColumns": "K tomuto dokumentu zatím nejsou vyplněné žádné údaje",
+      "similarDocuments": {
+        "heading": "Podobné dokumenty",
+        "similarity": "shoda {percent}"
+      },
       "stellaHeading": "Uloženo v aplikaci stella",
       "versionCurrent": "v{version} (aktuální)"
     },
@@ -814,7 +833,6 @@
       "why": "Proč",
       "whyItMatters": "Proč je to podstatné:"
     },
-    "selectAttachmentToSave": "Vyberte přílohu k uložení.",
     "showPane": "Zobrazit panel",
     "swapViews": "Prohodit hlavní zobrazení a boční panel",
     "title": "Inspektor"

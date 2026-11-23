@@ -61,3 +61,42 @@ test("rejects oversized pages and cumulative document rasters", async ({
     ),
   ).toBe("The document exceeds the anonymized export size limit");
 });
+
+test("blacks out text under an area drawn with the mouse", async ({ page }) => {
+  await page.goto("/", { waitUntil: "domcontentloaded" });
+  const secrets = await page.evaluate(
+    async () => await window.showManualRedactionPages(),
+  );
+  expect(secrets).toHaveLength(2);
+  // Drag from just outside the secret's corner to just past the opposite one.
+  for (const secret of secrets) {
+    await page.mouse.move(secret.left - 3, secret.top - 3);
+    await page.mouse.down();
+    await page.mouse.move(secret.right + 3, secret.bottom + 3, { steps: 5 });
+    await page.mouse.up();
+  }
+
+  const result = await page.evaluate(
+    async () => await window.runManualRedactionExportCheck(),
+  );
+
+  expect(result.areaCount).toBe(2);
+  expect(result.sourceText).toContain("Undetected 4711");
+  expect(result.outputText).toBe("");
+  expect(result.secretBlackRatio).toHaveLength(2);
+  for (const { source, output } of result.secretBlackRatio) {
+    // Glyphs alone leave most of the secret's box unpainted.
+    expect(source).toBeLessThan(0.5);
+    expect(output).toBeGreaterThan(0.99);
+  }
+  expect(result.areaBlackRatio).toHaveLength(2);
+  for (const ratio of result.areaBlackRatio) {
+    expect(ratio).toBeGreaterThan(0.99);
+  }
+  expect(result.otherDocumentError).toBe(
+    "The marked areas were drawn on a different version of the file",
+  );
+  expect(result.otherPageSizeError).toBe(
+    "The marked areas were drawn on a different version of the file",
+  );
+});

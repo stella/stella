@@ -7,10 +7,9 @@
 //   isn't blocked by network I/O).
 // - While the app keeps running, repeat that background check so
 //   long-lived desktop sessions still pick up new releases.
-// - When the tray "Check for updates" item is clicked, run the same
-//   check synchronously and notify whether an update was found.
 // - Settings → About checks without installing, shows what it found,
-//   and installs through that same check when the user asks.
+//   and installs through that same check when the user asks. The tray's
+//   "Check for updates" opens About and runs that check there.
 // - When an update is found and no desktop edit sessions are
 //   active, download + install + relaunch. The installer handles
 //   the binary swap; `crate::relaunch` owns the hand-over to the
@@ -235,7 +234,7 @@ where
   let prepared = prepare_install(&active_edit_sessions, || async {
     notify(
       handle,
-      "Stella update available",
+      "stella update available",
       &format!("Installing v{version}…"),
     );
     download_update_package(&update).await
@@ -246,15 +245,15 @@ where
     PreparedInstall::Deferred => {
       notify(
         handle,
-        "Stella update available",
-        "Stella Desktop will update after active desktop edits are finished.",
+        "stella update available",
+        "stella desktop will update after active desktop edits are finished.",
       );
       return CheckOutcome::Deferred { version };
     }
     PreparedInstall::DownloadFailed(err) => {
       #[cfg(windows)]
       crate::desktop_crash::resume_after_failed_update(handle);
-      notify(handle, "Stella update failed", &err);
+      notify(handle, "stella update failed", &err);
       return CheckOutcome::Failed(err);
     }
   };
@@ -262,7 +261,7 @@ where
   if let Err(err) = crate::local_store::install_update(&update, &package) {
     #[cfg(windows)]
     crate::desktop_crash::resume_after_failed_update(handle);
-    notify(handle, "Stella update failed", &err);
+    notify(handle, "stella update failed", &err);
     return CheckOutcome::Failed(err);
   }
 
@@ -271,8 +270,8 @@ where
   if let Err(err) = crate::relaunch::after_update(handle) {
     notify(
       handle,
-      "Stella update installed",
-      "Quit and reopen Stella to finish updating.",
+      "stella update installed",
+      "Quit and reopen stella desktop to finish updating.",
     );
     return CheckOutcome::Failed(format!(
       "v{version} installed but the relaunch failed: {err}"

@@ -409,6 +409,11 @@ export const workspaces = p.pgTable(
       length: 128,
     }),
     color: p.varchar({ length: 32 }),
+    /** Rename new uploads to the organization's document name pattern. */
+    documentNamingEnabled: p
+      .boolean("document_naming_enabled")
+      .notNull()
+      .default(false),
     status: p
       .text({ enum: WORKSPACE_STATUSES })
       .notNull()

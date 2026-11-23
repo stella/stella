@@ -1,5 +1,0 @@
-{
-  "kind": "priority",
-  "qualifier": "Builds and publishes desktop installers and updater artifacts with platform signing and Windows signature and timestamp verification.",
-  "reviewedDigest": "a4c1da87e440ae104d7b45a1d8dc0edaf93e554c4aca162616c85e648eb6d827"
-}
