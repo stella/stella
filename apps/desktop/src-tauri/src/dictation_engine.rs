@@ -525,6 +525,7 @@ fn finish(
         &words,
         context,
         dictation::cleanup_form(app),
+        &dictation::cleanup_preferences(app),
       )
     } else {
       (None, Cleanup::Off)
