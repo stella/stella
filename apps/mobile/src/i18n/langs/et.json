@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Manused",
     "certifiedAt": "Sertifitseerimise aeg",
     "deliveredTo": "Kätte toimetatud aadressile",
     "error": "Teatatud viga",
@@ -462,20 +461,110 @@
     },
     "fit": "Laius",
     "openOriginal": "Ava originaal",
+    "openPart": "Ava {fileName}",
     "preview": "Ava eelvaade",
     "previewDescription": "See fail avaneb süsteemi eelvaates.",
     "retry": "Proovi uuesti",
     "title": "Dokument",
     "unrendered": "Seda dokumenti ei saa siin kuvada, kuid süsteemi eelvaade võib selle avada.",
+    "unscannedContent": {
+      "encrypted": "Mõned sees olevad failid on parooliga kaitstud, seega ei kontrollitud neid ohtude suhtes.",
+      "unsupportedCompression": "Mõned sees olevad failid on tihendatud vormingus, mida stella lugeda ei oska, seega ei kontrollitud neid ohtude suhtes."
+    },
     "zoomFit": "Sobita laiusega",
     "zoomIn": "Suurenda",
     "zoomOut": "Vähenda"
+  },
+  "eInvoice": {
+    "accountNumber": "Pangakonto number",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Panga kood",
+    "batchPosition": "Dokument {position, number}/{count, number}",
+    "bic": "BIC-kood",
+    "currency": "Valuuta",
+    "customer": "Ostja",
+    "documentTitle": "{documentType, select, invoice {Arve} creditNote {Kreeditarve} debitNote {Deebetarve} advance {Ettemaksuarve} other {Muu dokument}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Arve {number}} creditNote {Kreeditarve {number}} debitNote {Deebetarve {number}} advance {Ettemaksuarve {number}} other {Dokument {number}}}",
+    "exemptionReason": "Maksuvabastuse põhjus",
+    "formatVersion": "{format}, versioon {version}",
+    "grossTotal": "Kokku koos käibemaksuga",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Väljastamise kuupäev",
+    "lineId": "Nr",
+    "lineItems": "Read",
+    "linesShown": "Kuvatakse {shown, number} rida {count, plural, one {#-st} other {#-st}}",
+    "netAmount": "Netosumma",
+    "netTotal": "Kokku käibemaksuta",
+    "notes": "Arve märkused",
+    "otherIdentifier": "Muu tunnus",
+    "payableAmount": "Tasumisele kuuluv summa",
+    "paymentAmount": "Makse summa",
+    "paymentDetails": "Makseandmed",
+    "paymentDueDate": "Maksetähtaeg",
+    "paymentMeansCode": "Makseviisi kood",
+    "paymentReference": "Viitenumber",
+    "prepaidAmount": "Ettemakstud",
+    "quantity": "Kogus ja ühik",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate}%",
+    "ratePercentWithCategory": "{rate}% ({category})",
+    "registrationNumber": "Registrikood",
+    "supplier": "Müüja",
+    "taxAmount": "Käibemaksusumma",
+    "taxId": "Maksukohustuslase number",
+    "taxPointDate": "Maksustatava käibe kuupäev",
+    "taxTotal": "Käibemaks kokku",
+    "taxableAmount": "Maksustatav väärtus",
+    "totals": "Kokkuvõte",
+    "unitPrice": "Ühiku hind",
+    "units": {
+      "day": "{count, plural, one {{quantity} päev} other {{quantity} päeva}}",
+      "hour": "{count, plural, one {{quantity} tund} other {{quantity} tundi}}",
+      "month": "{count, plural, one {{quantity} kuu} other {{quantity} kuud}}",
+      "unit": "{count, plural, one {{quantity} tk} other {{quantity} tk}}",
+      "week": "{count, plural, one {{quantity} nädal} other {{quantity} nädalat}}",
+      "year": "{count, plural, one {{quantity} aasta} other {{quantity} aastat}}"
+    },
+    "unreadable": "Arvet ei õnnestunud lugeda.",
+    "vat": "Käibemaks",
+    "vatBreakdown": "Käibemaksu jaotus",
+    "vatId": "Käibemaksukohustuslase number",
+    "xmlUnreadable": "Seda XML-faili ei õnnestunud lugeda."
+  },
+  "email": {
+    "cc": "Koopia",
+    "date": "Kuupäev",
+    "from": "Saatja",
+    "noSubject": "(Teema puudub)",
+    "subject": "Teema",
+    "to": "Saajad"
   },
   "entity": {
     "currentVersion": "Praegune versioon",
     "loadFailed": "Kirjet ei õnnestunud laadida.",
     "reference": "Viitenumber",
     "type": "Tüüp"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Arhiivi ei õnnestunud lugeda.",
+    "attachments": "Manused",
+    "files": "Failid",
+    "insideFailed": "Selles olevaid faile ei õnnestunud laadida. Puudutage, et uuesti proovida.",
+    "noFilesInside": "Selles pole ühtegi faili.",
+    "noMatches": "Päringule „{query}“ ei vasta ükski fail.",
+    "open": "Ava {fileName} ({details})",
+    "saveFailed": "Faili ei õnnestunud toimikusse salvestada. Proovige uuesti.",
+    "saveNamed": "Salvesta {fileName} toimikusse",
+    "search": "Otsi faili nime või kausta järgi",
+    "unavailable": {
+      "encrypted": "Parooliga kaitstud, ei saa avada",
+      "link": "Viide teisele failile, seda ei avata",
+      "tooLarge": "Avamiseks liiga suur",
+      "unreadable": "Kahjustatud, ei saa avada",
+      "unsupported": "Pakitud viisil, mida ei saa avada"
+    },
+    "unnamed": "Nimetu fail"
   },
   "header": {
     "search": "Otsing"
@@ -505,6 +594,16 @@
     "refused": "Server keeldus päringust (veakood {status}).",
     "server": "Serveris tekkis viga (veakood {status}). Proovige hetke pärast uuesti.",
     "session": "Teie sisselogimine on aegunud. Logige uuesti sisse."
+  },
+  "mailbox": {
+    "back": "Tagasi kirjade juurde",
+    "messages": "Kirjad",
+    "noMatches": "Päringule „{query}“ ei vasta ükski kiri.",
+    "noMessages": "Selles postkastis pole kirju.",
+    "openFailed": "Kirja ei õnnestunud avada. Uuesti proovimiseks puudutage.",
+    "search": "Otsi kirjadest",
+    "truncated": "Kuvatakse ainult esimesed {count, number} kirja.",
+    "unreadable": "Seda postkasti ei õnnestunud lugeda."
   },
   "matter": {
     "add": "Lisa",
@@ -800,9 +899,11 @@
     "useStella": "Kasuta rakendust stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Elektroonilise toimiku kättesaamise kinnitus",
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
     "noSigners": "Allkirjastajate andmeid ei leitud.",
+    "signedContent": "Allkirjastatud dokument",
     "signers": "Allkirjastajad",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",

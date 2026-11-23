@@ -340,6 +340,11 @@ const conversionRefusalSchema = v.union([
     kind: v.literal("legacy_format"),
     replacementExtension: v.picklist([".xlsx", ".pptx"]),
   }),
+  v.object({
+    kind: v.literal("no_preview"),
+    format: v.pipe(v.string(), v.minLength(1), v.maxLength(32)),
+    cause: v.picklist(["decoding_off", "unreadable"]),
+  }),
 ]);
 
 /** Shared by both derivatives so their state machines cannot drift apart. */

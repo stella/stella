@@ -124,6 +124,20 @@ describe("e-akta dossiers", () => {
     ]);
   });
 
+  test("tells a delivery receipt from a dossier by its stated category", async () => {
+    const documents = [
+      { title: "elismervény.txt", extension: "txt", bytes: "Átvéve" },
+    ];
+    const receipt = await read(
+      await makeEAktaFixture({
+        documents,
+        category: "electronic acknowledgement",
+      }),
+    );
+    const dossier = await read(await makeEAktaFixture({ documents }));
+    expect([receipt.receipt, dossier.receipt]).toEqual([true, false]);
+  });
+
   test("recognizes a dossier whose schema binds its own namespace", async () => {
     const dossier = await read(
       await makeEAktaFixture({

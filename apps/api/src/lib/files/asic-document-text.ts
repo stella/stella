@@ -4,8 +4,13 @@ import type { InferOutput } from "valibot";
 import type { asicPreviewSchema } from "@stll/api-contract/asic";
 
 type Preview = InferOutput<typeof asicPreviewSchema>;
+/** What the text shows of a member: its name and its reading. */
+type MemberReading = Pick<
+  Preview["members"][number],
+  "fileName" | "status" | "text"
+>;
 
-const memberText = ({ status, text }: Preview["members"][number]): string => {
+const memberText = ({ status, text }: MemberReading): string => {
   switch (status) {
     case "readable":
       return text;
@@ -21,7 +26,11 @@ const memberText = ({ status, text }: Preview["members"][number]): string => {
   }
 };
 
-export const asicDocumentText = ({ members }: Preview): string =>
+export const asicDocumentText = ({
+  members,
+}: {
+  members: readonly MemberReading[];
+}): string =>
   [
     "ASiC signature container. Signatures are unverified.",
     ...members.map(

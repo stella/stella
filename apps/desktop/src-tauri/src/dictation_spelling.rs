@@ -88,14 +88,20 @@ pub fn apply_learned(text: &str, fixes: &[LearnedSpelling<'_>]) -> String {
   let mut active = fixes
     .iter()
     .filter_map(|fix| {
-      let keys = pieces(fix.from)
+      // Only words apart by spaces can match: a fix whose dictated words
+      // hold punctuation, as `C++`, would otherwise match its words alone.
+      let (before, words, after) = phrase_words(fix.from)?;
+      if !before.is_empty() || !after.is_empty() {
+        return None;
+      }
+      let keys = pieces(words)
         .into_iter()
         .filter_map(|piece| match piece {
           Piece::Word(word) => Some(learned_key(word)),
           Piece::Between(_) => None,
         })
         .collect::<Vec<_>>();
-      (!keys.is_empty()).then_some((keys, fix.to))
+      Some((keys, fix.to))
     })
     .collect::<Vec<_>>();
   if active.is_empty() {
@@ -131,6 +137,29 @@ pub fn apply_learned(text: &str, fixes: &[LearnedSpelling<'_>]) -> String {
     }
   }
   out
+}
+
+/// `phrase` as the punctuation before its first word, its words, and the
+/// punctuation after its last word. `None` without a word, or when anything
+/// but spaces stands between two of its words.
+pub fn phrase_words(phrase: &str) -> Option<(&str, &str, &str)> {
+  let parts = pieces(phrase);
+  let first = parts
+    .iter()
+    .position(|piece| matches!(piece, Piece::Word(_)))?;
+  let last = parts
+    .iter()
+    .rposition(|piece| matches!(piece, Piece::Word(_)))?;
+  let spaced = parts[first..=last].iter().all(|piece| match piece {
+    Piece::Word(_) => true,
+    Piece::Between(between) => between.chars().all(|character| character == ' '),
+  });
+  if !spaced {
+    return None;
+  }
+  let before = joined(&parts[..first]).len();
+  let after = phrase.len() - joined(&parts[last + 1..]).len();
+  Some((&phrase[..before], &phrase[before..after], &phrase[after..]))
 }
 
 /// The words of `text`, split as the spelling passes split them.
@@ -425,6 +454,16 @@ mod tests {
         case.name
       );
     }
+  }
+
+  #[test]
+  fn a_phrase_splits_into_its_edge_punctuation_and_words() {
+    assert_eq!(phrase_words("Novak,"), Some(("", "Novak", ",")));
+    assert_eq!(phrase_words("(jon smith)"), Some(("(", "jon smith", ")")));
+    assert_eq!(phrase_words("C++"), Some(("", "C", "++")));
+    assert_eq!(phrase_words("o'brien"), Some(("", "o'brien", "")));
+    assert_eq!(phrase_words("St. John"), None);
+    assert_eq!(phrase_words("..."), None);
   }
 
   fn words(list: &[&str]) -> Vec<String> {

@@ -2686,7 +2686,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2]
+        partition: [1, 2, 3]
     permissions:
       contents: read
       actions: write
@@ -3000,7 +3000,7 @@ jobs:
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
           CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
-          CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
+          CI_CHECK_POOL_PARTITION: ${{ format('{0}/3', matrix.partition) }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
         run: |
@@ -3433,8 +3433,7 @@ jobs:
           path: ${{ runner.temp }}/postgres-test-durations.json
           key: postgres-test-durations-${{ github.run_id }}
 
-  # The browser-backed suites. They share one Playwright install, so they stay
-  # in a single job rather than one per suite.
+  # Browser-backed suites (shared Playwright container).
   ci-browser:
     needs: [ci-plan, pr-heavy-gate]
     if: >-
@@ -3650,18 +3649,19 @@ jobs:
           bun --filter @stll/ui test:browser -- "${specs[@]}"
 
       - name: Test desktop browser interactions
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (startsWith(matrix.suite, 'desktop-') && steps.desktop-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
+          S: ${{ matrix.suite }}
         run: |
           cd apps/desktop
-          bun run test:browser
+          bun run test:browser -- --shard="${S#desktop-}/3"
 
       - name: Upload desktop browser failures
-        if: matrix.suite == 'desktop' && failure() && steps.desktop-browser-tests.outputs.required == 'true'
+        if: startsWith(matrix.suite, 'desktop-') && failure() && steps.desktop-browser-tests.outputs.required == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: desktop-browser-failures
+          name: desktop-browser-failures-${{ matrix.suite }}
           path: apps/desktop/test-results/
           retention-days: 7
           if-no-files-found: ignore
@@ -3725,12 +3725,17 @@ jobs:
         || github.event_name == 'workflow_dispatch')
       )
       )
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [lib, handlers, rest]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
       actions: write
     env:
+      API_LINT_SHARD: ${{ matrix.shard }}
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
@@ -3809,6 +3814,7 @@ jobs:
           bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
 
       - name: Result consumption
+        if: matrix.shard == 'rest'
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -4249,6 +4255,7 @@ jobs:
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REDIS_URL: redis://127.0.0.1:6379
+          STELLA_ISOLATED_POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection_encoded || '' }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
@@ -6658,7 +6665,10 @@ jobs:
         id: wasm-check
         env:
           SCAN_ENGINE_WASM_OUT_DIR: ${{ runner.temp }}/scan-engine-wasm
-        run: bash packages/scan-engine/scripts/test-wasm-offline.sh
+          HEIC_DECODER_WASM_OUT_DIR: ${{ runner.temp }}/heic-decoder-wasm
+        run: |
+          bash packages/scan-engine/scripts/test-wasm-offline.sh
+          bash packages/heic-decoder/scripts/test-wasm-offline.sh
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'
@@ -6675,6 +6685,7 @@ jobs:
           name: scan-engine-wasm
           path: |
             ${{ runner.temp }}/scan-engine-wasm/
+            ${{ runner.temp }}/heic-decoder-wasm/
             ${{ runner.temp }}/scan-engine-wasm.sha256
             ${{ runner.temp }}/scan-engine-wasm.toolchain
           retention-days: 7
@@ -6691,10 +6702,10 @@ jobs:
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
+        run: for p in scan-engine heic-decoder; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
 
       - name: License audit
-        run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph bans licenses sources
+        run: for p in scan-engine heic-decoder; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
 
       - name: Save Rust build cache
         if: success()
@@ -7124,7 +7135,7 @@ jobs:
 
       - name: Dependency Review
         if: steps.changes.outputs.required == 'true' || steps.actions.outputs.required == 'true'
-        uses: actions/dependency-review-action@a1d282b36b6f3519aa1f3fc636f609c47dddb294 # v5.0.0
+        uses: actions/dependency-review-action@bbc44d14a204704ccc493733616cd1e93a0321ec # v5.0.1
         with:
           # The action derives both refs from a pull_request payload on its own;
           # a merge group carries them under its own event key.

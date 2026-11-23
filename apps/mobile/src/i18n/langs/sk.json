@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Prílohy",
     "certifiedAt": "Čas certifikácie",
     "deliveredTo": "Doručené na adresu",
     "error": "Ohlásená chyba",
@@ -462,20 +461,110 @@
     },
     "fit": "Šírka",
     "openOriginal": "Otvoriť originál",
+    "openPart": "Otvoriť {fileName}",
     "preview": "Otvoriť náhľad",
     "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
     "retry": "Skúsiť znova",
     "title": "Dokument",
     "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
+    "unscannedContent": {
+      "encrypted": "Niektoré súbory vo vnútri sú chránené heslom, a preto neboli skontrolované na hrozby.",
+      "unsupportedCompression": "Niektoré súbory vo vnútri sú komprimované vo formáte, ktorý stella nevie prečítať, a preto neboli skontrolované na hrozby."
+    },
     "zoomFit": "Prispôsobiť šírke",
     "zoomIn": "Priblížiť",
     "zoomOut": "Oddialiť"
+  },
+  "eInvoice": {
+    "accountNumber": "Číslo bankového účtu",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Kód banky",
+    "batchPosition": "Doklad {position, number} z {count, number}",
+    "bic": "Kód BIC",
+    "currency": "Mena",
+    "customer": "Odberateľ",
+    "documentTitle": "{documentType, select, invoice {Faktúra} creditNote {Dobropis} debitNote {Ťarchopis} advance {Zálohová faktúra} other {Iný doklad}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Faktúra {number}} creditNote {Dobropis {number}} debitNote {Ťarchopis {number}} advance {Zálohová faktúra {number}} other {Doklad {number}}}",
+    "exemptionReason": "Dôvod oslobodenia",
+    "formatVersion": "{format}, verzia {version}",
+    "grossTotal": "Spolu s DPH",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Dátum vyhotovenia",
+    "lineId": "Č.",
+    "lineItems": "Položky",
+    "linesShown": "Zobrazuje sa {shown, number} z {count, plural, one {# položky} few {# položiek} many {# položky} other {# položiek}}",
+    "netAmount": "Cena bez DPH",
+    "netTotal": "Spolu bez DPH",
+    "notes": "Poznámky k faktúre",
+    "otherIdentifier": "Iný identifikátor",
+    "payableAmount": "Na úhradu",
+    "paymentAmount": "Suma platby",
+    "paymentDetails": "Platobné údaje",
+    "paymentDueDate": "Dátum splatnosti",
+    "paymentMeansCode": "Kód spôsobu platby",
+    "paymentReference": "Identifikácia platby",
+    "prepaidAmount": "Uhradené zálohou",
+    "quantity": "Množstvo a jednotka",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate} %",
+    "ratePercentWithCategory": "{rate} % ({category})",
+    "registrationNumber": "Registračné číslo",
+    "supplier": "Dodávateľ",
+    "taxAmount": "Výška DPH",
+    "taxId": "DIČ",
+    "taxPointDate": "Dátum vzniku daňovej povinnosti",
+    "taxTotal": "DPH spolu",
+    "taxableAmount": "Základ dane",
+    "totals": "Súčty",
+    "unitPrice": "Jednotková cena",
+    "units": {
+      "day": "{count, plural, one {{quantity} deň} few {{quantity} dni} many {{quantity} dňa} other {{quantity} dní}}",
+      "hour": "{count, plural, one {{quantity} hodina} few {{quantity} hodiny} many {{quantity} hodiny} other {{quantity} hodín}}",
+      "month": "{count, plural, one {{quantity} mesiac} few {{quantity} mesiace} many {{quantity} mesiaca} other {{quantity} mesiacov}}",
+      "unit": "{count, plural, one {{quantity} ks} few {{quantity} ks} many {{quantity} ks} other {{quantity} ks}}",
+      "week": "{count, plural, one {{quantity} týždeň} few {{quantity} týždne} many {{quantity} týždňa} other {{quantity} týždňov}}",
+      "year": "{count, plural, one {{quantity} rok} few {{quantity} roky} many {{quantity} roka} other {{quantity} rokov}}"
+    },
+    "unreadable": "Faktúru sa nepodarilo prečítať.",
+    "vat": "DPH",
+    "vatBreakdown": "Rekapitulácia DPH",
+    "vatId": "IČ DPH",
+    "xmlUnreadable": "Tento súbor XML sa nepodarilo prečítať."
+  },
+  "email": {
+    "cc": "Kópia",
+    "date": "Dátum",
+    "from": "Odosielateľ",
+    "noSubject": "(Bez predmetu)",
+    "subject": "Predmet",
+    "to": "Príjemcovia"
   },
   "entity": {
     "currentVersion": "Aktuálna verzia",
     "loadFailed": "Položku sa nepodarilo načítať.",
     "reference": "Spisová značka",
     "type": "Typ"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Archív sa nepodarilo prečítať.",
+    "attachments": "Prílohy",
+    "files": "Súbory",
+    "insideFailed": "Súbory vo vnútri sa nepodarilo načítať. Ťuknutím to skúsite znova.",
+    "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
+    "noMatches": "Výrazu „{query}“ nezodpovedá žiadny súbor.",
+    "open": "Otvoriť {fileName} ({details})",
+    "saveFailed": "Súbor sa nepodarilo uložiť do spisu. Skúste to znova.",
+    "saveNamed": "Uložiť {fileName} do spisu",
+    "search": "Nájsť súbor podľa názvu alebo priečinka",
+    "unavailable": {
+      "encrypted": "Chránené heslom, nedá sa otvoriť",
+      "link": "Odkaz na iný súbor, neotvára sa",
+      "tooLarge": "Príliš veľký, nedá sa otvoriť",
+      "unreadable": "Poškodený, nedá sa otvoriť",
+      "unsupported": "Komprimované spôsobom, ktorý sa nedá otvoriť"
+    },
+    "unnamed": "Súbor bez názvu"
   },
   "header": {
     "search": "Hľadať"
@@ -505,6 +594,16 @@
     "refused": "Server požiadavku odmietol (kód {status}).",
     "server": "Na serveri nastala chyba (kód {status}). Skúste to o chvíľu znova.",
     "session": "Vaše prihlásenie vypršalo. Prihláste sa znova."
+  },
+  "mailbox": {
+    "back": "Späť na správy",
+    "messages": "Správy",
+    "noMatches": "Výrazu „{query}“ nezodpovedá žiadna správa.",
+    "noMessages": "Táto poštová schránka neobsahuje žiadne správy.",
+    "openFailed": "Správu sa nepodarilo otvoriť. Ťuknutím to skúsite znova.",
+    "search": "Hľadať v správach",
+    "truncated": "Zobrazuje sa len prvých {count, number} správ.",
+    "unreadable": "Túto poštovú schránku sa nepodarilo prečítať."
   },
   "matter": {
     "add": "Pridať",
@@ -800,9 +899,11 @@
     "useStella": "Použiť stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Doručenka k elektronickému spisu",
     "layer": "Vrstva podpisov {number, number}",
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
     "noSigners": "Nenašli sa žiadne údaje o podpisovateľoch.",
+    "signedContent": "Podpísaný dokument",
     "signers": "Podpisovatelia",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",

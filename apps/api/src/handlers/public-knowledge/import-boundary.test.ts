@@ -86,6 +86,9 @@ const allowedExternal = new Set([
   "@litko/yara-x",
   "@stll/agent-input",
   "@stll/api-contract",
+  // The warning text the scan records for content it could not read, and the
+  // pure reading of it back; no storage or data access.
+  "@stll/api-contract/file-scan-warnings",
   "@stll/collation",
   "@stll/docx-core/zip",
   "@stll/docx-utils",

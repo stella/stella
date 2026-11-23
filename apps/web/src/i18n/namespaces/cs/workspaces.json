@@ -31,7 +31,6 @@
       "sent": "Odeslaná",
       "statedInFile": "Datová zpráva (dle údajů v souboru)",
       "toHands": "K rukám: {name}",
-      "unlinkedFiles": "Přílohy bez odkazu otevřete po stažení původního souboru ZFO.",
       "unreadable": "Soubor se nepodařilo přečíst jako datovou zprávu ani jako doručenku.",
       "uploaded": "Nahraná datová zpráva"
     },
@@ -76,6 +75,61 @@
     "unknownApprover": "Neznámý schvalovatel",
     "uploadedBy": "Nahrál/a {name}",
     "uploadedFile": "Nahraný soubor e-mailu"
+  },
+  "eInvoice": {
+    "amountWithCurrency": "{amount} {currency}",
+    "attachments": "Přiložené soubory",
+    "bankCode": "Kód banky",
+    "batchPosition": "Doklad {position, number} z {count, number}",
+    "bic": "Kód BIC",
+    "customer": "Odběratel",
+    "documentTitleNumbered": "{documentType, select, invoice {Faktura {number}} creditNote {Dobropis {number}} debitNote {Vrubopis {number}} advance {Zálohová faktura {number}} other {Doklad {number}}}",
+    "documentTypes": {
+      "advance": "Zálohová faktura",
+      "debitNote": "Vrubopis",
+      "other": "Jiný doklad"
+    },
+    "exemptionReason": "Důvod osvobození",
+    "formatVersion": "{format}, verze {version}",
+    "grossTotal": "Celkem s DPH",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Datum vystavení",
+    "lineId": "Č.",
+    "lineItems": "Položky",
+    "linesShown": "Zobrazeno {shown, number} z {count, plural, one {# položky} few {# položek} many {# položky} other {# položek}}",
+    "netAmount": "Cena bez DPH",
+    "netTotal": "Celkem bez DPH",
+    "otherIdentifier": "Jiný identifikátor",
+    "payableAmount": "K úhradě",
+    "paymentAmount": "Částka platby",
+    "paymentDetails": "Platební údaje",
+    "paymentDueDate": "Datum splatnosti",
+    "paymentMeansCode": "Kód způsobu platby",
+    "paymentReference": "Identifikace platby",
+    "prepaidAmount": "Uhrazeno zálohou",
+    "quantity": "Množství a jednotka",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate} %",
+    "ratePercentWithCategory": "{rate} % ({category})",
+    "supplier": "Dodavatel",
+    "taxAmount": "Výše DPH",
+    "taxPointDate": "Datum uskutečnění zdanitelného plnění",
+    "taxTotal": "DPH celkem",
+    "taxableAmount": "Základ daně",
+    "totals": "Součty",
+    "unitPrice": "Jednotková cena",
+    "units": {
+      "day": "{count, plural, one {{quantity} den} few {{quantity} dny} many {{quantity} dne} other {{quantity} dní}}",
+      "hour": "{count, plural, one {{quantity} hodina} few {{quantity} hodiny} many {{quantity} hodiny} other {{quantity} hodin}}",
+      "month": "{count, plural, one {{quantity} měsíc} few {{quantity} měsíce} many {{quantity} měsíce} other {{quantity} měsíců}}",
+      "unit": "{count, plural, one {{quantity} ks} few {{quantity} ks} many {{quantity} ks} other {{quantity} ks}}",
+      "week": "{count, plural, one {{quantity} týden} few {{quantity} týdny} many {{quantity} týdne} other {{quantity} týdnů}}",
+      "year": "{count, plural, one {{quantity} rok} few {{quantity} roky} many {{quantity} roku} other {{quantity} let}}"
+    },
+    "unreadable": "Fakturu nelze přečíst.",
+    "vat": "DPH",
+    "vatBreakdown": "Rekapitulace DPH",
+    "xmlUnreadable": "Tento soubor XML se nepodařilo přečíst."
   },
   "emailViewer": {
     "attachments": "Přílohy",
@@ -317,10 +371,12 @@
     "title": "SharePoint a OneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "Doručenka k elektronickému spisu",
     "layer": "Vrstva podpisů {number, number}",
     "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
     "noSigners": "Nebyly nalezeny žádné údaje o podepisujících.",
     "pdfUnavailable": "Náhled PDF není k dispozici.",
+    "signedDocument": "Podepsaný dokument",
     "signers": "Podepisující",
     "unknownSigner": "Neznámý podepisující",
     "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
@@ -505,6 +561,10 @@
     "deleteWorkspaceConfirmDescription": "Opravdu chcete smazat tento spis? Tuto akci nelze vrátit.",
     "deletedItem": "Smazáno: {name}",
     "deletingWorkspace": "Mazání spisu",
+    "documentNaming": {
+      "description": "Nové dokumenty dostanou název podle vzoru organizace: {pattern}",
+      "label": "Přejmenovávat nově nahrané dokumenty"
+    },
     "documentSwitcher": {
       "download": "Stáhnout tento soubor",
       "renditionsFailed": "Načtěte dokument znovu a opakujte stažení.",
@@ -682,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# soubor přejmenován kvůli konfliktu} few {# soubory přejmenovány kvůli konfliktům} other {# souborů přejmenováno kvůli konfliktům} many {# souboru přejmenováno kvůli konfliktům}}",
       "retryFailed": "Opakovat {count, plural, one {# soubor} few {# soubory} other {# souborů} many {# souboru}}",
       "scrubFailed": "Metadata tohoto souboru se nepodařilo odstranit, proto se nic nestáhlo",
+      "unscannedContent": {
+        "encrypted": "Některé soubory uvnitř jsou chráněné heslem, a proto nebyly zkontrolovány na hrozby.",
+        "unsupportedCompression": "Některé soubory uvnitř jsou komprimované ve formátu, který stella neumí přečíst, a proto nebyly zkontrolovány na hrozby."
+      },
       "uploadBlockedByWorkflow": "S nahráváním souborů počkejte na dokončení workflow.",
       "uploadedPartially": "{failed, plural, one {# soubor selhal} few {# soubory selhaly} other {# souborů selhalo} many {# souboru selhalo}} z {total, number}",
       "uploadedSuccessfully": "Soubory úspěšně nahrány",

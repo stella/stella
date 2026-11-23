@@ -31,7 +31,6 @@
       "sent": "Wysłana",
       "statedInFile": "Wiadomość ze skrzynki danych (według pliku)",
       "toHands": "Do rąk: {name}",
-      "unlinkedFiles": "Aby otworzyć załączniki wyświetlane bez odnośnika, pobierz oryginalny plik ZFO.",
       "unreadable": "Nie można odczytać tego pliku jako wiadomości ze skrzynki danych ani jako potwierdzenia doręczenia.",
       "uploaded": "Przesłana wiadomość ze skrzynki danych"
     },
@@ -76,6 +75,61 @@
     "unknownApprover": "Nieznany zatwierdzający",
     "uploadedBy": "Przesłane przez {name}",
     "uploadedFile": "Przesłany plik wiadomości e-mail"
+  },
+  "eInvoice": {
+    "amountWithCurrency": "{amount} {currency}",
+    "attachments": "Załączone pliki",
+    "bankCode": "Kod banku",
+    "batchPosition": "Dokument {position, number} z {count, number}",
+    "bic": "Kod BIC",
+    "customer": "Nabywca",
+    "documentTitleNumbered": "{documentType, select, invoice {Faktura {number}} creditNote {Faktura korygująca {number}} debitNote {Nota obciążeniowa {number}} advance {Faktura zaliczkowa {number}} other {Dokument {number}}}",
+    "documentTypes": {
+      "advance": "Faktura zaliczkowa",
+      "debitNote": "Nota obciążeniowa",
+      "other": "Inny dokument"
+    },
+    "exemptionReason": "Podstawa zwolnienia",
+    "formatVersion": "{format}, wersja {version}",
+    "grossTotal": "Razem brutto",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Data wystawienia",
+    "lineId": "Lp.",
+    "lineItems": "Pozycje",
+    "linesShown": "Wyświetlono {shown, number} z {count, plural, one {# pozycji} few {# pozycji} many {# pozycji} other {# pozycji}}",
+    "netAmount": "Wartość netto",
+    "netTotal": "Razem netto",
+    "otherIdentifier": "Inny identyfikator",
+    "payableAmount": "Do zapłaty",
+    "paymentAmount": "Kwota płatności",
+    "paymentDetails": "Dane płatności",
+    "paymentDueDate": "Termin płatności",
+    "paymentMeansCode": "Kod formy płatności",
+    "paymentReference": "Tytuł płatności",
+    "prepaidAmount": "Zapłacono zaliczką",
+    "quantity": "Ilość i jednostka",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate}%",
+    "ratePercentWithCategory": "{rate}% ({category})",
+    "supplier": "Sprzedawca",
+    "taxAmount": "Kwota VAT",
+    "taxPointDate": "Data dostawy lub wykonania usługi",
+    "taxTotal": "VAT razem",
+    "taxableAmount": "Podstawa opodatkowania",
+    "totals": "Podsumowanie",
+    "unitPrice": "Cena jednostkowa",
+    "units": {
+      "day": "{count, plural, one {{quantity} dzień} few {{quantity} dni} many {{quantity} dni} other {{quantity} dnia}}",
+      "hour": "{count, plural, one {{quantity} godzina} few {{quantity} godziny} many {{quantity} godzin} other {{quantity} godziny}}",
+      "month": "{count, plural, one {{quantity} miesiąc} few {{quantity} miesiące} many {{quantity} miesięcy} other {{quantity} miesiąca}}",
+      "unit": "{count, plural, one {{quantity} szt.} few {{quantity} szt.} many {{quantity} szt.} other {{quantity} szt.}}",
+      "week": "{count, plural, one {{quantity} tydzień} few {{quantity} tygodnie} many {{quantity} tygodni} other {{quantity} tygodnia}}",
+      "year": "{count, plural, one {{quantity} rok} few {{quantity} lata} many {{quantity} lat} other {{quantity} roku}}"
+    },
+    "unreadable": "Nie udało się odczytać faktury.",
+    "vat": "Stawka VAT",
+    "vatBreakdown": "Zestawienie VAT",
+    "xmlUnreadable": "Nie udało się odczytać tego pliku XML."
   },
   "emailViewer": {
     "attachments": "Załączniki",
@@ -317,10 +371,12 @@
     "title": "SharePoint i OneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "Potwierdzenie doręczenia akt elektronicznych",
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "noSigners": "Nie znaleziono danych podpisujących.",
     "pdfUnavailable": "Podgląd pliku PDF jest niedostępny.",
+    "signedDocument": "Podpisany dokument",
     "signers": "Podpisujący",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",
@@ -505,6 +561,10 @@
     "deleteWorkspaceConfirmDescription": "Czy na pewno chcesz usunąć tę sprawę? Tej operacji nie można cofnąć.",
     "deletedItem": "Usunięto: {name}",
     "deletingWorkspace": "Usuwanie sprawy",
+    "documentNaming": {
+      "description": "Nowe dokumenty otrzymują wzorzec nazwy organizacji: {pattern}",
+      "label": "Zmieniaj nazwy nowych plików"
+    },
     "documentSwitcher": {
       "download": "Pobierz ten plik",
       "renditionsFailed": "Wczytaj ponownie dokument i spróbuj go pobrać jeszcze raz.",
@@ -682,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# plik został przemianowany, aby uniknąć konfliktów} few {# pliki zostały przemianowane, aby uniknąć konfliktów} many {# plików zostało przemianowanych, aby uniknąć konfliktów} other {# plików zostało przemianowanych, aby uniknąć konfliktów}}",
       "retryFailed": "Ponów {count, plural, one {# plik} few {# pliki} many {# plików} other {# plików}}",
       "scrubFailed": "Nie udało się usunąć metadanych tego pliku, więc nic nie pobrano",
+      "unscannedContent": {
+        "encrypted": "Niektóre pliki w środku są chronione hasłem, dlatego nie zostały sprawdzone pod kątem zagrożeń.",
+        "unsupportedCompression": "Niektóre pliki w środku są skompresowane w formacie, którego stella nie potrafi odczytać, dlatego nie zostały sprawdzone pod kątem zagrożeń."
+      },
       "uploadBlockedByWorkflow": "Przed przesłaniem plików proszę poczekać na zakończenie przepływu pracy.",
       "uploadedPartially": "{failed, plural, one {# plik nie został przesłany} few {# pliki nie zostały przesłane} many {# plików nie zostało przesłanych} other {# plików nie zostało przesłanych}} z {total, number}",
       "uploadedSuccessfully": "Pliki przesłane pomyślnie",

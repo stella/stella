@@ -44,7 +44,30 @@ type XadesSignatureOptions = {
   statedName?: string;
   /** Leaves out every certificate, so only a stated name remains. */
   withoutCertificate?: boolean;
+  /** Signed references, `#Object0` by default. */
+  references?: readonly { id?: string; uri: string; type?: string }[];
+  /** XAdES data object formats, naming a reference by its Id. */
+  dataObjectFormats?: readonly {
+    reference: string;
+    description?: string;
+    mimeType: string;
+  }[];
+  /** Elements placed inside the signature, such as enveloped objects. */
+  inner?: string;
 };
+
+const referenceXml = ({
+  id,
+  uri,
+  type,
+}: {
+  id?: string;
+  uri: string;
+  type?: string;
+}) =>
+  `<ds:Reference${id === undefined ? "" : ` Id="${id}"`}${
+    type === undefined ? "" : ` Type="${type}"`
+  } URI="${uri}"><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>AAAA</ds:DigestValue></ds:Reference>`;
 
 /** An XAdES signature element whose signing certificate digest is SHA-256. */
 export const xadesSignatureXml = async ({
@@ -53,6 +76,9 @@ export const xadesSignatureXml = async ({
   decoy,
   statedName,
   withoutCertificate = false,
+  references = [{ uri: "#Object0" }],
+  dataObjectFormats = [],
+  inner = "",
 }: XadesSignatureOptions) => {
   const der = await fixtureCertificate(signer);
   const keyInfo = withoutCertificate
@@ -66,7 +92,20 @@ export const xadesSignatureXml = async ({
     statedName === undefined
       ? ""
       : `<ds:Object><es:SignatureProfile xmlns:es="${E_AKTA_NAMESPACE}" SIGREF="${id}"><es:SignerName>${escapeXml(statedName)}</es:SignerName><es:Type>signature</es:Type></es:SignatureProfile></ds:Object>`;
-  return `<ds:Signature xmlns:ds="${XMLDSIG}" Id="${id}"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"/><ds:Reference URI="#Object0"><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>AAAA</ds:DigestValue></ds:Reference></ds:SignedInfo><ds:SignatureValue>AAAA</ds:SignatureValue>${keyInfo}${profile}<ds:Object><xades:QualifyingProperties xmlns:xades="${XADES}" Target="#${id}"><xades:SignedProperties><xades:SignedSignatureProperties><xades:SigningCertificate><xades:Cert><xades:CertDigest><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>${sha256Base64(der)}</ds:DigestValue></xades:CertDigest></xades:Cert></xades:SigningCertificate></xades:SignedSignatureProperties></xades:SignedProperties></xades:QualifyingProperties></ds:Object></ds:Signature>`;
+  return `<ds:Signature xmlns:ds="${XMLDSIG}" Id="${id}"><ds:SignedInfo><ds:CanonicalizationMethod Algorithm="http://www.w3.org/TR/2001/REC-xml-c14n-20010315"/><ds:SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#ecdsa-sha256"/>${references.map(referenceXml).join("")}</ds:SignedInfo><ds:SignatureValue>AAAA</ds:SignatureValue>${keyInfo}${profile}<ds:Object><xades:QualifyingProperties xmlns:xades="${XADES}" Target="#${id}"><xades:SignedProperties><xades:SignedSignatureProperties><xades:SigningCertificate><xades:Cert><xades:CertDigest><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>${sha256Base64(der)}</ds:DigestValue></xades:CertDigest></xades:Cert></xades:SigningCertificate></xades:SignedSignatureProperties>${
+    dataObjectFormats.length === 0
+      ? ""
+      : `<xades:SignedDataObjectProperties>${dataObjectFormats
+          .map(
+            ({ reference, description, mimeType }) =>
+              `<xades:DataObjectFormat ObjectReference="#${reference}">${
+                description === undefined
+                  ? ""
+                  : `<xades:Description>${escapeXml(description)}</xades:Description>`
+              }<xades:MimeType>${mimeType}</xades:MimeType></xades:DataObjectFormat>`,
+          )
+          .join("")}</xades:SignedDataObjectProperties>`
+  }</xades:SignedProperties></xades:QualifyingProperties></ds:Object>${inner}</ds:Signature>`;
 };
 
 export type EAktaFixtureDocument = {
@@ -92,10 +131,13 @@ export const makeEAktaFixture = async ({
   documents,
   frameSigners = [],
   namespace = E_AKTA_NAMESPACE,
+  category = "electronic dossier",
 }: {
   documents: readonly EAktaFixtureDocument[];
   frameSigners?: readonly (string | XadesSignatureOptions)[];
   namespace?: string;
+  /** §3.1.2: "electronic acknowledgement" for a delivery receipt. */
+  category?: string;
 }) => {
   const documentXml = await Promise.all(
     documents.map(
@@ -134,7 +176,7 @@ export const makeEAktaFixture = async ({
     ),
   );
   return new TextEncoder().encode(
-    `<?xml version="1.0" encoding="UTF-8"?>\n<es:Dossier xmlns:es="${namespace}" xmlns:ds="${XMLDSIG}"><es:DossierProfile Id="PObject0" OBJREF="Object0"><es:Title>Synthetic dossier</es:Title><es:E-category>electronic dossier</es:E-category><es:CreationDate>2026-01-05T09:00:00Z</es:CreationDate></es:DossierProfile><es:Documents Id="Object0">${documentXml.join("")}</es:Documents>${frame.join("")}</es:Dossier>`,
+    `<?xml version="1.0" encoding="UTF-8"?>\n<es:Dossier xmlns:es="${namespace}" xmlns:ds="${XMLDSIG}"><es:DossierProfile Id="PObject0" OBJREF="Object0"><es:Title>Synthetic dossier</es:Title><es:E-category>${category}</es:E-category><es:CreationDate>2026-01-05T09:00:00Z</es:CreationDate></es:DossierProfile><es:Documents Id="Object0">${documentXml.join("")}</es:Documents>${frame.join("")}</es:Dossier>`,
   );
 };
 
@@ -222,4 +264,89 @@ export const makeZepFixture = async ({
     zip.set(path, bytes);
   }
   return await zip.generate({ compression: "deflate" });
+};
+
+const XADES_ZEP_NAMESPACE =
+  "http://www.ditec.sk/ep/signature_formats/xades_zep/v2.0";
+const XADES_ZEP_DATA_SIGNATURES_NAMESPACE =
+  "http://www.ditec.sk/ep/signature_formats/xades_zep_data_signatures/v2.0";
+
+export type XadesZepFixtureObject = {
+  id: string;
+  description?: string;
+  mimeType: string;
+  /** Bytes are stored in base64; a string of XML is embedded as XML. */
+  content: Uint8Array | { xml: string };
+};
+
+const dataObjectXml = ({ id, content }: XadesZepFixtureObject) =>
+  content instanceof Uint8Array
+    ? `<ds:Object Encoding="http://www.w3.org/2000/09/xmldsig#base64" Id="${id}">${base64(content)}</ds:Object>`
+    : `<ds:Object Id="${id}">${content.xml}</ds:Object>`;
+
+/**
+ * A XAdES_ZEP data envelope per the Ditec profile v2.0 §4.2: data objects
+ * beside the signature (detached) or inside it (enveloping), each referenced
+ * directly or through a manifest and described by a data object format. The
+ * composite form wraps the objects with several signatures.
+ */
+export const makeXadesZepFixture = async ({
+  objects,
+  signers = ["Example envelope signer"],
+  form = "detached",
+}: {
+  objects: readonly XadesZepFixtureObject[];
+  signers?: readonly string[];
+  form?: "detached" | "enveloping" | "manifest" | "composite";
+}) => {
+  const objectXml = objects.map(dataObjectXml).join("");
+  const formats = objects.map(({ id, description, mimeType }) => ({
+    reference: `Reference-${id}`,
+    ...(description === undefined ? {} : { description }),
+    mimeType,
+  }));
+  // As signing clients write it: one manifest per data object.
+  const manifest = objects
+    .map(
+      ({ id }) =>
+        `<ds:Object><ds:Manifest Id="Manifest-${id}">${referenceXml({ uri: `#${id}` })}</ds:Manifest></ds:Object>`,
+    )
+    .join("");
+  const signatures = await Promise.all(
+    signers.map(
+      async (signer, position) =>
+        await xadesSignatureXml({
+          id: `Signature-${position}`,
+          signer,
+          references:
+            form === "manifest"
+              ? objects.map(({ id }) => ({
+                  id: `Reference-${id}`,
+                  uri: `#Manifest-${id}`,
+                  type: "http://www.w3.org/2000/09/xmldsig#Manifest",
+                }))
+              : objects.map(({ id }) => ({
+                  id: `Reference-${id}`,
+                  uri: `#${id}`,
+                  type: "http://www.w3.org/2000/09/xmldsig#Object",
+                })),
+          dataObjectFormats: formats,
+          inner: {
+            detached: "",
+            composite: "",
+            enveloping: objectXml,
+            manifest,
+          }[form],
+        }),
+    ),
+  );
+  const [prefix, root, namespace] =
+    form === "composite"
+      ? ["xzepds", "xzepds:DataSignatures", XADES_ZEP_DATA_SIGNATURES_NAMESPACE]
+      : ["xzep", "xzep:DataEnvelope", XADES_ZEP_NAMESPACE];
+  return new TextEncoder().encode(
+    `<?xml version="1.0" encoding="UTF-8"?>\n<${root} xmlns:${prefix}="${namespace}" xmlns:ds="${XMLDSIG}" Id="Envelope">${
+      form === "enveloping" ? "" : objectXml
+    }${signatures.join("")}</${root}>`,
+  );
 };

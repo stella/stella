@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Załączniki",
     "certifiedAt": "Data certyfikacji",
     "deliveredTo": "Doręczono do",
     "error": "Zgłoszony błąd",
@@ -462,20 +461,110 @@
     },
     "fit": "Szerokość",
     "openOriginal": "Otwórz oryginał",
+    "openPart": "Otwórz {fileName}",
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "retry": "Spróbuj ponownie",
     "title": "Dokument",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
+    "unscannedContent": {
+      "encrypted": "Niektóre pliki w środku są chronione hasłem, dlatego nie zostały sprawdzone pod kątem zagrożeń.",
+      "unsupportedCompression": "Niektóre pliki w środku są skompresowane w formacie, którego stella nie potrafi odczytać, dlatego nie zostały sprawdzone pod kątem zagrożeń."
+    },
     "zoomFit": "Dopasuj do szerokości",
     "zoomIn": "Powiększ",
     "zoomOut": "Pomniejsz"
+  },
+  "eInvoice": {
+    "accountNumber": "Numer rachunku bankowego",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Kod banku",
+    "batchPosition": "Dokument {position, number} z {count, number}",
+    "bic": "Kod BIC",
+    "currency": "Waluta",
+    "customer": "Nabywca",
+    "documentTitle": "{documentType, select, invoice {Faktura} creditNote {Faktura korygująca} debitNote {Nota obciążeniowa} advance {Faktura zaliczkowa} other {Inny dokument}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Faktura {number}} creditNote {Faktura korygująca {number}} debitNote {Nota obciążeniowa {number}} advance {Faktura zaliczkowa {number}} other {Dokument {number}}}",
+    "exemptionReason": "Podstawa zwolnienia",
+    "formatVersion": "{format}, wersja {version}",
+    "grossTotal": "Razem brutto",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Data wystawienia",
+    "lineId": "Lp.",
+    "lineItems": "Pozycje",
+    "linesShown": "Wyświetlono {shown, number} z {count, plural, one {# pozycji} few {# pozycji} many {# pozycji} other {# pozycji}}",
+    "netAmount": "Wartość netto",
+    "netTotal": "Razem netto",
+    "notes": "Uwagi do faktury",
+    "otherIdentifier": "Inny identyfikator",
+    "payableAmount": "Do zapłaty",
+    "paymentAmount": "Kwota płatności",
+    "paymentDetails": "Dane płatności",
+    "paymentDueDate": "Termin płatności",
+    "paymentMeansCode": "Kod formy płatności",
+    "paymentReference": "Tytuł płatności",
+    "prepaidAmount": "Zapłacono zaliczką",
+    "quantity": "Ilość i jednostka",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate}%",
+    "ratePercentWithCategory": "{rate}% ({category})",
+    "registrationNumber": "Numer rejestrowy",
+    "supplier": "Sprzedawca",
+    "taxAmount": "Kwota VAT",
+    "taxId": "Identyfikator podatkowy",
+    "taxPointDate": "Data dostawy lub wykonania usługi",
+    "taxTotal": "VAT razem",
+    "taxableAmount": "Podstawa opodatkowania",
+    "totals": "Podsumowanie",
+    "unitPrice": "Cena jednostkowa",
+    "units": {
+      "day": "{count, plural, one {{quantity} dzień} few {{quantity} dni} many {{quantity} dni} other {{quantity} dnia}}",
+      "hour": "{count, plural, one {{quantity} godzina} few {{quantity} godziny} many {{quantity} godzin} other {{quantity} godziny}}",
+      "month": "{count, plural, one {{quantity} miesiąc} few {{quantity} miesiące} many {{quantity} miesięcy} other {{quantity} miesiąca}}",
+      "unit": "{count, plural, one {{quantity} szt.} few {{quantity} szt.} many {{quantity} szt.} other {{quantity} szt.}}",
+      "week": "{count, plural, one {{quantity} tydzień} few {{quantity} tygodnie} many {{quantity} tygodni} other {{quantity} tygodnia}}",
+      "year": "{count, plural, one {{quantity} rok} few {{quantity} lata} many {{quantity} lat} other {{quantity} roku}}"
+    },
+    "unreadable": "Nie udało się odczytać faktury.",
+    "vat": "Stawka VAT",
+    "vatBreakdown": "Zestawienie VAT",
+    "vatId": "Numer VAT",
+    "xmlUnreadable": "Nie udało się odczytać tego pliku XML."
+  },
+  "email": {
+    "cc": "DW",
+    "date": "Data",
+    "from": "Nadawca",
+    "noSubject": "(Brak tematu)",
+    "subject": "Temat",
+    "to": "Odbiorcy"
   },
   "entity": {
     "currentVersion": "Bieżąca wersja",
     "loadFailed": "Nie udało się wczytać tej pozycji.",
     "reference": "Sygnatura",
     "type": "Typ"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Nie udało się odczytać archiwum.",
+    "attachments": "Załączniki",
+    "files": "Pliki",
+    "insideFailed": "Nie udało się wczytać plików ze środka. Stuknij, aby spróbować ponownie.",
+    "noFilesInside": "W środku nie ma żadnych plików.",
+    "noMatches": "Żaden plik nie pasuje do „{query}”.",
+    "open": "Otwórz {fileName} ({details})",
+    "saveFailed": "Nie udało się zapisać pliku w sprawie. Spróbuj ponownie.",
+    "saveNamed": "Zapisz {fileName} w sprawie",
+    "search": "Znajdź plik po nazwie lub folderze",
+    "unavailable": {
+      "encrypted": "Chroniony hasłem, nie można otworzyć",
+      "link": "Odnośnik do innego pliku, nie jest otwierany",
+      "tooLarge": "Za duży, by go otworzyć",
+      "unreadable": "Uszkodzony, nie można otworzyć",
+      "unsupported": "Skompresowany w sposób, którego nie można otworzyć"
+    },
+    "unnamed": "Plik bez nazwy"
   },
   "header": {
     "search": "Szukaj"
@@ -505,6 +594,16 @@
     "refused": "Serwer odrzucił żądanie (błąd {status}).",
     "server": "Na serwerze wystąpił problem (błąd {status}). Spróbuj ponownie za chwilę.",
     "session": "Twoja sesja wygasła. Zaloguj się ponownie."
+  },
+  "mailbox": {
+    "back": "Wróć do wiadomości",
+    "messages": "Wiadomości",
+    "noMatches": "Żadna wiadomość nie pasuje do „{query}”.",
+    "noMessages": "Ta skrzynka pocztowa nie zawiera wiadomości.",
+    "openFailed": "Nie udało się otworzyć tej wiadomości. Stuknij, aby spróbować ponownie.",
+    "search": "Szukaj w wiadomościach",
+    "truncated": "Wyświetlono tylko pierwsze {count, number} wiadomości.",
+    "unreadable": "Nie udało się odczytać tej skrzynki pocztowej."
   },
   "matter": {
     "add": "Dodaj",
@@ -800,9 +899,11 @@
     "useStella": "Użyj stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Potwierdzenie doręczenia akt elektronicznych",
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "noSigners": "Nie znaleziono danych podpisujących.",
+    "signedContent": "Podpisany dokument",
     "signers": "Podpisujący",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",

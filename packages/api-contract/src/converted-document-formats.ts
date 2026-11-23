@@ -1,8 +1,8 @@
 /**
  * Word-processing and spreadsheet formats stella reads by converting them to
  * PDF: the PDF is their preview, and the text read from it is what search,
- * chat, workflows and document reads see. They have no mark of their own, so
- * they show the generic file mark with their tag.
+ * chat, workflows and document reads see. Each `kind` names the format's own
+ * mark (`@stll/ui`'s `DOCUMENT_MARKS`), so every list draws it as itself.
  *
  * `mimeAliases` are the other types clients declare for the same files (a
  * Mac names a Pages file `application/x-iwork-pages-sffpages`).
@@ -13,6 +13,7 @@
  */
 export const CONVERTED_DOCUMENT_FORMATS = [
   {
+    kind: "wordPerfect",
     label: "WPD",
     mimeType: "application/vnd.wordperfect",
     mimeAliases: [
@@ -25,6 +26,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     zipPackage: false,
   },
   {
+    kind: "works",
     label: "WPS",
     mimeType: "application/vnd.ms-works",
     mimeAliases: [],
@@ -33,6 +35,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     zipPackage: false,
   },
   {
+    kind: "pages",
     label: "PAGES",
     mimeType: "application/vnd.apple.pages",
     mimeAliases: ["application/x-iwork-pages-sffpages"],
@@ -41,6 +44,7 @@ export const CONVERTED_DOCUMENT_FORMATS = [
     zipPackage: true,
   },
   {
+    kind: "numbers",
     label: "NUMBERS",
     mimeType: "application/vnd.apple.numbers",
     mimeAliases: ["application/x-iwork-numbers-sffnumbers"],
@@ -74,12 +78,58 @@ export const isConvertedDocumentMimeType = (
 ): mimeType is ConvertedDocumentMimeType =>
   convertedDocumentFormatOfMimeType(mimeType) !== undefined;
 
-/** The converted format a file name's extension names, if any. */
-export const convertedDocumentFormatOfFileName = (
+/**
+ * Formats whose preview is rendered from HTML stella builds out of them: a
+ * web archive's page with its own images, an e-book's chapters in reading
+ * order. That HTML converts like any other HTML file. Each `kind` names the
+ * format's own mark, as for the converted formats.
+ */
+export const HTML_RENDERED_DOCUMENT_FORMATS = [
+  {
+    kind: "webArchive",
+    label: "MHT",
+    mimeType: "multipart/related",
+    mimeAliases: ["application/x-mimearchive", "message/x-mht"],
+    extensions: [".mht", ".mhtml"],
+    zipPackage: false,
+  },
+  {
+    kind: "epub",
+    label: "EPUB",
+    mimeType: "application/epub+zip",
+    mimeAliases: [],
+    extensions: [".epub"],
+    zipPackage: true,
+  },
+] as const;
+
+export type HtmlRenderedDocumentFormat =
+  (typeof HTML_RENDERED_DOCUMENT_FORMATS)[number];
+
+/** Every media type, canonical or alias, an HTML-rendered format is declared as. */
+export type HtmlRenderedDocumentMimeType =
+  | HtmlRenderedDocumentFormat["mimeType"]
+  | HtmlRenderedDocumentFormat["mimeAliases"][number];
+
+/** The HTML-rendered format declared by `mimeType`, if any. */
+export const htmlRenderedDocumentFormatOfMimeType = (
+  mimeType: string,
+): HtmlRenderedDocumentFormat | undefined =>
+  HTML_RENDERED_DOCUMENT_FORMATS.find(
+    (format) =>
+      format.mimeType === mimeType ||
+      format.mimeAliases.some((alias) => alias === mimeType),
+  );
+
+/** The converted or HTML-rendered format a file name's extension names. */
+export const previewedDocumentFormatOfFileName = (
   fileName: string,
-): ConvertedDocumentFormat | undefined => {
+): ConvertedDocumentFormat | HtmlRenderedDocumentFormat | undefined => {
   const lower = fileName.trim().toLowerCase();
-  return CONVERTED_DOCUMENT_FORMATS.find((format) =>
+  return [
+    ...CONVERTED_DOCUMENT_FORMATS,
+    ...HTML_RENDERED_DOCUMENT_FORMATS,
+  ].find((format) =>
     format.extensions.some((extension) => lower.endsWith(extension)),
   );
 };

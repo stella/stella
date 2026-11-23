@@ -194,6 +194,16 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.WORKSPACE],
   },
+  updateWorkspace: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/workspaces/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
   // The member's own reminder for when a chat's usage limit resets.
   changeChatLimitReminder: {
     writes: [
@@ -467,6 +477,27 @@ export const RESOURCE_MUTATION_CONTRACTS = {
         method: "POST",
         route: "/organization/leave",
       } satisfies AuthPluginEndpointWrite<"leaveOrganization">,
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  // The organization's dictation words: one list, read by its settings page.
+  addDictationVocabulary: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/dictation-vocabulary",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  deleteDictationVocabulary: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/dictation-vocabulary",
+      },
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },

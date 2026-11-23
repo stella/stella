@@ -8,11 +8,8 @@ import type { WebRoutes } from "@/generated/api-routes.gen";
 import { createWebApiFetcher } from "@/lib/api";
 import { APIError } from "@/lib/errors/api";
 
-import {
-  createFileWrites,
-  documentPropertiesOptions,
-  saveEmailAttachment,
-} from "./queries";
+import { createFilePartWrites, saveFilePart } from "./file-part-queries";
+import { createFileWrites, documentPropertiesOptions } from "./queries";
 
 const originalFetch = globalThis.fetch;
 
@@ -73,12 +70,12 @@ test("file writes keep their 60 second request bound", async () => {
 
   await expectBadGateway(
     async () =>
-      await writes.saveEmailAttachment({
-        attachmentId: "attachment-1",
+      await createFilePartWrites(client).saveFilePart({
+        part: "attachment:0",
         destinationWorkspaceId: "00000000-0000-4000-8000-000000000003",
         fieldId: "00000000-0000-4000-8000-000000000002",
         parentId: null,
-        sourceWorkspaceId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
       }),
   );
   await writes.updateDocumentProperty({
@@ -93,15 +90,15 @@ test("file writes keep their 60 second request bound", async () => {
   ]);
 });
 
-test("an empty email attachment save answer is a bad gateway", async () => {
+test("an empty part save answer is a bad gateway", async () => {
   await expectBadGateway(
     async () =>
-      await saveEmailAttachment({
-        attachmentId: "attachment-1",
+      await saveFilePart({
+        part: "member:1",
         destinationWorkspaceId: "00000000-0000-4000-8000-000000000003",
         fieldId: "00000000-0000-4000-8000-000000000002",
         parentId: null,
-        sourceWorkspaceId: "00000000-0000-4000-8000-000000000001",
+        workspaceId: "00000000-0000-4000-8000-000000000001",
       }),
   );
 });

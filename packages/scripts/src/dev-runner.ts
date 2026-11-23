@@ -566,16 +566,21 @@ export const describeFailedProbes = (
 };
 
 const isHealthyApiPort = async (port: number) => {
+  let outcome: "healthy" | "unhealthy" | "unreachable";
   try {
     const response = await fetch(`${apiUrlForPort(port)}/health`, {
       method: "GET",
       signal: AbortSignal.timeout(DEFAULT_HTTP_PROBE_TIMEOUT_MS),
     });
     const bodyText = await response.text();
-    return validateApiHealth(response, bodyText) === undefined;
+    outcome =
+      validateApiHealth(response, bodyText) === undefined
+        ? "healthy"
+        : "unhealthy";
   } catch {
-    return false;
+    outcome = "unreachable";
   }
+  return outcome === "healthy";
 };
 
 const sharedInfraPortList = (infraPorts: InfraPorts) => [

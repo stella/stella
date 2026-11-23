@@ -30,7 +30,10 @@ import type { CertifiedEmailEnvelope } from "@stll/api-contract/certified-email"
 import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
+  resolveEmailMimeType,
+  TNEF_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
 import { ownEntry } from "@stll/api-contract/own-key";
 import type { Cheerio } from "@stll/html";
 import {
@@ -46,27 +49,20 @@ import {
   mayBeCertificationData,
   readCertifiedEmailParts,
 } from "@/api/lib/files/certified-email";
-import { MAX_EMAIL_ATTACHMENT_DESCRIPTORS } from "@/api/lib/files/email-attachment-token";
 import { EMAIL_PREVIEW_PALETTE as PALETTE } from "@/api/lib/files/email-preview-palette";
 import { EMAIL_SENDER_CLASS_CSS } from "@/api/lib/files/email-sender-styles";
 import { parseOutlookMsg } from "@/api/lib/files/outlook-msg";
+import { partMediaType } from "@/api/lib/files/part-media-type";
+import { rtfMessageBody } from "@/api/lib/files/rtf-body";
+import {
+  hasTnefSignature,
+  parseTnef,
+  type TnefMessage,
+} from "@/api/lib/files/tnef";
 import { isRecord } from "@/api/lib/type-guards";
 
-const EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES = {
-  gif: "image/gif",
-  jpeg: "image/jpeg",
-  jpg: "image/jpeg",
-  pdf: "application/pdf",
-  png: "image/png",
-  txt: "text/plain",
-  webp: "image/webp",
-} as const;
-
-const GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES = {
-  "": null,
-  "application/octet-stream": null,
-  "binary/octet-stream": null,
-} as const;
+/** The most attachments an email's preview lists. */
+const MAX_EMAIL_ATTACHMENT_DESCRIPTORS = 100;
 
 const EMAIL_WRITING_DIRECTIONS = {
   auto: null,
@@ -159,8 +155,41 @@ export const emailToHtml = async (
 
 type EmailPreviewOptions = {
   citationBlockMode?: EmailCitationBlockMode;
-  createAttachmentId?: (attachmentIndex: number) => string;
 };
+
+/** The type an email's attachment is listed and delivered as. */
+export const emailAttachmentMediaType = async ({
+  bytes,
+  charset,
+  fileName,
+  mimeType,
+}: EmailAttachment): Promise<string> =>
+  await partMediaType({ bytes, stated: mimeType, charset, fileName });
+
+const describeEmailAttachment = async (
+  attachment: EmailAttachment,
+  index: number,
+): Promise<EmailAttachmentDescriptor> => ({
+  part: filePartId({ kind: FILE_PART_KINDS.attachment, index }),
+  charset: attachment.charset,
+  fileName: attachment.fileName,
+  mediaType: await emailAttachmentMediaType(attachment),
+  sizeBytes: attachment.bytes.byteLength,
+});
+
+/** An email's attachments as its preview lists them: parts of the file. */
+export const describeEmailAttachments = async (
+  parsed: ParsedEmail,
+  listed: EmailPreviewListing["attachments"],
+): Promise<EmailAttachmentDescriptor[]> =>
+  await Promise.all(
+    listed.flatMap((index) => {
+      const attachment = parsed.attachments.at(index);
+      return attachment === undefined
+        ? []
+        : [describeEmailAttachment(attachment, index)];
+    }),
+  );
 
 export const emailToPreview = async (
   fileBuffer: ArrayBuffer,
@@ -171,27 +200,46 @@ export const emailToPreview = async (
   if (parsed.isErr()) {
     return parsed;
   }
-  return Result.try({
+  const toParseError = (cause: unknown) =>
+    cause instanceof EmailParseError
+      ? cause
+      : new EmailParseError({
+          message: "Failed to parse email preview",
+          mimeType,
+          cause,
+        });
+  const listing = Result.try({
     try: () => buildEmailPreview(parsed.value, options),
-    catch: (cause) =>
-      cause instanceof EmailParseError
-        ? cause
-        : new EmailParseError({
-            message: "Failed to parse email preview",
-            mimeType,
-            cause,
-          }),
+    catch: toParseError,
   });
+  if (listing.isErr()) {
+    return listing;
+  }
+  const attachments = await Result.tryPromise({
+    try: async () =>
+      await describeEmailAttachments(parsed.value, listing.value.attachments),
+    catch: toParseError,
+  });
+  return attachments.map((described) => ({
+    ...listing.value,
+    attachments: described,
+  }));
+};
+
+/**
+ * An email's preview before its attachments are typed: the attachments are
+ * their positions in the parsed email, which address them as parts.
+ */
+export type EmailPreviewListing = Omit<EmailPreview, "attachments"> & {
+  attachments: readonly number[];
 };
 
 export const buildEmailPreview = (
   parsed: ParsedEmail,
   {
     citationBlockMode = EMAIL_CITATION_BLOCK_MODE.include,
-    createAttachmentId = (attachmentIndex) =>
-      `attachment-${String(attachmentIndex)}`,
   }: EmailPreviewOptions = {},
-): EmailPreview => {
+): EmailPreviewListing => {
   const inlineContentIds = new Set(
     parsed.inlineImages.map(({ cid }) => cid.toLowerCase()),
   );
@@ -222,20 +270,7 @@ export const buildEmailPreview = (
           !renderedBody.referencedContentIds.has(contentId.toLowerCase()),
       )
       .slice(0, MAX_EMAIL_ATTACHMENT_DESCRIPTORS)
-      .map(({ attachment, attachmentIndex }) => {
-        const mimeType = resolveEmailAttachmentMimeType({
-          fileName: attachment.fileName,
-          mimeType: attachment.mimeType,
-        });
-        return {
-          charset: attachment.charset,
-          id: createAttachmentId(attachmentIndex),
-          fileName: attachment.fileName,
-          mimeType,
-          sizeBytes: attachment.bytes.byteLength,
-          previewable: isEmailAttachmentPreviewable(mimeType),
-        };
-      }),
+      .map(({ attachmentIndex }) => attachmentIndex),
     bodyFolds: renderedBody.bodyFolds,
     bodyHtml: renderedBody.bodyHtml,
     citationBlocks: [...headerCitationBlocks, ...renderedBody.citationBlocks],
@@ -261,46 +296,26 @@ const buildEmailHeaderCitationBlocks = (
   });
 };
 
-export const isEmailAttachmentPreviewable = (
-  mimeType: string | null,
-): boolean => {
-  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
-  return (
-    normalized === "application/pdf" ||
-    normalized === "text/plain" ||
-    /^image\/(?:png|jpe?g|gif|webp)$/u.test(normalized)
-  );
-};
-
-export const resolveEmailAttachmentMimeType = ({
-  fileName,
-  mimeType,
-}: {
-  fileName: string | null;
-  mimeType: string | null;
-}): string | null => {
-  const normalized = mimeType?.split(";").at(0)?.trim().toLowerCase() ?? "";
-  if (!Object.hasOwn(GENERIC_PREVIEW_ATTACHMENT_MIME_TYPES, normalized)) {
-    return normalized;
-  }
-  const dotIndex = fileName?.lastIndexOf(".") ?? -1;
-  if (!fileName || dotIndex === -1) {
-    return mimeType;
-  }
-  const extension = fileName.slice(dotIndex + 1).toLowerCase();
-  return (
-    ownEntry(EMAIL_ATTACHMENT_PREVIEW_EXTENSION_MIME_TYPES, extension) ??
-    mimeType
-  );
-};
-
 export const parseEmail = async (
   fileBuffer: ArrayBuffer,
   mimeType: string,
 ): Promise<Result<ParsedEmail, EmailParseError>> => {
+  if (mimeType === TNEF_MIME_TYPE) {
+    // A TNEF stream sent alone is the message; it is read, never expanded.
+    return parseTnef(new Uint8Array(fileBuffer))
+      .map(tnefToParsedEmail)
+      .mapError(
+        (cause) =>
+          new EmailParseError({
+            message: "Failed to parse email",
+            mimeType,
+            cause,
+          }),
+      );
+  }
   if (mimeType === MSG_MIME_TYPE) {
     return Result.try({
-      try: () => parseMsg(fileBuffer),
+      try: () => expandTnefAttachments(parseMsg(fileBuffer)),
       catch: (cause) =>
         new EmailParseError({
           message: "Failed to parse email",
@@ -309,11 +324,11 @@ export const parseEmail = async (
         }),
     });
   }
-  return await parseEml(fileBuffer);
+  return (await parseEml(fileBuffer)).map(expandTnefAttachments);
 };
 
 /** The message's headers and body as text, without its certification data. */
-export const emailMessageText = (parsed: ParsedEmail): string => {
+const emailMessageText = (parsed: ParsedEmail): string => {
   const parts: string[] = [];
   const rows = [
     ["From", parsed.from],
@@ -559,6 +574,42 @@ const withoutHeaderNames = ({
   headerNames: _headerNames,
   ...message
 }: ParsedEmlMessage): Omit<ParsedEmail, "certified"> => message;
+
+/**
+ * A certified email's certification data and the RFC 822 bytes of the
+ * original message it carries, read by the same rule `parseEmail` applies;
+ * null for any other .eml file.
+ */
+export const readCertifiedEmailMessage = async (
+  fileBuffer: ArrayBuffer,
+): Promise<
+  Result<
+    { envelope: CertifiedEmailEnvelope; original: ArrayBuffer | null } | null,
+    EmailParseError
+  >
+> => {
+  const provider = await parseEmlMessage(fileBuffer, {
+    keepMessageParts: true,
+  });
+  if (provider.isErr()) {
+    return provider;
+  }
+  const certified = readCertifiedEmailParts({
+    headerNames: provider.value.headerNames,
+    parts: provider.value.attachments,
+  });
+  return Result.ok(
+    certified === null
+      ? null
+      : {
+          envelope: certified.envelope,
+          original:
+            certified.original === null
+              ? null
+              : toOwnedArrayBuffer(certified.original),
+        },
+  );
+};
 
 const toOwnedArrayBuffer = (bytes: Uint8Array): ArrayBuffer =>
   bytes.byteOffset === 0 &&
@@ -831,6 +882,103 @@ const parseMsg = (fileBuffer: ArrayBuffer): ParsedEmail => {
     attachments,
     certified: null,
   };
+};
+
+// ── TNEF (winmail.dat) ─────────────────────────────────
+
+/**
+ * A TNEF message as an email: its body (HTML, else the HTML or text its
+ * compressed RTF carries, else its plain text) and its attachments with
+ * their original names, an attached message kept whole as a TNEF stream.
+ */
+const tnefToParsedEmail = (message: TnefMessage): ParsedEmail => {
+  const inlineImages: InlineImage[] = [];
+  const attachments: EmailAttachment[] = [];
+  for (const attachment of message.attachments) {
+    const mimeType = attachment.message ? TNEF_MIME_TYPE : attachment.mimeType;
+    attachments.push({
+      charset: resolveEmailAttachmentCharset(mimeType),
+      contentId: attachment.contentId
+        ? stripAngleBrackets(attachment.contentId)
+        : null,
+      fileName: attachment.fileName,
+      mimeType,
+      bytes: attachment.bytes,
+    });
+    if (
+      attachment.contentId &&
+      isSafeInlineImage(attachment.mimeType, attachment.fileName)
+    ) {
+      inlineImages.push({
+        cid: stripAngleBrackets(attachment.contentId),
+        mimeType: resolveAttachmentMimeType(
+          attachment.mimeType,
+          attachment.fileName,
+        ),
+        dataBase64: Buffer.from(attachment.bytes).toBase64(),
+      });
+    }
+  }
+  const addresses = (type: "to" | "cc" | "bcc") =>
+    message.recipients
+      .filter((recipient) => recipient.type === type)
+      .map(({ name, email }) => formatNameAddress(name, email))
+      .filter(nonEmpty);
+  const rtf = message.rtf === null ? null : rtfMessageBody(message.rtf);
+  const body: EmailBody =
+    message.html === null
+      ? (rtf ?? { type: "text", text: message.text ?? "" })
+      : { type: "html", html: message.html };
+  return {
+    subject: message.subject,
+    from: formatNameAddress(message.fromName, message.fromEmail),
+    to: addresses("to"),
+    cc: addresses("cc"),
+    bcc: addresses("bcc"),
+    date: message.date,
+    body,
+    inlineImages,
+    attachments,
+    certified: null,
+  };
+};
+
+const isEmptyBody = (body: EmailBody) =>
+  body.type === "html" ? body.html.trim() === "" : body.text.trim() === "";
+
+/**
+ * An email whose TNEF attachment (`winmail.dat`, how Outlook sends a rich
+ * message) is replaced by what it carries: its attachments, under their own
+ * names, its inline images, and its body when the email has none. A TNEF
+ * attachment that does not read stays an attachment. Only the email's own
+ * attachments are expanded, never a message they carry.
+ */
+const expandTnefAttachments = (email: ParsedEmail): ParsedEmail => {
+  let { body } = email;
+  const inlineImages = [...email.inlineImages];
+  const attachments: EmailAttachment[] = [];
+  for (const attachment of email.attachments) {
+    const declared =
+      resolveEmailMimeType({
+        mimeType: attachment.mimeType,
+        fileName: attachment.fileName,
+      }) === TNEF_MIME_TYPE;
+    const tnef =
+      declared && hasTnefSignature(attachment.bytes)
+        ? parseTnef(attachment.bytes)
+        : null;
+    if (tnef === null || tnef.isErr()) {
+      attachments.push(attachment);
+      continue;
+    }
+    const carried = tnefToParsedEmail(tnef.value);
+    attachments.push(...carried.attachments);
+    inlineImages.push(...carried.inlineImages);
+    if (isEmptyBody(body)) {
+      body = carried.body;
+    }
+  }
+  return { ...email, body, inlineImages, attachments };
 };
 
 const guessImageMime = (fileName: string | undefined): string => {

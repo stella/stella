@@ -225,6 +225,13 @@ The same `GOTENBERG_USERNAME` and `GOTENBERG_PASSWORD` values are passed to
 Gotenberg as basic-auth credentials, and the API uses them on conversion
 requests.
 
+Previews of HEIC and HEIF photos (the iPhone camera's default format) are
+made by the API itself, not by Gotenberg: the sandboxed PDF worker decodes
+them with a WebAssembly decoder bundled in the API image. This is off unless
+`HEIC_PREVIEW_DECODING_ENABLED="true"`. Off, such a photo is stored and
+downloads as uploaded, and its viewer says this server makes no previews of
+the format.
+
 Do not expose Gotenberg to the public internet. Gotenberg's installation guide
 recommends treating it like a database: keep it behind your firewall. The
 self-host Compose file intentionally does not publish a `ports` entry for the

@@ -47,6 +47,15 @@ type ImageAdmission =
   | { type: "refused"; error: DerivativeAdmissionError };
 
 /**
+ * The pixels an image may declare. A tiled HEIF photo is decoded tile by
+ * tile into a bounded page image, so its canvas has a budget of its own.
+ */
+const sourcePixelsMax = (header: ImageHeader): number =>
+  header.encoding?.format === "heif" && header.encoding.tiled
+    ? LIMITS.heifTiledCanvasPixelsMax
+    : LIMITS.imageDerivativeSourcePixelsMax;
+
+/**
  * Refuse an image by the pixel count its header declares, before any decoder
  * allocates a surface. Non-image types pass with no header.
  */
@@ -68,11 +77,12 @@ export const admitDerivativeImage = (
     };
   }
   const pixels = header.width * header.height;
-  if (pixels > LIMITS.imageDerivativeSourcePixelsMax) {
+  const pixelsMax = sourcePixelsMax(header);
+  if (pixels > pixelsMax) {
     return {
       type: "refused",
       error: new DerivativeAdmissionError({
-        message: `Image declares ${pixels} pixels, above the ${LIMITS.imageDerivativeSourcePixelsMax}-pixel derivative budget`,
+        message: `Image declares ${pixels} pixels, above the ${pixelsMax}-pixel derivative budget`,
         refusal: DERIVATIVE_REFUSAL.SOURCE_PIXELS,
       }),
     };

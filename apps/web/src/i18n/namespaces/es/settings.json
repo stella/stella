@@ -211,6 +211,15 @@
     "creationRateLimited": "Se han creado demasiadas organizaciones recientemente. Inténtalo más tarde.",
     "creationRefused": "No se ha podido crear la organización. Revisa los datos e inténtalo de nuevo.",
     "creationSlugConflict": "Esta dirección de organización ya está en uso. Elige otro nombre u otra dirección.",
+    "documentNaming": {
+      "description": "Renombra las nuevas subidas en los asuntos que lo activen. stella lee la fecha, el tipo y el título de cada documento y completa este patrón. Déjelo vacío para conservar los nombres originales.",
+      "invalid": "Use solo los marcadores indicados y ninguno de los caracteres \\ / : * ? \" < > |.",
+      "pattern": "Patrón de nombre",
+      "preview": "Un contrato firmado se llamaría:",
+      "sampleDocType": "Contrato",
+      "sampleTitle": "Contrato de compraventa de participaciones",
+      "tokenHelp": "Marcadores: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Un marcador sin valor se omite junto con su separador."
+    },
     "invitations": {
       "cancelConfirmDescription": "El enlace de invitación enviado a {email} dejará de funcionar. Para volver a invitar a esta persona, envíe una nueva invitación.",
       "cancelInvitation": "Cancelar invitación",
@@ -685,6 +694,44 @@
         "remove": "Quitar el buzón de datos {address}",
         "title": "Buzones de datos de la organización"
       },
+      "dictation": {
+        "addCount": "{count, plural, one {Añadir # palabra} many {Añadir # palabras} other {Añadir # palabras}}",
+        "addLabel": "Añadir una palabra o un nombre",
+        "addMany": "Añadir varias",
+        "addedToast": "Se añadió «{word}».",
+        "alreadyListedToast": "«{word}» ya está en la lista.",
+        "count": "{total, number} de {max, number}",
+        "deleteSelected": "{count, plural, one {Quitar # palabra} many {Quitar # palabras} other {Quitar # palabras}}",
+        "deleteSelectedDescription": "El dictado dejará de usarlas para todo el equipo.",
+        "deleteSelectedInput": "Escriba {number} para confirmar",
+        "deleteSelectedTitle": "{count, plural, one {¿Quitar # palabra?} many {¿Quitar # palabras?} other {¿Quitar # palabras?}}",
+        "deleteWord": "Quitar {word}",
+        "deletedToast": "{count, plural, one {Se quitó # palabra.} many {Se quitaron # palabras.} other {Se quitaron # palabras.}}",
+        "description": "Palabras y nombres que el dictado de todo el equipo debe escribir correctamente, como nombres de clientes o términos en inglés usados en otro idioma. stella usa los que necesita cada dictado, así que la lista puede ser larga.",
+        "empty": "Añada una palabra arriba, o varias desde una lista o un archivo.",
+        "export": "Exportar lista",
+        "exportFileName": "palabras-dictado.txt",
+        "full": "La lista está llena. Quite palabras para añadir otras nuevas.",
+        "importHint": "Pegue una palabra por línea, o elija un archivo .txt con una palabra por línea o un archivo .csv con las palabras en la primera columna.",
+        "importedToast": "{count, plural, one {Se añadió # palabra.} many {Se añadieron # palabras.} other {Se añadieron # palabras.}}",
+        "invalid": "Una palabra no puede contener saltos de línea ni caracteres de control.",
+        "noMatch": "Ninguna palabra coincide con «{search}».",
+        "pasteLabel": "Palabras para añadir",
+        "pastePlaceholder": "Una palabra por línea",
+        "review": "Revisar palabras",
+        "reviewInvalid": "{count, plural, one {# no válida, omitida} many {# no válidas, omitidas} other {# no válidas, omitidas}}",
+        "reviewListed": "{count, plural, one {# ya está en la lista} many {# ya están en la lista} other {# ya están en la lista}}",
+        "reviewNew": "{count, plural, one {# palabra nueva} many {# palabras nuevas} other {# palabras nuevas}}",
+        "reviewOverLimit": "La lista tiene {total, number} palabras y caben {room, number} más (como máximo {max, number}). Añada menos palabras o quite antes algunas de la lista.",
+        "reviewRepeated": "{count, plural, one {# repetida en esta importación} many {# repetidas en esta importación} other {# repetidas en esta importación}}",
+        "reviewTooLong": "{count, plural, one {# demasiado larga, omitida} many {# demasiado largas, omitidas} other {# demasiado largas, omitidas}}",
+        "searchPlaceholder": "Buscar palabras",
+        "selectWord": "Seleccionar {word}",
+        "showMore": "Mostrar más ({shown, number} de {matching, number})",
+        "title": "Dictado",
+        "tooLong": "Esta palabra es más larga de lo que admite el dictado.",
+        "wordsTitle": "Palabras del equipo"
+      },
       "documentProcessing": {
         "description": "Reconoce automáticamente texto en PDF escaneados para que se pueda buscar en su contenido.",
         "title": "Reconocimiento de texto de documentos",
@@ -698,7 +745,6 @@
         "reorder": "Reordenar tipo de documento",
         "title": "Tipos de documentos"
       },
-      "enterSlug": "Introduzca el identificador de la organización para la URL.",
       "localRuns": {
         "description": "Lo máximo que puede hacer un agente de programación sin preguntar cuando ejecuta un chat en el ordenador de un miembro. Un límite más bajo se aplica a partir del siguiente mensaje de cada miembro; una ejecución ya en curso conserva sus permisos.",
         "title": "Agentes de programación en los ordenadores de los miembros",
@@ -755,7 +801,6 @@
       },
       "uploadLogo": "Subir logotipo",
       "usage": "Uso",
-      "usageCheckoutProviderUnavailable": "El proveedor de pagos no está disponible para el pago en línea.",
       "usageDescription": "Límites de uso y estado de la autorización de esta organización",
       "usageEmptyDescription": "Configura una autorización de uso para habilitar funciones de IA medidas en esta organización.",
       "usageEmptyTitle": "Sin autorización de uso",
@@ -772,11 +817,9 @@
       "usageManageError": "No se pudo abrir la gestión de uso alojado",
       "usageManuallyManaged": "Gestionado manualmente",
       "usagePacksDescription": "Paquetes de unidades de pago único añadidos a tu periodo actual.",
-      "usagePacksRequireActivePlan": "Active o reanude un plan alojado para comprar paquetes de unidades.",
       "usagePacksTitle": "Paquetes de unidades",
       "usagePlanCheckout": "Continuar al pago",
       "usagePlanCheckoutError": "No se pudo iniciar el pago",
-      "usagePlanCheckoutUnavailable": "El pago en línea no está disponible para este plan.",
       "usagePlanPriceMonthTemplate": "{price} / mes",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / puesto / mes",
@@ -798,7 +841,11 @@
         "title": "Resultados de la verificación de documentos",
         "unavailable": "Esta organización no tiene ningún modelo de decisión disponible.",
         "updated": "Ajuste de verificación actualizado"
-      }
+      },
+      "enterSlug": "Introduzca el identificador de la organización para la URL.",
+      "usageCheckoutProviderUnavailable": "El proveedor de pagos no está disponible para el pago en línea.",
+      "usagePacksRequireActivePlan": "Active o reanude un plan alojado para comprar paquetes de unidades.",
+      "usagePlanCheckoutUnavailable": "El pago en línea no está disponible para este plan."
     }
   }
 }

@@ -21,6 +21,7 @@ import {
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { stellaToast } from "@stll/ui/toast";
 
+import { fileLinkAnswer } from "@/__fixtures__/file-link-answer";
 import type { DownloadVariant } from "@/components/inspector/file-download-service.logic";
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 import englishMessages from "@/i18n/langs/en.json";
@@ -84,9 +85,13 @@ globalThis.fetch = Object.assign(
       return await answer.promise;
     }
     if (url.includes("/url/")) {
-      return Response.json({
-        presignedUrl: "https://storage.example.test/file",
-      });
+      return Response.json(
+        fileLinkAnswer({
+          fileName: "A.md",
+          mimeType: "text/markdown",
+          presignedUrl: "https://storage.example.test/file",
+        }),
+      );
     }
     if (url === "https://storage.example.test/file") {
       return new Response("bytes");

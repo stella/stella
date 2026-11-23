@@ -33,7 +33,7 @@ const setup = ({
           (origin) => origin !== new URL(issuer).origin,
         ),
       }),
-    discoverIconUrl: async () => null,
+    discoverIconUrl: async () => ({ status: "invalid-url" }),
   });
   type Context = Parameters<typeof handler.handler>[0];
   let countQuery = false;

@@ -12,6 +12,7 @@ export const SIGNED_DOSSIER_FORMATS = [
     extensions: [".es3", ".et3", ".dosszie"],
     mimeType: "application/vnd.eszigno3+xml",
     mimeAliases: [],
+    profiles: [{ label: "ET3", extensions: [".et3"], mark: "et3" }],
   },
   {
     // Slovak ZEPf: a ZIP of external signatures over a MIME envelope that
@@ -23,5 +24,19 @@ export const SIGNED_DOSSIER_FORMATS = [
     extensions: [".zep"],
     mimeType: "application/x-zipzepf",
     mimeAliases: ["application/zep"],
+  },
+  {
+    // Slovak XAdES_ZEP: an XML data envelope of signed data objects and their
+    // XAdES signature, or of several signatures in its composite form.
+    kind: "xadesZep",
+    container: "xml",
+    auditFormat: "xades-zep",
+    label: "XZEP",
+    extensions: [".xzep", ".zepx"],
+    mimeType: "application/x-xades_zep",
+    mimeAliases: [
+      "application/zepx",
+      "application/x-xades_zep_data_signatures",
+    ],
   },
 ] as const;

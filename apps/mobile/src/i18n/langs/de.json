@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Anhänge",
     "certifiedAt": "Zertifiziert am",
     "deliveredTo": "Zugestellt an",
     "error": "Gemeldeter Fehler",
@@ -462,20 +461,110 @@
     },
     "fit": "Breite",
     "openOriginal": "Original öffnen",
+    "openPart": "{fileName} öffnen",
     "preview": "Vorschau öffnen",
     "previewDescription": "Diese Datei wird in der Systemvorschau geöffnet.",
     "retry": "Erneut versuchen",
     "title": "Dokument",
     "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
+    "unscannedContent": {
+      "encrypted": "Einige enthaltene Dateien sind passwortgeschützt und wurden daher nicht auf Bedrohungen geprüft.",
+      "unsupportedCompression": "Einige enthaltene Dateien sind in einem Format komprimiert, das stella nicht lesen kann, und wurden daher nicht auf Bedrohungen geprüft."
+    },
     "zoomFit": "An Breite anpassen",
     "zoomIn": "Vergrößern",
     "zoomOut": "Verkleinern"
+  },
+  "eInvoice": {
+    "accountNumber": "Bankkontonummer",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Bankleitzahl",
+    "batchPosition": "Beleg {position, number} von {count, number}",
+    "bic": "BIC-Code",
+    "currency": "Währung",
+    "customer": "Kunde",
+    "documentTitle": "{documentType, select, invoice {Rechnung} creditNote {Gutschrift} debitNote {Belastungsanzeige} advance {Anzahlungsrechnung} other {Sonstiger Beleg}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Rechnung {number}} creditNote {Gutschrift {number}} debitNote {Belastungsanzeige {number}} advance {Anzahlungsrechnung {number}} other {Beleg {number}}}",
+    "exemptionReason": "Befreiungsgrund",
+    "formatVersion": "{format}, Version {version}",
+    "grossTotal": "Gesamtbetrag inkl. USt.",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Ausstellungsdatum",
+    "lineId": "Nr.",
+    "lineItems": "Positionen",
+    "linesShown": "{shown, number} von {count, plural, one {# Position} other {# Positionen}} angezeigt",
+    "netAmount": "Nettobetrag",
+    "netTotal": "Gesamtbetrag ohne USt.",
+    "notes": "Rechnungshinweise",
+    "otherIdentifier": "Andere Kennung",
+    "payableAmount": "Zahlbetrag",
+    "paymentAmount": "Zahlungsbetrag",
+    "paymentDetails": "Zahlungsangaben",
+    "paymentDueDate": "Fälligkeitsdatum",
+    "paymentMeansCode": "Code der Zahlungsart",
+    "paymentReference": "Verwendungszweck",
+    "prepaidAmount": "Bereits gezahlt",
+    "quantity": "Menge und Einheit",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate} %",
+    "ratePercentWithCategory": "{rate} % ({category})",
+    "registrationNumber": "Registernummer",
+    "supplier": "Lieferant",
+    "taxAmount": "USt.-Betrag",
+    "taxId": "Steuernummer",
+    "taxPointDate": "Leistungsdatum",
+    "taxTotal": "USt. gesamt",
+    "taxableAmount": "Bemessungsgrundlage",
+    "totals": "Summen",
+    "unitPrice": "Einzelpreis",
+    "units": {
+      "day": "{count, plural, one {{quantity} Tag} other {{quantity} Tage}}",
+      "hour": "{count, plural, one {{quantity} Stunde} other {{quantity} Stunden}}",
+      "month": "{count, plural, one {{quantity} Monat} other {{quantity} Monate}}",
+      "unit": "{count, plural, one {{quantity} Stk.} other {{quantity} Stk.}}",
+      "week": "{count, plural, one {{quantity} Woche} other {{quantity} Wochen}}",
+      "year": "{count, plural, one {{quantity} Jahr} other {{quantity} Jahre}}"
+    },
+    "unreadable": "Die Rechnung konnte nicht gelesen werden.",
+    "vat": "USt.",
+    "vatBreakdown": "USt.-Aufschlüsselung",
+    "vatId": "Umsatzsteuer-ID",
+    "xmlUnreadable": "Diese XML-Datei konnte nicht gelesen werden."
+  },
+  "email": {
+    "cc": "Kopie",
+    "date": "Datum",
+    "from": "Absender",
+    "noSubject": "(Kein Betreff)",
+    "subject": "Betreff",
+    "to": "Empfänger"
   },
   "entity": {
     "currentVersion": "Aktuelle Version",
     "loadFailed": "Dieser Eintrag konnte nicht geladen werden.",
     "reference": "Aktenzeichen",
     "type": "Typ"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Das Archiv konnte nicht gelesen werden.",
+    "attachments": "Anhänge",
+    "files": "Dateien",
+    "insideFailed": "Die Dateien darin konnten nicht geladen werden. Zum erneuten Versuch tippen.",
+    "noFilesInside": "Darin sind keine Dateien.",
+    "noMatches": "Keine Datei entspricht „{query}“.",
+    "open": "{fileName} ({details}) öffnen",
+    "saveFailed": "Die Datei konnte nicht in der Akte gespeichert werden. Versuchen Sie es erneut.",
+    "saveNamed": "{fileName} in einer Akte speichern",
+    "search": "Datei nach Name oder Ordner suchen",
+    "unavailable": {
+      "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",
+      "link": "Verweis auf eine andere Datei, wird nicht geöffnet",
+      "tooLarge": "Zu groß zum Öffnen",
+      "unreadable": "Beschädigt, lässt sich nicht öffnen",
+      "unsupported": "Mit einem Verfahren komprimiert, das sich nicht öffnen lässt"
+    },
+    "unnamed": "Unbenannte Datei"
   },
   "header": {
     "search": "Suchen"
@@ -505,6 +594,16 @@
     "refused": "Ihr Server hat die Anfrage abgelehnt (Fehler {status}).",
     "server": "Auf Ihrem Server ist ein Fehler aufgetreten (Fehler {status}). Versuchen Sie es gleich noch einmal.",
     "session": "Ihre Anmeldung ist abgelaufen. Melden Sie sich erneut an."
+  },
+  "mailbox": {
+    "back": "Zurück zu den Nachrichten",
+    "messages": "Nachrichten",
+    "noMatches": "Keine Nachricht entspricht „{query}“.",
+    "noMessages": "Dieses Postfach enthält keine Nachrichten.",
+    "openFailed": "Die Nachricht konnte nicht geöffnet werden. Zum erneuten Versuchen tippen.",
+    "search": "Nachrichten durchsuchen",
+    "truncated": "Nur die ersten {count, number} Nachrichten werden angezeigt.",
+    "unreadable": "Dieses Postfach konnte nicht gelesen werden."
   },
   "matter": {
     "add": "Hinzufügen",
@@ -800,9 +899,11 @@
     "useStella": "stella verwenden"
   },
   "signedFile": {
+    "deliveryReceipt": "Zustellnachweis für eine elektronische Akte",
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
     "noSigners": "Es wurden keine Angaben zu Unterzeichnern gefunden.",
+    "signedContent": "Signiertes Dokument",
     "signers": "Unterzeichner",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",

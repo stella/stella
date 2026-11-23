@@ -1,0 +1,94 @@
+name: Converter tests
+
+# Converts every converted document format through the pinned document
+# converter (Gotenberg). The unit tests fake the converter; this proves its
+# image still imports the files. It runs only when the converter pin or the
+# conversion code changes, so unrelated pull requests spend nothing on it.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/converter-tests.yml"
+      - "scripts/ci-service-images.json"
+      - "docker-compose.yml"
+      - "apps/api/src/lib/files/gotenberg.ts"
+      - "apps/api/src/lib/files/conversion-content.ts"
+      - "apps/api/src/lib/files/conversion-input.ts"
+      - "apps/api/src/lib/files/converter-settings.ts"
+      - "apps/api/src/lib/files/converted-formats.converter.test.ts"
+      - "apps/api/src/lib/files/pdf-derivative-policy.ts"
+      - "apps/api/src/tests/helpers/converted-document-fixtures.ts"
+      - "packages/api-contract/src/converted-document-formats.ts"
+
+defaults:
+  run:
+    shell: bash
+
+permissions: {}
+
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
+concurrency:
+  group: converter-tests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  converter-tests:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but installs must not expose
+          # the real npm token to dependency lifecycle scripts.
+          NPM_TOKEN: ""
+
+      # The image is read from the service inventory, the one place the
+      # converter pin is declared for CI.
+      - name: Start the converter
+        timeout-minutes: 5
+        run: |
+          image=$(jq -r '.[] | select(.name == "gotenberg") | .source' scripts/ci-service-images.json)
+          test -n "$image"
+          docker run --detach --name converter --publish 127.0.0.1:3000:3000 "$image"
+          for _ in $(seq 1 60); do
+            if curl --fail --silent http://127.0.0.1:3000/health >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs converter
+          exit 1
+
+      - name: Configure flaky-test quarantine
+        uses: ./.github/actions/flaky-test-quarantine
+
+      - name: Convert every converted format
+        working-directory: apps/api
+        run: bun run test src/lib/files/converted-formats.converter.test.ts
+        env:
+          STELLA_RUN_CONVERTER_TESTS: "true"
+          GOTENBERG_URL: "http://127.0.0.1:3000"

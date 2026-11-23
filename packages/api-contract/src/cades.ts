@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { eInvoicePreviewSchema } from "./e-invoice";
+import { filePartDescriptorSchema } from "./file-parts";
 import { previewTextFormatSchema } from "./preview-text";
 
 /**
@@ -20,4 +22,8 @@ export const cadesPreviewSchema = v.object({
       ),
     }),
   ),
+  /** The signed document as a part of the file, delivered as a PDF. */
+  content: v.nullable(filePartDescriptorSchema),
+  /** The signed file read as a structured invoice, when it is one. */
+  invoice: v.nullable(eInvoicePreviewSchema),
 });

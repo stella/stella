@@ -49,14 +49,23 @@ export const readAuditedActivitySummary = async (
   if (first === undefined) {
     return panic("Operator activity requires eight weeks");
   }
-  const buckets = [
-    sql`(-1, ${windows.previousWeekSince}::timestamptz, ${first.since}::timestamptz)`,
-    ...windows.weeks.map(
-      ({ since, until }, index) =>
-        sql`(${index}, ${since}::timestamptz, ${until}::timestamptz)`,
-    ),
-    sql`(8, ${windows.samePointLastWeek.since}::timestamptz, ${windows.samePointLastWeek.until}::timestamptz)`,
-  ];
+  const bucketsPayload = JSON.stringify([
+    {
+      week_index: -1,
+      since: windows.previousWeekSince,
+      until: first.since,
+    },
+    ...windows.weeks.map(({ since, until }, index) => ({
+      week_index: index,
+      since,
+      until,
+    })),
+    {
+      week_index: 8,
+      since: windows.samePointLastWeek.since,
+      until: windows.samePointLastWeek.until,
+    },
+  ]);
   await setSharedStatementTimeout(tx, ACTIVITY_STATEMENT_TIMEOUT_MS);
   const rows = await tx.select({
     week_index: sql<number>`weekly.week_index`,
@@ -65,7 +74,10 @@ export const readAuditedActivitySummary = async (
     activated_24h_pct: sql<number | null>`weekly.activated_24h_pct`,
     weekly_retention_pct: sql<number | null>`weekly.weekly_retention_pct`,
   }).from(sql`(
-    WITH buckets (week_index, since, until) AS (VALUES ${sql.join(buckets, sql`, `)}),
+    WITH buckets AS (
+      SELECT week_index, since, until
+      FROM jsonb_to_recordset(${bucketsPayload}::text::jsonb) AS b(week_index int, since timestamptz, until timestamptz)
+    ),
     actions AS MATERIALIZED (
       SELECT ${chatThreads.organizationId} AS org_id, ${chatMessages.userId} AS actor_id, ${chatMessages.createdAt} AS acted_at
       FROM ${chatMessages} JOIN ${chatThreads} ON ${chatThreads.id} = ${chatMessages.threadId}

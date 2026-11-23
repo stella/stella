@@ -211,6 +211,15 @@
     "creationRateLimited": "Trop d’organisations ont été créées récemment. Réessayez plus tard.",
     "creationRefused": "L’organisation n’a pas pu être créée. Vérifiez les informations et réessayez.",
     "creationSlugConflict": "Cette adresse d’organisation est déjà utilisée. Choisissez un autre nom ou une autre adresse.",
+    "documentNaming": {
+      "description": "Renomme les nouveaux fichiers téléversés dans les dossiers qui l'activent. stella lit la date, le type et le titre de chaque document et complète ce modèle. Laissez vide pour conserver les noms d'origine.",
+      "invalid": "Utilisez uniquement les jetons indiqués et aucun des caractères \\ / : * ? \" < > |.",
+      "pattern": "Modèle de nom",
+      "preview": "Un contrat signé s'appellerait :",
+      "sampleDocType": "Contrat",
+      "sampleTitle": "Cession de parts sociales",
+      "tokenHelp": "Jetons : '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Un jeton sans valeur est omis avec son séparateur."
+    },
     "invitations": {
       "cancelConfirmDescription": "Le lien d'invitation envoyé à {email} ne fonctionnera plus. Pour inviter à nouveau cette personne, envoyez une nouvelle invitation.",
       "cancelInvitation": "Annuler l'invitation",
@@ -685,6 +694,44 @@
         "remove": "Retirer la boîte de données {address}",
         "title": "Boîtes de données de l’organisation"
       },
+      "dictation": {
+        "addCount": "{count, plural, =0 {Ajouter # mots} one {Ajouter # mot} many {Ajouter # mots} other {Ajouter # mots}}",
+        "addLabel": "Ajouter un mot ou un nom",
+        "addMany": "Ajouter plusieurs",
+        "addedToast": "« {word} » ajouté.",
+        "alreadyListedToast": "« {word} » est déjà dans la liste.",
+        "count": "{total, number} sur {max, number}",
+        "deleteSelected": "{count, plural, =0 {Retirer # mots} one {Retirer # mot} many {Retirer # mots} other {Retirer # mots}}",
+        "deleteSelectedDescription": "La dictée cessera de les utiliser pour toute l’équipe.",
+        "deleteSelectedInput": "Saisissez {number} pour confirmer",
+        "deleteSelectedTitle": "{count, plural, =0 {Retirer # mots ?} one {Retirer # mot ?} many {Retirer # mots ?} other {Retirer # mots ?}}",
+        "deleteWord": "Retirer {word}",
+        "deletedToast": "{count, plural, =0 {# mots retirés.} one {# mot retiré.} many {# mots retirés.} other {# mots retirés.}}",
+        "description": "Les mots et noms que la dictée de toute l’équipe doit écrire correctement, comme des noms de clients ou des termes anglais employés dans une autre langue. stella utilise ceux dont chaque dictée a besoin : la liste peut donc être longue.",
+        "empty": "Ajoutez un mot ci-dessus, ou plusieurs à partir d’une liste ou d’un fichier.",
+        "export": "Exporter la liste",
+        "exportFileName": "mots-dictee.txt",
+        "full": "La liste est pleine. Retirez des mots pour en ajouter de nouveaux.",
+        "importHint": "Collez un mot par ligne, ou choisissez un fichier .txt avec un mot par ligne ou un fichier .csv dont la première colonne contient les mots.",
+        "importedToast": "{count, plural, =0 {# mots ajoutés.} one {# mot ajouté.} many {# mots ajoutés.} other {# mots ajoutés.}}",
+        "invalid": "Un mot ne peut contenir ni saut de ligne ni caractère de contrôle.",
+        "noMatch": "Aucun mot ne correspond à « {search} ».",
+        "pasteLabel": "Mots à ajouter",
+        "pastePlaceholder": "Un mot par ligne",
+        "review": "Vérifier les mots",
+        "reviewInvalid": "{count, plural, =0 {# non valides, ignorés} one {# non valide, ignoré} many {# non valides, ignorés} other {# non valides, ignorés}}",
+        "reviewListed": "{count, plural, =0 {# déjà dans la liste} one {# déjà dans la liste} many {# déjà dans la liste} other {# déjà dans la liste}}",
+        "reviewNew": "{count, plural, =0 {# nouveaux mots} one {# nouveau mot} many {# nouveaux mots} other {# nouveaux mots}}",
+        "reviewOverLimit": "La liste contient {total, number} mots et peut encore en accueillir {room, number} (au maximum {max, number}). Ajoutez moins de mots, ou retirez-en d’abord de la liste.",
+        "reviewRepeated": "{count, plural, =0 {# en double dans cet import} one {# en double dans cet import} many {# en double dans cet import} other {# en double dans cet import}}",
+        "reviewTooLong": "{count, plural, =0 {# trop longs, ignorés} one {# trop long, ignoré} many {# trop longs, ignorés} other {# trop longs, ignorés}}",
+        "searchPlaceholder": "Rechercher des mots",
+        "selectWord": "Sélectionner {word}",
+        "showMore": "Afficher plus ({shown, number} sur {matching, number})",
+        "title": "Dictée",
+        "tooLong": "Ce mot est plus long que ce que la dictée accepte.",
+        "wordsTitle": "Mots de l’équipe"
+      },
       "documentProcessing": {
         "description": "Reconnaissez automatiquement le texte des PDF numérisés afin de pouvoir rechercher leur contenu.",
         "title": "Reconnaissance de texte des documents",
@@ -698,7 +745,6 @@
         "reorder": "Réorganiser le type de document",
         "title": "Types de documents"
       },
-      "enterSlug": "Saisissez l’identifiant de l’organisation dans l’URL.",
       "localRuns": {
         "description": "Ce qu’un agent de code peut faire au maximum sans demander lorsqu’il exécute une conversation sur l’ordinateur d’un membre. Une limite plus basse s’applique dès le prochain message de chaque membre ; une exécution déjà en cours conserve ses autorisations.",
         "title": "Agents de code sur les ordinateurs des membres",
@@ -755,7 +801,6 @@
       },
       "uploadLogo": "Importer un logo",
       "usage": "Utilisation",
-      "usageCheckoutProviderUnavailable": "Le prestataire de paiement est indisponible pour le règlement en ligne.",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",
       "usageEmptyTitle": "Aucun droit d’utilisation",
@@ -772,11 +817,9 @@
       "usageManageError": "Impossible d’ouvrir la gestion de l’utilisation hébergée",
       "usageManuallyManaged": "Géré manuellement",
       "usagePacksDescription": "Packs d’unités ponctuels ajoutés à votre période en cours.",
-      "usagePacksRequireActivePlan": "Activez ou reprenez une offre hébergée pour acheter des packs d’unités.",
       "usagePacksTitle": "Packs d’unités",
       "usagePlanCheckout": "Continuer vers le paiement",
       "usagePlanCheckoutError": "Impossible de démarrer le paiement",
-      "usagePlanCheckoutUnavailable": "Le paiement en ligne est indisponible pour cette offre.",
       "usagePlanPriceMonthTemplate": "{price} / mois",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / siège / mois",
@@ -798,7 +841,11 @@
         "title": "Verdicts de la vérification des documents",
         "unavailable": "Aucun modèle de décision n’est disponible pour cette organisation.",
         "updated": "Paramètre de vérification mis à jour"
-      }
+      },
+      "enterSlug": "Saisissez l’identifiant de l’organisation dans l’URL.",
+      "usageCheckoutProviderUnavailable": "Le prestataire de paiement est indisponible pour le règlement en ligne.",
+      "usagePacksRequireActivePlan": "Activez ou reprenez une offre hébergée pour acheter des packs d’unités.",
+      "usagePlanCheckoutUnavailable": "Le paiement en ligne est indisponible pour cette offre."
     }
   }
 }

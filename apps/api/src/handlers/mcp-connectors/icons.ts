@@ -9,47 +9,45 @@ const ICON_DISCOVERY_TIMEOUT_MS = 5000;
 const ICON_HTML_MAX_CHARS = 200_000;
 const ICON_HTML_MAX_BYTES = 300_000;
 
+export type DiscoverMcpIconUrlOutcome =
+  { status: "discovered"; url: string } | { status: "invalid-url" };
+
 export const discoverMcpIconUrl = async (
   rawUrl: string,
   permit: ThirdPartyOutboundPermit,
-): Promise<string | null> => {
+): Promise<DiscoverMcpIconUrlOutcome> => {
   const parsed = parseSafeOutboundUrl(rawUrl);
   if (Result.isError(parsed)) {
-    return null;
+    return { status: "invalid-url" };
   }
 
   const rootUrl = new URL("/", parsed.value.origin);
-  const htmlResult = await Result.tryPromise({
-    try: async () => {
-      const response = await safeOutboundFetchBytes({
-        permit,
-        headers: { Accept: "text/html" },
-        maxBytes: ICON_HTML_MAX_BYTES,
-        timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
-        url: rootUrl,
-      });
-      if (Result.isError(response) || !response.value.ok) {
-        return null;
-      }
-
-      return new TextDecoder()
-        .decode(response.value.body)
-        .slice(0, ICON_HTML_MAX_CHARS);
-    },
-    catch: () => null,
+  const response = await safeOutboundFetchBytes({
+    permit,
+    headers: { Accept: "text/html" },
+    maxBytes: ICON_HTML_MAX_BYTES,
+    timeoutMs: ICON_DISCOVERY_TIMEOUT_MS,
+    url: rootUrl,
   });
-
-  if (Result.isOk(htmlResult) && htmlResult.value) {
-    const discovered = findIconInHtml({
-      html: htmlResult.value,
-      rootUrl,
-    });
-    if (discovered) {
-      return discovered;
+  if (Result.isOk(response) && response.value.ok) {
+    const html = new TextDecoder()
+      .decode(response.value.body)
+      .slice(0, ICON_HTML_MAX_CHARS);
+    if (html.length > 0) {
+      const discovered = findIconInHtml({
+        html,
+        rootUrl,
+      });
+      if (discovered) {
+        return { status: "discovered", url: discovered };
+      }
     }
   }
 
-  return new URL("/favicon.ico", parsed.value.origin).toString();
+  return {
+    status: "discovered",
+    url: new URL("/favicon.ico", parsed.value.origin).toString(),
+  };
 };
 
 const ICON_REL_PRIORITY = [

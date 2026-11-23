@@ -72,19 +72,60 @@ pub struct FixRequest {
 
 /// The request the open panel shows, only in memory.
 #[derive(Default)]
-pub struct FixPanel(Mutex<Option<FixRequest>>);
+pub struct FixPanel(Mutex<PanelSlot>);
+
+/// Each stored request takes the next generation, so a cleanup removes only
+/// the request it belongs to and never a newer one.
+#[derive(Default)]
+struct PanelSlot {
+  generation: u64,
+  /// The generation the panel window last showed.
+  shown: u64,
+  request: Option<FixRequest>,
+}
 
 impl FixPanel {
-  fn set(&self, request: Option<FixRequest>) {
-    *self.0.lock().unwrap_or_else(|error| error.into_inner()) = request;
+  fn slot(&self) -> std::sync::MutexGuard<'_, PanelSlot> {
+    self.0.lock().unwrap_or_else(|error| error.into_inner())
+  }
+
+  /// Stores a new request and returns its generation.
+  fn store(&self, request: FixRequest) -> u64 {
+    let mut slot = self.slot();
+    slot.generation += 1;
+    slot.request = Some(request);
+    slot.generation
+  }
+
+  /// Records that the panel window now shows this generation.
+  fn mark_shown(&self, generation: u64) {
+    let mut slot = self.slot();
+    slot.shown = slot.shown.max(generation);
+  }
+
+  /// Clears the request only if it is still this generation's.
+  fn clear_if_current(&self, generation: u64) {
+    let mut slot = self.slot();
+    if slot.generation == generation {
+      slot.request = None;
+    }
+  }
+
+  /// Clears the request the closed window showed, keeping a newer one that
+  /// a later request stored for its own window.
+  fn clear_shown(&self) {
+    let mut slot = self.slot();
+    if slot.generation == slot.shown {
+      slot.request = None;
+    }
+  }
+
+  fn clear(&self) {
+    self.slot().request = None;
   }
 
   fn get(&self) -> Option<FixRequest> {
-    self
-      .0
-      .lock()
-      .unwrap_or_else(|error| error.into_inner())
-      .clone()
+    self.slot().request.clone()
   }
 }
 
@@ -108,11 +149,11 @@ pub fn request(app: &AppHandle, request: Request) {
       } else {
         Vec::new()
       };
-      app.state::<FixPanel>().set(Some(FixRequest {
+      let generation = app.state::<FixPanel>().store(FixRequest {
         selection,
         last_words,
-      }));
-      show(&app);
+      });
+      show(&app, generation);
     });
   if let Err(error) = spawned {
     tracing::warn!(%error, "dictation fix could not start");
@@ -159,10 +200,11 @@ const fn platform_selected_text(_process_id: i64) -> Option<String> {
   None
 }
 
-fn show(app: &AppHandle) {
+fn show(app: &AppHandle, generation: u64) {
   #[cfg(target_os = "macos")]
   crate::logging::best_effort(app.show(), "app could not be shown");
   if let Some(window) = app.get_webview_window(FIX_WINDOW_LABEL) {
+    app.state::<FixPanel>().mark_shown(generation);
     crate::logging::best_effort(
       app.emit_to(FIX_WINDOW_LABEL, CHANGED_EVENT, ()),
       "emit dictation fix change",
@@ -186,21 +228,25 @@ fn show(app: &AppHandle) {
   let builder = crate::window_placement::centered_on_target_screen(app, builder, size);
   let Ok(window) = builder.build() else {
     tracing::warn!("dictation fix panel could not be created");
+    // No window will ever close it: the selection read for it goes now,
+    // unless a later request has already replaced it.
+    app.state::<FixPanel>().clear_if_current(generation);
     return;
   };
+  app.state::<FixPanel>().mark_shown(generation);
   if window.set_focus().is_err() {
     tracing::warn!("dictation fix panel could not be focused");
   }
   let handle = app.clone();
   window.on_window_event(move |event| {
     if matches!(event, WindowEvent::Destroyed) {
-      handle.state::<FixPanel>().set(None);
+      handle.state::<FixPanel>().clear_shown();
     }
   });
 }
 
 fn close(app: &AppHandle) {
-  app.state::<FixPanel>().set(None);
+  app.state::<FixPanel>().clear();
   if let Some(window) = app.get_webview_window(FIX_WINDOW_LABEL)
     && window.close().is_err()
   {
@@ -246,6 +292,49 @@ pub fn dictation_fix_close(app: AppHandle) {
 mod tests {
   use super::*;
   use crate::clipboard_shortcut::{self, ShortcutKeys};
+
+  fn fix_request(selection: &str) -> FixRequest {
+    FixRequest {
+      selection: Some(selection.to_string()),
+      last_words: Vec::new(),
+    }
+  }
+
+  #[test]
+  fn a_failed_build_keeps_a_later_request() {
+    let panel = FixPanel::default();
+    let first = panel.store(fix_request("first"));
+    let _second = panel.store(fix_request("second"));
+    panel.clear_if_current(first);
+    assert_eq!(panel.get(), Some(fix_request("second")));
+  }
+
+  #[test]
+  fn a_failed_build_clears_its_own_request() {
+    let panel = FixPanel::default();
+    let only = panel.store(fix_request("only"));
+    panel.clear_if_current(only);
+    assert_eq!(panel.get(), None);
+  }
+
+  #[test]
+  fn closing_the_window_keeps_a_request_it_never_showed() {
+    let panel = FixPanel::default();
+    let shown = panel.store(fix_request("shown"));
+    panel.mark_shown(shown);
+    let _pending = panel.store(fix_request("pending"));
+    panel.clear_shown();
+    assert_eq!(panel.get(), Some(fix_request("pending")));
+  }
+
+  #[test]
+  fn closing_the_window_clears_the_request_it_showed() {
+    let panel = FixPanel::default();
+    let shown = panel.store(fix_request("shown"));
+    panel.mark_shown(shown);
+    panel.clear_shown();
+    assert_eq!(panel.get(), None);
+  }
 
   #[test]
   fn the_shortcut_passes_the_shortcut_rules_and_clashes_with_no_other_stella_shortcut()

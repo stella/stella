@@ -13,20 +13,37 @@ import { panic, Result } from "better-result";
  * Windows only collect pattern occurrences; once the archive is read, each
  * rule's own condition runs over the occurrences collected for it.
  *
- * An archive is refused only when it cannot be inspected: encrypted entries,
- * an unsupported compression method, a corrupt index or stream, an
- * exhausted time or evidence budget, or an inspection defect. The archive-index guard runs first and
- * stays the size limit.
+ * An entry whose content cannot be read (encrypted, or compressed with a
+ * method the inspector does not inflate) is not refused: its name is still
+ * scanned, every readable entry around it is inspected as usual, and the
+ * archive carries a warning per reason (`UNSCANNED_CONTENT_WARNING`), so a
+ * password-protected archive is stored with that warning like any other
+ * accepted file. A rule that matches readable content still refuses it.
+ *
+ * An archive is refused when it cannot be inspected at all: a corrupt index
+ * or stream, an exhausted time or evidence budget, or an inspection defect.
+ * The archive-index guard runs first and stays the size limit.
  */
 import { Readable } from "node:stream";
 import { createInflateRaw } from "node:zlib";
+
+import {
+  UNSCANNED_CONTENT_REASONS,
+  UNSCANNED_CONTENT_WARNING,
+  type UnscannedContentReason,
+} from "@stll/api-contract/file-scan-warnings";
 
 import type { Match, Scanner } from "@/api/lib/file-scan/scanner";
 import type {
   PatternOccurrence,
   WindowedRuleSet,
 } from "@/api/lib/file-scan/yara";
-import { hasZipMagic, readZipIndex } from "@/api/lib/file-scan/zip";
+import {
+  hasZipMagic,
+  readZipIndex,
+  unreadableZipEntry,
+  ZIP_METHOD_STORED,
+} from "@/api/lib/file-scan/zip";
 import type { ZipEntry } from "@/api/lib/file-scan/zip";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -56,23 +73,6 @@ const ARCHIVE_REFUSAL = {
     rule: "archive-nesting-limit",
     severity: "critical",
     meta: { description: "Archive nesting exceeds the inspection limit" },
-  },
-  encrypted: {
-    rule: "archive-encrypted",
-    severity: "critical",
-    meta: {
-      description:
-        "Archive entries are encrypted, so the file cannot be inspected",
-    },
-  },
-  unsupportedCompression: {
-    rule: "archive-compression-unsupported",
-    severity: "critical",
-    meta: {
-      description:
-        "Archive entries use an unsupported compression method, " +
-        "so the file cannot be inspected",
-    },
   },
   corrupt: {
     rule: "archive-corrupt",
@@ -107,11 +107,20 @@ export const ARCHIVE_REFUSAL_RULES: readonly string[] = Object.values(
   ARCHIVE_REFUSAL,
 ).map(({ rule }) => rule);
 
-const STORED = 0;
-const DEFLATE = 8;
-const AES = 99;
-// Bit 0: encrypted. Bit 6: strong encryption.
-const ENCRYPTION_FLAGS = [0x00_01, 0x00_40] as const;
+/** The warning an archive carries for entries it could not read. */
+export const ARCHIVE_UNSCANNED = {
+  encrypted: {
+    rule: "archive-entries-encrypted",
+    severity: "suspicious",
+    meta: { description: UNSCANNED_CONTENT_WARNING.encrypted },
+  },
+  unsupportedCompression: {
+    rule: "archive-entries-compression-unsupported",
+    severity: "suspicious",
+    meta: { description: UNSCANNED_CONTENT_WARNING.unsupportedCompression },
+  },
+} as const satisfies Record<UnscannedContentReason, Match>;
+
 // Small input slices bound the output a single inflate step can buffer.
 const INFLATE_INPUT_BYTES = 4 * 1024;
 
@@ -311,7 +320,7 @@ function* sliced(data: Uint8Array): Generator<Buffer> {
 const entryContent = (
   entry: ZipEntry,
 ): AsyncIterable<Uint8Array> | Iterable<Uint8Array> =>
-  entry.method === STORED
+  entry.method === ZIP_METHOD_STORED
     ? sliced(entry.data)
     : Readable.from(sliced(entry.data)).pipe(createInflateRaw());
 
@@ -320,19 +329,6 @@ const isInflateError = (cause: unknown): boolean =>
   isRecord(cause) &&
   typeof cause["code"] === "string" &&
   cause["code"].startsWith("Z_");
-
-const unreadableEntry = (entry: ZipEntry): Refusal | null => {
-  const flagged = ENCRYPTION_FLAGS.some(
-    (flag) => Math.floor(entry.flags / flag) % 2 === 1,
-  );
-  if (entry.method === AES || flagged) {
-    return "encrypted";
-  }
-  if (entry.method !== STORED && entry.method !== DEFLATE) {
-    return "unsupportedCompression";
-  }
-  return null;
-};
 
 const MAX_NESTED_DEPTH = 2;
 const CFB_MAGIC = Buffer.from([0xd0, 0xcf, 0x11, 0xe0]);
@@ -364,8 +360,11 @@ const inspectArchive = async ({
   budget,
   now,
   guard,
-}: InspectArchiveOptions): Promise<Result<Match[], Refusal>> => {
+}: InspectArchiveOptions): Promise<
+  Result<{ matches: Match[]; unscanned: UnscannedContentReason[] }, Refusal>
+> => {
   const deadline = now() + budget.timeBudgetMs;
+  const unscanned = new Set<UnscannedContentReason>();
   const outOfTime = () => now() > deadline;
   const evidence = createEvidence(rules, budget.maxEvidenceBytes);
   let stream = 0;
@@ -411,10 +410,6 @@ const inspectArchive = async ({
       return refused("corrupt");
     }
     for (const entry of entries) {
-      const unreadable = unreadableEntry(entry);
-      if (unreadable !== null) {
-        return refused(unreadable);
-      }
       const name = await scan({
         chunks: [entry.name],
         declaredBytes: entry.name.length,
@@ -422,6 +417,13 @@ const inspectArchive = async ({
       });
       if (name.type === "refused") {
         return name;
+      }
+      // Content that cannot be read is left unscanned and reported; the
+      // entries around it are still inspected.
+      const unreadable = unreadableZipEntry(entry);
+      if (unreadable !== null) {
+        unscanned.add(unreadable);
+        continue;
       }
       const chunks = entryContent(entry);
       const iterator = (async function* () {
@@ -503,7 +505,12 @@ const inspectArchive = async ({
   const inspection = await inspect(bytes, 0);
   return inspection.type === "refused"
     ? Result.err(inspection.refusal)
-    : Result.ok(evidence.evaluate());
+    : Result.ok({
+        matches: evidence.evaluate(),
+        unscanned: UNSCANNED_CONTENT_REASONS.filter((reason) =>
+          unscanned.has(reason),
+        ),
+      });
 };
 
 type ArchiveContentScannerOptions = {
@@ -543,9 +550,14 @@ export const createArchiveContentScanner = ({
         catch: (cause) => cause,
       });
       if (Result.isOk(inspected)) {
-        return Result.isError(inspected.value)
-          ? [ARCHIVE_REFUSAL[inspected.value.error]]
-          : inspected.value.value;
+        if (Result.isError(inspected.value)) {
+          return [ARCHIVE_REFUSAL[inspected.value.error]];
+        }
+        const { matches, unscanned } = inspected.value.value;
+        return [
+          ...matches,
+          ...unscanned.map((reason) => ARCHIVE_UNSCANNED[reason]),
+        ];
       }
       // A damaged deflate stream is a property of the file. Anything else is
       // a defect: the file is still refused rather than left to a retry that

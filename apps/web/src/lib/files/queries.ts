@@ -1,5 +1,6 @@
 import { queryOptions } from "@tanstack/react-query";
 import type { QueryClient } from "@tanstack/react-query";
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import type {
@@ -12,10 +13,8 @@ import {
   RESOURCE_TYPE,
 } from "@stll/api-contract";
 import type { CertifiedEmailEnvelope } from "@stll/api-contract/certified-email";
-import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
-import { apiUrl } from "@/lib/api-url";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import {
   APIError,
@@ -71,13 +70,6 @@ type TextFileData = {
   text: string;
 };
 
-const EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA = v.object({
-  entityId: v.string(),
-  fieldId: v.string(),
-  fileName: v.string(),
-  workspaceId: v.string(),
-});
-
 // Saving an attachment copies and re-derives the file, and a property update
 // rewrites it; both keep the longer bound they had before the typed client.
 const FILE_WRITE_TIMEOUT_MS = 60_000;
@@ -101,11 +93,14 @@ export const filesKeys = {
   byFieldId: fileContentQueryKey,
   contentByFieldId: fileContentByFieldQueryRoot,
   metadataByFieldId: fileMetadataQueryKey,
-  emailHtmlByFieldId: (key: FileByFieldIdKey) => [
+  emailHtmlByFieldId: (
+    key: FileByFieldIdKey & { part?: string | undefined },
+  ) => [
     ...filesKeys.all(),
     "email-html",
     key.workspaceId,
     key.fieldId,
+    key.part ?? null,
   ],
   officeCitation: ({
     blockId,
@@ -149,6 +144,10 @@ export const fileOptions = (props: FileOptionsProps) =>
           });
 
         const data = unwrapApiResponse(response);
+        // Without a `part` the endpoint answers with the file itself.
+        if (data.kind !== "file") {
+          return panic("The file link answered with a part");
+        }
 
         const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
           signal,
@@ -229,14 +228,23 @@ export const dataBoxPreviewOptions = (props: FileOptionsProps) =>
     },
   );
 
-export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
+/**
+ * An email file's preview, or, with `part`, the preview of an email that is
+ * a part of the file (a mailbox's message, an email in an archive).
+ */
+export const emailHtmlPreviewOptions = (
+  props: FileOptionsProps & { part?: string | undefined },
+) =>
   queryOptions({
     queryKey: filesKeys.emailHtmlByFieldId(props),
     queryFn: async ({ signal }) => {
       const fileRoutes = api.files({ workspaceId: props.workspaceId });
       const response = await fileRoutes["email-html"]({
         fieldId: props.fieldId,
-      }).get({ fetch: { signal } });
+      }).get({
+        query: props.part === undefined ? {} : { part: props.part },
+        fetch: { signal },
+      });
 
       // The answer is the preview and its source, field for field.
       const data: EmailHtmlPreviewData = unwrapApiResponse(response);
@@ -276,82 +284,12 @@ export const officeCitationOptions = ({
     retry: shouldRetryAPIRequest,
   });
 
-const emailAttachmentPreviewUrl = ({
-  attachmentId,
-  fieldId,
-  workspaceId,
-}: FileOptionsProps & { attachmentId: string }): string =>
-  apiUrl(
-    `/files/${encodeURIComponent(workspaceId)}/email-attachment/${encodeURIComponent(fieldId)}/${encodeURIComponent(attachmentId)}?disposition=inline`,
-  );
-
-export const emailAttachmentPreviewOptions = ({
-  attachmentId,
-  fieldId,
-  workspaceId,
-}: FileOptionsProps & { attachmentId: string }) =>
-  // Cached like a file's own bytes, so going back to an attachment shows it
-  // at once instead of downloading it again.
-  queryOptions({
-    enabled: attachmentId.length > 0,
-    retry: false,
-    queryKey: [
-      ...filesKeys.emailHtmlByFieldId({ fieldId, workspaceId }),
-      "attachment-preview",
-      attachmentId,
-    ],
-    queryFn: async ({ signal }) => {
-      const response = await fetchWithTimeout(
-        emailAttachmentPreviewUrl({ attachmentId, fieldId, workspaceId }),
-        { credentials: "include", signal, timeoutMs: 60_000 },
-      );
-      if (!response.ok) {
-        throw new APIError({
-          status: response.status,
-          message: "Failed to preview email attachment",
-        });
-      }
-      return await response.arrayBuffer();
-    },
-  });
-
-type SaveEmailAttachmentInput = {
-  attachmentId: string;
-  destinationWorkspaceId: string;
-  fieldId: string;
-  parentId: string | null;
-  sourceWorkspaceId: string;
-};
-
 type UpdateDocumentPropertyInput = FileOptionsProps & {
   propertyKey: AuthoredDocumentPropertyKey;
   value: string;
 };
 
 export const createFileWrites = (apiClient: typeof api) => ({
-  saveEmailAttachment: async ({
-    attachmentId,
-    destinationWorkspaceId,
-    fieldId,
-    parentId,
-    sourceWorkspaceId,
-  }: SaveEmailAttachmentInput) => {
-    const fileRoutes = apiClient.files({ workspaceId: sourceWorkspaceId });
-    return await invokeAppOnlyWrite("files.email-attachment.save", async () =>
-      parseSuccessBody(
-        EMAIL_ATTACHMENT_SAVE_RESPONSE_SCHEMA,
-        unwrapApiResponse(
-          await fileRoutes["email-attachment"]({ fieldId })({
-            attachmentId,
-          }).save.post(
-            { destinationWorkspaceId, parentId },
-            { fetch: { timeoutMs: FILE_WRITE_TIMEOUT_MS } },
-          ),
-        ),
-        "Invalid email attachment save response",
-      ),
-    );
-  },
   updateDocumentProperty: async ({
     workspaceId,
     fieldId,
@@ -370,8 +308,7 @@ export const createFileWrites = (apiClient: typeof api) => ({
   },
 });
 
-export const { saveEmailAttachment, updateDocumentProperty } =
-  createFileWrites(api);
+export const { updateDocumentProperty } = createFileWrites(api);
 
 /**
  * The file's own embedded properties (DOCX Author and Company, PDF Producer,
@@ -428,18 +365,28 @@ export const textFileOptions = (props: FileOptionsProps) =>
           });
 
         const data = unwrapApiResponse(response);
+        // Without a `part` the endpoint answers with the file itself.
+        if (data.kind !== "file") {
+          return panic("The file link answered with a part");
+        }
 
         const buffer = await fetchStorageArrayBuffer(data.presignedUrl, {
           signal,
           purpose: "download",
         });
 
+        // Loaded with the file, not the app: the decoder carries the CLDR
+        // letters it weighs an undeclared legacy charset against.
+        const { decodeDeclared } =
+          await import("@stll/mojibake/declared-charset");
         return {
           fileId: data.fileId,
           fileName: data.fileName,
           mimeType: data.mimeType,
           originalMimeType: data.originalMimeType,
-          text: new TextDecoder().decode(buffer),
+          text: decodeDeclared(new Uint8Array(buffer), {
+            contentType: data.originalMimeType,
+          }).text,
         } satisfies TextFileData;
       },
     }),

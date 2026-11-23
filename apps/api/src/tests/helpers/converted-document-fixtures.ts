@@ -168,3 +168,104 @@ export const multiPageTiff = (
   }
   return file;
 };
+
+/**
+ * A web archive (.mht) as browsers save one: a `multipart/related` message
+ * whose first part is the page, quoted-printable, and whose other parts are
+ * the page's images, base64, named by `Content-Location` and `Content-ID`.
+ */
+export const webArchiveFile = ({
+  body,
+  images = [],
+  pageLocation = "https://example.test/notice/index.html",
+}: {
+  body: string;
+  images?: readonly {
+    location?: string;
+    contentId?: string;
+    type: string;
+    bytes: Uint8Array;
+  }[];
+  pageLocation?: string;
+}): Uint8Array => {
+  const boundary = "----=_Synthetic_Archive";
+  const page = `<!DOCTYPE html><html><head><title>Synthetic page</title></head><body>${body}</body></html>`;
+  const quoted = page.replaceAll("=", "=3D");
+  const parts = [
+    [
+      "Content-Type: text/html; charset=utf-8",
+      "Content-Transfer-Encoding: quoted-printable",
+      `Content-Location: ${pageLocation}`,
+      "",
+      quoted,
+    ].join("\r\n"),
+    ...images.map(({ location, contentId, type, bytes }) =>
+      [
+        `Content-Type: ${type}`,
+        "Content-Transfer-Encoding: base64",
+        ...(location === undefined ? [] : [`Content-Location: ${location}`]),
+        ...(contentId === undefined ? [] : [`Content-ID: <${contentId}>`]),
+        "",
+        Buffer.from(bytes).toString("base64"),
+      ].join("\r\n"),
+    ),
+  ];
+  return encode(
+    [
+      "MIME-Version: 1.0",
+      `Content-Type: multipart/related; type="text/html"; boundary="${boundary}"`,
+      "",
+      ...parts.map((part) => `--${boundary}\r\n${part}`),
+      `--${boundary}--`,
+      "",
+    ].join("\r\n"),
+  );
+};
+
+/**
+ * An EPUB 3 e-book: the stored `mimetype`, the container naming the package
+ * document, the package's manifest and spine, and one XHTML file per chapter
+ * plus any images, all under `OEBPS/`.
+ */
+export const ebookFile = async ({
+  chapters,
+  images = {},
+  spineOrder,
+}: {
+  chapters: readonly { file: string; body: string }[];
+  images?: Readonly<Record<string, Uint8Array>>;
+  spineOrder?: readonly string[];
+}): Promise<Uint8Array> => {
+  const items = [
+    ...chapters.map(
+      ({ file }, index) =>
+        `<item id="c${index}" href="${file}" media-type="application/xhtml+xml"/>`,
+    ),
+    ...Object.keys(images).map(
+      (file, index) =>
+        `<item id="i${index}" href="${file}" media-type="image/png"/>`,
+    ),
+  ].join("");
+  const order = spineOrder ?? chapters.map(({ file }) => file);
+  const itemrefs = order
+    .map(
+      (file) =>
+        `<itemref idref="c${chapters.findIndex((chapter) => chapter.file === file)}"/>`,
+    )
+    .join("");
+  return await packageOf({
+    mimetype: "application/epub+zip",
+    "META-INF/container.xml":
+      '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+    "OEBPS/content.opf": `<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="id"><metadata xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:identifier id="id">synthetic</dc:identifier><dc:title>Synthetic book</dc:title></metadata><manifest>${items}</manifest><spine>${itemrefs}</spine></package>`,
+    ...Object.fromEntries(
+      chapters.map(({ file, body }) => [
+        `OEBPS/${file}`,
+        `<?xml version="1.0" encoding="utf-8"?><!DOCTYPE html><html xmlns="http://www.w3.org/1999/xhtml"><head><title>${file}</title><link rel="stylesheet" href="style.css"/></head><body>${body}</body></html>`,
+      ]),
+    ),
+    ...Object.fromEntries(
+      Object.entries(images).map(([file, bytes]) => [`OEBPS/${file}`, bytes]),
+    ),
+  });
+};

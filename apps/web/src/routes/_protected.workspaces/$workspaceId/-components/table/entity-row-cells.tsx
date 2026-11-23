@@ -65,6 +65,7 @@ import { toSafeId } from "@/lib/safe-id";
 import type { PropertyId } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/lib/workspaces/drag-constants";
 import type { TableContentMode } from "@/lib/workspaces/table-store";
+import { ReviewableTableCell } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement";
 import { VersionOrNewFileDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog";
 import { useVersionOrNewFileDrop } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop";
 
@@ -662,9 +663,13 @@ const DataRowCells = ({
     const isAddPropertyCell = cell.column.id === addPropertyColId;
     const canExpandCell = !isSelectCell && !isAddPropertyCell;
     const isExpandedCell = expandedCellId === cell.column.id;
+    const Cell =
+      cell.column.columnDef.meta?.contextMenu === "cell"
+        ? ReviewableTableCell
+        : WorkspaceGridCell;
 
     return (
-      <WorkspaceGridCell
+      <Cell
         aria-colindex={cellIndex + 1}
         className={cn(
           "relative",
@@ -706,7 +711,7 @@ const DataRowCells = ({
             {flexRender(cell.column.columnDef.cell, cell.getContext())}
           </EntityCellContent>
         )}
-      </WorkspaceGridCell>
+      </Cell>
     );
   });
 };

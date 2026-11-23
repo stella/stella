@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 
+import type { CertifiedEmailEnvelope } from "@stll/api-contract/certified-email";
 import type { DataBoxStatedEnvelope } from "@stll/api-contract/data-box";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
@@ -368,6 +369,196 @@ describe("data-box correspondence reads", () => {
     for (const { row, constraint } of INVALID_DATA_BOX_ROWS) {
       expect(
         causeChainText(await rejectionOf(insertDataBoxRow(row))),
+      ).toContain(constraint);
+    }
+  });
+});
+
+const certifiedEmail = {
+  system: "pec",
+  kind: "delivery",
+  error: "none",
+  errorDetail: null,
+  sender: "mittente@pec.example.com",
+  recipients: [{ address: "destinatario@pec.example.com", certified: true }],
+  replyTo: null,
+  subject: "Notifica",
+  provider: "Example PEC provider",
+  certifiedAt: "2026-11-21T09:15:30.000Z",
+  messageId: "opec-fixture@pec.example.com",
+  originalMessageId: null,
+  receiptType: "full",
+  deliveredTo: "destinatario@pec.example.com",
+  receivedFor: [],
+  includesOriginal: true,
+  signature: {
+    status: "unverified",
+    signerName: "Example signer",
+    issuerName: null,
+    serialNumber: null,
+    signedAt: null,
+  },
+} as const satisfies CertifiedEmailEnvelope;
+
+type CertifiedEmailRowFields = Pick<
+  typeof correspondence.$inferInsert,
+  "channel" | "certifiedEmail" | "direction"
+>;
+
+const INVALID_CERTIFIED_EMAIL_ROWS: readonly {
+  row: CertifiedEmailRowFields;
+  constraint: string;
+}[] = [
+  {
+    row: { channel: "pec", certifiedEmail: null, direction: "in" },
+    constraint: "correspondence_certified_email_check",
+  },
+  {
+    row: { channel: "email", certifiedEmail, direction: "in" },
+    constraint: "correspondence_certified_email_check",
+  },
+  {
+    row: {
+      channel: "pec",
+      // Another system's evidence is not PEC certification data.
+      certifiedEmail: asTestRaw<CertifiedEmailEnvelope>({
+        ...certifiedEmail,
+        system: "rem",
+      }),
+      direction: "in",
+    },
+    constraint: "correspondence_certified_email_check",
+  },
+  {
+    row: { channel: "pec", certifiedEmail, direction: null },
+    constraint: "correspondence_direction_check",
+  },
+];
+
+const insertCertifiedEmailRow = async (row: CertifiedEmailRowFields) =>
+  await runInRollback(async (tx) => {
+    const sourceEntityId = createSafeId<"entity">();
+    await tx.insert(entities).values({
+      id: sourceEntityId,
+      workspaceId: ids.wsA2,
+      name: "consegna.eml",
+      createdBy: ids.userA1,
+    });
+    await tx.insert(correspondence).values({
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA2,
+      source: "upload",
+      sourceEntityId,
+      originalSignature: { status: "unverified" },
+      contentHash: "a".repeat(64),
+      dedupKey: "d".repeat(64),
+      from: { address: "mittente@pec.example.com", name: null },
+      to: [],
+      cc: [],
+      subject: "",
+      receivedAt: new Date(certifiedEmail.certifiedAt),
+      references: [],
+      bodyText: "",
+      ...row,
+    });
+  });
+
+describe("certified email correspondence reads", () => {
+  test("return the certification data on the pec channel and filter by it", async () => {
+    await runInRollback(async (tx) => {
+      const sourceEntityId = createSafeId<"entity">();
+      const correspondenceId = createSafeId<"correspondence">();
+      await tx.insert(entities).values({
+        id: sourceEntityId,
+        workspaceId: ids.wsA2,
+        name: "consegna.eml",
+        createdBy: ids.userA1,
+      });
+      await tx.insert(correspondence).values({
+        id: correspondenceId,
+        organizationId: ids.orgA,
+        workspaceId: ids.wsA2,
+        channel: "pec",
+        certifiedEmail,
+        direction: "in",
+        source: "upload",
+        sourceEntityId,
+        originalSignature: { status: "unverified" },
+        contentHash: "a".repeat(64),
+        dedupKey: "e".repeat(64),
+        from: { address: "mittente@pec.example.com", name: null },
+        to: [{ address: "destinatario@pec.example.com", name: null }],
+        cc: [],
+        subject: "Notifica",
+        receivedAt: new Date(certifiedEmail.certifiedAt),
+        references: [],
+        bodyText: "Si trasmette l'atto.",
+      });
+      const context = {
+        workspaceId: ids.wsA2,
+        memberRole: sessionMemberRole("member"),
+        user: { id: ids.userA1 },
+        request: new Request("https://api.example.test/correspondence"),
+        route:
+          "/v1/workspaces/:workspaceId/correspondence/:correspondenceId" satisfies ApiRoutePath,
+        session: { activeOrganizationId: ids.orgA },
+        safeDb: asTestRaw<SafeDb>(
+          createSafeDb(markRlsDatabase(tx), [ids.wsA2], ids.orgA, ids.userA1),
+        ),
+        recordAuditEvent: createAuditRecorder({
+          organizationId: ids.orgA,
+          workspaceId: ids.wsA2,
+          userId: ids.userA1,
+          request: new Request("https://api.example.test/correspondence"),
+          server: null,
+        }),
+      };
+      expect(
+        await getCorrespondence.handler(
+          asTestRaw<Parameters<typeof getCorrespondence.handler>[0]>({
+            ...context,
+            params: { correspondenceId },
+          }),
+        ),
+      ).toMatchObject({
+        record: {
+          id: correspondenceId,
+          channel: "pec",
+          dataBox: null,
+          certifiedEmail,
+          direction: "in",
+          source: "upload",
+          sourceEntityId,
+        },
+        dataBoxContacts: null,
+      });
+      const listed = async (channel: "pec" | "email" | "data_box") =>
+        await listCorrespondence.handler(
+          asTestRaw<Parameters<typeof listCorrespondence.handler>[0]>({
+            ...context,
+            query: { channel },
+            route:
+              "/v1/workspaces/:workspaceId/correspondence" satisfies ApiRoutePath,
+          }),
+        );
+      expect(await listed("pec")).toMatchObject({
+        items: [
+          {
+            id: correspondenceId,
+            channel: "pec",
+            dataBox: null,
+            certifiedEmail,
+          },
+        ],
+      });
+      expect(await listed("email")).toMatchObject({ items: [] });
+    });
+  });
+
+  test("refuse certification data off the pec channel, a pec row without it, and a pec row without a direction", async () => {
+    for (const { row, constraint } of INVALID_CERTIFIED_EMAIL_ROWS) {
+      expect(
+        causeChainText(await rejectionOf(insertCertifiedEmailRow(row))),
       ).toContain(constraint);
     }
   });

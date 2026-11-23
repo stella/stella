@@ -13,6 +13,7 @@ const FIX_REFUSALS = [
   "tooLong",
   "tooManyWords",
   "same",
+  "punctuation",
 ] as const;
 
 export type FixRefusal = (typeof FIX_REFUSALS)[number];

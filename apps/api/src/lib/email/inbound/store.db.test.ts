@@ -83,6 +83,7 @@ const candidate = (sender: string): Candidate => {
       direction: "out",
       channel: "email",
       dataBox: null,
+      certifiedEmail: null,
       messageId: "<message@example.test>",
       contentHash: "a".repeat(64),
       from: { address: sender, name: null },

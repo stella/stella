@@ -182,7 +182,8 @@ export const LIST_MATTERS_DETAIL_PROJECTION = v.strictObject({
         // recent entity belongs to the one matter this response describes,
         // so its workspace is the payload's `matter.id`.
         entityId: chatEntityRef({ from: "outputPath", path: "matter.id" }),
-        name: v.string(),
+        // The entity's own name (often a file name): content, not a handle.
+        name: contentText(),
         kind: v.string(),
         status: v.nullable(v.string()),
         priority: v.nullable(v.string()),
@@ -298,7 +299,9 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
       entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
       workspaceId: chatRef("matter"),
       workspaceName: v.string(),
-      name: v.string(),
+      // The index title: the entity name, else its file name or the start
+      // of its text, so it is document content like the headline.
+      name: contentText(),
       kind: v.picklist(ENTITY_KINDS),
       headline: v.nullable(contentText()),
     }),
@@ -326,7 +329,7 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
   // declaration, kept verbatim) only backs a non-echo payload.
   entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
   kind: v.picklist(ENTITY_KINDS),
-  name: v.string(),
+  name: contentText(),
   text: contentText(),
   truncated: v.boolean(),
   nextCursor: v.nullable(v.string()),
@@ -384,7 +387,7 @@ export const LIST_DOCUMENTS_PROJECTION = v.strictObject({
   documents: v.array(
     v.strictObject({
       id: chatEntityRef({ from: "inputParam", param: "matter_id" }),
-      name: v.string(),
+      name: contentText(),
       kind: v.string(),
       parentId: v.nullable(
         chatEntityRef({ from: "inputParam", param: "matter_id" }),
@@ -419,7 +422,7 @@ const documentFieldContentProjection = v.variant("type", [
       version: v.literal(1),
       type: v.literal("file"),
       id: strippedField(),
-      fileName: v.string(),
+      fileName: contentText(),
       mimeType: v.string(),
       sizeBytes: v.number(),
       encrypted: v.boolean(),
@@ -643,7 +646,7 @@ const documentSearchIndexStateProjection = v.variant("status", [
 export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
   kind: v.string(),
-  name: v.string(),
+  name: contentText(),
   fields: v.array(documentFieldProjection),
   contentState: documentContentStateProjection,
   searchIndexState: documentSearchIndexStateProjection,
@@ -655,7 +658,7 @@ export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
 /** read_document, `version_id` branch: one version's metadata + fields. */
 export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
-  name: v.string(),
+  name: contentText(),
   version: v.strictObject({
     id: passthroughId(),
     versionNumber: v.number(),
@@ -673,7 +676,7 @@ export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
  */
 export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
-  name: v.string(),
+  name: contentText(),
   diff: v.strictObject({
     // Entity-version handles, no chat ref kind.
     baseVersionId: passthroughId(),
@@ -2867,6 +2870,7 @@ export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   matterNumberingEnabled: v.optional(v.boolean()),
+  documentNamePattern: v.optional(v.nullable(v.string())),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),

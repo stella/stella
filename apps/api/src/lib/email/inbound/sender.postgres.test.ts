@@ -91,6 +91,7 @@ if (!databaseUrl || !runPostgresTests) {
             direction: "out",
             channel: "email",
             dataBox: null,
+            certifiedEmail: null,
             messageId: `<${Bun.randomUUIDv7()}@example.test>`,
             contentHash: "a".repeat(64),
             from: { address: sender, name: null },

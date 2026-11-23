@@ -3,19 +3,14 @@ import { queryOptions } from "@tanstack/react-query";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
-import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
+import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
+import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
-import { fetchWithTimeout } from "@stll/fetch";
-import {
-  readBodyJsonWithIdleDeadline,
-  readBodyWithIdleDeadline,
-} from "@stll/fetch/body-reader";
+import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
 
 import { api } from "@/lib/api";
-import { apiUrl } from "@/lib/api-url";
-import { PDF_MIME } from "@/lib/consts";
-import { type ApiResponse, unwrapApiResponse } from "@/lib/errors/api";
+import { unwrapApiResponse } from "@/lib/errors/api";
 import {
   type FileOptionsProps,
   filesKeys,
@@ -25,49 +20,6 @@ import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 // Only the legal file viewers, each a lazy chunk, read these, so none of it
 // loads at startup.
-
-/** An audited PDF the API derives from a signed file, read within the upload limit. */
-const fetchDerivedPdf = async (path: `/${string}`, signal: AbortSignal) => {
-  const response = await fetchWithTimeout(apiUrl(path), {
-    credentials: "include",
-    signal,
-    timeout: { type: "headers", ms: 60_000 },
-  });
-  let result: ApiResponse<ArrayBuffer>;
-  if (!response.ok) {
-    const value = await readBodyJsonWithIdleDeadline(response, {
-      idleMs: 30_000,
-      maxBytes: 64 * 1024,
-      signal,
-    });
-    result = { data: null, error: { status: response.status, value } };
-  } else if (response.headers.get("content-type") !== PDF_MIME) {
-    await Promise.allSettled([response.body?.cancel()]);
-    result = {
-      data: null,
-      error: {
-        status: 502,
-        value: {
-          message: "Invalid PDF response from the signed file preview",
-        },
-      },
-    };
-  } else {
-    const bytes = await readBodyWithIdleDeadline(response, {
-      idleMs: 30_000,
-      maxBytes: UPLOAD_DOCUMENT_MAX_BYTES,
-      signal,
-    });
-    result = {
-      data:
-        bytes.buffer instanceof ArrayBuffer
-          ? bytes.buffer
-          : new Uint8Array(bytes).buffer,
-      error: null,
-    };
-  }
-  return unwrapApiResponse(result);
-};
 
 type LegalFileKey = Pick<FileOptionsProps, "fieldId" | "workspaceId">;
 
@@ -84,7 +36,71 @@ const legalFileKeys = {
     workspaceId,
     fieldId,
   ],
+  zip: ({ fieldId, workspaceId }: LegalFileKey) => [
+    ...filesKeys.all(),
+    "zip",
+    workspaceId,
+    fieldId,
+  ],
+  mbox: ({ fieldId, workspaceId }: LegalFileKey) => [
+    ...filesKeys.all(),
+    "mbox",
+    workspaceId,
+    fieldId,
+  ],
 };
+
+export const zipArchivePreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: legalFileKeys.zip(props),
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .zip({ fieldId: props.fieldId })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          zipArchivePreviewSchema,
+          unwrapApiResponse(response),
+          "ZIP archive preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const mailboxPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: legalFileKeys.mbox(props),
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .mbox({ fieldId: props.fieldId })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          mailboxPreviewSchema,
+          unwrapApiResponse(response),
+          "Mailbox preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
 
 export const signedDossierPreviewOptions = (props: FileOptionsProps) =>
   resourceQueryOptions(
@@ -109,36 +125,6 @@ export const signedDossierPreviewOptions = (props: FileOptionsProps) =>
         RESOURCE_TYPE.USER_FILE,
       ],
       scope: { type: "workspace", workspaceId: props.workspaceId },
-    },
-  );
-
-export const signedDossierPdfOptions = ({
-  document,
-  fieldId,
-  workspaceId,
-}: FileOptionsProps & { document: number }) =>
-  resourceQueryOptions(
-    // Cached like the signed file's own PDF, for the same reason.
-    queryOptions({
-      retry: false,
-      queryKey: [
-        ...legalFileKeys.signedDossier({ fieldId, workspaceId }),
-        "pdf",
-        document,
-      ],
-      queryFn: async ({ signal }) =>
-        await fetchDerivedPdf(
-          `/files/${encodeURIComponent(workspaceId)}/signed-dossier/${encodeURIComponent(fieldId)}/content?document=${document}`,
-          signal,
-        ),
-    }),
-    {
-      resources: [
-        RESOURCE_TYPE.ENTITY,
-        RESOURCE_TYPE.FIELD,
-        RESOURCE_TYPE.USER_FILE,
-      ],
-      scope: { type: "workspace", workspaceId },
     },
   );
 
@@ -231,16 +217,26 @@ export const cadesPreviewOptions = (props: FileOptionsProps) =>
 // Cached like a file's own bytes (`fileOptions`): reopening the tab reuses
 // them, and with them the parsed document, instead of extracting the PDF
 // from the signed container again behind a loading state.
-export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
+export const eInvoicePreviewOptions = (props: FileOptionsProps) =>
   resourceQueryOptions(
     queryOptions({
-      retry: false,
-      queryKey: [...legalFileKeys.cades({ fieldId, workspaceId }), "pdf"],
-      queryFn: async ({ signal }) =>
-        await fetchDerivedPdf(
-          `/files/${encodeURIComponent(workspaceId)}/cades/${encodeURIComponent(fieldId)}/content`,
-          signal,
-        ),
+      queryKey: [
+        ...filesKeys.all(),
+        "e-invoice",
+        props.workspaceId,
+        props.fieldId,
+      ],
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes["e-invoice"]({
+          fieldId: props.fieldId,
+        }).get({ fetch: { signal } });
+        return parseSuccessBody(
+          xmlDocumentPreviewSchema,
+          unwrapApiResponse(response),
+          "Invoice or XML preview must match its response schema",
+        );
+      },
     }),
     {
       resources: [
@@ -248,6 +244,6 @@ export const cadesPdfOptions = ({ fieldId, workspaceId }: FileOptionsProps) =>
         RESOURCE_TYPE.FIELD,
         RESOURCE_TYPE.USER_FILE,
       ],
-      scope: { type: "workspace", workspaceId },
+      scope: { type: "workspace", workspaceId: props.workspaceId },
     },
   );
