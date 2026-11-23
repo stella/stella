@@ -16,7 +16,7 @@ const escapeCommandData = (value: string): string =>
 const maskSecret = (secret: string): void => {
   for (const line of secret.split(/\r?\n/u)) {
     if (line.length > 0) {
-      process.stdout.write(`::add-mask::${line}\n`);
+      process.stdout.write(`::add-mask::${escapeCommandData(line)}\n`);
     }
   }
 };
@@ -69,7 +69,7 @@ export type DockerLoginOptions = {
   logout?: string;
   attempts?: number;
   delaysSeconds?: readonly number[];
-  statePath?: string;
+  statePath?: string | undefined;
   dockerBin?: string;
   sleep?: (seconds: number) => Promise<void>;
 };
@@ -168,10 +168,10 @@ export const runDockerLogin = async (
 };
 
 export type DockerLogoutOptions = {
-  loggedIn?: string;
-  registry?: string;
-  logout?: string;
-  dockerBin?: string;
+  loggedIn?: string | undefined;
+  registry?: string | undefined;
+  logout?: string | undefined;
+  dockerBin?: string | undefined;
 };
 
 export const runDockerLogout = (options: DockerLogoutOptions): number => {
