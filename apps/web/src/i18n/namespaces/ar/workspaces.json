@@ -31,7 +31,6 @@
       "sent": "مُرسلة",
       "statedInFile": "رسالة صندوق البيانات (كما وردت في الملف)",
       "toHands": "لعناية {name}",
-      "unlinkedFiles": "لفتح المرفقات التي تظهر من دون رابط، نزّل ملف ZFO الأصلي.",
       "unreadable": "تعذّرت قراءة هذا الملف كرسالة من صندوق البيانات أو كإيصال تسليم.",
       "uploaded": "رسالة صندوق بيانات مرفوعة"
     },
@@ -90,7 +89,6 @@
       "debitNote": "إشعار مدين",
       "other": "مستند آخر"
     },
-    "downloadAttachment": "تنزيل {fileName}",
     "exemptionReason": "سبب الإعفاء",
     "formatVersion": "{format}، الإصدار {version}",
     "grossTotal": "الإجمالي شاملًا ضريبة القيمة المضافة",
@@ -369,6 +367,7 @@
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
     "noSigners": "لم يُعثر على بيانات أي موقّع.",
     "pdfUnavailable": "معاينة ملف PDF غير متاحة.",
+    "signedDocument": "المستند الموقّع",
     "signers": "الموقّعون",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",
@@ -553,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "هل أنت متأكد من رغبتك في حذف هذا الملف القانوني؟ لا يمكن التراجع عن هذا الإجراء.",
     "deletedItem": "تم الحذف: {name}",
     "deletingWorkspace": "جارٍ حذف الملف القانوني",
+    "documentNaming": {
+      "description": "تحصل المستندات الجديدة على نمط اسم المؤسسة: {pattern}",
+      "label": "إعادة تسمية الملفات المرفوعة حديثًا"
+    },
     "documentSwitcher": {
       "download": "تنزيل هذا الملف",
       "renditionsFailed": "افتح المستند مجددًا ثم أعد محاولة التنزيل.",

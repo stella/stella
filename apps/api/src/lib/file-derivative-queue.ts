@@ -56,6 +56,7 @@ import {
   ConversionInputError,
   type ConversionInputErrorReason,
   convertToPdf,
+  PdfRenderError,
   shouldGeneratePdfDerivative,
 } from "@/api/lib/files/gotenberg";
 import {
@@ -753,6 +754,23 @@ const readSourceWithinBudget = async <T>(
   });
 
 /**
+ * What a render refusal records, or `null` to retry. A file the renderer
+ * refuses, renders too large or renders past the worker's memory ceiling
+ * gets the same answer on every attempt, so its preview is unavailable at
+ * once; a busy render slot or a worker that did not finish is retried.
+ */
+const FAILURE_REASON_FOR_RENDER = {
+  unreadable: DERIVATIVE_FAILURE_REASON.PROCESSING,
+  "too-large": DERIVATIVE_FAILURE_REASON.TOO_LARGE,
+  memory: DERIVATIVE_FAILURE_REASON.TOO_LARGE,
+  busy: null,
+  failed: null,
+} as const satisfies Record<
+  PdfRenderError["reason"],
+  DerivativeFailureReason | null
+>;
+
+/**
  * Read an admitted source once and convert it to PDF. The converter makes a
  * single attempt (`retry: "caller"`): the job's attempts are the only retry.
  */
@@ -796,6 +814,13 @@ const buildPdfDerivative = async (
         type: "refused",
         reason: FAILURE_REASON_FOR_REFUSAL[conversion.error.refusal],
       };
+    }
+    const renderRefusal =
+      conversion.error instanceof PdfRenderError
+        ? FAILURE_REASON_FOR_RENDER[conversion.error.reason]
+        : null;
+    if (renderRefusal !== null) {
+      return { type: "refused", reason: renderRefusal };
     }
     throw conversion.error;
   }

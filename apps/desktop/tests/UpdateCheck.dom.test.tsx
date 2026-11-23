@@ -7,7 +7,8 @@ const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
 const { clearMocks, mockIPC } = await import("@tauri-apps/api/mocks");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
-const { AppVersionRow } = await import("../src/mainview/UpdateCheck");
+const { AppVersionRow, useUpdateCheck } =
+  await import("../src/mainview/UpdateCheck");
 
 /** One macrotask, for the mocked IPC promises and React's scheduler. */
 const nextMacrotask = async () =>
@@ -41,6 +42,15 @@ type Native = {
   install?: () => unknown;
 };
 
+const CheckedRow = ({ onEmailSupport }: { onEmailSupport: () => void }) => (
+  <AppVersionRow
+    onEmailSupport={onEmailSupport}
+    supportEmail={SUPPORT_EMAIL}
+    updateCheck={useUpdateCheck()}
+    versionLabel="0.9.86"
+  />
+);
+
 const renderRow = ({ check, install = () => null }: Native) => {
   const commands: string[] = [];
   let emailed = 0;
@@ -58,12 +68,10 @@ const renderRow = ({ check, install = () => null }: Native) => {
   const view = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
       <ul>
-        <AppVersionRow
+        <CheckedRow
           onEmailSupport={() => {
             emailed += 1;
           }}
-          supportEmail={SUPPORT_EMAIL}
-          versionLabel="0.9.86"
         />
       </ul>
     </DesktopIntlProvider>,

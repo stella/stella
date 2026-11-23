@@ -8,6 +8,7 @@ import { extractPdfAnonymizationText } from "@/lib/anonymize/pdf-anonymization-g
 import { ClientOperationError } from "@/lib/errors/client";
 import { rasterizeAnonymizedPdf } from "@/lib/pdf/anonymized-export";
 import { buildAnonymizedExportMasks } from "@/lib/pdf/anonymized-export.logic";
+import type { ManualRedactionExport } from "@/lib/pdf/manual-redaction.logic";
 import { downloadFile } from "@/lib/utils";
 
 type DownloadAnonymizedFileOptions = {
@@ -15,6 +16,8 @@ type DownloadAnonymizedFileOptions = {
   fieldId: string;
   entityId: string | null;
   queryClient: QueryClient;
+  /** Areas drawn over the reader's pages, blacked out with the detected terms. */
+  manualRedaction: ManualRedactionExport | null;
 };
 
 export const downloadAnonymizedFile = async ({
@@ -22,6 +25,7 @@ export const downloadAnonymizedFile = async ({
   fieldId,
   entityId,
   queryClient,
+  manualRedaction,
 }: DownloadAnonymizedFileOptions) =>
   await Result.tryPromise({
     try: async () => {
@@ -50,7 +54,11 @@ export const downloadAnonymizedFile = async ({
       if (masks.isErr()) {
         return masks;
       }
-      const exported = await rasterizeAnonymizedPdf(buffer, masks.value);
+      const exported = await rasterizeAnonymizedPdf({
+        buffer,
+        masks: masks.value,
+        manualRedaction,
+      });
       if (exported.isErr()) {
         return exported;
       }

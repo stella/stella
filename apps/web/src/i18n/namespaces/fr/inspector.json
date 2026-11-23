@@ -540,7 +540,6 @@
       "waitForMatches": "Attendez la fin de l’analyse d’anonymisation.",
       "workspaceTermsHeading": "Termes de l’espace de travail ({count})"
     },
-    "attachmentNotPreviewable": "Téléchargez cette pièce jointe pour l’ouvrir.",
     "closeAllTabs": "Fermer {count, plural, one {# onglet} many {les # onglets} other {les # onglets}}",
     "closeOtherTabs": "Fermer {count, plural, one {l’autre onglet} many {les # autres onglets} other {les # autres onglets}}",
     "closeTab": "Fermer <bdi>{name}</bdi>",
@@ -560,6 +559,22 @@
     },
     "facet": {
       "anonymization": "Anonymisation"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Impossible de lire l’archive.",
+      "back": "Retour à la liste",
+      "download": "Télécharger {fileName}",
+      "noFilesInside": "Aucun fichier à l’intérieur.",
+      "noPreview": "Ce type de fichier n’a pas d’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
+      "notConverted": "Ce fichier n’a pas pu être converti pour l’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
+      "open": "Ouvrir {fileName}",
+      "unavailable": {
+        "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
+        "link": "Lien vers un autre fichier, non ouvert",
+        "tooLarge": "Trop volumineux pour être ouvert",
+        "unreadable": "Endommagé, impossible à ouvrir",
+        "unsupported": "Compressé d’une manière impossible à ouvrir"
+      }
     },
     "firstSourceReached": "Il s’agit de la première source.",
     "groups": {
@@ -632,6 +647,10 @@
       "lastUpdatedBy": "Dernière mise à jour par",
       "matterColumnsHeading": "Informations du dossier",
       "noMatterColumns": "Rien n'est encore renseigné pour ce document",
+      "similarDocuments": {
+        "heading": "Documents similaires",
+        "similarity": "{percent} de similarité"
+      },
       "stellaHeading": "Enregistré dans stella",
       "versionCurrent": "v{version} (actuelle)"
     },
@@ -814,7 +833,6 @@
       "why": "Pourquoi",
       "whyItMatters": "Pourquoi c'est important :"
     },
-    "selectAttachmentToSave": "Sélectionnez une pièce jointe à enregistrer.",
     "showPane": "Afficher le volet",
     "swapViews": "Échanger la vue principale et le panneau latéral",
     "title": "Inspecteur"

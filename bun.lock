@@ -191,6 +191,7 @@
         "ssf": "catalog:",
         "tldts": "7.5.3",
         "uqr": "^0.1.3",
+        "utif2": "4.1.0",
         "valibot": "catalog:",
         "y-prosemirror": "catalog:",
         "y-protocols": "catalog:",
@@ -968,7 +969,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.6.6",
+      "version": "0.6.9",
       "dependencies": {
         "@ag-ui/core": "1.0.4",
         "@stll/ai-catalog": "workspace:^",
@@ -1017,7 +1018,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "8.0.0",
+      "version": "8.1.0",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1749,7 +1750,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.80.1",
+      "version": "0.83.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1849,7 +1850,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.22.0",
+      "version": "0.23.2",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",

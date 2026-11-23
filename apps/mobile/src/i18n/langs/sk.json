@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Prílohy",
     "certifiedAt": "Čas certifikácie",
     "deliveredTo": "Doručené na adresu",
     "error": "Ohlásená chyba",
@@ -462,6 +461,7 @@
     },
     "fit": "Šírka",
     "openOriginal": "Otvoriť originál",
+    "openPart": "Otvoriť {fileName}",
     "preview": "Otvoriť náhľad",
     "previewDescription": "Tento súbor sa otvorí v systémovom náhľade.",
     "retry": "Skúsiť znova",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Číslo bankového účtu",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Priložené súbory",
     "bankCode": "Kód banky",
     "batchPosition": "Doklad {position, number} z {count, number}",
     "bic": "Kód BIC",
@@ -520,11 +519,35 @@
     "vatBreakdown": "Rekapitulácia DPH",
     "vatId": "IČ DPH"
   },
+  "email": {
+    "cc": "Kópia",
+    "date": "Dátum",
+    "from": "Odosielateľ",
+    "noSubject": "(Bez predmetu)",
+    "subject": "Predmet",
+    "to": "Príjemcovia"
+  },
   "entity": {
     "currentVersion": "Aktuálna verzia",
     "loadFailed": "Položku sa nepodarilo načítať.",
     "reference": "Spisová značka",
     "type": "Typ"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Archív sa nepodarilo prečítať.",
+    "attachments": "Prílohy",
+    "files": "Súbory",
+    "insideFailed": "Súbory vo vnútri sa nepodarilo načítať. Ťuknutím to skúsite znova.",
+    "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
+    "open": "Otvoriť {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Chránené heslom, nedá sa otvoriť",
+      "link": "Odkaz na iný súbor, neotvára sa",
+      "tooLarge": "Príliš veľký, nedá sa otvoriť",
+      "unreadable": "Poškodený, nedá sa otvoriť",
+      "unsupported": "Komprimované spôsobom, ktorý sa nedá otvoriť"
+    },
+    "unnamed": "Súbor bez názvu"
   },
   "header": {
     "search": "Hľadať"
@@ -853,6 +876,7 @@
     "layer": "Vrstva podpisov {number, number}",
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
     "noSigners": "Nenašli sa žiadne údaje o podpisovateľoch.",
+    "signedContent": "Podpísaný dokument",
     "signers": "Podpisovatelia",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",

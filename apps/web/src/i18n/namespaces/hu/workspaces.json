@@ -31,7 +31,6 @@
       "sent": "Elküldve",
       "statedInFile": "Adatfiók-üzenet (a fájl szerint)",
       "toHands": "{name} kezéhez",
-      "unlinkedFiles": "A hivatkozás nélkül megjelenő mellékletek megnyitásához töltse le az eredeti ZFO-fájlt.",
       "unreadable": "A fájl sem adatfiók-üzenetként, sem kézbesítési igazolásként nem olvasható.",
       "uploaded": "Feltöltött adatfiók-üzenet"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Terhelési értesítő",
       "other": "Egyéb bizonylat"
     },
-    "downloadAttachment": "{fileName} letöltése",
     "exemptionReason": "Mentesség oka",
     "formatVersion": "{format}, {version} verzió",
     "grossTotal": "Bruttó végösszeg",
@@ -369,6 +367,7 @@
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
     "noSigners": "Nem találhatók adatok az aláírókról.",
     "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "signedDocument": "Aláírt dokumentum",
     "signers": "Aláírók",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
@@ -553,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Biztosan törölni szeretné ezt az ügyet? Ez a művelet nem vonható vissza.",
     "deletedItem": "Törölve: {name}",
     "deletingWorkspace": "Ügy törlése folyamatban",
+    "documentNaming": {
+      "description": "Az új dokumentumok a szervezet névmintáját kapják: {pattern}",
+      "label": "Új feltöltések átnevezése"
+    },
     "documentSwitcher": {
       "download": "Fájl letöltése",
       "renditionsFailed": "Töltse újra a dokumentumot, majd próbálja meg ismét letölteni.",

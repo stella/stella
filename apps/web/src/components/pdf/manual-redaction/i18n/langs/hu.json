@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Húzza végig a mutatót az oldalon, hogy letakarjon mindent, amit a felismerés kihagyott. Az anonimizált PDF minden megjelölt területet kifeketít.",
+    "markingSurface": "Húzással jelöljön ki egy kifeketítendő területet",
+    "pageArea": "Terület ({page}. oldal)",
+    "removeArea": "Megjelölt terület eltávolítása ({page}. oldal)",
+    "startMarking": "Területek megjelölése",
+    "stopMarking": "Jelölés befejezése",
+    "title": "Megjelölt területek"
+  }
+}

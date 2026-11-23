@@ -5,10 +5,15 @@ import { Button } from "@stll/ui/button";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
+import { DocumentIcon } from "@/components/document-icon";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
+/**
+ * A filed record's attachments: documents of the matter, each with its type
+ * icon and size, opening as the document it was filed as.
+ */
 export const CorrespondenceAttachments = ({
   files,
   workspaceId,
@@ -16,6 +21,7 @@ export const CorrespondenceAttachments = ({
   files: readonly {
     entityId: string | null;
     fileName: string;
+    mediaType: string;
     byteSize?: number;
   }[];
   workspaceId: string;
@@ -32,11 +38,16 @@ export const CorrespondenceAttachments = ({
         {t("emailViewer.attachments")}
       </h2>
       <ul className="divide-y">
-        {files.map(({ entityId, fileName, byteSize }, ordinal) => (
+        {files.map(({ entityId, fileName, mediaType, byteSize }, ordinal) => (
           <li
-            className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm"
+            className="flex items-center gap-2 py-2 text-sm"
             key={entityId ?? ordinal}
           >
+            <DocumentIcon
+              className="size-4 shrink-0"
+              fileName={fileName}
+              mimeType={mediaType}
+            />
             {entityId === null ? (
               <TruncatedText dir="auto" render={<bdi />}>
                 {fileName}
@@ -67,7 +78,7 @@ export const CorrespondenceAttachments = ({
               </Button>
             )}
             {byteSize !== undefined && (
-              <span className="text-muted-foreground text-xs">
+              <span className="text-muted-foreground ms-auto shrink-0 text-xs tabular-nums">
                 {format.number(byteSize, {
                   style: "unit",
                   unit: "byte",

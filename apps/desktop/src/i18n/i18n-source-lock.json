@@ -899,7 +899,6 @@
   "settings.errorUpdateLanguage": "stella desktop could not update the interface language.",
   "settings.errorUpdatePreferences": "stella desktop could not update notification settings.",
   "settings.language": "Language",
-  "settings.lastVerified": "Last verified",
   "settings.loadingAccount": "Checking your account connection…",
   "settings.managedOfficeEditing": "Managed Office file editing for stella.",
   "settings.neverRequested": "Never requested",

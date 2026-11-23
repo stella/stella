@@ -31,7 +31,6 @@
       "sent": "Nosūtīta",
       "statedInFile": "Datu pastkastes ziņa (saskaņā ar failu)",
       "toHands": "Personīgi: {name}",
-      "unlinkedFiles": "Lai atvērtu pielikumus, kuriem nav saites, lejupielādējiet sākotnējo ZFO failu.",
       "unreadable": "Failu neizdevās nolasīt ne kā datu pastkastes ziņojumu, ne kā piegādes apliecinājumu.",
       "uploaded": "Augšupielādēta datu pastkastes ziņa"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Debetrēķins",
       "other": "Cits dokuments"
     },
-    "downloadAttachment": "Lejupielādēt {fileName}",
     "exemptionReason": "Atbrīvojuma iemesls",
     "formatVersion": "{format}, versija {version}",
     "grossTotal": "Kopā ar PVN",
@@ -369,6 +367,7 @@
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
     "noSigners": "Dati par parakstītājiem netika atrasti.",
     "pdfUnavailable": "PDF priekšskatījums nav pieejams.",
+    "signedDocument": "Parakstīts dokuments",
     "signers": "Parakstītāji",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
@@ -553,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Vai tiešām vēlaties dzēst šo lietu? Šo darbību nevar atsaukt.",
     "deletedItem": "Izdzēsts: {name}",
     "deletingWorkspace": "Dzēš lietu",
+    "documentNaming": {
+      "description": "Jaunie dokumenti saņem organizācijas nosaukuma veidni: {pattern}",
+      "label": "Pārdēvēt jaunās augšupielādes"
+    },
     "documentSwitcher": {
       "download": "Lejupielādēt šo failu",
       "renditionsFailed": "Pārlādējiet dokumentu un mēģiniet to lejupielādēt vēlreiz.",

@@ -31,7 +31,6 @@
       "sent": "Odeslaná",
       "statedInFile": "Datová zpráva (dle údajů v souboru)",
       "toHands": "K rukám: {name}",
-      "unlinkedFiles": "Přílohy bez odkazu otevřete po stažení původního souboru ZFO.",
       "unreadable": "Soubor se nepodařilo přečíst jako datovou zprávu ani jako doručenku.",
       "uploaded": "Nahraná datová zpráva"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Vrubopis",
       "other": "Jiný doklad"
     },
-    "downloadAttachment": "Stáhnout {fileName}",
     "exemptionReason": "Důvod osvobození",
     "formatVersion": "{format}, verze {version}",
     "grossTotal": "Celkem s DPH",
@@ -369,6 +367,7 @@
     "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
     "noSigners": "Nebyly nalezeny žádné údaje o podepisujících.",
     "pdfUnavailable": "Náhled PDF není k dispozici.",
+    "signedDocument": "Podepsaný dokument",
     "signers": "Podepisující",
     "unknownSigner": "Neznámý podepisující",
     "unreadable": "Podepsaný soubor se nepodařilo přečíst.",
@@ -553,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Opravdu chcete smazat tento spis? Tuto akci nelze vrátit.",
     "deletedItem": "Smazáno: {name}",
     "deletingWorkspace": "Mazání spisu",
+    "documentNaming": {
+      "description": "Nové dokumenty dostanou název podle vzoru organizace: {pattern}",
+      "label": "Přejmenovávat nově nahrané dokumenty"
+    },
     "documentSwitcher": {
       "download": "Stáhnout tento soubor",
       "renditionsFailed": "Načtěte dokument znovu a opakujte stažení.",

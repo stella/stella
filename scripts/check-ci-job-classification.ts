@@ -60,9 +60,8 @@ const sensitiveChanges = ({
       current !== undefined &&
       previous !== undefined &&
       current.digest === previous.digest &&
-      headDecision?.approvedDigests.includes(current.digest) &&
+      headDecision !== undefined &&
       previousDecision !== undefined &&
-      previousDecision.approvedDigests.includes(previous.digest) &&
       previousDecision.kind === headDecision.kind &&
       previousDecision.qualifier === headDecision.qualifier
     ) {
@@ -122,7 +121,6 @@ const misclassifiedWriters = (
     const decision = decisions[key];
     return job.writesRepository &&
       decision !== undefined &&
-      decision.approvedDigests.includes(job.digest) &&
       decision.kind !== "priority"
       ? [key]
       : [];

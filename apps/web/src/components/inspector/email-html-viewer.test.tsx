@@ -205,10 +205,9 @@ describe("email viewer", () => {
       attachments: [
         {
           charset: null,
-          id: "attachment-1",
+          part: "attachment:1",
           fileName: "contract.pdf",
-          mimeType: "application/pdf",
-          previewable: true,
+          mediaType: "application/pdf",
           sizeBytes: 2048,
         },
       ],

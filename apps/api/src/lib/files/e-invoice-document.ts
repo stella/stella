@@ -13,10 +13,7 @@ import {
 import { readCiiInvoice } from "@/api/lib/files/e-invoice-cii";
 import { readFatturaPaInvoice } from "@/api/lib/files/e-invoice-fattura-pa";
 import { readIsdocInvoice } from "@/api/lib/files/e-invoice-isdoc";
-import {
-  base64DecodedSize,
-  type ParsedEInvoice,
-} from "@/api/lib/files/e-invoice-nodes";
+import type { ParsedEInvoice } from "@/api/lib/files/e-invoice-nodes";
 import { readUblInvoice } from "@/api/lib/files/e-invoice-ubl";
 import { classifyXmlDocument } from "@/api/lib/files/xml-document-class";
 import {
@@ -39,16 +36,20 @@ const SYNTAX_READERS = {
 const ISDOCX_MANIFEST = "manifest.xml";
 const ISDOCX_MANIFEST_NAMESPACE = "http://isdoc.cz/namespace/2013/manifest";
 
-type InvoiceAttachment = {
+export type InvoiceAttachment = {
+  /** The path the invoice or its package gives the file. */
   fileName: string;
   description: string | null;
-  sizeBytes: number;
   read: () => Result<Uint8Array, DocumentPackageError>;
 };
 
-/** A read invoice: the preview, and its attachments by preview index. */
+/**
+ * A read invoice: the preview without its attachments, and the attachments
+ * in their part order. The attachments are listed as parts of the file, with
+ * the type their bytes show, when the preview leaves the reader.
+ */
 export type EInvoiceDocument = {
-  preview: EInvoicePreview;
+  preview: Omit<EInvoicePreview, "attachments">;
   attachments: readonly InvoiceAttachment[];
 };
 
@@ -65,16 +66,16 @@ export const E_INVOICE_PREVIEW_MAX_JSON_BYTES = 3 * 1024 * 1024;
  * an invoice that does not fit without its lines is refused as too large.
  */
 const fitPreview = (
-  preview: EInvoicePreview,
-): Result<EInvoicePreview, DocumentPackageError> => {
-  const withLines = (keep: number): EInvoicePreview => ({
+  preview: EInvoiceDocument["preview"],
+): Result<EInvoiceDocument["preview"], DocumentPackageError> => {
+  const withLines = (keep: number): EInvoiceDocument["preview"] => ({
     ...preview,
     invoices: preview.invoices.map((invoice) => ({
       ...invoice,
       lines: invoice.lines.slice(0, keep),
     })),
   });
-  const fits = (candidate: EInvoicePreview) =>
+  const fits = (candidate: EInvoiceDocument["preview"]) =>
     Buffer.byteLength(JSON.stringify(candidate)) <=
     E_INVOICE_PREVIEW_MAX_JSON_BYTES;
   let keep = Math.max(0, ...preview.invoices.map((i) => i.lines.length));
@@ -104,7 +105,6 @@ const withAttachments = (
       ({ fileName, description, base64 }): InvoiceAttachment => ({
         fileName,
         description,
-        sizeBytes: base64DecodedSize(base64),
         read: () => Result.ok(new Uint8Array(Buffer.from(base64, "base64"))),
       }),
     ),
@@ -114,14 +114,6 @@ const withAttachments = (
     syntax,
     version: parsed.version,
     invoices: parsed.invoices,
-    attachments: attachments.map(
-      ({ fileName, description, sizeBytes }, index) => ({
-        index,
-        fileName,
-        description,
-        sizeBytes,
-      }),
-    ),
   }).map((preview) => ({ preview, attachments }));
 };
 
@@ -213,7 +205,6 @@ const readIsdocx = async (
     .map(([name, entry]): InvoiceAttachment => ({
       fileName: name,
       description: null,
-      sizeBytes: entry.uncompressedSize,
       read: () => readArchiveEntry(entry),
     }));
   return withAttachments("isdoc", readIsdocInvoice(root.value), packaged);

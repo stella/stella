@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Priedai",
     "certifiedAt": "Sertifikavimo laikas",
     "deliveredTo": "Įteikta adresu",
     "error": "Pranešta klaida",
@@ -462,6 +461,7 @@
     },
     "fit": "Plotis",
     "openOriginal": "Atidaryti originalą",
+    "openPart": "Atidaryti {fileName}",
     "preview": "Atidaryti peržiūrą",
     "previewDescription": "Šis failas atidaromas sistemos peržiūroje.",
     "retry": "Bandyti dar kartą",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Banko sąskaitos numeris",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Pridėti failai",
     "bankCode": "Banko kodas",
     "batchPosition": "Dokumentas {position, number} iš {count, number}",
     "bic": "BIC kodas",
@@ -520,11 +519,35 @@
     "vatBreakdown": "PVM suvestinė",
     "vatId": "PVM mokėtojo kodas"
   },
+  "email": {
+    "cc": "Kopija",
+    "date": "Data",
+    "from": "Siuntėjas",
+    "noSubject": "(Nėra temos)",
+    "subject": "Tema",
+    "to": "Gavėjai"
+  },
   "entity": {
     "currentVersion": "Dabartinė versija",
     "loadFailed": "Nepavyko įkelti šio įrašo.",
     "reference": "Numeris",
     "type": "Tipas"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Archyvo nepavyko perskaityti.",
+    "attachments": "Priedai",
+    "files": "Failai",
+    "insideFailed": "Nepavyko įkelti viduje esančių failų. Bakstelėkite, kad bandytumėte dar kartą.",
+    "noFilesInside": "Viduje nėra jokių failų.",
+    "open": "Atidaryti {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",
+      "link": "Nuoroda į kitą failą, jis neatidaromas",
+      "tooLarge": "Per didelis, kad būtų galima atidaryti",
+      "unreadable": "Sugadintas, negalima atidaryti",
+      "unsupported": "Suglaudintas būdu, kurio negalima atidaryti"
+    },
+    "unnamed": "Failas be pavadinimo"
   },
   "header": {
     "search": "Ieškoti"
@@ -853,6 +876,7 @@
     "layer": "Parašų sluoksnis {number, number}",
     "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
     "noSigners": "Pasirašiusiųjų duomenų nerasta.",
+    "signedContent": "Pasirašytas dokumentas",
     "signers": "Pasirašiusieji",
     "unknownSigner": "Nežinomas pasirašęs asmuo",
     "unreadable": "Nepavyko perskaityti pasirašyto failo.",

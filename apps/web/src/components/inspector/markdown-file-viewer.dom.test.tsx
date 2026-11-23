@@ -73,6 +73,7 @@ globalThis.fetch = Object.assign(
     }
     if (url.includes("/url/")) {
       return Response.json({
+        kind: "file",
         presignedUrl: "https://storage.example.test/markdown",
       });
     }

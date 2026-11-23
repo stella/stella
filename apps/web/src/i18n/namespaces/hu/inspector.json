@@ -540,7 +540,6 @@
       "waitForMatches": "Várja meg az anonimizálási vizsgálat végét.",
       "workspaceTermsHeading": "Munkaterületi kifejezések ({count})"
     },
-    "attachmentNotPreviewable": "A melléklet megnyitásához töltse le.",
     "closeAllTabs": "{count, plural, one {# lap} other {Mind a # lap}} bezárása",
     "closeOtherTabs": "{count, plural, one {# másik lap} other {# másik lap}} bezárása",
     "closeTab": "<bdi>{name}</bdi> bezárása",
@@ -560,6 +559,22 @@
     },
     "facet": {
       "anonymization": "Anonimizálás"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Az archívumot nem sikerült beolvasni.",
+      "back": "Vissza a listához",
+      "download": "{fileName} letöltése",
+      "noFilesInside": "Nincsenek benne fájlok.",
+      "noPreview": "Ehhez a fájltípushoz nincs előnézet. Töltse le, vagy mentse egy ügybe.",
+      "notConverted": "Ezt a fájlt nem sikerült átalakítani az előnézethez. Töltse le, vagy mentse egy ügybe.",
+      "open": "{fileName} megnyitása",
+      "unavailable": {
+        "encrypted": "Jelszóval védett, nem nyitható meg",
+        "link": "Hivatkozás egy másik fájlra, nem nyitjuk meg",
+        "tooLarge": "Túl nagy a megnyitáshoz",
+        "unreadable": "Sérült, nem nyitható meg",
+        "unsupported": "Olyan módon tömörített, amely nem nyitható meg"
+      }
     },
     "firstSourceReached": "Ez az első forrás.",
     "groups": {
@@ -632,6 +647,10 @@
       "lastUpdatedBy": "Utoljára frissítette",
       "matterColumnsHeading": "Ügyadatok",
       "noMatterColumns": "Ehhez a dokumentumhoz még nincs rögzítve adat",
+      "similarDocuments": {
+        "heading": "Hasonló dokumentumok",
+        "similarity": "{percent} hasonlóság"
+      },
       "stellaHeading": "A stella alkalmazásban tárolva",
       "versionCurrent": "v{version} (aktuális)"
     },
@@ -814,7 +833,6 @@
       "why": "Miért",
       "whyItMatters": "Miért fontos:"
     },
-    "selectAttachmentToSave": "Válassza ki a mentendő mellékletet.",
     "showPane": "Panel megjelenítése",
     "swapViews": "A fő nézet és az oldalsó panel felcserélése",
     "title": "Ellenőrző panel"

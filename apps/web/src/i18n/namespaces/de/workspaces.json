@@ -31,7 +31,6 @@
       "sent": "Gesendet",
       "statedInFile": "Databox-Nachricht (laut Datei)",
       "toHands": "Zu Händen von {name}",
-      "unlinkedFiles": "Laden Sie die ursprüngliche ZFO-Datei herunter, um Anhänge ohne Link zu öffnen.",
       "unreadable": "Die Datei konnte weder als Databox-Nachricht noch als Zustellnachweis gelesen werden.",
       "uploaded": "Hochgeladene Databox-Nachricht"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Belastungsanzeige",
       "other": "Sonstiger Beleg"
     },
-    "downloadAttachment": "{fileName} herunterladen",
     "exemptionReason": "Befreiungsgrund",
     "formatVersion": "{format}, Version {version}",
     "grossTotal": "Gesamtbetrag inkl. USt.",
@@ -369,6 +367,7 @@
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
     "noSigners": "Es wurden keine Angaben zu Unterzeichnern gefunden.",
     "pdfUnavailable": "Die PDF-Vorschau ist nicht verfügbar.",
+    "signedDocument": "Signiertes Dokument",
     "signers": "Unterzeichner",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
@@ -553,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Möchten Sie diese Akte wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deletedItem": "Gelöscht: {name}",
     "deletingWorkspace": "Akte wird gelöscht",
+    "documentNaming": {
+      "description": "Neue Dokumente erhalten das Namensmuster der Organisation: {pattern}",
+      "label": "Neue Uploads umbenennen"
+    },
     "documentSwitcher": {
       "download": "Diese Datei herunterladen",
       "renditionsFailed": "Laden Sie das Dokument neu und versuchen Sie den Download erneut.",

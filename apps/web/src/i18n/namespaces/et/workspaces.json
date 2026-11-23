@@ -31,7 +31,6 @@
       "sent": "Saadetud",
       "statedInFile": "Andmepostkasti sõnum (faili andmetel)",
       "toHands": "Isiklikult: {name}",
-      "unlinkedFiles": "Ilma lingita manuste avamiseks laadige alla algne ZFO-fail.",
       "unreadable": "Faili ei saanud lugeda andmepostkasti sõnumi ega kättetoimetamistõendina.",
       "uploaded": "Üleslaaditud andmepostkasti sõnum"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Deebetarve",
       "other": "Muu dokument"
     },
-    "downloadAttachment": "Laadi alla {fileName}",
     "exemptionReason": "Maksuvabastuse põhjus",
     "formatVersion": "{format}, versioon {version}",
     "grossTotal": "Kokku koos käibemaksuga",
@@ -369,6 +367,7 @@
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
     "noSigners": "Allkirjastajate andmeid ei leitud.",
     "pdfUnavailable": "PDF-i eelvaade pole saadaval.",
+    "signedDocument": "Allkirjastatud dokument",
     "signers": "Allkirjastajad",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
@@ -553,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Kas olete kindel, et soovite selle toimiku kustutada? Seda toimingut ei saa tagasi võtta.",
     "deletedItem": "Kustutatud: {name}",
     "deletingWorkspace": "Toimiku kustutamine",
+    "documentNaming": {
+      "description": "Uued dokumendid saavad organisatsiooni nimemustri: {pattern}",
+      "label": "Nimeta uued üleslaadimised ümber"
+    },
     "documentSwitcher": {
       "download": "Laadi see fail alla",
       "renditionsFailed": "Laadige dokument uuesti ja proovige see uuesti alla laadida.",
