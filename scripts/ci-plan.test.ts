@@ -2985,7 +2985,7 @@ const jobSteps = (job: unknown) =>
     job,
   ).steps;
 
-const MATRIX_SHARD_ENV = `\${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}`;
+const MATRIX_SHARD_ENV = `\${{ matrix.shard }}`;
 
 const missingFullTestShards = (source: string) => {
   const steps = jobSteps(workflowJobs(source)["full-test"]);
@@ -3002,10 +3002,8 @@ const missingFullTestShards = (source: string) => {
             return false;
           }
           const configuredShard = step.env?.["SHARD"];
-          let actualShard = configuredShard;
-          if (configuredShard === MATRIX_SHARD_ENV) {
-            actualShard = jobShard === "rest-web" ? "rest" : jobShard;
-          }
+          const actualShard =
+            configuredShard === MATRIX_SHARD_ENV ? jobShard : configuredShard;
           if (actualShard !== suite) {
             return false;
           }
@@ -7329,19 +7327,22 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   const web = planCiApiTests({
     event: "pull_request",
     scopeUnknown: false,
-    testJobs: ["rest-web"],
+    testJobs: ["rest", "web"],
     select: () => selectApiTestImpact({ changed: ["apps/web/src/page.tsx"] }),
   });
   expect(web.type).toBe("run");
-  expect(web.type === "run" ? web.matrix.shard : []).toEqual(["rest-web"]);
+  expect(web.type === "run" ? web.matrix.shard : []).toEqual(["rest", "web"]);
   const queue = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
-    testJobs: ["rest-web"],
+    testJobs: ["rest", "web"],
     select: () => ({ mode: "none", files: [], shards: 0 }),
   });
   expect(queue.type).toBe("run");
-  expect(queue.type === "run" ? queue.matrix.shard : []).toEqual(["rest-web"]);
+  expect(queue.type === "run" ? queue.matrix.shard : []).toEqual([
+    "rest",
+    "web",
+  ]);
   expect(
     (() => {
       const plan = planCiApiTests({
@@ -7748,12 +7749,9 @@ test("the nightly shard census rejects a planted missing web suite", () => {
     new URL("../.github/workflows/nightly-test.yml", import.meta.url),
     "utf-8",
   );
-  const planted = nightly.replace(
-    /\n {6}- name: Full web test suite\n[\s\S]*?(?=\n\n {2}# The production client build)/u,
-    "",
-  );
+  const planted = nightly.replace(`SHARD: ${MATRIX_SHARD_ENV}`, "SHARD: rest");
   expect(planted).not.toBe(nightly);
-  expect(missingFullTestShards(planted)).toEqual(["rest-web/web"]);
+  expect(missingFullTestShards(planted)).toContain("web/web");
 });
 
 test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {
@@ -7781,18 +7779,18 @@ test("API planning only loads dependencies after installation and emits install-
       expected,
     ] of [
       ["pull_request", "false", "false", "", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "", "6"],
+      ["pull_request", "true", "false", "", "", "", "8"],
       // Without package checks no API test runs, even when the API scope is
       // unknown: ci_tests_required is the one gate of ci-tests.
       ["pull_request", "false", "true", "", "", "", "0"],
-      ["merge_group", "true", "false", "", "", "", "6"],
-      ["workflow_dispatch", "true", "false", "", "", "", "6"],
+      ["merge_group", "true", "false", "", "", "", "8"],
+      ["workflow_dispatch", "true", "false", "", "", "", "8"],
       [
         "pull_request",
         "true",
         "false",
         "true",
-        '{"shard":["api-1","rest-web"]}',
+        '{"shard":["api-1","rest","web"]}',
         "1",
         "1",
       ],
@@ -7801,9 +7799,9 @@ test("API planning only loads dependencies after installation and emits install-
         "true",
         "false",
         "",
-        '{"shard":["api-1","rest-web"]}',
+        '{"shard":["api-1","rest","web"]}',
         "1",
-        "6",
+        "8",
       ],
     ]) {
       writeFileSync(output, "");
