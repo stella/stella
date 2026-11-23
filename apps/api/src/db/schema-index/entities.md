@@ -278,89 +278,89 @@ folio_collab_publications.snapshot_sha256_hex              varchar          null
 folio_collab_publications.created_at                       timestamptz      default,not null  entities.ts:1093
 ```
 
-## pending_uploads · `pendingUploads` · entities.ts:1263
+## pending_uploads · `pendingUploads` · entities.ts:1285
 
 ```text
-pending_uploads.id                     pUuid               pk,not null       entities.ts:1266
-pending_uploads.organization_id        safeOrganizationId  fk,not null       entities.ts:1267
-pending_uploads.workspace_id           safeWorkspaceId     fk,not null       entities.ts:1268
-pending_uploads.user_id                text                fk,not null       entities.ts:1271
-pending_uploads.purpose                text                not null          entities.ts:1275
-pending_uploads.purpose_data           jsonb               not null          entities.ts:1276
-pending_uploads.declared_name          varchar             not null          entities.ts:1279
-pending_uploads.declared_mime          varchar             not null          entities.ts:1280
-pending_uploads.declared_size          bigint              not null          entities.ts:1281
-pending_uploads.declared_sha256        varchar             not null          entities.ts:1283  hex; matches `fields.content.sha256Hex` storage shape
-pending_uploads.status                 text                default,not null  entities.ts:1284
-pending_uploads.finalized_result       jsonb               null              entities.ts:1289  Populated on success so retries return the same response shape.
-pending_uploads.reject_reason          text                null              entities.ts:1292
-pending_uploads.rejection_details      jsonb               null              entities.ts:1293
-pending_uploads.claimed_at             timestamptz         null              entities.ts:1297  Set inside the claim transaction.
-pending_uploads.claimed_by_request_id  varchar             null              entities.ts:1298
-pending_uploads.expires_at             timestamptz         not null          entities.ts:1300  Finalize deadline (`uploadTimeline`); later requests only replay terminal results.
-pending_uploads.created_at             timestamptz         default,not null  entities.ts:1301
-pending_uploads.finalized_at           timestamptz         null              entities.ts:1302
+pending_uploads.id                     pUuid               pk,not null       entities.ts:1288
+pending_uploads.organization_id        safeOrganizationId  fk,not null       entities.ts:1289
+pending_uploads.workspace_id           safeWorkspaceId     fk,not null       entities.ts:1290
+pending_uploads.user_id                text                fk,not null       entities.ts:1293
+pending_uploads.purpose                text                not null          entities.ts:1297
+pending_uploads.purpose_data           jsonb               not null          entities.ts:1298
+pending_uploads.declared_name          varchar             not null          entities.ts:1301
+pending_uploads.declared_mime          varchar             not null          entities.ts:1302
+pending_uploads.declared_size          bigint              not null          entities.ts:1303
+pending_uploads.declared_sha256        varchar             not null          entities.ts:1305  hex; matches `fields.content.sha256Hex` storage shape
+pending_uploads.status                 text                default,not null  entities.ts:1306
+pending_uploads.finalized_result       jsonb               null              entities.ts:1311  Populated on success so retries return the same response shape.
+pending_uploads.reject_reason          text                null              entities.ts:1314
+pending_uploads.rejection_details      jsonb               null              entities.ts:1315
+pending_uploads.claimed_at             timestamptz         null              entities.ts:1319  Set inside the claim transaction.
+pending_uploads.claimed_by_request_id  varchar             null              entities.ts:1320
+pending_uploads.expires_at             timestamptz         not null          entities.ts:1322  Finalize deadline (`uploadTimeline`); later requests only replay terminal results.
+pending_uploads.created_at             timestamptz         default,not null  entities.ts:1323
+pending_uploads.finalized_at           timestamptz         null              entities.ts:1324
 ```
 
-## buffer_object_cleanup_intents · `bufferObjectCleanupIntents` · entities.ts:1361 · rls
+## buffer_object_cleanup_intents · `bufferObjectCleanupIntents` · entities.ts:1383 · rls
 
 Durable tombstones for server-generated object writes interrupted by a workspace, organization, or account deletion.
 
 ```text
-buffer_object_cleanup_intents.id               pUuid               pk,not null       entities.ts:1364
-buffer_object_cleanup_intents.organization_id  safeOrganizationId  not null          entities.ts:1365
-buffer_object_cleanup_intents.workspace_id     safeWorkspaceId     null              entities.ts:1366
-buffer_object_cleanup_intents.chat_thread_id   safeUuid            null              entities.ts:1368  Deliberately not a foreign key: the cleanup proof must outlive its chat.
-buffer_object_cleanup_intents.writer_user_id   text                default,null      entities.ts:1371  No FK: a writer must retain settlement authority after its owning workspace, thread, or organization has been removed.
-buffer_object_cleanup_intents.object_key       text                not null          entities.ts:1378
-buffer_object_cleanup_intents.status           text                default,not null  entities.ts:1379
-buffer_object_cleanup_intents.attempt_count    integer             default,not null  entities.ts:1389
-buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not null  entities.ts:1390
-buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1391
+buffer_object_cleanup_intents.id               pUuid               pk,not null       entities.ts:1386
+buffer_object_cleanup_intents.organization_id  safeOrganizationId  not null          entities.ts:1387
+buffer_object_cleanup_intents.workspace_id     safeWorkspaceId     null              entities.ts:1388
+buffer_object_cleanup_intents.chat_thread_id   safeUuid            null              entities.ts:1390  Deliberately not a foreign key: the cleanup proof must outlive its chat.
+buffer_object_cleanup_intents.writer_user_id   text                default,null      entities.ts:1393  No FK: a writer must retain settlement authority after its owning workspace, thread, or organization has been removed.
+buffer_object_cleanup_intents.object_key       text                not null          entities.ts:1400
+buffer_object_cleanup_intents.status           text                default,not null  entities.ts:1401
+buffer_object_cleanup_intents.attempt_count    integer             default,not null  entities.ts:1411
+buffer_object_cleanup_intents.next_attempt_at  timestamptz         default,not null  entities.ts:1412
+buffer_object_cleanup_intents.created_at       timestamptz         default,not null  entities.ts:1413
 ```
 
-## fields · `fields` · entities.ts:1523
+## fields · `fields` · entities.ts:1545
 
 ```text
-fields.{...entityFeatureGateColumns()}           spread                        entities.ts:1526
-fields.{...entityFeatureWorkspaceGateColumns()}  spread                        entities.ts:1527
-fields.id                                        pUuid            pk,not null  entities.ts:1528
-fields.workspace_id                              safeWorkspaceId  fk,not null  entities.ts:1529
-fields.property_id                               safeUuid         fk,not null  entities.ts:1530
-fields.entity_version_id                         safeUuid         fk,not null  entities.ts:1531
-fields.file_id                                   safeUuid         null         entities.ts:1534
-fields.content                                   jsonb            not null     entities.ts:1535
-fields.ai_settlement                             jsonb            null         entities.ts:1537  Durable terminal outcome of the latest AI run for this cell.
-fields.owner_run_id                              text             null         entities.ts:1539  Workflow run that currently owns this non-terminal cell.
-fields.owner_batch_id                            text             null         entities.ts:1541  Batch within the workflow run that currently owns this cell.
-fields.deadline_at                               timestamptz      null         entities.ts:1543  Time after which the cell owner may be reconciled.
-fields.attempt                                   smallint         null         entities.ts:1545  Bounded automatic-retry attempt for an owned cell.
+fields.{...entityFeatureGateColumns()}           spread                        entities.ts:1548
+fields.{...entityFeatureWorkspaceGateColumns()}  spread                        entities.ts:1549
+fields.id                                        pUuid            pk,not null  entities.ts:1550
+fields.workspace_id                              safeWorkspaceId  fk,not null  entities.ts:1551
+fields.property_id                               safeUuid         fk,not null  entities.ts:1552
+fields.entity_version_id                         safeUuid         fk,not null  entities.ts:1553
+fields.file_id                                   safeUuid         null         entities.ts:1556
+fields.content                                   jsonb            not null     entities.ts:1557
+fields.ai_settlement                             jsonb            null         entities.ts:1559  Durable terminal outcome of the latest AI run for this cell.
+fields.owner_run_id                              text             null         entities.ts:1561  Workflow run that currently owns this non-terminal cell.
+fields.owner_batch_id                            text             null         entities.ts:1563  Batch within the workflow run that currently owns this cell.
+fields.deadline_at                               timestamptz      null         entities.ts:1565  Time after which the cell owner may be reconciled.
+fields.attempt                                   smallint         null         entities.ts:1567  Bounded automatic-retry attempt for an owned cell.
 ```
 
-## cell_metadata · `cellMetadata` · entities.ts:1649
+## cell_metadata · `cellMetadata` · entities.ts:1671
 
 ```text
-cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1652
-cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1653
-cell_metadata.workspace_id                              safeWorkspaceId  fk,not null       entities.ts:1654
-cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1655
-cell_metadata.property_id                               safeUuid         fk,not null       entities.ts:1658
-cell_metadata.metadata                                  jsonb            not null          entities.ts:1659
-cell_metadata.created_by                                text             fk,null           entities.ts:1660
-cell_metadata.updated_by                                text             fk,null           entities.ts:1663
-cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1666
-cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1667
+cell_metadata.{...entityFeatureGateColumns()}           spread                             entities.ts:1674
+cell_metadata.{...entityFeatureWorkspaceGateColumns()}  spread                             entities.ts:1675
+cell_metadata.workspace_id                              safeWorkspaceId  fk,not null       entities.ts:1676
+cell_metadata.entity_version_id                         safeUuid         fk,not null       entities.ts:1677
+cell_metadata.property_id                               safeUuid         fk,not null       entities.ts:1680
+cell_metadata.metadata                                  jsonb            not null          entities.ts:1681
+cell_metadata.created_by                                text             fk,null           entities.ts:1682
+cell_metadata.updated_by                                text             fk,null           entities.ts:1685
+cell_metadata.created_at                                timestamptz      default,not null  entities.ts:1688
+cell_metadata.updated_at                                timestamptz      default,not null  entities.ts:1689
 ```
 
-## justifications · `justifications` · entities.ts:1696
+## justifications · `justifications` · entities.ts:1718
 
 ```text
-justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1699
-justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1700
-justifications.id                                        pUuid            pk,not null             entities.ts:1701
-justifications.workspace_id                              safeWorkspaceId  fk,not null             entities.ts:1702
-justifications.field_id                                  safeUuid         fk,not null             entities.ts:1703
-justifications.content                                   jsonb            not null                entities.ts:1704
-justifications.bounding_boxes                            jsonb            null                    entities.ts:1705
-justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1706
+justifications.{...entityFeatureGateColumns()}           spread                                   entities.ts:1721
+justifications.{...entityFeatureWorkspaceGateColumns()}  spread                                   entities.ts:1722
+justifications.id                                        pUuid            pk,not null             entities.ts:1723
+justifications.workspace_id                              safeWorkspaceId  fk,not null             entities.ts:1724
+justifications.field_id                                  safeUuid         fk,not null             entities.ts:1725
+justifications.content                                   jsonb            not null                entities.ts:1726
+justifications.bounding_boxes                            jsonb            null                    entities.ts:1727
+justifications.file_field_ids                            safeUuid         array,default,not null  entities.ts:1728
 ```
