@@ -288,7 +288,7 @@ const publish = async (client: InstanceType<typeof QueryClient>) => {
   expect(useInspectorTabsStore.getState().tabs.at(0)?.id).toBe("next-field");
   // Joins the remounted panel's own fetch of the new field's text.
   await act(async () => {
-    await client.fetchQuery(
+    await client.query(
       textFileOptions({ workspaceId: "matter", fieldId: "next-field" }),
     );
   });
