@@ -31,6 +31,7 @@ import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
+import { persistedColumnNumber } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
@@ -66,7 +67,10 @@ export const persistTightened = async (
     rule_id: row.ruleId,
     previous_polarity: row.previousPolarity,
     evidence_windows: row.evidenceWindows,
-    confidence: row.confidence,
+    confidence: persistedColumnNumber(
+      caseLawCitations.polarityConfidence,
+      row.confidence,
+    ),
     cited_part: row.citedPart,
     citing_decision_id: row.citingDecisionId,
     content_hash: row.textRevision.contentHash,
@@ -91,7 +95,7 @@ export const persistTightened = async (
           rule_id uuid,
           previous_polarity text,
           evidence_windows jsonb,
-          confidence numeric,
+          confidence double precision,
           cited_part text,
           citing_decision_id uuid,
           content_hash text,

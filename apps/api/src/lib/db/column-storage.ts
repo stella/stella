@@ -1,11 +1,7 @@
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 import { parseDecimalToken } from "@stll/agent-input/numeric-token";
-
-const typedColumnParam = (value: unknown, column: AnyPgColumn) =>
-  sql`${sql.param(value, column)}::${sql.raw(column.getSQLType())}`;
 
 /** Compare the number PostgreSQL stores, using the column's declared representation. */
 export const persistedColumnNumber = (
@@ -42,7 +38,3 @@ export const persistedColumnNumber = (
       return panic(`Unsupported numeric column ${column.name}`);
   }
 };
-
-/** Raw VALUES writes and comparison keys use the same stored numeric representation. */
-export const numericColumnParam = (column: AnyPgColumn, value: unknown) =>
-  typedColumnParam(persistedColumnNumber(column, value), column);

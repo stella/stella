@@ -1956,13 +1956,8 @@ const writeWorkspaceProjections = async (
             coalesce(v.searchable_text, '')
           ))
         )
-      FROM jsonb_to_recordset(${JSON.stringify(workspacePayload)}::text::jsonb) AS v(
-        workspace_id uuid,
-        organization_id text,
-        title text,
-        searchable_text text,
-        updated_at timestamptz
-      )
+      FROM jsonb_to_recordset(${JSON.stringify(workspacePayload)}::text::jsonb)
+        AS v(workspace_id uuid, organization_id text, title text, searchable_text text, updated_at timestamptz)
       ON CONFLICT (workspace_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         title = EXCLUDED.title,
@@ -1987,19 +1982,10 @@ const writeWorkspaceProjections = async (
       INSERT INTO workspace_search_document_preview_passages (
         workspace_id, organization_id, generation, ordinal, content, tsv
       )
-      SELECT
-        p.workspace_id,
-        p.organization_id,
-        ${previewGeneration}::uuid,
-        p.ordinal,
-        p.content,
+      SELECT p.workspace_id, p.organization_id, ${previewGeneration}::uuid, p.ordinal, p.content,
         to_tsvector('simple'::regconfig, unaccent(arabic_normalize(p.content)))
-      FROM jsonb_to_recordset(${JSON.stringify(workspacePassagesPayload)}::text::jsonb) AS p(
-        workspace_id uuid,
-        organization_id text,
-        ordinal integer,
-        content text
-      )
+      FROM jsonb_to_recordset(${JSON.stringify(workspacePassagesPayload)}::text::jsonb)
+        AS p(workspace_id uuid, organization_id text, ordinal integer, content text)
     `);
     await tx.execute(sql`
       UPDATE workspace_search_documents
