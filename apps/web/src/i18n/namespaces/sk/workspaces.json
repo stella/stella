@@ -31,7 +31,6 @@
       "sent": "Odoslaná",
       "statedInFile": "Dátová správa (podľa údajov v súbore)",
       "toHands": "K rukám: {name}",
-      "unlinkedFiles": "Prílohy bez odkazu otvoríte po stiahnutí pôvodného súboru ZFO.",
       "unreadable": "Súbor sa nepodarilo prečítať ako dátovú správu ani ako doručenku.",
       "uploaded": "Nahraná dátová správa"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Ťarchopis",
       "other": "Iný doklad"
     },
-    "downloadAttachment": "Stiahnuť {fileName}",
     "exemptionReason": "Dôvod oslobodenia",
     "formatVersion": "{format}, verzia {version}",
     "grossTotal": "Spolu s DPH",
@@ -110,6 +108,7 @@
     "paymentReference": "Identifikácia platby",
     "prepaidAmount": "Uhradené zálohou",
     "quantity": "Množstvo a jednotka",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Dodávateľ",
@@ -119,6 +118,14 @@
     "taxableAmount": "Základ dane",
     "totals": "Súčty",
     "unitPrice": "Jednotková cena",
+    "units": {
+      "day": "{count, plural, one {{quantity} deň} few {{quantity} dni} many {{quantity} dňa} other {{quantity} dní}}",
+      "hour": "{count, plural, one {{quantity} hodina} few {{quantity} hodiny} many {{quantity} hodiny} other {{quantity} hodín}}",
+      "month": "{count, plural, one {{quantity} mesiac} few {{quantity} mesiace} many {{quantity} mesiaca} other {{quantity} mesiacov}}",
+      "unit": "{count, plural, one {{quantity} ks} few {{quantity} ks} many {{quantity} ks} other {{quantity} ks}}",
+      "week": "{count, plural, one {{quantity} týždeň} few {{quantity} týždne} many {{quantity} týždňa} other {{quantity} týždňov}}",
+      "year": "{count, plural, one {{quantity} rok} few {{quantity} roky} many {{quantity} roka} other {{quantity} rokov}}"
+    },
     "unreadable": "Faktúru sa nepodarilo prečítať.",
     "vat": "DPH",
     "vatBreakdown": "Rekapitulácia DPH",
@@ -369,6 +376,7 @@
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
     "noSigners": "Nenašli sa žiadne údaje o podpisovateľoch.",
     "pdfUnavailable": "Náhľad PDF nie je k dispozícii.",
+    "signedDocument": "Podpísaný dokument",
     "signers": "Podpisovatelia",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
@@ -553,6 +561,10 @@
     "deleteWorkspaceConfirmDescription": "Naozaj chcete vymazať tento spis? Túto akciu nemožno vrátiť.",
     "deletedItem": "Odstránené: {name}",
     "deletingWorkspace": "Mazanie spisu",
+    "documentNaming": {
+      "description": "Nové dokumenty dostanú názov podľa vzoru organizácie: {pattern}",
+      "label": "Premenovávať novo nahrané dokumenty"
+    },
     "documentSwitcher": {
       "download": "Stiahnuť tento súbor",
       "renditionsFailed": "Načítajte dokument znova a zopakujte sťahovanie.",

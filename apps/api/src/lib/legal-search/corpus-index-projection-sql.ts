@@ -273,7 +273,12 @@ export const corpusIndexProjectionRevisionDeleteIsUnproven = ({
   OR (${statusHasCopy(status, "intact_until_claimed")} AND ${cleanupAttempts} > 0)
 )`;
 
-const revisionCopyIsIntact = ({
+/**
+ * The copy of a named revision is whole: applied, or queued for cleanup with
+ * no delete issued. Once a delete may have been issued the revision is never
+ * restored, so nothing a writer of desired state does brings its copy back.
+ */
+export const corpusIndexProjectionRevisionCopyIsIntact = ({
   status,
   cleanupAttempts,
 }: CorpusProjectionRevisionCopyColumns) => sql`(
@@ -346,7 +351,7 @@ export const CORPUS_INDEX_PROJECTION_SERVING = {
   served: ({ state, revision }: CorpusProjectionServingColumns) => sql`(
     ${wantsUpsert(state.desiredAction)}
     AND ${namesLiveRevision(state)}
-    AND ${revisionCopyIsIntact(revision)}
+    AND ${corpusIndexProjectionRevisionCopyIsIntact(revision)}
   )`,
   at_risk: ({ state, revision }: CorpusProjectionServingColumns) => sql`(
     ${wantsUpsert(state.desiredAction)}

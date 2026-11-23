@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { FILE_PART_KINDS } from "@stll/api-contract/file-parts";
 import {
   CADES_FILE_FORMAT,
   ISDOC_FILE_FORMAT,
@@ -8,14 +9,12 @@ import {
 } from "@stll/api-contract/legal-file-formats";
 
 import { readCadesPreview } from "@/api/lib/files/cades-preview";
-import {
-  readEInvoiceAttachment,
-  readEInvoicePreview,
-} from "@/api/lib/files/e-invoice-preview";
+import { readEInvoicePreview } from "@/api/lib/files/e-invoice-preview";
 import {
   eInvoiceDocumentText,
   xmlDocumentPreviewText,
 } from "@/api/lib/files/e-invoice-text";
+import { readPartOfFile } from "@/api/lib/files/file-part";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import {
   fatturaPaXml,
@@ -36,6 +35,11 @@ const storedFile = (bytes: Uint8Array, mimeType: string, fileName: string) =>
     mimeType,
     path: `org/matter/${fileName}`,
   });
+
+const attachment = (index: number) => ({
+  kind: FILE_PART_KINDS.attachment,
+  index,
+});
 
 describe("structured invoice files", () => {
   test.each([
@@ -136,15 +140,13 @@ describe("structured invoice files", () => {
       XML_FILE_FORMAT.mimeType,
       "IT00000000001_00001.xml",
     );
-    const attachment = (await readEInvoiceAttachment(0)(file)).unwrap();
-    expect(attachment).toMatchObject({
+    const read = (await readPartOfFile(file, attachment(0))).unwrap();
+    expect(read).toMatchObject({
       fileName: "bolla.txt",
       mimeType: "text/plain",
     });
-    expect(new TextDecoder().decode(attachment.bytes)).toBe(
-      SAMPLE_ATTACHMENT_TEXT,
-    );
-    const missing = await readEInvoiceAttachment(1)(file);
+    expect(new TextDecoder().decode(read.bytes)).toBe(SAMPLE_ATTACHMENT_TEXT);
+    const missing = await readPartOfFile(file, attachment(1));
     expect(missing.isErr() && missing.error.status).toBe(404);
   });
 
@@ -168,10 +170,8 @@ describe("structured invoice files", () => {
       eInvoiceDocumentText(preview.invoice),
     );
 
-    const attachment = (await readEInvoiceAttachment(0)(file)).unwrap();
-    expect(new TextDecoder().decode(attachment.bytes)).toBe(
-      SAMPLE_ATTACHMENT_TEXT,
-    );
+    const read = (await readPartOfFile(file, attachment(0))).unwrap();
+    expect(new TextDecoder().decode(read.bytes)).toBe(SAMPLE_ATTACHMENT_TEXT);
   });
 
   test.each([

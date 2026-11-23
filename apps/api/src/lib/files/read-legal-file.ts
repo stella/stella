@@ -6,6 +6,7 @@ import {
   E_INVOICE_KINDS,
   SIGNED_DOSSIER_KINDS,
   STRUCTURED_DOCUMENT_KINDS,
+  ZIP_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -14,6 +15,7 @@ import {
   readAsicPreview,
   readSignedDossierPreview,
   readStructuredDocumentPreview,
+  readZipArchivePreview,
 } from "@/api/lib/files/archive-preview";
 import { asicDocumentText } from "@/api/lib/files/asic-document-text";
 import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
@@ -24,6 +26,8 @@ import type { LegalFileReadOptions } from "@/api/lib/files/legal-file-source";
 import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
+import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
+import { LIMITS } from "@/api/lib/limits";
 
 type LegalContentReader = (options: LegalFileReadOptions) => Promise<
   Result<
@@ -90,6 +94,24 @@ const readEInvoiceContent: LegalContentReader = async (options) => {
   });
 };
 
+const readZipArchiveContent: LegalContentReader = async (options) => {
+  const read = await readLegalFilePreview(
+    options,
+    [ZIP_FILE_FORMAT.kind],
+    readZipArchivePreview,
+  );
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  return Result.ok({
+    text: zipArchiveText({
+      files: read.value.files,
+      maxChars: LIMITS.extractedContentMaxChars,
+    }),
+    attachments: [],
+  });
+};
+
 export const LEGAL_FILE_READERS = {
   isdoc: readEInvoiceContent,
   isdocx: readEInvoiceContent,
@@ -101,6 +123,7 @@ export const LEGAL_FILE_READERS = {
   eAkta: readSignedDossierContent,
   zep: readSignedDossierContent,
   xadesZep: readSignedDossierContent,
+  zip: readZipArchiveContent,
   cades: async (options) => {
     const read = await readLegalFilePreview(
       options,

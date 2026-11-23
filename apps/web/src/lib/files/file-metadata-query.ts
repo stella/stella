@@ -1,4 +1,5 @@
 import { queryOptions } from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { RESOURCE_TYPE } from "@stll/api-contract";
 
@@ -35,6 +36,10 @@ export const fileMetadataOptions = (props: FileMetadataOptions) =>
           });
 
         const data = unwrapApiResponse(response);
+        // Without a `part` the endpoint answers with the file itself.
+        if (data.kind !== "file") {
+          return panic("The file link answered with a part");
+        }
 
         return {
           fileId: data.fileId,

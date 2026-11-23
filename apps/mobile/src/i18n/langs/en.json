@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Attachments",
     "certifiedAt": "Certified at",
     "deliveredTo": "Delivered to",
     "error": "Reported error",
@@ -462,6 +461,7 @@
     },
     "fit": "Fit",
     "openOriginal": "Open original",
+    "openPart": "Open {fileName}",
     "preview": "Open preview",
     "previewDescription": "This file opens in the system preview.",
     "retry": "Try again",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Bank account number",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Attached files",
     "bankCode": "Bank code",
     "batchPosition": "Document {position, number} of {count, number}",
     "bic": "BIC code",
@@ -503,6 +502,7 @@
     "paymentReference": "Payment reference",
     "prepaidAmount": "Paid in advance",
     "quantity": "Quantity and unit",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "Registration number",
@@ -514,17 +514,49 @@
     "taxableAmount": "Tax base",
     "totals": "Totals",
     "unitPrice": "Unit price",
+    "units": {
+      "day": "{count, plural, one {{quantity} day} other {{quantity} days}}",
+      "hour": "{count, plural, one {{quantity} hour} other {{quantity} hours}}",
+      "month": "{count, plural, one {{quantity} month} other {{quantity} months}}",
+      "unit": "{count, plural, one {{quantity} unit} other {{quantity} units}}",
+      "week": "{count, plural, one {{quantity} week} other {{quantity} weeks}}",
+      "year": "{count, plural, one {{quantity} year} other {{quantity} years}}"
+    },
     "unreadable": "The invoice could not be read.",
     "vat": "VAT",
     "vatBreakdown": "VAT breakdown",
     "vatId": "VAT ID",
     "xmlUnreadable": "This XML file could not be read."
   },
+  "email": {
+    "cc": "Cc",
+    "date": "Date",
+    "from": "Sender",
+    "noSubject": "(No subject)",
+    "subject": "Subject",
+    "to": "Recipients"
+  },
   "entity": {
     "currentVersion": "Current version",
     "loadFailed": "This item could not be loaded.",
     "reference": "Reference",
     "type": "Type"
+  },
+  "fileParts": {
+    "archiveUnreadable": "This archive couldn’t be read.",
+    "attachments": "Attachments",
+    "files": "Files",
+    "insideFailed": "Couldn’t list the files inside. Tap to try again.",
+    "noFilesInside": "There are no files inside.",
+    "open": "Open {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Password-protected, can’t be opened",
+      "link": "A link to another file, not followed",
+      "tooLarge": "Too large to open",
+      "unreadable": "Damaged, can’t be opened",
+      "unsupported": "Compressed in a way that can’t be opened"
+    },
+    "unnamed": "Unnamed file"
   },
   "header": {
     "search": "Search"
@@ -853,6 +885,7 @@
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
     "noSigners": "No signer details were found.",
+    "signedContent": "Signed document",
     "signers": "Signers",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",

@@ -356,6 +356,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       /app/bundles/runtime/workers/pptx_parser_bg.wasm && \
     cp node_modules/@embedpdf/pdfium/dist/pdfium.wasm \
       /app/bundles/runtime/workers/pdfium.wasm && \
+    cp packages/heic-decoder/generated/heic_decoder_bg.wasm \
+      /app/bundles/runtime/workers/heic_decoder_bg.wasm && \
     cp apps/api/src/lib/ocr-local/latin-v5-dict.txt \
       /app/bundles/runtime/workers/latin-v5-dict.txt
 # Local OCR runtime assets: the pinned ONNX models, plus the onnxruntime

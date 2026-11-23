@@ -3,6 +3,7 @@ import type { InferOutput } from "valibot";
 
 import type { asicPreviewSchema } from "@stll/api-contract/asic";
 import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
+import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
 import type { PreviewText } from "@stll/api-contract/preview-text";
 
 import type {
@@ -10,66 +11,17 @@ import type {
   FileScanRejectedError,
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { hasZipMagic, readZipIndex } from "@/api/lib/file-scan/zip";
 import {
   AsicParseError,
   readAsicContainer,
 } from "@/api/lib/files/asic-container";
 import { asicDocumentText } from "@/api/lib/files/asic-document-text";
+import { OPAQUE_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
 import {
-  detectEmbeddedPayload,
-  OPAQUE_EMBEDDED_MIME_TYPE,
-} from "@/api/lib/files/embedded-payload-format";
+  containerMemberMimeType,
+  partMediaTypeOf,
+} from "@/api/lib/files/part-media-type";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import {
-  DOCX_MIME_TYPE,
-  ODP_MIME_TYPE,
-  ODS_MIME_TYPE,
-  ODT_MIME_TYPE,
-  PPTX_MIME_TYPE,
-  XLSX_MIME_TYPE,
-} from "@/api/mime-types";
-
-const OFFICE_PARTS = {
-  "word/document.xml": DOCX_MIME_TYPE,
-  "xl/workbook.xml": XLSX_MIME_TYPE,
-  "ppt/presentation.xml": PPTX_MIME_TYPE,
-};
-
-const ODF_MIME_MARKERS = [ODT_MIME_TYPE, ODS_MIME_TYPE, ODP_MIME_TYPE];
-
-const readOfficeMimeType = (bytes: Uint8Array): string | null => {
-  const index = readZipIndex(bytes);
-  if (index.type === "malformed") {
-    return null;
-  }
-  const names = new Set(
-    index.entries.map(({ name }) => name.toString("utf-8")),
-  );
-  if (names.has("[Content_Types].xml")) {
-    const candidates = Object.entries(OFFICE_PARTS).filter(([part]) =>
-      names.has(part),
-    );
-    return candidates.length === 1 ? (candidates.at(0)?.[1] ?? null) : null;
-  }
-
-  if (names.has("content.xml")) {
-    const mimeEntry = index.entries.at(0);
-    if (
-      mimeEntry?.name.toString("utf-8") === "mimetype" &&
-      mimeEntry.method === 0
-    ) {
-      return (
-        ODF_MIME_MARKERS.find(
-          (mimeType) =>
-            mimeEntry.data.byteLength === mimeType.length &&
-            Buffer.from(mimeEntry.data).equals(Buffer.from(mimeType)),
-        ) ?? null
-      );
-    }
-  }
-  return null;
-};
 
 type Preview = InferOutput<typeof asicPreviewSchema>;
 type MemberTextReadError =
@@ -88,20 +40,15 @@ export type ContainerMember = {
   opaque?: boolean;
 };
 
-export type ContainerMemberText = Preview["members"][number] & {
+/**
+ * A member's reading: its text, the type it was read as (from its bytes
+ * alone), and the type and size it is listed and delivered with as a part.
+ */
+export type ContainerMemberText = Pick<
+  Preview["members"][number],
+  "fileName" | "status" | "text" | "textFormat" | "mediaType" | "sizeBytes"
+> & {
   mimeType: string;
-};
-
-/** The media type a member is scanned and read as, from its own bytes. */
-export const containerMemberMimeType = async (bytes: Uint8Array) => {
-  const { zipBombGuard } = await import("@/api/lib/file-scan/pipeline");
-  // ZIP packages are recognized from their directory without inflating a
-  // nested archive. The exact bytes still go through the usual upload scan.
-  const officeMimeType =
-    hasZipMagic(bytes) && (await zipBombGuard.scan(bytes)).length === 0
-      ? readOfficeMimeType(bytes)
-      : null;
-  return officeMimeType ?? detectEmbeddedPayload(bytes).mimeType;
 };
 
 /** Scans one member exactly as an upload of its bytes would be scanned. */
@@ -141,6 +88,8 @@ export const readContainerMemberTexts = async ({
       texts.push({
         fileName: member.fileName,
         mimeType: OPAQUE_EMBEDDED_MIME_TYPE,
+        mediaType: OPAQUE_EMBEDDED_MIME_TYPE,
+        sizeBytes: member.bytes.byteLength,
         status: "unavailable",
         text: "",
         textFormat: "plain",
@@ -148,6 +97,15 @@ export const readContainerMemberTexts = async ({
       continue;
     }
     const mimeType = await containerMemberMimeType(member.bytes);
+    // The scan takes ownership of the bytes; type and size are read first.
+    const mediaType = partMediaTypeOf({
+      bytes: member.bytes,
+      detected: mimeType,
+      stated: null,
+      charset: null,
+      fileName: member.fileName,
+    });
+    const sizeBytes = member.bytes.byteLength;
     const scanned = await scanContainerMember(member, mimeType);
     if (scanned.isErr()) {
       return Result.err(scanned.error);
@@ -155,6 +113,8 @@ export const readContainerMemberTexts = async ({
     const unread = {
       fileName: member.fileName,
       mimeType,
+      mediaType,
+      sizeBytes,
       text: "",
       textFormat: "plain",
     } as const;
@@ -233,11 +193,20 @@ export const extractAsicPreview = async ({
     return Result.err(members.error);
   }
   return Result.ok({
-    members: members.value.map(({ fileName, status, text, textFormat }) => ({
-      fileName,
-      status,
-      text,
-      textFormat,
-    })),
+    members: members.value.map(
+      (
+        { fileName, mediaType, sizeBytes, status, text, textFormat },
+        index,
+      ) => ({
+        part: filePartId({ kind: FILE_PART_KINDS.member, index }),
+        // Listed by the name the part link delivers it under.
+        fileName: sanitizeFilenamePreservingExtension(fileName),
+        mediaType,
+        sizeBytes,
+        status,
+        text,
+        textFormat,
+      }),
+    ),
   });
 };

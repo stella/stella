@@ -211,6 +211,15 @@
     "creationRateLimited": "Az utóbbi időben túl sok szervezet jött létre. Próbálja újra később.",
     "creationRefused": "Nem sikerült létrehozni a szervezetet. Ellenőrizze az adatokat, és próbálja újra.",
     "creationSlugConflict": "Ez a szervezeti cím már használatban van. Válasszon másik nevet vagy címet.",
+    "documentNaming": {
+      "description": "Átnevezi az új feltöltéseket azokban az ügyekben, ahol ez be van kapcsolva. A stella kiolvassa minden dokumentum dátumát, típusát és címét, és kitölti velük ezt a mintát. Üresen hagyva megmaradnak az eredeti nevek.",
+      "invalid": "Csak a felsorolt jelölőket használja, és a \\ / : * ? \" < > | karaktereket ne.",
+      "pattern": "Névminta",
+      "preview": "Egy aláírt szerződés neve ez lenne:",
+      "sampleDocType": "Szerződés",
+      "sampleTitle": "Üzletrész-adásvételi szerződés",
+      "tokenHelp": "Jelölők: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Az érték nélküli jelölő az elválasztójával együtt kimarad."
+    },
     "invitations": {
       "cancelConfirmDescription": "A(z) {email} címre küldött meghívólink nem fog tovább működni. A személy ismételt meghívásához küldjön új meghívót.",
       "cancelInvitation": "Meghívó visszavonása",

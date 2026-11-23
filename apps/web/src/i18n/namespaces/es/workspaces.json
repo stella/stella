@@ -31,7 +31,6 @@
       "sent": "Enviado",
       "statedInFile": "Mensaje de buzón de datos (según el archivo)",
       "toHands": "A la atención de {name}",
-      "unlinkedFiles": "Para abrir los archivos adjuntos que aparecen sin enlace, descargue el archivo ZFO original.",
       "unreadable": "No se ha podido leer este archivo como mensaje del buzón de datos ni como acuse de recibo.",
       "uploaded": "Mensaje de buzón de datos subido"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Nota de débito",
       "other": "Otro documento"
     },
-    "downloadAttachment": "Descargar {fileName}",
     "exemptionReason": "Motivo de exención",
     "formatVersion": "{format}, versión {version}",
     "grossTotal": "Total con IVA",
@@ -110,6 +108,7 @@
     "paymentReference": "Referencia de pago",
     "prepaidAmount": "Pagado por adelantado",
     "quantity": "Cantidad y unidad",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Proveedor",
@@ -119,6 +118,14 @@
     "taxableAmount": "Base imponible",
     "totals": "Totales",
     "unitPrice": "Precio unitario",
+    "units": {
+      "day": "{count, plural, one {{quantity} día} many {{quantity} días} other {{quantity} días}}",
+      "hour": "{count, plural, one {{quantity} hora} many {{quantity} horas} other {{quantity} horas}}",
+      "month": "{count, plural, one {{quantity} mes} many {{quantity} meses} other {{quantity} meses}}",
+      "unit": "{count, plural, one {{quantity} unidad} many {{quantity} unidades} other {{quantity} unidades}}",
+      "week": "{count, plural, one {{quantity} semana} many {{quantity} semanas} other {{quantity} semanas}}",
+      "year": "{count, plural, one {{quantity} año} many {{quantity} años} other {{quantity} años}}"
+    },
     "unreadable": "No se pudo leer la factura.",
     "vat": "IVA",
     "vatBreakdown": "Desglose del IVA",
@@ -369,6 +376,7 @@
     "noReadableContent": "No hay contenido legible para la vista previa.",
     "noSigners": "No se encontraron datos de los firmantes.",
     "pdfUnavailable": "La vista previa del PDF no está disponible.",
+    "signedDocument": "Documento firmado",
     "signers": "Firmantes",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",
@@ -553,6 +561,10 @@
     "deleteWorkspaceConfirmDescription": "¿Está seguro de que desea eliminar este asunto? Esta acción no se puede deshacer.",
     "deletedItem": "Eliminado: {name}",
     "deletingWorkspace": "Eliminando asunto",
+    "documentNaming": {
+      "description": "Los documentos nuevos reciben el patrón de nombre de la organización: {pattern}",
+      "label": "Renombrar las nuevas subidas"
+    },
     "documentSwitcher": {
       "download": "Descargar este archivo",
       "renditionsFailed": "Vuelva a cargar el documento e intente descargarlo de nuevo.",

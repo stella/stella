@@ -9,6 +9,7 @@ import { ZipArchive } from "@stll/docx-core/zip";
 
 import { readAsicPreview } from "@/api/lib/files/archive-preview";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { makeAsicFixture } from "@/api/tests/fixtures/asic";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
@@ -86,7 +87,11 @@ test("reads a recognized Office payload from ASiC-S", async () => {
   const preview = (await readAsicPreview(source)).unwrap();
   expect(preview.members).toEqual([
     {
+      part: "member:0",
       fileName: "agreement.bin",
+      // The bytes decide the type, whatever the member's name says.
+      mediaType: DOCX_MIME_TYPE,
+      sizeBytes: office.byteLength,
       text: expect.stringContaining("Saved contract. Článek první."),
       textFormat: "markdown",
       status: "readable",

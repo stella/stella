@@ -42,6 +42,7 @@ import { assertOnlineRepairRehearsalCoverage } from "./online-migration-rehearsa
 import type { OnlineRepairRehearsalRecord } from "./online-migration-rehearsal-guard";
 import {
   ensureOnlineIndexValid,
+  EXPRESSION_STATISTICS_MIN_INDEX_BYTES,
   ONLINE_CONSTRAINT_VALIDATIONS,
   ONLINE_INDEX_REPLACEMENTS,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
@@ -202,6 +203,42 @@ const CLEANUP_STALL_CONSTRAINTS = [
 ] as const;
 
 describe("online migrations", () => {
+  test("analyzes each table once whose large expression indexes lack statistics", async () => {
+    const harness = createHarness({
+      expressionIndexesWithoutStatistics: [
+        { name: "keys_match_key_idx", tableName: "keys" },
+        { name: "keys_other_match_key_idx", tableName: "keys" },
+        { name: "names_match_key_idx", tableName: "names" },
+      ],
+    });
+    expect(await runOnlineMigrations(harness.pool, { repairs: [] })).toEqual({
+      type: "complete",
+    });
+    const analyzes = harness.statements.filter((statement) =>
+      statement.startsWith("ANALYZE "),
+    );
+    expect(analyzes).toEqual([
+      'ANALYZE public."keys"',
+      'ANALYZE public."names"',
+    ]);
+    const census = harness.statements.find((statement) =>
+      statement.includes('AS "tableName"'),
+    );
+    expect(census).toContain(
+      `-- params [${EXPRESSION_STATISTICS_MIN_INDEX_BYTES},null]`,
+    );
+  });
+
+  test("analyzes nothing when every large expression index has statistics", async () => {
+    const harness = createHarness();
+    await runOnlineMigrations(harness.pool, { repairs: [] });
+    expect(
+      harness.statements.filter((statement) =>
+        statement.startsWith("ANALYZE "),
+      ),
+    ).toEqual([]);
+  });
+
   test.each(ONLINE_MIGRATION_REPAIRS)(
     "the default harness reports $name complete",
     async (repair) => {
@@ -2641,6 +2678,11 @@ type HarnessOptions = {
   missingIndexes?: readonly string[];
   /** Replaced indexes already gone; the rest are present until dropped. */
   retiredIndexes?: readonly string[];
+  /** Large expression indexes the statistics census reports without stats. */
+  expressionIndexesWithoutStatistics?: readonly {
+    name: string;
+    tableName: string;
+  }[];
   /** Another session (a migrate run) holds the online lock. */
   onlineLockHeld?: boolean;
 };
@@ -2662,6 +2704,7 @@ const createHarness = ({
     ({ legacyName }) => legacyName,
   ),
   onlineLockHeld = false,
+  expressionIndexesWithoutStatistics = [],
 }: HarnessOptions = {}) => {
   const statements: string[] = [];
   const legacyIndexes = new Set(
@@ -2689,6 +2732,20 @@ const createHarness = ({
     Object.entries(artifacts).map(([name, values]) => [name, [...values]]),
   );
   let released = false;
+  /**
+   * The expression statistics census: every large expression index already
+   * has statistics unless a test injects some without. A freshly built
+   * declared index is a plain column index here.
+   */
+  const answerStatisticsRead = (query: string): unknown[] | undefined => {
+    if (query.includes('AS "hasExpressions"')) {
+      return [{ hasExpressions: false }];
+    }
+    if (query.includes('AS "tableName"') && query.includes("pg_stats")) {
+      return [...expressionIndexesWithoutStatistics];
+    }
+    return undefined;
+  };
   const onlineIndexes = [
     ...ONLINE_MIGRATION_INDEXES,
     ...ONLINE_MIGRATION_INDEX_CUTOVERS.map(({ staged }) => staged),
@@ -3015,6 +3072,10 @@ const createHarness = ({
           }
           if (query.includes("starts_with")) {
             return queryIndexArtifacts(params);
+          }
+          const statistics = answerStatisticsRead(query);
+          if (statistics !== undefined) {
+            return statistics;
           }
           // The graph edge backfill's matter walk: no matter holds a
           // verification run or a Spot, so there is nothing to derive.

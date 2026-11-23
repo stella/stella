@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { createHmac } from "node:crypto";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
@@ -34,8 +35,48 @@ describe("file content grants", () => {
       }),
     ).toEqual({
       status: "valid",
-      grant: { ...subject, expiresAt: NOW + FILE_CONTENT_GRANT_TTL_MS },
+      grant: {
+        ...subject,
+        part: null,
+        expiresAt: NOW + FILE_CONTENT_GRANT_TTL_MS,
+      },
     });
+  });
+
+  test("binds a part of the file, which a check returns as it was granted", () => {
+    const part = { kind: "attachment", index: 3 } as const;
+    const grant = createFileContentGrant({
+      ...subject,
+      part,
+      now: NOW,
+      secret: SECRET,
+    });
+
+    expect(checkFileContentGrant({ grant, now: NOW, secret: SECRET })).toEqual({
+      status: "valid",
+      grant: { ...subject, part, expiresAt: NOW + FILE_CONTENT_GRANT_TTL_MS },
+    });
+  });
+
+  test("refuses a signed grant whose part is not a part address", () => {
+    const payload = Buffer.from(
+      JSON.stringify({
+        ...subject,
+        part: "attachment:-1",
+        expiresAt: NOW + 1000,
+      }),
+    ).toString("base64url");
+    const signature = createHmac("sha256", SECRET)
+      .update(`fc1.${payload}`)
+      .digest("base64url");
+
+    expect(
+      checkFileContentGrant({
+        grant: `fc1.${payload}.${signature}`,
+        now: NOW,
+        secret: SECRET,
+      }),
+    ).toEqual({ status: "invalid" });
   });
 
   test("rejects expiry and tampering without exposing the subject", () => {
@@ -74,7 +115,7 @@ describe("file content grants", () => {
       checkFileContentGrant({ grant, now: expiresAt, secret: SECRET }),
     ).toEqual({
       status: "valid",
-      grant: { ...subject, expiresAt },
+      grant: { ...subject, part: null, expiresAt },
     });
     expect(
       checkFileContentGrant({ grant, now: expiresAt + 1, secret: SECRET }),

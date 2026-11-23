@@ -4,15 +4,21 @@ import * as v from "valibot";
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
-import { certifiedEmailReadSchema } from "@stll/api-contract/certified-email";
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import {
   documentFormat,
   legalFileFormat,
 } from "@stll/api-contract/document-format";
 import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
+import { emailReadingSchema } from "@stll/api-contract/email-reading";
+import {
+  filePartDescriptorSchema,
+  filePartListSchema,
+  isFilePartConvertedMediaType,
+} from "@stll/api-contract/file-parts";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
+import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -106,6 +112,8 @@ const fileUrlSchema = v.object({
 const dataBoxPreviewSchema = v.object({
   kind: v.picklist(DATA_BOX_DOCUMENT_KINDS),
   text: v.string(),
+  /** A message's files as parts, in its order; a receipt has none. */
+  files: v.optional(v.array(filePartDescriptorSchema), []),
 });
 
 type DataBoxDocumentFile = {
@@ -167,25 +175,33 @@ type EInvoiceDocumentFile = {
   >;
 };
 
-/** An .eml file its content shows to be a certified email (Italian PEC). */
-type CertifiedEmailDocumentFile = {
-  readonly viewer: "certifiedEmail";
+type ZipArchiveDocumentFile = {
+  readonly viewer: "zip";
   readonly fileName: string;
   readonly fieldId: string;
   readonly preview: Result<
-    v.InferOutput<typeof certifiedEmailReadSchema>,
+    v.InferOutput<typeof zipArchivePreviewSchema>,
     ApiError
   >;
+};
+
+/** An email file (.eml, .msg), certified (Italian PEC) or not. */
+type EmailDocumentFile = {
+  readonly viewer: "email";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<v.InferOutput<typeof emailReadingSchema>, ApiError>;
 };
 
 export type LegalDocumentFile =
   | AsicDocumentFile
   | CadesDocumentFile
-  | CertifiedEmailDocumentFile
   | DataBoxDocumentFile
   | EInvoiceDocumentFile
+  | EmailDocumentFile
   | SignedDossierDocumentFile
-  | StructuredDocumentFile;
+  | StructuredDocumentFile
+  | ZipArchiveDocumentFile;
 
 export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
 
@@ -205,6 +221,67 @@ export const readOriginalDocumentFile = async ({
     source,
     path: fileUrlPath(workspaceId, fieldId, "download"),
     schema: fileUrlSchema,
+  });
+
+/**
+ * What a part is fetched as to open it: a document no viewer draws (a Word
+ * 97 file, an OpenDocument text, a WordPerfect file) as the PDF the server
+ * converts it to, the way a stored file of its type opens; any other part
+ * as itself, whole.
+ */
+const partPurposeFor = (mediaType: string): FilePurpose =>
+  isFilePartConvertedMediaType(mediaType) ? "display" : "download";
+
+/**
+ * A short-lived, audited link to one part of a document's file: an email's
+ * attachment, the document a signed file wraps, a container's member.
+ */
+export const readDocumentPart = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+  part,
+  mediaType,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  /** A part address such as `attachment:0` (`@stll/api-contract/file-parts`). */
+  readonly part: string;
+  /** The part's media type, as its container's preview lists it. */
+  readonly mediaType: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `${fileUrlPath(workspaceId, fieldId, partPurposeFor(mediaType))}&part=${encodeURIComponent(part)}`,
+    schema: fileUrlSchema,
+  });
+
+/**
+ * The files of a part that is itself a container (an email in an archive,
+ * an archive in a data-box message), each opening by the path it is given.
+ */
+export const readDocumentPartList = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+  part,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  readonly part: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `/v1/files/${encodeURIComponent(workspaceId)}/parts/${encodeURIComponent(fieldId)}?part=${encodeURIComponent(part)}`,
+    schema: filePartListSchema,
   });
 
 /** The document has no file: it was created empty, or its file was removed. */
@@ -334,6 +411,20 @@ export const readDocumentFile = async ({
           preview,
         } satisfies SignedDossierDocumentFile);
       }
+      case "zip": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/zip/${encodeURIComponent(fieldId)}`,
+          schema: zipArchivePreviewSchema,
+        });
+        return Result.ok({
+          viewer: "zip",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies ZipArchiveDocumentFile);
+      }
       case "ofd":
       case "uyap": {
         const preview = await requestApi({
@@ -382,27 +473,27 @@ export const readDocumentFile = async ({
         kind satisfies never;
         return panic("Unsupported legal file viewer");
     }
-    // Only the content tells a certified email from any other .eml: the
-    // server reads it and refuses any other email, which opens as before.
-    const format = documentFormat(mimeType, fileName);
-    if (format.kind === "email" && format.label === "EML") {
+    // Every email file is read by the server: its header, its text, its
+    // attachments and a certified email's certification data. An email the
+    // server cannot read opens as before, in the system preview.
+    if (documentFormat(mimeType, fileName).kind === "email") {
       const preview = await requestApi({
         fetch,
         source,
-        path: `/v1/files/${encodeURIComponent(workspaceId)}/certified-email/${encodeURIComponent(fieldId)}`,
-        schema: certifiedEmailReadSchema,
+        path: `/v1/files/${encodeURIComponent(workspaceId)}/email-reading/${encodeURIComponent(fieldId)}`,
+        schema: emailReadingSchema,
       });
-      const notCertified =
+      const unreadable =
         Result.isError(preview) &&
         preview.error._tag === "ApiRequestError" &&
         preview.error.code === PREVIEW_UNAVAILABLE_ERROR_CODE;
-      if (!notCertified) {
+      if (!unreadable) {
         return Result.ok({
-          viewer: "certifiedEmail",
+          viewer: "email",
           fileName,
           fieldId,
           preview,
-        } satisfies CertifiedEmailDocumentFile);
+        } satisfies EmailDocumentFile);
       }
     }
     const display = await requestApi({

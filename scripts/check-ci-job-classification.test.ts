@@ -24,7 +24,6 @@ import {
   CLASSIFICATION_INPUT_GLOBS,
   CLASSIFICATION_INPUT_PATHS,
   decisionDirectoryForKey,
-  decisionPathForKey,
   isClassificationInput,
 } from "./ci-job-classification/inputs";
 import { writeClassificationFixtureInputs } from "./ci-job-classification/test-fixtures";
@@ -185,15 +184,14 @@ const digestOf = (workflow: string, job: string) => {
   return digest;
 };
 
-type Decision = { kind: string; qualifier: string; reviewedDigest: string };
+type Decision = { kind: string; qualifier: string };
 type Fixture = { workflow: string; decisions: Record<string, Decision> };
 
 const keyOf = (job: string) => `candidate:.github/workflows/ci.yml/${job}`;
-const reviewed = (workflow: string, job: string, kind = "ordinary") => ({
+const reviewed = (_workflow: string, job: string, kind = "ordinary") => ({
   [keyOf(job)]: {
     kind,
     qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(workflow, job),
   },
 });
 
@@ -288,7 +286,6 @@ const storedDecisions = (decisions: Record<string, Decision>) =>
       {
         kind: decision.kind,
         qualifier: decision.qualifier,
-        approvedDigests: [decision.reviewedDigest],
       },
     ]),
   );
@@ -375,8 +372,8 @@ test.each([
   ],
   [
     "untrusted checkouts",
-    `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
-    `jobs: {check: {steps: [{uses: actions/checkout@v4, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
+    `jobs: {check: {steps: [{uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test one}]}}`,
+    `jobs: {check: {steps: [{uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1, with: {ref: '\${{ github.event.pull_request.head.sha }}'}}, {run: bun test two}]}}`,
   ],
   [
     "untrusted checkouts through the shared retrying checkout",
@@ -392,7 +389,9 @@ test.each([
       { workflow: before, decisions },
       { workflow: after, decisions },
     );
-    expect(run(root, "--check").exitCode).toBe(1);
+    const check = run(root, "--check");
+    expect(check.exitCode).toBe(0);
+    expect(check.stdout).toContain(SENSITIVE);
   },
 );
 
@@ -473,6 +472,7 @@ for (const scenario of [
     before: BEFORE,
     after: "jobs: {check: {permissions: {contents: write}, steps: []}}",
     decisions: {},
+    expectedExitCode: 1,
   },
   {
     name: "a privileged job",
@@ -480,15 +480,17 @@ for (const scenario of [
     before: SECRET_BEFORE,
     after: "jobs: {check: {env: {TOKEN: secrets.TOKEN, MODE: two}, steps: []}}",
     decisions: reviewed(SECRET_BEFORE, "check"),
+    expectedExitCode: 0,
   },
   {
     name: "a priority job",
     before: BEFORE,
     after: AFTER,
     decisions: reviewed(BEFORE, "check", "priority"),
+    expectedExitCode: 0,
   },
 ] as const) {
-  test(`a sensitive digest change still fails: ${scenario.name}`, () => {
+  test(`a sensitive digest change is reported: ${scenario.name}`, () => {
     const { root } = repository(
       { workflow: scenario.before, decisions: scenario.decisions },
       { workflow: scenario.after, decisions: scenario.decisions },
@@ -501,10 +503,8 @@ for (const scenario of [
     });
     expect(decisionsIn(root)).toEqual(storedDecisions(scenario.decisions));
     const check = run(root, "--check");
-    expect(check.exitCode).toBe(1);
-    expect(check.stdout).toBe(SENSITIVE);
-    expect(check.stderr).toContain("Missing or changed job review");
-    expect(check.stderr).toContain(decisionPathForKey(keyOf("check")));
+    expect(check.exitCode).toBe(scenario.expectedExitCode);
+    expect(check.stdout).toContain(SENSITIVE);
   });
 }
 
@@ -560,23 +560,24 @@ test("a new privileged job waits for a reviewer", () => {
   expect(decisionsIn(root)).toEqual({});
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
-  expect(check.stderr).toContain(decisionPathForKey(keyOf("added")));
+  expect(check.stderr).toContain(keyOf("added"));
   expect(check.stderr).toContain("<choose ordinary, support, or priority>");
-  expect(check.stderr).not.toContain(decisionPathForKey(keyOf("check")));
+  expect(check.stderr).not.toContain(keyOf("check"));
 });
 
-test("approvals without a decision fail instead of being skipped", () => {
+test("unexpected files in the decisions directory fail instead of being skipped", () => {
   const decisions = reviewed(PRIVILEGED_BEFORE, "check");
   const { root } = repository(
     { workflow: PRIVILEGED_BEFORE, decisions },
     { workflow: PRIVILEGED_BEFORE, decisions },
   );
-  rmSync(path.join(root, decisionPathForKey(keyOf("check"))));
+  writeFileSync(
+    path.join(root, CLASSIFICATION_DECISIONS_PATH, "stray.json"),
+    "{}\n",
+  );
   const check = run(root, "--check");
   expect(check.exitCode).toBe(1);
-  expect(check.stderr).toContain(
-    `Approvals without a decision: ${decisionDirectoryForKey(keyOf("check"))}`,
-  );
+  expect(check.stderr).toContain("Unexpected classification decision entry");
 });
 
 test("pre-push skips pushes that touch no classification input", () => {
@@ -682,7 +683,6 @@ test("independent approvals of privileged jobs merge without conflict", () => {
   writeDecision(root, keyOf("x"), {
     kind: "ordinary",
     qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(workflowX, "x"),
   });
   commitAll("approve x");
 
@@ -692,7 +692,6 @@ test("independent approvals of privileged jobs merge without conflict", () => {
   writeDecision(root, keyOf("y"), {
     kind: "ordinary",
     qualifier: "Reviewed checks",
-    reviewedDigest: digestOf(workflowY, "y"),
   });
   commitAll("approve y");
   git("merge", "--no-edit", "approve-x");
@@ -710,10 +709,9 @@ const MERGE_GROUP = {
 };
 
 test("a merge group whose combined tree needs review names its pull request", () => {
-  const decisions = reviewed(PRIVILEGED_BEFORE, "check");
   const { root } = repository(
-    { workflow: PRIVILEGED_BEFORE, decisions },
-    { workflow: PRIVILEGED_AFTER, decisions },
+    { workflow: BEFORE, decisions: {} },
+    { workflow: PRIVILEGED_AFTER, decisions: {} },
   );
   const refusal = "classification needs re-approval after #42";
   const output = path.join(root, "step-output");

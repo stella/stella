@@ -211,6 +211,15 @@
     "creationRateLimited": "V poslední době bylo vytvořeno příliš mnoho organizací. Zkuste to později.",
     "creationRefused": "Organizaci se nepodařilo vytvořit. Zkontrolujte údaje a zkuste to znovu.",
     "creationSlugConflict": "Tuto adresu organizace už někdo používá. Zvolte jiný název nebo adresu.",
+    "documentNaming": {
+      "description": "Přejmenuje nově nahrané dokumenty ve spisech, které to mají zapnuté. stella přečte datum, typ a název každého dokumentu a doplní je do tohoto vzoru. Prázdné pole ponechá původní názvy.",
+      "invalid": "Použijte jen uvedené tokeny a žádné znaky \\ / : * ? \" < > |.",
+      "pattern": "Vzor názvu",
+      "preview": "Podepsaná smlouva by se jmenovala:",
+      "sampleDocType": "Smlouva",
+      "sampleTitle": "Smlouva o koupi podílu",
+      "tokenHelp": "Tokeny: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Token bez hodnoty se vynechá i s oddělovačem."
+    },
     "invitations": {
       "cancelConfirmDescription": "Odkaz z pozvánky zaslané na {email} přestane fungovat. Pokud chcete tuto osobu pozvat znovu, pošlete novou pozvánku.",
       "cancelInvitation": "Zrušit pozvánku",

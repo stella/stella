@@ -4,9 +4,15 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { cn } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import {
+  FilePartViewer,
+  useOpenFilePart,
+} from "@/components/file-parts/file-parts";
+import { useFilePartActions } from "@/components/file-parts/use-file-part-actions";
 import { EInvoiceDetails } from "@/components/inspector/e-invoice-details";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { eInvoicePreviewOptions } from "@/lib/files/legal-file-queries";
@@ -25,6 +31,11 @@ export const EInvoiceViewer = ({
     }),
   );
   const t = useTranslations();
+  const source = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const actions = useFilePartActions(source);
+  const { open, openPart, close } = useOpenFilePart(
+    data.type === "invoice" ? data.invoice.attachments : [],
+  );
 
   return (
     <FileViewerWithAI
@@ -36,7 +47,19 @@ export const EInvoiceViewer = ({
       className="flex h-full min-h-0 flex-col"
       workspaceId={tab.workspaceId}
     >
-      <ScrollArea axis="vertical" className="min-h-0 flex-1">
+      {open === null ? null : (
+        <FilePartViewer
+          actions={actions}
+          key={open.part}
+          onBack={close}
+          row={open}
+          source={source}
+        />
+      )}
+      <ScrollArea
+        axis="vertical"
+        className={cn("min-h-0 flex-1", open !== null && "hidden")}
+      >
         <article className="space-y-4 p-4" {...DOCKED_COMPOSER_CLEARANCE}>
           <Button
             onClick={onDownload}
@@ -49,9 +72,9 @@ export const EInvoiceViewer = ({
           </Button>
           {data.type === "invoice" ? (
             <EInvoiceDetails
-              fieldId={tab.id}
+              actions={actions}
+              onOpenAttachment={openPart}
               preview={data.invoice}
-              workspaceId={tab.workspaceId}
             />
           ) : (
             // XML that holds no invoice: its own markup, indented.
@@ -71,6 +94,7 @@ export const EInvoiceViewer = ({
           )}
         </article>
       </ScrollArea>
+      {actions.dialog}
     </FileViewerWithAI>
   );
 };

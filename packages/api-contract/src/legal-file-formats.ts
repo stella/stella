@@ -30,6 +30,19 @@ export const CADES_FILE_FORMAT = {
   mimeAliases: ["application/x-pkcs7-mime"],
 } as const;
 
+/**
+ * A plain ZIP archive. A ZIP-based format its name names (an ASiC container,
+ * an ISDOCX invoice, an Office document) is that format instead.
+ */
+export const ZIP_FILE_FORMAT = {
+  kind: "zip",
+  auditFormat: "zip",
+  label: "ZIP",
+  extensions: [".zip"],
+  mimeType: "application/zip",
+  mimeAliases: ["application/x-zip-compressed"],
+} as const;
+
 export const [ASIC_E_FILE_FORMAT, ASIC_S_FILE_FORMAT] = ASIC_FILE_FORMATS;
 
 export const ASIC_FILE_KINDS = ASIC_FILE_FORMATS.map(({ kind }) => kind);
@@ -49,6 +62,7 @@ export const LEGAL_FILE_FORMATS = [
   ...SIGNED_DOSSIER_FORMATS,
   ...STRUCTURED_DOCUMENT_FORMATS,
   ...E_INVOICE_FILE_FORMATS,
+  ZIP_FILE_FORMAT,
 ] as const;
 
 export type LegalFileFormat = (typeof LEGAL_FILE_FORMATS)[number];

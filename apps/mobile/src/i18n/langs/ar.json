@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "المرفقات",
     "certifiedAt": "وقت الاعتماد",
     "deliveredTo": "سُلّم إلى",
     "error": "الخطأ المُبلّغ عنه",
@@ -462,6 +461,7 @@
     },
     "fit": "العرض",
     "openOriginal": "فتح الأصل",
+    "openPart": "فتح {fileName}",
     "preview": "فتح المعاينة",
     "previewDescription": "يُفتح هذا الملف في معاينة النظام.",
     "retry": "إعادة المحاولة",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "رقم الحساب المصرفي",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "الملفات المرفقة",
     "bankCode": "رمز البنك",
     "batchPosition": "المستند {position, number} من {count, number}",
     "bic": "رمز BIC",
@@ -503,6 +502,7 @@
     "paymentReference": "مرجع الدفع",
     "prepaidAmount": "المدفوع مقدمًا",
     "quantity": "الكمية والوحدة",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "رقم التسجيل",
@@ -514,17 +514,49 @@
     "taxableAmount": "المبلغ الخاضع للضريبة",
     "totals": "الإجماليات",
     "unitPrice": "سعر الوحدة",
+    "units": {
+      "day": "{count, plural, zero {{quantity} يوم} one {{quantity} يوم} two {{quantity} يوم} few {{quantity} أيام} many {{quantity} يومًا} other {{quantity} يوم}}",
+      "hour": "{count, plural, zero {{quantity} ساعة} one {{quantity} ساعة} two {{quantity} ساعة} few {{quantity} ساعات} many {{quantity} ساعة} other {{quantity} ساعة}}",
+      "month": "{count, plural, zero {{quantity} شهر} one {{quantity} شهر} two {{quantity} شهر} few {{quantity} أشهر} many {{quantity} شهرًا} other {{quantity} شهر}}",
+      "unit": "{count, plural, zero {{quantity} وحدة} one {{quantity} وحدة} two {{quantity} وحدة} few {{quantity} وحدات} many {{quantity} وحدة} other {{quantity} وحدة}}",
+      "week": "{count, plural, zero {{quantity} أسبوع} one {{quantity} أسبوع} two {{quantity} أسبوع} few {{quantity} أسابيع} many {{quantity} أسبوعًا} other {{quantity} أسبوع}}",
+      "year": "{count, plural, zero {{quantity} سنة} one {{quantity} سنة} two {{quantity} سنة} few {{quantity} سنوات} many {{quantity} سنة} other {{quantity} سنة}}"
+    },
     "unreadable": "تعذّرت قراءة الفاتورة.",
     "vat": "ضريبة القيمة المضافة",
     "vatBreakdown": "تفصيل ضريبة القيمة المضافة",
     "vatId": "رقم ضريبة القيمة المضافة",
     "xmlUnreadable": "تعذّرت قراءة ملف XML هذا."
   },
+  "email": {
+    "cc": "نسخة",
+    "date": "التاريخ",
+    "from": "المرسل",
+    "noSubject": "(بلا موضوع)",
+    "subject": "الموضوع",
+    "to": "المستلمون"
+  },
   "entity": {
     "currentVersion": "الإصدار الحالي",
     "loadFailed": "تعذّر تحميل هذا العنصر.",
     "reference": "المرجع",
     "type": "النوع"
+  },
+  "fileParts": {
+    "archiveUnreadable": "تعذّرت قراءة الأرشيف.",
+    "attachments": "المرفقات",
+    "files": "الملفات",
+    "insideFailed": "تعذّر تحميل الملفات الموجودة بداخله. اضغط للمحاولة مرة أخرى.",
+    "noFilesInside": "لا توجد ملفات بداخله.",
+    "open": "فتح {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "محمي بكلمة مرور، لا يمكن فتحه",
+      "link": "رابط إلى ملف آخر، لا يُفتح",
+      "tooLarge": "كبير جدًا بحيث لا يمكن فتحه",
+      "unreadable": "تالف، لا يمكن فتحه",
+      "unsupported": "مضغوط بطريقة لا يمكن فتحها"
+    },
+    "unnamed": "ملف بلا اسم"
   },
   "header": {
     "search": "بحث"
@@ -853,6 +885,7 @@
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
     "noSigners": "لم يُعثر على بيانات أي موقّع.",
+    "signedContent": "المستند الموقّع",
     "signers": "الموقّعون",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",

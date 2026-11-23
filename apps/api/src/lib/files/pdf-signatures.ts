@@ -15,7 +15,7 @@
  */
 
 import type { PDF, SaveOptions } from "@libpdf/core";
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 /** An appended revision was asked for where only a rewrite is possible. */
 export class PdfRevisionAppendError extends TaggedError(
@@ -122,6 +122,27 @@ export const savePdfRewrite = async ({
     return { status: blocker };
   }
   return { status: "saved", bytes: await pdf.save(options) };
+};
+
+/**
+ * Saves a PDF built here from nothing (`PDF.create()`), which can be
+ * neither signed nor encrypted.
+ */
+export const saveCreatedPdf = async (pdf: PDF): Promise<Uint8Array> => {
+  const saved = await savePdfRewrite({ pdf, source: new Uint8Array() });
+  switch (saved.status) {
+    case "saved": {
+      return saved.bytes;
+    }
+    case "signed":
+    case "encrypted": {
+      return panic("A created PDF cannot be signed or encrypted");
+    }
+    default: {
+      saved satisfies never;
+      return panic("Unknown created PDF save status");
+    }
+  }
 };
 
 /**

@@ -9,6 +9,12 @@ import { cn } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
+import {
+  FilePartList,
+  FilePartViewer,
+  useOpenFilePart,
+} from "@/components/file-parts/file-parts";
+import { useFilePartActions } from "@/components/file-parts/use-file-part-actions";
 import { EInvoiceDetails } from "@/components/inspector/e-invoice-details";
 import type { FileTab } from "@/components/inspector/file-tab";
 import type { LegalFilePdfView } from "@/components/inspector/legal-file-pdf-view";
@@ -19,10 +25,8 @@ import {
   PeekSuspenseFallback,
 } from "@/components/pdf/peek/peek-pdf-viewer";
 import { PDF_MIME } from "@/lib/consts";
-import {
-  cadesPdfOptions,
-  cadesPreviewOptions,
-} from "@/lib/files/legal-file-queries";
+import { filePartContentOptions } from "@/lib/files/file-part-queries";
+import { cadesPreviewOptions } from "@/lib/files/legal-file-queries";
 
 export const CadesFileViewer = ({
   onDownload,
@@ -37,7 +41,17 @@ export const CadesFileViewer = ({
     cadesPreviewOptions({ fieldId: tab.id, workspaceId: tab.workspaceId }),
   );
   const t = useTranslations();
-  const hasPdf = data.mimeType === PDF_MIME;
+  const source = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const actions = useFilePartActions(source);
+  // The signed document, and the files a signed invoice carries.
+  const parts = [
+    ...(data.content === null ? [] : [data.content]),
+    ...(data.invoice === null ? [] : data.invoice.attachments),
+  ];
+  const { open, openPart, close } = useOpenFilePart(parts);
+  const pdfPart =
+    data.content?.mediaType === PDF_MIME ? data.content.part : null;
+  const hasPdf = pdfPart !== null;
   const textPreview = data.text.trim() ? (
     <LegalFilePreviewText format={data.textFormat} text={data.text} />
   ) : null;
@@ -52,10 +66,21 @@ export const CadesFileViewer = ({
       className="flex h-full min-h-0 flex-col"
       workspaceId={tab.workspaceId}
     >
+      {open === null ? null : (
+        <FilePartViewer
+          actions={actions}
+          fallback={open.part === data.content?.part ? textPreview : null}
+          key={open.part}
+          onBack={close}
+          row={open}
+          source={source}
+        />
+      )}
       <ScrollArea
         axis="vertical"
         className={cn(
           "min-h-0",
+          open !== null && "hidden",
           hasPdf ? "h-auto max-h-[40%] shrink-0" : "flex-1",
         )}
       >
@@ -78,6 +103,12 @@ export const CadesFileViewer = ({
             <DownloadIcon />
             {t("common.downloadOriginal")}
           </Button>
+          <FilePartList
+            actions={actions}
+            onOpen={openPart}
+            parts={data.content === null ? [] : [data.content]}
+            title={t("signedFile.signedDocument")}
+          />
           {data.layers.map(({ id, signers }, index) => (
             <section className="space-y-1 text-sm" key={id}>
               <h3 className="font-medium">
@@ -96,9 +127,9 @@ export const CadesFileViewer = ({
           ))}
           {!hasPdf && data.invoice !== null && (
             <EInvoiceDetails
-              fieldId={tab.id}
+              actions={actions}
+              onOpenAttachment={openPart}
               preview={data.invoice}
-              workspaceId={tab.workspaceId}
             />
           )}
           {!hasPdf &&
@@ -110,7 +141,7 @@ export const CadesFileViewer = ({
             ))}
         </article>
       </ScrollArea>
-      {hasPdf && (
+      {pdfPart !== null && open === null && (
         // The embedded PDF is drawn by the inspector's PDF viewer: it fits
         // the panel's width, follows the zoom controls floating over it and
         // zooms with the wheel, as a plain PDF file does.
@@ -135,39 +166,37 @@ export const CadesFileViewer = ({
             onDownload={onDownload}
             surface="inspector-cades"
           >
-            <CadesPdf
-              fieldId={tab.id}
-              pdfView={pdfView}
-              workspaceId={tab.workspaceId}
-            />
+            <CadesPdf part={pdfPart} pdfView={pdfView} source={source} />
           </MeasuredPdfProvider>
           {pdfView.controls}
         </div>
       )}
+      {actions.dialog}
     </FileViewerWithAI>
   );
 };
 
 const CadesPdf = ({
-  fieldId,
+  part,
   pdfView,
-  workspaceId,
+  source,
 }: {
-  fieldId: string;
+  part: string;
   pdfView: LegalFilePdfView;
-  workspaceId: string;
+  source: { fieldId: string; workspaceId: string };
 }) => {
   const { data: buffer } = useSuspenseQuery(
-    cadesPdfOptions({ fieldId, workspaceId }),
+    filePartContentOptions({ ...source, part }),
   );
   return (
     <PeekPdfViewport
       buffer={buffer}
       colorMode={pdfView.colorMode}
-      fileId={`cades:${fieldId}`}
+      fileId={`cades:${source.fieldId}`}
       onWheelZoom={pdfView.onWheelZoom}
       pageSource="document"
       scaleOffset={pdfView.scaleOffset}
+      underOverlayBar
     />
   );
 };

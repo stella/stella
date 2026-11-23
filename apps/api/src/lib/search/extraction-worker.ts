@@ -31,6 +31,11 @@ import {
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
 import {
+  FILE_PART_KINDS,
+  filePartId,
+  parseFilePartId,
+} from "@stll/api-contract/file-parts";
+import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
 } from "@stll/api-contract/legal-file-formats";
@@ -56,6 +61,7 @@ import {
   ASIC_PREVIEW_WORKER_MODE,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
+  ZIP_ARCHIVE_PREVIEW_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
 import type { AsicParseError } from "@/api/lib/files/asic-container";
 import { asicDocumentText } from "@/api/lib/files/asic-document-text";
@@ -64,13 +70,11 @@ import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
 import {
   CADES_WORKER_EXIT,
   CADES_WORKER_MODE,
-  type CadesWorkerMode,
 } from "@/api/lib/files/cades-preview-protocol";
 import { scanCadesPayload } from "@/api/lib/files/cades-preview-worker";
 import type { DocumentPackageError } from "@/api/lib/files/document-archive";
 import { readEInvoiceXml } from "@/api/lib/files/e-invoice-document";
 import {
-  E_INVOICE_ATTACHMENT_HEADER_END,
   E_INVOICE_WORKER_EXIT,
   E_INVOICE_WORKER_MODE,
 } from "@/api/lib/files/e-invoice-protocol";
@@ -79,8 +83,8 @@ import {
   xmlDocumentPreviewText,
 } from "@/api/lib/files/e-invoice-text";
 import {
-  extractEInvoiceAttachment,
   extractEInvoicePreview,
+  listEInvoiceParts,
 } from "@/api/lib/files/e-invoice-worker";
 import {
   type EmailAttachment,
@@ -88,15 +92,27 @@ import {
   parsedEmailToText,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
+import {
+  EMBEDDED_PART_LIST_WORKER_MODE,
+  EMBEDDED_PART_WORKER_EXIT,
+  EMBEDDED_PART_WORKER_MODE,
+  encodeEmbeddedPart,
+} from "@/api/lib/files/embedded-part-protocol";
+import {
+  cadesContentCandidate,
+  type EmbeddedPartError,
+  extractEmbeddedPart,
+  listEmbeddedParts,
+} from "@/api/lib/files/embedded-part-worker";
 import { XML_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
 import type { P7mParseError } from "@/api/lib/files/p7m";
+import { partMediaType } from "@/api/lib/files/part-media-type";
 import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
-import {
-  extractSignedDossierPdf,
-  extractSignedDossierPreview,
-} from "@/api/lib/files/signed-dossier-worker";
+import { extractSignedDossierPreview } from "@/api/lib/files/signed-dossier-worker";
 import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
+import { extractZipArchivePreview } from "@/api/lib/files/zip-archive-preview";
+import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -475,6 +491,20 @@ const extractSignedDossierText = async ({
   return preview.map(signedDossierText);
 };
 
+const extractZipText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const preview = await extractZipArchivePreview({
+    fileBytes,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  return preview.map(({ files }) => zipArchiveText({ files, maxChars }));
+};
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -493,6 +523,7 @@ const LEGAL_TEXT_READERS = {
   isdoc: extractEInvoiceText,
   isdocx: extractEInvoiceText,
   xml: extractEInvoiceText,
+  zip: extractZipText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -716,8 +747,12 @@ const readCadesPayloadContent = async (
 > => {
   if (!NON_XML_PAYLOAD_MIME_TYPES.has(normalizeMimeType(file.mimeType))) {
     const invoice = readEInvoiceXml(new Uint8Array(file.bytes));
-    if (invoice.isOk() && invoice.value !== null) {
-      const { preview } = invoice.value;
+    const listed =
+      invoice.isOk() && invoice.value !== null
+        ? await listEInvoiceParts(invoice.value)
+        : null;
+    if (listed?.isOk() === true) {
+      const preview = listed.value;
       return Result.ok({
         invoice: preview,
         text: eInvoiceDocumentText(preview).slice(0, maxChars),
@@ -737,14 +772,12 @@ const readCadesPayloadContent = async (
 };
 
 type CadesWorkerOptions = {
-  mode: CadesWorkerMode;
   fileBytes: Uint8Array;
   fileName: string;
   maxChars: number;
 };
 
 const writeCadesPreview = async ({
-  mode,
   fileBytes,
   fileName,
   maxChars,
@@ -761,25 +794,32 @@ const writeCadesPreview = async ({
     }
   }
   const { file, layers } = payload.value;
-  const bytes = new Uint8Array(file.bytes);
-  if (mode === CADES_WORKER_MODE.pdf) {
-    if (file.mimeType !== PDF_MIME_TYPE) {
-      return Result.ok(CADES_WORKER_EXIT.unreadable);
-    }
-    await writeWorkerStdout(bytes);
-    return Result.ok(0);
-  }
-
   const content = await readCadesPayloadContent(file, maxChars);
   if (content.isErr()) {
     return Result.err(content.error);
   }
+  const signed = cadesContentCandidate(fileBytes, fileName);
+  if (signed.isErr()) {
+    return Result.ok(CADES_WORKER_EXIT.unreadable);
+  }
+  const { bytes } = signed.value;
   const preview = {
     fileName: sanitizeFilename(file.fileName),
     mimeType: file.mimeType,
     layers,
     text: content.value.text,
     textFormat: content.value.format,
+    content: {
+      part: filePartId({ kind: FILE_PART_KINDS.content, index: 0 }),
+      fileName: signed.value.fileName,
+      mediaType: await partMediaType({
+        bytes,
+        stated: null,
+        charset: null,
+        fileName: signed.value.fileName,
+      }),
+      sizeBytes: bytes.byteLength,
+    },
     invoice: content.value.invoice,
   } satisfies v.InferOutput<typeof cadesPreviewSchema>;
   await writeWorkerStdout(JSON.stringify(preview));
@@ -831,54 +871,17 @@ const writeEInvoicePreview = async (options: {
   return Result.ok(0);
 };
 
-const writeEInvoiceAttachment = async (options: {
-  fileBytes: Uint8Array;
-  mimeType: string;
-  index: number;
-}) => {
-  const attachment = await extractEInvoiceAttachment(options);
-  if (attachment.isErr()) {
-    switch (attachment.error._tag) {
-      case "DocumentPackageError":
-      case "P7mParseError":
-        return Result.ok(E_INVOICE_WORKER_EXIT.unreadable);
-      case "FileScanRejectedError":
-        return Result.ok(E_INVOICE_WORKER_EXIT.rejected);
-      case "FileScanFailedError":
-        return Result.err(attachment.error);
-    }
-  }
-  if (attachment.value === null) {
-    return Result.ok(E_INVOICE_WORKER_EXIT.noAttachment);
-  }
-  const { fileName, mimeType, bytes } = attachment.value;
-  const header = new TextEncoder().encode(
-    JSON.stringify({ fileName, mimeType }),
-  );
-  const reply = new Uint8Array(header.byteLength + 1 + bytes.byteLength);
-  reply.set(header);
-  reply[header.byteLength] = E_INVOICE_ATTACHMENT_HEADER_END;
-  reply.set(bytes, header.byteLength + 1);
-  await writeWorkerStdout(reply);
-  return Result.ok(0);
-};
-
 const writeSignedDossier = async (options: {
-  mode: (typeof SIGNED_DOSSIER_WORKER_MODE)[keyof typeof SIGNED_DOSSIER_WORKER_MODE];
   fileBytes: Uint8Array;
   mimeType: string;
   maxChars: number;
-  document: number;
 }) => {
-  const output =
-    options.mode === SIGNED_DOSSIER_WORKER_MODE.pdf
-      ? await extractSignedDossierPdf(options)
-      : (
-          await extractSignedDossierPreview({
-            ...options,
-            readText: extractEmbeddedPayloadText,
-          })
-        ).map((preview) => JSON.stringify(preview));
+  const output = (
+    await extractSignedDossierPreview({
+      ...options,
+      readText: extractEmbeddedPayloadText,
+    })
+  ).map((preview) => JSON.stringify(preview));
   if (output.isErr()) {
     switch (output.error._tag) {
       case "SignedDossierParseError":
@@ -890,10 +893,90 @@ const writeSignedDossier = async (options: {
         return Result.err(output.error);
     }
   }
-  if (output.value === null) {
-    return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
-  }
   await writeWorkerStdout(output.value);
+  return Result.ok(0);
+};
+
+/** The exit a container that cannot be read, or a refused part, ends with. */
+const embeddedPartExit = (error: EmbeddedPartError) => {
+  switch (error._tag) {
+    case "AsicParseError":
+    case "DataBoxMessageParseError":
+    case "DocumentPackageError":
+    case "EmailParseError":
+    case "P7mParseError":
+    case "SignedDossierParseError":
+      return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
+    case "FileScanRejectedError":
+      return Result.ok(EMBEDDED_PART_WORKER_EXIT.rejected);
+    case "FileScanFailedError":
+    case "UnhandledException":
+      return Result.err(error);
+    default:
+      error satisfies never;
+      return panic("Unhandled embedded part error");
+  }
+};
+
+type EmbeddedPartRequest = {
+  fileBytes: Uint8Array;
+  containerMimeType: string;
+  containerName: string;
+  partId: string;
+};
+
+const writeEmbeddedPart = async (options: EmbeddedPartRequest) => {
+  const part = parseFilePartId(options.partId);
+  if (part === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  const read = await extractEmbeddedPart({ ...options, part });
+  if (read.isErr()) {
+    return embeddedPartExit(read.error);
+  }
+  if (read.value === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  await writeWorkerStdout(encodeEmbeddedPart(read.value));
+  return Result.ok(0);
+};
+
+const writeEmbeddedPartList = async (options: EmbeddedPartRequest) => {
+  const part = parseFilePartId(options.partId);
+  if (part === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  const listed = await listEmbeddedParts({ ...options, part });
+  if (listed.isErr()) {
+    return embeddedPartExit(listed.error);
+  }
+  if (listed.value === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  await writeWorkerStdout(JSON.stringify({ files: listed.value }));
+  return Result.ok(0);
+};
+
+const writeZipArchivePreview = async (options: {
+  fileBytes: Uint8Array;
+  maxChars: number;
+}) => {
+  const preview = await extractZipArchivePreview({
+    ...options,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "DocumentPackageError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(preview.error);
+    }
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value));
   return Result.ok(0);
 };
 
@@ -913,15 +996,13 @@ try {
   const maxChars = readMaxCharsArgument(process.argv[3]);
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   if (mimeType === DATA_BOX_PREVIEW_MODE) {
-    await writeWorkerStdout(JSON.stringify(extractDataBoxPreview(fileBytes)));
+    await writeWorkerStdout(
+      JSON.stringify(await extractDataBoxPreview(fileBytes)),
+    );
     process.exit(0);
   }
-  if (
-    mimeType === CADES_WORKER_MODE.preview ||
-    mimeType === CADES_WORKER_MODE.pdf
-  ) {
+  if (mimeType === CADES_WORKER_MODE.preview) {
     const preview = await writeCadesPreview({
-      mode: mimeType,
       fileBytes,
       fileName: process.argv[4] ?? "",
       maxChars,
@@ -943,24 +1024,47 @@ try {
     await writeWorkerStdout(JSON.stringify(preview.value));
     process.exit(0);
   }
-  if (
-    mimeType === E_INVOICE_WORKER_MODE.preview ||
-    mimeType === E_INVOICE_WORKER_MODE.attachment
-  ) {
-    const options = { fileBytes, mimeType: process.argv[4] ?? "" };
-    const written =
-      mimeType === E_INVOICE_WORKER_MODE.preview
-        ? await writeEInvoicePreview({ ...options, maxChars })
-        : await writeEInvoiceAttachment({
-            ...options,
-            index: parseIntegerToken(process.argv[5] ?? "", {
-              sign: "unsigned",
-            }).unwrapOr(-1),
-          });
+  if (mimeType === E_INVOICE_WORKER_MODE.preview) {
+    const written = await writeEInvoicePreview({
+      fileBytes,
+      mimeType: process.argv[4] ?? "",
+      maxChars,
+    });
     if (written.isErr()) {
       exitWithWorkerError(written.error);
     }
     process.exit(written.value);
+  }
+  if (mimeType === EMBEDDED_PART_WORKER_MODE) {
+    const written = await writeEmbeddedPart({
+      fileBytes,
+      containerMimeType: process.argv[4] ?? "",
+      partId: process.argv[5] ?? "",
+      containerName: process.argv[6] ?? "",
+    });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
+  }
+  if (mimeType === EMBEDDED_PART_LIST_WORKER_MODE) {
+    const written = await writeEmbeddedPartList({
+      fileBytes,
+      containerMimeType: process.argv[4] ?? "",
+      partId: process.argv[5] ?? "",
+      containerName: process.argv[6] ?? "",
+    });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
+  }
+  if (mimeType === ZIP_ARCHIVE_PREVIEW_MODE) {
+    const preview = await writeZipArchivePreview({ fileBytes, maxChars });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
   }
   if (mimeType === ASIC_PREVIEW_WORKER_MODE) {
     const preview = await writeAsicPreview({
@@ -973,19 +1077,11 @@ try {
     }
     process.exit(preview.value);
   }
-  if (
-    mimeType === SIGNED_DOSSIER_WORKER_MODE.preview ||
-    mimeType === SIGNED_DOSSIER_WORKER_MODE.pdf
-  ) {
+  if (mimeType === SIGNED_DOSSIER_WORKER_MODE.preview) {
     const written = await writeSignedDossier({
-      mode: mimeType,
       fileBytes,
       mimeType: process.argv[4] ?? "",
       maxChars,
-      // An unparsable position names no document; the reader refuses it.
-      document: parseIntegerToken(process.argv[5] ?? "", {
-        sign: "unsigned",
-      }).unwrapOr(-1),
     });
     if (written.isErr()) {
       exitWithWorkerError(written.error);
