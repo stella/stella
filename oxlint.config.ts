@@ -2106,6 +2106,7 @@ const config = defineConfig({
     // wasm-bindgen glue is committed verbatim and checked by rebuilding it;
     // product-code rewrites would be replaced by the next generation.
     "packages/scan-engine/generated/scan_engine.js",
+    "packages/heic-decoder/generated/heic_decoder.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no

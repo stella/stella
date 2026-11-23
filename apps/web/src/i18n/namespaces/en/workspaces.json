@@ -109,6 +109,7 @@
     "paymentReference": "Payment reference",
     "prepaidAmount": "Paid in advance",
     "quantity": "Quantity and unit",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "supplier": "Supplier",
@@ -118,6 +119,14 @@
     "taxableAmount": "Tax base",
     "totals": "Totals",
     "unitPrice": "Unit price",
+    "units": {
+      "day": "{count, plural, one {{quantity} day} other {{quantity} days}}",
+      "hour": "{count, plural, one {{quantity} hour} other {{quantity} hours}}",
+      "month": "{count, plural, one {{quantity} month} other {{quantity} months}}",
+      "unit": "{count, plural, one {{quantity} unit} other {{quantity} units}}",
+      "week": "{count, plural, one {{quantity} week} other {{quantity} weeks}}",
+      "year": "{count, plural, one {{quantity} year} other {{quantity} years}}"
+    },
     "unreadable": "The invoice could not be read.",
     "vat": "VAT",
     "vatBreakdown": "VAT breakdown"

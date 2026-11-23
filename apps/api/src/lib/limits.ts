@@ -562,6 +562,13 @@ export const LIMITS = {
    *  surface of any size, so the budget is checked against the header
    *  dimensions before the surface is allocated. */
   imageDerivativeSourcePixelsMax: 40_000_000,
+  /** Canvas pixels of a tiled HEIF photo (a grid, as phones write) whose
+   *  preview is decoded tile by tile straight into the page image, so its
+   *  memory is one tile plus `pdfRenderImagePixelsMax`, whatever the canvas.
+   *  Decoding time grows with the canvas: 200 MP admits every phone camera
+   *  (up to 16320 × 12240) within `pdfRenderTimeoutMs`. Admission and the
+   *  decoder check it in place of the whole-image pixel budgets. */
+  heifTiledCanvasPixelsMax: 200_000_000,
   /** Wall-clock ceiling for one thumbnail plus blur placeholder. */
   imageDerivativeTimeoutMs: 30_000,
   /** Hard timeout for the PDF worker rendering one image, text or CSV

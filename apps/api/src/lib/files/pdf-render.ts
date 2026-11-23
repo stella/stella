@@ -10,6 +10,13 @@
  * - TIFF: the first `imagePagesMax` pages, decoded one at a time by
  *   `tiff-pages.ts`, each with its own orientation and decoding to at most
  *   `tiffPageDecodedBytesMax`.
+ * - HEIC/HEIF: decoded in WebAssembly by `@stll/heic-decoder`, scaled down
+ *   to `imagePixelsMax` with rotation, mirroring and colour profile
+ *   applied. A grid photo (every phone photo) is decoded tile by tile
+ *   straight into the page image, each tile and a coded image within
+ *   `imageDecodedBytesMax`, its canvas within
+ *   `LIMITS.heifTiledCanvasPixelsMax`: a 48 MP photo holds what a 12 MP one
+ *   does.
  * - Every other image type: at most `imageDecodedBytesMax` decoded, by Bun's
  *   built-in image pipeline in its static-codec mode (identical on Linux and
  *   macOS), which applies EXIF orientation, reads only the first frame of a
@@ -28,8 +35,10 @@
 
 import { panic, Result, TaggedError } from "better-result";
 
+import { createHeicDecoder } from "@stll/heic-decoder";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
+import { isHeifMimeType } from "@/api/lib/files/heif";
 import {
   type ImageHeader,
   isHeaderReadableImageMimeType,
@@ -158,6 +167,64 @@ const scaledImage = async (
   return image.resize(side, side, { fit: "inside" });
 };
 
+/** Loads its WebAssembly module (a sidecar of the bundled worker) on first use. */
+const heicDecoder = createHeicDecoder();
+
+/** RGBA: four bytes for every pixel a HEIF image or tile decodes to. */
+const HEIF_DECODED_BYTES_PER_PIXEL = 4;
+
+/**
+ * A HEIC/HEIF photo (the first frame of a sequence without a still image).
+ * The decoder checks every size against these limits from the container
+ * before it allocates for it, and its WebAssembly memory cannot grow past
+ * its own maximum.
+ */
+const renderHeif = async (
+  bytes: Uint8Array,
+  budget: PdfRenderBudget,
+): Promise<Result<RenderedPdf, PdfRenderInputError>> => {
+  const preview = heicDecoder.decode(bytes, {
+    maxDecodedPixels: Math.floor(
+      budget.imageDecodedBytesMax / HEIF_DECODED_BYTES_PER_PIXEL,
+    ),
+    maxCanvasPixels: LIMITS.heifTiledCanvasPixelsMax,
+    maxOutputPixels: budget.imagePixelsMax,
+  });
+  switch (preview.type) {
+    case "decoded": {
+      return Result.ok(
+        await imagePagesToPdf(
+          collectedBetween([{ kind: "rgba", ...preview, orientation: 1 }]),
+          { maxBytes: LIMITS.fileDerivativePdfMaxBytes },
+        ),
+      );
+    }
+    case "too-large": {
+      // Under a smaller budget, a render with the full one decides.
+      return Result.ok({
+        type:
+          budget.imageDecodedBytesMax <
+          FULL_PDF_RENDER_BUDGET.imageDecodedBytesMax
+            ? "over-budget"
+            : "too-large",
+      });
+    }
+    case "unreadable":
+    case "failed": {
+      return Result.err(
+        new PdfRenderInputError({
+          message: "The HEIF image does not decode",
+          cause: preview,
+        }),
+      );
+    }
+    default: {
+      preview satisfies never;
+      return panic("Unhandled HEIC preview");
+    }
+  }
+};
+
 const renderImage = async (
   mimeType: string,
   bytes: Uint8Array,
@@ -165,6 +232,10 @@ const renderImage = async (
 ): Promise<Result<RenderedPdf, PdfRenderInputError>> => {
   if (mimeType === "image/tiff") {
     return await renderTiff(bytes, budget);
+  }
+  // Bounded by the decoder per tile and canvas, not by the header's size.
+  if (isHeifMimeType(mimeType)) {
+    return await renderHeif(bytes, budget);
   }
   const header = isHeaderReadableImageMimeType(mimeType)
     ? readImageHeader(bytes, mimeType)
