@@ -10,7 +10,7 @@
     "aiDraftAllow": "Autoriser",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Tâche {task} · Activité {activity}",
-    "aiDraftConsent": "stella AI peut rédiger des descriptions à partir du dossier, de la date, de la durée et des noms d’applications de chaque entrée, ainsi que des noms de documents et des titres de fenêtres affichés ici lorsque vous les enregistrez. Vos entrées précédentes sur le dossier l’aident à reprendre votre façon d’écrire. Rien d’autre sur votre journée ne quitte cet ordinateur.",
+    "aiDraftConsent": "Pour rédiger une description, stella AI utilise : {inputs}. Le tout part chez {provider}, uniquement pour rédiger le brouillon. Rien d’autre sur votre journée ne quitte cet ordinateur.",
     "aiDraftConsentRequired": "Autorisez à nouveau stella AI pour rédiger cette description.",
     "aiDraftDisclosure": "Les propositions d’IA sont des suggestions que stella génère à partir de l’entrée que vous vérifiez, de vos entrées précédentes sur le dossier et, si votre cabinet les a ajoutées, de ses règles de facturation. Vérifiez chaque entrée avant de la créer.",
     "aiDraftEarlierEntries": "{count, plural, one {Reprend # entrée précédente} other {Reprend # entrées précédentes}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI est désactivé sur cet ordinateur. Votre retrait sera envoyé à stella dès qu’il sera joignable.",
     "browserAnsweredAppNameOnly": "Seul le nom de l’application est enregistré pour <bdi>{browser}</bdi>. Vous pouvez le modifier dans les Réglages.",
     "browserAnsweredTitles": "Les titres des onglets dans <bdi>{browser}</bdi> sont enregistrés. Vous pouvez le modifier dans les Réglages.",
-    "browserPrivacyNote": "Les fenêtres privées peuvent aussi être enregistrées ; mettez l’enregistrement en pause ou excluez le navigateur lors de la navigation privée.",
+    "browserPrivacyNote": "stella ne reconnaît pas toutes les fenêtres privées ; mettez donc l’enregistrement en pause avant de naviguer en privé.",
     "browserQuestionAppNameOnly": "Nom de l’application seul",
-    "browserQuestionDescription": "Les titres des onglets aident à décrire le travail. stella ne reconnaît pas toutes les fenêtres privées ; mettez donc l’enregistrement en pause avant de naviguer en privé.",
+    "browserQuestionDescription": "Les titres des onglets aident à décrire le travail.",
     "browserQuestionLater": "Décider plus tard",
     "browserQuestionRecordTitles": "Enregistrer les titres",
     "browserQuestionTitle": "Enregistrer aussi les titres des onglets dans <bdi>{browser}</bdi> ?",
@@ -103,7 +103,19 @@
     "detectCalls": "Enregistrer les appels",
     "detectCallsDescription": "Lorsque Teams, Zoom ou un navigateur utilise votre micro, ce temps compte comme l’appel, même si vous ne faites qu’écouter ou travaillez dans une autre app. Aucun son n’est enregistré.",
     "disclosure": {
-      "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement dans Activité. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
+      "aiDraftInputs": {
+        "appNames": "les noms d’applications",
+        "billingFormat": "le format de facturation du client",
+        "date": "la date",
+        "duration": "la durée",
+        "earlierDescriptions": "vos descriptions précédentes sur le dossier",
+        "firmGuidelines": "les éventuelles règles de facturation de votre cabinet",
+        "instructions": "les consignes que vous saisissez",
+        "matter": "le dossier",
+        "titles": "les titres de fenêtres et noms de documents enregistrés"
+      },
+      "aiDraftProvider": "le fournisseur d’IA de votre cabinet, ou celui de stella AI",
+      "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
       "never": {
         "audio": "Le son du micro",
         "keystrokes": "Frappes au clavier ou texte saisi",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Ce qui est enregistré",
       "sent": {
-        "aiDrafts": "Brouillons de stella AI que vous demandez, une fois autorisés : dossier, date, durée et noms d’applications de l’entrée, ses titres de fenêtres et noms de documents lorsqu’ils sont enregistrés, et les consignes que vous saisissez. stella y ajoute vos descriptions précédentes sur le dossier, le format de facturation du client et, si votre cabinet les utilise, ses règles de facturation. Le tout part chez le fournisseur d’IA de votre cabinet, ou celui de stella AI, uniquement pour rédiger le brouillon ; stella ne conserve ni le brouillon ni ce qui a été envoyé pour lui.",
+        "aiDrafts": "Brouillons de stella AI que vous demandez, une fois autorisés. Pour chacun, stella AI utilise : {inputs}. Le tout part chez {provider}, uniquement pour rédiger le brouillon ; stella ne conserve ni le brouillon ni ce qui a été envoyé pour lui.",
         "timeEntries": "Saisies de temps que vous créez : dossier, date, durée, description, caractère facturable et éventuels codes de facturation"
       },
       "sentTitle": "Ce qui quitte cet ordinateur",
@@ -866,6 +878,30 @@
   },
   "onboarding": {
     "activityBody": "Voyez où est passée votre journée de travail et transformez-la en brouillons de saisies de temps. Vous décidez de ce qui est enregistré et de ce qui est envoyé.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Rédiger les descriptions avec stella AI",
+        "body": "stella AI peut rédiger la description de chaque saisie de temps. Autorisez-le maintenant ou lorsque vous passerez une journée en revue pour la première fois.",
+        "withdraw": "Vous pouvez retirer votre consentement à tout moment dans les Réglages."
+      },
+      "calls": {
+        "body": "Comptez le temps passé en appel.",
+        "title": "Appels"
+      },
+      "details": {
+        "appNamesOnly": "Seuls les noms des applications sont enregistrés.",
+        "body": "Ils vous aident à distinguer vos dossiers lorsque vous passez la journée en revue.",
+        "browsers": "Les navigateurs n’enregistrent les titres des onglets qu’une fois que vous l’autorisez. Activité vous pose la question pour chaque navigateur la première fois qu’elle le voit.",
+        "title": "Titres de fenêtres et documents"
+      },
+      "screens": {
+        "aiDrafts": "Propositions IA",
+        "calls": "Appels",
+        "details": "Détails",
+        "recording": "Aperçu"
+      },
+      "starting": "Démarrage de l’enregistrement…"
+    },
     "activityStoryDraft": "Brouillon",
     "activityStoryRecordTitle": "Enregistré",
     "activityStoryReviewCaption": "Vous passez la journée en revue et choisissez le dossier",
@@ -904,7 +940,6 @@
         "choose": "Microphone pour dicter",
         "title": "Laissez stella vous entendre"
       },
-      "progress": "Étape {current} sur {total}",
       "screens": {
         "app": "Correction",
         "context": "Contexte",
@@ -912,7 +947,6 @@
         "transcription": "Transcription",
         "words": "Mots"
       },
-      "skipRest": "Passer la suite",
       "transcription": {
         "body": "Vous pourrez le modifier plus tard dans les Réglages.",
         "bodyLocal": "Le modèle vocal tourne ici, la dictée fonctionne donc aussi hors ligne.",
@@ -982,6 +1016,7 @@
     "permissionsTitlePc": "Configurer ce PC",
     "progress": "Étape {current} sur {total}",
     "skip": "Passer",
+    "skipRest": "Passer la suite",
     "staysLocalMac": "Reste sur ce Mac",
     "staysLocalPc": "Reste sur ce PC",
     "tryAgain": "Réessayer",

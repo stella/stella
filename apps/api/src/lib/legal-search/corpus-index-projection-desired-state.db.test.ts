@@ -528,11 +528,13 @@ test("bounded reconciliation repairs drift once and then reaches a fixed point",
     epoch: 2n,
     changed: true,
     generationCount: 1,
+    servedCopies: [],
   });
   expect(fixedPoint).toEqual({
     epoch: 2n,
     changed: false,
     generationCount: 1,
+    servedCopies: [],
   });
 });
 
@@ -678,6 +680,7 @@ test("a court correction on a court-partitioned decision replaces its desired pr
     epoch: 2n,
     changed: true,
     generationCount: 1,
+    servedCopies: [],
   });
   const [after] = await desired();
   // Same index and a new fingerprint, eligible for append: the append path

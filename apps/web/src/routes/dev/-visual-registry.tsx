@@ -108,6 +108,13 @@ const visualLoaders = {
       return { default: PageCropPlayground };
     },
   },
+  "pdf-fit-width": {
+    load: async () => {
+      const { PdfFitWidthPlayground } =
+        await import("./-components/pdf-fit-width-playground");
+      return { default: PdfFitWidthPlayground };
+    },
+  },
   "chat-long-paste": {
     load: async () => {
       const { ChatLongPastePlayground } =

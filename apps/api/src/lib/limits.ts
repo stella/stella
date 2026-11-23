@@ -588,6 +588,11 @@ export const LIMITS = {
    *  the shortened note. Bounds what a file of very short lines, or a wide
    *  table split into many column bands, can make of the source budget. */
   pdfRenderTextPagesMax: 200,
+  /** Laid-out pages a text preview holds before writing them out with one
+   *  subset of each font and collecting their layout. A text render's peak
+   *  grows with these, about 1.8 MB a page, then stays: 50 pages share a
+   *  subset at a peak near 230 MB. */
+  pdfRenderTextPagesPerFontRun: 50,
   /** Bytes an image Bun's pipeline renders may decode to: width × height ×
    *  four (RGBA), or eight for a 16-bit PNG. A larger image is too large to
    *  preview. The pipeline holds the decoded image and the buffers it scales
@@ -610,11 +615,29 @@ export const LIMITS = {
    *  bounds time and the PDF held, not the peak: at the largest page budget
    *  (about 0.6 s a page) 50 pages finish in half of `pdfRenderTimeoutMs`. */
   pdfRenderImagePagesMax: 50,
-  /** Resident memory of one PDF render worker. The parent kills a worker
-   *  past it (`SubprocessError` with a `memory` termination), and the file
-   *  gets no preview. The source bounds above keep every measured input
-   *  well under it; this is the backstop for one they missed. */
+  /** The most resident memory one PDF render worker gets; its actual
+   *  ceiling is what its container has left, up to this (see
+   *  `pdf-render-budget.ts`). The parent kills a worker past its ceiling
+   *  (`SubprocessError` with a `memory` termination), and the file gets no
+   *  preview. The source bounds above, scaled with the ceiling, keep every
+   *  measured input well under it; this is the backstop for one they
+   *  missed. */
   pdfRenderWorkerRssMaxBytes: 512 * 1024 * 1024,
+  /** What a render worker holds before its file adds anything: the runtime,
+   *  the renderer and its fonts, measured rendering a one-line text file
+   *  (111 to 116 MB). Budgets scale with the ceiling above this. */
+  pdfRenderWorkerBaseRssBytes: 112 * 1024 * 1024,
+  /** Room a scaled-down budget leaves under its ceiling. The memory a
+   *  source budget takes is not proportional at the low end (a text render holds its fonts
+   *  and a run of pages whatever its budget), so shares are taken of the
+   *  room above the base less this. */
+  pdfRenderWorkerMarginBytes: 40 * 1024 * 1024,
+  /** The smallest ceiling a render starts under. Below it the container has
+   *  too little left and the render waits (`busy`) rather than risk it. */
+  pdfRenderWorkerRssMinBytes: 160 * 1024 * 1024,
+  /** Room the parent keeps to grow while its render runs, beyond its RSS
+   *  when the render starts and the PDF it reads back. */
+  pdfRenderParentGrowthBytes: 64 * 1024 * 1024,
   /** Largest stored source (bytes) a PDF or thumbnail derivative is built
    *  from. Checked against the recorded size before the object is read and
    *  again against the store's declared length, so a refused file is never

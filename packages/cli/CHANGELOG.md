@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.1.2
+
+### Patch Changes
+
+- [#9246](https://github.com/stella/stella/pull/9246) [`f292e0a`](https://github.com/stella/stella/commit/f292e0af50fa6912cdced0f28f0b4cfd22c61c01) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Uploads of `.heic` and `.heif` photos declare `image/heic` and `image/heif`.
+
 ## 8.1.1
 
 ### Patch Changes

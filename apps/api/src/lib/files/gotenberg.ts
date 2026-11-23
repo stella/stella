@@ -55,12 +55,14 @@ import {
   isHtmlRenderedMimeType,
   mediaTypeEssence,
 } from "@/api/lib/files/pdf-derivative-policy";
+import { pdfRenderBudget } from "@/api/lib/files/pdf-render-budget";
 import {
   isRenderedPdfMimeType,
   type RenderedPdfMimeType,
 } from "@/api/lib/files/pdf-render-protocol";
 import {
   PDF_WORKER_OPERATION,
+  PDF_WORKER_OVER_BUDGET_EXIT_CODE,
   PDF_WORKER_PARSE_ERROR_EXIT_CODE,
   PDF_WORKER_TOO_LARGE_EXIT_CODE,
   pdfWorkerPath,
@@ -70,6 +72,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { admitWork, WorkRefusal } from "@/api/lib/load/work-admission";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import {
+  type ProcessMemoryLimit,
+  readProcessMemoryLimit,
+} from "@/api/lib/observability/process-memory-limit";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 import { spawnBinaryWorker } from "@/api/lib/subprocess";
 
@@ -370,14 +376,22 @@ const embedImage = async (
       new ImagePdfError({ message: "Failed to embed image", cause }),
   });
 
+let processMemoryLimit: ProcessMemoryLimit | undefined;
+/** The container's memory limit, read once: it is fixed for the process. */
+const containerMemoryLimit = (): ProcessMemoryLimit => {
+  processMemoryLimit ??= readProcessMemoryLimit();
+  return processMemoryLimit;
+};
+
 /**
  * Render a file stella lays out itself in the PDF worker subprocess, so
  * decoding and layout never hold the API's event loop and the timeout can
  * stop them. One attempt: the same bytes render the same way every time.
  *
  * Renders queue for the process's `pdf-render` work pool, so a process runs
- * `LIMITS.workPoolPdfRenderSlots` workers at once, and each worker is killed
- * past `LIMITS.pdfRenderWorkerRssMaxBytes`: together they bound what
+ * `LIMITS.workPoolPdfRenderSlots` workers at once, and each worker gets the
+ * budget its container has room for as it starts (`pdf-render-budget.ts`)
+ * and is killed past that budget's ceiling: together they bound what
  * rendering adds to the container's memory.
  */
 const renderPdfInWorker = async (
@@ -388,17 +402,33 @@ const renderPdfInWorker = async (
     pool: "pdf-render",
     kind: "render-pdf",
     bytes: bytes.byteLength,
-    run: async ({ signal }) =>
-      await spawnBinaryWorker({
-        workerPath: pdfWorkerPath(),
-        args: [PDF_WORKER_OPERATION.render, declaredType],
-        stdin: new Blob([bytes]),
-        timeoutMs: LIMITS.pdfRenderTimeoutMs,
-        signal,
-        // The worker refuses a larger PDF itself; this bounds what is read.
-        maxOutputBytes: LIMITS.fileDerivativePdfMaxBytes,
-        maxRssBytes: LIMITS.pdfRenderWorkerRssMaxBytes,
-      }),
+    run: async ({ signal }) => {
+      // Read as the render starts: the parent's RSS is what it is now.
+      const budget = pdfRenderBudget({
+        limit: containerMemoryLimit(),
+        parentRssBytes: process.memoryUsage.rss(),
+      });
+      if (budget === null) {
+        return null;
+      }
+      return {
+        budget,
+        rendered: await spawnBinaryWorker({
+          workerPath: pdfWorkerPath(),
+          args: [
+            PDF_WORKER_OPERATION.render,
+            declaredType,
+            JSON.stringify(budget),
+          ],
+          stdin: new Blob([bytes]),
+          timeoutMs: LIMITS.pdfRenderTimeoutMs,
+          signal,
+          // The worker refuses a larger PDF itself; this bounds what is read.
+          maxOutputBytes: LIMITS.fileDerivativePdfMaxBytes,
+          maxRssBytes: budget.workerRssMaxBytes,
+        }),
+      };
+    },
   });
   if (Result.isError(admitted)) {
     return Result.err(
@@ -415,7 +445,16 @@ const renderPdfInWorker = async (
           }),
     );
   }
-  const rendered = admitted.value;
+  if (admitted.value === null) {
+    return Result.err(
+      new PdfRenderError({
+        message:
+          "The container has too little memory left for a PDF render now",
+        reason: "busy",
+      }),
+    );
+  }
+  const { budget, rendered } = admitted.value;
   if (Result.isOk(rendered)) {
     return Result.ok({
       buffer: toArrayBuffer(rendered.value),
@@ -427,7 +466,7 @@ const renderPdfInWorker = async (
   ) {
     return Result.err(
       new PdfRenderError({
-        message: `The PDF worker passed its ${LIMITS.pdfRenderWorkerRssMaxBytes}-byte memory ceiling`,
+        message: `The PDF worker passed its ${budget.workerRssMaxBytes}-byte memory ceiling`,
         reason: "memory",
         cause: rendered.error,
       }),
@@ -439,6 +478,16 @@ const renderPdfInWorker = async (
       new PdfRenderError({
         message: "The file could not be decoded",
         reason: "unreadable",
+        cause: rendered.error,
+      }),
+    );
+  }
+  if (exitCode === PDF_WORKER_OVER_BUDGET_EXIT_CODE) {
+    // The file fits a render with the full budget; this one had less room.
+    return Result.err(
+      new PdfRenderError({
+        message: "The image needs more memory than the container has left now",
+        reason: "busy",
         cause: rendered.error,
       }),
     );

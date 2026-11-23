@@ -821,7 +821,7 @@ const FilePartPreview = ({
       <PDFViewport
         buffer={content.data}
         className="document-preview-surface h-full w-full"
-        contentClassName="relative space-y-2 px-2 pt-2"
+        contentClassName="relative space-y-2 pt-2"
         fileId={viewId}
         pageSource="portfolio"
         renderPage={(props) => <PDFPage {...props} />}

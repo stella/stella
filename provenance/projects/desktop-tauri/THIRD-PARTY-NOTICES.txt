@@ -173,7 +173,7 @@ Project: desktop-tauri
 - foreign-types 0.5.0 — MIT/Apache-2.0
 - foreign-types-macros 0.2.4 — MIT/Apache-2.0
 - foreign-types-shared 0.3.1 — MIT/Apache-2.0
-- form_urlencoded 1.2.2 — Apache-2.0 OR MIT
+- form_urlencoded 1.2.3 — Apache-2.0 OR MIT
 - fs_extra 1.3.0 — MIT
 - futures-channel 0.3.34 — Apache-2.0 OR MIT
 - futures-core 0.3.34 — Apache-2.0 OR MIT
@@ -614,7 +614,7 @@ Project: desktop-tauri
 - unicode-segmentation 1.13.3 — Apache-2.0 OR MIT
 - universal-hash 0.6.1 — Apache-2.0 OR MIT
 - untrusted 0.9.0 — ISC
-- url 2.5.8 — Apache-2.0 OR MIT
+- url 2.5.9 — Apache-2.0 OR MIT
 - urlpattern 0.6.0 — MIT
 - utf8_iter 1.1.0 — Apache-2.0 OR MIT
 - utf_types 1.0.0 — Apache-2.0 OR MIT
