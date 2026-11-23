@@ -276,15 +276,20 @@ describe("batched supplemental rebuild", () => {
         if (!Array.isArray(parsed)) {
           return [];
         }
-        return parsed.flatMap((row) =>
-          typeof row === "object" &&
-          row !== null &&
-          "workspace_id" in row &&
-          typeof row.workspace_id === "string" &&
-          ids.some((id) => id === row.workspace_id)
-            ? [row.workspace_id]
-            : [],
-        );
+        const rows: readonly unknown[] = parsed;
+        const matched: string[] = [];
+        for (const row of rows) {
+          if (
+            typeof row === "object" &&
+            row !== null &&
+            "workspace_id" in row &&
+            typeof row.workspace_id === "string" &&
+            ids.some((id) => id === row.workspace_id)
+          ) {
+            matched.push(row.workspace_id);
+          }
+        }
+        return matched;
       }),
     );
     expect(upsertOrder).toEqual(ids.toSorted(compareCodeUnit));
