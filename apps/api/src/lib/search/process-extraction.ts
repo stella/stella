@@ -27,7 +27,9 @@ import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { readStoredMailboxText } from "@/api/lib/files/mailbox-stream-text";
+import { readZipNameCodePage } from "@/api/lib/files/organization-zip-name-code-page";
 import { createFileKey } from "@/api/lib/files/utils";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -314,7 +316,7 @@ type NativeExtractionRun = Pick<
  */
 export type NativeExtractionDatabase = Pick<
   typeof rootDb,
-  "transaction" | "update"
+  "query" | "transaction" | "update"
 >;
 
 type RecordDocxVersionLanguageOptions = {
@@ -480,12 +482,14 @@ const readAndExtract = async ({
   maxBytes,
   mimeType,
   readSource,
+  zipNameCodePage,
 }: {
   extractText: typeof extractFileTextResult;
   key: FileKey;
   lifecycleSignal: AbortSignal;
   maxBytes: number | undefined;
   mimeType: string;
+  zipNameCodePage: ZipNameCodePage;
   readSource: (input: {
     key: FileKey;
     mimeType: string;
@@ -513,6 +517,7 @@ const readAndExtract = async ({
     extraction: await extractText(stored, {
       signal: lifecycleSignal,
       timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+      zipNameCodePage,
     }),
   };
 };
@@ -546,6 +551,7 @@ export const executeNativeExtraction = async ({
     recordSignature,
     requestAutomaticOcr,
     restoreManualOcr,
+    readZipNameCodePage: readOrganizationZipNameCodePage,
   } = dependencies;
   const source = pickExtractionSource(fileField);
   const key = createFileKey({
@@ -578,6 +584,12 @@ export const executeNativeExtraction = async ({
               : undefined,
           mimeType: source.extractionMimeType,
           readSource,
+          // One indexed read of the organization's settings row, on the
+          // extraction's connection.
+          zipNameCodePage: await readOrganizationZipNameCodePage(
+            database,
+            run.organizationId,
+          ),
         });
   if (Result.isError(extraction)) {
     throw extraction.error;
@@ -667,6 +679,7 @@ export type ExecuteNativeExtractionDependencies = {
   recordSignature: typeof recordNearDuplicateSignature;
   requestAutomaticOcr: typeof requestAutomaticDocumentOcr;
   restoreManualOcr: typeof restoreManualOcrRunAfterProjectionLoss;
+  readZipNameCodePage: typeof readZipNameCodePage;
 };
 
 const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
@@ -679,6 +692,7 @@ const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencie
     recordSignature: recordNearDuplicateSignature,
     requestAutomaticOcr: requestAutomaticDocumentOcr,
     restoreManualOcr: restoreManualOcrRunAfterProjectionLoss,
+    readZipNameCodePage,
   };
 
 /**

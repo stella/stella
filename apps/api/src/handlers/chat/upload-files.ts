@@ -85,7 +85,9 @@ import {
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
 import type { CheckedFileWrite } from "@/api/lib/files/organization-file-usage";
+import { readZipNameCodePage } from "@/api/lib/files/organization-zip-name-code-page";
 import { createUserFileKey } from "@/api/lib/files/utils";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { putS3ObjectWithSignal } from "@/api/lib/s3";
@@ -428,6 +430,8 @@ type HydrateFilePartProps = {
   mimeType: string;
   sendMode: ChatSendMode;
   s3Key: FileKey;
+  /** The organization's, for an archive among the attachments. */
+  zipNameCodePage: ZipNameCodePage;
 };
 
 export type HydratedFilePart =
@@ -516,9 +520,15 @@ export const attachmentText = ({
 
 // A chat attachment is read whole and then cut to the chat context limit; it
 // is not a windowed document read.
-const extractChatAttachmentText = async (file: ScannedFile) =>
+const extractChatAttachmentText = async (
+  file: ScannedFile,
+  zipNameCodePage: ZipNameCodePage,
+) =>
   (
-    await extractFileTextResult(file, { includeContainerAttachments: true })
+    await extractFileTextResult(file, {
+      includeContainerAttachments: true,
+      zipNameCodePage,
+    })
   ).map((extracted) => {
     const text = extracted?.trim();
     return text ? text.slice(0, LIMITS.chatContextFileMaxChars) : null;
@@ -530,6 +540,7 @@ export const hydrateFilePart = async ({
   mimeType: storedMimeType,
   sendMode,
   s3Key,
+  zipNameCodePage,
 }: HydrateFilePartProps) =>
   await Result.gen(async function* () {
     const mimeType = chatUploadMimeType({ fileName, mimeType: storedMimeType });
@@ -643,7 +654,7 @@ export const hydrateFilePart = async ({
 
     if (source === "extracted-text") {
       const extracted = yield* Result.await(
-        extractChatAttachmentText(stored).then((result) =>
+        extractChatAttachmentText(stored, zipNameCodePage).then((result) =>
           Result.mapError(
             result,
             (cause) =>
@@ -879,11 +890,11 @@ type UploadUserFileInput = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const prepareChatAttachmentText = async (file: ScannedFile) => {
-  if (chatFileSource(file.mimeType) !== "extracted-text") {
-    return Result.ok(null);
-  }
-  const extracted = await extractChatAttachmentText(file);
+const prepareChatAttachmentText = async (
+  file: ScannedFile,
+  zipNameCodePage: ZipNameCodePage,
+) => {
+  const extracted = await extractChatAttachmentText(file, zipNameCodePage);
   if (extracted.isErr()) {
     const cause = extracted.error;
     return Result.err(
@@ -998,9 +1009,20 @@ export const uploadUserFile = async ({
     const scanWarnings = scanned.scanWarnings;
     yield* Result.await(refuseEncryptedAttachment(scanned));
 
-    const extractedText = yield* Result.await(
-      prepareChatAttachmentText(scanned),
-    );
+    // The organization's code page is read only for a file whose text is
+    // extracted, before it reaches the worker.
+    const extractsText = chatFileSource(scanned.mimeType) === "extracted-text";
+    const zipNameCodePage = extractsText
+      ? yield* Result.await(
+          safeDb(async (tx) => await readZipNameCodePage(tx, organizationId)),
+        )
+      : null;
+    const extractedText =
+      zipNameCodePage === null
+        ? null
+        : yield* Result.await(
+            prepareChatAttachmentText(scanned, zipNameCodePage),
+          );
 
     // Best-effort image thumbnail + blur placeholder. A failure here never
     // blocks the upload: the original still serves; the row just carries no

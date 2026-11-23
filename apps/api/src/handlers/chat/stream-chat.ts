@@ -301,6 +301,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -5854,6 +5855,8 @@ type HydrateMessagesProps = {
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   userId: SafeId<"user">;
+  /** The organization's, for an archive among the attachments. */
+  zipNameCodePage: ZipNameCodePage;
 };
 
 const localRunFilePath = (file: Pick<StoredUserFile, "fileName" | "id">) =>
@@ -5945,6 +5948,7 @@ export const hydrateMessages = async ({
   safeDb,
   sendMode,
   userId,
+  zipNameCodePage,
 }: HydrateMessagesProps) =>
   await Result.gen(async function* () {
     const userFilesById = yield* Result.await(
@@ -6000,6 +6004,7 @@ export const hydrateMessages = async ({
             mimeType: userFile.mimeType,
             sendMode,
             s3Key: userFile.s3Key,
+            zipNameCodePage,
           }),
         );
 

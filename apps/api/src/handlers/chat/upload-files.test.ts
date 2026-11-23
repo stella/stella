@@ -88,6 +88,10 @@ const makeDocxBytes = async (): Promise<Uint8Array> => {
 };
 const organizationId = toSafeId<"organization">("organization_1");
 const workspaceId = toSafeId<"workspace">("workspace_1");
+/** An organization that never saved settings: its ZIP names read in 437. */
+const SETTINGS_READ = {
+  query: { organizationSettings: { findFirst: async () => undefined } },
+};
 const createFileDeletionTx = () =>
   asTestRaw<Transaction>({
     select: () => createSelectQueryMock([]),
@@ -146,6 +150,7 @@ describe("chat attachment hydration", () => {
       mimeType: TEXT_CSV_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.anonymized,
       s3Key: testFileKey(ATTACHMENT_KEY),
+      zipNameCodePage: "ibm437",
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -171,6 +176,7 @@ describe("chat attachment hydration", () => {
       mimeType: PDF_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.anonymized,
       s3Key: testFileKey(ATTACHMENT_KEY),
+      zipNameCodePage: "ibm437",
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -188,6 +194,7 @@ describe("chat attachment hydration", () => {
       mimeType: PDF_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
       s3Key: testFileKey(ATTACHMENT_KEY),
+      zipNameCodePage: "ibm437",
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -215,6 +222,7 @@ describe("chat attachment hydration", () => {
       mimeType: IMAGE_PNG_MIME_TYPE,
       sendMode: CHAT_SEND_MODE.rawOverride,
       s3Key: testFileKey(ATTACHMENT_KEY),
+      zipNameCodePage: "ibm437",
     });
 
     expect(Result.isOk(result)).toBe(true);
@@ -250,6 +258,7 @@ describe("chat attachment hydration", () => {
         mimeType: DOCX_MIME_TYPE,
         sendMode,
         s3Key: testFileKey(ATTACHMENT_KEY),
+        zipNameCodePage: "ibm437",
       });
 
       expect(Result.isOk(result)).toBe(true);
@@ -296,6 +305,7 @@ describe("chat attachment hydration", () => {
         mimeType: XLSX_MIME_TYPE,
         sendMode,
         s3Key: testFileKey(ATTACHMENT_KEY),
+        zipNameCodePage: "ibm437",
       });
 
       expect(Result.isOk(result)).toBe(true);
@@ -354,6 +364,7 @@ describe("chat attachment hydration", () => {
       );
       const testTx = asTestRaw<Transaction>({
         insert: mock(() => ({ values })),
+        ...SETTINGS_READ,
       });
       const safeDb: SafeDb = async (callback) =>
         await Result.tryPromise(async () => await callback(testTx));
@@ -389,6 +400,7 @@ describe("chat attachment hydration", () => {
         mimeType,
         sendMode: CHAT_SEND_MODE.rawOverride,
         s3Key: testFileKey(ATTACHMENT_KEY),
+        zipNameCodePage: "ibm437",
       });
 
       expect(Result.isOk(hydrateResult)).toBe(true);
@@ -423,7 +435,12 @@ describe("chat attachment hydration", () => {
       },
       organizationId,
       workspaceId,
-      safeDb: async () => panic("Rejected uploads do not write a chat file"),
+      // The organization's settings are read before its text is extracted;
+      // the transaction has nothing to write with.
+      safeDb: async (callback) =>
+        await Result.tryPromise(
+          async () => await callback(asTestRaw<Transaction>(SETTINGS_READ)),
+        ),
       recordAuditEvent: mock(async () => undefined),
       threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111112"),
       userId: toSafeId<"user">("11111111-1111-4111-8111-111111111113"),

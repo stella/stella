@@ -121,6 +121,7 @@ import { extractSignedDossierPreview } from "@/api/lib/files/signed-dossier-work
 import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
 import { extractZipArchivePreview } from "@/api/lib/files/zip-archive-preview";
 import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
+import { readWorkerZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -156,6 +157,12 @@ import {
   XLSB_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
+
+/**
+ * The code page this run reads ZIP names that tie in, for every archive it
+ * opens at any depth: one run reads one organization's file.
+ */
+const ZIP_NAME_CODE_PAGE = readWorkerZipNameCodePage();
 
 const EMAIL_ATTACHMENT_MAX_COUNT = 25;
 const EMAIL_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -520,6 +527,7 @@ const extractZipText = async ({
     fileBytes,
     maxChars,
     readText: extractEmbeddedPayloadText,
+    nameCodePage: ZIP_NAME_CODE_PAGE,
   });
   return preview.map(({ files }) => zipArchiveText({ files, maxChars }));
 };
@@ -963,7 +971,11 @@ const writeEmbeddedPart = async (options: EmbeddedPartRequest) => {
   if (part === null) {
     return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
   }
-  const read = await extractEmbeddedPart({ ...options, part });
+  const read = await extractEmbeddedPart({
+    ...options,
+    part,
+    zipNameCodePage: ZIP_NAME_CODE_PAGE,
+  });
   if (read.isErr()) {
     return embeddedPartExit(read.error);
   }
@@ -980,7 +992,11 @@ const writeEmbeddedPartList = async (options: EmbeddedPartRequest) => {
   if (part === null && options.partId !== "") {
     return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
   }
-  const listed = await listEmbeddedParts({ ...options, part });
+  const listed = await listEmbeddedParts({
+    ...options,
+    part,
+    zipNameCodePage: ZIP_NAME_CODE_PAGE,
+  });
   if (listed.isErr()) {
     return embeddedPartExit(listed.error);
   }
@@ -998,6 +1014,7 @@ const writeZipArchivePreview = async (options: {
   const preview = await extractZipArchivePreview({
     ...options,
     readText: extractEmbeddedPayloadText,
+    nameCodePage: ZIP_NAME_CODE_PAGE,
   });
   if (preview.isErr()) {
     switch (preview.error._tag) {
