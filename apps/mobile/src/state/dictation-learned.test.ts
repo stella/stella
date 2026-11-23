@@ -122,11 +122,11 @@ const fakeServer = (start: { generation: number; fixes: LearnedFix[] }) => {
   let whileReading: (() => Promise<void>) | undefined;
   const fetch: Fetch = async (url, init) => {
     const method = init?.method ?? "GET";
-    const target = new URL(String(url));
+    const target = new URL(url);
     expect(`${target.origin}${target.pathname}`).toBe(PATH);
     const body: unknown =
       typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
-    sent.push({ method, url: String(url), body });
+    sent.push({ method, url, body });
     if (status !== 200) {
       return Response.json({ message: "no" }, { status });
     }
