@@ -113,7 +113,7 @@ export const accountStatusTone = (status: AccountStatus) => {
 const ACCOUNT_AVATAR_DATA_URL =
   /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z\d+/]+={0,2}$/u;
 
-export const accountAvatar = (avatar: string | null) =>
+const accountAvatar = (avatar: string | null) =>
   avatar !== null && ACCOUNT_AVATAR_DATA_URL.test(avatar) ? avatar : null;
 
 const initialsOf = (account: LinkedAccountSnapshot) => {
