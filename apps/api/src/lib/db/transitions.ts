@@ -251,7 +251,7 @@ const serializeTransitionColumnValue = (
   if (typeof value === "bigint") {
     return value.toString();
   }
-  if (column.dataType === "json") {
+  if (column.getSQLType() === "jsonb" || column.getSQLType() === "json") {
     return value;
   }
   const mapped: unknown = column.mapToDriverValue(value);
