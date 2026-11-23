@@ -1,6 +1,6 @@
 import AppIntents
 import Foundation
-import QuickDictation
+internal import QuickDictation
 
 /// What a run of `DictateIntent` does, in the app's process.
 @available(iOS 18.0, *)
