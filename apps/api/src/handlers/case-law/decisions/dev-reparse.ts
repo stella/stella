@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Development only: re-parse a decision from the publisher on read.
  *
@@ -111,14 +112,13 @@ export const reparseForDev = async (
     if (decision.adapterKey !== ADAPTER_KEYS.CZ_NSS) {
       return { status: "not-applicable" };
     }
-    try {
-      const ast = await reparseNss(decision);
-      return ast === null
-        ? { status: "not-applicable" }
-        : { status: "reparsed", ast };
-    } catch (error: unknown) {
+    const reparsed = await Result.tryPromise({
+      try: async () => await reparseNss(decision),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(reparsed)) {
       captureError(
-        error,
+        reparsed.error,
         handlerErrorContext("decisions.attempt", {
           source: "case-law-dev-reparse",
           decisionId: decision.id,
@@ -126,4 +126,7 @@ export const reparseForDev = async (
       );
       return { status: "failed" };
     }
+    return reparsed.value === null
+      ? { status: "not-applicable" }
+      : { status: "reparsed", ast: reparsed.value };
   });
