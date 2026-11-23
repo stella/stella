@@ -31,9 +31,9 @@
       "passportNumber": "Número do passaporte",
       "person": "Pessoa",
       "phoneNumber": "Número de telefone",
-      "registrationNumber": "CNPJ",
+      "registrationNumber": "Número de registro",
       "socialSecurityNumber": "Número de seguro social",
-      "taxIdentificationNumber": "CPF / CNPJ"
+      "taxIdentificationNumber": "Número de identificação fiscal"
     },
     "applying": "Aplicando as alterações…",
     "approve": "Aprovar",

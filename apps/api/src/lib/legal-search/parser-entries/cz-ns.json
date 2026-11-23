@@ -2,10 +2,10 @@
   "type": "parser",
   "name": "CZ_NS",
   "key": "cz-ns",
-  "parserVersion": 34,
+  "parserVersion": 35,
   "sourceFingerprintVersion": 0,
   "scope": {
     "type": "all",
-    "reason": "Recompute procedural review links from the stored opening and holding text; parsed document output is otherwise unchanged."
+    "reason": "Read the print page's tabs, source line breaks and space runs as one space, as a browser shows them, so no paragraph or heading keeps the page's raw indentation."
   }
 }

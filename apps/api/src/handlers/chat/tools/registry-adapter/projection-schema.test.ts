@@ -748,6 +748,59 @@ describe("projectForChat", () => {
     expect(JSON.stringify(projected)).not.toContain("avatar.png");
   });
 
+  test("list_matters detail masks a UUID inside a recent entity name without a defect", () => {
+    const projected = project({
+      payload: {
+        contactsOverflow: false,
+        matter: {
+          id: WS_UUID,
+          name: "Lindqvist retainer",
+          reference: "REF-1",
+          status: "active",
+          clientName: null,
+        },
+        overview: {
+          entityCount: 1,
+          documentCount: 1,
+          taskCount: 0,
+          recentEntities: [
+            {
+              entityId: ENTITY_UUID,
+              name: `Scan ${ROGUE_UUID}.pdf`,
+              kind: "document",
+              status: null,
+              priority: null,
+              listItemType: null,
+              dueDate: null,
+              mimeType: "application/pdf",
+              fieldId: null,
+              propertyId: null,
+              pdfFileId: null,
+              encrypted: false,
+              createdAt: "2026-01-01T00:00:00.000Z",
+              updatedAt: null,
+              createdBy: null,
+              createdByDeletedAt: null,
+              assignedTo: null,
+              assignedToDeletedAt: null,
+            },
+          ],
+        },
+        contacts: [],
+        members: [],
+      },
+      schema: LIST_MATTERS_PROJECTION,
+    }).unwrap();
+
+    expect(projected).toMatchObject({
+      overview: {
+        recentEntities: [{ name: `Scan ${MASKED_CONTENT_ID}.pdf` }],
+      },
+    });
+    expect(containsRawUuid(projected)).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+  });
+
   test("an entity echo reuses the dehydrated ref even under another workspace source", () => {
     const refRegistry = createChatRefRegistry();
     const entityRef = refRegistry.toEntityRef({

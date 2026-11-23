@@ -99,7 +99,6 @@
     "linesShown": "Rodoma {shown, number} iš {count, plural, one {# eilutės} few {# eilučių} many {# eilutės} other {# eilučių}}",
     "netAmount": "Suma be PVM",
     "netTotal": "Iš viso be PVM",
-    "notRecognized": "Šis XML failas nėra atpažinta struktūrizuota sąskaita faktūra.",
     "otherIdentifier": "Kitas identifikatorius",
     "payableAmount": "Mokėtina suma",
     "paymentAmount": "Mokėjimo suma",
@@ -129,7 +128,8 @@
     },
     "unreadable": "Nepavyko perskaityti sąskaitos faktūros.",
     "vat": "PVM",
-    "vatBreakdown": "PVM suvestinė"
+    "vatBreakdown": "PVM suvestinė",
+    "xmlUnreadable": "Šio XML failo nepavyko perskaityti."
   },
   "emailViewer": {
     "attachments": "Priedai",

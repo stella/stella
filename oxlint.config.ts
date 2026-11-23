@@ -6179,6 +6179,10 @@ const config = defineConfig({
               // validates them on boot.
               "apps/api/src/lib/business-registries/dispatch.ts",
               "apps/api/src/lib/db/assert-migrations-applied.ts",
+              // The extraction worker's one input besides its arguments: the
+              // code page the API hands each run (its child env is PATH plus
+              // the variables `subprocess.ts` declares).
+              "apps/api/src/lib/files/zip-name-code-page.ts",
               "apps/api/src/lib/runtime-worker-path.ts",
               "apps/api/src/lib/s3.ts",
               "apps/api/src/lib/scheduler/runner.ts",

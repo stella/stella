@@ -11,10 +11,10 @@ import {
   CADES_WORKER_EXIT,
   CADES_WORKER_MODE,
 } from "@/api/lib/files/cades-preview-protocol";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
-import { spawnBinaryWorker } from "@/api/lib/subprocess";
+import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 const CADES_PREVIEW_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const previewReplySchema = v.pipe(
@@ -33,6 +33,7 @@ const unavailable = (message: string) =>
 const runCadesWorker = async (
   { bytes }: ScannedFile,
   fileName: string,
+  zipNameCodePage: ZipNameCodePage,
 ): Promise<Result<Uint8Array, HandlerError<422 | 503>>> => {
   if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
     return Result.err(
@@ -40,8 +41,8 @@ const runCadesWorker = async (
     );
   }
 
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionBinaryWorker({
+    zipNameCodePage,
     args: [
       CADES_WORKER_MODE.preview,
       String(LIMITS.extractedContentMaxChars),
@@ -73,16 +74,23 @@ const runCadesWorker = async (
   );
 };
 
+/**
+ * A signed envelope's preview. Its document is read in turn and may be a ZIP
+ * archive, whose names tie in `zipNameCodePage`.
+ */
 export const readCadesPreview = async (
   source: ScannedFile,
-  fileName = source.fileName,
+  {
+    zipNameCodePage,
+    fileName = source.fileName,
+  }: { zipNameCodePage: ZipNameCodePage; fileName?: string },
 ): Promise<
   Result<
     v.InferOutput<typeof cadesPreviewSchema>,
     HandlerError<422 | 500 | 503>
   >
 > => {
-  const result = await runCadesWorker(source, fileName);
+  const result = await runCadesWorker(source, fileName, zipNameCodePage);
   if (result.isErr()) {
     return Result.err(result.error);
   }

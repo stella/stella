@@ -88,7 +88,7 @@ const listedAndRead = async (
       const address = parseFilePartId(part);
       return address === null
         ? null
-        : (await readPartOfFile(source, address)).unwrap();
+        : (await readPartOfFile(source, address, "ibm437")).unwrap();
     }),
   );
   return { parsed, listed, read };
@@ -211,10 +211,14 @@ describe("a TNEF stream on its own", () => {
 
   test("stored under its name with no media type, opens as TNEF", async () => {
     const source = stored(WINMAIL, "WINMAIL.DAT", "application/octet-stream");
-    const read = await readPartOfFile(source, {
-      kind: FILE_PART_KINDS.attachment,
-      index: 1,
-    });
+    const read = await readPartOfFile(
+      source,
+      {
+        kind: FILE_PART_KINDS.attachment,
+        index: 1,
+      },
+      "ibm437",
+    );
     expect(read.unwrap().fileName).toBe(EXHIBITS_NAME);
   });
 
@@ -238,6 +242,7 @@ describe("a TNEF stream on its own", () => {
         fileBytes: outer,
         containerMimeType: TNEF_MIME_TYPE,
         containerName: "winmail.dat",
+        zipNameCodePage: "ibm437",
         part: within,
       })
     ).unwrap();
@@ -249,6 +254,7 @@ describe("a TNEF stream on its own", () => {
     const read = await readPartOfFile(
       stored(outer, "winmail.dat", TNEF_MIME_TYPE),
       part ?? within,
+      "ibm437",
     );
     expect(read.unwrap().fileName).toBe(EXHIBITS_NAME);
   });

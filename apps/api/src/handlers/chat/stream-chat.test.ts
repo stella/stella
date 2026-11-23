@@ -6548,6 +6548,7 @@ describe("chat message hydration", () => {
       safeDb,
       sendMode: CHAT_SEND_MODE.anonymized,
       userId,
+      zipNameCodePage: "ibm437",
     });
 
     expect(Result.isError(result)).toBe(true);
@@ -6606,6 +6607,7 @@ describe("chat message hydration", () => {
       safeDb,
       sendMode: CHAT_SEND_MODE.rawOverride,
       userId,
+      zipNameCodePage: "ibm437",
     });
 
     const parts = result.unwrap().flatMap((message) => message.parts);

@@ -19,6 +19,11 @@ import readDeepLAvailability from "@/api/handlers/organization-settings/deepl-av
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
 import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
+import addDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/add";
+import checkDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/check";
+import deleteDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/delete";
+import exportDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/export";
+import listDictationVocabulary from "@/api/handlers/organization-settings/dictation-vocabulary/list";
 import getDocumentOcrAvailability from "@/api/handlers/organization-settings/document-ocr-availability/get";
 import getFeatureAccess from "@/api/handlers/organization-settings/feature-access/get";
 import enrolFeature from "@/api/handlers/organization-settings/feature-enrolments/enrol";
@@ -135,6 +140,13 @@ export const organizationSettingsRoute = mount(
         GET: readAnonymizationBlacklist,
         PUT: updateAnonymizationBlacklist,
       },
+      "/dictation-vocabulary": {
+        GET: listDictationVocabulary,
+        POST: addDictationVocabulary,
+        DELETE: deleteDictationVocabulary,
+      },
+      "/dictation-vocabulary/check": { POST: checkDictationVocabulary },
+      "/dictation-vocabulary/export": { GET: exportDictationVocabulary },
     }),
     routes(
       {

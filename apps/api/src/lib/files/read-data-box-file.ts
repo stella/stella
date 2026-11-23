@@ -167,7 +167,7 @@ export const readDataBoxFile = async (
   if (loaded.isErr()) {
     return Result.err(loaded.error);
   }
-  const { source, mimeType, entityId, deliver } = loaded.value;
+  const { source, mimeType, entityId, deliver, zipNameCodePage } = loaded.value;
   const preview = await readDataBoxPreview(source);
   if (preview.isErr()) {
     return Result.err(preview.error);
@@ -197,6 +197,7 @@ export const readDataBoxFile = async (
         source.withMimeType(mimeType),
         {
           includeContainerAttachments: true,
+          zipNameCodePage: await zipNameCodePage(),
         },
       );
       if (standalone.isErr()) {
