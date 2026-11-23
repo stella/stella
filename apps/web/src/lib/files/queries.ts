@@ -363,12 +363,18 @@ export const textFileOptions = (props: FileOptionsProps) =>
           purpose: "download",
         });
 
+        // Loaded with the file, not the app: the decoder carries the CLDR
+        // letters it weighs an undeclared legacy charset against.
+        const { decodeDeclared } =
+          await import("@stll/mojibake/declared-charset");
         return {
           fileId: data.fileId,
           fileName: data.fileName,
           mimeType: data.mimeType,
           originalMimeType: data.originalMimeType,
-          text: new TextDecoder().decode(buffer),
+          text: decodeDeclared(new Uint8Array(buffer), {
+            contentType: data.originalMimeType,
+          }).text,
         } satisfies TextFileData;
       },
     }),

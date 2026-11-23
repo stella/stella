@@ -11,6 +11,7 @@ import {
   isFilePartConvertedMediaType,
   isFilePartTextMediaType,
 } from "@stll/api-contract/file-parts";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
 import type { TranslationKey } from "@/i18n/types";
 import { DOCX_MIME, getNativeOfficeViewerFormat } from "@/lib/consts";
@@ -150,54 +151,10 @@ export const filePartViewId = ({
   workspaceId: string;
 }): string => `file-part:${workspaceId}:${fieldId}:${part}`;
 
-const getByteOrderMarkEncoding = (
-  bytes: Uint8Array,
-): EmailTextAttachmentCharset | null => {
-  if (bytes.at(0) === 0xef && bytes.at(1) === 0xbb && bytes.at(2) === 0xbf) {
-    return EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
-  }
-  if (bytes.at(0) === 0xff && bytes.at(1) === 0xfe) {
-    return EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Le;
-  }
-  if (bytes.at(0) === 0xfe && bytes.at(1) === 0xff) {
-    return EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be;
-  }
-  return null;
-};
-
-const decodeUtf16Be = (bytes: Uint8Array): string => {
-  const completeByteLength = bytes.byteLength - (bytes.byteLength % 2);
-  const littleEndianBytes = new Uint8Array(completeByteLength);
-  for (let index = 0; index < completeByteLength; index += 2) {
-    littleEndianBytes[index] = bytes[index + 1] ?? 0;
-    littleEndianBytes[index + 1] = bytes[index] ?? 0;
-  }
-  return new TextDecoder("utf-16").decode(littleEndianBytes);
-};
-
-const decodeText = (
-  bytes: Uint8Array,
-  charset: EmailTextAttachmentCharset | null,
-): string => {
-  if (charset === EMAIL_TEXT_ATTACHMENT_CHARSET.utf16) {
-    const byteOrder = getByteOrderMarkEncoding(bytes);
-    return byteOrder === EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be
-      ? decodeUtf16Be(bytes)
-      : new TextDecoder("utf-16").decode(bytes);
-  }
-  const encoding =
-    charset ??
-    getByteOrderMarkEncoding(bytes) ??
-    EMAIL_TEXT_ATTACHMENT_CHARSET.utf8;
-  if (encoding === EMAIL_TEXT_ATTACHMENT_CHARSET.utf16Be) {
-    return decodeUtf16Be(bytes);
-  }
-  return new TextDecoder(encoding).decode(bytes);
-};
-
 /**
- * A text part's preview: its first bytes decoded with the charset the
- * container declares (an email's), else its byte-order mark, else UTF-8.
+ * A text part's preview: its first bytes decoded by `decodeDeclared`, in the
+ * charset their byte-order mark or the container (an email) declares, else
+ * in the one they were most likely saved in.
  * The part link delivers a long text part cut one byte past the preview
  * (`filePartInlineBytes`), which is how a cut part is told from a whole one.
  */
@@ -213,5 +170,8 @@ export const decodeFilePartText = ({
   const shown = truncated
     ? bytes.subarray(0, FILE_PART_TEXT_PREVIEW_MAX_BYTES)
     : bytes;
-  return { text: decodeText(shown, charset), truncated };
+  const { text } = decodeDeclared(shown, {
+    contentType: charset === null ? null : `text/plain; charset=${charset}`,
+  });
+  return { text, truncated };
 };
