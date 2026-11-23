@@ -12,7 +12,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf target .cache .turbo node_modules",
-    "test": "bun run test:bun && cargo test --features assemble",
+    "test": "bun run test:bun && bash ../../scripts/cargo-test.sh --features assemble",
     "test:bun": "bun test src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun scripts/lint.ts packages/pst-reader",
