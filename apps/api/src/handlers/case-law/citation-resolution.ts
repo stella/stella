@@ -385,15 +385,15 @@ export const decisionTypeKeySql = (holder: SQL): SQL =>
  * same constants the extractor writes, so the two cannot drift.
  */
 const hintFamilyCte = (): SQL =>
-  sql`hint_family(hint, decision_types) AS (VALUES ${sql.join(
-    CITATION_DECISION_TYPE_HINTS.map(
-      (hint) =>
-        sql`(${hint}::varchar, ${decisionTypeArray(
-          CITATION_DECISION_TYPE_HINT_FAMILIES[hint],
-        )})`,
-    ),
-    sql`, `,
-  )})`;
+  sql`hint_family(hint, decision_types) AS (
+    SELECT h.hint, h.decision_types
+      FROM jsonb_to_recordset(${JSON.stringify(
+        CITATION_DECISION_TYPE_HINTS.map((hint) => ({
+          hint,
+          decision_types: CITATION_DECISION_TYPE_HINT_FAMILIES[hint],
+        })),
+      )}::text::jsonb) AS h(hint varchar, decision_types varchar[])
+  )`;
 
 /** What one statement settled, in the terms the runner reports. */
 export type CitationResolutionCounts = {
@@ -477,14 +477,6 @@ const EMPTY_COUNTS: CitationResolutionCounts = {
   undeclaredJurisdiction: 0,
 };
 
-const jurisdictionArray = (
-  jurisdictions: readonly CaseLawJurisdiction[],
-): SQL =>
-  sql`ARRAY[${sql.join(
-    jurisdictions.map((jurisdiction) => sql`${jurisdiction}`),
-    sql`, `,
-  )}]::varchar[]`;
-
 /**
  * The declared reach of every jurisdiction as `(citing, allowed[])` rows.
  *
@@ -495,13 +487,15 @@ const jurisdictionArray = (
  * stale.
  */
 const policyCte = (): SQL =>
-  sql`policy(citing_country, resolves_to) AS (VALUES ${sql.join(
-    citationResolutionPolicyRows().map(
-      ({ jurisdiction, resolvesTo }) =>
-        sql`(${jurisdiction}::varchar, ${jurisdictionArray(resolvesTo)})`,
-    ),
-    sql`, `,
-  )})`;
+  sql`policy(citing_country, resolves_to) AS (
+    SELECT p.citing_country, p.resolves_to
+      FROM jsonb_to_recordset(${JSON.stringify(
+        citationResolutionPolicyRows().map(({ jurisdiction, resolvesTo }) => ({
+          citing_country: jurisdiction,
+          resolves_to: resolvesTo,
+        })),
+      )}::text::jsonb) AS p(citing_country varchar, resolves_to varchar[])
+  )`;
 
 type CitationMatchingHoldersSqlOptions = {
   holder: SQL;
@@ -1354,13 +1348,14 @@ export const reopenCitationsForDecisionKey = async (
 ): Promise<number> => {
   const reachedFrom = sql`(
     SELECT pol.citing_country
-      FROM (VALUES ${sql.join(
+      FROM jsonb_to_recordset(${JSON.stringify(
         citationResolutionPolicyRows().map(
-          ({ jurisdiction: citing, resolvesTo }) =>
-            sql`(${citing}::varchar, ${jurisdictionArray(resolvesTo)})`,
+          ({ jurisdiction: citing, resolvesTo }) => ({
+            citing_country: citing,
+            resolves_to: resolvesTo,
+          }),
         ),
-        sql`, `,
-      )}) AS pol(citing_country, resolves_to)
+      )}::text::jsonb) AS pol(citing_country varchar, resolves_to varchar[])
      WHERE ${jurisdiction}::varchar = ANY (pol.resolves_to)
   )`;
 
@@ -1441,27 +1436,31 @@ export const reopenCitationsForDecisionIdentifiers = async (
   if (identifiers.length === 0) {
     return NOTHING_REOPENED;
   }
-  const identifierRows = sql.join(
-    identifiers.map(
-      (identifier) =>
-        sql`(${identifier.type}::varchar, ${identifier.normalizedValue}::varchar)`,
-    ),
-    sql`, `,
-  );
+  const arrivingPayload = identifiers.map((identifier) => ({
+    type: identifier.type,
+    normalized_value: identifier.normalizedValue,
+  }));
   const reachedFrom = sql`(
     SELECT pol.citing_country
-      FROM (VALUES ${sql.join(
+      FROM jsonb_to_recordset(${JSON.stringify(
         citationResolutionPolicyRows().map(
-          ({ jurisdiction: citing, resolvesTo }) =>
-            sql`(${citing}::varchar, ${jurisdictionArray(resolvesTo)})`,
+          ({ jurisdiction: citing, resolvesTo }) => ({
+            citing_country: citing,
+            resolves_to: resolvesTo,
+          }),
         ),
-        sql`, `,
-      )}) AS pol(citing_country, resolves_to)
+      )}::text::jsonb) AS pol(citing_country varchar, resolves_to varchar[])
      WHERE ${jurisdiction}::varchar = ANY (pol.resolves_to)
   )`;
 
   const result: unknown = await tx.execute(sql`
-    WITH arriving(type, normalized_value) AS (VALUES ${identifierRows}),
+    WITH arriving(type, normalized_value) AS (
+      SELECT a.type, a.normalized_value
+        FROM jsonb_to_recordset(${JSON.stringify(arrivingPayload)}::text::jsonb) AS a(
+          type varchar,
+          normalized_value varchar
+        )
+    ),
     revived AS (
       UPDATE ${caseLawCitations} citation
          SET resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
