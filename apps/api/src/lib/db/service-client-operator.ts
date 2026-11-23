@@ -9,8 +9,8 @@ import {
   oauthClientResource,
   organization,
 } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { serviceOAuthClients } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { recordServiceClientOperatorAuditEvent } from "@/api/lib/db/service-client-audit";
 import {

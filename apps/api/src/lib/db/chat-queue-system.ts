@@ -5,8 +5,8 @@ import {
   CHAT_QUEUE_SEND_REFUSAL,
 } from "@stll/api-contract/chat-queue";
 
-import type { Transaction } from "@/api/db/root";
 import { chatQueuedMessages, chatQueueHolds, chatTurns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import { ACTIVE_CHAT_TURN_STATUSES } from "@/api/lib/chat/turn-status";
