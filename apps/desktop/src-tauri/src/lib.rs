@@ -25,6 +25,7 @@ mod clipboard_commands;
 #[cfg(target_os = "macos")]
 mod clipboard_image_export;
 mod clipboard_screen_capture;
+mod clipboard_settings;
 mod clipboard_shortcut;
 mod clipboard_store;
 mod clipboard_welcome;

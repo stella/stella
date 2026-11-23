@@ -462,6 +462,21 @@
     "welcomeStart": "Alusta kopeerimist",
     "welcomeTitle": "Teie uus lõikelaud"
   },
+  "clipboardSettings": {
+    "capture": "Salvesta uued lõiked",
+    "captureDescription": "Kui see on välja lülitatud, ei salvestata midagi, mida kopeerid.",
+    "errorSave": "Muudatust ei õnnestunud salvestada. Proovi uuesti.",
+    "excludedDescription": "Nendes rakendustes kopeeritut ei salvestata.",
+    "excludedEmpty": "Rakenduse välistamiseks paremklõpsa lõikelaual mõnel selle lõikel ja vali, et selle uusi lõikeid enam ei salvestataks.",
+    "groupActions": "Rühma {groupName} toimingud",
+    "groupsDescription": "Lohista rühma, et muuta selle asukohta lõikelaual.",
+    "groupsEmpty": "Loo rühm ja lohista sellesse lõikelaual lõikeid.",
+    "history": "Ajalugu",
+    "moveGroupDown": "Liiguta alla",
+    "moveGroupUp": "Liiguta üles",
+    "recordingsDescription": "Luba ekraanipiltidel, salvestistel ja ekraani jagamisel lõikelauda näidata.",
+    "retentionDescription": "Vanemad lõiked kustutatakse. Rühmades olevad lõiked säilivad."
+  },
   "dialog": {
     "accountEmail": "Konto",
     "accountSubtitle": "Ühendage stella desktop selle konto ja organisatsiooniga.",

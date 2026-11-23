@@ -85,7 +85,6 @@ import { InlineDropIndicator } from "@stll/ui/inline-drop-indicator";
 import { InlineRenameInput } from "@stll/ui/inline-rename";
 import {
   type InlineDropPosition,
-  reorderInlineIds,
   toInlineDropPosition,
 } from "@stll/ui/inline-reorder";
 import {
@@ -183,6 +182,13 @@ import type {
 } from "./clipboard-logic";
 import { clipboardHistory } from "./clipboard-selection";
 import {
+  CLIPBOARD_RETENTION_LABEL_KEYS,
+  clipboardGroupDropIndex,
+  clipboardGroupStepIndex,
+  clipboardSettingsCommands,
+} from "./clipboard-settings";
+import type { ClipboardGroupDialogState } from "./clipboard-settings";
+import {
   markClipboardShellCommit,
   markClipboardSnapshotApplied,
   measureClipboardSnapshotRequest,
@@ -204,27 +210,23 @@ import type {
   ClipboardGroup,
   ClipboardGroupColor,
   ClipboardItem,
-  ClipboardRetention,
+  ClipboardSettingsSnapshot,
   ClipboardSnapshot,
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
 } from "./clipboard-types";
 import { ClipboardCardPreview } from "./ClipboardCardPreview";
 import {
-  ClipboardGroupFields,
-  nextClipboardGroupColor,
-} from "./ClipboardGroupFields";
+  ClipboardGroupDialogBody,
+  useClipboardGroupDialogFrame,
+} from "./ClipboardGroupDialog";
+import { nextClipboardGroupColor } from "./ClipboardGroupFields";
 import type { ClipboardImagePreviewStatus } from "./ClipboardImagePreview";
 import { ClipboardSourceIcon } from "./ClipboardSourceIcon";
 import { useClipsCopyFailed } from "./clips-copy-routing";
 import { useRailViewport } from "./use-rail-viewport";
 
 const STELLA_WEB_APP_URL = "https://my.stll.app";
-const RETENTION_LABEL_KEYS = {
-  week: "retentionWeek",
-  month: "retentionMonth",
-  year: "retentionYear",
-} as const satisfies Record<ClipboardRetention, string>;
 const CLIPBOARD_CARD_SELECTOR = "[data-clipboard-id]";
 // Which step of a copy failed decides what the user is told: only a `copy`
 // failure means the clip never reached the system clipboard.
@@ -909,28 +911,7 @@ const ClipboardCard = ({
 };
 
 type ClipboardDialogState =
-  | { type: "closed" }
-  | { type: "clearHistory" }
-  | {
-      color: ClipboardGroupColor;
-      itemId: string | null;
-      name: string;
-      type: "createGroup";
-    }
-  | {
-      groupId: string;
-      groupName: string;
-      mode: ClipboardGroupDeletionMode;
-      type: "deleteGroup";
-    }
-  | {
-      color: ClipboardGroupColor;
-      groupId: string;
-      name: string;
-      type: "editGroup";
-    };
-
-type ClipboardGroupDeletionMode = "deleteClips" | "keepClips";
+  { type: "closed" } | { type: "clearHistory" } | ClipboardGroupDialogState;
 
 type DialogShellProps = {
   children: ReactNode;
@@ -1001,6 +982,36 @@ const DialogShell = ({
   );
 };
 
+type ClipboardGroupDialogProps = {
+  dialog: ClipboardGroupDialogState;
+  onChange: (dialog: ClipboardGroupDialogState) => void;
+  onClose: () => void;
+  onSubmit: (dialog: ClipboardGroupDialogState) => void;
+};
+
+/** A group dialog in the Clips window's own dialog style. */
+const ClipboardGroupDialog = ({
+  dialog,
+  onChange,
+  onClose,
+  onSubmit,
+}: ClipboardGroupDialogProps) => {
+  const frame = useClipboardGroupDialogFrame(dialog);
+  return (
+    <DialogShell
+      destructive={frame.destructive}
+      dirty={frame.dirty}
+      onClose={onClose}
+      onSubmit={() => onSubmit(dialog)}
+      submitDisabled={frame.submitDisabled}
+      submitLabel={frame.submitLabel}
+      title={frame.title}
+    >
+      <ClipboardGroupDialogBody dialog={dialog} onChange={onChange} />
+    </DialogShell>
+  );
+};
+
 type ClipboardDialogProps = {
   dialog: ClipboardDialogState;
   onChange: (dialog: ClipboardDialogState) => void;
@@ -1009,14 +1020,17 @@ type ClipboardDialogProps = {
     args?: Record<string, unknown>,
     onSuccess?: () => void,
   ) => void;
-  onGroupDeleted: (groupId: string) => void;
+  onGroupDialogSubmit: (
+    dialog: ClipboardGroupDialogState,
+    onSuccess: () => void,
+  ) => void;
 };
 
 const ClipboardDialog = ({
   dialog,
   onChange,
   onCommand,
-  onGroupDeleted,
+  onGroupDialogSubmit,
 }: ClipboardDialogProps) => {
   const t = useTranslations("clipboard");
   const close = () => onChange({ type: "closed" });
@@ -1041,148 +1055,15 @@ const ClipboardDialog = ({
         </DialogShell>
       );
     case "createGroup":
-      return (
-        <DialogShell
-          onClose={close}
-          onSubmit={() => {
-            onCommand(
-              "clipboard_create_group",
-              {
-                color: dialog.color,
-                itemId: dialog.itemId,
-                name: dialog.name,
-              },
-              close,
-            );
-          }}
-          submitDisabled={!dialog.name.trim()}
-          submitLabel={t("create")}
-          title={t("createGroup")}
-        >
-          <ClipboardGroupFields
-            autoFocus
-            color={dialog.color}
-            name={dialog.name}
-            onChange={({ color, name }) => {
-              onChange({
-                color,
-                itemId: dialog.itemId,
-                name,
-                type: "createGroup",
-              });
-            }}
-          />
-        </DialogShell>
-      );
     case "deleteGroup":
-      return (
-        <DialogShell
-          dirty={dialog.mode !== "keepClips"}
-          destructive
-          onClose={close}
-          onSubmit={() => {
-            onCommand(
-              "clipboard_delete_group",
-              { id: dialog.groupId, mode: dialog.mode },
-              () => {
-                onGroupDeleted(dialog.groupId);
-                close();
-              },
-            );
-          }}
-          submitLabel={
-            dialog.mode === "deleteClips"
-              ? t("deleteGroupDeleteClips")
-              : t("deleteGroup")
-          }
-          title={t("deleteGroup")}
-        >
-          <fieldset>
-            <legend className="text-muted-foreground text-sm leading-relaxed text-pretty">
-              {t("deleteGroupConfirmation", { groupName: dialog.groupName })}
-            </legend>
-            <div className="mt-4 grid gap-2">
-              {(
-                [
-                  {
-                    description: t("deleteGroupKeepClipsDescription"),
-                    label: t("deleteGroupKeepClips"),
-                    mode: "keepClips",
-                  },
-                  {
-                    description: t("deleteGroupDeleteClipsDescription"),
-                    label: t("deleteGroupDeleteClips"),
-                    mode: "deleteClips",
-                  },
-                ] as const
-              ).map((option) => (
-                <Label
-                  aria-label={option.label}
-                  key={option.mode}
-                  variant="choice-card"
-                >
-                  <input
-                    checked={dialog.mode === option.mode}
-                    className="accent-destructive mt-0.5 size-4 shrink-0"
-                    name="delete-group-mode"
-                    onChange={() =>
-                      onChange({
-                        groupId: dialog.groupId,
-                        groupName: dialog.groupName,
-                        mode: option.mode,
-                        type: "deleteGroup",
-                      })
-                    }
-                    type="radio"
-                    value={option.mode}
-                  />
-                  <span className="min-w-0">
-                    <span className="text-foreground block text-sm font-medium">
-                      {option.label}
-                    </span>
-                    <span className="text-muted-foreground mt-0.5 block text-xs leading-relaxed text-pretty">
-                      {option.description}
-                    </span>
-                  </span>
-                </Label>
-              ))}
-            </div>
-          </fieldset>
-        </DialogShell>
-      );
     case "editGroup":
       return (
-        <DialogShell
+        <ClipboardGroupDialog
+          dialog={dialog}
+          onChange={onChange}
           onClose={close}
-          onSubmit={() => {
-            onCommand(
-              "clipboard_update_group",
-              {
-                color: dialog.color,
-                id: dialog.groupId,
-                name: dialog.name,
-              },
-              close,
-            );
-          }}
-          submitDisabled={!dialog.name.trim()}
-          submitLabel={t("editGroup")}
-          title={t("editGroup")}
-        >
-          <ClipboardGroupFields
-            autoFocus
-            color={dialog.color}
-            name={dialog.name}
-            onChange={({ color, name }) => {
-              onChange({
-                color,
-                groupId: dialog.groupId,
-                name,
-                type: "editGroup",
-              });
-            }}
-          />
-        </DialogShell>
+          onSubmit={(submitted) => onGroupDialogSubmit(submitted, close)}
+        />
       );
     default: {
       dialog satisfies never;
@@ -2282,6 +2163,48 @@ const ClipboardApp = () => {
     [t],
   );
 
+  /** Applies the settings a settings command answers with; the change event
+   *  it sends brings the clips it touched. */
+  const applySettingsCommand = useCallback(
+    (
+      command: Promise<ClipboardSettingsSnapshot | null>,
+      onSuccess?: () => void,
+    ) => {
+      setError((current) => (current?.source === "operation" ? null : current));
+      void command
+        .then((settings) => {
+          if (settings) {
+            dispatchClipboard({ type: "settingsReceived", settings });
+            onSuccess?.();
+            return undefined;
+          }
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({
+            message: t("errorUpdateHistory"),
+            source: "operation",
+          });
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+            detail: describeError(error),
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardHistoryUpdate,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({
+            message: t("errorUpdateHistory"),
+            source: "operation",
+          });
+        });
+    },
+    [t],
+  );
+
   const closeWelcome = () => {
     setWelcomeDismissed(true);
     setWelcomeRequested(false);
@@ -2541,20 +2464,22 @@ const ClipboardApp = () => {
                 extractClosestEdge(self.data),
                 clipboardElementDirection(element),
               );
-              const reordered =
+              const index =
                 groupId === null || position === null
                   ? null
-                  : reorderInlineIds({
+                  : clipboardGroupDropIndex({
                       draggedId: draggedGroupId,
-                      ids: snapshot.groups.map((group) => group.id),
+                      groups: snapshot.groups,
                       position,
                       targetId: groupId,
                     });
-              if (reordered) {
-                applySnapshotCommand("clipboard_move_group", {
-                  id: draggedGroupId,
-                  index: reordered.indexOf(draggedGroupId),
-                });
+              if (index !== null) {
+                applySettingsCommand(
+                  clipboardSettingsCommands.moveGroup({
+                    id: draggedGroupId,
+                    index,
+                  }),
+                );
               }
               return;
             }
@@ -2574,6 +2499,7 @@ const ClipboardApp = () => {
     return combine(...cleanups);
   }, [
     activeGroupId,
+    applySettingsCommand,
     applySnapshotCommand,
     filterQuery,
     railWindow.end,
@@ -2591,8 +2517,14 @@ const ClipboardApp = () => {
     dragState.type === "reordering" && dragState.over?.groupId === groupId
       ? dragState.over.position
       : null;
-  const moveGroup = (groupId: string, index: number) =>
-    applySnapshotCommand("clipboard_move_group", { id: groupId, index });
+  const moveGroup = (groupId: string, step: -1 | 1) => {
+    const index = clipboardGroupStepIndex(snapshot.groups, groupId, step);
+    if (index !== null) {
+      applySettingsCommand(
+        clipboardSettingsCommands.moveGroup({ id: groupId, index }),
+      );
+    }
+  };
 
   const selectIndex = (index: number) => {
     // Mount a virtualized target before focusing it. Deferring focus to a
@@ -2994,9 +2926,17 @@ const ClipboardApp = () => {
         dialog={dialog}
         onChange={setDialog}
         onCommand={applySnapshotCommand}
-        onGroupDeleted={(groupId) => {
-          setSelectedGroupId((currentGroupId) =>
-            currentGroupId === groupId ? null : currentGroupId,
+        onGroupDialogSubmit={(submitted, close) => {
+          applySettingsCommand(
+            clipboardSettingsCommands.submitGroupDialog(submitted),
+            () => {
+              if (submitted.type === "deleteGroup") {
+                setSelectedGroupId((currentGroupId) =>
+                  currentGroupId === submitted.groupId ? null : currentGroupId,
+                );
+              }
+              close();
+            },
           );
         }}
       />
@@ -3245,9 +3185,9 @@ const ClipboardApp = () => {
                     aria-label={t("resume")}
                     className="size-11 shrink-0 rounded-full text-(--option-orange)"
                     onClick={() => {
-                      applySnapshotCommand("clipboard_set_capture_status", {
-                        status: "active",
-                      });
+                      applySettingsCommand(
+                        clipboardSettingsCommands.setCaptureStatus("active"),
+                      );
                     }}
                     size="icon"
                     title={t("resume")}
@@ -3520,8 +3460,7 @@ const ClipboardApp = () => {
                                 />
                               ),
                               label: t("moveGroupEarlier"),
-                              onClick: () =>
-                                moveGroup(group.id, groupIndex - 1),
+                              onClick: () => moveGroup(group.id, -1),
                               separatorBefore: true,
                             },
                             {
@@ -3534,8 +3473,7 @@ const ClipboardApp = () => {
                                 />
                               ),
                               label: t("moveGroupLater"),
-                              onClick: () =>
-                                moveGroup(group.id, groupIndex + 1),
+                              onClick: () => moveGroup(group.id, 1),
                             },
                             {
                               icon: <Trash2Icon aria-hidden="true" />,
@@ -3611,9 +3549,11 @@ const ClipboardApp = () => {
                     <MenuItem
                       className="min-h-11 rounded-xl"
                       onClick={() => {
-                        applySnapshotCommand("clipboard_set_capture_status", {
-                          status: nextCaptureStatus,
-                        });
+                        applySettingsCommand(
+                          clipboardSettingsCommands.setCaptureStatus(
+                            nextCaptureStatus,
+                          ),
+                        );
                       }}
                     >
                       {captureActive ? <PauseIcon /> : <PlayIcon />}
@@ -3631,16 +3571,15 @@ const ClipboardApp = () => {
                               className="min-h-11 rounded-xl"
                               key={retention}
                               onClick={() => {
-                                applySnapshotCommand(
-                                  "clipboard_set_retention",
-                                  {
+                                applySettingsCommand(
+                                  clipboardSettingsCommands.setRetention(
                                     retention,
-                                  },
+                                  ),
                                 );
                               }}
                               value={retention}
                             >
-                              {t(RETENTION_LABEL_KEYS[retention])}
+                              {t(CLIPBOARD_RETENTION_LABEL_KEYS[retention])}
                             </MenuRadioItem>
                           ))}
                         </MenuRadioGroup>
@@ -3658,9 +3597,10 @@ const ClipboardApp = () => {
                               className="min-h-11 rounded-xl"
                               key={exclusion.identifier}
                               onClick={() => {
-                                applySnapshotCommand(
-                                  "clipboard_remove_source_app_exclusion",
-                                  { identifier: exclusion.identifier },
+                                applySettingsCommand(
+                                  clipboardSettingsCommands.removeSourceAppExclusion(
+                                    exclusion.identifier,
+                                  ),
                                 );
                               }}
                             >
@@ -3682,9 +3622,11 @@ const ClipboardApp = () => {
                       checked={snapshot.screenCapture === "visible"}
                       className="min-h-11 rounded-xl"
                       onCheckedChange={(checked) => {
-                        applySnapshotCommand("clipboard_set_screen_capture", {
-                          capture: checked ? "visible" : "hidden",
-                        });
+                        applySettingsCommand(
+                          clipboardSettingsCommands.setScreenCapture(
+                            checked ? "visible" : "hidden",
+                          ),
+                        );
                       }}
                       variant="switch"
                     >
