@@ -71,6 +71,114 @@ pub fn respell(text: &str, words: &[String]) -> String {
   out
 }
 
+/// A learned fix that is on: the words as dictated, and as the speaker
+/// writes them.
+pub struct LearnedSpelling<'a> {
+  pub from: &'a str,
+  pub to: &'a str,
+}
+
+/// `text` with every whole-word, case-insensitive match of a learned fix's
+/// words written as the speaker writes them: the longest phrase first, a
+/// match only where a word starts, words apart only by spaces, and a capital
+/// kept where the match had one. The twin of `applyLearnedFixes` in
+/// `@stll/transcript/corrections`; both pass the cases in
+/// `fixtures/dictation-learned-fixes.json`.
+pub fn apply_learned(text: &str, fixes: &[LearnedSpelling<'_>]) -> String {
+  let mut active = fixes
+    .iter()
+    .filter_map(|fix| {
+      // Only words apart by spaces can match: a fix whose dictated words
+      // hold punctuation, as `C++`, would otherwise match its words alone.
+      let (before, words, after) = phrase_words(fix.from)?;
+      if !before.is_empty() || !after.is_empty() {
+        return None;
+      }
+      let keys = pieces(words)
+        .into_iter()
+        .filter_map(|piece| match piece {
+          Piece::Word(word) => Some(learned_key(word)),
+          Piece::Between(_) => None,
+        })
+        .collect::<Vec<_>>();
+      Some((keys, fix.to))
+    })
+    .collect::<Vec<_>>();
+  if active.is_empty() {
+    return text.to_string();
+  }
+  // Stable, so of two phrases as long the first listed wins.
+  active.sort_by_key(|(keys, _)| Reverse(keys.len()));
+  let pieces = pieces(text);
+  let mut out = String::with_capacity(text.len());
+  let mut index = 0;
+  while index < pieces.len() {
+    let rest = &pieces[index..];
+    let found = match rest[0] {
+      Piece::Word(_) => active.iter().find_map(|(keys, to)| {
+        let (words, taken) = leading_words(rest, keys.len())?;
+        words
+          .iter()
+          .zip(keys)
+          .all(|(word, key)| learned_key(word) == *key)
+          .then_some((*to, taken))
+      }),
+      Piece::Between(_) => None,
+    };
+    match found {
+      Some((to, taken)) => {
+        out.push_str(&cased_like(to, &joined(&rest[..taken])));
+        index += taken;
+      }
+      None => {
+        out.push_str(joined(&rest[..1]).as_str());
+        index += 1;
+      }
+    }
+  }
+  out
+}
+
+/// `phrase` as the punctuation before its first word, its words, and the
+/// punctuation after its last word. `None` without a word, or when anything
+/// but spaces stands between two of its words.
+pub fn phrase_words(phrase: &str) -> Option<(&str, &str, &str)> {
+  let parts = pieces(phrase);
+  let first = parts
+    .iter()
+    .position(|piece| matches!(piece, Piece::Word(_)))?;
+  let last = parts
+    .iter()
+    .rposition(|piece| matches!(piece, Piece::Word(_)))?;
+  let spaced = parts[first..=last].iter().all(|piece| match piece {
+    Piece::Word(_) => true,
+    Piece::Between(between) => between.chars().all(|character| character == ' '),
+  });
+  if !spaced {
+    return None;
+  }
+  let before = joined(&parts[..first]).len();
+  let after = phrase.len() - joined(&parts[last + 1..]).len();
+  Some((&phrase[..before], &phrase[before..after], &phrase[after..]))
+}
+
+/// The words of `text`, split as the spelling passes split them.
+pub fn words_of(text: &str) -> Vec<String> {
+  pieces(text)
+    .into_iter()
+    .filter_map(|piece| match piece {
+      Piece::Word(word) => Some(word.to_string()),
+      Piece::Between(_) => None,
+    })
+    .collect()
+}
+
+/// How a learned fix's words compare: in lower case, curly apostrophes made
+/// straight.
+fn learned_key(word: &str) -> String {
+  word.to_lowercase().replace('’', "'")
+}
+
 fn target(word: &str) -> Option<Target<'_>> {
   let folded = word
     .split_whitespace()
@@ -308,6 +416,55 @@ fn distance(left: &str, right: &str) -> usize {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  /// Cases shared with `applyLearnedFixes` in `@stll/transcript`.
+  #[derive(serde::Deserialize)]
+  struct LearnedCase {
+    name: String,
+    text: String,
+    fixes: Vec<LearnedCaseFix>,
+    expected: String,
+  }
+
+  #[derive(serde::Deserialize)]
+  struct LearnedCaseFix {
+    from: String,
+    to: String,
+  }
+
+  #[test]
+  fn learned_fixes_rewrite_the_shared_cases() {
+    let cases: Vec<LearnedCase> =
+      serde_json::from_str(include_str!("../fixtures/dictation-learned-fixes.json"))
+        .unwrap();
+    assert!(!cases.is_empty());
+    for case in cases {
+      let fixes = case
+        .fixes
+        .iter()
+        .map(|fix| LearnedSpelling {
+          from: &fix.from,
+          to: &fix.to,
+        })
+        .collect::<Vec<_>>();
+      assert_eq!(
+        apply_learned(&case.text, &fixes),
+        case.expected,
+        "{}",
+        case.name
+      );
+    }
+  }
+
+  #[test]
+  fn a_phrase_splits_into_its_edge_punctuation_and_words() {
+    assert_eq!(phrase_words("Novak,"), Some(("", "Novak", ",")));
+    assert_eq!(phrase_words("(jon smith)"), Some(("(", "jon smith", ")")));
+    assert_eq!(phrase_words("C++"), Some(("", "C", "++")));
+    assert_eq!(phrase_words("o'brien"), Some(("", "o'brien", "")));
+    assert_eq!(phrase_words("St. John"), None);
+    assert_eq!(phrase_words("..."), None);
+  }
 
   fn words(list: &[&str]) -> Vec<String> {
     list.iter().map(ToString::to_string).collect()
