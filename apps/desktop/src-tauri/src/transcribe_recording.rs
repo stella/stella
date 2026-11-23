@@ -1705,8 +1705,10 @@ mod tests {
 
   #[test]
   fn the_tray_is_rebuilt_once_per_minute_transcribed_never_per_piece() {
-    let mut inner = Inner::default();
-    inner.job = Some(running(3));
+    let mut inner = Inner {
+      job: Some(running(3)),
+      ..Inner::default()
+    };
     let rebuilds = (1..=200_u64)
       .filter(|piece| inner.progressed(3, piece * 20_000))
       .count();
