@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   DEFAULT_TIME_EDIT_WINDOW_DAYS,
   DEFAULT_TIME_MINIMUM_UNIT_MINUTES,

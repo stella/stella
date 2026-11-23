@@ -3,7 +3,7 @@ import { and, desc, eq, isNull, lte } from "drizzle-orm";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import {
   entities,
   entityVersions,

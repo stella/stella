@@ -25,7 +25,7 @@
 import { Result } from "better-result";
 import { inArray } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { workspaces } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { basisReferenceWorkspaceIds } from "@/api/lib/document-review/reference-passages";

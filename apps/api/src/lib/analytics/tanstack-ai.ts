@@ -14,7 +14,7 @@ import {
   sanitizeQueryErrorText,
 } from "@stll/errors";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type {
   UsageActionType,
   UsageEventLane,

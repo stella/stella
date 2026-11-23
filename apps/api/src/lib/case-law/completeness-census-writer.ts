@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { chunk } from "@stll/concurrency/chunk";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawCompletenessCensus as census } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { censusListingEvidenceKey } from "@/api/lib/case-law/census-listing-identity";

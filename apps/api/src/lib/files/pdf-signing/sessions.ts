@@ -15,7 +15,7 @@ import { Temporal } from "@stll/time";
 
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   entities,
   entityVersions,

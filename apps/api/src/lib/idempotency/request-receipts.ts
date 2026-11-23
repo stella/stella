@@ -19,7 +19,7 @@ import { stableStringify } from "@stll/stable-stringify";
 import { DAY_IN_MS } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { requestIdempotencyReceipts as receipts } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import {
