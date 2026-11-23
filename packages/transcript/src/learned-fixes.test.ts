@@ -48,11 +48,28 @@ describe("applyLearnedFixChanges", () => {
         [corrected("Hrubesch", "Hrubeš"), corrected("Lorentz", "Lorenc")],
       ).map(({ from, status }) => [from, status]),
     ).toEqual([
-      ["Hrubeš", "contradicted"],
       ["Lorenc", "off"],
+      ["Hrubeš", "contradicted"],
       ["Hrubesch", "learning"],
       ["Lorentz", "learning"],
     ]);
+  });
+
+  test("a fix turned back moves last, so the limit takes an older unused fix first", () => {
+    const others = Array.from({ length: LEARNED_FIX_LIMIT - 2 }, (_, index) =>
+      fix(`slovo${String.fromCodePoint(97 + index)}`, "x", "on"),
+    );
+    const next = applyLearnedFixChanges(
+      [
+        fix("Hrubeš", "Hrubesch"),
+        fix("rozpracovano", "rozpracováno", "learning", 1),
+        ...others,
+      ],
+      [corrected("Hrubesch", "Hrubeš")],
+    );
+    expect(next).toHaveLength(LEARNED_FIX_LIMIT);
+    expect(next.map(({ from }) => from)).not.toContain("rozpracovano");
+    expect(next.at(-2)).toEqual(fix("Hrubeš", "Hrubesch", "contradicted"));
   });
 
   test("a fix of case alone is learned, not taken for its own reversal", () => {
@@ -81,8 +98,8 @@ describe("applyLearnedFixChanges", () => {
         ],
       ),
     ).toEqual([
-      fix("Hrubeš", "Hrubesch", "contradicted"),
       fix("Lorenc", "Lorentz", "off"),
+      fix("Hrubeš", "Hrubesch", "contradicted"),
     ]);
   });
 
@@ -95,14 +112,54 @@ describe("applyLearnedFixChanges", () => {
     ).toEqual([fix("Lorenc", "Lorentz"), fix("hrubeš", "Hrubesch", "on", 4)]);
   });
 
-  test("a switch sets the status of a known fix and leaves others alone", () => {
+  test("a switch sets the status of a known fix, moves it last and leaves others alone", () => {
     const fixes = [fix("Hrubeš", "Hrubesch"), fix("Lorenc", "Lorentz")];
     expect(
       applyLearnedFixChanges(fixes, [
         { type: "switched", from: "hrubeš", status: "off" },
         { type: "switched", from: "Novák", status: "on" },
       ]),
-    ).toEqual([fix("Hrubeš", "Hrubesch", "off"), fix("Lorenc", "Lorentz")]);
+    ).toEqual([fix("Lorenc", "Lorentz"), fix("Hrubeš", "Hrubesch", "off")]);
+  });
+
+  test("a fix switched off and on again is not the first to go past the limit", () => {
+    const full = Array.from({ length: LEARNED_FIX_LIMIT }, (_, index) =>
+      fix(`slovo${String.fromCodePoint(97 + index)}`, "x", "on"),
+    );
+    const next = applyLearnedFixChanges(full, [
+      { type: "switched", from: "slovoa", status: "off" },
+      { type: "switched", from: "slovoa", status: "on" },
+      { type: "taught", from: "posledni", to: "poslední" },
+    ]);
+    expect(next.map(({ from }) => from)).toContain("slovoa");
+    expect(next.map(({ from }) => from)).not.toContain("slovob");
+  });
+
+  test("a fix of an apostrophe alone turns on when seen twice", () => {
+    const changes = [
+      corrected("O’Neill", "O'Neill"),
+      corrected("O’Neill", "O'Neill"),
+    ];
+    expect(applyLearnedFixChanges([], changes)).toEqual([
+      fix("O’Neill", "O'Neill", "on", 2),
+    ]);
+  });
+
+  test("changes give the same fixes in one call or one at a time at the limit", () => {
+    const full = Array.from({ length: LEARNED_FIX_LIMIT }, (_, index) =>
+      fix(`slovo${String.fromCodePoint(97 + index)}`, "x", "on"),
+    );
+    const changes = [
+      corrected("nakonec", "na konec"),
+      corrected("nakonec", "na konec"),
+    ];
+    const batched = applyLearnedFixChanges(full, changes);
+    let single: LearnedFix[] = full;
+    for (const change of changes) {
+      single = applyLearnedFixChanges(single, [change]);
+    }
+    expect(batched).toEqual(single);
+    expect(batched).toHaveLength(LEARNED_FIX_LIMIT);
   });
 
   test("past the limit the oldest unused fix goes first", () => {
@@ -124,6 +181,23 @@ describe("applyLearnedFixChanges", () => {
       { type: "taught", from: "posledni", to: "poslední" },
     ]);
     expect(allOn.at(0)?.from).toBe("slovob");
+  });
+
+  test("past the limit a fix switched off is unused, and the oldest one goes", () => {
+    const others = Array.from({ length: LEARNED_FIX_LIMIT - 2 }, (_, index) =>
+      fix(`slovo${String.fromCodePoint(97 + index)}`, "x", "on"),
+    );
+    const next = applyLearnedFixChanges(
+      [
+        fix("Lorenc", "Lorentz", "off"),
+        fix("rozpracovano", "rozpracováno", "learning", 1),
+        ...others,
+      ],
+      [{ type: "taught", from: "posledni", to: "poslední" }],
+    );
+    expect(next).toHaveLength(LEARNED_FIX_LIMIT);
+    expect(next.map(({ from }) => from)).not.toContain("Lorenc");
+    expect(next.map(({ from }) => from)).toContain("rozpracovano");
   });
 
   test("the same changes always give the same fixes", () => {

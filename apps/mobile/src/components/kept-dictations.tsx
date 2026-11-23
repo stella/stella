@@ -196,6 +196,8 @@ const retryKept = async (
   const text = await finalText({
     source,
     cleanup: kept.cleanup,
+    style: kept.style,
+    translateTo: kept.translateTo,
     joined,
     locale: kept.locale,
   });

@@ -116,8 +116,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
-  // Deleting what dictation learned bumps the generation once more; a repeat
-  // leaves nothing learned, as the first did.
+  // Deleting what dictation learned names the generation it deletes; a
+  // repeat finds a newer one and changes nothing.
   "DELETE /v1/dictation/learned-fixes": {
     type: "non-replay",
     reason: "current-state",
@@ -658,8 +658,8 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
-  // Each change carries its own id and is applied once, so a repeat answers
-  // the current fixes.
+  // Each change carries its device's next number and is applied once, so a
+  // repeat answers the current fixes.
   "POST /v1/dictation/learned-fixes": {
     type: "non-replay",
     reason: "current-state",
@@ -1340,8 +1340,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "Retains native processing-run deduplication by source version.",
   "src/handlers/feedback/create.ts":
     "Submits to the detached feedback store outside the organization transaction.",
-  "src/handlers/files/email-attachment/create.ts":
-    "Saves attachment bytes through the durable upload lifecycle.",
   "src/handlers/flows/create.ts":
     "Synchronizes the scheduled trigger after the database mutation.",
   "src/handlers/lists/items/comments/create.ts":

@@ -1,3 +1,4 @@
+import type { CertifiedEmailEnvelope } from "./certified-email";
 import type { DataBoxEnvelope, DataBoxStatedEnvelope } from "./data-box";
 import type { SafeId } from "./safe-id";
 
@@ -10,16 +11,23 @@ export const CORRESPONDENCE_MAX_BODY_CHARACTERS = 2_000_000;
 export const CORRESPONDENCE_SOURCE_CHANGED_CODE =
   "correspondence_source_changed";
 
-export const CORRESPONDENCE_CHANNELS = ["email", "data_box"] as const;
+export const CORRESPONDENCE_CHANNELS = ["email", "data_box", "pec"] as const;
 export type CorrespondenceChannel = (typeof CORRESPONDENCE_CHANNELS)[number];
 
 /**
  * A data-box message carries its envelope; its sender and recipient
- * addresses are box IDs. Only an uploaded `.zfo` file files one.
+ * addresses are box IDs. Only an uploaded `.zfo` file files one. A certified
+ * email (Italian PEC) carries its certification data as stated in the file;
+ * only an uploaded `.eml` file that its content shows to be one files one.
  */
 export type CorrespondenceChannelContent =
-  | { channel: "email"; dataBox: null }
-  | { channel: "data_box"; dataBox: DataBoxEnvelope };
+  | { channel: "email"; dataBox: null; certifiedEmail: null }
+  | { channel: "data_box"; dataBox: DataBoxEnvelope; certifiedEmail: null }
+  | {
+      channel: "pec";
+      dataBox: null;
+      certifiedEmail: CertifiedEmailEnvelope;
+    };
 
 export const CORRESPONDENCE_DIRECTIONS = ["in", "out"] as const;
 export type CorrespondenceDirection =
@@ -168,8 +176,24 @@ export type CorrespondenceFiler =
 export type ParsedCorrespondence = CorrespondenceProvenance &
   Omit<CorrespondenceMessageContent, "direction"> &
   (
-    | { channel: "email"; dataBox: null; direction: CorrespondenceDirection }
-    | { channel: "data_box"; dataBox: DataBoxStatedEnvelope; direction: null }
+    | {
+        channel: "email";
+        dataBox: null;
+        certifiedEmail: null;
+        direction: CorrespondenceDirection;
+      }
+    | {
+        channel: "data_box";
+        dataBox: DataBoxStatedEnvelope;
+        certifiedEmail: null;
+        direction: null;
+      }
+    | {
+        channel: "pec";
+        dataBox: null;
+        certifiedEmail: CertifiedEmailEnvelope;
+        direction: CorrespondenceDirection;
+      }
   );
 
 /** A record's content other than its provenance and channel. */

@@ -1,4 +1,42 @@
 {
+  "certifiedEmail": {
+    "certifiedAt": "Sertifitseerimise aeg",
+    "deliveredTo": "Kätte toimetatud aadressile",
+    "error": "Teatatud viga",
+    "errors": {
+      "noDomain": "Tundmatu domeen",
+      "noRecipient": "Tundmatu saaja",
+      "other": "Muu viga",
+      "virus": "Avastati viirus"
+    },
+    "handedOverFor": "Üle võetud saajale",
+    "kinds": {
+      "acceptance": "Vastuvõtukinnitus (PEC)",
+      "delivery": "Kättetoimetamise kinnitus (PEC)",
+      "deliveryError": "Kättetoimetamata jäämise teade (PEC)",
+      "deliveryErrorWarning": "Kättetoimetamise tähtaja ületamise teade (PEC)",
+      "nonAcceptance": "Mittevastuvõtmise teade (PEC)",
+      "takenInCharge": "Ülevõtmise kinnitus (PEC)",
+      "transport": "Sertifitseeritud e-kiri (PEC)",
+      "virusDetected": "Viiruse avastamise teade (PEC)"
+    },
+    "messageId": "PEC-sõnumi ID",
+    "notDeliveredTo": "Kätte toimetamata aadressile",
+    "ordinaryMailbox": "Tavaline postkast",
+    "originalNotIncluded": "See fail ei sisalda algset sõnumit.",
+    "provider": "PEC-teenuse pakkuja",
+    "receipt": "Taotletud kinnitus",
+    "receiptTypes": {
+      "full": "Täielik kinnitus",
+      "short": "Lühike kinnitus",
+      "summary": "Kokkuvõtlik kinnitus"
+    },
+    "recipients": "Märgitud saajad",
+    "sender": "Märgitud saatja",
+    "signatureNotVerified": "Teenusepakkuja allkiri jääb faili ega ole kontrollitud.",
+    "signedBy": "Allkirjastaja: {name}",
+    "statedInFile": "Nagu failis märgitud"
+  },
   "chat": {
     "alreadyAnswered": "Sellele on juba vastatud.",
     "answerAwaitingInput": "See vastus vajab teie sisendit.",
@@ -423,6 +461,7 @@
     },
     "fit": "Laius",
     "openOriginal": "Ava originaal",
+    "openPart": "Ava {fileName}",
     "preview": "Ava eelvaade",
     "previewDescription": "See fail avaneb süsteemi eelvaates.",
     "retry": "Proovi uuesti",
@@ -432,11 +471,94 @@
     "zoomIn": "Suurenda",
     "zoomOut": "Vähenda"
   },
+  "eInvoice": {
+    "accountNumber": "Pangakonto number",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Panga kood",
+    "batchPosition": "Dokument {position, number}/{count, number}",
+    "bic": "BIC-kood",
+    "currency": "Valuuta",
+    "customer": "Ostja",
+    "documentTitle": "{documentType, select, invoice {Arve} creditNote {Kreeditarve} debitNote {Deebetarve} advance {Ettemaksuarve} other {Muu dokument}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Arve {number}} creditNote {Kreeditarve {number}} debitNote {Deebetarve {number}} advance {Ettemaksuarve {number}} other {Dokument {number}}}",
+    "exemptionReason": "Maksuvabastuse põhjus",
+    "formatVersion": "{format}, versioon {version}",
+    "grossTotal": "Kokku koos käibemaksuga",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Väljastamise kuupäev",
+    "lineId": "Nr",
+    "lineItems": "Read",
+    "linesShown": "Kuvatakse {shown, number} rida {count, plural, one {#-st} other {#-st}}",
+    "netAmount": "Netosumma",
+    "netTotal": "Kokku käibemaksuta",
+    "notRecognized": "See XML-fail ei ole tuvastatud struktureeritud arve.",
+    "notes": "Arve märkused",
+    "otherIdentifier": "Muu tunnus",
+    "payableAmount": "Tasumisele kuuluv summa",
+    "paymentAmount": "Makse summa",
+    "paymentDetails": "Makseandmed",
+    "paymentDueDate": "Maksetähtaeg",
+    "paymentMeansCode": "Makseviisi kood",
+    "paymentReference": "Viitenumber",
+    "prepaidAmount": "Ettemakstud",
+    "quantity": "Kogus ja ühik",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate}%",
+    "ratePercentWithCategory": "{rate}% ({category})",
+    "registrationNumber": "Registrikood",
+    "supplier": "Müüja",
+    "taxAmount": "Käibemaksusumma",
+    "taxId": "Maksukohustuslase number",
+    "taxPointDate": "Maksustatava käibe kuupäev",
+    "taxTotal": "Käibemaks kokku",
+    "taxableAmount": "Maksustatav väärtus",
+    "totals": "Kokkuvõte",
+    "unitPrice": "Ühiku hind",
+    "units": {
+      "day": "{count, plural, one {{quantity} päev} other {{quantity} päeva}}",
+      "hour": "{count, plural, one {{quantity} tund} other {{quantity} tundi}}",
+      "month": "{count, plural, one {{quantity} kuu} other {{quantity} kuud}}",
+      "unit": "{count, plural, one {{quantity} tk} other {{quantity} tk}}",
+      "week": "{count, plural, one {{quantity} nädal} other {{quantity} nädalat}}",
+      "year": "{count, plural, one {{quantity} aasta} other {{quantity} aastat}}"
+    },
+    "unreadable": "Arvet ei õnnestunud lugeda.",
+    "vat": "Käibemaks",
+    "vatBreakdown": "Käibemaksu jaotus",
+    "vatId": "Käibemaksukohustuslase number"
+  },
+  "email": {
+    "cc": "Koopia",
+    "date": "Kuupäev",
+    "from": "Saatja",
+    "noSubject": "(Teema puudub)",
+    "subject": "Teema",
+    "to": "Saajad"
+  },
   "entity": {
     "currentVersion": "Praegune versioon",
     "loadFailed": "Kirjet ei õnnestunud laadida.",
     "reference": "Viitenumber",
     "type": "Tüüp"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Arhiivi ei õnnestunud lugeda.",
+    "attachments": "Manused",
+    "files": "Failid",
+    "insideFailed": "Selles olevaid faile ei õnnestunud laadida. Puudutage, et uuesti proovida.",
+    "noFilesInside": "Selles pole ühtegi faili.",
+    "noMatches": "Päringule „{query}“ ei vasta ükski fail.",
+    "open": "Ava {fileName} ({details})",
+    "search": "Otsi faili nime või kausta järgi",
+    "unavailable": {
+      "encrypted": "Parooliga kaitstud, ei saa avada",
+      "link": "Viide teisele failile, seda ei avata",
+      "tooLarge": "Avamiseks liiga suur",
+      "unreadable": "Kahjustatud, ei saa avada",
+      "unsupported": "Pakitud viisil, mida ei saa avada"
+    },
+    "unnamed": "Nimetu fail"
   },
   "header": {
     "search": "Otsing"
@@ -466,6 +588,16 @@
     "refused": "Server keeldus päringust (veakood {status}).",
     "server": "Serveris tekkis viga (veakood {status}). Proovige hetke pärast uuesti.",
     "session": "Teie sisselogimine on aegunud. Logige uuesti sisse."
+  },
+  "mailbox": {
+    "back": "Tagasi kirjade juurde",
+    "messages": "Kirjad",
+    "noMatches": "Päringule „{query}“ ei vasta ükski kiri.",
+    "noMessages": "Selles postkastis pole kirju.",
+    "openFailed": "Kirja ei õnnestunud avada. Uuesti proovimiseks puudutage.",
+    "search": "Otsi kirjadest",
+    "truncated": "Kuvatakse ainult esimesed {count, number} kirja.",
+    "unreadable": "Seda postkasti ei õnnestunud lugeda."
   },
   "matter": {
     "add": "Lisa",
@@ -610,6 +742,20 @@
     "hideList": "Peida loend",
     "showList": "Näita loendit"
   },
+  "quickDictation": {
+    "activityReady": "Dikteering on valmis",
+    "activityReadyDetail": "Puuduta, et vaadata teksti rakenduses stella",
+    "activityRecording": "Dikteerid",
+    "activityRecordingDetail": "Puuduta Valmis, et teksti vaadata",
+    "copied": "Kopeeritud",
+    "copy": "Kopeeri",
+    "documentName": "Dikteering {when}",
+    "none": "Ükski dikteering ei oota. Alusta toimingunupu, Siri või juhtimiskeskusega.",
+    "noneTitle": "Pole midagi üle vaadata",
+    "saveFailed": "Teksti ei õnnestunud salvestamiseks ette valmistada. Proovi uuesti.",
+    "sendToChat": "Saada vestlusesse",
+    "text": "Dikteeritud tekst"
+  },
   "role": {
     "readFailed": "Teie õigusi ei õnnestunud laadida, seega on muudatused praegu peidetud.",
     "retry": "Proovi uuesti"
@@ -691,7 +837,19 @@
     "dictationModelWithdrawn": "Enam ei pakuta",
     "dictationModelWithdrawnHint": "Valitud mudelit enam ei pakuta. Valige mõni muu; seni läheb dikteering ainult sama teenusepakkuja, piirkonna ja andmete säilitamisega mudelile, muidu ootab see selles telefonis transkribeerimata.",
     "dictationModelsUnavailable": "Mudeleid ei õnnestunud laadida. Dikteerimine kasutab valitud mudelit või vaikimisi mudelit, kui server seda enam ei paku.",
+    "dictationStyle": "Stiil",
+    "dictationStyleCasual": "Vaba",
+    "dictationStyleCasualHint": "Jätab alles teie vaba tooni ja säästliku kirjavahemärgistuse.",
+    "dictationStyleNotes": "Märkmed",
+    "dictationStyleNotesHint": "Lühikesed punktid, üks rea kohta, ilma täitesõnadeta.",
+    "dictationStylePolished": "Viimistletud",
+    "dictationStylePolishedHint": "Parandab tuvastusvead ja jätab teie sõnastuse alles.",
+    "dictationStyleVerbatim": "Sõnasõnaline",
+    "dictationStyleVerbatimHint": "Iga sõna nii, nagu see öeldi; muutuvad ainult kirjavahemärgid ja suurtähed.",
     "dictationTitle": "Dikteerimine",
+    "dictationTranslate": "Tõlgi keelde",
+    "dictationTranslateHint": "Parandatud tekst kirjutatakse selles keeles, ükskõik mis keeles te dikteerite.",
+    "dictationTranslateOff": "Ära tõlgi",
     "lockScreenTitle": "Lukustuskuva",
     "server": "Server",
     "signOut": "Logi välja",
@@ -735,8 +893,12 @@
     "useStella": "Kasuta rakendust stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Elektroonilise toimiku kättesaamise kinnitus",
     "layer": "Allkirjakiht {number, number}",
     "noReadableContent": "Eelvaateks pole loetavat sisu saadaval.",
+    "noSigners": "Allkirjastajate andmeid ei leitud.",
+    "signedContent": "Allkirjastatud dokument",
+    "signers": "Allkirjastajad",
     "unknownSigner": "Tundmatu allkirjastaja",
     "unreadable": "Allkirjastatud faili ei õnnestunud lugeda.",
     "unverified": "Allkirju ei ole kontrollitud."

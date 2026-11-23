@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The new @stll/heic-decoder package (the server's HEIC/HEIF preview decoder, Rust compiled to WebAssembly) runs in Bun and type-checks against bun-types, the catalog version every Bun package declares. It adds no other third-party dependency."
+}

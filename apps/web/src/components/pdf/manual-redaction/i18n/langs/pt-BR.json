@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Arraste sobre uma página para cobrir o que a detecção deixou passar. O PDF anonimizado tarja de preto cada área marcada.",
+    "markingSurface": "Arraste para marcar uma área a ser tarjada de preto",
+    "pageArea": "Área na página {page}",
+    "removeArea": "Remover a área marcada da página {page}",
+    "startMarking": "Marcar áreas",
+    "stopMarking": "Concluir marcação",
+    "title": "Áreas marcadas"
+  }
+}

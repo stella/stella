@@ -16,10 +16,10 @@ import {
   DICTATION_LEARNED_FIX_SWITCHES,
   type DictationLearnedFixChanges,
   type DictationLearnedFixes,
+  type DictationLearnedFixesClearQuery,
   dictationLearnedFixSchema,
 } from "@stll/api-contract/dictation-learned-fixes";
 import {
-  applyLearnedFixChanges,
   LEARNED_FIX_LIMIT,
   LEARNED_FIX_STATUSES,
   LEARNED_FIX_SWITCHES,
@@ -29,6 +29,7 @@ import type { Transaction } from "@/api/db/root";
 import { dictationLearnedFixes } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
+import { withDeviceChanges } from "@/api/lib/dictation/learned-fixes-sync";
 
 // The wire contract and the rules that apply its changes name the same
 // statuses, switches and limit.
@@ -44,22 +45,26 @@ export type LearnedFixOwner = {
   userId: SafeId<"user">;
 };
 
-/** Change ids remembered, so a retried change is applied once. */
-const REMEMBERED_CHANGE_IDS = 500;
 /** Concurrent writes a change waits out before it gives up. */
 const WRITE_ATTEMPTS = 5;
 
 /** What the encrypted column holds. */
 const storedSchema = v.strictObject({
   fixes: v.array(dictationLearnedFixSchema),
-  changeIds: v.array(v.string()),
+  /** Each device's highest change number applied in this generation. */
+  devices: v.array(
+    v.strictObject({
+      device: v.string(),
+      seq: v.pipe(v.number(), v.safeInteger(), v.minValue(1)),
+    }),
+  ),
 });
 
 type Stored = v.InferOutput<typeof storedSchema>;
 
 type Row = { generation: number; revision: number; stored: Stored };
 
-const EMPTY: Stored = { fixes: [], changeIds: [] };
+const EMPTY: Stored = { fixes: [], devices: [] };
 
 /** The member's row: the primary key, so at most one. */
 const ownedBy = (owner: LearnedFixOwner) =>
@@ -184,45 +189,40 @@ export const readLearnedFixes = async (
 };
 
 /**
- * Applies a device's changes, in order, and answers with the result. Changes
- * made in an older generation (before the member deleted everything stella
- * learned) and changes already applied are skipped.
+ * Applies a device's changes in number order and answers with the result.
+ * Changes made in an older generation (before the member deleted everything
+ * stella learned) and changes at or below the device's highest applied
+ * number are skipped, so a retry is applied once however late it comes.
  */
 export const changeLearnedFixes = async (
   tx: Transaction,
   owner: LearnedFixOwner,
-  { generation, changes }: DictationLearnedFixChanges,
+  { generation, device, changes }: DictationLearnedFixChanges,
 ): Promise<DictationLearnedFixes> =>
   await rewrite(tx, owner, (read) => {
-    const current = read?.stored ?? EMPTY;
     if (generation !== (read?.generation ?? 0)) {
       return null;
     }
-    const applied = new Set(current.changeIds);
-    const fresh = changes.filter(({ id }) => !applied.has(id));
-    if (fresh.length === 0) {
-      return null;
-    }
-    return {
-      generation,
-      next: {
-        fixes: applyLearnedFixChanges(current.fixes, fresh),
-        changeIds: [...current.changeIds, ...fresh.map(({ id }) => id)].slice(
-          -REMEMBERED_CHANGE_IDS,
-        ),
-      },
-    };
+    const next = withDeviceChanges(read?.stored ?? EMPTY, device, changes);
+    return next === null ? null : { generation, next };
   });
 
-/** Deletes everything stella learned for the member, on every device. */
+/**
+ * Deletes everything stella learned for the member, on every device, when
+ * `generation` is still the current one. A repeat of a deletion already made,
+ * or one another device's deletion overtook, changes nothing, so it cannot
+ * take what was learned after it.
+ */
 export const clearLearnedFixes = async (
   tx: Transaction,
   owner: LearnedFixOwner,
+  { generation }: DictationLearnedFixesClearQuery,
 ): Promise<DictationLearnedFixes> =>
-  await rewrite(tx, owner, (read) => ({
-    generation: (read?.generation ?? 0) + 1,
-    next: EMPTY,
-  }));
+  await rewrite(tx, owner, (read) =>
+    generation === (read?.generation ?? 0)
+      ? { generation: generation + 1, next: EMPTY }
+      : null,
+  );
 
 /** A member's row as their account export holds it: the fixes, readable. */
 export const toLearnedFixesAccountExport = async (

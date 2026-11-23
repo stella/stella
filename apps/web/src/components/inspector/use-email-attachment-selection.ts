@@ -1,7 +1,7 @@
 import { useState } from "react";
 
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
-import { getEmailAttachmentPreviewId } from "@/components/inspector/email-attachments-facet.logic";
+import { filePartViewId } from "@/components/file-parts/file-parts.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 
@@ -19,8 +19,8 @@ const getEmailAttachmentState = ({
   tab,
 }: GetEmailAttachmentStateOptions) => {
   const selectedEmailAttachmentPreviewId = selectedEmailAttachmentId
-    ? getEmailAttachmentPreviewId({
-        attachmentId: selectedEmailAttachmentId,
+    ? filePartViewId({
+        part: selectedEmailAttachmentId,
         fieldId: tab.id,
         workspaceId: tab.workspaceId,
       })

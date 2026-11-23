@@ -540,12 +540,13 @@
       "waitForMatches": "Palaukite, kol baigsis nuasmeninimo patikra.",
       "workspaceTermsHeading": "Darbo srities terminai ({count})"
     },
-    "attachmentNotPreviewable": "Atsisiųskite priedą, kad galėtumėte jį atidaryti.",
     "closeAllTabs": "Uždaryti {count, plural, one {# kortelę} few {visas # korteles} many {# kortelės} other {visas # kortelių}}",
     "closeOtherTabs": "Uždaryti {count, plural, one {# kitą kortelę} few {# kitas korteles} many {# kitos kortelės} other {# kitų kortelių}}",
     "closeTab": "Uždaryti <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Tai seno formato „{format}“ failas. Norėdami jį konvertuoti, iš naujo įrašykite kaip {replacementExtension}.",
+      "noPreviewDecodingOff": "Šis serveris nekuria „{format}“ vaizdų peržiūrų. Norėdami failą atidaryti, atsisiųskite jį.",
+      "noPreviewUnreadable": "Šio „{format}“ vaizdo nepavyksta nuskaityti peržiūrai. Norėdami failą atidaryti, atsisiųskite jį.",
       "unsupportedEncoding": "Šiame dokumente naudojama nepalaikoma {encoding} koduotė, todėl jo konvertuoti negalima.",
       "unsupportedField": "Šiame dokumente yra {fieldType} laukas, kurio konvertuoti negalima.",
       "unsupportedReference": "Šis dokumentas nurodo išorinį išteklių dalyje {element} {attribute}, todėl jo konvertuoti negalima."
@@ -560,6 +561,24 @@
     },
     "facet": {
       "anonymization": "Anonimizavimas"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Archyvo nepavyko perskaityti.",
+      "back": "Grįžti į sąrašą",
+      "download": "Atsisiųsti {fileName}",
+      "noFilesInside": "Viduje nėra jokių failų.",
+      "noPreview": "Šio tipo failo peržiūra negalima. Atsisiųskite jį arba išsaugokite byloje.",
+      "notConverted": "Šio failo nepavyko konvertuoti peržiūrai. Atsisiųskite jį arba išsaugokite byloje.",
+      "open": "Atidaryti {fileName}",
+      "unavailable": {
+        "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",
+        "link": "Nuoroda į kitą failą, jis neatidaromas",
+        "tooLarge": "Per didelis, kad būtų galima atidaryti",
+        "unreadable": "Sugadintas, negalima atidaryti",
+        "unsupported": "Suglaudintas būdu, kurio negalima atidaryti"
+      },
+      "search": "Rasti failą pagal pavadinimą ar aplanką",
+      "noMatches": "Užklausą „{query}“ atitinkančių failų nėra."
     },
     "firstSourceReached": "Tai pirmas šaltinis.",
     "groups": {
@@ -632,6 +651,10 @@
       "lastUpdatedBy": "Paskutinį kartą atnaujino",
       "matterColumnsHeading": "Bylos duomenys",
       "noMatterColumns": "Apie šį dokumentą dar nieko neįrašyta",
+      "similarDocuments": {
+        "heading": "Panašūs dokumentai",
+        "similarity": "{percent} panašumas"
+      },
       "stellaHeading": "Saugoma programoje stella",
       "versionCurrent": "v{version} (dabartinė)"
     },
@@ -814,9 +837,16 @@
       "why": "Kodėl",
       "whyItMatters": "Kodėl tai svarbu:"
     },
-    "selectAttachmentToSave": "Pasirinkite priedą, kurį norite išsaugoti.",
     "showPane": "Rodyti polangį",
     "swapViews": "Sukeisti pagrindinį rodinį ir šoninį skydelį",
-    "title": "Inspektorius"
+    "title": "Inspektorius",
+    "mailbox": {
+      "messages": "Laiškai",
+      "noMatches": "Užklausą „{query}“ atitinkančių laiškų nėra.",
+      "noMessages": "Šioje pašto dėžutėje nėra laiškų.",
+      "search": "Ieškoti laiškų",
+      "truncated": "Rodomi tik pirmieji {count, number} laiškų.",
+      "unreadable": "Nepavyko perskaityti šios pašto dėžutės."
+    }
   }
 }

@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { DictationLearnedFixChange } from "@stll/api-contract/dictation-learned-fixes";
 import { createTestClock } from "@stll/test-kit";
@@ -44,16 +44,15 @@ const as = (member: typeof userId, org = organizationId) => ({
 });
 
 const corrected = (
-  id: string,
+  seq: number,
   from: string,
   to: string,
-): DictationLearnedFixChange => ({ id, type: "corrected", from, to });
+): DictationLearnedFixChange => ({ seq, type: "corrected", from, to });
 
-const ID = {
-  first: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a01",
-  second: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a02",
-  third: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a03",
-  fourth: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a04",
+/** Each device's id, kept with its change numbers. */
+const DEVICE = {
+  laptop: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a01",
+  phone: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a02",
 } as const;
 
 beforeAll(async () => {
@@ -90,26 +89,35 @@ describe("learned dictation fixes", () => {
 
   test("changes apply once, in order", async () => {
     const member = as(userId);
-    const apply = async (changes: DictationLearnedFixChange[]) =>
+    const apply = async (
+      changes: DictationLearnedFixChange[],
+      device: string = DEVICE.laptop,
+    ) =>
       await member.run(
         async (tx) =>
           await changeLearnedFixes(tx, member.owner, {
             generation: 0,
+            device,
             changes,
           }),
       );
-    await apply([corrected(ID.first, "Hrubeš", "Hrubesch")]);
+    await apply([corrected(1, "Hrubeš", "Hrubesch")]);
     // A retried change is not a second sighting.
-    expect(await apply([corrected(ID.first, "Hrubeš", "Hrubesch")])).toEqual({
+    expect(await apply([corrected(1, "Hrubeš", "Hrubesch")])).toEqual({
       generation: 0,
       fixes: [{ from: "Hrubeš", to: "Hrubesch", seen: 1, status: "learning" }],
     });
-    expect(await apply([corrected(ID.second, "Hrubeš", "Hrubesch")])).toEqual({
+    // Another device counts its own changes.
+    expect(
+      await apply([corrected(1, "Hrubeš", "Hrubesch")], DEVICE.phone),
+    ).toEqual({
       generation: 0,
       fixes: [{ from: "Hrubeš", to: "Hrubesch", seen: 2, status: "on" }],
     });
+    // The laptop's first change, retried after the phone's, still counts once.
+    await apply([corrected(1, "Hrubeš", "Hrubesch")]);
     const [row] = await db.select().from(dictationLearnedFixes);
-    // Inserted at revision 0; the retried change wrote nothing.
+    // Inserted at revision 0; only the phone's change wrote again.
     expect(row?.revision).toBe(1);
   });
 
@@ -142,39 +150,87 @@ describe("learned dictation fixes", () => {
   test("deleting everything clears every device, and changes made before it are dropped", async () => {
     const member = as(userId);
     expect(
-      await member.run(async (tx) => await clearLearnedFixes(tx, member.owner)),
+      await member.run(
+        async (tx) =>
+          await clearLearnedFixes(tx, member.owner, { generation: 0 }),
+      ),
     ).toEqual({ generation: 1, fixes: [] });
     const late = await member.run(
       async (tx) =>
         await changeLearnedFixes(tx, member.owner, {
           generation: 0,
-          changes: [corrected(ID.third, "Lorenc", "Lorentz")],
+          device: DEVICE.laptop,
+          changes: [corrected(2, "Lorenc", "Lorentz")],
         }),
     );
     expect(late).toEqual({ generation: 1, fixes: [] });
+    // The phone learns after the deletion; its numbers go on from before it.
     const current = await member.run(
       async (tx) =>
         await changeLearnedFixes(tx, member.owner, {
           generation: 1,
-          changes: [
-            { id: ID.fourth, type: "taught", from: "Lorenc", to: "Lorentz" },
-          ],
+          device: DEVICE.phone,
+          changes: [{ seq: 2, type: "taught", from: "Lorenc", to: "Lorentz" }],
         }),
     );
     expect(current).toEqual({
       generation: 1,
       fixes: [{ from: "Lorenc", to: "Lorentz", seen: 1, status: "on" }],
     });
+    // The laptop's deletion, retried after its answer was lost, leaves what
+    // the phone learned since.
+    expect(
+      await member.run(
+        async (tx) =>
+          await clearLearnedFixes(tx, member.owner, { generation: 0 }),
+      ),
+    ).toEqual(current);
+  });
+
+  test("a change repeated within one request is applied once", async () => {
+    const member = as(colleagueId, otherOrganizationId);
+    const fixes = await member.run(
+      async (tx) =>
+        await changeLearnedFixes(tx, member.owner, {
+          generation: 0,
+          device: DEVICE.laptop,
+          changes: [
+            corrected(1, "Hrubeš", "Hrubesch"),
+            corrected(1, "Hrubeš", "Hrubesch"),
+          ],
+        }),
+    );
+    expect(fixes).toEqual({
+      generation: 0,
+      fixes: [{ from: "Hrubeš", to: "Hrubesch", seen: 1, status: "learning" }],
+    });
   });
 
   test("the account export reads the fixes back", async () => {
-    const [row] = await db.select().from(dictationLearnedFixes);
+    const member = as(colleagueId);
+    await member.run(
+      async (tx) =>
+        await changeLearnedFixes(tx, member.owner, {
+          generation: 0,
+          device: DEVICE.laptop,
+          changes: [{ seq: 1, type: "taught", from: "Novacek", to: "Nováček" }],
+        }),
+    );
+    const [row] = await db
+      .select()
+      .from(dictationLearnedFixes)
+      .where(
+        and(
+          eq(dictationLearnedFixes.organizationId, organizationId),
+          eq(dictationLearnedFixes.userId, colleagueId),
+        ),
+      );
     if (row === undefined) {
       panic("The fixture row is missing");
     }
     expect(await toLearnedFixesAccountExport(organizationId, row)).toEqual({
-      generation: 1,
-      fixes: [{ from: "Lorenc", to: "Lorentz", seen: 1, status: "on" }],
+      generation: 0,
+      fixes: [{ from: "Novacek", to: "Nováček", seen: 1, status: "on" }],
       updatedAt: row.updatedAt.toISOString(),
     });
   });

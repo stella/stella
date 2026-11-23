@@ -196,5 +196,84 @@
       }
     ],
     "plausible": false
+  },
+  {
+    "name": "notes may condense a rambling dictation into short points",
+    "transcript": "so um basically I think we should probably call the client on Monday and then you know send the draft by Friday",
+    "segments": [
+      {
+        "type": "text",
+        "text": "- Call client Monday",
+        "bold": false
+      },
+      {
+        "type": "lineBreak"
+      },
+      {
+        "type": "text",
+        "text": "- Draft by Friday",
+        "bold": false
+      }
+    ],
+    "plausible": true,
+    "style": "notes"
+  },
+  {
+    "name": "the same points lose too much for polished cleanup",
+    "transcript": "so um basically I think we should probably call the client on Monday and then you know send the draft by Friday",
+    "segments": [
+      {
+        "type": "text",
+        "text": "- Call client Monday",
+        "bold": false
+      },
+      {
+        "type": "lineBreak"
+      },
+      {
+        "type": "text",
+        "text": "- Draft by Friday",
+        "bold": false
+      }
+    ],
+    "plausible": false
+  },
+  {
+    "name": "notes still keep the condensed share of the dictation",
+    "transcript": "so um basically I think we should probably call the client on Monday and then you know send the draft by Friday",
+    "segments": [
+      {
+        "type": "text",
+        "text": "- Call",
+        "bold": false
+      }
+    ],
+    "plausible": false,
+    "style": "notes"
+  },
+  {
+    "name": "a translation may word the dictation in fewer letters",
+    "transcript": "lhůta pro odvolání je patnáct dní tečka",
+    "segments": [
+      {
+        "type": "text",
+        "text": "Appeal: 15 days.",
+        "bold": false
+      }
+    ],
+    "plausible": true,
+    "translateTo": "en"
+  },
+  {
+    "name": "the same answer loses too much without a translation",
+    "transcript": "lhůta pro odvolání je patnáct dní tečka",
+    "segments": [
+      {
+        "type": "text",
+        "text": "Appeal: 15 days.",
+        "bold": false
+      }
+    ],
+    "plausible": false
   }
 ]

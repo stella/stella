@@ -1,4 +1,42 @@
 {
+  "certifiedEmail": {
+    "certifiedAt": "Certificado el",
+    "deliveredTo": "Entregado a",
+    "error": "Error notificado",
+    "errors": {
+      "noDomain": "Dominio desconocido",
+      "noRecipient": "Destinatario desconocido",
+      "other": "Otro error",
+      "virus": "Virus detectado"
+    },
+    "handedOverFor": "Tomado a cargo para",
+    "kinds": {
+      "acceptance": "Recibo de aceptación (PEC)",
+      "delivery": "Recibo de entrega (PEC)",
+      "deliveryError": "Aviso de no entrega (PEC)",
+      "deliveryErrorWarning": "Aviso de plazo de entrega superado (PEC)",
+      "nonAcceptance": "Aviso de no aceptación (PEC)",
+      "takenInCharge": "Recibo de toma a cargo (PEC)",
+      "transport": "Correo electrónico certificado (PEC)",
+      "virusDetected": "Aviso de detección de virus (PEC)"
+    },
+    "messageId": "ID del mensaje PEC",
+    "notDeliveredTo": "No entregado a",
+    "ordinaryMailbox": "Buzón ordinario",
+    "originalNotIncluded": "Este archivo no incluye el mensaje original.",
+    "provider": "Proveedor de PEC",
+    "receipt": "Recibo solicitado",
+    "receiptTypes": {
+      "full": "Recibo completo",
+      "short": "Recibo breve",
+      "summary": "Recibo sintético"
+    },
+    "recipients": "Destinatarios indicados",
+    "sender": "Remitente indicado",
+    "signatureNotVerified": "La firma del proveedor se conserva en el archivo y no se verifica.",
+    "signedBy": "Firmado por {name}",
+    "statedInFile": "Según consta en el archivo"
+  },
   "chat": {
     "alreadyAnswered": "Esto ya se respondió.",
     "answerAwaitingInput": "Esta respuesta necesita tu intervención.",
@@ -423,6 +461,7 @@
     },
     "fit": "Ancho",
     "openOriginal": "Abrir original",
+    "openPart": "Abrir {fileName}",
     "preview": "Abrir vista previa",
     "previewDescription": "Este archivo se abre en la vista previa del sistema.",
     "retry": "Reintentar",
@@ -432,11 +471,94 @@
     "zoomIn": "Acercar",
     "zoomOut": "Alejar"
   },
+  "eInvoice": {
+    "accountNumber": "Número de cuenta bancaria",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Código bancario",
+    "batchPosition": "Documento {position, number} de {count, number}",
+    "bic": "Código BIC",
+    "currency": "Moneda",
+    "customer": "Cliente",
+    "documentTitle": "{documentType, select, invoice {Factura} creditNote {Nota de crédito} debitNote {Nota de débito} advance {Factura de anticipo} other {Otro documento}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Factura {number}} creditNote {Nota de crédito {number}} debitNote {Nota de débito {number}} advance {Factura de anticipo {number}} other {Documento {number}}}",
+    "exemptionReason": "Motivo de exención",
+    "formatVersion": "{format}, versión {version}",
+    "grossTotal": "Total con IVA",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Fecha de emisión",
+    "lineId": "N.º",
+    "lineItems": "Líneas",
+    "linesShown": "Se muestran {shown, number} de {count, plural, one {# línea} many {# líneas} other {# líneas}}",
+    "netAmount": "Importe neto",
+    "netTotal": "Total sin IVA",
+    "notRecognized": "Este archivo XML no es una factura estructurada reconocida.",
+    "notes": "Notas de la factura",
+    "otherIdentifier": "Otro identificador",
+    "payableAmount": "Importe a pagar",
+    "paymentAmount": "Importe del pago",
+    "paymentDetails": "Datos de pago",
+    "paymentDueDate": "Fecha de vencimiento",
+    "paymentMeansCode": "Código del medio de pago",
+    "paymentReference": "Referencia de pago",
+    "prepaidAmount": "Pagado por adelantado",
+    "quantity": "Cantidad y unidad",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate} %",
+    "ratePercentWithCategory": "{rate} % ({category})",
+    "registrationNumber": "Número de registro",
+    "supplier": "Proveedor",
+    "taxAmount": "Cuota de IVA",
+    "taxId": "Identificación fiscal",
+    "taxPointDate": "Fecha de devengo",
+    "taxTotal": "Total de IVA",
+    "taxableAmount": "Base imponible",
+    "totals": "Totales",
+    "unitPrice": "Precio unitario",
+    "units": {
+      "day": "{count, plural, one {{quantity} día} many {{quantity} días} other {{quantity} días}}",
+      "hour": "{count, plural, one {{quantity} hora} many {{quantity} horas} other {{quantity} horas}}",
+      "month": "{count, plural, one {{quantity} mes} many {{quantity} meses} other {{quantity} meses}}",
+      "unit": "{count, plural, one {{quantity} unidad} many {{quantity} unidades} other {{quantity} unidades}}",
+      "week": "{count, plural, one {{quantity} semana} many {{quantity} semanas} other {{quantity} semanas}}",
+      "year": "{count, plural, one {{quantity} año} many {{quantity} años} other {{quantity} años}}"
+    },
+    "unreadable": "No se pudo leer la factura.",
+    "vat": "IVA",
+    "vatBreakdown": "Desglose del IVA",
+    "vatId": "Número de IVA"
+  },
+  "email": {
+    "cc": "Copia",
+    "date": "Fecha",
+    "from": "Remitente",
+    "noSubject": "(Sin asunto)",
+    "subject": "Asunto",
+    "to": "Destinatarios"
+  },
   "entity": {
     "currentVersion": "Versión actual",
     "loadFailed": "No se pudo cargar este elemento.",
     "reference": "Referencia",
     "type": "Tipo"
+  },
+  "fileParts": {
+    "archiveUnreadable": "No se pudo leer el archivo comprimido.",
+    "attachments": "Adjuntos",
+    "files": "Archivos",
+    "insideFailed": "No se pudieron cargar los archivos que contiene. Toca para volver a intentarlo.",
+    "noFilesInside": "No contiene ningún archivo.",
+    "noMatches": "Ningún archivo coincide con «{query}».",
+    "open": "Abrir {fileName} ({details})",
+    "search": "Buscar un archivo por nombre o carpeta",
+    "unavailable": {
+      "encrypted": "Protegido con contraseña, no se puede abrir",
+      "link": "Enlace a otro archivo, no se abre",
+      "tooLarge": "Demasiado grande para abrirlo",
+      "unreadable": "Dañado, no se puede abrir",
+      "unsupported": "Comprimido de un modo que no se puede abrir"
+    },
+    "unnamed": "Archivo sin nombre"
   },
   "header": {
     "search": "Buscar"
@@ -466,6 +588,16 @@
     "refused": "Su servidor rechazó la solicitud (error {status}).",
     "server": "Su servidor tuvo un problema (error {status}). Inténtelo de nuevo en un momento.",
     "session": "Su sesión ha caducado. Vuelva a iniciar sesión."
+  },
+  "mailbox": {
+    "back": "Volver a los mensajes",
+    "messages": "Mensajes",
+    "noMatches": "Ningún mensaje coincide con «{query}».",
+    "noMessages": "Este buzón no contiene mensajes.",
+    "openFailed": "No se ha podido abrir este mensaje. Toca para volver a intentarlo.",
+    "search": "Buscar mensajes",
+    "truncated": "Solo se muestran los primeros {count, number} mensajes.",
+    "unreadable": "No se ha podido leer este buzón."
   },
   "matter": {
     "add": "Añadir",
@@ -610,6 +742,20 @@
     "hideList": "Ocultar la lista",
     "showList": "Mostrar la lista"
   },
+  "quickDictation": {
+    "activityReady": "Dictado listo",
+    "activityReadyDetail": "Toca para revisar el texto en stella",
+    "activityRecording": "Dictando",
+    "activityRecordingDetail": "Toca Listo para revisar el texto",
+    "copied": "Copiado",
+    "copy": "Copiar",
+    "documentName": "Dictado {when}",
+    "none": "No hay ningún dictado pendiente. Empieza uno con el botón de acción, Siri o el centro de control.",
+    "noneTitle": "Nada que revisar",
+    "saveFailed": "No se pudo preparar el texto para guardarlo. Inténtalo de nuevo.",
+    "sendToChat": "Enviar al chat",
+    "text": "Texto dictado"
+  },
   "role": {
     "readFailed": "No se pudieron cargar sus permisos, así que los cambios quedan ocultos por ahora.",
     "retry": "Reintentar"
@@ -691,7 +837,19 @@
     "dictationModelWithdrawn": "Ya no se ofrece",
     "dictationModelWithdrawnHint": "El modelo elegido ya no se ofrece. Elija otro; mientras tanto, un dictado solo va a un modelo del mismo proveedor, región y retención de datos y, si no, espera sin transcribir en este teléfono.",
     "dictationModelsUnavailable": "No se pudieron cargar los modelos. El dictado usa el modelo que elegiste, o el predeterminado si el servidor ya no lo ofrece.",
+    "dictationStyle": "Estilo",
+    "dictationStyleCasual": "Informal",
+    "dictationStyleCasualHint": "Mantiene tu tono relajado y una puntuación ligera.",
+    "dictationStyleNotes": "Notas",
+    "dictationStyleNotesHint": "Puntos breves, uno por línea, sin muletillas.",
+    "dictationStylePolished": "Pulido",
+    "dictationStylePolishedHint": "Corrige errores de reconocimiento y mantiene tu forma de expresarte.",
+    "dictationStyleVerbatim": "Literal",
+    "dictationStyleVerbatimHint": "Cada palabra tal como la dijiste; solo cambian la puntuación y las mayúsculas.",
     "dictationTitle": "Dictado",
+    "dictationTranslate": "Traducir a",
+    "dictationTranslateHint": "El texto corregido se escribe en este idioma, dictes en el idioma que dictes.",
+    "dictationTranslateOff": "No traducir",
     "lockScreenTitle": "Pantalla bloqueada",
     "server": "Servidor",
     "signOut": "Cerrar sesión",
@@ -735,8 +893,12 @@
     "useStella": "Usar stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Acuse de entrega de un expediente electrónico",
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
+    "noSigners": "No se encontraron datos de los firmantes.",
+    "signedContent": "Documento firmado",
+    "signers": "Firmantes",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",
     "unverified": "Las firmas no se han verificado."

@@ -10,7 +10,9 @@ import {
   type EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
+  type TNEF_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -57,6 +59,7 @@ import {
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
 import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
+import { readCertifiedEmailMessage } from "@/api/lib/files/email-to-html";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
@@ -68,7 +71,9 @@ const UPLOADED_MAIL_FORMATS = {
   [MSG_MIME_TYPE]: "msg",
   [DATA_BOX_MESSAGE_MIME_TYPE]: "zfo",
 } as const satisfies Record<
-  keyof typeof EMAIL_MIME_TYPES | typeof DATA_BOX_MESSAGE_MIME_TYPE,
+  // A TNEF stream is read where it is filed, never uploaded as mail.
+  | Exclude<keyof typeof EMAIL_MIME_TYPES, typeof TNEF_MIME_TYPE>
+  | typeof DATA_BOX_MESSAGE_MIME_TYPE,
   EmailFileFormat | "zfo"
 >;
 
@@ -424,6 +429,7 @@ const dataBoxCorrespondence = ({
   originalSignature: UNVERIFIED_SIGNATURE,
   channel: "data_box",
   dataBox: envelope,
+  certifiedEmail: null,
   direction: null,
   messageId: envelope.messageId,
   contentHash: dataBoxPayloadIdentity({ annotation, envelope, files })
@@ -553,8 +559,9 @@ const fileUploadedDataBoxMessage = async ({
 };
 
 /**
- * Files an email file or a data-box `.zfo` file stored in a matter as
- * correspondence linked to that file. The uploader is the filer and must hold
+ * Files an email file, a certified email (Italian PEC) `.eml` file or a
+ * data-box `.zfo` file stored in a matter as correspondence linked to that
+ * file. The uploader is the filer and must hold
  * matter access when this runs. An email file keeps its attachments inside
  * the file; the record links the file instead of storing them again, and
  * replays converge on the file's one record.
@@ -630,7 +637,15 @@ const attemptUploadedMail = async ({
       createRecord,
     });
   }
-  const parsed = await parseEmailFile({ bytes, format });
+  // A certified email (Italian PEC) files on its own channel. Its record is
+  // the original message it carries, or the provider's notice without one.
+  // A file the reader cannot split into parts files as the email it parses
+  // as, or is refused by that parse.
+  const certifiedRead =
+    format === "eml" ? await readCertifiedEmailMessage(bytes) : null;
+  const certified = certifiedRead?.isOk() ? certifiedRead.value : null;
+  const messageBytes = certified?.original ?? bytes;
+  const parsed = await parseEmailFile({ bytes: messageBytes, format });
   if (parsed.isErr()) {
     return skipped(PARSE_DROP_REASON[parsed.error.reason]);
   }
@@ -638,25 +653,39 @@ const attemptUploadedMail = async ({
   if (from === null) {
     return skipped("no_sender");
   }
+  const content = correspondenceFromMessage({
+    message: { ...parsed.value, from },
+    provenance: {
+      source: "upload",
+      sourceEntityId: scope.entityId,
+      originalSignature: await uploadedSignature({
+        bytes: messageBytes,
+        format,
+        verifyOriginal,
+      }),
+    },
+    sender: normalizeEmail(file.uploaderEmail),
+    receivedAt: file.createdAt.toISOString(),
+  });
   const created = await createRecord({
     safeDb: safeDbFromScoped(scopedDb),
     organizationId: scope.organizationId,
     workspaceId: scope.workspaceId,
     filer: { type: "user", userId },
-    parsed: correspondenceFromMessage({
-      message: { ...parsed.value, from },
-      provenance: {
-        source: "upload",
-        sourceEntityId: scope.entityId,
-        originalSignature: await uploadedSignature({
-          bytes,
-          format,
-          verifyOriginal,
-        }),
-      },
-      sender: normalizeEmail(file.uploaderEmail),
-      receivedAt: file.createdAt.toISOString(),
-    }),
+    parsed:
+      certified === null
+        ? content
+        : {
+            ...content,
+            channel: "pec",
+            certifiedEmail: certified.envelope,
+            // The certification is part of what is filed: a replacement
+            // carrying the same message under other certification data
+            // refreshes the record.
+            contentHash: hashSha256Hex(
+              JSON.stringify([content.contentHash, certified.envelope]),
+            ),
+          },
     attachments: [],
     expectedSourceVersionId: file.currentVersionId,
     recordAuditEvent,

@@ -1,6 +1,6 @@
 ---
 name: conventions-testing
-description: "Apply when writing or reviewing tests."
+description: "Apply when writing or reviewing tests, fixtures, seed data, demos or marketing recordings."
 ---
 
 # Testing Conventions
@@ -84,6 +84,26 @@ through the owning package script so preloads and setup survive:
 - Keep time, randomness, network, filesystem, and database ownership explicit
   in tests. Pin or inject them rather than relying on ambient machine state.
   [review]
+
+## Invented data that reads as real
+
+Fixtures, seeds, e2e data, screenshots, demos and marketing recordings use
+invented data that a lawyer would take for a real file: plausible personal and
+firm names for the jurisdiction, real-looking addresses, case numbers, data-box
+and registry IDs in their real formats, and dated, signed, coherent documents.
+
+Real public institutions (courts, ministries, registries, data-box authorities)
+appear under their real names. Private people, firms and their identifiers are
+always invented, never a real person's or company's. Before using a
+checksum-valid identifier (company ID, VAT number, birth number), check the
+public registry that it belongs to no one.
+
+- Never use placeholder wording: "Example", "Sample", "Test", "Demo", "Foo",
+  "Acme", "John Doe", "Lorem ipsum", "[COMPANY NAME]", or local equivalents
+  such as "Vzorový", "Vzorová s.r.o." or "Jan Novák". The ratchet counts
+  placeholder names in tests, fixtures, seeds, browser specs and marketing
+  previews, and the count may only fall.
+  [check: ratchet:placeholder-party-names]
 
 ## Mutation check
 

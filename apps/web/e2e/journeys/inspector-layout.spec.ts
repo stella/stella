@@ -10,6 +10,7 @@ import * as v from "valibot";
 
 import messages from "../../src/i18n/langs/en.json" with { type: "json" };
 import { createUploadedDocumentRoute } from "../helpers/document";
+import { openSavedView } from "../helpers/saved-views";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_60_SECONDS_MS } from "../helpers/wait-budgets";
 import {
   createTestWorkspace,
@@ -162,9 +163,7 @@ test.describe("inspector layout journey", () => {
       await page.goto(`/workspaces/${workspace.id}/${workspace.viewId}`, {
         waitUntil: "domcontentloaded",
       });
-      await page
-        .getByRole("tab", { name: messages.workspaces.views.layouts.table })
-        .click();
+      await openSavedView(page, messages.workspaces.views.layouts.table);
       await page
         .locator('[data-slot="workspace-grid-cell"]')
         .getByRole("button", { exact: true, name: FIXTURE_FILE_NAME })

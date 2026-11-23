@@ -10,7 +10,7 @@
     "aiDraftAllow": "Erlauben",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Aufgabe {task} · Tätigkeit {activity}",
-    "aiDraftConsent": "stella KI kann Beschreibungen aus Akte, Datum, Dauer und App-Namen jedes Eintrags entwerfen, dazu aus den hier gezeigten Dokumentnamen und Fenstertiteln, wenn Sie diese aufzeichnen. Ihre früheren Einträge zur Akte helfen, Ihren Stil zu treffen. Sonst verlässt nichts über Ihren Tag diesen Computer.",
+    "aiDraftConsent": "Für eine Beschreibung nutzt stella KI: {inputs}. All das geht an {provider}, nur um den Entwurf zu schreiben. Sonst verlässt nichts über Ihren Tag diesen Computer.",
     "aiDraftConsentRequired": "Erlauben Sie stella KI erneut, um diese Beschreibung zu entwerfen.",
     "aiDraftDisclosure": "KI-Entwürfe sind Vorschläge, die stella aus dem geprüften Eintrag, Ihren früheren Einträgen zur Akte und, sofern Ihre Kanzlei sie hinzugefügt hat, ihren Abrechnungsrichtlinien erstellt. Prüfen Sie jeden Eintrag, bevor Sie ihn anlegen.",
     "aiDraftEarlierEntries": "{count, plural, one {Folgt # früheren Eintrag} other {Folgt # früheren Einträgen}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella KI ist auf diesem Computer aus. Ihr Widerruf wird an stella gesendet, sobald es erreichbar ist.",
     "browserAnsweredAppNameOnly": "Für <bdi>{browser}</bdi> wird nur der App-Name aufgezeichnet. Sie können das in den Einstellungen ändern.",
     "browserAnsweredTitles": "Tab-Titel in <bdi>{browser}</bdi> werden aufgezeichnet. Sie können das in den Einstellungen ändern.",
-    "browserPrivacyNote": "Private Fenster können ebenfalls aufgezeichnet werden; pausieren Sie die Aufzeichnung oder schließen Sie den Browser aus, wenn Sie privat surfen.",
+    "browserPrivacyNote": "stella erkennt nicht jedes private Fenster; pausieren Sie die Aufzeichnung daher, bevor Sie privat surfen.",
     "browserQuestionAppNameOnly": "Nur App-Name",
-    "browserQuestionDescription": "Tab-Titel helfen bei Tätigkeitsbeschreibungen. stella erkennt nicht jedes private Fenster; pausieren Sie die Aufzeichnung daher, bevor Sie privat surfen.",
+    "browserQuestionDescription": "Tab-Titel helfen bei Tätigkeitsbeschreibungen.",
     "browserQuestionLater": "Später entscheiden",
     "browserQuestionRecordTitles": "Titel aufzeichnen",
     "browserQuestionTitle": "Auch Tab-Titel in <bdi>{browser}</bdi> aufzeichnen?",
@@ -103,7 +103,19 @@
     "detectCalls": "Anrufe erfassen",
     "detectCallsDescription": "Solange Teams, Zoom oder ein Browser Ihr Mikrofon verwendet, zählt diese Zeit als Anruf, auch wenn Sie nur zuhören oder in einer anderen App arbeiten. Ton wird nie aufgezeichnet.",
     "disclosure": {
-      "control": "Nichts wird aufgezeichnet, bevor Sie in Aktivität auf Aufzeichnung starten klicken. Pausieren, Apps ausschließen oder Tage löschen können Sie jederzeit.",
+      "aiDraftInputs": {
+        "appNames": "die App-Namen",
+        "billingFormat": "das Abrechnungsformat des Mandanten",
+        "date": "das Datum",
+        "duration": "die Dauer",
+        "earlierDescriptions": "Ihre früheren Beschreibungen zur Akte",
+        "firmGuidelines": "etwaige Abrechnungsrichtlinien Ihrer Kanzlei",
+        "instructions": "Ihre eingegebenen Anweisungen",
+        "matter": "die Akte",
+        "titles": "aufgezeichnete Fenstertitel und Dokumentnamen"
+      },
+      "aiDraftProvider": "den KI-Anbieter Ihrer Kanzlei oder den von stella KI",
+      "control": "Nichts wird aufgezeichnet, bevor Sie auf Aufzeichnung starten klicken. Pausieren, Apps ausschließen oder Tage löschen können Sie jederzeit.",
       "never": {
         "audio": "Ton vom Mikrofon",
         "keystrokes": "Tastenanschläge oder getippter Text",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Was aufgezeichnet wird",
       "sent": {
-        "aiDrafts": "Entwürfe von stella KI, die Sie nach erteilter Einwilligung anfordern: Akte, Datum, Dauer und App-Namen des Eintrags, seine Fenstertitel und Dokumentnamen, wenn sie aufgezeichnet werden, und Anweisungen, die Sie eingeben. stella ergänzt Ihre früheren Beschreibungen zur Akte, das Abrechnungsformat des Mandanten und, sofern Ihre Kanzlei sie nutzt, ihre Abrechnungsrichtlinien. All das geht an den KI-Anbieter Ihrer Kanzlei oder den von stella KI, nur um den Entwurf zu schreiben; stella speichert weder den Entwurf noch das dafür Gesendete.",
+        "aiDrafts": "Entwürfe von stella KI, die Sie nach erteilter Einwilligung anfordern. Für jeden nutzt stella KI: {inputs}. All das geht an {provider}, nur um den Entwurf zu schreiben; stella speichert weder den Entwurf noch das dafür Gesendete.",
         "timeEntries": "Zeiteinträge, die Sie anlegen: Akte, Datum, Dauer, Beschreibung, Abrechenbarkeit und etwaige Abrechnungscodes"
       },
       "sentTitle": "Was diesen Computer verlässt",
@@ -575,6 +587,25 @@
       "descriptionCloud": "stella KI korrigiert außerdem Erkennungsfehler und gesprochene Formatierungen wie „neue Zeile“ oder „fett“ und passt den Text an die App an, etwa an E-Mail.",
       "title": "Mit KI überarbeiten"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Behält einen lockeren Ton mit sparsamer Zeichensetzung bei.",
+        "title": "Locker"
+      },
+      "notes": {
+        "description": "Kurze Punkte, einer pro Zeile, ohne Füllwörter.",
+        "title": "Notizen"
+      },
+      "polished": {
+        "description": "Korrigiert Erkennungsfehler und behält Ihre Formulierungen bei.",
+        "title": "Ausformuliert"
+      },
+      "title": "Stil",
+      "verbatim": {
+        "description": "Jedes Wort wie gesprochen; nur Satzzeichen und Großschreibung werden ergänzt.",
+        "title": "Wörtlich"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Bis zu {limit, number} Zeichen des Dokuments, in dem Sie arbeiten, damit das Diktat an Ihren Text anschließt.",
@@ -747,6 +778,11 @@
       "open": "Öffnen",
       "title": "Aufnahme transkribieren"
     },
+    "translateTo": {
+      "description": "Schreibt den bereinigten Text in dieser Sprache, egal in welcher Sprache Sie sprechen.",
+      "off": "Gesprochene Sprache",
+      "title": "Schreiben auf"
+    },
     "whileDictating": {
       "choices": {
         "lower": "Andere Töne leiser stellen",
@@ -842,6 +878,30 @@
   },
   "onboarding": {
     "activityBody": "Sehen Sie, wohin Ihr Arbeitstag gegangen ist, und machen Sie daraus Entwürfe für Zeiteinträge. Sie entscheiden, was aufgezeichnet und was gesendet wird.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Beschreibungen mit stella KI entwerfen",
+        "body": "stella KI kann die Beschreibung jedes Zeiteintrags entwerfen. Erlauben Sie es jetzt oder wenn Sie zum ersten Mal einen Tag durchgehen.",
+        "withdraw": "Sie können Ihre Einwilligung jederzeit in den Einstellungen widerrufen."
+      },
+      "calls": {
+        "body": "Erfassen Sie die Zeit, die Sie in Anrufen verbringen.",
+        "title": "Anrufe"
+      },
+      "details": {
+        "appNamesOnly": "Nur App-Namen werden aufgezeichnet.",
+        "body": "Damit unterscheiden Sie Ihre Akten leichter, wenn Sie den Tag durchgehen.",
+        "browsers": "Browser zeichnen Tab-Titel erst auf, wenn Sie es erlauben. Aktivität fragt nach jedem Browser, sobald sie ihn zum ersten Mal sieht.",
+        "title": "Fenstertitel und Dokumente"
+      },
+      "screens": {
+        "aiDrafts": "KI-Entwürfe",
+        "calls": "Anrufe",
+        "details": "Einzelheiten",
+        "recording": "Überblick"
+      },
+      "starting": "Aufzeichnung wird gestartet…"
+    },
     "activityStoryDraft": "Entwurf",
     "activityStoryRecordTitle": "Aufgezeichnet",
     "activityStoryReviewCaption": "Sie gehen den Tag durch und wählen die Akte",
@@ -880,7 +940,6 @@
         "choose": "Mikrofon zum Diktieren",
         "title": "Damit stella Sie hört"
       },
-      "progress": "Schritt {current} von {total}",
       "screens": {
         "app": "Überarbeitung",
         "context": "Kontext",
@@ -888,7 +947,6 @@
         "transcription": "Transkription",
         "words": "Wörter"
       },
-      "skipRest": "Rest überspringen",
       "transcription": {
         "body": "Sie können das später in den Einstellungen ändern.",
         "bodyLocal": "Das Sprachmodell läuft hier, daher funktioniert das Diktieren auch offline.",
@@ -958,6 +1016,7 @@
     "permissionsTitlePc": "Diesen PC einrichten",
     "progress": "Schritt {current} von {total}",
     "skip": "Überspringen",
+    "skipRest": "Rest überspringen",
     "staysLocalMac": "Bleibt auf diesem Mac",
     "staysLocalPc": "Bleibt auf diesem PC",
     "tryAgain": "Erneut versuchen",
@@ -1004,7 +1063,6 @@
     "errorUpdateLanguage": "stella desktop konnte die Sprache der Oberfläche nicht ändern.",
     "errorUpdatePreferences": "stella desktop konnte die Benachrichtigungseinstellungen nicht aktualisieren.",
     "language": "Sprache",
-    "lastVerified": "Zuletzt überprüft",
     "loadingAccount": "Ihre Kontoverbindung wird geprüft…",
     "managedOfficeEditing": "Verwaltete Office-Dateibearbeitung für stella.",
     "neverRequested": "Nie angefragt",

@@ -1,6 +1,9 @@
 import { Result } from "better-result";
 
-import { dictationLearnedFixesSchema } from "@stll/api-contract/dictation-learned-fixes";
+import {
+  dictationLearnedFixesClearQuerySchema,
+  dictationLearnedFixesSchema,
+} from "@stll/api-contract/dictation-learned-fixes";
 
 import {
   ACCOUNT_ACCESS,
@@ -20,20 +23,25 @@ const config = {
     "Each device drops its own copy when it next syncs",
   ),
   mcp: { type: "internal", reason: "native_tool_ui" },
+  query: dictationLearnedFixesClearQuerySchema,
   response: safeHandlerResponseSchemas(dictationLearnedFixesSchema),
 } as const satisfies HandlerConfig;
 
-/** Deletes everything dictation learned for the caller in the active organization, on every device. */
+/**
+ * Deletes everything dictation learned for the caller in the active
+ * organization, on every device, if the generation named is still current.
+ */
 const clearLearnedFixesHandler = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, user }) {
+  async function* ({ query, safeDb, session, user }) {
     const fixes = yield* Result.await(
       safeDb(
         async (tx) =>
-          await clearLearnedFixes(tx, {
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-          }),
+          await clearLearnedFixes(
+            tx,
+            { organizationId: session.activeOrganizationId, userId: user.id },
+            query,
+          ),
       ),
     );
     return Result.ok(fixes);

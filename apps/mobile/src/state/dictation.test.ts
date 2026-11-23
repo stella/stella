@@ -299,6 +299,8 @@ describe("cleaning up a dictation", () => {
       source: sourceFor(fetch),
       transcript: "dobrý den čárka nový odstavec posílám návrh",
       locale: "cs",
+      style: "polished",
+      translateTo: null,
     });
 
     expect(result.unwrap()).toBe("Dobrý den,\n\nposílám návrh.");
@@ -310,6 +312,63 @@ describe("cleaning up a dictation", () => {
       locale: "cs",
       context: { appKind: "chat" },
     });
+  });
+
+  test("names a style and a language to write in, and asks an older server again without them", async () => {
+    let answers = 0;
+    const { fetch, sent } = server(() => {
+      answers += 1;
+      return answers === 1
+        ? Response.json({ message: "Invalid body" }, { status: 422 })
+        : Response.json({
+            segments: [
+              { type: "text", text: "1. Call the client", bold: false },
+            ],
+          });
+    });
+
+    const result = await cleanUpDictation({
+      fetch,
+      source: sourceFor(fetch),
+      transcript: "first call the client",
+      locale: "en",
+      style: "notes",
+      translateTo: "en",
+    });
+
+    expect(result.unwrap()).toBe("1. Call the client");
+    expect(sent.map(({ body }): unknown => JSON.parse(String(body)))).toEqual([
+      {
+        transcript: "first call the client",
+        locale: "en",
+        context: { appKind: "chat" },
+        style: "notes",
+        translateTo: "en",
+      },
+      {
+        transcript: "first call the client",
+        locale: "en",
+        context: { appKind: "chat" },
+      },
+    ]);
+  });
+
+  test("a refused cleanup that named nothing new is not asked again", async () => {
+    const { fetch, sent } = server(() =>
+      Response.json({ message: "Invalid body" }, { status: 422 }),
+    );
+
+    const result = await cleanUpDictation({
+      fetch,
+      source: sourceFor(fetch),
+      transcript: "call the client",
+      locale: "en",
+      style: "polished",
+      translateTo: null,
+    });
+
+    expect(result.isErr()).toBe(true);
+    expect(sent).toHaveLength(1);
   });
 
   test("a line break is one new line", () => {

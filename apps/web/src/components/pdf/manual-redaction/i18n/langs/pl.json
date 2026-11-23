@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Przeciągnij po stronie, aby zakryć wszystko, co pominęło wykrywanie. Zanonimizowany PDF zaczernia każdy zaznaczony obszar.",
+    "markingSurface": "Przeciągnij, aby zaznaczyć obszar do zaczernienia",
+    "pageArea": "Obszar na stronie {page}",
+    "removeArea": "Usuń zaznaczony obszar na stronie {page}",
+    "startMarking": "Zaznacz obszary",
+    "stopMarking": "Zakończ zaznaczanie",
+    "title": "Zaznaczone obszary"
+  }
+}

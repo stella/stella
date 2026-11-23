@@ -10,7 +10,7 @@
     "aiDraftAllow": "Zezwól",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Zadanie {task} · Czynność {activity}",
-    "aiDraftConsent": "stella AI może proponować opisy na podstawie sprawy, daty, czasu trwania i nazw aplikacji każdego wpisu oraz widocznych tu nazw dokumentów i tytułów okien, jeśli je rejestrujesz. Twoje wcześniejsze wpisy w sprawie pomagają jej pisać Twoim stylem. Nic więcej o Twoim dniu nie opuszcza tego komputera.",
+    "aiDraftConsent": "Do napisania opisu stella AI używa: {inputs}. Wszystko trafia do {provider} wyłącznie w celu napisania propozycji. Nic więcej o Twoim dniu nie opuszcza tego komputera.",
     "aiDraftConsentRequired": "Zezwól ponownie stella AI, aby zaproponować ten opis.",
     "aiDraftDisclosure": "Propozycje AI to sugestie, które stella tworzy na podstawie sprawdzanego wpisu, Twoich wcześniejszych wpisów w sprawie oraz zasad rozliczeń kancelarii, jeśli je dodała. Sprawdź każdy wpis przed jego utworzeniem.",
     "aiDraftEarlierEntries": "{count, plural, one {Nawiązuje do # wcześniejszego wpisu} few {Nawiązuje do # wcześniejszych wpisów} many {Nawiązuje do # wcześniejszych wpisów} other {Nawiązuje do # wcześniejszego wpisu}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI jest wyłączona na tym komputerze. Wycofanie zgody zostanie wysłane do aplikacji stella, gdy tylko będzie dostępna.",
     "browserAnsweredAppNameOnly": "Dla <bdi>{browser}</bdi> rejestrowana jest tylko nazwa aplikacji. Możesz to zmienić w Ustawieniach.",
     "browserAnsweredTitles": "Tytuły kart w <bdi>{browser}</bdi> są rejestrowane. Możesz to zmienić w Ustawieniach.",
-    "browserPrivacyNote": "Okna prywatne też mogą zostać zarejestrowane; wstrzymaj rejestrowanie lub wyklucz przeglądarkę podczas przeglądania prywatnego.",
+    "browserPrivacyNote": "stella nie rozpoznaje każdego okna prywatnego, więc przed prywatnym przeglądaniem wstrzymaj rejestrowanie.",
     "browserQuestionAppNameOnly": "Tylko nazwa aplikacji",
-    "browserQuestionDescription": "Tytuły kart pomagają w opisach pracy. stella nie rozpoznaje każdego okna prywatnego, więc przed prywatnym przeglądaniem wstrzymaj rejestrowanie.",
+    "browserQuestionDescription": "Tytuły kart pomagają w opisach pracy.",
     "browserQuestionLater": "Zdecyduj później",
     "browserQuestionRecordTitles": "Rejestruj tytuły",
     "browserQuestionTitle": "Rejestrować też tytuły kart w <bdi>{browser}</bdi>?",
@@ -103,7 +103,19 @@
     "detectCalls": "Rejestruj rozmowy",
     "detectCallsDescription": "Gdy Teams, Zoom lub przeglądarka używa mikrofonu, ten czas jest liczony jako rozmowa, nawet jeśli tylko słuchasz lub pracujesz w innej aplikacji. Dźwięk nigdy nie jest nagrywany.",
     "disclosure": {
-      "control": "Nic nie jest zapisywane, dopóki nie klikniesz Rozpocznij zapis w Aktywności. W każdej chwili możesz wstrzymać zapis, wykluczyć aplikacje lub usunąć dowolny dzień.",
+      "aiDraftInputs": {
+        "appNames": "nazwy aplikacji",
+        "billingFormat": "format rozliczeń klienta",
+        "date": "data",
+        "duration": "czas trwania",
+        "earlierDescriptions": "Twoje wcześniejsze opisy w sprawie",
+        "firmGuidelines": "ewentualne zasady rozliczeń kancelarii",
+        "instructions": "wpisane przez Ciebie polecenia",
+        "matter": "sprawa",
+        "titles": "rejestrowane tytuły okien i nazwy dokumentów"
+      },
+      "aiDraftProvider": "dostawcy AI, z którego korzysta kancelaria, albo dostawcy stella AI",
+      "control": "Nic nie jest zapisywane, dopóki nie klikniesz Rozpocznij zapis. W każdej chwili możesz wstrzymać zapis, wykluczyć aplikacje lub usunąć dowolny dzień.",
       "never": {
         "audio": "Dźwięk z mikrofonu",
         "keystrokes": "Naciśnięcia klawiszy ani wpisywany tekst",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Co jest zapisywane",
       "sent": {
-        "aiDrafts": "Propozycje stella AI, o które prosisz po wyrażeniu zgody: sprawa, data, czas trwania i nazwy aplikacji wpisu, jego tytuły okien i nazwy dokumentów, jeśli są rejestrowane, oraz polecenia, które wpiszesz. stella dodaje Twoje wcześniejsze opisy w sprawie, format rozliczeń klienta oraz zasady rozliczeń kancelarii, jeśli z nich korzysta. Wszystko trafia do dostawcy AI, z którego korzysta kancelaria, albo do dostawcy stella AI, wyłącznie w celu napisania propozycji; stella nie zapisuje propozycji ani tego, co wysłano w jej celu.",
+        "aiDrafts": "Propozycje stella AI, o które prosisz po wyrażeniu zgody. Do każdej stella AI używa: {inputs}. Wszystko trafia do {provider} wyłącznie w celu napisania propozycji; stella nie zapisuje propozycji ani tego, co wysłano w jej celu.",
         "timeEntries": "Wpisy czasu, które tworzysz: sprawa, data, czas trwania, opis, rozliczalność i ewentualne kody rozliczeniowe"
       },
       "sentTitle": "Co opuszcza ten komputer",
@@ -575,6 +587,25 @@
       "descriptionCloud": "stella AI dodatkowo poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail.",
       "title": "Popraw za pomocą AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Zachowuje swobodny ton i oszczędną interpunkcję.",
+        "title": "Swobodny"
+      },
+      "notes": {
+        "description": "Krótkie punkty, każdy w osobnym wierszu, bez zbędnych słów.",
+        "title": "Notatki"
+      },
+      "polished": {
+        "description": "Poprawia błędy rozpoznawania i zachowuje Twoje sformułowania.",
+        "title": "Dopracowany"
+      },
+      "title": "Styl",
+      "verbatim": {
+        "description": "Każde słowo tak, jak padło; dodawane są tylko interpunkcja i wielkie litery.",
+        "title": "Dosłowny"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Do {limit, number} znaków dokumentu, w którym jesteś, aby dyktowany tekst pasował do tego, co piszesz.",
@@ -747,6 +778,11 @@
       "open": "Otwórz",
       "title": "Transkrypcja nagrania"
     },
+    "translateTo": {
+      "description": "Zapisuje poprawiony tekst w tym języku, niezależnie od tego, w jakim języku mówisz.",
+      "off": "Język, w którym mówisz",
+      "title": "Pisz w języku"
+    },
     "whileDictating": {
       "choices": {
         "lower": "Ścisz inne dźwięki",
@@ -842,6 +878,30 @@
   },
   "onboarding": {
     "activityBody": "Zobacz, na co poszedł dzień pracy, i zamień go na robocze wpisy czasu. To Ty decydujesz, co jest zapisywane i co jest wysyłane.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Proponuj opisy za pomocą stella AI",
+        "body": "stella AI może zaproponować opis każdego wpisu czasu. Zezwól na to teraz albo przy pierwszym przeglądaniu dnia.",
+        "withdraw": "Zgodę możesz w każdej chwili wycofać w Ustawieniach."
+      },
+      "calls": {
+        "body": "Licz czas spędzony na rozmowach.",
+        "title": "Rozmowy"
+      },
+      "details": {
+        "appNamesOnly": "Rejestrowane są tylko nazwy aplikacji.",
+        "body": "Pomagają odróżnić sprawy podczas przeglądania dnia.",
+        "browsers": "Przeglądarki rejestrują tytuły kart dopiero wtedy, gdy na to zezwolisz. Aktywność pyta o każdą przeglądarkę, gdy zobaczy ją po raz pierwszy.",
+        "title": "Tytuły okien i dokumenty"
+      },
+      "screens": {
+        "aiDrafts": "Propozycje AI",
+        "calls": "Rozmowy",
+        "details": "Szczegóły",
+        "recording": "Przegląd"
+      },
+      "starting": "Rozpoczynanie zapisu…"
+    },
     "activityStoryDraft": "Wersja robocza",
     "activityStoryRecordTitle": "Zapisane",
     "activityStoryReviewCaption": "Przeglądasz dzień i wybierasz sprawę",
@@ -880,7 +940,6 @@
         "choose": "Mikrofon do dyktowania",
         "title": "Niech stella Cię słyszy"
       },
-      "progress": "Krok {current} z {total}",
       "screens": {
         "app": "Poprawki",
         "context": "Kontekst",
@@ -888,7 +947,6 @@
         "transcription": "Transkrypcja",
         "words": "Słowa"
       },
-      "skipRest": "Pomiń resztę",
       "transcription": {
         "body": "Możesz to później zmienić w Ustawieniach.",
         "bodyLocal": "Model mowy działa tutaj, więc dyktowanie działa też offline.",
@@ -958,6 +1016,7 @@
     "permissionsTitlePc": "Skonfiguruj ten komputer",
     "progress": "Krok {current} z {total}",
     "skip": "Pomiń",
+    "skipRest": "Pomiń resztę",
     "staysLocalMac": "Zostaje na tym Macu",
     "staysLocalPc": "Zostaje na tym komputerze",
     "tryAgain": "Spróbuj ponownie",
@@ -1004,7 +1063,6 @@
     "errorUpdateLanguage": "stella desktop nie mógł zmienić języka interfejsu.",
     "errorUpdatePreferences": "stella desktop nie mógł zaktualizować ustawień powiadomień.",
     "language": "Język",
-    "lastVerified": "Ostatnio zweryfikowano",
     "loadingAccount": "Sprawdzanie połączenia z kontem…",
     "managedOfficeEditing": "Zarządzana edycja plików Office dla stella.",
     "neverRequested": "Nigdy niewymagane",

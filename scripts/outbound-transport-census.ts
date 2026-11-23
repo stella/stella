@@ -885,12 +885,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/fetch"],
   },
   {
-    path: "apps/web/src/lib/files/queries.ts",
-    class: "operator-configured-infrastructure",
-    reason: "Reads and saves email attachments through the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/lib/files/storage-fetch.ts",
     class: "operator-configured-infrastructure",
     reason:

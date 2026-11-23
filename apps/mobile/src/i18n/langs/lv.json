@@ -1,4 +1,42 @@
 {
+  "certifiedEmail": {
+    "certifiedAt": "Sertifikācijas laiks",
+    "deliveredTo": "Piegādāts uz adresi",
+    "error": "Ziņotā kļūda",
+    "errors": {
+      "noDomain": "Nezināms domēns",
+      "noRecipient": "Nezināms saņēmējs",
+      "other": "Cita kļūda",
+      "virus": "Konstatēts vīruss"
+    },
+    "handedOverFor": "Pārņemts saņēmējam",
+    "kinds": {
+      "acceptance": "Pieņemšanas apstiprinājums (PEC)",
+      "delivery": "Piegādes apstiprinājums (PEC)",
+      "deliveryError": "Paziņojums par nepiegādi (PEC)",
+      "deliveryErrorWarning": "Paziņojums par piegādes termiņa pārsniegšanu (PEC)",
+      "nonAcceptance": "Paziņojums par nepieņemšanu (PEC)",
+      "takenInCharge": "Pārņemšanas apstiprinājums (PEC)",
+      "transport": "Sertificēts e-pasts (PEC)",
+      "virusDetected": "Paziņojums par vīrusa konstatēšanu (PEC)"
+    },
+    "messageId": "PEC ziņojuma ID",
+    "notDeliveredTo": "Nav piegādāts uz adresi",
+    "ordinaryMailbox": "Parasta pastkaste",
+    "originalNotIncluded": "Šajā failā nav sākotnējā ziņojuma.",
+    "provider": "PEC pakalpojumu sniedzējs",
+    "receipt": "Pieprasītais apstiprinājums",
+    "receiptTypes": {
+      "full": "Pilns apstiprinājums",
+      "short": "Īss apstiprinājums",
+      "summary": "Kopsavilkuma apstiprinājums"
+    },
+    "recipients": "Norādītie saņēmēji",
+    "sender": "Norādītais sūtītājs",
+    "signatureNotVerified": "Pakalpojumu sniedzēja paraksts paliek failā un netiek pārbaudīts.",
+    "signedBy": "Parakstītājs: {name}",
+    "statedInFile": "Kā norādīts failā"
+  },
   "chat": {
     "alreadyAnswered": "Uz šo jau ir atbildēts.",
     "answerAwaitingInput": "Šai atbildei nepieciešama jūsu ievade.",
@@ -423,6 +461,7 @@
     },
     "fit": "Platums",
     "openOriginal": "Atvērt oriģinālu",
+    "openPart": "Atvērt {fileName}",
     "preview": "Atvērt priekšskatījumu",
     "previewDescription": "Šis fails tiek atvērts sistēmas priekšskatījumā.",
     "retry": "Mēģināt vēlreiz",
@@ -432,11 +471,94 @@
     "zoomIn": "Tuvināt",
     "zoomOut": "Tālināt"
   },
+  "eInvoice": {
+    "accountNumber": "Bankas konta numurs",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Bankas kods",
+    "batchPosition": "Dokuments {position, number} no {count, number}",
+    "bic": "BIC kods",
+    "currency": "Valūta",
+    "customer": "Pircējs",
+    "documentTitle": "{documentType, select, invoice {Rēķins} creditNote {Kredītrēķins} debitNote {Debetrēķins} advance {Avansa rēķins} other {Cits dokuments}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Rēķins {number}} creditNote {Kredītrēķins {number}} debitNote {Debetrēķins {number}} advance {Avansa rēķins {number}} other {Dokuments {number}}}",
+    "exemptionReason": "Atbrīvojuma iemesls",
+    "formatVersion": "{format}, versija {version}",
+    "grossTotal": "Kopā ar PVN",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Izrakstīšanas datums",
+    "lineId": "Nr.",
+    "lineItems": "Pozīcijas",
+    "linesShown": "Rāda {shown, number} no {count, plural, zero {# pozīcijām} one {# pozīcijas} other {# pozīcijām}}",
+    "netAmount": "Summa bez PVN",
+    "netTotal": "Kopā bez PVN",
+    "notRecognized": "Šī XML datne nav atpazīts strukturēts rēķins.",
+    "notes": "Rēķina piezīmes",
+    "otherIdentifier": "Cits identifikators",
+    "payableAmount": "Summa apmaksai",
+    "paymentAmount": "Maksājuma summa",
+    "paymentDetails": "Maksājuma informācija",
+    "paymentDueDate": "Apmaksas termiņš",
+    "paymentMeansCode": "Maksājuma veida kods",
+    "paymentReference": "Maksājuma mērķis",
+    "prepaidAmount": "Samaksāts avansā",
+    "quantity": "Daudzums un mērvienība",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate}%",
+    "ratePercentWithCategory": "{rate}% ({category})",
+    "registrationNumber": "Reģistrācijas numurs",
+    "supplier": "Pārdevējs",
+    "taxAmount": "PVN summa",
+    "taxId": "Nodokļu maksātāja numurs",
+    "taxPointDate": "Nodokļa punkta datums",
+    "taxTotal": "PVN kopā",
+    "taxableAmount": "Ar nodokli apliekamā vērtība",
+    "totals": "Kopsummas",
+    "unitPrice": "Vienības cena",
+    "units": {
+      "day": "{count, plural, zero {{quantity} dienu} one {{quantity} diena} other {{quantity} dienas}}",
+      "hour": "{count, plural, zero {{quantity} stundu} one {{quantity} stunda} other {{quantity} stundas}}",
+      "month": "{count, plural, zero {{quantity} mēnešu} one {{quantity} mēnesis} other {{quantity} mēneši}}",
+      "unit": "{count, plural, zero {{quantity} gab.} one {{quantity} gab.} other {{quantity} gab.}}",
+      "week": "{count, plural, zero {{quantity} nedēļu} one {{quantity} nedēļa} other {{quantity} nedēļas}}",
+      "year": "{count, plural, zero {{quantity} gadu} one {{quantity} gads} other {{quantity} gadi}}"
+    },
+    "unreadable": "Rēķinu neizdevās nolasīt.",
+    "vat": "PVN",
+    "vatBreakdown": "PVN sadalījums",
+    "vatId": "PVN numurs"
+  },
+  "email": {
+    "cc": "Kopija",
+    "date": "Datums",
+    "from": "Sūtītājs",
+    "noSubject": "(Bez tēmas)",
+    "subject": "Tēma",
+    "to": "Saņēmēji"
+  },
   "entity": {
     "currentVersion": "Pašreizējā versija",
     "loadFailed": "Šo ierakstu neizdevās ielādēt.",
     "reference": "Numurs",
     "type": "Veids"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Arhīvu neizdevās nolasīt.",
+    "attachments": "Pielikumi",
+    "files": "Faili",
+    "insideFailed": "Neizdevās ielādēt iekšā esošos failus. Pieskarieties, lai mēģinātu vēlreiz.",
+    "noFilesInside": "Iekšā nav neviena faila.",
+    "noMatches": "Vaicājumam “{query}” neatbilst neviens fails.",
+    "open": "Atvērt {fileName} ({details})",
+    "search": "Atrast failu pēc nosaukuma vai mapes",
+    "unavailable": {
+      "encrypted": "Aizsargāts ar paroli, nevar atvērt",
+      "link": "Saite uz citu failu, netiek atvērta",
+      "tooLarge": "Pārāk liels, lai atvērtu",
+      "unreadable": "Bojāts, nevar atvērt",
+      "unsupported": "Saspiests veidā, ko nevar atvērt"
+    },
+    "unnamed": "Datne bez nosaukuma"
   },
   "header": {
     "search": "Meklēt"
@@ -466,6 +588,16 @@
     "refused": "Serveris noraidīja pieprasījumu (kļūdas kods {status}).",
     "server": "Serverī radās problēma (kļūdas kods {status}). Pēc brīža mēģiniet vēlreiz.",
     "session": "Jūsu pieteikšanās ir beigusies. Piesakieties vēlreiz."
+  },
+  "mailbox": {
+    "back": "Atpakaļ uz e-pasta ziņojumiem",
+    "messages": "E-pasta ziņojumi",
+    "noMatches": "Vaicājumam “{query}” neatbilst neviens e-pasta ziņojums.",
+    "noMessages": "Šajā pastkastītē nav e-pasta ziņojumu.",
+    "openFailed": "Šo e-pasta ziņojumu neizdevās atvērt. Pieskarieties, lai mēģinātu vēlreiz.",
+    "search": "Meklēt e-pasta ziņojumos",
+    "truncated": "Tiek rādīti tikai pirmie {count, number} e-pasta ziņojumi.",
+    "unreadable": "Šo pastkastīti neizdevās nolasīt."
   },
   "matter": {
     "add": "Pievienot",
@@ -610,6 +742,20 @@
     "hideList": "Paslēpt sarakstu",
     "showList": "Rādīt sarakstu"
   },
+  "quickDictation": {
+    "activityReady": "Diktāts ir gatavs",
+    "activityReadyDetail": "Pieskarieties, lai pārskatītu tekstu stella",
+    "activityRecording": "Notiek diktēšana",
+    "activityRecordingDetail": "Pieskarieties Gatavs, lai pārskatītu tekstu",
+    "copied": "Nokopēts",
+    "copy": "Kopēt",
+    "documentName": "Diktāts {when}",
+    "none": "Neviens diktāts negaida. Sāciet ar darbības pogu, Siri vai vadības centrā.",
+    "noneTitle": "Nav ko pārskatīt",
+    "saveFailed": "Tekstu neizdevās sagatavot saglabāšanai. Mēģiniet vēlreiz.",
+    "sendToChat": "Sūtīt uz tērzēšanu",
+    "text": "Diktētais teksts"
+  },
   "role": {
     "readFailed": "Jūsu atļaujas neizdevās ielādēt, tāpēc izmaiņas pagaidām ir paslēptas.",
     "retry": "Mēģināt vēlreiz"
@@ -691,7 +837,19 @@
     "dictationModelWithdrawn": "Vairs netiek piedāvāts",
     "dictationModelWithdrawnHint": "Izvēlētais modelis vairs netiek piedāvāts. Izvēlieties citu; līdz tam diktāts tiek nosūtīts tikai tā paša pakalpojumu sniedzēja, reģiona un datu glabāšanas modelim, citādi tas gaida šajā tālrunī nepārrakstīts.",
     "dictationModelsUnavailable": "Modeļus neizdevās ielādēt. Diktēšana izmanto jūsu izvēlēto modeli vai noklusējuma modeli, ja serveris to vairs nepiedāvā.",
+    "dictationStyle": "Stils",
+    "dictationStyleCasual": "Brīvs",
+    "dictationStyleCasualHint": "Saglabā jūsu nepiespiesto toni un taupīgu pieturzīmju lietojumu.",
+    "dictationStyleNotes": "Piezīmes",
+    "dictationStyleNotesHint": "Īsi punkti, pa vienam rindā, bez liekvārdiem.",
+    "dictationStylePolished": "Noslīpēts",
+    "dictationStylePolishedHint": "Izlabo atpazīšanas kļūdas un saglabā jūsu formulējumu.",
+    "dictationStyleVerbatim": "Burtisks",
+    "dictationStyleVerbatimHint": "Katrs vārds tā, kā tas tika pateikts; mainās tikai pieturzīmes un lielie burti.",
     "dictationTitle": "Diktēšana",
+    "dictationTranslate": "Tulkot uz",
+    "dictationTranslateHint": "Labotais teksts tiek uzrakstīts šajā valodā neatkarīgi no tā, kādā valodā jūs diktējat.",
+    "dictationTranslateOff": "Netulkot",
     "lockScreenTitle": "Bloķēšanas ekrāns",
     "server": "Serveris",
     "signOut": "Atslēgties",
@@ -735,8 +893,12 @@
     "useStella": "Izmantot stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Elektroniskās lietas saņemšanas apstiprinājums",
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
+    "noSigners": "Dati par parakstītājiem netika atrasti.",
+    "signedContent": "Parakstītais dokuments",
+    "signers": "Parakstītāji",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
     "unverified": "Paraksti nav pārbaudīti."

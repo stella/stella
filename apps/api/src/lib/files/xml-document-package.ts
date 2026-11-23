@@ -12,7 +12,10 @@ export type DocumentXmlNode = {
   namespaceURI: string;
   attributes: ReadonlyMap<string, string>;
   children: DocumentXmlNode[];
+  /** The element's own text, its runs joined, without its children's. */
   text: string;
+  /** Text runs and child elements in document order, for mixed content. */
+  content: (string | DocumentXmlNode)[];
 };
 
 export type DocumentXmlReader = (
@@ -130,10 +133,12 @@ const parseXmlPart = (
       ),
       children: [],
       text: "",
+      content: [],
     };
     const parent = stack.at(-1);
     if (parent) {
       parent.children.push(node);
+      parent.content.push(node);
     } else {
       read.root = node;
     }
@@ -143,6 +148,13 @@ const parseXmlPart = (
     const node = stack.at(-1);
     if (node && !read.failure) {
       node.text += value;
+      const last = node.content.length - 1;
+      const previous = node.content[last];
+      if (typeof previous === "string") {
+        node.content[last] = previous + value;
+      } else {
+        node.content.push(value);
+      }
     }
   };
   parser.on("text", append);
@@ -206,6 +218,19 @@ export const openXmlDocumentPackage = async (
   };
   return Result.ok(readXml);
 };
+
+/**
+ * Parses one XML document that is not inside a ZIP package, such as an XML
+ * dossier with embedded documents. The same node and depth budgets apply; the
+ * byte budget is the caller's, which has already bounded the file.
+ */
+export const parseStandaloneXml = (
+  bytes: Uint8Array,
+  maxBytes: number,
+): Result<DocumentXmlNode, DocumentPackageError> =>
+  bytes.byteLength > maxBytes
+    ? Result.err(limitError())
+    : parseXmlPart(bytes, { remaining: MAX_XML_NODES });
 
 export const createDocumentText = (maxChars: number) => {
   let text = "";

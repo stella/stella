@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import {
   dictationLearnedFixChangesSchema,
+  dictationLearnedFixesClearQuerySchema,
   dictationLearnedFixesSchema,
 } from "@stll/api-contract/dictation-learned-fixes";
 import type { PermissionInput } from "@stll/permissions";
@@ -147,9 +148,10 @@ const createDesktopLearnedFixesClearEndpoint = (
         accountAccess: ACCOUNT_ACCESS.sandbox,
         mcp: { type: "internal", reason: "auth_plumbing" },
         cache: { kind: "none" },
+        query: dictationLearnedFixesClearQuerySchema,
         response,
       },
-      async function* ({ request }) {
+      async function* ({ request, query }) {
         const { safeDb, owner } = yield* Result.await(
           authorizeLearnedFixes(
             request,
@@ -159,7 +161,7 @@ const createDesktopLearnedFixesClearEndpoint = (
         );
         return Result.ok(
           yield* Result.await(
-            safeDb(async (tx) => await clearLearnedFixes(tx, owner)),
+            safeDb(async (tx) => await clearLearnedFixes(tx, owner, query)),
           ),
         );
       },
