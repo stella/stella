@@ -103,7 +103,7 @@
     "detectCalls": "Hívások rögzítése",
     "detectCallsDescription": "Amíg a Teams, a Zoom vagy egy böngésző használja a mikrofont, ez az idő hívásnak számít, akkor is, ha csak hallgat, vagy egy másik alkalmazásban dolgozik. Hangot soha nem rögzítünk.",
     "disclosure": {
-      "control": "Semmi sem kerül rögzítésre, amíg a Tevékenységben nem kattint a Rögzítés indítása gombra. Bármikor szüneteltethet, kizárhat alkalmazásokat vagy törölhet bármely napot.",
+      "control": "Semmi sem kerül rögzítésre, amíg nem kattint a Rögzítés indítása gombra. Bármikor szüneteltethet, kizárhat alkalmazásokat vagy törölhet bármely napot.",
       "never": {
         "audio": "A mikrofon hangját",
         "keystrokes": "Billentyűleütéseket vagy begépelt szöveget",
@@ -866,6 +866,30 @@
   },
   "onboarding": {
     "activityBody": "Lássa, mire ment el a munkanapja, és alakítsa időbejegyzés-piszkozatokká. Ön dönti el, mi kerül rögzítésre és mi kerül elküldésre.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Leírások javasoltatása a stella AI-jal",
+        "body": "A stella AI javaslatot tehet minden időbejegyzés leírására. Engedélyezze most, vagy amikor először átnéz egy napot.",
+        "withdraw": "A hozzájárulását bármikor visszavonhatja a Beállításokban."
+      },
+      "calls": {
+        "body": "Számolja a hívásokkal töltött időt.",
+        "title": "Hívások"
+      },
+      "details": {
+        "appNamesOnly": "Csak az alkalmazások neve kerül rögzítésre.",
+        "body": "Segítenek megkülönböztetni az ügyeket, amikor átnézi a napot.",
+        "browsers": "A böngészők csak az Ön engedélyével rögzítik a lapcímeket. A Tevékenység minden böngészőnél rákérdez, amikor először látja.",
+        "title": "Ablakcímek és dokumentumok"
+      },
+      "screens": {
+        "aiDrafts": "AI-javaslatok",
+        "calls": "Hívások",
+        "details": "Részletek",
+        "recording": "Áttekintés"
+      },
+      "starting": "Rögzítés indítása…"
+    },
     "activityStoryDraft": "Piszkozat",
     "activityStoryRecordTitle": "Rögzítve",
     "activityStoryReviewCaption": "Átnézi a napot, és kiválasztja az ügyet",
@@ -904,7 +928,6 @@
         "choose": "Mikrofon a diktáláshoz",
         "title": "Hadd hallja Önt a stella"
       },
-      "progress": "{current}. lépés / {total}",
       "screens": {
         "app": "Javítás",
         "context": "Kontextus",
@@ -912,7 +935,6 @@
         "transcription": "Átírás",
         "words": "Szavak"
       },
-      "skipRest": "A többi kihagyása",
       "transcription": {
         "body": "Ezt később a Beállításokban módosíthatja.",
         "bodyLocal": "A beszédmodell itt fut, így a diktálás offline is működik.",
@@ -982,6 +1004,7 @@
     "permissionsTitlePc": "A számítógép beállítása",
     "progress": "{current}. lépés / {total}",
     "skip": "Kihagyás",
+    "skipRest": "A többi kihagyása",
     "staysLocalMac": "Ezen a Macen marad",
     "staysLocalPc": "Ezen a számítógépen marad",
     "tryAgain": "Újra",

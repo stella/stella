@@ -365,7 +365,7 @@ test("custom words start empty; an idea asks for the word and adding it stores t
   });
   await view.findByText("Novák & Partners");
   // The last screen ends the step with Continue; there is nothing to skip.
-  expect(view.queryByRole("button", { name: setup.skipRest })).toBeNull();
+  expect(view.queryByRole("button", { name: onboarding.skipRest })).toBeNull();
 });
 
 test("Skip on the first screen moves the tour on without turning dictation on", async () => {
@@ -388,7 +388,7 @@ test("Skip the rest leaves the step and keeps what was chosen", async () => {
   const view = await renderSetup(native);
   await continueTo(view, setup.transcription.titleLocal);
 
-  fireEvent.click(view.getByRole("button", { name: setup.skipRest }));
+  fireEvent.click(view.getByRole("button", { name: onboarding.skipRest }));
 
   await waitFor(() => {
     expect(native.calls).toContainEqual({
