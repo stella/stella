@@ -1684,6 +1684,10 @@ jobs:
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [network-baseline, phone-layouts]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -5288,6 +5292,7 @@ jobs:
           retention-days: 1
 
   route-smoke:
+    name: route-smoke (${{ matrix.mode }})
     needs: [ci-plan, web-build, heavy-web-build]
     # Affected browser suites certify the queued tree at every queue depth.
     if: >-
@@ -5343,6 +5348,7 @@ jobs:
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Prepare merge-base network budget
+        if: matrix.mode == 'network-baseline'
         timeout-minutes: 5
         uses: ./.github/actions/prepare-network-baseline
         with:
@@ -5361,11 +5367,11 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Configure flaky-test quarantine
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ matrix.mode == 'network-baseline' && !cancelled() && steps.checkout.outcome == 'success' }}
         uses: ./.github/actions/flaky-test-quarantine
 
       - name: Check route network baseline
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' }}
+        if: ${{ matrix.mode == 'network-baseline' && !cancelled() && steps.checkout.outcome == 'success' }}
         continue-on-error: ${{ github.event_name == 'merge_group' }}
         timeout-minutes: 8
         id: network-baseline
@@ -5377,23 +5383,17 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts --project=route-smoke
 
       - name: Explain network baseline failure
-        if: failure() && steps.network-baseline.outcome == 'failure'
+        if: matrix.mode == 'network-baseline' && failure() && steps.network-baseline.outcome == 'failure'
         run: |
           echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
 
-      # The phone run follows the stack, not the checkout, so it gets its own
-      # quarantine setup under the same condition.
       - name: Configure flaky-test quarantine for phone layouts
-        if: >-
-          !cancelled()
-          && steps.e2e-stack.outcome == 'success'
+        if: matrix.mode == 'phone-layouts' && !cancelled() && steps.e2e-stack.outcome == 'success'
         uses: ./.github/actions/flaky-test-quarantine
 
       # Same stack and route table, on the narrowest current iPhone in WebKit.
       - name: Check phone layouts
-        if: >-
-          !cancelled()
-          && steps.e2e-stack.outcome == 'success'
+        if: matrix.mode == 'phone-layouts' && !cancelled() && steps.e2e-stack.outcome == 'success'
         timeout-minutes: 8
         id: phone-layout
         env:
@@ -5403,7 +5403,7 @@ jobs:
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:phone
 
       - name: Upload phone layout report
-        if: always() && steps.phone-layout.outcome != 'skipped'
+        if: always() && matrix.mode == 'phone-layouts' && steps.phone-layout.outcome != 'skipped'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: phone-layout-pr-blob
@@ -5411,7 +5411,7 @@ jobs:
           retention-days: 7
 
       - name: Upload route smoke report
-        if: always()
+        if: always() && matrix.mode == 'network-baseline'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: route-smoke-pr-blob
@@ -5422,7 +5422,7 @@ jobs:
         if: failure() && steps.e2e-stack.outcome != 'skipped'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: server-logs-route-smoke
+          name: server-logs-route-smoke-${{ matrix.mode }}
           path: |
             /tmp/api.log
             /tmp/web-production.log
@@ -5432,7 +5432,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: route-smoke-timings
+          name: route-smoke-timings-${{ matrix.mode }}
           path: .cache/playwright-timings/*.json
           retention-days: 7
           if-no-files-found: ignore
@@ -6742,6 +6742,19 @@ jobs:
           targets: ${{ matrix.target }}
           components: clippy
 
+      - &desktop_rust_cache
+        name: Cache Rust dependencies and build artifacts
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry/cache
+            ~/.cargo/registry/index
+            ~/.cargo/git/db
+            apps/desktop/src-tauri/target
+          key: ${{ runner.os }}-desktop-rust-${{ github.job }}-${{ matrix.target }}-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-desktop-rust-${{ github.job }}-${{ matrix.target }}-
+
       # The locked crates download once, retried as a unit; every later
       # cargo command runs --frozen and never reaches the registry itself.
       - &desktop_rust_fetch
@@ -6749,10 +6762,6 @@ jobs:
         timeout-minutes: 10
         run: bash scripts/retry.sh cargo fetch --manifest-path apps/desktop/src-tauri/Cargo.toml --locked --target ${{ matrix.target }}
 
-      # No cargo cache action here: the job is path-filtered to desktop
-      # changes, so it runs rarely and a cold compile (well under the
-      # timeout) is acceptable. It also keeps the LGPL-3.0 rust-cache
-      # action out of the dependency-review-enforced diff.
       - name: Check
         shell: pwsh
         run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --frozen
@@ -6906,6 +6915,7 @@ jobs:
     steps:
       - *desktop_rust_checkout
       - *desktop_rust_toolchain
+      - *desktop_rust_cache
       - *desktop_rust_fetch
       - name: Clippy
         shell: pwsh

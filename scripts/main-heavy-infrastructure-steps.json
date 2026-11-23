@@ -678,7 +678,7 @@
     ]
   },
   "route-smoke": {
-    "displayName": { "prefix": "route-smoke", "suffix": "" },
+    "displayName": { "prefix": "route-smoke (", "suffix": ")" },
     "declaredStepNames": [
       "Cancel merge group after failure in this job",
       "Check phone layouts",
@@ -978,6 +978,7 @@
     "displayName": { "prefix": "Desktop Rust Tests (", "suffix": ")" },
     "declaredStepNames": [
       "Build test binaries",
+      "Cache Rust dependencies and build artifacts",
       "Cancel merge group after failure in this job",
       "Check",
       "Checkout",
@@ -996,8 +997,10 @@
       "Test signer against the certificate store"
     ],
     "steps": [
+      "Cache Rust dependencies and build artifacts",
       "Checkout",
       "Install desktop transport smoke dependencies",
+      "Post Cache Rust dependencies and build artifacts",
       "Post Checkout",
       "Post Install desktop transport smoke dependencies",
       "Post Setup Bun for the desktop transport smoke",
@@ -1007,13 +1010,19 @@
   "desktop-rust-lint": {
     "displayName": { "prefix": "Desktop Rust Lint (", "suffix": ")" },
     "declaredStepNames": [
+      "Cache Rust dependencies and build artifacts",
       "Cancel merge group after failure in this job",
       "Checkout",
       "Clippy",
       "Fetch Rust dependencies",
       "Setup Rust"
     ],
-    "steps": ["Checkout", "Post Checkout"]
+    "steps": [
+      "Cache Rust dependencies and build artifacts",
+      "Checkout",
+      "Post Cache Rust dependencies and build artifacts",
+      "Post Checkout"
+    ]
   },
   "dependency-audit": {
     "displayName": { "prefix": "bun audit (high/critical)", "suffix": "" },
