@@ -1007,30 +1007,36 @@ const handleWorkflowJobFailed = (
   const actor = workflowRunActor(data);
   trackFailedJobFinalization(
     (async () => {
-      const isCurrentRequest = await isCurrentWorkflowRequest({
-        requestId: actor.runId,
-        workspaceId: actor.workspaceId,
-      });
-      if (!isCurrentRequest) {
-        await markPendingPlannedFieldsErrored(actor, data);
-        return;
-      }
+      const finalization = await Result.tryPromise({
+        try: async () => {
+          const isCurrentRequest = await isCurrentWorkflowRequest({
+            requestId: actor.runId,
+            workspaceId: actor.workspaceId,
+          });
+          if (!isCurrentRequest) {
+            await markPendingPlannedFieldsErrored(actor, data);
+            return;
+          }
 
-      await failEntity({
-        actor,
-        data,
-        errorCode: errorTag(error),
-        extractionRuns,
+          await failEntity({
+            actor,
+            data,
+            errorCode: errorTag(error),
+            extractionRuns,
+          });
+        },
+        catch: (cause) => cause,
       });
-    })().catch((completionError: unknown) => {
-      captureError(
-        completionError,
-        handlerErrorContext("lib.handleWorkflowJobFailed.completionError", {
-          workspaceId: data.workspaceId,
-          entityId: data.entityId,
-        }),
-      );
-    }),
+      if (Result.isError(finalization)) {
+        captureError(
+          finalization.error,
+          handlerErrorContext("lib.handleWorkflowJobFailed.completionError", {
+            workspaceId: data.workspaceId,
+            entityId: data.entityId,
+          }),
+        );
+      }
+    })(),
   );
 };
 
