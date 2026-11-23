@@ -280,7 +280,6 @@
       "Install dependencies",
       "Prepare environment",
       "Repeat changed tests",
-      "Restore API test memory feedback",
       "Runner resources",
       "Setup Bun",
       "Test .claude/mcp",
