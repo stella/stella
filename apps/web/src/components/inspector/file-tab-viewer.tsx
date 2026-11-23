@@ -174,6 +174,44 @@ const legalFileViewers = {
   },
 } as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
 
+/**
+ * A legal file in its format's viewer; a file its reader refuses shows why,
+ * with its download.
+ */
+const LegalFileTabViewer = ({
+  kind,
+  onDownload,
+  pdfView,
+  tab,
+}: {
+  kind: LegalFileFormatKind;
+  onDownload: () => void;
+  pdfView: LegalFilePdfView;
+  tab: FileTab;
+}) => {
+  const t = useTranslations();
+  const { Viewer, unreadable, download, surface } = legalFileViewers[kind];
+  return (
+    <RecoverableViewerBoundary
+      finalFallback={(error) =>
+        isPreviewUnavailableError(error) ? (
+          <FilePreviewUnavailable
+            downloadLabel={t(download)}
+            message={t(unreadable)}
+            onDownload={onDownload}
+          />
+        ) : undefined
+      }
+      onDownload={onDownload}
+      surface={surface}
+    >
+      <Suspense fallback={<PeekSuspenseFallback />}>
+        <Viewer onDownload={onDownload} pdfView={pdfView} tab={tab} />
+      </Suspense>
+    </RecoverableViewerBoundary>
+  );
+};
+
 const OfficeFileViewer = lazy(async () => {
   const m = await import("@/components/office/office-file-viewer");
   return { default: m.OfficeFileViewer };
@@ -331,34 +369,16 @@ const FileTabViewerComponent = ({
       case "isdocx":
       case "xml":
       case "zip":
-      case "mbox": {
-        const { Viewer, unreadable, download, surface } =
-          legalFileViewers[nativePreviewKind];
+      case "mbox":
         return (
-          <RecoverableViewerBoundary
-            finalFallback={(error) =>
-              isPreviewUnavailableError(error) ? (
-                <FilePreviewUnavailable
-                  downloadLabel={t(download)}
-                  message={t(unreadable)}
-                  onDownload={handleDownload}
-                />
-              ) : undefined
-            }
+          <LegalFileTabViewer
             key={tab.id}
+            kind={nativePreviewKind}
             onDownload={handleDownload}
-            surface={surface}
-          >
-            <Suspense fallback={<PeekSuspenseFallback />}>
-              <Viewer
-                onDownload={handleDownload}
-                pdfView={legalFilePdfView}
-                tab={tab}
-              />
-            </Suspense>
-          </RecoverableViewerBoundary>
+            pdfView={legalFilePdfView}
+            tab={tab}
+          />
         );
-      }
       case "email":
         if (entity.shouldSurfaceEmailResolutionError) {
           return (
