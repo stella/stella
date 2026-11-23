@@ -233,6 +233,14 @@
     "writeDescription": "Įveskite šio įrašo aprašymą."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Patikrinti dar kartą",
+      "notInstalled": "Įdiekite „Antigravity“ 1.5 ar naujesnę versiją ir prisijunkite per ją.",
+      "signedIn": "Prisijungta prie „Antigravity“",
+      "signedOut": "Prisijunkite per „Antigravity“ CLI, kad galėtumėte naudoti „stella“.",
+      "title": "Antigravity",
+      "tooOld": "Atnaujinkite „Antigravity“ iki 1.5 ar naujesnės versijos ir prisijunkite per ją."
+    },
     "callbackAccount": "Paskyra",
     "callbackCloseTab": "Šį skirtuką galite uždaryti.",
     "callbackConnectedBody": "DI užklausos programoje stella dabar naudoja jūsų ChatGPT prenumeratą.",

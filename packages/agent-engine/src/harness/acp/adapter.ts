@@ -95,6 +95,11 @@ export type AcpHarnessAdapterOptions = {
    * process it does not answer `true` for is ended unused.
    */
   onProcess?: (pid: number) => Promise<boolean>;
+  /**
+   * Command prefix for the stdio-to-HTTP MCP bridge (`--mcp-stdio-bridge`),
+   * used when an ACP agent does not advertise `mcpCapabilities.http`.
+   */
+  stdioMcpBridge?: readonly string[] | null;
   platform: NodeJS.Platform;
 };
 
@@ -185,6 +190,8 @@ const connect = async ({
       ...(tempDir === null ? {} : tempEnvironment(tempDir, options.platform)),
     }),
     handlers,
+    // A definition that reads the agent's errors from stderr needs it kept.
+    captureStderr: options.definition.classifyErrorOutput !== undefined,
   });
   if (Result.isError(started)) {
     if (tempDir !== null) {
@@ -297,19 +304,53 @@ const authenticate = async (
     : Result.err(answered.error);
 };
 
-/** stella's MCP servers for a session, over HTTP; the token stays on stdio. */
-const mcpServers = (input: HarnessTurnInput): AcpMcpServer[] =>
-  [input.mcp, ...(input.browser === null ? [] : [input.browser])].map(
-    (binding): AcpMcpServer => ({
+const speaksHttpMcp = (agent: AcpInitializeResponse) =>
+  agent.agentCapabilities?.mcpCapabilities?.http === true;
+
+const canReachMcp = (
+  agent: AcpInitializeResponse,
+  options: AcpHarnessAdapterOptions,
+) => speaksHttpMcp(agent) || (options.stdioMcpBridge?.length ?? 0) > 0;
+
+/**
+ * stella's MCP servers for a session: HTTP when the agent supports it, else
+ * over stdio through stella's local `--mcp-stdio-bridge`.
+ */
+const mcpServers = (
+  agent: AcpInitializeResponse,
+  options: AcpHarnessAdapterOptions,
+  input: HarnessTurnInput,
+): AcpMcpServer[] => {
+  const bindings = [
+    input.mcp,
+    ...(input.browser === null ? [] : [input.browser]),
+  ];
+  if (speaksHttpMcp(agent)) {
+    return bindings.map((binding): AcpMcpServer => ({
       type: "http",
       name: binding.serverName,
       url: binding.url,
       headers: [{ name: "Authorization", value: `Bearer ${binding.token}` }],
-    }),
-  );
-
-const speaksHttpMcp = (agent: AcpInitializeResponse) =>
-  agent.agentCapabilities?.mcpCapabilities?.http === true;
+    }));
+  }
+  const bridge = options.stdioMcpBridge;
+  if (bridge === undefined || bridge === null || bridge.length === 0) {
+    return [];
+  }
+  const [command, ...prefixArgs] = bridge;
+  if (command === undefined) {
+    return [];
+  }
+  return bindings.map((binding): AcpMcpServer => ({
+    name: binding.serverName,
+    command,
+    args: [...prefixArgs, "--mcp-stdio-bridge"],
+    env: [
+      { name: "STELLA_MCP_URL", value: binding.url },
+      { name: "STELLA_MCP_TOKEN", value: binding.token },
+    ],
+  }));
+};
 
 const canResume = (agent: AcpInitializeResponse) =>
   agent.agentCapabilities?.sessionCapabilities?.resume !== undefined &&
@@ -455,7 +496,7 @@ const probeAgent = async (
         }),
       );
     }
-    if (!speaksHttpMcp(agent)) {
+    if (!canReachMcp(agent, options)) {
       return Result.err(
         new HarnessProbeError({
           reason: "harness_unavailable",
@@ -517,7 +558,12 @@ const probeAgent = async (
   await close(client, options.gracePeriodMs);
   removeProbeFolder(cwd);
   if (probeSession.id !== null) {
-    options.definition.discardSession?.(options.configDir, probeSession.id);
+    options.definition.discardSession?.({
+      configDir: options.configDir,
+      sessionId: probeSession.id,
+      environment: options.environment,
+      cwd,
+    });
   }
   return result;
 };
@@ -625,14 +671,22 @@ type OpenedSession = {
   continuation: HarnessContinuation;
 };
 
-const newSession = async (
-  client: AcpClient,
-  input: HarnessTurnInput,
-  continuation: HarnessContinuation,
-): Promise<Result<OpenedSession, HarnessStartError>> => {
+const newSession = async ({
+  client,
+  agent,
+  options,
+  input,
+  continuation,
+}: {
+  client: AcpClient;
+  agent: AcpInitializeResponse;
+  options: AcpHarnessAdapterOptions;
+  input: HarnessTurnInput;
+  continuation: HarnessContinuation;
+}): Promise<Result<OpenedSession, HarnessStartError>> => {
   const opened = await client.request("session/new", {
     cwd: input.workspaceDir,
-    mcpServers: mcpServers(input),
+    mcpServers: mcpServers(agent, options, input),
   });
   if (Result.isError(opened)) {
     return Result.err(
@@ -667,49 +721,69 @@ const newSession = async (
 const openSession = async ({
   client,
   agent,
+  options,
   input,
   session,
   configDir,
 }: {
   client: AcpClient;
   agent: AcpInitializeResponse;
+  options: AcpHarnessAdapterOptions;
   input: HarnessTurnInput;
   session: AcpTurnSession;
   configDir: string;
 }): Promise<Result<OpenedSession, HarnessStartError>> => {
   const { continuation } = input;
   if (continuation.type === "fresh" || continuation.type === "live") {
-    return newSession(client, input, { type: "fresh" });
+    return newSession({
+      client,
+      agent,
+      options,
+      input,
+      continuation: { type: "fresh" },
+    });
   }
   const unavailable = (
     reason: "session_not_found" | "resume_rejected",
     message: string,
   ): HarnessContinuation => ({ type: "resume_unavailable", reason, message });
   if (continuation.type === "fork") {
-    return newSession(
+    return newSession({
       client,
+      agent,
+      options,
       input,
-      unavailable("resume_rejected", "The agent cannot fork a session."),
-    );
+      continuation: unavailable(
+        "resume_rejected",
+        "The agent cannot fork a session.",
+      ),
+    });
   }
   const method = reopenMethod(agent);
   if (method === null) {
-    return newSession(
+    return newSession({
       client,
+      agent,
+      options,
       input,
-      unavailable("resume_rejected", "The agent cannot resume a session."),
-    );
+      continuation: unavailable(
+        "resume_rejected",
+        "The agent cannot resume a session.",
+      ),
+    });
   }
   const sessionId: string = continuation.sessionId;
   if (isSessionBroken(configDir, sessionId)) {
-    return newSession(
+    return newSession({
       client,
+      agent,
+      options,
       input,
-      unavailable(
+      continuation: unavailable(
         "resume_rejected",
         "The agent can no longer continue its saved session.",
       ),
-    );
+    });
   }
   if (method === "session/load") {
     session.loading(sessionId);
@@ -717,7 +791,7 @@ const openSession = async ({
   const reopened = await client.request(method, {
     sessionId,
     cwd: input.workspaceDir,
-    mcpServers: mcpServers(input),
+    mcpServers: mcpServers(agent, options, input),
   });
   session.loaded();
   if (Result.isError(reopened)) {
@@ -737,17 +811,19 @@ const openSession = async ({
         }),
       );
     }
-    return newSession(
+    return newSession({
       client,
+      agent,
+      options,
       input,
-      unavailable(
+      continuation: unavailable(
         reopened.error.code === ACP_ERROR.resourceNotFound ||
           reopened.error.code === ACP_ERROR.invalidParams
           ? "session_not_found"
           : "resume_rejected",
         reopened.error.message,
       ),
-    );
+    });
   }
   const state = v.safeParse(AcpOpenedSessionResponseSchema, reopened.value);
   if (!state.success) {
@@ -999,6 +1075,17 @@ const startTurn = async (
         markSessionBroken(options.configDir, sessionHolder.id);
       }
     },
+    onBrokenSession: () => {
+      if (sessionHolder.id !== null) {
+        markSessionBroken(options.configDir, sessionHolder.id);
+      }
+    },
+    ...(options.definition.toolOutlivesPrompt === undefined
+      ? {}
+      : { toolOutlivesPrompt: options.definition.toolOutlivesPrompt }),
+    ...(options.definition.classifyErrorOutput === undefined
+      ? {}
+      : { classifyErrorOutput: options.definition.classifyErrorOutput }),
   });
   const connected = await connect({
     options,
@@ -1015,12 +1102,13 @@ const startTurn = async (
   }
   const { client, agent } = connected.value;
   session.attach(client);
+  await session.settleStderrMark();
   const fail = async (error: HarnessStartError) => {
     session.abandon();
     await client.kill();
     return Result.err(error);
   };
-  if (!speaksHttpMcp(agent)) {
+  if (!canReachMcp(agent, options)) {
     return fail(
       new HarnessStartError({
         reason: "harness_unavailable",
@@ -1041,6 +1129,7 @@ const startTurn = async (
   const opened = await openSession({
     client,
     agent,
+    options,
     input,
     session,
     configDir: options.configDir,
