@@ -233,6 +233,14 @@
     "writeDescription": "Sisestage selle kande kirjeldus."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Kontrolli uuesti",
+      "notInstalled": "Installi Antigravity 1.5 või uuem versioon ja logi selles sisse.",
+      "signedIn": "Sisse logitud Antigravitysse",
+      "signedOut": "Logi sisse Antigravity CLI-s, et seda rakenduses stella kasutada.",
+      "title": "Antigravity",
+      "tooOld": "Uuenda Antigravity versioonile 1.5 või uuemaks ja logi selles sisse."
+    },
     "callbackAccount": "Konto",
     "callbackCloseTab": "Võite selle vahekaardi sulgeda.",
     "callbackConnectedBody": "stella AI-päringud kasutavad nüüd teie ChatGPT paketti.",

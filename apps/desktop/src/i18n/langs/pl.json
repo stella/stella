@@ -233,6 +233,14 @@
     "writeDescription": "Wpisz opis tego wpisu."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Sprawdź ponownie",
+      "notInstalled": "Zainstaluj Antigravity 1.5 lub nowszą wersję, a następnie się w niej zaloguj.",
+      "signedIn": "Zalogowano do Antigravity",
+      "signedOut": "Zaloguj się w CLI Antigravity, aby używać go w aplikacji stella.",
+      "title": "Antigravity",
+      "tooOld": "Zaktualizuj Antigravity do wersji 1.5 lub nowszej, a następnie się w niej zaloguj."
+    },
     "callbackAccount": "Konto",
     "callbackCloseTab": "Możesz zamknąć tę kartę.",
     "callbackConnectedBody": "Zapytania do AI w aplikacji stella korzystają teraz z Twojego planu ChatGPT.",

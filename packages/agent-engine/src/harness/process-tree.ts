@@ -54,7 +54,7 @@ const GONE_POLL_MAX_MS = 250;
 /** How long one `ps` listing of the system's processes may take. */
 const PS_BUDGET_MS = 2000;
 
-type HarnessChild = Bun.Subprocess<"pipe", "pipe", "ignore">;
+type HarnessChild = Bun.Subprocess<"pipe", "pipe", "ignore" | "pipe">;
 
 export type HarnessProcessTree = {
   /** The CLI: its stdio is the harness's protocol. */
@@ -73,6 +73,8 @@ type SpawnHarnessProcessTreeOptions = {
   env: Readonly<Record<string, string>>;
   /** How long the tree gets to exit on SIGTERM before SIGKILL. */
   terminateMs: number;
+  /** Pipe stderr for bounded in-memory error classification (never logged). */
+  captureStderr?: boolean | undefined;
 };
 
 /** Why a harness process could not be started. */
@@ -307,6 +309,7 @@ const spawnSession = ({
   cwd,
   env,
   terminateMs,
+  captureStderr = false,
 }: SpawnHarnessProcessTreeOptions): Result<
   HarnessProcessTree,
   HarnessSpawnError
@@ -335,7 +338,7 @@ const spawnSession = ({
         detached: true,
         // Harness logs may carry account details, so stderr is dropped. Fd 3
         // is the watcher's pipe.
-        stdio: ["pipe", "pipe", "ignore", "pipe"],
+        stdio: ["pipe", "pipe", captureStderr ? "pipe" : "ignore", "pipe"],
       },
     ),
   );
@@ -400,6 +403,7 @@ const spawnWindowsTree = ({
   cwd,
   env,
   terminateMs,
+  captureStderr = false,
 }: SpawnHarnessProcessTreeOptions): Result<
   HarnessProcessTree,
   HarnessSpawnError
@@ -410,8 +414,8 @@ const spawnWindowsTree = ({
       env: { ...env },
       stdin: "pipe",
       stdout: "pipe",
-      // Harness logs may carry account details.
-      stderr: "ignore",
+      // Harness logs may carry account details; piped only for bounded in-memory classification.
+      stderr: captureStderr ? "pipe" : "ignore",
       windowsHide: true,
     }),
   );

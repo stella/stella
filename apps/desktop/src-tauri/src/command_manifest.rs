@@ -173,6 +173,7 @@ macro_rules! with_stella_commands {
       desktop_telemetry::desktop_report_error => "desktop_report_error",
       desktop_telemetry::desktop_report_timing => "desktop_report_timing",
       harness_commands::harness_get_status => "harness_get_status",
+      harness_commands::antigravity_get_status => "antigravity_get_status",
       harness_commands::harness_install => "harness_install",
       harness_commands::harness_cancel_install => "harness_cancel_install",
       harness_commands::harness_remove => "harness_remove",

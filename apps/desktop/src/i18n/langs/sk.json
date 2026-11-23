@@ -233,6 +233,14 @@
     "writeDescription": "Zadajte opis tohto záznamu."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Skontrolovať znova",
+      "notInstalled": "Nainštalujte Antigravity 1.5 alebo novší a prihláste sa v ňom.",
+      "signedIn": "Prihlásené do Antigravity",
+      "signedOut": "Prihláste sa v Antigravity CLI, aby ste ho mohli používať v aplikácii stella.",
+      "title": "Antigravity",
+      "tooOld": "Aktualizujte Antigravity na 1.5 alebo novší a prihláste sa v ňom."
+    },
     "callbackAccount": "Účet",
     "callbackCloseTab": "Túto kartu môžete zavrieť.",
     "callbackConnectedBody": "Požiadavky na AI v aplikácii stella teraz využívajú váš plán ChatGPT.",

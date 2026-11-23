@@ -233,6 +233,14 @@
     "writeDescription": "Insira uma descrição para este registro."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Verificar novamente",
+      "notInstalled": "Instale o Antigravity 1.5 ou posterior e entre por ele.",
+      "signedIn": "Conectado ao Antigravity",
+      "signedOut": "Entre pela CLI do Antigravity para usá-lo na stella.",
+      "title": "Antigravity",
+      "tooOld": "Atualize o Antigravity para 1.5 ou posterior e entre por ele."
+    },
     "callbackAccount": "Conta",
     "callbackCloseTab": "Você pode fechar esta aba.",
     "callbackConnectedBody": "As solicitações de IA no stella agora usam seu plano do ChatGPT.",

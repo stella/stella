@@ -233,6 +233,14 @@
     "writeDescription": "Ievadiet šī ieraksta aprakstu."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Pārbaudīt vēlreiz",
+      "notInstalled": "Instalējiet Antigravity 1.5 vai jaunāku versiju un pierakstieties tajā.",
+      "signedIn": "Pierakstījies Antigravity",
+      "signedOut": "Pierakstieties Antigravity CLI, lai to izmantotu stella.",
+      "title": "Antigravity",
+      "tooOld": "Atjauniniet Antigravity uz 1.5 vai jaunāku versiju un pierakstieties tajā."
+    },
     "callbackAccount": "Konts",
     "callbackCloseTab": "Šo cilni varat aizvērt.",
     "callbackConnectedBody": "AI pieprasījumi lietotnē stella tagad izmanto jūsu ChatGPT abonementu.",
