@@ -561,10 +561,20 @@
       "anonymization": "Anonimizavimas"
     },
     "fileParts": {
+      "archiveUnreadable": "Archyvo nepavyko perskaityti.",
       "back": "Grįžti į sąrašą",
       "download": "Atsisiųsti {fileName}",
+      "noFilesInside": "Viduje nėra jokių failų.",
       "noPreview": "Šio tipo failo peržiūra negalima. Atsisiųskite jį arba išsaugokite byloje.",
-      "open": "Atidaryti {fileName}"
+      "notConverted": "Šio failo nepavyko konvertuoti peržiūrai. Atsisiųskite jį arba išsaugokite byloje.",
+      "open": "Atidaryti {fileName}",
+      "unavailable": {
+        "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",
+        "link": "Nuoroda į kitą failą, jis neatidaromas",
+        "tooLarge": "Per didelis, kad būtų galima atidaryti",
+        "unreadable": "Sugadintas, negalima atidaryti",
+        "unsupported": "Suglaudintas būdu, kurio negalima atidaryti"
+      }
     },
     "firstSourceReached": "Tai pirmas šaltinis.",
     "groups": {

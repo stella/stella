@@ -561,10 +561,20 @@
       "anonymization": "Anonymizácia"
     },
     "fileParts": {
+      "archiveUnreadable": "Archív sa nepodarilo prečítať.",
       "back": "Späť na zoznam",
       "download": "Stiahnuť {fileName}",
+      "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
       "noPreview": "Tento typ súboru nemá náhľad. Stiahnite si ho alebo ho uložte do spisu.",
-      "open": "Otvoriť {fileName}"
+      "notConverted": "Tento súbor sa nepodarilo previesť na náhľad. Stiahnite si ho alebo ho uložte do spisu.",
+      "open": "Otvoriť {fileName}",
+      "unavailable": {
+        "encrypted": "Chránené heslom, nedá sa otvoriť",
+        "link": "Odkaz na iný súbor, neotvára sa",
+        "tooLarge": "Príliš veľký, nedá sa otvoriť",
+        "unreadable": "Poškodený, nedá sa otvoriť",
+        "unsupported": "Komprimované spôsobom, ktorý sa nedá otvoriť"
+      }
     },
     "firstSourceReached": "Toto je prvý zdroj.",
     "groups": {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
@@ -12,45 +12,74 @@ import { SettingsRow } from "@stll/ui/settings";
 import { StellaAppIcon } from "../shared/StellaAppIcon";
 
 /**
- * The About page's version row. "Check for updates" asks the native updater
- * whether a newer version exists without installing it; an update it finds is
- * installed only when the user asks, through the same check the tray runs.
+ * The state of Settings' update check. "Check for updates", on About or in the
+ * tray, asks the native updater whether a newer version exists without
+ * installing it; an update it finds is installed only when the user asks,
+ * through the same check the background schedule runs.
  */
-export const AppVersionRow = ({
-  onEmailSupport,
-  supportEmail,
-  versionLabel,
-}: {
-  onEmailSupport: () => void;
-  supportEmail: string;
-  versionLabel: string;
-}) => {
-  const t = useTranslations("settings");
-  const tTray = useTranslations("tray");
+export const useUpdateCheck = () => {
   const [check, setCheck] = useState<CheckState>({ status: "idle" });
+  // Whether a command of this window's is still unanswered. An "installing"
+  // the native side reports is an answer: its install may fail elsewhere.
+  const pending = useRef(false);
 
-  const runCheck = async () => {
+  const run = async () => {
+    if (pending.current) {
+      return;
+    }
+    pending.current = true;
     setCheck({ status: "checking" });
     const result = await Result.tryPromise(async () =>
       invoke<unknown>("check_for_updates"),
     );
+    pending.current = false;
     setCheck(nativeCheckState(result, "check"));
   };
 
   const install = async (version: string) => {
     // On success the app quits to relaunch, so this may never resolve.
+    pending.current = true;
     setCheck({ status: "installing", version });
     const result = await Result.tryPromise(async () =>
       invoke<unknown>("install_update"),
     );
+    pending.current = false;
     setCheck(nativeCheckState(result, "install"));
   };
+
+  /** Drops an answer already given; a pending command stays shown. */
+  const dismiss = () => {
+    if (!pending.current) {
+      setCheck({ status: "idle" });
+    }
+  };
+
+  return { check, dismiss, install, run };
+};
+
+export type UpdateCheck = ReturnType<typeof useUpdateCheck>;
+
+/** The About page's version row, with the update check's button and answer. */
+export const AppVersionRow = ({
+  onEmailSupport,
+  supportEmail,
+  updateCheck: { check, install, run },
+  versionLabel,
+}: {
+  onEmailSupport: () => void;
+  supportEmail: string;
+  updateCheck: UpdateCheck;
+  /** Null while the version is still loading. */
+  versionLabel: string | null;
+}) => {
+  const t = useTranslations("settings");
+  const tTray = useTranslations("tray");
 
   // A check in flight shows as loading, which already blocks a second one.
   const installing = check.status === "installing";
   return (
     <SettingsRow
-      description={versionLabel}
+      description={versionLabel ?? <VersionPlaceholder />}
       footer={
         check.status === "idle" || check.status === "checking" ? null : (
           <div aria-live="polite" className="flex flex-col gap-1 text-sm">
@@ -82,7 +111,7 @@ export const AppVersionRow = ({
         disabledReason={installing ? t("updates.installInProgress") : undefined}
         loading={check.status === "checking"}
         onClick={() => {
-          void runCheck();
+          void run();
         }}
         variant="outline"
       >
@@ -91,6 +120,14 @@ export const AppVersionRow = ({
     </SettingsRow>
   );
 };
+
+/** Holds the version line's height while the version loads, so the row
+ *  does not jump when it arrives. */
+const VersionPlaceholder = () => (
+  <span aria-hidden="true" className="invisible">
+    0.0.0
+  </span>
+);
 
 const CheckOutcome = ({
   check,

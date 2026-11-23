@@ -2,7 +2,11 @@ import { PDF } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { readImageHeader } from "@/api/lib/files/image-header";
-import { imageToPdf } from "@/api/lib/files/image-pdf";
+import {
+  type ImagePage,
+  imagePagesToPdf,
+  imageToPdf,
+} from "@/api/lib/files/image-pdf";
 import { openPdfiumDocument } from "@/api/lib/files/pdfium";
 import { splitJpeg, splitPng } from "@/api/tests/helpers/image-fixtures";
 
@@ -121,4 +125,42 @@ describe("image to PDF without a browser", () => {
       expect(isBlue(rendered.colorAt(blue[0], blue[1]))).toBe(true);
     },
   );
+});
+
+describe("image pages under a byte budget", () => {
+  /** Decoded pages, counting how many were asked for. */
+  const scannedPages = (count: number) => {
+    const pulled = { count: 0 };
+    const pages = (function* scans(): Generator<ImagePage> {
+      for (let index = 0; index < count; index += 1) {
+        pulled.count += 1;
+        const rgba = new Uint8Array(64 * 32 * 4);
+        for (let offset = 0; offset < rgba.length; offset += 4) {
+          // Grey noise, so each page deflates to a few kilobytes.
+          const grey = (offset * 2_654_435_761 + index) % 251;
+          rgba.set([grey, grey, grey, 255], offset);
+        }
+        yield { kind: "rgba", width: 64, height: 32, rgba, orientation: 1 };
+      }
+    })();
+    return { pages, pulled };
+  };
+
+  test("stops at the page that passes the budget and decodes no further", async () => {
+    const { pages, pulled } = scannedPages(10);
+    expect(await imagePagesToPdf(pages, { maxBytes: 1 })).toEqual({
+      type: "too-large",
+    });
+    expect(pulled.count).toBe(1);
+  });
+
+  test("keeps every page that fits", async () => {
+    const { pages, pulled } = scannedPages(10);
+    const pdf = await imagePagesToPdf(pages, { maxBytes: 1024 * 1024 });
+    expect(pdf.type).toBe("pdf");
+    expect(pulled.count).toBe(10);
+    if (pdf.type === "pdf") {
+      expect((await PDF.load(pdf.bytes)).getPageCount()).toBe(10);
+    }
+  });
 });

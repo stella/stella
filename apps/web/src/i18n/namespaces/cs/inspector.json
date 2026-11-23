@@ -561,10 +561,20 @@
       "anonymization": "Anonymizace"
     },
     "fileParts": {
+      "archiveUnreadable": "Archiv se nepodařilo přečíst.",
       "back": "Zpět na seznam",
       "download": "Stáhnout {fileName}",
+      "noFilesInside": "Uvnitř nejsou žádné soubory.",
       "noPreview": "Tento typ souboru nemá náhled. Stáhněte si ho nebo ho uložte do spisu.",
-      "open": "Otevřít {fileName}"
+      "notConverted": "Tento soubor se nepodařilo převést pro náhled. Stáhněte si ho nebo ho uložte do spisu.",
+      "open": "Otevřít {fileName}",
+      "unavailable": {
+        "encrypted": "Chráněno heslem, nelze otevřít",
+        "link": "Odkaz na jiný soubor, neotevírá se",
+        "tooLarge": "Příliš velký, nelze otevřít",
+        "unreadable": "Poškozený, nelze otevřít",
+        "unsupported": "Komprimováno způsobem, který nelze otevřít"
+      }
     },
     "firstSourceReached": "Toto je první zdroj.",
     "groups": {

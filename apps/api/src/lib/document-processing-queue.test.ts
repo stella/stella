@@ -538,6 +538,7 @@ describe("reconciliation fault isolation", () => {
     expect(results).toEqual({
       "deadline-scout": { count: 0, hasMore: false },
       delivery: { count: 5, hasMore: false },
+      "document-naming": { count: 0, hasMore: false },
       reindex: { count: 2, hasMore: false },
       repair: { count: 0, hasMore: true },
       retry: { count: 3, hasMore: true },
@@ -1400,6 +1401,7 @@ describe("reconciliationLeftWorkBehind", () => {
     expect(declared).toEqual([
       "deadline-scout",
       "delivery",
+      "document-naming",
       "reindex",
       "repair",
       "retry",

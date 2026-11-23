@@ -1,10 +1,20 @@
-import { type ReactNode, useId, useState } from "react";
+import {
+  lazy,
+  type ReactElement,
+  type ReactNode,
+  Suspense,
+  useId,
+  useState,
+} from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import type { EmailTextAttachmentCharset } from "@stll/api-contract";
-import type { FilePartDescriptor } from "@stll/api-contract/file-parts";
+import type {
+  ContainedFile,
+  FilePartDescriptor,
+} from "@stll/api-contract/file-parts";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DirectionalIcon } from "@stll/ui/directional-icon";
@@ -24,10 +34,15 @@ import { cn } from "@stll/ui/utils";
 
 import { DocumentIcon } from "@/components/document-icon";
 import {
+  containedFileRows,
   decodeFilePartText,
   FILE_PART_PREVIEW_KIND,
+  FILE_PART_UNAVAILABLE_LABEL,
+  filePartOpensInside,
+  type FilePartPreviewKind,
   filePartPreviewKind,
   filePartViewId,
+  isFilePartPdfPreviewKind,
 } from "@/components/file-parts/file-parts.logic";
 import type { FilePartActions } from "@/components/file-parts/use-file-part-actions";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
@@ -36,13 +51,34 @@ import { PeekPdfControls } from "@/components/pdf/peek/peek-pdf-viewer";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { filePartContentOptions } from "@/lib/files/file-part-queries";
+import { APIError, isPreviewUnavailableError } from "@/lib/errors/api";
+import {
+  filePartContentOptions,
+  filePartListOptions,
+} from "@/lib/files/file-part-queries";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
 import {
   getPDFScaleOffset,
   PDF_SCALE_OFFSET_STEP,
 } from "@/lib/pdf/pdf-zoom.logic";
+
+// A Word part draws in the read-only document view, a spreadsheet or a
+// presentation in the office canvas: the views a stored file of the type
+// opens in. Both load with the first such part opened.
+const ReadOnlyDocxDocument = lazy(async () => {
+  const m = await import("@/components/docx/read-only-docx-document");
+  return { default: m.ReadOnlyDocxDocument };
+});
+
+const OfficeDocumentCanvas = lazy(async () => {
+  const m = await import("@/components/office/office-document-canvas");
+  return { default: m.OfficeDocumentCanvas };
+});
+
+/** Kinds whose preview zooms with the header's controls. */
+const isZoomablePreviewKind = (kind: FilePartPreviewKind) =>
+  isFilePartPdfPreviewKind(kind) || kind === FILE_PART_PREVIEW_KIND.docx;
 
 /** A part as a list shows it; a container may add one line under its name. */
 export type FilePartRow = FilePartDescriptor & {
@@ -164,6 +200,89 @@ export const FilePartList = ({
   );
 };
 
+/**
+ * The files a container holds, in its order, whether or not they open: a
+ * ZIP archive's files with their folders, or the files of a part that is
+ * itself a container. A file that opens is a part row; one that does not
+ * shows why, and offers nothing to open.
+ */
+export const ContainedFileList = ({
+  actions,
+  files,
+  onOpen,
+  title,
+}: {
+  actions: FilePartActions;
+  files: readonly ContainedFile[];
+  onOpen: (part: string) => void;
+  title: string;
+}) => {
+  const titleId = useId();
+  if (files.length === 0) {
+    return null;
+  }
+  return (
+    <section aria-labelledby={titleId} className="space-y-2">
+      <h2 className="text-sm font-medium" id={titleId}>
+        {title}
+      </h2>
+      <ul className="divide-y rounded-lg border">
+        {containedFileRows(files).map((row) =>
+          row.type === "part" ? (
+            <FilePartListItem
+              actions={actions}
+              key={row.key}
+              onOpen={onOpen}
+              row={row.part}
+            />
+          ) : (
+            <UnavailableFileListItem file={row.file} key={row.key} />
+          ),
+        )}
+      </ul>
+    </section>
+  );
+};
+
+const UnavailableFileListItem = ({ file }: { file: ContainedFile }) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  return (
+    <li className="text-muted-foreground flex min-h-12 items-center gap-3 px-3 py-2">
+      <DocumentIcon
+        className="size-5 shrink-0"
+        fileName={file.fileName}
+        mimeType={null}
+      />
+      <span className="min-w-0 flex-1">
+        <TruncatedText
+          className="block text-sm"
+          render={<BidiText as="span" />}
+        >
+          {file.fileName}
+        </TruncatedText>
+        <TruncatedText
+          className="block text-xs"
+          lines={2}
+          render={<BidiText as="span" />}
+        >
+          {[
+            file.folder,
+            file.unavailable === null
+              ? null
+              : t(FILE_PART_UNAVAILABLE_LABEL[file.unavailable]),
+          ]
+            .filter((line) => line !== null)
+            .join(" · ")}
+        </TruncatedText>
+      </span>
+      <span className="shrink-0 text-xs tabular-nums">
+        {formatFileSize(file.sizeBytes, format)}
+      </span>
+    </li>
+  );
+};
+
 const FilePartListItem = ({
   actions,
   onOpen,
@@ -257,9 +376,10 @@ const useLocalZoom = (): ZoomControl => {
 
 /**
  * One part opened in place, with the way back to its container: a PDF in
- * the PDF viewer, an image, or text; any other type shows what it is, with
- * download and save. `fallback` is shown under that notice, such as the text
- * the server read from the part.
+ * the PDF viewer, an image, or text; a part that is itself a container (an
+ * email in an archive) lists its own files, each opening in place in turn;
+ * any other type shows what it is, with download and save. `fallback` is
+ * shown under that notice, such as the text the server read from the part.
  */
 export const FilePartViewer = ({
   actions,
@@ -284,9 +404,66 @@ export const FilePartViewer = ({
   const nameOf = usePartName();
   const nameId = useId();
   const localZoom = useLocalZoom();
+  const [inside, setInside] = useState<FilePartRow | null>(null);
   const { scaleOffset, onResetZoom, onZoom } = zoom ?? localZoom;
   const fileName = nameOf(row);
   const kind = filePartPreviewKind(row.mediaType);
+
+  const body = (() => {
+    if (filePartOpensInside(row)) {
+      return (
+        <FilesInside
+          actions={actions}
+          fallback={fallback}
+          fileName={fileName}
+          onOpen={setInside}
+          row={row}
+          source={source}
+        />
+      );
+    }
+    if (kind === FILE_PART_PREVIEW_KIND.none) {
+      return (
+        <NoPreview
+          actions={actions}
+          fallback={fallback}
+          fileName={fileName}
+          row={row}
+        />
+      );
+    }
+    return (
+      <FilePartPreview
+        fileName={fileName}
+        kind={kind}
+        notConverted={
+          <NoPreview
+            actions={actions}
+            fallback={fallback}
+            fileName={fileName}
+            message={t("inspector.fileParts.notConverted")}
+            row={row}
+          />
+        }
+        row={row}
+        scaleOffset={scaleOffset}
+        source={source}
+      />
+    );
+  })();
+
+  if (inside !== null) {
+    return (
+      <FilePartViewer
+        actions={actions}
+        bottomClearance={bottomClearance}
+        key={inside.part}
+        onBack={() => setInside(null)}
+        row={inside}
+        source={source}
+      />
+    );
+  }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -314,7 +491,7 @@ export const FilePartViewer = ({
         <span className="text-muted-foreground hidden shrink-0 text-xs tabular-nums sm:inline">
           {formatFileSize(row.sizeBytes, format)}
         </span>
-        {kind === FILE_PART_PREVIEW_KIND.pdf ? (
+        {isZoomablePreviewKind(kind) ? (
           <div className="flex shrink-0 items-center gap-1">
             <PeekPdfControls
               onReset={onResetZoom}
@@ -344,22 +521,7 @@ export const FilePartViewer = ({
           bottomClearance && "pb-40",
         )}
       >
-        {kind === FILE_PART_PREVIEW_KIND.none ? (
-          <NoPreview
-            actions={actions}
-            fallback={fallback}
-            fileName={fileName}
-            row={row}
-          />
-        ) : (
-          <FilePartPreview
-            fileName={fileName}
-            kind={kind}
-            row={row}
-            scaleOffset={scaleOffset}
-            source={source}
-          />
-        )}
+        {body}
       </div>
     </div>
   );
@@ -369,11 +531,14 @@ const NoPreview = ({
   actions,
   fallback,
   fileName,
+  message,
   row,
 }: {
   actions: FilePartActions;
   fallback: ReactNode;
   fileName: string;
+  /** Why there is no preview; by default, that the type has none. */
+  message?: string;
   row: FilePartRow;
 }) => {
   const t = useTranslations();
@@ -396,7 +561,7 @@ const NoPreview = ({
             </p>
           </div>
           <p className="text-muted-foreground max-w-sm text-sm text-pretty">
-            {t("inspector.fileParts.noPreview")}
+            {message ?? t("inspector.fileParts.noPreview")}
           </p>
           <PartDownloadButton
             actions={actions}
@@ -408,6 +573,95 @@ const NoPreview = ({
         {fallback === null || fallback === undefined ? null : (
           <div className="border-t p-4">{fallback}</div>
         )}
+      </ScrollArea>
+    </div>
+  );
+};
+
+/**
+ * The files of a part that is itself a container, listed by the server down
+ * the part's path; a container it cannot read shows as any file without a
+ * preview.
+ */
+const FilesInside = ({
+  actions,
+  fallback,
+  fileName,
+  onOpen,
+  row,
+  source,
+}: {
+  actions: FilePartActions;
+  fallback: ReactNode;
+  fileName: string;
+  onOpen: (row: FilePartRow) => void;
+  row: FilePartRow;
+  source: FilePartSource;
+}) => {
+  const t = useTranslations();
+  const listed = useQuery(filePartListOptions({ ...source, part: row.part }));
+  if (listed.isError) {
+    // A part the server does not read as a container, or cannot read, is
+    // shown as any file without a preview; anything else may pass.
+    const unreadable =
+      isPreviewUnavailableError(listed.error) ||
+      (APIError.is(listed.error) && listed.error.status === 404);
+    return unreadable ? (
+      <NoPreview
+        actions={actions}
+        fallback={fallback}
+        fileName={fileName}
+        row={row}
+      />
+    ) : (
+      <PreviewMessage
+        action={
+          <Button
+            onClick={() => {
+              detached(listed.refetch(), "file-part.list-retry");
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.tryAgain")}
+          </Button>
+        }
+        message={t("common.somethingWentWrong")}
+      />
+    );
+  }
+  if (listed.data === undefined) {
+    return <Skeleton className="size-full rounded-sm" />;
+  }
+  const { files } = listed.data;
+  const openPart = (part: string) => {
+    const opened = containedFileRows(files).find(
+      (candidate) => candidate.type === "part" && candidate.key === part,
+    );
+    if (opened?.type === "part") {
+      onOpen(opened.part);
+    }
+  };
+  return (
+    <div className="bg-background flex min-h-0 flex-1 flex-col rounded-sm">
+      <ScrollArea axis="vertical" className="min-h-0 flex-1">
+        <div className="space-y-4 p-4">
+          {files.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {t("inspector.fileParts.noFilesInside")}
+            </p>
+          ) : (
+            <ContainedFileList
+              actions={actions}
+              files={files}
+              onOpen={openPart}
+              title={t("common.files")}
+            />
+          )}
+          {fallback === null || fallback === undefined ? null : (
+            <div className="border-t pt-4">{fallback}</div>
+          )}
+        </div>
       </ScrollArea>
     </div>
   );
@@ -430,18 +684,26 @@ const PreviewMessage = ({
   </div>
 );
 
+/**
+ * A converted part's display the server answered without a PDF: the
+ * conversion refused it (too large, turned away by the converter's checks,
+ * a document it cannot render). Another attempt gives the same answer.
+ */
+const isConversionRefusal = (error: unknown) =>
+  APIError.is(error) && error.status === 422;
+
 const FilePartPreview = ({
   fileName,
   kind,
+  notConverted,
   row,
   scaleOffset,
   source,
 }: {
   fileName: string;
-  kind: Exclude<
-    (typeof FILE_PART_PREVIEW_KIND)[keyof typeof FILE_PART_PREVIEW_KIND],
-    "none"
-  >;
+  kind: Exclude<FilePartPreviewKind, "none">;
+  /** What shows when the server could not convert a converted part. */
+  notConverted: ReactElement;
   row: FilePartRow;
   scaleOffset: number;
   source: FilePartSource;
@@ -452,6 +714,13 @@ const FilePartPreview = ({
   );
   const viewId = filePartViewId({ ...source, part: row.part });
 
+  if (
+    content.isError &&
+    kind === FILE_PART_PREVIEW_KIND.converted &&
+    isConversionRefusal(content.error)
+  ) {
+    return notConverted;
+  }
   if (content.isError) {
     return (
       <PreviewMessage
@@ -503,6 +772,40 @@ const FilePartPreview = ({
       </div>
     );
   }
+  if (kind === FILE_PART_PREVIEW_KIND.docx) {
+    return (
+      <div className="bg-background size-full min-h-0 overflow-hidden rounded-sm">
+        <Suspense fallback={<Skeleton className="size-full rounded-sm" />}>
+          <ReadOnlyDocxDocument
+            documentBuffer={content.data}
+            fileName={fileName}
+            scaleOffset={scaleOffset}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+  if (
+    kind === FILE_PART_PREVIEW_KIND.xlsx ||
+    kind === FILE_PART_PREVIEW_KIND.pptx
+  ) {
+    return (
+      <div
+        aria-label={fileName}
+        className="bg-muted flex size-full min-h-0 flex-col overflow-hidden rounded-sm"
+        role="document"
+      >
+        <Suspense fallback={<Skeleton className="size-full rounded-sm" />}>
+          <OfficeDocumentCanvas
+            documentBuffer={content.data}
+            documentKey={viewId}
+            format={kind}
+          />
+        </Suspense>
+      </div>
+    );
+  }
+  // A PDF part, or the PDF the server converted a document part to.
   return (
     <MeasuredPdfProvider
       active

@@ -211,6 +211,15 @@
     "creationRateLimited": "Trop d’organisations ont été créées récemment. Réessayez plus tard.",
     "creationRefused": "L’organisation n’a pas pu être créée. Vérifiez les informations et réessayez.",
     "creationSlugConflict": "Cette adresse d’organisation est déjà utilisée. Choisissez un autre nom ou une autre adresse.",
+    "documentNaming": {
+      "description": "Renomme les nouveaux fichiers téléversés dans les dossiers qui l'activent. stella lit la date, le type et le titre de chaque document et complète ce modèle. Laissez vide pour conserver les noms d'origine.",
+      "invalid": "Utilisez uniquement les jetons indiqués et aucun des caractères \\ / : * ? \" < > |.",
+      "pattern": "Modèle de nom",
+      "preview": "Un contrat signé s'appellerait :",
+      "sampleDocType": "Contrat",
+      "sampleTitle": "Cession de parts sociales",
+      "tokenHelp": "Jetons : '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Un jeton sans valeur est omis avec son séparateur."
+    },
     "invitations": {
       "cancelConfirmDescription": "Le lien d'invitation envoyé à {email} ne fonctionnera plus. Pour inviter à nouveau cette personne, envoyez une nouvelle invitation.",
       "cancelInvitation": "Annuler l'invitation",

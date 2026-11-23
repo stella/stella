@@ -253,7 +253,7 @@ const claimRun = async (
   return claimed.at(0) ?? null;
 };
 
-const resolveActorUserId = async (
+export const resolveActorUserId = async (
   db: DeadlineScoutDb,
   run: ClaimedRun,
 ): Promise<SafeId<"user"> | null> => {

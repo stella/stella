@@ -552,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Czy na pewno chcesz usunąć tę sprawę? Tej operacji nie można cofnąć.",
     "deletedItem": "Usunięto: {name}",
     "deletingWorkspace": "Usuwanie sprawy",
+    "documentNaming": {
+      "description": "Nowe dokumenty otrzymują wzorzec nazwy organizacji: {pattern}",
+      "label": "Zmieniaj nazwy nowych plików"
+    },
     "documentSwitcher": {
       "download": "Pobierz ten plik",
       "renditionsFailed": "Wczytaj ponownie dokument i spróbuj go pobrać jeszcze raz.",

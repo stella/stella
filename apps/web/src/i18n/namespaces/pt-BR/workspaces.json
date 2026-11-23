@@ -552,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Tem certeza de que deseja excluir este caso? Esta ação não pode ser desfeita.",
     "deletedItem": "Excluído: {name}",
     "deletingWorkspace": "Excluindo caso",
+    "documentNaming": {
+      "description": "Novos documentos recebem o padrão de nome da organização: {pattern}",
+      "label": "Renomear novos envios"
+    },
     "documentSwitcher": {
       "download": "Baixar este arquivo",
       "renditionsFailed": "Recarregue o documento e tente baixá-lo novamente.",

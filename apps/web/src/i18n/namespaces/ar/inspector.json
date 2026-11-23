@@ -561,10 +561,20 @@
       "anonymization": "إخفاء الهوية"
     },
     "fileParts": {
+      "archiveUnreadable": "تعذّرت قراءة الأرشيف.",
       "back": "العودة إلى القائمة",
       "download": "تنزيل {fileName}",
+      "noFilesInside": "لا توجد ملفات بداخله.",
       "noPreview": "لا تتوفر معاينة لهذا النوع من المستندات. نزّله أو احفظه في ملف.",
-      "open": "فتح {fileName}"
+      "notConverted": "تعذّر تحويل هذا المستند لمعاينته. نزّله أو احفظه في ملف.",
+      "open": "فتح {fileName}",
+      "unavailable": {
+        "encrypted": "محمي بكلمة مرور، لا يمكن فتحه",
+        "link": "رابط إلى ملف آخر، لا يُفتح",
+        "tooLarge": "كبير جدًا بحيث لا يمكن فتحه",
+        "unreadable": "تالف، لا يمكن فتحه",
+        "unsupported": "مضغوط بطريقة لا يمكن فتحها"
+      }
     },
     "firstSourceReached": "هذا هو المصدر الأول.",
     "groups": {

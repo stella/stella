@@ -27,6 +27,10 @@ const partLinkRequests: string[] = [];
 const PART_BYTES: Readonly<Record<string, string>> = {
   "field-asic/member:2": "# První strana\nDruhý řádek",
 };
+/** Parts whose display the server could not convert to a PDF. */
+const PARTS_NOT_CONVERTED: ReadonlySet<string> = new Set([
+  "field-asic-converted/member:1",
+]);
 const PART_LINK = /\/files\/[^/]+\/url\/([^/?]+)\?(.*)$/u;
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request) => {
@@ -47,6 +51,12 @@ globalThis.fetch = Object.assign(
     }
     if (url.includes("/files/content/grant?part=")) {
       const key = new URL(url).searchParams.get("part") ?? "";
+      if (PARTS_NOT_CONVERTED.has(key)) {
+        return Response.json(
+          { message: "The file could not be converted for preview" },
+          { status: 422 },
+        );
+      }
       return new Response(PART_BYTES[key] ?? "%PDF-1.7");
     }
     if (url.includes("/e-invoice/field-e-invoice-single")) {
@@ -275,9 +285,13 @@ const { useDocxEditorHostStore } =
 const { FileTabPanel } = await import("./file-tab-panel");
 const { dataBoxPreviewOptions, fileOptions } =
   await import("@/lib/files/queries");
-const { asicPreviewOptions, cadesPreviewOptions, signedDossierPreviewOptions } =
-  await import("@/lib/files/legal-file-queries");
-const { filePartContentOptions } =
+const {
+  asicPreviewOptions,
+  cadesPreviewOptions,
+  signedDossierPreviewOptions,
+  zipArchivePreviewOptions,
+} = await import("@/lib/files/legal-file-queries");
+const { filePartContentOptions, filePartListOptions } =
   await import("@/lib/files/file-part-queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
@@ -754,9 +768,8 @@ test.each([".asice", ".asics"])(
         members: [
           {
             part: "member:0",
-            fileName: "leping.docx",
-            mediaType:
-              "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            fileName: "leping.html",
+            mediaType: "text/html",
             sizeBytes: 21_504,
             status: "readable",
             text: "# Töövõtuleping\n\n**2. Tasu**\n\nTöövõtja saab tasu",
@@ -784,7 +797,7 @@ test.each([".asice", ".asics"])(
       });
     });
 
-    for (const fileName of ["leping.docx", "lisa.pdf", "markused.txt"]) {
+    for (const fileName of ["leping.html", "lisa.pdf", "markused.txt"]) {
       expect(
         await mounted.findByRole("button", { name: `Open ${fileName}` }),
       ).toBeTruthy();
@@ -803,7 +816,7 @@ test.each([".asice", ".asics"])(
 
     // A document without a preview of its own shows what it is and the text
     // the server read from it, formatted, never as Markdown source.
-    fireEvent.click(mounted.getByRole("button", { name: "Open leping.docx" }));
+    fireEvent.click(mounted.getByRole("button", { name: "Open leping.html" }));
     expect(
       await mounted.findByRole("heading", { name: "Töövõtuleping" }),
     ).toBeTruthy();
@@ -826,6 +839,165 @@ test.each([".asice", ".asics"])(
     ]);
   },
 );
+
+test("lists a ZIP archive's files with their folders and opens an email inside it in place", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-zip"),
+    fileName: "podklady-ke-sporu.zip",
+    mimeType: "application/zip",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const unread = {
+    text: "",
+    textFormat: "plain",
+    status: "unavailable",
+  } as const;
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(zipArchivePreviewOptions(key).queryKey, {
+      files: [
+        {
+          fileName: "žaloba.pdf",
+          folder: "podání/2026",
+          sizeBytes: 88_310,
+          part: {
+            part: "member:0",
+            fileName: "žaloba.pdf",
+            mediaType: "application/pdf",
+            sizeBytes: 88_310,
+          },
+          unavailable: null,
+          text: "Žaloba",
+          textFormat: "markdown",
+          status: "readable",
+        },
+        {
+          fileName: "posudek.pdf",
+          folder: null,
+          sizeBytes: 120_400,
+          part: null,
+          unavailable: "encrypted",
+          ...unread,
+        },
+        {
+          fileName: "podklady.eml",
+          folder: "korespondence",
+          sizeBytes: 9120,
+          part: {
+            part: "member:2",
+            fileName: "podklady.eml",
+            mediaType: "message/rfc822",
+            sizeBytes: 9120,
+          },
+          unavailable: null,
+          ...unread,
+        },
+      ],
+    });
+    client.setQueryData(
+      filePartListOptions({ ...key, part: "member:2" }).queryKey,
+      {
+        files: [
+          {
+            fileName: "usneseni.pdf",
+            folder: null,
+            sizeBytes: 4210,
+            part: {
+              part: "member:2/attachment:0",
+              fileName: "usneseni.pdf",
+              mediaType: "application/pdf",
+              sizeBytes: 4210,
+            },
+            unavailable: null,
+          },
+        ],
+      },
+    );
+  });
+
+  expect(
+    await mounted.findByRole("button", { name: "Open žaloba.pdf" }),
+  ).toBeTruthy();
+  expect(mounted.getByText("podání/2026")).toBeTruthy();
+  // A locked file is listed with the reason, and nothing opens it.
+  expect(mounted.getByText("Password-protected, can’t be opened")).toBeTruthy();
+  expect(
+    mounted.queryByRole("button", { name: "Open posudek.pdf" }),
+  ).toBeNull();
+  expect(
+    mounted.queryByRole("button", { name: "Download posudek.pdf" }),
+  ).toBeNull();
+
+  // An email in the archive lists its own attachments, which open in turn.
+  fireEvent.click(mounted.getByRole("button", { name: "Open podklady.eml" }));
+  fireEvent.click(
+    await mounted.findByRole("button", { name: "Open usneseni.pdf" }),
+  );
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(partLinkRequests).toContain("field-zip/member:2/attachment:0");
+  fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+  expect(
+    await mounted.findByRole("button", { name: "Open usneseni.pdf" }),
+  ).toBeTruthy();
+  fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+  expect(
+    await mounted.findByRole("button", { name: "Open žaloba.pdf" }),
+  ).toBeTruthy();
+  expect(partLinkRequests).not.toContain("field-zip/member:2");
+});
+
+test("opens a document member no viewer draws as the PDF the server converts it to", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-asic-converted"),
+    fileName: "toovotuleping.asice",
+    mimeType: "application/octet-stream",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(asicPreviewOptions(key).queryKey, {
+      members: [
+        {
+          part: "member:0",
+          fileName: "leping.odt",
+          mediaType: "application/vnd.oasis.opendocument.text",
+          sizeBytes: 18_944,
+          status: "readable",
+          text: "Töövõtuleping",
+          textFormat: "plain",
+        },
+        {
+          part: "member:1",
+          fileName: "lisa.doc",
+          mediaType: "application/msword",
+          sizeBytes: 26_112,
+          status: "readable",
+          text: "Lisa 1",
+          textFormat: "plain",
+        },
+      ],
+    });
+  });
+
+  // The OpenDocument text opens in the PDF viewer, as its stored kind does.
+  fireEvent.click(
+    await mounted.findByRole("button", { name: "Open leping.odt" }),
+  );
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(partLinkRequests).toEqual(["field-asic-converted/member:0"]);
+  fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+
+  // A document the server could not convert says so and stays downloadable.
+  fireEvent.click(mounted.getByRole("button", { name: "Open lisa.doc" }));
+  expect(
+    await mounted.findByText(
+      "This file couldn't be converted for preview. Download it or save it to a matter.",
+    ),
+  ).toBeTruthy();
+  expect(
+    mounted.getAllByRole("button", { name: "Download lisa.doc" }).length,
+  ).toBeGreaterThan(0);
+});
 
 test("keeps the original ASiC archive available when preview is unavailable", async () => {
   const mounted = renderFileTab({

@@ -179,6 +179,8 @@
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
     "./file-parts": "./src/file-parts.ts",
+    "./file-part-containers": "./src/file-part-containers.ts",
+    "./zip-archive": "./src/zip-archive.ts",
     "./document-format": "./src/document-format.ts",
     "./converted-document-formats": "./src/converted-document-formats.ts",
     "./entity-views": "./src/entity-views.ts",
@@ -271,6 +273,7 @@
     "./chat-ui-resources": "./src/chat-ui-resources.ts",
     "./task-write": "./src/task-write.ts",
     "./matter-duplicates": "./src/matter-duplicates.ts",
+    "./document-name": "./src/document-name.ts",
     "./matter-reference": "./src/matter-reference.ts",
     "./matter-reference-edit": "./src/matter-reference-edit.ts"
   },

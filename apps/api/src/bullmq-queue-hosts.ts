@@ -12,6 +12,7 @@ export const BULLMQ_QUEUE_HOSTS = {
   "account-exports": "api",
   "bilingual-translation-runs": "api",
   "document-deadline-scouts": "api",
+  "document-naming": "api",
   "document-processing": "document-processing-worker",
   "document-review-runs-v2": "api",
   "document-translation-runs": "api",

@@ -11,9 +11,14 @@ import {
 } from "@stll/api-contract/document-format";
 import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
 import { emailReadingSchema } from "@stll/api-contract/email-reading";
-import { filePartDescriptorSchema } from "@stll/api-contract/file-parts";
+import {
+  filePartDescriptorSchema,
+  filePartListSchema,
+  isFilePartConvertedMediaType,
+} from "@stll/api-contract/file-parts";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
+import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -170,6 +175,16 @@ type EInvoiceDocumentFile = {
   >;
 };
 
+type ZipArchiveDocumentFile = {
+  readonly viewer: "zip";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof zipArchivePreviewSchema>,
+    ApiError
+  >;
+};
+
 /** An email file (.eml, .msg), certified (Italian PEC) or not. */
 type EmailDocumentFile = {
   readonly viewer: "email";
@@ -185,7 +200,8 @@ export type LegalDocumentFile =
   | EInvoiceDocumentFile
   | EmailDocumentFile
   | SignedDossierDocumentFile
-  | StructuredDocumentFile;
+  | StructuredDocumentFile
+  | ZipArchiveDocumentFile;
 
 export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
 
@@ -208,10 +224,47 @@ export const readOriginalDocumentFile = async ({
   });
 
 /**
+ * What a part is fetched as to open it: a document no viewer draws (a Word
+ * 97 file, an OpenDocument text, a WordPerfect file) as the PDF the server
+ * converts it to, the way a stored file of its type opens; any other part
+ * as itself, whole.
+ */
+const partPurposeFor = (mediaType: string): FilePurpose =>
+  isFilePartConvertedMediaType(mediaType) ? "display" : "download";
+
+/**
  * A short-lived, audited link to one part of a document's file: an email's
  * attachment, the document a signed file wraps, a container's member.
  */
 export const readDocumentPart = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+  part,
+  mediaType,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  /** A part address such as `attachment:0` (`@stll/api-contract/file-parts`). */
+  readonly part: string;
+  /** The part's media type, as its container's preview lists it. */
+  readonly mediaType: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `${fileUrlPath(workspaceId, fieldId, partPurposeFor(mediaType))}&part=${encodeURIComponent(part)}`,
+    schema: fileUrlSchema,
+  });
+
+/**
+ * The files of a part that is itself a container (an email in an archive,
+ * an archive in a data-box message), each opening by the path it is given.
+ */
+export const readDocumentPartList = async ({
   fetch,
   source,
   workspaceId,
@@ -222,14 +275,13 @@ export const readDocumentPart = async ({
   readonly source: AccessTokenSource;
   readonly workspaceId: string;
   readonly fieldId: string;
-  /** A part address such as `attachment:0` (`@stll/api-contract/file-parts`). */
   readonly part: string;
 }) =>
   await requestApi({
     fetch,
     source,
-    path: `${fileUrlPath(workspaceId, fieldId, "download")}&part=${encodeURIComponent(part)}`,
-    schema: fileUrlSchema,
+    path: `/v1/files/${encodeURIComponent(workspaceId)}/parts/${encodeURIComponent(fieldId)}?part=${encodeURIComponent(part)}`,
+    schema: filePartListSchema,
   });
 
 /** The document has no file: it was created empty, or its file was removed. */
@@ -358,6 +410,20 @@ export const readDocumentFile = async ({
           fieldId,
           preview,
         } satisfies SignedDossierDocumentFile);
+      }
+      case "zip": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/zip/${encodeURIComponent(fieldId)}`,
+          schema: zipArchivePreviewSchema,
+        });
+        return Result.ok({
+          viewer: "zip",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies ZipArchiveDocumentFile);
       }
       case "ofd":
       case "uyap": {

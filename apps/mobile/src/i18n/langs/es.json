@@ -534,8 +534,19 @@
     "type": "Tipo"
   },
   "fileParts": {
+    "archiveUnreadable": "No se pudo leer el archivo comprimido.",
     "attachments": "Adjuntos",
+    "files": "Archivos",
+    "insideFailed": "No se pudieron cargar los archivos que contiene. Toca para volver a intentarlo.",
+    "noFilesInside": "No contiene ningún archivo.",
     "open": "Abrir {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Protegido con contraseña, no se puede abrir",
+      "link": "Enlace a otro archivo, no se abre",
+      "tooLarge": "Demasiado grande para abrirlo",
+      "unreadable": "Dañado, no se puede abrir",
+      "unsupported": "Comprimido de un modo que no se puede abrir"
+    },
     "unnamed": "Archivo sin nombre"
   },
   "header": {

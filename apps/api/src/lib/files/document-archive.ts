@@ -144,14 +144,22 @@ const indexPath = (
   return true;
 };
 
+/**
+ * Whether an archive keeps to the bounds every archive reader holds it to:
+ * its size, its entry count, its total uncompressed size and each entry's
+ * compression ratio, all read from its index before anything is inflated.
+ */
+export const isWithinArchiveLimits = async (
+  bytes: Uint8Array,
+): Promise<boolean> =>
+  bytes.length <= DOCUMENT_ARCHIVE_MAX_BYTES &&
+  (await archiveGuard.scan(bytes)).length === 0;
+
 export const openDocumentArchive = async (bytes: Uint8Array) => {
   if (!hasZipMagic(bytes)) {
     return invalid("The container is not a ZIP archive");
   }
-  if (
-    bytes.length > DOCUMENT_ARCHIVE_MAX_BYTES ||
-    (await archiveGuard.scan(bytes)).length !== 0
-  ) {
+  if (!(await isWithinArchiveLimits(bytes))) {
     return Result.err(
       new DocumentPackageError({
         message: "The container exceeds the supported ZIP limits",

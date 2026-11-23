@@ -2,9 +2,18 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { readImageHeader } from "@/api/lib/files/image-header";
-import { renderPdf } from "@/api/lib/files/pdf-render";
+import { previewText, renderPdf } from "@/api/lib/files/pdf-render";
+import { loadStampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
 import { openPdfiumDocument } from "@/api/lib/files/pdfium";
 import {
+  csvToPdf,
+  plainTextToPdf,
+  PREVIEW_SHORTENED_NOTE,
+} from "@/api/lib/files/text-preview-pdf";
+import { readTiffPages } from "@/api/lib/files/tiff-pages";
+import { LIMITS } from "@/api/lib/limits";
+import {
+  declaredPng,
   splitBmp,
   splitGif,
   splitJpeg,
@@ -68,7 +77,10 @@ const rendered = async (mimeType: string, bytes: Uint8Array) => {
   if (Result.isError(result)) {
     throw result.error;
   }
-  return result.value;
+  if (result.value.type === "too-large") {
+    throw new Error(`${mimeType} rendered too large`);
+  }
+  return result.value.bytes;
 };
 
 /** A 64 x 32 px image is 48 x 24 pt at 96 px per inch. */
@@ -508,5 +520,316 @@ describe("CSV rendered in-process", () => {
       ),
     );
     expect(readsBack(items, 'a,"unterminated')).toBe(true);
+  });
+});
+
+const encode = (text: string) => new TextEncoder().encode(text);
+
+/** Whether the last page of a preview is the shortened note. */
+const endsWithNote = ({
+  items,
+  pageCount,
+}: {
+  items: readonly TextItem[];
+  pageCount: number;
+}) =>
+  readsBack(
+    items.filter(({ page }) => page === pageCount),
+    PREVIEW_SHORTENED_NOTE,
+  );
+
+describe("what a text preview lays out is bounded", () => {
+  const FILING =
+    "spisu sp. zn. 23 C 114/2024 vedeného u Okresního soudu v Kolíně";
+  /** One page per section: a form feed starts a page. */
+  const sections = (count: number) =>
+    Array.from(
+      { length: count },
+      (_, index) => `Strana ${index + 1} ${FILING}`,
+    ).join("\f");
+
+  test("text fills at most the page limit, then says it is shortened", async () => {
+    const max = LIMITS.pdfRenderTextPagesMax;
+    const atLimit = await textItems(
+      await rendered("text/plain", encode(sections(max))),
+    );
+    expect(atLimit.pageCount).toBe(max);
+    expect(endsWithNote(atLimit)).toBe(false);
+
+    const past = await textItems(
+      await rendered("text/plain", encode(sections(max + 1))),
+    );
+    // The limit's pages, then the note on a page of its own.
+    expect(past.pageCount).toBe(max + 1);
+    expect(endsWithNote(past)).toBe(true);
+    expect(readsBack(past.items, `Strana ${max} ${FILING}`)).toBe(true);
+    expect(readsBack(past.items, `Strana ${max + 1} ${FILING}`)).toBe(false);
+  });
+
+  test("a file at the byte budget is read whole", () => {
+    const line =
+      "Žalobce se domáhá zaplacení částky 125 400 Kč s příslušenstvím.\n";
+    const lines = Math.floor(
+      LIMITS.pdfRenderTextSourceBytesMax / encode(line).byteLength,
+    );
+    const body = line.repeat(lines);
+    // Padded with ASCII up to the budget exactly.
+    const text = `${body}${"x".repeat(LIMITS.pdfRenderTextSourceBytesMax - encode(body).byteLength)}`;
+    expect(encode(text).byteLength).toBe(LIMITS.pdfRenderTextSourceBytesMax);
+
+    expect(previewText(encode(text), "text/plain")).toEqual({
+      text,
+      shortened: false,
+    });
+  });
+
+  test("a longer file is read up to the budget, back to its last whole line", () => {
+    const line =
+      "Žalobce se domáhá zaplacení částky 125 400 Kč s příslušenstvím.\r\n";
+    const lineBytes = encode(line).byteLength;
+    const bytes = encode(
+      line.repeat(
+        Math.ceil(LIMITS.pdfRenderTextSourceBytesMax / lineBytes) + 10,
+      ),
+    );
+    // The budget falls inside a line's text, so cutting back is exercised.
+    const into = LIMITS.pdfRenderTextSourceBytesMax % lineBytes;
+    expect(into).toBeGreaterThan(0);
+    expect(into).toBeLessThan(lineBytes - 2);
+
+    const { shortened, text } = previewText(bytes, "text/plain");
+    expect(shortened).toBe(true);
+    const kept = Math.floor(LIMITS.pdfRenderTextSourceBytesMax / lineBytes);
+    // Every whole line inside the budget, and not the CR of the last one.
+    expect(text).toBe(line.repeat(kept).slice(0, -2));
+  });
+
+  test("a longer file without line breaks drops only a character the cut split", () => {
+    // One ASCII byte, then two-byte letters: the budget, an even number of
+    // bytes, ends halfway through a letter.
+    const bytes = encode(`a${"ž".repeat(LIMITS.pdfRenderTextSourceBytesMax)}`);
+    expect(LIMITS.pdfRenderTextSourceBytesMax % 2).toBe(0);
+
+    const { shortened, text } = previewText(bytes, "text/plain");
+    expect(shortened).toBe(true);
+    expect(text).toBe(
+      `a${"ž".repeat((LIMITS.pdfRenderTextSourceBytesMax - 2) / 2)}`,
+    );
+  });
+
+  test("a replacement character the file holds at the budget is kept", () => {
+    // ASCII up to three bytes before the budget, then U+FFFD (three bytes)
+    // ending exactly at it: the cut splits nothing.
+    const head = "x".repeat(LIMITS.pdfRenderTextSourceBytesMax - 3);
+    const bytes = encode(`${head}�${"y".repeat(16)}`);
+    expect(encode(`${head}�`).byteLength).toBe(
+      LIMITS.pdfRenderTextSourceBytesMax,
+    );
+
+    expect(previewText(bytes, "text/plain")).toEqual({
+      text: `${head}�`,
+      shortened: true,
+    });
+  });
+
+  test("a shortened file ends with the note even within the page limit", async () => {
+    const fonts = await loadStampFonts();
+    const text = `Strana 1 ${FILING}`;
+    for (const toPdf of [plainTextToPdf, csvToPdf]) {
+      const shortened = await textItems(
+        await toPdf({ text, shortened: true }, fonts),
+      );
+      expect(shortened.pageCount).toBe(2);
+      expect(endsWithNote(shortened)).toBe(true);
+      const whole = await textItems(
+        await toPdf({ text, shortened: false }, fonts),
+      );
+      expect(whole.pageCount).toBe(1);
+      expect(endsWithNote(whole)).toBe(false);
+    }
+  });
+
+  test("a table past the page limit stops there and says it is shortened", async () => {
+    const records = Array.from(
+      // About 46 records fit a page.
+      { length: 60 * LIMITS.pdfRenderTextPagesMax },
+      (_, index) =>
+        `${index + 1},2025-03-${String((index % 28) + 1).padStart(2, "0")},Mgr. Petra Holubová,1.50`,
+    );
+    const { items, pageCount } = await textItems(
+      await rendered(
+        "text/csv",
+        encode(["Číslo,Datum,Advokát,Hodiny", ...records].join("\n")),
+      ),
+    );
+    expect(pageCount).toBe(LIMITS.pdfRenderTextPagesMax + 1);
+    expect(endsWithNote({ items, pageCount })).toBe(true);
+    // The header is still repeated on the last page of the table.
+    expect(
+      items.some(
+        ({ page, text }) =>
+          page === LIMITS.pdfRenderTextPagesMax && text === "Advokát",
+      ),
+    ).toBe(true);
+    expect(items.some(({ text }) => text === String(records.length))).toBe(
+      false,
+    );
+  });
+
+  test("a table cut inside a quoted multi-line cell stays a table", async () => {
+    const note = Array.from(
+      { length: 40 },
+      (_, index) => `bod ${index + 1} protokolu o jednání`,
+    ).join("\n");
+    const record = (index: number) => `${index + 1},"${note}"`;
+    const recordBytes = encode(`${record(0)}\n`).byteLength;
+    const bytes = encode(
+      [
+        "Číslo,Poznámka",
+        ...Array.from(
+          {
+            length:
+              Math.ceil(LIMITS.pdfRenderTextSourceBytesMax / recordBytes) + 5,
+          },
+          (_, index) => record(index),
+        ),
+      ].join("\n"),
+    );
+    // The cut lands inside a quoted cell: its quotes are left unbalanced.
+    const cut = previewText(bytes, "text/csv");
+    expect(cut.shortened).toBe(true);
+    expect(cut.text.split('"').length % 2).toBe(0);
+
+    const { items } = await textItems(await rendered("text/csv", bytes));
+    expect(items.some(({ text }) => text === "Poznámka")).toBe(true);
+    // Read as text, the quotes would show.
+    expect(items.some(({ text }) => text.includes('"'))).toBe(false);
+  });
+});
+
+/** Every page's size in pixels, at the 96 px per inch a page is sized by. */
+const pagePixels = async (pdf: Uint8Array) => {
+  const document = (await openPdfiumDocument(pdf)).unwrap();
+  const sizes = Array.from({ length: document.pageCount }, (_, index) => {
+    const { pointHeight, pointWidth } = document.pageSize(index).unwrap();
+    return {
+      width: Math.round(pointWidth / 0.75),
+      height: Math.round(pointHeight / 0.75),
+    };
+  });
+  document.close();
+  return sizes;
+};
+
+describe("what an image preview decodes is bounded", () => {
+  const MAX = LIMITS.pdfRenderImageDecodedBytesMax;
+
+  test.each([
+    ["an 8-bit", 8, 4],
+    ["a 16-bit", 16, 8],
+  ] as const)(
+    "%s PNG decoding past the budget is too large; one at it is decoded",
+    async (_name, bitDepth, bytesPerPixel) => {
+      const width = 4096;
+      const height = MAX / bytesPerPixel / width;
+      expect(Number.isInteger(height)).toBe(true);
+
+      // A header with no pixel data: the decoder, when it is reached,
+      // refuses it.
+      const atBudget = await renderPdf(
+        "image/png",
+        declaredPng({ bitDepth, height, width }),
+      );
+      expect(Result.isError(atBudget)).toBe(true);
+      const past = await renderPdf(
+        "image/png",
+        declaredPng({ bitDepth, height, width: width + 1 }),
+      );
+      expect(Result.isOk(past) && past.value).toEqual({ type: "too-large" });
+    },
+  );
+
+  test("an image past the page pixel budget is scaled down to it", async () => {
+    const width = 4000;
+    const height = 2100;
+    expect(width * height).toBeGreaterThan(LIMITS.pdfRenderImagePixelsMax);
+
+    const pdf = await rendered("image/webp", await splitWebp(width, height));
+    const [page] = await pagePixels(pdf);
+    expect((page?.width ?? 0) * (page?.height ?? 0)).toBeLessThanOrEqual(
+      LIMITS.pdfRenderImagePixelsMax,
+    );
+    expect((page?.width ?? 0) / (page?.height ?? 1)).toBeCloseTo(
+      width / height,
+      2,
+    );
+    const [shown] = await renderPages(pdf);
+    expect(isRed(shown?.colorAt(0.25, 0.5) ?? [0, 0, 0])).toBe(true);
+    expect(isBlue(shown?.colorAt(0.75, 0.5) ?? [0, 0, 0])).toBe(true);
+  });
+
+  test("an image at the page pixel budget keeps its size", async () => {
+    const width = 4000;
+    const height = LIMITS.pdfRenderImagePixelsMax / width;
+    const [page] = await pagePixels(
+      await rendered("image/webp", await splitWebp(width, height)),
+    );
+    expect(page).toEqual({ width, height });
+  });
+
+  test("a TIFF page decoding past the budget is too large; one at it is read", () => {
+    // Three 8-bit samples a pixel, plus the four of the RGBA they become.
+    const bytesPerPixel = 3 + 4;
+    const height = 4096;
+    const width = Math.floor(
+      LIMITS.pdfRenderTiffPageDecodedBytesMax / bytesPerPixel / height,
+    );
+    const declaring = (pageWidth: number) => {
+      const tiff = tiffFile([splitTiffPage(8, 8)]);
+      // ImageWidth (tag 256, LONG, one value) declares the size under test.
+      const entry = indexOfBytes(
+        tiff,
+        Uint8Array.from([0x00, 0x01, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00]),
+      );
+      const heightEntry = indexOfBytes(
+        tiff,
+        Uint8Array.from([0x01, 0x01, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00]),
+      );
+      expect(entry).toBeGreaterThan(0);
+      expect(heightEntry).toBeGreaterThan(0);
+      const view = new DataView(tiff.buffer);
+      view.setUint32(entry + 8, pageWidth, true);
+      view.setUint32(heightEntry + 8, height, true);
+      return tiff;
+    };
+    const options = {
+      decodedBytesMax: LIMITS.pdfRenderTiffPageDecodedBytesMax,
+      pagesMax: LIMITS.pdfRenderImagePagesMax,
+    };
+    expect(width * height * bytesPerPixel).toBeLessThanOrEqual(
+      LIMITS.pdfRenderTiffPageDecodedBytesMax,
+    );
+    expect((width + 1) * height * bytesPerPixel).toBeGreaterThan(
+      LIMITS.pdfRenderTiffPageDecodedBytesMax,
+    );
+    expect(Result.isOk(readTiffPages(declaring(width), options))).toBe(true);
+    const past = readTiffPages(declaring(width + 1), options);
+    expect(Result.isError(past) && past.error.reason).toBe("too-large");
+  });
+
+  test("a TIFF past the page limit shows the limit's pages, then the note", async () => {
+    const max = LIMITS.pdfRenderImagePagesMax;
+    const pages = (count: number) =>
+      tiffFile(Array.from({ length: count }, () => splitTiffPage(16, 8)));
+
+    const atLimit = await rendered("image/tiff", pages(max));
+    expect(await pagePixels(atLimit)).toHaveLength(max);
+    expect(endsWithNote(await textItems(atLimit))).toBe(false);
+
+    const past = await rendered("image/tiff", pages(max + 1));
+    const sizes = await pagePixels(past);
+    expect(sizes).toHaveLength(max + 1);
+    expect(sizes[max - 1]).toEqual({ width: 16, height: 8 });
+    expect(endsWithNote(await textItems(past))).toBe(true);
   });
 });

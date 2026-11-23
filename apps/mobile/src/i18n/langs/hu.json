@@ -534,8 +534,19 @@
     "type": "Típus"
   },
   "fileParts": {
+    "archiveUnreadable": "Az archívumot nem sikerült beolvasni.",
     "attachments": "Mellékletek",
+    "files": "Fájlok",
+    "insideFailed": "A benne lévő fájlokat nem sikerült betölteni. Koppintson az újrapróbáláshoz.",
+    "noFilesInside": "Nincsenek benne fájlok.",
     "open": "{fileName} ({details}) megnyitása",
+    "unavailable": {
+      "encrypted": "Jelszóval védett, nem nyitható meg",
+      "link": "Hivatkozás egy másik fájlra, nem nyitjuk meg",
+      "tooLarge": "Túl nagy a megnyitáshoz",
+      "unreadable": "Sérült, nem nyitható meg",
+      "unsupported": "Olyan módon tömörített, amely nem nyitható meg"
+    },
     "unnamed": "Névtelen fájl"
   },
   "header": {
