@@ -362,4 +362,87 @@ describe("AcpTurnSession background work, stderr classification, and late update
     const events = await collected;
     expect(events.at(-1)?.type).toBe("turn.completed");
   });
+
+  test("stderr an earlier turn wrote but not yet read is drained before the mark and does not fail the next turn", async () => {
+    const { client } = createFakeClient();
+    const quota =
+      "Error 429, Message: Quota exceeded reason:QUOTA_EXHAUSTED quotaResetTimeStamp:2026-11-22T10:00:00Z, Status: RESOURCE_EXHAUSTED";
+    const stderr = { text: "" };
+    const lateReadClient: AcpClient = {
+      ...client,
+      stderrBytesSeen: () => stderr.text.length,
+      stderrSince: (start) => stderr.text.slice(start),
+    };
+    const clock = { now: 0, sleeps: 0 };
+    const session = new AcpTurnSession({
+      gracePeriodMs: 200,
+      detached: (p) => {
+        void p;
+      },
+      displayName: "Antigravity",
+      mcpNames: { stella: "stella", others: [] },
+      policy: { approvals: "auto", network: "open", fs: "workspace" },
+      workspaceDir: "/tmp/chat",
+      unreadablePaths: [],
+      onPromptError: () => undefined,
+      classifyErrorOutput: classifyAntigravityError,
+      stderrClock: {
+        now: () => clock.now,
+        sleep: async (ms) => {
+          clock.now += ms;
+          clock.sleeps += 1;
+          // The earlier turn's error is read only after this turn attached.
+          if (clock.sleeps === 1) {
+            stderr.text = quota;
+          }
+        },
+      },
+    });
+    session.attach(lateReadClient);
+    await session.settleStderrMark();
+    // Without the wait the late read lands after the mark instead.
+    if (stderr.text === "") {
+      stderr.text = quota;
+    }
+    session.begin("sess-drained", { type: "fresh" });
+
+    const turn = session.turn();
+    const collected = collectEvents(turn);
+    session.prompted(Promise.resolve(Result.ok({ stopReason: "end_turn" })));
+
+    const events = await collected;
+    expect(events.at(-1)?.type).toBe("turn.completed");
+  });
+
+  test("the wait before the stderr mark stops at its cap while stderr stays busy", async () => {
+    const { client } = createFakeClient();
+    const stderr = { seen: 0 };
+    const busyClient: AcpClient = {
+      ...client,
+      stderrBytesSeen: () => stderr.seen,
+    };
+    const clock = { now: 1000 };
+    const session = new AcpTurnSession({
+      gracePeriodMs: 200,
+      detached: (p) => {
+        void p;
+      },
+      displayName: "Antigravity",
+      mcpNames: { stella: "stella", others: [] },
+      policy: { approvals: "auto", network: "open", fs: "workspace" },
+      workspaceDir: "/tmp/chat",
+      unreadablePaths: [],
+      onPromptError: () => undefined,
+      stderrClock: {
+        now: () => clock.now,
+        sleep: async (ms) => {
+          clock.now += ms;
+          stderr.seen += 10;
+        },
+      },
+    });
+    session.attach(busyClient);
+    await session.settleStderrMark();
+    expect(clock.now - 1000).toBe(250);
+  });
 });

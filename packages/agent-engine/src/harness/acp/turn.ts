@@ -233,6 +233,52 @@ const ACP_FAILURE_OF_STOP: Readonly<
   },
 };
 
+/** Milliseconds as `performance.now()` counts them, and a wait. */
+export type AcpStderrClock = {
+  now: () => number;
+  sleep: (ms: number) => Promise<void>;
+};
+
+const SYSTEM_STDERR_CLOCK: AcpStderrClock = {
+  now: () => performance.now(),
+  sleep: async (ms) => {
+    await Bun.sleep(ms);
+  },
+};
+
+/** Quiet that counts as drained, the most a turn start waits, and the step. */
+const STDERR_QUIET_MS = 100;
+const STDERR_QUIET_CAP_MS = 250;
+const STDERR_QUIET_POLL_MS = 20;
+
+/**
+ * Settles once stderr has read nothing new for `STDERR_QUIET_MS`, or after
+ * `STDERR_QUIET_CAP_MS` however busy it stays.
+ */
+const awaitStderrQuiet = async (
+  client: AcpClient,
+  clock: AcpStderrClock,
+): Promise<void> => {
+  const started = clock.now();
+  const step = async (seen: number, quietSince: number): Promise<void> => {
+    const now = clock.now();
+    if (
+      now - quietSince >= STDERR_QUIET_MS ||
+      now - started >= STDERR_QUIET_CAP_MS
+    ) {
+      return;
+    }
+    await clock.sleep(
+      Math.min(STDERR_QUIET_POLL_MS, STDERR_QUIET_CAP_MS - (now - started)),
+    );
+    const latest = client.stderrBytesSeen();
+    await (latest === seen
+      ? step(seen, quietSince)
+      : step(latest, clock.now()));
+  };
+  await step(client.stderrBytesSeen(), started);
+};
+
 export type AcpTurnOptions = {
   gracePeriodMs: number;
   detached: Detached;
@@ -252,6 +298,8 @@ export type AcpTurnOptions = {
   classifyErrorOutput?: AcpAgentDefinition["classifyErrorOutput"];
   /** Debounce before settling a turn held for background work once tools finish. */
   backgroundSettleMs?: number;
+  /** Time for the wait before the turn's stderr mark; the system clock by default. */
+  stderrClock?: AcpStderrClock;
 };
 
 type PromptUsage = NonNullable<
@@ -349,6 +397,23 @@ export class AcpTurnSession {
   attach(client: AcpClient) {
     this.stderrStartByte = client.stderrBytesSeen();
     this.lifecycle.attach(client);
+  }
+
+  /**
+   * The turn's stderr mark, taken once stderr is quiet: the mark counts bytes
+   * read, so output an earlier turn wrote but not yet read is credited to
+   * that turn rather than classified as this one's.
+   */
+  async settleStderrMark() {
+    const client = this.lifecycle.client;
+    if (client === null) {
+      return;
+    }
+    await awaitStderrQuiet(
+      client,
+      this.options.stderrClock ?? SYSTEM_STDERR_CLOCK,
+    );
+    this.stderrStartByte = client.stderrBytesSeen();
   }
 
   abandon() {

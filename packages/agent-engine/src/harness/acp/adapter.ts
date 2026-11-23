@@ -1102,6 +1102,7 @@ const startTurn = async (
   }
   const { client, agent } = connected.value;
   session.attach(client);
+  await session.settleStderrMark();
   const fail = async (error: HarnessStartError) => {
     session.abandon();
     await client.kill();
