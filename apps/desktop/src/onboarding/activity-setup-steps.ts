@@ -8,7 +8,7 @@
 import { panic } from "better-result";
 
 import type { ActivityDetailsAccess } from "../activity/activity-types";
-import type { BillingDraftSettings } from "../activity/billing-draft-settings";
+import type { AiDraftsChoice } from "../activity/billing-draft-logic";
 import type { Permission } from "../shared/permissions";
 import type { DesktopPlatform } from "../shared/shortcut-keys";
 
@@ -20,9 +20,6 @@ export const ACTIVITY_SETUP_SCREENS = [
 ] as const;
 
 export type ActivitySetupScreen = (typeof ACTIVITY_SETUP_SCREENS)[number];
-
-/** Whether the account can choose stella AI drafts here. */
-export type AiDraftsChoice = "offered" | "notOffered";
 
 /** The parts of the live state that decide which screens apply. */
 export type ActivitySetupState = {
@@ -52,31 +49,6 @@ export const activitySetupScreens = (
         return panic("Unknown activity setup screen.");
     }
   });
-
-/**
- * Whether the drafts screen applies: where the firm lets this account
- * draft, or where consent exists and can still be withdrawn. The same rule
- * decides whether Settings → Activity shows its drafts row.
- */
-export const aiDraftsChoice = (
-  settings: BillingDraftSettings,
-): AiDraftsChoice => {
-  switch (settings.type) {
-    case "loading":
-    case "unavailable":
-    case "failed":
-      return "notOffered";
-    case "ready":
-      return settings.mode !== "off" ||
-        settings.consent === "granted" ||
-        settings.consent === "pending-withdrawal"
-        ? "offered"
-        : "notOffered";
-    default:
-      settings satisfies never;
-      return panic("Unknown stella AI draft settings.");
-  }
-};
 
 type DetailsPermissionsArgs = {
   captureDetails: boolean;

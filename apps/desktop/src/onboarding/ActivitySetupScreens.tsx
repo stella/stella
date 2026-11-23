@@ -1,11 +1,14 @@
-import { useState } from "react";
-
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
 import type { BillingDraftSettingsControl } from "../activity/billing-draft-settings";
+import type { DraftConsentStatus } from "../activity/billing-draft-transport";
+import {
+  DraftConsentRefused,
+  useDraftConsentText,
+} from "../activity/DraftConsent";
 import { PermissionsSection } from "../mainview/PermissionsSection";
 import type { Permission } from "../shared/permissions";
 import { DESKTOP_TELEMETRY_WINDOWS } from "../telemetry/desktop-telemetry";
@@ -140,55 +143,43 @@ const CallsScreen = ({ controls, snapshot }: ScreenProps) => {
   );
 };
 
-/** What the drafts switch is doing: idle, saving the choice it shows, or
- *  back after a save the server did not confirm. */
-type ConsentSave =
-  { type: "idle" } | { enabled: boolean; type: "saving" } | { type: "failed" };
-
 /** 4. Consent to stella AI drafts, in the words the time entry card asks
- *  with; it is the same consent, kept with the account. */
+ *  with; it is the same consent, kept with the account, and its one owner
+ *  says whether a grant or a withdrawal is on its way or went unconfirmed. */
 const AiDraftsScreen = ({
   drafts,
 }: {
   drafts: BillingDraftSettingsControl;
 }) => {
   const t = useTranslations("onboarding.activitySetup.aiDrafts");
-  const onboardingT = useTranslations("onboarding");
   const activityT = useTranslations("activity");
-  const [save, setSave] = useState<ConsentSave>({ type: "idle" });
-  const { settings } = drafts;
-  // Only a confirmed grant shows as on: a grant the server never confirmed
-  // stays unconfirmed in the consent owner, and the switch must stay usable
-  // to try again or to withdraw.
-  const granted = settings.type === "ready" && settings.consent === "granted";
-  const choose = async (enabled: boolean) => {
-    setSave({ enabled, type: "saving" });
-    const saved = await drafts.setConsent(enabled ? "granted" : "revoked");
-    setSave(saved ? { type: "idle" } : { type: "failed" });
+  const { setConsent, settings } = drafts;
+  const consentText = useDraftConsentText();
+  const consent = settings.type === "ready" ? settings.consent : "unavailable";
+  const choose = (enabled: boolean) => {
+    void setConsent(enabled ? "granted" : "revoked");
   };
   return (
     <>
       <ScreenHeader body={t("body")} title={activityT("billingDraftsTitle")} />
       <ScreenContent>
         <SwitchCard
-          checked={save.type === "saving" ? save.enabled : granted}
-          description={activityT("aiDraftConsent")}
-          disabled={save.type === "saving"}
-          onChange={(enabled) => {
-            void choose(enabled);
-          }}
+          checked={consentSwitch(consent) === "on"}
+          description={consentText}
+          disabled={
+            consent === "pending-grant" || consent === "pending-withdrawal"
+          }
+          onChange={choose}
           title={t("allow")}
         />
-        {save.type === "failed" ? (
-          <p className="text-destructive-foreground px-1 text-sm" role="alert">
-            {activityT("errorUpdate")}
-          </p>
+        {consent === "grant-refused" ? (
+          <div className="px-1 text-sm">
+            <DraftConsentRefused />
+          </div>
         ) : null}
         {/* A withdrawal stella has not confirmed is off here already; it is
             sent again from here, not only when the window next reads. */}
-        {save.type !== "saving" &&
-        settings.type === "ready" &&
-        settings.consent === "pending-withdrawal" ? (
+        {consent === "withdrawal-unconfirmed" ? (
           <div className="flex items-center justify-between gap-4 px-1">
             <p className="text-muted-foreground min-w-0 text-sm" role="status">
               {activityT("billingDraftsWithdrawPending")}
@@ -196,11 +187,11 @@ const AiDraftsScreen = ({
             <Button
               className="shrink-0"
               onClick={() => {
-                void choose(false);
+                choose(false);
               }}
               variant="outline"
             >
-              {onboardingT("tryAgain")}
+              {activityT("retry")}
             </Button>
           </div>
         ) : null}
@@ -208,4 +199,23 @@ const AiDraftsScreen = ({
       </ScreenContent>
     </>
   );
+};
+
+/** The drafts switch shows the choice in force: a grant on its way as on,
+ *  a withdrawal on its way or unconfirmed as off, since it applies at once. */
+const consentSwitch = (consent: DraftConsentStatus) => {
+  switch (consent) {
+    case "granted":
+    case "pending-grant":
+      return "on";
+    case "unavailable":
+    case "revoked":
+    case "grant-refused":
+    case "pending-withdrawal":
+    case "withdrawal-unconfirmed":
+      return "off";
+    default:
+      consent satisfies never;
+      return panic("Unknown stella AI draft consent.");
+  }
 };

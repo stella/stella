@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 
 import { ACTIVITY_DETAILS_ACCESS } from "../src/activity/activity-types";
+import { aiDraftsChoice } from "../src/activity/billing-draft-logic";
+import type { AiDraftsChoice } from "../src/activity/billing-draft-logic";
 import type { BillingDraftSettings } from "../src/activity/billing-draft-settings";
+import type { DraftConsentStatus } from "../src/activity/billing-draft-transport";
 import {
   ACTIVITY_SETUP_SCREENS,
   activitySetupScreens,
-  aiDraftsChoice,
   detailsScreenPermissions,
 } from "../src/onboarding/activity-setup-steps";
 import type { ActivitySetupScreen } from "../src/onboarding/activity-setup-steps";
@@ -73,16 +75,20 @@ describe("the AI drafts screen", () => {
   });
 
   test("stays while consent exists, so it can be withdrawn", () => {
-    for (const consent of ["granted", "pending-withdrawal"] as const) {
-      expect(aiDraftsChoice(ready({ consent, mode: "off" }))).toBe("offered");
-    }
-    for (const consent of [
-      "revoked",
-      "pending-grant",
-      "unavailable",
-    ] as const) {
+    const withDraftingOff = {
+      granted: "offered",
+      "pending-withdrawal": "offered",
+      "withdrawal-unconfirmed": "offered",
+      revoked: "notOffered",
+      "pending-grant": "notOffered",
+      "grant-refused": "notOffered",
+      unavailable: "notOffered",
+    } as const satisfies Record<DraftConsentStatus, AiDraftsChoice>;
+    const isStatus = (key: string): key is DraftConsentStatus =>
+      key in withDraftingOff;
+    for (const consent of Object.keys(withDraftingOff).filter(isStatus)) {
       expect(aiDraftsChoice(ready({ consent, mode: "off" }))).toBe(
-        "notOffered",
+        withDraftingOff[consent],
       );
     }
   });
