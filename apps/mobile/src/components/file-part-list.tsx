@@ -67,9 +67,6 @@ type FilesInside =
 
 export const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
 
-/** The way to the open document's parts, where it can open them. */
-export const useFilePartOpener = () => use(FilePartOpenerContext);
-
 export const FilePartOpenerProvider = ({
   children,
   opener,
