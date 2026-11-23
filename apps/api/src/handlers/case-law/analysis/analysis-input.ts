@@ -12,7 +12,7 @@ import { Result, TaggedError } from "better-result";
  * they compare would not mean the same thing.
  */
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { envBase } from "@/api/env-base";
 import {
   devReparseEnabled,

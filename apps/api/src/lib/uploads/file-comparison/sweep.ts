@@ -1,7 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, inArray, lte, ne, or } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { fileComparisonUploads } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/error-tag";

@@ -15,7 +15,7 @@ import * as v from "valibot";
 import type { DecisionUndecidedReason } from "@stll/api-contract/ai-decision-provider";
 import { evaluateCondition, resolvePath } from "@stll/template-conditions";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

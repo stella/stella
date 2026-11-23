@@ -5,7 +5,7 @@ import type { SanctionsSource } from "@stll/sanctions";
 import { stableStringify } from "@stll/stable-stringify";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type {
   sanctionsContactScreenings,
   sanctionsScreeningEvents,

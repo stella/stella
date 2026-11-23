@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import { isClauseSlotName } from "@stll/template-conditions";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { clauseVersions, templateClauses } from "@/api/db/schema";
 import { status } from "@/api/http/status";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";

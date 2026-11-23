@@ -2,7 +2,7 @@ import { panic, Result, TaggedError } from "better-result";
 
 import type { ConditionNode } from "@stll/conditions";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { PropertyStatus } from "@/api/db/schema";
 import type {
   AiExtractablePropertyContent,

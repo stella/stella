@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { ownAIKeyRequiredError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";

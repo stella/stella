@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";

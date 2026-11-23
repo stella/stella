@@ -3,7 +3,7 @@ import { and, asc, count, eq, inArray, lte, sql } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { entities } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

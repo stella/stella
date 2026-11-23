@@ -97,7 +97,7 @@ import type { DecisionSheetSource } from "@stll/api-contract/decision-query-inte
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCitationResolutionProgress,
   caseLawCitations,

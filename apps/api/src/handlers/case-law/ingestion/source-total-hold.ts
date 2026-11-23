@@ -3,7 +3,7 @@ import { asc, isNull, or, sql } from "drizzle-orm";
 import { isHeldTooLong } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawSources } from "@/api/db/schema";
 import { loadGateHealthConfig } from "@/api/env-online-index";
 

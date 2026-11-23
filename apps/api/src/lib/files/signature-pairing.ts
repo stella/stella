@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { SignaturePreview } from "@stll/api-contract/signature";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";

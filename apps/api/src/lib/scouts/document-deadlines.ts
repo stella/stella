@@ -11,7 +11,7 @@ import type { PermissionInput } from "@stll/permissions";
 
 import { member as organizationMembers } from "@/api/db/auth-schema";
 import type { rootDb, Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   documentProcessingRuns,
   entities,

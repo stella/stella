@@ -26,7 +26,7 @@ import { and, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCitations,
   caseLawDecisions,

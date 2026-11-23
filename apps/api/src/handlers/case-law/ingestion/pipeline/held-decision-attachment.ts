@@ -11,7 +11,7 @@ import {
 import { sha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,

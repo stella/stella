@@ -12,7 +12,7 @@ import {
   type DesktopRunnerApprovalMode,
 } from "@stll/api-contract/desktop-runner";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import {
   createLocalChatRun,
   type LocalChatRun,

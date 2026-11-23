@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import { sanitizeErrorForOutput } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import {
   PROCESS_DECISION_RETRY_REASON,

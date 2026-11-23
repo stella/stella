@@ -3,7 +3,7 @@ import { inArray } from "drizzle-orm";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_TOMBSTONE_REASON,
   caseLawCorpusPackRefs,

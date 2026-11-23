@@ -11,7 +11,7 @@ import {
 import type { StellaMcpAppToolResult } from "@stll/api-contract/stella-mcp-app";
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
