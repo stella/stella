@@ -1874,11 +1874,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/search/highlight.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/search/index-entity-stamps.db.test.ts": {
     "count": 1,
     "owner": "api",
@@ -1941,11 +1936,6 @@
   },
   "apps/api/src/lib/style-set-package-cleanup-queue.db.test.ts": {
     "count": 3,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/subprocess.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2114,18 +2104,8 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/mcp/search-index-unavailable.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/mcp/server.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/mcp/tool-name-suggestions.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2474,21 +2454,6 @@
     "owner": "invoicing",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/legal-atlas/src/document-stage-observer.test.ts": {
-    "count": 2,
-    "owner": "legal-atlas",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/legal-atlas/src/provision-citation-grammars.property.test.ts": {
-    "count": 2,
-    "owner": "legal-atlas",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/mcp-kit/src/envelope.test.ts": {
-    "count": 4,
-    "owner": "mcp-kit",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/sanctions/src/dense-screening.test.ts": {
     "count": 2,
     "owner": "sanctions",
@@ -2497,16 +2462,6 @@
   "packages/sanctions/src/screening.test.ts": {
     "count": 4,
     "owner": "sanctions",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/scripts/src/process-stderr.test.ts": {
-    "count": 2,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/template-conditions/src/parse.test.ts": {
-    "count": 2,
-    "owner": "template-conditions",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/ui/src/components/animated-preview.dom.test.tsx": {
@@ -2561,11 +2516,6 @@
   },
   "scripts/flake-gate-process.test.ts": {
     "count": 3,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/generate-tailwind-classes.test.ts": {
-    "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
