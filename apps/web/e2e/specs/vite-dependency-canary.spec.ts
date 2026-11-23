@@ -57,12 +57,12 @@ test.describe("Vite dependency optimizer canary", () => {
       workspace: testWorkspace,
     });
 
-    const [threadPage, documentPage, autocompletePage] = await Promise.all([
+    const [threadPage, documentPage, devPage] = await Promise.all([
       context.newPage(),
       context.newPage(),
       context.newPage(),
     ]);
-    const extraPages = [threadPage, documentPage, autocompletePage];
+    const extraPages = [threadPage, documentPage, devPage];
     const detachErrorCollectors = extraPages.map((extraPage) =>
       browserErrors.trackPage(extraPage),
     );
@@ -74,7 +74,7 @@ test.describe("Vite dependency optimizer canary", () => {
       await mountChatIndex(page);
       await mountChatThread(threadPage);
       await mountDocumentRoute(documentPage, documentRoute.path);
-      await mountAutocomplete(autocompletePage);
+      await mountDevPlayground(devPage);
     } finally {
       await Promise.all(extraPages.map(async (extraPage) => extraPage.close()));
       for (const detach of detachErrorCollectors) {
@@ -114,12 +114,11 @@ const mountDocumentRoute = async (page: Page, route: string): Promise<void> => {
   ).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS });
 };
 
-const mountAutocomplete = async (page: Page): Promise<void> => {
-  await page.goto("/dev?visual=autocomplete", { waitUntil: "commit" });
+const mountDevPlayground = async (page: Page): Promise<void> => {
+  // The dev route lazy-loads each visual as its own graph.
+  await page.goto("/dev?visual=ui", { waitUntil: "commit" });
   await expect(
-    page.getByRole("heading", {
-      name: "stella autocomplete — dev playground",
-    }),
+    page.getByRole("heading", { name: "Stella UI Playground" }),
   ).toBeVisible({ timeout: ROUTE_READY_TIMEOUT_MS });
 };
 
