@@ -7376,7 +7376,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   expect(planner?.run).toContain(
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
-  expect(planner?.run).toContain("api_test_shards=6");
+  expect(planner?.run).toContain("api_test_shards=8");
   expect(planner?.env?.["COMPARISON_BASE"]).toBe(
     `\${{ steps.changed-files.outputs.comparison_base }}`,
   );
