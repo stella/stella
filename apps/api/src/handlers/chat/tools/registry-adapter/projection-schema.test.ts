@@ -880,7 +880,7 @@ describe("projectForChat", () => {
             kind: "document",
             name: `scan-${ROGUE_UUID}.pdf`,
             workspaceId: WS_UUID,
-            workspaceName: "Acme",
+            workspaceName: "Lindqvist lease renewal",
           },
         ],
         nextCursor: null,
