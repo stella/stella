@@ -1,4 +1,0 @@
-{
-  "kind": "support",
-  "qualifier": "Runs the candidate commit application journeys against a local stack with a mock model; promotion records staging verification only after it succeeds."
-}

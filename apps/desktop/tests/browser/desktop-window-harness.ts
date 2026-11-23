@@ -5,6 +5,7 @@ import type { ActivitySettingsSnapshot } from "../../src/activity/activity-types
 import type { MicrophonesSnapshot } from "../../src/mainview/dictation-microphone";
 import { ONBOARDING_STEPS } from "../../src/onboarding/onboarding-types";
 import type { OnboardingSnapshot } from "../../src/onboarding/onboarding-types";
+import type { ActivitySetupSnapshot } from "../../src/onboarding/use-activity-setup";
 import type {
   PermissionsSnapshot,
   PermissionStatus,
@@ -232,7 +233,12 @@ const openWindow = async (
           [
             ["dictation_set_enabled", "enabled", "enabled"],
             ["dictation_set_cleanup", "enabled", "cleanup"],
+            ["dictation_set_cleanup_style", "style", "cleanupStyle"],
+            ["dictation_set_translate_to", "language", "translateTo"],
             ["dictation_set_sounds", "enabled", "sounds"],
+            ["dictation_set_retype_shortcut", "enabled", "retypeShortcut"],
+            ["dictation_set_while_dictating", "choice", "whileDictating"],
+            ["dictation_set_speakers_only", "enabled", "speakersOnly"],
             ["dictation_set_share_window_title", "enabled", "shareWindowTitle"],
             [
               "dictation_set_share_text_before_cursor",
@@ -242,6 +248,7 @@ const openWindow = async (
             ["dictation_set_destination", "destination", "destination"],
             ["dictation_set_cloud_model", "modelId", "cloudModel"],
             ["dictation_set_custom_words", "words", "customWords"],
+            ["dictation_set_app_settings", "settings", "appSettings"],
           ] as const
         ).map(([command, argument, field]) => [
           command,
@@ -260,6 +267,16 @@ const openWindow = async (
       },
       is_activity_enabled: () => data.activity !== null,
       activity_get_settings: () => data.activity,
+      // Activity as setup reads it before recording starts: the defaults,
+      // with window titles waiting for Accessibility. Written out here, as
+      // the handlers run in the page.
+      activity_get_setup: () =>
+        ({
+          captureDetails: true,
+          detailsAccess: "accessibilityRequired",
+          detectCalls: true,
+          recordingStatus: "off",
+        }) satisfies ActivitySetupSnapshot,
       // The native defaults: awake while agents work, not on battery.
       keep_awake_get_settings: () => ({ enabled: true, onBattery: false }),
       // Consent given, so Settings lays out its stella AI drafting rows too.
@@ -423,10 +440,11 @@ export const openSettingsWindow = async (
   if (tab === "dictation") {
     const pane = page.locator("[data-slot=settings-page]");
     await expect(pane.getByRole("alert")).toBeVisible();
-    // Sounds, cleanup and both of its context switches, all switchable.
+    // Sounds, only through speakers, typing the last dictation again,
+    // cleanup and both of its context switches, all switchable.
     await expect(
       pane.locator("[data-slot=settings-row] [role=switch]"),
-    ).toHaveCount(4);
+    ).toHaveCount(6);
     await expect(
       pane.locator("[data-slot=settings-row][data-disabled]"),
     ).toHaveCount(0);

@@ -36,6 +36,9 @@ export const dataBoxPreviewResultSchema = v.variant("kind", [
       v.object({
         ...dataBoxMessageMetadataSchema.entries.files.item.entries,
         sha256Hex: v.string(),
+        /** The type the file is listed and delivered as (`partMediaType`). */
+        mediaType: v.string(),
+        sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
       }),
     ),
     contentHash: v.string(),

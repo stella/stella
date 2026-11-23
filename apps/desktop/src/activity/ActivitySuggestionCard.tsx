@@ -3,6 +3,7 @@ import { useEffect, useEffectEvent, useId, useRef, useState } from "react";
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
+import type { BILLING_CODE_TYPES } from "@stll/api-contract/billing";
 import { DESKTOP_BILLING_DRAFT_LIMITS } from "@stll/api-contract/desktop-billing-drafts";
 import { DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH } from "@stll/api-contract/desktop-time-entries";
 import type {
@@ -52,7 +53,10 @@ import type {
 import { calendarDate } from "./activity-logic";
 import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
+import { DRAFT_FAILURE_RECOVERY } from "./billing-draft-logic";
 import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
+import type { DraftConsentStatus } from "./billing-draft-transport";
+import { DraftConsent } from "./DraftConsent";
 import { MatterPicker } from "./MatterPicker";
 import { useDurationLabel } from "./use-duration-label";
 
@@ -72,16 +76,18 @@ export type SuggestionEdit = {
   > | null;
 };
 
-/** What the stella AI strip above the narrative shows. `hidden` when the
- * firm has drafting off or its settings cannot be read. */
+/** What the stella AI strip under the narrative shows. `hidden` when the
+ * drafting settings cannot be read; a firm that switched drafting off is the
+ * `off` failure. */
 export type DraftAssistView =
   | { type: "hidden" }
   | { type: "needsMatter" }
-  | { pending: boolean; type: "consent" }
+  | { consent: DraftConsentStatus; type: "consent" }
   | {
       canUndo: boolean;
       canRestoreTemplate: boolean;
-      drafted: boolean;
+      /** The draft in place, or `null` while the card has none. */
+      draft: Pick<CardDraft, "narrativeLanguage"> | null;
       refineFailure: DraftFailureKind | null;
       type: "ready";
     }
@@ -120,6 +126,8 @@ type ActivitySuggestionCardProps = {
   earlierEntries: CardDraft["earlierEntries"];
   /** The current guided draft's notes against the billing guidelines. */
   flags: CardDraft["flags"];
+  /** The names the matter gives the codes the current draft uses. */
+  codeNames: CardDraft["codeNames"];
   /** A split or move the current guided draft proposes. */
   structure: CardDraft["structure"];
   onDraft: () => void;
@@ -180,6 +188,7 @@ export const ActivitySuggestionCard = ({
   assist,
   earlierEntries,
   flags,
+  codeNames,
   structure,
   onDraft,
   onAllow,
@@ -225,6 +234,9 @@ export const ActivitySuggestionCard = ({
     }
     if (edit.matter === null) {
       return t("chooseMatterForEntry");
+    }
+    if (refusesMatter(assist)) {
+      return t("aiDraftRefused");
     }
     if (edit.narrative.trim().length === 0) {
       return t("writeDescription");
@@ -355,20 +367,6 @@ export const ActivitySuggestionCard = ({
           {edit.matter === null ? (
             <RangeMatterNote suggestion={suggestion} />
           ) : null}
-          <DraftAssistStrip
-            view={assist}
-            onDraft={onDraft}
-            onRefine={onRefine}
-            onAcceptProposal={onAcceptProposal}
-            onDismissProposal={onDismissProposal}
-            onUndo={onUndo}
-            onRestoreTemplate={onRestoreTemplate}
-            onAllow={() => {
-              onAllow();
-              // The consent buttons go away; keep the card's shortcuts in reach.
-              card.current?.focus();
-            }}
-          />
           {titlesNotice !== null && !hasWindowTitles(suggestion) ? (
             // The description falls back to app names without titles; say
             // why next to it, where the gap shows.
@@ -386,7 +384,26 @@ export const ActivitySuggestionCard = ({
             rows={2}
             value={edit.narrative}
           />
-          <DraftClassification classification={edit.classification} />
+          {/* Under the description, so it stays the first thing under the
+              matter however much stella AI offers. */}
+          <DraftAssistStrip
+            view={assist}
+            onDraft={onDraft}
+            onRefine={onRefine}
+            onAcceptProposal={onAcceptProposal}
+            onDismissProposal={onDismissProposal}
+            onUndo={onUndo}
+            onRestoreTemplate={onRestoreTemplate}
+            onAllow={() => {
+              onAllow();
+              // The consent buttons go away; keep the card's shortcuts in reach.
+              card.current?.focus();
+            }}
+          />
+          <DraftClassification
+            classification={edit.classification}
+            codeNames={codeNames}
+          />
           <GuidelineFlags
             flags={flags}
             onSplit={
@@ -556,12 +573,19 @@ const ShortcutHint = ({ label }: { label: string }) => (
   </kbd>
 );
 
+/** Whether drafting refused the card's matter: time entries can no longer
+ * be created on it, so the card cannot create one either. */
+const refusesMatter = (view: DraftAssistView) =>
+  (view.type === "failed" && view.kind === "refused") ||
+  (view.type === "ready" && view.refineFailure === "refused");
+
 const DRAFT_FAILURE_MESSAGES = {
   off: "aiDraftOff",
   consentRequired: "aiDraftConsentRequired",
   refused: "aiDraftRefused",
   modeChanged: "aiDraftModeChanged",
   tooLarge: "aiDraftTooLarge",
+  aiUnavailable: "aiDraftUnavailable",
   failed: "aiDraftFailed",
 } as const satisfies Record<DraftFailureKind, string>;
 
@@ -607,19 +631,29 @@ const DraftAssistStrip = ({
       );
     case "failed":
       return (
-        <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
-          <p role="status">{t(DRAFT_FAILURE_MESSAGES[view.kind])}</p>
-          {view.kind === "off" || view.kind === "refused" ? null : (
-            <DraftButton label={t("aiDraftRetry")} onClick={onDraft} />
-          )}
-        </div>
+        <DraftFailure kind={view.kind} onAllow={onAllow} onRetry={onDraft} />
       );
     case "ready":
       return (
-        <div className="flex flex-col gap-2 text-xs">
-          <div className="flex flex-wrap items-center gap-2">
+        <div
+          className="flex flex-col gap-2 text-xs"
+          data-activity-draft-ready=""
+        >
+          {/* The label leads, so the actions wrap from the start edge and
+              nothing is left floating at the end of a wrapped row. */}
+          <div className="flex flex-wrap items-center gap-1">
+            {view.draft === null ? null : (
+              <span className="text-muted-foreground me-1">
+                <AiLabel
+                  disclosure={t("aiDraftDisclosure")}
+                  label={t("aiDraftLabel")}
+                />
+              </span>
+            )}
             <DraftButton
-              label={view.drafted ? t("aiDraftAgain") : t("aiDraftWrite")}
+              label={
+                view.draft === null ? t("aiDraftWrite") : t("aiDraftAgain")
+              }
               onClick={onDraft}
             />
             {view.canUndo ? (
@@ -632,21 +666,18 @@ const DraftAssistStrip = ({
                 {t("aiUseOriginal")}
               </Button>
             ) : null}
-            {view.drafted ? (
-              <span className="text-muted-foreground ms-auto">
-                <AiLabel
-                  disclosure={t("aiDraftDisclosure")}
-                  label={t("aiDraftLabel")}
-                />
-              </span>
-            ) : null}
           </div>
           {view.refineFailure === null ? null : (
-            <p className="text-muted-foreground" role="status">
+            <p className="text-muted-foreground text-pretty" role="status">
               {t(DRAFT_FAILURE_MESSAGES[view.refineFailure])}
             </p>
           )}
-          {view.drafted ? <RefineInput onRefine={onRefine} /> : null}
+          {view.draft === null ? null : (
+            <RefineInput
+              narrativeLanguage={view.draft.narrativeLanguage}
+              onRefine={onRefine}
+            />
+          )}
         </div>
       );
     case "refining":
@@ -673,7 +704,7 @@ const DraftAssistStrip = ({
           />
           <div className="flex gap-1.5">
             <Button onClick={onAcceptProposal} size="xs">
-              {t("aiAccept")}
+              {t("aiApplyChange")}
             </Button>
             <Button onClick={onDismissProposal} size="xs" variant="ghost">
               {t("aiDismiss")}
@@ -682,7 +713,7 @@ const DraftAssistStrip = ({
         </section>
       );
     case "consent":
-      return <DraftConsent onAllow={onAllow} pending={view.pending} />;
+      return <DraftConsent onAllow={onAllow} status={view.consent} />;
     default:
       view satisfies never;
       return panic("Unhandled stella AI draft view");
@@ -690,41 +721,50 @@ const DraftAssistStrip = ({
 };
 
 /**
- * The ask before stella AI drafts anything: one line and Allow, with what a
- * draft sends a click away. Allow is the same consent whether or not the
- * details are open.
+ * Why stella AI could not draft, in one layout for every kind, with the one
+ * action that can still help: Allow when consent is missing, Try again when
+ * another attempt can succeed, nothing when only another matter, less
+ * detail or the firm can change the outcome.
  */
-const DraftConsent = ({
+const DraftFailure = ({
+  kind,
   onAllow,
-  pending,
+  onRetry,
 }: {
+  kind: DraftFailureKind;
   onAllow: () => void;
-  pending: boolean;
+  onRetry: () => void;
 }) => {
   const t = useTranslations("activity");
+  const recovery = DRAFT_FAILURE_RECOVERY[kind];
+  const action = (() => {
+    switch (recovery) {
+      case "allow":
+        return (
+          <Button onClick={onAllow} size="xs" variant="outline">
+            {t("aiDraftAllow")}
+          </Button>
+        );
+      case "retry":
+        return <DraftButton label={t("aiDraftRetry")} onClick={onRetry} />;
+      case "none":
+        return null;
+      default:
+        recovery satisfies never;
+        return panic("Unhandled draft failure recovery");
+    }
+  })();
   return (
-    <Collapsible
-      className="bg-muted/60 flex flex-col gap-2 rounded-lg px-2.5 py-2 text-xs"
-      data-activity-draft-consent=""
+    <div
+      className="text-muted-foreground flex flex-wrap items-center gap-x-2 gap-y-1 text-xs"
+      data-activity-draft-failure={kind}
     >
-      <div className="flex items-center gap-2">
-        <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
-        <p className="min-w-0 flex-1 text-pretty">
-          {t("aiDraftOffer")}{" "}
-          <CollapsibleTrigger render={<Button size="inline" variant="link" />}>
-            {t("aiDraftWhatIsSent")}
-          </CollapsibleTrigger>
-        </p>
-        <Button loading={pending} onClick={onAllow} size="xs" variant="outline">
-          {t("aiDraftAllow")}
-        </Button>
-      </div>
-      <CollapsiblePanel>
-        <p className="text-muted-foreground ps-5.5 text-pretty">
-          {t("aiDraftConsent")}
-        </p>
-      </CollapsiblePanel>
-    </Collapsible>
+      <AiActionIcon aria-hidden="true" className="size-3.5 shrink-0" />
+      <p className="min-w-0 flex-1 basis-40 text-pretty" role="status">
+        {t(DRAFT_FAILURE_MESSAGES[kind])}
+      </p>
+      {action}
+    </div>
   );
 };
 
@@ -732,21 +772,36 @@ const STEER_CHIPS = [
   "aiSteerShorter",
   "aiSteerMoreDetail",
   "aiSteerClientFriendly",
-  // Each catalogue names its own language, as people say it.
-  "aiSteerWriteInLanguage",
 ] as const;
 
+/** A BCP 47 tag's language subtag, the one before any script or region. */
+const languageSubtag = (tag: string) => tag.split("-", 1).at(0)?.toLowerCase();
+
+/** Whether two language tags name the same language, whatever the region. */
+const sameLanguage = (left: string, right: string) =>
+  languageSubtag(left) === languageSubtag(right);
+
 /** An instruction for stella AI to change the draft, with quick chips and the
- * choice to remember it for future drafts. */
+ * choice to remember it for future drafts. The chip asking for the window's
+ * language shows only on a draft written in another one. */
 const RefineInput = ({
+  narrativeLanguage,
   onRefine,
 }: {
+  narrativeLanguage: string;
   onRefine: (steer: string, remember: boolean) => void;
 }) => {
   const t = useTranslations("activity");
+  const locale = useLocale();
   const [text, setText] = useState("");
   const [remember, setRemember] = useState(false);
-  const chips = STEER_CHIPS.map((key) => t(key));
+  const chips = [
+    ...STEER_CHIPS.map((key) => t(key)),
+    // Each catalogue names its own language, as people say it.
+    ...(sameLanguage(narrativeLanguage, locale)
+      ? []
+      : [t("aiSteerWriteInLanguage")]),
+  ];
   const steer = text.trim();
   return (
     <Form
@@ -812,21 +867,32 @@ const DraftButton = ({
   </Button>
 );
 
+type BillingCodeType = (typeof BILLING_CODE_TYPES)[number];
+
 /** The UTBMS codes a guided draft gave an entry billed in LEDES. */
 const DraftClassification = ({
   classification,
+  codeNames,
 }: {
   classification: DesktopTimeEntryClassification | null;
+  codeNames: CardDraft["codeNames"];
 }) => {
   const t = useTranslations("activity");
   if (classification?.type !== "ledes") {
     return null;
   }
+  // A code the matter's code list does not name shows on its own.
+  const named = (type: BillingCodeType, code: string) => {
+    const name = codeNames.find(
+      (entry) => entry.type === type && entry.code === code,
+    )?.name;
+    return name === undefined ? code : t("aiDraftCodeNamed", { code, name });
+  };
   return (
-    <p className="text-muted-foreground text-xs tabular-nums">
+    <p className="text-muted-foreground text-xs text-pretty">
       {t("aiDraftCodes", {
-        task: classification.taskCode,
-        activity: classification.activityCode,
+        task: named("task", classification.taskCode),
+        activity: named("activity", classification.activityCode),
       })}
     </p>
   );
@@ -848,17 +914,17 @@ const GuidelineFlags = ({
   return (
     <section
       aria-label={t("aiDraftFlags")}
-      className="flex flex-col gap-1.5 text-xs"
+      className="bg-muted/60 flex flex-col gap-1.5 rounded-lg border px-2.5 py-2 text-xs"
     >
       <span className="font-medium">{t("aiDraftFlags")}</span>
-      <ul className="flex flex-col gap-1.5">
+      <ul className="flex flex-col gap-2">
         {flags.map((flag) => (
           <li
             className="flex flex-col gap-0.5"
             key={`${flag.fileName}\n${flag.section}\n${flag.text}`}
           >
             <bdi className="text-pretty">{flag.text}</bdi>
-            <span className="text-muted-foreground">
+            <span className="text-muted-foreground text-pretty">
               {t("aiDraftFlagSource", {
                 file: flag.fileName,
                 section: flag.section,

@@ -195,9 +195,7 @@ export const ProvisionCitingDecisions = ({
       {snapshot?.type === "capped" && (
         <p className="text-muted-foreground text-xs">
           {t("statutes.citingDecisionsSnapshotCapped", {
-            count: format.number(
-              new Set(loaded.map((decision) => decision.decisionId)).size,
-            ),
+            count: new Set(loaded.map((decision) => decision.decisionId)).size,
             limit: format.number(snapshot.limit),
           })}
         </p>

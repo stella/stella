@@ -814,7 +814,7 @@ const registerBuildProperties = () => {
 // Clients outside the API client (the auth client) reject with the native
 // fetch error or deadline reason. It must be classified here, before redaction
 // blanks the message that tells it apart from a TypeError of ours.
-const transportFailureKind = (error: unknown): APIError["transportKind"] => {
+const ownTransportFailureKind = (error: unknown): APIError["transportKind"] => {
   if (APIError.is(error)) {
     return error.transportKind;
   }
@@ -822,6 +822,25 @@ const transportFailureKind = (error: unknown): APIError["transportKind"] => {
     return "network";
   }
   return isNativeFetchTimeout(error) ? "timeout" : undefined;
+};
+
+// A feature error may wrap the transport failure as its cause; the cause
+// still decides the class. An answered API error ends the walk.
+const transportFailureKind = (error: unknown): APIError["transportKind"] => {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (seen.size < MAX_EXCEPTION_CAUSE_DEPTH && !seen.has(current)) {
+    seen.add(current);
+    const kind = ownTransportFailureKind(current);
+    if (kind !== undefined || APIError.is(current)) {
+      return kind;
+    }
+    if (!(current instanceof Error)) {
+      return undefined;
+    }
+    current = current.cause;
+  }
+  return undefined;
 };
 
 const captureError: Analytics["captureError"] = (

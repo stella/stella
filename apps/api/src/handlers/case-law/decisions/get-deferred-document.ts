@@ -13,6 +13,7 @@
 
 import { panic } from "better-result";
 
+import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import type { PublicCountrySurface } from "@stll/api-contract/public-country-capability";
 import { isDocumentAst } from "@stll/legal-ast/document-ast";
 
@@ -258,6 +259,7 @@ const DECISION_READ_FIELD_KINDS = {
   documentAstSource: DECISION_READ_FIELD_KIND.TEXT,
   sections: DECISION_READ_FIELD_KIND.TEXT,
   fulltext: DECISION_READ_FIELD_KIND.TEXT,
+  bodySource: DECISION_READ_FIELD_KIND.TEXT,
   metadata: DECISION_READ_FIELD_KIND.TEXT,
   headnote: DECISION_READ_FIELD_KIND.TEXT,
   textFields: DECISION_READ_FIELD_KIND.TEXT,
@@ -325,6 +327,7 @@ const withheldDecisionText = (reason: TextAbsenceReason) =>
     documentAstSource: null,
     sections: null,
     fulltext: null,
+    bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
     metadata: {},
     headnote: absentTextField(reason),
     textFields: absentDecisionTextFields(reason),

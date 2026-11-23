@@ -90,13 +90,22 @@ export const resolveExtraColumns = (
 
 export const NAME_COL_ID = "__name__";
 export const DEFAULT_EXTRA_WIDTH_PX = 128;
+/** The narrowest a column gets, by a drag or by yielding to a narrow view. */
+export const MIN_COLUMN_WIDTH_PX = 80;
+/** The narrowest the Name column gets before the tree scrolls sideways. */
+const NAME_MIN_WIDTH = "10rem";
 
 /** The trailing actions track `buildGridTemplate` ends every template with. */
 const ACTIONS_COL_RE = / 2rem$/u;
 
 /**
  * The tree's grid: Name (a stored width, or a flexible track), each extra
- * column at its stored or default width, then the row actions.
+ * column at its stored width or yielding from its default width down to the
+ * minimum, then the row actions. A column nobody sized gives up room before
+ * the tree scrolls sideways, so a docked pane beside the list narrows the
+ * columns (their headers truncate) instead of cutting the last one off at
+ * the scroll edge; only once every column is at its minimum does the tree
+ * scroll. A width someone dragged a column to is kept as it is.
  */
 export const buildGridTemplate = (
   extraColumns: readonly ExtraColumn[],
@@ -104,9 +113,16 @@ export const buildGridTemplate = (
 ): string => {
   const nameWidth = widths[NAME_COL_ID];
   const nameTrack =
-    nameWidth !== undefined ? `${nameWidth}px` : "minmax(20rem, 1fr)";
+    nameWidth !== undefined
+      ? `${nameWidth}px`
+      : `minmax(${NAME_MIN_WIDTH}, 1fr)`;
   const extraTracks = extraColumns
-    .map((col) => `${widths[col.id] ?? DEFAULT_EXTRA_WIDTH_PX}px`)
+    .map((col) => {
+      const stored = widths[col.id];
+      return stored !== undefined
+        ? `${stored}px`
+        : `minmax(${MIN_COLUMN_WIDTH_PX}px, ${DEFAULT_EXTRA_WIDTH_PX}px)`;
+    })
     .join(" ");
   return `${nameTrack}${extraTracks ? ` ${extraTracks}` : ""} 2rem`;
 };

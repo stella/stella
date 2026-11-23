@@ -143,7 +143,7 @@ export const BrowserQuestion = ({
             {t.rich("browserQuestionTitle", { bdi, browser: browser.name })}
           </h2>
           <p className="text-muted-foreground text-xs text-pretty">
-            {t("browserQuestionDescription")}
+            {t("browserQuestionDescription")} {t("browserPrivacyNote")}
           </p>
         </div>
         <Button

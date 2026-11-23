@@ -413,6 +413,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "credential",
   },
+  "POST /v1/case/citations/check": {
+    type: "non-replay",
+    reason: "read",
+  },
   "POST /v1/case/decisions/search/expand": {
     type: "non-replay",
     reason: "current-state",
@@ -645,6 +649,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "POST /v1/dictation/cleanup": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/dictation/recording-cleanup": {
     type: "non-replay",
     reason: "current-state",
   },
@@ -1320,8 +1328,6 @@ const IDEMPOTENCY_EXCEPTIONS = {
     "Retains native processing-run deduplication by source version.",
   "src/handlers/feedback/create.ts":
     "Submits to the detached feedback store outside the organization transaction.",
-  "src/handlers/files/email-attachment/create.ts":
-    "Saves attachment bytes through the durable upload lifecycle.",
   "src/handlers/flows/create.ts":
     "Synchronizes the scheduled trigger after the database mutation.",
   "src/handlers/lists/items/comments/create.ts":

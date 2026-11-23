@@ -40,6 +40,7 @@ import {
   activityBlocks,
   blockDetails,
   calendarHours,
+  contiguousRuns,
   draftedBlocks,
   manualSuggestion,
   matchedSuggestions,
@@ -73,6 +74,8 @@ import type {
 import {
   cardDraftEntry,
   cardDraftFrom,
+  restoredEdit,
+  revertActions,
   structureItems,
 } from "./billing-draft-logic";
 import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
@@ -142,24 +145,19 @@ export type ActivityCalendarPreferences = {
   granularity: DayCalendarGranularity;
 };
 
-/** An Activity block's hover: its range, then each app with its time and the
- * title it spent longest on, then why a browser in it recorded no titles. */
-const ActivityBlockDetails = ({
+/** Each app with its time and the title it spent longest on, then how many
+ * apps past the limit are left out. */
+const BlockDetailRows = ({
   details,
-  range,
   sourceAppVisuals,
-  titlesNotice,
 }: {
   details: ReturnType<typeof blockDetails>;
-  range: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
-  titlesNotice: ReactElement | null;
 }) => {
   const t = useTranslations("activity");
   const durationLabel = useDurationLabel();
   return (
-    <div className="flex w-64 flex-col gap-2 py-0.5 text-xs">
-      <p className="text-muted-foreground tabular-nums">{range}</p>
+    <>
       <ul className="flex flex-col gap-1.5">
         {details.rows.map((row) => (
           <li className="flex items-start gap-2" key={row.identifier}>
@@ -193,6 +191,42 @@ const ActivityBlockDetails = ({
           {t("moreApps", { count: details.hiddenCount })}
         </p>
       ) : null}
+    </>
+  );
+};
+
+/** An Activity block's hover: its range, then the apps its stated time was
+ * spent in, then the brief stretches with no matter it took in, then why a
+ * browser in it recorded no titles. */
+const ActivityBlockDetails = ({
+  details,
+  joined,
+  range,
+  sourceAppVisuals,
+  titlesNotice,
+}: {
+  details: ReturnType<typeof blockDetails>;
+  /** `null` when the block took in nothing it does not count. */
+  joined: ReturnType<typeof blockDetails> | null;
+  range: string;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  titlesNotice: ReactElement | null;
+}) => {
+  const t = useTranslations("activity");
+  return (
+    <div className="flex w-64 flex-col gap-2 py-0.5 text-xs">
+      <p className="text-muted-foreground tabular-nums">{range}</p>
+      <BlockDetailRows details={details} sourceAppVisuals={sourceAppVisuals} />
+      {joined === null ? null : (
+        <>
+          <Separator />
+          <p className="text-muted-foreground">{t("joinedActivity")}</p>
+          <BlockDetailRows
+            details={joined}
+            sourceAppVisuals={sourceAppVisuals}
+          />
+        </>
+      )}
       {titlesNotice === null ? null : (
         <>
           <Separator />
@@ -237,16 +271,18 @@ const DayMetrics = ({
       ? t("hours", { hours: format.number(1) })
       : t("durationMinutes", { minutes: value });
   return (
-    <div className="ms-auto flex flex-wrap items-center gap-6 tabular-nums">
-      {[
-        { label: t("activeLabel"), ms: activeMs },
-        { label: t("draftedLabel"), ms: draftedMs },
-      ].map(({ label, ms }) => (
-        <div key={label}>
-          <b className="block text-base font-semibold">{hours(ms)}</b>
-          <span className="text-muted-foreground text-xs">{label}</span>
-        </div>
-      ))}
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 tabular-nums">
+      <div className="flex items-center gap-6">
+        {[
+          { label: t("activeLabel"), ms: activeMs },
+          { label: t("draftedLabel"), ms: draftedMs },
+        ].map(({ label, ms }) => (
+          <div key={label}>
+            <b className="block text-base font-semibold">{hours(ms)}</b>
+            <span className="text-muted-foreground text-xs">{label}</span>
+          </div>
+        ))}
+      </div>
       <div className="flex items-center gap-2">
         <span
           className="text-muted-foreground text-xs"
@@ -513,15 +549,16 @@ export const ActivityDayCalendar = ({
   const summaryLabel = useSummaryLabel();
   // Matters group the day, so its blocks wait for them: drawn before they
   // arrive, every block a matter claims would be drawn again as another one,
-  // under a pointer or focus already on it. The grid shows meanwhile.
-  const matched = candidates.type !== "loading";
+  // under a pointer or focus already on it. The grid shimmers meanwhile where
+  // activity was recorded.
   const columns = useCalendarColumns({
-    segments: matched ? day.segments : [],
+    phase: candidates.type === "loading" ? "pending" : "ready",
+    segments: day.segments,
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
-    draftedEntries: matched ? draftedEntries : [],
-    suggestions: matched ? suggestions : [],
+    draftedEntries,
+    suggestions,
     narrativeFor: (suggestion) => narratives.editFor(suggestion).narrative,
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
@@ -548,6 +585,7 @@ export const ActivityDayCalendar = ({
         assist={narratives.view(openSuggestion)}
         earlierEntries={narratives.earlierEntries(openSuggestion)}
         flags={narratives.flags(openSuggestion)}
+        codeNames={narratives.codeNames(openSuggestion)}
         structure={narratives.structure(openSuggestion)}
         onAcceptStructure={() => acceptStructure(openSuggestion)}
         onDraft={() => narratives.draft(openSuggestion)}
@@ -579,7 +617,9 @@ export const ActivityDayCalendar = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-5">
+      {/* The totals keep a row of their own, so the header's height does
+          not depend on how long its words are in a language. */}
+      <div className="flex flex-col gap-3">
         {header}
         <DayMetrics
           segments={day.segments}
@@ -590,16 +630,13 @@ export const ActivityDayCalendar = ({
         />
       </div>
       {notice}
+      {day.segments.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          {t(emptyDayMessage(snapshot))}
+        </p>
+      ) : null}
       {candidates.type === "failed" ? (
-        <div
-          role="alert"
-          className="text-destructive flex items-center gap-2 text-sm"
-        >
-          {t("candidatesFailed")}
-          <Button size="sm" variant="ghost" onClick={refreshCandidates}>
-            {t("retry")}
-          </Button>
-        </div>
+        <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
       <SubmissionFeedback
         submission={submission}
@@ -658,23 +695,57 @@ export const ActivityDayCalendar = ({
   );
 };
 
+const CandidatesFailedAlert = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations("activity");
+  return (
+    <div
+      role="alert"
+      className="text-destructive flex items-center gap-2 text-sm"
+    >
+      {t("candidatesFailed")}
+      <Button size="sm" variant="ghost" onClick={onRetry}>
+        {t("retry")}
+      </Button>
+    </div>
+  );
+};
+
+/** What a day with nothing recorded says: today, what fills it; another day,
+ * only that nothing was recorded. */
+const emptyDayMessage = ({
+  date,
+  recordingStatus,
+  today,
+}: Pick<ActivityDaySnapshot, "date" | "recordingStatus" | "today">) => {
+  if (date !== today) {
+    return "empty";
+  }
+  switch (recordingStatus) {
+    case "recording":
+      return "emptyToday";
+    case "paused":
+    case "off":
+      return "emptyTodayPaused";
+    default:
+      recordingStatus satisfies never;
+      return panic("Unhandled activity recording status");
+  }
+};
+
 /** What a suggestion card's header says about its time: its range or how
- * many pieces it has, the minutes they hold and the hours they bill. */
+ * many pieces it has, and the hours the entry bills. */
 const useSummaryLabel = () => {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const minutesLabel = useMinutesLabel();
   const hours = (tenths: number) =>
     format.number(tenths / 10, {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
   return (summary: SuggestionSummary) => {
-    const duration = minutesLabel(summary.minutes);
     switch (summary.type) {
       case "range":
         return t("suggestionRange", {
-          duration,
           hours: hours(summary.tenths),
           range: format.dateTimeRange(summary.startMs, summary.endMs, {
             hour: "numeric",
@@ -684,7 +755,6 @@ const useSummaryLabel = () => {
       case "pieces":
         return t("suggestionPieces", {
           count: summary.count,
-          duration,
           hours: hours(summary.tenths),
         });
       default:
@@ -732,6 +802,8 @@ const cardTimes = ({
     : { type: "recorded" };
 
 type CalendarColumnsOptions = {
+  /** `pending` while the matters that group the day are still read. */
+  phase: "pending" | "ready";
   segments: readonly MatchedSegment[];
   granularity: DayCalendarGranularity;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
@@ -748,6 +820,7 @@ type CalendarColumnsOptions = {
 /** The Activity column (recorded time) and the Time entries column (created
  * drafts and suggestions). */
 function useCalendarColumns({
+  phase,
   segments,
   granularity,
   sourceAppVisuals,
@@ -772,6 +845,16 @@ function useCalendarColumns({
     });
   const durationLabel = useDurationLabel();
   const minutesLabel = useMinutesLabel();
+  const activityHeader = { id: ACTIVITY_COLUMN_ID, label: t("title") };
+  const entriesHeader = { id: ENTRIES_COLUMN_ID, label: t("timeEntries") };
+  if (phase === "pending") {
+    // Where activity was recorded is known; what each stretch becomes is not.
+    const placeholders = contiguousRuns(segments);
+    return [
+      { ...activityHeader, placeholders, type: "pending" },
+      { ...entriesHeader, placeholders, type: "pending" },
+    ];
+  }
   const titleOf = segmentTitles(segments);
 
   const activity = activityBlocks(segments, granularity).map(
@@ -780,9 +863,18 @@ function useCalendarColumns({
       const titlesNotice = titlesNoticeFor(
         block.apps.map(({ identifier }) => identifier),
       );
+      const joined = new Set(block.joined);
       const details = (
         <ActivityBlockDetails
-          details={blockDetails(block.sources, titleOf)}
+          details={blockDetails(
+            block.sources.filter((segment) => !joined.has(segment)),
+            titleOf,
+          )}
+          joined={
+            block.joined.length === 0
+              ? null
+              : blockDetails(block.joined, titleOf)
+          }
           range={range}
           sourceAppVisuals={sourceAppVisuals}
           titlesNotice={titlesNotice}
@@ -792,12 +884,7 @@ function useCalendarColumns({
         block.apps.map(({ name }) => name),
         { type: "unit" },
       );
-      const duration = durationLabel(
-        block.sources.reduce(
-          (sum, segment) => sum + segment.endMs - segment.startMs,
-          0,
-        ),
-      );
+      const duration = durationLabel(block.durationMs);
       // A block is named by the topic that sets its colour: the app its topic
       // was held in, with its icon, or a call there; time it took in from
       // other apps is listed under it, never named.
@@ -916,17 +1003,15 @@ function useCalendarColumns({
 
   return [
     {
+      ...activityHeader,
       blocks: activity,
-      id: ACTIVITY_COLUMN_ID,
-      label: t("title"),
       // Activity is the record; entries are drawn where they are kept.
       rangeSelection: { type: "disabled" },
       type: "blocks",
     },
     {
+      ...entriesHeader,
       blocks: entries,
-      id: ENTRIES_COLUMN_ID,
-      label: t("timeEntries"),
       rangeSelection: rangeSelection
         ? { label: t("selectRange"), type: "enabled" }
         : { type: "disabled" },
@@ -1047,6 +1132,8 @@ type SuggestionDraftsOptions = {
 
 /** What a written draft leaves on a card. */
 type Drafted = {
+  narrativeLanguage: CardDraft["narrativeLanguage"];
+  codeNames: CardDraft["codeNames"];
   earlierEntries: CardDraft["earlierEntries"];
   flags: CardDraft["flags"];
   /** The server's result, which a refinement sends back unchanged. */
@@ -1074,7 +1161,8 @@ type DraftStatus =
       proposal: CardDraft;
       type: "proposed";
     }
-  | { kind: DraftFailureKind; type: "failed" };
+  /** Drafting for `matterId` failed; another matter starts afresh. */
+  | { kind: DraftFailureKind; matterId: string; type: "failed" };
 
 type DraftAnswer =
   | { draft: CardDraft; type: "drafted" }
@@ -1083,6 +1171,8 @@ type DraftAnswer =
   | { type: "quiet" };
 
 const draftedFrom = (draft: CardDraft, matterId: string): Drafted => ({
+  narrativeLanguage: draft.narrativeLanguage,
+  codeNames: draft.codeNames,
   earlierEntries: draft.earlierEntries,
   flags: draft.flags,
   structure: draft.structure,
@@ -1113,6 +1203,12 @@ const withAiText = (
   },
 });
 
+/** The card's draft while the card keeps the matter it was drafted for. */
+const draftForMatter = (status: DraftStatus, edit: SuggestionEdit) =>
+  status.type === "drafted" && edit.matter?.id === status.matterId
+    ? status
+    : null;
+
 /** What a card's stella AI area shows. */
 const draftAssistView = ({
   settings,
@@ -1125,8 +1221,11 @@ const draftAssistView = ({
   edit: SuggestionEdit;
   template: string;
 }): DraftAssistView => {
-  if (settings.type !== "ready" || settings.mode === "off") {
+  if (settings.type !== "ready") {
     return { type: "hidden" };
+  }
+  if (settings.mode === "off") {
+    return { kind: "off", type: "failed" };
   }
   switch (status.type) {
     case "writing":
@@ -1151,19 +1250,24 @@ const draftAssistView = ({
     return { type: "needsMatter" };
   }
   if (settings.consent !== "granted") {
-    return {
-      pending: settings.consent === "pending-grant",
-      type: "consent",
-    };
+    return { consent: settings.consent, type: "consent" };
   }
-  if (status.type === "failed") {
+  if (status.type === "failed" && status.matterId === edit.matter.id) {
     return { kind: status.kind, type: "failed" };
   }
+  const reverts = revertActions(edit, template);
   return {
-    canUndo: edit.undo !== null,
-    canRestoreTemplate: edit.narrative !== template,
-    drafted: status.type === "drafted",
-    refineFailure: status.type === "drafted" ? status.refineFailure : null,
+    canUndo: reverts.undo,
+    canRestoreTemplate: reverts.restoreTemplate,
+    draft:
+      status.type === "drafted"
+        ? { narrativeLanguage: status.narrativeLanguage }
+        : null,
+    // A refusal names the matter it was refining for.
+    refineFailure:
+      status.type === "drafted" && status.matterId === edit.matter.id
+        ? status.refineFailure
+        : null,
     type: "ready",
   };
 };
@@ -1193,13 +1297,14 @@ function useSuggestionDrafts({
     if (suggestion.matter === null) {
       return "";
     }
-    const titles = matterTitles(suggestion, suggestion.matter.id);
+    // Quoted: titles mix file names, meetings and subjects with their own commas.
+    const titles = [
+      ...new Set(matterTitles(suggestion, suggestion.matter.id)),
+    ].map((title) => t("narrativeTitle", { title }));
     const text =
       titles.length > 0
         ? t("narrativeEvidence", {
-            evidence: format.list([...new Set(titles)], {
-              type: "conjunction",
-            }),
+            evidence: format.list(titles, { type: "conjunction" }),
           })
         : t("narrativeApps", {
             apps: format.list(
@@ -1311,7 +1416,11 @@ function useSuggestionDrafts({
           settle(id, request, { type: "template" });
           return undefined;
         case "failed":
-          settle(id, request, { kind: answer.kind, type: "failed" });
+          settle(id, request, {
+            kind: answer.kind,
+            matterId: matter.id,
+            type: "failed",
+          });
           return undefined;
         case "drafted":
           break;
@@ -1462,8 +1571,7 @@ function useSuggestionDrafts({
           ...current,
           [suggestion.id]: {
             ...edit,
-            narrative: template(suggestion),
-            classification: null,
+            ...restoredEdit(edit, template(suggestion)),
             undo: {
               narrative: edit.narrative,
               classification: edit.classification,
@@ -1480,15 +1588,14 @@ function useSuggestionDrafts({
       const status = statusFor(suggestion);
       return status.type === "drafted" ? status.flags : [];
     },
-    /** The split or move on offer, while the card keeps the matter it was
-     * drafted for. */
-    structure: (suggestion: ActivitySuggestion) => {
-      const status = statusFor(suggestion);
-      return status.type === "drafted" &&
-        editFor(suggestion).matter?.id === status.matterId
-        ? status.structure
-        : null;
-    },
+    /** The names of the codes the draft gave, for the matter it was for. */
+    codeNames: (suggestion: ActivitySuggestion) =>
+      draftForMatter(statusFor(suggestion), editFor(suggestion))?.codeNames ??
+      [],
+    /** The split or move on offer, for the matter it was drafted for. */
+    structure: (suggestion: ActivitySuggestion) =>
+      draftForMatter(statusFor(suggestion), editFor(suggestion))?.structure ??
+      null,
     view: (suggestion: ActivitySuggestion) =>
       draftAssistView({
         settings,

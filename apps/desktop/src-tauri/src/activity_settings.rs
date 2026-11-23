@@ -1,9 +1,9 @@
 //! Activity settings commands, for the activity window and the Settings
 //! window. Every command takes an [`ActivitySettingsCaller`]: these change
 //! settings or delete history, and the one read returns settings and the
-//! names of one day's apps, never the timeline. Every change announces
-//! itself through `activity::emit_changed`, so both windows and the tray
-//! read again.
+//! names of one day's apps, never the timeline. What setup also offers
+//! lives in `activity_setup`. Every change announces itself through
+//! `activity::emit_changed`, so both windows and the tray read again.
 
 use chrono::Utc;
 use tauri::{AppHandle, State};
@@ -12,7 +12,7 @@ use crate::{
   activity::{
     self, ActivityAppDetailCapture, ActivityAppState, ActivityDeletionError,
     ActivityDeletionRecovery, ActivityHistoryDisposition, ActivityOtherHistoryRecovery,
-    ActivityRecordingStatus, ActivityRetention, ActivitySettingsSnapshot,
+    ActivityRetention, ActivitySettingsSnapshot,
   },
   activity_commands::{lock_error, update},
   activity_details,
@@ -52,32 +52,6 @@ pub fn activity_get_settings(
   drop(manager);
   snapshot.resolve_app_visuals();
   Ok(snapshot)
-}
-
-#[tauri::command]
-pub fn activity_set_recording_status(
-  caller: ActivitySettingsCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  status: ActivityRecordingStatus,
-) -> Result<(), String> {
-  if status == ActivityRecordingStatus::Off {
-    return Err("activity recording can only be paused".to_string());
-  }
-  let mut prompt = false;
-  update(&app, &state, &caller, |manager| {
-    // Details are on by default, so the first start asks for the
-    // permission that records them.
-    prompt = manager.recording_status() == ActivityRecordingStatus::Off
-      && manager.capture_details();
-    manager.set_recording_status(status, Utc::now())
-  })?;
-  // Recording has started either way; the prompt only follows a caller that
-  // is still current.
-  if prompt && caller.require_current(&app).is_ok() {
-    activity_details::request_permission();
-  }
-  Ok(())
 }
 
 #[tauri::command]
@@ -151,39 +125,6 @@ pub fn activity_delete_other_account_history(
 ) -> Result<(), ActivityDeletionError> {
   update(&app, &state, &caller, |manager| {
     manager.delete_other_account_history(recovery)
-  })
-}
-
-#[tauri::command]
-pub fn activity_set_capture_details(
-  caller: ActivitySettingsCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  enabled: bool,
-) -> Result<(), String> {
-  let should_prompt = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    caller.require_current(&app)?;
-    manager.require_caller(&caller)?;
-    manager.set_capture_details(enabled, Utc::now())?
-  };
-  if should_prompt {
-    caller.require_current(&app)?;
-    activity_details::request_permission();
-  }
-  activity::emit_changed(&app);
-  Ok(())
-}
-
-#[tauri::command]
-pub fn activity_set_detect_calls(
-  caller: ActivitySettingsCaller,
-  app: AppHandle,
-  state: State<'_, ActivityAppState>,
-  enabled: bool,
-) -> Result<(), String> {
-  update(&app, &state, &caller, |manager| {
-    manager.set_detect_calls(enabled, Utc::now())
   })
 }
 

@@ -1,0 +1,842 @@
+{
+  "aiColumns": {
+    "countSummary": "{columns} kolonnas × {rows} rindas = {answers, plural, zero {# atbildes} one {# atbilde} other {# atbildes}}. Atbildes patērē budžetu.",
+    "modelRefused": "Modelis atteicās atbildēt",
+    "noRowsToRun": "Atlasē nav piemērotu rindu.",
+    "nothingFound": "Nekas netika atrasts",
+    "nothingFoundInCutDocument": "Izlasītajā daļā nekas nav atrasts",
+    "refusedBudget": "Nav palaists: atbilžu budžets nav pieejams",
+    "rerunAllPage": "Palaist visu vēlreiz (šajā lapā)",
+    "rerunColumnPage": "Palaist kolonnu vēlreiz (šajā lapā)",
+    "runColumnPage": "Palaist kolonnu (šajā lapā)",
+    "runPageRows": "Palaist {count, plural, zero {# rindai šajā lapā} one {# rindai šajā lapā} other {# rindām šajā lapā}}",
+    "runRemainingPage": "Palaist atlikušās (šajā lapā)",
+    "runSelectedRows": "Palaist {count, plural, zero {# atlasītai rindai} one {# atlasītai rindai} other {# atlasītām rindām}}",
+    "selectedRun": "Palaist AI kolonnas {count, plural, zero {# rindai} one {# rindai} other {# rindām}}",
+    "waitToRun": "Uzgaidiet, līdz beidzas pašreizējā izpilde."
+  },
+  "avt": {
+    "anchorFacts": {
+      "about": "Par enkurfaktu reģistru",
+      "addFact": "Pievienot faktu",
+      "addFactPlaceholder": "Norādiet faktu tā, kā tas izriet no pierādījumiem",
+      "addInterpretationNote": "Pievienot interpretācijas piezīmi",
+      "busyLine": "Jūsu pieņemtie fakti parādīsies šeit.",
+      "confidenceLevels": {
+        "high": "Augsta noteiktība",
+        "low": "Zema noteiktība",
+        "medium": "Vidēja noteiktība"
+      },
+      "description": "Droši pierādījumi, piemēram, e-pasta vēstules, ziņas, bankas ieraksti un saskaņoti fakti, kas iegūti enkurfaktu reģistram, ar kuru tiek pārbaudīti apgalvojumi. Pārskatiet, rediģējiet vai manuāli pievienojiet faktus.",
+      "editInterpretationNote": "Rediģēt interpretācijas piezīmi",
+      "emptyLine": "Izgūstiet faktus no lietas dokumentiem vai pievienojiet faktu manuāli.",
+      "emptyTitle": "Enkurfaktu vēl nav",
+      "heldDescription": "Šo izvilkumu <strong>nozīme patiešām ir neskaidra</strong>: saturs ir provizorisks vai neapstiprināts, nevis tikai rakstīts ar roku. Tie netiek vērtēti, kamēr pārbaudītājs tos neapstiprina, nerediģē vai neievada vēlreiz. Salasāms avots nekad netiek nosūtīts pārskatīšanai tikai tā nesēja dēļ.",
+      "heldFilter": "{count, plural, zero {# aizturēti pārskatīšanai} one {# aizturēts pārskatīšanai} other {# aizturēti pārskatīšanai}}",
+      "heldForReview": "Aizturēts pārskatīšanai",
+      "hideSources": "Paslēpt avotus",
+      "holdOutOfScoring": "Izslēgt no vērtējuma",
+      "inScoring": "Iekļauts vērtējumā",
+      "includeInScoring": "Iekļaut vērtējumā",
+      "interpretationNote": "Interpretācijas piezīme",
+      "interpretationNotePlaceholder": "Ja šī pierādījuma nozīme ir apstrīdēta, aprakstiet, kā. Ja nav, atstājiet lauku tukšu.",
+      "interpretiveConfidence": "Interpretācijas ticamība",
+      "openList": "Atvērt sarakstu",
+      "record": "Enkurfaktu reģistrs",
+      "showSources": "Rādīt avotus",
+      "title": "Enkurfakti"
+    },
+    "chronology": {
+      "claims": "{count, plural, zero {# apgalvojumi balstās uz šo faktu} one {# apgalvojums balstās uz šo faktu} other {# apgalvojumi balstās uz šo faktu}}",
+      "empty": "Šajā sarakstā vēl nav faktu.",
+      "moreClaims": "{count, plural, zero {vēl # apgalvojumi} one {vēl # apgalvojums} other {vēl # apgalvojumi}}",
+      "undated": "Bez datuma"
+    },
+    "claimDetail": {
+      "basis": {
+        "anchorFactsDisagree": "Enkurfakti ir pretrunā",
+        "conflictCount": "{count, plural, zero {# pretrunu} one {# pretruna} other {# pretrunas}}",
+        "gap": "<strong>Neviens enkurfakts neaptver šo apgalvojumu.</strong> Tas ir robs reģistrā, nevis vājš slēdziens: pašlaik nav nekā, pret ko to pārbaudīt.",
+        "notVerifiable": "<strong>Apgalvojumu nevar pārbaudīt.</strong> Šādu apgalvojumu nevarētu apstiprināt neviens dokuments: tā ir hipotētiska alternatīva, prognoze, nodoma paziņojums, juridisks secinājums vai pārāk neskaidrs apgalvojums. Tas tiek atlikts, nevis vērtēts.",
+        "supportCount": "{count, plural, zero {# pamatojumu} one {# pamatojums} other {# pamatojumi}}",
+        "verdictWithheld": "Slēdziens nav sniegts"
+      },
+      "escalatedReview": "Nodots pierādījumu komandai: kamēr nav atrisināta pamatā esošā pretruna, šeit nav slēdziena, ko apstiprināt vai apstrīdēt.",
+      "flagDispute": "Atzīmēt strīdu",
+      "humanReview": "Cilvēka pārbaude",
+      "interpretationCaveat": "Vienam no saistītajiem faktiem ir būtiska interpretācijas atruna: neskaidra ir pierādījuma nozīme, nevis tā nesējs.",
+      "notVerifiable": {
+        "reopen": "Atvērt vēlreiz → pārbaudīt pret reģistru",
+        "reopenExplanation": "<strong>Atlikts kā nepārbaudāms.</strong> Ja apgalvojumu patiesībā var pārbaudīt, atveriet to vēlreiz: AVT saglabās jūsu pārklasifikāciju un veiks tikai iepriekš izlaisto pārbaudi pret reģistru.",
+        "reopenedPending": "Atvērts vēlreiz kā pārbaudāms apgalvojums. Tas tiek rādīts kā <strong>Nav seguma</strong>, kamēr dokuments netiek pārbaudīts vēlreiz."
+      },
+      "note": {
+        "add": "Pievienot piezīmi vai labojumu",
+        "heading": "Jūsu piezīme · {savedAt}",
+        "headingUndated": "Jūsu piezīme",
+        "placeholder": "Ierakstiet labojumu vai paskaidrojumu. Saglabājot piezīme tiek sasaistīta tikai ar šo apgalvojumu; slēdziens un enkurfaktu reģistrs netiek mainīti.",
+        "saveCorrection": "Saglabāt labojumu"
+      },
+      "overridden": "Mainīts",
+      "overrideNotice": "Slēdziens mainīts uz <strong>{verdict}</strong>. Tālāk ir redzama paša rīka nemainītā analīze.",
+      "overrideTooltip": "Pārbaudītājs ir reģistrējis citu slēdzienu. Tālāk ir redzama paša rīka nemainītā analīze.",
+      "overrideVerdict": "Mainīt slēdzienu",
+      "recordConflict": {
+        "confirmGoverningRecord": "Apstiprināt kā noteicošo",
+        "description": "Divi enkurfakti attiecas uz vienu un to pašu jautājumu, <strong>{subject}</strong>, taču ir pretrunā. Abi ir <strong>augstas ticamības</strong> avoti, tāpēc tā nav uzticamības problēma: pats reģistrs ir iekšēji pretrunīgs. AVT nesniedz slēdzienu un nevērtē apgalvojumu, jo izvēle starp ierakstiem ir lēmums, kas jāpieņem un jāreģistrē jums; rīks nedrīkst to izdarīt klusējot.",
+        "escalatedNotice": "Atzīmēts pierādījumu komandai. Reģistra pretruna paliek atvērta un uzskaitīta, līdz tiek izvēlēts noteicošais ieraksts.",
+        "flagForEvidenceTeam": "Nodot pierādījumu komandai",
+        "governed": "<strong>{value}</strong> ir noteicošais: apgalvojums tiek vērtēts pret šo ierakstu. Otrs ieraksts paliek reģistrā.",
+        "reconcile": "Saskaņot reģistru",
+        "suggestedNotice": "Ieteikts dot priekšroku dokumenta ierakstam, nevis liecinieka stāstījumam. Apstipriniet to vai izvēlieties otru ierakstu.",
+        "title": "Pretrunīgi pierādījumi reģistrā",
+        "treatAsGoverningRecord": "Uzskatīt par noteicošo"
+      },
+      "relation": {
+        "conflicts": "Ir pretrunā",
+        "supports": "Pamato"
+      },
+      "reopened": "Atvērts vēlreiz, gaida pārbaudi",
+      "reopenedTooltip": "Pārbaudītājs to pārklasificēja par pārbaudāmu faktu; tiešā pārbaude pret reģistru vēl nav veikta.",
+      "sourceCount": "{count, plural, zero {# avotu} one {# avots} other {# avoti}}",
+      "verdictBy": "Slēdzienu sniedza {model}",
+      "verdictByGenerativeModel": "Slēdzienu sniedza ģeneratīvais modelis; lēmumu modelis to nenoteica",
+      "whyVerdict": "Slēdziena pamatojums: enkurfakti"
+    },
+    "claimTypes": {
+      "fact": {
+        "hint": "Objektīvs, pārbaudāms apgalvojums, ko vērtē pret reģistru. Ietver apgalvojumus, kas formulēti kā atzīšana vai noliegums: tiek vērtēts pamatā esošais apgalvojums, nevis tikai vārdi."
+      },
+      "opinion": {
+        "hint": "Vērtējums vai raksturojums, ko neviens dokuments nevar apstiprināt vai atspēkot; tas tiek atlikts, nevis vērtēts.",
+        "label": "Viedoklis"
+      },
+      "setAside": "atlikts",
+      "unverifiable": {
+        "hint": "Apgalvojums, ko neviens dokuments nevarētu apstiprināt: hipotētiska alternatīva, prognoze, nodoma vai pārliecības paziņojums, juridisks secinājums vai pārāk neskaidrs apgalvojums. Tas tiek atlikts, nevis vērtēts. Tas atšķiras no seguma trūkuma, kad faktu var pārbaudīt, bet reģistrā par to vienkārši nav informācijas.",
+        "label": "Nepārbaudāms"
+      }
+    },
+    "confidence": {
+      "interpretation": "Interpretācija",
+      "tooltip": "Interpretācijas ticamība norāda, cik nepārprotama ir pierādījuma nozīme. Tā nav atkarīga no avota nesēja, piemēram, rokraksta vai skenējuma."
+    },
+    "confirm": {
+      "acknowledge": "Sapratu",
+      "recordConflict": "Apstiprināt risinājumu",
+      "supported": "Apstiprināt: gatavs",
+      "verdict": "Apstiprināt slēdzienu"
+    },
+    "disposition": {
+      "contested": "Slēdziens ir skaidrs, taču viena saistītā fakta interpretācija ir apstrīdēta; pirms apstiprināšanas pārskatiet to.",
+      "contradicted": "Reģistrs neatbilst šim apgalvojumam. Pirms slēdziena apstiprināšanas tas jāizvērtē cilvēkam.",
+      "nocover": "Neviens saraksta fakts vēl neattiecas uz šo apgalvojumu.",
+      "notverifiable": "Atlikts kā nepārbaudāms; apstiprināšana nav obligāta. Ja apgalvojumu patiesībā var pārbaudīt, atveriet to vēlreiz tālāk.",
+      "recordconflict": "Divi pierādījumi reģistrā ir pretrunā. Iepriekš izlemiet, kurš ir noteicošais, vai nododiet jautājumu pierādījumu komandai; rīks neizvēlēsies jūsu vietā.",
+      "restsOnHeld": "Fakts, uz kuru balstās šis slēdziens, ir aizturēts pārskatīšanai; apstipriniet, ka slēdziens ir spēkā arī bez tā, vai pārbaudiet apgalvojumu vēlreiz, kad fakts būs noskaidrots.",
+      "scopeMismatch": "Citētā fakta tvērums atšķiras no apgalvojuma. Pirms slēdziens tiek apstiprināts, izvērtējiet, vai tas izšķir apgalvojumu tā formulējumā.",
+      "supported": "Reģistrs to apstiprina. Jūsu apstiprinājums apliecina, ka rīks to nolasīja pareizi; vērtējošs lēmums nav vajadzīgs.",
+      "tension": "Reģistrs to pamato tikai daļēji. Pirms slēdziena apstiprināšanas izvērtējiet iepriekš minētos pamatojošos un pretrunīgos faktus.",
+      "testimonyOnly": "Materiāli to apstiprina, taču neviens dokumenta ieraksts to nepamato: tas balstās uz liecībām. Jūsu apstiprinājums apliecina, ka rīks to nolasīja pareizi; secinājums paliek atzīmēts kā balstīts uz liecībām.",
+      "unsourcedOnly": "Reģistrs to apstiprina, bet tikai ar faktiem, kuriem vēl nav avota. Jūsu apstiprinājums apliecina, ka rīks tos izlasīja pareizi; fakti paliek atzīmēti kā bez avota."
+    },
+    "documents": {
+      "claimSummary": "Pretrunā: {contradicted} · Daļēji pretrunā: {tension} · Reģistra pretruna: {conflicts}",
+      "empty": "Augšupielādējiet dokumentu šajā lietā, lai to pārbaudītu.",
+      "kindsLoadFailed": "Neizdevās ielādēt, vai šie dokumenti ir liecības.",
+      "notVerified": "Vēl nav pārbaudīts",
+      "otherList": "Pārbaudīts pret citu sarakstu",
+      "permissionRequired": "Lai pārbaudītu dokumentus, jums ir nepieciešama atļauja rediģēt šo sarakstu.",
+      "sizeConfirmTitle": "Vai pārbaudīt šo dokumentu?",
+      "starting": "Sāk pārbaudi…",
+      "statusLoadFailed": "Neizdevās ielādēt šo dokumentu pārbaudes statusu.",
+      "testimony": "Liecība",
+      "testimonyAbout": "Par liecībām",
+      "testimonyLine": "Atzīmējiet liecinieku liecības, sarunu piezīmes un atšifrējumus kā liecības. No tām ņemtie fakti tiek uzskatīti par personas stāstījumu, nevis ierakstu.",
+      "verifyAgain": "Pārbaudīt vēlreiz"
+    },
+    "extraction": {
+      "busy": "Vispirms pabeidziet notiekošo izgūšanu un tās pārskatīšanu.",
+      "confirmStart": "{units, plural, zero {Sākt, # vienību} one {Sākt, # vienība} other {Sākt, # vienības}}",
+      "dialogDescription": "Katru faktu jūs pieņemat vai noraidāt, pirms tas nonāk reģistrā.",
+      "dialogTitle": "Izgūt faktus no dokumentiem",
+      "documentsChosen": "{count, plural, zero {Izvēlēti #, ne vairāk kā {max}} one {Izvēlēts #, ne vairāk kā {max}} other {Izvēlēti #, ne vairāk kā {max}}}",
+      "documentsLabel": "Lasāmie dokumenti",
+      "errors": {
+        "accessRevoked": "Faktu izgūšana tika apturēta, jo piekļuve nav pieejama.",
+        "aiUnavailable": "Dokumentu lasīšanai nav pieejams neviens AI modelis. Pārbaudiet organizācijas AI iestatījumus.",
+        "documentMissing": "Izvēlētais dokuments vai saraksts vairs nepastāv. Pārlādējiet lapu un izvēlieties vēlreiz.",
+        "enqueueFailed": "Neizdevās sākt faktu izgūšanu. Mēģiniet vēlreiz.",
+        "extractionFailed": "Faktus no šiem dokumentiem neizdevās izgūt.",
+        "internal": "Faktu izgūšana negaidīti neizdevās.",
+        "noText": "No izvēlētajiem dokumentiem neizdevās nolasīt tekstu.",
+        "sourceUnavailable": "Pēc izgūšanas sākuma dokuments tika mainīts vai noņemts. Izvēlieties dokumentus vēlreiz.",
+        "unsupportedFormat": "Faktus var nolasīt tikai no DOCX failiem, PDF failiem un failiem ar PDF versiju."
+      },
+      "extractFromDocuments": "Izgūt no dokumentiem",
+      "failedTitle": "Faktu izgūšana neizdevās",
+      "instructionLabel": "Ko meklēt (neobligāti)",
+      "instructionPlaceholder": "Piemēram: maksājumi starp pusēm un to datumi",
+      "nothingFound": "Izvēlētajos dokumentos netika atrasts neviens fakts.",
+      "proposedTitle": "Ierosinātie fakti",
+      "queued": "Gaida sākšanu.",
+      "reviewed": "Pieņemti {accepted} no {proposed, plural, zero {# ierosinātajiem faktiem} one {# ierosinātā fakta} other {# ierosinātajiem faktiem}}.",
+      "runSize": "{available, plural, zero {Šī palaišana izmantos aptuveni {estimated} no jūsu # pieejamajām vienībām.} one {Šī palaišana izmantos aptuveni {estimated} no jūsu # pieejamās vienības.} other {Šī palaišana izmantos aptuveni {estimated} no jūsu # pieejamajām vienībām.}}",
+      "running": "Notiek dokumentu lasīšana. Ierosinātie fakti šeit parādīsies pārskatīšanai.",
+      "selectDocument": "Atlasiet vismaz vienu dokumentu.",
+      "startFailed": "Neizdevās sākt faktu izgūšanu",
+      "starting": "Sāk faktu izgūšanu…",
+      "submit": "{count, plural, =0 {Izgūt faktus} zero {Izgūt faktus no # dokumentiem} one {Izgūt faktus no # dokumenta} other {Izgūt faktus no # dokumentiem}}"
+    },
+    "factTier": {
+      "testimony": {
+        "hint": "Visi šī fakta nenoraidītie avoti ir liecības: liecinieka liecība, sarunas piezīmes vai atšifrējums.",
+        "label": "Liecība"
+      },
+      "unsourced": {
+        "hint": "Šim faktam nav piesaistīts neviens avota dokuments, kas nav noraidīts; nesējs un datums apraksta pierādījumu, taču nav avots.",
+        "label": "Bez avota"
+      }
+    },
+    "gap": {
+      "addFact": "Pievienot faktu no dokumenta",
+      "addFactFailed": "Faktu neizdevās pievienot",
+      "factOffList": "Fakts, kura sarakstā vairs nav",
+      "linkFact": "Sasaistīt faktu",
+      "linkFailed": "Faktu neizdevās sasaistīt",
+      "linked": "Sasaistītie fakti",
+      "linkedMark": "Saistīts",
+      "linksChanged": "Saites ir mainījušās kopš pēdējās pārbaudes.",
+      "noFacts": "Neviens saraksta fakts neatbilst.",
+      "recheck": "Pārbaudīt vēlreiz",
+      "recheckFailed": "Apgalvojumu neizdevās pārbaudīt vēlreiz",
+      "searchFacts": "Meklēt saraksta faktos",
+      "sheet": {
+        "passage": "Fragments",
+        "passageHint": "Dokumenta vārdi, kas pierāda faktu.",
+        "statementRequired": "Uzrakstiet faktu.",
+        "statementTooLong": "Fakts var būt ne garāks par {limit} rakstzīmēm.",
+        "submit": "Pievienot un pārbaudīt vēlreiz",
+        "title": "Pievienot faktu no dokumenta"
+      },
+      "showNextSteps": "Rādīt nākamos soļus",
+      "unlink": "Atsaistīt: {fact}"
+    },
+    "graph": {
+      "claimCount": "{count, plural, zero {# apgalvojumi} one {# apgalvojums} other {# apgalvojumi}}",
+      "claimTitle": "Apgalvojums",
+      "columns": {
+        "claims": "Apgalvojumi",
+        "sources": "Avota dokumenti",
+        "statements": "Paziņojumi"
+      },
+      "empty": "Šajā sarakstā vēl nav faktu vai pārbaudītu dokumentu.",
+      "factCount": "{count, plural, zero {# fakti} one {# fakts} other {# fakti}}",
+      "factOverflow": "{count, plural, zero {Rāda pirmos # šī saraksta faktus.} one {Rāda pirmo # šī saraksta faktu.} other {Rāda pirmos # šī saraksta faktus.}}",
+      "filters": {
+        "allSources": "Visi avoti",
+        "allVerdicts": "Visi slēdzieni",
+        "conflicts": "Pretrunas",
+        "heldFacts": "Aizturētie fakti",
+        "source": "Filtrēt pēc avota",
+        "verdict": "Filtrēt pēc slēdziena"
+      },
+      "held": "Aizturēts",
+      "linkedFacts": "{count, plural, zero {# sasaistīti fakti} one {# sasaistīts fakts} other {# sasaistīti fakti}}",
+      "listLabel": "Grafs kā saraksts",
+      "loadMore": "Ielādēt vairāk dokumentu",
+      "noMatch": "Šiem filtriem nekas neatbilst.",
+      "noStatements": "Pret šo sarakstu vēl nav pārbaudīts neviens dokuments.",
+      "offList": "Vairs nav sarakstā",
+      "relation": {
+        "conflicts": "Ir pretrunā",
+        "governs": "Noteicošais",
+        "record": "Reģistrā",
+        "recordConflict": "Pretrunīgs ieraksts",
+        "supports": "Pamato"
+      },
+      "unlinked": "Fakti, uz kuriem nebalstās neviens apgalvojums",
+      "verifyInReview": "Pārbaudīt dokumentu"
+    },
+    "guidance": {
+      "escalate": "Nodot tālāk",
+      "manualJudgement": "Cilvēka lēmums",
+      "optional": "Nav obligāti",
+      "readyToConfirm": "Gatavs apstiprināšanai"
+    },
+    "history": {
+      "actions": {
+        "acceptedRoutine": "Pieņemts kā standarta",
+        "conflictReopened": "Pretrunas atrisinājums atsaukts",
+        "escalated": "Nodots pierādījumu komandai",
+        "factLinked": "Fakts sasaistīts",
+        "factUnlinked": "Fakts atsaistīts",
+        "governed": "Izvēlēts noteicošais ieraksts",
+        "noteCleared": "Piezīme noņemta",
+        "noteSaved": "Piezīme saglabāta",
+        "overridden": "Slēdziens mainīts",
+        "overrideWithdrawn": "Slēdziena maiņa atsaukta",
+        "rechecked": "Apgalvojums pārbaudīts vēlreiz",
+        "reopened": "Atvērts vēlreiz kā pārbaudāms apgalvojums",
+        "statusCleared": "Pārskatīšanas statuss noņemts",
+        "statusDisputed": "Atzīmēts kā apstrīdēts",
+        "statusNeedsEvidence": "Atzīmēts, ka vajag pierādījumus",
+        "statusReviewed": "Atzīmēts kā pārskatīts"
+      },
+      "carriedFrom": "No {date} pārbaudes",
+      "carriedFromEarlier": "No agrākas pārbaudes",
+      "empty": "Pārskatīšanas darbību vēl nav.",
+      "filters": {
+        "allKinds": "Jebkura darbība",
+        "allReviewers": "Jebkurš pārskatītājs",
+        "kind": "Filtrēt pēc darbības",
+        "reviewer": "Filtrēt pēc pārskatītāja"
+      },
+      "formerMember": "Bijušais dalībnieks",
+      "kinds": {
+        "factLink": "Faktu sasaistes",
+        "override": "Mainīti slēdzieni",
+        "recheck": "Atkārtotas pārbaudes",
+        "recordConflict": "Pretrunu atrisinājumi",
+        "reopen": "Atvēršanas vēlreiz",
+        "status": "Statusa izmaiņas"
+      },
+      "noMatches": "Šiem filtriem neatbilst neviena darbība.",
+      "noStatus": "Nav statusa",
+      "none": "Darbību vēl nav",
+      "reasonUnrecorded": "Iemesls nav ierakstīts: darbība veikta, pirms iemesls kļuva obligāts.",
+      "runButton": "Pārskatīšanas vēsture",
+      "runTitle": "Pārskatīšanas vēsture"
+    },
+    "matches": {
+      "count": "{count, plural, zero {# atbilstību} one {# atbilstība} other {# atbilstības}}",
+      "noNext": "Šī ir pēdējā atbilstība.",
+      "noPrevious": "Šī ir pirmā atbilstība.",
+      "position": "{current}/{total}"
+    },
+    "mode": {
+      "chronology": "Hronoloģija",
+      "graph": "Grafs",
+      "label": "Rādīt sarakstu kā",
+      "review": "Pārskatīšana"
+    },
+    "qualifiers": {
+      "heading": "Atrunas",
+      "recordSilent": {
+        "hint": "No reģistra nav sagaidāms, ka tas aptvers šo jautājumu, tāpēc seguma trūkums nav robs.",
+        "label": "Reģistrs klusē"
+      },
+      "restsOnHeld": {
+        "hint": "Fakts, uz kuru balstās šis slēdziens, tagad ir izslēgts no vērtējuma.",
+        "label": "Balstās uz izslēgtu faktu"
+      },
+      "scopeMismatch": {
+        "hint": "Citētais fakts attiecas uz citu periodu, personu loku, vietu vai mērījumu nekā apgalvojums.",
+        "label": "Cits tvērums"
+      },
+      "testimonyOnly": {
+        "hint": "Neviens dokumenta ieraksts nepamato faktus, uz kuriem balstās šis secinājums, un vismaz viens no tiem ir liecība.",
+        "label": "Tikai liecības"
+      },
+      "unsourcedOnly": {
+        "hint": "Nevienam faktam, uz kuru balstās šis slēdziens, vēl nav avota.",
+        "label": "Tikai bez avota"
+      }
+    },
+    "reason": {
+      "escalate": "Kāpēc tas vajadzīgs pierādījumu komandai?",
+      "govern": "Kāpēc šis ieraksts ir noteicošais?",
+      "override": "Kāpēc slēdziens ir “{verdict}”?",
+      "placeholder": "Norādiet iemeslu; tas paliks apgalvojuma vēsturē",
+      "reopen": "Kāpēc šo apgalvojumu var pārbaudīt?",
+      "required": "Lai to ierakstītu, norādiet iemeslu.",
+      "unresolveConflict": "Kāpēc atsaukt šo atrisinājumu?",
+      "withdrawOverride": "Kāpēc atgriezties pie rīka slēdziena?"
+    },
+    "recheck": {
+      "currentVerdict": "Slēdziens pēc atkārtotas pārbaudes",
+      "runVerdict": "Pārbaudes slēdziens",
+      "summary": "Pārbaudīts vēlreiz {checkedAt}, izmantojot {count, plural, zero {# faktu} one {# faktu} other {# faktus}}."
+    },
+    "review": {
+      "alreadyReopened": "Šis apgalvojums jau ir atvērts atkārtoti.",
+      "decided": "{status, select, disputed {Apstrīdēts} needsEvidence {Vajag pierādījumus} other {{origin, select, bulk {Pieņemts kā standarta} other {Pārskatīts}}}} · {decidedAt}",
+      "escalated": "Pirms pārskatīšanas lēmuma maiņas atrisiniet eskalēto jautājumu.",
+      "permissionRequired": "Lai izvērtētu apgalvojumus, jums ir nepieciešama atļauja rediģēt šo sarakstu.",
+      "status": {
+        "disputed": "Apstrīdēts",
+        "needsEvidence": "Vajag pierādījumus",
+        "reviewed": "Pārskatīts"
+      },
+      "undo": "Atsaukt lēmumu"
+    },
+    "runs": {
+      "back": "Visi dokumenti",
+      "carryOver": {
+        "openSource": "Atvērt {date} pārbaudi",
+        "outcomes": {
+          "ambiguous": "Vairākas iespējamas atbilstības",
+          "textChanged": "Formulējums mainījies",
+          "unmatched": "Nav atbilstoša apgalvojuma",
+          "verdictChanged": "Slēdziens mainījies"
+        },
+        "summary": {
+          "carried": "Pārnests: {count, number}",
+          "carriedAndMissed": "Pārnests: {carried, number} · nav: {missed, number}",
+          "label": "Pārskatīšanas no {date} pārbaudes: pārnestas {carried, number}, nav pārnestas {missed, number}",
+          "missed": "Nav pārnests: {count, number}"
+        }
+      },
+      "errors": {
+        "accessRevoked": "Pārbaude tika apturēta, jo piekļuve nav pieejama.",
+        "aiUnavailable": "Dokumentu pārbaudei nav pieejams neviens AI modelis. Pārbaudiet organizācijas AI iestatījumus.",
+        "enqueueFailed": "Neizdevās sākt pārbaudi. Mēģiniet vēlreiz.",
+        "extractionFailed": "Neizdevās iegūt šajā dokumentā ietvertos apgalvojumus.",
+        "gradingFailed": "Neizdevās pārbaudīt apgalvojumus pret saraksta faktiem.",
+        "internal": "Pārbaude neparedzēti neizdevās.",
+        "noText": "Neizdevās nolasīt tekstu no šī dokumenta.",
+        "pinContentChanged": "Dokuments mainījās pēc pārbaudes sākuma. Pārbaudiet to vēlreiz.",
+        "pinUnresolved": "Dokumenta versiju, ar kuru tika sākta šī pārbaude, vairs nevar atrast.",
+        "unsupportedFormat": "Pārbaudīt var tikai DOCX failus, PDF failus un failus ar PDF versiju."
+      },
+      "evidencePinned": "Pārbaudīts pret {count, plural, zero {# faktu} one {# faktu} other {# faktus}}, kādi tie bija {checkedAt}. Vēlākas izmaiņas sarakstā šo pārbaudi nemaina.",
+      "failedTitle": "Pārbaude neizdevās",
+      "history": {
+        "label": "Pārbaužu vēsture",
+        "loadFailed": "Neizdevās ielādēt šī dokumenta iepriekšējās pārbaudes."
+      },
+      "inProgress": "Notiek dokumenta apgalvojumu pārbaude pret saraksta faktiem…",
+      "loadFailed": "Neizdevās ielādēt šo pārbaudi.",
+      "noClaims": "Šajā dokumentā apgalvojumi nav atrasti.",
+      "startFailed": "Neizdevās sākt pārbaudi",
+      "status": {
+        "running": "Notiek pārbaude"
+      },
+      "unreadParts": "{count, plural, zero {Neizdevās nolasīt # dokumenta daļas, tāpēc to apgalvojumi netika pārbaudīti.} one {Neizdevās nolasīt # dokumenta daļu, tāpēc tās apgalvojumi netika pārbaudīti.} other {Neizdevās nolasīt # dokumenta daļas, tāpēc to apgalvojumi netika pārbaudīti.}}"
+    },
+    "save": {
+      "failed": "Nav saglabāts",
+      "failedTitle": "Jūsu izmaiņas netika saglabātas"
+    },
+    "scope": {
+      "checkedDocument": "Pārbaudītas tikai rindkopas <num>{range}</num>.",
+      "checkedOrdinal": "Pārbaudītas tikai rindkopas <num>{range}</num>, skaitot pēc kārtas: šis dokuments savas rindkopas nenumurē.",
+      "errors": {
+        "empty": "Šajās rindkopās nav pārbaudāma teksta.",
+        "garbage": "Ievadiet rindkopu numurus, piemēram, 82–136.",
+        "notFound": "Šo rindkopu šajā dokumentā nav.",
+        "numberingUnclear": "Šī dokumenta rindkopu numurus nevar nolasīt. Pārbaudiet visu dokumentu.",
+        "required": "Ievadiet rindkopas, kuras pārbaudīt.",
+        "reversed": "Diapazons beidzas, pirms sākas.",
+        "tooWide": "Vienlaikus pārbaudiet ne vairāk kā 500 rindkopas."
+      },
+      "example": "82–136",
+      "mark": "¶ <num>{range}</num>",
+      "noClaims": "Šajās rindkopās netika atrasts neviens apgalvojums.",
+      "showBefore": "Rādīt tekstu pirms ¶ {from}",
+      "verifyParagraphs": "Pārbaudīt rindkopas"
+    },
+    "staleness": {
+      "failed": "Apgalvojumus neizdevās pārbaudīt vēlreiz",
+      "finished": "{count, plural, zero {# apgalvojumi pārbaudīti vēlreiz} one {# apgalvojums pārbaudīts vēlreiz} other {# apgalvojumi pārbaudīti vēlreiz}}",
+      "partial": "Pārbaudīti vēlreiz: {rechecked, number}, neizdevās: {failed, plural, zero {#} one {#} other {#}}",
+      "reasons": {
+        "factChanged": "Fakts mainīts",
+        "factHeld": "Fakts izslēgts",
+        "factRemoved": "Fakts noņemts",
+        "newFactRelated": "Jauns saistīts fakts"
+      },
+      "recheckAll": "Pārbaudīt visus vēlreiz",
+      "recheckLocked": "Tiek pārbaudīts vēlreiz kopā ar citiem novecojušiem apgalvojumiem",
+      "runLine": "{count, plural, zero {# apgalvojumi var būt novecojuši} one {# apgalvojums var būt novecojis} other {# apgalvojumi var būt novecojuši}}",
+      "running": "{count, plural, zero {Vēlreiz tiek pārbaudīti # apgalvojumi…} one {Vēlreiz tiek pārbaudīts # apgalvojums…} other {Vēlreiz tiek pārbaudīti # apgalvojumi…}}"
+    },
+    "states": {
+      "contradicted": {
+        "chip": "Pretrunā",
+        "label": "Pretrunā reģistram"
+      },
+      "nocover": {
+        "chip": "Nav seguma",
+        "label": "Neviens enkurfakts neattiecas uz šo apgalvojumu",
+        "silentChip": "Nav seguma · reģistrs klusē"
+      },
+      "notverifiable": {
+        "chip": "Nepārbaudāms",
+        "label": "Nav pārbaudāms faktisks apgalvojums"
+      },
+      "recordconflict": {
+        "chip": "Reģistra pretruna",
+        "label": "Enkurfakti ir savstarpēji pretrunīgi"
+      },
+      "supported": {
+        "chip": "Pamatots",
+        "label": "Reģistra pamatots"
+      },
+      "tension": {
+        "chip": "Daļēji pretrunā",
+        "label": "Daļēji pretrunā reģistram"
+      }
+    },
+    "verification": {
+      "acceptRoutine": "{count, plural, zero {Pieņemt # standarta apgalvojumu} one {Pieņemt # standarta apgalvojumu} other {Pieņemt # standarta apgalvojumus}}",
+      "attentionComplete": "<strong>Visi apgalvojumi, kuriem vajadzīgs cilvēka lēmums, ir apstrādāti.</strong> {count, plural, zero {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.} one {# standarta vērtējumam nav vajadzīga individuāla pārskatīšana.} other {# standarta vērtējumiem nav vajadzīga individuāla pārskatīšana.}}",
+      "attentionOpen": "<strong>{count, plural, zero {# apgalvojumiem vajadzīgs} one {# apgalvojumam vajadzīgs} other {# apgalvojumiem vajadzīgs}} jūsu lēmums</strong>: pretrunas un apstrīdētas interpretācijas. {routineCount, plural, zero {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.} one {Pārējais # apgalvojums ir standarta, un tam nav vajadzīgs individuāls apstiprinājums.} other {Pārējie # apgalvojumi ir standarta, un tiem nav vajadzīgs individuāls apstiprinājums.}}",
+      "claimAnnouncement": " ({state}{contested, select, true {, apstrīdēts} other {}}{reviewStatus, select, reviewed {, pārskatīts} disputed {, apstrīdēts} needsEvidence {, vajag pierādījumus} other {}})",
+      "documentView": {
+        "label": "Dokumenta skats",
+        "original": "Oriģināls",
+        "reading": "Lasīšanas skats"
+      },
+      "notLocated": "{count, plural, zero {# apgalvojumi oriģinālā netika atrasti} one {# apgalvojums oriģinālā netika atrasts} other {# apgalvojumi oriģinālā netika atrasti}}",
+      "pdfTextFailed": "PDF tekstu neizdevās nolasīt, tāpēc apgalvojumi lapās nav atzīmēti.",
+      "selectClaim": "Atlasiet apgalvojumu, lai pārbaudītu tā pamatojumu reģistrā.",
+      "showQueue": "Rādīt rindu",
+      "stats": {
+        "claims": "Apgalvojumi",
+        "needsJudgement": "Vajadzīgs lēmums",
+        "progress": "{settled}/{total}"
+      }
+    },
+    "view": {
+      "chooseList": "Izvēlēties sarakstu",
+      "createList": "Izveidot sarakstu",
+      "evidenceList": "Fakti no",
+      "loadSample": "Ielādēt parauga lietu",
+      "loadSampleFailed": "Neizdevās ielādēt parauga lietu",
+      "loadingSample": "Ielādē parauga lietu…",
+      "noLists": "Šai lietai nav sarakstu.",
+      "pickList": "Izvēlieties sarakstu, pret kura faktiem tiek pārbaudīti šīs lietas dokumenti."
+    }
+  },
+  "inspector": {
+    "anonymization": {
+      "addPlaceholder": "Anonimizējamais termins",
+      "contextMenuAddAction": "Anonimizēt atlasi",
+      "deleteAction": "Dzēst terminu",
+      "detectedHeading": "Atrasts šajā dokumentā ({count})",
+      "detectingMatches": "Šajā dokumentā tiek meklētas atbilstības…",
+      "downloadAction": "Lejupielādēt anonimizētu PDF",
+      "downloadHint": "Eksportē saglabāto versiju kā PDF failu ar tekstu, ko nevar atlasīt.",
+      "emptyState": "Vēl nav darba telpai specifisku terminu. Pievienojiet vienu augstāk.",
+      "enterTerm": "Ievadiet anonimizējamo terminu.",
+      "ignoreAction": "Ignorēt šajā dokumentā",
+      "ignoreScopeAlways": "Vienmēr ignorēt",
+      "ignoreScopeDocument": "Ignorēt šajā lietā",
+      "ignoreScopeMenuAriaLabel": "Ignorēšanas tvērums",
+      "labelPickerAriaLabel": "Atbilstības etiķete",
+      "labelPickerEmpty": "Nav atbilstošas etiķetes.",
+      "labelPickerPlaceholder": "Etiķete",
+      "matchCount": "Šajā dokumentā {count, plural, zero {izceltas # atbilstības} one {izcelta # atbilstība} other {izceltas # atbilstības}}.",
+      "matchedWorkspaceTermsHeading": "Atbilstošie darba telpas termini ({count})",
+      "noMatchesInDocument": "Neviens darba telpas termins šajā dokumentā neparādās.",
+      "openFullViewHint": "Atveriet failu pilnskata režīmā, lai redzētu anonimizācijas izceltos un katra dokumenta atbilstību skaitu.",
+      "restoreAction": "Atjaunot šajā dokumentā",
+      "scanFailed": "Skenēšana neizdevās. Mēģiniet vēlreiz, lai noteiktu atbilstības.",
+      "termAddedToast": "\"{value}\" pievienots darba telpas anonimizācijas terminiem.",
+      "termMatchCountAriaLabel": "Šajā dokumentā atrasts {count, plural, zero {# reizes} one {# reizi} other {# reizes}}.",
+      "title": "Anonimizācijas vārdnīca",
+      "unsupportedVisualContent": "Šajā failā ir attēli vai vektorgrafika, ko nevar pārbaudīt, vai tajā nav sensitīva teksta. Eksportēšana nav pieejama.",
+      "waitForMatches": "Uzgaidiet, līdz beidzas anonimizācijas pārbaude.",
+      "workspaceTermsHeading": "Darba telpas termini ({count})"
+    },
+    "closeAllTabs": "Aizvērt {count, plural, zero {visas # cilnes} one {# cilni} other {visas # cilnes}}",
+    "closeOtherTabs": "Aizvērt {count, plural, zero {# citu cilņu} one {# citu cilni} other {# citas cilnes}}",
+    "closeTab": "Aizvērt <bdi>{name}</bdi>",
+    "conversionRefusal": {
+      "legacyFormat": "Šis ir mantotā formāta {format} fails. Lai to konvertētu, saglabājiet to vēlreiz kā {replacementExtension}.",
+      "noPreviewDecodingOff": "Šis serveris neveido {format} attēlu priekšskatījumus. Lai failu atvērtu, lejupielādējiet to.",
+      "noPreviewUnreadable": "Šo {format} attēlu nevar nolasīt priekšskatījumam. Lai failu atvērtu, lejupielādējiet to.",
+      "unsupportedEncoding": "Šajā dokumentā izmantots neatbalstīts {encoding} kodējums, tāpēc to nevar konvertēt.",
+      "unsupportedField": "Šajā dokumentā ir lauks {fieldType}, ko nevar konvertēt.",
+      "unsupportedReference": "Šajā dokumentā {element} {attribute} atsaucas uz ārēju resursu, tāpēc to nevar konvertēt."
+    },
+    "enterGroupName": "Ievadiet grupas nosaukumu.",
+    "external": {
+      "confirmDescription": "Jūs tūlīt apmeklēsiet ārēju tīmekļa vietni.",
+      "confirmTitle": "Atvērt ārēju saiti?",
+      "openLink": "Atvērt saiti",
+      "openOriginal": "Atvērt oriģinālu",
+      "unavailable": "Norādītā vietne neļauj drošu priekšskatījumu. Ja rīks atgrieza dokumenta tekstu, tas parādīsies šeit; pretējā gadījumā atveriet oriģinālu."
+    },
+    "facet": {
+      "anonymization": "Anonimizācija"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Arhīvu neizdevās nolasīt.",
+      "back": "Atpakaļ uz sarakstu",
+      "download": "Lejupielādēt {fileName}",
+      "noFilesInside": "Iekšā nav neviena faila.",
+      "noPreview": "Šim faila veidam nav priekšskatījuma. Lejupielādējiet to vai saglabājiet lietā.",
+      "notConverted": "Šo failu neizdevās pārveidot priekšskatījumam. Lejupielādējiet to vai saglabājiet lietā.",
+      "open": "Atvērt {fileName}",
+      "unavailable": {
+        "encrypted": "Aizsargāts ar paroli, nevar atvērt",
+        "link": "Saite uz citu failu, netiek atvērta",
+        "tooLarge": "Pārāk liels, lai atvērtu",
+        "unreadable": "Bojāts, nevar atvērt",
+        "unsupported": "Saspiests veidā, ko nevar atvērt"
+      }
+    },
+    "firstSourceReached": "Šis ir pirmais avots.",
+    "groups": {
+      "addContext": "Pievienot kontekstu",
+      "chatMoveDescription": "<bdi>{chatName}</bdi> tiks grupēta zem <bdi>{matterName}</bdi>. Pievienojiet lietu tērzēšanas kontekstam, lai tā varētu izmantot lietas failus un informāciju.",
+      "chatMoveTitle": "Pievienot šo lietu tērzēšanai?",
+      "collapse": "Sakļaut {groupName}",
+      "color": "Grupas krāsa",
+      "colorOption": "Krāsa {number}",
+      "copyIntoMatter": "Kopēt uz lietu",
+      "expand": "Izvērst {groupName}",
+      "fileMoveDescription": "<bdi>{fileName}</bdi> pieder lietai <bdi>{sourceMatterName}</bdi>. Kopējiet to uz <bdi>{matterName}</bdi> vai, nekopējot failu, sagrupējiet esošo cilni zem šīs lietas.",
+      "fileMoveTitle": "Kopēt šo failu uz lietu?",
+      "groupOnly": "Tikai grupēt",
+      "moveToGroup": "Pārvietot uz grupu",
+      "name": "Grupas nosaukums",
+      "newGroup": "Jauna grupa",
+      "remove": "Atgrupēt cilnes",
+      "rename": "Pārdēvēt grupu",
+      "saveFailed": "Šajā pārlūkprogrammā neizdevās saglabāt ciļņu grupas.",
+      "tabCount": "{count, plural, zero {# ciļņu} one {# cilne} other {# cilnes}}",
+      "ungroup": "Noņemt no grupas"
+    },
+    "hidePane": "Slēpt paneli",
+    "lastSourceReached": "Šis ir pēdējais avots.",
+    "matterPicker": {
+      "allMatters": "Visas lietas",
+      "description": "Izvēlieties lietas, uz kurām šī tērzēšana var balstīties.",
+      "empty": "Nav pieejamu lietu.",
+      "noMatter": "Bez lietas",
+      "noResults": "Neviena lieta neatbilst „{query}”.",
+      "searchPlaceholder": "Meklēt lietas vai klientus…",
+      "title": "Lietas konteksts"
+    },
+    "metadata": {
+      "aiExtractedHeading": "Iegūts ar AI",
+      "documentProperties": {
+        "empty": "Šajā failā nav paša faila rekvizītu",
+        "heading": "Faila rekvizīti",
+        "keys": {
+          "application": "Lietojumprogramma",
+          "applicationVersion": "Lietojumprogrammas versija",
+          "characters": "Rakstzīmes",
+          "company": "Uzņēmums",
+          "contentStatus": "Satura statuss",
+          "createdAt": "Izveidots",
+          "description": "Komentāri",
+          "editingMinutes": "Kopējais rediģēšanas laiks",
+          "keywords": "Atslēgvārdi",
+          "lastModifiedBy": "Pēdējoreiz saglabāja",
+          "lastPrintedAt": "Drukāts",
+          "manager": "Pārvaldnieks",
+          "modifiedAt": "Modificēts",
+          "pages": "Lappuses",
+          "paragraphs": "Rindkopas",
+          "producer": "PDF veidotājs",
+          "revision": "Redakcijas numurs",
+          "slides": "Slaidi",
+          "subject": "Tēma",
+          "template": "Veidne",
+          "title": "Nosaukums",
+          "words": "Vārdi"
+        },
+        "passwordProtected": "Fails ir aizsargāts ar paroli, tāpēc tā rekvizītus nevar nolasīt",
+        "saveFailed": "Neizdevās saglabāt šo rekvizītu.",
+        "tooLarge": "Fails ir pārāk liels, lai nolasītu tā rekvizītus",
+        "unreadable": "Neizdevās nolasīt faila rekvizītus",
+        "unsupportedFormat": "Šāda veida failā nav dokumenta rekvizītu"
+      },
+      "lastUpdatedBy": "Pēdējoreiz atjaunināja",
+      "matterColumnsHeading": "Lietas dati",
+      "noMatterColumns": "Par šo dokumentu vēl nekas nav ierakstīts",
+      "similarDocuments": {
+        "heading": "Līdzīgi dokumenti",
+        "similarity": "{percent} līdzība"
+      },
+      "stellaHeading": "Saglabāts lietotnē stella",
+      "versionCurrent": "v{version} (pašreizējā)"
+    },
+    "moveToMain": "Pārvietot uz galveno skatu",
+    "moveToSide": "Pārvietot uz sānu paneli",
+    "openChat": "Atvērt tērzēšanu",
+    "openTabs": "Atvērtās cilnes ({count, number})",
+    "reopenTab": "Atkārtoti atvērt {name}",
+    "resizePane": "Mainīt paneļa izmēru",
+    "review": {
+      "acceptChange": "Pieņemt izmaiņas",
+      "acceptFinding": "Pieņemt secinājumu",
+      "addNote": "Pievienot komentāru pretpusei",
+      "addNotePlaceholder": "Ko pretpusei vajadzētu redzēt",
+      "addNoteSubmit": "Pievienot komentāru",
+      "addReference": "Pievienot {name} kā atsauci",
+      "allDecided": "Par visiem šeit redzamajiem secinājumiem ir pieņemts lēmums.",
+      "basisCombined": "{count, plural, zero {Pārbaude pēc {name} bez atsauces dokumentiem} one {Pārbaude pēc {name} un salīdzinājums ar # atsauces dokumentu} other {Pārbaude pēc {name} un salīdzinājums ar # atsauces dokumentiem}}",
+      "basisDivider": "un / vai",
+      "basisPlaybook": "Pārbaude pēc {name}",
+      "basisReferences": "{count, plural, zero {Nav atsauces dokumentu} one {Salīdzinājums ar # atsauces dokumentu} other {Salīdzinājums ar # atsauces dokumentiem}}",
+      "basisToggle": "Kas tika salīdzināts",
+      "changeBasis": "Mainīt pārbaudes pamatu",
+      "chatDraft": {
+        "finding": "Secinājums:",
+        "impact": "Ietekme:",
+        "issue": "Tēma:",
+        "question": "Kā man vajadzētu pārformulēt mērķa dokumentu šajā jautājumā?",
+        "rationale": "Pamatojums:"
+      },
+      "checks": "Tiek pārbaudīts:",
+      "commentFailed": "Komentāru neizdevās pievienot",
+      "completePositionIssues": "Ievadiet jautājumu katrai atlasītajai pozīcijai.",
+      "decidedCount": "{count, number} izlemti",
+      "decision": "Lēmums",
+      "decisionFailed": "Lēmumu neizdevās saglabāt",
+      "decisions": {
+        "accepted": "Pieņemts",
+        "dismissed": "Noraidīts"
+      },
+      "dismissFinding": "Noraidīt secinājumu",
+      "documentChanged": "Šis dokuments pēc šīs pārbaudes ir mainījies.",
+      "documentCutNotice": "<strong>Dokuments {documentName} nav izlasīts pilnībā.</strong> Šim modelim tas ir pārāk garš, tāpēc aptuveni {percent} teksta tika izlaisti. Pozīcija bez atbildes tiek atzīmēta pārskatīšanai, jo atbilde var būt izlaistajā daļā.",
+      "documentTooLarge": "Šis dokuments ir pārāk garš, lai šis modelis varētu izlasīt pietiekamu tā daļu. Izmēģiniet modeli ar lielāku konteksta logu.",
+      "documentsTooLarge": "Šie dokumenti ir pārāk gari, lai šis modelis tos varētu izlasīt kopā. Izmantojiet mazāk vai īsākus dokumentus vai izmēģiniet modeli ar lielāku konteksta logu.",
+      "enterNote": "Vispirms uzrakstiet komentāru.",
+      "export": {
+        "counterparty": "Lejupielādēt pretpusei",
+        "counterpartyFailed": "Neizdevās eksportēt dokumentu",
+        "counterpartyHint": "Saglabātais dokuments ar izsekotajām izmaiņām, bez iekšējām pārskata piezīmēm",
+        "counterpartyUnavailable": "Atveriet dokumentu, lai to eksportētu",
+        "csv": "CSV",
+        "docx": "Word dokuments (.docx)",
+        "exporting": "Eksportē",
+        "internal": "Iekšējs memorands",
+        "internalHint": "Secinājumi, pamatojums un atsauces",
+        "xlsx": "Excel izklājlapa (.xlsx)"
+      },
+      "failed": "Neizdevās pārbaudīt dokumentu",
+      "filterCoverage": "Aptvērums",
+      "filterDeviations": "Novirzes",
+      "fixesWithheldNotice": "Šai pārbaudei ierosinātās izmaiņas netika izveidotas, jo tajā izmantots atsauces dokuments no lietas, kas nav pieejama personai, kura to palaida. Secinājumus tas neietekmē.",
+      "flag": "Atzīmēt",
+      "flaggedPositions": "{total, plural, zero {Nav atzīmētu pozīciju} one {{flagged, number} no # pozīcijas atzīmēta} other {{flagged, number} no # pozīcijām atzīmētas}}",
+      "fromChat": "No tērzēšanas",
+      "fromThisMatter": "No šīs lietas",
+      "history": {
+        "backToLatest": "Atpakaļ pie jaunākās",
+        "decided": "{decided, number} no {total, number} izlemts",
+        "fromTable": "No tabulas",
+        "references": "{count, plural, zero {# atsauču} one {# atsauce} other {# atsauces}}"
+      },
+      "impact": {
+        "favourable": "Labvēlīgs",
+        "neutral": "Bez ietekmes",
+        "unfavourable": "Nelabvēlīgs"
+      },
+      "impactForSide": {
+        "favourable": "Labāk ({role})",
+        "neutral": "Bez ietekmes ({role})",
+        "unfavourable": "Sliktāk ({role})"
+      },
+      "insufficientEvidence": "Iesniegtajos dokumentos nav pietiekamu pierādījumu par šo tēmu.",
+      "marginNotes": {
+        "above": "{count, number} augstāk",
+        "below": "{count, number} zemāk",
+        "documentNotRead": "Atveriet dokumentu galvenajā rūtī, lai piespraustu secinājumus tam blakus.",
+        "label": "Secinājumi blakus klauzulām, par kurām tie ir",
+        "unanchored": "Nav saistīts ar klauzulu"
+      },
+      "noEditor": "Atveriet dokumentu, lai apstiprinātu izmaiņas",
+      "noMaterialDifferences": "Būtiskas atšķirības nav atrastas",
+      "noPassage": "Fragmenta nav",
+      "noPlaybooksMatch": "Nav atbilstošu pārbaudes ceļvežu.",
+      "notCompared": "Nav salīdzināts",
+      "notComparedCount": "Nav salīdzināts: {count, number}",
+      "noteAdded": "Pretpusei pievienots komentārs",
+      "noteBlockedChecking": "stella vēl pārbauda, vai šo dokumentu var droši rediģēt. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedCollaboration": "Koplietotā rediģēšanas sesija vēl tiek atvērta. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedOpening": "Dokuments vēl tiek atvērts. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz pēc brīža.",
+      "noteBlockedReadOnly": "Šis koplietotais dokuments ir atvērts tikai lasīšanai. Jūsu komentārs ir saglabāts; mēģiniet vēlreiz, kad varēsiet to rediģēt.",
+      "noteNotAdded": "Komentārs nav pievienots",
+      "openPlaybooks": "Atvērt pārbaudes ceļvežus",
+      "pane": {
+        "document": "Panelis: secinājumi blakus dokumentam",
+        "margin": "Mala: secinājumi blakus savām klauzulām",
+        "review": "Galvenais: secinājumi platajā panelī"
+      },
+      "passageUnavailable": "Atsauces teksts nav pieejams",
+      "passagesCount": "{count, plural, zero {# fragmentu} one {# fragments} other {# fragmenti}}",
+      "passagesToggle": "Fragmenti",
+      "pendingCount": "{count, plural, zero {# neizlemtu secinājumu} one {# neizlemts secinājums} other {# neizlemti secinājumi}}",
+      "perspective": {
+        "neutral": "Nav norādīts",
+        "other": "Cits…",
+        "otherPlaceholder": "Loma tā, kā tā minēta dokumentā",
+        "title": "Mēs pārstāvam"
+      },
+      "playbookDeleted": "Šī pārbaudes ceļveža vairs nav; pārbaude tiek saglabāta kā ieraksts.",
+      "playbookOutdated": "Ir pieejama jaunāka apstiprināta šī pārbaudes ceļveža versija.",
+      "playbookSection": "Pārbaudes ceļvedis",
+      "presence": {
+        "absent": "Nē",
+        "present": "Jā"
+      },
+      "progressPositions": "{total, plural, zero {Nav pozīciju} one {{completed, number} no # pozīcijas} other {{completed, number} no # pozīcijām}}",
+      "proposedChange": "Ierosinātās izmaiņas",
+      "proposing": "Tiek piedāvātas pozīcijas… {count, number}",
+      "readOnlyRun": "Izlemts šajā pārbaudē",
+      "recommendation": "Ieteikums:",
+      "referenceDocument": "Atsauces dokuments",
+      "referenceLimitReached": "Sasniegts atsauču limits",
+      "referencePlaceholder": "Meklēt atsauces dokumentus",
+      "referencesCount": "{count, number}/{max, number}",
+      "referencesDisagree": "Atsauces atšķiras",
+      "referencesSection": "Atsauces dokumenti",
+      "removeReference": "Noņemt atsauci {name}",
+      "reopen": "Atvērt atkārtoti",
+      "results": "Pārbaudes rezultāti",
+      "reviewAgain": "Sākt citu pārbaudi",
+      "reviewPositionsFirst": "Vispirms pārskatīt pozīcijas",
+      "reviewing": "Pārbaude notiek…",
+      "reviewingHint": "Lielu dokumentu pārbaude var aizņemt dažas minūtes.",
+      "run": "Sākt pārbaudi",
+      "saveAsPlaybook": "Saglabāt kā pārbaudes ceļvedi",
+      "saveAsPlaybookFailed": "Neizdevās saglabāt šo pārbaudi kā pārbaudes ceļvedi",
+      "savedAsPlaybook": "Saglabāts kā pārbaudes ceļvedis",
+      "searchPlaybooks": "Meklēt pārbaudes ceļvežus",
+      "selectPositionFirst": "Atlasiet vismaz vienu pozīciju.",
+      "selectReviewBasis": "Izvēlieties pārskatīšanas ceļvedi vai pievienojiet atsauces dokumentu.",
+      "selectReviewPositionOrReference": "Izvēlieties pārskatīšanas ceļvedi ar aktīvām pozīcijām vai pievienojiet atsauces dokumentu.",
+      "showInDocument": "Rādīt dokumentā",
+      "sizeConfirmStart": "Sākt pārbaudi",
+      "sizeConfirmTitle": "Apjomīga pārbaude",
+      "skipReason": {
+        "dealSpecificValue": "Konkrētam darījumam raksturīga vērtība",
+        "lowerWeight": "Mazāks komerciālais svars",
+        "structural": "Strukturāla atšķirība"
+      },
+      "standardColumn": "Standarts",
+      "standardColumnFrom": "Standarts ({name})",
+      "suggestionSkipped": "Vairs neatbilst dokumentam",
+      "suggestionStaged": "Iekļauts dokumentā kā izsekota izmaiņa",
+      "summary": {
+        "forParty": "{role} labā",
+        "noSide": "Nav puses",
+        "proposedFromReferences": "Pozīcijas, kas ierosinātas no atsaucēm",
+        "unnamedReferences": "{count, plural, zero {# atsauces dokumentu} one {# atsauces dokuments} other {# atsauces dokumenti}}"
+      },
+      "tableRunNotice": {
+        "openFullReview": "<link>Šīs versijas pilna pārbaude</link> ar saitēm un ierosinātajām izmaiņām ir pieejama pārbaužu vēsturē.",
+        "origin": "<strong>Palaists no tabulas.</strong> Šie secinājumi novērtēti pēc tabulai iegūtajām vērtībām, tāpēc tie nav saistīti ar dokumentu un neietver ierosinātās izmaiņas.",
+        "runAnotherReview": "Lai iegūtu saites un ierosinātās izmaiņas, izmantojiet pogu <action>{label}</action>."
+      },
+      "targetAsReference": "Pārbaudāmais dokuments nevar būt savs paša atsauces dokuments.",
+      "targetColumn": "Šis dokuments",
+      "targetDocument": "Mērķa dokuments",
+      "title": "Dokumenta pārbaude",
+      "topicsTitle": "Kas jāaptver šajā pārbaudē?",
+      "why": "Kāpēc",
+      "whyItMatters": "Kāpēc tas ir svarīgi:"
+    },
+    "showPane": "Rādīt paneli",
+    "swapViews": "Apmainīt galveno skatu un sānu paneli",
+    "title": "Inspektors"
+  }
+}

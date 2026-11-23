@@ -9,6 +9,7 @@ import { ZipArchive } from "@stll/docx-core/zip";
 
 import { readAsicPreview } from "@/api/lib/files/archive-preview";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { makeAsicFixture } from "@/api/tests/fixtures/asic";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
@@ -43,13 +44,24 @@ test("reads ASiC-E payloads for preview and search from a legacy generic upload"
   const source = storedAsic(bytes, "filing.asice", "application/octet-stream");
   const preview = await readAsicPreview(source, ASIC_E_FILE_FORMAT.mimeType);
   expect(preview.unwrap().members).toMatchObject([
-    { fileName: "filing.txt", text: "Sdělení č. 47", status: "readable" },
+    {
+      fileName: "filing.txt",
+      text: "Sdělení č. 47",
+      textFormat: "plain",
+      status: "readable",
+    },
     {
       fileName: "filing.pdf",
       text: expect.stringContaining(marker),
+      textFormat: "markdown",
       status: "readable",
     },
-    { fileName: "archive.docx", text: "", status: "unavailable" },
+    {
+      fileName: "archive.docx",
+      text: "",
+      textFormat: "plain",
+      status: "unavailable",
+    },
   ]);
 
   const extracted = (await extractFileTextResult(source)).unwrap();
@@ -75,8 +87,13 @@ test("reads a recognized Office payload from ASiC-S", async () => {
   const preview = (await readAsicPreview(source)).unwrap();
   expect(preview.members).toEqual([
     {
+      part: "member:0",
       fileName: "agreement.bin",
+      // The bytes decide the type, whatever the member's name says.
+      mediaType: DOCX_MIME_TYPE,
+      sizeBytes: office.byteLength,
       text: expect.stringContaining("Saved contract. Článek první."),
+      textFormat: "markdown",
       status: "readable",
     },
   ]);

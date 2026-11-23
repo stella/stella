@@ -1,0 +1,5 @@
+{
+  "metric": "lint-suppression-directives",
+  "delta": 1,
+  "reason": "MinHash and its LSH band keys are 32-bit hashing (FNV-1a, the murmur3 finalizer and 64-bit key packing); the file-level no-bitwise waiver covers only that arithmetic, as compact-storage.ts does for sanctions screening."
+}

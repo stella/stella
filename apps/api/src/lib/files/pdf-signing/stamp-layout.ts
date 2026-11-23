@@ -34,7 +34,7 @@ export const STAMP_UNITS_PER_EM = 1000;
  * the explicit embeddings, overrides and isolates, and the directional
  * marks. They take part in resolving levels and are never shaped.
  */
-const BIDI_CONTROL = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u;
+export const BIDI_CONTROL = /[\u061C\u200E\u200F\u202A-\u202E\u2066-\u2069]/u;
 
 /** Isolates a value inserted into a label, in whichever direction it reads. */
 export const FIRST_STRONG_ISOLATE = "\u2068";
@@ -69,7 +69,7 @@ const utf8 = new TextEncoder();
 const utf8Decoder = new TextDecoder();
 
 /** Each cluster's text: from its offset to the next cluster's. */
-const clusterTexts = (text: string, glyphs: readonly StampGlyph[]) => {
+export const clusterTexts = (text: string, glyphs: readonly StampGlyph[]) => {
   const bytes = utf8.encode(text);
   const starts = [...new Set(glyphs.map(({ cluster }) => cluster))].toSorted(
     (a, b) => a - b,

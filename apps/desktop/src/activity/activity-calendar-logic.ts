@@ -96,7 +96,15 @@ export type ActivityBlock = DayCalendarRange & {
    * block can still be read, hovered and clicked, and never past the next
    * block's start. */
   drawnEndMs: number;
+  /** The recorded time the block states. A matter block states only its
+   * matter's own time, as the matter's suggestion counts it, and lists the
+   * stretches it took in as {@link joined}; any other block states all of
+   * its recorded time. */
+  durationMs: number;
   id: string;
+  /** Stretches with no matter that a matter block took in because each was
+   * too short for a block of its own; empty for any other block. */
+  joined: MatchedSegment[];
   matter: DesktopTimeEntryMatterCandidate | null;
   /** Every recorded segment in the block, in time order. */
   sources: MatchedSegment[];
@@ -350,18 +358,27 @@ export const activityBlocks = (
     }
     const first = draft.sources.at(0);
     const nextStartMs = blocks[index + 1]?.startMs ?? Number.POSITIVE_INFINITY;
+    const { matter } = draft;
     return {
       apps: appTotals(draft.sources),
       drawnEndMs: Math.min(
         Math.max(draft.endMs, draft.startMs + thresholdMs),
         Math.max(draft.endMs, nextStartMs),
       ),
+      durationMs:
+        matter === null
+          ? totalDurationMs(draft.sources)
+          : totalDurationMs(topicSources),
       endMs: draft.endMs,
       id:
         first === undefined
           ? draft.topic
           : `${draft.topic}:${String(first.startMs)}:${first.appIdentifier}`,
-      matter: draft.matter,
+      joined:
+        matter === null
+          ? []
+          : draft.sources.filter((segment) => segment.matter === null),
+      matter,
       sources: draft.sources,
       startMs: draft.startMs,
       title,
@@ -560,7 +577,7 @@ const roundedTogether = (values: readonly number[]): number[] => {
 /** One dashed piece of a suggestion in the Time entries column. */
 export type SuggestionPiece = DayCalendarRange & {
   /** The piece's own time in whole minutes. Pieces round together, so
-   * their minutes add up to the suggestion's {@link SuggestionSummary}. */
+   * their minutes add up to the suggestion's rounded recorded minutes. */
   minutes: number;
 };
 
@@ -598,12 +615,9 @@ export const suggestionPieces = (
 };
 
 /** What a suggestion card's header says about its time: the range for a
- * suggestion in one piece, else how many pieces; with the minutes they hold
- * and the tenths of an hour they bill. */
-export type SuggestionSummary = {
-  minutes: number;
-  tenths: number;
-} & (
+ * suggestion in one piece, else how many pieces; with the tenths of an hour
+ * the entry bills, its one duration. */
+export type SuggestionSummary = { tenths: number } & (
   | { endMs: number; startMs: number; type: "range" }
   | { count: number; type: "pieces" }
 );
@@ -611,15 +625,12 @@ export type SuggestionSummary = {
 export const suggestionSummary = (
   suggestion: ActivitySuggestion,
 ): SuggestionSummary => {
-  const pieces = suggestionPieces(suggestion);
-  const minutes = pieces.reduce((sum, piece) => sum + piece.minutes, 0);
   const tenths = suggestion.roundedTenths;
-  if (pieces.length > 1) {
-    return { count: pieces.length, minutes, tenths, type: "pieces" };
+  if (suggestion.runs.length > 1) {
+    return { count: suggestion.runs.length, tenths, type: "pieces" };
   }
   return {
     endMs: suggestion.endMs,
-    minutes,
     startMs: suggestion.startMs,
     tenths,
     type: "range",

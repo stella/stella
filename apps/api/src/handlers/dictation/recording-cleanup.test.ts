@@ -8,13 +8,19 @@ import {
 import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
+import { HttpStatusResponse } from "@/api/http/status";
 import {
+  DICTATING_ORGANIZATION_ID,
+  DICTATING_USER_ID,
   exerciseDesktopDictationEndpoint,
+  exerciseMemberDictationEndpoint,
   grantDesktopDictation,
   testDesktopDictationGate,
+  testMemberDictationGate,
 } from "@/api/tests/helpers/desktop-dictation-endpoint";
 import type { TestServer } from "@/api/tests/helpers/test-server";
 
+import { createMemberRecordingCleanupEndpoint } from "./member-recording-cleanup";
 import { createRecordingCleanupEndpoint } from "./recording-cleanup";
 import {
   RECORDING_CLEANUP_OUTPUT_TOKENS,
@@ -178,3 +184,54 @@ test("an answer that repeats the text before the part is refused", async () => {
   expect(response.status).toBe(502);
   expect(await response.text()).not.toContain("termínům");
 });
+
+/** The member route: a signed-in member's session, no desktop decision. */
+const exerciseMember = async (
+  options: { role?: "member" | "external"; limited?: boolean } = {},
+) =>
+  await exerciseMemberDictationEndpoint({
+    createEndpoint: createMemberRecordingCleanupEndpoint,
+    testState,
+    route: "/v1/dictation/recording-cleanup",
+    body: {
+      transcript: TRANSCRIPT,
+      previousText: "Dobrý den,",
+      locale: "cs",
+      languages: ["cs"],
+    },
+    answer: () => CLEANED,
+    ...options,
+  });
+
+test("a signed-in member gets the same recording cleanup as a desktop, without any desktop decision", async () => {
+  const { result, calls, limit } = await exerciseMember();
+  if (result instanceof HttpStatusResponse) {
+    throw new TypeError(
+      `Expected the cleaned part, got ${String(result.code)}`,
+    );
+  }
+  expect(
+    v.parse(desktopDictationRecordingCleanupResponseSchema, result),
+  ).toEqual(CLEANED);
+  expect(calls).toHaveLength(1);
+  expect(calls.at(0)).toMatchObject({
+    system: RECORDING_CLEANUP_SYSTEM_PROMPT,
+    schema: recordingCleanupModelOutputSchema,
+    task: "chat",
+    deadlineMs: 120_000,
+    outputTokenBudget: RECORDING_CLEANUP_OUTPUT_TOKENS,
+  });
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).toEqual({
+    languages: ["cs"],
+    locale: "cs",
+    previousText: "Dobrý den,",
+    transcript: TRANSCRIPT,
+  });
+  expect(limit.mock.calls.at(0)?.[0]).toMatchObject({
+    organizationId: DICTATING_ORGANIZATION_ID,
+    userId: DICTATING_USER_ID,
+    operation: "cleanup",
+  });
+});
+
+testMemberDictationGate(exerciseMember);

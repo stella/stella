@@ -59,22 +59,19 @@ export function MattersPage() {
   const activeOrganizationId = routeApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const [organizationMount, setOrganizationMount] = useState({
-    activeOrganizationId,
-    resetExternalState: false,
-  });
-  if (organizationMount.activeOrganizationId !== activeOrganizationId) {
-    setOrganizationMount({
-      activeOrganizationId,
-      resetExternalState: true,
-    });
+  const [prevOrganizationId, setPrevOrganizationId] =
+    useState(activeOrganizationId);
+  const [resetExternalState, setResetExternalState] = useState(false);
+  if (prevOrganizationId !== activeOrganizationId) {
+    setPrevOrganizationId(activeOrganizationId);
+    setResetExternalState(true);
   }
 
   return (
     <MattersContent
       activeOrganizationId={activeOrganizationId}
       key={activeOrganizationId}
-      resetExternalState={organizationMount.resetExternalState}
+      resetExternalState={resetExternalState}
     />
   );
 }

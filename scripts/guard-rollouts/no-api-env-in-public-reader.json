@@ -1,0 +1,19 @@
+{
+  "id": "no-api-env-in-public-reader",
+  "rules": ["no-api-env-in-public-reader/no-api-env-in-public-reader"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-29T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "no-api-env-in-public-reader/no-api-env-in-public-reader",
+    "apps/api/src",
+    "packages"
+  ]
+}

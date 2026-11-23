@@ -1397,6 +1397,7 @@ const labelLikeFilter = (column: SQL, search: string): SQL => {
     return sql``;
   }
   const pattern = `%${escapeLike(trimmed)}%`;
+  // sql-perf-allow: bounded by one organization's accessible workspaces (search_documents_org_workspace_idx) and active facet filters
   return sql`AND ${column} ILIKE ${pattern}`;
 };
 

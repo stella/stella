@@ -31,6 +31,7 @@ export const invokeCapability = async <TResult>(
 export type AppOnlyWriteId =
   | "account.delete.send-otp"
   | "account.delete.verify"
+  | "case-law.citations.check"
   | "chat.browser-site-grants.create"
   | "chat.browser-site-grants.delete"
   | "chat.local-runners.folder-approval.update"
@@ -48,7 +49,7 @@ export type AppOnlyWriteId =
   | "contacts.import.inspect"
   | "contacts.import.preview"
   | "files.document-properties.update"
-  | "files.email-attachment.save"
+  | "files.part.save"
   | "folio-collaboration.join"
   | "folio-collaboration.refresh-token"
   | "folio-collaboration.seed.acknowledge"

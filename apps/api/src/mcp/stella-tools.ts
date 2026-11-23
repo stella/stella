@@ -8,6 +8,7 @@ import {
   RESOURCE_TYPE,
   resourceRef,
 } from "@stll/api-contract";
+import { decisionBodyAllowsDerivedAi } from "@stll/api-contract/case-law-body-source";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { publicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
@@ -4021,7 +4022,7 @@ const decisionTextAbsence = (
   read: ReadCaseLawDecisionSuccess,
   readsSharedCorpus: boolean,
 ) => {
-  if (!read.source.allowsDerivedAi) {
+  if (!decisionBodyAllowsDerivedAi(read)) {
     return {
       textWithheldReason:
         "The source licence does not permit AI use of the full text.",
@@ -4070,7 +4071,7 @@ const decisionItemResult = ({
   // allowsRedistribution gates whether the decision is publicly
   // readable; allowsDerivedAi additionally gates feeding full text to a
   // model, which is exactly this tool's context.
-  const aiTextAllowed = read.source.allowsDerivedAi;
+  const aiTextAllowed = decisionBodyAllowsDerivedAi(read);
   const parsedBlocks = aiTextAllowed
     ? (parseCachedDecisionAst(read.documentAst)?.blocks ?? null)
     : null;
@@ -4126,6 +4127,9 @@ const decisionItemResult = ({
     status: DECISION_READ_STATUS.found,
     decision: {
       extractionWarnings: read.extractionWarnings,
+      ...(read.bodySource.textSource === "collection"
+        ? { bodySource: read.bodySource }
+        : {}),
       decisionId: read.id,
       caseNumber: read.caseNumber,
       ...nonDocketReference(read),
@@ -4188,7 +4192,7 @@ const readableDecisionTextLength = (
     read === null ||
     !isReadCaseLawDecisionSuccess(read) ||
     isDecisionDocumentPending(read, readsSharedCorpus) ||
-    !read.source.allowsDerivedAi
+    !decisionBodyAllowsDerivedAi(read)
   ) {
     return 0;
   }

@@ -4,12 +4,13 @@
     "accessibilityAccessMissing": "stella n’a pas accès à l’accessibilité. Si elle apparaît déjà activée dans la liste, désactivez-la puis réactivez-la.",
     "accessibilityRequired": "Autorisez l’accès à l’accessibilité pour enregistrer les détails. Les noms des applications restent enregistrés.",
     "activeLabel": "activité",
-    "aiAccept": "Accepter",
+    "aiApplyChange": "Appliquer la modification",
     "aiDismiss": "Ignorer",
     "aiDraftAgain": "Rédiger à nouveau",
     "aiDraftAllow": "Autoriser",
+    "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Tâche {task} · Activité {activity}",
-    "aiDraftConsent": "stella AI peut rédiger des descriptions à partir du dossier, de la date, de la durée et des noms d’applications de chaque entrée, ainsi que des noms de documents et des titres de fenêtres affichés ici lorsque vous les enregistrez. Vos entrées précédentes sur le dossier l’aident à reprendre votre façon d’écrire. Rien d’autre sur votre journée ne quitte cet ordinateur.",
+    "aiDraftConsent": "Pour rédiger une description, stella AI utilise : {inputs}. Le tout part chez {provider}, uniquement pour rédiger le brouillon. Rien d’autre sur votre journée ne quitte cet ordinateur.",
     "aiDraftConsentRequired": "Autorisez à nouveau stella AI pour rédiger cette description.",
     "aiDraftDisclosure": "Les propositions d’IA sont des suggestions que stella génère à partir de l’entrée que vous vérifiez, de vos entrées précédentes sur le dossier et, si votre cabinet les a ajoutées, de ses règles de facturation. Vérifiez chaque entrée avant de la créer.",
     "aiDraftEarlierEntries": "{count, plural, one {Reprend # entrée précédente} other {Reprend # entrées précédentes}}",
@@ -21,9 +22,10 @@
     "aiDraftNeedsMatter": "Choisissez un dossier et stella AI pourra rédiger la description.",
     "aiDraftOff": "Votre cabinet a désactivé les propositions de stella AI.",
     "aiDraftOffer": "stella AI peut proposer la description.",
-    "aiDraftRefused": "Vous ne pouvez plus créer d’entrées de temps sur ce dossier.",
+    "aiDraftRefused": "Vous ne pouvez plus créer d’entrées de temps sur ce dossier. Choisissez un autre dossier.",
     "aiDraftRetry": "Réessayer",
-    "aiDraftTooLarge": "Cette entrée contient plus de détails qu’une proposition ne peut en utiliser.",
+    "aiDraftTooLarge": "Cette entrée contient plus de détails qu’une proposition ne peut en utiliser. Sélectionnez une plage de temps plus courte ou rédigez la description vous-même.",
+    "aiDraftUnavailable": "Les propositions de stella AI ne vous sont pas accessibles. Rédigez la description vous-même.",
     "aiDraftWhatIsSent": "Qu'est-ce qui est envoyé ?",
     "aiDraftWrite": "Rédiger avec stella AI",
     "aiDraftWriting": "stella AI rédige la description…",
@@ -46,20 +48,19 @@
     "appNameOnlyApps": "Applications dont seul le nom est enregistré",
     "batchCreated": "{count, plural, one {# brouillon créé} other {# brouillons créés}}",
     "batchFailed": "Impossible de créer les brouillons. Réessayez.",
-    "batchPrivacy": "Seuls le dossier, la date, la durée et la description sont envoyés",
     "billingDraftsForgetPreference": "Oublier la préférence",
     "billingDraftsGranted": "stella AI rédige les descriptions de vos entrées de temps à partir des détails affichés pour chaque entrée.",
     "billingDraftsPreference": "Votre préférence de rédaction",
-    "billingDraftsRevoked": "stella AI ne rédige de descriptions qu’après votre autorisation sur une entrée de temps.",
+    "billingDraftsRevoked": "stella AI ne rédige aucune description tant que vous ne l’avez pas autorisé.",
     "billingDraftsTitle": "Propositions de stella AI",
     "billingDraftsUnavailable": "Impossible de charger les réglages des propositions de stella AI pour le moment.",
     "billingDraftsWithdraw": "Retirer le consentement",
     "billingDraftsWithdrawPending": "stella AI est désactivé sur cet ordinateur. Votre retrait sera envoyé à stella dès qu’il sera joignable.",
     "browserAnsweredAppNameOnly": "Seul le nom de l’application est enregistré pour <bdi>{browser}</bdi>. Vous pouvez le modifier dans les Réglages.",
     "browserAnsweredTitles": "Les titres des onglets dans <bdi>{browser}</bdi> sont enregistrés. Vous pouvez le modifier dans les Réglages.",
-    "browserPrivacyNote": "Les fenêtres privées peuvent aussi être enregistrées ; mettez l’enregistrement en pause ou excluez le navigateur lors de la navigation privée.",
+    "browserPrivacyNote": "stella ne reconnaît pas toutes les fenêtres privées ; mettez donc l’enregistrement en pause avant de naviguer en privé.",
     "browserQuestionAppNameOnly": "Nom de l’application seul",
-    "browserQuestionDescription": "Les titres des onglets aident à décrire le travail. Les fenêtres privées ne sont reconnues que par leur titre ; mettez donc l’enregistrement en pause pendant la navigation privée.",
+    "browserQuestionDescription": "Les titres des onglets aident à décrire le travail.",
     "browserQuestionLater": "Décider plus tard",
     "browserQuestionRecordTitles": "Enregistrer les titres",
     "browserQuestionTitle": "Enregistrer aussi les titres des onglets dans <bdi>{browser}</bdi> ?",
@@ -73,6 +74,7 @@
     "candidatesFailed": "Impossible de charger les suggestions de dossiers. Réessayez.",
     "captureDetails": "Enregistrer aussi les titres des fenêtres et les documents ouverts",
     "captureDetailsDescription": "Désactiver cette option arrête l’enregistrement de nouveaux détails. Les détails passés restent jusqu’à la fin de leur conservation ou leur suppression.",
+    "captureDetailsOffDescription": "Activer cette option ajoute les titres des fenêtres et les noms des documents à la nouvelle activité.",
     "captureModeAppOnly": "App seule",
     "captureModeBrowser": "Navigateur",
     "captureModeLabel": "Ce qu’il faut enregistrer pour {name}",
@@ -100,6 +102,43 @@
     "detailsUnavailable": "Les détails ne sont pas disponibles sur cet appareil. Les noms des applications restent enregistrés.",
     "detectCalls": "Enregistrer les appels",
     "detectCallsDescription": "Lorsque Teams, Zoom ou un navigateur utilise votre micro, ce temps compte comme l’appel, même si vous ne faites qu’écouter ou travaillez dans une autre app. Aucun son n’est enregistré.",
+    "disclosure": {
+      "aiDraftInputs": {
+        "appNames": "les noms d’applications",
+        "billingFormat": "le format de facturation du client",
+        "date": "la date",
+        "duration": "la durée",
+        "earlierDescriptions": "vos descriptions précédentes sur le dossier",
+        "firmGuidelines": "les éventuelles règles de facturation de votre cabinet",
+        "instructions": "les consignes que vous saisissez",
+        "matter": "le dossier",
+        "titles": "les titres de fenêtres et noms de documents enregistrés"
+      },
+      "aiDraftProvider": "le fournisseur d’IA de votre cabinet, ou celui de stella AI",
+      "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
+      "never": {
+        "audio": "Le son du micro",
+        "keystrokes": "Frappes au clavier ou texte saisi",
+        "screen": "Captures ou contenu de l'écran",
+        "webAddresses": "Adresses de sites web"
+      },
+      "neverTitle": "Jamais enregistré",
+      "recorded": {
+        "activeTime": "Le temps actif uniquement ; l'inactivité est exclue",
+        "app": "L'app au premier plan, toutes les quelques secondes",
+        "browserTitles": "Titres des onglets du navigateur, seulement dans les navigateurs que vous autorisez",
+        "calls": "Temps passé en appel, sauf si vous le désactivez",
+        "details": "Titres de fenêtres et, sur Mac, le chemin complet de chaque document ouvert, dossiers compris, sauf si vous les désactivez"
+      },
+      "recordedTitle": "Ce qui est enregistré",
+      "sent": {
+        "aiDrafts": "Brouillons de stella AI que vous demandez, une fois autorisés. Pour chacun, stella AI utilise : {inputs}. Le tout part chez {provider}, uniquement pour rédiger le brouillon ; stella ne conserve ni le brouillon ni ce qui a été envoyé pour lui.",
+        "timeEntries": "Saisies de temps que vous créez : dossier, date, durée, description, caractère facturable et éventuels codes de facturation"
+      },
+      "sentTitle": "Ce qui quitte cet ordinateur",
+      "storedMac": "Chiffré sur ce Mac, pour votre compte uniquement",
+      "storedPc": "Chiffré sur ce PC, pour votre compte uniquement"
+    },
     "draftMarkerFailed": "Les brouillons ont été créés, mais le reçu local n'a pas pu être enregistré. Réessayez pour enregistrer le reçu.",
     "draftedEntry": "Brouillon créé",
     "draftedLabel": "en brouillon",
@@ -110,6 +149,8 @@
     "earlierTimeStaysUntitled": "Le temps antérieur reste sans titres.",
     "earliestDayReached": "Vous consultez le premier jour disponible.",
     "empty": "Rien n'a été enregistré ce jour-là.",
+    "emptyToday": "Rien n’a encore été enregistré aujourd’hui. Votre travail s’affiche ici au fur et à mesure.",
+    "emptyTodayPaused": "L’enregistrement est en pause. Choisissez Reprendre pour enregistrer votre travail d’aujourd’hui.",
     "encrypted": "Chiffré sur cet appareil",
     "enterRefinement": "Saisissez une consigne pour modifier la description.",
     "entryBillable": "Facturable",
@@ -130,6 +171,7 @@
     "granularity": "Grille",
     "hours": "{hours} h",
     "incompatibleActivity": "Cette version de l'application ne peut pas lire l'activité enregistrée. Mettez l'application à jour pour continuer.",
+    "joinedActivity": "Non compté dans ce dossier",
     "keepHistory": "Conserver l’historique",
     "latestDayReached": "Vous consultez le dernier jour disponible.",
     "memoryOnly": "Non enregistré dans cette version",
@@ -139,6 +181,7 @@
     "moreApps": "+{count} de plus",
     "narrativeApps": "Travail dans {apps}",
     "narrativeEvidence": "Travail sur {evidence}",
+    "narrativeTitle": "« {title} »",
     "newEntry": "Nouvelle saisie",
     "nextDay": "Jour suivant",
     "noMatters": "Aucun dossier trouvé. Essayez une autre recherche.",
@@ -171,8 +214,8 @@
     "selectRange": "Sélectionner une plage",
     "settings": "Réglages",
     "suggestionPieceLabel": "Saisie suggérée : {matter}, {range}, {duration}, {hours} h au total",
-    "suggestionPieces": "{count, plural, one {# plage} other {# plages}} · {duration} · {hours} h",
-    "suggestionRange": "{range} · {duration} · {hours} h",
+    "suggestionPieces": "{count, plural, one {# plage} other {# plages}} · {hours} h",
+    "suggestionRange": "{range} · {hours} h",
     "timeEntries": "Saisies de temps",
     "title": "Activité",
     "titlesNeedAccessibility": "Sans accès à l’accessibilité, les titres des fenêtres ne sont pas enregistrés.",
@@ -183,12 +226,8 @@
     "unreadableEraseConfirmation": "Les activités enregistrées illisibles et les données de récupération de leurs brouillons en attente seront effacées. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",
     "unreadableEraseNotice": "Certaines activités enregistrées ne peuvent pas être lues. Vous pouvez effacer les activités enregistrées illisibles et les données de récupération de leurs brouillons.",
     "unrecoverableOtherHistoryConfirmation": "L'historique enregistré des autres comptes sera supprimé, y compris les données de récupération des brouillons en attente dont les clés sont absentes ou les fichiers illisibles. Des brouillons créés peuvent déjà exister. Cette action est irréversible.",
-    "welcomeControlFact": "Temps d’inactivité exclu. Suspendez ou supprimez à tout moment.",
-    "welcomeDetails": "L’activité des applications est relevée toutes les quelques secondes et n’est jamais envoyée automatiquement. Les titres de fenêtres et les chemins des documents ouverts sont aussi enregistrés, sauf si vous désactivez les détails. Les résumés ne sont copiés dans le presse-papiers que sur demande. Vous pouvez exclure des applications et choisir la durée de conservation de l’historique. Désactiver les détails arrête l’enregistrement de nouveaux détails ; les anciens restent conservés jusqu’à l’expiration de cette durée ou leur suppression. Les titres de fenêtres d’une suggestion ne quittent cet appareil que si vous approuvez une description par stella AI, une fois ou toujours ; ils ne sont pas conservés.",
     "welcomeLearnMore": "En savoir plus",
-    "welcomeLocalFact": "Chiffré sur cet appareil.",
     "welcomePreviewMatter": "Renouvellement du bail Riverside",
-    "welcomePrivacyFact": "Aucun contenu d’écran ; les titres uniquement avec votre accord.",
     "welcomeStart": "Commencer l'enregistrement",
     "welcomeTitle": "Votre journée, en privé",
     "writeDescription": "Saisissez une description pour cette saisie."
@@ -548,6 +587,25 @@
       "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail.",
       "title": "Corriger avec l’IA"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Garde un ton détendu, avec une ponctuation légère.",
+        "title": "Décontracté"
+      },
+      "notes": {
+        "description": "Des points courts, un par ligne, sans mots de remplissage.",
+        "title": "Notes"
+      },
+      "polished": {
+        "description": "Corrige les erreurs de reconnaissance et conserve votre formulation.",
+        "title": "Soigné"
+      },
+      "title": "Style",
+      "verbatim": {
+        "description": "Chaque mot tel qu’il a été dit ; seules la ponctuation et les majuscules sont ajoutées.",
+        "title": "Mot à mot"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Jusqu’à {limit, number} caractères du document où vous êtes, pour que la dictée s’accorde avec ce que vous écrivez.",
@@ -579,6 +637,7 @@
       "local": "Cet ordinateur",
       "localDescription": "La parole est transcrite sur cet ordinateur et n'est pas conservée.",
       "model": "Modèle de transcription",
+      "modelWithdrawn": "Le modèle choisi n’est plus proposé. Choisissez-en un autre ; en attendant, la dictée est transcrite sur cet ordinateur.",
       "outsideRegion": "Hors de votre région",
       "retainsData": "Conserve votre audio",
       "retainsDataTitle": "{provider} conserve ce que vous dictez",
@@ -650,10 +709,13 @@
       "checkBodyMac": "Vérifiez l'accès au micro dans les Réglages Système, puis réessayez.",
       "checkBodyPc": "Vérifiez l'accès au micro dans les Paramètres Windows, puis réessayez.",
       "chooseMicrophone": "Choisir le micro…",
+      "chooseModel": "Choisir un modèle…",
       "dismiss": "Fermer",
       "inputDevice": "Entrée : {device}",
       "missingBody": "La dictée utilise {device} à la place.",
       "missingTitle": "{missing} n'est pas connecté",
+      "modelBody": "Choisissez-en un dans Paramètres → Dictée. Cette dictée a été transcrite sur cet ordinateur.",
+      "modelTitle": "Votre modèle de transcription n’est plus proposé",
       "nothingBody": "Parlez en maintenant la touche, ou choisissez une autre entrée dans les réglages Son.",
       "nothingTitle": "stella n'a entendu aucune parole",
       "openSettingsMac": "Ouvrir les Réglages Système",
@@ -662,6 +724,35 @@
       "openSoundPc": "Ouvrir les paramètres de son",
       "title": "stella n'entend pas votre micro"
     },
+    "perApp": {
+      "add": "Ajouter…",
+      "cleanup": {
+        "default": "Correction selon le réglage",
+        "label": "Correction pour {name}",
+        "off": "Sans correction",
+        "on": "Avec correction"
+      },
+      "description": "Activez ou désactivez la correction par l’IA et choisissez la langue pour une app ou un type d’app. C’est l’app au premier plan au début de la dictée qui compte.",
+      "failed": "Les réglages n’ont pas pu être enregistrés. Réessayez.",
+      "group": "Par app",
+      "kinds": {
+        "browser": "Navigateurs",
+        "chat": "Apps de discussion",
+        "code": "Éditeurs de code",
+        "document": "Traitements de texte",
+        "email": "Apps de messagerie",
+        "other": "Autres apps",
+        "terminal": "Terminaux"
+      },
+      "kindsOfApp": "Types d’app",
+      "language": {
+        "default": "Langue selon le réglage",
+        "label": "Langue pour {name}"
+      },
+      "recentApps": "Apps récentes",
+      "remove": "Retirer {name}",
+      "title": "Réglages pour une app"
+    },
     "preview": {
       "finishing": "Finalisation…",
       "label": "Ce que vous avez dicté jusqu’ici",
@@ -669,6 +760,11 @@
     },
     "removeFailed": "Le modèle vocal n’a pas pu être supprimé. Réessayez.",
     "removeModel": "Supprimer",
+    "retype": {
+      "description": "Appuyez sur {shortcut} pour retaper votre dernière dictée au curseur. Elle reste seulement en mémoire, tant qu’elle figure dans l’historique du presse-papiers.",
+      "taken": "Une autre app utilise {shortcut}. Le menu Dictée de l’icône stella propose la même chose.",
+      "title": "Raccourci pour la dernière dictée"
+    },
     "shortcutTaken": "Une autre application utilise {shortcut}.",
     "sounds": {
       "description": "Émettre un son bref et discret au début et à la fin de l’enregistrement.",
@@ -681,6 +777,24 @@
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez.",
       "open": "Ouvrir",
       "title": "Transcrire un enregistrement"
+    },
+    "translateTo": {
+      "description": "Écrit le texte nettoyé dans cette langue, quelle que soit la langue que vous parlez.",
+      "off": "Langue parlée",
+      "title": "Écrire en"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Baisser les autres sons",
+        "nothing": "Ne rien faire",
+        "pause": "Mettre Musique et Spotify en pause"
+      },
+      "description": "Ce qui arrive aux autres sons pendant que stella enregistre, pour qu’ils ne finissent pas dans le texte. Tout revient à la fin de l’enregistrement.",
+      "speakersOnly": {
+        "description": "Les écouteurs restent tels quels : le micro ne les entend pas.",
+        "title": "Seulement sur les haut-parleurs"
+      },
+      "title": "Pendant la dictée"
     }
   },
   "keepAwake": {
@@ -763,23 +877,36 @@
     "takenOverTitle": "Modification déplacée vers un autre appareil"
   },
   "onboarding": {
-    "activityAiNote": "Les titres de fenêtres d’une suggestion ne quittent cet appareil que si vous approuvez une description par stella AI, une fois ou toujours. Ils ne sont pas conservés.",
     "activityBody": "Voyez où est passée votre journée de travail et transformez-la en brouillons de saisies de temps. Vous décidez de ce qui est enregistré et de ce qui est envoyé.",
-    "activityConsentNote": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement dans Activité. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
-    "activityNeverKeys": "Frappes au clavier ou texte saisi",
-    "activityNeverScreen": "Captures ou contenu de l'écran",
-    "activityNeverTitle": "Jamais enregistré",
-    "activityNeverWeb": "Adresses de sites web",
-    "activityRecordsActive": "Le temps actif uniquement ; l'inactivité est exclue",
-    "activityRecordsApp": "L'app au premier plan, toutes les quelques secondes",
-    "activityRecordsDetails": "Titres de fenêtres et noms de documents, sauf si vous les désactivez",
-    "activityRecordsTitle": "Ce qui est enregistré",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Rédiger les descriptions avec stella AI",
+        "body": "stella AI peut rédiger la description de chaque saisie de temps. Autorisez-le maintenant ou lorsque vous passerez une journée en revue pour la première fois.",
+        "withdraw": "Vous pouvez retirer votre consentement à tout moment dans les Réglages."
+      },
+      "calls": {
+        "body": "Comptez le temps passé en appel.",
+        "title": "Appels"
+      },
+      "details": {
+        "appNamesOnly": "Seuls les noms des applications sont enregistrés.",
+        "body": "Ils vous aident à distinguer vos dossiers lorsque vous passez la journée en revue.",
+        "browsers": "Les navigateurs n’enregistrent les titres des onglets qu’une fois que vous l’autorisez. Activité vous pose la question pour chaque navigateur la première fois qu’elle le voit.",
+        "title": "Titres de fenêtres et documents"
+      },
+      "screens": {
+        "aiDrafts": "Propositions IA",
+        "calls": "Appels",
+        "details": "Détails",
+        "recording": "Aperçu"
+      },
+      "starting": "Démarrage de l’enregistrement…"
+    },
     "activityStoryDraft": "Brouillon",
-    "activityStoryRecordMac": "Chiffré sur ce Mac, pour votre compte uniquement",
-    "activityStoryRecordPc": "Chiffré sur ce PC, pour votre compte uniquement",
     "activityStoryRecordTitle": "Enregistré",
     "activityStoryReviewCaption": "Vous passez la journée en revue et choisissez le dossier",
     "activityStoryReviewTitle": "Vous vérifiez",
+    "activityStorySendCaption": "Vous choisissez ce qui quitte cet ordinateur",
     "activityStorySendTitle": "Vous envoyez",
     "activityTitle": "L'activité, expliquée",
     "back": "Retour",
@@ -813,7 +940,6 @@
         "choose": "Microphone pour dicter",
         "title": "Laissez stella vous entendre"
       },
-      "progress": "Étape {current} sur {total}",
       "screens": {
         "app": "Correction",
         "context": "Contexte",
@@ -821,7 +947,6 @@
         "transcription": "Transcription",
         "words": "Mots"
       },
-      "skipRest": "Passer la suite",
       "transcription": {
         "body": "Vous pourrez le modifier plus tard dans les Réglages.",
         "bodyLocal": "Le modèle vocal tourne ici, la dictée fonctionne donc aussi hors ligne.",
@@ -870,7 +995,7 @@
     "howSigningBodyMac": "Choisissez « Signer avec stella desktop » sur un PDF dans stella. Votre certificat reste dans votre trousseau ou sur votre carte à puce, et le PDF signé revient dans stella sous forme de nouvelle version.",
     "howSigningBodyPc": "Choisissez « Signer avec stella desktop » sur un PDF dans stella. Votre certificat reste dans votre magasin de certificats ou sur votre carte à puce, et le PDF signé revient dans stella sous forme de nouvelle version.",
     "howTitle": "Comment fonctionne stella desktop",
-    "introduceActivityBody": "L'activité est maintenant disponible pour votre compte. Rien n'est enregistré tant que vous ne la lancez pas dans la fenêtre d'activité.",
+    "introduceActivityBody": "L'activité est maintenant disponible pour votre compte : voyez où est passée votre journée de travail et transformez-la en brouillons de saisies de temps.",
     "introduceActivityTitle": "Nouveau : chronologie d'activité",
     "introduceDictationTitle": "Nouveau : dictée",
     "later": "Configurer plus tard",
@@ -891,6 +1016,7 @@
     "permissionsTitlePc": "Configurer ce PC",
     "progress": "Étape {current} sur {total}",
     "skip": "Passer",
+    "skipRest": "Passer la suite",
     "staysLocalMac": "Reste sur ce Mac",
     "staysLocalPc": "Reste sur ce PC",
     "tryAgain": "Réessayer",
@@ -937,7 +1063,6 @@
     "errorUpdateLanguage": "stella desktop n'a pas pu changer la langue de l’interface.",
     "errorUpdatePreferences": "stella desktop n'a pas pu mettre à jour les paramètres de notification.",
     "language": "Langue",
-    "lastVerified": "Dernière vérification",
     "loadingAccount": "Vérification de la connexion de votre compte…",
     "managedOfficeEditing": "Modification de fichiers Office gérée pour stella.",
     "neverRequested": "Jamais demandé",
@@ -1210,6 +1335,7 @@
     "checkForUpdates": "Vérifier les mises à jour",
     "dictation": "Dictée",
     "dictationHint": "Maintenez {key} pour dicter",
+    "dictationRetype": "Retaper la dernière dictée",
     "dictationSettings": "Réglages de la dictée…",
     "dictationTurnOn": "Activer la dictée…",
     "documentsSyncing": "{count, plural, one {{count} document en synchronisation} other {{count} documents en synchronisation}}",

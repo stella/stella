@@ -1,9 +1,10 @@
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
-import { env } from "@/api/env";
+import { envPublicCorpus } from "@/api/env-public-corpus";
 import { getPublicCorpusLimits } from "@/api/lib/limits";
 
-export const getPublicCorpusClassPolicy = () => getPublicCorpusLimits(env);
+export const getPublicCorpusClassPolicy = () =>
+  getPublicCorpusLimits(envPublicCorpus);
 
 export type PublicCorpusClass = keyof ReturnType<
   typeof getPublicCorpusClassPolicy

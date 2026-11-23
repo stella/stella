@@ -657,13 +657,17 @@ export const PromptBar = (props: PromptBarProps) => {
    * chooser instead of the chips; Escape or losing chip visibility
    * cancels back to the chips.
    */
+  const [prevPresetChipsVisible, setPrevPresetChipsVisible] =
+    useState(presetChipsVisible);
   const [scopePromptPreset, setScopePromptPreset] =
     useState<AISuggestionPreset | null>(null);
-  // Cancel the scope chooser during render (adjust-state-during-render) rather
-  // than in an effect when the preset chips lose visibility; guarded on
-  // scopePromptPreset !== null so it converges in one pass.
-  if (!presetChipsVisible && scopePromptPreset !== null) {
-    setScopePromptPreset(null);
+  // Cancel the scope chooser during render when the preset chips lose
+  // visibility, rather than in an effect.
+  if (prevPresetChipsVisible !== presetChipsVisible) {
+    setPrevPresetChipsVisible(presetChipsVisible);
+    if (!presetChipsVisible) {
+      setScopePromptPreset(null);
+    }
   }
   const submitPreset = (preset: AISuggestionPreset) => {
     if (canSubmitNow !== undefined && !canSubmitNow()) {

@@ -1,0 +1,6 @@
+{
+  "metric": "no-db-await-in-loop-suppressions",
+  "file": "apps/api/src/lib/uploads/document-naming/queue.ts",
+  "delta": 1,
+  "reason": "Each expired naming claim moves under its own attempt fence, so the reclaim cannot be one batched update; leases expire only when a worker dies and a sweep reads at most one batch."
+}

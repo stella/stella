@@ -4,12 +4,13 @@
     "accessibilityAccessMissing": "Lietotnei stella nav piekļuves Pieejamības iestatījumos. Ja sarakstā tā jau ir ieslēgta, izslēdziet to un atkal ieslēdziet.",
     "accessibilityRequired": "Lai ierakstītu detaļas, atļaujiet piekļuvi Pieejamības iestatījumos. Lietotņu nosaukumi joprojām tiek ierakstīti.",
     "activeLabel": "aktīvs darbs",
-    "aiAccept": "Pieņemt",
+    "aiApplyChange": "Lietot izmaiņas",
     "aiDismiss": "Noraidīt",
     "aiDraftAgain": "Sagatavot vēlreiz",
     "aiDraftAllow": "Atļaut",
+    "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Uzdevums {task} · Darbība {activity}",
-    "aiDraftConsent": "stella AI var sagatavot aprakstus no katra ieraksta lietas, datuma, ilguma un lietotņu nosaukumiem, kā arī no šeit redzamajiem dokumentu nosaukumiem un logu virsrakstiem, ja tos ierakstāt. Jūsu agrākie ieraksti lietā palīdz rakstīt jūsu stilā. Nekas cits par jūsu dienu neatstāj šo datoru.",
+    "aiDraftConsent": "Apraksta sagatavošanai stella AI izmanto: {inputs}. Tas viss tiek nosūtīts {provider} tikai melnraksta uzrakstīšanai. Nekas cits par jūsu dienu neatstāj šo datoru.",
     "aiDraftConsentRequired": "Lai sagatavotu šo aprakstu, vēlreiz atļaujiet stella AI.",
     "aiDraftDisclosure": "AI melnraksti ir ieteikumi, ko stella izveido no pārskatāmā ieraksta, jūsu agrākajiem ierakstiem lietā un, ja jūsu organizācija tās ir pievienojusi, tās norēķinu vadlīnijām. Pirms izveides pārskatiet katru ierakstu.",
     "aiDraftEarlierEntries": "{count, plural, zero {Seko # agrākiem ierakstiem} one {Seko # agrākam ierakstam} other {Seko # agrākiem ierakstiem}}",
@@ -21,9 +22,10 @@
     "aiDraftNeedsMatter": "Izvēlieties lietu, un stella AI sagatavos aprakstu.",
     "aiDraftOff": "Jūsu birojs ir izslēdzis stella AI melnrakstus.",
     "aiDraftOffer": "stella AI var ieteikt aprakstu.",
-    "aiDraftRefused": "Šajā lietā vairs nevarat izveidot laika ierakstus.",
+    "aiDraftRefused": "Šajā lietā vairs nevarat izveidot laika ierakstus. Izvēlieties citu lietu.",
     "aiDraftRetry": "Mēģināt vēlreiz",
-    "aiDraftTooLarge": "Šajā ierakstā ir vairāk detaļu, nekā viens melnraksts var izmantot.",
+    "aiDraftTooLarge": "Šajā ierakstā ir vairāk detaļu, nekā viens melnraksts var izmantot. Atlasiet īsāku laika posmu vai uzrakstiet aprakstu paši.",
+    "aiDraftUnavailable": "stella AI melnraksti jums nav pieejami. Uzrakstiet aprakstu paši.",
     "aiDraftWhatIsSent": "Kas tiek nosūtīts?",
     "aiDraftWrite": "Sagatavot ar stella AI",
     "aiDraftWriting": "stella AI sagatavo aprakstu…",
@@ -46,20 +48,19 @@
     "appNameOnlyApps": "Lietotnes, kurām ieraksta tikai nosaukumu",
     "batchCreated": "{count, plural, zero {Izveidots # melnrakstu} one {Izveidots # melnraksts} other {Izveidoti # melnraksti}}",
     "batchFailed": "Neizdevās izveidot melnrakstus. Mēģiniet vēlreiz.",
-    "batchPrivacy": "Tiek nosūtīta tikai lieta, datums, ilgums un apraksts",
     "billingDraftsForgetPreference": "Aizmirst preferenci",
     "billingDraftsGranted": "stella AI sagatavo jūsu laika ierakstu aprakstus no detaļām, ko rāda katrs ieraksts.",
     "billingDraftsPreference": "Jūsu melnrakstu preference",
-    "billingDraftsRevoked": "stella AI sagatavo aprakstus tikai pēc tam, kad to atļaujat pie laika ieraksta.",
+    "billingDraftsRevoked": "stella AI nesagatavo aprakstus, kamēr to neatļaujat.",
     "billingDraftsTitle": "stella AI melnraksti",
     "billingDraftsUnavailable": "stella AI melnrakstu iestatījumus pašlaik nevar ielādēt.",
     "billingDraftsWithdraw": "Atsaukt piekrišanu",
     "billingDraftsWithdrawPending": "stella AI šajā datorā ir izslēgts. Atsaukums tiks nosūtīts lietotnei stella, tiklīdz tā būs sasniedzama.",
     "browserAnsweredAppNameOnly": "Pārlūkprogrammai <bdi>{browser}</bdi> tiek ierakstīts tikai lietotnes nosaukums. To var mainīt iestatījumos.",
     "browserAnsweredTitles": "Pārlūkprogrammas <bdi>{browser}</bdi> cilņu nosaukumi tiek ierakstīti. To var mainīt iestatījumos.",
-    "browserPrivacyNote": "Var tikt ierakstīti arī privātie logi; privātas pārlūkošanas laikā apturiet ierakstīšanu vai izslēdziet pārlūkprogrammu no tās.",
+    "browserPrivacyNote": "stella neatpazīst katru privāto logu, tāpēc pirms privātas pārlūkošanas apturiet ierakstīšanu.",
     "browserQuestionAppNameOnly": "Tikai lietotnes nosaukums",
-    "browserQuestionDescription": "Cilņu nosaukumi palīdz aprakstīt darbu. Privātos logus var atpazīt tikai pēc nosaukuma, tāpēc privātas pārlūkošanas laikā apturiet ierakstīšanu.",
+    "browserQuestionDescription": "Cilņu nosaukumi palīdz aprakstīt darbu.",
     "browserQuestionLater": "Izlemt vēlāk",
     "browserQuestionRecordTitles": "Ierakstīt nosaukumus",
     "browserQuestionTitle": "Vai ierakstīt arī cilņu nosaukumus pārlūkprogrammā <bdi>{browser}</bdi>?",
@@ -73,6 +74,7 @@
     "candidatesFailed": "Neizdevās ielādēt lietu ieteikumus. Mēģiniet vēlreiz.",
     "captureDetails": "Ierakstīt arī logu nosaukumus un atvērtos dokumentus",
     "captureDetailsDescription": "Izslēgšana aptur jaunu detaļu ierakstīšanu. Iepriekšējās paliek līdz glabāšanas termiņa beigām vai dzēšanai.",
+    "captureDetailsOffDescription": "Ieslēdzot jaunajai darbībai tiek ierakstīti arī logu un dokumentu nosaukumi.",
     "captureModeAppOnly": "Tikai lietotne",
     "captureModeBrowser": "Pārlūkprogramma",
     "captureModeLabel": "Ko ierakstīt lietotnei {name}",
@@ -100,6 +102,43 @@
     "detailsUnavailable": "Detaļas šajā ierīcē nav pieejamas. Lietotņu nosaukumi joprojām tiek ierakstīti.",
     "detectCalls": "Reģistrēt zvanus",
     "detectCallsDescription": "Kamēr Teams, Zoom vai pārlūks izmanto mikrofonu, šis laiks tiek skaitīts kā zvans, pat ja jūs tikai klausāties vai strādājat citā lietotnē. Skaņa netiek ierakstīta.",
+    "disclosure": {
+      "aiDraftInputs": {
+        "appNames": "lietotņu nosaukumi",
+        "billingFormat": "klienta norēķinu formāts",
+        "date": "datums",
+        "duration": "ilgums",
+        "earlierDescriptions": "jūsu agrākie apraksti lietā",
+        "firmGuidelines": "iespējamās jūsu biroja norēķinu vadlīnijas",
+        "instructions": "jūsu ievadītie norādījumi",
+        "matter": "lieta",
+        "titles": "ierakstītie logu virsraksti un dokumentu nosaukumi"
+      },
+      "aiDraftProvider": "jūsu biroja izmantotajam AI pakalpojumu sniedzējam vai stella AI pakalpojumu sniedzējam",
+      "control": "Nekas netiek ierakstīts, kamēr nenospiežat Sākt ierakstīšanu. Jebkurā laikā varat pauzēt, izslēgt lietotnes vai dzēst jebkuru dienu.",
+      "never": {
+        "audio": "Skaņa no mikrofona",
+        "keystrokes": "Taustiņu nospiešana vai ievadītais teksts",
+        "screen": "Ekrānuzņēmumi vai ekrāna saturs",
+        "webAddresses": "Tīmekļa vietņu adreses"
+      },
+      "neverTitle": "Nekad netiek ierakstīts",
+      "recorded": {
+        "activeTime": "Tikai aktīvais laiks; dīkstāve netiek iekļauta",
+        "app": "Kura lietotne ir priekšplānā, ik pēc dažām sekundēm",
+        "browserTitles": "Pārlūkprogrammas cilņu nosaukumi, tikai jūsu atļautajās pārlūkprogrammās",
+        "calls": "Zvanos pavadītais laiks, ja vien to neizslēdzat",
+        "details": "Logu virsraksti un Mac datorā katra atvērtā dokumenta pilns ceļš ar mapēm, ja vien tos neizslēdzat"
+      },
+      "recordedTitle": "Kas tiek ierakstīts",
+      "sent": {
+        "aiDrafts": "stella AI melnraksti, ko pieprasāt pēc atļaujas. Katram stella AI izmanto: {inputs}. Tas viss tiek nosūtīts {provider} tikai melnraksta uzrakstīšanai; stella nesaglabā ne melnrakstu, ne tam nosūtīto.",
+        "timeEntries": "Jūsu izveidotie laika ieraksti: lieta, datums, ilgums, apraksts, vai tas ir apmaksājams, un iespējamie norēķinu kodi"
+      },
+      "sentTitle": "Kas atstāj šo datoru",
+      "storedMac": "Šifrēts šajā Mac datorā, tikai jūsu kontam",
+      "storedPc": "Šifrēts šajā datorā, tikai jūsu kontam"
+    },
     "draftMarkerFailed": "Melnraksti tika izveidoti, bet vietējo apstiprinājumu neizdevās saglabāt. Mēģiniet vēlreiz saglabāt apstiprinājumu.",
     "draftedEntry": "Melnraksts izveidots",
     "draftedLabel": "melnraksti",
@@ -110,6 +149,8 @@
     "earlierTimeStaysUntitled": "Agrākais laiks paliks bez nosaukumiem.",
     "earliestDayReached": "Jūs skatāt agrāko pieejamo dienu.",
     "empty": "Šajā dienā nekas netika ierakstīts.",
+    "emptyToday": "Šodien vēl nekas nav ierakstīts. Jūsu darbs šeit parādīsies darba gaitā.",
+    "emptyTodayPaused": "Ierakstīšana ir apturēta. Lai ierakstītu šodienas darbu, izvēlieties Turpināt.",
     "encrypted": "Šifrēts šajā ierīcē",
     "enterRefinement": "Ievadiet norādījumu apraksta labošanai.",
     "entryBillable": "Apmaksājams",
@@ -130,6 +171,7 @@
     "granularity": "Režģis",
     "hours": "{hours} st.",
     "incompatibleActivity": "Šī lietotnes versija nevar nolasīt saglabāto darbību. Lai turpinātu, atjauniniet lietotni.",
+    "joinedActivity": "Netiek ieskaitīts šīs lietas laikā",
     "keepHistory": "Saglabāt vēsturi",
     "latestDayReached": "Jūs skatāt jaunāko pieejamo dienu.",
     "memoryOnly": "Šajā versijā netiek saglabāts",
@@ -138,7 +180,8 @@
     "mixedActivityLabel": "Ātra pārslēgšanās: {apps}, {range}",
     "moreApps": "+{count} vēl",
     "narrativeApps": "Darbs lietotnēs: {apps}",
-    "narrativeEvidence": "Darbs ar: {evidence}",
+    "narrativeEvidence": "Darbs ar {evidence}",
+    "narrativeTitle": "„{title}“",
     "newEntry": "Jauns ieraksts",
     "nextDay": "Nākamā diena",
     "noMatters": "Lietas nav atrastas. Izmēģiniet citu meklējumu.",
@@ -171,8 +214,8 @@
     "selectRange": "Atlasīt posmu",
     "settings": "Iestatījumi",
     "suggestionPieceLabel": "Ieteiktais ieraksts: {matter}, {range}, {duration}, kopā {hours} st.",
-    "suggestionPieces": "{count, plural, zero {# posmu} one {# posms} other {# posmi}} · {duration} · {hours} st.",
-    "suggestionRange": "{range} · {duration} · {hours} st.",
+    "suggestionPieces": "{count, plural, zero {# posmu} one {# posms} other {# posmi}} · {hours} st.",
+    "suggestionRange": "{range} · {hours} st.",
     "timeEntries": "Laika ieraksti",
     "title": "Darbība",
     "titlesNeedAccessibility": "Bez piekļuves Pieejamības iestatījumos logu nosaukumi netiek ierakstīti.",
@@ -183,12 +226,8 @@
     "unreadableEraseConfirmation": "Nenolasāmā saglabātā darbība un tās gaidošo melnrakstu atkopšanas dati tiks dzēsti. Izveidotie melnraksti jau var pastāvēt. Šo darbību nevar atsaukt.",
     "unreadableEraseNotice": "Daļu saglabātās darbības nevar nolasīt. Varat dzēst nenolasāmo saglabāto darbību un tās melnrakstu atkopšanas datus.",
     "unrecoverableOtherHistoryConfirmation": "Citu kontu saglabātā vēsture tiks dzēsta, tostarp gaidošo melnrakstu atkopšanas dati ar trūkstošām atslēgām vai nenolasāmiem failiem. Izveidotie melnraksti jau var pastāvēt. Šo darbību nevar atsaukt.",
-    "welcomeControlFact": "Dīkstāves laiks netiek skaitīts. Jebkurā laikā apturiet vai dzēsiet.",
-    "welcomeDetails": "Lietotņu darbība tiek reģistrēta ik pēc dažām sekundēm un nekad netiek automātiski augšupielādēta. Tiek reģistrēti arī logu nosaukumi un atvērto dokumentu ceļi, ja vien neizslēdzat detalizēto informāciju. Kopsavilkumi nonāk starpliktuvē tikai pēc pieprasījuma. Varat izslēgt lietotnes no uzskaites un izvēlēties vēstures glabāšanas ilgumu. Izslēdzot detalizēto informāciju, jauna informācija vairs netiek reģistrēta; iepriekšējā paliek līdz glabāšanas termiņa beigām vai dzēšanai. Ieteikuma logu nosaukumi atstāj šo ierīci tikai tad, ja apstiprināt stella AI aprakstu, vienreiz vai vienmēr; tie netiek saglabāti.",
     "welcomeLearnMore": "Uzzināt vairāk",
-    "welcomeLocalFact": "Šifrēts šajā ierīcē.",
     "welcomePreviewMatter": "Riverside nomas līguma pagarināšana",
-    "welcomePrivacyFact": "Bez ekrāna satura; nosaukumi tikai pēc jūsu izvēles.",
     "welcomeStart": "Sākt ierakstīšanu",
     "welcomeTitle": "Jūsu diena privāti",
     "writeDescription": "Ievadiet šī ieraksta aprakstu."
@@ -548,6 +587,25 @@
       "descriptionCloud": "stella AI arī izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam.",
       "title": "Labot ar AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Saglabā nepiespiestu toni ar vieglu pieturzīmju lietojumu.",
+        "title": "Brīvs"
+      },
+      "notes": {
+        "description": "Īsi punkti, katrs savā rindā, bez liekiem vārdiem.",
+        "title": "Piezīmes"
+      },
+      "polished": {
+        "description": "Izlabo atpazīšanas kļūdas un saglabā jūsu formulējumu.",
+        "title": "Noslīpēts"
+      },
+      "title": "Stils",
+      "verbatim": {
+        "description": "Katrs vārds tā, kā izskanēja; tiek pievienotas tikai pieturzīmes un lielie burti.",
+        "title": "Burtisks"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Līdz {limit, number} rakstzīmēm no dokumenta, kurā strādājat, lai diktētais atbilstu rakstītajam.",
@@ -579,6 +637,7 @@
       "local": "Šo datoru",
       "localDescription": "Runa tiek pārveidota šajā datorā un netiek saglabāta.",
       "model": "Pārvēršanas modelis",
+      "modelWithdrawn": "Izvēlētais modelis vairs netiek piedāvāts. Izvēlieties citu; līdz tam diktāts tiek pārrakstīts šajā datorā.",
       "outsideRegion": "Ārpus jūsu reģiona",
       "retainsData": "Saglabā jūsu audio",
       "retainsDataTitle": "{provider} saglabā to, ko diktējat",
@@ -650,10 +709,13 @@
       "checkBodyMac": "Pārbaudiet piekļuvi mikrofonam sistēmas iestatījumos un mēģiniet vēlreiz.",
       "checkBodyPc": "Pārbaudiet piekļuvi mikrofonam Windows iestatījumos un mēģiniet vēlreiz.",
       "chooseMicrophone": "Izvēlēties mikrofonu…",
+      "chooseModel": "Izvēlēties modeli…",
       "dismiss": "Aizvērt",
       "inputDevice": "Ievade: {device}",
       "missingBody": "Diktēšana tā vietā izmanto {device}.",
       "missingTitle": "{missing} nav pievienota",
+      "modelBody": "Izvēlieties citu sadaļā Iestatījumi → Diktēšana. Šis diktāts tika pārrakstīts šajā datorā.",
+      "modelTitle": "Jūsu transkripcijas modelis vairs netiek piedāvāts",
       "nothingBody": "Runājiet, kamēr turat taustiņu, vai skaņas iestatījumos izvēlieties citu ievadi.",
       "nothingTitle": "stella nedzirdēja runu",
       "openSettingsMac": "Atvērt sistēmas iestatījumus",
@@ -662,6 +724,35 @@
       "openSoundPc": "Atvērt skaņas iestatījumus",
       "title": "stella nedzird jūsu mikrofonu"
     },
+    "perApp": {
+      "add": "Pievienot…",
+      "cleanup": {
+        "default": "Labošana pēc iestatījuma",
+        "label": "Labošana: {name}",
+        "off": "Bez labošanas",
+        "on": "Ar labošanu"
+      },
+      "description": "Ieslēdziet vai izslēdziet AI labošanu un izvēlieties valodu vienai lietotnei vai lietotņu veidam. Izšķir lietotne, kas ir priekšplānā, kad sākat diktēt.",
+      "failed": "Iestatījumus neizdevās saglabāt. Mēģiniet vēlreiz.",
+      "group": "Pa lietotnēm",
+      "kinds": {
+        "browser": "Pārlūki",
+        "chat": "Tērzēšanas lietotnes",
+        "code": "Koda redaktori",
+        "document": "Dokumenti",
+        "email": "E-pasta lietotnes",
+        "other": "Citas lietotnes",
+        "terminal": "Termināļi"
+      },
+      "kindsOfApp": "Lietotņu veidi",
+      "language": {
+        "default": "Valoda pēc iestatījuma",
+        "label": "Valoda: {name}"
+      },
+      "recentApps": "Nesen lietotās lietotnes",
+      "remove": "Noņemt {name}",
+      "title": "Lietotnes iestatījumi"
+    },
     "preview": {
       "finishing": "Tiek pabeigts…",
       "label": "Līdz šim diktētais teksts",
@@ -669,6 +760,11 @@
     },
     "removeFailed": "Runas modeli neizdevās noņemt. Mēģiniet vēlreiz.",
     "removeModel": "Noņemt",
+    "retype": {
+      "description": "Nospiediet {shortcut}, lai pēdējo diktātu vēlreiz ievadītu kursora vietā. Tas tiek glabāts tikai atmiņā, kamēr tas ir starpliktuves vēsturē.",
+      "taken": "Cita lietotne izmanto {shortcut}. stella ikonas izvēlne Diktēšana piedāvā to pašu.",
+      "title": "Pēdējā diktāta īsinājumtaustiņš"
+    },
     "shortcutTaken": "{shortcut} izmanto cita lietotne.",
     "sounds": {
       "description": "Atskaņot īsu, klusu skaņu, kad ieraksts sākas un kad tas beidzas.",
@@ -681,6 +777,24 @@
       "failed": "Neizdevās atvērt logu. Mēģiniet vēlreiz.",
       "open": "Atvērt",
       "title": "Ieraksta transkribēšana"
+    },
+    "translateTo": {
+      "description": "Uzraksta notīrīto tekstu šajā valodā neatkarīgi no tā, kādā valodā jūs runājat.",
+      "off": "Runātā valoda",
+      "title": "Rakstīt valodā"
+    },
+    "whileDictating": {
+      "choices": {
+        "lower": "Klusināt citas skaņas",
+        "nothing": "Neko nedarīt",
+        "pause": "Pauzēt Mūziku un Spotify"
+      },
+      "description": "Kas notiek ar citām skaņām, kamēr stella ieraksta, lai tās nenonāktu tekstā. Pēc ieraksta viss atgriežas.",
+      "speakersOnly": {
+        "description": "Austiņas paliek kā ir: mikrofons tās nedzird.",
+        "title": "Tikai caur skaļruņiem"
+      },
+      "title": "Diktējot"
     }
   },
   "keepAwake": {
@@ -763,23 +877,36 @@
     "takenOverTitle": "Rediģēšana pārvietota uz citu ierīci"
   },
   "onboarding": {
-    "activityAiNote": "Ieteikuma logu nosaukumi atstāj šo ierīci tikai tad, ja apstiprināt stella AI aprakstu, vienreiz vai vienmēr. Tie netiek saglabāti.",
     "activityBody": "Redziet, kur pagāja jūsu darba diena, un pārvērtiet to laika ierakstu melnrakstos. Jūs izlemjat, kas tiek ierakstīts un kas tiek nosūtīts.",
-    "activityConsentNote": "Nekas netiek ierakstīts, kamēr sadaļā Aktivitāte nenospiežat Sākt ierakstīšanu. Jebkurā laikā varat pauzēt, izslēgt lietotnes vai dzēst jebkuru dienu.",
-    "activityNeverKeys": "Taustiņu nospiešana vai ievadītais teksts",
-    "activityNeverScreen": "Ekrānuzņēmumi vai ekrāna saturs",
-    "activityNeverTitle": "Nekad netiek ierakstīts",
-    "activityNeverWeb": "Tīmekļa vietņu adreses",
-    "activityRecordsActive": "Tikai aktīvais laiks; dīkstāve netiek iekļauta",
-    "activityRecordsApp": "Kura lietotne ir priekšplānā, ik pēc dažām sekundēm",
-    "activityRecordsDetails": "Logu virsraksti un dokumentu nosaukumi, ja vien tos neizslēdzat",
-    "activityRecordsTitle": "Kas tiek ierakstīts",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Sagatavot aprakstus ar stella AI",
+        "body": "stella AI var sagatavot katra laika ieraksta apraksta melnrakstu. Atļaujiet to tagad vai tad, kad pirmo reizi pārskatīsiet dienu.",
+        "withdraw": "Piekrišanu varat jebkurā laikā atsaukt iestatījumos."
+      },
+      "calls": {
+        "body": "Uzskaitiet zvanos pavadīto laiku.",
+        "title": "Zvani"
+      },
+      "details": {
+        "appNamesOnly": "Tiek ierakstīti tikai lietotņu nosaukumi.",
+        "body": "Tie palīdz atšķirt lietas, kad pārskatāt dienu.",
+        "browsers": "Pārlūkprogrammas ieraksta cilņu nosaukumus tikai pēc jūsu atļaujas. Aktivitāte jautā par katru pārlūkprogrammu, kad to redz pirmo reizi.",
+        "title": "Logu virsraksti un dokumenti"
+      },
+      "screens": {
+        "aiDrafts": "AI melnraksti",
+        "calls": "Zvani",
+        "details": "Detaļas",
+        "recording": "Pārskats"
+      },
+      "starting": "Sāk ierakstīšanu…"
+    },
     "activityStoryDraft": "Melnraksts",
-    "activityStoryRecordMac": "Šifrēts šajā Mac datorā, tikai jūsu kontam",
-    "activityStoryRecordPc": "Šifrēts šajā datorā, tikai jūsu kontam",
     "activityStoryRecordTitle": "Ierakstīts",
     "activityStoryReviewCaption": "Jūs pārskatāt dienu un izvēlaties lietu",
     "activityStoryReviewTitle": "Jūs pārskatāt",
+    "activityStorySendCaption": "Jūs izvēlaties, kas atstāj šo datoru",
     "activityStorySendTitle": "Jūs nosūtāt",
     "activityTitle": "Kā darbojas Aktivitāte",
     "back": "Atpakaļ",
@@ -813,7 +940,6 @@
         "choose": "Mikrofons diktēšanai",
         "title": "Ļaujiet stella jūs dzirdēt"
       },
-      "progress": "{current}. darbība no {total}",
       "screens": {
         "app": "Labošana",
         "context": "Konteksts",
@@ -821,7 +947,6 @@
         "transcription": "Transkripcija",
         "words": "Vārdi"
       },
-      "skipRest": "Izlaist pārējo",
       "transcription": {
         "body": "To varēsiet vēlāk mainīt iestatījumos.",
         "bodyLocal": "Runas modelis darbojas šeit, tāpēc diktēšana darbojas arī bezsaistē.",
@@ -870,7 +995,7 @@
     "howSigningBodyMac": "Pie PDF stella izvēlieties “Parakstīt ar stella desktop”. Sertifikāts paliek jūsu atslēgu saišķī vai viedkartē, un parakstītais PDF atgriežas stella kā jauna versija.",
     "howSigningBodyPc": "Pie PDF stella izvēlieties “Parakstīt ar stella desktop”. Sertifikāts paliek jūsu sertifikātu krātuvē vai viedkartē, un parakstītais PDF atgriežas stella kā jauna versija.",
     "howTitle": "Kā darbojas stella desktop",
-    "introduceActivityBody": "Aktivitāte tagad ir pieejama jūsu kontā. Nekas netiek ierakstīts, līdz to palaižat aktivitāšu logā.",
+    "introduceActivityBody": "Aktivitāte tagad ir pieejama jūsu kontā: redziet, kur pagāja jūsu darba diena, un pārvērtiet to laika ierakstu melnrakstos.",
     "introduceActivityTitle": "Jaunums: aktivitāšu laika josla",
     "introduceDictationTitle": "Jaunums: diktēšana",
     "later": "Iestatīt vēlāk",
@@ -891,6 +1016,7 @@
     "permissionsTitlePc": "Iestatiet šo datoru",
     "progress": "{current}. darbība no {total}",
     "skip": "Izlaist",
+    "skipRest": "Izlaist pārējo",
     "staysLocalMac": "Paliek šajā Mac datorā",
     "staysLocalPc": "Paliek šajā datorā",
     "tryAgain": "Mēģināt vēlreiz",
@@ -937,7 +1063,6 @@
     "errorUpdateLanguage": "stella desktop nevarēja mainīt saskarnes valodu.",
     "errorUpdatePreferences": "stella desktop nevarēja atjaunināt paziņojumu iestatījumus.",
     "language": "Valoda",
-    "lastVerified": "Pēdējo reizi pārbaudīts",
     "loadingAccount": "Notiek konta savienojuma pārbaude…",
     "managedOfficeEditing": "Pārvaldīta Office failu rediģēšana stella vajadzībām.",
     "neverRequested": "Nekad netiek pieprasīts",
@@ -1210,6 +1335,7 @@
     "checkForUpdates": "Pārbaudīt atjauninājumus",
     "dictation": "Diktēšana",
     "dictationHint": "Lai diktētu, turiet {key}",
+    "dictationRetype": "Ievadīt pēdējo diktātu vēlreiz",
     "dictationSettings": "Diktēšanas iestatījumi…",
     "dictationTurnOn": "Ieslēgt diktēšanu…",
     "documentsSyncing": "{count, plural, zero {{count} dokumentu tiek sinhronizēts} one {{count} dokuments tiek sinhronizēts} other {{count} dokumenti tiek sinhronizēti}}",

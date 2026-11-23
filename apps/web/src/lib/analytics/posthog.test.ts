@@ -1187,6 +1187,70 @@ describe("PostHog browser analytics adapter", () => {
     },
   );
 
+  class WrappedFeatureFailure extends TaggedError("WrappedFeatureFailure")<{
+    message: string;
+    cause?: unknown;
+  }> {}
+
+  test.each([
+    { cause: new TypeError("Failed to fetch"), transportKind: "network" },
+    {
+      cause: new APIError({
+        status: 0,
+        message: "x",
+        transportKind: "timeout",
+      }),
+      transportKind: "timeout",
+    },
+  ])(
+    "captureError classifies a feature error by its transport cause ($transportKind)",
+    ({ cause, transportKind }) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(
+        new WrappedFeatureFailure({ message: "Feature request failed", cause }),
+        {
+          fingerprintKey: "feature:query",
+          scope: { type: "handler", handlerId: "feature" },
+        },
+      );
+
+      expect(captureExceptionMock).not.toHaveBeenCalled();
+      expect(captureMock).toHaveBeenLastCalledWith("client_transient", {
+        query_owner: "feature:query",
+        transport_kind: transportKind,
+      });
+    },
+  );
+
+  test.each([
+    new TypeError("Cannot read properties of undefined"),
+    new APIError({
+      status: 500,
+      message: "x",
+      cause: new TypeError("Failed to fetch"),
+    }),
+  ])(
+    "captureError keeps a feature error whose cause is not a transport failure",
+    (cause) => {
+      const { analytics } = createPostHogAnalytics({
+        host: "https://posthog.test",
+        key: "phc_test",
+      });
+      analytics.captureError(
+        new WrappedFeatureFailure({ message: "Feature request failed", cause }),
+        {
+          fingerprintKey: "feature:query",
+          scope: { type: "handler", handlerId: "feature" },
+        },
+      );
+
+      expect(captureExceptionMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
   test("captureError records a native fetch deadline as one transient signal", () => {
     const { analytics } = createPostHogAnalytics({
       host: "https://posthog.test",

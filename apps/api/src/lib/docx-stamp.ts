@@ -322,19 +322,64 @@ export const injectStamp = async (
  * Checks custom properties first (reliable), then falls
  * back to footer bookmark parsing.
  */
+type DocxArchiveLoad =
+  | { readonly kind: "loaded"; readonly archive: DocxArchive }
+  | { readonly kind: "unreadable" };
+
+const loadStampArchive = async (
+  docxBuffer: ArrayBuffer | Uint8Array,
+): Promise<DocxArchiveLoad> => {
+  const loaded = await Result.tryPromise(
+    async () => await loadDocxArchive(docxBuffer),
+  );
+  return Result.isError(loaded)
+    ? { kind: "unreadable" }
+    : { kind: "loaded", archive: loaded.value };
+};
+
+type StripStampOutcome =
+  | { readonly kind: "stripped"; readonly buffer: ArrayBuffer }
+  | { readonly kind: "unchanged" }
+  | { readonly kind: "unreadable" };
+
+const stripStampOutcome = async (
+  docxBuffer: ArrayBuffer | Uint8Array,
+): Promise<StripStampOutcome> => {
+  const loaded = await loadStampArchive(docxBuffer);
+  if (loaded.kind === "unreadable") {
+    return { kind: "unreadable" };
+  }
+  const { archive } = loaded;
+  const stripResult = await Result.tryPromise(async () => {
+    if (!(await isDocxArchive(archive))) {
+      return false;
+    }
+    const strippedProperties = await stripCustomProperties(archive);
+    const strippedFooter = await stripStampParagraph(archive);
+    return strippedProperties || strippedFooter;
+  });
+  if (Result.isError(stripResult)) {
+    return { kind: "unreadable" };
+  }
+  if (!stripResult.value) {
+    return { kind: "unchanged" };
+  }
+  const written = await archive.zip.generate();
+  return { kind: "stripped", buffer: written.buffer };
+};
+
 export const extractStamp = async (
   docxBuffer: ArrayBuffer,
 ): Promise<{
   verificationCode: string | null;
   stamp: string | null;
 }> => {
-  let archive: DocxArchive;
-  try {
-    archive = await loadDocxArchive(docxBuffer);
-  } catch {
+  const loaded = await loadStampArchive(docxBuffer);
+  if (loaded.kind === "unreadable") {
     // Malformed or corrupt DOCX; treat as no stamp
     return { verificationCode: null, stamp: null };
   }
+  const { archive } = loaded;
 
   // 1. Try custom properties (fast, reliable)
   const customXml = await archive.readEntryString(CUSTOM_PROPS_PATH);
@@ -368,32 +413,8 @@ export const extractStamp = async (
 export const stripStamp = async (
   docxBuffer: ArrayBuffer | Uint8Array,
 ): Promise<ArrayBuffer | null> => {
-  const archiveResult = await Result.tryPromise(
-    async () => await loadDocxArchive(docxBuffer),
-  );
-  if (Result.isError(archiveResult)) {
-    return null;
-  }
-  const archive = archiveResult.value;
-
-  const stripResult = await Result.tryPromise(async () => {
-    if (!(await isDocxArchive(archive))) {
-      return false;
-    }
-    const strippedProperties = await stripCustomProperties(archive);
-    const strippedFooter = await stripStampParagraph(archive);
-    return strippedProperties || strippedFooter;
-  });
-  if (Result.isError(stripResult)) {
-    // A bounded-read cap tripped part-way through: the archive is out of
-    // bounds, so leave it to the validation step that reports that.
-    return null;
-  }
-  if (!stripResult.value) {
-    return null;
-  }
-
-  return archive.zip.generate().then((written) => written.buffer);
+  const outcome = await stripStampOutcome(docxBuffer);
+  return outcome.kind === "stripped" ? outcome.buffer : null;
 };
 
 // ── Reference Removal ───────────────────────────────────

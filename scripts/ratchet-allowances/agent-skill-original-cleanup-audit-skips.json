@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 2,
-  "reason": "The skill original erasure queue holds object keys the row triggers recorded in the audited transaction that deleted a file or skill. The scheduler task deletes a request once its objects are erased and backs a failed one off; both writes change no member data and run under the aggregated scheduler audit."
-}

@@ -205,7 +205,8 @@ type LoadCurrentExtractedContentsOptions = {
 
 type RlsCurrentContentDb = Pick<Transaction, "query" | "rollback">;
 
-export type SystemSweep = "search-indexing" | "deadline-scout";
+export type SystemSweep =
+  "search-indexing" | "deadline-scout" | "document-naming";
 
 const resolveCurrentExtractedRowsFromDatabase = async (
   database: Pick<typeof rootDb, "query">,
@@ -556,10 +557,10 @@ const currentSourceWhere = (run: DeadlineSourceRun) =>
 
 export const loadCurrentDeadlineSourceReader = async (
   db: SystemExtractionReadDb,
-  sweep: Extract<SystemSweep, "deadline-scout">,
+  sweep: Extract<SystemSweep, "deadline-scout" | "document-naming">,
   run: DeadlineSourceRun,
 ) => {
-  sweep satisfies "deadline-scout";
+  sweep satisfies "deadline-scout" | "document-naming";
   const rows = await db
     .select({
       ciphertext: extractedContent.ciphertext,
