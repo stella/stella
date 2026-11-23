@@ -6,6 +6,7 @@ import type { SamlMetadataError } from "@/api/lib/auth/saml-metadata";
 import type { OidcDiscoveryError } from "@/api/lib/auth/sso-discovery";
 import type { SsoDomainDnsError } from "@/api/lib/auth/sso-domain-verify";
 import type { SsoManagementError } from "@/api/lib/db/sso-management";
+import type { SsoProvisioningError } from "@/api/lib/db/sso-provisioning";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const mapSsoManagementError = (
@@ -100,5 +101,28 @@ export const mapSamlMetadataError = (
     default:
       error.reason satisfies never;
       return panic("Unhandled SAML metadata error reason");
+  }
+};
+
+export const mapSsoProvisioningError = (
+  error: SsoProvisioningError,
+): HandlerError => {
+  switch (error.reason) {
+    case "pending_not_found":
+      return new HandlerError({
+        status: 404,
+        code: error.reason,
+        message: error.message,
+      });
+    case "seat_limit_reached":
+    case "already_reviewed":
+      return new HandlerError({
+        status: 409,
+        code: error.reason,
+        message: error.message,
+      });
+    default:
+      error.reason satisfies never;
+      return panic("Unhandled SSO provisioning error reason");
   }
 };

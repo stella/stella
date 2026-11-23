@@ -8,13 +8,17 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import { ORGANIZATION_SSO_PROVISIONING_MODES } from "@stll/api-contract/sso";
 import type {
   OrganizationSsoDomainSummary,
-  OrganizationSsoPolicyRequirement,
+  OrganizationSsoPendingMemberSummary,
   OrganizationSsoProviderSummary,
+  OrganizationSsoProvisioningMode,
   TestOidcSsoProviderResponse,
+  UpdateOrganizationSsoPolicyBody,
 } from "@stll/api-contract/sso";
 import { Badge } from "@stll/ui/badge";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { openFilePicker } from "@stll/ui/file-picker";
@@ -30,11 +34,13 @@ import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { SecretInput } from "@/components/secret-input";
 import {
   addOrgSsoDomain,
+  approveOrgSsoPendingMember,
   fetchOrgSsoSettings,
   importSamlSsoMetadata,
   probeOidcSsoProvider,
   registerOidcSsoProvider,
   registerSamlSsoProvider,
+  rejectOrgSsoPendingMember,
   removeOrgSsoDomain,
   removeOrgSsoProvider,
   saveOrgSsoPolicy,
@@ -893,6 +899,226 @@ const VerifiedDomainsSection = ({
   );
 };
 
+const PROVISIONING_MODE_KEYS = {
+  invite_only: "settings.organization.sso.provisioningModeInviteOnly",
+  admin_approval: "settings.organization.sso.provisioningModeAdminApproval",
+  jit_active: "settings.organization.sso.provisioningModeJitActive",
+} as const satisfies Record<OrganizationSsoProvisioningMode, string>;
+
+const ProvisioningAndSeatsSection = ({
+  requirement,
+  provisioningMode,
+  seatLimit,
+  activeSeatCount,
+  pendingMembers,
+  onChanged,
+}: {
+  requirement: "optional" | "required";
+  provisioningMode: OrganizationSsoProvisioningMode;
+  seatLimit: number | null;
+  activeSeatCount: number;
+  pendingMembers: readonly OrganizationSsoPendingMemberSummary[];
+  onChanged: () => Promise<void>;
+}) => {
+  const t = useTranslations();
+  const [selectedMode, setSelectedMode] =
+    useState<OrganizationSsoProvisioningMode>(provisioningMode);
+  const [seatLimitInput, setSeatLimitInput] = useState(
+    seatLimit === null ? "" : String(seatLimit),
+  );
+
+  const saveMutation = useMutation({
+    mutationFn: async (body: UpdateOrganizationSsoPolicyBody) =>
+      await saveOrgSsoPolicy(body),
+    onSuccess: async () => {
+      await onChanged();
+      stellaToast.add({
+        title: t("settings.organization.sso.provisioningUpdated"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (pendingId: string) =>
+      await approveOrgSsoPendingMember(pendingId),
+    onSuccess: async () => {
+      await onChanged();
+      stellaToast.add({
+        title: t("settings.organization.sso.pendingApproved"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: async (pendingId: string) =>
+      await rejectOrgSsoPendingMember(pendingId),
+    onSuccess: async () => {
+      await onChanged();
+      stellaToast.add({
+        title: t("settings.organization.sso.pendingRejected"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const trimmed = seatLimitInput.trim();
+    const parsedSeatLimit =
+      trimmed.length === 0 ? null : Number.parseInt(trimmed, 10);
+    if (
+      parsedSeatLimit !== null &&
+      (!Number.isInteger(parsedSeatLimit) || parsedSeatLimit < 1)
+    ) {
+      return;
+    }
+    saveMutation.mutate({
+      requirement,
+      provisioningMode: selectedMode,
+      seatLimit: parsedSeatLimit,
+    });
+  };
+
+  return (
+    <section className="border-border bg-card space-y-4 rounded-xl border p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <h2 className="text-foreground text-sm font-medium">
+            {t("settings.organization.sso.provisioningTitle")}
+          </h2>
+          <p className="text-muted-foreground text-xs">
+            {t("settings.organization.sso.provisioningDescription")}
+          </p>
+        </div>
+        <span className="bg-muted text-muted-foreground rounded-sm px-2 py-0.5 text-xs font-medium">
+          {seatLimit === null
+            ? t("settings.organization.sso.seatsUnlimited", {
+                count: String(activeSeatCount),
+              })
+            : t("settings.organization.sso.seatsCount", {
+                active: String(activeSeatCount),
+                limit: String(seatLimit),
+              })}
+        </span>
+      </div>
+
+      <Form onSubmit={handleSave}>
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {ORGANIZATION_SSO_PROVISIONING_MODES.map((mode) => (
+              <Button
+                key={mode}
+                onClick={() => setSelectedMode(mode)}
+                size="xs"
+                type="button"
+                variant={selectedMode === mode ? "default" : "outline"}
+              >
+                {t(PROVISIONING_MODE_KEYS[mode])}
+              </Button>
+            ))}
+          </div>
+
+          <div className="flex flex-wrap items-end gap-2">
+            <Field className="min-w-44">
+              <FieldLabel>
+                {t("settings.organization.sso.seatLimitLabel")}
+              </FieldLabel>
+              <Input
+                dir="ltr"
+                inputMode="numeric"
+                onChange={(e) => setSeatLimitInput(e.target.value)}
+                placeholder={t(
+                  "settings.organization.sso.seatLimitPlaceholder",
+                )}
+                type="text"
+                value={seatLimitInput}
+              />
+            </Field>
+            <Button
+              disabled={saveMutation.isPending}
+              disabledReason={t("common.loading")}
+              size="sm"
+              type="submit"
+            >
+              {t("settings.organization.sso.saveProvisioning")}
+            </Button>
+          </div>
+        </div>
+      </Form>
+
+      {pendingMembers.length > 0 && (
+        <div className="border-border space-y-2 border-t pt-3">
+          <h3 className="text-foreground text-xs font-medium">
+            {t("settings.organization.sso.pendingApprovalsTitle", {
+              count: String(pendingMembers.length),
+            })}
+          </h3>
+          {pendingMembers.map((pending) => (
+            <div
+              className="border-border flex flex-wrap items-center justify-between gap-2 rounded-lg border p-3"
+              key={pending.id}
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-foreground text-sm font-medium">
+                    <BidiText>{pending.email}</BidiText>
+                  </span>
+                  <Badge>
+                    {pending.reason === "seat_limit_reached"
+                      ? t("settings.organization.sso.pendingReasonSeatLimit")
+                      : t("settings.organization.sso.pendingReasonApproval")}
+                  </Badge>
+                </div>
+                {pending.name && (
+                  <p className="text-muted-foreground text-xs">
+                    <BidiText>{pending.name}</BidiText>
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  disabled={
+                    approveMutation.isPending || rejectMutation.isPending
+                  }
+                  disabledReason={t("common.loading")}
+                  onClick={() => approveMutation.mutate(pending.id)}
+                  size="xs"
+                  type="button"
+                >
+                  {t("settings.organization.sso.approveMember")}
+                </Button>
+                <Button
+                  disabled={
+                    approveMutation.isPending || rejectMutation.isPending
+                  }
+                  disabledReason={t("common.loading")}
+                  onClick={() => rejectMutation.mutate(pending.id)}
+                  size="xs"
+                  type="button"
+                  variant="outline"
+                >
+                  {t("settings.organization.sso.rejectMember")}
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
 export const OrganizationSsoPage = () => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -916,8 +1142,8 @@ export const OrganizationSsoPage = () => {
       mutation: "saveOrganizationSsoPolicy",
       queryClient,
       scope: { type: "organization" },
-      mutationFn: async (requirement: OrganizationSsoPolicyRequirement) =>
-        await saveOrgSsoPolicy(requirement),
+      mutationFn: async (body: UpdateOrganizationSsoPolicyBody) =>
+        await saveOrgSsoPolicy(body),
     }),
     onSuccess: async () => {
       await invalidate();
@@ -971,7 +1197,11 @@ export const OrganizationSsoPage = () => {
               (!isRequired && settings.providers.length === 0)
             }
             onCheckedChange={(checked) => {
-              policyMutation.mutate(checked ? "required" : "optional");
+              policyMutation.mutate({
+                requirement: checked ? "required" : "optional",
+                provisioningMode: settings.provisioningMode,
+                seatLimit: settings.seatLimit,
+              });
             }}
           />
         </div>
@@ -980,6 +1210,14 @@ export const OrganizationSsoPage = () => {
       <OidcProvidersSection
         onChanged={invalidate}
         providers={settings.providers}
+      />
+      <ProvisioningAndSeatsSection
+        activeSeatCount={settings.activeSeatCount}
+        onChanged={invalidate}
+        pendingMembers={settings.pendingMembers}
+        provisioningMode={settings.provisioningMode}
+        requirement={settings.requirement}
+        seatLimit={settings.seatLimit}
       />
       <VerifiedDomainsSection
         domains={settings.domains}

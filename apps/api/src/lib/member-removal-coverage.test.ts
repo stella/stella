@@ -286,6 +286,10 @@ const RETAINED_MEMBER_COLUMNS = {
     "Who registered the organization's SSO provider; the provider belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
   "organization_sso_domain.created_by":
     "Who added the organization's SSO domain verification record; the domain belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
+  "organization_sso_pending_member.user_id":
+    "Pending SSO access request isolated from organization membership; holds no workspace authority and cascades on user deletion.",
+  "organization_sso_pending_member.reviewed_by":
+    "Who approved or rejected a pending SSO membership request; retained audit attribution granting no membership or authority.",
   "account_exports.attempt_object_keys":
     "Storage keys of the account's own archives, named by account id; reclamation and account deletion own them, not membership removal.",
   "account_exports.user_id":

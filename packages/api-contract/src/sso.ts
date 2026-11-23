@@ -56,6 +56,32 @@ export const ORGANIZATION_SSO_POLICY_REQUIREMENTS = [
 export type OrganizationSsoPolicyRequirement =
   (typeof ORGANIZATION_SSO_POLICY_REQUIREMENTS)[number];
 
+export const ORGANIZATION_SSO_PROVISIONING_MODES = [
+  "invite_only",
+  "admin_approval",
+  "jit_active",
+] as const;
+
+export type OrganizationSsoProvisioningMode =
+  (typeof ORGANIZATION_SSO_PROVISIONING_MODES)[number];
+
+export const SSO_PENDING_MEMBER_REASONS = [
+  "admin_approval",
+  "seat_limit_reached",
+] as const;
+
+export type SsoPendingMemberReason =
+  (typeof SSO_PENDING_MEMBER_REASONS)[number];
+
+export const SSO_PENDING_MEMBER_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+] as const;
+
+export type SsoPendingMemberStatus =
+  (typeof SSO_PENDING_MEMBER_STATUSES)[number];
+
 /** Normalized RFC-1035 hostname (e.g. `acme.example.com`). */
 export const SSO_DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u;
@@ -133,6 +159,12 @@ export type TestOidcSsoProviderBody = v.InferOutput<
 
 export const updateOrganizationSsoPolicyBodySchema = v.strictObject({
   requirement: v.picklist(ORGANIZATION_SSO_POLICY_REQUIREMENTS),
+  provisioningMode: v.optional(v.picklist(ORGANIZATION_SSO_PROVISIONING_MODES)),
+  seatLimit: v.optional(
+    v.nullable(
+      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100_000)),
+    ),
+  ),
 });
 
 export type UpdateOrganizationSsoPolicyBody = v.InferOutput<
@@ -198,10 +230,28 @@ export type OrganizationSsoDomainSummary = v.InferOutput<
   typeof organizationSsoDomainSummarySchema
 >;
 
+export const organizationSsoPendingMemberSummarySchema = v.object({
+  id: v.string(),
+  userId: v.string(),
+  email: v.string(),
+  name: v.nullable(v.string()),
+  reason: v.picklist(SSO_PENDING_MEMBER_REASONS),
+  status: v.picklist(SSO_PENDING_MEMBER_STATUSES),
+  createdAt: v.string(),
+});
+
+export type OrganizationSsoPendingMemberSummary = v.InferOutput<
+  typeof organizationSsoPendingMemberSummarySchema
+>;
+
 export const organizationSsoSettingsResponseSchema = v.object({
   requirement: v.picklist(ORGANIZATION_SSO_POLICY_REQUIREMENTS),
+  provisioningMode: v.picklist(ORGANIZATION_SSO_PROVISIONING_MODES),
+  seatLimit: v.nullable(v.number()),
+  activeSeatCount: v.number(),
   providers: v.array(organizationSsoProviderSummarySchema),
   domains: v.array(organizationSsoDomainSummarySchema),
+  pendingMembers: v.array(organizationSsoPendingMemberSummarySchema),
 });
 
 export type OrganizationSsoSettingsResponse = v.InferOutput<

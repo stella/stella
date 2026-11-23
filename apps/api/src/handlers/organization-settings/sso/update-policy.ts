@@ -24,6 +24,10 @@ const updateOrganizationSsoPolicyHandler = createSafeRootHandler(
     const updated = await updateOrgSsoRequirement({
       organizationId: session.activeOrganizationId,
       requirement: body.requirement,
+      ...(body.provisioningMode !== undefined
+        ? { provisioningMode: body.provisioningMode }
+        : {}),
+      ...(body.seatLimit !== undefined ? { seatLimit: body.seatLimit } : {}),
     });
     if (updated.isErr()) {
       return Result.err(mapSsoManagementError(updated.error));
@@ -38,6 +42,8 @@ const updateOrganizationSsoPolicyHandler = createSafeRootHandler(
           metadata: {
             setting: "sso_policy",
             requirement: updated.value.requirement,
+            provisioningMode: updated.value.provisioningMode,
+            seatLimit: updated.value.seatLimit,
           },
         });
       }),
