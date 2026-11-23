@@ -164,7 +164,9 @@ describe("lint entry script", () => {
           ? { exitCode: null, signalCode: "SIGSEGV" }
           : { exitCode: 0, signalCode: null };
       },
-      (msg) => warnings.push(msg),
+      (msg) => {
+        warnings.push(msg);
+      },
     );
     expect(recovered).toEqual({ exitCode: 0, signalCode: null });
     expect(crashAttempts).toBe(2);

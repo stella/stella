@@ -46,12 +46,13 @@ const CRASH_EXIT_CODES = new Set<number>([134, 135, 139]);
 
 export type LintRunOutcome = {
   exitCode: number | null;
-  signalCode: NodeJS.Signals | null;
+  signalCode: NodeJS.Signals | number | null;
 };
 
 /** True only for fatal native runtime crashes, never for normal lint findings (exit 1). */
 export const isRuntimeCrashOutcome = (outcome: LintRunOutcome): boolean =>
-  (outcome.signalCode !== null && CRASH_SIGNALS.has(outcome.signalCode)) ||
+  (typeof outcome.signalCode === "string" &&
+    CRASH_SIGNALS.has(outcome.signalCode)) ||
   (outcome.exitCode !== null && CRASH_EXIT_CODES.has(outcome.exitCode));
 
 const describeCrash = (outcome: LintRunOutcome): string =>
@@ -116,7 +117,9 @@ if (import.meta.main) {
     console.log(formatLintCommand(command));
     process.exit(0);
   }
-  const outcome = await runWithCrashRetry(() => spawnLintOnce(command));
+  const outcome = await runWithCrashRetry(
+    async () => await spawnLintOnce(command),
+  );
   if (outcome.signalCode !== null) {
     // Die the way the linter did, so a caller sees the same termination.
     process.kill(process.pid, outcome.signalCode);
