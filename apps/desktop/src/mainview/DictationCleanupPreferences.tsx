@@ -6,6 +6,7 @@ import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import {
+  countDictationCodePoints,
   DESKTOP_DICTATION_CLEANUP_LIMITS,
   desktopDictationCleanupModelsSchema,
 } from "@stll/api-contract/desktop-dictation-cleanup";
@@ -148,8 +149,9 @@ export const DictationCleanupModelRow = ({
 const INSTRUCTIONS_LIMIT =
   DESKTOP_DICTATION_CLEANUP_LIMITS.customInstructionsLength;
 
-/** Characters as the contract counts them: code points, not UTF-16 units. */
-const codePoints = (text: string): number => [...text].length;
+/** Characters as the contract counts them: code points, not UTF-16 units,
+ *  counted by the contract's own helper. */
+const codePoints = countDictationCodePoints;
 
 /**
  * What the speaker wants cleanup to follow, saved when the field is left.

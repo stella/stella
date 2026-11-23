@@ -1537,19 +1537,23 @@ test("the instructions limit counts characters as code points", async () => {
 
 test("an edit made while a save is on its way is kept when the save returns", async () => {
   let answer: ((snapshot: unknown) => void) | undefined;
-  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
-    if (command !== "dictation_set_cleanup_instructions") {
-      return undefined;
-    }
-    return new Promise((resolve) => {
-      answer = () => {
-        resolve({
-          ...ENABLED_SNAPSHOT,
-          cleanupInstructions: asked(payload, "instructions"),
-        });
-      };
-    });
-  });
+  // Answers a held promise for the save and nothing for any other command.
+  const view = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (command, payload): unknown => {
+      if (command !== "dictation_set_cleanup_instructions") {
+        return undefined;
+      }
+      return new Promise((resolve) => {
+        answer = () => {
+          resolve({
+            ...ENABLED_SNAPSHOT,
+            cleanupInstructions: asked(payload, "instructions"),
+          });
+        };
+      });
+    },
+  );
   const field = view.getByRole("textbox", { name: cleanupInstructions.title });
   const value = () => (field instanceof HTMLTextAreaElement ? field.value : "");
   fireEvent.change(field, { target: { value: "Use British spelling." } });
