@@ -17,6 +17,15 @@ const viewStrip = (page: Page) =>
 export const savedViewTab = (page: Page, name: string): Locator =>
   viewStrip(page).getByRole("tab", { exact: true, name });
 
+/*
+ * The switcher's own strip, the one that carries the measuring copy. While a
+ * view loads, its pending face draws a second strip with the same slot.
+ */
+const drawnStrip = (page: Page) =>
+  viewStrip(page).filter({
+    has: page.locator('[data-slot="workspace-view-measure"]'),
+  });
+
 const moreViews = (page: Page) =>
   viewStrip(page).getByRole("button", {
     exact: true,
@@ -110,7 +119,7 @@ export const openSavedView = async (
   await expect
     .poll(
       async () => {
-        await expect(viewStrip(page)).toBeVisible();
+        await expect(drawnStrip(page)).toBeVisible();
         return (await selectedTab.count()) > 0 || (await onlyTheMenu());
       },
       {
