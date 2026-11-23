@@ -251,9 +251,9 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
     cleanupS3Key,
     id,
     updatedAt,
-  }: PendingCleanupRow): Promise<boolean> => {
+  }: PendingCleanupRow): Promise<"handed-off" | "skipped" | "failed"> => {
     if (cleanupS3Key === null) {
-      return false;
+      return "skipped";
     }
     const outcome = await Result.tryPromise({
       // Bounded here rather than inside the handoff itself: the request path
