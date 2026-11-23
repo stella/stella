@@ -1,16 +1,15 @@
-import { type Result, TaggedError } from "better-result";
+import { panic, type Result } from "better-result";
 
 import type { ExtractionWorkerError } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
 import { openS3ObjectStream } from "@/api/lib/s3";
 import { extractMailboxStreamText } from "@/api/lib/search/extract-content";
 
-/** The live file's stored object is not in the store. */
-export class StoredMailboxMissingError extends TaggedError(
-  "StoredMailboxMissingError",
-)<{ message: string }> {}
-
-/** Streams a stored mailbox, one network chunk in memory at a time. */
+/**
+ * Streams a stored mailbox, one network chunk in memory at a time. A live
+ * file's object is never removed while the file is live, so one the store
+ * does not hold is a broken invariant, never an answer to pass on.
+ */
 export const openStoredMailbox = async ({
   key,
   signal,
@@ -19,12 +18,7 @@ export const openStoredMailbox = async ({
   signal: AbortSignal;
 }) => {
   const opened = await openS3ObjectStream({ key, signal });
-  if (opened === null) {
-    throw new StoredMailboxMissingError({
-      message: "The stored mailbox is missing from the store",
-    });
-  }
-  return opened;
+  return opened ?? panic("The stored mailbox is missing from the store");
 };
 
 /** Chunks as a stream that pulls one at a time; cancelling stops the source. */

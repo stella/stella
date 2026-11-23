@@ -534,7 +534,6 @@ export const TAGGED_FAILURE_REASON = {
   StoreUnavailableError: "tagged_failure",
   StoredCorpusValidationError: "tagged_failure",
   StoredAstDegradedError: "stored_ast_degraded",
-  StoredMailboxMissingError: "tagged_failure",
   StoredRawReadError: "tagged_failure",
   StragglerCatchUpError: "tagged_failure",
   StreamDeadlineError: "tagged_failure",

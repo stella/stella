@@ -520,7 +520,6 @@ export const FAILURE_TAGS = [
   "StoreUnavailableError",
   "StoredAstDegradedError",
   "StoredCorpusValidationError",
-  "StoredMailboxMissingError",
   "StoredRawReadError",
   "StragglerCatchUpError",
   "StreamDeadlineError",
