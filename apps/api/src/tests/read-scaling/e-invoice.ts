@@ -19,7 +19,8 @@ export const eInvoicePreviewScalingScenario = {
         statements: counter.count,
         transactionRoundTrips: counter.transactions,
         responseBytes: Buffer.byteLength(JSON.stringify(response)),
-        rows: response.invoices.length,
+        rows:
+          response.type === "invoice" ? response.invoice.invoices.length : 1,
       };
     }),
 };

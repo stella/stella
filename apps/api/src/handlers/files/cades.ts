@@ -4,7 +4,10 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readCadesPreview } from "@/api/lib/files/cades-preview";
-import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
+import {
+  readingZipNames,
+  readLegalFilePreview,
+} from "@/api/lib/files/read-legal-file-preview";
 
 const config = {
   contract: "patch",
@@ -37,7 +40,7 @@ export const cadesPreviewEndpoint = createSafeHandler(
               recordAuditEvent,
             },
             ["cades"],
-            readCadesPreview,
+            readingZipNames(readCadesPreview),
           ),
       ),
     );

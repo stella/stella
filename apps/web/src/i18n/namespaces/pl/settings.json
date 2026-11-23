@@ -694,6 +694,44 @@
         "remove": "Usuń skrzynkę danych {address}",
         "title": "Skrzynki danych organizacji"
       },
+      "dictation": {
+        "addCount": "{count, plural, one {Dodaj # słowo} few {Dodaj # słowa} many {Dodaj # słów} other {Dodaj # słowa}}",
+        "addLabel": "Dodaj słowo lub nazwę",
+        "addMany": "Dodaj wiele",
+        "addedToast": "Dodano „{word}”.",
+        "alreadyListedToast": "„{word}” jest już na liście.",
+        "count": "{total, number} z {max, number}",
+        "deleteSelected": "{count, plural, one {Usuń # słowo} few {Usuń # słowa} many {Usuń # słów} other {Usuń # słowa}}",
+        "deleteSelectedDescription": "Dyktowanie przestanie ich używać w całym zespole.",
+        "deleteSelectedInput": "Wpisz {number}, aby potwierdzić",
+        "deleteSelectedTitle": "{count, plural, one {Usunąć # słowo?} few {Usunąć # słowa?} many {Usunąć # słów?} other {Usunąć # słowa?}}",
+        "deleteWord": "Usuń {word}",
+        "deletedToast": "{count, plural, one {Usunięto # słowo.} few {Usunięto # słowa.} many {Usunięto # słów.} other {Usunięto # słowa.}}",
+        "description": "Słowa i nazwy, które dyktowanie całego zespołu ma pisać poprawnie, np. nazwy klientów lub angielskie terminy używane w innym języku. stella używa tych, których potrzebuje dane dyktowanie, więc lista może być długa.",
+        "empty": "Dodaj słowo powyżej albo wiele naraz z listy lub pliku.",
+        "export": "Eksportuj listę",
+        "exportFileName": "slowa-dyktowania.txt",
+        "full": "Lista jest pełna. Usuń słowa, aby dodać nowe.",
+        "importHint": "Wklej jedno słowo w każdym wierszu albo wybierz plik .txt z jednym słowem w wierszu lub plik .csv ze słowami w pierwszej kolumnie.",
+        "importedToast": "{count, plural, one {Dodano # słowo.} few {Dodano # słowa.} many {Dodano # słów.} other {Dodano # słowa.}}",
+        "invalid": "Słowo nie może zawierać podziałów wiersza ani znaków sterujących.",
+        "noMatch": "Żadne słowo nie pasuje do „{search}”.",
+        "pasteLabel": "Słowa do dodania",
+        "pastePlaceholder": "Jedno słowo w wierszu",
+        "review": "Sprawdź słowa",
+        "reviewInvalid": "{count, plural, one {# nieprawidłowe, pominięte} few {# nieprawidłowe, pominięte} many {# nieprawidłowych, pominiętych} other {# nieprawidłowego, pominiętego}}",
+        "reviewListed": "{count, plural, one {# jest już na liście} few {# są już na liście} many {# jest już na liście} other {# jest już na liście}}",
+        "reviewNew": "{count, plural, one {# nowe słowo} few {# nowe słowa} many {# nowych słów} other {# nowego słowa}}",
+        "reviewOverLimit": "Lista zawiera {total, number} słów i zmieści jeszcze {room, number} (najwyżej {max, number}). Dodaj mniej słów albo najpierw usuń część z listy.",
+        "reviewRepeated": "{count, plural, one {# powtarza się w tym imporcie} few {# powtarzają się w tym imporcie} many {# powtarza się w tym imporcie} other {# powtarza się w tym imporcie}}",
+        "reviewTooLong": "{count, plural, one {# za długie, pominięte} few {# za długie, pominięte} many {# za długich, pominiętych} other {# za długiego, pominiętego}}",
+        "searchPlaceholder": "Szukaj słów",
+        "selectWord": "Zaznacz {word}",
+        "showMore": "Pokaż więcej ({shown, number} z {matching, number})",
+        "title": "Dyktowanie",
+        "tooLong": "To słowo jest dłuższe, niż przyjmuje dyktowanie.",
+        "wordsTitle": "Słowa zespołu"
+      },
       "documentProcessing": {
         "description": "Automatycznie rozpoznawaj tekst w zeskanowanych plikach PDF, aby można było przeszukiwać ich zawartość.",
         "title": "Rozpoznawanie tekstu dokumentów",
@@ -707,7 +745,6 @@
         "reorder": "Zmień kolejność typu dokumentu",
         "title": "Typy dokumentów"
       },
-      "enterSlug": "Wpisz identyfikator organizacji używany w adresie URL.",
       "localRuns": {
         "description": "Najwięcej, ile agent programistyczny może zrobić bez pytania, gdy prowadzi czat na komputerze członka. Niższy limit obowiązuje od następnej wiadomości każdego członka; trwające już uruchomienie zachowuje swoje uprawnienia.",
         "title": "Agenci programistyczni na komputerach członków",
@@ -764,7 +801,6 @@
       },
       "uploadLogo": "Prześlij logo",
       "usage": "Użycie",
-      "usageCheckoutProviderUnavailable": "Operator płatności jest niedostępny do obsługi płatności online.",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",
       "usageEmptyTitle": "Brak uprawnienia do użycia",
@@ -781,11 +817,9 @@
       "usageManageError": "Nie udało się otworzyć zarządzania użyciem hostowanym",
       "usageManuallyManaged": "Zarządzane ręcznie",
       "usagePacksDescription": "Jednorazowe pakiety jednostek dodawane do bieżącego okresu.",
-      "usagePacksRequireActivePlan": "Aktywuj lub wznów plan hostowany, aby kupić pakiety jednostek.",
       "usagePacksTitle": "Pakiety jednostek",
       "usagePlanCheckout": "Przejdź do płatności",
       "usagePlanCheckoutError": "Nie udało się rozpocząć płatności",
-      "usagePlanCheckoutUnavailable": "Płatność online za ten plan jest niedostępna.",
       "usagePlanPriceMonthTemplate": "{price} / miesiąc",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / miejsce / miesiąc",
@@ -807,7 +841,11 @@
         "title": "Rozstrzygnięcia przy weryfikacji dokumentów",
         "unavailable": "Ta organizacja nie ma dostępnego modelu decyzyjnego.",
         "updated": "Zaktualizowano ustawienie weryfikacji"
-      }
+      },
+      "enterSlug": "Wpisz identyfikator organizacji używany w adresie URL.",
+      "usageCheckoutProviderUnavailable": "Operator płatności jest niedostępny do obsługi płatności online.",
+      "usagePacksRequireActivePlan": "Aktywuj lub wznów plan hostowany, aby kupić pakiety jednostek.",
+      "usagePlanCheckoutUnavailable": "Płatność online za ten plan jest niedostępna."
     }
   }
 }

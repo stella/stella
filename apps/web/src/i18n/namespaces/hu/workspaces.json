@@ -99,7 +99,6 @@
     "linesShown": "{count, plural, one {# tételből} other {# tételből}} {shown, number} látható",
     "netAmount": "Nettó érték",
     "netTotal": "Nettó végösszeg",
-    "notRecognized": "Ez az XML-fájl nem felismert strukturált számla.",
     "otherIdentifier": "Egyéb azonosító",
     "payableAmount": "Fizetendő összeg",
     "paymentAmount": "Fizetés összege",
@@ -129,7 +128,8 @@
     },
     "unreadable": "A számlát nem sikerült beolvasni.",
     "vat": "ÁFA",
-    "vatBreakdown": "ÁFA-összesítő"
+    "vatBreakdown": "ÁFA-összesítő",
+    "xmlUnreadable": "Ezt az XML-fájlt nem sikerült beolvasni."
   },
   "emailViewer": {
     "attachments": "Mellékletek",

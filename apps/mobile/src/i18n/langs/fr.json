@@ -492,7 +492,6 @@
     "linesShown": "Affichage de {shown, number} sur {count, plural, one {# ligne} many {# lignes} other {# lignes}}",
     "netAmount": "Montant HT",
     "netTotal": "Total HT",
-    "notRecognized": "Ce fichier XML n’est pas une facture structurée reconnue.",
     "notes": "Remarques sur la facture",
     "otherIdentifier": "Autre identifiant",
     "payableAmount": "Montant à payer",
@@ -526,7 +525,8 @@
     "unreadable": "Impossible de lire la facture.",
     "vat": "TVA",
     "vatBreakdown": "Ventilation de la TVA",
-    "vatId": "Numéro de TVA"
+    "vatId": "Numéro de TVA",
+    "xmlUnreadable": "Impossible de lire ce fichier XML."
   },
   "email": {
     "cc": "Copie",

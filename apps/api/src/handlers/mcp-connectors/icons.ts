@@ -9,13 +9,16 @@ const ICON_DISCOVERY_TIMEOUT_MS = 5000;
 const ICON_HTML_MAX_CHARS = 200_000;
 const ICON_HTML_MAX_BYTES = 300_000;
 
+export type DiscoverMcpIconUrlOutcome =
+  { status: "discovered"; url: string } | { status: "invalid-url" };
+
 export const discoverMcpIconUrl = async (
   rawUrl: string,
   permit: ThirdPartyOutboundPermit,
-): Promise<string | null> => {
+): Promise<DiscoverMcpIconUrlOutcome> => {
   const parsed = parseSafeOutboundUrl(rawUrl);
   if (Result.isError(parsed)) {
-    return null;
+    return { status: "invalid-url" };
   }
 
   const rootUrl = new URL("/", parsed.value.origin);
@@ -36,12 +39,15 @@ export const discoverMcpIconUrl = async (
         rootUrl,
       });
       if (discovered) {
-        return discovered;
+        return { status: "discovered", url: discovered };
       }
     }
   }
 
-  return new URL("/favicon.ico", parsed.value.origin).toString();
+  return {
+    status: "discovered",
+    url: new URL("/favicon.ico", parsed.value.origin).toString(),
+  };
 };
 
 const ICON_REL_PRIORITY = [

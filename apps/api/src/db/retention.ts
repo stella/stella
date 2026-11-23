@@ -141,6 +141,10 @@ export const TABLE_RETENTION = {
     boundedBy:
       "Authenticated account-owned editing sessions with expiry and revocation.",
   },
+  dictation_vocabulary_terms: {
+    boundedBy:
+      "At most MAX_ORGANIZATION_DICTATION_TERMS words per organization, deleted with it.",
+  },
   document_processing_runs: {
     boundedBy:
       "Organization-owned processing history and organization deletion.",

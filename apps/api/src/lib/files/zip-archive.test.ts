@@ -19,16 +19,24 @@ import {
   readZipArchiveFile,
   ZIP_ARCHIVE_MAX_FILE_BYTES,
 } from "./zip-archive";
+import type { ZipNameCodePage } from "./zip-name-code-page";
 
-const read = async (entries: readonly RawZipEntry[]) =>
-  (await readZipArchive(makeZipArchive(entries))).unwrap();
+const read = async (
+  entries: readonly RawZipEntry[],
+  nameCodePage: ZipNameCodePage = "ibm437",
+) => (await readZipArchive(makeZipArchive(entries), { nameCodePage })).unwrap();
 
-const listed = async (entries: readonly RawZipEntry[]) =>
-  (await read(entries)).map(({ fileName, folder, unavailable }) => ({
-    fileName,
-    folder,
-    unavailable,
-  }));
+const listed = async (
+  entries: readonly RawZipEntry[],
+  nameCodePage?: ZipNameCodePage,
+) =>
+  (await read(entries, nameCodePage)).map(
+    ({ fileName, folder, unavailable }) => ({
+      fileName,
+      folder,
+      unavailable,
+    }),
+  );
 
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
@@ -126,6 +134,37 @@ describe("a ZIP archive's files", () => {
       expect(
         files.map(({ fileName, folder }) => ({ fileName, folder })),
       ).toEqual(expected);
+    }
+  });
+
+  test("a name that reads alike in 437 and 852 reads in the code page the reader is given", async () => {
+    // "ů" in 852 is the byte of "à" in 437, and both readings are letters
+    // some scored language writes: a tie.
+    const tied = encodeDosCodePage("Důkazy.pdf", "ibm852");
+    expect(tied).toEqual(encodeDosCodePage("Dàkazy.pdf", "ibm437"));
+    const entries = [{ name: tied ?? new Uint8Array(), data: "x", flags: 0 }];
+    expect(
+      (await listed(entries, "ibm852")).map(({ fileName }) => fileName),
+    ).toEqual(["Důkazy.pdf"]);
+    expect(
+      (await listed(entries, "ibm437")).map(({ fileName }) => fileName),
+    ).toEqual(["Dàkazy.pdf"]);
+    // Names one code page explains better read alike whichever is given,
+    // and a name the archive flags as UTF-8 is never weighed.
+    const won = [
+      {
+        name:
+          encodeDosCodePage("Procès-verbal_à_signer.pdf", "ibm437") ??
+          new Uint8Array(),
+        data: "x",
+        flags: 0,
+      },
+      { name: "Důkazy_UTF-8.pdf", data: "y" },
+    ];
+    for (const nameCodePage of ["ibm437", "ibm852"] as const) {
+      expect(
+        (await listed(won, nameCodePage)).map(({ fileName }) => fileName),
+      ).toEqual(["Procès-verbal_à_signer.pdf", "Důkazy_UTF-8.pdf"]);
     }
   });
 
@@ -307,10 +346,12 @@ describe("a ZIP archive's files", () => {
       { name: "bomba.txt", data: new Uint8Array(8 * 1024 * 1024) },
     ]);
     for (const bytes of [tooMany, bomb]) {
-      const result = await readZipArchive(bytes);
+      const result = await readZipArchive(bytes, { nameCodePage: "ibm852" });
       expect(result.isErr() && result.error.reason).toBe("limit");
     }
-    const notZip = await readZipArchive(new TextEncoder().encode("PK no"));
+    const notZip = await readZipArchive(new TextEncoder().encode("PK no"), {
+      nameCodePage: "ibm437",
+    });
     expect(notZip.isErr() && notZip.error.reason).toBe("invalid");
   });
 

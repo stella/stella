@@ -141,6 +141,7 @@ const TABLE_CLASSIFICATIONS = {
   aiMemories: FORMAT_SCOPE_EXCLUSION,
   anonymizationAllowlistEntries: FORMAT_SCOPE_EXCLUSION,
   anonymizationBlacklistEntries: FORMAT_SCOPE_EXCLUSION,
+  dictationVocabularyTerms: FORMAT_SCOPE_EXCLUSION,
   auditLogs: FORMAT_SCOPE_EXCLUSION,
   bilingualTranslationRows: FORMAT_SCOPE_EXCLUSION,
   bilingualTranslationRuns: FORMAT_SCOPE_EXCLUSION,

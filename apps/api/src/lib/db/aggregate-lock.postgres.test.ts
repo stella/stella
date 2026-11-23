@@ -209,6 +209,12 @@ const advisoryAcquisitions = () => {
         id: { organizationId },
         tx,
       }),
+    dictationVocabularyCapacity: async (tx: AggregateAcquireTransaction) =>
+      await withAggregateLock({
+        aggregate: "dictationVocabularyCapacity",
+        id: { organizationId },
+        tx,
+      }),
     desktopRunnerCapacity: async (tx: AggregateAcquireTransaction) =>
       await withAggregateLock({
         aggregate: "desktopRunnerCapacity",
