@@ -831,7 +831,7 @@
     "dictationLearnedDelete": "Dzēst stella apgūto",
     "dictationLearnedEmpty": "Vēl nekas nav apgūts.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Ja diktēta vārda vai nosaukuma rakstību divreiz izlabojat vienādi, stella turpmākajos diktējumos to rakstīs tā. Glabājas tikai šajā tālrunī.",
+    "dictationLearnedHint": "Ja diktēta vārda vai nosaukuma rakstību divreiz izlabojat vienādi, stella turpmākajos diktējumos to rakstīs tā. Tiek sinhronizēts ar jūsu citām ierīcēm; to redzat tikai jūs.",
     "dictationLearnedTitle": "No jūsu labojumiem apgūtie labojumi",
     "dictationLearnedUnreadable": "stella apgūto neizdevās nolasīt.",
     "dictationModelDefault": "Noklusējuma",

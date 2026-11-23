@@ -831,7 +831,7 @@
     "dictationLearnedDelete": "A stella által tanultak törlése",
     "dictationLearnedEmpty": "Még nincs tanult javítás.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Ha egy diktált szó vagy név írásmódját kétszer ugyanúgy javítja, a stella a későbbi diktálásokban úgy írja. Csak ezen a telefonon marad.",
+    "dictationLearnedHint": "Ha egy diktált szó vagy név írásmódját kétszer ugyanúgy javítja, a stella a későbbi diktálásokban úgy írja. Szinkronizálódik a többi eszközével; csak Ön láthatja.",
     "dictationLearnedTitle": "A javításaiból tanult javítások",
     "dictationLearnedUnreadable": "A stella által tanultakat nem sikerült beolvasni.",
     "dictationModelDefault": "Alapértelmezett",
