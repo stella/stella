@@ -20,7 +20,7 @@ import { Separator } from "@stll/ui/separator";
 import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
-import { composeRefs } from "@stll/ui/utils";
+import { cn, composeRefs } from "@stll/ui/utils";
 
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import {
@@ -35,6 +35,7 @@ import {
   PdfSignPlacementBar,
   PdfSignPlacementLayer,
 } from "@/components/inspector/pdf-sign-placement-viewer";
+import { VIEWER_OVERLAY_BAR_TOP_CLEARANCE } from "@/components/inspector/viewer-overlay-bar";
 import { ZoomControls } from "@/components/inspector/zoom-controls";
 import type { ZoomDirection } from "@/components/inspector/zoom-controls";
 import { DocumentMarkPageLayer } from "@/components/pdf/annotations/document-marks-layer";
@@ -124,6 +125,12 @@ type PeekPdfViewerProps = {
   scaleOffset: number;
   mimeType?: string | undefined;
   interactionMode?: "preview-only" | "with-ai" | undefined;
+  /**
+   * Whether the viewer's controls float over the top inline-end corner of the
+   * pages (`ViewerOverlayBar`). The first page then starts below the bar, so
+   * at the top of the scroll the bar covers none of it.
+   */
+  underOverlayBar: boolean;
   searchText?: SearchTextQuery | undefined;
   activeSearchMatchIndex?: number | undefined;
   onSearchMatchSummaryChange?:
@@ -195,6 +202,7 @@ const PeekPdfViewerContent = ({
   mimeType,
   interactionMode = "with-ai",
   searchText = "",
+  underOverlayBar,
   activeSearchMatchIndex = 0,
   onSearchMatchSummaryChange,
   onPeekNavigate,
@@ -291,6 +299,7 @@ const PeekPdfViewerContent = ({
         renderPageOverlay={renderPageOverlay}
         scaleOffset={scaleOffset}
         searchText={searchText}
+        underOverlayBar={underOverlayBar}
       />
     </>
   );
@@ -327,6 +336,12 @@ type PeekPdfViewportProps = {
   /** The zoom over the fit-to-width scale, as the zoom controls set it. */
   scaleOffset: number;
   colorMode: PDFColorMode;
+  /**
+   * Whether the viewer's controls float over the top inline-end corner of the
+   * pages (`ViewerOverlayBar`). The first page then starts below the bar, so
+   * at the top of the scroll the bar covers none of it.
+   */
+  underOverlayBar: boolean;
   isImageOrigin?: boolean | undefined;
   onWheelZoom?: ((deltaY: number) => void) | undefined;
   searchText?: SearchTextQuery | undefined;
@@ -349,13 +364,17 @@ export const PeekPdfViewport = ({
   isImageOrigin = false,
   pageSource,
   renderPageOverlay,
+  underOverlayBar,
   ...props
 }: PeekPdfViewportProps) => (
   <PDFViewport
     {...props}
     buffer={buffer}
     className="document-preview-surface h-full"
-    contentClassName="relative space-y-2 px-2 pt-2"
+    contentClassName={cn(
+      "relative space-y-2",
+      underOverlayBar ? VIEWER_OVERLAY_BAR_TOP_CLEARANCE : "pt-2",
+    )}
     fileId={fileId}
     invertColors={resolvePDFInvertColors({ colorMode, isImageOrigin })}
     pageSource={pageSource}

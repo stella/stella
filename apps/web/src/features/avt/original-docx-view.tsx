@@ -247,6 +247,7 @@ export const OriginalDocxView = ({
           interactionMode: "preview-only",
           pdfPageSource: "document",
           scaleOffset: 0,
+          underOverlayBar: false,
           viewId,
           workspaceId,
         })}
