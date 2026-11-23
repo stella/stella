@@ -837,6 +837,12 @@
     },
     "showPane": "Mostrar painel",
     "swapViews": "Trocar a visualização principal e o painel lateral",
-    "title": "Inspetor"
+    "title": "Inspetor",
+    "mailbox": {
+      "messages": "Mensagens",
+      "noMessages": "Esta caixa de correio não contém mensagens.",
+      "truncated": "Somente as primeiras {count, number} mensagens são exibidas.",
+      "unreadable": "Não foi possível ler esta caixa de correio."
+    }
   }
 }

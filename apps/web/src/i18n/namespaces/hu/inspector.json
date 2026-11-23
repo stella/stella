@@ -837,6 +837,12 @@
     },
     "showPane": "Panel megjelenítése",
     "swapViews": "A fő nézet és az oldalsó panel felcserélése",
-    "title": "Ellenőrző panel"
+    "title": "Ellenőrző panel",
+    "mailbox": {
+      "messages": "Üzenetek",
+      "noMessages": "Ez a postafiók nem tartalmaz üzeneteket.",
+      "truncated": "Csak az első {count, number} üzenet látható.",
+      "unreadable": "Ezt a postafiókot nem sikerült beolvasni."
+    }
   }
 }

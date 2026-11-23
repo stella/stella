@@ -3,6 +3,7 @@ import { cadesPreviewEndpoint } from "@/api/handlers/files/cades";
 import dataBoxEndpoint from "@/api/handlers/files/data-box";
 import { eInvoicePreviewEndpoint } from "@/api/handlers/files/e-invoice";
 import emailReadingEndpoint from "@/api/handlers/files/email-reading";
+import { mailboxPreviewEndpoint } from "@/api/handlers/files/mailbox";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
 import { readFilePartListEndpoint } from "@/api/handlers/files/part-list";
 import saveFilePartEndpoint from "@/api/handlers/files/part-save";
@@ -31,6 +32,7 @@ export const filesRoute = routes(
     "/e-invoice/:fieldId": { GET: eInvoicePreviewEndpoint },
     "/asic/:fieldId": { GET: asicPreviewEndpoint },
     "/zip/:fieldId": { GET: zipArchivePreviewEndpoint },
+    "/mbox/:fieldId": { GET: mailboxPreviewEndpoint },
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
     "/signed-dossier/:fieldId": { GET: signedDossierPreviewEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },

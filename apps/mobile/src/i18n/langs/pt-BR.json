@@ -587,6 +587,14 @@
     "server": "Seu servidor teve um problema (erro {status}). Tente novamente em instantes.",
     "session": "Seu login expirou. Entre novamente."
   },
+  "mailbox": {
+    "back": "Voltar às mensagens",
+    "messages": "Mensagens",
+    "noMessages": "Esta caixa de correio não contém mensagens.",
+    "openFailed": "Não foi possível abrir esta mensagem. Toque para tentar novamente.",
+    "truncated": "Somente as primeiras {count, number} mensagens são exibidas.",
+    "unreadable": "Não foi possível ler esta caixa de correio."
+  },
   "matter": {
     "add": "Adicionar",
     "details": "Detalhes",

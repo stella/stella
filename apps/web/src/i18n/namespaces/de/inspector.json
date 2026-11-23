@@ -837,6 +837,12 @@
     },
     "showPane": "Bereich anzeigen",
     "swapViews": "Hauptansicht und Seitenleiste tauschen",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "mailbox": {
+      "messages": "Nachrichten",
+      "noMessages": "Dieses Postfach enthält keine Nachrichten.",
+      "truncated": "Nur die ersten {count, number} Nachrichten werden angezeigt.",
+      "unreadable": "Dieses Postfach konnte nicht gelesen werden."
+    }
   }
 }

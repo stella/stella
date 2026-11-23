@@ -1,9 +1,10 @@
 /**
  * A part of a stored file: a file inside a file, such as the document a
  * signed `.p7m` wraps, a document in a signed container, a file in a ZIP
- * archive or an email's attachment. A part is addressed by its kind and its
- * position in the list its file's preview gives, and opens through the file's
- * own audited link (`GET /files/:workspaceId/url/:fieldId?part=`). A part
+ * archive, a mailbox's message or an email's attachment. A part is addressed
+ * by its kind and its position in the list its file's preview gives, and
+ * opens through the file's own audited link
+ * (`GET /files/:workspaceId/url/:fieldId?part=`). A part
  * that is itself a container (an email in an archive, an archive in a
  * data-box message) has parts of its own, addressed by the path through its
  * containers (`member:2/attachment:0`), at most `FILE_PART_MAX_DEPTH` deep.
@@ -27,6 +28,8 @@ export const FILE_PART_KINDS = {
   member: "member",
   /** An attachment of an email, a data-box message or an invoice. */
   attachment: "attachment",
+  /** A message of a mailbox (`.mbox`), delivered as an email of its own. */
+  message: "message",
 } as const;
 export type FilePartKind =
   (typeof FILE_PART_KINDS)[keyof typeof FILE_PART_KINDS];
@@ -38,7 +41,7 @@ export const FILE_PART_MAX_INDEX = 9999;
 export const FILE_PART_MAX_DEPTH = 4;
 
 const SEGMENT_SOURCE =
-  "(content|document|member|attachment):(0|[1-9][0-9]{0,3})";
+  "(content|document|member|attachment|message):(0|[1-9][0-9]{0,3})";
 const SEGMENT_PATTERN = new RegExp(`^${SEGMENT_SOURCE}$`, "u");
 const FILE_PART_PATTERN = new RegExp(
   `^${SEGMENT_SOURCE}(?:/${SEGMENT_SOURCE}){0,${String(FILE_PART_MAX_DEPTH - 1)}}$`,
@@ -59,6 +62,40 @@ export const filePartDepth = (part: FilePart): number =>
 /** A part's address, such as `attachment:2` or `member:0/attachment:2`. */
 export const filePartId = ({ kind, index, within }: FilePart): string =>
   `${within === undefined ? "" : `${filePartId(within)}/`}${kind}:${String(index)}`;
+
+/**
+ * `part`, a part of the part `container`, addressed from the file itself:
+ * `attachment:0` within `message:3` is `message:3/attachment:0`.
+ */
+export const filePartWithin = (
+  part: FilePart,
+  container: FilePart,
+): FilePart =>
+  part.within === undefined
+    ? { kind: part.kind, index: part.index, within: container }
+    : {
+        kind: part.kind,
+        index: part.index,
+        within: filePartWithin(part.within, container),
+      };
+
+/**
+ * A part's outermost segment, the part of the file itself it sits in, and
+ * its path within that part; `inner` is null when the part is that segment.
+ */
+export const splitOutermostFilePart = (
+  part: FilePart,
+): { readonly outermost: FilePart; readonly inner: FilePart | null } => {
+  const segment = { kind: part.kind, index: part.index };
+  if (part.within === undefined) {
+    return { outermost: segment, inner: null };
+  }
+  const { outermost, inner } = splitOutermostFilePart(part.within);
+  return {
+    outermost,
+    inner: inner === null ? segment : { ...segment, within: inner },
+  };
+};
 
 const parseSegment = (value: string): FilePart | null => {
   const match = SEGMENT_PATTERN.exec(value);

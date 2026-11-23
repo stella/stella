@@ -837,6 +837,12 @@
     },
     "showPane": "Kuva paneel",
     "swapViews": "Vaheta põhivaade ja külgpaneel",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "mailbox": {
+      "messages": "Kirjad",
+      "noMessages": "Selles postkastis pole kirju.",
+      "truncated": "Kuvatakse ainult esimesed {count, number} kirja.",
+      "unreadable": "Seda postkasti ei õnnestunud lugeda."
+    }
   }
 }

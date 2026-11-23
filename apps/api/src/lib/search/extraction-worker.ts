@@ -61,6 +61,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
   ASIC_PREVIEW_WORKER_MODE,
+  MAILBOX_TEXT_WORKER_MODE,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
   ZIP_ARCHIVE_PREVIEW_MODE,
@@ -104,6 +105,11 @@ import {
   listEmbeddedParts,
 } from "@/api/lib/files/embedded-part-worker";
 import { XML_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
+import {
+  readMailboxBytesText,
+  readMailboxText,
+} from "@/api/lib/files/mailbox-text";
+import type { MboxParseError } from "@/api/lib/files/mbox";
 import type { P7mParseError } from "@/api/lib/files/p7m";
 import { partMediaType } from "@/api/lib/files/part-media-type";
 import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
@@ -374,6 +380,7 @@ type LegalTextReadOptions = {
 type LegalTextReadError =
   | AsicParseError
   | DocumentPackageError
+  | MboxParseError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -516,6 +523,18 @@ const extractZipText = async ({
   return preview.map(({ files }) => zipArchiveText({ files, maxChars }));
 };
 
+const extractMailboxText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> =>
+  await readMailboxBytesText({
+    bytes: fileBytes,
+    maxChars,
+    mailboxName: "mailbox",
+  });
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -535,6 +554,7 @@ const LEGAL_TEXT_READERS = {
   isdocx: extractEInvoiceText,
   xml: extractEInvoiceText,
   zip: extractZipText,
+  mbox: extractMailboxText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -917,6 +937,7 @@ const embeddedPartExit = (error: EmbeddedPartError) => {
     case "DataBoxMessageParseError":
     case "DocumentPackageError":
     case "EmailParseError":
+    case "MboxParseError":
     case "P7mParseError":
     case "SignedDossierParseError":
       return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
@@ -955,8 +976,9 @@ const writeEmbeddedPart = async (options: EmbeddedPartRequest) => {
 };
 
 const writeEmbeddedPartList = async (options: EmbeddedPartRequest) => {
-  const part = parseFilePartId(options.partId);
-  if (part === null) {
+  // No part lists the file's own parts, as for a mailbox's message.
+  const part = options.partId === "" ? null : parseFilePartId(options.partId);
+  if (part === null && options.partId !== "") {
     return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
   }
   const listed = await listEmbeddedParts({ ...options, part });
@@ -1004,9 +1026,29 @@ function exitWithWorkerError(error: unknown): never {
 
 // ── Main ──────────────────────────────────────────────────
 
+/**
+ * A mailbox's text, read as its bytes stream in, one message at a time:
+ * the mailbox is never held whole.
+ */
+const writeMailboxText = async (maxChars: number) => {
+  const text = await readMailboxText({
+    chunks: Bun.stdin.stream(),
+    maxChars,
+    mailboxName: process.argv[4] ?? "",
+  });
+  if (text.isErr()) {
+    return ARCHIVE_PREVIEW_WORKER_EXIT.unreadable;
+  }
+  await writeWorkerStdout(text.value);
+  return 0;
+};
+
 try {
   const mimeType = process.argv[2] ?? "";
   const maxChars = readMaxCharsArgument(process.argv[3]);
+  if (mimeType === MAILBOX_TEXT_WORKER_MODE) {
+    process.exit(await writeMailboxText(maxChars));
+  }
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   if (mimeType === DATA_BOX_PREVIEW_MODE) {
     await writeWorkerStdout(

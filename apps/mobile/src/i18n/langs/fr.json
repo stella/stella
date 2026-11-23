@@ -587,6 +587,14 @@
     "server": "Votre serveur a rencontré un problème (erreur {status}). Réessayez dans un instant.",
     "session": "Votre session a expiré. Reconnectez-vous."
   },
+  "mailbox": {
+    "back": "Retour aux messages",
+    "messages": "Courriels",
+    "noMessages": "Cette boîte aux lettres ne contient aucun message.",
+    "openFailed": "Impossible d’ouvrir ce message. Touchez pour réessayer.",
+    "truncated": "Seuls les {count, number} premiers messages sont affichés.",
+    "unreadable": "Impossible de lire cette boîte aux lettres."
+  },
   "matter": {
     "add": "Ajouter",
     "details": "Détails",

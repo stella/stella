@@ -2,6 +2,7 @@ import {
   EMAIL_TEXT_ATTACHMENT_CHARSET,
   type EmailTextAttachmentCharset,
 } from "@stll/api-contract";
+import { isEmailMimeType } from "@stll/api-contract/email-mime-types";
 import { opensToFilesInside } from "@stll/api-contract/file-part-containers";
 import {
   type ContainedFile,
@@ -70,6 +71,14 @@ export const filePartPreviewKind = (mediaType: string): FilePartPreviewKind => {
   }
   return FILE_PART_PREVIEW_KIND.none;
 };
+
+/**
+ * Whether a part is an email the email viewer shows, as it shows an email
+ * file: a mailbox's message, or an email attached as one.
+ */
+export const filePartIsEmail = (
+  part: Pick<FilePartDescriptor, "mediaType">,
+): boolean => isEmailMimeType(essence(part.mediaType));
 
 /**
  * Whether a part that has no preview of its own opens to the files inside
