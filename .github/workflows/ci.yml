@@ -1259,8 +1259,8 @@ jobs:
             : > "$RUNNER_TEMP/api-test-files"
             {
               echo 'ci_tests_required=true'
-              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}'
-              echo 'api_test_shards=6'
+              echo 'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","api-7","api-8","rest","web"]}'
+              echo 'api_test_shards=8'
               echo 'test_scope='
               echo 'api_test_files_encoded='
             } >> "$GITHUB_OUTPUT"
@@ -1575,7 +1575,7 @@ jobs:
           elif [[ "$PACKAGE_CHECKS_REQUIRED" != true ]]; then
             {
               echo 'ci_tests_required=false'
-              echo 'ci_tests_matrix={"shard":["rest-web"]}'
+              echo 'ci_tests_matrix={"shard":["rest"]}'
               echo 'api_test_shards=0'
               echo 'test_scope='
               echo 'api_test_files_encoded='
@@ -3157,7 +3157,7 @@ jobs:
       - name: Test .claude/mcp
         # Outside the workspace, so no shard filter selects it: one shard owns
         # it outright.
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest') }}
         run: bun --cwd .claude/mcp test
 
       # The API test runner sizes its parallel lanes from the runner's cores
@@ -3172,7 +3172,7 @@ jobs:
         env:
           AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
           TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
-          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
+          SHARD: ${{ matrix.shard }}
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}
           API_TEST_ARTIFACT_DIR: ${{ runner.temp }}/api-test-${{ matrix.shard }}
           API_TEST_FILES_ENCODED: ${{ needs.ci-plan.outputs.api_test_files_encoded }}
@@ -3202,7 +3202,7 @@ jobs:
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
-          # The upload step reads this path; the rest-web leg writes the rest shard's file.
+          # The upload step reads this path; each leg writes its own shard's file.
           echo "output=$output" >> "$GITHUB_OUTPUT"
           bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
           # On failure the log ends with the failing tests and their errors.
@@ -3217,7 +3217,7 @@ jobs:
 
       - name: Test the stella browser host
         # The runner's Chrome in a desktop session: headful, sandbox on.
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web' && (steps.affected.outputs.flag == '' || contains(needs.ci-plan.outputs.test_scope, '@stll/agent-engine')) }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest' && (steps.affected.outputs.flag == '' || contains(needs.ci-plan.outputs.test_scope, '@stll/agent-engine')) }}
         timeout-minutes: 5
         env:
           STELLA_BROWSER_E2E_EXECUTABLE: /opt/google/chrome/chrome
@@ -3243,54 +3243,11 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
-      - name: Test web
-        id: test-web
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true' && matrix.shard == 'rest-web') }}
-        env:
-          AFFECTED_FLAG: ${{ steps.affected.outputs.flag }}
-          TEST_SCOPE: ${{ needs.ci-plan.outputs.test_scope }}
-          SHARD: web
-        run: |
-          args=()
-          if [[ -n "$AFFECTED_FLAG" ]]; then
-            read -r -a args <<<"$TEST_SCOPE"
-          fi
-          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
-          API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
-          export API_TEST_SHARD
-          # A cached pass replays only under the quarantine that produced it.
-          FLAKY_TEST_QUARANTINE_DIGEST=$(bun scripts/flaky-test-quarantine.ts digest)
-          export FLAKY_TEST_QUARANTINE_DIGEST
-          set -o pipefail
-          plan="$RUNNER_TEMP/test-plan-$SHARD.json"
-          output="$RUNNER_TEMP/test-output-$SHARD.log"
-          # The upload step reads this path; the rest-web leg writes the rest shard's file.
-          echo "output=$output" >> "$GITHUB_OUTPUT"
-          bun run test -- --concurrency=2 "${args[@]}" "${shard_args[@]}" --dry=json > "$plan"
-          # On failure the log ends with the failing tests and their errors.
-          # A heavy_only run may check out a digest script without --summary;
-          # it refuses the flag, so the tail is printed again without it.
-          bun run test -- --concurrency=2 --output-logs=full --log-order=stream "${args[@]}" "${shard_args[@]}" 2>&1 | tee "$output" || {
-            status=$?
-            timeout 60 bun scripts/ci-failure-digest.ts tail "$output" --summary "$GITHUB_STEP_SUMMARY" || timeout 60 bun scripts/ci-failure-digest.ts tail "$output" || true
-            exit "$status"
-          }
-          bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
-
-      - name: Upload failed web test output
-        if: failure() && steps.test-web.outcome == 'failure'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: test-output-web
-          path: ${{ steps.test-web.outputs.output }}
-          retention-days: 7
-          if-no-files-found: ignore
-
       - name: Repeat changed tests
         if: >-
           !cancelled()
           && github.event_name == 'pull_request'
-          && matrix.shard == 'rest-web'
+          && (matrix.shard == 'rest' || (matrix.shard == 'web' && !contains(fromJSON(needs.ci-plan.outputs.ci_tests_matrix).shard, 'rest')))
           && needs.ci-plan.outputs.package_checks_required == 'true'
         # A file, not an environment variable: a large diff exceeds the size
         # limit of one variable and the step cannot start.

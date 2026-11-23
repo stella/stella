@@ -277,20 +277,12 @@ jobs:
       - name: Full test suite
         env:
           API_TEST_SHARD_COUNT: ${{ needs.full-test-plan.outputs.api-shards }}
-          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
+          SHARD: ${{ matrix.shard }}
           TURBO_FORCE: "true"
         run: |
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
           export API_TEST_SHARD
-          bun run test -- --concurrency=2 "${shard_args[@]}"
-      - name: Full web test suite
-        if: matrix.shard == 'rest-web'
-        env:
-          SHARD: web
-          TURBO_FORCE: "true"
-        run: |
-          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           bun run test -- --concurrency=2 "${shard_args[@]}"
 
   # The production client build is the remaining browser-CI setup hotspot.
