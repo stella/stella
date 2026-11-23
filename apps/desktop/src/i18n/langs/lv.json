@@ -10,7 +10,7 @@
     "aiDraftAllow": "Atļaut",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Uzdevums {task} · Darbība {activity}",
-    "aiDraftConsent": "stella AI var sagatavot aprakstus no katra ieraksta lietas, datuma, ilguma un lietotņu nosaukumiem, kā arī no šeit redzamajiem dokumentu nosaukumiem un logu virsrakstiem, ja tos ierakstāt. Jūsu agrākie ieraksti lietā palīdz rakstīt jūsu stilā. Nekas cits par jūsu dienu neatstāj šo datoru.",
+    "aiDraftConsent": "Apraksta sagatavošanai stella AI izmanto: {inputs}. Tas viss tiek nosūtīts {provider} tikai melnraksta uzrakstīšanai. Nekas cits par jūsu dienu neatstāj šo datoru.",
     "aiDraftConsentRequired": "Lai sagatavotu šo aprakstu, vēlreiz atļaujiet stella AI.",
     "aiDraftDisclosure": "AI melnraksti ir ieteikumi, ko stella izveido no pārskatāmā ieraksta, jūsu agrākajiem ierakstiem lietā un, ja jūsu organizācija tās ir pievienojusi, tās norēķinu vadlīnijām. Pirms izveides pārskatiet katru ierakstu.",
     "aiDraftEarlierEntries": "{count, plural, zero {Seko # agrākiem ierakstiem} one {Seko # agrākam ierakstam} other {Seko # agrākiem ierakstiem}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI šajā datorā ir izslēgts. Atsaukums tiks nosūtīts lietotnei stella, tiklīdz tā būs sasniedzama.",
     "browserAnsweredAppNameOnly": "Pārlūkprogrammai <bdi>{browser}</bdi> tiek ierakstīts tikai lietotnes nosaukums. To var mainīt iestatījumos.",
     "browserAnsweredTitles": "Pārlūkprogrammas <bdi>{browser}</bdi> cilņu nosaukumi tiek ierakstīti. To var mainīt iestatījumos.",
-    "browserPrivacyNote": "Var tikt ierakstīti arī privātie logi; privātas pārlūkošanas laikā apturiet ierakstīšanu vai izslēdziet pārlūkprogrammu no tās.",
+    "browserPrivacyNote": "stella neatpazīst katru privāto logu, tāpēc pirms privātas pārlūkošanas apturiet ierakstīšanu.",
     "browserQuestionAppNameOnly": "Tikai lietotnes nosaukums",
-    "browserQuestionDescription": "Cilņu nosaukumi palīdz aprakstīt darbu. stella neatpazīst katru privāto logu, tāpēc pirms privātas pārlūkošanas apturiet ierakstīšanu.",
+    "browserQuestionDescription": "Cilņu nosaukumi palīdz aprakstīt darbu.",
     "browserQuestionLater": "Izlemt vēlāk",
     "browserQuestionRecordTitles": "Ierakstīt nosaukumus",
     "browserQuestionTitle": "Vai ierakstīt arī cilņu nosaukumus pārlūkprogrammā <bdi>{browser}</bdi>?",
@@ -103,6 +103,18 @@
     "detectCalls": "Reģistrēt zvanus",
     "detectCallsDescription": "Kamēr Teams, Zoom vai pārlūks izmanto mikrofonu, šis laiks tiek skaitīts kā zvans, pat ja jūs tikai klausāties vai strādājat citā lietotnē. Skaņa netiek ierakstīta.",
     "disclosure": {
+      "aiDraftInputs": {
+        "appNames": "lietotņu nosaukumi",
+        "billingFormat": "klienta norēķinu formāts",
+        "date": "datums",
+        "duration": "ilgums",
+        "earlierDescriptions": "jūsu agrākie apraksti lietā",
+        "firmGuidelines": "iespējamās jūsu biroja norēķinu vadlīnijas",
+        "instructions": "jūsu ievadītie norādījumi",
+        "matter": "lieta",
+        "titles": "ierakstītie logu virsraksti un dokumentu nosaukumi"
+      },
+      "aiDraftProvider": "jūsu biroja izmantotajam AI pakalpojumu sniedzējam vai stella AI pakalpojumu sniedzējam",
       "control": "Nekas netiek ierakstīts, kamēr nenospiežat Sākt ierakstīšanu. Jebkurā laikā varat pauzēt, izslēgt lietotnes vai dzēst jebkuru dienu.",
       "never": {
         "audio": "Skaņa no mikrofona",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Kas tiek ierakstīts",
       "sent": {
-        "aiDrafts": "stella AI melnraksti, ko pieprasāt pēc atļaujas: ieraksta lieta, datums, ilgums un lietotņu nosaukumi, tā logu virsraksti un dokumentu nosaukumi, ja tie tiek ierakstīti, un jūsu ievadītie norādījumi. stella pievieno jūsu agrākos aprakstus lietā, klienta norēķinu formātu un, ja jūsu birojs tās izmanto, tā norēķinu vadlīnijas. Tas viss tiek nosūtīts jūsu biroja izmantotajam AI pakalpojumu sniedzējam vai stella AI pakalpojumu sniedzējam tikai melnraksta uzrakstīšanai; stella nesaglabā ne melnrakstu, ne tam nosūtīto.",
+        "aiDrafts": "stella AI melnraksti, ko pieprasāt pēc atļaujas. Katram stella AI izmanto: {inputs}. Tas viss tiek nosūtīts {provider} tikai melnraksta uzrakstīšanai; stella nesaglabā ne melnrakstu, ne tam nosūtīto.",
         "timeEntries": "Jūsu izveidotie laika ieraksti: lieta, datums, ilgums, apraksts, vai tas ir apmaksājams, un iespējamie norēķinu kodi"
       },
       "sentTitle": "Kas atstāj šo datoru",

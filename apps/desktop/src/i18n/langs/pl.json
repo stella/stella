@@ -10,7 +10,7 @@
     "aiDraftAllow": "Zezwól",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Zadanie {task} · Czynność {activity}",
-    "aiDraftConsent": "stella AI może proponować opisy na podstawie sprawy, daty, czasu trwania i nazw aplikacji każdego wpisu oraz widocznych tu nazw dokumentów i tytułów okien, jeśli je rejestrujesz. Twoje wcześniejsze wpisy w sprawie pomagają jej pisać Twoim stylem. Nic więcej o Twoim dniu nie opuszcza tego komputera.",
+    "aiDraftConsent": "Do napisania opisu stella AI używa: {inputs}. Wszystko trafia do {provider} wyłącznie w celu napisania propozycji. Nic więcej o Twoim dniu nie opuszcza tego komputera.",
     "aiDraftConsentRequired": "Zezwól ponownie stella AI, aby zaproponować ten opis.",
     "aiDraftDisclosure": "Propozycje AI to sugestie, które stella tworzy na podstawie sprawdzanego wpisu, Twoich wcześniejszych wpisów w sprawie oraz zasad rozliczeń kancelarii, jeśli je dodała. Sprawdź każdy wpis przed jego utworzeniem.",
     "aiDraftEarlierEntries": "{count, plural, one {Nawiązuje do # wcześniejszego wpisu} few {Nawiązuje do # wcześniejszych wpisów} many {Nawiązuje do # wcześniejszych wpisów} other {Nawiązuje do # wcześniejszego wpisu}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI jest wyłączona na tym komputerze. Wycofanie zgody zostanie wysłane do aplikacji stella, gdy tylko będzie dostępna.",
     "browserAnsweredAppNameOnly": "Dla <bdi>{browser}</bdi> rejestrowana jest tylko nazwa aplikacji. Możesz to zmienić w Ustawieniach.",
     "browserAnsweredTitles": "Tytuły kart w <bdi>{browser}</bdi> są rejestrowane. Możesz to zmienić w Ustawieniach.",
-    "browserPrivacyNote": "Okna prywatne też mogą zostać zarejestrowane; wstrzymaj rejestrowanie lub wyklucz przeglądarkę podczas przeglądania prywatnego.",
+    "browserPrivacyNote": "stella nie rozpoznaje każdego okna prywatnego, więc przed prywatnym przeglądaniem wstrzymaj rejestrowanie.",
     "browserQuestionAppNameOnly": "Tylko nazwa aplikacji",
-    "browserQuestionDescription": "Tytuły kart pomagają w opisach pracy. stella nie rozpoznaje każdego okna prywatnego, więc przed prywatnym przeglądaniem wstrzymaj rejestrowanie.",
+    "browserQuestionDescription": "Tytuły kart pomagają w opisach pracy.",
     "browserQuestionLater": "Zdecyduj później",
     "browserQuestionRecordTitles": "Rejestruj tytuły",
     "browserQuestionTitle": "Rejestrować też tytuły kart w <bdi>{browser}</bdi>?",
@@ -103,6 +103,18 @@
     "detectCalls": "Rejestruj rozmowy",
     "detectCallsDescription": "Gdy Teams, Zoom lub przeglądarka używa mikrofonu, ten czas jest liczony jako rozmowa, nawet jeśli tylko słuchasz lub pracujesz w innej aplikacji. Dźwięk nigdy nie jest nagrywany.",
     "disclosure": {
+      "aiDraftInputs": {
+        "appNames": "nazwy aplikacji",
+        "billingFormat": "format rozliczeń klienta",
+        "date": "data",
+        "duration": "czas trwania",
+        "earlierDescriptions": "Twoje wcześniejsze opisy w sprawie",
+        "firmGuidelines": "ewentualne zasady rozliczeń kancelarii",
+        "instructions": "wpisane przez Ciebie polecenia",
+        "matter": "sprawa",
+        "titles": "rejestrowane tytuły okien i nazwy dokumentów"
+      },
+      "aiDraftProvider": "dostawcy AI, z którego korzysta kancelaria, albo dostawcy stella AI",
       "control": "Nic nie jest zapisywane, dopóki nie klikniesz Rozpocznij zapis. W każdej chwili możesz wstrzymać zapis, wykluczyć aplikacje lub usunąć dowolny dzień.",
       "never": {
         "audio": "Dźwięk z mikrofonu",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Co jest zapisywane",
       "sent": {
-        "aiDrafts": "Propozycje stella AI, o które prosisz po wyrażeniu zgody: sprawa, data, czas trwania i nazwy aplikacji wpisu, jego tytuły okien i nazwy dokumentów, jeśli są rejestrowane, oraz polecenia, które wpiszesz. stella dodaje Twoje wcześniejsze opisy w sprawie, format rozliczeń klienta oraz zasady rozliczeń kancelarii, jeśli z nich korzysta. Wszystko trafia do dostawcy AI, z którego korzysta kancelaria, albo do dostawcy stella AI, wyłącznie w celu napisania propozycji; stella nie zapisuje propozycji ani tego, co wysłano w jej celu.",
+        "aiDrafts": "Propozycje stella AI, o które prosisz po wyrażeniu zgody. Do każdej stella AI używa: {inputs}. Wszystko trafia do {provider} wyłącznie w celu napisania propozycji; stella nie zapisuje propozycji ani tego, co wysłano w jej celu.",
         "timeEntries": "Wpisy czasu, które tworzysz: sprawa, data, czas trwania, opis, rozliczalność i ewentualne kody rozliczeniowe"
       },
       "sentTitle": "Co opuszcza ten komputer",

@@ -88,7 +88,13 @@ test("the first screen tells what is recorded and sent, and starts nothing on it
   ]);
   expect(steps[0]?.getAttribute("aria-current")).toBe("step");
   // The same facts as every other surface, from their one owner.
-  await view.findByText(activity.disclosure.sent.aiDrafts);
+  await view.findByText(
+    (content) =>
+      content.includes(activity.disclosure.aiDraftProvider) &&
+      Object.values(activity.disclosure.aiDraftInputs).every((input) =>
+        content.includes(input),
+      ),
+  );
   await view.findByText(activity.disclosure.recorded.browserTitles);
   await view.findByText(activity.disclosure.never.webAddresses);
   view.getByRole("button", { name: activity.welcomeStart });
@@ -157,7 +163,9 @@ test("the drafts screen asks with the card's consent and grants it on the accoun
   }
   await heading(view, activity.billingDraftsTitle);
 
-  await view.findByText(activity.aiDraftConsent);
+  await view.findByText((content) =>
+    content.includes(activity.disclosure.aiDraftProvider),
+  );
   const allow = view.getByRole("switch", { name: setup.aiDrafts.allow });
   expect(allow.getAttribute("aria-checked")).toBe("false");
   fireEvent.click(allow);
@@ -220,7 +228,7 @@ test("a withdrawal the server has not confirmed shows as pending and is sent aga
   await view.findByText(activity.billingDraftsWithdrawPending);
   expect(native.drafts.consent).toBe("granted");
 
-  await click(view, onboarding.tryAgain);
+  await click(view, activity.retry);
   await waitFor(() => {
     expect(native.drafts.consent).toBe("revoked");
   });
