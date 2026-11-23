@@ -7,6 +7,7 @@ import {
   isCaseLawJurisdiction,
 } from "@stll/api-contract/case-law-jurisdictions";
 import { isPublicCaseLawCountry } from "@stll/api-contract/case-law-launch-readiness";
+import { classifyFailure } from "@stll/errors";
 
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
@@ -96,6 +97,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import type { PublicLawReadOptions } from "@/api/lib/public-law-read-db";
 import {
   definePublicLawSharedQuery,
@@ -284,6 +286,23 @@ class CoverageError extends TaggedError("CoverageError")<{
   message: string;
   cause?: unknown;
 }> {}
+
+/**
+ * The breakdown's own statement is bounded so a cold index degrades the page
+ * instead of stalling it; that bound ending is the designed outcome, graded
+ * as a public read's timeout rather than a defect. The cause is read, not the
+ * error: evidence is memoized on first read, so the error is classified
+ * before anything reads it.
+ */
+const observeCourtsReadFailure = (error: CoverageError, country: string) => {
+  if (isPgError(error.cause, PG_ERROR.QUERY_CANCELED)) {
+    classifyFailure(error, "public_read_timeout");
+  }
+  observeFailure(error, {
+    sink: courtsReadFailure,
+    ctx: { jurisdiction: country },
+  });
+};
 
 /**
  * Who a persisted total came from. Total over the stored origins, so a new
@@ -894,10 +913,7 @@ export const loadCaseLawCoverage = async ({
     });
     if (Result.isError(courts)) {
       onPartialFailure("courts");
-      observeFailure(courts.error, {
-        sink: courtsReadFailure,
-        ctx: { jurisdiction: country },
-      });
+      observeCourtsReadFailure(courts.error, country);
     }
     countries.push({
       ...base,
