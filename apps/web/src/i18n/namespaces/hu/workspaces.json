@@ -31,7 +31,6 @@
       "sent": "Elküldve",
       "statedInFile": "Adatfiók-üzenet (a fájl szerint)",
       "toHands": "{name} kezéhez",
-      "unlinkedFiles": "A hivatkozás nélkül megjelenő mellékletek megnyitásához töltse le az eredeti ZFO-fájlt.",
       "unreadable": "A fájl sem adatfiók-üzenetként, sem kézbesítési igazolásként nem olvasható.",
       "uploaded": "Feltöltött adatfiók-üzenet"
     },
@@ -76,6 +75,61 @@
     "unknownApprover": "Ismeretlen jóváhagyó",
     "uploadedBy": "Feltöltötte: {name}",
     "uploadedFile": "Feltöltött e-mail-fájl"
+  },
+  "eInvoice": {
+    "amountWithCurrency": "{amount} {currency}",
+    "attachments": "Csatolt fájlok",
+    "bankCode": "Bankkód",
+    "batchPosition": "{position, number}. bizonylat ({count, number} közül)",
+    "bic": "BIC-kód",
+    "customer": "Vevő",
+    "documentTitleNumbered": "{documentType, select, invoice {Számla: {number}} creditNote {Jóváíró számla: {number}} debitNote {Terhelési értesítő: {number}} advance {Előlegszámla: {number}} other {Bizonylat: {number}}}",
+    "documentTypes": {
+      "advance": "Előlegszámla",
+      "debitNote": "Terhelési értesítő",
+      "other": "Egyéb bizonylat"
+    },
+    "exemptionReason": "Mentesség oka",
+    "formatVersion": "{format}, {version} verzió",
+    "grossTotal": "Bruttó végösszeg",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Kiállítás dátuma",
+    "lineId": "Sorsz.",
+    "lineItems": "Tételek",
+    "linesShown": "{count, plural, one {# tételből} other {# tételből}} {shown, number} látható",
+    "netAmount": "Nettó érték",
+    "netTotal": "Nettó végösszeg",
+    "notRecognized": "Ez az XML-fájl nem felismert strukturált számla.",
+    "otherIdentifier": "Egyéb azonosító",
+    "payableAmount": "Fizetendő összeg",
+    "paymentAmount": "Fizetés összege",
+    "paymentDetails": "Fizetési adatok",
+    "paymentDueDate": "Fizetési határidő",
+    "paymentMeansCode": "Fizetési mód kódja",
+    "paymentReference": "Közlemény",
+    "prepaidAmount": "Előlegként fizetve",
+    "quantity": "Mennyiség és egység",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate}%",
+    "ratePercentWithCategory": "{rate}% ({category})",
+    "supplier": "Szállító",
+    "taxAmount": "ÁFA összege",
+    "taxPointDate": "Teljesítés dátuma",
+    "taxTotal": "ÁFA összesen",
+    "taxableAmount": "Adóalap",
+    "totals": "Összesítés",
+    "unitPrice": "Egységár",
+    "units": {
+      "day": "{count, plural, one {{quantity} nap} other {{quantity} nap}}",
+      "hour": "{count, plural, one {{quantity} óra} other {{quantity} óra}}",
+      "month": "{count, plural, one {{quantity} hónap} other {{quantity} hónap}}",
+      "unit": "{count, plural, one {{quantity} db} other {{quantity} db}}",
+      "week": "{count, plural, one {{quantity} hét} other {{quantity} hét}}",
+      "year": "{count, plural, one {{quantity} év} other {{quantity} év}}"
+    },
+    "unreadable": "A számlát nem sikerült beolvasni.",
+    "vat": "ÁFA",
+    "vatBreakdown": "ÁFA-összesítő"
   },
   "emailViewer": {
     "attachments": "Mellékletek",
@@ -317,9 +371,13 @@
     "title": "SharePoint és OneDrive"
   },
   "signedFile": {
+    "deliveryReceipt": "Elektronikus akta átvételi elismervénye",
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
+    "noSigners": "Nem találhatók adatok az aláírókról.",
     "pdfUnavailable": "A PDF előnézete nem érhető el.",
+    "signedDocument": "Aláírt dokumentum",
+    "signers": "Aláírók",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."
@@ -503,6 +561,10 @@
     "deleteWorkspaceConfirmDescription": "Biztosan törölni szeretné ezt az ügyet? Ez a művelet nem vonható vissza.",
     "deletedItem": "Törölve: {name}",
     "deletingWorkspace": "Ügy törlése folyamatban",
+    "documentNaming": {
+      "description": "Az új dokumentumok a szervezet névmintáját kapják: {pattern}",
+      "label": "Új feltöltések átnevezése"
+    },
     "documentSwitcher": {
       "download": "Fájl letöltése",
       "renditionsFailed": "Töltse újra a dokumentumot, majd próbálja meg ismét letölteni.",

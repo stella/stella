@@ -10,6 +10,7 @@ import {
   type EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
+  type TNEF_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
 
 import { member, user } from "@/api/db/auth-schema";
@@ -68,7 +69,9 @@ const UPLOADED_MAIL_FORMATS = {
   [MSG_MIME_TYPE]: "msg",
   [DATA_BOX_MESSAGE_MIME_TYPE]: "zfo",
 } as const satisfies Record<
-  keyof typeof EMAIL_MIME_TYPES | typeof DATA_BOX_MESSAGE_MIME_TYPE,
+  // A TNEF stream is read where it is filed, never uploaded as mail.
+  | Exclude<keyof typeof EMAIL_MIME_TYPES, typeof TNEF_MIME_TYPE>
+  | typeof DATA_BOX_MESSAGE_MIME_TYPE,
   EmailFileFormat | "zfo"
 >;
 

@@ -328,6 +328,9 @@ export const ENUM_COLUMN_ROLES = {
   desktop_runners: {
     connection: ATTRIBUTE,
   },
+  document_naming_runs: {
+    entity_feature_gate: ATTRIBUTE,
+  },
   document_processing_runs: {
     entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,
@@ -376,6 +379,12 @@ export const ENUM_COLUMN_ROLES = {
     entity_feature_gate: ATTRIBUTE,
   },
   entity_version_ai_summaries: {
+    entity_feature_gate: ATTRIBUTE,
+  },
+  entity_version_minhash_bands: {
+    entity_feature_gate: ATTRIBUTE,
+  },
+  entity_version_minhash_signatures: {
     entity_feature_gate: ATTRIBUTE,
   },
   entity_versions: {

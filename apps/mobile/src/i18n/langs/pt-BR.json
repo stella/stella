@@ -1,4 +1,42 @@
 {
+  "certifiedEmail": {
+    "certifiedAt": "Certificado em",
+    "deliveredTo": "Entregue a",
+    "error": "Erro informado",
+    "errors": {
+      "noDomain": "Domínio desconhecido",
+      "noRecipient": "Destinatário desconhecido",
+      "other": "Outro erro",
+      "virus": "Vírus detectado"
+    },
+    "handedOverFor": "Tomado a cargo para",
+    "kinds": {
+      "acceptance": "Recibo de aceitação (PEC)",
+      "delivery": "Recibo de entrega (PEC)",
+      "deliveryError": "Aviso de não entrega (PEC)",
+      "deliveryErrorWarning": "Aviso de prazo de entrega excedido (PEC)",
+      "nonAcceptance": "Aviso de não aceitação (PEC)",
+      "takenInCharge": "Recibo de tomada a cargo (PEC)",
+      "transport": "E-mail certificado (PEC)",
+      "virusDetected": "Aviso de detecção de vírus (PEC)"
+    },
+    "messageId": "ID da mensagem PEC",
+    "notDeliveredTo": "Não entregue a",
+    "ordinaryMailbox": "Caixa comum",
+    "originalNotIncluded": "Este arquivo não inclui a mensagem original.",
+    "provider": "Provedor de PEC",
+    "receipt": "Recibo solicitado",
+    "receiptTypes": {
+      "full": "Recibo completo",
+      "short": "Recibo breve",
+      "summary": "Recibo sintético"
+    },
+    "recipients": "Destinatários indicados",
+    "sender": "Remetente indicado",
+    "signatureNotVerified": "A assinatura do provedor é mantida no arquivo e não é verificada.",
+    "signedBy": "Assinado por {name}",
+    "statedInFile": "Conforme consta no arquivo"
+  },
   "chat": {
     "alreadyAnswered": "Isso já foi respondido.",
     "answerAwaitingInput": "Esta resposta precisa da sua ação.",
@@ -423,6 +461,7 @@
     },
     "fit": "Largura",
     "openOriginal": "Abrir original",
+    "openPart": "Abrir {fileName}",
     "preview": "Abrir pré-visualização",
     "previewDescription": "Este arquivo abre na pré-visualização do sistema.",
     "retry": "Tentar novamente",
@@ -432,11 +471,92 @@
     "zoomIn": "Aumentar zoom",
     "zoomOut": "Diminuir zoom"
   },
+  "eInvoice": {
+    "accountNumber": "Número da conta bancária",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Código do banco",
+    "batchPosition": "Documento {position, number} de {count, number}",
+    "bic": "Código BIC",
+    "currency": "Moeda",
+    "customer": "Cliente",
+    "documentTitle": "{documentType, select, invoice {Fatura} creditNote {Nota de crédito} debitNote {Nota de débito} advance {Fatura de adiantamento} other {Outro documento}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Fatura {number}} creditNote {Nota de crédito {number}} debitNote {Nota de débito {number}} advance {Fatura de adiantamento {number}} other {Documento {number}}}",
+    "exemptionReason": "Motivo da isenção",
+    "formatVersion": "{format}, versão {version}",
+    "grossTotal": "Total com IVA",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Data de emissão",
+    "lineId": "Nº",
+    "lineItems": "Itens",
+    "linesShown": "Exibindo {shown, number} de {count, plural, one {# item} many {# itens} other {# itens}}",
+    "netAmount": "Valor líquido",
+    "netTotal": "Total sem IVA",
+    "notRecognized": "Este arquivo XML não é uma fatura estruturada reconhecida.",
+    "notes": "Observações da fatura",
+    "otherIdentifier": "Outro identificador",
+    "payableAmount": "Valor a pagar",
+    "paymentAmount": "Valor do pagamento",
+    "paymentDetails": "Dados de pagamento",
+    "paymentDueDate": "Data de vencimento",
+    "paymentMeansCode": "Código do meio de pagamento",
+    "paymentReference": "Referência de pagamento",
+    "prepaidAmount": "Pago antecipadamente",
+    "quantity": "Quantidade e unidade",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate}%",
+    "ratePercentWithCategory": "{rate}% ({category})",
+    "registrationNumber": "Número de registro",
+    "supplier": "Fornecedor",
+    "taxAmount": "Valor do IVA",
+    "taxId": "Identificação fiscal",
+    "taxPointDate": "Data do fato gerador",
+    "taxTotal": "Total de IVA",
+    "taxableAmount": "Base de cálculo",
+    "totals": "Totais",
+    "unitPrice": "Preço unitário",
+    "units": {
+      "day": "{count, plural, one {{quantity} dia} many {{quantity} dias} other {{quantity} dias}}",
+      "hour": "{count, plural, one {{quantity} hora} many {{quantity} horas} other {{quantity} horas}}",
+      "month": "{count, plural, one {{quantity} mês} many {{quantity} meses} other {{quantity} meses}}",
+      "unit": "{count, plural, one {{quantity} unidade} many {{quantity} unidades} other {{quantity} unidades}}",
+      "week": "{count, plural, one {{quantity} semana} many {{quantity} semanas} other {{quantity} semanas}}",
+      "year": "{count, plural, one {{quantity} ano} many {{quantity} anos} other {{quantity} anos}}"
+    },
+    "unreadable": "Não foi possível ler a fatura.",
+    "vat": "IVA",
+    "vatBreakdown": "Detalhamento do IVA",
+    "vatId": "Número de IVA"
+  },
+  "email": {
+    "cc": "Cópia",
+    "date": "Data",
+    "from": "Remetente",
+    "noSubject": "(Sem assunto)",
+    "subject": "Assunto",
+    "to": "Destinatários"
+  },
   "entity": {
     "currentVersion": "Versão atual",
     "loadFailed": "Não foi possível carregar este item.",
     "reference": "Referência",
     "type": "Tipo"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Não foi possível ler o arquivo compactado.",
+    "attachments": "Anexos",
+    "files": "Arquivos",
+    "insideFailed": "Não foi possível carregar os arquivos dentro dele. Toque para tentar de novo.",
+    "noFilesInside": "Não há arquivos dentro.",
+    "open": "Abrir {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Protegido por senha, não pode ser aberto",
+      "link": "Link para outro arquivo, não é aberto",
+      "tooLarge": "Grande demais para abrir",
+      "unreadable": "Danificado, não pode ser aberto",
+      "unsupported": "Compactado de um modo que não pode ser aberto"
+    },
+    "unnamed": "Arquivo sem nome"
   },
   "header": {
     "search": "Pesquisar"
@@ -610,6 +730,20 @@
     "hideList": "Ocultar a lista",
     "showList": "Mostrar a lista"
   },
+  "quickDictation": {
+    "activityReady": "Ditado pronto",
+    "activityReadyDetail": "Toque para revisar o texto no stella",
+    "activityRecording": "Ditando",
+    "activityRecordingDetail": "Toque em Concluir para revisar o texto",
+    "copied": "Copiado",
+    "copy": "Copiar",
+    "documentName": "Ditado {when}",
+    "none": "Nenhum ditado aguardando. Comece um com o botão de Ação, a Siri ou a Central de Controle.",
+    "noneTitle": "Nada para revisar",
+    "saveFailed": "Não foi possível preparar o texto para salvar. Tente de novo.",
+    "sendToChat": "Enviar para o chat",
+    "text": "Texto ditado"
+  },
   "role": {
     "readFailed": "Não foi possível carregar suas permissões, então as alterações estão ocultas por enquanto.",
     "retry": "Tentar novamente"
@@ -691,7 +825,19 @@
     "dictationModelWithdrawn": "Não é mais oferecido",
     "dictationModelWithdrawnHint": "O modelo escolhido não é mais oferecido. Escolha outro; até lá, um ditado só vai para um modelo do mesmo provedor, região e retenção de dados e, caso contrário, espera neste telefone sem transcrição.",
     "dictationModelsUnavailable": "Não foi possível carregar os modelos. O ditado usa o modelo que você escolheu, ou o padrão se o servidor não o oferecer mais.",
+    "dictationStyle": "Estilo",
+    "dictationStyleCasual": "Informal",
+    "dictationStyleCasualHint": "Mantém o seu tom descontraído e uma pontuação leve.",
+    "dictationStyleNotes": "Notas",
+    "dictationStyleNotesHint": "Tópicos curtos, um por linha, sem palavras de preenchimento.",
+    "dictationStylePolished": "Caprichado",
+    "dictationStylePolishedHint": "Corrige erros de reconhecimento e mantém a sua forma de dizer.",
+    "dictationStyleVerbatim": "Literal",
+    "dictationStyleVerbatimHint": "Cada palavra como você disse; só a pontuação e as maiúsculas mudam.",
     "dictationTitle": "Ditado",
+    "dictationTranslate": "Traduzir para",
+    "dictationTranslateHint": "O texto revisado é escrito neste idioma, seja qual for o idioma em que você dita.",
+    "dictationTranslateOff": "Não traduzir",
     "lockScreenTitle": "Tela Bloqueada",
     "server": "Servidor",
     "signOut": "Sair",
@@ -735,8 +881,12 @@
     "useStella": "Usar o stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Comprovante de entrega de um dossiê eletrônico",
     "layer": "Camada de assinaturas {number, number}",
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
+    "noSigners": "Nenhum dado de signatário foi encontrado.",
+    "signedContent": "Documento assinado",
+    "signers": "Signatários",
     "unknownSigner": "Signatário desconhecido",
     "unreadable": "Não foi possível ler o arquivo assinado.",
     "unverified": "As assinaturas não foram verificadas."

@@ -60,6 +60,7 @@ describe("projectOrganizationSettingsRow", () => {
         documentProcessingMode: "searchable-text",
         matterNumberPadding: 3,
         matterNumberPattern: "{SEQ}",
+        documentNamePattern: null,
         matterNumberingEnabled: false,
         practiceJurisdictions: [
           { countryCode: "CZ", isPrimary: true },

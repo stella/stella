@@ -1,6 +1,11 @@
 import { panic } from "better-result";
 import type { Result } from "better-result";
 
+import type {
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
+
 import type { Dictated } from "@/state/dictation";
 import type { ModelClass } from "@/state/dictation-fallback";
 import {
@@ -88,6 +93,8 @@ export type KeptSetup = {
   readonly modelClass: ModelClass | null;
   readonly locale: string;
   readonly cleanup: boolean;
+  readonly style: DesktopDictationCleanupStyle;
+  readonly translateTo: DesktopDictationTranslationLanguage | null;
 };
 
 type KeptDictationsDeps = {
@@ -432,6 +439,8 @@ const settle = (store: Store, entry: Entry, dictated: Dictated) => {
     modelClass: previous.modelClass,
     locale: previous.locale,
     cleanup: previous.cleanup,
+    style: previous.style,
+    translateTo: previous.translateTo,
     keptAt: previous.keptAt,
     state: {
       type: "recovered",

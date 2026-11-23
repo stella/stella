@@ -1,5 +1,3 @@
-import type { ReactNode } from "react";
-
 import { Link } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
@@ -18,6 +16,7 @@ import type { TranslationKey } from "@/i18n/types";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
 import { DATA_BOX_DIRECTION_LABEL_KEYS } from "./data-box-direction";
+import { EnvelopeCard, EnvelopeField as Field } from "./envelope-field";
 
 const ACCEPTANCE_LABEL_KEYS = {
   accepted_by_fiction: "correspondence.dataBox.acceptedByFiction",
@@ -26,13 +25,6 @@ const ACCEPTANCE_LABEL_KEYS = {
   Extract<DataBoxMessageStatus, "accepted_by_fiction" | "accepted_by_login">,
   TranslationKey
 >;
-
-const Field = ({ label, children }: { label: string; children: ReactNode }) => (
-  <div className="min-w-0 space-y-1">
-    <div className="text-muted-foreground text-xs">{label}</div>
-    <div className="text-sm wrap-break-word">{children}</div>
-  </div>
-);
 
 const Party = ({
   party,
@@ -102,8 +94,8 @@ export const DataBoxEnvelope = ({
   const recipientReferences = references(envelope.recipient);
 
   return (
-    <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-      <div className="space-y-1 sm:col-span-2">
+    <EnvelopeCard>
+      <div className="col-span-full space-y-1">
         <h2 className="text-sm font-medium">{t(titleKey)}</h2>
         {direction !== null && (
           <p className="text-muted-foreground text-xs">{t(direction)}</p>
@@ -160,6 +152,6 @@ export const DataBoxEnvelope = ({
           {t("correspondence.dataBox.personalDelivery")}
         </Field>
       )}
-    </section>
+    </EnvelopeCard>
   );
 };

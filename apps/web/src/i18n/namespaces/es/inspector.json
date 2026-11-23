@@ -540,12 +540,13 @@
       "waitForMatches": "Espere a que termine el análisis de anonimización.",
       "workspaceTermsHeading": "Términos del espacio de trabajo ({count})"
     },
-    "attachmentNotPreviewable": "Descargue este adjunto para abrirlo.",
     "closeAllTabs": "Cerrar {count, plural, one {# pestaña} many {las # pestañas} other {las # pestañas}}",
     "closeOtherTabs": "Cerrar {count, plural, one {la otra pestaña} many {las otras # pestañas} other {las otras # pestañas}}",
     "closeTab": "Cerrar <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Este es un archivo antiguo de {format}. Vuelve a guardarlo como {replacementExtension} para convertirlo.",
+      "noPreviewDecodingOff": "Este servidor no genera vistas previas de imágenes {format}. Descarga el archivo para abrirlo.",
+      "noPreviewUnreadable": "Esta imagen {format} no se puede leer para generar una vista previa. Descarga el archivo para abrirlo.",
       "unsupportedEncoding": "Este documento usa la codificación {encoding}, que no es compatible, por lo que no se puede convertir.",
       "unsupportedField": "Este documento contiene un campo {fieldType} que no se puede convertir.",
       "unsupportedReference": "Este documento hace referencia a un recurso externo en {element} {attribute}, por lo que no se puede convertir."
@@ -560,6 +561,22 @@
     },
     "facet": {
       "anonymization": "Anonimización"
+    },
+    "fileParts": {
+      "archiveUnreadable": "No se pudo leer el archivo comprimido.",
+      "back": "Volver a la lista",
+      "download": "Descargar {fileName}",
+      "noFilesInside": "No contiene ningún archivo.",
+      "noPreview": "Este tipo de archivo no tiene vista previa. Descárguelo o guárdelo en un asunto.",
+      "notConverted": "No se pudo convertir este archivo para la vista previa. Descárguelo o guárdelo en un asunto.",
+      "open": "Abrir {fileName}",
+      "unavailable": {
+        "encrypted": "Protegido con contraseña, no se puede abrir",
+        "link": "Enlace a otro archivo, no se abre",
+        "tooLarge": "Demasiado grande para abrirlo",
+        "unreadable": "Dañado, no se puede abrir",
+        "unsupported": "Comprimido de un modo que no se puede abrir"
+      }
     },
     "firstSourceReached": "Esta es la primera fuente.",
     "groups": {
@@ -632,6 +649,10 @@
       "lastUpdatedBy": "Actualizado por última vez por",
       "matterColumnsHeading": "Datos del asunto",
       "noMatterColumns": "Todavía no hay nada registrado sobre este documento",
+      "similarDocuments": {
+        "heading": "Documentos similares",
+        "similarity": "{percent} de similitud"
+      },
       "stellaHeading": "Guardado en stella",
       "versionCurrent": "v{version} (actual)"
     },
@@ -814,7 +835,6 @@
       "why": "Por qué",
       "whyItMatters": "Por qué importa:"
     },
-    "selectAttachmentToSave": "Seleccione un adjunto para guardarlo.",
     "showPane": "Mostrar panel",
     "swapViews": "Intercambiar la vista principal y el panel lateral",
     "title": "Panel de inspección"

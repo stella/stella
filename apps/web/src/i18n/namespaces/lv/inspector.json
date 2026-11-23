@@ -540,12 +540,13 @@
       "waitForMatches": "Uzgaidiet, līdz beidzas anonimizācijas pārbaude.",
       "workspaceTermsHeading": "Darba telpas termini ({count})"
     },
-    "attachmentNotPreviewable": "Lejupielādējiet pielikumu, lai to atvērtu.",
     "closeAllTabs": "Aizvērt {count, plural, zero {visas # cilnes} one {# cilni} other {visas # cilnes}}",
     "closeOtherTabs": "Aizvērt {count, plural, zero {# citu cilņu} one {# citu cilni} other {# citas cilnes}}",
     "closeTab": "Aizvērt <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Šis ir mantotā formāta {format} fails. Lai to konvertētu, saglabājiet to vēlreiz kā {replacementExtension}.",
+      "noPreviewDecodingOff": "Šis serveris neveido {format} attēlu priekšskatījumus. Lai failu atvērtu, lejupielādējiet to.",
+      "noPreviewUnreadable": "Šo {format} attēlu nevar nolasīt priekšskatījumam. Lai failu atvērtu, lejupielādējiet to.",
       "unsupportedEncoding": "Šajā dokumentā izmantots neatbalstīts {encoding} kodējums, tāpēc to nevar konvertēt.",
       "unsupportedField": "Šajā dokumentā ir lauks {fieldType}, ko nevar konvertēt.",
       "unsupportedReference": "Šajā dokumentā {element} {attribute} atsaucas uz ārēju resursu, tāpēc to nevar konvertēt."
@@ -560,6 +561,22 @@
     },
     "facet": {
       "anonymization": "Anonimizācija"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Arhīvu neizdevās nolasīt.",
+      "back": "Atpakaļ uz sarakstu",
+      "download": "Lejupielādēt {fileName}",
+      "noFilesInside": "Iekšā nav neviena faila.",
+      "noPreview": "Šim faila veidam nav priekšskatījuma. Lejupielādējiet to vai saglabājiet lietā.",
+      "notConverted": "Šo failu neizdevās pārveidot priekšskatījumam. Lejupielādējiet to vai saglabājiet lietā.",
+      "open": "Atvērt {fileName}",
+      "unavailable": {
+        "encrypted": "Aizsargāts ar paroli, nevar atvērt",
+        "link": "Saite uz citu failu, netiek atvērta",
+        "tooLarge": "Pārāk liels, lai atvērtu",
+        "unreadable": "Bojāts, nevar atvērt",
+        "unsupported": "Saspiests veidā, ko nevar atvērt"
+      }
     },
     "firstSourceReached": "Šis ir pirmais avots.",
     "groups": {
@@ -632,6 +649,10 @@
       "lastUpdatedBy": "Pēdējoreiz atjaunināja",
       "matterColumnsHeading": "Lietas dati",
       "noMatterColumns": "Par šo dokumentu vēl nekas nav ierakstīts",
+      "similarDocuments": {
+        "heading": "Līdzīgi dokumenti",
+        "similarity": "{percent} līdzība"
+      },
       "stellaHeading": "Saglabāts lietotnē stella",
       "versionCurrent": "v{version} (pašreizējā)"
     },
@@ -814,7 +835,6 @@
       "why": "Kāpēc",
       "whyItMatters": "Kāpēc tas ir svarīgi:"
     },
-    "selectAttachmentToSave": "Atlasiet saglabājamo pielikumu.",
     "showPane": "Rādīt paneli",
     "swapViews": "Apmainīt galveno skatu un sānu paneli",
     "title": "Inspektors"

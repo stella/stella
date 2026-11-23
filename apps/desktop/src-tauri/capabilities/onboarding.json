@@ -43,6 +43,14 @@
     "allow-dictation-test-microphone-stop",
     "allow-dictation-notice-get-state",
     "allow-dictation-notice-respond",
+    "allow-activity-get-setup",
+    "allow-activity-set-recording-status",
+    "allow-activity-set-capture-details",
+    "allow-activity-set-detect-calls",
+    "allow-billing-draft-get-settings",
+    "allow-billing-draft-grant-consent",
+    "allow-billing-draft-withdraw-consent",
+    "allow-billing-draft-set-preference",
     "core:window:allow-start-dragging"
   ]
 }

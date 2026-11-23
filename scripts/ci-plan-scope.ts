@@ -1099,11 +1099,13 @@ export const OUTPUT_RULES = {
     scopeRule(facts, "route_tree_required", ({ full, p }) =>
       bool(full || p(ROUTE_TREE_INPUTS)),
     ),
+  // Both Rust WebAssembly packages share the drift job.
   scan_engine_wasm_required: (facts) =>
     scopeRule(facts, "scan_engine_wasm_required", ({ p }) =>
       bool(
         p([
           "packages/scan-engine/*",
+          "packages/heic-decoder/*",
           ".github/actions/cargo-deny/*",
           "bun.lock",
           ".github/workflows/ci.yml",

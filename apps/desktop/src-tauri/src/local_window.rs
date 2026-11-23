@@ -144,6 +144,31 @@ impl LocalWindowFeature for ActivitySettingsWindows {
 
 impl ActivityAccountFeature for ActivitySettingsWindows {}
 
+/// Activity setup: the activity window, Settings and the setup window. These
+/// commands read and change what setup offers (starting to record, details,
+/// calls, consent to AI drafts); none deletes history or returns the
+/// timeline or a day's apps.
+pub struct ActivitySetupWindows;
+
+impl LocalWindowFeature for ActivitySetupWindows {
+  const WINDOW_LABELS: &'static [&'static str] = &[
+    crate::activity_window::ACTIVITY_WINDOW_LABEL,
+    crate::SETTINGS_WINDOW_LABEL,
+    crate::onboarding::ONBOARDING_WINDOW_LABEL,
+  ];
+  const REFUSAL: &'static str = "activity setup is not available here";
+
+  fn is_available<R: Runtime>(app: &AppHandle<R>) -> bool {
+    ActivityWindows::is_available(app)
+  }
+
+  fn account_binding<R: Runtime>(app: &AppHandle<R>) -> Option<(u64, String)> {
+    ActivityWindows::account_binding(app)
+  }
+}
+
+impl ActivityAccountFeature for ActivitySetupWindows {}
+
 /// A feature whose callers act on the linked account's activity store.
 pub trait ActivityAccountFeature: LocalWindowFeature {}
 
@@ -165,6 +190,8 @@ impl<F: ActivityAccountFeature> LocalCaller<F> {
 pub type ActivityCaller = LocalCaller<ActivityWindows>;
 
 pub type ActivitySettingsCaller = LocalCaller<ActivitySettingsWindows>;
+
+pub type ActivitySetupCaller = LocalCaller<ActivitySetupWindows>;
 
 #[cfg(test)]
 mod tests {
@@ -261,5 +288,29 @@ mod tests {
           .is_none()
       );
     }
+  }
+
+  #[test]
+  fn activity_setup_callers_add_only_the_setup_window() {
+    assert_only_feature_windows_on_the_app_origin::<ActivitySetupWindows>();
+    assert_eq!(
+      ActivitySetupWindows::WINDOW_LABELS,
+      [
+        crate::activity_window::ACTIVITY_WINDOW_LABEL,
+        crate::SETTINGS_WINDOW_LABEL,
+        crate::onboarding::ONBOARDING_WINDOW_LABEL,
+      ]
+    );
+    let page = tauri::Url::parse("tauri://localhost/index.html").unwrap();
+    // Setup reaches its own choices, never activity settings or the timeline.
+    let setup = crate::onboarding::ONBOARDING_WINDOW_LABEL;
+    assert!(
+      LocalCaller::<ActivitySetupWindows>::verify(setup, Some(&page), None).is_some()
+    );
+    assert!(
+      LocalCaller::<ActivitySettingsWindows>::verify(setup, Some(&page), None)
+        .is_none()
+    );
+    assert!(LocalCaller::<ActivityWindows>::verify(setup, Some(&page), None).is_none());
   }
 }

@@ -100,7 +100,7 @@ jobs:
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.cargo/registry/cache
-          key: cargo-deny-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'packages/scan-engine/Cargo.lock') }}
+          key: cargo-deny-crates-${{ hashFiles('apps/desktop/src-tauri/Cargo.lock', 'packages/scan-engine/Cargo.lock', 'packages/heic-decoder/Cargo.lock') }}
 
       - name: Fetch dependencies and advisory database
         id: fetch
@@ -110,6 +110,7 @@ jobs:
         run: |
           bash .github/actions/cargo-deny/fetch.sh apps/desktop/src-tauri/Cargo.toml db index
           bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
+          bash .github/actions/cargo-deny/fetch.sh packages/heic-decoder/Cargo.toml
 
       - name: Save advisory database
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -125,6 +126,10 @@ jobs:
       - name: Scan engine advisories
         if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
         run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph advisories
+
+      - name: HEIC decoder advisories
+        if: ${{ !cancelled() && steps.fetch.outcome == 'success' }}
+        run: cargo deny --offline --manifest-path packages/heic-decoder/Cargo.toml check --config packages/heic-decoder/deny.toml --hide-inclusion-graph advisories
 
   remediate:
     name: Open dependency audit remediation

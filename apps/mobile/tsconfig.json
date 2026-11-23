@@ -13,6 +13,7 @@
     "src/**/*.ts",
     "src/**/*.tsx",
     "app.config.ts",
+    "modules/*/plugin.ts",
     "xcode.d.ts",
     ".expo/types/**/*.ts",
     "expo-env.d.ts",

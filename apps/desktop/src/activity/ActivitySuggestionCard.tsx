@@ -55,6 +55,7 @@ import type { ActivityDaySnapshot } from "./activity-types";
 import { ActivitySourceIcon } from "./ActivitySourceIcon";
 import { DRAFT_FAILURE_RECOVERY } from "./billing-draft-logic";
 import type { CardDraft, DraftFailureKind } from "./billing-draft-logic";
+import type { DraftConsentStatus } from "./billing-draft-transport";
 import { DraftConsent } from "./DraftConsent";
 import { MatterPicker } from "./MatterPicker";
 import { useDurationLabel } from "./use-duration-label";
@@ -81,7 +82,7 @@ export type SuggestionEdit = {
 export type DraftAssistView =
   | { type: "hidden" }
   | { type: "needsMatter" }
-  | { pending: boolean; type: "consent" }
+  | { consent: DraftConsentStatus; type: "consent" }
   | {
       canUndo: boolean;
       canRestoreTemplate: boolean;
@@ -712,7 +713,7 @@ const DraftAssistStrip = ({
         </section>
       );
     case "consent":
-      return <DraftConsent onAllow={onAllow} pending={view.pending} />;
+      return <DraftConsent onAllow={onAllow} status={view.consent} />;
     default:
       view satisfies never;
       return panic("Unhandled stella AI draft view");

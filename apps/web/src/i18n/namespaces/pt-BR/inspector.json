@@ -540,12 +540,13 @@
       "waitForMatches": "Aguarde a conclusão da análise de anonimização.",
       "workspaceTermsHeading": "Termos do espaço de trabalho ({count})"
     },
-    "attachmentNotPreviewable": "Baixe este anexo para abri-lo.",
     "closeAllTabs": "Fechar {count, plural, one {# aba} many {todas as # abas} other {todas as # abas}}",
     "closeOtherTabs": "Fechar {count, plural, one {a outra aba} many {as outras # abas} other {as outras # abas}}",
     "closeTab": "Fechar <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Este é um arquivo antigo do {format}. Salve-o novamente como {replacementExtension} para convertê-lo.",
+      "noPreviewDecodingOff": "Este servidor não gera prévias de imagens {format}. Baixe o arquivo para abri-lo.",
+      "noPreviewUnreadable": "Não é possível ler esta imagem {format} para gerar uma prévia. Baixe o arquivo para abri-lo.",
       "unsupportedEncoding": "Este documento usa a codificação {encoding}, que não é compatível, portanto não pode ser convertido.",
       "unsupportedField": "Este documento contém um campo {fieldType} que não pode ser convertido.",
       "unsupportedReference": "Este documento faz referência a um recurso externo em {element} {attribute}, portanto não pode ser convertido."
@@ -560,6 +561,22 @@
     },
     "facet": {
       "anonymization": "Anonimização"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Não foi possível ler o arquivo compactado.",
+      "back": "Voltar para a lista",
+      "download": "Baixar {fileName}",
+      "noFilesInside": "Não há arquivos dentro.",
+      "noPreview": "Este tipo de arquivo não tem pré-visualização. Baixe-o ou salve-o em um caso.",
+      "notConverted": "Não foi possível converter este arquivo para pré-visualização. Baixe-o ou salve-o em um caso.",
+      "open": "Abrir {fileName}",
+      "unavailable": {
+        "encrypted": "Protegido por senha, não pode ser aberto",
+        "link": "Link para outro arquivo, não é aberto",
+        "tooLarge": "Grande demais para abrir",
+        "unreadable": "Danificado, não pode ser aberto",
+        "unsupported": "Compactado de um modo que não pode ser aberto"
+      }
     },
     "firstSourceReached": "Esta é a primeira fonte.",
     "groups": {
@@ -632,6 +649,10 @@
       "lastUpdatedBy": "Atualizado pela última vez por",
       "matterColumnsHeading": "Dados do caso",
       "noMatterColumns": "Nada registrado sobre este documento ainda",
+      "similarDocuments": {
+        "heading": "Documentos semelhantes",
+        "similarity": "{percent} de semelhança"
+      },
       "stellaHeading": "Armazenado no stella",
       "versionCurrent": "v{version} (atual)"
     },
@@ -814,7 +835,6 @@
       "why": "Por quê",
       "whyItMatters": "Por que importa:"
     },
-    "selectAttachmentToSave": "Selecione um anexo para salvar.",
     "showPane": "Mostrar painel",
     "swapViews": "Trocar a visualização principal e o painel lateral",
     "title": "Inspetor"

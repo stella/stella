@@ -24,6 +24,7 @@ import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import {
   PDF_PAGE_FIELD_ROW_CLASS,
   PDF_ZOOM_GROUP_CLASS,
+  PdfPageCount,
 } from "@/components/pdf/pdf-viewer.pending";
 import {
   fetchPrintPdf,
@@ -258,7 +259,11 @@ export const PdfViewerControls = ({
               value={pageInputValue}
             />
             <span>/</span>
-            <span>{format.number(totalPages)}</span>
+            <PdfPageCount
+              formattedCount={
+                totalPages > 0 ? format.number(totalPages) : undefined
+              }
+            />
           </div>
         </>
       )}
