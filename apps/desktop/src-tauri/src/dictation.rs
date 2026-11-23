@@ -1471,7 +1471,12 @@ pub fn dictation_set_cleanup_instructions(
     &app,
     CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME,
     stored.as_deref().unwrap_or(""),
-    |inner| inner.cleanup_preferences.custom_instructions.clone_from(&stored),
+    |inner| {
+      inner
+        .cleanup_preferences
+        .custom_instructions
+        .clone_from(&stored)
+    },
   )?;
   Ok(read_snapshot(&app, &state))
 }

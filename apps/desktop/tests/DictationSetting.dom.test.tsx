@@ -1466,7 +1466,7 @@ const CLEANUP_MODELS = {
 /** The field a native answer was asked to store, or null. */
 const asked = (payload: unknown, field: string): unknown =>
   typeof payload === "object" && payload !== null && field in payload
-    ? (payload as Record<string, unknown>)[field]
+    ? Reflect.get(payload, field)
     : null;
 
 test("the speaker's instructions are saved when the field is left, and cleared when emptied", async () => {
