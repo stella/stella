@@ -1249,6 +1249,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Zahodit mé úpravy",
+      "editorLabel": "Editor upraveného textu",
       "failedCount": "{count, plural, one {# část neupravena} few {# části neupraveny} other {# částí neupraveno}}",
       "fileNameMarkdown": "{title} upravený text.md",
       "fileNameText": "{title} upravený text.txt",

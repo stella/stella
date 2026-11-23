@@ -1249,6 +1249,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Atmest manas izmaiņas",
+      "editorLabel": "Sakārtotā teksta redaktors",
       "failedCount": "{count, plural, zero {# daļas nav sakārtotas} one {# daļa nav sakārtota} other {# daļas nav sakārtotas}}",
       "fileNameMarkdown": "{title} sakārtots.md",
       "fileNameText": "{title} sakārtots.txt",

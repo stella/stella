@@ -1249,6 +1249,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "تجاهل تعديلاتي",
+      "editorLabel": "محرر النص المنقّح",
       "failedCount": "{count, plural, zero {لم يُنقَّح أي جزء} one {جزء واحد لم يُنقَّح} two {جزءان لم يُنقَّحا} few {# أجزاء لم تُنقَّح} many {# جزءًا لم يُنقَّح} other {# جزء لم يُنقَّح}}",
       "fileNameMarkdown": "{title} منقّح.md",
       "fileNameText": "{title} منقّح.txt",

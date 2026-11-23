@@ -19,13 +19,14 @@ import type { TranscriptDocx } from "./transcript-docx";
 export const useTranscriptSaveOptions = ({
   title,
   paragraphs,
-  cleanup,
+  cleaned,
   cleanedPlain,
   onResult,
 }: {
   title: string;
   paragraphs: readonly Paragraph[];
-  cleanup: { instructions: readonly string[]; markdown: string };
+  /** The cleaned-up text as shown: the speaker's edits once there are any. */
+  cleaned: { instructions: readonly string[]; markdown: string };
   cleanedPlain: string;
   onResult: (failed: boolean) => void;
 }): { transcript: SaveOption[]; cleaned: SaveOption[] } => {
@@ -99,8 +100,8 @@ export const useTranscriptSaveOptions = ({
           void saveDocx(
             {
               kind: "cleaned",
-              markdown: cleanup.markdown,
-              instructions: cleanup.instructions,
+              markdown: cleaned.markdown,
+              instructions: cleaned.instructions,
               instructionsLabel: t("matterFolder.instructionsLabel"),
             },
             t("matterFolder.cleanedDocxFileName", { title }),
@@ -114,8 +115,8 @@ export const useTranscriptSaveOptions = ({
         onSave: () => {
           void saveText(
             cleanedMarkdown(
-              cleanup.instructions,
-              cleanup.markdown,
+              cleaned.instructions,
+              cleaned.markdown,
               t("cleaned.instructionsLabel"),
             ),
             t("cleaned.fileNameMarkdown", { title }),

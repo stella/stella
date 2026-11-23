@@ -1249,6 +1249,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Descartar mis cambios",
+      "editorLabel": "Editor del texto depurado",
       "failedCount": "{count, plural, one {# parte sin depurar} other {# partes sin depurar}}",
       "fileNameMarkdown": "{title} depurado.md",
       "fileNameText": "{title} depurado.txt",

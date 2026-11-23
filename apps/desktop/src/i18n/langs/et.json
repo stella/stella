@@ -1249,6 +1249,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Loobu minu muudatustest",
+      "editorLabel": "Puhastatud teksti redaktor",
       "failedCount": "{count, plural, one {# osa puhastamata} other {# osa puhastamata}}",
       "fileNameMarkdown": "{title} puhastatud.md",
       "fileNameText": "{title} puhastatud.txt",

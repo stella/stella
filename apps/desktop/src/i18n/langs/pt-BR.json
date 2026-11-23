@@ -1249,6 +1249,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Descartar minhas edições",
+      "editorLabel": "Editor do texto revisado",
       "failedCount": "{count, plural, one {# parte não revisada} other {# partes não revisadas}}",
       "fileNameMarkdown": "{title} revisado.md",
       "fileNameText": "{title} revisado.txt",

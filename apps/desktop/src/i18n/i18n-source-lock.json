@@ -1087,6 +1087,8 @@
   "signingDriver.notice.not_a_library": "This file is not a PKCS #11 module.",
   "signingDriver.remove": "Remove",
   "signingDriver.title": "Smart card driver",
+  "transcribe.cleaned.discardEdits": "Discard my edits",
+  "transcribe.cleaned.editorLabel": "Cleaned-up text editor",
   "transcribe.cleaned.failedCount": "{count, plural, one {# part not cleaned up} other {# parts not cleaned up}}",
   "transcribe.cleaned.fileNameMarkdown": "{title} cleaned up.md",
   "transcribe.cleaned.fileNameText": "{title} cleaned up.txt",

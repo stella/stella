@@ -4,6 +4,7 @@ import path from "node:path";
 import { defineConfig } from "vite";
 
 const DESKTOP_ROOT = path.resolve(import.meta.dirname, "src/mainview");
+const FONT_FILE = /\.(?:woff2?|ttf|otf|eot)$/u;
 const DESKTOP_VIEW_PORT = Number(
   process.env["STELLA_DESKTOP_VIEW_PORT"] ?? "5177",
 );
@@ -13,6 +14,11 @@ export default defineConfig({
   plugins: [tailwindcss(), react()],
   root: DESKTOP_ROOT,
   build: {
+    // The windows' CSP takes fonts only from the app itself (font-src falls
+    // back to `default-src 'self'`), so a font is never inlined as a data:
+    // URI, however small (KaTeX ships some under the inline limit). Images
+    // may still be (`img-src 'self' data:`).
+    assetsInlineLimit: (file) => (FONT_FILE.test(file) ? false : undefined),
     emptyOutDir: true,
     outDir: "../../dist",
     rolldownOptions: {
