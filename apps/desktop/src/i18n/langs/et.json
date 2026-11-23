@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Kõik lõiked",
+    "allResults": "Kõik tulemused",
     "bold": "Paks kiri",
     "bulletedList": "Täpploend",
     "cancel": "Loobu",
@@ -378,6 +379,7 @@
     "moveToGroup": "Teisalda rühma",
     "newGroupOption": "Uus rühm…",
     "noGroup": "Rühmata",
+    "noGroupMatches": "Selles rühmas vasteid pole",
     "noResults": "Sobivaid lõikeid pole",
     "noResultsSearchRegistries": "Otsi „{query}” registritest",
     "numberedList": "Nummerdatud loend",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Ava see kõikjal.",
     "welcomeStart": "Alusta kopeerimist",
     "welcomeTitle": "Teie uus lõikelaud"
+  },
+  "clipboardSettings": {
+    "capture": "Salvesta uued lõiked",
+    "captureDescription": "Kui see on välja lülitatud, ei salvestata midagi, mida kopeerid.",
+    "errorSave": "Muudatust ei õnnestunud salvestada. Proovi uuesti.",
+    "excludedDescription": "Nendes rakendustes kopeeritut ei salvestata.",
+    "excludedEmpty": "Rakenduse välistamiseks paremklõpsa lõikelaual mõnel selle lõikel ja vali, et selle uusi lõikeid enam ei salvestataks.",
+    "groupActions": "Rühma {groupName} toimingud",
+    "groupsDescription": "Lohista rühma, et muuta selle asukohta lõikelaual.",
+    "groupsEmpty": "Loo rühm ja lohista sellesse lõikelaual lõikeid.",
+    "history": "Ajalugu",
+    "moveGroupDown": "Liiguta alla",
+    "moveGroupUp": "Liiguta üles",
+    "recordingsDescription": "Luba ekraanipiltidel, salvestistel ja ekraani jagamisel lõikelauda näidata.",
+    "retentionDescription": "Vanemad lõiked kustutatakse. Rühmades olevad lõiked säilivad."
   },
   "dialog": {
     "accountEmail": "Konto",
@@ -1170,6 +1187,8 @@
       "available": "Saadaval on versioon {version}.",
       "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
       "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
+      "downloadProgress": "{percent}% alla laaditud",
+      "downloading": "Laaditakse alla versiooni {version}. Pärast installimist taaskäivitub stella desktop.",
       "install": "Installi ja taaskäivita",
       "installFailed": "stella desktop ei saanud värskendust installida.",
       "installInProgress": "Värskendust installitakse.",
@@ -1398,7 +1417,6 @@
     "supportRevealAppData": "Kuva rakenduse andmed",
     "temporaryWorkingCopies": "Ajutised töökoopiad",
     "transcribeRecording": "Transkribeeri salvestis…",
-    "updateReady": "Värskendus valmis",
     "updatesManaged": "Värskendusi haldab teie organisatsioon"
   }
 }

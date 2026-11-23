@@ -127,19 +127,7 @@ const appSnapshot = {
     },
   ],
   update: {
-    baseUrl: "https://downloads.example.com/desktop",
-    channel: "stable",
-    currentHash:
-      "sha256:1111111111111111111111111111111111111111111111111111111111111111",
     currentVersion: "1.4.2",
-    lastCheckedAt: "2026-07-18T09:00:00Z",
-    latestHash:
-      "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-    latestVersion: "1.4.3",
-    status: "available",
-    statusMessage: "An update is available.",
-    updateAvailable: true,
-    updateReady: false,
   },
 } as const satisfies AppSnapshot;
 
@@ -246,17 +234,7 @@ const linkedAccount = {
 } as const satisfies LinkedAccountSnapshot;
 
 const desktopUpdate = {
-  baseUrl: null,
-  channel: null,
-  currentHash: null,
   currentVersion: "1.4.2",
-  lastCheckedAt: null,
-  latestHash: null,
-  latestVersion: null,
-  status: "disabled",
-  statusMessage: "Updates will appear here once configured.",
-  updateAvailable: false,
-  updateReady: false,
 } as const satisfies DesktopUpdateSnapshot;
 
 const trustedSelfHost = {

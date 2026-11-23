@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Összes vágólapelem",
+    "allResults": "Összes találat",
     "bold": "Félkövér",
     "bulletedList": "Felsorolás",
     "cancel": "Mégse",
@@ -378,6 +379,7 @@
     "moveToGroup": "Áthelyezés csoportba",
     "newGroupOption": "Új csoport…",
     "noGroup": "Nincs csoport",
+    "noGroupMatches": "Nincs találat ebben a csoportban",
     "noResults": "Nincs egyező kivágás",
     "noResultsSearchRegistries": "„{query}” keresése a nyilvántartásokban",
     "numberedList": "Számozott lista",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Bárhonnan megnyitható.",
     "welcomeStart": "Másolás megkezdése",
     "welcomeTitle": "Ismerje meg a vágólapot"
+  },
+  "clipboardSettings": {
+    "capture": "Új klipek mentése",
+    "captureDescription": "Kikapcsolva semmi sem kerül mentésre, amit kimásol.",
+    "errorSave": "A módosítást nem sikerült menteni. Próbálja újra.",
+    "excludedDescription": "Az ezekben az alkalmazásokban másolt tartalom nem kerül mentésre.",
+    "excludedEmpty": "Egy alkalmazás kizárásához kattintson jobb gombbal a vágólapon az egyik klipjére, és válassza, hogy ne mentse az onnan származó új klipeket.",
+    "groupActions": "Műveletek: {groupName}",
+    "groupsDescription": "Húzzon el egy csoportot a vágólapon elfoglalt helyének módosításához.",
+    "groupsEmpty": "Hozzon létre egy csoportot, majd húzzon bele klipeket a vágólapon.",
+    "history": "Előzmények",
+    "moveGroupDown": "Mozgatás lefelé",
+    "moveGroupUp": "Mozgatás felfelé",
+    "recordingsDescription": "A vágólap megjelenhet képernyőképeken, felvételeken és képernyőmegosztáskor.",
+    "retentionDescription": "A régebbi klipek törlődnek. A csoportokban lévő klipek megmaradnak."
   },
   "dialog": {
     "accountEmail": "Fiók",
@@ -1170,6 +1187,8 @@
       "available": "Elérhető a(z) {version} verzió.",
       "checkFailed": "A stella desktop nem tudta ellenőrizni a frissítéseket.",
       "deferred": "A(z) {version} verzió vár, amíg megnyitott dokumentumokat szerkeszt. Ha végzett, ellenőrizze újra a telepítéshez, különben a következő automatikus ellenőrzéskor települ.",
+      "downloadProgress": "{percent}% letöltve",
+      "downloading": "A(z) {version} verzió letöltése folyamatban. A stella desktop a telepítés után újraindul.",
       "install": "Telepítés és újraindítás",
       "installFailed": "A stella desktop nem tudta telepíteni a frissítést.",
       "installInProgress": "Egy frissítés telepítése folyamatban van.",
@@ -1398,7 +1417,6 @@
     "supportRevealAppData": "Alkalmazásadatok megjelenítése",
     "temporaryWorkingCopies": "Ideiglenes munkamásolatok",
     "transcribeRecording": "Felvétel átírása…",
-    "updateReady": "Frissítés kész",
     "updatesManaged": "A frissítéseket a szervezete kezeli"
   }
 }

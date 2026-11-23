@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Todos os recortes",
+    "allResults": "Todos os resultados",
     "bold": "Negrito",
     "bulletedList": "Lista com marcadores",
     "cancel": "Cancelar",
@@ -378,6 +379,7 @@
     "moveToGroup": "Mover para grupo",
     "newGroupOption": "Novo grupo…",
     "noGroup": "Sem grupo",
+    "noGroupMatches": "Nenhum resultado neste grupo",
     "noResults": "Nenhum recorte correspondente",
     "noResultsSearchRegistries": "Pesquisar “{query}” nos registros",
     "numberedList": "Lista numerada",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Abra em qualquer lugar.",
     "welcomeStart": "Começar a copiar",
     "welcomeTitle": "Conheça sua área de transferência"
+  },
+  "clipboardSettings": {
+    "capture": "Salvar novos recortes",
+    "captureDescription": "Desative para parar de salvar o que você copia.",
+    "errorSave": "Não foi possível salvar a alteração. Tente novamente.",
+    "excludedDescription": "Nada do que você copia nesses aplicativos é salvo.",
+    "excludedEmpty": "Para excluir um aplicativo, clique com o botão direito em um dos recortes dele na área de transferência e escolha parar de salvar novos recortes dele.",
+    "groupActions": "Ações de {groupName}",
+    "groupsDescription": "Arraste um grupo para mudar a posição dele na área de transferência.",
+    "groupsEmpty": "Crie um grupo e arraste recortes para ele na área de transferência.",
+    "history": "Histórico",
+    "moveGroupDown": "Mover para baixo",
+    "moveGroupUp": "Mover para cima",
+    "recordingsDescription": "Permite que capturas de tela, gravações e o compartilhamento de tela mostrem a área de transferência.",
+    "retentionDescription": "Recortes mais antigos são excluídos. Recortes em um grupo são mantidos."
   },
   "dialog": {
     "accountEmail": "Conta",
@@ -1170,6 +1187,8 @@
       "available": "A versão {version} está disponível.",
       "checkFailed": "O stella desktop não conseguiu verificar se há atualizações.",
       "deferred": "A versão {version} aguarda enquanto documentos abertos estão sendo editados. Ao terminar, verifique novamente para instalá-la, ou ela será instalada na próxima verificação automática.",
+      "downloadProgress": "{percent}% baixado",
+      "downloading": "Baixando a versão {version}. O stella desktop será reiniciado após a instalação.",
       "install": "Instalar e reiniciar",
       "installFailed": "O stella desktop não conseguiu instalar a atualização.",
       "installInProgress": "Uma atualização está sendo instalada.",
@@ -1398,7 +1417,6 @@
     "supportRevealAppData": "Mostrar dados do aplicativo",
     "temporaryWorkingCopies": "Cópias de trabalho temporárias",
     "transcribeRecording": "Transcrever uma gravação…",
-    "updateReady": "Atualização pronta",
     "updatesManaged": "Atualizações gerenciadas pela sua organização"
   }
 }

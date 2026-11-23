@@ -45,7 +45,7 @@ use crate::{
   },
   keychain,
   local_store::StoreKey,
-  local_window::ClipboardCaller,
+  local_window::{ClipboardCaller, ClipboardSettingsCaller},
 };
 
 #[cfg(target_os = "windows")]
@@ -918,6 +918,22 @@ pub struct ClipboardSnapshot {
   pub welcome_status: ClipboardWelcomeStatus,
 }
 
+/// What the clipboard settings read returns: how history is kept and how its
+/// groups are named and ordered, never a clip. The Settings window renders it
+/// beside the Clips windows, which read the full [`ClipboardSnapshot`].
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ClipboardSettingsSnapshot {
+  pub revision: u32,
+  pub capture_status: ClipboardCaptureStatus,
+  pub group_limit: usize,
+  pub groups: Vec<ClipboardGroup>,
+  pub retention: ClipboardRetention,
+  pub screen_capture: ClipboardScreenCapture,
+  pub source_app_exclusion_limit: usize,
+  pub source_app_exclusions: Vec<ClipboardSourceAppExclusion>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ClipboardCaptureUpdate {
@@ -1550,6 +1566,22 @@ impl ClipboardManager {
       source_app_exclusions: self.source_app_exclusions.clone(),
       source_app_visuals,
       welcome_status: self.welcome.status(),
+    }
+  }
+
+  pub fn settings_snapshot(
+    &self,
+    _caller: &ClipboardSettingsCaller,
+  ) -> ClipboardSettingsSnapshot {
+    ClipboardSettingsSnapshot {
+      revision: self.revision,
+      capture_status: self.capture_status,
+      group_limit: MAX_GROUPS,
+      groups: self.groups.clone(),
+      retention: self.retention,
+      screen_capture: self.screen_capture.capture(),
+      source_app_exclusion_limit: MAX_CAPTURE_EXCLUSIONS,
+      source_app_exclusions: self.source_app_exclusions.clone(),
     }
   }
 
@@ -7440,6 +7472,54 @@ mod tests {
     assert_eq!(names(&manager.groups), ["Keys", "Code", "Prompts"]);
     assert!(!manager.move_group("missing", 0).unwrap());
     assert_eq!(names(&manager.groups), ["Keys", "Code", "Prompts"]);
+  }
+
+  #[test]
+  fn settings_snapshot_carries_settings_and_never_a_clip() {
+    let mut manager = ready_manager();
+    let clip_text = "Draft settlement figure for the client";
+    manager.items.push(text_item(Utc::now(), clip_text));
+    manager
+      .create_group("Prompts", ClipboardGroupColor::default(), None)
+      .unwrap();
+    manager.set_retention(ClipboardRetention::Week).unwrap();
+    manager
+      .set_capture_status(ClipboardCaptureStatus::Paused)
+      .unwrap();
+
+    let full =
+      serde_json::to_value(manager.snapshot(&ClipboardCaller::for_test())).unwrap();
+    assert!(full.to_string().contains(clip_text));
+
+    let settings = manager.settings_snapshot(&ClipboardSettingsCaller::for_test());
+    assert_eq!(settings.revision, manager.revision);
+    let json = serde_json::to_value(settings).unwrap();
+    let mut keys = json
+      .as_object()
+      .unwrap()
+      .keys()
+      .cloned()
+      .collect::<Vec<_>>();
+    keys.sort();
+    assert_eq!(
+      keys,
+      [
+        "captureStatus",
+        "groupLimit",
+        "groups",
+        "retention",
+        "revision",
+        "screenCapture",
+        "sourceAppExclusionLimit",
+        "sourceAppExclusions",
+      ]
+    );
+    assert!(!json.to_string().contains(clip_text));
+    assert_eq!(json["retention"], "week");
+    assert_eq!(json["captureStatus"], "paused");
+    assert_eq!(json["groupLimit"], MAX_GROUPS);
+    assert_eq!(json["groups"][0]["name"], "Prompts");
+    assert_eq!(json["sourceAppExclusionLimit"], MAX_CAPTURE_EXCLUSIONS);
   }
 
   #[test]

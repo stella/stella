@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Visos iškarpos",
+    "allResults": "Visi rezultatai",
     "bold": "Pusjuodis",
     "bulletedList": "Sąrašas su ženkleliais",
     "cancel": "Atšaukti",
@@ -378,6 +379,7 @@
     "moveToGroup": "Perkelti į grupę",
     "newGroupOption": "Nauja grupė…",
     "noGroup": "Be grupės",
+    "noGroupMatches": "Šioje grupėje atitikmenų nėra",
     "noResults": "Atitinkančių iškarpų nėra",
     "noResultsSearchRegistries": "Ieškoti „{query}“ registruose",
     "numberedList": "Numeruotas sąrašas",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Atidarykite bet kur.",
     "welcomeStart": "Pradėti kopijuoti",
     "welcomeTitle": "Susipažinkite su iškarpine"
+  },
+  "clipboardSettings": {
+    "capture": "Išsaugoti naujas iškarpas",
+    "captureDescription": "Išjungus nieko, ką nukopijuojate, neišsaugoma.",
+    "errorSave": "Pakeitimo išsaugoti nepavyko. Bandykite dar kartą.",
+    "excludedDescription": "Tai, ką nukopijuojate šiose programose, neišsaugoma.",
+    "excludedEmpty": "Norėdami neįtraukti programos, iškarpinėje dešiniuoju pelės mygtuku spustelėkite vieną jos iškarpą ir pasirinkite nebesaugoti naujų iš jos iškarpų.",
+    "groupActions": "Grupės „{groupName}“ veiksmai",
+    "groupsDescription": "Vilkite grupę, kad pakeistumėte jos vietą iškarpinėje.",
+    "groupsEmpty": "Sukurkite grupę ir iškarpinėje nuvilkite į ją iškarpas.",
+    "history": "Istorija",
+    "moveGroupDown": "Perkelti žemyn",
+    "moveGroupUp": "Perkelti aukštyn",
+    "recordingsDescription": "Leisti iškarpinę rodyti ekrano kopijose, įrašuose ir bendrinant ekraną.",
+    "retentionDescription": "Senesnės iškarpos ištrinamos. Grupėse esančios iškarpos išlieka."
   },
   "dialog": {
     "accountEmail": "Paskyra",
@@ -1170,6 +1187,8 @@
       "available": "Galima versija {version}.",
       "checkFailed": "stella desktop nepavyko patikrinti naujinimų.",
       "deferred": "Versija {version} laukia, kol redaguojami atidaryti dokumentai. Baigę patikrinkite dar kartą, kad ją įdiegtumėte, kitaip ji bus įdiegta per kitą automatinį patikrinimą.",
+      "downloadProgress": "Atsisiųsta {percent} %",
+      "downloading": "Atsisiunčiama versija {version}. Įdiegus stella desktop pasileis iš naujo.",
       "install": "Įdiegti ir paleisti iš naujo",
       "installFailed": "stella desktop nepavyko įdiegti naujinimo.",
       "installInProgress": "Diegiamas naujinimas.",
@@ -1398,7 +1417,6 @@
     "supportRevealAppData": "Rodyti programos duomenis",
     "temporaryWorkingCopies": "Laikinos darbinės kopijos",
     "transcribeRecording": "Transkribuoti įrašą…",
-    "updateReady": "Naujinimas paruoštas",
     "updatesManaged": "Naujinimus valdo jūsų organizacija"
   }
 }
