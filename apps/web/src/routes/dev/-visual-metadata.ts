@@ -84,6 +84,7 @@ export const visualRegistry = {
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
+  "pdf-fit-width": { label: "PDF pages fitted to width", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
   "document-naming": { label: "Document name pattern field", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
