@@ -1684,10 +1684,6 @@ jobs:
       )
       && needs.ci-plan.outputs.package_checks_required == 'true'
       )
-    strategy:
-      fail-fast: false
-      matrix:
-        mode: [network-baseline, phone-layouts]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
@@ -5308,6 +5304,10 @@ jobs:
       )
       )
       )
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [network-baseline, phone-layouts]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
