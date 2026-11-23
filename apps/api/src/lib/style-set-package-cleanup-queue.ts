@@ -291,14 +291,16 @@ export const reconcilePendingStyleSetPackageCleanups = async ({
         stage: "requeue",
         styleSetId: id,
       });
-      return false;
+      return "failed";
     }
     // Only a job this sweep actually added spends budget. A key the queue
     // already holds is covered work, and a cleanup sits delayed for the whole
     // download TTL — far longer than the settle window — so counting those
     // would let a run of healthy rows exhaust the tick before it reached the
     // stranded row behind them.
-    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED
+      ? "handed-off"
+      : "skipped";
   };
 
   const scan = await scanPendingRows({ handle, readPage });

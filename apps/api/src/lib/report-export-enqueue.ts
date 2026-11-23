@@ -249,9 +249,11 @@ export const reconcileQueuedReportExports = async ({
         stage: "requeue",
         workspaceId: row.workspaceId,
       });
-      return false;
+      return "failed";
     }
-    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED
+      ? "handed-off"
+      : "skipped";
   };
 
   const scan = await scanPendingRows({ handle, readPage });

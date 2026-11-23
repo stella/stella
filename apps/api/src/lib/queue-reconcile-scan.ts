@@ -146,7 +146,7 @@ type ScanPendingRowsOptions<Row> = {
    * on — an unusable actor, a queue lookup that failed — advances the cursor
    * instead of pinning the sweep to the page it sits on.
    */
-  handle: (row: Row) => Promise<boolean>;
+  handle: (row: Row) => Promise<boolean | "handed-off" | "skipped" | "failed">;
   /** Reads the next page after `cursor`, ordered by the same key. */
   readPage: (cursor: Row | null) => Promise<readonly Row[]>;
 };
@@ -181,9 +181,9 @@ export const scanPendingRows = async <Row>({
       }
       next += 1;
       reserved += 1;
-      const didHandOff = await handle(row);
+      const outcome = await handle(row);
       scanned += 1;
-      if (didHandOff) {
+      if (outcome === true || outcome === "handed-off") {
         handedOff += 1;
       } else {
         reserved -= 1;
@@ -296,9 +296,11 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
         outcome.error,
         handlerErrorContext("lib.handle.outcome_error", { runId: run.id }),
       );
-      return false;
+      return "failed";
     }
-    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED
+      ? "handed-off"
+      : "skipped";
   };
 
   const scan = await scanPendingRows({ handle, readPage });

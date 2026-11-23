@@ -361,14 +361,14 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   }
 
   private readonly isFederatedCredentialRefusal = (error: unknown): boolean => {
-    if (
-      this.credential.type !== "federated" ||
-      readProviderStatus(error)?.status !== 401
-    ) {
+    if (this.credential.type !== "federated") {
       return false;
     }
-    this.credential.invalidate();
-    return true;
+    if (readProviderStatus(error)?.status === 401) {
+      this.credential.invalidate();
+      return true;
+    }
+    return false;
   };
 
   override chatStream(options: OpenRouterTextOptions) {
