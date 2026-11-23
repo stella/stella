@@ -7685,7 +7685,7 @@
       "version": "0.3.1"
     },
     {
-      "bom-ref": "pkg:cargo/form_urlencoded@1.2.2",
+      "bom-ref": "pkg:cargo/form_urlencoded@1.2.3",
       "evidence": {
         "identity": [
           {
@@ -7706,7 +7706,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf"
+          "content": "afa489199eaffb1211795df1c6236ce1ad0d41a6fa45250add73e3b02420f06e"
         }
       ],
       "licenses": [
@@ -7728,9 +7728,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/form_urlencoded@1.2.2",
+      "purl": "pkg:cargo/form_urlencoded@1.2.3",
       "type": "library",
-      "version": "1.2.2"
+      "version": "1.2.3"
     },
     {
       "bom-ref": "pkg:cargo/fs_extra@1.3.0",
@@ -28368,7 +28368,7 @@
       "version": "0.9.0"
     },
     {
-      "bom-ref": "pkg:cargo/url@2.5.8",
+      "bom-ref": "pkg:cargo/url@2.5.9",
       "evidence": {
         "identity": [
           {
@@ -28389,7 +28389,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "ff67a8a4397373c3ef660812acab3268222035010ab8680ec4215f38ba3d0eed"
+          "content": "f00cd2407bb42c0ef17be88d4cf020f5cceffd121665bac9b8b9493a369b3b1a"
         }
       ],
       "licenses": [
@@ -28411,9 +28411,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/url@2.5.8",
+      "purl": "pkg:cargo/url@2.5.9",
       "type": "library",
-      "version": "2.5.8"
+      "version": "2.5.9"
     },
     {
       "bom-ref": "pkg:cargo/urlpattern@0.6.0",
@@ -34894,7 +34894,7 @@
         "pkg:cargo/cssparser@0.38.0",
         "pkg:cargo/html5ever@0.40.1",
         "pkg:cargo/maplit@1.0.2",
-        "pkg:cargo/url@2.5.8"
+        "pkg:cargo/url@2.5.9"
       ],
       "ref": "pkg:cargo/ammonia@4.2.5"
     },
@@ -35093,7 +35093,7 @@
       "dependsOn": [
         "pkg:cargo/axum-core@0.5.6",
         "pkg:cargo/bytes@1.12.1",
-        "pkg:cargo/form_urlencoded@1.2.2",
+        "pkg:cargo/form_urlencoded@1.2.3",
         "pkg:cargo/futures-util@0.3.34",
         "pkg:cargo/http-body-util@0.1.5",
         "pkg:cargo/http-body@1.1.0",
@@ -35946,7 +35946,7 @@
       "dependsOn": [
         "pkg:cargo/percent-encoding@2.3.2"
       ],
-      "ref": "pkg:cargo/form_urlencoded@1.2.2"
+      "ref": "pkg:cargo/form_urlencoded@1.2.3"
     },
     {
       "dependsOn": [],
@@ -37373,7 +37373,7 @@
     {
       "dependsOn": [
         "pkg:cargo/normpath@1.5.2",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/windows-sys@0.61.2"
       ],
       "ref": "pkg:cargo/opener@0.9.0"
@@ -37830,7 +37830,7 @@
         "pkg:cargo/tower-http@0.6.11",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/wasm-bindgen-futures@0.4.80",
         "pkg:cargo/wasm-bindgen@0.2.130",
         "pkg:cargo/wasm-streams@0.5.0",
@@ -38136,7 +38136,7 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/form_urlencoded@1.2.2",
+        "pkg:cargo/form_urlencoded@1.2.3",
         "pkg:cargo/itoa@1.0.19",
         "pkg:cargo/ryu@1.0.23",
         "pkg:cargo/serde@1.0.229"
@@ -38732,7 +38732,7 @@
         "pkg:cargo/raw-window-handle@0.6.2",
         "pkg:cargo/tao-macros@0.1.4",
         "pkg:cargo/unicode-segmentation@1.13.3",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/windows-core@0.62.2",
         "pkg:cargo/windows-version@0.1.7",
         "pkg:cargo/windows@0.62.2",
@@ -38801,7 +38801,7 @@
         "pkg:cargo/thiserror@2.0.21",
         "pkg:cargo/tokio@1.54.1",
         "pkg:cargo/tray-icon@0.25.1",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.39.1",
         "pkg:cargo/window-vibrancy@0.8.1",
@@ -38847,7 +38847,7 @@
         "pkg:cargo/tauri-utils@2.10.2",
         "pkg:cargo/thiserror@2.0.21",
         "pkg:cargo/time@0.3.55",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/uuid@1.29.2",
         "pkg:cargo/walkdir@2.5.0"
       ],
@@ -38912,7 +38912,7 @@
         "pkg:cargo/tauri@2.12.5",
         "pkg:cargo/thiserror@2.0.21",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/windows-registry@0.6.1",
         "pkg:cargo/windows-result@0.4.1"
       ],
@@ -38929,7 +38929,7 @@
         "pkg:cargo/tauri-plugin@2.7.2",
         "pkg:cargo/tauri@2.12.5",
         "pkg:cargo/thiserror@2.0.21",
-        "pkg:cargo/url@2.5.8"
+        "pkg:cargo/url@2.5.9"
       ],
       "ref": "pkg:cargo/tauri-plugin-dialog@2.8.4"
     },
@@ -38950,7 +38950,7 @@
         "pkg:cargo/tauri@2.12.5",
         "pkg:cargo/thiserror@2.0.21",
         "pkg:cargo/toml@1.2.1+spec-1.1.0",
-        "pkg:cargo/url@2.5.8"
+        "pkg:cargo/url@2.5.9"
       ],
       "ref": "pkg:cargo/tauri-plugin-fs@2.7.1"
     },
@@ -38978,7 +38978,7 @@
         "pkg:cargo/tauri@2.12.5",
         "pkg:cargo/thiserror@2.0.21",
         "pkg:cargo/time@0.3.55",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/zbus@5.19.0"
       ],
       "ref": "pkg:cargo/tauri-plugin-notification@2.8.1"
@@ -38996,7 +38996,7 @@
         "pkg:cargo/tauri-plugin@2.7.2",
         "pkg:cargo/tauri@2.12.5",
         "pkg:cargo/thiserror@2.0.21",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/windows@0.62.2",
         "pkg:cargo/zbus@5.19.0"
       ],
@@ -39048,7 +39048,7 @@
         "pkg:cargo/thiserror@2.0.21",
         "pkg:cargo/time@0.3.55",
         "pkg:cargo/tokio@1.54.1",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/zip@9.5.1"
       ],
@@ -39069,7 +39069,7 @@
         "pkg:cargo/serde_json@1.0.154",
         "pkg:cargo/tauri-utils@2.10.2",
         "pkg:cargo/thiserror@2.0.21",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.39.1",
         "pkg:cargo/windows@0.62.2"
@@ -39090,7 +39090,7 @@
         "pkg:cargo/tao@0.37.2",
         "pkg:cargo/tauri-runtime@2.12.2",
         "pkg:cargo/tauri-utils@2.10.2",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.39.1",
         "pkg:cargo/windows@0.62.2",
@@ -39126,7 +39126,7 @@
         "pkg:cargo/swift-rs@1.0.9",
         "pkg:cargo/thiserror@2.0.21",
         "pkg:cargo/toml@1.2.1+spec-1.1.0",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/urlpattern@0.6.0",
         "pkg:cargo/uuid@1.29.2",
         "pkg:cargo/walkdir@2.5.0"
@@ -39358,7 +39358,7 @@
         "pkg:cargo/tower-layer@0.3.3",
         "pkg:cargo/tower-service@0.3.3",
         "pkg:cargo/tower@0.5.3",
-        "pkg:cargo/url@2.5.8"
+        "pkg:cargo/url@2.5.9"
       ],
       "ref": "pkg:cargo/tower-http@0.6.11"
     },
@@ -39545,20 +39545,20 @@
     },
     {
       "dependsOn": [
-        "pkg:cargo/form_urlencoded@1.2.2",
+        "pkg:cargo/form_urlencoded@1.2.3",
         "pkg:cargo/idna@1.1.0",
         "pkg:cargo/percent-encoding@2.3.2",
         "pkg:cargo/serde@1.0.229",
         "pkg:cargo/serde_derive@1.0.229"
       ],
-      "ref": "pkg:cargo/url@2.5.8"
+      "ref": "pkg:cargo/url@2.5.9"
     },
     {
       "dependsOn": [
         "pkg:cargo/icu_properties@2.4.0",
         "pkg:cargo/regex@1.13.1",
         "pkg:cargo/serde@1.0.229",
-        "pkg:cargo/url@2.5.8"
+        "pkg:cargo/url@2.5.9"
       ],
       "ref": "pkg:cargo/urlpattern@0.6.0"
     },
@@ -40100,7 +40100,7 @@
         "pkg:cargo/soup3@0.5.0",
         "pkg:cargo/tao-macros@0.1.4",
         "pkg:cargo/thiserror@2.0.21",
-        "pkg:cargo/url@2.5.8",
+        "pkg:cargo/url@2.5.9",
         "pkg:cargo/webkit2gtk-sys@2.0.2",
         "pkg:cargo/webkit2gtk@2.0.2",
         "pkg:cargo/webview2-com@0.39.1",
