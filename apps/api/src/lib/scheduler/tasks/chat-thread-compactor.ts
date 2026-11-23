@@ -457,30 +457,30 @@ const compactThread = async ({
 
 /**
  * The run's own budget ending is a deadline outcome: the thread stays queued
- * and is retried. Any other rejection propagates unchanged.
+ * and is retried. Any other rejection is reported as unhandled.
  */
 const withCompactionDeadline = async <T, E>(
   deadline: AbortSignal,
   thread: QueuedCompactionThread,
   run: () => Promise<Result<T, E>>,
-): Promise<Result<T, E | ChatCompactionError>> => {
-  try {
-    return await run();
-  } catch (error) {
-    if (!deadline.aborted) {
-      throw error;
-    }
-    return Result.err(
-      classifyFailure(
-        new ChatCompactionError({
-          cause: error,
-          message: "chat compaction exceeded its deadline",
-          threadId: thread.threadId,
-        }),
-        "work_deadline_exceeded",
-      ),
-    );
+): Promise<Result<T, E | ChatCompactionError | UnhandledException>> => {
+  const settled = await Result.tryPromise(run);
+  if (Result.isOk(settled)) {
+    return settled.value;
   }
+  if (!deadline.aborted) {
+    return settled;
+  }
+  return Result.err(
+    classifyFailure(
+      new ChatCompactionError({
+        cause: settled.error.cause,
+        message: "chat compaction exceeded its deadline",
+        threadId: thread.threadId,
+      }),
+      "work_deadline_exceeded",
+    ),
+  );
 };
 
 /** Reported, as the cause of an `UnhandledException` like any other aborted
