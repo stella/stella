@@ -462,8 +462,8 @@ pub fn dictation_learned_delete(app: AppHandle) -> Result<LearnedView, String> {
   let namespace = dictation_namespace(&app).ok_or(NO_ACCOUNT)?;
   {
     let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
-    let (generation, clear_count) = read(&namespace)
-      .map_or((0, 0), |stored| (stored.generation, stored.clear_count));
+    let (generation, clear_count) =
+      read(&namespace).map_or((0, 0), |stored| (stored.generation, stored.clear_count));
     write(
       &namespace,
       &Stored {
