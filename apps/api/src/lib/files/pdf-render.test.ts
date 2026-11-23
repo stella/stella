@@ -90,8 +90,8 @@ const rendered = async (mimeType: string, bytes: Uint8Array) => {
   if (Result.isError(result)) {
     throw result.error;
   }
-  if (result.value.type === "too-large") {
-    throw new Error(`${mimeType} rendered too large`);
+  if (result.value.type !== "pdf") {
+    throw new Error(`${mimeType} rendered ${result.value.type}`);
   }
   return result.value.bytes;
 };
@@ -804,6 +804,53 @@ describe("what an image preview decodes is bounded", () => {
       expect(Result.isOk(past) && past.value).toEqual({ type: "too-large" });
     },
   );
+
+  test("an image past a smaller budget but within the full one waits for room", async () => {
+    const mib = 1024 * 1024;
+    const budget = pdfRenderBudget({
+      limit: { type: "limited", bytes: 512 * mib },
+      parentRssBytes: 200 * mib,
+    });
+    if (budget === null) {
+      throw new Error("A 512 MiB container has a render budget");
+    }
+    expect(budget.imageDecodedBytesMax).toBeLessThan(MAX);
+    // 8-bit RGB, four bytes a pixel once decoded.
+    const width = 4096;
+    const height = MAX / 4 / width;
+    const withinFull = await renderPdf(
+      "image/png",
+      declaredPng({ height, width }),
+      budget,
+    );
+    expect(Result.isOk(withinFull) && withinFull.value).toEqual({
+      type: "over-budget",
+    });
+    const pastFull = await renderPdf(
+      "image/png",
+      declaredPng({ height, width: width + 1 }),
+      budget,
+    );
+    expect(Result.isOk(pastFull) && pastFull.value).toEqual({
+      type: "too-large",
+    });
+
+    // A TIFF page the same way: within the full page budget, past this one.
+    const tiff = tiffFile([splitTiffPage(8, 8)]);
+    const widthEntry = indexOfBytes(
+      tiff,
+      Uint8Array.from([0x00, 0x01, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00]),
+    );
+    expect(widthEntry).toBeGreaterThan(0);
+    // Seven bytes a pixel: three samples and the RGBA they become.
+    const tiffWidth = Math.floor(budget.tiffPageDecodedBytesMax / 7 / 8) + 1;
+    expect(tiffWidth * 8 * 7).toBeLessThanOrEqual(
+      LIMITS.pdfRenderTiffPageDecodedBytesMax,
+    );
+    new DataView(tiff.buffer).setUint32(widthEntry + 8, tiffWidth, true);
+    const page = await renderPdf("image/tiff", tiff, budget);
+    expect(Result.isOk(page) && page.value).toEqual({ type: "over-budget" });
+  });
 
   test("an image past the page pixel budget is scaled down to it", async () => {
     const width = 4000;

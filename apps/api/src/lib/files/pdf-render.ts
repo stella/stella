@@ -37,7 +37,10 @@ import {
 } from "@/api/lib/files/image-header";
 import { type ImagePage, imagePagesToPdf } from "@/api/lib/files/image-pdf";
 import { mediaTypeEssence } from "@/api/lib/files/pdf-derivative-policy";
-import type { PdfRenderBudget } from "@/api/lib/files/pdf-render-budget";
+import {
+  FULL_PDF_RENDER_BUDGET,
+  type PdfRenderBudget,
+} from "@/api/lib/files/pdf-render-budget";
 import {
   isRenderedPdfMimeType,
   RENDERED_PDF_MIME_TYPES,
@@ -63,11 +66,15 @@ class PdfRenderInputError extends TaggedError("PdfRenderInputError")<{
 }> {}
 
 /**
- * A rendered preview, or `too-large` when its image data passed
- * `LIMITS.fileDerivativePdfMaxBytes` before the last page.
+ * A rendered preview; `too-large` when an image is past even the full
+ * budget or its image data passed `LIMITS.fileDerivativePdfMaxBytes` before
+ * the last page; `over-budget` when an image fits the full budget but not
+ * this render's, so a render with more room left may take it.
  */
 export type RenderedPdf =
-  { type: "pdf"; bytes: Uint8Array } | { type: "too-large" };
+  | { type: "pdf"; bytes: Uint8Array }
+  | { type: "too-large" }
+  | { type: "over-budget" };
 
 /**
  * The render runs in a process of its own, so a full collection between
@@ -92,14 +99,21 @@ const renderTiff = async (
     pagesMax: budget.imagePagesMax,
   });
   if (Result.isError(tiff)) {
-    return tiff.error.reason === "too-large"
-      ? Result.ok({ type: "too-large" })
-      : Result.err(
-          new PdfRenderInputError({
-            message: tiff.error.message,
-            cause: tiff.error,
-          }),
-        );
+    if (tiff.error.reason !== "too-large") {
+      return Result.err(
+        new PdfRenderInputError({
+          message: tiff.error.message,
+          cause: tiff.error,
+        }),
+      );
+    }
+    const underFull = readTiffPages(bytes, {
+      decodedBytesMax: FULL_PDF_RENDER_BUDGET.tiffPageDecodedBytesMax,
+      pagesMax: budget.imagePagesMax,
+    });
+    return Result.ok({
+      type: Result.isOk(underFull) ? "over-budget" : "too-large",
+    });
   }
   const { count, pages } = tiff.value;
   const fonts = count > budget.imagePagesMax ? await loadStampFonts() : null;
@@ -156,11 +170,15 @@ const renderImage = async (
     ? readImageHeader(bytes, mimeType)
     : null;
   const perPixel = decodedBytesPerPixel(header);
-  if (
-    header !== null &&
-    header.width * header.height * perPixel > budget.imageDecodedBytesMax
-  ) {
-    return Result.ok({ type: "too-large" });
+  const decodedBytes =
+    header === null ? 0 : header.width * header.height * perPixel;
+  if (decodedBytes > budget.imageDecodedBytesMax) {
+    return Result.ok({
+      type:
+        decodedBytes > FULL_PDF_RENDER_BUDGET.imageDecodedBytesMax
+          ? "too-large"
+          : "over-budget",
+    });
   }
   Bun.Image.backend = "bun";
   const png = await Result.tryPromise({

@@ -616,8 +616,8 @@ export const LIMITS = {
    *  the renderer and its fonts, measured rendering a one-line text file
    *  (111 to 116 MB). Budgets scale with the ceiling above this. */
   pdfRenderWorkerBaseRssBytes: 112 * 1024 * 1024,
-  /** Room a scaled-down budget leaves under its ceiling. A source budget's
-   *  cost is not proportional at the low end (a text render holds its fonts
+  /** Room a scaled-down budget leaves under its ceiling. The memory a
+   *  source budget takes is not proportional at the low end (a text render holds its fonts
    *  and a run of pages whatever its budget), so shares are taken of the
    *  room above the base less this. */
   pdfRenderWorkerMarginBytes: 40 * 1024 * 1024,

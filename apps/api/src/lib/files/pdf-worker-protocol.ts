@@ -8,6 +8,8 @@ import {
 export const PDF_WORKER_PARSE_ERROR_EXIT_CODE = 65;
 /** A rendered PDF larger than `LIMITS.fileDerivativePdfMaxBytes`. */
 export const PDF_WORKER_TOO_LARGE_EXIT_CODE = 66;
+/** An image within the full render budget but past this render's. */
+export const PDF_WORKER_OVER_BUDGET_EXIT_CODE = 67;
 
 export const pdfWorkerPath = () =>
   resolveRuntimeWorkerPath({

@@ -13,7 +13,8 @@
  *   stderr → error messages (captured by parent)
  *   exit 0 = success, exit 65 (EX_DATAERR) = the parser or decoder refused
  *   the bytes, exit 66 = the rendered PDF is over the derivative size
- *   limit. Any other exit (Bun failing to start or to load a module exits
+ *   limit, exit 67 = an image fits the full render budget but not the one
+ *   given. Any other exit (Bun failing to start or to load a module exits
  *   1) is a worker failure, not a verdict on the file.
  */
 
@@ -31,6 +32,7 @@ import { writeWorkerStdout } from "@/api/lib/subprocess";
 
 import {
   PDF_WORKER_OPERATION,
+  PDF_WORKER_OVER_BUDGET_EXIT_CODE,
   PDF_WORKER_PARSE_ERROR_EXIT_CODE,
   PDF_WORKER_TOO_LARGE_EXIT_CODE,
   pdfWorkerOperationSchema,
@@ -91,6 +93,11 @@ if (operationName === PDF_WORKER_OPERATION.render) {
   );
   if (Result.isError(rendered)) {
     refuse(rendered.error);
+  } else if (rendered.value.type === "over-budget") {
+    process.stderr.write(
+      "pdf-worker: the image is past this render's budget\n",
+    );
+    process.exit(PDF_WORKER_OVER_BUDGET_EXIT_CODE);
   } else if (
     rendered.value.type === "too-large" ||
     rendered.value.bytes.byteLength > LIMITS.fileDerivativePdfMaxBytes

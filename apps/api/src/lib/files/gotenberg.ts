@@ -54,6 +54,7 @@ import {
 } from "@/api/lib/files/pdf-render-protocol";
 import {
   PDF_WORKER_OPERATION,
+  PDF_WORKER_OVER_BUDGET_EXIT_CODE,
   PDF_WORKER_PARSE_ERROR_EXIT_CODE,
   PDF_WORKER_TOO_LARGE_EXIT_CODE,
   pdfWorkerPath,
@@ -460,6 +461,16 @@ const renderPdfInWorker = async (
       new PdfRenderError({
         message: "The file could not be decoded",
         reason: "unreadable",
+        cause: rendered.error,
+      }),
+    );
+  }
+  if (exitCode === PDF_WORKER_OVER_BUDGET_EXIT_CODE) {
+    // The file fits a render with the full budget; this one had less room.
+    return Result.err(
+      new PdfRenderError({
+        message: "The image needs more memory than the container has left now",
+        reason: "busy",
         cause: rendered.error,
       }),
     );
