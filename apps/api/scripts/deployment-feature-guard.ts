@@ -163,6 +163,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Authenticated dictation lists the region's transcription models on every deployment, and a model whose provider keeps the audio only to a member whose feature decision grants it",
   ],
   [
+    "/v1/dictation/learned-fixes",
+    "A member's learned dictation fixes are their own spellings, mounted on every deployment; nothing reaches a model",
+  ],
+  [
     "/v1/dictation/cleanup",
     "Authenticated dictation cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
   ],
@@ -306,6 +310,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/cleanup",
     "Desktop dictation cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/learned-fixes",
+    "A desktop member's learned dictation fixes enforce the caller's dictation feature decision on every deployment; nothing reaches a model",
   ],
   [
     "/v1/desktop/dictation/models",
