@@ -6,8 +6,12 @@ import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment
 GlobalRegistrator.register();
 const { act, cleanup, fireEvent, render, waitFor } =
   await import("@testing-library/react");
-const { AnimatedPreview, AnimatedPreviewCard, AnimatedPreviewMotion } =
-  await import("./animated-preview");
+const {
+  ANIMATED_PREVIEW_CARD_DELAY_MS,
+  AnimatedPreview,
+  AnimatedPreviewCard,
+  AnimatedPreviewMotion,
+} = await import("./animated-preview");
 
 const realMatchMedia = window.matchMedia.bind(window);
 
@@ -231,6 +235,7 @@ describe("AnimatedPreviewCard", () => {
   test("hovering the trigger opens the card only after the delay", async () => {
     const view = renderCard();
     const trigger = view.getByRole("button", { name: "Shield" });
+    const startedAt = performance.now();
 
     fireEvent.pointerEnter(trigger, { pointerType: "mouse" });
     fireEvent.mouseEnter(trigger);
@@ -240,6 +245,9 @@ describe("AnimatedPreviewCard", () => {
     await waitFor(() => {
       expect(openCard()).not.toBeNull();
     });
+    expect(performance.now() - startedAt).toBeGreaterThanOrEqual(
+      ANIMATED_PREVIEW_CARD_DELAY_MS - 20,
+    );
     const card = openCard();
     expect(
       card?.querySelector('[data-slot="animated-preview"]'),

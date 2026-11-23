@@ -172,6 +172,7 @@ describe("composed visual preview", () => {
     });
   });
   test("bounds settlement when the guest fonts never resolve", async () => {
+    const started = performance.now();
     const result = await renderVisual({
       launch,
       input: {
@@ -180,15 +181,18 @@ describe("composed visual preview", () => {
       },
     });
     expect(Result.isError(result)).toBe(true);
+    expect(performance.now() - started).toBeLessThan(15_000);
   }, 15_000);
   test(
     "returns a typed timeout and closes an unresponsive guest browser",
     async () => {
       const browsers: Browser[] = [];
+      const timing = { started: 0 };
       const result = await renderVisual({
         launch: async (options) => {
           const browser = await launch(options);
           browsers.push(browser);
+          timing.started = performance.now();
           return browser;
         },
         input: {
@@ -203,6 +207,9 @@ describe("composed visual preview", () => {
           expect(result.error.readyFired).toBe(false);
         }
       }
+      expect(performance.now() - timing.started).toBeLessThan(
+        VISUAL_PREVIEW_LIMITS.renderTimeoutMs + 2000,
+      );
       const browser = browsers.at(0);
       if (browser === undefined) {
         throw new TypeError("Preview timeout requires a launched browser");
