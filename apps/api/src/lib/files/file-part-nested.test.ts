@@ -340,7 +340,7 @@ describe("a part that is itself a container", () => {
         "ibm437",
       )
     ).unwrap();
-    expect(closing.fileName).toBe(LAW_FIRM_MESSAGES[last].fileName);
+    expect(closing.fileName).toBe(LAW_FIRM_MESSAGES.at(-1)?.fileName);
     // The message over the bound and one past the end have no part to open.
     for (const index of [6, LAW_FIRM_MESSAGES.length]) {
       expect(
