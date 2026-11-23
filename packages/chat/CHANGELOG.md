@@ -1,5 +1,15 @@
 # @stll/chat
 
+## 0.6.11
+
+### Patch Changes
+
+- [#9265](https://github.com/stella/stella/pull/9265) [`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `@ag-ui/core` to `1.0.5`.
+  Update `tldts` to `7.5.4`.
+  Update `lucide-react` to `1.74.0`.
+- Updated dependencies [[`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63), [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b)]:
+  - @stll/ui@0.85.0
+
 ## 0.6.10
 
 ### Patch Changes

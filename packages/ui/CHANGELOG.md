@@ -1,5 +1,17 @@
 # @stll/ui
 
+## 0.85.0
+
+### Minor Changes
+
+- [#9275](https://github.com/stella/stella/pull/9275) [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for mailboxes (`.mbox`).
+
+### Patch Changes
+
+- [#9265](https://github.com/stella/stella/pull/9265) [`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `@ag-ui/core` to `1.0.5`.
+  Update `tldts` to `7.5.4`.
+  Update `lucide-react` to `1.74.0`.
+
 ## 0.84.1
 
 ### Patch Changes
