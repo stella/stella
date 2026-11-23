@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Todos los clips",
+    "allResults": "Todos los resultados",
     "bold": "Negrita",
     "bulletedList": "Lista con viñetas",
     "cancel": "Cancelar",
@@ -378,6 +379,7 @@
     "moveToGroup": "Mover al grupo",
     "newGroupOption": "Grupo nuevo…",
     "noGroup": "Sin grupo",
+    "noGroupMatches": "No hay coincidencias en este grupo",
     "noResults": "No hay recortes coincidentes",
     "noResultsSearchRegistries": "Buscar «{query}» en los registros",
     "numberedList": "Lista numerada",

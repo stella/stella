@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Összes vágólapelem",
+    "allResults": "Összes találat",
     "bold": "Félkövér",
     "bulletedList": "Felsorolás",
     "cancel": "Mégse",
@@ -378,6 +379,7 @@
     "moveToGroup": "Áthelyezés csoportba",
     "newGroupOption": "Új csoport…",
     "noGroup": "Nincs csoport",
+    "noGroupMatches": "Nincs találat ebben a csoportban",
     "noResults": "Nincs egyező kivágás",
     "noResultsSearchRegistries": "„{query}” keresése a nyilvántartásokban",
     "numberedList": "Számozott lista",

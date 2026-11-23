@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Tous les extraits",
+    "allResults": "Tous les résultats",
     "bold": "Gras",
     "bulletedList": "Liste à puces",
     "cancel": "Annuler",
@@ -378,6 +379,7 @@
     "moveToGroup": "Déplacer vers le groupe",
     "newGroupOption": "Nouveau groupe…",
     "noGroup": "Aucun groupe",
+    "noGroupMatches": "Aucun résultat dans ce groupe",
     "noResults": "Aucun extrait correspondant",
     "noResultsSearchRegistries": "Rechercher « {query} » dans les registres",
     "numberedList": "Liste numérotée",

@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Visos iškarpos",
+    "allResults": "Visi rezultatai",
     "bold": "Pusjuodis",
     "bulletedList": "Sąrašas su ženkleliais",
     "cancel": "Atšaukti",
@@ -378,6 +379,7 @@
     "moveToGroup": "Perkelti į grupę",
     "newGroupOption": "Nauja grupė…",
     "noGroup": "Be grupės",
+    "noGroupMatches": "Šioje grupėje atitikmenų nėra",
     "noResults": "Atitinkančių iškarpų nėra",
     "noResultsSearchRegistries": "Ieškoti „{query}“ registruose",
     "numberedList": "Numeruotas sąrašas",

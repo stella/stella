@@ -635,8 +635,17 @@ export const clipboardSourceTintIndex = (sourceIdentity: string | null) => {
   return hash % CLIPBOARD_SOURCE_TINT_COUNT;
 };
 
+/**
+ * The divider a split rail draws before the card at `index`, and the room it
+ * takes: its width plus the gap after it (and, before the first card, the
+ * empty-group line beside it).
+ */
+export type ClipboardRailDivider = { advance: number; index: number };
+
 type ClipboardRailWindowOptions = {
   activeIndex: number;
+  /** The divider of a split rail; none on a plain one. */
+  divider?: ClipboardRailDivider | null;
   itemCount: number;
   overscan: number;
   /** Distance scrolled from the rail's inline start, in either direction. */
@@ -732,6 +741,7 @@ const UNMEASURED_VISIBLE_CARDS = 8;
  */
 export const clipboardRailWindow = ({
   activeIndex,
+  divider = null,
   itemCount,
   overscan,
   scrollOffset,
@@ -745,7 +755,16 @@ export const clipboardRailWindow = ({
     viewportWidth > 0
       ? Math.ceil(viewportWidth / stride) + 1
       : UNMEASURED_VISIBLE_CARDS;
-  const viewportStart = Math.floor(Math.max(0, scrollOffset) / stride);
+  const offset = Math.max(0, scrollOffset);
+  // Past the divider every card sits `advance` further along.
+  const dividerStart = divider === null ? Infinity : divider.index * stride;
+  const viewportStart =
+    divider === null || offset < dividerStart
+      ? Math.floor(offset / stride)
+      : divider.index +
+        Math.floor(
+          Math.max(0, offset - dividerStart - divider.advance) / stride,
+        );
   const active = Math.min(Math.max(0, activeIndex), itemCount - 1);
   const start = Math.min(viewportStart, active);
   const end = Math.max(viewportStart + visible, active + 1);
@@ -753,6 +772,74 @@ export const clipboardRailWindow = ({
     end: Math.min(itemCount, end + overscan),
     start: Math.max(0, start - overscan),
   };
+};
+
+/**
+ * The space a virtualized rail keeps for what it does not mount: before the
+ * first mounted card and after the last, each without the gap that follows
+ * it. The divider is mounted with the card it precedes; otherwise its room
+ * joins the spacer on its side.
+ */
+export const clipboardRailSpacers = ({
+  divider = null,
+  gap,
+  itemCount,
+  stride,
+  window,
+}: {
+  divider?: ClipboardRailDivider | null;
+  gap: number;
+  itemCount: number;
+  stride: number;
+  window: ClipboardRailWindow;
+}) => {
+  const dividerMounted =
+    divider !== null &&
+    divider.index >= window.start &&
+    divider.index < window.end;
+  const before =
+    window.start * stride +
+    (divider !== null && divider.index < window.start ? divider.advance : 0);
+  const after =
+    (itemCount - window.end) * stride +
+    (divider !== null && divider.index >= window.end ? divider.advance : 0);
+  return {
+    dividerMounted,
+    leading: before > 0 ? before - gap : 0,
+    trailing: after > 0 ? after - gap : 0,
+  };
+};
+
+/**
+ * What the rail shows. With a group selected and a search typed, the
+ * group's own matches come first and every other match follows after a
+ * divider at `dividerIndex`, so the rest stays in reach without clearing the
+ * group. Without a group or a search, or when nothing outside the group
+ * matches, the rail is not split and `dividerIndex` is null.
+ */
+type ClipboardRailItems = {
+  dividerIndex: number | null;
+  items: readonly ClipboardItem[];
+};
+
+export const clipboardRailItems = (
+  items: readonly ClipboardItem[],
+  query: string,
+  groupId: string | null,
+  options: ClipboardSearchOptions = DEFAULT_CLIPBOARD_SEARCH_OPTIONS,
+): ClipboardRailItems => {
+  const inGroup = filterClipboardItems(items, query, groupId, options);
+  if (groupId === null || clipboardQueryTerms(query, options).length === 0) {
+    return { dividerIndex: null, items: inGroup };
+  }
+  const inGroupIds = new Set(inGroup.map((item) => item.id));
+  const others = filterClipboardItems(items, query, null, options).filter(
+    (item) => item.groupId !== groupId && !inGroupIds.has(item.id),
+  );
+  if (others.length === 0) {
+    return { dividerIndex: null, items: inGroup };
+  }
+  return { dividerIndex: inGroup.length, items: [...inGroup, ...others] };
 };
 
 /**

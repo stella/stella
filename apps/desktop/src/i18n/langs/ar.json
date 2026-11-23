@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "كل المقتطفات",
+    "allResults": "كل النتائج",
     "bold": "عريض",
     "bulletedList": "قائمة نقطية",
     "cancel": "إلغاء",
@@ -378,6 +379,7 @@
     "moveToGroup": "النقل إلى مجموعة",
     "newGroupOption": "مجموعة جديدة…",
     "noGroup": "بلا مجموعة",
+    "noGroupMatches": "لا توجد نتائج مطابقة في هذه المجموعة",
     "noResults": "لا توجد مقتطفات مطابقة",
     "noResultsSearchRegistries": "البحث عن «{query}» في السجلات",
     "numberedList": "قائمة مرقّمة",

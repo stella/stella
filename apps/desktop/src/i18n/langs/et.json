@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Kõik lõiked",
+    "allResults": "Kõik tulemused",
     "bold": "Paks kiri",
     "bulletedList": "Täpploend",
     "cancel": "Loobu",
@@ -378,6 +379,7 @@
     "moveToGroup": "Teisalda rühma",
     "newGroupOption": "Uus rühm…",
     "noGroup": "Rühmata",
+    "noGroupMatches": "Selles rühmas vasteid pole",
     "noResults": "Sobivaid lõikeid pole",
     "noResultsSearchRegistries": "Otsi „{query}” registritest",
     "numberedList": "Nummerdatud loend",

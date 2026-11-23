@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "All clips",
+    "allResults": "All results",
     "bold": "Bold",
     "bulletedList": "Bulleted list",
     "cancel": "Cancel",
@@ -378,6 +379,7 @@
     "moveToGroup": "Move to group",
     "newGroupOption": "New group…",
     "noGroup": "No group",
+    "noGroupMatches": "No matches in this group",
     "noResults": "No matching clips",
     "noResultsSearchRegistries": "Search registries for “{query}”",
     "numberedList": "Numbered list",

@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Visi izgriezumi",
+    "allResults": "Visi rezultāti",
     "bold": "Treknraksts",
     "bulletedList": "Saraksts ar aizzīmēm",
     "cancel": "Atcelt",
@@ -378,6 +379,7 @@
     "moveToGroup": "Pārvietot uz grupu",
     "newGroupOption": "Jauna grupa…",
     "noGroup": "Bez grupas",
+    "noGroupMatches": "Šajā grupā nav atbilstību",
     "noResults": "Nav atbilstošu izgriezumu",
     "noResultsSearchRegistries": "Meklēt “{query}” reģistros",
     "numberedList": "Numurēts saraksts",
