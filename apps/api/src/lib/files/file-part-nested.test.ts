@@ -238,14 +238,14 @@ describe("a part that is itself a container", () => {
         part?.mediaType,
       ]),
     ).toEqual([
-      ["Spis 23 C 118_2026, podklady k jednání.eml", null, "message/rfc822"],
+      ["Spis 23 C 118_2026, podklady k jednání.eml", "spis", "message/rfc822"],
       [
         "Re_ Spis 23 C 118_2026, podklady k jednání.eml",
         "Spisy/23 C 118-2026,Důležité",
         "message/rfc822",
       ],
       ["Vyjádření k žalobě.eml", "Spisy/Stavby Hradec", "message/rfc822"],
-      ["Spis 23 C 118_2026, podklady k jednání.eml", null, "message/rfc822"],
+      ["Spis 23 C 118_2026, podklady k jednání.eml", "spis", "message/rfc822"],
     ]);
     const third = (
       await readPartOfFile(source, {

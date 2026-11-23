@@ -572,6 +572,7 @@ const LegalFilePreview = ({
         return (
           <ContainedFileList
             files={preview.value.files}
+            searchable
             title={fileParts("files")}
           />
         );

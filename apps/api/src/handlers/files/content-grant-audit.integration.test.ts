@@ -2235,7 +2235,8 @@ describe("mailbox delivery", () => {
         {
           subject: "Spis 23 C 118/2026, podklady k jednání",
           from: expect.stringContaining("kalina@ak-kalina-vesela.cz"),
-          folder: null,
+          // No folder header: the mailbox file is the folder.
+          folder: "spis-23-C-118-2026",
           part: {
             part: "message:0",
             fileName: "Spis 23 C 118_2026, podklady k jednání.eml",

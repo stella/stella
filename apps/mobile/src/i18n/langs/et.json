@@ -548,7 +548,9 @@
     "files": "Failid",
     "insideFailed": "Selles olevaid faile ei õnnestunud laadida. Puudutage, et uuesti proovida.",
     "noFilesInside": "Selles pole ühtegi faili.",
+    "noMatches": "Päringule „{query}“ ei vasta ükski fail.",
     "open": "Ava {fileName} ({details})",
+    "search": "Otsi faili nime või kausta järgi",
     "unavailable": {
       "encrypted": "Parooliga kaitstud, ei saa avada",
       "link": "Viide teisele failile, seda ei avata",
@@ -590,8 +592,10 @@
   "mailbox": {
     "back": "Tagasi kirjade juurde",
     "messages": "Kirjad",
+    "noMatches": "Päringule „{query}“ ei vasta ükski kiri.",
     "noMessages": "Selles postkastis pole kirju.",
     "openFailed": "Kirja ei õnnestunud avada. Uuesti proovimiseks puudutage.",
+    "search": "Otsi kirjadest",
     "truncated": "Kuvatakse ainult esimesed {count, number} kirja.",
     "unreadable": "Seda postkasti ei õnnestunud lugeda."
   },

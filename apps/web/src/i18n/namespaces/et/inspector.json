@@ -576,7 +576,9 @@
         "tooLarge": "Avamiseks liiga suur",
         "unreadable": "Kahjustatud, ei saa avada",
         "unsupported": "Pakitud viisil, mida ei saa avada"
-      }
+      },
+      "search": "Otsi faili nime või kausta järgi",
+      "noMatches": "Päringule „{query}“ ei vasta ükski fail."
     },
     "firstSourceReached": "See on esimene allikas.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Inspektor",
     "mailbox": {
       "messages": "Kirjad",
+      "noMatches": "Päringule „{query}“ ei vasta ükski kiri.",
       "noMessages": "Selles postkastis pole kirju.",
+      "search": "Otsi kirjadest",
       "truncated": "Kuvatakse ainult esimesed {count, number} kirja.",
       "unreadable": "Seda postkasti ei õnnestunud lugeda."
     }

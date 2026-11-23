@@ -548,7 +548,9 @@
     "files": "Fichiers",
     "insideFailed": "Impossible de charger les fichiers qu’il contient. Touchez pour réessayer.",
     "noFilesInside": "Aucun fichier à l’intérieur.",
+    "noMatches": "Aucun fichier ne correspond à « {query} ».",
     "open": "Ouvrir {fileName} ({details})",
+    "search": "Rechercher un fichier par nom ou dossier",
     "unavailable": {
       "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
       "link": "Lien vers un autre fichier, non ouvert",
@@ -590,8 +592,10 @@
   "mailbox": {
     "back": "Retour aux messages",
     "messages": "Courriels",
+    "noMatches": "Aucun courriel ne correspond à « {query} ».",
     "noMessages": "Cette boîte aux lettres ne contient aucun message.",
     "openFailed": "Impossible d’ouvrir ce message. Touchez pour réessayer.",
+    "search": "Rechercher dans les courriels",
     "truncated": "Seuls les {count, number} premiers messages sont affichés.",
     "unreadable": "Impossible de lire cette boîte aux lettres."
   },

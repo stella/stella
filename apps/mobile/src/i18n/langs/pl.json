@@ -548,7 +548,9 @@
     "files": "Pliki",
     "insideFailed": "Nie udało się wczytać plików ze środka. Stuknij, aby spróbować ponownie.",
     "noFilesInside": "W środku nie ma żadnych plików.",
+    "noMatches": "Żaden plik nie pasuje do „{query}”.",
     "open": "Otwórz {fileName} ({details})",
+    "search": "Znajdź plik po nazwie lub folderze",
     "unavailable": {
       "encrypted": "Chroniony hasłem, nie można otworzyć",
       "link": "Odnośnik do innego pliku, nie jest otwierany",
@@ -590,8 +592,10 @@
   "mailbox": {
     "back": "Wróć do wiadomości",
     "messages": "Wiadomości",
+    "noMatches": "Żadna wiadomość nie pasuje do „{query}”.",
     "noMessages": "Ta skrzynka pocztowa nie zawiera wiadomości.",
     "openFailed": "Nie udało się otworzyć tej wiadomości. Stuknij, aby spróbować ponownie.",
+    "search": "Szukaj w wiadomościach",
     "truncated": "Wyświetlono tylko pierwsze {count, number} wiadomości.",
     "unreadable": "Nie udało się odczytać tej skrzynki pocztowej."
   },

@@ -548,7 +548,9 @@
     "files": "Failai",
     "insideFailed": "Nepavyko įkelti viduje esančių failų. Bakstelėkite, kad bandytumėte dar kartą.",
     "noFilesInside": "Viduje nėra jokių failų.",
+    "noMatches": "Užklausą „{query}“ atitinkančių failų nėra.",
     "open": "Atidaryti {fileName} ({details})",
+    "search": "Rasti failą pagal pavadinimą ar aplanką",
     "unavailable": {
       "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",
       "link": "Nuoroda į kitą failą, jis neatidaromas",
@@ -590,8 +592,10 @@
   "mailbox": {
     "back": "Grįžti į laiškus",
     "messages": "Laiškai",
+    "noMatches": "Užklausą „{query}“ atitinkančių laiškų nėra.",
     "noMessages": "Šioje pašto dėžutėje nėra laiškų.",
     "openFailed": "Nepavyko atidaryti šio laiško. Palieskite ir bandykite dar kartą.",
+    "search": "Ieškoti laiškų",
     "truncated": "Rodomi tik pirmieji {count, number} laiškų.",
     "unreadable": "Nepavyko perskaityti šios pašto dėžutės."
   },

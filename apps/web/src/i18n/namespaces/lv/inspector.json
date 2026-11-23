@@ -576,7 +576,9 @@
         "tooLarge": "Pārāk liels, lai atvērtu",
         "unreadable": "Bojāts, nevar atvērt",
         "unsupported": "Saspiests veidā, ko nevar atvērt"
-      }
+      },
+      "search": "Atrast failu pēc nosaukuma vai mapes",
+      "noMatches": "Vaicājumam “{query}” neatbilst neviens fails."
     },
     "firstSourceReached": "Šis ir pirmais avots.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Inspektors",
     "mailbox": {
       "messages": "E-pasta ziņojumi",
+      "noMatches": "Vaicājumam “{query}” neatbilst neviens e-pasta ziņojums.",
       "noMessages": "Šajā pastkastītē nav e-pasta ziņojumu.",
+      "search": "Meklēt e-pasta ziņojumos",
       "truncated": "Tiek rādīti tikai pirmie {count, number} e-pasta ziņojumi.",
       "unreadable": "Šo pastkastīti neizdevās nolasīt."
     }

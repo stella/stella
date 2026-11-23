@@ -548,7 +548,9 @@
     "files": "Arquivos",
     "insideFailed": "Não foi possível carregar os arquivos dentro dele. Toque para tentar de novo.",
     "noFilesInside": "Não há arquivos dentro.",
+    "noMatches": "Nenhum arquivo corresponde a “{query}”.",
     "open": "Abrir {fileName} ({details})",
+    "search": "Encontrar um arquivo por nome ou pasta",
     "unavailable": {
       "encrypted": "Protegido por senha, não pode ser aberto",
       "link": "Link para outro arquivo, não é aberto",
@@ -590,8 +592,10 @@
   "mailbox": {
     "back": "Voltar às mensagens",
     "messages": "Mensagens",
+    "noMatches": "Nenhuma mensagem corresponde a “{query}”.",
     "noMessages": "Esta caixa de correio não contém mensagens.",
     "openFailed": "Não foi possível abrir esta mensagem. Toque para tentar novamente.",
+    "search": "Pesquisar mensagens",
     "truncated": "Somente as primeiras {count, number} mensagens são exibidas.",
     "unreadable": "Não foi possível ler esta caixa de correio."
   },

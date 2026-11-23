@@ -576,7 +576,9 @@
         "tooLarge": "Demasiado grande para abrirlo",
         "unreadable": "Dañado, no se puede abrir",
         "unsupported": "Comprimido de un modo que no se puede abrir"
-      }
+      },
+      "search": "Buscar un archivo por nombre o carpeta",
+      "noMatches": "Ningún archivo coincide con «{query}»."
     },
     "firstSourceReached": "Esta es la primera fuente.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Panel de inspección",
     "mailbox": {
       "messages": "Mensajes",
+      "noMatches": "Ningún mensaje coincide con «{query}».",
       "noMessages": "Este buzón no contiene mensajes.",
+      "search": "Buscar mensajes",
       "truncated": "Solo se muestran los primeros {count, number} mensajes.",
       "unreadable": "No se ha podido leer este buzón."
     }

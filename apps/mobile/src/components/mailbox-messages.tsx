@@ -6,12 +6,17 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import type { EmailReading as EmailReadingData } from "@stll/api-contract/email-reading";
 import {
+  LIST_SEARCH_MIN_ROWS,
+  listRowMatches,
+} from "@stll/api-contract/list-search";
+import {
   type MailboxMessage,
   mailboxMessageDetails,
   type MailboxPreview,
 } from "@stll/api-contract/mailbox";
 import { Button } from "@stll/ui/button";
 import { formatFileSize } from "@stll/ui/file-size";
+import { Input } from "@stll/ui/input";
 import { Loader } from "@stll/ui/loader";
 import { Separator } from "@stll/ui/separator";
 import { Text } from "@stll/ui/text";
@@ -128,6 +133,7 @@ export const MailboxMessages = ({
   const opener = use(FilePartOpenerContext);
   const ui = useUiColors();
   const [open, setOpen] = useState<OpenMessage | null>(null);
+  const [query, setQuery] = useState("");
   const read = async (message: MailboxMessage) => {
     const { part } = message;
     if (part === null) {
@@ -189,6 +195,14 @@ export const MailboxMessages = ({
   if (preview.messages.length === 0) {
     return <Text variant="caption">{t("noMessages")}</Text>;
   }
+  const shown = preview.messages.flatMap((message, position) =>
+    listRowMatches(
+      [message.subject, message.from, message.folder, message.fileName],
+      query,
+    )
+      ? [{ message, position }]
+      : [],
+  );
   return (
     <View>
       <Text accessibilityRole="header" variant="section">
@@ -199,10 +213,23 @@ export const MailboxMessages = ({
           {t("truncated", { count: preview.messages.length })}
         </Text>
       ) : null}
-      {preview.messages.map((message, index) => (
+      {preview.messages.length >= LIST_SEARCH_MIN_ROWS ? (
+        <Input
+          accessibilityLabel={t("search")}
+          autoCapitalize="none"
+          onChangeText={setQuery}
+          placeholder={t("search")}
+          type="search"
+          value={query}
+        />
+      ) : null}
+      {shown.length === 0 ? (
+        <Text variant="caption">{t("noMatches", { query: query.trim() })}</Text>
+      ) : null}
+      {shown.map(({ message, position }, row) => (
         <MessageRow
-          divided={index < preview.messages.length - 1}
-          key={message.part?.part ?? `unavailable:${String(index)}`}
+          divided={row < shown.length - 1}
+          key={message.part?.part ?? `unavailable:${String(position)}`}
           message={message}
           onOpen={(opened) => {
             void read(opened);

@@ -11,6 +11,7 @@ import {
 
 import {
   mailboxEntry,
+  mailboxFolderName,
   mailboxMessageFileName,
   mailboxMessageRow,
 } from "./mailbox-messages";
@@ -38,7 +39,8 @@ describe("a mailbox's list", () => {
         subject: "Spis 23 C 118/2026, podklady k jednání",
         from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
         date: "2026-11-17T08:30:00.000Z",
-        folder: null,
+        // No folder header: the mailbox file is the folder.
+        folder: "spis-23-C-118-2026",
         fileName: "Spis 23 C 118_2026, podklady k jednání.eml",
         sizeBytes: expect.any(Number),
         part: {
@@ -103,6 +105,17 @@ describe("a mailbox's list", () => {
       { part: null, unavailable: "unreadable" },
     ]);
     expect(rows[0]?.sizeBytes).toBeGreaterThan(MBOX_MESSAGE_MAX_BYTES);
+  });
+});
+
+describe("a mailbox's own folder", () => {
+  test.each([
+    ["Inbox", "Inbox"],
+    ["Doručená pošta.mbox", "Doručená pošta"],
+    ["Sent.MBX", "Sent"],
+    [".mbox", null],
+  ])("a mailbox file %j is the folder %j", (name, folder) => {
+    expect(mailboxFolderName(name)).toBe(folder);
   });
 });
 

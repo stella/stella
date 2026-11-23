@@ -548,7 +548,9 @@
     "files": "Fájlok",
     "insideFailed": "A benne lévő fájlokat nem sikerült betölteni. Koppintson az újrapróbáláshoz.",
     "noFilesInside": "Nincsenek benne fájlok.",
+    "noMatches": "Egyetlen fájl sem felel meg ennek: „{query}”.",
     "open": "{fileName} ({details}) megnyitása",
+    "search": "Fájl keresése név vagy mappa alapján",
     "unavailable": {
       "encrypted": "Jelszóval védett, nem nyitható meg",
       "link": "Hivatkozás egy másik fájlra, nem nyitjuk meg",
@@ -590,8 +592,10 @@
   "mailbox": {
     "back": "Vissza az üzenetekhez",
     "messages": "Üzenetek",
+    "noMatches": "Egyetlen üzenet sem felel meg ennek: „{query}”.",
     "noMessages": "Ez a postafiók nem tartalmaz üzeneteket.",
     "openFailed": "Az üzenetet nem sikerült megnyitni. Koppintson az újrapróbálkozáshoz.",
+    "search": "Keresés az üzenetekben",
     "truncated": "Csak az első {count, number} üzenet látható.",
     "unreadable": "Ezt a postafiókot nem sikerült beolvasni."
   },
