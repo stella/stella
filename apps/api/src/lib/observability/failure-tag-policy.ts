@@ -288,6 +288,7 @@ export const TAGGED_FAILURE_REASON = {
   FlowRunStartError: "tagged_failure",
   FlowStepError: "tagged_failure",
   FolioCollabSnapshotStoreError: "tagged_failure",
+  FolioRoomSnapshotError: "tagged_failure",
   FreeTierPolicyMissingError: "tagged_failure",
   FreshLoginDeadlineError: "tagged_failure",
   GeneratedFileWriteError: "tagged_failure",

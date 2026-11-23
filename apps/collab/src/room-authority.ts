@@ -213,7 +213,7 @@ export const createRoomAuthorities = ({
           return;
         default: {
           room.state satisfies never;
-          return panic("Unhandled room authority state");
+          panic("Unhandled room authority state");
         }
       }
     };
