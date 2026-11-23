@@ -18,6 +18,7 @@ import { Skeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
 import type { PDFColorMode } from "@/lib/pdf/pdf-color-mode";
+import { PDF_PAGE_INLINE_INSET_PX } from "@/lib/pdf/pdf-fit-width.logic";
 
 /*
  * The PDF viewer's frame and toolbar, apart from their behaviour: the
@@ -43,7 +44,7 @@ export const PdfColorModeIcon = ({
 
 /** The PDF viewer's scroll surface and its column of pages. */
 export const PDF_VIEWPORT_CLASS = "document-preview-surface h-full";
-export const PDF_VIEWPORT_CONTENT_CLASS = "relative mt-2 space-y-2 px-2";
+export const PDF_VIEWPORT_CONTENT_CLASS = "relative mt-2 space-y-2";
 
 /**
  * A PDF before its pages are measured: the viewer's own surface with one
@@ -56,7 +57,10 @@ export const PdfLoadingShell = () => (
     aria-hidden="true"
     className={cn(PDF_VIEWPORT_CLASS, "relative overflow-hidden")}
   >
-    <div className={PDF_VIEWPORT_CONTENT_CLASS}>
+    <div
+      className={PDF_VIEWPORT_CONTENT_CLASS}
+      style={{ paddingInline: PDF_PAGE_INLINE_INSET_PX }}
+    >
       <div className="relative mx-auto aspect-[210/297] w-full border-transparent">
         <Skeleton className="absolute inset-0 h-full w-full rounded-none" />
       </div>

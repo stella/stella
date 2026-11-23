@@ -214,6 +214,7 @@ const SignedDossierPdf = ({
       onWheelZoom={pdfView.onWheelZoom}
       pageSource="document"
       scaleOffset={pdfView.scaleOffset}
+      underOverlayBar
     />
   );
 };

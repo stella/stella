@@ -8,6 +8,8 @@ import { cn } from "@stll/ui/utils";
 import type { OnboardingSnapshot } from "./onboarding-types";
 
 type StepFooterProps = {
+  /** Why Back cannot act right now, such as while the step saves. */
+  backDisabledReason?: string | undefined;
   onBack?: (() => void) | undefined;
   primary?: ReactNode;
   secondary?: ReactNode;
@@ -16,6 +18,7 @@ type StepFooterProps = {
 
 /** Back, the step dots, and the step's own actions. */
 export const StepFooter = ({
+  backDisabledReason,
   onBack,
   primary,
   secondary,
@@ -26,7 +29,12 @@ export const StepFooter = ({
   return (
     <div className="mt-auto flex items-center gap-2 pt-5">
       {onBack ? (
-        <Button onClick={onBack} variant="ghost">
+        <Button
+          disabled={backDisabledReason !== undefined}
+          disabledReason={backDisabledReason}
+          onClick={onBack}
+          variant="ghost"
+        >
           {t("back")}
         </Button>
       ) : null}
