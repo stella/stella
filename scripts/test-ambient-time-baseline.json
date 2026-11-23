@@ -2235,7 +2235,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/collab/src/server.test.ts": {
-    "count": 8,
+    "count": 6,
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2485,22 +2485,12 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/ci-check-pool.test.ts": {
-    "count": 5,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/ci-failure-digest.test.ts": {
-    "count": 2,
+    "count": 3,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/ci-store-save.test.ts": {
     "count": 3,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/code-quality-task-budget.test.ts": {
-    "count": 6,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

@@ -59,11 +59,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/collab/src/server.test.ts": {
-    "count": 1,
-    "owner": "collab",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/visual-preview/browser/render.test.ts": {
     "count": 1,
     "owner": "visual-preview",
@@ -82,21 +77,6 @@
   "packages/ui/src/components/animated-preview.dom.test.tsx": {
     "count": 1,
     "owner": "ui",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/ci-check-pool.test.ts": {
-    "count": 1,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/ci-failure-digest.test.ts": {
-    "count": 1,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/code-quality-task-budget.test.ts": {
-    "count": 3,
-    "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   }
 }
