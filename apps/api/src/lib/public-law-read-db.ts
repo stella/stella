@@ -309,12 +309,12 @@ const columnTupleSource = (
 ): SqlFragment =>
   columns.length === 0
     ? sql`SELECT NULL::text, NULL::text WHERE false`
-    : sql`VALUES ${sql.join(
-        columns.map(
-          ({ relation, column }) => sql`(${relation}::text, ${column}::text)`,
-        ),
-        sql.raw(","),
-      )}`;
+    : sql`SELECT r.relation, r.column_name FROM jsonb_to_recordset(${JSON.stringify(
+        columns.map(({ relation, column }) => ({
+          relation,
+          column_name: column,
+        })),
+      )}::text::jsonb) AS r(relation text, column_name text)`;
 
 /**
  * What `current_user` may do, in the terms the validator judges.
