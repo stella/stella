@@ -34,11 +34,13 @@ type ResolveEmailMimeTypeOptions = {
   mimeType?: string | null | undefined;
 };
 
-const isTnefMimeAlias = (mimeType: string): boolean =>
-  TNEF_MIME_ALIASES.some(
-    (alias) =>
-      alias === (mimeType.split(";", 1).at(0) ?? "").trim().toLowerCase(),
+/** Whether a media type is TNEF, in any case and with any parameters. */
+const isTnefMimeType = (mimeType: string): boolean => {
+  const essence = (mimeType.split(";", 1).at(0) ?? "").trim().toLowerCase();
+  return [TNEF_MIME_TYPE, ...TNEF_MIME_ALIASES].some(
+    (type) => type === essence,
   );
+};
 
 /** Whether a name is the one Outlook gives a TNEF stream, in any case. */
 export const isTnefFileName = (fileName: string | null | undefined): boolean =>
@@ -61,9 +63,7 @@ export const resolveEmailMimeType = ({
     return mimeType;
   }
   if (
-    (mimeType !== null &&
-      mimeType !== undefined &&
-      isTnefMimeAlias(mimeType)) ||
+    (mimeType !== null && mimeType !== undefined && isTnefMimeType(mimeType)) ||
     isTnefFileName(fileName)
   ) {
     return TNEF_MIME_TYPE;

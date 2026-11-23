@@ -55,6 +55,35 @@ describe("an RTF message body", () => {
     ).toBe("\u4E2D\u6587");
   });
 
+  test("a run in a font of another character set decodes in that script", () => {
+    const rtf =
+      "{\\rtf1\\ansi\\ansicpg1252\\deff0{\\fonttbl{\\f0\\fswiss\\fcharset0 Arial;}" +
+      "{\\f1\\fnil\\fcharset128 MS Mincho;}}Tokio {\\f1 \\'93\\'fa\\'96\\'7b} K\\'f6ln}";
+    expect(read(rtf)).toEqual({
+      type: "text",
+      text: "Tokio \u65E5\u672C K\u00F6ln",
+    });
+  });
+
+  test("a control symbol is one stand-in character of a Unicode escape", () => {
+    expect(read("{\\rtf1\\uc1\\u945\\~B}")).toEqual({
+      type: "text",
+      text: "\u03B1B",
+    });
+  });
+
+  test("binary data is skipped whole, braces in it included", () => {
+    expect(read("{\\rtf1 Before{\\pict\\bin1 {}After}")).toEqual({
+      type: "text",
+      text: "BeforeAfter",
+    });
+  });
+
+  test("a control word longer than the specification allows never fails the read", () => {
+    const long = `{\\rtf1 \\${"a".repeat(200_000)}1234567890123 Text}`;
+    expect(read(long)?.type).toBe("text");
+  });
+
   test("shows nothing for RTF without text", () => {
     expect(read("{\\rtf1\\ansi{\\fonttbl{\\f0 Arial;}}\\par }")).toBeNull();
     expect(read("")).toBeNull();

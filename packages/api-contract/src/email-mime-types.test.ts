@@ -16,6 +16,7 @@ describe("an email's media type", () => {
     [TNEF_MIME_TYPE, "zprava", TNEF_MIME_TYPE],
     ["application/ms-tnef", "priloha", TNEF_MIME_TYPE],
     ["Application/MS-TNEF; name=winmail.dat", null, TNEF_MIME_TYPE],
+    ["Application/VND.MS-TNEF; name=zprava.dat", "zprava.dat", TNEF_MIME_TYPE],
     ["application/octet-stream", "winmail.dat", TNEF_MIME_TYPE],
     ["application/octet-stream", "WINMAIL.DAT", TNEF_MIME_TYPE],
     ["application/octet-stream", "prilohy/winmail.dat", TNEF_MIME_TYPE],

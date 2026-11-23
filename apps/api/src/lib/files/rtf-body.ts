@@ -103,6 +103,31 @@ const decoderFor = codePageDecoder;
 
 /** The largest UTF-16 code unit a `\uN` may name. */
 const MAX_CODE_UNIT = 0xff_ff;
+/** The longest control word and parameter the RTF specification allows. */
+const MAX_WORD_LETTERS = 32;
+const MAX_PARAMETER_DIGITS = 10;
+
+/**
+ * The Windows code page a font's character set (`\fcharsetN`) selects, so a
+ * run in that font decodes as its own script.
+ */
+const CHARSET_CODE_PAGES: ReadonlyMap<number, number> = new Map([
+  [0, 1252],
+  [77, 10_000],
+  [128, 932],
+  [129, 949],
+  [134, 936],
+  [136, 950],
+  [161, 1253],
+  [162, 1254],
+  [163, 1258],
+  [177, 1255],
+  [178, 1256],
+  [186, 1257],
+  [204, 1251],
+  [222, 874],
+  [238, 1250],
+]);
 
 type Group = {
   /** The group's content is not body text. */
@@ -113,18 +138,25 @@ type Group = {
   rtfOnly: boolean;
   /** Characters a `\uN` stands in place of (`\ucN`). */
   unicodeSkip: number;
+  /** The group is (inside) the font table, whose fonts it records. */
+  fontTable: boolean;
+  /** The current font (`\fN`), whose character set decodes its bytes. */
+  font: number | null;
 };
 
 const isLetter = (byte: number) =>
   (byte >= 0x61 && byte <= 0x7a) || (byte >= 0x41 && byte <= 0x5a);
 const isDigit = (byte: number) => byte >= 0x30 && byte <= 0x39;
 const HEX_DIGITS = /^[0-9a-f]{2}$/iu;
+const ascii = new TextDecoder("windows-1252");
 
 const ROOT_GROUP: Group = {
   hidden: false,
   htmlTag: false,
   rtfOnly: false,
   unicodeSkip: 1,
+  fontTable: false,
+  font: null,
 };
 
 /** What a control symbol other than an escaped byte stands for. */
@@ -139,18 +171,24 @@ const CONTROL_SYMBOL_TEXT: ReadonlyMap<number, string> = new Map([
 type ControlWord = { word: string; parameter: number | null; next: number };
 
 const readControlWord = (rtf: Uint8Array, at: number): ControlWord => {
+  const limit = (start: number, length: number) =>
+    Math.min(rtf.byteLength, start + length);
   let end = at + 1;
-  while (end < rtf.byteLength && isLetter(rtf[end] ?? 0)) {
+  while (end < limit(at + 1, MAX_WORD_LETTERS) && isLetter(rtf[end] ?? 0)) {
     end += 1;
   }
-  const word = String.fromCodePoint(...rtf.subarray(at + 1, end));
-  let paramEnd = rtf[end] === 0x2d ? end + 1 : end;
-  while (paramEnd < rtf.byteLength && isDigit(rtf[paramEnd] ?? 0)) {
+  const word = ascii.decode(rtf.subarray(at + 1, end));
+  const digitsStart = rtf[end] === 0x2d ? end + 1 : end;
+  let paramEnd = digitsStart;
+  while (
+    paramEnd < limit(digitsStart, MAX_PARAMETER_DIGITS) &&
+    isDigit(rtf[paramEnd] ?? 0)
+  ) {
     paramEnd += 1;
   }
-  const hasParameter = paramEnd > end && isDigit(rtf[paramEnd - 1] ?? 0);
+  const hasParameter = paramEnd > digitsStart;
   const parameter = hasParameter
-    ? Number.parseInt(String.fromCodePoint(...rtf.subarray(end, paramEnd)), 10)
+    ? Number.parseInt(ascii.decode(rtf.subarray(end, paramEnd)), 10)
     : null;
   const after = hasParameter ? paramEnd : end;
   // One space after a control word is its delimiter, not text.
@@ -160,10 +198,19 @@ const readControlWord = (rtf: Uint8Array, at: number): ControlWord => {
 /** The reading of one body: the output so far and the state that shapes it. */
 class BodyReader {
   fromHtml = false;
-  private decoder = decoderFor(1252);
+  private documentDecoder = decoderFor(1252);
+  /** Each font's code page, from the font table. */
+  private readonly fontCodePages = new Map<number, number>();
+  /** One decoder per font code page, made once. */
+  private readonly fontDecoders = new Map<number, TextDecoder>();
+  /** The font the font table is describing. */
+  private tableFont: number | null = null;
   private readonly out: string[] = [];
   private pending: number[] = [];
+  private pendingDecoder: TextDecoder = this.documentDecoder;
   private readonly groups: Group[] = [{ ...ROOT_GROUP }];
+  /** Groups opened past the depth bound: counted, never kept. */
+  private overflow = 0;
   /** Whether the next control word opens the current group's destination. */
   private groupStart = false;
   private ignorableDestination = false;
@@ -176,28 +223,55 @@ class BodyReader {
 
   private get visible(): boolean {
     const { group } = this;
-    if (group.hidden) {
+    if (group.hidden || this.overflow > 0) {
       return false;
     }
     return group.htmlTag || !(this.fromHtml && group.rtfOnly);
   }
 
+  /** The decoder for the current font, else the document's code page. */
+  private get decoder(): TextDecoder {
+    const { font } = this.group;
+    const codePage = font === null ? undefined : this.fontCodePages.get(font);
+    if (codePage === undefined) {
+      return this.documentDecoder;
+    }
+    const known = this.fontDecoders.get(codePage);
+    if (known !== undefined) {
+      return known;
+    }
+    const decoder = codePageDecoder(codePage);
+    this.fontDecoders.set(codePage, decoder);
+    return decoder;
+  }
+
   private flush() {
     if (this.pending.length > 0) {
-      this.out.push(this.decoder.decode(new Uint8Array(this.pending)));
+      this.out.push(this.pendingDecoder.decode(new Uint8Array(this.pending)));
       this.pending = [];
     }
   }
 
-  byte(byte: number) {
-    this.groupStart = false;
+  /** Whether a fallback character of a `\uN` is consumed here. */
+  private skipped(): boolean {
     if (this.skip > 0) {
       this.skip -= 1;
+      return true;
+    }
+    return false;
+  }
+
+  byte(byte: number) {
+    this.groupStart = false;
+    if (this.skipped() || !this.visible) {
       return;
     }
-    if (this.visible) {
-      this.pending.push(byte);
+    const { decoder } = this;
+    if (decoder !== this.pendingDecoder) {
+      this.flush();
+      this.pendingDecoder = decoder;
     }
+    this.pending.push(byte);
   }
 
   private text(text: string) {
@@ -208,18 +282,20 @@ class BodyReader {
   }
 
   open() {
-    // A group inherits its parent's state.
-    const parent = this.group;
-    this.groups.push({
-      ...parent,
-      hidden: parent.hidden || this.groups.length > MAX_GROUP_DEPTH,
-    });
+    if (this.groups.length > MAX_GROUP_DEPTH) {
+      this.overflow += 1;
+    } else {
+      // A group inherits its parent's state.
+      this.groups.push({ ...this.group });
+    }
     this.groupStart = true;
     this.ignorableDestination = false;
   }
 
   close() {
-    if (this.groups.length > 1) {
+    if (this.overflow > 0) {
+      this.overflow -= 1;
+    } else if (this.groups.length > 1) {
       this.groups.pop();
     }
     this.groupStart = false;
@@ -229,7 +305,7 @@ class BodyReader {
   symbol(rtf: Uint8Array, at: number): number {
     const symbol = rtf[at + 1];
     if (symbol === 0x27) {
-      const hex = String.fromCodePoint(rtf[at + 2] ?? 0, rtf[at + 3] ?? 0);
+      const hex = ascii.decode(rtf.subarray(at + 2, at + 4));
       if (HEX_DIGITS.test(hex)) {
         this.byte(Number.parseInt(hex, 16));
       }
@@ -242,7 +318,8 @@ class BodyReader {
       this.byte(symbol);
     } else {
       const text = CONTROL_SYMBOL_TEXT.get(symbol ?? 0);
-      if (text !== undefined) {
+      // A control symbol counts as one fallback character of a `\uN`.
+      if (text !== undefined && !this.skipped()) {
         this.text(text);
       }
     }
@@ -260,6 +337,11 @@ class BodyReader {
       this.group.htmlTag = true;
       return true;
     }
+    if (word === "fonttbl") {
+      this.group.hidden = true;
+      this.group.fontTable = true;
+      return true;
+    }
     if (this.ignorableDestination || HIDDEN_DESTINATIONS.has(word)) {
       this.flush();
       this.group.hidden = true;
@@ -268,11 +350,30 @@ class BodyReader {
     return false;
   }
 
+  /** A font table's control word: which font, and its character set. */
+  private fontTableWord(word: string, parameter: number | null): void {
+    if (word === "f") {
+      this.tableFont = parameter;
+      return;
+    }
+    const codePage =
+      word === "fcharset" && parameter !== null
+        ? CHARSET_CODE_PAGES.get(parameter)
+        : undefined;
+    if (this.tableFont !== null && codePage !== undefined) {
+      this.fontCodePages.set(this.tableFont, codePage);
+    }
+  }
+
   word({ word, parameter }: ControlWord) {
     if (this.destination(word)) {
       return;
     }
     const { group } = this;
+    if (group.fontTable) {
+      this.fontTableWord(word, parameter);
+      return;
+    }
     switch (word) {
       case "fromhtml":
         this.fromHtml = parameter !== 0;
@@ -280,8 +381,12 @@ class BodyReader {
       case "ansicpg":
         if (parameter !== null) {
           this.flush();
-          this.decoder = decoderFor(parameter);
+          this.documentDecoder = decoderFor(parameter);
         }
+        return;
+      case "f":
+      case "deff":
+        group.font = parameter;
         return;
       case "uc":
         group.unicodeSkip = Math.max(0, parameter ?? 1);
@@ -305,7 +410,7 @@ class BodyReader {
         return;
       default: {
         const special = SPECIAL_CHARACTERS.get(word);
-        if (special !== undefined) {
+        if (special !== undefined && !this.skipped()) {
           this.text(special);
         }
       }
@@ -349,7 +454,14 @@ export const rtfMessageBody = (rtf: Uint8Array): RtfMessageBody | null => {
     } else if (isLetter(rtf[at + 1] ?? 0)) {
       const control = readControlWord(rtf, at);
       reader.word(control);
-      at = control.next;
+      // `\binN`: N raw bytes follow, never read as RTF.
+      at =
+        control.word === "bin" && control.parameter !== null
+          ? Math.min(
+              rtf.byteLength,
+              control.next + Math.max(0, control.parameter),
+            )
+          : control.next;
     } else {
       at = reader.symbol(rtf, at);
     }

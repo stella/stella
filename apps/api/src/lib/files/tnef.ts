@@ -483,9 +483,7 @@ const smtpAddress = (address: string | null): string | null => {
  * `attFrom`: a TRP structure (type, size, name length, address length),
  * then the name and the address, each NUL-terminated.
  */
-const legacySender = (data: Uint8Array, codePage: number) => {
-  // A sender that does not read is no sender, never a failed message.
-  const cursor = new Cursor(data, { error: null });
+const legacySender = (cursor: Cursor, codePage: number) => {
   cursor.uint16();
   cursor.uint16();
   const nameLength = cursor.uint16();
@@ -538,7 +536,7 @@ const startsWith = (bytes: Uint8Array, prefix: Uint8Array) =>
 const finishAttachment = (
   { title, data, properties }: AttachmentDraft,
   codePage: number,
-): TnefAttachment | null => {
+): TnefAttachment => {
   const name =
     stringOf(properties, PROPERTY.attachLongFilename, codePage) ??
     stringOf(properties, PROPERTY.attachFilename, codePage) ??
@@ -563,10 +561,19 @@ const finishAttachment = (
       message: true,
     };
   }
-  const bytes = binaryOf(properties, PROPERTY.attachData) ?? data;
-  return bytes === null
-    ? null
-    : { ...common, fileName: name, bytes, message: false };
+  // An OLE object (`ATTACH_OLE`) is its storage after its interface ID.
+  const bytes =
+    binaryOf(properties, PROPERTY.attachData) ??
+    data ??
+    (object?.kind === "object" ? object.bytes.subarray(IID_BYTES) : null);
+  // An attachment with no bytes is still listed, so expanding the stream
+  // never hides a file it names.
+  return {
+    ...common,
+    fileName: name,
+    bytes: bytes ?? new Uint8Array(),
+    message: false,
+  };
 };
 
 /** What the message attributes say, as the stream is read. */
@@ -606,7 +613,8 @@ const readMessageAttribute = (
       state.date = legacyDate(data);
       break;
     case ATTRIBUTE.from:
-      state.from = legacySender(data, state.codePage);
+      // A sender that does not read refuses the stream, as any fault does.
+      state.from = legacySender(cursor.over(data), state.codePage);
       break;
     case ATTRIBUTE.msgProps: {
       const list = cursor.over(data);
@@ -692,10 +700,7 @@ const messageOf = (
             null,
           ),
     text: string(PROPERTY.body) ?? state.body,
-    attachments: drafts.flatMap((draft) => {
-      const attachment = finishAttachment(draft, codePage);
-      return attachment === null ? [] : [attachment];
-    }),
+    attachments: drafts.map((draft) => finishAttachment(draft, codePage)),
   };
 };
 

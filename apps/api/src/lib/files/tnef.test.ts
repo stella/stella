@@ -155,6 +155,45 @@ describe("a TNEF stream", () => {
     ]);
   });
 
+  test("an attachment whose bytes are an OLE object or missing is still listed", () => {
+    const header = new Uint8Array([0x78, 0x9f, 0x3e, 0x22, 0x00, 0x01]);
+    const rendering = tnefAttribute(2, 0x00_06_90_02, new Uint8Array(14));
+    const title = (name: string) =>
+      tnefAttribute(2, 0x00_01_80_10, new TextEncoder().encode(`${name}\0`));
+    const read = parseTnef(
+      new Uint8Array(
+        Buffer.concat([
+          header,
+          rendering,
+          title("Plan.vsd"),
+          rendering,
+          title("leer.txt"),
+        ]),
+      ),
+    ).unwrap();
+    expect(
+      read.attachments.map(({ fileName, bytes }) => [
+        fileName,
+        bytes.byteLength,
+      ]),
+    ).toEqual([
+      ["Plan.vsd", 0],
+      ["leer.txt", 0],
+    ]);
+  });
+
+  test("a sender attribute that runs past its data refuses the stream", () => {
+    const header = new Uint8Array([0x78, 0x9f, 0x3e, 0x22, 0x00, 0x01]);
+    // A TRP header stating a 200-byte name in an 8-byte attribute.
+    const from = new Uint8Array([4, 0, 0, 0, 200, 0, 0, 0]);
+    const read = parseTnef(
+      new Uint8Array(
+        Buffer.concat([header, tnefAttribute(1, 0x00_00_80_00, from)]),
+      ),
+    );
+    expect(read.isErr()).toBe(true);
+  });
+
   test("refuses what is not a TNEF stream, or is cut short", () => {
     expect(parseTnef(new TextEncoder().encode("%PDF-1.7")).isErr()).toBe(true);
     const stream = tnefStream(WENDLER_MESSAGE);
