@@ -1411,12 +1411,16 @@
     "sessionOpeningInOffice": "Wird in Office geöffnet",
     "sessionSavingDraft": "Entwurf wird gespeichert",
     "settings": "Einstellungen",
+    "showTranscription": "Transkript anzeigen",
     "support": "Support",
     "supportCopyDiagnostics": "Diagnose kopieren",
     "supportEmailSupport": "E-Mail-Support",
     "supportRevealAppData": "App-Daten anzeigen",
     "temporaryWorkingCopies": "Temporäre Arbeitskopien",
     "transcribeRecording": "Aufnahme transkribieren…",
+    "transcriptionProgress": "Transkription läuft: {done} von {total} Min.",
+    "transcriptionProgressSoFar": "Transkription läuft: bisher {done} Min.",
+    "transcriptionReady": "Transkript fertig",
     "updatesManaged": "Aktualisierungen werden von Ihrer Organisation verwaltet"
   }
 }

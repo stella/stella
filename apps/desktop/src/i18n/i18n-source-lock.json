@@ -1226,11 +1226,15 @@
   "tray.sessionOpeningInOffice": "Opening in Office",
   "tray.sessionSavingDraft": "Saving draft",
   "tray.settings": "Settings",
+  "tray.showTranscription": "Show transcription",
   "tray.support": "Support",
   "tray.supportCopyDiagnostics": "Copy diagnostics",
   "tray.supportEmailSupport": "Email support",
   "tray.supportRevealAppData": "Reveal app data",
   "tray.temporaryWorkingCopies": "Temporary working copies",
   "tray.transcribeRecording": "Transcribe a recording…",
+  "tray.transcriptionProgress": "Transcription in progress: {done} of {total} min",
+  "tray.transcriptionProgressSoFar": "Transcription in progress: {done} min so far",
+  "tray.transcriptionReady": "Transcription ready",
   "tray.updatesManaged": "Updates managed by your organization"
 }

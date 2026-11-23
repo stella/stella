@@ -1411,12 +1411,16 @@
     "sessionOpeningInOffice": "Megnyitás Office-ban",
     "sessionSavingDraft": "Piszkozat mentése",
     "settings": "Beállítások",
+    "showTranscription": "Átirat megjelenítése",
     "support": "Támogatás",
     "supportCopyDiagnostics": "Diagnosztika másolása",
     "supportEmailSupport": "E-mail támogatás",
     "supportRevealAppData": "Alkalmazásadatok megjelenítése",
     "temporaryWorkingCopies": "Ideiglenes munkamásolatok",
     "transcribeRecording": "Felvétel átírása…",
+    "transcriptionProgress": "Átírás folyamatban: {done} / {total} perc",
+    "transcriptionProgressSoFar": "Átírás folyamatban: eddig {done} perc",
+    "transcriptionReady": "Az átirat elkészült",
     "updatesManaged": "A frissítéseket a szervezete kezeli"
   }
 }

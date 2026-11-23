@@ -1411,12 +1411,16 @@
     "sessionOpeningInOffice": "Tiek atvērts Office",
     "sessionSavingDraft": "Tiek saglabāts melnraksts",
     "settings": "Iestatījumi",
+    "showTranscription": "Rādīt transkripciju",
     "support": "Atbalsts",
     "supportCopyDiagnostics": "Kopēt diagnostiku",
     "supportEmailSupport": "E-pasta atbalsts",
     "supportRevealAppData": "Rādīt lietotnes datus",
     "temporaryWorkingCopies": "Pagaidu darba kopijas",
     "transcribeRecording": "Transkribēt ierakstu…",
+    "transcriptionProgress": "Notiek transkribēšana: {done} no {total} min",
+    "transcriptionProgressSoFar": "Notiek transkribēšana: līdz šim {done} min",
+    "transcriptionReady": "Transkripcija ir gatava",
     "updatesManaged": "Atjauninājumus pārvalda jūsu organizācija"
   }
 }

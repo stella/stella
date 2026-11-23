@@ -1411,12 +1411,16 @@
     "sessionOpeningInOffice": "Otevírání v Office",
     "sessionSavingDraft": "Ukládání konceptu",
     "settings": "Nastavení",
+    "showTranscription": "Zobrazit přepis",
     "support": "Podpora",
     "supportCopyDiagnostics": "Kopírovat diagnostiku",
     "supportEmailSupport": "E-mailová podpora",
     "supportRevealAppData": "Zobrazit data aplikace",
     "temporaryWorkingCopies": "Dočasné pracovní kopie",
     "transcribeRecording": "Přepsat nahrávku…",
+    "transcriptionProgress": "Probíhá přepis: {done} z {total} min",
+    "transcriptionProgressSoFar": "Probíhá přepis: zatím {done} min",
+    "transcriptionReady": "Přepis je hotový",
     "updatesManaged": "Aktualizace spravuje vaše organizace"
   }
 }

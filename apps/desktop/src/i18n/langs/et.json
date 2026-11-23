@@ -1411,12 +1411,16 @@
     "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine",
     "settings": "Seaded",
+    "showTranscription": "Näita transkriptsiooni",
     "support": "Tugi",
     "supportCopyDiagnostics": "Kopeeri diagnostika",
     "supportEmailSupport": "E-posti tugi",
     "supportRevealAppData": "Kuva rakenduse andmed",
     "temporaryWorkingCopies": "Ajutised töökoopiad",
     "transcribeRecording": "Transkribeeri salvestis…",
+    "transcriptionProgress": "Transkribeerimine käib: {done} / {total} min",
+    "transcriptionProgressSoFar": "Transkribeerimine käib: seni {done} min",
+    "transcriptionReady": "Transkriptsioon on valmis",
     "updatesManaged": "Värskendusi haldab teie organisatsioon"
   }
 }
