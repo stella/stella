@@ -498,14 +498,16 @@ const updateTranslatedUnits = async (
   }
   await authorizedWrite(actor, async (tx) => {
     // audit: skip — unit and progress bookkeeping inside the audited run.
-    const values = sql.join(
-      updates.map((update) => sql`(${update.unitKey}, ${update.targetText})`),
-      sql`, `,
+    const updatesPayload = JSON.stringify(
+      updates.map((update) => ({
+        unit_key: update.unitKey,
+        target_text: update.targetText,
+      })),
     );
     await tx.execute(sql`
       UPDATE ${documentTranslationUnits} AS u
       SET status = 'translated', target_text = v.target_text, updated_at = now()
-      FROM (VALUES ${values}) AS v(unit_key, target_text)
+      FROM jsonb_to_recordset(${updatesPayload}::text::jsonb) AS v(unit_key text, target_text text)
       WHERE u.run_id = ${actor.runId}
         AND u.workspace_id = ${actor.workspaceId}
         AND u.unit_key = v.unit_key
