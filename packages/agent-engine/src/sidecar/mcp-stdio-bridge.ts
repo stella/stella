@@ -62,10 +62,12 @@ const jsonRpcErrorLine = (id: string | number, message: string): string =>
   })}\n`;
 
 /**
- * Extracts complete `data:` payloads from an SSE stream and writes each
- * non-empty JSON payload as a single line.
+ * Writes each complete `data:` payload of an SSE stream as a single line as
+ * soon as its event ends, so a server request sent on the stream before the
+ * final response reaches the agent while the stream stays open.
  */
-const writeSsePayloads = (text: string, output: (line: string) => void) => {
+const createSseWriter = (output: (line: string) => void) => {
+  let pending = "";
   let dataLines: string[] = [];
   const flush = () => {
     if (dataLines.length === 0) {
@@ -81,16 +83,74 @@ const writeSsePayloads = (text: string, output: (line: string) => void) => {
       `${Result.isOk(compact) ? compact.value : payload.replace(/\r?\n/gu, " ")}\n`,
     );
   };
-  for (const rawLine of text.split(/\r?\n/u)) {
+  const line = (rawLine: string) => {
     if (rawLine === "") {
       flush();
-      continue;
+      return;
     }
     if (rawLine.startsWith("data:")) {
       dataLines.push(rawLine.slice(5).trimStart());
     }
+  };
+  return {
+    push: (text: string) => {
+      const lines = `${pending}${text}`.split(/\r?\n/u);
+      pending = lines.pop() ?? "";
+      for (const rawLine of lines) {
+        line(rawLine);
+      }
+    },
+    end: () => {
+      if (pending !== "") {
+        line(pending);
+        pending = "";
+      }
+      flush();
+    },
+  };
+};
+
+type BridgeMessage =
+  | { kind: "request"; id: string | number }
+  | { kind: "cancellation"; requestId: string | number | null }
+  | { kind: "response" }
+  | { kind: "other" };
+
+/**
+ * Requests wait their turn; a response or a cancellation from the agent goes
+ * out at once, since the request it answers may hold the queue open.
+ */
+const bridgeMessageOf = (trimmed: string): BridgeMessage => {
+  const parsed = Result.try((): unknown => JSON.parse(trimmed));
+  if (
+    Result.isError(parsed) ||
+    typeof parsed.value !== "object" ||
+    parsed.value === null
+  ) {
+    return { kind: "other" };
   }
-  flush();
+  const message = parsed.value;
+  const method: unknown = Reflect.get(message, "method");
+  const id: unknown = Reflect.get(message, "id");
+  const validId = typeof id === "string" || typeof id === "number";
+  if (method === "notifications/cancelled") {
+    const params: unknown = Reflect.get(message, "params");
+    const requestId: unknown =
+      typeof params === "object" && params !== null
+        ? Reflect.get(params, "requestId")
+        : null;
+    return {
+      kind: "cancellation",
+      requestId:
+        typeof requestId === "string" || typeof requestId === "number"
+          ? requestId
+          : null,
+    };
+  }
+  if (typeof method === "string") {
+    return validId ? { kind: "request", id } : { kind: "other" };
+  }
+  return validId ? { kind: "response" } : { kind: "other" };
 };
 
 export const runMcpStdioBridge = async ({
@@ -110,22 +170,20 @@ export const runMcpStdioBridge = async ({
   // Set from the reader's callback, so it is a field, not a narrowed local.
   const limit = { oversizedExceeded: false };
 
-  const isCancellationNotification = (trimmed: string): boolean => {
-    const parsed = Result.try((): unknown => JSON.parse(trimmed));
-    return (
-      Result.isOk(parsed) &&
-      typeof parsed.value === "object" &&
-      parsed.value !== null &&
-      Reflect.get(parsed.value, "method") === "notifications/cancelled"
-    );
-  };
+  // Requests still waiting in the queue, and those cancelled before they
+  // were sent: a cancelled request never reaches the proxy.
+  const queued = new Set<string | number>();
+  const cancelledBeforeSending = new Set<string | number>();
 
   const forward = async (line: string) => {
     const trimmed = line.trim();
     if (trimmed === "") {
       return;
     }
-    const id = requestIdOf(trimmed);
+    // Only a request is answered with an error line; the agent's own
+    // responses and notifications expect no reply.
+    const id =
+      bridgeMessageOf(trimmed).kind === "request" ? requestIdOf(trimmed) : null;
     const headers: Record<string, string> = {
       accept: "application/json, text/event-stream",
       authorization: `Bearer ${token}`,
@@ -161,14 +219,8 @@ export const runMcpStdioBridge = async ({
       if (res.status === 202 || res.status === 204) {
         return;
       }
-      const body = await Result.tryPromise(async () => await res.text());
-      if (Result.isError(body)) {
-        if (id !== null) {
-          output(jsonRpcErrorLine(id, "Could not read stella's MCP response."));
-        }
-        return;
-      }
       if (!res.ok) {
+        await Result.tryPromise(async () => await res.body?.cancel());
         if (id !== null) {
           output(
             jsonRpcErrorLine(
@@ -181,7 +233,28 @@ export const runMcpStdioBridge = async ({
       }
       const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
       if (contentType.includes("text/event-stream")) {
-        writeSsePayloads(body.value, output);
+        const sse = createSseWriter(output);
+        const decoder = new TextDecoder("utf-8", { fatal: true });
+        const streamed = await Result.tryPromise(async () => {
+          if (res.body === null) {
+            return;
+          }
+          for await (const bytes of res.body) {
+            sse.push(decoder.decode(bytes, { stream: true }));
+          }
+          sse.push(decoder.decode());
+        });
+        sse.end();
+        if (Result.isError(streamed) && id !== null) {
+          output(jsonRpcErrorLine(id, "Could not read stella's MCP response."));
+        }
+        return;
+      }
+      const body = await Result.tryPromise(async () => await res.text());
+      if (Result.isError(body)) {
+        if (id !== null) {
+          output(jsonRpcErrorLine(id, "Could not read stella's MCP response."));
+        }
         return;
       }
       const text = body.value.trim();
@@ -199,14 +272,34 @@ export const runMcpStdioBridge = async ({
   const lines = createLineReader({
     maxLineBytes: MAX_LINE_BYTES,
     line: (line) => {
-      if (isCancellationNotification(line.trim())) {
+      const message = bridgeMessageOf(line.trim());
+      if (
+        message.kind === "cancellation" &&
+        message.requestId !== null &&
+        queued.has(message.requestId)
+      ) {
+        // The proxy has not seen the request: it is dropped before sending,
+        // so it cannot start after the agent cancelled it.
+        cancelledBeforeSending.add(message.requestId);
+        return;
+      }
+      if (message.kind === "cancellation" || message.kind === "response") {
         const task = forward(line).finally(() => {
           outOfBand.delete(task);
         });
         outOfBand.add(task);
         return;
       }
+      if (message.kind === "request") {
+        queued.add(message.id);
+      }
       queue = queue.then(async () => {
+        if (message.kind === "request") {
+          queued.delete(message.id);
+          if (cancelledBeforeSending.delete(message.id)) {
+            return undefined;
+          }
+        }
         await forward(line);
         return undefined;
       });

@@ -6,6 +6,7 @@ import {
   antigravityCommandOutlivesPrompt,
   classifyAntigravityError,
 } from "./antigravity";
+import { AcpRequestError } from "./client";
 import type { AcpAnswer, AcpClient } from "./client";
 import { ACP_AGENT_NOTIFICATIONS } from "./protocol";
 import { AcpTurnSession } from "./turn";
@@ -220,5 +221,145 @@ describe("AcpTurnSession background work, stderr classification, and late update
         resetsAt: "2026-11-22T10:00:00Z",
       },
     });
+  });
+  test("an error written while a held turn's background work runs fails the turn", async () => {
+    const { client } = createFakeClient();
+    const stderr = { text: "" };
+    const lateErrorClient: AcpClient = {
+      ...client,
+      stderrSince: () => stderr.text,
+    };
+    const session = new AcpTurnSession({
+      gracePeriodMs: 200,
+      detached: (p) => {
+        void p;
+      },
+      displayName: "Antigravity",
+      mcpNames: { stella: "stella", others: [] },
+      policy: { approvals: "auto", network: "open", fs: "workspace" },
+      workspaceDir: "/tmp/chat",
+      unreadablePaths: [],
+      onPromptError: () => undefined,
+      toolOutlivesPrompt: antigravityCommandOutlivesPrompt,
+      classifyErrorOutput: classifyAntigravityError,
+      backgroundSettleMs: 5000,
+    });
+    session.attach(lateErrorClient);
+    session.begin("sess-late-err", { type: "fresh" });
+
+    const turn = session.turn();
+    const collected = collectEvents(turn);
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.update, {
+      sessionId: "sess-late-err",
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "cmd-late",
+        title: "bun test",
+        kind: "execute",
+        status: "in_progress",
+        rawInput: { CommandLine: "bun test" },
+      },
+    });
+    session.prompted(Promise.resolve(Result.ok({ stopReason: "end_turn" })));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    stderr.text =
+      "Error 429, Message: Quota exceeded reason:QUOTA_EXHAUSTED quotaResetTimeStamp:2026-11-22T10:00:00Z, Status: RESOURCE_EXHAUSTED";
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.update, {
+      sessionId: "sess-late-err",
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "cmd-late",
+        status: "completed",
+      },
+    });
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.update, {
+      sessionId: "sess-late-err",
+      update: { sessionUpdate: "usage_update", used: 10, size: 1000 },
+    });
+
+    const events = await collected;
+    expect(events.at(-1)).toEqual({
+      type: "turn.failed",
+      failure: {
+        type: "usage_limit",
+        message: "You have reached your Antigravity quota for this period.",
+        resetsAt: "2026-11-22T10:00:00Z",
+      },
+    });
+  });
+
+  test("a steer refused while the turn waits on background work leaves the turn waiting for that work", async () => {
+    const { client } = createFakeClient();
+    const steerAnswer = Promise.withResolvers<AcpAnswer>();
+    const steeringClient: AcpClient = {
+      ...client,
+      request: async () => await steerAnswer.promise,
+    };
+    const session = new AcpTurnSession({
+      gracePeriodMs: 200,
+      detached: (p) => {
+        void p;
+      },
+      displayName: "Antigravity",
+      mcpNames: { stella: "stella", others: [] },
+      policy: { approvals: "auto", network: "open", fs: "workspace" },
+      workspaceDir: "/tmp/chat",
+      unreadablePaths: [],
+      onPromptError: () => undefined,
+      toolOutlivesPrompt: antigravityCommandOutlivesPrompt,
+      backgroundSettleMs: 5000,
+    });
+    session.attach(steeringClient);
+    session.steers(true);
+    session.begin("sess-steer-held", { type: "fresh" });
+
+    const turn = session.turn();
+    const collected = collectEvents(turn);
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.update, {
+      sessionId: "sess-steer-held",
+      update: {
+        sessionUpdate: "tool_call",
+        toolCallId: "cmd-steer",
+        title: "bun test",
+        kind: "execute",
+        status: "in_progress",
+        rawInput: { CommandLine: "bun test" },
+      },
+    });
+    session.prompted(Promise.resolve(Result.ok({ stopReason: "end_turn" })));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await turn.steer({ inputId: "input-held", text: "Also check B." });
+    steerAnswer.resolve(
+      Result.err(
+        new AcpRequestError({
+          reason: "rejected",
+          code: null,
+          message: "busy",
+        }),
+      ),
+    );
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.update, {
+      sessionId: "sess-steer-held",
+      update: {
+        sessionUpdate: "tool_call_update",
+        toolCallId: "cmd-steer",
+        status: "completed",
+      },
+    });
+    session.handlers.notification(ACP_AGENT_NOTIFICATIONS.update, {
+      sessionId: "sess-steer-held",
+      update: { sessionUpdate: "usage_update", used: 10, size: 1000 },
+    });
+
+    const events = await collected;
+    expect(events.at(-1)?.type).toBe("turn.completed");
   });
 });

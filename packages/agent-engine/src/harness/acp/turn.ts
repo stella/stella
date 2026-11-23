@@ -293,7 +293,7 @@ export class AcpTurnSession {
   /** Steering messages not settled yet, by the prompt that carries them. */
   private readonly steeringInputs = new Map<
     number,
-    { inputId: string; during: number }
+    { inputId: string; during: number; heldBefore: boolean }
   >();
   /** The prompt whose answer ends the turn: the last one sent. */
   private latestPrompt = 0;
@@ -426,6 +426,12 @@ export class AcpTurnSession {
       this.lifecycle.settleInput(steer.inputId, "rejected");
       if (this.latestPrompt === prompt) {
         this.latestPrompt = steer.during;
+        // The earlier prompt had already ended into background work: the
+        // turn waits on that work again, as it did before the steer.
+        if (steer.heldBefore && !this.lifecycle.ended) {
+          this.heldForBackground = true;
+          this.maybeSettleBackground(false);
+        }
       }
       return;
     }
@@ -453,6 +459,7 @@ export class AcpTurnSession {
     }
     this.flushText();
     const during = this.latestPrompt;
+    const heldBefore = this.heldForBackground;
     this.prompted(
       client.request("session/prompt", {
         sessionId: this.sessionId,
@@ -464,6 +471,7 @@ export class AcpTurnSession {
     this.steeringInputs.set(this.latestPrompt, {
       inputId: input.inputId,
       during,
+      heldBefore,
     });
   }
 
@@ -912,6 +920,16 @@ export class AcpTurnSession {
       this.lifecycle.ended ||
       this.hasHeldCompletionBlocker()
     ) {
+      return;
+    }
+    // The agent can report a quota or a broken session on stderr while the
+    // background work runs, after the prompt's answer was already clean.
+    const classified = this.classifyStderr(null, null);
+    if (classified !== null) {
+      if (classified.brokenSession) {
+        this.options.onBrokenSession?.();
+      }
+      this.fail(classified.failure);
       return;
     }
     this.clearBackgroundSettle();
