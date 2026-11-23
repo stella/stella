@@ -578,6 +578,7 @@ const TRANSITIVE_GENERATOR_INPUTS = {
     "packages/mojibake/src/charsets.ts",
     "packages/mojibake/src/declared-charset.ts",
     "packages/mojibake/src/detect.ts",
+    "packages/mojibake/src/dos-code-pages.ts",
     "packages/mojibake/src/exemplars.generated.ts",
     "packages/mojibake/src/undeclared-charset.ts",
     "packages/money/src/cents.ts",
