@@ -954,13 +954,15 @@ describe("folio collaboration room seed generation CAS", () => {
         expect(seedBytes).toEqual(savedDocx);
         expect(joined.shouldSeed).toBe(true);
         const snapshot = await seededRoom(seedBytes);
-        const materialized = await materializeRoomOverScannedDocx({
-          source: testScannedFile({
-            bytes: seedBytes.slice().buffer,
-            mimeType: DOCX_MIME_TYPE,
-          }),
-          yjsUpdate: snapshot,
-        });
+        const materialized = (
+          await materializeRoomOverScannedDocx({
+            source: testScannedFile({
+              bytes: seedBytes.slice().buffer,
+              mimeType: DOCX_MIME_TYPE,
+            }),
+            yjsUpdate: snapshot,
+          })
+        ).unwrap();
         expect(await extractDocxText(materialized)).toEqual(
           await extractDocxText(savedDocx),
         );

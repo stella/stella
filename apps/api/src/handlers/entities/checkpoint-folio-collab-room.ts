@@ -324,10 +324,21 @@ const checkpointFolioCollabRoomHandler = async function* (
       }),
     );
   }
-  const materialized = await materializeRoomOverScannedDocx({
+  const materializedResult = await materializeRoomOverScannedDocx({
     source: sourceDocx,
     yjsUpdate: Buffer.from(persisted.snapshot.snapshotBase64, "base64"),
   });
+  if (Result.isError(materializedResult)) {
+    return Result.err(
+      new HandlerError({
+        code: "folio_collab_room_unreadable",
+        status: 409,
+        message: "Collaborative room could not be saved from its journal.",
+        cause: materializedResult.error,
+      }),
+    );
+  }
+  const materialized = materializedResult.value;
   if (materialized.byteLength > FOLIO_COLLAB_CHECKPOINT_MAX_BYTES) {
     return Result.err(
       new HandlerError({

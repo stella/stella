@@ -5,7 +5,6 @@ import * as Y from "yjs";
 
 import { serveCanonicalYjsRoom } from "@stll/folio-core/controller/canonicalYjsRoom";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
-import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { materializeRoomOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
@@ -140,27 +139,25 @@ describe("room materialization", () => {
       mimeType: DOCX_MIME_TYPE,
     });
 
-    const materialized = await materializeRoomOverScannedDocx({
-      source,
-      yjsUpdate,
-    });
+    const materialized = (
+      await materializeRoomOverScannedDocx({ source, yjsUpdate })
+    ).unwrap();
     expect(
       (await extractDocxText(materialized)).paragraphs.map(({ text }) => text),
     ).toEqual(["Saved contract. Článek první."]);
 
     // Any other bytes name another snapshot.
     const otherDocx = new Uint8Array([...savedDocx, 0]);
-    expect(
-      await rejectionOf(
-        materializeRoomOverScannedDocx({
-          source: testScannedFile({
-            bytes: otherDocx.buffer,
-            mimeType: DOCX_MIME_TYPE,
-          }),
-          yjsUpdate,
-        }),
-      ),
-    ).toMatchObject({ reason: "snapshotMismatch" });
+    const refused = await materializeRoomOverScannedDocx({
+      source: testScannedFile({
+        bytes: otherDocx.buffer,
+        mimeType: DOCX_MIME_TYPE,
+      }),
+      yjsUpdate,
+    });
+    expect(Result.isError(refused) ? refused.error : null).toMatchObject({
+      reason: "snapshotMismatch",
+    });
   });
 });
 

@@ -12,12 +12,15 @@
  * `ScannedFile`: those bytes are the parser's output for scanned input, not
  * new untrusted content.
  */
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as Y from "yjs";
 
 import { compareDocx } from "@stll/folio-core";
 import { canonicalSnapshotId } from "@stll/folio-core/canonical/canonicalRoomBase";
-import { readCanonicalYjsJournal } from "@stll/folio-core/controller/canonicalYjsRoom";
+import {
+  type CanonicalYjsRoomError,
+  readCanonicalYjsJournal,
+} from "@stll/folio-core/controller/canonicalYjsRoom";
 import {
   applyFolioAIEditsToBuffer,
   compareDocxVersions,
@@ -26,6 +29,7 @@ import {
   extractDocumentStyleSetFromDocx,
   extractDocxText,
   FolioDocxReviewer,
+  FolioRoomJournalError,
   parseDocx,
   readBilingualDocx,
 } from "@stll/folio-core/server";
@@ -110,7 +114,8 @@ export const applyFolioAIEditsToScannedDocx = async (
 /**
  * A collaboration room saved over the scanned document it was seeded from:
  * the journal its authority sequenced, read from the stored Yjs state and
- * replayed over that document as every peer applied it.
+ * replayed over that document as every peer applied it. A room seeded from
+ * other bytes, or whose journal does not replay, is refused.
  */
 export const materializeRoomOverScannedDocx = async ({
   source,
@@ -118,7 +123,9 @@ export const materializeRoomOverScannedDocx = async ({
 }: {
   source: ScannedFile;
   yjsUpdate: Uint8Array;
-}): Promise<ArrayBuffer> => {
+}): Promise<
+  Result<ArrayBuffer, CanonicalYjsRoomError | FolioRoomJournalError>
+> => {
   const room = new Y.Doc();
   Y.applyUpdate(room, yjsUpdate);
   const journal = readCanonicalYjsJournal({
@@ -127,13 +134,24 @@ export const materializeRoomOverScannedDocx = async ({
   });
   room.destroy();
   if (Result.isError(journal)) {
-    throw journal.error;
+    return Result.err(journal.error);
   }
   const reviewer = await FolioDocxReviewer.fromBuffer(source.bytes, {
     session: "canonical",
   });
-  reviewer.applyRoomJournal(journal.value);
-  return await reviewer.toBuffer();
+  const replayed = Result.try({
+    try: () => {
+      reviewer.applyRoomJournal(journal.value);
+    },
+    catch: (cause) =>
+      cause instanceof FolioRoomJournalError
+        ? cause
+        : panic("applyRoomJournal threw an unexpected error", cause),
+  });
+  if (Result.isError(replayed)) {
+    return Result.err(replayed.error);
+  }
+  return Result.ok(await reviewer.toBuffer());
 };
 
 export const openScannedDocxReviewer = async (
