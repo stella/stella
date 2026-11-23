@@ -158,6 +158,22 @@ for (const cacheClass of [null, ...cacheClasses]) {
           expect(response.headers.get("Cross-Origin-Embedder-Policy")).toBe(
             "credentialless",
           );
+          // Only a document a shared cache may store drops the nonce.
+          const scriptPolicy = response.headers
+            .get("Content-Security-Policy")
+            ?.split("; ")
+            .find((directive) => directive.startsWith("script-src "));
+          if (!html) {
+            expect(scriptPolicy).toBeUndefined();
+          } else if (sharedDocument) {
+            expect(scriptPolicy).toStartWith("script-src 'self' ");
+            expect(scriptPolicy).not.toContain("'nonce-");
+            expect(scriptPolicy).not.toContain("'strict-dynamic'");
+          } else {
+            expect(scriptPolicy).toMatch(
+              /^script-src 'self' 'nonce-[^']+' 'strict-dynamic' /u,
+            );
+          }
           const document = await response.text();
           if (html) {
             assertSsrDocument({
