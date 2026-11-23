@@ -587,6 +587,14 @@
     "server": "Na serwerze wystąpił problem (błąd {status}). Spróbuj ponownie za chwilę.",
     "session": "Twoja sesja wygasła. Zaloguj się ponownie."
   },
+  "mailbox": {
+    "back": "Wróć do wiadomości",
+    "messages": "Wiadomości",
+    "noMessages": "Ta skrzynka pocztowa nie zawiera wiadomości.",
+    "openFailed": "Nie udało się otworzyć tej wiadomości. Stuknij, aby spróbować ponownie.",
+    "truncated": "Wyświetlono tylko pierwsze {count, number} wiadomości.",
+    "unreadable": "Nie udało się odczytać tej skrzynki pocztowej."
+  },
   "matter": {
     "add": "Dodaj",
     "details": "Szczegóły",

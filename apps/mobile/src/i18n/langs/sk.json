@@ -587,6 +587,14 @@
     "server": "Na serveri nastala chyba (kód {status}). Skúste to o chvíľu znova.",
     "session": "Vaše prihlásenie vypršalo. Prihláste sa znova."
   },
+  "mailbox": {
+    "back": "Späť na správy",
+    "messages": "Správy",
+    "noMessages": "Táto poštová schránka neobsahuje žiadne správy.",
+    "openFailed": "Správu sa nepodarilo otvoriť. Ťuknutím to skúsite znova.",
+    "truncated": "Zobrazuje sa len prvých {count, number} správ.",
+    "unreadable": "Túto poštovú schránku sa nepodarilo prečítať."
+  },
   "matter": {
     "add": "Pridať",
     "details": "Podrobnosti",

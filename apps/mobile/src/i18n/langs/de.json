@@ -587,6 +587,14 @@
     "server": "Auf Ihrem Server ist ein Fehler aufgetreten (Fehler {status}). Versuchen Sie es gleich noch einmal.",
     "session": "Ihre Anmeldung ist abgelaufen. Melden Sie sich erneut an."
   },
+  "mailbox": {
+    "back": "Zurück zu den Nachrichten",
+    "messages": "Nachrichten",
+    "noMessages": "Dieses Postfach enthält keine Nachrichten.",
+    "openFailed": "Die Nachricht konnte nicht geöffnet werden. Zum erneuten Versuchen tippen.",
+    "truncated": "Nur die ersten {count, number} Nachrichten werden angezeigt.",
+    "unreadable": "Dieses Postfach konnte nicht gelesen werden."
+  },
   "matter": {
     "add": "Hinzufügen",
     "details": "Details",

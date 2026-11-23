@@ -837,6 +837,12 @@
     },
     "showPane": "Mostrar panel",
     "swapViews": "Intercambiar la vista principal y el panel lateral",
-    "title": "Panel de inspección"
+    "title": "Panel de inspección",
+    "mailbox": {
+      "messages": "Mensajes",
+      "noMessages": "Este buzón no contiene mensajes.",
+      "truncated": "Solo se muestran los primeros {count, number} mensajes.",
+      "unreadable": "No se ha podido leer este buzón."
+    }
   }
 }

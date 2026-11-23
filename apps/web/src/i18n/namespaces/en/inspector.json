@@ -837,6 +837,12 @@
     },
     "showPane": "Show pane",
     "swapViews": "Swap main and side views",
-    "title": "Inspector"
+    "title": "Inspector",
+    "mailbox": {
+      "messages": "Messages",
+      "noMessages": "This mailbox holds no messages.",
+      "truncated": "Only the first {count, number} messages are listed.",
+      "unreadable": "This mailbox couldn’t be read."
+    }
   }
 }

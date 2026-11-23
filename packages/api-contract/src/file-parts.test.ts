@@ -11,8 +11,10 @@ import {
   filePartId,
   filePartIdSchema,
   filePartInlineBytes,
+  filePartWithin,
   isFilePartTextMediaType,
   parseFilePartId,
+  splitOutermostFilePart,
 } from "./file-parts";
 
 describe("file part addresses", () => {
@@ -76,6 +78,42 @@ describe("a part of a part", () => {
   ])("%s addresses nothing", (value) => {
     expect(parseFilePartId(value)).toBeNull();
     expect(v.is(filePartIdSchema, value)).toBe(false);
+  });
+});
+
+describe("a part addressed through its container", () => {
+  test.each([
+    "message:3",
+    "message:3/attachment:0",
+    "member:2/message:9999/attachment:1",
+    "attachment:0/member:1/message:2/attachment:3",
+  ])(
+    "%s splits into its outermost part and the path within it, and nests back",
+    (id) => {
+      const part = parseFilePartId(id);
+      if (part === null) {
+        throw new Error(`${id} must parse`);
+      }
+      const { outermost, inner } = splitOutermostFilePart(part);
+      expect(outermost.within).toBeUndefined();
+      if (inner === null) {
+        expect(filePartId(outermost)).toBe(id);
+        return;
+      }
+      expect(`${filePartId(outermost)}/${filePartId(inner)}`).toBe(id);
+      expect(filePartId(filePartWithin(inner, outermost))).toBe(id);
+    },
+  );
+
+  test("a part of a message is addressed under the message", () => {
+    expect(
+      filePartId(
+        filePartWithin(
+          { kind: FILE_PART_KINDS.attachment, index: 0 },
+          { kind: FILE_PART_KINDS.message, index: 3 },
+        ),
+      ),
+    ).toBe("message:3/attachment:0");
   });
 });
 

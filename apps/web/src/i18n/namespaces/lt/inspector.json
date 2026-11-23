@@ -837,6 +837,12 @@
     },
     "showPane": "Rodyti polangį",
     "swapViews": "Sukeisti pagrindinį rodinį ir šoninį skydelį",
-    "title": "Inspektorius"
+    "title": "Inspektorius",
+    "mailbox": {
+      "messages": "Laiškai",
+      "noMessages": "Šioje pašto dėžutėje nėra laiškų.",
+      "truncated": "Rodomi tik pirmieji {count, number} laiškų.",
+      "unreadable": "Nepavyko perskaityti šios pašto dėžutės."
+    }
   }
 }

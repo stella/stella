@@ -837,6 +837,12 @@
     },
     "showPane": "Zobrazit panel",
     "swapViews": "Prohodit hlavní zobrazení a boční panel",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "mailbox": {
+      "messages": "Zprávy",
+      "noMessages": "Tato poštovní schránka neobsahuje žádné zprávy.",
+      "truncated": "Zobrazuje se jen prvních {count, number} zpráv.",
+      "unreadable": "Tuto poštovní schránku se nepodařilo přečíst."
+    }
   }
 }

@@ -587,6 +587,14 @@
     "server": "Serveryje įvyko klaida (klaidos kodas {status}). Netrukus bandykite dar kartą.",
     "session": "Jūsų prisijungimas baigėsi. Prisijunkite iš naujo."
   },
+  "mailbox": {
+    "back": "Grįžti į laiškus",
+    "messages": "Laiškai",
+    "noMessages": "Šioje pašto dėžutėje nėra laiškų.",
+    "openFailed": "Nepavyko atidaryti šio laiško. Palieskite ir bandykite dar kartą.",
+    "truncated": "Rodomi tik pirmieji {count, number} laiškų.",
+    "unreadable": "Nepavyko perskaityti šios pašto dėžutės."
+  },
   "matter": {
     "add": "Pridėti",
     "details": "Išsami informacija",
