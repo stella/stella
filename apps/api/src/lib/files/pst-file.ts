@@ -33,7 +33,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 /** How long the worker may take over a stored mailbox's list or message. */
-export const PST_READ_TIMEOUT_MS = LIMITS.extractionTimeoutMs;
+const PST_READ_TIMEOUT_MS = LIMITS.extractionTimeoutMs;
 
 /** A list's reply: a row per message, at most the list's bound. */
 const LIST_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;

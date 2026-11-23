@@ -314,11 +314,15 @@ describe("a part that is itself a container", () => {
       ]),
     );
     const message = (
-      await readPartOfFile(source, {
-        kind: FILE_PART_KINDS.message,
-        index: 1,
-        within: member(0),
-      })
+      await readPartOfFile(
+        source,
+        {
+          kind: FILE_PART_KINDS.message,
+          index: 1,
+          within: member(0),
+        },
+        "ibm437",
+      )
     ).unwrap();
     expect(message).toMatchObject({
       fileName: LAW_FIRM_MESSAGES[1].fileName,
@@ -328,11 +332,19 @@ describe("a part that is itself a container", () => {
       "Subject: =?UTF-8?B?",
     );
     const notes = (
-      await readPartOfFile(source, {
-        kind: FILE_PART_KINDS.attachment,
-        index: 1,
-        within: { kind: FILE_PART_KINDS.message, index: 0, within: member(0) },
-      })
+      await readPartOfFile(
+        source,
+        {
+          kind: FILE_PART_KINDS.attachment,
+          index: 1,
+          within: {
+            kind: FILE_PART_KINDS.message,
+            index: 0,
+            within: member(0),
+          },
+        },
+        "ibm437",
+      )
     ).unwrap();
     expect(notes.fileName).toBe("poznámky k návrhu.txt");
     expect(new TextDecoder().decode(notes.bytes)).toContain(

@@ -68,7 +68,7 @@ export const PST_PROPERTY = {
 const ATTACH_EMBEDDED_MESSAGE = 5;
 
 /** The largest RTF body read out of its compressed stream. */
-export const PST_RTF_MAX_BYTES = 16 * 1024 * 1024;
+const PST_RTF_MAX_BYTES = 16 * 1024 * 1024;
 
 /** Windows-1252, the code page a message that names none is in. */
 const DEFAULT_CODE_PAGE = 1252;
