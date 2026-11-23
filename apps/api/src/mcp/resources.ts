@@ -35,7 +35,7 @@ import {
   CHAT_SKILL_SOURCE,
   listAvailableChatSkillMetadata,
 } from "@/api/lib/agent-skills/skills";
-import type { McpToolName } from "@/api/lib/api-handlers";
+import type { McpToolName } from "@/api/lib/api-handlers-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DeploymentFeatureFlag } from "@/api/lib/deployment-feature";
 import type { FeatureId } from "@/api/lib/feature-access/registry";

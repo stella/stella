@@ -19,7 +19,7 @@ import {
   FEEDBACK_LIMITS,
 } from "@stll/api-contract/feedback";
 
-import type { McpToolName } from "@/api/lib/api-handlers";
+import type { McpToolName } from "@/api/lib/api-handlers-types";
 import { SUBMIT_RATE_LIMIT_MAX_PER_ORG } from "@/api/mcp/feedback-tools";
 
 /**
