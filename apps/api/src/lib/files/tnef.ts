@@ -19,6 +19,7 @@ import { Result, TaggedError } from "better-result";
 import { declareFingerprintFields } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
+import { codePageDecoder } from "@/api/lib/files/rtf-body";
 import { decompressRtf } from "@/api/lib/files/rtf-compressed";
 
 class TnefParseError extends TaggedError("TnefParseError")<{
@@ -275,21 +276,9 @@ class Cursor {
   }
 }
 
-const WINDOWS_CODE_PAGES = new Set([
-  874, 1250, 1251, 1252, 1253, 1254, 1255, 1256, 1257, 1258,
-]);
-
-const codePageLabel = (codePage: number): string => {
-  if (codePage === 65_001) {
-    return "utf-8";
-  }
-  return WINDOWS_CODE_PAGES.has(codePage)
-    ? `windows-${String(codePage)}`
-    : "windows-1252";
-};
-
+/** 8-bit text in the code page the stream declares, East Asian ones included. */
 const decodeString8 = (bytes: Uint8Array, codePage: number): string =>
-  new TextDecoder(codePageLabel(codePage)).decode(bytes);
+  codePageDecoder(codePage).decode(bytes);
 
 /** A string without its terminating NULs and surrounding space; null if empty. */
 const cleanString = (value: string): string | null => {

@@ -3,7 +3,7 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { rtfMessageBody } from "./rtf-body";
+import { codePageDecoder, rtfMessageBody } from "./rtf-body";
 
 const read = (rtf: string) =>
   rtfMessageBody(new Uint8Array(Buffer.from(rtf, "latin1")));
@@ -35,6 +35,24 @@ describe("an RTF message body", () => {
       type: "text",
       text: "Vážený pane,\nzasílám vyjádření k částce 148 500 Kč.\nS pozdravem\tMgr. Ondřej Kalina",
     });
+  });
+
+  test("a Unicode escape past a code unit names nothing, and never fails the body", () => {
+    expect(
+      read("{\\rtf1 Smlouva\\u9999999?\\u-999999? \\u269?\\'e1st}"),
+    ).toEqual({
+      type: "text",
+      text: "Smlouva \u010D\u00E1st",
+    });
+  });
+
+  test("a declared East Asian code page decodes as itself", () => {
+    expect(
+      codePageDecoder(932).decode(Uint8Array.from([0x93, 0xfa, 0x96, 0x7b])),
+    ).toBe("\u65E5\u672C");
+    expect(
+      codePageDecoder(936).decode(Uint8Array.from([0xd6, 0xd0, 0xce, 0xc4])),
+    ).toBe("\u4E2D\u6587");
   });
 
   test("shows nothing for RTF without text", () => {

@@ -87,10 +87,20 @@ const CODE_PAGE_LABELS: ReadonlyMap<number, string> = new Map([
   [65_001, "utf-8"],
 ]);
 
-const decoderFor = (codePage: number): TextDecoder =>
+/**
+ * A decoder for a Windows code page as Outlook declares it (an RTF body's
+ * `\ansicpgN`, a TNEF stream's OEM or internet code page); Windows-1252 for
+ * one the table does not hold.
+ */
+export const codePageDecoder = (codePage: number): TextDecoder =>
   Result.try(
     () => new TextDecoder(CODE_PAGE_LABELS.get(codePage) ?? "windows-1252"),
   ).unwrapOr(new TextDecoder("windows-1252"));
+
+const decoderFor = codePageDecoder;
+
+/** The largest UTF-16 code unit a `\uN` may name. */
+const MAX_CODE_UNIT = 0xff_ff;
 
 type Group = {
   /** The group's content is not body text. */
@@ -274,16 +284,19 @@ class BodyReader {
       case "uc":
         group.unicodeSkip = Math.max(0, parameter ?? 1);
         return;
-      case "u":
-        if (parameter !== null) {
-          this.text(
-            String.fromCodePoint(
-              parameter < 0 ? parameter + 65_536 : parameter,
-            ),
-          );
-          this.skip = group.unicodeSkip;
+      case "u": {
+        if (parameter === null) {
+          return;
         }
+        // A signed 16-bit parameter names one UTF-16 code unit; any other
+        // value names nothing, though its stand-in characters are skipped.
+        const unit = parameter < 0 ? parameter + 65_536 : parameter;
+        if (unit >= 0 && unit <= MAX_CODE_UNIT) {
+          this.text(String.fromCodePoint(unit));
+        }
+        this.skip = group.unicodeSkip;
         return;
+      }
       case "htmlrtf":
         this.flush();
         group.rtfOnly = parameter !== 0;
