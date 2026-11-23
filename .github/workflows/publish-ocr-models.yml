@@ -63,6 +63,8 @@ jobs:
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
@@ -71,28 +73,35 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Pull base images
+        timeout-minutes: 5
+        run: bash scripts/pull-base-images.sh --buildx linux/amd64,linux/arm64 docker/ocr-models/Dockerfile
+
       # The image holds only the two model files, so it builds for both
       # platforms without emulation.
       - name: Build and push the models image
+        id: build
         timeout-minutes: 10
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ runner.temp }}/ocr-models
+          file: docker/ocr-models/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          push: true
+          tags: ${{ env.MODELS_IMAGE }}:${{ env.MODELS_TAG }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          annotations: |
+            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            index:org.opencontainers.image.description=Pinned PP-OCRv5 models for stella's local OCR
+
+      - name: Report the image digest
         env:
-          SOURCE_URL: ${{ github.server_url }}/${{ github.repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -euo pipefail
-          context="$RUNNER_TEMP/ocr-models"
-          printf 'FROM scratch\nCOPY *.onnx /\n' > "$context/Dockerfile"
-          docker buildx build \
-            --platform linux/amd64,linux/arm64 \
-            --provenance=false \
-            --label "org.opencontainers.image.source=$SOURCE_URL" \
-            --annotation "index:org.opencontainers.image.source=$SOURCE_URL" \
-            --annotation "index:org.opencontainers.image.description=Pinned PP-OCRv5 models for stella's local OCR" \
-            --tag "$MODELS_IMAGE:$MODELS_TAG" \
-            --push \
-            "$context"
-          digest="$(docker buildx imagetools inspect "$MODELS_IMAGE:$MODELS_TAG" --format '{{json .Manifest.Digest}}' | tr -d '"')"
-          echo "Published $MODELS_IMAGE:$MODELS_TAG@$digest"
-          echo "Published \`$MODELS_IMAGE:$MODELS_TAG@$digest\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Published $MODELS_IMAGE:$MODELS_TAG@$DIGEST"
+          echo "Published \`$MODELS_IMAGE:$MODELS_TAG@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Log out of GitHub Container Registry
         if: always()
