@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * Mailboxes built in tests: invented correspondence of an invented law firm,
  * written the way each mail client variant writes it.
@@ -234,3 +236,39 @@ export const MATTER_CORRESPONDENCE: readonly MailMessage[] = [
     headers: ["X-Folder: Spisy/Stavby Hradec"],
   },
 ];
+
+/**
+ * A mailbox whose first message is `bodyBytes` of body long (pass more than
+ * one message may be), then `after`: written straight into one buffer, so a
+ * test holds the mailbox once rather than as strings and copies.
+ */
+export const mailboxWithLargeMessage = (
+  bodyBytes: number,
+  after: Uint8Array = new Uint8Array(),
+): Uint8Array => {
+  const head = encoder.encode(
+    `From kalina@ak-kalina-vesela.cz Tue Nov 17 09:30:00 2026\n${new TextDecoder().decode(
+      mailMessage({
+        ...(MATTER_CORRESPONDENCE[0] ?? panic("The matter has its first message")),
+        body: "",
+      }),
+    )}`,
+  );
+  const line = encoder.encode("Příloha spisu, strana textu.\n");
+  const out = new Uint8Array(head.byteLength + bodyBytes + 1 + after.byteLength);
+  out.set(head);
+  const bodyStart = head.byteLength;
+  // Fill the body with whole lines by doubling what is written so far.
+  out.set(line.subarray(0, Math.min(line.byteLength, bodyBytes)), bodyStart);
+  let written = Math.min(line.byteLength, bodyBytes);
+  while (written < bodyBytes) {
+    const copy = Math.min(written, bodyBytes - written);
+    out.copyWithin(bodyStart + written, bodyStart, bodyStart + copy);
+    written += copy;
+  }
+  out[bodyStart + bodyBytes - 1] = 0x0a;
+  // The blank line a writer puts after every message.
+  out[bodyStart + bodyBytes] = 0x0a;
+  out.set(after, bodyStart + bodyBytes + 1);
+  return out;
+};

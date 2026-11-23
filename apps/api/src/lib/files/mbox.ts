@@ -69,6 +69,18 @@ const GT = 0x3e;
 const FROM_ = new TextEncoder().encode("From ");
 const FROM_LENGTH = FROM_.byteLength;
 
+const concat = (parts: readonly Uint8Array[]): Uint8Array => {
+  const out = new Uint8Array(
+    parts.reduce((total, part) => total + part.byteLength, 0),
+  );
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.byteLength;
+  }
+  return out;
+};
+
 /** A run of bytes kept as the chunks it arrived in. */
 class ByteRun {
   private readonly chunks: Uint8Array[] = [];
@@ -132,13 +144,20 @@ const headerBlockEnd = (header: Uint8Array): number | null => {
   }
 };
 
-const CONTENT_LENGTH = /^content-length[ \t]*:[ \t]*(\d{1,10})[ \t]*\r?$/gimu;
+const CONTENT_LENGTH_FIELD = /^content-length[ \t]*:(.*)$/gimu;
+const CONTENT_LENGTH_VALUE = /^[ \t]*(\d{1,10})[ \t]*\r?$/u;
 
-/** The body length a header states; null when it states none, or two. */
+/**
+ * The body length a header states; null when it states none, states one
+ * that is not a number, or has the field more than once.
+ */
 export const statedContentLength = (header: Uint8Array): number | null => {
   const text = new TextDecoder("latin1").decode(header);
-  const matches = [...text.matchAll(CONTENT_LENGTH)];
-  const value = matches.length === 1 ? matches[0]?.[1] : undefined;
+  const fields = [...text.matchAll(CONTENT_LENGTH_FIELD)];
+  const value =
+    fields.length === 1
+      ? CONTENT_LENGTH_VALUE.exec(fields[0]?.[1] ?? "")?.[1]
+      : undefined;
   return value === undefined ? null : Number(value);
 };
 
@@ -217,38 +236,61 @@ export class MboxScanner {
   }
 
   finish(): void {
-    if (this.stopped) {
-      return;
-    }
-    const open = this.open;
-    if (open !== null) {
-      const { pending } = open;
-      if (pending.type === "blank") {
-        this.close(open, pending.end, true);
-      } else if (pending.type === "counted" && pending.end === this.position) {
-        this.close(open, pending.end, true);
-      } else if (pending.type === "counted" && open.candidate !== null) {
-        // The count ran past the file's end: read again from the first
-        // separator inside it.
-        const again = this.readAgain(open);
-        this.push(again);
-        this.finish();
+    while (!this.stopped) {
+      const again = this.atEndOfFile();
+      if (again === null) {
+        this.stopped = true;
         return;
-      } else {
-        // The last message ends with the file, less the blank line a
-        // writer puts after every message.
-        const lastLineBlank = this.lineSeen === 0 && this.previousBlank;
-        this.close(
-          open,
-          lastLineBlank &&
-            this.previousBlankStart >= (open.offset ?? this.position)
-            ? this.previousBlankStart
-            : this.position,
-          false,
-        );
       }
+      this.push(again);
     }
-    this.stopped = true;
+  }
+
+  /**
+   * Settles the open message at the file's end; returns the bytes to read
+   * again when its count proved wrong there.
+   */
+  private atEndOfFile(): Uint8Array | null {
+    // A last line too short for its head to have been looked at, and not
+    // the carriage return of a line break the file was cut in.
+    const tail =
+      this.lineSeen > 0 &&
+      this.lineSeen < FROM_LENGTH &&
+      !(this.lineSeen === 1 && this.lineHead[0] === CR);
+    const open = this.open;
+    if (open === null) {
+      if (tail) {
+        this.failure = new MboxParseError({
+          message: "The file does not start with a message separator",
+        });
+      }
+      return null;
+    }
+    const { pending } = open;
+    if (pending.type === "blank" && !tail) {
+      this.close(open, pending.end, true);
+      return null;
+    }
+    if (pending.type === "counted" && pending.end === this.position) {
+      this.close(open, pending.end, true);
+      return null;
+    }
+    if (pending.type !== "none" && open.candidate !== null) {
+      // The count did not land on the file's end: read again from the first
+      // separator inside it.
+      return this.readAgain(open);
+    }
+    // The last message ends with the file, less the blank line a writer
+    // puts after every message.
+    const lastLineBlank = this.lineSeen === 0 && this.previousBlank;
+    this.close(
+      open,
+      lastLineBlank && this.previousBlankStart >= (open.offset ?? this.position)
+        ? this.previousBlankStart
+        : this.position,
+      false,
+    );
+    return null;
   }
 
   private consume(chunk: Uint8Array, queue: Uint8Array[]): void {
@@ -267,9 +309,21 @@ export class MboxScanner {
 
   /**
    * The current line's next bytes, ending it when `ends`. Returns the bytes
-   * to read again when the open message's count proved wrong.
+   * to read again when the open message's count proved wrong. A line's head
+   * is decided on before the rest of it is taken, so what is decided never
+   * depends on where the chunks were cut.
    */
   private scan(bytes: Uint8Array, ends: boolean): Uint8Array | null {
+    const headBytes = FROM_LENGTH - this.lineSeen;
+    if (headBytes <= 0 || bytes.byteLength <= headBytes) {
+      return this.scanPart(bytes, ends);
+    }
+    const rest = bytes.subarray(headBytes);
+    const again = this.scanPart(bytes.subarray(0, headBytes), false);
+    return again === null ? this.scanPart(rest, ends) : concat([again, rest]);
+  }
+
+  private scanPart(bytes: Uint8Array, ends: boolean): Uint8Array | null {
     const seenBefore = this.lineSeen;
     for (
       let at = 0;
@@ -290,6 +344,17 @@ export class MboxScanner {
         return again;
       }
     }
+    // A line that runs on past a counted body's end, by more than a line
+    // break, is the count missing: decided now, not when the line ends.
+    const open = this.open;
+    if (
+      !ends &&
+      open?.pending.type === "counted" &&
+      this.lineStart < open.pending.end &&
+      this.position >= open.pending.end + 2
+    ) {
+      return this.miscounted(open);
+    }
     return ends ? this.atLineEnd() : null;
   }
 
@@ -306,9 +371,12 @@ export class MboxScanner {
       this.runDropped = true;
       return;
     }
+    // While a count is open, its bytes stay until it lands or misses; the
+    // count itself is bounded, so they are too.
     if (
+      open.pending.type === "none" &&
       this.run.length + bytes.byteLength >
-      MBOX_MESSAGE_MAX_BYTES + MBOX_HEADER_MAX_BYTES
+        MBOX_MESSAGE_MAX_BYTES + MBOX_HEADER_MAX_BYTES
     ) {
       // Past any message that may be read: keep only what is known.
       this.captureHeader(open);
@@ -489,8 +557,12 @@ export class MboxScanner {
       return;
     }
     const end = bodyStart + stated;
-    // A count past what one message may be is never followed.
-    if (end - open.offset <= MBOX_MESSAGE_MAX_BYTES) {
+    // A count past what one message may be is never followed: its bytes
+    // would have to be kept until it lands.
+    if (
+      end - open.separator <=
+      MBOX_MESSAGE_MAX_BYTES + MBOX_HEADER_MAX_BYTES
+    ) {
       open.pending = { type: "counted", end };
     }
   }

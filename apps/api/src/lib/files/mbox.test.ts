@@ -5,6 +5,7 @@ import { MAILBOX_MAX_MESSAGES } from "@stll/api-contract/mailbox";
 import { assertProperty } from "@stll/property-testing";
 
 import {
+  mailboxWithLargeMessage,
   mailMessage,
   MATTER_CORRESPONDENCE,
   MBOX_VARIANTS,
@@ -161,6 +162,60 @@ describe("a mailbox in every variant", () => {
     );
   });
 
+  test("a count stated twice is not followed, even when one is not a number", () => {
+    const message = mailMessage({
+      ...MATTER_CORRESPONDENCE[0]!,
+      body: "Shrnutí:\n\nFrom 9:00 the court heard both parties.",
+      headers: ["Content-Length: 9", "Content-Length:"],
+    });
+    const separator =
+      "From kalina@ak-kalina-vesela.cz Tue Nov 17 09:30:00 2026\n";
+    const bytes = new TextEncoder().encode(`${separator}${decode(message)}\n`);
+    const { messages } = scanMbox(bytes);
+    expect(messages.every(({ bounded }) => !bounded)).toBe(true);
+    // Separators decide: the body's From line after a blank line splits it.
+    expect(messages).toHaveLength(2);
+  });
+
+  test("a count that misses at a long line is decided the same in any chunks", () => {
+    const message = mailMessage({
+      ...MATTER_CORRESPONDENCE[0]!,
+      body: `Shrnutí:\n\nFrom 9:00 the court heard both parties.\n${"x".repeat(80_000)}\n`,
+      headers: ["Content-Length: 10"],
+    });
+    const next = mailMessage(MATTER_CORRESPONDENCE[2]!);
+    const separator =
+      "From kalina@ak-kalina-vesela.cz Tue Nov 17 09:30:00 2026\n";
+    const bytes = new TextEncoder().encode(
+      `${separator}${decode(message)}\n${separator}${decode(next)}\n`,
+    );
+    const whole = scanMbox(bytes).messages.map(({ offset, length }) => [
+      offset,
+      length,
+    ]);
+    const cuts = Array.from(
+      { length: Math.floor(bytes.byteLength / 997) },
+      (_, index) => (index + 1) * 997,
+    );
+    expect(
+      scanInChunks(bytes, cuts).messages.map(({ offset, length }) => [
+        offset,
+        length,
+      ]),
+    ).toEqual(whole);
+    expect(whole).toHaveLength(3);
+  });
+
+  test("a last line too short to be a separator is not a mailbox's start", () => {
+    for (const text of ["abc", "From"]) {
+      expect(scanMbox(new TextEncoder().encode(text)).failure?._tag).toBe(
+        "MboxParseError",
+      );
+    }
+    // A file cut in a line break is still a mailbox with nothing in it.
+    expect(scanMbox(new TextEncoder().encode("\r")).failure).toBeNull();
+  });
+
   test("a count past the file's end falls back to the separators", () => {
     const message = mailMessage({
       ...MATTER_CORRESPONDENCE[0]!,
@@ -228,14 +283,10 @@ describe("what a mailbox holds", () => {
   });
 
   test("a message over the size bound is measured, never kept", () => {
-    const big = mailMessage({
-      ...MATTER_CORRESPONDENCE[0]!,
-      body: `${"Příloha spisu. ".repeat(64)}\n`.repeat(
-        Math.ceil(MBOX_MESSAGE_MAX_BYTES / 1024) + 4,
-      ),
-    });
-    expect(big.byteLength).toBeGreaterThan(MBOX_MESSAGE_MAX_BYTES);
-    const { bytes } = writeMbox([big, ...correspondence()], "mboxcl2");
+    const bytes = mailboxWithLargeMessage(
+      MBOX_MESSAGE_MAX_BYTES + 1024 * 1024,
+      writeMbox(correspondence(), "mboxcl2").bytes,
+    );
     const { messages } = scanMbox(bytes, { keepMessages: true });
     expect(messages).toHaveLength(MATTER_CORRESPONDENCE.length + 1);
     expect(messages[0]?.stored).toBeNull();

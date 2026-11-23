@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
 
 import {
+  mailboxWithLargeMessage,
   mailMessage,
   MATTER_CORRESPONDENCE,
   writeMbox,
@@ -86,19 +87,12 @@ describe("a mailbox's list", () => {
   });
 
   test("a message over the size bound and a damaged one are listed with why", async () => {
-    const big = mailMessage({
-      ...MATTER_CORRESPONDENCE[0]!,
-      body: `${"Příloha spisu. ".repeat(64)}\n`.repeat(
-        Math.ceil(MBOX_MESSAGE_MAX_BYTES / 1024) + 4,
-      ),
-    });
-    const { bytes } = writeMbox([big], "mboxo");
-    const damaged = new Uint8Array([
-      ...bytes,
-      ...new TextEncoder().encode(
+    const damaged = mailboxWithLargeMessage(
+      MBOX_MESSAGE_MAX_BYTES + 1024 * 1024,
+      new TextEncoder().encode(
         "From kalina@ak-kalina-vesela.cz Tue Nov 17 09:30:00 2026\n\u0000\u0001\u0002 poškozená data\n",
       ),
-    ]);
+    );
     const rows = await rowsOf(damaged);
     expect(rows).toMatchObject([
       {

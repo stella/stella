@@ -564,6 +564,7 @@ export const executeNativeExtraction = async ({
             key,
             fileName: fileField.fileName,
             signal: lifecycleSignal,
+            openTimeoutMs: LIMITS.documentProcessingObjectReadTimeoutMs,
             timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
           }),
         }

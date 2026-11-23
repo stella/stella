@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
 import {
+  mailboxWithLargeMessage,
   mailMessage,
   MATTER_CORRESPONDENCE,
   writeMbox,
@@ -106,13 +107,7 @@ describe("a stored mailbox", () => {
   });
 
   test("a message it does not hold, or one too large, is not read", async () => {
-    const big = mailMessage({
-      ...MATTER_CORRESPONDENCE[0]!,
-      body: `${"Příloha spisu. ".repeat(64)}\n`.repeat(
-        Math.ceil(MBOX_MESSAGE_MAX_BYTES / 1024) + 4,
-      ),
-    });
-    const { bytes } = writeMbox([big], "mboxo");
+    const bytes = mailboxWithLargeMessage(MBOX_MESSAGE_MAX_BYTES + 1024 * 1024);
     fake.put(envBase.S3_BUCKET, key, bytes, "application/mbox");
     const tooLarge = await readStoredMailboxMessage({
       key,

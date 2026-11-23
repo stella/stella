@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  mailboxWithLargeMessage,
   mailMessage,
   MATTER_CORRESPONDENCE,
   writeMbox,
@@ -68,13 +69,7 @@ describe("a mailbox's text", () => {
   });
 
   test("says which messages cannot be read", async () => {
-    const big = mailMessage({
-      ...MATTER_CORRESPONDENCE[0]!,
-      body: `${"Příloha spisu. ".repeat(64)}\n`.repeat(
-        Math.ceil(MBOX_MESSAGE_MAX_BYTES / 1024) + 4,
-      ),
-    });
-    const { bytes } = writeMbox([big], "mboxo");
+    const bytes = mailboxWithLargeMessage(MBOX_MESSAGE_MAX_BYTES + 1024 * 1024);
     const text = (await read(bytes)).unwrap();
     expect(text).toContain("Subject: Spis 23 C 118/2026, podklady k jednání");
     expect(text).toContain("The message is too large to read.");

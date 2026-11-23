@@ -133,13 +133,14 @@ export const MailboxMessages = ({
     if (part === null) {
       return;
     }
-    setOpen({ status: "loading", message });
+    // Each attempt is its own state: only the attempt still showing settles.
+    const loading: OpenMessage = { status: "loading", message };
+    setOpen(loading);
     const reading = await readMessage(part.part);
     const settled: OpenMessage = Result.isOk(reading)
       ? { status: "open", message, reading: reading.value }
       : { status: "failed", message };
-    // A message left before it was read stays left.
-    setOpen((current) => (current?.message === message ? settled : current));
+    setOpen((current) => (current === loading ? settled : current));
   };
 
   if (open !== null) {
