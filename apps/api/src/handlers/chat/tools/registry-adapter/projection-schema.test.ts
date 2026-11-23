@@ -550,6 +550,60 @@ describe("projectForChat", () => {
     });
   });
 
+  test("a document name carrying a UUID is masked as content, not reported", () => {
+    const refRegistry = createChatRefRegistry();
+    const fileName = `scan-${ROGUE_UUID}.pdf`;
+
+    const listed = project({
+      dehydration: {
+        ...emptyDehydration(),
+        resolvedMatterParams: { matter_id: toSafeId<"workspace">(WS_UUID) },
+      },
+      payload: {
+        documents: [
+          { id: ENTITY_UUID, name: fileName, kind: "file", parentId: null },
+        ],
+        nextCursor: null,
+      },
+      refRegistry,
+      schema: READ_TOOL_REF_FIELD_MAP.list_documents.projection,
+    }).unwrap();
+
+    const documentRef = refRegistry.toEntityRef({
+      entityId: toSafeId<"entity">(ENTITY_UUID),
+      workspaceId: toSafeId<"workspace">(WS_UUID),
+    });
+    const read = project({
+      dehydration: {
+        ...emptyDehydration(),
+        dehydratedEntityRefs: new Map([[ENTITY_UUID, documentRef]]),
+        resolvedEntityParams: { entity_id: toSafeId<"workspace">(WS_UUID) },
+      },
+      payload: {
+        entityId: ENTITY_UUID,
+        name: fileName,
+        version: {
+          id: "version-1",
+          versionNumber: 1,
+          stamp: null,
+          label: null,
+          description: null,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          fields: [],
+        },
+      },
+      refRegistry,
+      schema: READ_DOCUMENT_VERSION_PROJECTION,
+    }).unwrap();
+
+    const maskedName = `scan-${MASKED_CONTENT_ID}.pdf`;
+    expect(listed).toMatchObject({ documents: [{ name: maskedName }] });
+    expect(read).toMatchObject({ name: maskedName });
+    expect(containsRawUuid([listed, read])).toBe(false);
+    expect(degradeLogs()).toEqual([]);
+    expect(exceptionProperties()).toEqual([]);
+  });
+
   test("inputEntityWorkspace mints a new ref for a different entity in the input entity's workspace", () => {
     const refRegistry = createChatRefRegistry();
     const taskRef = refRegistry.toEntityRef({
