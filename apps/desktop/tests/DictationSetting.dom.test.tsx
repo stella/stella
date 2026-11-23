@@ -1482,7 +1482,9 @@ test("the speaker's instructions are saved when the field is left, and cleared w
     };
   });
   const field = view.getByRole("textbox", { name: cleanupInstructions.title });
-  expect(field.getAttribute("maxlength")).toBe("1000");
+  // The limit is counted in code points, as the contract counts it, so no
+  // UTF-16 cap sits on the field.
+  expect(field.getAttribute("maxlength")).toBeNull();
 
   fireEvent.change(field, {
     target: { value: "Use British spelling.\nNever use emoji." },
@@ -1516,6 +1518,52 @@ test("the speaker's instructions are saved when the field is left, and cleared w
       { instructions: null },
     ]);
   });
+});
+
+test("the instructions limit counts characters as code points", async () => {
+  const view = await renderSetting(ENABLED_SNAPSHOT, () => undefined);
+  const field = view.getByRole("textbox", { name: cleanupInstructions.title });
+  const value = () => (field instanceof HTMLTextAreaElement ? field.value : "");
+  // 999 letters and one emoji: 1,000 code points, 1,001 UTF-16 units.
+  const atLimit = `${"a".repeat(999)}🙂`;
+  fireEvent.change(field, { target: { value: atLimit } });
+  expect(value()).toBe(atLimit);
+  expect(
+    view.container.querySelector('[data-slot="textarea-count"]')?.textContent,
+  ).toBe("1000/1000");
+  fireEvent.change(field, { target: { value: `${atLimit}a` } });
+  expect(value()).toBe(atLimit);
+});
+
+test("an edit made while a save is on its way is kept when the save returns", async () => {
+  let answer: ((snapshot: unknown) => void) | undefined;
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_cleanup_instructions") {
+      return undefined;
+    }
+    return new Promise((resolve) => {
+      answer = () => {
+        resolve({
+          ...ENABLED_SNAPSHOT,
+          cleanupInstructions: asked(payload, "instructions"),
+        });
+      };
+    });
+  });
+  const field = view.getByRole("textbox", { name: cleanupInstructions.title });
+  const value = () => (field instanceof HTMLTextAreaElement ? field.value : "");
+  fireEvent.change(field, { target: { value: "Use British spelling." } });
+  await act(async () => {
+    fireEvent.blur(field);
+  });
+  fireEvent.change(field, {
+    target: { value: "Use British spelling. Keep fragments." },
+  });
+  await act(async () => {
+    answer?.(undefined);
+    await nextMacrotask();
+  });
+  expect(value()).toBe("Use British spelling. Keep fragments.");
 });
 
 test("instructions the native side refuses say so beside the field", async () => {
@@ -1603,6 +1651,22 @@ test("a chosen model the organization no longer offers reads as automatic, and t
     { ...ENABLED_SNAPSHOT, cleanupModel: "openai::gpt-5" },
     (command) =>
       command === "dictation_get_cleanup_models" ? CLEANUP_MODELS : undefined,
+  );
+  const select = await view.findByRole("combobox", {
+    name: cleanupModel.title,
+  });
+  expect(select.textContent).toBe(cleanupModel.automatic);
+  expect(
+    view.container.querySelector("#dictation-cleanup-model-description")
+      ?.textContent,
+  ).toBe(cleanupModel.withdrawn);
+});
+
+test("a stored model stays visible, as replaced by automatic, when the organization offers none", async () => {
+  const view = await renderSetting(
+    { ...ENABLED_SNAPSHOT, cleanupModel: "openai::gpt-5" },
+    (command) =>
+      command === "dictation_get_cleanup_models" ? { models: [] } : undefined,
   );
   const select = await view.findByRole("combobox", {
     name: cleanupModel.title,

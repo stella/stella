@@ -913,8 +913,7 @@ const DictationCleanupSection = ({
         translateTo={snapshot.translateTo}
       />
       {/* The speaker's own guidance and the model; offered only while
-          cleanup runs. Keyed by what is stored, so a change from elsewhere
-          starts the field afresh. */}
+          cleanup runs. */}
       {snapshot.cleanup && (
         <>
           <DictationCleanupModelRow
@@ -925,7 +924,6 @@ const DictationCleanupSection = ({
           />
           <DictationCleanupInstructionsRow
             instructions={snapshot.cleanupInstructions}
-            key={snapshot.cleanupInstructions ?? ""}
             onSave={async (instructions) =>
               await change("dictation_set_cleanup_instructions", {
                 instructions,

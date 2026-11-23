@@ -683,14 +683,22 @@ async fn post(
   .map_err(request_cause_logged(FAILURE))
 }
 
-/// What to ask again after `status`: an API from before styles refuses a
-/// request that names a style or a language to write in as invalid, and one
-/// from before custom words a request with them, so each is dropped in turn,
-/// the newest first; asked again without it, the API still cleans up. `None`
-/// once nothing is left to drop or the refusal was of another kind.
+/// What to ask again after `status`: an API from before instructions and a
+/// chosen model refuses a request that carries either, one from before styles
+/// a request that names a style or a language to write in, and one from before
+/// custom words a request with them, so each is dropped in turn, the newest
+/// first; asked again without it, the API still cleans up. `None` once nothing
+/// is left to drop or the refusal was of another kind.
 fn fallback<'a>(status: reqwest::StatusCode, asked: &Asked<'a>) -> Option<Asked<'a>> {
   if status != reqwest::StatusCode::UNPROCESSABLE_ENTITY {
     return None;
+  }
+  if asked.custom_instructions.is_some() || asked.model.is_some() {
+    return Some(Asked {
+      custom_instructions: None,
+      model: None,
+      ..*asked
+    });
   }
   if asked.form != CleanupForm::default() {
     return Some(Asked {
@@ -1387,9 +1395,14 @@ mod tests {
         translate_to: Some("en"),
       },
       custom_instructions: Some("Keep my sentence fragments."),
-      model: None,
+      model: Some("model-a"),
     };
-    let without_form = fallback(invalid, &asked).unwrap();
+    let without_preferences = fallback(invalid, &asked).unwrap();
+    assert_eq!(without_preferences.custom_instructions, None);
+    assert_eq!(without_preferences.model, None);
+    assert_eq!(without_preferences.form, asked.form);
+    assert_eq!(without_preferences.vocabulary, words.as_slice());
+    let without_form = fallback(invalid, &without_preferences).unwrap();
     assert_eq!(without_form.form, CleanupForm::default());
     assert_eq!(without_form.vocabulary, words.as_slice());
     let without_words = fallback(invalid, &without_form).unwrap();

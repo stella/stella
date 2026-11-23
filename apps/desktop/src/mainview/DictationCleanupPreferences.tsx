@@ -77,7 +77,13 @@ export const DictationCleanupModelRow = ({
   const t = useTranslations("dictation.cleanupModel");
   const ids = settingsRowIds("dictation-cleanup-model");
   const state = useCleanupModels();
-  if (state.status !== "loaded" || state.models.length === 0) {
+  // An empty offer hides the row only when nothing is stored: a stored model
+  // the organization stopped offering keeps the row, so the speaker sees it
+  // replaced by automatic and can clear it.
+  if (
+    state.status !== "loaded" ||
+    (state.models.length === 0 && cleanupModel === null)
+  ) {
     return null;
   }
   const chosen =
@@ -139,10 +145,21 @@ export const DictationCleanupModelRow = ({
   );
 };
 
+const INSTRUCTIONS_LIMIT =
+  DESKTOP_DICTATION_CLEANUP_LIMITS.customInstructionsLength;
+
+/** Characters as the contract counts them: code points, not UTF-16 units. */
+const codePoints = (text: string): number => [...text].length;
+
 /**
  * What the speaker wants cleanup to follow, saved when the field is left.
- * The field holds at most the contract's length; the native side refuses
- * anything longer whole rather than cutting it.
+ * The field holds at most the contract's length in code points, the unit the
+ * contract and the native side count; the native side refuses anything
+ * longer whole rather than cutting it.
+ *
+ * The row follows what is stored without remounting: a stored value that
+ * changes, from elsewhere or as this row's own save coming back, replaces the
+ * draft only while the draft holds no edit made since the last stored value.
  */
 export const DictationCleanupInstructionsRow = ({
   instructions,
@@ -153,8 +170,16 @@ export const DictationCleanupInstructionsRow = ({
 }) => {
   const t = useTranslations("dictation.cleanupInstructions");
   const ids = settingsRowIds("dictation-cleanup-instructions");
-  const [draft, setDraft] = useState(instructions ?? "");
+  const stored = instructions ?? "";
+  const [draft, setDraft] = useState(stored);
+  const [synced, setSynced] = useState(stored);
   const [failed, setFailed] = useState(false);
+  if (synced !== stored) {
+    setSynced(stored);
+    if (draft === synced) {
+      setDraft(stored);
+    }
+  }
   const save = async () => {
     const next = draft.trim() === "" ? null : draft;
     if ((next ?? "") === (instructions ?? "")) {
@@ -172,22 +197,28 @@ export const DictationCleanupInstructionsRow = ({
             aria-describedby={ids.description}
             aria-invalid={failed || undefined}
             aria-labelledby={ids.label}
-            maxLength={
-              DESKTOP_DICTATION_CLEANUP_LIMITS.customInstructionsLength
-            }
             maxRows={8}
             onBlur={() => {
               void save();
             }}
             onChange={(event) => {
-              setDraft(event.currentTarget.value);
+              const next = event.currentTarget.value;
+              if (codePoints(next) > INSTRUCTIONS_LIMIT) {
+                return;
+              }
+              setDraft(next);
               setFailed(false);
             }}
             placeholder={t("placeholder")}
             rows={3}
-            showCount
             value={draft}
           />
+          <p
+            className="text-muted-foreground mt-1 text-end text-xs tabular-nums"
+            data-slot="textarea-count"
+          >
+            {codePoints(draft)}/{INSTRUCTIONS_LIMIT}
+          </p>
           {failed && (
             <p
               className="text-destructive-foreground mt-1.5 text-xs"
