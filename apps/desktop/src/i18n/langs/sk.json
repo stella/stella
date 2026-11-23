@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Vyplňte obe polia.",
         "lineBreak": "Oprava je jeden riadok textu.",
+        "punctuation": "Vyberte nadiktované slová bez interpunkcie.",
         "same": "Slová sú už napísané takto.",
         "tooLong": "Na jednu opravu je to príliš dlhé.",
         "tooManyWords": "Oprava môže mať najviac tri slová."

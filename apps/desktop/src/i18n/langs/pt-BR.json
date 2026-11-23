@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Preencha os dois campos.",
         "lineBreak": "Uma correção é uma única linha de texto.",
+        "punctuation": "Escolha as palavras ditadas sem pontuação.",
         "same": "As palavras já estão escritas assim.",
         "tooLong": "É longo demais para uma correção.",
         "tooManyWords": "Uma correção tem no máximo três palavras."

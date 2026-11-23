@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Fill in both fields.",
         "lineBreak": "A fix is one line of text.",
+        "punctuation": "Pick the dictated words without punctuation.",
         "same": "The words are already written this way.",
         "tooLong": "That is too long for one fix.",
         "tooManyWords": "A fix takes at most three words."

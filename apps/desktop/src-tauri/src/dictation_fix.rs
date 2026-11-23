@@ -186,6 +186,8 @@ fn show(app: &AppHandle) {
   let builder = crate::window_placement::centered_on_target_screen(app, builder, size);
   let Ok(window) = builder.build() else {
     tracing::warn!("dictation fix panel could not be created");
+    // No window will ever close it: the selection read for it goes now.
+    app.state::<FixPanel>().set(None);
     return;
   };
   if window.set_focus().is_err() {

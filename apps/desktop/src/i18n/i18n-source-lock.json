@@ -606,6 +606,7 @@
   "dictation.fixPanel.pick": "Pick the wrong words from your last dictation:",
   "dictation.fixPanel.refused.empty": "Fill in both fields.",
   "dictation.fixPanel.refused.lineBreak": "A fix is one line of text.",
+  "dictation.fixPanel.refused.punctuation": "Pick the dictated words without punctuation.",
   "dictation.fixPanel.refused.same": "The words are already written this way.",
   "dictation.fixPanel.refused.tooLong": "That is too long for one fix.",
   "dictation.fixPanel.refused.tooManyWords": "A fix takes at most three words.",

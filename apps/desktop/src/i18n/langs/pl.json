@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Wypełnij oba pola.",
         "lineBreak": "Poprawka to jeden wiersz tekstu.",
+        "punctuation": "Wybierz podyktowane słowa bez znaków interpunkcyjnych.",
         "same": "Słowa są już tak zapisane.",
         "tooLong": "To za długie na jedną poprawkę.",
         "tooManyWords": "Poprawka może mieć najwyżej trzy słowa."

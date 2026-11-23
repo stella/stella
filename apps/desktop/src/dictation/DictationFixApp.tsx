@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
@@ -43,6 +43,10 @@ const DictationFixApp = () => {
   const [to, setTo] = useState("");
   const [picked, setPicked] = useState<WordRange | null>(null);
   const [outcome, setOutcome] = useState<Outcome>({ status: "editing" });
+  // Set before the first await, so a second submit cannot start a save
+  // while one runs.
+  const saving = useRef(false);
+  const locked = outcome.status === "saving";
 
   useEffect(() => {
     let disposed = false;
@@ -81,10 +85,15 @@ const DictationFixApp = () => {
   }, []);
 
   const save = async () => {
+    if (saving.current) {
+      return;
+    }
+    saving.current = true;
     setOutcome({ status: "saving" });
     const result = await Result.tryPromise(async () =>
       invoke<unknown>("dictation_fix_save", { from, to }),
     );
+    saving.current = false;
     if (Result.isError(result) || !isFixSaved(result.value)) {
       reportFailure();
       setOutcome({ status: "notSaved" });
@@ -139,6 +148,7 @@ const DictationFixApp = () => {
           request.selection === null &&
           request.lastWords.length > 0 && (
             <LastWords
+              locked={locked}
               onPick={pick}
               picked={picked}
               words={request.lastWords}
@@ -152,6 +162,7 @@ const DictationFixApp = () => {
         <Field>
           <FieldLabel>{t("dictatedAs")}</FieldLabel>
           <Input
+            disabled={locked}
             onChange={(event) => {
               setFrom(event.target.value);
               setOutcome({ status: "editing" });
@@ -164,6 +175,7 @@ const DictationFixApp = () => {
           <FieldLabel>{t("writtenAs")}</FieldLabel>
           <Input
             autoFocus
+            disabled={locked}
             onChange={(event) => {
               setTo(event.target.value);
               setOutcome({ status: "editing" });
@@ -179,7 +191,7 @@ const DictationFixApp = () => {
             {tDialog("cancel")}
           </Button>
           <Button
-            disabled={outcome.status === "saving"}
+            disabled={locked}
             disabledReason={t("saving")}
             size="sm"
             type="submit"
@@ -195,10 +207,12 @@ const DictationFixApp = () => {
 /** The words of the last dictation; picking one, then a neighbour, takes
  *  a phrase. */
 const LastWords = ({
+  locked,
   onPick,
   picked,
   words,
 }: {
+  locked: boolean;
   onPick: (index: number) => void;
   picked: WordRange | null;
   words: readonly string[];
@@ -211,6 +225,8 @@ const LastWords = ({
         <div className="flex flex-wrap gap-1">
           {placed(words).map(({ place, word }) => (
             <Button
+              disabled={locked}
+              disabledReason={t("saving")}
               key={place}
               onClick={() => {
                 onPick(place);
@@ -260,6 +276,7 @@ const OutcomeLine = ({ outcome }: { outcome: Outcome }) => {
 const REFUSAL_MESSAGES = {
   empty: "refused.empty",
   lineBreak: "refused.lineBreak",
+  punctuation: "refused.punctuation",
   same: "refused.same",
   tooLong: "refused.tooLong",
   tooManyWords: "refused.tooManyWords",

@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Užpildykite abu laukus.",
         "lineBreak": "Pataisymas yra viena teksto eilutė.",
+        "punctuation": "Pasirinkite padiktuotus žodžius be skyrybos ženklų.",
         "same": "Žodžiai jau parašyti taip.",
         "tooLong": "Vienam pataisymui tai per ilga.",
         "tooManyWords": "Pataisymą gali sudaryti ne daugiau kaip trys žodžiai."

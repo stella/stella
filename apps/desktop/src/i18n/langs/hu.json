@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Töltse ki mindkét mezőt.",
         "lineBreak": "Egy javítás egy sor szöveg.",
+        "punctuation": "Válassza ki a diktált szavakat írásjelek nélkül.",
         "same": "A szavak már így vannak írva.",
         "tooLong": "Ez túl hosszú egy javításhoz.",
         "tooManyWords": "Egy javítás legfeljebb három szó lehet."

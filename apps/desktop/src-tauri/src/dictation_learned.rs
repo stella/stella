@@ -30,7 +30,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::{
   device_preference::DevicePreference,
-  dictation_spelling::LearnedSpelling,
+  dictation_spelling::{LearnedSpelling, phrase_words},
   dictation_words::dictation_namespace,
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
@@ -151,6 +151,10 @@ struct Stored {
   pending: Vec<Change>,
   /// The speaker deleted what stella learned; the server is told first.
   clear_pending: bool,
+  /// Counts the deletes, so a reply to an earlier one leaves a later one
+  /// waiting.
+  #[serde(default)]
+  clear_count: u64,
 }
 
 /// The server's answer to every learned-fixes request.
@@ -177,6 +181,9 @@ pub enum Refusal {
   TooLong,
   TooManyWords,
   Same,
+  /// Punctuation inside the dictated words, or at their edge without the
+  /// same in how they are written: a fix matches words only.
+  Punctuation,
 }
 
 /// `text` as a fix's side: trimmed, single spaces between its words, within
@@ -198,6 +205,24 @@ pub fn accepted(text: &str) -> Result<String, Refusal> {
     return Err(Refusal::TooLong);
   }
   Ok(joined)
+}
+
+/// `from` → `to` as a fix of dictated words: punctuation at the edges of
+/// `from` comes off both sides when `to` has the same there, so selecting
+/// `Novak,` teaches `Novak` → `Novák`. Other punctuation in `from` could
+/// never match dictated words and is refused.
+fn learnable(from: &str, to: &str) -> Result<(String, String), Refusal> {
+  let (before, words, after) = phrase_words(from).ok_or(Refusal::Punctuation)?;
+  if before.is_empty() && after.is_empty() {
+    return Ok((from.to_string(), to.to_string()));
+  }
+  let written = to
+    .strip_prefix(before)
+    .and_then(|rest| rest.strip_suffix(after))
+    .map(str::trim)
+    .filter(|rest| !rest.is_empty())
+    .ok_or(Refusal::Punctuation)?;
+  Ok((words.trim().to_string(), written.to_string()))
 }
 
 /// How two fixes' dictated words compare: lower case, curly apostrophes
@@ -302,23 +327,31 @@ fn changed(app: &AppHandle) {
 }
 
 /// The fixes that are on for the account dictation runs for, as the
-/// spelling pass takes them; none without an account or a readable file.
-pub fn on_fixes(app: &AppHandle) -> Vec<LearnedFix> {
-  dictation_namespace(app)
-    .and_then(|namespace| read(&namespace).ok())
-    .map(|stored| {
-      stored
-        .fixes
-        .into_iter()
-        .filter(|fix| fix.status == FixStatus::On)
-        .collect()
-    })
-    .unwrap_or_default()
+/// spelling pass takes them: none without an account, an error when the
+/// file cannot be read.
+fn on_fixes(app: &AppHandle) -> Result<Vec<LearnedFix>, String> {
+  let Some(namespace) = dictation_namespace(app) else {
+    return Ok(Vec::new());
+  };
+  Ok(
+    read(&namespace)?
+      .fixes
+      .into_iter()
+      .filter(|fix| fix.status == FixStatus::On)
+      .collect(),
+  )
 }
 
-/// `text` with every fix that is on applied.
+/// `text` with every fix that is on applied. A file that cannot be read
+/// leaves the text as dictated and says so in the log, never what it holds.
 pub fn apply(app: &AppHandle, text: &str) -> String {
-  let fixes = on_fixes(app);
+  let fixes = match on_fixes(app) {
+    Ok(fixes) => fixes,
+    Err(error) => {
+      tracing::warn!(%error, "learned dictation fixes not applied");
+      return text.to_string();
+    }
+  };
   let spellings = fixes
     .iter()
     .map(|fix| LearnedSpelling {
@@ -333,6 +366,7 @@ pub fn apply(app: &AppHandle, text: &str) -> String {
 pub fn teach(app: &AppHandle, from: &str, to: &str) -> Result<(), TeachFailure> {
   let from = accepted(from).map_err(TeachFailure::Refused)?;
   let to = accepted(to).map_err(TeachFailure::Refused)?;
+  let (from, to) = learnable(&from, &to).map_err(TeachFailure::Refused)?;
   if from == to {
     return Err(TeachFailure::Refused(Refusal::Same));
   }
@@ -359,12 +393,36 @@ pub enum TeachFailure {
   NotSaved,
 }
 
-/// Forgets the account's fixes on this computer, as it disconnects: the
-/// server keeps the speaker's list for their other devices.
-pub fn erase_account(namespace: &str) {
+/// Forgets every account's fixes on this computer, as the account
+/// disconnects: the server keeps the speaker's list for their other devices.
+/// Files of an account that expired before are erased too, since its
+/// namespace is no longer known.
+pub fn erase_all() {
   let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
-  if let Err(error) = preference(namespace).remove() {
-    tracing::warn!(%error, "learned dictation fixes were not erased");
+  let Some(directory) =
+    dirs::data_dir().map(|data| data.join(crate::config::APP_DATA_DIR_NAME))
+  else {
+    return;
+  };
+  let entries = match std::fs::read_dir(&directory) {
+    Ok(entries) => entries,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+    Err(error) => {
+      tracing::warn!(%error, "learned dictation fixes were not erased");
+      return;
+    }
+  };
+  for entry in entries.flatten() {
+    let name = entry.file_name();
+    let Some(name) = name.to_str() else {
+      continue;
+    };
+    if !name.starts_with(FILE_PREFIX) {
+      continue;
+    }
+    if let Err(error) = DevicePreference::in_app_data(name).remove() {
+      tracing::warn!(%error, "learned dictation fixes were not erased");
+    }
   }
 }
 
@@ -405,7 +463,8 @@ pub fn dictation_learned_delete(app: AppHandle) -> Result<LearnedView, String> {
   let namespace = dictation_namespace(&app).ok_or(NO_ACCOUNT)?;
   {
     let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
-    let generation = read(&namespace).map_or(0, |stored| stored.generation);
+    let (generation, clear_count) = read(&namespace)
+      .map_or((0, 0), |stored| (stored.generation, stored.clear_count));
     write(
       &namespace,
       &Stored {
@@ -413,6 +472,7 @@ pub fn dictation_learned_delete(app: AppHandle) -> Result<LearnedView, String> {
         fixes: Vec::new(),
         pending: Vec::new(),
         clear_pending: true,
+        clear_count: clear_count.wrapping_add(1),
       },
     )?;
   }
@@ -461,6 +521,9 @@ async fn sync(app: &AppHandle) {
       }
     }
   }
+  // The rounds ran out with changes still waiting: the rest goes in a sync
+  // of its own rather than waiting for the next change.
+  sync_soon(app);
 }
 
 enum Round {
@@ -477,7 +540,8 @@ enum Stop {
 
 /// What one request does, decided from the file.
 enum Request {
-  Clear,
+  /// The delete with this count; a later one stays waiting.
+  Clear(u64),
   Send {
     generation: u64,
     changes: Vec<Change>,
@@ -490,7 +554,7 @@ async fn sync_round(app: &AppHandle, namespace: &str) -> Result<Round, Stop> {
     let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
     let stored = read(namespace).map_err(|_error| Stop::Failed)?;
     if stored.clear_pending {
-      Request::Clear
+      Request::Clear(stored.clear_count)
     } else if stored.pending.is_empty() {
       Request::Read
     } else {
@@ -505,34 +569,49 @@ async fn sync_round(app: &AppHandle, namespace: &str) -> Result<Round, Stop> {
       }
     }
   };
-  let reply = send(app, namespace, &request).await?;
-  let again = update(namespace, |stored| {
-    match &request {
-      Request::Clear => stored.clear_pending = false,
-      Request::Send { changes, .. } => {
-        stored
-          .pending
-          .retain(|change| changes.iter().all(|sent| sent.id() != change.id()));
-      }
-      Request::Read => {}
-    }
-    stored.generation = reply.generation;
-    let settled = stored.pending.is_empty() && !stored.clear_pending;
-    if settled {
-      stored.fixes = reply.fixes;
-    }
-    !settled
-  })
-  .map_err(|_error| Stop::Failed)?;
+  // The account lease is held until the reply is written, so Disconnect
+  // cannot erase the file while the reply is read and then see it written
+  // back.
+  let (reply, account) = send(app, namespace, &request).await?;
+  let again = update(namespace, |stored| settle(stored, &request, reply))
+    .map_err(|_error| Stop::Failed)?;
+  drop(account);
   changed(app);
   Ok(if again { Round::Again } else { Round::Done })
 }
 
+/// `stored` after the server answered `request`: what it took no longer
+/// waits, and its list replaces the one here once nothing waits. True while
+/// something still waits.
+fn settle(stored: &mut Stored, request: &Request, reply: Snapshot) -> bool {
+  match request {
+    Request::Clear(count) => {
+      if stored.clear_count == *count {
+        stored.clear_pending = false;
+      }
+    }
+    Request::Send { changes, .. } => {
+      stored
+        .pending
+        .retain(|change| changes.iter().all(|sent| sent.id() != change.id()));
+    }
+    Request::Read => {}
+  }
+  stored.generation = reply.generation;
+  let settled = stored.pending.is_empty() && !stored.clear_pending;
+  if settled {
+    stored.fixes = reply.fixes;
+  }
+  !settled
+}
+
+/// The server's answer, and the account request whose lease the caller holds
+/// until the answer is written.
 async fn send(
   app: &AppHandle,
   namespace: &str,
   request: &Request,
-) -> Result<Snapshot, Stop> {
+) -> Result<(Snapshot, crate::account::AccountRequest), Stop> {
   let account = crate::dictation_cleanup::dictation_account(app)
     .await
     .map_err(|_error| Stop::Failed)?;
@@ -546,7 +625,7 @@ async fn send(
   .map_err(|_error| Stop::Failed)?;
   let url = format!("{}{}", account.api_base_url, contract().path);
   let builder = match request {
-    Request::Clear => client.delete(url),
+    Request::Clear(_) => client.delete(url),
     Request::Send {
       generation,
       changes,
@@ -564,7 +643,6 @@ async fn send(
   )
   .map_err(|_error| Stop::Failed)?;
   let response = signed.send().await.map_err(|_error| Stop::Failed)?;
-  drop(account);
   let status = response.status();
   if status == reqwest::StatusCode::NOT_FOUND {
     return Err(Stop::OlderServer);
@@ -578,7 +656,9 @@ async fn send(
     return Err(Stop::Failed);
   }
   // A serde error is never logged: it can quote a fix.
-  serde_json::from_slice(&bytes).map_err(|_error| Stop::Failed)
+  let snapshot: Snapshot =
+    serde_json::from_slice(&bytes).map_err(|_error| Stop::Failed)?;
+  Ok((snapshot, account))
 }
 
 #[cfg(test)]
@@ -592,6 +672,57 @@ mod tests {
       seen: 1,
       status,
     }
+  }
+
+  #[test]
+  fn edge_punctuation_comes_off_both_sides_and_other_punctuation_is_refused() {
+    assert_eq!(
+      learnable("Novak,", "Novák,"),
+      Ok(("Novak".to_string(), "Novák".to_string()))
+    );
+    assert_eq!(
+      learnable("jon smith", "Jon Smyth"),
+      Ok(("jon smith".to_string(), "Jon Smyth".to_string()))
+    );
+    assert_eq!(learnable("C++", "Rust"), Err(Refusal::Punctuation));
+    assert_eq!(learnable("Novak,", "Novák"), Err(Refusal::Punctuation));
+    assert_eq!(
+      learnable("St. John", "Saint John"),
+      Err(Refusal::Punctuation)
+    );
+  }
+
+  #[test]
+  fn a_reply_to_an_earlier_delete_leaves_a_later_one_waiting() {
+    let mut stored = Stored {
+      generation: 1,
+      fixes: Vec::new(),
+      pending: Vec::new(),
+      clear_pending: true,
+      clear_count: 2,
+    };
+    let reply = || Snapshot {
+      generation: 2,
+      fixes: vec![fix("kept", "Kept", FixStatus::On)],
+    };
+    assert!(settle(&mut stored, &Request::Clear(1), reply()));
+    assert!(stored.clear_pending);
+    assert!(stored.fixes.is_empty());
+    assert!(!settle(&mut stored, &Request::Clear(2), reply()));
+    assert!(!stored.clear_pending);
+    assert_eq!(stored.fixes, vec![fix("kept", "Kept", FixStatus::On)]);
+  }
+
+  #[test]
+  fn a_stored_file_without_a_delete_count_reads() {
+    let stored: Stored = serde_json::from_value(serde_json::json!({
+      "generation": 3,
+      "fixes": [],
+      "pending": [],
+      "clearPending": false,
+    }))
+    .unwrap();
+    assert_eq!(stored.clear_count, 0);
   }
 
   #[test]

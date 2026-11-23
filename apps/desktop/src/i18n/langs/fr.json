@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Remplissez les deux champs.",
         "lineBreak": "Une correction tient sur une seule ligne.",
+        "punctuation": "Sélectionnez les mots dictés sans ponctuation.",
         "same": "Les mots sont déjà écrits ainsi.",
         "tooLong": "C’est trop long pour une correction.",
         "tooManyWords": "Une correction compte au plus trois mots."

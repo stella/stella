@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Täitke mõlemad väljad.",
         "lineBreak": "Parandus on üks tekstirida.",
+        "punctuation": "Valige dikteeritud sõnad ilma kirjavahemärkideta.",
         "same": "Sõnad on juba nii kirjutatud.",
         "tooLong": "See on ühe paranduse jaoks liiga pikk.",
         "tooManyWords": "Paranduses võib olla kõige rohkem kolm sõna."

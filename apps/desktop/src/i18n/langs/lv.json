@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Aizpildiet abus laukus.",
         "lineBreak": "Labojums ir viena teksta rinda.",
+        "punctuation": "Izvēlieties diktētos vārdus bez pieturzīmēm.",
         "same": "Vārdi jau ir uzrakstīti tā.",
         "tooLong": "Vienam labojumam tas ir par garu.",
         "tooManyWords": "Labojumā var būt ne vairāk kā trīs vārdi."

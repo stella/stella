@@ -666,6 +666,7 @@
       "refused": {
         "empty": "Füllen Sie beide Felder aus.",
         "lineBreak": "Eine Korrektur ist eine Textzeile.",
+        "punctuation": "Wählen Sie die diktierten Wörter ohne Satzzeichen.",
         "same": "Die Wörter sind bereits so geschrieben.",
         "tooLong": "Das ist für eine Korrektur zu lang.",
         "tooManyWords": "Eine Korrektur umfasst höchstens drei Wörter."
