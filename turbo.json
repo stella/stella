@@ -1932,13 +1932,15 @@
         "API_TEST_FILES_ENCODED",
         "STELLA_RUN_SHARED_POSTGRES_TESTS"
       ],
-      // Lane count and diagnostics destinations never change test results;
+      // Lane count, diagnostics destinations and the learned memory feedback
+      // (which only regroups files into processes) never change test results;
       // pass them through without entering the cache key.
       "passThroughEnv": [
         "API_TEST_ARTIFACT_DIR",
         "API_TEST_LANES",
         "API_TEST_TIMINGS_DIR",
-        "API_TEST_DURATIONS_FILE"
+        "API_TEST_DURATIONS_FILE",
+        "API_TEST_RSS_FEEDBACK_FILE"
       ],
       "inputs": [
         "$TURBO_ROOT$/packages/html/src/email.ts",

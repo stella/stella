@@ -1,0 +1,125 @@
+name: API test memory feedback
+
+# Every API test shard uploads, with its timings, one observation per passing
+# batch: the planner's estimate and the batch's measured peak. A batch that
+# peaked past its plan teaches later plans to weigh its heaviest file higher
+# (apps/api/scripts/test-rss-feedback.ts). Which files share a process depends
+# on each run's scope, so every same-repository run is a source; learning runs
+# in main's context, so the cache it saves reaches every branch.
+
+on:
+  workflow_run: # zizmor: ignore[dangerous-triggers] reads only the run's JSON observations, parsed against a strict schema by main's code; no PR code runs
+    workflows: [CI Checks, Main heavy suites, Main PR-depth checks]
+    types: [completed]
+
+permissions: {}
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  find:
+    name: Find batches past their memory plan
+    if: github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      found: ${{ steps.find.outputs.found }}
+    steps:
+      # A run without API test shards uploaded none; that downloads nothing.
+      - name: Download the run's batch observations
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: api-test-timings-api-*
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/api-test-rss-observations
+
+      # The same test as isPastMemoryPlan, so a run with nothing to learn
+      # installs nothing.
+      - name: Find batches past their plan
+        id: find
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=("$RUNNER_TEMP"/api-test-rss-observations/*.rss.jsonl)
+          past=0
+          if (( ${#files[@]} > 0 )); then
+            past=$(cat "${files[@]}" | jq -c 'select(.peakMb > .compositionBudgetMb and .peakMb > .estimateMb)' | tee "$RUNNER_TEMP/past.jsonl" | wc -l)
+            cat "$RUNNER_TEMP/past.jsonl"
+          fi
+          echo "${#files[@]} observation files, $past batches past their plan"
+          echo "found=$([[ "$past" -gt 0 ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+  learn:
+    name: Learn API test memory surcharges
+    needs: find
+    if: needs.find.outputs.found == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # One learner at a time, each building on the last save. A queued learner
+    # that a newer one replaces loses its lesson until that batch next peaks
+    # past its plan.
+    concurrency:
+      group: api-test-memory-feedback
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.repository.default_branch }}
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
+        with:
+          save: "false"
+          bun-version-file: package.json
+
+      - name: Install dependencies
+        timeout-minutes: 5
+        env:
+          NPM_TOKEN: ""
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+
+      - name: Download the run's batch observations
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: api-test-timings-api-*
+          merge-multiple: true
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/api-test-rss-observations
+
+      - name: Restore the learned surcharges
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-rss-feedback.json
+          key: api-test-rss-feedback-${{ github.run_id }}
+          restore-keys: api-test-rss-feedback-
+
+      - name: Learn from the run
+        run: |
+          set -euo pipefail
+          feedback="$RUNNER_TEMP/api-test-rss-feedback.json"
+          bun apps/api/scripts/refresh-test-rss-feedback.ts --write "$feedback" --base "$([[ -f "$feedback" ]] && echo "$feedback" || echo missing)" "$RUNNER_TEMP/api-test-rss-observations"
+          {
+            echo "### API test memory surcharges"
+            echo
+            echo '```json'
+            cat "$feedback"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Save the learned surcharges
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/api-test-rss-feedback.json
+          key: api-test-rss-feedback-${{ github.run_id }}

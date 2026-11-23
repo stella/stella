@@ -47,6 +47,8 @@
     "nightly-test.yml/script-test-declarations": "main",
     "api-test-memory.yml/measure": "main",
     "api-test-memory.yml/refresh": "main",
+    "api-test-memory-feedback.yml/find": "pr-fast",
+    "api-test-memory-feedback.yml/learn": "pr-fast",
     "sync-branch-protection.yml/sync": "main",
     "nightly-property-test.yml/provider-request-three-wise": "main",
     "nightly-property-test.yml/provider-request-combinations": "main",

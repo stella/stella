@@ -15,6 +15,14 @@
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."
   },
+  "candidate:.github/workflows/api-test-memory-feedback.yml/find": {
+    "kind": "ordinary",
+    "qualifier": "Reads a completed CI run's API test memory observations with a read-only token; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/api-test-memory-feedback.yml/learn": {
+    "kind": "ordinary",
+    "qualifier": "Saves learned API test memory surcharges to an Actions cache that later test plans read; no repository write, publication, tag creation, or deployment."
+  },
   "candidate:.github/workflows/api-test-memory.yml/measure": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."

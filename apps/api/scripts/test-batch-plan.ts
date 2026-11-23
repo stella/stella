@@ -10,6 +10,7 @@ import {
 
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
 import rssData from "./test-peak-rss.json";
+import type { TestRssFeedback } from "./test-rss-feedback";
 
 /** The ordinary DB batch stays small without paying one process per file. */
 export const DB_TEST_BATCH_SIZE = 3;
@@ -270,13 +271,22 @@ export const unmeasuredTestPeakRss = ({
   );
 };
 
-type RssFileWeightOptions = UnmeasuredTestPeakRssOptions;
-const rssFileWeight = ({
+type RssFileWeightOptions = UnmeasuredTestPeakRssOptions & {
+  /** Surcharges learned from main's batch peaks (test-rss-feedback.ts). */
+  feedback?: TestRssFeedback;
+};
+/**
+ * A file's planned increment over the preload baseline: its measured (or
+ * estimated) increment plus any surcharge main's runs taught the planner.
+ */
+export const testRssFileWeight = ({
   file,
   rssTable,
   budgetMb,
   dbTestPaths,
+  feedback = {},
 }: RssFileWeightOptions) => {
+  const surchargeMb = feedback[file]?.surchargeMb ?? 0;
   const observation = rssTable.files[file];
   if (observation === undefined) {
     const incrementalMb = unmeasuredTestPeakRss({
@@ -288,13 +298,16 @@ const rssFileWeight = ({
     return {
       type: "unmeasured",
       peakMb: rssTable.baselineMb + incrementalMb,
-      incrementalMb,
+      incrementalMb: incrementalMb + surchargeMb,
+      surchargeMb,
     } as const;
   }
   return {
     type: "measured",
     peakMb: observation.peakMb,
-    incrementalMb: Math.max(0, observation.peakMb - observation.baselineMb),
+    incrementalMb:
+      Math.max(0, observation.peakMb - observation.baselineMb) + surchargeMb,
+    surchargeMb,
   } as const;
 };
 
@@ -304,20 +317,23 @@ type BatchPeakRssOptions = {
   budgetMb: number;
   /** Files the runner executes in its db class; their estimate differs. */
   dbTestPaths: ReadonlySet<string>;
+  feedback?: TestRssFeedback;
 };
 export const batchPeakRss = ({
   files,
   rssTable,
   budgetMb,
   dbTestPaths,
+  feedback = {},
 }: BatchPeakRssOptions) => {
   let peakMb = rssTable.baselineMb;
   for (const file of files) {
-    peakMb += rssFileWeight({
+    peakMb += testRssFileWeight({
       file,
       rssTable,
       budgetMb,
       dbTestPaths,
+      feedback,
     }).incrementalMb;
   }
   return peakMb;
@@ -330,6 +346,7 @@ type SplitMemoryBoundedBatchesOptions = {
   budgetMb: number;
   /** Files the runner executes in its db class; their estimate differs. */
   dbTestPaths: ReadonlySet<string>;
+  feedback?: TestRssFeedback;
 };
 
 /** Split existing batches without introducing new process neighbours. */
@@ -338,6 +355,7 @@ export const splitMemoryBoundedBatches = ({
   rssTable = measuredTestRssTable(),
   budgetMb,
   dbTestPaths,
+  feedback = {},
 }: SplitMemoryBoundedBatchesOptions): string[][] => {
   if (!Number.isFinite(budgetMb) || budgetMb <= 0) {
     panic("test batch memory budget must be positive and finite");
@@ -348,11 +366,12 @@ export const splitMemoryBoundedBatches = ({
     let current: string[] = [];
     let totalMb = rssTable.baselineMb;
     for (const file of batch) {
-      const weight = rssFileWeight({
+      const weight = testRssFileWeight({
         file,
         rssTable,
         budgetMb,
         dbTestPaths,
+        feedback,
       });
       if (
         !Number.isFinite(weight.peakMb) ||
@@ -363,13 +382,15 @@ export const splitMemoryBoundedBatches = ({
         panic(`Invalid peak RSS for ${file}`);
       }
       const singletonPeak = rssTable.baselineMb + weight.incrementalMb;
-      if (singletonPeak > budgetMb) {
+      // A learned surcharge can only isolate a file: alone, the runtime cap
+      // decides, so it never makes a plan impossible.
+      if (singletonPeak - weight.surchargeMb > budgetMb) {
         panic(
           `Cannot plan API test batch [${batch.join(", ")}]: ${file} requires ${singletonPeak} MB, class budget ${budgetMb} MB`,
         );
       }
       if (
-        weight.type === "measured" &&
+        (weight.type === "measured" || weight.surchargeMb > 0) &&
         singletonPeak >= budgetMb * SOLO_TEST_RSS_RATIO
       ) {
         if (current.length > 0) {
@@ -401,6 +422,8 @@ export const splitMemoryBoundedBatches = ({
       rssTable,
       budgetMb,
       dbTestPaths,
+      // A file alone is bounded by its measurement; see the singleton check.
+      feedback: batch.length > 1 ? feedback : {},
     });
     if (peak > budgetMb) {
       panic(

@@ -64,15 +64,15 @@ describe("batchMemoryVerdict", () => {
     }
   });
 
-  test("the drift warning is a GitHub annotation pointing at the table refresh", () => {
+  test("the drift warning is a GitHub annotation pointing at the learned feedback", () => {
     const result = verdict(2100);
     if (result.type !== BATCH_MEMORY.planDrift) {
       throw new Error(`expected plan drift, got ${result.type}`);
     }
     expect(result.annotation).toBe(
       "::warning title=API test batch above its memory plan::db batch 27/35 " +
-        "peaked at 2100 MB of its 2560 MB budget (82%); refresh " +
-        "apps/api/scripts/test-peak-rss.json (docs/test-memory.md); files: " +
+        "peaked at 2100 MB of its 2560 MB budget (82%); main's runs learn " +
+        "the excess (docs/test-memory.md); files: " +
         "src/a.db.test.ts, src/b.db.test.ts",
     );
   });
