@@ -42,7 +42,7 @@ export const fieldUnscannedContent = (
  * Says that part of a stored file, such as a password-protected file inside
  * a ZIP archive, was not scanned when it was uploaded.
  */
-export const UnscannedContentNotice = ({
+const UnscannedContentNotice = ({
   reasons,
 }: {
   reasons: readonly UnscannedContentReason[];
