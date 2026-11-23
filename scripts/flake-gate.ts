@@ -39,23 +39,31 @@ export const REPEATS = 5;
 export const MAX_CHANGED_TEST_FILES = 10;
 export const BUDGET_MS = 5 * 60 * 1000;
 /** Digits only: an epoch-millisecond instant handed over by the CI job. */
-const DEADLINE_EPOCH_MS = /^\d{1,16}$/u;
+const EPOCH_MS = /^\d{1,16}$/u;
+/**
+ * How long after the test job's clock the repeats may still run. The job's
+ * runner step records the clock (`CI_T0`) after setup; 21 minutes from it
+ * stays inside the job's 25-minute timeout with room for the uploads that
+ * follow the repeats.
+ */
+export const JOB_REPEAT_WINDOW_MS = 21 * 60 * 1000;
 /**
  * The gate's budget: its own cap, or less when the job that runs it must end
- * sooner. `deadline` is the epoch millisecond by which the gate has to finish
- * (`FLAKE_GATE_DEADLINE_MS`); without one the cap applies unchanged.
+ * sooner. `clock` is the epoch millisecond the test job's clock started
+ * (`CI_T0`); without one the cap applies unchanged.
  */
 export const gateBudgetMs = (
-  deadline: string | undefined,
+  clock: string | undefined,
   nowEpochMs: number,
 ): number => {
-  if (deadline === undefined || deadline === "") {
+  if (clock === undefined || clock === "") {
     return BUDGET_MS;
   }
-  if (!DEADLINE_EPOCH_MS.test(deadline)) {
-    panic(`FLAKE_GATE_DEADLINE_MS is not an epoch millisecond: ${deadline}`);
+  if (!EPOCH_MS.test(clock)) {
+    panic(`CI_T0 is not an epoch millisecond: ${clock}`);
   }
-  return Math.min(BUDGET_MS, Math.max(0, Number(deadline) - nowEpochMs));
+  const deadline = Number(clock) + JOB_REPEAT_WINDOW_MS;
+  return Math.min(BUDGET_MS, Math.max(0, deadline - nowEpochMs));
 };
 const root = path.resolve(import.meta.dir, "..");
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
@@ -802,7 +810,7 @@ if (import.meta.main) {
     }
     return executeGate({
       ...selection,
-      budgetMs: gateBudgetMs(process.env["FLAKE_GATE_DEADLINE_MS"], Date.now()),
+      budgetMs: gateBudgetMs(process.env["CI_T0"], Date.now()),
     });
   });
   if (outcome.isErr()) {

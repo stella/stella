@@ -23,6 +23,7 @@ import {
   executeGate,
   failureAnnotation,
   gateBudgetMs,
+  JOB_REPEAT_WINDOW_MS,
   MAX_CHANGED_TEST_FILES,
   planRepeats,
   renderReport,
@@ -58,16 +59,13 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
       "          CHANGED_FILES_JSON\n",
     ].join(""),
   );
-  // The repeats end before the job's timeout: the clock starts in the
-  // shard's runner step and the gate gets the deadline.
+  // The repeats end before the job's timeout: the shard's runner step starts
+  // the clock the gate reads.
   expect(source).toContain(
-    `echo "CI_TESTS_CLOCK_MS=$(date +%s%3N)" >> "$GITHUB_ENV"`,
+    `run: nproc; free -g; date +CI_T0=%s%3N>>"$GITHUB_ENV"`,
   );
   expect(source).toContain(
-    [
-      "          FLAKE_GATE_DEADLINE_MS=$(( CI_TESTS_CLOCK_MS + 21 * 60 * 1000 )) \\\n",
-      `            CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
-    ].join(""),
+    `CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
   );
   expect(source).not.toContain("CHANGED_FILES_JSON: $");
   // Repeated tests read the API runtime their own jobs generate.
@@ -1196,11 +1194,14 @@ test("a failing trial that names tests without details still names them", async 
 
 test("the gate spends its cap, or only what the job has left before its deadline", () => {
   const now = 1_800_000_000_000;
+  // The clock a window ago plus `left` leaves exactly `left` before the deadline.
+  const clockLeaving = (left: number) =>
+    String(now - JOB_REPEAT_WINDOW_MS + left);
   expect(gateBudgetMs(undefined, now)).toBe(BUDGET_MS);
   expect(gateBudgetMs("", now)).toBe(BUDGET_MS);
-  expect(gateBudgetMs(String(now + 2 * BUDGET_MS), now)).toBe(BUDGET_MS);
-  expect(gateBudgetMs(String(now + 90_000), now)).toBe(90_000);
-  expect(gateBudgetMs(String(now - 1), now)).toBe(0);
+  expect(gateBudgetMs(String(now), now)).toBe(BUDGET_MS);
+  expect(gateBudgetMs(clockLeaving(90_000), now)).toBe(90_000);
+  expect(gateBudgetMs(clockLeaving(-1), now)).toBe(0);
   expect(() => gateBudgetMs("soon", now)).toThrow("not an epoch millisecond");
 });
 
