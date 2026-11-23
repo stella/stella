@@ -188,7 +188,7 @@ const EXCEPTIONS = new Map([
   ],
   [
     "lib/uploads/client-preview.ts",
-    "Deletes only a client preview's staging object beside tmpUploadKey once it is read; the preview PDF is stored under its own final key.",
+    "Deletes only a client preview's staging object beside tmpUploadKey once its PDF derivative is settled; the preview PDF is stored under its own final key.",
   ],
   [
     "lib/entities/create-from-buffer.ts",

@@ -114,6 +114,7 @@ import {
   acceptsClientPreview,
   loadClientPreview,
   type QueuedClientPreview,
+  removeClientPreview,
 } from "@/api/lib/uploads/client-preview";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
@@ -974,12 +975,20 @@ const processPdfDerivativeJob = async (
     fileId: content.id,
     mimeType: content.mimeType,
   });
+  // A retried attempt reads the staged preview again, so it goes only once
+  // the derivative is settled.
+  const settleClientPreview = async () => {
+    if (jobData.clientPreview !== undefined) {
+      await removeClientPreview(jobData.clientPreview);
+    }
+  };
   const built = await buildPdfDerivative(
     content,
     sourceKey,
     jobData.clientPreview,
   );
   if (built.type === "refused") {
+    await settleClientPreview();
     await refuseDerivative({
       fieldId: brandedFieldId,
       jobData,
@@ -1086,6 +1095,7 @@ const processPdfDerivativeJob = async (
     });
 
     if (publication !== "published") {
+      await settleClientPreview();
       await cleanupUnpublishedDerivative({
         intentId: cleanupIntent.value,
         objectKey: pdfKey,
@@ -1112,6 +1122,7 @@ const processPdfDerivativeJob = async (
     throw error;
   }
 
+  await settleClientPreview();
   broadcastWorkspaceResourceUpdated(
     branded.workspaceId,
     resourceRef({ type: RESOURCE_TYPE.FIELD, id: brandedFieldId }),

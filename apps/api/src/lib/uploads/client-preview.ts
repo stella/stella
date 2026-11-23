@@ -171,7 +171,7 @@ export const clientPreviewRefusal = ({
   return null;
 };
 
-/** How long reading, scanning and removing a staged preview may take. */
+/** How long reading or removing a staged preview may take. */
 const PREVIEW_IO_TIMEOUT_MS = 30_000;
 
 export type LoadedClientPreview =
@@ -184,8 +184,9 @@ export type LoadedClientPreview =
 
 /**
  * Reads the staged preview back and decides whether it stands for the
- * photo whose header is `original`. The staged object is removed either way:
- * it is read once, by this job.
+ * photo whose header is `original`. The staged object stays where it is, so
+ * a retried attempt reads it again; the job removes it with
+ * `removeClientPreview` once the derivative is settled.
  */
 export const loadClientPreview = async ({
   original,
@@ -205,15 +206,6 @@ export const loadClientPreview = async ({
         signal,
       }),
   );
-  const removed = await Result.tryPromise(
-    async () => await deleteS3ObjectWithSignal(queued.key, signal),
-  );
-  if (Result.isError(removed)) {
-    // The bucket's temporary-upload rule removes it later.
-    logger.info("file_derivative.client_preview_not_removed", {
-      key: queued.key,
-    });
-  }
   if (Result.isError(read)) {
     return { type: "refused", reason: "unreadable" };
   }
@@ -245,4 +237,24 @@ export const loadClientPreview = async ({
   return Result.isOk(scanned)
     ? { type: "accepted", preview: scanned.value }
     : { type: "refused", reason: "scan" };
+};
+
+/**
+ * Removes the staged preview once its derivative is settled (published, or
+ * refused for good). A failed removal is left to the bucket's
+ * temporary-upload rule, which also collects the preview of a job that
+ * exhausted its attempts.
+ */
+export const removeClientPreview = async (
+  queued: QueuedClientPreview,
+): Promise<void> => {
+  const signal = AbortSignal.timeout(PREVIEW_IO_TIMEOUT_MS);
+  const removed = await Result.tryPromise(
+    async () => await deleteS3ObjectWithSignal(queued.key, signal),
+  );
+  if (Result.isError(removed)) {
+    logger.info("file_derivative.client_preview_not_removed", {
+      key: queued.key,
+    });
+  }
 };
