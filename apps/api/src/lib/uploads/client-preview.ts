@@ -40,9 +40,7 @@ import {
 } from "@/api/lib/s3";
 import { tmpUploadKey } from "@/api/lib/uploads/runtime";
 
-export const CLIENT_PREVIEW_MIME_TYPES = ["image/jpeg", "image/webp"] as const;
-
-export type ClientPreviewMimeType = (typeof CLIENT_PREVIEW_MIME_TYPES)[number];
+const CLIENT_PREVIEW_MIME_TYPES = ["image/jpeg", "image/webp"] as const;
 
 /** A displayed side of a client preview, in pixels. */
 const previewSideSchema = v.pipe(
