@@ -92,10 +92,17 @@ const cmsBytes = (bytes: Uint8Array): Uint8Array | null => {
   if (bytes.at(0) === 0x30) {
     return bytes;
   }
-  const text = Buffer.from(bytes).toString("latin1").trim();
+  // PEM armor and base64 are ASCII; bytes that are not UTF-8 are neither.
+  const decoded = Result.try(() =>
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+  );
+  if (Result.isError(decoded)) {
+    return null;
+  }
+  const text = decoded.value.trim();
   const body = PEM_BODY.exec(text)?.[1] ?? text;
-  const decoded = decodeBase64Text(body);
-  return decoded !== null && hasCmsSignedDataHeader(decoded) ? decoded : null;
+  const der = decodeBase64Text(body);
+  return der !== null && hasCmsSignedDataHeader(der) ? der : null;
 };
 
 const distinctDigests = (digests: readonly StatedDigest[]) =>

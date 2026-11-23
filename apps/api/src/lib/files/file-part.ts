@@ -270,6 +270,9 @@ export const LEGAL_FILE_PARTS = {
   mbox: { [FILE_PART_KINDS.message]: { from: "object", read: mailboxMessage } },
   uyap: {},
   ofd: {},
+  // A signature file's text is read whole; it has no parts of its own.
+  cadesDetached: {},
+  xades: {},
 } as const satisfies Record<
   LegalFileFormatKind,
   Partial<Record<FilePartKind, PartReading>>

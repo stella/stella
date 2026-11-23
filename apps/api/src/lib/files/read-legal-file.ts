@@ -158,10 +158,11 @@ const readNamedSignatureContent: LegalContentReader = async (options) => {
 /** An `.xml` file read as the XAdES signature it holds, else as XML. */
 const readXmlContent: LegalContentReader = async (options) => {
   const signature = await readSignatureContent(options);
-  if (signature.isErr() || signature.value !== null) {
-    return signature.isErr()
-      ? Result.err(signature.error)
-      : Result.ok(signature.value);
+  if (signature.isErr()) {
+    return Result.err(signature.error);
+  }
+  if (signature.value !== null) {
+    return Result.ok(signature.value);
   }
   return await readEInvoiceContent(options);
 };

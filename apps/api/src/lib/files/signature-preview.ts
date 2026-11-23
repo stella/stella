@@ -104,11 +104,13 @@ export const readSignatureWorkerReply = async (
   if (result.value === "unreadable") {
     return Result.ok(null);
   }
-  const parsed = v.safeParse(
-    replySchema,
-    new TextDecoder().decode(result.value),
+  const reply = Result.try(() =>
+    new TextDecoder("utf-8", { fatal: true }).decode(result.value),
   );
-  return parsed.success
+  const parsed = Result.isError(reply)
+    ? null
+    : v.safeParse(replySchema, reply.value);
+  return parsed?.success === true
     ? Result.ok(parsed.output)
     : Result.err(
         classifyFailure(

@@ -444,6 +444,8 @@ const containerSlots = async (
       return await emailAttachments(container);
     case "uyap":
     case "ofd":
+    case "cadesDetached":
+    case "xades":
       return Result.ok([]);
     default:
       format satisfies never;
