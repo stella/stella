@@ -12,6 +12,7 @@ import {
   MSG_MIME_TYPE,
   type TNEF_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -678,6 +679,12 @@ const attemptUploadedMail = async ({
             ...content,
             channel: "pec",
             certifiedEmail: certified.envelope,
+            // The certification is part of what is filed: a replacement
+            // carrying the same message under other certification data
+            // refreshes the record.
+            contentHash: hashSha256Hex(
+              JSON.stringify([content.contentHash, certified.envelope]),
+            ),
           },
     attachments: [],
     expectedSourceVersionId: file.currentVersionId,

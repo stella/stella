@@ -196,7 +196,7 @@ export function CorrespondenceDetailPage() {
         </DetailField>
       </CorrespondenceSection>
 
-      {record.channel === "email" && (
+      {(record.channel === "email" || record.channel === "pec") && (
         <CorrespondenceSection layout="plain">
           <BodySectionHeading>{t("emailViewer.bodyTitle")}</BodySectionHeading>
           {record.bodyHtml === null ? (
