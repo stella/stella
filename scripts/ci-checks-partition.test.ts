@@ -1160,13 +1160,21 @@ const expectScope = ({
   // only an added partition: a baseline that owns it must retain it.
   if (
     job === "ci-checks-rest" &&
-    originalScope["strategy"] === undefined &&
     isDeepStrictEqual(migrated["strategy"], {
       "fail-fast": false,
-      matrix: { partition: [1, 2] },
+      matrix: { partition: [1, 2, 3] },
     })
   ) {
-    delete migrated["strategy"];
+    if (originalScope["strategy"] === undefined) {
+      delete migrated["strategy"];
+    } else if (
+      isDeepStrictEqual(originalScope["strategy"], {
+        "fail-fast": false,
+        matrix: { partition: [1, 2] },
+      })
+    ) {
+      migrated["strategy"] = originalScope["strategy"];
+    }
   }
   // The retired changeset hold was the check legs' only pull-request reader.
   if (

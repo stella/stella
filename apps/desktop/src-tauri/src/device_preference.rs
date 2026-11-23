@@ -73,6 +73,20 @@ impl DevicePreference {
   }
 }
 
+impl DevicePreference {
+  /// Deletes the file; nothing stored is not an error.
+  pub fn remove(&self) -> Result<(), String> {
+    let Some(path) = self.path.as_deref() else {
+      return Ok(());
+    };
+    match fs::remove_file(path) {
+      Ok(()) => Ok(()),
+      Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+      Err(error) => Err(format!("preference could not be deleted: {error}")),
+    }
+  }
+}
+
 fn write_atomically(path: &Path, value: &str) -> Result<(), String> {
   match fs::symlink_metadata(path) {
     Ok(meta) if !meta.file_type().is_file() => {

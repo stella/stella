@@ -16,6 +16,10 @@ import {
   filePartListSchema,
   isFilePartConvertedMediaType,
 } from "@stll/api-contract/file-parts";
+import {
+  UNSCANNED_CONTENT_REASONS,
+  type UnscannedContentReason,
+} from "@stll/api-contract/file-scan-warnings";
 import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
@@ -51,6 +55,11 @@ const versionFileSchema = v.object({
   propertyId: v.pipe(v.string(), v.minLength(1)),
   fileName: v.string(),
   mimeType: v.string(),
+  /** Why some of the file's content was not scanned when it was stored. */
+  unscannedContent: v.optional(
+    v.array(v.picklist(UNSCANNED_CONTENT_REASONS)),
+    [],
+  ),
 });
 
 const versionsSchema = v.object({
@@ -216,7 +225,14 @@ export type LegalDocumentFile =
   | StructuredDocumentFile
   | ZipArchiveDocumentFile;
 
-export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
+/** Content of the file the upload scan could not read, such as an encrypted
+ *  file inside an archive; empty when everything was scanned. */
+export type UnscannedContent = {
+  readonly unscannedContent: readonly UnscannedContentReason[];
+};
+
+export type DocumentFile = (NativeDocumentFile | LegalDocumentFile) &
+  UnscannedContent;
 
 export const readOriginalDocumentFile = async ({
   fetch,
@@ -322,6 +338,46 @@ export const readDocumentEmailPart = async ({
     schema: emailReadingSchema,
   });
 
+const savedPartSchema = v.object({
+  entityId: v.string(),
+  fieldId: v.string(),
+  fileName: v.string(),
+  workspaceId: v.string(),
+});
+
+/** Saving copies the part and derives its previews, as an upload does. */
+const PART_SAVE_TIMEOUT_MS = 60_000;
+
+/**
+ * Saves one part of a document's file (an attachment, a container's file, a
+ * mailbox's message) into a matter, at its top, as a document of its own:
+ * the same audited copy the web's save makes.
+ */
+export const saveDocumentPart = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+  part,
+  destinationWorkspaceId,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  readonly part: string;
+  /** The matter the part goes into. */
+  readonly destinationWorkspaceId: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `/v1/files/${encodeURIComponent(workspaceId)}/part/${encodeURIComponent(fieldId)}/save`,
+    body: { part, destinationWorkspaceId, parentId: null },
+    schema: savedPartSchema,
+    timeoutMs: PART_SAVE_TIMEOUT_MS,
+  });
+
 /** The document has no file: it was created empty, or its file was removed. */
 class NoFileError extends TaggedError("NoFileError")<{
   message: string;
@@ -397,6 +453,28 @@ export const readDocumentFile = async ({
         new NoFileError({ message: `Document ${entityId} has no file` }),
       );
     }
+    const opened = await openVersionFile({ fetch, source, workspaceId, file });
+    return opened.map((value) => ({
+      ...value,
+      unscannedContent: file.unscannedContent,
+    }));
+  });
+
+/** Where the current file opens, read for its viewer. */
+const openVersionFile = async ({
+  fetch,
+  source,
+  workspaceId,
+  file,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly file: VersionFile;
+}): Promise<
+  Result<NativeDocumentFile | LegalDocumentFile, DocumentFileError>
+> =>
+  await Result.gen(async function* () {
     const { fieldId, fileName, mimeType } = file;
     const kind = legalFileFormat(mimeType, fileName)?.kind;
     switch (kind) {

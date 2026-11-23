@@ -32,6 +32,7 @@ import {
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
+import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 import type { FolioAgentToolName } from "@stll/folio-agents";
@@ -136,6 +137,8 @@ export type ChatAttachmentPart = Extract<
   metadata?: {
     filename?: string | undefined;
     placeholder?: string | undefined;
+    /** Why some of the file's content was not scanned when it was stored. */
+    unscannedContent?: UnscannedContentReason[] | undefined;
   };
 };
 export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;

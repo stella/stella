@@ -38,6 +38,25 @@ import {
 export const REPEATS = 5;
 export const MAX_CHANGED_TEST_FILES = 10;
 export const BUDGET_MS = 5 * 60 * 1000;
+/** Digits only: an epoch-millisecond instant handed over by the CI job. */
+const DEADLINE_EPOCH_MS = /^\d{1,16}$/u;
+/**
+ * The gate's budget: its own cap, or less when the job that runs it must end
+ * sooner. `deadline` is the epoch millisecond by which the gate has to finish
+ * (`FLAKE_GATE_DEADLINE_MS`); without one the cap applies unchanged.
+ */
+export const gateBudgetMs = (
+  deadline: string | undefined,
+  nowEpochMs: number,
+): number => {
+  if (deadline === undefined || deadline === "") {
+    return BUDGET_MS;
+  }
+  if (!DEADLINE_EPOCH_MS.test(deadline)) {
+    panic(`FLAKE_GATE_DEADLINE_MS is not an epoch millisecond: ${deadline}`);
+  }
+  return Math.min(BUDGET_MS, Math.max(0, Number(deadline) - nowEpochMs));
+};
 const root = path.resolve(import.meta.dir, "..");
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const manifestSchema = v.object({
@@ -283,6 +302,8 @@ export type Report = {
   skipped: Skipped[];
   errors: string[];
   elapsedMs: number;
+  /** The budget this run had; absent means the default cap. */
+  budgetMs?: number;
 };
 const markdown = (value: string) =>
   value
@@ -304,7 +325,7 @@ export const renderReport = (report: Report) =>
   [
     "## Changed-test flake gate (report only by default)",
     "",
-    `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: ${BUDGET_MS / 60_000} test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
+    `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: ${((report.budgetMs ?? BUDGET_MS) / 60_000).toFixed(2)} test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
     "Failures include persistent failures and runner errors; they require investigation before being called flakes.",
     report.cleanup.note,
     "",
@@ -620,6 +641,7 @@ export const executeGate = async ({
     skipped: [...skipped],
     errors: [],
     elapsedMs: 0,
+    budgetMs,
   };
   const measured: Measured[] = [];
   const reportedFailures = new Set<string>();
@@ -778,7 +800,10 @@ if (import.meta.main) {
         elapsedMs: 0,
       } satisfies Report;
     }
-    return executeGate(selection);
+    return executeGate({
+      ...selection,
+      budgetMs: gateBudgetMs(process.env["FLAKE_GATE_DEADLINE_MS"], Date.now()),
+    });
   });
   if (outcome.isErr()) {
     report.errors.push(outcome.error.message);

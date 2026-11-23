@@ -629,13 +629,14 @@ const executeRun = async ({
     });
     await authorizedWrite(actor, async (tx) => {
       // audit: skip — row bookkeeping inside a run audited at create.
-      // One statement for the whole batch: a VALUES list joined on row_id.
-      const values = sql.join(
-        updates.map(
-          (update) =>
-            sql`(${update.rowId}, ${update.status}, ${update.targetText}, ${JSON.stringify(update.warnings)}::text::jsonb)`,
-        ),
-        sql`, `,
+      // One statement for the whole batch: a JSONB recordset joined on row_id.
+      const updatesPayload = JSON.stringify(
+        updates.map((update) => ({
+          row_id: update.rowId,
+          status: update.status,
+          target_text: update.targetText,
+          warnings: update.warnings,
+        })),
       );
       await tx.execute(sql`
         UPDATE ${bilingualTranslationRows} AS r
@@ -643,7 +644,7 @@ const executeRun = async ({
             target_text = v.target_text,
             warnings = v.warnings,
             updated_at = now()
-        FROM (VALUES ${values}) AS v(row_id, status, target_text, warnings)
+        FROM jsonb_to_recordset(${updatesPayload}::text::jsonb) AS v(row_id text, status text, target_text text, warnings jsonb)
         WHERE r.run_id = ${actor.runId}
           AND r.workspace_id = ${actor.workspaceId}
           AND r.row_id = v.row_id

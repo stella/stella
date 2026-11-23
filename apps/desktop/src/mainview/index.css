@@ -63,6 +63,12 @@ body:has(.dictation-notice-window) {
   min-height: 100dvh;
 }
 
+/* The dictation fix panel is a borderless transparent panel too. */
+body:has(.dictation-fix-window) {
+  background: transparent;
+  overflow: hidden;
+}
+
 /* The dictation preview is a borderless transparent window that lets clicks
  * through; its card grows from the edge nearest the status icon. */
 body:has(.dictation-preview-window) {

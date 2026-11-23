@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# plik został przemianowany, aby uniknąć konfliktów} few {# pliki zostały przemianowane, aby uniknąć konfliktów} many {# plików zostało przemianowanych, aby uniknąć konfliktów} other {# plików zostało przemianowanych, aby uniknąć konfliktów}}",
       "retryFailed": "Ponów {count, plural, one {# plik} few {# pliki} many {# plików} other {# plików}}",
       "scrubFailed": "Nie udało się usunąć metadanych tego pliku, więc nic nie pobrano",
+      "unscannedContent": {
+        "encrypted": "Niektóre pliki w środku są chronione hasłem, dlatego nie zostały sprawdzone pod kątem zagrożeń.",
+        "unsupportedCompression": "Niektóre pliki w środku są skompresowane w formacie, którego stella nie potrafi odczytać, dlatego nie zostały sprawdzone pod kątem zagrożeń."
+      },
       "uploadBlockedByWorkflow": "Przed przesłaniem plików proszę poczekać na zakończenie przepływu pracy.",
       "uploadedPartially": "{failed, plural, one {# plik nie został przesłany} few {# pliki nie zostały przesłane} many {# plików nie zostało przesłanych} other {# plików nie zostało przesłanych}} z {total, number}",
       "uploadedSuccessfully": "Pliki przesłane pomyślnie",

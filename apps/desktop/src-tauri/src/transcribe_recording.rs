@@ -667,6 +667,7 @@ pub async fn transcribe_start(
     job,
     destination: request.destination,
     model: model.clone(),
+    account: account.clone(),
     matter_id,
     language: dictation::language(&app).hint,
     workers: Arc::clone(&workers),
@@ -737,6 +738,9 @@ struct Plan {
   destination: Destination,
   /// The stella AI model, and the account the recording started for.
   model: Option<RecordingModel>,
+  /// The dictation account the recording started for: its learned fixes
+  /// spell every piece, even if another account is linked meanwhile.
+  account: String,
   matter_id: Option<String>,
   language: Option<&'static str>,
   workers: Arc<LocalWorkers>,
@@ -821,7 +825,7 @@ async fn transcribe(
           }
         })
         .buffered(CLOUD_PIECES_AT_ONCE);
-      deliver(app, plan.job, texts).await
+      deliver(app, plan.job, &plan.account, texts).await
     }
     Destination::Local => {
       let model = dictation::installed_model().ok_or(Failure::ModelMissing)?;
@@ -857,7 +861,7 @@ async fn transcribe(
           }
         })
         .buffered(1);
-      deliver(app, plan.job, texts).await
+      deliver(app, plan.job, &plan.account, texts).await
     }
   }
 }
@@ -890,6 +894,7 @@ impl Decoded {
 async fn deliver(
   app: &AppHandle,
   job: u64,
+  account: &str,
   steps: impl futures_util::Stream<Item = Step>,
 ) -> Result<u64, Failure> {
   futures_util::pin_mut!(steps);
@@ -897,6 +902,9 @@ async fn deliver(
     match step {
       Step::Text(mut text) => {
         text.job = job;
+        // The speaker's learned fixes, as dictation applies them, so a
+        // recording spells their words the way they write them.
+        text.text = crate::dictation_learned::apply_for(account, &text.text);
         crate::logging::best_effort(
           app.emit_to(TRANSCRIBE_WINDOW_LABEL, PIECE_EVENT, &text),
           "transcribed piece was not delivered",

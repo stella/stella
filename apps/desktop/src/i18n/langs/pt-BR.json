@@ -664,6 +664,30 @@
       "transcription": "A transcrição falhou. Tente novamente."
     },
     "failureKeptInHistory": "O texto está no histórico da área de transferência.",
+    "fix": {
+      "description": "Selecione em qualquer app as palavras que um ditado escreveu errado e pressione {shortcut} para digitar a grafia correta. A stella lê a seleção só quando você pressiona o atalho.",
+      "taken": "Outro app está usando {shortcut}. O menu Ditado do ícone do stella oferece o mesmo.",
+      "title": "Atalho para corrigir um ditado"
+    },
+    "fixPanel": {
+      "dictatedAs": "Ditado como",
+      "hint": "A stella vai escrever essas palavras assim nos seus próximos ditados, em todos os seus dispositivos.",
+      "notSaved": "Não foi possível salvar a correção. Verifique se a stella está conectada à sua conta.",
+      "nothing": "Selecione primeiro as palavras erradas no app ou digite-as aqui.",
+      "pick": "Escolha as palavras erradas do seu último ditado:",
+      "refused": {
+        "empty": "Preencha os dois campos.",
+        "lineBreak": "Uma correção é uma única linha de texto.",
+        "punctuation": "Escolha as palavras ditadas sem pontuação.",
+        "same": "As palavras já estão escritas assim.",
+        "tooLong": "É longo demais para uma correção.",
+        "tooManyWords": "Uma correção tem no máximo três palavras."
+      },
+      "save": "Salvar correção",
+      "saving": "Salvando a correção…",
+      "title": "Corrigir uma palavra ditada",
+      "writtenAs": "Grafia correta"
+    },
     "groups": {
       "cleanup": "Revisão",
       "shortcut": "Atalho",
@@ -684,6 +708,17 @@
       "description": "Automático usa os idiomas de exibição e de teclado deste computador. Se houver mais de um, cada palavra é reconhecida no idioma em que você a fala.",
       "noResults": "Nenhum idioma encontrado",
       "title": "Idioma do ditado"
+    },
+    "learned": {
+      "delete": "Apagar o que a stella aprendeu",
+      "description": "Quando você corrige uma palavra ditada duas vezes do mesmo jeito, ou a corrige com {shortcut}, a stella passa a escrevê-la assim nos próximos ditados. Sincronizado com seus outros dispositivos; só você as vê.",
+      "empty": "Nenhuma correção aprendida ainda.",
+      "failed": "Não foi possível alterar a correção.",
+      "fix": "{from} → {to}",
+      "group": "Correções aprendidas",
+      "title": "Correções aprendidas com suas edições",
+      "unreadable": "Não foi possível ler o que a stella aprendeu.",
+      "working": "Salvando a alteração…"
     },
     "lede": "Segure <key>{shortcut}</key> e fale. O texto aparece onde você está digitando.",
     "microphone": {
@@ -1334,6 +1369,7 @@
     "activityResume": "Retomar registro",
     "checkForUpdates": "Verificar atualizações",
     "dictation": "Ditado",
+    "dictationFix": "Corrigir o último ditado…",
     "dictationHint": "Segure {key} para ditar",
     "dictationRetype": "Digitar o último ditado de novo",
     "dictationSettings": "Configurações de ditado…",

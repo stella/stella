@@ -664,6 +664,30 @@
       "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti."
     },
     "failureKeptInHistory": "Tekst on lõikelaua ajaloos.",
+    "fix": {
+      "description": "Valige mis tahes rakenduses sõnad, mille dikteerimine valesti kirjutas, ja vajutage {shortcut}, et kirjutada nende õige kuju. stella loeb valikut ainult siis, kui kiirklahvi vajutate.",
+      "taken": "Teine rakendus kasutab kiirklahvi {shortcut}. stella ikooni menüü Dikteerimine pakub sama.",
+      "title": "Kiirklahv dikteerimise parandamiseks"
+    },
+    "fixPanel": {
+      "dictatedAs": "Dikteeritud kujul",
+      "hint": "stella kirjutab need sõnad järgmistes dikteerimistes nii, kõigis teie seadmetes.",
+      "notSaved": "Parandust ei saanud salvestada. Kontrollige, kas stella on teie kontoga ühendatud.",
+      "nothing": "Valige esmalt rakenduses valed sõnad või kirjutage need siia.",
+      "pick": "Valige viimasest dikteerimisest valed sõnad:",
+      "refused": {
+        "empty": "Täitke mõlemad väljad.",
+        "lineBreak": "Parandus on üks tekstirida.",
+        "punctuation": "Valige dikteeritud sõnad ilma kirjavahemärkideta.",
+        "same": "Sõnad on juba nii kirjutatud.",
+        "tooLong": "See on ühe paranduse jaoks liiga pikk.",
+        "tooManyWords": "Paranduses võib olla kõige rohkem kolm sõna."
+      },
+      "save": "Salvesta parandus",
+      "saving": "Paranduse salvestamine…",
+      "title": "Paranda dikteeritud sõna",
+      "writtenAs": "Õige kuju"
+    },
     "groups": {
       "cleanup": "Parandamine",
       "shortcut": "Kiirklahv",
@@ -684,6 +708,17 @@
       "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli. Kui neid on mitu, tuntakse iga sõna ära selles keeles, milles te selle ütlete.",
       "noResults": "Keeli ei leitud",
       "title": "Dikteerimise keel"
+    },
+    "learned": {
+      "delete": "Kustuta, mida stella õppis",
+      "description": "Kui parandate dikteeritud sõna kaks korda ühtmoodi või parandate selle kiirklahviga {shortcut}, kirjutab stella selle järgmistes dikteerimistes nii. Sünkroonitakse teie teiste seadmetega; neid näete ainult teie.",
+      "empty": "Veel pole midagi õpitud.",
+      "failed": "Parandust ei õnnestunud muuta.",
+      "fix": "{from} → {to}",
+      "group": "Õpitud parandused",
+      "title": "Teie parandustest õpitud parandused",
+      "unreadable": "Seda, mida stella õppis, ei saanud lugeda.",
+      "working": "Muudatuse salvestamine…"
     },
     "lede": "Hoidke all klahve <key>{shortcut}</key> ja rääkige. Tekst ilmub sinna, kuhu kirjutate.",
     "microphone": {
@@ -1334,6 +1369,7 @@
     "activityResume": "Jätka salvestamist",
     "checkForUpdates": "Kontrolli värskendusi",
     "dictation": "Dikteerimine",
+    "dictationFix": "Paranda viimane dikteerimine…",
     "dictationHint": "Dikteerimiseks hoidke all {key}",
     "dictationRetype": "Sisesta viimane dikteering uuesti",
     "dictationSettings": "Dikteerimise seaded…",

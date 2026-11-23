@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}",
       "retryFailed": "Retry {count, plural, one {# file} other {# files}}",
       "scrubFailed": "This file's metadata could not be removed, so nothing was downloaded",
+      "unscannedContent": {
+        "encrypted": "Some files inside are password-protected, so they weren’t checked for threats.",
+        "unsupportedCompression": "Some files inside are compressed in a format stella can’t read, so they weren’t checked for threats."
+      },
       "uploadBlockedByWorkflow": "Wait for the workflow to finish before uploading files.",
       "uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}",
       "uploadedSuccessfully": "Files uploaded successfully",

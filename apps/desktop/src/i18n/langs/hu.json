@@ -664,6 +664,30 @@
       "transcription": "Az átírás nem sikerült. Próbálja újra."
     },
     "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben.",
+    "fix": {
+      "description": "Jelölje ki bármelyik alkalmazásban a szavakat, amelyeket a diktálás rosszul írt, és nyomja meg a(z) {shortcut} billentyűket a helyes írásmód megadásához. A stella csak akkor olvassa be a kijelölést, amikor megnyomja a billentyűparancsot.",
+      "taken": "Egy másik alkalmazás használja ezt: {shortcut}. A stella ikon Diktálás menüje ugyanezt kínálja.",
+      "title": "Billentyűparancs diktálás javításához"
+    },
+    "fixPanel": {
+      "dictatedAs": "Diktálva",
+      "hint": "A stella a következő diktálásokban így írja ezeket a szavakat, minden eszközén.",
+      "notSaved": "A javítást nem sikerült menteni. Ellenőrizze, hogy a stella csatlakozik-e a fiókjához.",
+      "nothing": "Előbb jelölje ki a hibás szavakat az alkalmazásban, vagy írja be őket ide.",
+      "pick": "Válassza ki a hibás szavakat az utolsó diktálásból:",
+      "refused": {
+        "empty": "Töltse ki mindkét mezőt.",
+        "lineBreak": "Egy javítás egy sor szöveg.",
+        "punctuation": "Válassza ki a diktált szavakat írásjelek nélkül.",
+        "same": "A szavak már így vannak írva.",
+        "tooLong": "Ez túl hosszú egy javításhoz.",
+        "tooManyWords": "Egy javítás legfeljebb három szó lehet."
+      },
+      "save": "Javítás mentése",
+      "saving": "A javítás mentése…",
+      "title": "Diktált szó javítása",
+      "writtenAs": "Helyesen"
+    },
     "groups": {
       "cleanup": "Javítás",
       "shortcut": "Billentyűparancs",
@@ -684,6 +708,17 @@
       "description": "Az Automatikus a számítógép megjelenítési és billentyűzetnyelveit használja. Ha több ilyen van, minden szót azon a nyelven ismer fel, amelyen kimondja.",
       "noResults": "Nem található nyelv",
       "title": "Diktálás nyelve"
+    },
+    "learned": {
+      "delete": "A stella által tanultak törlése",
+      "description": "Ha egy diktált szót kétszer ugyanúgy javít, vagy a(z) {shortcut} billentyűkkel javítja, a stella a későbbi diktálásokban így írja. Szinkronizálódik a többi eszközére; csak Ön látja.",
+      "empty": "Még nincs tanult javítás.",
+      "failed": "A javítást nem sikerült módosítani.",
+      "fix": "{from} → {to}",
+      "group": "Tanult javítások",
+      "title": "A javításaiból tanult javítások",
+      "unreadable": "A stella által tanultakat nem sikerült beolvasni.",
+      "working": "A módosítás mentése…"
     },
     "lede": "Tartsa lenyomva a(z) <key>{shortcut}</key> billentyűt, és beszéljen. A szöveg ott jelenik meg, ahol éppen ír.",
     "microphone": {
@@ -1334,6 +1369,7 @@
     "activityResume": "Rögzítés folytatása",
     "checkForUpdates": "Frissítések keresése",
     "dictation": "Diktálás",
+    "dictationFix": "Utolsó diktálás javítása…",
     "dictationHint": "A diktáláshoz tartsa lenyomva a(z) {key} billentyűt",
     "dictationRetype": "Utolsó diktálás újbóli beírása",
     "dictationSettings": "Diktálási beállítások…",

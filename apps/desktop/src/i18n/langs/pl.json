@@ -664,6 +664,30 @@
       "transcription": "Transkrypcja nie powiodła się. Spróbuj ponownie."
     },
     "failureKeptInHistory": "Tekst jest w historii schowka.",
+    "fix": {
+      "description": "Zaznacz w dowolnej aplikacji słowa, które dyktowanie zapisało błędnie, i naciśnij {shortcut}, aby wpisać ich pisownię. stella odczytuje zaznaczenie tylko wtedy, gdy naciśniesz skrót.",
+      "taken": "Inna aplikacja używa skrótu {shortcut}. To samo oferuje menu Dyktowanie przy ikonie aplikacji stella.",
+      "title": "Skrót do poprawiania dyktowania"
+    },
+    "fixPanel": {
+      "dictatedAs": "Podyktowano jako",
+      "hint": "stella zapisze te słowa tak w kolejnych dyktowaniach, na wszystkich Twoich urządzeniach.",
+      "notSaved": "Nie udało się zapisać poprawki. Sprawdź, czy stella jest połączona z Twoim kontem.",
+      "nothing": "Najpierw zaznacz błędne słowa w aplikacji albo wpisz je tutaj.",
+      "pick": "Wybierz błędne słowa z ostatniego dyktowania:",
+      "refused": {
+        "empty": "Wypełnij oba pola.",
+        "lineBreak": "Poprawka to jeden wiersz tekstu.",
+        "punctuation": "Wybierz podyktowane słowa bez znaków interpunkcyjnych.",
+        "same": "Słowa są już tak zapisane.",
+        "tooLong": "To za długie na jedną poprawkę.",
+        "tooManyWords": "Poprawka może mieć najwyżej trzy słowa."
+      },
+      "save": "Zapisz poprawkę",
+      "saving": "Zapisywanie poprawki…",
+      "title": "Popraw podyktowane słowo",
+      "writtenAs": "Poprawna pisownia"
+    },
     "groups": {
       "cleanup": "Poprawianie",
       "shortcut": "Skrót",
@@ -684,6 +708,17 @@
       "description": "Automatycznie używa języków interfejsu i klawiatur tego komputera. Gdy jest ich kilka, każde słowo jest rozpoznawane w języku, w którym je wypowiadasz.",
       "noResults": "Nie znaleziono języków",
       "title": "Język dyktowania"
+    },
+    "learned": {
+      "delete": "Usuń to, czego nauczyła się stella",
+      "description": "Gdy poprawisz podyktowane słowo dwa razy tak samo lub poprawisz je skrótem {shortcut}, stella zapisze je tak w kolejnych dyktowaniach. Synchronizowane z Twoimi innymi urządzeniami; widzisz je tylko Ty.",
+      "empty": "Brak wyuczonych poprawek.",
+      "failed": "Nie udało się zmienić poprawki.",
+      "fix": "{from} → {to}",
+      "group": "Wyuczone poprawki",
+      "title": "Poprawki wyuczone z Twoich zmian",
+      "unreadable": "Nie udało się odczytać tego, czego nauczyła się stella.",
+      "working": "Zapisywanie zmiany…"
     },
     "lede": "Przytrzymaj <key>{shortcut}</key> i mów. Tekst pojawi się tam, gdzie piszesz.",
     "microphone": {
@@ -1334,6 +1369,7 @@
     "activityResume": "Wznów rejestrowanie",
     "checkForUpdates": "Sprawdź aktualizacje",
     "dictation": "Dyktowanie",
+    "dictationFix": "Popraw ostatnie dyktowanie…",
     "dictationHint": "Przytrzymaj {key}, aby dyktować",
     "dictationRetype": "Wpisz ponownie ostatnie dyktowanie",
     "dictationSettings": "Ustawienia dyktowania…",
