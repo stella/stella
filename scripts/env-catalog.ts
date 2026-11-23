@@ -1768,8 +1768,6 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_TEST_DURATIONS_HASH",
   // Optional main-measured weights path; content identity is keyed separately.
   "API_TEST_DURATIONS_FILE",
-  // Optional learned memory surcharges; they regroup files, never select them.
-  "API_TEST_RSS_FEEDBACK_FILE",
   "API_TEST_FILES_ENCODED",
   "API_TEST_RUNNER_DEADLINE_MS",
   "API_TEST_SHARD_COUNT",

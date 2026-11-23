@@ -3166,17 +3166,6 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: nproc; free -g
 
-      # Surcharges learned from batches that peaked past their memory plan in
-      # any run (api-test-memory-feedback.yml). A miss plans from the measured
-      # table alone.
-      - name: Restore API test memory feedback
-        if: startsWith(matrix.shard, 'api-') && needs.ci-plan.outputs.package_checks_required == 'true'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ${{ runner.temp }}/api-test-rss-feedback.json
-          key: api-test-rss-feedback-${{ github.run_id }}
-          restore-keys: api-test-rss-feedback-
-
       - name: Test API or rest
         id: test-api-or-rest
         if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (needs.ci-plan.outputs.package_checks_required == 'true') }}
@@ -3190,7 +3179,6 @@ jobs:
           API_TEST_SHARD_COUNT: ${{ needs.ci-plan.outputs.api_test_shards }}
           API_TEST_DURATIONS_HASH: ${{ needs.ci-plan.outputs.api_test_durations_hash }}
           API_TEST_DURATIONS_FILE: ${{ runner.temp }}/api-test-durations.json
-          API_TEST_RSS_FEEDBACK_FILE: ${{ runner.temp }}/api-test-rss-feedback.json
         # Not --affected: a suite that reads files outside its own package also
         # needs the packages its turbo.json test inputs name, and
         # `--affected --filter=X` intersects instead of widening.
@@ -3251,10 +3239,7 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: api-test-timings-${{ matrix.shard }}
-          # Bun's per-file timings and the runner's batch peak observations.
-          path: |
-            ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}/*.json
-            ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}/*.rss.jsonl
+          path: ${{ runner.temp }}/api-test-timings-${{ matrix.shard }}/*.json
           retention-days: 7
           if-no-files-found: ignore
 

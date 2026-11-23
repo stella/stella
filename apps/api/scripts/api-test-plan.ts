@@ -20,7 +20,6 @@ import {
   TEST_BATCH_KIND,
   type TestBatchKind,
 } from "./test-batch-plan";
-import type { TestRssFeedback } from "./test-rss-feedback";
 
 // Every directory of this package that holds test files. `evals/` carries
 // only its own colocated unit tests (e.g. `evals/lib/model-turn.test.ts`),
@@ -161,8 +160,6 @@ type PlanApiTestBatchesOptions = {
   apiRoot: string;
   propertyOnly: boolean;
   testPaths: readonly string[];
-  /** Surcharges learned from main's batch peaks; none outside CI. */
-  rssFeedback?: TestRssFeedback;
 };
 
 type ApiTestSourceFacts = {
@@ -272,7 +269,6 @@ type PlanApiTestBatchesFromSourceIndexOptions = Omit<
 export const planApiTestBatchesFromSourceIndex = ({
   executionMode = "batched",
   propertyOnly,
-  rssFeedback = {},
   sourceIndex,
   testPaths,
 }: PlanApiTestBatchesFromSourceIndexOptions): ComposedTestBatches[] => {
@@ -411,7 +407,6 @@ export const planApiTestBatchesFromSourceIndex = ({
             batches: splitSoloTests(group.testBatches, SOLO_TEST_PATHS),
             budgetMb: group.maxPeakRssMb,
             dbTestPaths,
-            feedback: rssFeedback,
           });
   }
   return composed;
@@ -424,7 +419,6 @@ export const planApiTestBatches = async (
   planApiTestBatchesFromSourceIndex({
     executionMode: options.executionMode ?? "batched",
     propertyOnly: options.propertyOnly,
-    rssFeedback: options.rssFeedback,
     sourceIndex: await readApiTestSourceIndex(
       options.apiRoot,
       [

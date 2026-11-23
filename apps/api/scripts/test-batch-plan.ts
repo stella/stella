@@ -10,7 +10,6 @@ import {
 
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
 import rssData from "./test-peak-rss.json";
-import type { TestRssFeedback } from "./test-rss-feedback";
 
 /** The ordinary DB batch stays small without paying one process per file. */
 export const DB_TEST_BATCH_SIZE = 3;
@@ -74,6 +73,23 @@ export const TEST_BATCH_RSS_HEADROOM_RATIO = 0.7;
 export const UNMEASURED_TEST_RSS_RATIO = 0.4;
 export const MIN_TEST_RSS_CLASS_MEASUREMENTS = 20;
 export const SOLO_TEST_RSS_RATIO = 0.6;
+
+/**
+ * Solo increments do not add up for files that each boot an embedded Postgres
+ * in one process: a finished file's database may still be resident when the
+ * next one boots, and whether it is varies with how far the collector got.
+ * On hosted runners, sitemap-shard-refresh (1248 MB alone) and
+ * active-draft-context.integration (773 MB alone) peaked between 1300 MB and
+ * 2571 MB together, 550 MB above the sum of their solo peaks, against a
+ * 1788 MB increment estimate. Collecting right after each close did not help:
+ * the forced collection's own transient raised the pair's peak from about
+ * 1290 MB to as much as 1683 MB in a direct reproduction.
+ *
+ * Such files therefore share a process only while their summed solo peaks plus
+ * this allowance stay within the class cap. 550 MB is the largest overlap
+ * measured in 20 CI runs (80 API shard jobs) on 2026-11-23.
+ */
+export const EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB = 550;
 
 export const TEST_RSS_EXECUTION_CLASS = {
   db: "db",
@@ -271,22 +287,13 @@ export const unmeasuredTestPeakRss = ({
   );
 };
 
-type RssFileWeightOptions = UnmeasuredTestPeakRssOptions & {
-  /** Surcharges learned from main's batch peaks (test-rss-feedback.ts). */
-  feedback?: TestRssFeedback;
-};
-/**
- * A file's planned increment over the preload baseline: its measured (or
- * estimated) increment plus any surcharge main's runs taught the planner.
- */
-export const testRssFileWeight = ({
+type RssFileWeightOptions = UnmeasuredTestPeakRssOptions;
+const rssFileWeight = ({
   file,
   rssTable,
   budgetMb,
   dbTestPaths,
-  feedback = {},
 }: RssFileWeightOptions) => {
-  const surchargeMb = feedback[file]?.surchargeMb ?? 0;
   const observation = rssTable.files[file];
   if (observation === undefined) {
     const incrementalMb = unmeasuredTestPeakRss({
@@ -298,16 +305,13 @@ export const testRssFileWeight = ({
     return {
       type: "unmeasured",
       peakMb: rssTable.baselineMb + incrementalMb,
-      incrementalMb: incrementalMb + surchargeMb,
-      surchargeMb,
+      incrementalMb,
     } as const;
   }
   return {
     type: "measured",
     peakMb: observation.peakMb,
-    incrementalMb:
-      Math.max(0, observation.peakMb - observation.baselineMb) + surchargeMb,
-    surchargeMb,
+    incrementalMb: Math.max(0, observation.peakMb - observation.baselineMb),
   } as const;
 };
 
@@ -317,23 +321,20 @@ type BatchPeakRssOptions = {
   budgetMb: number;
   /** Files the runner executes in its db class; their estimate differs. */
   dbTestPaths: ReadonlySet<string>;
-  feedback?: TestRssFeedback;
 };
 export const batchPeakRss = ({
   files,
   rssTable,
   budgetMb,
   dbTestPaths,
-  feedback = {},
 }: BatchPeakRssOptions) => {
   let peakMb = rssTable.baselineMb;
   for (const file of files) {
-    peakMb += testRssFileWeight({
+    peakMb += rssFileWeight({
       file,
       rssTable,
       budgetMb,
       dbTestPaths,
-      feedback,
     }).incrementalMb;
   }
   return peakMb;
@@ -346,7 +347,6 @@ type SplitMemoryBoundedBatchesOptions = {
   budgetMb: number;
   /** Files the runner executes in its db class; their estimate differs. */
   dbTestPaths: ReadonlySet<string>;
-  feedback?: TestRssFeedback;
 };
 
 /** Split existing batches without introducing new process neighbours. */
@@ -355,7 +355,6 @@ export const splitMemoryBoundedBatches = ({
   rssTable = measuredTestRssTable(),
   budgetMb,
   dbTestPaths,
-  feedback = {},
 }: SplitMemoryBoundedBatchesOptions): string[][] => {
   if (!Number.isFinite(budgetMb) || budgetMb <= 0) {
     panic("test batch memory budget must be positive and finite");
@@ -365,13 +364,19 @@ export const splitMemoryBoundedBatches = ({
   for (const batch of batches) {
     let current: string[] = [];
     let totalMb = rssTable.baselineMb;
+    let embeddedPostgresPeakMb = 0;
+    const flush = () => {
+      result.push(current);
+      current = [];
+      totalMb = rssTable.baselineMb;
+      embeddedPostgresPeakMb = 0;
+    };
     for (const file of batch) {
-      const weight = testRssFileWeight({
+      const weight = rssFileWeight({
         file,
         rssTable,
         budgetMb,
         dbTestPaths,
-        feedback,
       });
       if (
         !Number.isFinite(weight.peakMb) ||
@@ -382,35 +387,39 @@ export const splitMemoryBoundedBatches = ({
         panic(`Invalid peak RSS for ${file}`);
       }
       const singletonPeak = rssTable.baselineMb + weight.incrementalMb;
-      // A learned surcharge can only isolate a file: alone, the runtime cap
-      // decides, so it never makes a plan impossible.
-      if (singletonPeak - weight.surchargeMb > budgetMb) {
+      if (singletonPeak > budgetMb) {
         panic(
           `Cannot plan API test batch [${batch.join(", ")}]: ${file} requires ${singletonPeak} MB, class budget ${budgetMb} MB`,
         );
       }
       if (
-        (weight.type === "measured" || weight.surchargeMb > 0) &&
+        weight.type === "measured" &&
         singletonPeak >= budgetMb * SOLO_TEST_RSS_RATIO
       ) {
         if (current.length > 0) {
-          result.push(current);
-          current = [];
-          totalMb = rssTable.baselineMb;
+          flush();
         }
         result.push([file]);
         continue;
       }
+      const bootsEmbeddedPostgres = dbTestPaths.has(file);
       if (
         current.length > 0 &&
-        totalMb + weight.incrementalMb > compositionBudgetMb
+        (totalMb + weight.incrementalMb > compositionBudgetMb ||
+          (bootsEmbeddedPostgres &&
+            embeddedPostgresPeakMb > 0 &&
+            embeddedPostgresPeakMb +
+              weight.peakMb +
+              EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB >
+              budgetMb))
       ) {
-        result.push(current);
-        current = [];
-        totalMb = rssTable.baselineMb;
+        flush();
       }
       current.push(file);
       totalMb += weight.incrementalMb;
+      if (bootsEmbeddedPostgres) {
+        embeddedPostgresPeakMb += weight.peakMb;
+      }
     }
     if (current.length > 0) {
       result.push(current);
@@ -422,8 +431,6 @@ export const splitMemoryBoundedBatches = ({
       rssTable,
       budgetMb,
       dbTestPaths,
-      // A file alone is bounded by its measurement; see the singleton check.
-      feedback: batch.length > 1 ? feedback : {},
     });
     if (peak > budgetMb) {
       panic(
@@ -432,6 +439,28 @@ export const splitMemoryBoundedBatches = ({
     }
   }
   return result;
+};
+
+/**
+ * What a batch's embedded-Postgres files may hold together: their summed solo
+ * peaks plus the measured overlap allowance. Zero for at most one such file,
+ * which its solo measurement already covers.
+ */
+export const embeddedPostgresOverlapPeakRss = ({
+  files,
+  rssTable,
+  budgetMb,
+  dbTestPaths,
+}: BatchPeakRssOptions) => {
+  const embedded = files.filter((file) => dbTestPaths.has(file));
+  if (embedded.length < 2) {
+    return 0;
+  }
+  let peakMb = EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB;
+  for (const file of embedded) {
+    peakMb += rssFileWeight({ file, rssTable, budgetMb, dbTestPaths }).peakMb;
+  }
+  return peakMb;
 };
 
 export type TestRssMeasurement = {

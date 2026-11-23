@@ -13,11 +13,10 @@ export const RSS_NEAR_CAP_RATIO = 0.9;
 
 /**
  * The planner keeps a shared batch's estimate within 70% of its cap
- * (TEST_BATCH_RSS_HEADROOM_RATIO), and most measured batch peaks above 1 GB
- * stay within about 5% of that estimate. A shared batch above this ratio was
- * planned from a stale measurement, or its files hold more memory together
- * than their solo peaks add up to. It surfaces while the batch still has room;
- * main's runs teach the planner the excess (test-rss-feedback.ts).
+ * (TEST_BATCH_RSS_HEADROOM_RATIO), and measured batch peaks above 1 GB stay
+ * within about 5% of that estimate. A shared batch above this ratio was
+ * planned from a stale or missing measurement; it surfaces while the batch
+ * still has room, so the table is refreshed before the batch nears its cap.
  */
 export const RSS_PLAN_DRIFT_RATIO = 0.8;
 
@@ -70,7 +69,7 @@ export const batchMemoryVerdict = ({
       annotation:
         `::warning title=API test batch above its memory plan::${label} ` +
         `peaked at ${peakMb} MB of its ${budgetMb} MB budget (${percent}%); ` +
-        "main's runs learn the excess (docs/test-memory.md); " +
+        "refresh apps/api/scripts/test-peak-rss.json (docs/test-memory.md); " +
         `files: ${testFiles.join(", ")}`,
     };
   }

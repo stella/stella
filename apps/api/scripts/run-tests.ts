@@ -1,7 +1,5 @@
 import { panic, TaggedError } from "better-result";
 import {
-  appendFileSync,
-  mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
@@ -27,15 +25,12 @@ import {
   maxRssBytesToMb,
 } from "./resource-usage";
 import {
-  batchPeakRss,
   measuredTestRssTable,
   parseRssMeasurementArguments,
   staleTestRssTableAnnotation,
   TEST_BATCH_KIND,
-  TEST_BATCH_RSS_HEADROOM_RATIO,
   type TestBatchKind,
   testRssArtifact,
-  testRssFileWeight,
   type TestRssMeasurement,
 } from "./test-batch-plan";
 import {
@@ -63,13 +58,6 @@ import {
   testProcessBudgets,
   TestProcessSupervisor,
 } from "./test-process-supervisor";
-import {
-  API_TEST_RSS_FEEDBACK_FILE_ENV,
-  loadTestRssFeedback,
-  TEST_RSS_OBSERVATION_VERSION,
-  TEST_RSS_OBSERVATIONS_SUFFIX,
-  testRssObservationLine,
-} from "./test-rss-feedback";
 import {
   API_TEST_DURATIONS_FILE_ENV,
   API_TEST_DURATIONS_HASH_ENV,
@@ -115,32 +103,10 @@ if (shard !== null) {
     `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,
   );
 }
-// A measurement run plans every file alone and must not learn from itself.
-const rssFeedback =
-  rssMode.mode === "batched"
-    ? loadTestRssFeedback({
-        path: process.env[API_TEST_RSS_FEEDBACK_FILE_ENV],
-      })
-    : {};
-// CI uploads the timings directory, and every same-repository run teaches the
-// planner from these observations (test-rss-feedback.ts). Local runs record
-// nothing.
-const timingsDirectory = process.env["API_TEST_TIMINGS_DIR"];
-const rssObservationsPath =
-  rssMode.mode === "batched" &&
-  timingsDirectory !== undefined &&
-  timingsDirectory !== ""
-    ? path.join(
-        timingsDirectory,
-        `batch-${Bun.randomUUIDv7()}${TEST_RSS_OBSERVATIONS_SUFFIX}`,
-      )
-    : undefined;
-const rssTable = measuredTestRssTable();
-
 // One annotation per run: the first shard speaks for all of them.
 if (rssMode.mode === "batched" && (shard === null || shard.index === 1)) {
   const staleTable = staleTestRssTableAnnotation(
-    rssTable.measuredAt,
+    measuredTestRssTable().measuredAt,
     new Date(),
   );
   if (staleTable !== undefined) {
@@ -348,7 +314,6 @@ const buildTestDbSnapshot = async (): Promise<string> => {
 };
 
 type PlannedTestBatch = {
-  dbTestPaths: ReadonlySet<string>;
   isolate: boolean;
   kind: TestBatchKind;
   label: string;
@@ -358,7 +323,6 @@ type PlannedTestBatch = {
 
 /** Label every composed batch, then keep only the selection inside each. */
 const planBatches = ({
-  dbTestPaths,
   isolate,
   kind,
   maxPeakRssMb,
@@ -366,7 +330,6 @@ const planBatches = ({
 }: ComposedTestBatches): PlannedTestBatch[] =>
   testBatches
     .map((batch, index) => ({
-      dbTestPaths,
       isolate,
       kind,
       label: `${kind} batch ${index + 1}/${testBatches.length}`,
@@ -379,51 +342,8 @@ const composedBatches = await planApiTestBatches({
   executionMode: rssMode.mode,
   apiRoot,
   propertyOnly,
-  rssFeedback,
   testPaths,
 });
-
-type RecordBatchPeakOptions = {
-  batch: PlannedTestBatch;
-  testFiles: readonly string[];
-  peakMb: number;
-};
-
-/** Append what the planner estimated and what the batch actually peaked at. */
-const recordBatchPeak = ({
-  batch,
-  testFiles,
-  peakMb,
-}: RecordBatchPeakOptions) => {
-  if (rssObservationsPath === undefined) {
-    return;
-  }
-  const weighed = {
-    rssTable,
-    budgetMb: batch.maxPeakRssMb,
-    dbTestPaths: batch.dbTestPaths,
-    feedback: rssFeedback,
-  };
-  mkdirSync(path.dirname(rssObservationsPath), { recursive: true });
-  appendFileSync(
-    rssObservationsPath,
-    testRssObservationLine({
-      version: TEST_RSS_OBSERVATION_VERSION,
-      observedAt: new Date().toISOString(),
-      budgetMb: batch.maxPeakRssMb,
-      compositionBudgetMb: batch.maxPeakRssMb * TEST_BATCH_RSS_HEADROOM_RATIO,
-      estimateMb: batchPeakRss({ files: testFiles, ...weighed }),
-      peakMb,
-      files: testFiles.map((file) => {
-        const { incrementalMb, surchargeMb } = testRssFileWeight({
-          file,
-          ...weighed,
-        });
-        return { path: file, weightMb: incrementalMb, surchargeMb };
-      }),
-    }),
-  );
-};
 const plannedBatches = orderBatchesForLanes(
   composedBatches.flatMap((group) => planBatches(group)),
   testFileDurationWeights(allTestPaths, durationWeights),
@@ -542,11 +462,10 @@ type RunTestsOptions = {
 };
 
 const runTests = async ({
-  batch,
+  batch: { isolate, label, maxPeakRssMb, testFiles },
   log,
   lane,
 }: RunTestsOptions): Promise<number> => {
-  const { isolate, label, maxPeakRssMb, testFiles } = batch;
   const executionMode = isolate ? "isolated" : "shared-process";
   log.out(
     `Running ${testFiles.length} ${executionMode} API test files (${label})`,
@@ -606,7 +525,6 @@ const runTests = async ({
         `${peakMb} MB (budget ${maxPeakRssMb} MB)`,
     );
     if (exitCode === 0) {
-      recordBatchPeak({ batch, testFiles, peakMb });
       const verdict = batchMemoryVerdict({
         label,
         peakMb,
