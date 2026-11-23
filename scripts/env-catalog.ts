@@ -195,6 +195,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FRONTEND_URL",
   "GOOGLE_AUTH_CLIENT_ID",
   "GOTENBERG_URL",
+  "HEIC_PREVIEW_DECODING_ENABLED",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
   "INBOUND_MAIL_BUCKET",
@@ -609,6 +610,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "HTTPS, a loopback sidecar, or a private deployment network.",
   GOTENBERG_USERNAME:
     "Username for the Gotenberg sidecar's HTTP basic authentication.",
+  HEIC_PREVIEW_DECODING_ENABLED:
+    "Make previews of HEIC/HEIF photos by decoding them on this server, in " +
+    "the sandboxed PDF worker. Off, such a photo shows that it has no " +
+    "preview and still downloads as uploaded.",
   INGESTION_USER_AGENT:
     "User-Agent sent to court publishers. Defaults to a stella product " +
     "identifier with the build version and a contact URL; set it so a fork " +
@@ -970,6 +975,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   GOTENBERG_PASSWORD: ENV_CREDENTIAL_KIND.credential,
   GOTENBERG_URL: ENV_CREDENTIAL_KIND.notCredential,
   GOTENBERG_USERNAME: ENV_CREDENTIAL_KIND.notCredential,
+  HEIC_PREVIEW_DECODING_ENABLED: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER: ENV_CREDENTIAL_KIND.notCredential,
   HOSTED_USAGE_PROVIDER_API_KEY: ENV_CREDENTIAL_KIND.credential,
   HOSTED_USAGE_PROVIDER_API_VERSION: ENV_CREDENTIAL_KIND.notCredential,
@@ -1656,8 +1662,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // catalogs.
   "CLI_CONTRACT_BASE_CATALOG",
   "CLI_CONTRACT_HEAD_CATALOG",
-  // The scan engine drift check builds into a scratch directory and compares it.
+  // The WebAssembly drift checks build into a scratch directory and compare it.
   "SCAN_ENGINE_WASM_OUT_DIR",
+  "HEIC_DECODER_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",

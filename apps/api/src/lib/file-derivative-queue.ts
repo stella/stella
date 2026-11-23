@@ -726,6 +726,9 @@ export const displayableConversionRefusal = (
     case "legacy_format": {
       return reason;
     }
+    case "no_preview": {
+      return { ...reason, format: reason.format.slice(0, 32) };
+    }
     case "external_reference":
     case "inspection_failed": {
       return undefined;

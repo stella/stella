@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 8.1.2
+
+### Patch Changes
+
+- [#9246](https://github.com/stella/stella/pull/9246) [`f292e0a`](https://github.com/stella/stella/commit/f292e0af50fa6912cdced0f28f0b4cfd22c61c01) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Uploads of `.heic` and `.heif` photos declare `image/heic` and `image/heif`.
+
+## 8.1.1
+
+### Patch Changes
+
+- [#9242](https://github.com/stella/stella/pull/9242) [`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read the files of ZIP archives, with their folders, through document content commands.
+
 ## 8.1.0
 
 ### Minor Changes

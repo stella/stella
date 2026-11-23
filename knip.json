@@ -236,6 +236,10 @@
       "entry": ["src/**/*.test.ts"],
       "ignore": ["generated/**"]
     },
+    "packages/heic-decoder": {
+      "entry": ["src/**/*.test.ts"],
+      "ignore": ["generated/**"]
+    },
     "packages/scripts": {
       // The Postgres lifecycle owner is invoked by scripts/configure-test-postgres.sh.
       "entry": [

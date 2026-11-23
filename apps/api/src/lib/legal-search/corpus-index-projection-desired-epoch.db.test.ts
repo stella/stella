@@ -351,7 +351,12 @@ test("a generation whose desired epoch trails the canonical one is current to ev
           await reconcileCorpusProjectionDesiredStateTx(tx, subject),
       )
     ).unwrap(),
-  ).toEqual({ epoch: 2n, changed: false, generationCount: 2 });
+  ).toEqual({
+    epoch: 2n,
+    changed: false,
+    generationCount: 2,
+    servedCopies: [],
+  });
   await synchronizeBatch();
   expect(await statesOf()).toEqual(trailing);
   expect(await decisionRow()).toEqual({ epoch: 2n, updatedAt: FRESHNESS });

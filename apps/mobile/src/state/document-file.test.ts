@@ -416,6 +416,13 @@ describe("reading a document's file", () => {
       "application/vnd.ms-outlook",
       plainRead,
     ],
+    [
+      "an Outlook TNEF stream",
+      "winmail.dat",
+      "application/octet-stream",
+      plainRead,
+    ],
+    ["a TNEF stream by its type", "zprava", "application/ms-tnef", plainRead],
   ] as const)(
     "opens %s through the audited email reading",
     async (_, fileName, mimeType, reading) => {

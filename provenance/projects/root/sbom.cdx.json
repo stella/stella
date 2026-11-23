@@ -209,6 +209,9 @@
             "location": "apps/mobile/src/components/use-now.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/use-open-delivered-file.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-optimistic-write.ts#1"
           },
           {
@@ -971,7 +974,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#1"
+            "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
@@ -1175,9 +1178,6 @@
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/certified-email-envelope.tsx#1"
-          },
-          {
             "location": "apps/mobile/src/components/changes.tsx#9"
           },
           {
@@ -1247,7 +1247,19 @@
             "location": "apps/mobile/src/components/document-viewer/pdf-pages.tsx#14"
           },
           {
+            "location": "apps/mobile/src/components/e-invoice-details.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/email-reading.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/entity-detail-sheet.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-list.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-opener.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/header-search.tsx#1"
@@ -1943,6 +1955,9 @@
             "location": "apps/web/src/components/docx/evidence-references.tsx#1"
           },
           {
+            "location": "apps/web/src/components/docx/read-only-docx-document.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
           },
           {
@@ -1986,6 +2001,12 @@
           },
           {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/file-parts.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/use-file-part-actions.tsx#1"
           },
           {
             "location": "apps/web/src/components/file-thumbnail.tsx#1"
@@ -2033,7 +2054,7 @@
             "location": "apps/web/src/components/inspector/download-rendition-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
+            "location": "apps/web/src/components/inspector/e-invoice-details.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#8"
@@ -2042,7 +2063,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
@@ -2138,7 +2159,7 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
@@ -2261,6 +2282,9 @@
             "location": "apps/web/src/components/matter-activity-row.tsx#1"
           },
           {
+            "location": "apps/web/src/components/matter-number-preview.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/matter-run-marks.tsx#1"
           },
           {
@@ -2289,6 +2313,9 @@
           },
           {
             "location": "apps/web/src/components/oauth-consent/scope-summary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-document-canvas.tsx#1"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
@@ -2325,6 +2352,12 @@
           },
           {
             "location": "apps/web/src/components/pdf/annotations/document-marks-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#2"
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#1"
@@ -4242,6 +4275,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/document-naming-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
@@ -6628,6 +6664,9 @@
             "location": "apps/mobile/src/components/use-now.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/use-open-delivered-file.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-optimistic-write.ts#1"
           },
           {
@@ -7390,7 +7429,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#1"
+            "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
@@ -7594,9 +7633,6 @@
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/certified-email-envelope.tsx#1"
-          },
-          {
             "location": "apps/mobile/src/components/changes.tsx#9"
           },
           {
@@ -7666,7 +7702,19 @@
             "location": "apps/mobile/src/components/document-viewer/pdf-pages.tsx#14"
           },
           {
+            "location": "apps/mobile/src/components/e-invoice-details.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/email-reading.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/entity-detail-sheet.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-list.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-opener.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/header-search.tsx#1"
@@ -8362,6 +8410,9 @@
             "location": "apps/web/src/components/docx/evidence-references.tsx#1"
           },
           {
+            "location": "apps/web/src/components/docx/read-only-docx-document.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
           },
           {
@@ -8405,6 +8456,12 @@
           },
           {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/file-parts.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/use-file-part-actions.tsx#1"
           },
           {
             "location": "apps/web/src/components/file-thumbnail.tsx#1"
@@ -8452,7 +8509,7 @@
             "location": "apps/web/src/components/inspector/download-rendition-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
+            "location": "apps/web/src/components/inspector/e-invoice-details.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#8"
@@ -8461,7 +8518,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
@@ -8557,7 +8614,7 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
@@ -8680,6 +8737,9 @@
             "location": "apps/web/src/components/matter-activity-row.tsx#1"
           },
           {
+            "location": "apps/web/src/components/matter-number-preview.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/matter-run-marks.tsx#1"
           },
           {
@@ -8708,6 +8768,9 @@
           },
           {
             "location": "apps/web/src/components/oauth-consent/scope-summary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-document-canvas.tsx#1"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
@@ -8744,6 +8807,12 @@
           },
           {
             "location": "apps/web/src/components/pdf/annotations/document-marks-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#2"
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#1"
@@ -10661,6 +10730,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/document-naming-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
@@ -13801,6 +13873,9 @@
             "location": "apps/api/src/lib/files/image-pdf.ts#1"
           },
           {
+            "location": "apps/api/src/lib/files/image-pdf.ts#10"
+          },
+          {
             "location": "apps/api/src/lib/files/marked-pdf.ts#22"
           },
           {
@@ -13858,7 +13933,13 @@
             "location": "apps/api/src/lib/files/pdf-signing/validation-data.ts#14"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-worker.ts#16"
+            "location": "apps/api/src/lib/files/pdf-worker.ts#21"
+          },
+          {
+            "location": "apps/api/src/lib/files/text-preview-pdf.ts#17"
+          },
+          {
+            "location": "apps/api/src/lib/files/text-preview-pdf.ts#18"
           },
           {
             "location": "apps/api/src/lib/legal-search/parsers/libpdf-utils.ts#13"
@@ -15323,6 +15404,9 @@
           },
           {
             "location": "apps/api/src/env-file-derivative-worker.ts#1"
+          },
+          {
+            "location": "apps/api/src/env-public-corpus.ts#1"
           },
           {
             "location": "apps/api/src/env.ts#1"
@@ -18084,6 +18168,9 @@
             "location": "apps/web/src/lib/files/file-metadata-query.ts#1"
           },
           {
+            "location": "apps/web/src/lib/files/file-part-queries.ts#1"
+          },
+          {
             "location": "apps/web/src/lib/files/legal-file-queries.ts#1"
           },
           {
@@ -18349,6 +18436,9 @@
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/report-exports.ts#1"
+          },
+          {
+            "location": "apps/web/src/lib/workspaces/queries/similar-documents.ts#1"
           },
           {
             "location": "apps/web/src/lib/workspaces/queries/tasks.ts#1"
@@ -18729,6 +18819,12 @@
             "location": "apps/web/src/components/feedback-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/components/file-parts/file-parts.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/use-file-part-actions.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inbox/signal-card.tsx#3"
           },
           {
@@ -18756,13 +18852,16 @@
             "location": "apps/web/src/components/inspector/document-properties-section.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#3"
+            "location": "apps/web/src/components/inspector/e-invoice-viewer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#10"
           },
           {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#14"
+            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#16"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#3"
@@ -18792,7 +18891,10 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#10"
           },
           {
-            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#3"
+            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/similar-documents-section.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/proposal-review.tsx#1"
@@ -18808,6 +18910,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/language-picker.tsx#1"
@@ -18952,6 +19057,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/create-property.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/document-naming-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/workspaces/editable-field.tsx#13"
@@ -20194,6 +20302,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#11"
+          },
+          {
+            "location": "apps/web/src/components/inspector/similar-documents-section.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#14"
@@ -21814,7 +21925,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#3"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#3"
+            "location": "apps/desktop/src/mainview/App.tsx#9"
           },
           {
             "location": "apps/desktop/src/mainview/DictationDestination.tsx#3"
@@ -22011,6 +22122,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-now.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-open-delivered-file.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-optimistic-write.ts#1"
@@ -22775,7 +22889,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#1"
+            "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
@@ -22979,9 +23093,6 @@
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/certified-email-envelope.tsx#1"
-          },
-          {
             "location": "apps/mobile/src/components/changes.tsx#9"
           },
           {
@@ -23051,7 +23162,19 @@
             "location": "apps/mobile/src/components/document-viewer/pdf-pages.tsx#14"
           },
           {
+            "location": "apps/mobile/src/components/e-invoice-details.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/email-reading.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/entity-detail-sheet.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-list.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-opener.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/header-search.tsx#1"
@@ -23747,6 +23870,9 @@
             "location": "apps/web/src/components/docx/evidence-references.tsx#1"
           },
           {
+            "location": "apps/web/src/components/docx/read-only-docx-document.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
           },
           {
@@ -23790,6 +23916,12 @@
           },
           {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/file-parts.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/use-file-part-actions.tsx#1"
           },
           {
             "location": "apps/web/src/components/file-thumbnail.tsx#1"
@@ -23837,7 +23969,7 @@
             "location": "apps/web/src/components/inspector/download-rendition-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
+            "location": "apps/web/src/components/inspector/e-invoice-details.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#8"
@@ -23846,7 +23978,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
@@ -23942,7 +24074,7 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
@@ -24065,6 +24197,9 @@
             "location": "apps/web/src/components/matter-activity-row.tsx#1"
           },
           {
+            "location": "apps/web/src/components/matter-number-preview.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/matter-run-marks.tsx#1"
           },
           {
@@ -24093,6 +24228,9 @@
           },
           {
             "location": "apps/web/src/components/oauth-consent/scope-summary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-document-canvas.tsx#1"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
@@ -24129,6 +24267,12 @@
           },
           {
             "location": "apps/web/src/components/pdf/annotations/document-marks-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#2"
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#1"
@@ -26046,6 +26190,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/document-naming-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
@@ -28227,6 +28374,9 @@
             "location": "apps/mobile/src/components/use-now.ts#1"
           },
           {
+            "location": "apps/mobile/src/components/use-open-delivered-file.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/use-optimistic-write.ts#1"
           },
           {
@@ -28989,7 +29139,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#1"
+            "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
@@ -29193,9 +29343,6 @@
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/certified-email-envelope.tsx#1"
-          },
-          {
             "location": "apps/mobile/src/components/changes.tsx#9"
           },
           {
@@ -29265,7 +29412,19 @@
             "location": "apps/mobile/src/components/document-viewer/pdf-pages.tsx#14"
           },
           {
+            "location": "apps/mobile/src/components/e-invoice-details.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/email-reading.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/entity-detail-sheet.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-list.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-opener.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/header-search.tsx#1"
@@ -29961,6 +30120,9 @@
             "location": "apps/web/src/components/docx/evidence-references.tsx#1"
           },
           {
+            "location": "apps/web/src/components/docx/read-only-docx-document.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
           },
           {
@@ -30004,6 +30166,12 @@
           },
           {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/file-parts.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/use-file-part-actions.tsx#1"
           },
           {
             "location": "apps/web/src/components/file-thumbnail.tsx#1"
@@ -30051,7 +30219,7 @@
             "location": "apps/web/src/components/inspector/download-rendition-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
+            "location": "apps/web/src/components/inspector/e-invoice-details.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#8"
@@ -30060,7 +30228,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
@@ -30156,7 +30324,7 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
@@ -30279,6 +30447,9 @@
             "location": "apps/web/src/components/matter-activity-row.tsx#1"
           },
           {
+            "location": "apps/web/src/components/matter-number-preview.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/matter-run-marks.tsx#1"
           },
           {
@@ -30307,6 +30478,9 @@
           },
           {
             "location": "apps/web/src/components/oauth-consent/scope-summary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-document-canvas.tsx#1"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
@@ -30343,6 +30517,12 @@
           },
           {
             "location": "apps/web/src/components/pdf/annotations/document-marks-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#2"
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#1"
@@ -32260,6 +32440,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/document-naming-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
@@ -35170,6 +35353,9 @@
             "location": "apps/api/src/env-file-derivative-worker.ts#2"
           },
           {
+            "location": "apps/api/src/env-public-corpus.ts#2"
+          },
+          {
             "location": "apps/api/src/env.ts#2"
           },
           {
@@ -37207,6 +37393,9 @@
             "location": "apps/api/src/handlers/entities/request-desktop-edit-takeover.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/entities/similar/list.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/entities/stamps/check.ts#1"
           },
           {
@@ -37324,22 +37513,13 @@
             "location": "apps/api/src/handlers/files/cades.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/files/certified-email.ts#1"
-          },
-          {
             "location": "apps/api/src/handlers/files/data-box.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/files/email-attachment/create.ts#1"
+            "location": "apps/api/src/handlers/files/e-invoice.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/files/email-attachment-loader.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/files/email-attachment-save-scan.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/files/email-attachment.ts#1"
+            "location": "apps/api/src/handlers/files/email-reading.ts#1"
           },
           {
             "location": "apps/api/src/handlers/files/get.ts#1"
@@ -37349,6 +37529,15 @@
           },
           {
             "location": "apps/api/src/handlers/files/office-citation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/part-list.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/part-save-scan.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/part-save.ts#1"
           },
           {
             "location": "apps/api/src/handlers/files/read-content.ts#1"
@@ -37364,6 +37553,9 @@
           },
           {
             "location": "apps/api/src/handlers/files/thumbnail.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/zip-archive.ts#1"
           },
           {
             "location": "apps/api/src/handlers/flows/create.ts#1"
@@ -40681,19 +40873,40 @@
             "location": "apps/api/src/lib/files/e-akta-dossier.ts#1"
           },
           {
-            "location": "apps/api/src/lib/files/email-attachment-token.ts#1"
+            "location": "apps/api/src/lib/files/e-invoice-document.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/e-invoice-preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/e-invoice-text.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/e-invoice-worker.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/email-to-html.ts#14"
           },
           {
+            "location": "apps/api/src/lib/files/embedded-part-worker.ts#10"
+          },
+          {
             "location": "apps/api/src/lib/files/encrypted-ooxml.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/epub-document.ts#8"
           },
           {
             "location": "apps/api/src/lib/files/extract-office-evidence.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/file-content-grant.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/file-part-rendition.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/files/file-part.ts#10"
           },
           {
             "location": "apps/api/src/lib/files/folio-collab-snapshot-loader.ts#1"
@@ -40708,13 +40921,16 @@
             "location": "apps/api/src/lib/files/image-derivative.ts#1"
           },
           {
-            "location": "apps/api/src/lib/files/image-pdf.ts#2"
+            "location": "apps/api/src/lib/files/image-pdf.ts#11"
           },
           {
             "location": "apps/api/src/lib/files/legal-file-source.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/marked-pdf.ts#31"
+          },
+          {
+            "location": "apps/api/src/lib/files/mhtml-document.ts#7"
           },
           {
             "location": "apps/api/src/lib/files/ofd-document.ts#1"
@@ -40739,6 +40955,9 @@
           },
           {
             "location": "apps/api/src/lib/files/p7m.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/pdf-render.ts#36"
           },
           {
             "location": "apps/api/src/lib/files/pdf-signatures.ts#18"
@@ -40813,19 +41032,22 @@
             "location": "apps/api/src/lib/files/pdf-utils.ts#1"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-worker.ts#17"
+            "location": "apps/api/src/lib/files/pdf-worker.ts#22"
           },
           {
             "location": "apps/api/src/lib/files/pdfium.ts#16"
           },
           {
-            "location": "apps/api/src/lib/files/read-certified-email-file.ts#1"
+            "location": "apps/api/src/lib/files/png-pixels.ts#8"
           },
           {
             "location": "apps/api/src/lib/files/read-data-box-file.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/read-data-box-file.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/files/read-email-file.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/read-file.ts#1"
@@ -40847,6 +41069,15 @@
           },
           {
             "location": "apps/api/src/lib/files/structured-document-worker.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/text-preview-layout.ts#20"
+          },
+          {
+            "location": "apps/api/src/lib/files/text-preview-pdf.ts#19"
+          },
+          {
+            "location": "apps/api/src/lib/files/tiff-pages.ts#15"
           },
           {
             "location": "apps/api/src/lib/files/utils.ts#1"
@@ -40871,6 +41102,15 @@
           },
           {
             "location": "apps/api/src/lib/files/zep-container.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/zip-archive-preview.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/files/zip-archive-text.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/zip-archive.ts#14"
           },
           {
             "location": "apps/api/src/lib/flows/flow-executor.ts#1"
@@ -41087,6 +41327,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-scope.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-served-copy-restore.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-settlement-judgement.ts#1"
@@ -41836,6 +42079,9 @@
             "location": "apps/api/src/lib/rate-limit/action-size-limits.ts#1"
           },
           {
+            "location": "apps/api/src/lib/rate-limit/action-size-settings.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/rate-limit/auth-admission-reservations.ts#1"
           },
           {
@@ -42355,6 +42601,12 @@
             "location": "apps/api/src/lib/two-factor.ts#1"
           },
           {
+            "location": "apps/api/src/lib/uploads/document-naming/document-naming.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/document-naming/worker.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/uploads/entity-create.ts#21"
           },
           {
@@ -42365,6 +42617,9 @@
           },
           {
             "location": "apps/api/src/lib/uploads/file-comparison/uploads.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/near-duplicates/record-signature.ts#3"
           },
           {
             "location": "apps/api/src/lib/uploads/promote-tmp-object.ts#1"
@@ -43322,6 +43577,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-matter-write.ts#3"
+          },
+          {
+            "location": "apps/mobile/src/components/use-open-delivered-file.ts#3"
           },
           {
             "location": "apps/mobile/src/components/use-open-reference.ts#1"
@@ -44578,6 +44836,15 @@
             "location": "apps/web/src/lib/files/exact-duplicate-queries.ts#1"
           },
           {
+            "location": "apps/web/src/lib/files/file-metadata-query.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/files/file-part-queries.ts#2"
+          },
+          {
+            "location": "apps/web/src/lib/files/queries.ts#3"
+          },
+          {
             "location": "apps/web/src/lib/files/upload-entity-version.ts#1"
           },
           {
@@ -44654,6 +44921,9 @@
           },
           {
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-document.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/pdf/manual-redaction.logic.ts#1"
           },
           {
             "location": "apps/web/src/lib/pdf/page-editor/clean-scan-canvas.ts#1"
@@ -45341,6 +45611,9 @@
           },
           {
             "location": "packages/api-contract/src/desktop-runner.ts#3"
+          },
+          {
+            "location": "packages/api-contract/src/document-name.ts#1"
           },
           {
             "location": "packages/api-contract/src/http-input.ts#1"
@@ -47107,7 +47380,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#4"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#4"
+            "location": "apps/desktop/src/mainview/App.tsx#10"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCustomWords.tsx#3"
@@ -47284,10 +47557,16 @@
             "location": "apps/mobile/src/components/document-viewer/pdf-pages.tsx#16"
           },
           {
+            "location": "apps/mobile/src/components/e-invoice-details.tsx#3"
+          },
+          {
             "location": "apps/mobile/src/components/entity-detail-sheet.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/entity-kind-icon.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-list.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/header-search.tsx#4"
@@ -47623,6 +47902,9 @@
             "location": "apps/web/src/components/feedback-dialog.tsx#4"
           },
           {
+            "location": "apps/web/src/components/file-parts/use-file-part-actions.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inbox/signal-card.tsx#4"
           },
           {
@@ -47644,10 +47926,10 @@
             "location": "apps/web/src/components/inspector/document-properties-section.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#4"
+            "location": "apps/web/src/components/inspector/e-invoice-details.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#15"
+            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#17"
           },
           {
             "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#4"
@@ -50144,6 +50426,9 @@
             "location": "apps/api/src/db/schema/correspondence.ts#1"
           },
           {
+            "location": "apps/api/src/db/schema/document-naming.ts#1"
+          },
+          {
             "location": "apps/api/src/db/schema/document-processing.ts#1"
           },
           {
@@ -50181,6 +50466,9 @@
           },
           {
             "location": "apps/api/src/db/schema/mcp.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/schema/near-duplicates.ts#1"
           },
           {
             "location": "apps/api/src/db/schema/oauth-grant-revocations.ts#1"
@@ -51288,9 +51576,6 @@
           },
           {
             "location": "apps/api/src/handlers/fields/column-flag/update.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/files/email-attachment-loader.ts#2"
           },
           {
             "location": "apps/api/src/handlers/files/update-document-properties.ts#1"
@@ -53717,7 +54002,10 @@
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-convergence.ts#2"
           },
           {
-            "location": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts#2"
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-evidence.ts#1"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-erasure-store.ts#2"
@@ -53748,6 +54036,9 @@
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-revision.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/corpus-index-projection-served-copy-restore.ts#2"
           },
           {
             "location": "apps/api/src/lib/legal-search/corpus-index-projection-sql.ts#1"
@@ -54602,6 +54893,15 @@
             "location": "apps/api/src/lib/time-entry-timer-access.ts#2"
           },
           {
+            "location": "apps/api/src/lib/uploads/document-naming/dispatch.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/document-naming/document-naming.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/document-naming/queue.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/uploads/entity-create.ts#22"
           },
           {
@@ -54612,6 +54912,12 @@
           },
           {
             "location": "apps/api/src/lib/uploads/file-comparison/uploads.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/near-duplicates/find-similar.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/near-duplicates/record-signature.ts#4"
           },
           {
             "location": "apps/api/src/lib/usage/action-costs/report-query.ts#2"
@@ -59715,6 +60021,9 @@
           },
           {
             "location": "apps/api/src/lib/files/email-to-html.ts#15"
+          },
+          {
+            "location": "apps/api/src/lib/files/mhtml-document.ts#8"
           }
         ]
       },
@@ -60765,6 +61074,9 @@
             "location": "apps/mobile/src/components/use-mark-chat-read.ts#4"
           },
           {
+            "location": "apps/mobile/src/components/use-open-delivered-file.ts#4"
+          },
+          {
             "location": "apps/mobile/src/components/use-open-reference.ts#3"
           },
           {
@@ -60855,9 +61167,6 @@
             "location": "apps/mobile/src/components/case-law-list.tsx#4"
           },
           {
-            "location": "apps/mobile/src/components/certified-email-envelope.tsx#3"
-          },
-          {
             "location": "apps/mobile/src/components/chat-attachment-chip.tsx#1"
           },
           {
@@ -60912,6 +61221,12 @@
             "location": "apps/mobile/src/components/dictation-setting.tsx#4"
           },
           {
+            "location": "apps/mobile/src/components/e-invoice-details.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/components/email-reading.tsx#3"
+          },
+          {
             "location": "apps/mobile/src/components/empty-state-screen.tsx#1"
           },
           {
@@ -60919,6 +61234,9 @@
           },
           {
             "location": "apps/mobile/src/components/entity-row.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-list.tsx#4"
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#5"
@@ -61184,6 +61502,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-now.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/components/use-open-delivered-file.ts#1"
           },
           {
             "location": "apps/mobile/src/components/use-optimistic-write.ts#1"
@@ -61948,7 +62269,7 @@
             "location": "apps/desktop/src/mainview/AgentSubscriptionsSection.tsx#1"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#1"
+            "location": "apps/desktop/src/mainview/App.tsx#7"
           },
           {
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
@@ -62152,9 +62473,6 @@
             "location": "apps/mobile/src/components/case-law-list.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/certified-email-envelope.tsx#1"
-          },
-          {
             "location": "apps/mobile/src/components/changes.tsx#9"
           },
           {
@@ -62224,7 +62542,19 @@
             "location": "apps/mobile/src/components/document-viewer/pdf-pages.tsx#14"
           },
           {
+            "location": "apps/mobile/src/components/e-invoice-details.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/email-reading.tsx#1"
+          },
+          {
             "location": "apps/mobile/src/components/entity-detail-sheet.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-list.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-opener.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/header-search.tsx#1"
@@ -62920,6 +63250,9 @@
             "location": "apps/web/src/components/docx/evidence-references.tsx#1"
           },
           {
+            "location": "apps/web/src/components/docx/read-only-docx-document.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/drag-and-drop-live-region.tsx#1"
           },
           {
@@ -62963,6 +63296,12 @@
           },
           {
             "location": "apps/web/src/components/file-drop-zone.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/file-parts.tsx#8"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/use-file-part-actions.tsx#1"
           },
           {
             "location": "apps/web/src/components/file-thumbnail.tsx#1"
@@ -63010,7 +63349,7 @@
             "location": "apps/web/src/components/inspector/download-rendition-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#1"
+            "location": "apps/web/src/components/inspector/e-invoice-details.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#8"
@@ -63019,7 +63358,7 @@
             "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#8"
+            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#1"
@@ -63115,7 +63454,7 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#1"
@@ -63238,6 +63577,9 @@
             "location": "apps/web/src/components/matter-activity-row.tsx#1"
           },
           {
+            "location": "apps/web/src/components/matter-number-preview.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/matter-run-marks.tsx#1"
           },
           {
@@ -63266,6 +63608,9 @@
           },
           {
             "location": "apps/web/src/components/oauth-consent/scope-summary.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/office/office-document-canvas.tsx#1"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#1"
@@ -63302,6 +63647,12 @@
           },
           {
             "location": "apps/web/src/components/pdf/annotations/document-marks-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-page-layer.tsx#2"
           },
           {
             "location": "apps/web/src/components/pdf/page-anonymization.tsx#1"
@@ -65219,6 +65570,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/column-composer-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/document-naming-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/handoff-confirmation-playground.tsx#1"
@@ -68433,6 +68787,9 @@
             "location": "apps/mobile/src/components/use-document-editing.ts#7"
           },
           {
+            "location": "apps/mobile/src/components/use-open-delivered-file.ts#5"
+          },
+          {
             "location": "apps/mobile/src/components/use-open-reference.ts#4"
           },
           {
@@ -68715,7 +69072,7 @@
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#5"
           },
           {
-            "location": "apps/desktop/src/mainview/App.tsx#5"
+            "location": "apps/desktop/src/mainview/App.tsx#11"
           },
           {
             "location": "apps/desktop/src/mainview/ChatGptCard.tsx#1"
@@ -68937,9 +69294,6 @@
             "location": "apps/mobile/src/components/case-law-list.tsx#5"
           },
           {
-            "location": "apps/mobile/src/components/certified-email-envelope.tsx#4"
-          },
-          {
             "location": "apps/mobile/src/components/chat-attachment-chip.tsx#2"
           },
           {
@@ -69003,10 +69357,22 @@
             "location": "apps/mobile/src/components/document-viewer/docx-pages.tsx#4"
           },
           {
+            "location": "apps/mobile/src/components/e-invoice-details.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/components/email-reading.tsx#4"
+          },
+          {
             "location": "apps/mobile/src/components/entity-detail-sheet.tsx#5"
           },
           {
             "location": "apps/mobile/src/components/entity-row.tsx#2"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-list.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/components/file-part-opener.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/load-failure.tsx#3"
@@ -69486,6 +69852,9 @@
             "location": "apps/web/src/components/document-language-picker.tsx#6"
           },
           {
+            "location": "apps/web/src/components/document-name-pattern-field.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/docx/citation-check/citation-check-card.tsx#2"
           },
           {
@@ -69526,6 +69895,12 @@
           },
           {
             "location": "apps/web/src/components/feedback-sidebar-item.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/file-parts.tsx#11"
+          },
+          {
+            "location": "apps/web/src/components/file-parts/use-file-part-actions.tsx#5"
           },
           {
             "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#3"
@@ -69573,13 +69948,19 @@
             "location": "apps/web/src/components/inspector/download-rendition-menu.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#5"
+            "location": "apps/web/src/components/inspector/e-invoice-details.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/inspector/e-invoice-viewer.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/inspector/email-attachments-facet.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/email-html-viewer.tsx#11"
           },
           {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#16"
+            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#18"
           },
           {
             "location": "apps/web/src/components/inspector/external-reference-panel.tsx#4"
@@ -69657,7 +70038,10 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#4"
+            "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#2"
+          },
+          {
+            "location": "apps/web/src/components/inspector/similar-documents-section.tsx#5"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/comment-list.tsx#1"
@@ -69697,6 +70081,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#16"
+          },
+          {
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#2"
           },
           {
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#3"
@@ -69778,6 +70165,9 @@
           },
           {
             "location": "apps/web/src/components/oauth-consent/scope-summary.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/office/office-document-canvas.tsx#3"
           },
           {
             "location": "apps/web/src/components/office/office-file-viewer.tsx#8"
@@ -70012,6 +70402,9 @@
           },
           {
             "location": "apps/web/src/components/workspaces/document-extraction-status.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/workspaces/document-naming-section.tsx#2"
           },
           {
             "location": "apps/web/src/components/workspaces/document-reference-upload-dialog.tsx#5"
@@ -71718,6 +72111,66 @@
       "version": "4.15.1"
     },
     {
+      "authors": [
+        {
+          "name": "photopea (https://github.com/photopea)"
+        }
+      ],
+      "bom-ref": "pkg:npm/utif2@4.1.0",
+      "description": "Fast and advanced TIFF decoder",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "apps/api/node_modules/utif2/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "apps/api/node_modules/utif2/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/files/tiff-pages.ts#16"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/photopea/UTIF.js"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "utif2",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/utif2/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "apps/api/node_modules/utif2/package.json"
+        }
+      ],
+      "purl": "pkg:npm/utif2@4.1.0",
+      "scope": "required",
+      "type": "library",
+      "version": "4.1.0"
+    },
+    {
       "bom-ref": "pkg:npm/uuid@14.0.3",
       "description": "RFC9562 UUIDs",
       "evidence": {
@@ -73054,22 +73507,19 @@
             "location": "apps/api/src/handlers/fields/upsert.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/files/email-attachment/create.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/files/email-attachment.ts#2"
-          },
-          {
             "location": "apps/api/src/handlers/files/office-citation.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/files/part-list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/files/part-save.ts#2"
           },
           {
             "location": "apps/api/src/handlers/files/read-content.ts#2"
           },
           {
             "location": "apps/api/src/handlers/files/routes.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/files/signed-dossier.ts#2"
           },
           {
             "location": "apps/api/src/handlers/flows/schema.ts#1"
@@ -74752,10 +75202,19 @@
             "location": "apps/api/src/lib/files/converter-settings.ts#1"
           },
           {
+            "location": "apps/api/src/lib/files/e-invoice-preview.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/files/embedded-part-protocol.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/files/extract-office-evidence.ts#2"
           },
           {
             "location": "apps/api/src/lib/files/file-object-ids.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/file-part.ts#11"
           },
           {
             "location": "apps/api/src/lib/files/office-evidence-types.ts#1"
@@ -74764,13 +75223,16 @@
             "location": "apps/api/src/lib/files/office-evidence.ts#3"
           },
           {
+            "location": "apps/api/src/lib/files/pdf-render-budget.ts#17"
+          },
+          {
             "location": "apps/api/src/lib/files/pdf-text-lines.ts#2"
           },
           {
             "location": "apps/api/src/lib/files/pdf-worker-protocol.ts#1"
           },
           {
-            "location": "apps/api/src/lib/files/pdf-worker.ts#18"
+            "location": "apps/api/src/lib/files/pdf-worker.ts#24"
           },
           {
             "location": "apps/api/src/lib/files/signed-dossier-text.ts#2"
@@ -75029,6 +75491,9 @@
           },
           {
             "location": "apps/api/src/lib/templates/template-fill-completion.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/uploads/document-naming/document-naming.logic.ts#1"
           },
           {
             "location": "apps/api/src/lib/uploads/file-metadata-schema.ts#1"
@@ -75709,7 +76174,10 @@
             "location": "apps/web/src/lib/errors/provider-diagnostic.ts#2"
           },
           {
-            "location": "apps/web/src/lib/files/queries.ts#3"
+            "location": "apps/web/src/lib/files/file-part-queries.ts#3"
+          },
+          {
+            "location": "apps/web/src/lib/files/queries.ts#4"
           },
           {
             "location": "apps/web/src/lib/knowledge/catalogue-intent.ts#1"
@@ -76117,10 +76585,19 @@
             "location": "packages/api-contract/src/document-properties.ts#1"
           },
           {
+            "location": "packages/api-contract/src/e-invoice.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/email-delivery.ts#1"
           },
           {
+            "location": "packages/api-contract/src/email-reading.ts#9"
+          },
+          {
             "location": "packages/api-contract/src/entity-reference.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/file-parts.ts#12"
           },
           {
             "location": "packages/api-contract/src/folio-collab.ts#1"
@@ -76253,6 +76730,9 @@
           },
           {
             "location": "packages/api-contract/src/visual-theme.ts#2"
+          },
+          {
+            "location": "packages/api-contract/src/zip-archive.ts#1"
           },
           {
             "location": "packages/browser-page/src/page-window.ts#2"
@@ -77407,6 +77887,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/resolved-route-ids.ts#1"
+          },
+          {
+            "location": "apps/web/src/components/pdf/manual-redaction/manual-redaction-store.ts#1"
           },
           {
             "location": "apps/web/src/components/workspaces/cell-metadata-overrides-store.ts#1"

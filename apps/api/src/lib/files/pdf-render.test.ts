@@ -3,6 +3,10 @@ import { describe, expect, test } from "bun:test";
 
 import { readImageHeader } from "@/api/lib/files/image-header";
 import { previewText, renderPdf } from "@/api/lib/files/pdf-render";
+import {
+  FULL_PDF_RENDER_BUDGET,
+  pdfRenderBudget,
+} from "@/api/lib/files/pdf-render-budget";
 import { loadStampFonts } from "@/api/lib/files/pdf-signing/stamp-font";
 import { openPdfiumDocument } from "@/api/lib/files/pdfium";
 import {
@@ -14,6 +18,7 @@ import { readTiffPages } from "@/api/lib/files/tiff-pages";
 import { LIMITS } from "@/api/lib/limits";
 import {
   declaredPng,
+  heicFixture,
   splitBmp,
   splitGif,
   splitJpeg,
@@ -21,6 +26,7 @@ import {
   splitTiffPage,
   splitWebp,
   tiffFile,
+  withHeifRotation,
 } from "@/api/tests/helpers/image-fixtures";
 
 /** The first index of `needle` in `haystack`, or -1. */
@@ -72,13 +78,22 @@ const isRed = ([r, g, b]: readonly [number, number, number]) =>
 const isBlue = ([r, g, b]: readonly [number, number, number]) =>
   b > 200 && r < 60 && g < 60;
 
+const FULL_TEXT_PAGES = {
+  pagesMax: FULL_PDF_RENDER_BUDGET.textPagesMax,
+  pagesPerFontRun: FULL_PDF_RENDER_BUDGET.textPagesPerFontRun,
+};
+
+/** A render within the budget a container with room to spare gives. */
+const renderFull = async (mimeType: string, bytes: Uint8Array) =>
+  await renderPdf(mimeType, bytes, FULL_PDF_RENDER_BUDGET);
+
 const rendered = async (mimeType: string, bytes: Uint8Array) => {
-  const result = await renderPdf(mimeType, bytes);
+  const result = await renderFull(mimeType, bytes);
   if (Result.isError(result)) {
     throw result.error;
   }
-  if (result.value.type === "too-large") {
-    throw new Error(`${mimeType} rendered too large`);
+  if (result.value.type !== "pdf") {
+    throw new Error(`${mimeType} rendered ${result.value.type}`);
   }
   return result.value.bytes;
 };
@@ -156,7 +171,7 @@ describe("images rendered in-process", () => {
 
   test("a TIFF whose strip runs past the end of the file is refused", async () => {
     const tiff = tiffFile([splitTiffPage(64, 32)]);
-    expect(Result.isOk(await renderPdf("image/tiff", tiff))).toBe(true);
+    expect(Result.isOk(await renderFull("image/tiff", tiff))).toBe(true);
     // The directory stays readable; only its StripOffsets value (tag 273,
     // LONG, one value) moves so the strip's bytes would end past the file.
     const entry = indexOfBytes(
@@ -166,7 +181,7 @@ describe("images rendered in-process", () => {
     expect(entry).toBeGreaterThan(0);
     const cut = tiff.slice();
     new DataView(cut.buffer).setUint32(entry + 8, tiff.length - 16, true);
-    expect(Result.isError(await renderPdf("image/tiff", cut))).toBe(true);
+    expect(Result.isError(await renderFull("image/tiff", cut))).toBe(true);
   });
 
   test("a CMYK TIFF renders in colour", async () => {
@@ -184,11 +199,65 @@ describe("images rendered in-process", () => {
     expectSplit(pages[0]);
   });
 
+  test("a HEIC photo becomes one page sized to the photo", async () => {
+    // 1100 x 700 px in 3 x 2 tiles is 825 x 525 pt.
+    const pages = await renderPages(
+      await rendered("image/heic", heicFixture("grid.heic")),
+    );
+    expect(pages).toHaveLength(1);
+    expect(pages[0]?.width).toBeCloseTo(825, 3);
+    expect(pages[0]?.height).toBeCloseTo(525, 3);
+  });
+
+  test("a 48 MP HEIC photo becomes one page at the page-image budget", async () => {
+    // 8064 x 6048 (48.8 MP, 195 MB as whole RGBA) decodes tile by tile.
+    const pages = await renderPages(
+      await rendered("image/heic", heicFixture("grid-48mp.heic")),
+    );
+    expect(pages).toHaveLength(1);
+    const width = (pages[0]?.width ?? 0) / (72 / 96);
+    const height = (pages[0]?.height ?? 0) / (72 / 96);
+    expect(width * height).toBeLessThanOrEqual(LIMITS.pdfRenderImagePixelsMax);
+    expect(width * height).toBeGreaterThan(
+      LIMITS.pdfRenderImagePixelsMax * 0.99,
+    );
+    expect(width / height).toBeCloseTo(8064 / 6048, 2);
+  });
+
+  test("a rotated HEIC photo is shown upright", async () => {
+    const turned = withHeifRotation(heicFixture("grid.heic"), 1);
+    expect(readImageHeader(turned, "image/heic")?.orientation).toBe(8);
+    const [page] = await renderPages(await rendered("image/heic", turned));
+    expect(page?.width).toBeCloseTo(525, 3);
+    expect(page?.height).toBeCloseTo(825, 3);
+  });
+
+  test("a HEIC grid declaring a canvas past the tiled budget is too large", async () => {
+    const huge = heicFixture("grid.heic");
+    // The grid item: version and flags, 2 rows and 3 columns less one, then
+    // 1100 x 700 in 16 bits, which becomes 65535 x 65535.
+    const grid = indexOfBytes(
+      huge,
+      Uint8Array.from([0, 0, 1, 2, 0x04, 0x4c, 0x02, 0xbc]),
+    );
+    expect(grid).toBeGreaterThan(0);
+    const view = new DataView(huge.buffer, huge.byteOffset);
+    view.setUint16(grid + 4, 0xff_ff);
+    view.setUint16(grid + 6, 0xff_ff);
+    const result = await renderFull("image/heic", huge);
+    expect(Result.isOk(result) && result.value.type).toBe("too-large");
+  });
+
+  test("a HEIC file whose pictures are cut off is refused", async () => {
+    const cut = heicFixture("grid.heic").subarray(0, 3000);
+    expect(Result.isError(await renderFull("image/heic", cut))).toBe(true);
+  });
+
   test("an image whose bitstream is garbage is refused", async () => {
     const corrupt = splitBmp(64, 32);
     // A BMP header declaring a compression the decoder has no codec for.
     new DataView(corrupt.buffer).setUint32(30, 99, true);
-    const result = await renderPdf("image/bmp", corrupt);
+    const result = await renderFull("image/bmp", corrupt);
     expect(Result.isError(result)).toBe(true);
   });
 });
@@ -566,6 +635,29 @@ describe("what a text preview lays out is bounded", () => {
     expect(readsBack(past.items, `Strana ${max + 1} ${FILING}`)).toBe(false);
   });
 
+  test("a smaller container's budget is the page limit the render keeps", async () => {
+    const mib = 1024 * 1024;
+    const budget = pdfRenderBudget({
+      limit: { type: "limited", bytes: 512 * mib },
+      parentRssBytes: 200 * mib,
+    });
+    const max = budget?.textPagesMax ?? 0;
+    expect(max).toBeGreaterThan(0);
+    expect(max).toBeLessThan(LIMITS.pdfRenderTextPagesMax);
+
+    const result = await renderPdf(
+      "text/plain",
+      encode(sections(max + 1)),
+      budget ?? FULL_PDF_RENDER_BUDGET,
+    );
+    if (Result.isError(result) || result.value.type !== "pdf") {
+      throw new Error("The text did not render");
+    }
+    const past = await textItems(result.value.bytes);
+    expect(past.pageCount).toBe(max + 1);
+    expect(endsWithNote(past)).toBe(true);
+  });
+
   test("a file at the byte budget is read whole", () => {
     const line =
       "Žalobce se domáhá zaplacení částky 125 400 Kč s příslušenstvím.\n";
@@ -577,7 +669,13 @@ describe("what a text preview lays out is bounded", () => {
     const text = `${body}${"x".repeat(LIMITS.pdfRenderTextSourceBytesMax - encode(body).byteLength)}`;
     expect(encode(text).byteLength).toBe(LIMITS.pdfRenderTextSourceBytesMax);
 
-    expect(previewText(encode(text), "text/plain")).toEqual({
+    expect(
+      previewText(
+        encode(text),
+        "text/plain",
+        LIMITS.pdfRenderTextSourceBytesMax,
+      ),
+    ).toEqual({
       text,
       shortened: false,
     });
@@ -597,7 +695,11 @@ describe("what a text preview lays out is bounded", () => {
     expect(into).toBeGreaterThan(0);
     expect(into).toBeLessThan(lineBytes - 2);
 
-    const { shortened, text } = previewText(bytes, "text/plain");
+    const { shortened, text } = previewText(
+      bytes,
+      "text/plain",
+      LIMITS.pdfRenderTextSourceBytesMax,
+    );
     expect(shortened).toBe(true);
     const kept = Math.floor(LIMITS.pdfRenderTextSourceBytesMax / lineBytes);
     // Every whole line inside the budget, and not the CR of the last one.
@@ -610,7 +712,11 @@ describe("what a text preview lays out is bounded", () => {
     const bytes = encode(`a${"ž".repeat(LIMITS.pdfRenderTextSourceBytesMax)}`);
     expect(LIMITS.pdfRenderTextSourceBytesMax % 2).toBe(0);
 
-    const { shortened, text } = previewText(bytes, "text/plain");
+    const { shortened, text } = previewText(
+      bytes,
+      "text/plain",
+      LIMITS.pdfRenderTextSourceBytesMax,
+    );
     expect(shortened).toBe(true);
     expect(text).toBe(
       `a${"ž".repeat((LIMITS.pdfRenderTextSourceBytesMax - 2) / 2)}`,
@@ -626,7 +732,9 @@ describe("what a text preview lays out is bounded", () => {
       LIMITS.pdfRenderTextSourceBytesMax,
     );
 
-    expect(previewText(bytes, "text/plain")).toEqual({
+    expect(
+      previewText(bytes, "text/plain", LIMITS.pdfRenderTextSourceBytesMax),
+    ).toEqual({
       text: `${head}�`,
       shortened: true,
     });
@@ -637,12 +745,12 @@ describe("what a text preview lays out is bounded", () => {
     const text = `Strana 1 ${FILING}`;
     for (const toPdf of [plainTextToPdf, csvToPdf]) {
       const shortened = await textItems(
-        await toPdf({ text, shortened: true }, fonts),
+        await toPdf({ text, shortened: true }, fonts, FULL_TEXT_PAGES),
       );
       expect(shortened.pageCount).toBe(2);
       expect(endsWithNote(shortened)).toBe(true);
       const whole = await textItems(
-        await toPdf({ text, shortened: false }, fonts),
+        await toPdf({ text, shortened: false }, fonts, FULL_TEXT_PAGES),
       );
       expect(whole.pageCount).toBe(1);
       expect(endsWithNote(whole)).toBe(false);
@@ -696,7 +804,11 @@ describe("what a text preview lays out is bounded", () => {
       ].join("\n"),
     );
     // The cut lands inside a quoted cell: its quotes are left unbalanced.
-    const cut = previewText(bytes, "text/csv");
+    const cut = previewText(
+      bytes,
+      "text/csv",
+      LIMITS.pdfRenderTextSourceBytesMax,
+    );
     expect(cut.shortened).toBe(true);
     expect(cut.text.split('"').length % 2).toBe(0);
 
@@ -736,18 +848,65 @@ describe("what an image preview decodes is bounded", () => {
 
       // A header with no pixel data: the decoder, when it is reached,
       // refuses it.
-      const atBudget = await renderPdf(
+      const atBudget = await renderFull(
         "image/png",
         declaredPng({ bitDepth, height, width }),
       );
       expect(Result.isError(atBudget)).toBe(true);
-      const past = await renderPdf(
+      const past = await renderFull(
         "image/png",
         declaredPng({ bitDepth, height, width: width + 1 }),
       );
       expect(Result.isOk(past) && past.value).toEqual({ type: "too-large" });
     },
   );
+
+  test("an image past a smaller budget but within the full one waits for room", async () => {
+    const mib = 1024 * 1024;
+    const budget = pdfRenderBudget({
+      limit: { type: "limited", bytes: 512 * mib },
+      parentRssBytes: 200 * mib,
+    });
+    if (budget === null) {
+      throw new Error("A 512 MiB container has a render budget");
+    }
+    expect(budget.imageDecodedBytesMax).toBeLessThan(MAX);
+    // 8-bit RGB, four bytes a pixel once decoded.
+    const width = 4096;
+    const height = MAX / 4 / width;
+    const withinFull = await renderPdf(
+      "image/png",
+      declaredPng({ height, width }),
+      budget,
+    );
+    expect(Result.isOk(withinFull) && withinFull.value).toEqual({
+      type: "over-budget",
+    });
+    const pastFull = await renderPdf(
+      "image/png",
+      declaredPng({ height, width: width + 1 }),
+      budget,
+    );
+    expect(Result.isOk(pastFull) && pastFull.value).toEqual({
+      type: "too-large",
+    });
+
+    // A TIFF page the same way: within the full page budget, past this one.
+    const tiff = tiffFile([splitTiffPage(8, 8)]);
+    const widthEntry = indexOfBytes(
+      tiff,
+      Uint8Array.from([0x00, 0x01, 0x04, 0x00, 0x01, 0x00, 0x00, 0x00]),
+    );
+    expect(widthEntry).toBeGreaterThan(0);
+    // Seven bytes a pixel: three samples and the RGBA they become.
+    const tiffWidth = Math.floor(budget.tiffPageDecodedBytesMax / 7 / 8) + 1;
+    expect(tiffWidth * 8 * 7).toBeLessThanOrEqual(
+      LIMITS.pdfRenderTiffPageDecodedBytesMax,
+    );
+    new DataView(tiff.buffer).setUint32(widthEntry + 8, tiffWidth, true);
+    const page = await renderPdf("image/tiff", tiff, budget);
+    expect(Result.isOk(page) && page.value).toEqual({ type: "over-budget" });
+  });
 
   test("an image past the page pixel budget is scaled down to it", async () => {
     const width = 4000;

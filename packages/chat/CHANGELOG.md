@@ -1,5 +1,12 @@
 # @stll/chat
 
+## 0.6.10
+
+### Patch Changes
+
+- Updated dependencies [[`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853)]:
+  - @stll/ui@0.84.0
+
 ## 0.6.9
 
 ### Patch Changes

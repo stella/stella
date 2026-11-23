@@ -9,6 +9,10 @@ import type { ConvertibleMime } from "@/api/lib/files/pdf-derivative-policy";
 export const RENDERED_PDF_MIME_TYPES = {
   "image/bmp": "image",
   "image/gif": "image",
+  "image/heic": "image",
+  "image/heic-sequence": "image",
+  "image/heif": "image",
+  "image/heif-sequence": "image",
   "image/jpeg": "image",
   "image/png": "image",
   "image/tiff": "image",

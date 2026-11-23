@@ -545,6 +545,8 @@
     "closeTab": "إغلاق <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
+      "noPreviewDecodingOff": "لا يُنشئ هذا الخادم معاينات لصور {format}. نزِّل الملف لفتحه.",
+      "noPreviewUnreadable": "تعذّرت قراءة صورة {format} هذه لإنشاء معاينة. نزِّل الملف لفتحه.",
       "unsupportedEncoding": "هذا المستند يستخدم ترميز {encoding} غير مدعوم، لذا لا يمكن تحويله.",
       "unsupportedField": "يحتوي هذا المستند على حقل {fieldType} لا يمكن تحويله.",
       "unsupportedReference": "يشير هذا المستند إلى مورد خارجي في {element} {attribute}، لذا لا يمكن تحويله."
