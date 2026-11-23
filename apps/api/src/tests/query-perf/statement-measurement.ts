@@ -7,8 +7,9 @@ import type { TransactionOf } from "@/api/db/scoped";
 import type { ExplainPlanDocument } from "@/api/tests/explain-as-stella";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
-import { explainOwnerStatement } from "./measurement";
+import { explainOwnerStatement, metricsFromPlan } from "./measurement";
 import { withQueryPerfRollback } from "./rollback";
+import { confirmedExecutionTimes } from "./sampling";
 import { applyPlannerSettings, assertPlannerSettings } from "./settings";
 
 type Statement = { text: string; params: unknown[] };
@@ -98,6 +99,8 @@ const instrumentSession = (
 type MeasureJobStatementsOptions<T> = {
   database: GatedTestDb;
   run: (database: GatedTestDb) => Promise<T>;
+  /** Whether one sample exceeds the statement's scaled-time allowance and needs confirming. */
+  overTimeAllowance: (executionTimeMs: number) => boolean;
 };
 
 /**
@@ -108,13 +111,18 @@ type MeasureJobStatementsOptions<T> = {
 export const measureJobStatements = async <T>({
   database,
   run,
+  overTimeAllowance,
 }: MeasureJobStatementsOptions<T>) => {
   // Keep EXPLAIN and planner setup outside the job's statement-ceiling
   // context. Its real queries and native transactions retain that context.
   const outsideJob = AsyncLocalStorage.snapshot();
   const issued: Statement[] = [];
   const executed: Statement[] = [];
-  const statements: { query: Statement; plan: ExplainPlanDocument }[] = [];
+  const statements: {
+    query: Statement;
+    plan: ExplainPlanDocument;
+    executionTimesMs: number[];
+  }[] = [];
   const measure = async (
     owner: Pick<GatedTestDb, "transaction">,
     query: Statement,
@@ -130,12 +138,23 @@ export const measureJobStatements = async <T>({
       if (!PLAN_KEYWORDS.has(keyword)) {
         panic(`No query-perf measurement for ${keyword || "blank"} statement`);
       }
-      const plan = await withQueryPerfRollback(
-        owner,
-        async (savepoint) =>
-          await explainOwnerStatement(savepoint, capturedStatementQuery(query)),
-      );
-      statements.push({ query, plan });
+      const explain = async () =>
+        await withQueryPerfRollback(
+          owner,
+          async (savepoint) =>
+            await explainOwnerStatement(
+              savepoint,
+              capturedStatementQuery(query),
+            ),
+        );
+      const plan = await explain();
+      // Every sample rolls back; the job's own execution follows them.
+      const executionTimesMs = await confirmedExecutionTimes({
+        first: metricsFromPlan(plan).executionTimeMs,
+        overAllowance: overTimeAllowance,
+        resample: async () => metricsFromPlan(await explain()).executionTimeMs,
+      });
+      statements.push({ query, plan, executionTimesMs });
       return () => {
         executed.push(query);
       };

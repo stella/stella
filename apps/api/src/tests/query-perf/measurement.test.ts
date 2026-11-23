@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { expect, test } from "bun:test";
 
 import { READ_BUDGETS, readBudgetPages } from "@/api/lib/db/read-budgets";
@@ -7,7 +8,6 @@ import { projectionStateRowsVisited } from "./legislation-candidate-plan";
 import {
   budgetProblem,
   budgetViolations,
-  median,
   metricsFromPlan,
   scaleViolations,
   scheduledJobBudgetProblems,
@@ -17,8 +17,18 @@ import {
   sumMetrics,
   writeScaleViolations,
 } from "./measurement";
-import { analyzePlan, relationRowsVisited } from "./plan-analyzer";
+import {
+  analyzePlan,
+  exceedsScaledTimeAllowance,
+  relationRowsVisited,
+  scaledTimeViolations,
+} from "./plan-analyzer";
 import { PLAN_EXCEPTIONS } from "./plan-exceptions";
+import {
+  confirmedExecutionTimes,
+  median,
+  QUERY_PERF_TIME_CONFIRMATION_SAMPLES,
+} from "./sampling";
 import {
   classifyMeasuredStatement,
   queuedExportReadWork,
@@ -467,16 +477,116 @@ test("a plan exception recorded for one profile does not hide another profile", 
   ).toEqual(["large-scan"]);
 });
 
+const scaledTime = (executionTimesMs: readonly number[]) =>
+  scaledTimeViolations({
+    document: plan({ "Node Type": "Result" }, executionTimesMs.at(-1)),
+    executionTimesMs,
+    owner: "statement.owner",
+    ownerDeadlineMs: 5000,
+    profileId: "small",
+    statement: "select 1",
+  }).map(({ message }) => message);
+
 test("scaled execution time is checked against the owner's deadline", () => {
+  // 5000 ms deadline: one statement may use 1250 ms, so 12.5 ms on the fixture.
+  expect(exceedsScaledTimeAllowance(12.5, 5000)).toBe(false);
+  expect(exceedsScaledTimeAllowance(12.6, 5000)).toBe(true);
+  expect(exceedsScaledTimeAllowance(1e9, undefined)).toBe(false);
+  expect(scaledTime([20, 21, 19])).toEqual([
+    "statement.owner: scaled execution time 2000 ms (median of 3 samples) exceeds 1250 ms; statement: select 1; node: Result",
+  ]);
+  expect(scaledTime([12.5])).toEqual([]);
+});
+
+test("one slow sample among fast ones is runner jitter, not a scaled-time finding", () => {
+  expect(scaledTime([929, 4, 5])).toEqual([]);
+  expect(scaledTime([4, 929, 5, 6, 3])).toEqual([]);
+  // Two slow samples out of three are the statement, not the runner.
+  expect(scaledTime([929, 4, 930])).toHaveLength(1);
+});
+
+test("the plan analysis itself no longer times a single execution", () => {
   expect(
     analyzePlan({
-      document: plan({ "Node Type": "Result" }, 20),
+      document: plan({ "Node Type": "Result" }, 929),
       owner: "statement.owner",
       ownerDeadlineMs: 5000,
       profileId: "small",
       statement: "select 1",
-    }).map(({ kind }) => kind),
-  ).toEqual(["scaled-time"]);
+    }),
+  ).toEqual([]);
+});
+
+test("a sample within the allowance needs no confirmation", async () => {
+  let resampled = 0;
+  expect(
+    await confirmedExecutionTimes({
+      first: 12,
+      overAllowance: (ms) => exceedsScaledTimeAllowance(ms, 5000),
+      resample: async () => {
+        resampled += 1;
+        return await Promise.resolve(1);
+      },
+    }),
+  ).toEqual([12]);
+  expect(resampled).toBe(0);
+});
+
+test("a sample over the allowance is confirmed, and only the final sample is the last", async () => {
+  const lastFlags: boolean[] = [];
+  const confirmations = [4, 5];
+  const times = await confirmedExecutionTimes({
+    first: 929,
+    overAllowance: (ms) => exceedsScaledTimeAllowance(ms, 5000),
+    resample: async (last) => {
+      lastFlags.push(last);
+      return await Promise.resolve(
+        confirmations.shift() ?? panic("unexpected sample"),
+      );
+    },
+  });
+  expect(times).toEqual([929, 4, 5]);
+  expect(times).toHaveLength(QUERY_PERF_TIME_CONFIRMATION_SAMPLES);
+  expect(lastFlags).toEqual([false, true]);
+  expect(scaledTime(times)).toEqual([]);
+});
+
+test("the cold warmup plan shapes findings but is not a timing sample", () => {
+  const result = summarize(
+    [
+      { sharedBlocks: 1, executionTimeMs: 4 },
+      { sharedBlocks: 1, executionTimeMs: 5 },
+      { sharedBlocks: 1, executionTimeMs: 6 },
+    ],
+    [
+      plan({ "Node Type": "Result" }, 929),
+      plan({ "Node Type": "Result" }, 4),
+      plan({ "Node Type": "Result" }, 5),
+      plan({ "Node Type": "Result" }, 6),
+    ],
+    "statement.owner",
+    5000,
+    "select 1",
+    "small",
+  );
+  expect(result.planViolations).toEqual([]);
+  const slow = summarize(
+    [
+      { sharedBlocks: 1, executionTimeMs: 20 },
+      { sharedBlocks: 1, executionTimeMs: 4 },
+      { sharedBlocks: 1, executionTimeMs: 21 },
+    ],
+    [
+      plan({ "Node Type": "Result" }, 20),
+      plan({ "Node Type": "Result" }, 4),
+      plan({ "Node Type": "Result" }, 21),
+    ],
+    "statement.owner",
+    5000,
+    "select 1",
+    "small",
+  );
+  expect(slow.planViolations.map(({ kind }) => kind)).toEqual(["scaled-time"]);
 });
 
 test("an owner without a statement deadline yields a typed finding", () => {

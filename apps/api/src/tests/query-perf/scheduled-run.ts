@@ -11,6 +11,7 @@ import type { Verdict } from "@stll/db-load-gate/health";
 import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { Transaction } from "@/api/db/root";
+import type { TransactionOf } from "@/api/db/scoped";
 import { setSharedQueryTimeouts } from "@/api/db/shared-pool-timeouts";
 import { createDatabase } from "@/api/db/sql-client";
 import { computeCaseLawCoverageAnswer } from "@/api/handlers/case-law/decisions/coverage";
@@ -33,6 +34,7 @@ import type { DataExportMaintenanceDependencies } from "@/api/lib/scheduler/task
 import { createLegislationExpressionIdBackfill } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { isRecord } from "@/api/lib/type-guards";
+import type { ExplainPlanDocument } from "@/api/tests/explain-as-stella";
 import type {
   GatedTestClientScope,
   GatedTestDb,
@@ -49,9 +51,13 @@ import {
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import {
   analyzePlan,
+  exceedsScaledTimeAllowance,
   type PlanViolation,
   relationRowsVisited,
+  scaledTimeViolations,
 } from "./plan-analyzer";
+import { withQueryPerfRollback, withQueryPerfRollbackWhen } from "./rollback";
+import { confirmedExecutionTimes } from "./sampling";
 import {
   applyPlannerSettings,
   assertPlannerSettings,
@@ -416,9 +422,37 @@ export const measureScheduledStatementsInOrder = async ({
     .transaction(async (tx) => {
       await applyPlannerSettings(tx);
       const measured: MeasuredStatement[] = [];
+      const ownerDeadlineMs = QUERY_PERF_OWNER_DEADLINES[readBudgetId];
+      const overAllowance = (executionTimeMs: number) =>
+        exceedsScaledTimeAllowance(executionTimeMs, ownerDeadlineMs);
       for (const statement of reads) {
+        const query = asQuery(statement);
+        const explain = async (owner: TransactionOf<GatedTestDb>) =>
+          await explainOwnerStatement(owner, query);
+        const timeOf = (document: ExplainPlanDocument) =>
+          metricsFromPlan(document).executionTimeMs;
         // db-await-in-loop: replay preserves the job's statement order and state transitions.
-        const plan = await explainOwnerStatement(tx, asQuery(statement));
+        const first = await withQueryPerfRollbackWhen(tx, explain, (document) =>
+          overAllowance(timeOf(document)),
+        );
+        // A first sample within the allowance keeps its effects. Otherwise
+        // it rolled back, and only the last confirmation sample keeps them,
+        // so the statements after it replay against the same state.
+        let plan = first.value;
+        // db-await-in-loop: confirmation samples run in statement order before the next statement.
+        const executionTimesMs = await confirmedExecutionTimes({
+          first: timeOf(first.value),
+          overAllowance,
+          resample: async (last) => {
+            const document = last
+              ? await explain(tx)
+              : await withQueryPerfRollback(tx, explain);
+            if (last) {
+              plan = document;
+            }
+            return timeOf(document);
+          },
+        });
         const actualRows = plan.Plan["Actual Rows"];
         if (typeof actualRows !== "number") {
           panic(`${jobId} statement plan has no numeric Actual Rows`);
@@ -444,13 +478,23 @@ export const measureScheduledStatementsInOrder = async ({
           queuedExportRead,
           queuedReadPlan:
             queuedExportRead === undefined ? undefined : plan.Plan,
-          planViolations: analyzePlan({
-            document: plan,
-            owner: jobId,
-            ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
-            statement: normalized,
-            profileId: "corpus",
-          }),
+          planViolations: [
+            ...analyzePlan({
+              document: plan,
+              owner: jobId,
+              ownerDeadlineMs,
+              statement: normalized,
+              profileId: "corpus",
+            }),
+            ...scaledTimeViolations({
+              document: plan,
+              executionTimesMs,
+              owner: jobId,
+              ownerDeadlineMs,
+              statement: normalized,
+              profileId: "corpus",
+            }),
+          ],
           statement: normalized,
         });
       }
@@ -707,8 +751,11 @@ export const measureScheduledJobRun = async ({
   const persistedJob = await database.query.schedulerJobs.findFirst({
     where: { id: { eq: job.id } },
   });
+  const ownerDeadlineMs = QUERY_PERF_OWNER_DEADLINES[readBudgetId];
   const measured = await measureJobStatements({
     database,
+    overTimeAllowance: (executionTimeMs) =>
+      exceedsScaledTimeAllowance(executionTimeMs, ownerDeadlineMs),
     run: async (db) =>
       await task(
         asTestRaw<SchedulerTaskContext>({
@@ -743,26 +790,41 @@ export const measureScheduledJobRun = async ({
   if (measured.statements.length === 0) {
     return panic(`${jobId} issued no statement to measure`);
   }
-  const statements = measured.statements.map(({ query, plan }) => {
-    const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
-    const queuedExportRead = queuedExportReadWork({
-      ...query,
-      plan: plan.Plan,
-    });
-    return {
-      ...classifyMeasuredStatement({ statement: query.text, plan: plan.Plan }),
-      metrics: metricsFromPlan(plan),
-      queuedExportRead,
-      queuedReadPlan: queuedExportRead === undefined ? undefined : plan.Plan,
-      planViolations: analyzePlan({
-        document: plan,
-        owner: jobId,
-        ownerDeadlineMs: QUERY_PERF_OWNER_DEADLINES[readBudgetId],
+  const statements = measured.statements.map(
+    ({ query, plan, executionTimesMs }) => {
+      const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
+      const queuedExportRead = queuedExportReadWork({
+        ...query,
+        plan: plan.Plan,
+      });
+      return {
+        ...classifyMeasuredStatement({
+          statement: query.text,
+          plan: plan.Plan,
+        }),
+        metrics: metricsFromPlan(plan),
+        queuedExportRead,
+        queuedReadPlan: queuedExportRead === undefined ? undefined : plan.Plan,
+        planViolations: [
+          ...analyzePlan({
+            document: plan,
+            owner: jobId,
+            ownerDeadlineMs,
+            statement,
+            profileId: "corpus",
+          }),
+          ...scaledTimeViolations({
+            document: plan,
+            executionTimesMs,
+            owner: jobId,
+            ownerDeadlineMs,
+            statement,
+            profileId: "corpus",
+          }),
+        ],
         statement,
-        profileId: "corpus",
-      }),
-      statement,
-    };
-  });
+      };
+    },
+  );
   return summarizeScheduledRun(statements);
 };
