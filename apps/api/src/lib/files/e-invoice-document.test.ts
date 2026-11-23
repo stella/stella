@@ -277,7 +277,7 @@ describe("structured invoice reading", () => {
           quantity: "10",
           unitCode: "C62",
           unitPrice: "1.00",
-          priceBasis: "0.1 C62",
+          priceBasis: { quantity: "0.1", unitCode: "C62" },
           vatRate: "19",
           vatCategory: "S",
           netAmount: "100.00",
@@ -310,6 +310,74 @@ describe("structured invoice reading", () => {
       typeCode: "381",
       lines: [{ quantity: "10" }],
     });
+  });
+
+  test("lists a number the file states twice once, under its more specific kind", async () => {
+    // A Peppol supplier's electronic address is often its VAT number, in
+    // the VAT address scheme for its country (9930 for Germany).
+    const xml = ublXml().replace(
+      '<cbc:EndpointID schemeID="0088">0000000000001</cbc:EndpointID>',
+      '<cbc:EndpointID schemeID="9930">de 000000001</cbc:EndpointID>',
+    );
+    const { preview } = await read(xmlBytes(xml));
+    expect(preview.invoices[0]?.seller.identifiers).toEqual([
+      { kind: "vat", scheme: "VAT", value: "DE000000001" },
+      { kind: "registration", scheme: "0002", value: "HRB 00000" },
+    ]);
+
+    // An electronic address in a VAT scheme that differs from the stated VAT
+    // number is still the party's VAT number.
+    const other = ublXml().replace(
+      '<cbc:EndpointID schemeID="0088">0000000000001</cbc:EndpointID>',
+      '<cbc:EndpointID schemeID="9930">DE000000099</cbc:EndpointID>',
+    );
+    const { preview: otherPreview } = await read(xmlBytes(other));
+    expect(otherPreview.invoices[0]?.seller.identifiers).toContainEqual({
+      kind: "vat",
+      scheme: "9930",
+      value: "DE000000099",
+    });
+  });
+
+  test("keeps two addresses that differ only in punctuation", async () => {
+    // Peppol scheme 0202 carries certified mailboxes: a.b@ and ab@ differ.
+    const xml = ublXml().replace(
+      '<cbc:EndpointID schemeID="0088">0000000000001</cbc:EndpointID>',
+      '<cbc:EndpointID schemeID="0202">a.b@pec.example.invalid</cbc:EndpointID><cac:PartyIdentification><cbc:ID schemeID="0202">ab@pec.example.invalid</cbc:ID></cac:PartyIdentification>',
+    );
+    const { preview } = await read(xmlBytes(xml));
+    const values = preview.invoices[0]?.seller.identifiers.map(
+      ({ value }) => value,
+    );
+    expect(values).toContain("a.b@pec.example.invalid");
+    expect(values).toContain("ab@pec.example.invalid");
+  });
+
+  test("keeps opaque identifiers that differ only in punctuation", async () => {
+    const xml = ublXml().replace(
+      '<cbc:EndpointID schemeID="0088">0000000000001</cbc:EndpointID>',
+      "<cac:PartyIdentification><cbc:ID>A-1</cbc:ID></cac:PartyIdentification><cac:PartyIdentification><cbc:ID>A1</cbc:ID></cac:PartyIdentification>",
+    );
+    const { preview } = await read(xmlBytes(xml));
+    const values = preview.invoices[0]?.seller.identifiers.map(
+      ({ value }) => value,
+    );
+    expect(values).toContain("A-1");
+    expect(values).toContain("A1");
+  });
+
+  test("search and AI text names units and identifier schemes", async () => {
+    const text = eInvoiceDocumentText(
+      await listed(await read(xmlBytes(ublXml()))),
+    );
+    for (const value of [
+      "VAT ID: DE000000001",
+      "Registration number (SIRENE): HRB 00000",
+      "GLN: 0000000000001",
+      "quantity 10 units (C62); unit price 1.00 per 0.1 units (C62)",
+    ]) {
+      expect(text).toContain(value);
+    }
   });
 
   test("reads a CII invoice and writes its compact dates as calendar dates", async () => {
@@ -419,9 +487,9 @@ describe("structured invoice reading", () => {
       "ISDOC structured invoice, 6.0.2.",
       "Invoice FV-2026-0042 (type 1)",
       "Seller: Example Supplier s.r.o.",
-      "VAT ID (VAT): CZ00000001",
+      "VAT ID: CZ00000001",
       "Buyer: Example Customer a.s.",
-      "1. Consultation 1; quantity 2 HUR; unit price 1500.00; VAT 21; net 3000.00 CZK",
+      "1. Consultation 1; quantity 2 hours (HUR); unit price 1500.00; VAT 21; net 3000.00 CZK",
       "Totals: net 6000.00 CZK; VAT 1260.00 CZK; gross 7260.00 CZK",
       "IBAN CZ0000000000000000000001",
       "reference 20260042",

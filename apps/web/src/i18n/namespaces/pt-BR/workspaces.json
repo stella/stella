@@ -109,6 +109,7 @@
     "paymentReference": "Referência de pagamento",
     "prepaidAmount": "Pago antecipadamente",
     "quantity": "Quantidade e unidade",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "supplier": "Fornecedor",
@@ -118,6 +119,14 @@
     "taxableAmount": "Base de cálculo",
     "totals": "Totais",
     "unitPrice": "Preço unitário",
+    "units": {
+      "day": "{count, plural, one {{quantity} dia} many {{quantity} dias} other {{quantity} dias}}",
+      "hour": "{count, plural, one {{quantity} hora} many {{quantity} horas} other {{quantity} horas}}",
+      "month": "{count, plural, one {{quantity} mês} many {{quantity} meses} other {{quantity} meses}}",
+      "unit": "{count, plural, one {{quantity} unidade} many {{quantity} unidades} other {{quantity} unidades}}",
+      "week": "{count, plural, one {{quantity} semana} many {{quantity} semanas} other {{quantity} semanas}}",
+      "year": "{count, plural, one {{quantity} ano} many {{quantity} anos} other {{quantity} anos}}"
+    },
     "unreadable": "Não foi possível ler a fatura.",
     "vat": "IVA",
     "vatBreakdown": "Detalhamento do IVA"

@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
@@ -10,6 +11,12 @@ import type {
   EInvoice,
   EInvoicePreview,
 } from "@stll/api-contract/e-invoice";
+import {
+  eInvoiceIdentifierScheme,
+  eInvoiceQuantityCount,
+  eInvoiceUnit,
+  type EInvoiceUnitName,
+} from "@stll/api-contract/e-invoice-codes";
 import { Text } from "@stll/ui/text";
 
 import { FilePartList } from "@/components/file-part-list";
@@ -53,7 +60,58 @@ const TOTAL_LABELS = [
   ["payableAmount", "payableAmount"],
 ] as const satisfies readonly (readonly [keyof EInvoice["totals"], string])[];
 
+const UNIT_LABELS = {
+  unit: "units.unit",
+  hour: "units.hour",
+  day: "units.day",
+  week: "units.week",
+  month: "units.month",
+  year: "units.year",
+} as const satisfies Record<EInvoiceUnitName, string>;
+
 type Row = { readonly label: string; readonly value: string | null };
+
+/**
+ * Quantities with their units, and identifiers with their labels, as the web
+ * preview writes them: common units in words, measures as symbols, known
+ * identifier schemes by name.
+ */
+const useInvoiceWording = () => {
+  const t = useTranslations("eInvoice");
+  const quantity = (value: string, unitCode: string | null) => {
+    if (unitCode === null) {
+      return value;
+    }
+    const unit = eInvoiceUnit(unitCode);
+    const count = eInvoiceQuantityCount(value);
+    return unit.type === "named" && count !== null
+      ? t(UNIT_LABELS[unit.name], { count, quantity: value })
+      : t("quantityWithUnit", {
+          quantity: value,
+          unit: unit.type === "symbol" ? unit.symbol : unitCode,
+        });
+  };
+  const identifierLabel = (
+    identifier: EInvoice["seller"]["identifiers"][number],
+  ) => {
+    const kind = t(IDENTIFIER_KIND_LABELS[identifier.kind]);
+    const scheme = eInvoiceIdentifierScheme(identifier);
+    switch (scheme.type) {
+      case "none":
+        return kind;
+      case "named":
+        return identifier.kind === "other"
+          ? scheme.name
+          : t("identifierWithScheme", { kind, scheme: scheme.name });
+      case "code":
+        return t("identifierWithScheme", { kind, scheme: scheme.code });
+      default:
+        scheme satisfies never;
+        return panic("Unhandled identifier scheme");
+    }
+  };
+  return { identifierLabel, quantity };
+};
 
 /**
  * What the file lists without ids (lines, notes, a batch's invoices) is keyed
@@ -129,7 +187,7 @@ const PartyDetails = ({
   party: EInvoice["seller"];
   title: string;
 }) => {
-  const t = useTranslations("eInvoice");
+  const { identifierLabel } = useInvoiceWording();
   if (
     party.name === null &&
     party.identifiers.length === 0 &&
@@ -146,16 +204,10 @@ const PartyDetails = ({
       )}
       {party.identifiers.length > 0 && (
         <Rows
-          rows={party.identifiers.map(({ kind, scheme, value }) => {
-            const label = t(IDENTIFIER_KIND_LABELS[kind]);
-            return {
-              label:
-                scheme === null
-                  ? label
-                  : t("identifierWithScheme", { kind: label, scheme }),
-              value,
-            };
-          })}
+          rows={party.identifiers.map((identifier) => ({
+            label: identifierLabel(identifier),
+            value: identifier.value,
+          }))}
         />
       )}
       {party.address.length > 0 && (
@@ -178,6 +230,7 @@ const InvoiceDetails = ({
 }) => {
   const t = useTranslations("eInvoice");
   const { amount, rate } = useAmounts(invoice.currency);
+  const { quantity } = useInvoiceWording();
   const documentType = DOCUMENT_TYPES[invoice.documentType];
   const totals = TOTAL_LABELS.map(([total, label]) => ({
     label: t(label),
@@ -239,9 +292,9 @@ const InvoiceDetails = ({
                   {
                     label: t("quantity"),
                     value:
-                      line.quantity === null || line.unitCode === null
-                        ? line.quantity
-                        : `${line.quantity} ${line.unitCode}`,
+                      line.quantity === null
+                        ? null
+                        : quantity(line.quantity, line.unitCode),
                   },
                   {
                     label: t("unitPrice"),
@@ -249,7 +302,10 @@ const InvoiceDetails = ({
                     value:
                       line.unitPrice === null || line.priceBasis === null
                         ? amount(line.unitPrice)
-                        : `${amount(line.unitPrice) ?? ""} / ${line.priceBasis}`,
+                        : `${amount(line.unitPrice) ?? ""} / ${quantity(
+                            line.priceBasis.quantity,
+                            line.priceBasis.unitCode,
+                          )}`,
                   },
                   {
                     label: t("vat"),
