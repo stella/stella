@@ -541,7 +541,11 @@ describe("entries whose content cannot be read", () => {
 
   test("still scan the name of a locked entry", async () => {
     const matches = await scanArchive(
-      makeZipArchive([locked("encryptedFlag", "word/vbaProject.bin", "x")]),
+      makeZipArchive([
+        { name: "[Content_Types].xml", data: "<Types/>" },
+        // The macro rule needs this name, which only the locked entry gives.
+        locked("encryptedFlag", "word/vbaProject.bin", "x"),
+      ]),
       REFUSAL_BUDGET,
     );
 

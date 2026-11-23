@@ -80,7 +80,7 @@ export type ZipEntry = {
 type ZipIndex = { type: "read"; entries: ZipEntry[] } | { type: "malformed" };
 
 export const ZIP_METHOD_STORED = 0;
-export const ZIP_METHOD_DEFLATE = 8;
+const ZIP_METHOD_DEFLATE = 8;
 /** WinZip AES encryption, stated as a method of its own. */
 const ZIP_METHOD_AES = 99;
 const ZIP_FLAG_ENCRYPTED = 0x00_01;
