@@ -65,7 +65,7 @@ const SPECIAL_CHARACTERS: ReadonlyMap<string, string> = new Map([
 ]);
 
 /** Code pages `\ansicpgN` selects, by the label `TextDecoder` knows. */
-const CODE_PAGE_LABELS: ReadonlyMap<number, string> = new Map([
+const CODE_PAGES = [
   [874, "windows-874"],
   [932, "shift_jis"],
   [936, "gbk"],
@@ -81,11 +81,13 @@ const CODE_PAGE_LABELS: ReadonlyMap<number, string> = new Map([
   [1257, "windows-1257"],
   [1258, "windows-1258"],
   [10_000, "macintosh"],
-  [20_866, "koi8-r"],
-  [28_591, "iso-8859-1"],
-  [28_592, "iso-8859-2"],
   [65_001, "utf-8"],
-]);
+] as const;
+
+/** The labels above, as the decoder's own vocabulary. */
+type CodePageLabel = (typeof CODE_PAGES)[number][1];
+
+const CODE_PAGE_LABELS = new Map<number, CodePageLabel>(CODE_PAGES);
 
 /**
  * A decoder for a Windows code page as Outlook declares it (an RTF body's

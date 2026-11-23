@@ -67,6 +67,7 @@ const stored = (bytes: Uint8Array, fileName: string, mimeType: string) =>
   });
 
 const ATTACHMENT_NAMES = WENDLER.attachments.map(({ fileName }) => fileName);
+const EXHIBITS_NAME = ATTACHMENT_NAMES.at(1) ?? "";
 
 /** What an email's preview lists, and what each part opens as. */
 const listedAndRead = async (
@@ -214,7 +215,7 @@ describe("a TNEF stream on its own", () => {
       kind: FILE_PART_KINDS.attachment,
       index: 1,
     });
-    expect(read.unwrap().fileName).toBe(ATTACHMENT_NAMES[1]);
+    expect(read.unwrap().fileName).toBe(EXHIBITS_NAME);
   });
 
   test("an attached message lists its own files, each opening by its path", async () => {
@@ -249,6 +250,6 @@ describe("a TNEF stream on its own", () => {
       stored(outer, "winmail.dat", TNEF_MIME_TYPE),
       part ?? within,
     );
-    expect(read.unwrap().fileName).toBe(ATTACHMENT_NAMES[1]);
+    expect(read.unwrap().fileName).toBe(EXHIBITS_NAME);
   });
 });

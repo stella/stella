@@ -99,7 +99,7 @@ describe("a TNEF stream", () => {
     const inner = tnefStream({
       ...WENDLER_MESSAGE,
       subject: "AW: Abnahmeprotokoll Bauabschnitt 2",
-      attachments: [WENDLER_MESSAGE.attachments[1]],
+      attachments: WENDLER_MESSAGE.attachments.slice(1, 2),
     });
     const { attachments } = parseTnef(
       tnefStream({
@@ -138,7 +138,12 @@ describe("a TNEF stream", () => {
             hidden: true,
             bytes: new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
           },
-          { ...WENDLER_MESSAGE.attachments[1], hidden: false },
+          {
+            fileName: "Anlagenverzeichnis Pfeiffer Hochbau GmbH.txt",
+            mimeType: "text/plain",
+            bytes: EXHIBITS,
+            hidden: false,
+          },
         ],
       }),
     ).unwrap();
