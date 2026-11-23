@@ -263,6 +263,10 @@ export const aggregateFences = () => {
       id: { organizationId },
     },
     contactCapacity: { aggregate: "contactCapacity", id: { organizationId } },
+    dictationVocabularyCapacity: {
+      aggregate: "dictationVocabularyCapacity",
+      id: { organizationId },
+    },
     billingDraftSettings: {
       aggregate: "billingDraftSettings",
       id: { organizationId },
