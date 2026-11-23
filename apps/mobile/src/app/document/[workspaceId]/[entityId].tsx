@@ -441,6 +441,32 @@ const OpenedDocument = ({
   );
 };
 
+/**
+ * Opens the sheet that saves one part of the file into a matter. Saving a part
+ * only names it to the server, so it needs no native viewer.
+ */
+const usePartSave = ({
+  workspaceId,
+  fieldId,
+}: {
+  workspaceId: string;
+  fieldId: string;
+}) => {
+  const router = useRouter();
+  return ({ part, fileName, sizeBytes }: FilePartDescriptor) => {
+    router.push({
+      pathname: "/part/save",
+      params: {
+        workspaceId,
+        fieldId,
+        part,
+        name: fileName ?? "",
+        size: String(sizeBytes),
+      },
+    });
+  };
+};
+
 const LegalFilePreview = ({
   file,
   onRetry,
@@ -461,7 +487,6 @@ const LegalFilePreview = ({
   const eInvoice = useTranslations("eInvoice");
   const fileParts = useTranslations("fileParts");
   const mailbox = useTranslations("mailbox");
-  const router = useRouter();
   const { fieldId, preview, viewer } = file;
   const { opening, open: openDelivered } = useOpenDeliveredFile(showPreview);
   const openOriginal = async () => {
@@ -498,19 +523,7 @@ const LegalFilePreview = ({
           }),
       }
     : null;
-  // Saving a part only names it to the server, so it needs no native viewer.
-  const savePart = ({ part, fileName, sizeBytes }: FilePartDescriptor) => {
-    router.push({
-      pathname: "/part/save",
-      params: {
-        workspaceId,
-        fieldId,
-        part,
-        name: fileName ?? "",
-        size: String(sizeBytes),
-      },
-    });
-  };
+  const savePart = usePartSave({ workspaceId, fieldId });
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
