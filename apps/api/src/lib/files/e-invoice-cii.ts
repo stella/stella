@@ -11,7 +11,7 @@ import {
   type EmbeddedInvoiceFile,
   joined,
   type ParsedEInvoice,
-  quantityWithUnit,
+  statedQuantity,
   statedValues,
   textAt,
   textOf,
@@ -149,7 +149,7 @@ export const readCiiInvoice = (root: DocumentXmlNode): ParsedEInvoice => {
             "NetPriceProductTradePrice",
             "ChargeAmount",
           ),
-          priceBasis: quantityWithUnit(
+          priceBasis: statedQuantity(
             at(
               line,
               "SpecifiedLineTradeAgreement",

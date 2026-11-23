@@ -13882,6 +13882,9 @@
             "matterNumberingEnabled": {
               "type": "boolean"
             },
+            "documentNamePattern": {
+              "type": ["string", "null"]
+            },
             "promptCachingEnabled": {
               "type": "boolean"
             },

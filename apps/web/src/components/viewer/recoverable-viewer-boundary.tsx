@@ -31,7 +31,7 @@ export type ViewerSurface =
   | "document-docx"
   | "document-office"
   | "document-pdf"
-  | "email-attachment-pdf"
+  | "file-part-pdf"
   | "external-reference-pdf"
   | "inspector-asic"
   | "inspector-structured-document"
@@ -39,6 +39,7 @@ export type ViewerSurface =
   | "inspector-signed-dossier"
   | "inspector-data-box"
   | "inspector-e-invoice"
+  | "inspector-zip"
   | "inspector-pdf"
   | "inspector-text"
   | "search-preview-pdf";

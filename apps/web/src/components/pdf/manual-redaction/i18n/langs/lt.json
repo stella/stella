@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Vilkite per puslapį, kad uždengtumėte viską, ko aptikimas nepastebėjo. Anoniminiame PDF kiekviena pažymėta sritis užtamsinama juodai.",
+    "markingSurface": "Vilkite, kad pažymėtumėte sritį, kurią reikia užtamsinti",
+    "pageArea": "Sritis {page} puslapyje",
+    "removeArea": "Pašalinti pažymėtą sritį {page} puslapyje",
+    "startMarking": "Pažymėti sritis",
+    "stopMarking": "Baigti žymėti",
+    "title": "Pažymėtos sritys"
+  }
+}

@@ -5,6 +5,7 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
+import { envPublicCorpus } from "@/api/env-public-corpus";
 import { createHttpApp } from "@/api/http/app";
 import { HTTP_METHODS, mount, routes } from "@/api/http/route";
 import type { HttpMethod, Middleware, RouteTable } from "@/api/http/route";
@@ -38,6 +39,8 @@ import {
 } from "./redis-context";
 
 const testState = createTestState({ file: import.meta.path, config: env });
+// The public corpus policy reads its own settings slice.
+const corpusState = testState.forConfig(envPublicCorpus);
 
 const request = (path: string, method = "GET") =>
   new Request(`http://localhost${STELLA_API_VERSION_PREFIX}${path}`, {
@@ -233,8 +236,8 @@ test("verified crawlers bypass public browse quotas while impersonators remain l
 });
 
 test("verified sitemap readers retain shared capacity and interactive search quotas", async () => {
-  testState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 2);
-  testState.setConfig("PUBLIC_CORPUS_SEARCH_ADDRESS_MAX", 3);
+  corpusState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 2);
+  corpusState.setConfig("PUBLIC_CORPUS_SEARCH_ADDRESS_MAX", 3);
   const bindings = createBindings();
   try {
     await using server = serveVersioned(
@@ -450,8 +453,8 @@ describe("public corpus fleet request budgets", () => {
     const bindings = createBindings();
 
     try {
-      testState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 100);
-      testState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 120);
+      corpusState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 100);
+      corpusState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 120);
       await using server = createApp(bindings.binding);
       for (const { path, limit } of [
         { path: "/law/statutes/search", limit: 30 },
@@ -595,7 +598,7 @@ describe("public corpus fleet request budgets", () => {
     test(`search address refusals preserve fleet capacity without double charging: ${method} ${path}`, async () => {
       const bindings = createBindings();
       try {
-        testState.setConfig("PUBLIC_CORPUS_SEARCH_GLOBAL_MAX", 7);
+        corpusState.setConfig("PUBLIC_CORPUS_SEARCH_GLOBAL_MAX", 7);
         await using server = createApp(bindings.binding);
         for (let index = 0; index < 3; index += 1) {
           expect(
@@ -645,9 +648,9 @@ describe("public corpus fleet request budgets", () => {
       lines.push(line);
     });
     try {
-      testState.setConfig("PUBLIC_CORPUS_SEARCH_GLOBAL_MAX", 3);
-      testState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 3);
-      testState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 3);
+      corpusState.setConfig("PUBLIC_CORPUS_SEARCH_GLOBAL_MAX", 3);
+      corpusState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 3);
+      corpusState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 3);
       await using server = createApp(bindings.binding);
       for (const classRoutes of [
         [
@@ -752,7 +755,7 @@ describe("public corpus fleet request budgets", () => {
           bindings.optionsByScope.get(`public-corpus-global-${routeClass}`),
         ).toMatchObject({
           localMax: Math.floor(
-            options.max / env.PUBLIC_CORPUS_ASSUMED_REPLICAS,
+            options.max / envPublicCorpus.PUBLIC_CORPUS_ASSUMED_REPLICAS,
           ),
           failurePolicy: "fail_open_local",
         });
@@ -782,8 +785,8 @@ describe("public corpus fleet request budgets", () => {
   test("aggregate and sitemap per-address caps are isolated from ordinary navigation", async () => {
     const bindings = createBindings();
 
-    testState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 1200);
-    testState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 100);
+    corpusState.setConfig("PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX", 1200);
+    corpusState.setConfig("PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX", 100);
     await using server = createApp(bindings.binding);
     const lines: string[] = [];
     setMetricLineSinkForTesting((line) => {
@@ -859,9 +862,9 @@ describe("public corpus fleet request budgets", () => {
       lines.push(line);
     });
     try {
-      testState.setConfig(
+      corpusState.setConfig(
         "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX",
-        2 * env.PUBLIC_CORPUS_ASSUMED_REPLICAS,
+        2 * envPublicCorpus.PUBLIC_CORPUS_ASSUMED_REPLICAS,
       );
       const options = createPublicCorpusGlobalRateLimitOptions(
         "search",

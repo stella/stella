@@ -101,6 +101,7 @@ const createClient = () => {
     capabilities: {},
     documentProcessingMode: "off",
     matterNumberPattern: "{year}/{number}",
+    documentNamePattern: null,
     matterNumberPadding: 3,
     matterNumberingEnabled: true,
     practiceJurisdictions: [],

@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Pièces jointes",
     "certifiedAt": "Certifié le",
     "deliveredTo": "Remis à",
     "error": "Erreur signalée",
@@ -462,6 +461,7 @@
     },
     "fit": "Largeur",
     "openOriginal": "Ouvrir l’original",
+    "openPart": "Ouvrir {fileName}",
     "preview": "Ouvrir l’aperçu",
     "previewDescription": "Ce fichier s’ouvre dans l’aperçu du système.",
     "retry": "Réessayer",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Numéro de compte bancaire",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Fichiers joints",
     "bankCode": "Code banque",
     "batchPosition": "Document {position, number} sur {count, number}",
     "bic": "Code BIC",
@@ -504,6 +503,7 @@
     "paymentReference": "Référence de paiement",
     "prepaidAmount": "Acompte versé",
     "quantity": "Quantité et unité",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "registrationNumber": "Numéro d’enregistrement",
@@ -515,16 +515,48 @@
     "taxableAmount": "Base d’imposition",
     "totals": "Totaux",
     "unitPrice": "Prix unitaire",
+    "units": {
+      "day": "{count, plural, one {{quantity} jour} many {{quantity} jours} other {{quantity} jours}}",
+      "hour": "{count, plural, one {{quantity} heure} many {{quantity} heures} other {{quantity} heures}}",
+      "month": "{count, plural, one {{quantity} mois} many {{quantity} mois} other {{quantity} mois}}",
+      "unit": "{count, plural, one {{quantity} unité} many {{quantity} unités} other {{quantity} unités}}",
+      "week": "{count, plural, one {{quantity} semaine} many {{quantity} semaines} other {{quantity} semaines}}",
+      "year": "{count, plural, one {{quantity} an} many {{quantity} ans} other {{quantity} ans}}"
+    },
     "unreadable": "Impossible de lire la facture.",
     "vat": "TVA",
     "vatBreakdown": "Ventilation de la TVA",
     "vatId": "Numéro de TVA"
+  },
+  "email": {
+    "cc": "Copie",
+    "date": "Date d’envoi",
+    "from": "Expéditeur",
+    "noSubject": "(Sans objet)",
+    "subject": "Objet",
+    "to": "Destinataires"
   },
   "entity": {
     "currentVersion": "Version actuelle",
     "loadFailed": "Cet élément n’a pas pu être chargé.",
     "reference": "Référence",
     "type": "Type"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Impossible de lire l’archive.",
+    "attachments": "Pièces jointes",
+    "files": "Fichiers",
+    "insideFailed": "Impossible de charger les fichiers qu’il contient. Touchez pour réessayer.",
+    "noFilesInside": "Aucun fichier à l’intérieur.",
+    "open": "Ouvrir {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
+      "link": "Lien vers un autre fichier, non ouvert",
+      "tooLarge": "Trop volumineux pour être ouvert",
+      "unreadable": "Endommagé, impossible à ouvrir",
+      "unsupported": "Compressé d’une manière impossible à ouvrir"
+    },
+    "unnamed": "Fichier sans nom"
   },
   "header": {
     "search": "Rechercher"
@@ -853,6 +885,7 @@
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
     "noSigners": "Aucune information sur les signataires n’a été trouvée.",
+    "signedContent": "Document signé",
     "signers": "Signataires",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",

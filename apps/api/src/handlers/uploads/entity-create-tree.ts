@@ -29,7 +29,7 @@ import {
   insertEntityBatch,
 } from "@/api/lib/entity-versions/insert-entity-batch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { resolveUploadMime } from "@/api/lib/files/utils";
+import { resolveUploadMime } from "@/api/lib/files/upload-mime";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { presignUploadUrl } from "@/api/lib/s3-presign";

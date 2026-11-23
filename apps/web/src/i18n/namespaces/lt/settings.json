@@ -211,6 +211,15 @@
     "creationRateLimited": "Pastaruoju metu sukurta per daug organizacijų. Bandykite dar kartą vėliau.",
     "creationRefused": "Organizacijos sukurti nepavyko. Patikrinkite duomenis ir bandykite dar kartą.",
     "creationSlugConflict": "Šis organizacijos adresas jau naudojamas. Pasirinkite kitą pavadinimą arba adresą.",
+    "documentNaming": {
+      "description": "Pervadina naujai įkeltus failus bylose, kuriose tai įjungta. stella perskaito kiekvieno dokumento datą, rūšį ir pavadinimą ir užpildo šį šabloną. Palikite tuščią, kad liktų pradiniai pavadinimai.",
+      "invalid": "Naudokite tik išvardytas žymas ir jokių simbolių \\ / : * ? \" < > |.",
+      "pattern": "Pavadinimo šablonas",
+      "preview": "Pasirašyta sutartis vadintųsi:",
+      "sampleDocType": "Sutartis",
+      "sampleTitle": "Akcijų pirkimo–pardavimo sutartis",
+      "tokenHelp": "Žymos: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Žyma be reikšmės praleidžiama kartu su skyrikliu."
+    },
     "invitations": {
       "cancelConfirmDescription": "Adresu {email} išsiųsta kvietimo nuoroda nebeveiks. Norėdami pakviesti šį asmenį dar kartą, išsiųskite naują kvietimą.",
       "cancelInvitation": "Atšaukti kvietimą",

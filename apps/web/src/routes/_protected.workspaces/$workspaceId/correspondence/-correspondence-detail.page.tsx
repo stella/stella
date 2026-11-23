@@ -220,11 +220,14 @@ export function CorrespondenceDetailPage() {
       )}
 
       <CorrespondenceAttachments
-        files={attachments.map(({ entityId, filename, byteSize }) => ({
-          entityId,
-          fileName: filename,
-          byteSize,
-        }))}
+        files={attachments.map(
+          ({ entityId, filename, mediaType, byteSize }) => ({
+            entityId,
+            fileName: filename,
+            mediaType,
+            byteSize,
+          }),
+        )}
         workspaceId={workspaceId}
       />
 

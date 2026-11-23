@@ -4,6 +4,7 @@ import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useDebounce } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { documentNamePatternProblem } from "@stll/api-contract/document-name";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
@@ -16,6 +17,8 @@ import {
   SelectValue,
 } from "@stll/ui/select";
 
+import { DocumentNamePatternField } from "@/components/document-name-pattern-field";
+import { MatterNumberPreview } from "@/components/matter-number-preview.pending";
 import {
   QueryViewFeedback,
   SettledQueryViewFeedback,
@@ -32,7 +35,6 @@ import {
   MATTER_NUMBERING_TOGGLE_ROW_CLASS,
   MatterNumberingCardFrame,
   MatterNumberingCardPending,
-  MatterNumberPreview,
   MatterNumberPreviewPending,
 } from "@/routes/_protected.settings/organization/-components/organization/matter-numbering-card.pending";
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
@@ -73,7 +75,7 @@ export const MatterNumberingCard = () => {
       <MatterNumberingCardBody
         // A new organization mounts a new body, so its preview never starts
         // from the last organization's number.
-        key={`${activeOrganizationId}|${settings.matterNumberPattern}|${settings.matterNumberPadding}`}
+        key={`${activeOrganizationId}|${settings.matterNumberPattern}|${settings.matterNumberPadding}|${settings.documentNamePattern ?? ""}`}
         settings={settings}
       />
     </>
@@ -81,6 +83,7 @@ export const MatterNumberingCard = () => {
 };
 
 type MatterNumberingSettings = {
+  documentNamePattern: string | null;
   matterNumberPattern: string;
   matterNumberPadding: number;
   matterNumberingEnabled: boolean;
@@ -96,6 +99,12 @@ const MatterNumberingCardBody = ({
 
   const [pattern, setPattern] = useState(settings.matterNumberPattern);
   const [padding, setPadding] = useState(settings.matterNumberPadding);
+  // Empty leaves uploaded names alone.
+  const [namePattern, setNamePattern] = useState(
+    settings.documentNamePattern ?? "",
+  );
+  const namePatternProblem =
+    namePattern === "" ? null : documentNamePatternProblem(namePattern);
   const [isCustom, setIsCustom] = useState(
     () =>
       !PATTERN_PRESETS.some(
@@ -157,6 +166,7 @@ const MatterNumberingCardBody = ({
         await api["organization-settings"].post({
           matterNumberPattern: pattern,
           matterNumberPadding: padding,
+          documentNamePattern: namePattern === "" ? null : namePattern,
         }),
       ),
     invalidate: organizationSettingsKeys.all,
@@ -286,9 +296,18 @@ const MatterNumberingCardBody = ({
           <SettledQueryViewFeedback view={previewView} />
         </>
       }
+      documentNaming={
+        <DocumentNamePatternField
+          onChange={setNamePattern}
+          problem={namePatternProblem}
+          value={namePattern}
+        />
+      }
       save={
         <Button
           className="self-start"
+          disabled={namePatternProblem !== null}
+          disabledReason={t("organization.documentNaming.invalid")}
           loading={updateMutation.isPending}
           onClick={() => updateMutation.mutate()}
           size="sm"

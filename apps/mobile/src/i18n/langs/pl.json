@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Załączniki",
     "certifiedAt": "Data certyfikacji",
     "deliveredTo": "Doręczono do",
     "error": "Zgłoszony błąd",
@@ -462,6 +461,7 @@
     },
     "fit": "Szerokość",
     "openOriginal": "Otwórz oryginał",
+    "openPart": "Otwórz {fileName}",
     "preview": "Otwórz podgląd",
     "previewDescription": "Ten plik otworzy się w podglądzie systemowym.",
     "retry": "Spróbuj ponownie",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Numer rachunku bankowego",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Załączone pliki",
     "bankCode": "Kod banku",
     "batchPosition": "Dokument {position, number} z {count, number}",
     "bic": "Kod BIC",
@@ -504,6 +503,7 @@
     "paymentReference": "Tytuł płatności",
     "prepaidAmount": "Zapłacono zaliczką",
     "quantity": "Ilość i jednostka",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "Numer rejestrowy",
@@ -515,16 +515,48 @@
     "taxableAmount": "Podstawa opodatkowania",
     "totals": "Podsumowanie",
     "unitPrice": "Cena jednostkowa",
+    "units": {
+      "day": "{count, plural, one {{quantity} dzień} few {{quantity} dni} many {{quantity} dni} other {{quantity} dnia}}",
+      "hour": "{count, plural, one {{quantity} godzina} few {{quantity} godziny} many {{quantity} godzin} other {{quantity} godziny}}",
+      "month": "{count, plural, one {{quantity} miesiąc} few {{quantity} miesiące} many {{quantity} miesięcy} other {{quantity} miesiąca}}",
+      "unit": "{count, plural, one {{quantity} szt.} few {{quantity} szt.} many {{quantity} szt.} other {{quantity} szt.}}",
+      "week": "{count, plural, one {{quantity} tydzień} few {{quantity} tygodnie} many {{quantity} tygodni} other {{quantity} tygodnia}}",
+      "year": "{count, plural, one {{quantity} rok} few {{quantity} lata} many {{quantity} lat} other {{quantity} roku}}"
+    },
     "unreadable": "Nie udało się odczytać faktury.",
     "vat": "Stawka VAT",
     "vatBreakdown": "Zestawienie VAT",
     "vatId": "Numer VAT"
+  },
+  "email": {
+    "cc": "DW",
+    "date": "Data",
+    "from": "Nadawca",
+    "noSubject": "(Brak tematu)",
+    "subject": "Temat",
+    "to": "Odbiorcy"
   },
   "entity": {
     "currentVersion": "Bieżąca wersja",
     "loadFailed": "Nie udało się wczytać tej pozycji.",
     "reference": "Sygnatura",
     "type": "Typ"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Nie udało się odczytać archiwum.",
+    "attachments": "Załączniki",
+    "files": "Pliki",
+    "insideFailed": "Nie udało się wczytać plików ze środka. Stuknij, aby spróbować ponownie.",
+    "noFilesInside": "W środku nie ma żadnych plików.",
+    "open": "Otwórz {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Chroniony hasłem, nie można otworzyć",
+      "link": "Odnośnik do innego pliku, nie jest otwierany",
+      "tooLarge": "Za duży, by go otworzyć",
+      "unreadable": "Uszkodzony, nie można otworzyć",
+      "unsupported": "Skompresowany w sposób, którego nie można otworzyć"
+    },
+    "unnamed": "Plik bez nazwy"
   },
   "header": {
     "search": "Szukaj"
@@ -853,6 +885,7 @@
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "noSigners": "Nie znaleziono danych podpisujących.",
+    "signedContent": "Podpisany dokument",
     "signers": "Podpisujący",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",

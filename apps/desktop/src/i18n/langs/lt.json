@@ -10,7 +10,7 @@
     "aiDraftAllow": "Leisti",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Užduotis {task} · Veikla {activity}",
-    "aiDraftConsent": "stella DI gali rengti aprašus pagal kiekvieno įrašo bylą, datą, trukmę ir programų pavadinimus, taip pat pagal čia rodomus dokumentų pavadinimus ir langų antraštes, jei juos įrašote. Jūsų ankstesni įrašai byloje padeda rašyti jūsų stiliumi. Niekas kita apie jūsų dieną šio kompiuterio nepalieka.",
+    "aiDraftConsent": "Aprašui parengti stella DI naudoja: {inputs}. Visa tai siunčiama {provider} tik juodraščiui parašyti. Niekas kita apie jūsų dieną šio kompiuterio nepalieka.",
     "aiDraftConsentRequired": "Kad būtų parengtas šis aprašas, vėl leiskite stella DI.",
     "aiDraftDisclosure": "DI juodraščiai yra pasiūlymai, kuriuos stella sukuria pagal peržiūrimą įrašą, jūsų ankstesnius įrašus byloje ir, jei kontora jas pridėjo, jos atsiskaitymo gaires. Prieš kurdami peržiūrėkite kiekvieną įrašą.",
     "aiDraftEarlierEntries": "{count, plural, one {Remiasi # ankstesniu įrašu} few {Remiasi # ankstesniais įrašais} other {Remiasi # ankstesnių įrašų}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella DI šiame kompiuteryje išjungta. Atšaukimas bus išsiųstas programai stella, kai tik ji bus pasiekiama.",
     "browserAnsweredAppNameOnly": "Naršyklės <bdi>{browser}</bdi> įrašomas tik programos pavadinimas. Tai galite pakeisti nustatymuose.",
     "browserAnsweredTitles": "Naršyklės <bdi>{browser}</bdi> kortelių pavadinimai įrašomi. Tai galite pakeisti nustatymuose.",
-    "browserPrivacyNote": "Privatūs langai taip pat gali būti įrašyti; naršydami privačiai pristabdykite įrašymą arba neįtraukite naršyklės.",
+    "browserPrivacyNote": "stella atpažįsta ne kiekvieną privatų langą, todėl prieš naršydami privačiai pristabdykite įrašymą.",
     "browserQuestionAppNameOnly": "Tik programos pavadinimas",
-    "browserQuestionDescription": "Kortelių pavadinimai padeda aprašyti darbą. stella atpažįsta ne kiekvieną privatų langą, todėl prieš naršydami privačiai pristabdykite įrašymą.",
+    "browserQuestionDescription": "Kortelių pavadinimai padeda aprašyti darbą.",
     "browserQuestionLater": "Nuspręsti vėliau",
     "browserQuestionRecordTitles": "Įrašyti pavadinimus",
     "browserQuestionTitle": "Ar įrašyti ir kortelių pavadinimus naršyklėje <bdi>{browser}</bdi>?",
@@ -103,7 +103,19 @@
     "detectCalls": "Registruoti skambučius",
     "detectCallsDescription": "Kai Teams, Zoom ar naršyklė naudoja mikrofoną, tas laikas skaičiuojamas kaip skambutis, net jei tik klausotės ar dirbate kitoje programoje. Garsas niekada neįrašomas.",
     "disclosure": {
-      "control": "Niekas neįrašoma, kol skiltyje Veikla nepaspausite Pradėti įrašyti. Bet kada galite pristabdyti, išskirti programas ar ištrinti bet kurią dieną.",
+      "aiDraftInputs": {
+        "appNames": "programų pavadinimai",
+        "billingFormat": "kliento atsiskaitymo formatas",
+        "date": "data",
+        "duration": "trukmė",
+        "earlierDescriptions": "jūsų ankstesni aprašai byloje",
+        "firmGuidelines": "galimos jūsų kontoros atsiskaitymo gairės",
+        "instructions": "jūsų įvesti nurodymai",
+        "matter": "byla",
+        "titles": "įrašyti langų ir dokumentų pavadinimai"
+      },
+      "aiDraftProvider": "jūsų kontoros naudojamam DI teikėjui arba stella DI teikėjui",
+      "control": "Niekas neįrašoma, kol nepaspausite Pradėti įrašyti. Bet kada galite pristabdyti, išskirti programas ar ištrinti bet kurią dieną.",
       "never": {
         "audio": "Mikrofono garsas",
         "keystrokes": "Klavišų paspaudimai ar įvestas tekstas",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Kas įrašoma",
       "sent": {
-        "aiDrafts": "stella DI juodraščiai, kurių paprašote leidę: įrašo byla, data, trukmė ir programų pavadinimai, jo langų antraštės ir dokumentų pavadinimai, jei jie įrašomi, ir jūsų įvesti nurodymai. stella prideda jūsų ankstesnius aprašus byloje, kliento atsiskaitymo formatą ir, jei kontora jas naudoja, jos atsiskaitymo gaires. Visa tai siunčiama jūsų kontoros naudojamam DI teikėjui arba stella DI teikėjui tik juodraščiui parašyti; stella nesaugo nei juodraščio, nei to, kas jam buvo išsiųsta.",
+        "aiDrafts": "stella DI juodraščiai, kurių paprašote leidę. Kiekvienam stella DI naudoja: {inputs}. Visa tai siunčiama {provider} tik juodraščiui parašyti; stella nesaugo nei juodraščio, nei to, kas jam buvo išsiųsta.",
         "timeEntries": "Jūsų sukurti laiko įrašai: byla, data, trukmė, aprašas, ar apmokamas ir galimi atsiskaitymo kodai"
       },
       "sentTitle": "Kas palieka šį kompiuterį",
@@ -866,6 +878,30 @@
   },
   "onboarding": {
     "activityBody": "Pamatykite, kur dingo darbo diena, ir paverskite ją laiko įrašų juodraščiais. Jūs sprendžiate, kas įrašoma ir kas siunčiama.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Rengti aprašus su stella DI",
+        "body": "stella DI gali parengti kiekvieno laiko įrašo aprašo juodraštį. Leiskite tai dabar arba kai pirmą kartą peržiūrėsite dieną.",
+        "withdraw": "Sutikimą galite bet kada atšaukti nustatymuose."
+      },
+      "calls": {
+        "body": "Skaičiuokite skambučiams skirtą laiką.",
+        "title": "Skambučiai"
+      },
+      "details": {
+        "appNamesOnly": "Įrašomi tik programų pavadinimai.",
+        "body": "Jie padeda atskirti bylas, kai peržiūrite dieną.",
+        "browsers": "Naršyklės kortelių pavadinimus įrašo tik jums leidus. Veikla paklausia apie kiekvieną naršyklę, kai pamato ją pirmą kartą.",
+        "title": "Langų pavadinimai ir dokumentai"
+      },
+      "screens": {
+        "aiDrafts": "DI juodraščiai",
+        "calls": "Skambučiai",
+        "details": "Išsami informacija",
+        "recording": "Apžvalga"
+      },
+      "starting": "Pradedama įrašyti…"
+    },
     "activityStoryDraft": "Juodraštis",
     "activityStoryRecordTitle": "Įrašyta",
     "activityStoryReviewCaption": "Peržiūrite dieną ir pasirenkate bylą",
@@ -904,7 +940,6 @@
         "choose": "Mikrofonas diktavimui",
         "title": "Leiskite stella jus girdėti"
       },
-      "progress": "{current} veiksmas iš {total}",
       "screens": {
         "app": "Taisymas",
         "context": "Kontekstas",
@@ -912,7 +947,6 @@
         "transcription": "Perrašymas",
         "words": "Žodžiai"
       },
-      "skipRest": "Praleisti likusius",
       "transcription": {
         "body": "Vėliau tai galėsite pakeisti nustatymuose.",
         "bodyLocal": "Kalbos modelis veikia čia, todėl diktavimas veikia ir be interneto.",
@@ -982,6 +1016,7 @@
     "permissionsTitlePc": "Nustatykite šį kompiuterį",
     "progress": "{current} veiksmas iš {total}",
     "skip": "Praleisti",
+    "skipRest": "Praleisti likusius",
     "staysLocalMac": "Lieka šiame „Mac“",
     "staysLocalPc": "Lieka šiame kompiuteryje",
     "tryAgain": "Bandyti dar kartą",
@@ -1028,7 +1063,6 @@
     "errorUpdateLanguage": "stella desktop nepavyko pakeisti sąsajos kalbos.",
     "errorUpdatePreferences": "stella desktop nepavyko atnaujinti pranešimų nustatymų.",
     "language": "Kalba",
-    "lastVerified": "Paskutinį kartą patikrinta",
     "loadingAccount": "Tikrinamas jūsų paskyros ryšys…",
     "managedOfficeEditing": "Valdomas Office failų redagavimas stella programai.",
     "neverRequested": "Niekada neprašoma",

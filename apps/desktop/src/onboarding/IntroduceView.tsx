@@ -2,8 +2,10 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
+import { useBillingDraftSettings } from "../activity/billing-draft-settings";
 import type { Permission } from "../shared/permissions";
-import { ActivityExplainer } from "./ActivityExplainer";
+import { ActivitySetupFlow } from "./ActivitySetupFlow";
+import { useActivitySetup } from "./use-activity-setup";
 
 type IntroduceViewProps = {
   activityPermissions: readonly Permission[];
@@ -11,30 +13,56 @@ type IntroduceViewProps = {
   onOpenActivity: () => void;
 };
 
-/**
- * Activity became available after setup. This only explains it: recording
- * starts from the activity window's own consent, which stays with the
- * account.
- */
+/** Activity arrived after setup: the same screens as the tour's step,
+ *  once, ending in Done. */
 export const IntroduceView = ({
   activityPermissions,
   onDismiss,
   onOpenActivity,
 }: IntroduceViewProps) => {
   const t = useTranslations("onboarding");
+  const controls = useActivitySetup();
+  const drafts = useBillingDraftSettings(true);
   return (
-    <>
-      <h1 className="text-xl font-semibold">{t("introduceActivityTitle")}</h1>
-      <p className="text-muted-foreground mt-1 mb-4 max-w-md text-sm leading-relaxed text-pretty">
-        {t("introduceActivityBody")}
-      </p>
-      <ActivityExplainer permissions={activityPermissions} />
-      <div className="mt-auto flex justify-end gap-2 pt-5">
-        <Button onClick={onDismiss} variant="ghost">
-          {t("later")}
-        </Button>
-        <Button onClick={onOpenActivity}>{t("openActivity")}</Button>
-      </div>
-    </>
+    <ActivitySetupFlow
+      controls={controls}
+      drafts={drafts}
+      finishLabel={t("done")}
+      label={t("introduceActivityTitle")}
+      onLeaveForward={onDismiss}
+      permissions={activityPermissions}
+      recordingBody={t("introduceActivityBody")}
+      renderFooter={({
+        backDisabledReason,
+        onBack,
+        primary,
+        recording,
+        secondary,
+      }) => (
+        <div className="mt-auto flex items-center gap-2 pt-5">
+          {onBack === undefined ? null : (
+            <Button
+              disabled={backDisabledReason !== undefined}
+              disabledReason={backDisabledReason}
+              onClick={onBack}
+              variant="ghost"
+            >
+              {t("back")}
+            </Button>
+          )}
+          <span className="flex-1" />
+          {/* The last screen has nothing left to skip; the day itself is in
+              the Activity window. */}
+          {secondary ??
+            (recording ? (
+              <Button onClick={onOpenActivity} variant="ghost">
+                {t("openActivity")}
+              </Button>
+            ) : null)}
+          {primary}
+        </div>
+      )}
+      skipLabel={t("later")}
+    />
   );
 };

@@ -32,7 +32,6 @@ import { cn } from "@stll/ui/utils";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DocumentIcon } from "@/components/document-icon";
-import { getEmailAttachmentActivationId } from "@/components/inspector/email-attachments-facet.logic";
 import {
   EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
@@ -316,7 +315,6 @@ export const EmailHtmlViewer = ({
     : preview.date;
   const hasAdditionalParticipants =
     preview.cc.length > 0 || preview.bcc.length > 0;
-  const attachmentKeyOccurrences = new Map<string, number>();
   const bodyHtml = localizeEmailBodyHtml({
     bodyFolds: preview.bodyFolds,
     bodyHtml: preview.bodyHtml,
@@ -427,15 +425,11 @@ export const EmailHtmlViewer = ({
             </h2>
             <ul className="flex flex-wrap gap-1.5">
               {preview.attachments.map((attachment) => (
-                <li
-                  key={getAttachmentKey(attachment, attachmentKeyOccurrences)}
-                >
+                <li key={attachment.part}>
                   <Button
                     className="max-w-full"
                     onClick={() => {
-                      onOpenAttachment(
-                        getEmailAttachmentActivationId(attachment),
-                      );
+                      onOpenAttachment(attachment.part);
                     }}
                     variant="plain"
                   >
@@ -446,9 +440,7 @@ export const EmailHtmlViewer = ({
                           attachment.fileName ??
                           t("emailViewer.unnamedAttachment")
                         }
-                        mimeType={
-                          attachment.mimeType ?? "application/octet-stream"
-                        }
+                        mimeType={attachment.mediaType}
                       />
                       <TruncatedText
                         className="max-w-48"
@@ -653,22 +645,6 @@ const findEmailCitationElement = (
     }
   }
   return null;
-};
-
-const getAttachmentKey = (
-  attachment: {
-    fileName: string | null;
-    mimeType: string | null;
-    sizeBytes: number;
-  },
-  occurrences: Map<string, number>,
-): string => {
-  const signature = JSON.stringify([
-    attachment.fileName,
-    attachment.mimeType,
-    attachment.sizeBytes,
-  ]);
-  return getOccurrenceKey(signature, occurrences);
 };
 
 const getOccurrenceKey = (
