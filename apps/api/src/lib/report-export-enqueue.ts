@@ -208,7 +208,7 @@ export const reconcileQueuedReportExports = async ({
     const { aiNarrative, format, requestedBy } = row;
     if (requestedBy === null) {
       unattributed += 1;
-      return false;
+      return "skipped";
     }
     if (format === null || aiNarrative === null) {
       unrecoverable += 1;
@@ -221,7 +221,7 @@ export const reconcileQueuedReportExports = async ({
         .where(
           and(eq(reportExports.id, row.id), eq(reportExports.status, "queued")),
         );
-      return false;
+      return "skipped";
     }
     const outcome = await Result.tryPromise({
       try: async () =>

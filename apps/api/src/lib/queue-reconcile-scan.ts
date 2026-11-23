@@ -45,7 +45,7 @@ const RECONCILE_SCAN_CONCURRENCY = 10;
  */
 const RECONCILE_MAX_PAGES = 20;
 
-export type ReconcileRowOutcome = "handed-off" | "skipped" | "failed";
+type ReconcileRowOutcome = "handed-off" | "skipped" | "failed";
 
 export type ReconcileScanResult = {
   handedOff: number;
@@ -277,10 +277,10 @@ export const reconcileQueuedRuns = async <Row extends QueuedRunRow, DataType>({
     const admitted = admit === undefined ? true : await admit(run);
     if (run.requestedBy === null) {
       unattributed += 1;
-      return false;
+      return "skipped";
     }
     if (!admitted) {
-      return false;
+      return "skipped";
     }
     const { data, name, opts } = runJob({
       organizationId: run.organizationId,
