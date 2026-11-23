@@ -353,6 +353,19 @@ describe("structured invoice reading", () => {
     expect(values).toContain("ab@pec.example.invalid");
   });
 
+  test("keeps opaque identifiers that differ only in punctuation", async () => {
+    const xml = ublXml().replace(
+      '<cbc:EndpointID schemeID="0088">0000000000001</cbc:EndpointID>',
+      "<cac:PartyIdentification><cbc:ID>A-1</cbc:ID></cac:PartyIdentification><cac:PartyIdentification><cbc:ID>A1</cbc:ID></cac:PartyIdentification>",
+    );
+    const { preview } = await read(xmlBytes(xml));
+    const values = preview.invoices[0]?.seller.identifiers.map(
+      ({ value }) => value,
+    );
+    expect(values).toContain("A-1");
+    expect(values).toContain("A1");
+  });
+
   test("search and AI text names units and identifier schemes", async () => {
     const text = eInvoiceDocumentText(
       await listed(await read(xmlBytes(ublXml()))),

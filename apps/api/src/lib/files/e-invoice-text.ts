@@ -64,7 +64,7 @@ const quantityText = (quantity: string, unitCode: string | null) => {
       const count = eInvoiceQuantityCount(quantity);
       return count === null
         ? `${quantity} ${unitCode}`
-        : `${quantity} ${count === 1 ? one : other} (${unitCode})`;
+        : `${quantity} ${Math.abs(count) === 1 ? one : other} (${unitCode})`;
     }
     case "symbol":
       return `${quantity} ${unit.symbol} (${unitCode})`;

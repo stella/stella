@@ -85,15 +85,29 @@ const KIND_RANK = {
   other: 3,
 } as const satisfies Record<PartyIdentifier["kind"], number>;
 
+/** An identifier's value apart from case and spacing. */
+const writtenKey = (value: string) => value.replace(/\s/gu, "").toUpperCase();
+
 /**
- * An identifier's value apart from how it is written: case and spacing
- * never count, and a number's dots and dashes ("0123.456.789") do not
- * either. An address (a certified mailbox, a URL) keeps its punctuation,
- * since `a.b@` and `ab@` are two mailboxes.
+ * Whether two identifiers state the same value. A VAT or tax number's dots
+ * and dashes are formatting ("0123.456.789"), so two such numbers match
+ * without them; any other identifier (an address, an opaque code such as
+ * `A-1`) keeps its punctuation.
  */
-const identifierKey = (value: string) => {
-  const compact = value.replace(/\s/gu, "").toUpperCase();
-  return /[@:/]/u.test(compact) ? compact : compact.replace(/[.-]/gu, "");
+const sameIdentifier = (left: PartyIdentifier, right: PartyIdentifier) => {
+  const leftKey = writtenKey(left.value);
+  const rightKey = writtenKey(right.value);
+  if (leftKey === rightKey) {
+    return true;
+  }
+  const isNumber = (kind: PartyIdentifier["kind"]) =>
+    kind === "vat" || kind === "tax";
+  const digitsOnly = (key: string) => key.replace(/[.-]/gu, "");
+  return (
+    isNumber(left.kind) &&
+    isNumber(right.kind) &&
+    digitsOnly(leftKey) === digitsOnly(rightKey)
+  );
 };
 
 /**
@@ -105,23 +119,19 @@ const identifierKey = (value: string) => {
 const distinctIdentifiers = (
   identifiers: readonly PartyIdentifier[],
 ): PartyIdentifier[] => {
-  const byValue = new Map<string, PartyIdentifier>();
+  const listed: PartyIdentifier[] = [];
   for (const identifier of identifiers) {
-    const key = identifierKey(identifier.value);
-    const known = byValue.get(key);
-    if (
-      known === undefined ||
-      KIND_RANK[identifier.kind] < KIND_RANK[known.kind]
-    ) {
-      byValue.set(
-        key,
-        known === undefined
-          ? identifier
-          : { ...identifier, value: known.value },
-      );
+    const index = listed.findIndex((known) =>
+      sameIdentifier(known, identifier),
+    );
+    const known = index === -1 ? undefined : listed[index];
+    if (known === undefined) {
+      listed.push(identifier);
+    } else if (KIND_RANK[identifier.kind] < KIND_RANK[known.kind]) {
+      listed[index] = { ...identifier, value: known.value };
     }
   }
-  return [...byValue.values()];
+  return listed;
 };
 
 /** The party with each identifier listed once. */
