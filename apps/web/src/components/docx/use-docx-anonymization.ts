@@ -150,13 +150,16 @@ export const useDocxAnonymizationHighlights = ({
     () =>
       mergeAnonymizationTerms({
         isAnonymizationActive,
-        workspaceTerms: (workspaceTermEntries ?? [])
-          .filter((entry) => entry.enabled)
-          .map((entry) => ({
-            canonical: entry.canonical,
-            label: entry.label,
-            variants: entry.variants,
-          })),
+        workspaceTerms:
+          workspaceTermEntries === null
+            ? []
+            : workspaceTermEntries
+                .filter((entry) => entry.enabled)
+                .map((entry) => ({
+                  canonical: entry.canonical,
+                  label: entry.label,
+                  variants: entry.variants,
+                })),
         detectedTerms: detectedAnonymizationTerms,
         excludedCanonicals: excludedCanonicalsSet,
       }),

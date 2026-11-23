@@ -657,7 +657,7 @@ type LoadedFolioCollabSnapshot = Extract<
 >;
 
 /** A room's stored state, before the service load adds the room's seed. */
-export type FolioCollabStoredSnapshot =
+type FolioCollabStoredSnapshot =
   | Exclude<FolioCollabSnapshotLoadResponse, LoadedFolioCollabSnapshot>
   | Omit<LoadedFolioCollabSnapshot, "seedDocxBase64">;
 

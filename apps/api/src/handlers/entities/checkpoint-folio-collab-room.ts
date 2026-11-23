@@ -34,10 +34,10 @@ import {
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { materializeRoomOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { materializeRoomOverScannedDocx } from "@/api/lib/files/folio-collab-room-materialization";
 import {
   organizationFileUsageHandlerError,
   writeOrganizationFile,

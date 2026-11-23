@@ -46,7 +46,7 @@ return 0
 `;
 
 /** Who runs a room's authority: this process alone, or a Redis lease's holder. */
-export type RoomAuthorityCoordination =
+type RoomAuthorityCoordination =
   | { type: "single-process" }
   | {
       type: "redis";

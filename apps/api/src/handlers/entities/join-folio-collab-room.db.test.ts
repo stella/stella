@@ -46,8 +46,8 @@ import {
   publishCheckpointInTransaction,
 } from "@/api/lib/entity-versions/publish-folio-collab-checkpoint";
 import { createFileKey } from "@/api/lib/file-key";
-import { materializeRoomOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { materializeRoomOverScannedDocx } from "@/api/lib/files/folio-collab-room-materialization";
 import { decideFolioSnapshotRecoveryState } from "@/api/lib/files/folio-collab-snapshot-loader";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { FOLIO_COLLAB_SEED_CLAIM_STALE_MS } from "@/api/lib/folio-collab-room-contract";

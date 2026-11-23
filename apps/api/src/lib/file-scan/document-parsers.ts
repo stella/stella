@@ -13,14 +13,8 @@
  * new untrusted content.
  */
 import { panic, Result } from "better-result";
-import * as Y from "yjs";
 
 import { compareDocx } from "@stll/folio-core";
-import { canonicalSnapshotId } from "@stll/folio-core/canonical/canonicalRoomBase";
-import {
-  type CanonicalYjsRoomError,
-  readCanonicalYjsJournal,
-} from "@stll/folio-core/controller/canonicalYjsRoom";
 import {
   applyFolioAIEditsToBuffer,
   compareDocxVersions,
@@ -112,36 +106,23 @@ export const applyFolioAIEditsToScannedDocx = async (
 ) => await applyFolioAIEditsToBuffer(file.bytes, operations, options);
 
 /**
- * A collaboration room saved over the scanned document it was seeded from:
- * the journal its authority sequenced, read from the stored Yjs state and
- * replayed over that document as every peer applied it. A room seeded from
- * other bytes, or whose journal does not replay, is refused.
+ * A collaboration room's journal replayed over the scanned document the room
+ * was seeded from, as every peer applied it. A journal that does not replay
+ * is refused.
  */
-export const materializeRoomOverScannedDocx = async ({
+export const replayRoomJournalOverScannedDocx = async ({
   source,
-  yjsUpdate,
+  journal,
 }: {
   source: ScannedFile;
-  yjsUpdate: Uint8Array;
-}): Promise<
-  Result<ArrayBuffer, CanonicalYjsRoomError | FolioRoomJournalError>
-> => {
-  const room = new Y.Doc();
-  Y.applyUpdate(room, yjsUpdate);
-  const journal = readCanonicalYjsJournal({
-    doc: room,
-    snapshot: await canonicalSnapshotId(source.bytes),
-  });
-  room.destroy();
-  if (Result.isError(journal)) {
-    return Result.err(journal.error);
-  }
+  journal: Parameters<FolioDocxReviewer["applyRoomJournal"]>[0];
+}): Promise<Result<ArrayBuffer, FolioRoomJournalError>> => {
   const reviewer = await FolioDocxReviewer.fromBuffer(source.bytes, {
     session: "canonical",
   });
   const replayed = Result.try({
     try: () => {
-      reviewer.applyRoomJournal(journal.value);
+      reviewer.applyRoomJournal(journal);
     },
     catch: (cause) =>
       cause instanceof FolioRoomJournalError

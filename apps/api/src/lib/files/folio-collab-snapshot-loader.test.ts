@@ -7,7 +7,7 @@ import { serveCanonicalYjsRoom } from "@stll/folio-core/controller/canonicalYjsR
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 
 import { toSafeId } from "@/api/lib/branded-types";
-import { materializeRoomOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
+import { materializeRoomOverScannedDocx } from "@/api/lib/files/folio-collab-room-materialization";
 import {
   decideFolioSnapshotRecoveryState,
   FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
