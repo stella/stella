@@ -354,7 +354,11 @@ trait UpdaterHost: Sync {
     update: &'a Self::Update,
     progress: &'a (dyn Fn(u64, Option<u64>) + Send + Sync),
   ) -> impl Future<Output = Result<Self::Package, String>> + Send + 'a;
-  fn install(&self, update: &Self::Update, package: &Self::Package) -> Result<(), String>;
+  fn install(
+    &self,
+    update: &Self::Update,
+    package: &Self::Package,
+  ) -> Result<(), String>;
   fn relaunch(&self) -> Result<(), String>;
   /// Records when the feed was last asked, for the background schedule.
   fn record_check(&self);
@@ -371,13 +375,11 @@ impl UpdaterHost for TauriHost<'_> {
   type Update = tauri_plugin_updater::Update;
   type Package = VerifiedUpdatePackage;
 
-  fn find(&self) -> impl Future<Output = Result<Option<Self::Update>, String>> + Send {
-    async move {
-      build_updater(self.0)?
-        .check()
-        .await
-        .map_err(|err| err.to_string())
-    }
+  async fn find(&self) -> Result<Option<Self::Update>, String> {
+    build_updater(self.0)?
+      .check()
+      .await
+      .map_err(|err| err.to_string())
   }
 
   fn version(update: &Self::Update) -> String {
@@ -392,7 +394,11 @@ impl UpdaterHost for TauriHost<'_> {
     download_update_package(update, progress)
   }
 
-  fn install(&self, update: &Self::Update, package: &Self::Package) -> Result<(), String> {
+  fn install(
+    &self,
+    update: &Self::Update,
+    package: &Self::Package,
+  ) -> Result<(), String> {
     crate::local_store::install_update(update, package)
   }
 
@@ -912,7 +918,9 @@ mod tests {
     type Update = &'static str;
     type Package = &'static str;
 
-    fn find(&self) -> impl Future<Output = Result<Option<Self::Update>, String>> + Send {
+    fn find(
+      &self,
+    ) -> impl Future<Output = Result<Option<Self::Update>, String>> + Send {
       self.finds.fetch_add(1, Ordering::SeqCst);
       std::future::ready(self.found.clone())
     }
@@ -921,25 +929,27 @@ mod tests {
       (*update).to_string()
     }
 
-    fn download<'a>(
+    async fn download<'a>(
       &'a self,
       _update: &'a Self::Update,
       progress: &'a (dyn Fn(u64, Option<u64>) + Send + Sync),
-    ) -> impl Future<Output = Result<Self::Package, String>> + Send + 'a {
-      async move {
-        self.downloads.fetch_add(1, Ordering::SeqCst);
-        for (index, received) in self.chunks.iter().enumerate() {
-          progress(*received, self.total);
-          if index == 0 && self.hold_download {
-            self.download_started.notify_one();
-            self.download_released.notified().await;
-          }
+    ) -> Result<Self::Package, String> {
+      self.downloads.fetch_add(1, Ordering::SeqCst);
+      for (index, received) in self.chunks.iter().enumerate() {
+        progress(*received, self.total);
+        if index == 0 && self.hold_download {
+          self.download_started.notify_one();
+          self.download_released.notified().await;
         }
-        self.download_result.clone().map(|()| "package")
       }
+      self.download_result.clone().map(|()| "package")
     }
 
-    fn install(&self, _update: &Self::Update, package: &Self::Package) -> Result<(), String> {
+    fn install(
+      &self,
+      _update: &Self::Update,
+      package: &Self::Package,
+    ) -> Result<(), String> {
       assert_eq!(*package, "package");
       self.installs.fetch_add(1, Ordering::SeqCst);
       self.install_result.clone()
@@ -964,7 +974,11 @@ mod tests {
     std::future::ready(false)
   }
 
-  fn downloading(version: &str, received_bytes: u64, total_bytes: Option<u64>) -> UpdaterState {
+  fn downloading(
+    version: &str,
+    received_bytes: u64,
+    total_bytes: Option<u64>,
+  ) -> UpdaterState {
     UpdaterState::Downloading {
       version: version.to_string(),
       received_bytes,
@@ -985,7 +999,10 @@ mod tests {
       host.download_started.notified().await;
       // Settings opened mid-download: the read and a check both name the
       // download, and the check asks the feed nothing.
-      assert_eq!(board.snapshot().state, downloading("0.9.90", 100, Some(300)));
+      assert_eq!(
+        board.snapshot().state,
+        downloading("0.9.90", 100, Some(300))
+      );
       let checked = board.check_unless_busy(&host).await;
       assert_eq!(checked.state, downloading("0.9.90", 100, Some(300)));
       assert_eq!(host.finds.load(Ordering::SeqCst), 1);
@@ -1000,7 +1017,9 @@ mod tests {
     .await
     .expect("a settings check never waits for the install it reports");
 
-    assert!(matches!(outcome, CheckOutcome::Installed { version } if version == "0.9.90"));
+    assert!(
+      matches!(outcome, CheckOutcome::Installed { version } if version == "0.9.90")
+    );
     assert_eq!(host.downloads.load(Ordering::SeqCst), 1);
     assert_eq!(host.installs.load(Ordering::SeqCst), 1);
     assert_eq!(
@@ -1087,10 +1106,15 @@ mod tests {
 
       assert_eq!(board.snapshot().state, expected);
       let announced = host.announced();
-      assert_eq!(announced.first().map(|s| &s.state), Some(&UpdaterState::Checking));
+      assert_eq!(
+        announced.first().map(|s| &s.state),
+        Some(&UpdaterState::Checking)
+      );
       assert_eq!(announced.last().map(|s| &s.state), Some(&expected));
       assert!(
-        announced.windows(2).all(|pair| pair[0].revision < pair[1].revision),
+        announced
+          .windows(2)
+          .all(|pair| pair[0].revision < pair[1].revision),
         "{announced:?}"
       );
     }
@@ -1103,17 +1127,35 @@ mod tests {
     let at = |millis| start + Duration::from_millis(millis);
 
     assert!(board.record(UpdaterState::Checking, at(0)).is_some());
-    assert!(board.record(downloading("0.9.90", 0, Some(300)), at(1)).is_some());
-    // Inside the interval the step is kept, not announced.
-    assert!(board.record(downloading("0.9.90", 100, Some(300)), at(100)).is_none());
-    assert_eq!(board.snapshot().state, downloading("0.9.90", 100, Some(300)));
     assert!(
       board
-        .record(downloading("0.9.90", 200, Some(300)), at(1) + PROGRESS_EVENT_INTERVAL)
+        .record(downloading("0.9.90", 0, Some(300)), at(1))
+        .is_some()
+    );
+    // Inside the interval the step is kept, not announced.
+    assert!(
+      board
+        .record(downloading("0.9.90", 100, Some(300)), at(100))
+        .is_none()
+    );
+    assert_eq!(
+      board.snapshot().state,
+      downloading("0.9.90", 100, Some(300))
+    );
+    assert!(
+      board
+        .record(
+          downloading("0.9.90", 200, Some(300)),
+          at(1) + PROGRESS_EVENT_INTERVAL
+        )
         .is_some()
     );
     // The last step and the change after it are always announced.
-    assert!(board.record(downloading("0.9.90", 300, Some(300)), at(300)).is_some());
+    assert!(
+      board
+        .record(downloading("0.9.90", 300, Some(300)), at(300))
+        .is_some()
+    );
     let installing = UpdaterState::Installing {
       version: "0.9.90".into(),
     };
