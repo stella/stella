@@ -467,6 +467,10 @@
     "retry": "Erneut versuchen",
     "title": "Dokument",
     "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
+    "unscannedContent": {
+      "encrypted": "Einige enthaltene Dateien sind passwortgeschützt und wurden daher nicht auf Bedrohungen geprüft.",
+      "unsupportedCompression": "Einige enthaltene Dateien sind in einem Format komprimiert, das stella nicht lesen kann, und wurden daher nicht auf Bedrohungen geprüft."
+    },
     "zoomFit": "An Breite anpassen",
     "zoomIn": "Vergrößern",
     "zoomOut": "Verkleinern"

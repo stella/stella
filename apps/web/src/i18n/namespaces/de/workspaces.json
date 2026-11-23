@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "retryFailed": "{count, plural, one {# Datei} other {# Dateien}} erneut versuchen",
       "scrubFailed": "Die Metadaten dieser Datei konnten nicht entfernt werden, daher wurde nichts heruntergeladen",
+      "unscannedContent": {
+        "encrypted": "Einige enthaltene Dateien sind passwortgeschützt und wurden daher nicht auf Bedrohungen geprüft.",
+        "unsupportedCompression": "Einige enthaltene Dateien sind in einem Format komprimiert, das stella nicht lesen kann, und wurden daher nicht auf Bedrohungen geprüft."
+      },
       "uploadBlockedByWorkflow": "Warten Sie, bis der Workflow abgeschlossen ist, bevor Sie Dateien hochladen.",
       "uploadedPartially": "{failed, plural, one {# Datei} other {# Dateien}} von {total, number} fehlgeschlagen",
       "uploadedSuccessfully": "Dateien erfolgreich hochgeladen",

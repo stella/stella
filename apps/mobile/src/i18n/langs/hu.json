@@ -467,6 +467,10 @@
     "retry": "Újra",
     "title": "Dokumentum",
     "unrendered": "Ez a dokumentum itt nem jeleníthető meg, de a rendszer előnézete talán meg tudja nyitni.",
+    "unscannedContent": {
+      "encrypted": "Néhány benne lévő fájl jelszóval védett, ezért nem ellenőriztük őket fenyegetések szempontjából.",
+      "unsupportedCompression": "Néhány benne lévő fájl olyan formátumban van tömörítve, amelyet a stella nem tud beolvasni, ezért nem ellenőriztük őket fenyegetések szempontjából."
+    },
     "zoomFit": "Szélességhez igazítás",
     "zoomIn": "Nagyítás",
     "zoomOut": "Kicsinyítés"

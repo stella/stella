@@ -467,6 +467,10 @@
     "retry": "Bandyti dar kartą",
     "title": "Dokumentas",
     "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
+    "unscannedContent": {
+      "encrypted": "Kai kurie viduje esantys failai apsaugoti slaptažodžiu, todėl jie nebuvo patikrinti dėl grėsmių.",
+      "unsupportedCompression": "Kai kurie viduje esantys failai suglaudinti formatu, kurio stella negali perskaityti, todėl jie nebuvo patikrinti dėl grėsmių."
+    },
     "zoomFit": "Pritaikyti pločiui",
     "zoomIn": "Didinti",
     "zoomOut": "Mažinti"

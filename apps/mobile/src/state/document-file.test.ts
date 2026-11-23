@@ -83,7 +83,12 @@ const history = (
   versions: {
     id: string;
     versionNumber?: number;
-    file: { fieldId: string; fileName?: string; mimeType?: string } | null;
+    file: {
+      fieldId: string;
+      fileName?: string;
+      mimeType?: string;
+      unscannedContent?: string[];
+    } | null;
   }[],
 ) => ({
   entityId: "entity-1",
@@ -273,10 +278,34 @@ describe("reading a document's file", () => {
       mimeType: "application/pdf",
       url: "https://storage.example.com/file-1?signature=abc",
       viewer: "pdf",
+      unscannedContent: [],
     });
     expect(calls).toEqual([
       "/v1/entities/matter-1/entity/entity-1/versions",
       "/v1/files/matter-1/url/field-1?purpose=display",
+    ]);
+  });
+
+  test("names the content the upload scan could not read", async () => {
+    const { fetch } = server((path) =>
+      path.endsWith("/versions")
+        ? Response.json(
+            history("version-1", [
+              {
+                id: "version-1",
+                file: {
+                  fieldId: "field-1",
+                  unscannedContent: ["encrypted", "unsupportedCompression"],
+                },
+              },
+            ]),
+          )
+        : Response.json(delivered("application/pdf")),
+    );
+    const result = await read(fetch);
+    expect(result.isOk() && result.value.unscannedContent).toEqual([
+      "encrypted",
+      "unsupportedCompression",
     ]);
   });
 

@@ -467,6 +467,10 @@
     "retry": "Spróbuj ponownie",
     "title": "Dokument",
     "unrendered": "Tego dokumentu nie można tu wyświetlić, ale podgląd systemowy może go otworzyć.",
+    "unscannedContent": {
+      "encrypted": "Niektóre pliki w środku są chronione hasłem, dlatego nie zostały sprawdzone pod kątem zagrożeń.",
+      "unsupportedCompression": "Niektóre pliki w środku są skompresowane w formacie, którego stella nie potrafi odczytać, dlatego nie zostały sprawdzone pod kątem zagrożeń."
+    },
     "zoomFit": "Dopasuj do szerokości",
     "zoomIn": "Powiększ",
     "zoomOut": "Pomniejsz"

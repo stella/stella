@@ -79,6 +79,41 @@ export type ZipEntry = {
 
 type ZipIndex = { type: "read"; entries: ZipEntry[] } | { type: "malformed" };
 
+export const ZIP_METHOD_STORED = 0;
+export const ZIP_METHOD_DEFLATE = 8;
+/** WinZip AES encryption, stated as a method of its own. */
+const ZIP_METHOD_AES = 99;
+const ZIP_FLAG_ENCRYPTED = 0x00_01;
+const ZIP_FLAG_STRONG_ENCRYPTION = 0x00_40;
+
+const hasFlag = (flags: number, flag: number): boolean =>
+  Math.floor(flags / flag) % 2 === 1;
+
+/**
+ * Why an entry's content cannot be read, or null when it is stored or
+ * deflated in the clear. The one reading of this for every ZIP reader: the
+ * upload scan records such an entry as unscanned, the archive reader lists it
+ * as a file that does not open.
+ */
+export const unreadableZipEntry = (
+  entry: Pick<ZipEntry, "flags" | "method">,
+): "encrypted" | "unsupportedCompression" | null => {
+  if (
+    entry.method === ZIP_METHOD_AES ||
+    hasFlag(entry.flags, ZIP_FLAG_ENCRYPTED) ||
+    hasFlag(entry.flags, ZIP_FLAG_STRONG_ENCRYPTION)
+  ) {
+    return "encrypted";
+  }
+  if (
+    entry.method !== ZIP_METHOD_STORED &&
+    entry.method !== ZIP_METHOD_DEFLATE
+  ) {
+    return "unsupportedCompression";
+  }
+  return null;
+};
+
 const findEndOfCentralDirectory = (view: DataView): number => {
   const length = view.byteLength;
   const earliest = Math.max(0, length - EOCD_BYTES - MAX_ZIP_COMMENT_BYTES);

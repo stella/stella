@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
       "retryFailed": "Mēģināt vēlreiz {count, plural, zero {# failu} one {# failu} other {# failus}}",
       "scrubFailed": "Neizdevās noņemt šī faila metadatus, tāpēc nekas netika lejupielādēts",
+      "unscannedContent": {
+        "encrypted": "Daži iekšā esošie faili ir aizsargāti ar paroli, tāpēc tie netika pārbaudīti, vai tajos nav apdraudējumu.",
+        "unsupportedCompression": "Daži iekšā esošie faili ir saspiesti formātā, ko stella nevar nolasīt, tāpēc tie netika pārbaudīti, vai tajos nav apdraudējumu."
+      },
       "uploadBlockedByWorkflow": "Pirms failu augšupielādes uzgaidiet, līdz darbplūsma ir pabeigta.",
       "uploadedPartially": "{failed, plural, zero {# failu neizdevās augšupielādēt} one {# fails neizdevās augšupielādēt} other {# faili neizdevās augšupielādēt}} no {total, number}",
       "uploadedSuccessfully": "Faili veiksmīgi augšupielādēti",

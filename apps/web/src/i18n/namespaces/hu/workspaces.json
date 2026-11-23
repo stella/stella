@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# fájl átnevezve az ütközések elkerülése érdekében} other {# fájl átnevezve az ütközések elkerülése érdekében}}",
       "retryFailed": "{count, plural, one {# fájl} other {# fájl}} újrapróbálása",
       "scrubFailed": "A fájl metaadatai nem távolíthatók el, ezért nem történt letöltés",
+      "unscannedContent": {
+        "encrypted": "Néhány benne lévő fájl jelszóval védett, ezért nem ellenőriztük őket fenyegetések szempontjából.",
+        "unsupportedCompression": "Néhány benne lévő fájl olyan formátumban van tömörítve, amelyet a stella nem tud beolvasni, ezért nem ellenőriztük őket fenyegetések szempontjából."
+      },
       "uploadBlockedByWorkflow": "A fájlok feltöltése előtt várja meg a munkafolyamat végét.",
       "uploadedPartially": "{failed, plural, one {# fájl} other {# fájl}} feltöltése sikertelen a {total, number} fájlból",
       "uploadedSuccessfully": "Fájlok sikeresen feltöltve",

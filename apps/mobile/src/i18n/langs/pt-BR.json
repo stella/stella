@@ -467,6 +467,10 @@
     "retry": "Tentar novamente",
     "title": "Documento",
     "unrendered": "Este documento não pode ser exibido aqui, mas a pré-visualização do sistema talvez consiga abri-lo.",
+    "unscannedContent": {
+      "encrypted": "Alguns arquivos contidos nele estão protegidos por senha, por isso não foram verificados quanto a ameaças.",
+      "unsupportedCompression": "Alguns arquivos contidos nele estão compactados em um formato que a stella não consegue ler, por isso não foram verificados quanto a ameaças."
+    },
     "zoomFit": "Ajustar à largura",
     "zoomIn": "Aumentar zoom",
     "zoomOut": "Diminuir zoom"

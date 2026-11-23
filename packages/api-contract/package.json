@@ -180,6 +180,7 @@
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
     "./file-parts": "./src/file-parts.ts",
+    "./file-scan-warnings": "./src/file-scan-warnings.ts",
     "./file-part-containers": "./src/file-part-containers.ts",
     "./zip-archive": "./src/zip-archive.ts",
     "./mailbox": "./src/mailbox.ts",

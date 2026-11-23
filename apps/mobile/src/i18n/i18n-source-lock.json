@@ -414,6 +414,8 @@
   "document.retry": "Try again",
   "document.title": "Document",
   "document.unrendered": "This document cannot be shown here, but the system preview may open it.",
+  "document.unscannedContent.encrypted": "Some files inside are password-protected, so they weren’t checked for threats.",
+  "document.unscannedContent.unsupportedCompression": "Some files inside are compressed in a format stella can’t read, so they weren’t checked for threats.",
   "document.zoomFit": "Fit to width",
   "document.zoomIn": "Zoom in",
   "document.zoomOut": "Zoom out",

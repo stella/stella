@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# fichier renommé pour éviter les conflits} many {# fichiers renommés pour éviter les conflits} other {# fichiers renommés pour éviter les conflits}}",
       "retryFailed": "Réessayer {count, plural, one {# fichier} other {# fichiers} many {# fichiers}}",
       "scrubFailed": "Les métadonnées de ce fichier n’ont pas pu être supprimées, rien n’a donc été téléchargé",
+      "unscannedContent": {
+        "encrypted": "Certains fichiers qu’il contient sont protégés par un mot de passe : ils n’ont donc pas été analysés pour détecter des menaces.",
+        "unsupportedCompression": "Certains fichiers qu’il contient sont compressés dans un format que stella ne sait pas lire : ils n’ont donc pas été analysés pour détecter des menaces."
+      },
       "uploadBlockedByWorkflow": "Attendez la fin du processus avant d’importer des fichiers.",
       "uploadedPartially": "{failed, plural, one {# fichier échoué} other {# fichiers échoués} many {# fichiers échoués}} sur {total, number}",
       "uploadedSuccessfully": "Fichiers importés avec succès",

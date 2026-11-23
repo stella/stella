@@ -467,6 +467,10 @@
     "retry": "Try again",
     "title": "Document",
     "unrendered": "This document cannot be shown here, but the system preview may open it.",
+    "unscannedContent": {
+      "encrypted": "Some files inside are password-protected, so they weren’t checked for threats.",
+      "unsupportedCompression": "Some files inside are compressed in a format stella can’t read, so they weren’t checked for threats."
+    },
     "zoomFit": "Fit to width",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"

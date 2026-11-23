@@ -6504,6 +6504,8 @@
   "workspaces.files.renamedToAvoidConflicts": "{count, plural, one {# file renamed to avoid conflicts} other {# files renamed to avoid conflicts}}",
   "workspaces.files.retryFailed": "Retry {count, plural, one {# file} other {# files}}",
   "workspaces.files.scrubFailed": "This file's metadata could not be removed, so nothing was downloaded",
+  "workspaces.files.unscannedContent.encrypted": "Some files inside are password-protected, so they weren’t checked for threats.",
+  "workspaces.files.unscannedContent.unsupportedCompression": "Some files inside are compressed in a format stella can’t read, so they weren’t checked for threats.",
   "workspaces.files.uploadBlockedByWorkflow": "Wait for the workflow to finish before uploading files.",
   "workspaces.files.uploadedPartially": "{failed, plural, one {# file} other {# files}} failed out of {total, number}",
   "workspaces.files.uploadedSuccessfully": "Files uploaded successfully",

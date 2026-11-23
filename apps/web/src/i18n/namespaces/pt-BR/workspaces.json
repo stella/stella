@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# arquivo renomeado para evitar conflitos} many {# arquivos renomeados para evitar conflitos} other {# arquivos renomeados para evitar conflitos}}",
       "retryFailed": "Tentar novamente {count, plural, one {# arquivo} many {# arquivos} other {# arquivos}}",
       "scrubFailed": "Não foi possível remover os metadados deste arquivo, portanto nada foi baixado",
+      "unscannedContent": {
+        "encrypted": "Alguns arquivos contidos nele estão protegidos por senha, por isso não foram verificados quanto a ameaças.",
+        "unsupportedCompression": "Alguns arquivos contidos nele estão compactados em um formato que a stella não consegue ler, por isso não foram verificados quanto a ameaças."
+      },
       "uploadBlockedByWorkflow": "Aguarde a conclusão do fluxo de trabalho antes de enviar arquivos.",
       "uploadedPartially": "{failed, plural, one {# arquivo falhou} many {# arquivos falharam} other {# arquivos falharam}} de {total, number}",
       "uploadedSuccessfully": "Arquivos enviados com sucesso",

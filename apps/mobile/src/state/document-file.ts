@@ -16,6 +16,10 @@ import {
   filePartListSchema,
   isFilePartConvertedMediaType,
 } from "@stll/api-contract/file-parts";
+import {
+  UNSCANNED_CONTENT_REASONS,
+  type UnscannedContentReason,
+} from "@stll/api-contract/file-scan-warnings";
 import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
@@ -51,6 +55,11 @@ const versionFileSchema = v.object({
   propertyId: v.pipe(v.string(), v.minLength(1)),
   fileName: v.string(),
   mimeType: v.string(),
+  /** Why some of the file's content was not scanned when it was stored. */
+  unscannedContent: v.optional(
+    v.array(v.picklist(UNSCANNED_CONTENT_REASONS)),
+    [],
+  ),
 });
 
 const versionsSchema = v.object({
@@ -216,7 +225,14 @@ export type LegalDocumentFile =
   | StructuredDocumentFile
   | ZipArchiveDocumentFile;
 
-export type DocumentFile = NativeDocumentFile | LegalDocumentFile;
+/** Content of the file the upload scan could not read, such as an encrypted
+ *  file inside an archive; empty when everything was scanned. */
+export type UnscannedContent = {
+  readonly unscannedContent: readonly UnscannedContentReason[];
+};
+
+export type DocumentFile = (NativeDocumentFile | LegalDocumentFile) &
+  UnscannedContent;
 
 export const readOriginalDocumentFile = async ({
   fetch,
@@ -397,6 +413,28 @@ export const readDocumentFile = async ({
         new NoFileError({ message: `Document ${entityId} has no file` }),
       );
     }
+    const opened = await openVersionFile({ fetch, source, workspaceId, file });
+    return opened.map((value) => ({
+      ...value,
+      unscannedContent: file.unscannedContent,
+    }));
+  });
+
+/** Where the current file opens, read for its viewer. */
+const openVersionFile = async ({
+  fetch,
+  source,
+  workspaceId,
+  file,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly file: VersionFile;
+}): Promise<
+  Result<NativeDocumentFile | LegalDocumentFile, DocumentFileError>
+> =>
+  await Result.gen(async function* () {
     const { fieldId, fileName, mimeType } = file;
     const kind = legalFileFormat(mimeType, fileName)?.kind;
     switch (kind) {

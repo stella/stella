@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# soubor přejmenován kvůli konfliktu} few {# soubory přejmenovány kvůli konfliktům} other {# souborů přejmenováno kvůli konfliktům} many {# souboru přejmenováno kvůli konfliktům}}",
       "retryFailed": "Opakovat {count, plural, one {# soubor} few {# soubory} other {# souborů} many {# souboru}}",
       "scrubFailed": "Metadata tohoto souboru se nepodařilo odstranit, proto se nic nestáhlo",
+      "unscannedContent": {
+        "encrypted": "Některé soubory uvnitř jsou chráněné heslem, a proto nebyly zkontrolovány na hrozby.",
+        "unsupportedCompression": "Některé soubory uvnitř jsou komprimované ve formátu, který stella neumí přečíst, a proto nebyly zkontrolovány na hrozby."
+      },
       "uploadBlockedByWorkflow": "S nahráváním souborů počkejte na dokončení workflow.",
       "uploadedPartially": "{failed, plural, one {# soubor selhal} few {# soubory selhaly} other {# souborů selhalo} many {# souboru selhalo}} z {total, number}",
       "uploadedSuccessfully": "Soubory úspěšně nahrány",

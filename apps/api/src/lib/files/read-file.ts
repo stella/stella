@@ -8,6 +8,10 @@ import {
   type FilePart,
   filePartInlineBytes,
 } from "@stll/api-contract/file-parts";
+import {
+  type UnscannedContentReason,
+  unscannedContentReasons,
+} from "@stll/api-contract/file-scan-warnings";
 import { Temporal } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -110,6 +114,8 @@ export const displayedPdfFileId = (
 type FileDelivery = {
   disposition: ContentDisposition;
   encrypted: boolean;
+  /** Why some of the stored file's content was not scanned; empty when all was. */
+  unscannedContent: UnscannedContentReason[];
   entityId: SafeId<"entity">;
   fileId: string;
   fileName: string;
@@ -143,6 +149,7 @@ const resolveFileDelivery = ({
   }
 
   const content = row.content;
+  const unscannedContent = unscannedContentReasons(content.scanWarnings);
   const originalKey = createFileKey({
     organizationId,
     workspaceId,
@@ -155,6 +162,7 @@ const resolveFileDelivery = ({
       delivery: {
         disposition: "attachment",
         encrypted: content.encrypted,
+        unscannedContent,
         entityId: row.entityId,
         fileId: content.id,
         fileName: content.fileName,
@@ -186,6 +194,7 @@ const resolveFileDelivery = ({
       delivery: {
         disposition: "inline",
         encrypted: content.encrypted,
+        unscannedContent,
         entityId: row.entityId,
         fileId: content.id,
         fileName: content.fileName,
@@ -207,6 +216,7 @@ const resolveFileDelivery = ({
     delivery: {
       disposition: "inline",
       encrypted: content.encrypted,
+      unscannedContent,
       entityId: row.entityId,
       fileId: displayFileId,
       fileName: content.fileName,
@@ -318,6 +328,7 @@ export const readFileHandler = async ({
       originalMimeType: delivery.originalMimeType,
       fileName: delivery.fileName,
       encrypted: delivery.encrypted,
+      unscannedContent: delivery.unscannedContent,
       // Kept for client compatibility; this is now a Stella grant URL whose
       // redemption rechecks version liveness, rather than a direct S3 URL.
       presignedUrl: fileContentGrantUrl(grant),

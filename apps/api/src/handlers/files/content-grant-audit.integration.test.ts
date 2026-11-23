@@ -2125,7 +2125,9 @@ describe("ZIP archive delivery", () => {
     const { text } = read.unwrap();
     expect(text).toContain("podání/vyjádření.txt");
     expect(text).toContain("Vyjádření žalovaného k žalobě");
-    expect(text).toContain("The file is encrypted.");
+    expect(text).toContain(
+      "The file is encrypted, so it was not read or scanned.",
+    );
   });
 
   test("an email in an archive lists its attachments, each opening by its path", async () => {
