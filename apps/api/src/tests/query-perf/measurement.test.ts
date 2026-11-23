@@ -32,6 +32,7 @@ import {
 import {
   classifyMeasuredStatement,
   queuedExportReadWork,
+  sampledStatementFindings,
 } from "./scheduled-run";
 
 const plan = (Plan: Record<string, unknown>, executionTime = 1) => ({
@@ -549,6 +550,38 @@ test("a sample over the allowance is confirmed, and only the final sample is the
   expect(times).toHaveLength(QUERY_PERF_TIME_CONFIRMATION_SAMPLES);
   expect(lastFlags).toEqual([false, true]);
   expect(scaledTime(times)).toEqual([]);
+});
+
+test("a confirmed scheduled statement keeps every sample's shape findings and reports the median time", () => {
+  const buffers = { "Shared Hit Blocks": 7, "Shared Read Blocks": 0 };
+  const spilled = plan(
+    { "Node Type": "Sort", "Sort Method": "external merge", ...buffers },
+    929,
+  );
+  const sorted = (time: number) =>
+    plan({ "Node Type": "Sort", "Sort Method": "quicksort", ...buffers }, time);
+  const last = sorted(5);
+  const result = sampledStatementFindings({
+    plan: last,
+    plans: [spilled, sorted(4), last],
+    executionTimesMs: [929, 4, 5],
+    owner: "statement.owner",
+    ownerDeadlineMs: 5000,
+    statement: "select sorted rows",
+  });
+  expect(result.metrics).toEqual({ sharedBlocks: 7, executionTimeMs: 5 });
+  expect(result.planViolations.map(({ kind }) => kind)).toEqual(["spill"]);
+  // Measured in place, the first sample is the statement's plan; its outlier
+  // time still does not reach the run's metrics.
+  const inPlace = sampledStatementFindings({
+    plan: spilled,
+    plans: [spilled, sorted(4), last],
+    executionTimesMs: [929, 4, 5],
+    owner: "statement.owner",
+    ownerDeadlineMs: 5000,
+    statement: "select sorted rows",
+  });
+  expect(inPlace.metrics).toEqual({ sharedBlocks: 7, executionTimeMs: 5 });
 });
 
 test("the cold warmup plan shapes findings but is not a timing sample", () => {

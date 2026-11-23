@@ -57,7 +57,7 @@ import {
   scaledTimeViolations,
 } from "./plan-analyzer";
 import { withQueryPerfRollback, withQueryPerfRollbackWhen } from "./rollback";
-import { confirmedExecutionTimes } from "./sampling";
+import { confirmedExecutionTimes, median } from "./sampling";
 import {
   applyPlannerSettings,
   assertPlannerSettings,
@@ -402,6 +402,53 @@ const captureConnection = (
   };
 };
 
+/**
+ * Metrics and findings for one scheduled statement from every sample it
+ * took. Every sample's plan is analysed for its shape; the execution time
+ * that the run's metrics carry is the same median that decides the
+ * scaled-time finding. Buffers come from `plan`, the sample whose
+ * classification the statement reports.
+ */
+export const sampledStatementFindings = ({
+  plan,
+  plans,
+  executionTimesMs,
+  owner,
+  ownerDeadlineMs,
+  statement,
+}: {
+  plan: ExplainPlanDocument;
+  plans: readonly ExplainPlanDocument[];
+  executionTimesMs: readonly number[];
+  owner: string;
+  ownerDeadlineMs: number | undefined;
+  statement: string;
+}) => ({
+  metrics: {
+    sharedBlocks: metricsFromPlan(plan).sharedBlocks,
+    executionTimeMs: median(executionTimesMs),
+  },
+  planViolations: [
+    ...plans.flatMap((document) =>
+      analyzePlan({
+        document,
+        owner,
+        ownerDeadlineMs,
+        statement,
+        profileId: "corpus",
+      }),
+    ),
+    ...scaledTimeViolations({
+      document: plan,
+      executionTimesMs,
+      owner,
+      ownerDeadlineMs,
+      statement,
+      profileId: "corpus",
+    }),
+  ],
+});
+
 export const measureScheduledStatementsInOrder = async ({
   database,
   jobId,
@@ -439,6 +486,7 @@ export const measureScheduledStatementsInOrder = async ({
         // it rolled back, and only the last confirmation sample keeps them,
         // so the statements after it replay against the same state.
         let plan = first.value;
+        const plans = [first.value];
         // db-await-in-loop: confirmation samples run in statement order before the next statement.
         const executionTimesMs = await confirmedExecutionTimes({
           first: timeOf(first.value),
@@ -447,6 +495,7 @@ export const measureScheduledStatementsInOrder = async ({
             const document = last
               ? await explain(tx)
               : await withQueryPerfRollback(tx, explain);
+            plans.push(document);
             if (last) {
               plan = document;
             }
@@ -474,27 +523,17 @@ export const measureScheduledStatementsInOrder = async ({
         measured.push({
           actualRows,
           ...classification,
-          metrics: metricsFromPlan(plan),
+          ...sampledStatementFindings({
+            plan,
+            plans,
+            executionTimesMs,
+            owner: jobId,
+            ownerDeadlineMs,
+            statement: normalized,
+          }),
           queuedExportRead,
           queuedReadPlan:
             queuedExportRead === undefined ? undefined : plan.Plan,
-          planViolations: [
-            ...analyzePlan({
-              document: plan,
-              owner: jobId,
-              ownerDeadlineMs,
-              statement: normalized,
-              profileId: "corpus",
-            }),
-            ...scaledTimeViolations({
-              document: plan,
-              executionTimesMs,
-              owner: jobId,
-              ownerDeadlineMs,
-              statement: normalized,
-              profileId: "corpus",
-            }),
-          ],
           statement: normalized,
         });
       }
@@ -791,7 +830,7 @@ export const measureScheduledJobRun = async ({
     return panic(`${jobId} issued no statement to measure`);
   }
   const statements = measured.statements.map(
-    ({ query, plan, executionTimesMs }) => {
+    ({ query, plan, plans, executionTimesMs }) => {
       const statement = query.text.replaceAll(/\s+/gu, " ").slice(0, 160);
       const queuedExportRead = queuedExportReadWork({
         ...query,
@@ -802,26 +841,16 @@ export const measureScheduledJobRun = async ({
           statement: query.text,
           plan: plan.Plan,
         }),
-        metrics: metricsFromPlan(plan),
+        ...sampledStatementFindings({
+          plan,
+          plans,
+          executionTimesMs,
+          owner: jobId,
+          ownerDeadlineMs,
+          statement,
+        }),
         queuedExportRead,
         queuedReadPlan: queuedExportRead === undefined ? undefined : plan.Plan,
-        planViolations: [
-          ...analyzePlan({
-            document: plan,
-            owner: jobId,
-            ownerDeadlineMs,
-            statement,
-            profileId: "corpus",
-          }),
-          ...scaledTimeViolations({
-            document: plan,
-            executionTimesMs,
-            owner: jobId,
-            ownerDeadlineMs,
-            statement,
-            profileId: "corpus",
-          }),
-        ],
         statement,
       };
     },

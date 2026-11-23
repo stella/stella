@@ -121,6 +121,8 @@ export const measureJobStatements = async <T>({
   const statements: {
     query: Statement;
     plan: ExplainPlanDocument;
+    /** Every sample's plan, `plan` first; confirmation samples follow it. */
+    plans: ExplainPlanDocument[];
     executionTimesMs: number[];
   }[] = [];
   const measure = async (
@@ -148,13 +150,18 @@ export const measureJobStatements = async <T>({
             ),
         );
       const plan = await explain();
+      const plans = [plan];
       // Every sample rolls back; the job's own execution follows them.
       const executionTimesMs = await confirmedExecutionTimes({
         first: metricsFromPlan(plan).executionTimeMs,
         overAllowance: overTimeAllowance,
-        resample: async () => metricsFromPlan(await explain()).executionTimeMs,
+        resample: async () => {
+          const sample = await explain();
+          plans.push(sample);
+          return metricsFromPlan(sample).executionTimeMs;
+        },
       });
-      statements.push({ query, plan, executionTimesMs });
+      statements.push({ query, plan, plans, executionTimesMs });
       return () => {
         executed.push(query);
       };

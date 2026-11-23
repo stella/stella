@@ -166,10 +166,16 @@ describe.skipIf(!enabled)(
       });
       expect(measured.value).toHaveLength(2);
       expect(
-        measured.statements.map(
-          ({ executionTimesMs }) => executionTimesMs.length,
-        ),
-      ).toEqual([QUERY_PERF_TIME_CONFIRMATION_SAMPLES]);
+        measured.statements.map(({ executionTimesMs, plans }) => [
+          executionTimesMs.length,
+          plans.length,
+        ]),
+      ).toEqual([
+        [
+          QUERY_PERF_TIME_CONFIRMATION_SAMPLES,
+          QUERY_PERF_TIME_CONFIRMATION_SAMPLES,
+        ],
+      ]);
       expect(
         executedRows(
           await db.execute(
