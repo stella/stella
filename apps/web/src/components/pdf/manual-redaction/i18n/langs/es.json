@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Arrastre sobre una página para cubrir lo que la detección haya pasado por alto. El PDF anonimizado tapa en negro cada área marcada.",
+    "markingSurface": "Arrastre para marcar un área que se tapará en negro",
+    "pageArea": "Área en la página {page}",
+    "removeArea": "Eliminar el área marcada de la página {page}",
+    "startMarking": "Marcar áreas",
+    "stopMarking": "Terminar de marcar",
+    "title": "Áreas marcadas"
+  }
+}

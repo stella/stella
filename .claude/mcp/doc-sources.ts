@@ -740,6 +740,14 @@ export const DOC_SOURCE_EXCLUSIONS = PROBED_WITHOUT_LLMS_TXT.map(
     expiresAt: "2026-12-04T00:00:00.000Z",
     reason: "no-llms-txt",
   },
+  {
+    checkedAt: "2026-11-22T00:00:00.000Z",
+    dependency: "utif2",
+    explanation:
+      "https://raw.githubusercontent.com/photopea/UTIF.js/HEAD/llms.txt and https://raw.githubusercontent.com/photopea/UTIF.js/master/llms.txt return 404. Use the README and UTIF.d.ts in https://github.com/photopea/UTIF.js directly.",
+    expiresAt: "2026-12-22T00:00:00.000Z",
+    reason: "no-llms-txt",
+  },
   ...["@dnd-kit/core", "@dnd-kit/sortable"].map(
     (dependency) =>
       ({

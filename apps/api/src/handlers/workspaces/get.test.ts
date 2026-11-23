@@ -30,6 +30,7 @@ const workspaceRow = {
   billingReference: null,
   billingNarrativeLanguage: null,
   color: null,
+  documentNamingEnabled: false,
   status: "active",
   lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
   createdAt: new Date("2026-01-01T00:00:00.000Z"),

@@ -104,6 +104,13 @@ jobs:
         with:
           expected-sha: ${{ github.sha }}
 
+      - name: Prepare network comparison baseline
+        timeout-minutes: 5
+        uses: ./.github/actions/prepare-network-baseline
+        with:
+          base-sha: ${{ github.sha }}
+          token: ${{ github.token }}
+
       - name: Login to GitHub Container Registry for browser images
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true

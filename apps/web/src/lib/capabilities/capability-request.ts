@@ -49,7 +49,7 @@ export type AppOnlyWriteId =
   | "contacts.import.inspect"
   | "contacts.import.preview"
   | "files.document-properties.update"
-  | "files.email-attachment.save"
+  | "files.part.save"
   | "folio-collaboration.join"
   | "folio-collaboration.refresh-token"
   | "folio-collaboration.seed.acknowledge"

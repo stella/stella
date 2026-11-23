@@ -10,7 +10,7 @@
     "aiDraftAllow": "Engedélyezés",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Feladat {task} · Tevékenység {activity}",
-    "aiDraftConsent": "A stella AI minden bejegyzés ügye, dátuma, időtartama és alkalmazásnevei alapján javasolhat leírást, valamint az itt látható dokumentumnevek és ablakcímek alapján, ha ezeket rögzíti. Az ügyben korábban rögzített bejegyzései segítik, hogy az Ön stílusában írjon. A napjáról semmi más nem hagyja el ezt a számítógépet.",
+    "aiDraftConsent": "Egy leírás megírásához a stella AI ezeket használja: {inputs}. Mindez csak a javaslat megírásához kerül {provider}. A napjáról semmi más nem hagyja el ezt a számítógépet.",
     "aiDraftConsentRequired": "A leírás javaslatához engedélyezze újra a stella AI-t.",
     "aiDraftDisclosure": "Az AI-javaslatok olyan ajánlások, amelyeket a stella az ellenőrzött bejegyzésből, az ügyben korábban rögzített bejegyzéseiből és – ha a szervezete hozzáadta őket – a számlázási irányelvekből készít. Létrehozás előtt ellenőrizzen minden bejegyzést.",
     "aiDraftEarlierEntries": "{count, plural, one {# korábbi bejegyzést követ} other {# korábbi bejegyzést követ}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "A stella AI ki van kapcsolva ezen a számítógépen. A visszavonást elküldjük a stella alkalmazásnak, amint elérhető.",
     "browserAnsweredAppNameOnly": "A(z) <bdi>{browser}</bdi> esetén csak az alkalmazás neve rögzül. Ezt a Beállításokban módosíthatja.",
     "browserAnsweredTitles": "A(z) <bdi>{browser}</bdi> lapcímei rögzülnek. Ezt a Beállításokban módosíthatja.",
-    "browserPrivacyNote": "A privát ablakok is rögzülhetnek; privát böngészés közben szüneteltesse a rögzítést, vagy zárja ki a böngészőt.",
+    "browserPrivacyNote": "A stella nem ismer fel minden privát ablakot, ezért privát böngészés előtt szüneteltesse a rögzítést.",
     "browserQuestionAppNameOnly": "Csak az alkalmazás neve",
-    "browserQuestionDescription": "A lapcímek segítenek a munka leírásában. A stella nem ismer fel minden privát ablakot, ezért privát böngészés előtt szüneteltesse a rögzítést.",
+    "browserQuestionDescription": "A lapcímek segítenek a munka leírásában.",
     "browserQuestionLater": "Döntés később",
     "browserQuestionRecordTitles": "Címek rögzítése",
     "browserQuestionTitle": "A(z) <bdi>{browser}</bdi> lapcímeit is rögzítse?",
@@ -103,7 +103,19 @@
     "detectCalls": "Hívások rögzítése",
     "detectCallsDescription": "Amíg a Teams, a Zoom vagy egy böngésző használja a mikrofont, ez az idő hívásnak számít, akkor is, ha csak hallgat, vagy egy másik alkalmazásban dolgozik. Hangot soha nem rögzítünk.",
     "disclosure": {
-      "control": "Semmi sem kerül rögzítésre, amíg a Tevékenységben nem kattint a Rögzítés indítása gombra. Bármikor szüneteltethet, kizárhat alkalmazásokat vagy törölhet bármely napot.",
+      "aiDraftInputs": {
+        "appNames": "az alkalmazásnevek",
+        "billingFormat": "az ügyfél számlázási formátuma",
+        "date": "a dátum",
+        "duration": "az időtartam",
+        "earlierDescriptions": "az ügyben korábban írt leírásai",
+        "firmGuidelines": "irodája esetleges számlázási irányelvei",
+        "instructions": "a beírt utasításai",
+        "matter": "az ügy",
+        "titles": "a rögzített ablakcímek és dokumentumnevek"
+      },
+      "aiDraftProvider": "az irodája által használt AI-szolgáltatóhoz vagy a stella AI szolgáltatójához",
+      "control": "Semmi sem kerül rögzítésre, amíg nem kattint a Rögzítés indítása gombra. Bármikor szüneteltethet, kizárhat alkalmazásokat vagy törölhet bármely napot.",
       "never": {
         "audio": "A mikrofon hangját",
         "keystrokes": "Billentyűleütéseket vagy begépelt szöveget",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Mit rögzít",
       "sent": {
-        "aiDrafts": "Az Ön által kért stella AI-javaslatok, engedélyezés után: a bejegyzés ügye, dátuma, időtartama és alkalmazásnevei, ablakcímei és dokumentumnevei, ha rögzítésre kerülnek, valamint a beírt utasításai. A stella hozzáadja az ügyben korábban írt leírásait, az ügyfél számlázási formátumát és – ha az irodája használja őket – a számlázási irányelveket. Mindez csak a javaslat megírásához kerül az irodája által használt AI-szolgáltatóhoz vagy a stella AI szolgáltatójához; a stella sem a javaslatot, sem a hozzá elküldött adatokat nem menti.",
+        "aiDrafts": "Az Ön által kért stella AI-javaslatok, engedélyezés után. Mindegyikhez a stella AI ezeket használja: {inputs}. Mindez csak a javaslat megírásához kerül {provider}; a stella sem a javaslatot, sem a hozzá elküldött adatokat nem menti.",
         "timeEntries": "Az Ön által létrehozott időbejegyzések: ügy, dátum, időtartam, leírás, számlázhatóság és az esetleges számlázási kódok"
       },
       "sentTitle": "Mi hagyja el ezt a számítógépet",
@@ -874,6 +886,30 @@
   },
   "onboarding": {
     "activityBody": "Lássa, mire ment el a munkanapja, és alakítsa időbejegyzés-piszkozatokká. Ön dönti el, mi kerül rögzítésre és mi kerül elküldésre.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Leírások javasoltatása a stella AI-jal",
+        "body": "A stella AI javaslatot tehet minden időbejegyzés leírására. Engedélyezze most, vagy amikor először átnéz egy napot.",
+        "withdraw": "A hozzájárulását bármikor visszavonhatja a Beállításokban."
+      },
+      "calls": {
+        "body": "Számolja a hívásokkal töltött időt.",
+        "title": "Hívások"
+      },
+      "details": {
+        "appNamesOnly": "Csak az alkalmazások neve kerül rögzítésre.",
+        "body": "Segítenek megkülönböztetni az ügyeket, amikor átnézi a napot.",
+        "browsers": "A böngészők csak az Ön engedélyével rögzítik a lapcímeket. A Tevékenység minden böngészőnél rákérdez, amikor először látja.",
+        "title": "Ablakcímek és dokumentumok"
+      },
+      "screens": {
+        "aiDrafts": "AI-javaslatok",
+        "calls": "Hívások",
+        "details": "Részletek",
+        "recording": "Áttekintés"
+      },
+      "starting": "Rögzítés indítása…"
+    },
     "activityStoryDraft": "Piszkozat",
     "activityStoryRecordTitle": "Rögzítve",
     "activityStoryReviewCaption": "Átnézi a napot, és kiválasztja az ügyet",
@@ -912,7 +948,6 @@
         "choose": "Mikrofon a diktáláshoz",
         "title": "Hadd hallja Önt a stella"
       },
-      "progress": "{current}. lépés / {total}",
       "screens": {
         "app": "Javítás",
         "context": "Kontextus",
@@ -920,7 +955,6 @@
         "transcription": "Átírás",
         "words": "Szavak"
       },
-      "skipRest": "A többi kihagyása",
       "transcription": {
         "body": "Ezt később a Beállításokban módosíthatja.",
         "bodyLocal": "A beszédmodell itt fut, így a diktálás offline is működik.",
@@ -990,6 +1024,7 @@
     "permissionsTitlePc": "A számítógép beállítása",
     "progress": "{current}. lépés / {total}",
     "skip": "Kihagyás",
+    "skipRest": "A többi kihagyása",
     "staysLocalMac": "Ezen a Macen marad",
     "staysLocalPc": "Ezen a számítógépen marad",
     "tryAgain": "Újra",
@@ -1036,7 +1071,6 @@
     "errorUpdateLanguage": "A stella desktop nem tudta módosítani a felület nyelvét.",
     "errorUpdatePreferences": "A stella desktop nem tudta frissíteni az értesítési beállításokat.",
     "language": "Nyelv",
-    "lastVerified": "Utoljára ellenőrizve",
     "loadingAccount": "A fiókkapcsolat ellenőrzése…",
     "managedOfficeEditing": "Felügyelt Office-fájl szerkesztés a stella számára.",
     "neverRequested": "Soha nem kéri",

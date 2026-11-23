@@ -51,6 +51,7 @@ describe("workspace update cache invalidation", () => {
         expectedClientId: null,
       },
       color: { type: "color", value: "purple" },
+      documentNamingEnabled: { type: "documentNamingEnabled", value: true },
       leadUserId: {
         type: "leadUserId",
         value: "user_test",
@@ -73,6 +74,7 @@ describe("workspace update cache invalidation", () => {
     expect(scopes).toEqual({
       clientId: "query-cache",
       color: "query-cache",
+      documentNamingEnabled: "query-cache",
       leadUserId: "query-cache",
       name: "route-metadata",
       reference: "query-cache",
@@ -97,6 +99,7 @@ describe("workspace update cache invalidation", () => {
       }),
       workspaceUpdateBody({ type: "color", value: "purple" }),
       workspaceUpdateBody({ type: "color", value: null }),
+      workspaceUpdateBody({ type: "documentNamingEnabled", value: true }),
       workspaceUpdateBody({ type: "leadUserId", value: "user_test" }),
       workspaceUpdateBody({ type: "leadUserId", value: null }),
       workspaceUpdateBody({ type: "name", value: "Renamed matter" }),
@@ -111,6 +114,7 @@ describe("workspace update cache invalidation", () => {
       },
       { color: "purple" },
       { color: null },
+      { documentNamingEnabled: true },
       { leadUserId: "user_test" },
       { leadUserId: null },
       { name: "Renamed matter" },

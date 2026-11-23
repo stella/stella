@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Přílohy",
     "certifiedAt": "Čas certifikace",
     "deliveredTo": "Doručeno na adresu",
     "error": "Ohlášená chyba",
@@ -462,6 +461,7 @@
     },
     "fit": "Šířka",
     "openOriginal": "Otevřít originál",
+    "openPart": "Otevřít {fileName}",
     "preview": "Otevřít náhled",
     "previewDescription": "Tento soubor se otevře v systémovém náhledu.",
     "retry": "Zkusit znovu",
@@ -474,7 +474,6 @@
   "eInvoice": {
     "accountNumber": "Číslo bankovního účtu",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Přiložené soubory",
     "bankCode": "Kód banky",
     "batchPosition": "Doklad {position, number} z {count, number}",
     "bic": "Kód BIC",
@@ -504,6 +503,7 @@
     "paymentReference": "Identifikace platby",
     "prepaidAmount": "Uhrazeno zálohou",
     "quantity": "Množství a jednotka",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "registrationNumber": "Registrační číslo",
@@ -515,16 +515,48 @@
     "taxableAmount": "Základ daně",
     "totals": "Součty",
     "unitPrice": "Jednotková cena",
+    "units": {
+      "day": "{count, plural, one {{quantity} den} few {{quantity} dny} many {{quantity} dne} other {{quantity} dní}}",
+      "hour": "{count, plural, one {{quantity} hodina} few {{quantity} hodiny} many {{quantity} hodiny} other {{quantity} hodin}}",
+      "month": "{count, plural, one {{quantity} měsíc} few {{quantity} měsíce} many {{quantity} měsíce} other {{quantity} měsíců}}",
+      "unit": "{count, plural, one {{quantity} ks} few {{quantity} ks} many {{quantity} ks} other {{quantity} ks}}",
+      "week": "{count, plural, one {{quantity} týden} few {{quantity} týdny} many {{quantity} týdne} other {{quantity} týdnů}}",
+      "year": "{count, plural, one {{quantity} rok} few {{quantity} roky} many {{quantity} roku} other {{quantity} let}}"
+    },
     "unreadable": "Fakturu nelze přečíst.",
     "vat": "DPH",
     "vatBreakdown": "Rekapitulace DPH",
     "vatId": "DIČ"
+  },
+  "email": {
+    "cc": "Kopie",
+    "date": "Datum",
+    "from": "Odesílatel",
+    "noSubject": "(Bez předmětu)",
+    "subject": "Předmět",
+    "to": "Příjemci"
   },
   "entity": {
     "currentVersion": "Aktuální verze",
     "loadFailed": "Položku se nepodařilo načíst.",
     "reference": "Číslo jednací",
     "type": "Typ"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Archiv se nepodařilo přečíst.",
+    "attachments": "Přílohy",
+    "files": "Soubory",
+    "insideFailed": "Soubory uvnitř se nepodařilo načíst. Klepnutím to zkusíte znovu.",
+    "noFilesInside": "Uvnitř nejsou žádné soubory.",
+    "open": "Otevřít {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Chráněno heslem, nelze otevřít",
+      "link": "Odkaz na jiný soubor, neotevírá se",
+      "tooLarge": "Příliš velký, nelze otevřít",
+      "unreadable": "Poškozený, nelze otevřít",
+      "unsupported": "Komprimováno způsobem, který nelze otevřít"
+    },
+    "unnamed": "Soubor bez názvu"
   },
   "header": {
     "search": "Hledat"
@@ -853,6 +885,7 @@
     "layer": "Vrstva podpisů {number, number}",
     "noReadableContent": "Pro náhled není k dispozici žádný čitelný obsah.",
     "noSigners": "Nebyly nalezeny žádné údaje o podepisujících.",
+    "signedContent": "Podepsaný dokument",
     "signers": "Podepisující",
     "unknownSigner": "Neznámý podepisující",
     "unreadable": "Podepsaný soubor se nepodařilo přečíst.",

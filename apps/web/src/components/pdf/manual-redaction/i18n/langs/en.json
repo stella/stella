@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Drag over a page to cover anything the detection missed. The anonymized PDF blacks out every marked area.",
+    "markingSurface": "Drag to mark an area to black out",
+    "pageArea": "Area on page {page}",
+    "removeArea": "Remove the marked area on page {page}",
+    "startMarking": "Mark areas",
+    "stopMarking": "Done marking",
+    "title": "Marked areas"
+  }
+}

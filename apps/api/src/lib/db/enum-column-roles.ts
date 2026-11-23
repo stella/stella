@@ -328,6 +328,9 @@ export const ENUM_COLUMN_ROLES = {
   desktop_runners: {
     connection: ATTRIBUTE,
   },
+  document_naming_runs: {
+    entity_feature_gate: ATTRIBUTE,
+  },
   document_processing_runs: {
     entity_feature_gate: ATTRIBUTE,
     kind: ATTRIBUTE,

@@ -10,7 +10,7 @@
     "aiDraftAllow": "Allow",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Task {task} · Activity {activity}",
-    "aiDraftConsent": "stella AI can draft descriptions from each entry's matter, date, duration and app names, plus the document names and window titles shown here when you record them. Your earlier entries on the matter help it match how you write. Nothing else about your day leaves this computer.",
+    "aiDraftConsent": "To write a description, stella AI uses: {inputs}. All of it goes to {provider} only to write the draft. Nothing else about your day leaves this computer.",
     "aiDraftConsentRequired": "Allow stella AI again to draft this description.",
     "aiDraftDisclosure": "AI drafts are suggestions stella generates from the entry you are reviewing, your earlier entries on the matter and, where your firm has added them, its billing guidelines. Review each entry before you create it.",
     "aiDraftEarlierEntries": "{count, plural, one {Follows # earlier entry} other {Follows # earlier entries}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI is off on this computer. Your withdrawal is sent to stella as soon as it can be reached.",
     "browserAnsweredAppNameOnly": "Only the app name is recorded for <bdi>{browser}</bdi>. You can change this in Settings.",
     "browserAnsweredTitles": "Tab titles in <bdi>{browser}</bdi> are recorded. You can change this in Settings.",
-    "browserPrivacyNote": "Private windows may be recorded too; pause recording or exclude the browser while browsing privately.",
+    "browserPrivacyNote": "stella cannot recognize every private window, so pause recording before you browse privately.",
     "browserQuestionAppNameOnly": "App name only",
-    "browserQuestionDescription": "Tab titles help describe your work. stella cannot recognize every private window, so pause recording before you browse privately.",
+    "browserQuestionDescription": "Tab titles help describe your work.",
     "browserQuestionLater": "Decide later",
     "browserQuestionRecordTitles": "Record titles",
     "browserQuestionTitle": "Also record tab titles in <bdi>{browser}</bdi>?",
@@ -103,7 +103,19 @@
     "detectCalls": "Record calls",
     "detectCallsDescription": "While Teams, Zoom or a browser uses your microphone, that time counts as the call, even if you only listen or work in another app. Audio is never recorded.",
     "disclosure": {
-      "control": "Nothing is recorded until you press Start recording in Activity. Pause, exclude apps or delete any day whenever you like.",
+      "aiDraftInputs": {
+        "appNames": "the app names",
+        "billingFormat": "the client's billing format",
+        "date": "the date",
+        "duration": "the duration",
+        "earlierDescriptions": "your earlier descriptions on the matter",
+        "firmGuidelines": "your firm's billing guidelines if it has any",
+        "instructions": "instructions you type",
+        "matter": "the matter",
+        "titles": "recorded window titles and document names"
+      },
+      "aiDraftProvider": "the AI provider your firm uses, or stella AI's",
+      "control": "Nothing is recorded until you press Start recording. Pause, exclude apps or delete any day whenever you like.",
       "never": {
         "audio": "Sound from the microphone",
         "keystrokes": "Keystrokes or typed text",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "What is recorded",
       "sent": {
-        "aiDrafts": "stella AI drafts you ask for, once allowed: the entry's matter, date, duration and app names, its window titles and document names when recorded, and any instructions you type. stella adds your earlier descriptions on the matter, the client's billing format and, where your firm uses them, its billing guidelines. All of it goes to the AI provider your firm uses, or stella AI's, only to write the draft; stella does not save the draft or what was sent for it.",
+        "aiDrafts": "stella AI drafts you ask for, once allowed. For each, stella AI uses: {inputs}. All of it goes to {provider} only to write the draft; stella does not save the draft or what was sent for it.",
         "timeEntries": "Time entries you create: matter, date, duration, description, billable status and any billing codes"
       },
       "sentTitle": "What leaves this computer",
@@ -874,6 +886,30 @@
   },
   "onboarding": {
     "activityBody": "See where your working day went and turn it into draft time entries. You decide what is recorded and what is sent.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Draft descriptions with stella AI",
+        "body": "stella AI can draft the description of each time entry. Allow it now, or when you first review a day.",
+        "withdraw": "You can withdraw consent at any time in Settings."
+      },
+      "calls": {
+        "body": "Count the time you spend on calls.",
+        "title": "Calls"
+      },
+      "details": {
+        "appNamesOnly": "Only app names are recorded.",
+        "body": "They help you tell matters apart when you review the day.",
+        "browsers": "Browsers record tab titles only once you allow it. Activity asks about each browser the first time it sees it.",
+        "title": "Window titles and documents"
+      },
+      "screens": {
+        "aiDrafts": "AI drafts",
+        "calls": "Calls",
+        "details": "Details",
+        "recording": "Overview"
+      },
+      "starting": "Starting recording…"
+    },
     "activityStoryDraft": "Draft",
     "activityStoryRecordTitle": "Recorded",
     "activityStoryReviewCaption": "You check the day and choose the matter",
@@ -912,7 +948,6 @@
         "choose": "Microphone to dictate with",
         "title": "Let stella hear you"
       },
-      "progress": "Step {current} of {total}",
       "screens": {
         "app": "Cleanup",
         "context": "Context",
@@ -920,7 +955,6 @@
         "transcription": "Transcription",
         "words": "Words"
       },
-      "skipRest": "Skip the rest",
       "transcription": {
         "body": "You can change this later in Settings.",
         "bodyLocal": "The speech model runs here, so dictation also works offline.",
@@ -990,6 +1024,7 @@
     "permissionsTitlePc": "Set up this PC",
     "progress": "Step {current} of {total}",
     "skip": "Skip",
+    "skipRest": "Skip the rest",
     "staysLocalMac": "Stays on this Mac",
     "staysLocalPc": "Stays on this PC",
     "tryAgain": "Try again",
@@ -1036,7 +1071,6 @@
     "errorUpdateLanguage": "stella desktop could not update the interface language.",
     "errorUpdatePreferences": "stella desktop could not update notification settings.",
     "language": "Language",
-    "lastVerified": "Last verified",
     "loadingAccount": "Checking your account connection…",
     "managedOfficeEditing": "Managed Office file editing for stella.",
     "neverRequested": "Never requested",

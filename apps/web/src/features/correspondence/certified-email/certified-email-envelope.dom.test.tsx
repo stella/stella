@@ -111,3 +111,29 @@ test("a transport envelope with its original names no error or delivery", async 
     "The provider’s signature is kept with the file and not verified.",
   );
 });
+
+test("long addresses wrap inside a narrow card instead of running past it", async () => {
+  const longAddress =
+    "ufficio.contenzioso.civile.tribunale-ordinario@pec.giustizia-example.it";
+  await renderEnvelope({
+    ...NOTICE,
+    recipients: [{ address: longAddress, certified: true }],
+    receivedFor: [longAddress],
+  });
+  const card = document.querySelector('[data-slot="envelope-card"]');
+  // Columns follow the card's own width, not the viewport's.
+  expect(card?.className).not.toMatch(/(?:^|\s)(?:sm|md|lg):/u);
+  const values = [
+    ...document.querySelectorAll('[data-slot="envelope-field-value"]'),
+  ];
+  expect(values.length).toBeGreaterThan(3);
+  for (const value of values) {
+    // `anywhere` lowers the value's min-content width, so an unbroken
+    // address inside a flex row can narrow; `break-word` would not.
+    expect(value.className.split(" ")).toContain("wrap-anywhere");
+    expect(value.className).not.toContain("wrap-break-word");
+  }
+  expect(
+    values.some((value) => value.textContent.includes(longAddress)),
+  ).toBeTrue();
+});

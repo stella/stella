@@ -540,12 +540,13 @@
       "waitForMatches": "Wait for the anonymization scan to finish.",
       "workspaceTermsHeading": "Workspace terms ({count})"
     },
-    "attachmentNotPreviewable": "Download this attachment to open it.",
     "closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
     "closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
     "closeTab": "Close <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "This is a legacy {format} file. Re-save it as {replacementExtension} to convert it.",
+      "noPreviewDecodingOff": "This server makes no previews of {format} images. Download the file to open it.",
+      "noPreviewUnreadable": "This {format} image can't be read for a preview. Download the file to open it.",
       "unsupportedEncoding": "This document uses the unsupported {encoding} encoding, so it can't be converted.",
       "unsupportedField": "This document contains {fieldType}, which can't be converted.",
       "unsupportedReference": "This document refers to an external resource in {element} {attribute}, so it can't be converted."
@@ -560,6 +561,22 @@
     },
     "facet": {
       "anonymization": "Anonymization"
+    },
+    "fileParts": {
+      "archiveUnreadable": "This archive couldn’t be read.",
+      "back": "Back to the list",
+      "download": "Download {fileName}",
+      "noFilesInside": "There are no files inside.",
+      "noPreview": "This file type has no preview. Download it or save it to a matter.",
+      "notConverted": "This file couldn't be converted for preview. Download it or save it to a matter.",
+      "open": "Open {fileName}",
+      "unavailable": {
+        "encrypted": "Password-protected, can’t be opened",
+        "link": "A link to another file, not followed",
+        "tooLarge": "Too large to open",
+        "unreadable": "Damaged, can’t be opened",
+        "unsupported": "Compressed in a way that can’t be opened"
+      }
     },
     "firstSourceReached": "This is the first source.",
     "groups": {
@@ -818,7 +835,6 @@
       "why": "Why",
       "whyItMatters": "Why it matters:"
     },
-    "selectAttachmentToSave": "Select an attachment to save.",
     "showPane": "Show pane",
     "swapViews": "Swap main and side views",
     "title": "Inspector"

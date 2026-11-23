@@ -95,12 +95,24 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "ASiC previews use matter file read permissions on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/zip",
+    "ZIP archive previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/parts",
+    "Listing the files inside a part of a file uses the matter file read permission on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/cades",
     "Signed document previews use the matter file read permission on every deployment",
   ],
   [
-    "/v1/files/:workspaceId/certified-email",
-    "Certified email previews use the matter file read permission on every deployment",
+    "/v1/files/:workspaceId/part",
+    "Saving a part of a file to a matter uses the matter file read and document create permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/email-reading",
+    "Email readings use the matter file read permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/data-box",

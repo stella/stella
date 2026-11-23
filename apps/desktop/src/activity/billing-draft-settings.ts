@@ -189,6 +189,7 @@ export const useBillingDraftSettings = (
           return true;
         });
         if (result.isErr() || !result.value) {
+          consent.fail(generation);
           reportFailure(
             DESKTOP_TELEMETRY_OPERATIONS.activityUpdate,
             DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
@@ -232,7 +233,7 @@ export const useBillingDraftSettings = (
         preference: next.settings.preference,
       });
       // A withdrawal the server never confirmed is sent again first.
-      if (consent.getSnapshot() === "pending-withdrawal") {
+      if (consent.getSnapshot() === "withdrawal-unconfirmed") {
         await setConsent("revoked");
         return;
       }

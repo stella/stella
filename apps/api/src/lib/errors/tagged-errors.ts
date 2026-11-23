@@ -760,6 +760,11 @@ export const SUBPROCESS_TERMINATION_REASON = {
   cancelled: "cancelled",
   crashed: "crashed",
   external: "external",
+  /**
+   * The parent killed the worker past its resident-memory ceiling, or when
+   * its memory could no longer be read, so the ceiling could not be held.
+   */
+  memory: "memory",
 } as const;
 
 export type SubprocessTerminationReason =
@@ -791,6 +796,7 @@ export const EXTRACTION_WORKER_ERROR_CODE = {
   cancelled: "worker_cancelled",
   crashed: "worker_crashed",
   external: "worker_externally_terminated",
+  memory: "worker_memory_exceeded",
   parser: "parser_failed",
   timeout: "worker_timeout",
 } as const;
@@ -804,6 +810,7 @@ const EXTRACTION_WORKER_TERMINATION_ERROR_CODE = {
   [SUBPROCESS_TERMINATION_REASON.crashed]: EXTRACTION_WORKER_ERROR_CODE.crashed,
   [SUBPROCESS_TERMINATION_REASON.external]:
     EXTRACTION_WORKER_ERROR_CODE.external,
+  [SUBPROCESS_TERMINATION_REASON.memory]: EXTRACTION_WORKER_ERROR_CODE.memory,
   [SUBPROCESS_TERMINATION_REASON.timeout]: EXTRACTION_WORKER_ERROR_CODE.timeout,
 } as const satisfies Record<
   SubprocessTerminationReason,

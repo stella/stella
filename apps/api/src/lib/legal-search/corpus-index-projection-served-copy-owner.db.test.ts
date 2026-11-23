@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { Temporal } from "@stll/time";
+
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
@@ -20,6 +22,7 @@ import {
   writeRepairedCorpusProjectionDesiredStatesTx,
 } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
+import { retireLegacyUnprovenServedCopiesTx } from "@/api/lib/legal-search/corpus-index-projection-legacy-retire";
 import { corpusProjectionLegacyFixture } from "@/api/tests/helpers/corpus-projection-legacy-fixture";
 import { optOutOfCorpusProjectionSeedingGuard } from "@/api/tests/helpers/corpus-projection-seeding-guard";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -44,6 +47,7 @@ const {
   servedEntity,
   changeDesired,
   previousPrepare,
+  recordWithdrawal,
   seedGeneration,
   subjectOf,
   claim,
@@ -155,7 +159,12 @@ describe("a repair that would take a served copy away is held", () => {
       panic("Expected the repair to be held");
     }
     expect(outcome.error.copies).toEqual([
-      { generation: SERVED, entityId, risk: "desired_action_change" },
+      {
+        generation: SERVED,
+        entityId,
+        outcome: "held",
+        risk: "desired_action_change",
+      },
     ]);
     expect(await stateOf(entityId)).toEqual({
       desiredAction: "erase",
@@ -181,7 +190,12 @@ describe("a repair that would take a served copy away is held", () => {
       panic("Expected the second repair to be held");
     }
     expect(second.error.copies).toEqual([
-      { generation: SERVED, entityId, risk: "desired_action_change" },
+      {
+        generation: SERVED,
+        entityId,
+        outcome: "held",
+        risk: "desired_action_change",
+      },
     ]);
     expect(await stateOf(entityId)).toMatchObject({
       appliedRevision: toSafeId<"corpusIndexProjectionIntent">(revision),
@@ -220,7 +234,7 @@ describe("a repair that would take a served copy away is held", () => {
     expect((await boundedRepairWrites(entityId)).isOk()).toBe(true);
   });
 
-  test("a queued copy the cleanup claim would restore keeps its proof", async () => {
+  test("a queued copy the cleanup claim would restore is restored before the repair", async () => {
     const { entityId, revision } = await servedEntity();
     await changeDesired(entityId, 2, {
       action: "upsert",
@@ -230,45 +244,158 @@ describe("a repair that would take a served copy away is held", () => {
 
     const outcome = await continuousReconciles(entityId);
 
-    if (outcome.isOk()) {
-      panic("Expected the repair to be held");
+    if (outcome.isErr()) {
+      panic("Expected the repair to restore the copy and go through");
     }
-    expect(outcome.error.copies).toEqual([
-      { generation: SERVED, entityId, risk: "restorable_cleanup" },
+    expect(outcome.value.servedCopies).toEqual([
+      { generation: SERVED, entityId, outcome: "restored" },
     ]);
-    expect(await canonicalEpochOf(entityId)).toBe(2n);
-    expect((await claim()).restoredIntentIds).toEqual([
-      toSafeId<"corpusIndexProjectionIntent">(revision),
-    ]);
+    expect(await intentOf(revision)).toMatchObject({ status: "applied" });
+    expect(await stateOf(entityId)).toMatchObject({
+      appliedRevision: toSafeId<"corpusIndexProjectionIntent">(revision),
+    });
+    expect(await canonicalEpochOf(entityId)).toBe(3n);
+    expect((await claim()).restoredIntentIds).toEqual([]);
   });
 
-  test("a copy two changes behind is not handed to the legacy pass by an epoch jump", async () => {
-    const { entityId, revision } = await servedEntity();
-    await changeDesired(entityId, 2, {
+  /** A served copy two desired changes behind, with other content. */
+  const trailingCopy = async (
+    between: (entityId: string) => Promise<void> = async () => undefined,
+  ) => {
+    const served = await servedEntity();
+    await between(served.entityId);
+    await changeDesired(served.entityId, 2, {
       action: "upsert",
       fingerprint: fingerprint(1),
     });
-    await changeDesired(entityId, 3, {
+    await changeDesired(served.entityId, 3, {
       action: "upsert",
       fingerprint: fingerprint(2),
     });
-    // The canonical row moved on without its states, so the repair would
-    // write an epoch more than one past the state's.
-    await run(sql`
-      UPDATE case_law_decisions SET projection_epoch = 5 WHERE id = ${entityId}
-    `);
+    return served;
+  };
 
-    const outcome = await continuousReconciles(entityId);
+  const protections: {
+    name: string;
+    protect: (entityId: string) => Promise<void>;
+    canonicalEpoch: bigint;
+  }[] = [
+    {
+      // The canonical row moved on without its states, so the repair would
+      // write an epoch more than one past the state's.
+      name: "an epoch jump",
+      protect: async (entityId) =>
+        await run(sql`
+          UPDATE case_law_decisions SET projection_epoch = 5
+          WHERE id = ${entityId}
+        `),
+      canonicalEpoch: 5n,
+    },
+    {
+      name: "unblocked work",
+      protect: async (entityId) =>
+        await run(sql`
+          UPDATE corpus_index_projection_states
+          SET work_status = 'blocked', retry_not_before = NULL,
+              failure_attempts = 1, last_failure_kind = 'revision_too_large',
+              last_failure_message = 'projection revision exceeds the request limit'
+          WHERE entity_id = ${entityId}
+        `),
+      canonicalEpoch: 3n,
+    },
+  ];
 
-    if (outcome.isOk()) {
-      panic("Expected the repair to be held");
-    }
-    expect(outcome.error.copies).toEqual([
-      { generation: SERVED, entityId, risk: "legacy_retirement" },
-    ]);
-    expect(await intentOf(revision)).toMatchObject({ status: "applied" });
-    expect(await canonicalEpochOf(entityId)).toBe(5n);
-  });
+  /** What the legacy pass would do with every copy of the generation. */
+  const legacyPass = async () => {
+    await db.execute(sql`SELECT pg_sleep(0.002)`);
+    const now =
+      (
+        await db.execute<{ now: string }>(
+          sql`SELECT to_char(clock_timestamp() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS now`,
+        )
+      ).rows.at(0)?.now ?? panic("No clock");
+    return (
+      await db.transaction(
+        async (tx) =>
+          await retireLegacyUnprovenServedCopiesTx(asTestRaw<Transaction>(tx), {
+            family: "case_law",
+            generation: SERVED,
+            cutoverAt: Temporal.Instant.from(now),
+            after: null,
+            limit: 16,
+            mode: "retire",
+          }),
+      )
+    ).unwrap();
+  };
+
+  for (const { name, protect, canonicalEpoch } of protections) {
+    test(`a copy with a recorded erasure is not handed to the legacy pass by ${name}`, async () => {
+      const { entityId, revision } = await trailingCopy(recordWithdrawal);
+      await protect(entityId);
+
+      const outcome = await continuousReconciles(entityId);
+
+      if (outcome.isOk()) {
+        panic("Expected the repair to be held");
+      }
+      expect(outcome.error.copies).toEqual([
+        {
+          generation: SERVED,
+          entityId,
+          outcome: "held",
+          risk: "legacy_retirement",
+        },
+      ]);
+      expect(await intentOf(revision)).toMatchObject({ status: "applied" });
+      expect(await canonicalEpochOf(entityId)).toBe(canonicalEpoch);
+      expect((await legacyPass()).outcomes.retired).toBe(0);
+    });
+
+    test(`a copy with no recorded erasure holds no repair for ${name}, and the legacy pass keeps it`, async () => {
+      // One withdrawn before the copy was reserved is no evidence either.
+      const served = [
+        await trailingCopy(),
+        await (async () => {
+          const copy = await servedEntity({
+            beforeReservation: recordWithdrawal,
+          });
+          await changeDesired(copy.entityId, 2, {
+            action: "upsert",
+            fingerprint: fingerprint(1),
+          });
+          await changeDesired(copy.entityId, 3, {
+            action: "upsert",
+            fingerprint: fingerprint(2),
+          });
+          return copy;
+        })(),
+      ];
+      for (const { entityId, revision } of served) {
+        // db-await-in-loop: one repair per entity
+        await protect(entityId);
+        // db-await-in-loop: one repair per entity
+        const outcome = await continuousReconciles(entityId);
+        expect(outcome.isOk() && outcome.value).toMatchObject({
+          changed: true,
+          servedCopies: [
+            { generation: SERVED, entityId, outcome: "already_current" },
+          ],
+        });
+        // db-await-in-loop: one repair per entity
+        expect(await stateOf(entityId)).toMatchObject({
+          appliedRevision: toSafeId<"corpusIndexProjectionIntent">(revision),
+        });
+      }
+      const pass = await legacyPass();
+      expect(pass.outcomes.retired).toBe(0);
+      expect(pass.keptUnproven).toBe(served.length);
+      for (const { revision } of served) {
+        // db-await-in-loop: one read per entity
+        expect(await intentOf(revision)).toMatchObject({ status: "applied" });
+      }
+    });
+  }
 
   test("a repair that takes no copy away is written", async () => {
     const { entityId, revision } = await servedEntity();

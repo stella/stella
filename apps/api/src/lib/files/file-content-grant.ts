@@ -1,6 +1,12 @@
 import { panic, Result } from "better-result";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
+import {
+  type FilePart,
+  filePartId,
+  parseFilePartId,
+} from "@stll/api-contract/file-parts";
+
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   brandPersistedFieldId,
@@ -33,12 +39,18 @@ type FileContentGrant = {
   expiresAt: number;
   fieldId: SafeId<"field">;
   organizationId: SafeId<"organization">;
+  /** A part of the file (an attachment, a signed document's content), or null for the file itself. */
+  part: FilePart | null;
   purpose: FileContentPurpose;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
 };
 
-type CreateFileContentGrantOptions = Omit<FileContentGrant, "expiresAt"> & {
+type CreateFileContentGrantOptions = Omit<
+  FileContentGrant,
+  "expiresAt" | "part"
+> & {
+  part?: FilePart | null;
   /** An earlier session-bound deadline; omitted grants use the default TTL. */
   expiresAt?: number;
   now: number;
@@ -55,6 +67,7 @@ export const createFileContentGrant = ({
   fieldId,
   now,
   organizationId,
+  part = null,
   purpose,
   secret,
   userId,
@@ -73,6 +86,7 @@ export const createFileContentGrant = ({
       expiresAt: grantExpiresAt,
       fieldId,
       organizationId,
+      ...(part === null ? {} : { part: filePartId(part) }),
       purpose,
       userId,
       workspaceId,
@@ -122,7 +136,11 @@ export const checkFileContentGrant = ({
   const purpose = value["purpose"];
   const userId = value["userId"];
   const workspaceId = value["workspaceId"];
+  const partValue = value["part"];
+  const part =
+    typeof partValue === "string" ? parseFilePartId(partValue) : null;
   if (
+    (partValue !== undefined && part === null) ||
     typeof expiresAt !== "number" ||
     !Number.isSafeInteger(expiresAt) ||
     typeof fieldId !== "string" ||
@@ -143,6 +161,7 @@ export const checkFileContentGrant = ({
       expiresAt,
       fieldId: brandPersistedFieldId(fieldId),
       organizationId: brandPersistedOrganizationId(organizationId),
+      part,
       purpose,
       userId: brandPersistedUserId(userId),
       workspaceId: brandPersistedWorkspaceId(workspaceId),
