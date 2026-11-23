@@ -5,11 +5,12 @@ import {
   DESKTOP_DICTATION_LEARNED_FIXES_PATH,
   DICTATION_LEARNED_FIX_LIMITS,
   dictationLearnedFixChangesSchema,
+  dictationLearnedFixesClearQuerySchema,
   dictationLearnedFixesSchema,
 } from "./dictation-learned-fixes";
 import contract from "./dictation-learned-fixes.json";
 
-const ID = "4d7f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a6b";
+const DEVICE = "4d7f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a6b";
 
 test("the typed learned-fix contract reads the native one", () => {
   expect(contract).toStrictEqual({
@@ -21,57 +22,83 @@ test("the typed learned-fix contract reads the native one", () => {
   });
 });
 
-test("changes name themselves and carry short fixes only", () => {
+test("changes carry their device's number and short fixes only", () => {
   const changes = (change: Record<string, unknown>) =>
     v.safeParse(dictationLearnedFixChangesSchema, {
       generation: 0,
+      device: DEVICE,
       changes: [change],
     }).success;
   expect(
-    changes({ id: ID, type: "corrected", from: "Hrubeš", to: "Hrubesch" }),
+    changes({ seq: 1, type: "corrected", from: "Hrubeš", to: "Hrubesch" }),
   ).toBe(true);
-  expect(changes({ id: ID, type: "kept", from: "Hrubeš" })).toBe(true);
+  expect(changes({ seq: 1, type: "kept", from: "Hrubeš" })).toBe(true);
   expect(
-    changes({ id: ID, type: "switched", from: "Hrubeš", status: "off" }),
+    changes({ seq: 1, type: "switched", from: "Hrubeš", status: "off" }),
   ).toBe(true);
   expect(
-    changes({ id: ID, type: "switched", from: "Hrubeš", status: "learning" }),
+    changes({ seq: 1, type: "switched", from: "Hrubeš", status: "learning" }),
   ).toBe(false);
   expect(changes({ type: "taught", from: "Hrubeš", to: "Hrubesch" })).toBe(
     false,
   );
   expect(
-    changes({ id: ID, type: "taught", from: "a b c d", to: "Hrubesch" }),
+    changes({ seq: 1, type: "taught", from: "a b c d", to: "Hrubesch" }),
   ).toBe(false);
   expect(
-    changes({ id: ID, type: "taught", from: "Hrubeš\n", to: "Hrubesch" }),
+    changes({ seq: 1, type: "taught", from: "Hrubeš\n", to: "Hrubesch" }),
   ).toBe(false);
   for (const separator of ["\u2028", "\u2029"]) {
     expect(
-      changes({ id: ID, type: "kept", from: `Hrubeš${separator}Novák` }),
+      changes({ seq: 1, type: "kept", from: `Hrubeš${separator}Novák` }),
     ).toBe(false);
   }
   expect(
-    changes({ id: ID, type: "taught", from: "de la Cruz", to: "De La Cruz" }),
+    changes({ seq: 1, type: "taught", from: "de la Cruz", to: "De La Cruz" }),
   ).toBe(true);
-  expect(changes({ id: ID, type: "kept", from: " padded" })).toBe(false);
-  expect(changes({ id: ID, type: "kept", from: "" })).toBe(false);
-  expect(changes({ id: ID, type: "kept", from: "x".repeat(49) })).toBe(false);
+  expect(changes({ seq: 1, type: "kept", from: " padded" })).toBe(false);
+  expect(changes({ seq: 1, type: "kept", from: "" })).toBe(false);
+  expect(changes({ seq: 1, type: "kept", from: "x".repeat(49) })).toBe(false);
   expect(
     changes({
-      id: ID,
+      seq: 1,
       type: "taught",
       from: "Hrubeš",
       to: "Hrubesch",
       extra: true,
     }),
   ).toBe(false);
+  expect(changes({ seq: 0, type: "kept", from: "Hrubeš" })).toBe(false);
+  expect(changes({ seq: 1.5, type: "kept", from: "Hrubeš" })).toBe(false);
   expect(
     v.safeParse(dictationLearnedFixChangesSchema, {
       generation: 0,
+      device: DEVICE,
       changes: [],
     }).success,
   ).toBe(false);
+  // Without a device id its numbers mean nothing.
+  for (const device of [undefined, "laptop"]) {
+    expect(
+      v.safeParse(dictationLearnedFixChangesSchema, {
+        generation: 0,
+        device,
+        changes: [{ seq: 1, type: "kept", from: "Hrubeš" }],
+      }).success,
+    ).toBe(false);
+  }
+});
+
+test("a deletion names the generation it deletes", () => {
+  expect(
+    v.parse(dictationLearnedFixesClearQuerySchema, { generation: "3" }),
+  ).toStrictEqual({ generation: 3 });
+  for (const generation of [undefined, "-1", "1.5", "x"]) {
+    expect(
+      v.safeParse(dictationLearnedFixesClearQuerySchema, { generation })
+        .success,
+    ).toBe(false);
+  }
 });
 
 test("a snapshot holds at most the fix limit", () => {

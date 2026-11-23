@@ -38,7 +38,7 @@ const PEER = "peer";
 /** A full row: as many fixes as a member keeps, each `to` ending in `tag`. */
 const fullChanges = (tag: string): DictationLearnedFixChange[] =>
   Array.from({ length: DICTATION_LEARNED_FIX_LIMITS.fixes }, (_, index) => ({
-    id: Bun.randomUUIDv7(),
+    seq: index + 1,
     type: "taught",
     from: `slovo${String(index)}`,
     to: `Slovo${String(index)}${tag}`,
@@ -84,6 +84,7 @@ export const seedLearnedFixesScaling = async (
         async (tx) =>
           await changeLearnedFixes(tx, owner, {
             generation: 0,
+            device: Bun.randomUUIDv7(),
             changes: fullChanges(tag),
           }),
       )
