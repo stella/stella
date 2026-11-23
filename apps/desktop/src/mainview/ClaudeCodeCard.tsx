@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { ClaudeLogoIcon } from "@stll/ui/brand-icons";
 import { Button } from "@stll/ui/button";
 
 import type { ClaudeCodeFailure, ClaudeCodeStatus } from "./claude-code-status";
@@ -24,7 +25,10 @@ export const ClaudeCodeCard = ({
     <div className="space-y-3 px-4 py-3">
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{t("claudeCode.title")}</p>
+          <p className="flex items-center gap-2 text-sm font-medium">
+            <ClaudeLogoIcon className="size-4 shrink-0" />
+            <span>{t("claudeCode.title")}</span>
+          </p>
           {showStatus ? (
             <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
               {signedInWithEmail

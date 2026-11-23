@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# fail nimetati konfliktide vältimiseks ümber} other {# faili nimetati konfliktide vältimiseks ümber}}",
       "retryFailed": "Proovi uuesti {count, plural, one {# faili} other {# faili}}",
       "scrubFailed": "Selle faili metaandmeid ei õnnestunud eemaldada, seega ei laaditud midagi alla",
+      "unscannedContent": {
+        "encrypted": "Mõned sees olevad failid on parooliga kaitstud, seega ei kontrollitud neid ohtude suhtes.",
+        "unsupportedCompression": "Mõned sees olevad failid on tihendatud vormingus, mida stella lugeda ei oska, seega ei kontrollitud neid ohtude suhtes."
+      },
       "uploadBlockedByWorkflow": "Enne failide üleslaadimist oodake, kuni töövoog lõpeb.",
       "uploadedPartially": "{failed, plural, one {# faili} other {# faili}} üleslaadimine ebaõnnestus {total, number}-st",
       "uploadedSuccessfully": "Failid edukalt üles laaditud",

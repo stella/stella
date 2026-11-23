@@ -742,6 +742,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# failas pervadintas siekiant išvengti konfliktų} few {# failai pervadinti siekiant išvengti konfliktų} many {# failų pervadinta siekiant išvengti konfliktų} other {# failų pervadinta siekiant išvengti konfliktų}}",
       "retryFailed": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų} many {# failų}}",
       "scrubFailed": "Nepavyko pašalinti šio failo metaduomenų, todėl nieko neatsisiųsta",
+      "unscannedContent": {
+        "encrypted": "Kai kurie viduje esantys failai apsaugoti slaptažodžiu, todėl jie nebuvo patikrinti dėl grėsmių.",
+        "unsupportedCompression": "Kai kurie viduje esantys failai suglaudinti formatu, kurio stella negali perskaityti, todėl jie nebuvo patikrinti dėl grėsmių."
+      },
       "uploadBlockedByWorkflow": "Prieš įkeldami failus palaukite, kol darbo eiga bus baigta.",
       "uploadedPartially": "{failed, plural, one {# failas nepavyko} few {# failai nepavyko} many {# failų nepavyko} other {# failų nepavyko}} iš {total, number}",
       "uploadedSuccessfully": "Failai sėkmingai įkelti",

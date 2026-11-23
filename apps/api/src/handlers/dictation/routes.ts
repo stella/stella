@@ -3,6 +3,7 @@ import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createStandardApiRateLimitOptions } from "@/api/lib/rate-limit/standard-api";
 
 import cleanup from "./cleanup";
+import { readDesktopDictationCleanupModels } from "./cleanup-models";
 import { saveDesktopDictationTranscript } from "./desktop-transcript";
 import {
   readDesktopDictationModels,
@@ -42,6 +43,7 @@ export const dictationRoute = routes(
 export const desktopDictationRoute = routes(
   {
     "/cleanup": { POST: cleanup },
+    "/cleanup-models": { GET: readDesktopDictationCleanupModels },
     "/learned-fixes": {
       GET: listDesktopLearnedFixes,
       POST: changeDesktopLearnedFixes,

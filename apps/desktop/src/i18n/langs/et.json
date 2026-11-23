@@ -233,6 +233,14 @@
     "writeDescription": "Sisestage selle kande kirjeldus."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Kontrolli uuesti",
+      "notInstalled": "Installi Antigravity 1.5 või uuem versioon ja logi selles sisse.",
+      "signedIn": "Sisse logitud Antigravitysse",
+      "signedOut": "Logi sisse Antigravity CLI-s, et seda rakenduses stella kasutada.",
+      "title": "Antigravity",
+      "tooOld": "Uuenda Antigravity versioonile 1.5 või uuemaks ja logi selles sisse."
+    },
     "callbackAccount": "Konto",
     "callbackCloseTab": "Võite selle vahekaardi sulgeda.",
     "callbackConnectedBody": "stella AI-päringud kasutavad nüüd teie ChatGPT paketti.",
@@ -312,6 +320,7 @@
   },
   "clipboard": {
     "allClips": "Kõik lõiked",
+    "allResults": "Kõik tulemused",
     "bold": "Paks kiri",
     "bulletedList": "Täpploend",
     "cancel": "Loobu",
@@ -378,6 +387,7 @@
     "moveToGroup": "Teisalda rühma",
     "newGroupOption": "Uus rühm…",
     "noGroup": "Rühmata",
+    "noGroupMatches": "Selles rühmas vasteid pole",
     "noResults": "Sobivaid lõikeid pole",
     "noResultsSearchRegistries": "Otsi „{query}” registritest",
     "numberedList": "Nummerdatud loend",
@@ -461,6 +471,21 @@
     "welcomeShortcutTitle": "Ava see kõikjal.",
     "welcomeStart": "Alusta kopeerimist",
     "welcomeTitle": "Teie uus lõikelaud"
+  },
+  "clipboardSettings": {
+    "capture": "Salvesta uued lõiked",
+    "captureDescription": "Kui see on välja lülitatud, ei salvestata midagi, mida kopeerid.",
+    "errorSave": "Muudatust ei õnnestunud salvestada. Proovi uuesti.",
+    "excludedDescription": "Nendes rakendustes kopeeritut ei salvestata.",
+    "excludedEmpty": "Rakenduse välistamiseks paremklõpsa lõikelaual mõnel selle lõikel ja vali, et selle uusi lõikeid enam ei salvestataks.",
+    "groupActions": "Rühma {groupName} toimingud",
+    "groupsDescription": "Lohista rühma, et muuta selle asukohta lõikelaual.",
+    "groupsEmpty": "Loo rühm ja lohista sellesse lõikelaual lõikeid.",
+    "history": "Ajalugu",
+    "moveGroupDown": "Liiguta alla",
+    "moveGroupUp": "Liiguta üles",
+    "recordingsDescription": "Luba ekraanipiltidel, salvestistel ja ekraani jagamisel lõikelauda näidata.",
+    "retentionDescription": "Vanemad lõiked kustutatakse. Rühmades olevad lõiked säilivad."
   },
   "dialog": {
     "accountEmail": "Konto",
@@ -587,6 +612,19 @@
       "descriptionCloud": "stella AI parandab ka tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga.",
       "title": "Paranda tehisintellektiga"
     },
+    "cleanupInstructions": {
+      "description": "Kuidas soovite oma teksti kirjutatuna näha, näiteks õigekirja varianti või sõnu, mida vältida. Parandamine järgib neid seal, kus selle reeglid lubavad, ega muuda kunagi seda, mida ütlesite.",
+      "placeholder": "Näiteks: Kasuta Briti õigekirja. Ära kasuta kunagi emojisid. Jäta mu poolikud laused alles.",
+      "saveFailed": "Juhiseid ei õnnestunud salvestada. Proovige uuesti.",
+      "title": "Teie juhised"
+    },
+    "cleanupModel": {
+      "automatic": "Automaatne",
+      "automaticDescription": "Kasutab teie organisatsiooni kiiret mudelit.",
+      "chosenDescription": "Kui see mudel vajab rohkem kui paar sekundit, sisestatakse tekst parandamata.",
+      "title": "Tehisintellekti mudel",
+      "withdrawn": "Valitud mudel pole enam saadaval, seega kasutab parandamine automaatset valikut."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Hoiab vaba tooni ja kerget kirjavahemärgistust.",
@@ -664,6 +702,30 @@
       "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti."
     },
     "failureKeptInHistory": "Tekst on lõikelaua ajaloos.",
+    "fix": {
+      "description": "Valige mis tahes rakenduses sõnad, mille dikteerimine valesti kirjutas, ja vajutage {shortcut}, et kirjutada nende õige kuju. stella loeb valikut ainult siis, kui kiirklahvi vajutate.",
+      "taken": "Teine rakendus kasutab kiirklahvi {shortcut}. stella ikooni menüü Dikteerimine pakub sama.",
+      "title": "Kiirklahv dikteerimise parandamiseks"
+    },
+    "fixPanel": {
+      "dictatedAs": "Dikteeritud kujul",
+      "hint": "stella kirjutab need sõnad järgmistes dikteerimistes nii, kõigis teie seadmetes.",
+      "notSaved": "Parandust ei saanud salvestada. Kontrollige, kas stella on teie kontoga ühendatud.",
+      "nothing": "Valige esmalt rakenduses valed sõnad või kirjutage need siia.",
+      "pick": "Valige viimasest dikteerimisest valed sõnad:",
+      "refused": {
+        "empty": "Täitke mõlemad väljad.",
+        "lineBreak": "Parandus on üks tekstirida.",
+        "punctuation": "Valige dikteeritud sõnad ilma kirjavahemärkideta.",
+        "same": "Sõnad on juba nii kirjutatud.",
+        "tooLong": "See on ühe paranduse jaoks liiga pikk.",
+        "tooManyWords": "Paranduses võib olla kõige rohkem kolm sõna."
+      },
+      "save": "Salvesta parandus",
+      "saving": "Paranduse salvestamine…",
+      "title": "Paranda dikteeritud sõna",
+      "writtenAs": "Õige kuju"
+    },
     "groups": {
       "cleanup": "Parandamine",
       "shortcut": "Kiirklahv",
@@ -684,6 +746,17 @@
       "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli. Kui neid on mitu, tuntakse iga sõna ära selles keeles, milles te selle ütlete.",
       "noResults": "Keeli ei leitud",
       "title": "Dikteerimise keel"
+    },
+    "learned": {
+      "delete": "Kustuta, mida stella õppis",
+      "description": "Kui parandate dikteeritud sõna kaks korda ühtmoodi või parandate selle kiirklahviga {shortcut}, kirjutab stella selle järgmistes dikteerimistes nii. Sünkroonitakse teie teiste seadmetega; neid näete ainult teie.",
+      "empty": "Veel pole midagi õpitud.",
+      "failed": "Parandust ei õnnestunud muuta.",
+      "fix": "{from} → {to}",
+      "group": "Õpitud parandused",
+      "title": "Teie parandustest õpitud parandused",
+      "unreadable": "Seda, mida stella õppis, ei saanud lugeda.",
+      "working": "Muudatuse salvestamine…"
     },
     "lede": "Hoidke all klahve <key>{shortcut}</key> ja rääkige. Tekst ilmub sinna, kuhu kirjutate.",
     "microphone": {
@@ -1135,6 +1208,8 @@
       "available": "Saadaval on versioon {version}.",
       "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
       "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
+      "downloadProgress": "{percent}% alla laaditud",
+      "downloading": "Laaditakse alla versiooni {version}. Pärast installimist taaskäivitub stella desktop.",
       "install": "Installi ja taaskäivita",
       "installFailed": "stella desktop ei saanud värskendust installida.",
       "installInProgress": "Värskendust installitakse.",
@@ -1199,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Loobu minu muudatustest",
+      "editorLabel": "Puhastatud teksti redaktor",
       "failedCount": "{count, plural, one {# osa puhastamata} other {# osa puhastamata}}",
       "fileNameMarkdown": "{title} puhastatud.md",
       "fileNameText": "{title} puhastatud.txt",
@@ -1270,6 +1347,7 @@
       "audioMissing": "Salvestis pole selles aknas enam avatud, seega seda toimikusse ei salvestatud.",
       "audioTooLarge": "Salvestis on suurem kui {size}, seega seda toimikusse ei salvestatud.",
       "cleanedDocxFileName": "{title} – toimetatud tekst.docx",
+      "cleanedNotFiled": "Puhastatud teksti ei õnnestunud toimikusse salvestada.",
       "cleanedTitle": "{title} – toimetatud tekst",
       "documents": "Wordi dokumentide salvestamine…",
       "docxFileName": "{title} – transkriptsioon.docx",
@@ -1312,7 +1390,6 @@
       "saveToMatterFailed": "Transkriptsiooni ei õnnestunud toimikusse salvestada. Proovige uuesti.",
       "saveWithTimestamps": "Tekst ajatemplitega (.txt)",
       "saveWithoutTimestamps": "Tekst ajatempliteta (.txt)",
-      "savedToMatter": "Salvestatud toimikusse {matter} nimega {fileName}.",
       "savingToMatter": "Salvestamine…",
       "thisComputer": "See arvuti",
       "transcriptTitle": "Transkriptsioon"
@@ -1334,6 +1411,7 @@
     "activityResume": "Jätka salvestamist",
     "checkForUpdates": "Kontrolli värskendusi",
     "dictation": "Dikteerimine",
+    "dictationFix": "Paranda viimane dikteerimine…",
     "dictationHint": "Dikteerimiseks hoidke all {key}",
     "dictationRetype": "Sisesta viimane dikteering uuesti",
     "dictationSettings": "Dikteerimise seaded…",
@@ -1356,13 +1434,16 @@
     "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine",
     "settings": "Seaded",
+    "showTranscription": "Näita transkriptsiooni",
     "support": "Tugi",
     "supportCopyDiagnostics": "Kopeeri diagnostika",
     "supportEmailSupport": "E-posti tugi",
     "supportRevealAppData": "Kuva rakenduse andmed",
     "temporaryWorkingCopies": "Ajutised töökoopiad",
     "transcribeRecording": "Transkribeeri salvestis…",
-    "updateReady": "Värskendus valmis",
+    "transcriptionProgress": "Transkribeerimine käib: {done} / {total} min",
+    "transcriptionProgressSoFar": "Transkribeerimine käib: seni {done} min",
+    "transcriptionReady": "Transkriptsioon on valmis",
     "updatesManaged": "Värskendusi haldab teie organisatsioon"
   }
 }

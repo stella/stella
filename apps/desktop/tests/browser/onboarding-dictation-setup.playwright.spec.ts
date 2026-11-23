@@ -61,6 +61,9 @@ const heading = (page: Page) => page.getByRole("heading", { level: 1 });
 
 /** Continues from the first screen until `title` heads the step. */
 const continueTo = async (page: Page, title: string) => {
+  // Until the dictation snapshot arrives the step shows only its label, and
+  // Continue there leaves the step: read the heading once a screen is drawn.
+  await expect(page.locator("[data-dictation-screen]")).toBeVisible();
   for (const screen of SCREENS) {
     if ((await heading(page).textContent()) === title) {
       return;

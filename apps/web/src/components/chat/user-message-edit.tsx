@@ -14,6 +14,7 @@ import {
   createChatPastedTextPart,
   isChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import { knownUnscannedContentReasons } from "@stll/api-contract/file-scan-warnings";
 import { sleep } from "@stll/concurrency/sleep";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -51,6 +52,7 @@ import type {
   UserMessageEditSession,
 } from "@/components/chat/user-message-edit.logic";
 import { DocumentIcon } from "@/components/document-icon";
+import { UnscannedContentMark } from "@/components/inspector/unscanned-content-notice";
 import {
   type LocalFilesUndoMessage,
   localFilesUndoOptions,
@@ -348,6 +350,18 @@ const LocalFilesUndoPending = () => {
     </p>
   );
 };
+
+/** A kept file's chip says what was not scanned of it, as in the thread. */
+const AttachmentUnscannedContent = ({
+  part,
+}: {
+  part: UserMessageEditAttachment["part"];
+}) =>
+  isChatPastedTextPart(part) ? null : (
+    <UnscannedContentMark
+      reasons={knownUnscannedContentReasons(part.metadata?.unscannedContent)}
+    />
+  );
 
 type UserMessageEditFormProps = {
   draft: UserMessageEditDraft;
@@ -669,6 +683,7 @@ const UserMessageEditForm = ({
                 }
                 key={attachment.id}
                 kind={pasted ? "pasted_text" : "file"}
+                notice={<AttachmentUnscannedContent part={attachment.part} />}
                 title={title}
               />
             );

@@ -465,8 +465,9 @@ export const desktopTelemetryWindowFromLabel = (
       return DESKTOP_TELEMETRY_WINDOWS.clipboard;
     case "clipboard-editor":
       return DESKTOP_TELEMETRY_WINDOWS.clipboardEditor;
-    // The dictation notice belongs to the Dictation settings.
+    // The dictation notice and fix panel belong to the Dictation settings.
     case "dictation-notice":
+    case "dictation-fix":
     case "main":
     case "dictation-preview":
       return DESKTOP_TELEMETRY_WINDOWS.main;

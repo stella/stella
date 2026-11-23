@@ -3,15 +3,17 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import fc from "fast-check";
 
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { assertProperty } from "@stll/property-testing";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
 import { fileLinkAnswer } from "@/__fixtures__/file-link-answer";
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import englishMessages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
 import type { api } from "@/lib/api";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { toSafeId } from "@/lib/safe-id";
 
 import type { FileTab } from "./inspector-store-types";
@@ -109,8 +111,7 @@ const { AuthenticatedUserProvider } =
 const { useRenameEntity } = await import("@/lib/workspaces/mutations/entities");
 // Load the real browser engine before installing fake timers (lazy loading may
 // otherwise schedule its mount beyond the test's explicit debounce advances).
-const { MarkdownHybridEditor } =
-  await import("@/components/markdown/markdown-hybrid-editor.impl");
+const { MarkdownHybridEditor } = await import("@stll/markdown-editor/impl");
 
 const fileTab: FileTab = {
   type: "pdf",
@@ -337,7 +338,9 @@ const mountEmissionEditors = async () => {
     <IntlProvider locale="en" messages={englishMessages}>
       <MarkdownHybridEditor
         markdown="Original instructions"
-        imagePolicy="data-only"
+        allowsImageSource={isSafeMarkdownPreviewImageSrc}
+        label="Markdown source"
+        onOpenLink={openIsolatedWindow}
         changeEmission="immediate"
         onMarkdownChange={(text) => {
           immediateChanges.push(text);
@@ -349,7 +352,9 @@ const mountEmissionEditors = async () => {
     <IntlProvider locale="en" messages={englishMessages}>
       <MarkdownHybridEditor
         markdown="Original instructions"
-        imagePolicy="data-only"
+        allowsImageSource={isSafeMarkdownPreviewImageSrc}
+        label="Markdown source"
+        onOpenLink={openIsolatedWindow}
         onMarkdownChange={(text) => {
           debouncedChanges.push(text);
         }}
@@ -546,7 +551,9 @@ test("editor resets are fixed points for source and pending notifications", asyn
           <MarkdownHybridEditor
             ref={handle}
             markdown="Server text"
-            imagePolicy="data-only"
+            allowsImageSource={isSafeMarkdownPreviewImageSrc}
+            label="Markdown source"
+            onOpenLink={openIsolatedWindow}
             onMarkdownChange={(next) => {
               changes.push(next);
             }}

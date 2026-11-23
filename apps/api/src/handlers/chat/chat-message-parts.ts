@@ -18,6 +18,7 @@ import {
 } from "@stll/api-contract/chat";
 import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import type { SupersededToolResultsOptions } from "@stll/api-contract/chat-tool-result-retention";
+import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import {
   GENERATED_VISUAL_MIME_TYPE,
   generatedVisualPartSchema,
@@ -394,6 +395,7 @@ export type ChatAttachmentInput = {
   filename?: string | undefined;
   mimeType: string;
   placeholder?: string | undefined;
+  unscannedContent?: readonly UnscannedContentReason[] | undefined;
   url: string;
 };
 
@@ -503,6 +505,7 @@ export const createChatAttachmentPart = ({
   filename,
   mimeType,
   placeholder,
+  unscannedContent,
   url,
 }: ChatAttachmentInput): ChatAttachmentPart => {
   const source: ContentPartSource = {
@@ -513,6 +516,9 @@ export const createChatAttachmentPart = ({
   const metadata: ChatAttachmentMetadata = {
     ...(filename === undefined ? {} : { filename }),
     ...(placeholder === undefined ? {} : { placeholder }),
+    ...(unscannedContent === undefined || unscannedContent.length === 0
+      ? {}
+      : { unscannedContent: [...unscannedContent] }),
   };
   const metadataPatch = Object.keys(metadata).length === 0 ? {} : { metadata };
 

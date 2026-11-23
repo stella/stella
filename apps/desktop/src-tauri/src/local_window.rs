@@ -101,6 +101,22 @@ impl LocalWindowFeature for ClipboardWindows {
 
 pub type ClipboardCaller = LocalCaller<ClipboardWindows>;
 
+/// Clipboard settings: the Clips windows and the Settings window. These
+/// commands change how history is kept and how its groups are named and
+/// ordered; the one read returns those settings, never a clip.
+pub struct ClipboardSettingsWindows;
+
+impl LocalWindowFeature for ClipboardSettingsWindows {
+  const WINDOW_LABELS: &'static [&'static str] = &[
+    crate::clipboard_window::CLIPBOARD_WINDOW_LABEL,
+    crate::clipboard_window::CLIPBOARD_EDITOR_WINDOW_LABEL,
+    crate::SETTINGS_WINDOW_LABEL,
+  ];
+  const REFUSAL: &'static str = "clipboard settings are not available here";
+}
+
+pub type ClipboardSettingsCaller = LocalCaller<ClipboardSettingsWindows>;
+
 /// The activity window: the only reader of the day timeline.
 pub struct ActivityWindows;
 
@@ -237,6 +253,37 @@ mod tests {
   #[test]
   fn clipboard_callers_are_clipboard_windows_on_the_app_origin() {
     assert_only_feature_windows_on_the_app_origin::<ClipboardWindows>();
+  }
+
+  #[test]
+  fn clipboard_settings_callers_add_only_the_settings_window() {
+    assert_only_feature_windows_on_the_app_origin::<ClipboardSettingsWindows>();
+    assert_eq!(
+      ClipboardSettingsWindows::WINDOW_LABELS,
+      [
+        crate::clipboard_window::CLIPBOARD_WINDOW_LABEL,
+        crate::clipboard_window::CLIPBOARD_EDITOR_WINDOW_LABEL,
+        crate::SETTINGS_WINDOW_LABEL,
+      ]
+    );
+    let page = tauri::Url::parse("tauri://localhost/index.html").unwrap();
+    // The Settings window reaches clipboard settings, never the history.
+    assert!(
+      LocalCaller::<ClipboardSettingsWindows>::verify(
+        crate::SETTINGS_WINDOW_LABEL,
+        Some(&page),
+        None
+      )
+      .is_some()
+    );
+    assert!(
+      LocalCaller::<ClipboardWindows>::verify(
+        crate::SETTINGS_WINDOW_LABEL,
+        Some(&page),
+        None
+      )
+      .is_none()
+    );
   }
 
   #[test]

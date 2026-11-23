@@ -233,6 +233,14 @@
     "writeDescription": "Wpisz opis tego wpisu."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Sprawdź ponownie",
+      "notInstalled": "Zainstaluj Antigravity 1.5 lub nowszą wersję, a następnie się w niej zaloguj.",
+      "signedIn": "Zalogowano do Antigravity",
+      "signedOut": "Zaloguj się w CLI Antigravity, aby używać go w aplikacji stella.",
+      "title": "Antigravity",
+      "tooOld": "Zaktualizuj Antigravity do wersji 1.5 lub nowszej, a następnie się w niej zaloguj."
+    },
     "callbackAccount": "Konto",
     "callbackCloseTab": "Możesz zamknąć tę kartę.",
     "callbackConnectedBody": "Zapytania do AI w aplikacji stella korzystają teraz z Twojego planu ChatGPT.",
@@ -312,6 +320,7 @@
   },
   "clipboard": {
     "allClips": "Wszystkie wycinki",
+    "allResults": "Wszystkie wyniki",
     "bold": "Pogrubienie",
     "bulletedList": "Lista punktowana",
     "cancel": "Anuluj",
@@ -378,6 +387,7 @@
     "moveToGroup": "Przenieś do grupy",
     "newGroupOption": "Nowa grupa…",
     "noGroup": "Bez grupy",
+    "noGroupMatches": "Brak wyników w tej grupie",
     "noResults": "Brak pasujących wycinków",
     "noResultsSearchRegistries": "Szukaj „{query}” w rejestrach",
     "numberedList": "Lista numerowana",
@@ -461,6 +471,21 @@
     "welcomeShortcutTitle": "Otwórz go z dowolnego miejsca.",
     "welcomeStart": "Zacznij kopiować",
     "welcomeTitle": "Poznaj swój schowek"
+  },
+  "clipboardSettings": {
+    "capture": "Zapisuj nowe wycinki",
+    "captureDescription": "Po wyłączeniu nic, co skopiujesz, nie jest zapisywane.",
+    "errorSave": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "excludedDescription": "Nic, co skopiujesz w tych aplikacjach, nie jest zapisywane.",
+    "excludedEmpty": "Aby wykluczyć aplikację, kliknij prawym przyciskiem jeden z jej wycinków w schowku i wybierz, aby nie zapisywać z niej nowych wycinków.",
+    "groupActions": "Działania dla grupy {groupName}",
+    "groupsDescription": "Przeciągnij grupę, aby zmienić jej miejsce w schowku.",
+    "groupsEmpty": "Utwórz grupę, a następnie przeciągnij do niej wycinki w schowku.",
+    "history": "Historia",
+    "moveGroupDown": "Przesuń w dół",
+    "moveGroupUp": "Przesuń w górę",
+    "recordingsDescription": "Zezwala na pokazywanie schowka na zrzutach ekranu, w nagraniach i podczas udostępniania ekranu.",
+    "retentionDescription": "Starsze wycinki są usuwane. Wycinki w grupie są zachowywane."
   },
   "dialog": {
     "accountEmail": "Konto",
@@ -587,6 +612,19 @@
       "descriptionCloud": "stella AI dodatkowo poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail.",
       "title": "Popraw za pomocą AI"
     },
+    "cleanupInstructions": {
+      "description": "Jak ma być napisany Twój tekst, np. wariant pisowni lub słowa, których należy unikać. Poprawianie stosuje się do nich tam, gdzie pozwalają na to jego zasady, i nigdy nie zmienia tego, co zostało powiedziane.",
+      "placeholder": "Na przykład: Używaj brytyjskiej pisowni. Nigdy nie używaj emoji. Zachowuj moje urwane zdania.",
+      "saveFailed": "Nie udało się zapisać instrukcji. Spróbuj ponownie.",
+      "title": "Twoje instrukcje"
+    },
+    "cleanupModel": {
+      "automatic": "Automatycznie",
+      "automaticDescription": "Używa szybkiego modelu Twojej organizacji.",
+      "chosenDescription": "Jeśli ten model potrzebuje więcej niż kilku sekund, tekst zostanie wpisany bez poprawiania.",
+      "title": "Model AI",
+      "withdrawn": "Wybrany model nie jest już dostępny, więc poprawianie działa automatycznie."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Zachowuje swobodny ton i oszczędną interpunkcję.",
@@ -664,6 +702,30 @@
       "transcription": "Transkrypcja nie powiodła się. Spróbuj ponownie."
     },
     "failureKeptInHistory": "Tekst jest w historii schowka.",
+    "fix": {
+      "description": "Zaznacz w dowolnej aplikacji słowa, które dyktowanie zapisało błędnie, i naciśnij {shortcut}, aby wpisać ich pisownię. stella odczytuje zaznaczenie tylko wtedy, gdy naciśniesz skrót.",
+      "taken": "Inna aplikacja używa skrótu {shortcut}. To samo oferuje menu Dyktowanie przy ikonie aplikacji stella.",
+      "title": "Skrót do poprawiania dyktowania"
+    },
+    "fixPanel": {
+      "dictatedAs": "Podyktowano jako",
+      "hint": "stella zapisze te słowa tak w kolejnych dyktowaniach, na wszystkich Twoich urządzeniach.",
+      "notSaved": "Nie udało się zapisać poprawki. Sprawdź, czy stella jest połączona z Twoim kontem.",
+      "nothing": "Najpierw zaznacz błędne słowa w aplikacji albo wpisz je tutaj.",
+      "pick": "Wybierz błędne słowa z ostatniego dyktowania:",
+      "refused": {
+        "empty": "Wypełnij oba pola.",
+        "lineBreak": "Poprawka to jeden wiersz tekstu.",
+        "punctuation": "Wybierz podyktowane słowa bez znaków interpunkcyjnych.",
+        "same": "Słowa są już tak zapisane.",
+        "tooLong": "To za długie na jedną poprawkę.",
+        "tooManyWords": "Poprawka może mieć najwyżej trzy słowa."
+      },
+      "save": "Zapisz poprawkę",
+      "saving": "Zapisywanie poprawki…",
+      "title": "Popraw podyktowane słowo",
+      "writtenAs": "Poprawna pisownia"
+    },
     "groups": {
       "cleanup": "Poprawianie",
       "shortcut": "Skrót",
@@ -684,6 +746,17 @@
       "description": "Automatycznie używa języków interfejsu i klawiatur tego komputera. Gdy jest ich kilka, każde słowo jest rozpoznawane w języku, w którym je wypowiadasz.",
       "noResults": "Nie znaleziono języków",
       "title": "Język dyktowania"
+    },
+    "learned": {
+      "delete": "Usuń to, czego nauczyła się stella",
+      "description": "Gdy poprawisz podyktowane słowo dwa razy tak samo lub poprawisz je skrótem {shortcut}, stella zapisze je tak w kolejnych dyktowaniach. Synchronizowane z Twoimi innymi urządzeniami; widzisz je tylko Ty.",
+      "empty": "Brak wyuczonych poprawek.",
+      "failed": "Nie udało się zmienić poprawki.",
+      "fix": "{from} → {to}",
+      "group": "Wyuczone poprawki",
+      "title": "Poprawki wyuczone z Twoich zmian",
+      "unreadable": "Nie udało się odczytać tego, czego nauczyła się stella.",
+      "working": "Zapisywanie zmiany…"
     },
     "lede": "Przytrzymaj <key>{shortcut}</key> i mów. Tekst pojawi się tam, gdzie piszesz.",
     "microphone": {
@@ -1135,6 +1208,8 @@
       "available": "Dostępna jest wersja {version}.",
       "checkFailed": "stella desktop nie mógł sprawdzić aktualizacji.",
       "deferred": "Wersja {version} czeka, dopóki edytujesz otwarte dokumenty. Gdy skończysz, sprawdź ponownie, aby ją zainstalować, w przeciwnym razie zostanie zainstalowana przy następnym automatycznym sprawdzeniu.",
+      "downloadProgress": "Pobrano {percent}%",
+      "downloading": "Pobieranie wersji {version}. Po instalacji stella desktop uruchomi się ponownie.",
       "install": "Zainstaluj i uruchom ponownie",
       "installFailed": "stella desktop nie mógł zainstalować aktualizacji.",
       "installInProgress": "Trwa instalowanie aktualizacji.",
@@ -1199,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Odrzuć moje zmiany",
+      "editorLabel": "Edytor tekstu po korekcie",
       "failedCount": "{count, plural, one {# część niepoprawiona} few {# części niepoprawione} many {# części niepoprawionych} other {# części niepoprawionych}}",
       "fileNameMarkdown": "{title} po korekcie.md",
       "fileNameText": "{title} po korekcie.txt",
@@ -1270,6 +1347,7 @@
       "audioMissing": "Nagranie nie jest już otwarte w tym oknie, więc nie zapisano go w sprawie.",
       "audioTooLarge": "Nagranie jest większe niż {size}, więc nie zapisano go w sprawie.",
       "cleanedDocxFileName": "{title} – tekst poprawiony.docx",
+      "cleanedNotFiled": "Nie udało się zapisać tekstu po korekcie w sprawie.",
       "cleanedTitle": "{title} – tekst poprawiony",
       "documents": "Zapisywanie dokumentów Word…",
       "docxFileName": "{title} – transkrypcja.docx",
@@ -1312,7 +1390,6 @@
       "saveToMatterFailed": "Nie udało się zapisać transkrypcji w sprawie. Spróbuj ponownie.",
       "saveWithTimestamps": "Tekst ze znacznikami czasu (.txt)",
       "saveWithoutTimestamps": "Tekst bez znaczników czasu (.txt)",
-      "savedToMatter": "Zapisano w sprawie {matter} jako {fileName}.",
       "savingToMatter": "Zapisywanie…",
       "thisComputer": "Ten komputer",
       "transcriptTitle": "Transkrypcja"
@@ -1334,6 +1411,7 @@
     "activityResume": "Wznów rejestrowanie",
     "checkForUpdates": "Sprawdź aktualizacje",
     "dictation": "Dyktowanie",
+    "dictationFix": "Popraw ostatnie dyktowanie…",
     "dictationHint": "Przytrzymaj {key}, aby dyktować",
     "dictationRetype": "Wpisz ponownie ostatnie dyktowanie",
     "dictationSettings": "Ustawienia dyktowania…",
@@ -1356,13 +1434,16 @@
     "sessionOpeningInOffice": "Otwieranie w Office",
     "sessionSavingDraft": "Zapisywanie wersji roboczej",
     "settings": "Ustawienia",
+    "showTranscription": "Pokaż transkrypcję",
     "support": "Wsparcie",
     "supportCopyDiagnostics": "Kopiuj diagnostykę",
     "supportEmailSupport": "Wsparcie e-mail",
     "supportRevealAppData": "Pokaż dane aplikacji",
     "temporaryWorkingCopies": "Tymczasowe kopie robocze",
     "transcribeRecording": "Transkrybuj nagranie…",
-    "updateReady": "Aktualizacja gotowa",
+    "transcriptionProgress": "Trwa transkrypcja: {done} z {total} min",
+    "transcriptionProgressSoFar": "Trwa transkrypcja: dotąd {done} min",
+    "transcriptionReady": "Transkrypcja gotowa",
     "updatesManaged": "Aktualizacjami zarządza Twoja organizacja"
   }
 }

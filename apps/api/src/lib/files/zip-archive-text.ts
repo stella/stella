@@ -10,8 +10,10 @@ type FileReading = Pick<
 >;
 
 const UNAVAILABLE_TEXT = {
-  encrypted: "The file is encrypted.",
-  unsupported: "The file is compressed with a method that is not supported.",
+  encrypted: "The file is encrypted, so it was not read or scanned.",
+  unsupported:
+    "The file is compressed with a method that is not supported, " +
+    "so it was not read or scanned.",
   link: "The file is a link to another path and is not followed.",
   tooLarge: "The file is too large to read.",
   unreadable: "The file is damaged.",

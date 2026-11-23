@@ -19,7 +19,14 @@ export const createQueryPerfDeadline = ({
 }: QueryPerfDeadlineOptions) => {
   const expiresAt = now() + timeoutMs;
   return {
-    run: async <T>(phase: string, operation: () => Promise<T>) => {
+    /**
+     * Runs `operation` within what is left of the profile's budget, which
+     * it is handed so a statement can be bounded by the same budget.
+     */
+    run: async <T>(
+      phase: string,
+      operation: (remainingMs: number) => Promise<T>,
+    ) => {
       const messageLabel = `query perf ${profileId}: ${phase}`;
       const remainingMs = expiresAt - now();
       process.stdout.write(
@@ -39,10 +46,13 @@ export const createQueryPerfDeadline = ({
             timeoutMs,
           });
         }
-        const value = await withTimeout(operation, {
-          label: QUERY_PERF_DEADLINE_LABEL,
-          timeoutMs: remainingMs,
-        }).catch((error: unknown) => {
+        const value = await withTimeout(
+          async () => await operation(remainingMs),
+          {
+            label: QUERY_PERF_DEADLINE_LABEL,
+            timeoutMs: remainingMs,
+          },
+        ).catch((error: unknown) => {
           // The label stays static; the message names the phase it cut.
           throw error instanceof TimeoutError &&
             error.label === QUERY_PERF_DEADLINE_LABEL

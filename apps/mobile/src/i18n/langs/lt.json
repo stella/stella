@@ -467,6 +467,10 @@
     "retry": "Bandyti dar kartą",
     "title": "Dokumentas",
     "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
+    "unscannedContent": {
+      "encrypted": "Kai kurie viduje esantys failai apsaugoti slaptažodžiu, todėl jie nebuvo patikrinti dėl grėsmių.",
+      "unsupportedCompression": "Kai kurie viduje esantys failai suglaudinti formatu, kurio stella negali perskaityti, todėl jie nebuvo patikrinti dėl grėsmių."
+    },
     "zoomFit": "Pritaikyti pločiui",
     "zoomIn": "Didinti",
     "zoomOut": "Mažinti"
@@ -550,6 +554,8 @@
     "noFilesInside": "Viduje nėra jokių failų.",
     "noMatches": "Užklausą „{query}“ atitinkančių failų nėra.",
     "open": "Atidaryti {fileName} ({details})",
+    "saveFailed": "Nepavyko išsaugoti failo byloje. Bandykite dar kartą.",
+    "saveNamed": "Išsaugoti {fileName} byloje",
     "search": "Rasti failą pagal pavadinimą ar aplanką",
     "unavailable": {
       "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",

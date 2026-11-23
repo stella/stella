@@ -13,7 +13,8 @@ mod focused_window;
 #[cfg(target_os = "macos")]
 pub use focused_window::{
   FocusedWindowDetails, accessibility_trusted, focused_field_is_secure,
-  focused_window_details, request_accessibility_permission, text_before_cursor,
+  focused_window_details, request_accessibility_permission, selected_text,
+  text_before_cursor,
 };
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
@@ -143,6 +144,11 @@ pub use system_audio_windows::SystemAudioReader;
 mod windows_password_field;
 #[cfg(target_os = "windows")]
 pub use windows_password_field::focused_field_is_secure;
+
+#[cfg(target_os = "windows")]
+mod windows_selection;
+#[cfg(target_os = "windows")]
+pub use windows_selection::selected_text;
 
 #[cfg(target_os = "windows")]
 mod windows_window;

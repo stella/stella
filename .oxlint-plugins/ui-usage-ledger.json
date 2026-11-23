@@ -35,6 +35,7 @@
     "apps/web/src/components/inspector/mailbox-viewer.tsx": 1,
     "apps/web/src/components/inspector/pdf-sign-placement.tsx": 1,
     "apps/web/src/components/inspector/playbook-facet.tsx": 4,
+    "apps/web/src/components/inspector/unscanned-content-notice.tsx": 1,
     "apps/web/src/components/legal-reader/citation-copy-options.tsx": 1,
     "apps/web/src/components/legal-reader/margin-notes.tsx": 2,
     "apps/web/src/components/matter-target-picker.tsx": 4,

@@ -158,7 +158,7 @@ export const applyLearnedFixes = (
   fixes: readonly LearnedFix[],
 ): string => {
   const active = fixes
-    .filter(({ status }) => status === "on")
+    .filter(({ status, from }) => status === "on" && wordsOnly(from))
     .map(({ from, to }) => ({ keys: phraseKey(from).split(" "), to }))
     // The longest phrase first, so it wins over one of its words.
     .sort((left, right) => right.keys.length - left.keys.length);
@@ -189,6 +189,18 @@ export const applyLearnedFixes = (
     }
   }
   return out;
+};
+
+/**
+ * Whether a fix's dictated words are words apart only by spaces: dictated
+ * words with punctuation, as `C++`, would otherwise match their words alone.
+ */
+const wordsOnly = (phrase: string): boolean => {
+  const pieces = splitWords(phrase);
+  return (
+    pieces.some(({ kind }) => kind === "word") &&
+    pieces.every(({ kind, text }) => kind === "word" || /^ +$/u.test(text))
+  );
 };
 
 /** The first fix, longest first, whose words start at `start`, and how many pieces they cover. */

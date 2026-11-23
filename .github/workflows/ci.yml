@@ -2686,7 +2686,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        partition: [1, 2]
+        partition: [1, 2, 3]
     permissions:
       contents: read
       actions: write
@@ -3000,7 +3000,7 @@ jobs:
           CI_CHECK_POOL_INPUTS: ${{ toJSON(inputs) }}
           CI_CHECK_POOL_TOKEN: ${{ github.token }}
           CI_COMPARISON_BASE: ${{ needs.ci-plan.outputs.target_base_sha }}
-          CI_CHECK_POOL_PARTITION: ${{ format('{0}/2', matrix.partition) }}
+          CI_CHECK_POOL_PARTITION: ${{ format('{0}/3', matrix.partition) }}
         # ci-plan's outputs reach the pool through this script's text, never
         # the environment (see ci-result's outcome step).
         run: |
@@ -3164,7 +3164,7 @@ jobs:
       # and memory (apps/api/scripts/test-lanes.ts); print what it sees.
       - name: Runner resources
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: nproc; free -g
+        run: nproc; free -g; date +CI_T0=%s%3N>>"$GITHUB_ENV"
 
       - name: Test API or rest
         id: test-api-or-rest
@@ -3433,8 +3433,7 @@ jobs:
           path: ${{ runner.temp }}/postgres-test-durations.json
           key: postgres-test-durations-${{ github.run_id }}
 
-  # The browser-backed suites. They share one Playwright install, so they stay
-  # in a single job rather than one per suite.
+  # Browser-backed suites (shared Playwright container).
   ci-browser:
     needs: [ci-plan, pr-heavy-gate]
     if: >-
@@ -3650,18 +3649,19 @@ jobs:
           bun --filter @stll/ui test:browser -- "${specs[@]}"
 
       - name: Test desktop browser interactions
-        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (matrix.suite == 'desktop' && steps.desktop-browser-tests.outputs.required == 'true') }}
+        if: ${{ !cancelled() && steps.checkout.outcome == 'success' && (startsWith(matrix.suite, 'desktop-') && steps.desktop-browser-tests.outputs.required == 'true') }}
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
+          S: ${{ matrix.suite }}
         run: |
           cd apps/desktop
-          bun run test:browser
+          bun run test:browser -- --shard="${S#desktop-}/3"
 
       - name: Upload desktop browser failures
-        if: matrix.suite == 'desktop' && failure() && steps.desktop-browser-tests.outputs.required == 'true'
+        if: startsWith(matrix.suite, 'desktop-') && failure() && steps.desktop-browser-tests.outputs.required == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: desktop-browser-failures
+          name: desktop-browser-failures-${{ matrix.suite }}
           path: apps/desktop/test-results/
           retention-days: 7
           if-no-files-found: ignore

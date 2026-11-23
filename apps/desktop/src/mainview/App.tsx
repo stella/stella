@@ -12,7 +12,6 @@ import { useLocale, useTranslations } from "use-intl";
 
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
-import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -33,7 +32,6 @@ import {
   settingsRowIds,
   SettingsSection,
 } from "@stll/ui/settings";
-import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { cn } from "@stll/ui/utils";
 
@@ -70,8 +68,10 @@ import {
 } from "../telemetry/desktop-telemetry";
 import { accountDisplay, accountStatusTone } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
+import { AccountAvatar } from "./AccountAvatar";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
+import { ClipboardSettingsSections } from "./ClipboardSettings";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting, useDictationAvailability } from "./DictationSetting";
 import { KeepAwakeSection } from "./KeepAwakeSection";
@@ -462,13 +462,7 @@ const AccountRow = ({
     <SettingsRow
       description={description}
       id="desktop-account"
-      media={
-        <Avatar className="size-8 border">
-          <AvatarFallback className="text-xs">
-            {display.initials ?? <StellaMark className="size-4" />}
-          </AvatarFallback>
-        </Avatar>
-      }
+      media={<AccountAvatar display={display} />}
       title={display.name ?? t("stellaDesktop")}
     >
       {tone === null ? null : (
@@ -555,6 +549,7 @@ const ClipboardPane = () => {
           <ShortcutSetting />
         </SettingsPanel>
       </SettingsSection>
+      <ClipboardSettingsSections />
     </>
   );
 };
@@ -1313,8 +1308,6 @@ const App = () => {
         accountState={accountState}
         current={shownPage}
         onSelect={(nextPage) => {
-          // An update check's answer belongs to the visit that asked.
-          updateCheck.dismiss();
           setActivePage(nextPage);
           // Choosing a page by hand is never the link's visit.
           setAgentSettingsFocus(null);

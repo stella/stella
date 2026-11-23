@@ -894,6 +894,7 @@ pub(crate) async fn show_connection_confirmation(
     app_handle,
     "selfhost-connect-dialog",
     format!("selfhost-connect-dialog.html#{hash}"),
+    crate::app_window::WindowKind::App,
   )
   .title(crate::i18n::t(title_key))
   .inner_size(420.0, 320.0)

@@ -250,6 +250,12 @@ describe("applying what was learned", () => {
     ).toBe("Volal Baker McKenzie a Stelana.");
   });
 
+  test("a fix whose dictated words hold punctuation never matches their words alone", () => {
+    expect(applyLearnedFixes("Use C and C++.", [fix("C++", "Rust")])).toBe(
+      "Use C and C++.",
+    );
+  });
+
   test("fixes still learning, off or contradicted change nothing", () => {
     const text = "stela volala";
     for (const status of ["learning", "off", "contradicted"] as const) {

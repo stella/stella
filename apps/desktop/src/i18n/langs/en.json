@@ -233,6 +233,14 @@
     "writeDescription": "Enter a description for this entry."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Check again",
+      "notInstalled": "Install Antigravity 1.5 or later, then sign in from it.",
+      "signedIn": "Signed in to Antigravity",
+      "signedOut": "Sign in from the Antigravity CLI to use it in stella.",
+      "title": "Antigravity",
+      "tooOld": "Update Antigravity to 1.5 or later, then sign in from it."
+    },
     "callbackAccount": "Account",
     "callbackCloseTab": "You can close this tab.",
     "callbackConnectedBody": "AI requests in stella now use your ChatGPT plan.",
@@ -312,6 +320,7 @@
   },
   "clipboard": {
     "allClips": "All clips",
+    "allResults": "All results",
     "bold": "Bold",
     "bulletedList": "Bulleted list",
     "cancel": "Cancel",
@@ -378,6 +387,7 @@
     "moveToGroup": "Move to group",
     "newGroupOption": "New group…",
     "noGroup": "No group",
+    "noGroupMatches": "No matches in this group",
     "noResults": "No matching clips",
     "noResultsSearchRegistries": "Search registries for “{query}”",
     "numberedList": "Numbered list",
@@ -461,6 +471,21 @@
     "welcomeShortcutTitle": "Open it anywhere.",
     "welcomeStart": "Start copying",
     "welcomeTitle": "Meet your clipboard"
+  },
+  "clipboardSettings": {
+    "capture": "Save new clips",
+    "captureDescription": "Turn this off to stop saving what you copy.",
+    "errorSave": "The change could not be saved. Try again.",
+    "excludedDescription": "Nothing you copy in these apps is saved.",
+    "excludedEmpty": "To exclude an app, right-click one of its clips in the clipboard and choose to stop saving new clips from it.",
+    "groupActions": "Actions for {groupName}",
+    "groupsDescription": "Drag a group to change where it appears in the clipboard.",
+    "groupsEmpty": "Create a group, then drag clips into it in the clipboard.",
+    "history": "History",
+    "moveGroupDown": "Move down",
+    "moveGroupUp": "Move up",
+    "recordingsDescription": "Let screenshots, recordings and screen sharing show the clipboard.",
+    "retentionDescription": "Older clips are deleted. Clips in a group are kept."
   },
   "dialog": {
     "accountEmail": "Account",
@@ -587,6 +612,19 @@
       "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email.",
       "title": "Clean up with AI"
     },
+    "cleanupInstructions": {
+      "description": "How you like your text written, such as a spelling variant or words to avoid. Cleanup follows them where its own rules allow and never changes what you said.",
+      "placeholder": "For example: Use British spelling. Never use emoji. Keep my sentence fragments.",
+      "saveFailed": "Your instructions could not be saved. Try again.",
+      "title": "Your instructions"
+    },
+    "cleanupModel": {
+      "automatic": "Automatic",
+      "automaticDescription": "Uses your organization’s fast model.",
+      "chosenDescription": "If this model takes more than a few seconds, the text is typed without cleanup.",
+      "title": "AI model",
+      "withdrawn": "The model you chose is no longer available, so cleanup uses Automatic."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Keeps a relaxed tone with light punctuation.",
@@ -664,6 +702,30 @@
       "transcription": "Transcription failed. Try again."
     },
     "failureKeptInHistory": "The text is in clipboard history.",
+    "fix": {
+      "description": "Select the words a dictation got wrong in any app and press {shortcut} to write how they are spelled. stella reads the selection only when you press it.",
+      "taken": "Another app is using {shortcut}. The Dictation menu of the stella icon offers the same.",
+      "title": "Shortcut to fix a dictation"
+    },
+    "fixPanel": {
+      "dictatedAs": "Dictated as",
+      "hint": "stella will write these words this way in your next dictations, on all your devices.",
+      "notSaved": "The fix could not be saved. Check that stella is connected to your account.",
+      "nothing": "Select the wrong words in the app first, or type them here.",
+      "pick": "Pick the wrong words from your last dictation:",
+      "refused": {
+        "empty": "Fill in both fields.",
+        "lineBreak": "A fix is one line of text.",
+        "punctuation": "Pick the dictated words without punctuation.",
+        "same": "The words are already written this way.",
+        "tooLong": "That is too long for one fix.",
+        "tooManyWords": "A fix takes at most three words."
+      },
+      "save": "Save fix",
+      "saving": "Saving the fix…",
+      "title": "Fix a dictated word",
+      "writtenAs": "Written as"
+    },
     "groups": {
       "cleanup": "Clean up",
       "shortcut": "Shortcut",
@@ -684,6 +746,17 @@
       "description": "Automatic uses this computer’s display and keyboard languages. With more than one, each word is recognized in the language you speak it in.",
       "noResults": "No languages found",
       "title": "Dictation language"
+    },
+    "learned": {
+      "delete": "Delete what stella learned",
+      "description": "When you correct a dictated word the same way twice, or fix it with {shortcut}, stella writes it that way in later dictations. Synced to your other devices; only you can see them.",
+      "empty": "No fixes learned yet.",
+      "failed": "The fix could not be changed.",
+      "fix": "{from} → {to}",
+      "group": "Learned fixes",
+      "title": "Fixes learned from your corrections",
+      "unreadable": "What stella learned could not be read.",
+      "working": "Saving the change…"
     },
     "lede": "Hold <key>{shortcut}</key> and speak. The text appears where you are typing.",
     "microphone": {
@@ -1135,6 +1208,8 @@
       "available": "Version {version} is available.",
       "checkFailed": "stella desktop could not check for updates.",
       "deferred": "Version {version} waits while documents are open for editing. When you finish, check again to install it, or it installs at the next automatic check.",
+      "downloadProgress": "{percent}% downloaded",
+      "downloading": "Downloading version {version}. stella desktop restarts once it is installed.",
       "install": "Install and restart",
       "installFailed": "stella desktop could not install the update.",
       "installInProgress": "An update is being installed.",
@@ -1199,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Discard my edits",
+      "editorLabel": "Cleaned-up text editor",
       "failedCount": "{count, plural, one {# part not cleaned up} other {# parts not cleaned up}}",
       "fileNameMarkdown": "{title} cleaned up.md",
       "fileNameText": "{title} cleaned up.txt",
@@ -1270,6 +1347,7 @@
       "audioMissing": "The recording is no longer open in this window, so it was not saved to the matter.",
       "audioTooLarge": "The recording is larger than {size}, so it was not saved to the matter.",
       "cleanedDocxFileName": "{title} cleaned up.docx",
+      "cleanedNotFiled": "The cleaned-up text could not be saved to the matter.",
       "cleanedTitle": "{title} cleaned up",
       "documents": "Saving the Word documents…",
       "docxFileName": "{title} transcript.docx",
@@ -1312,7 +1390,6 @@
       "saveToMatterFailed": "The transcript could not be saved to the matter. Try again.",
       "saveWithTimestamps": "Text with timestamps (.txt)",
       "saveWithoutTimestamps": "Text without timestamps (.txt)",
-      "savedToMatter": "Saved to {matter} as {fileName}.",
       "savingToMatter": "Saving…",
       "thisComputer": "This computer",
       "transcriptTitle": "Transcript"
@@ -1334,6 +1411,7 @@
     "activityResume": "Resume recording",
     "checkForUpdates": "Check for updates",
     "dictation": "Dictation",
+    "dictationFix": "Fix last dictation…",
     "dictationHint": "Hold {key} to dictate",
     "dictationRetype": "Type last dictation again",
     "dictationSettings": "Dictation settings…",
@@ -1356,13 +1434,16 @@
     "sessionOpeningInOffice": "Opening in Office",
     "sessionSavingDraft": "Saving draft",
     "settings": "Settings",
+    "showTranscription": "Show transcription",
     "support": "Support",
     "supportCopyDiagnostics": "Copy diagnostics",
     "supportEmailSupport": "Email support",
     "supportRevealAppData": "Reveal app data",
     "temporaryWorkingCopies": "Temporary working copies",
     "transcribeRecording": "Transcribe a recording…",
-    "updateReady": "Update ready",
+    "transcriptionProgress": "Transcription in progress: {done} of {total} min",
+    "transcriptionProgressSoFar": "Transcription in progress: {done} min so far",
+    "transcriptionReady": "Transcription ready",
     "updatesManaged": "Updates managed by your organization"
   }
 }

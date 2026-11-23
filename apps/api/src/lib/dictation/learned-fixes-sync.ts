@@ -21,7 +21,7 @@ import { applyLearnedFixChanges } from "@stll/transcript/learned-fixes";
  */
 export const REMEMBERED_DEVICES = 100;
 
-export type DeviceChangeNumber = { device: string; seq: number };
+type DeviceChangeNumber = { device: string; seq: number };
 
 /** One generation's fixes and each device's highest applied change number. */
 export type LearnedFixesState = {

@@ -264,6 +264,15 @@ const Screens = () => {
               }}
             />
             <Stack.Screen
+              name="part/save"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
               name="share/[shareId]"
               options={{ ...pushedScreen, presentation: "modal" }}
             />

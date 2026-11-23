@@ -372,7 +372,8 @@
     "drizzle-orm@1.0.0-rc.5": "patches/drizzle-orm@1.0.0-rc.5.patch",
     "@vscode/markdown-editor@0.0.2-184": "patches/@vscode%2Fmarkdown-editor@0.0.2-184.patch",
     "@better-auth/oauth-provider@1.7.25": "patches/@better-auth%2Foauth-provider@1.7.25.patch",
-    "@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch"
+    "@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch",
+    "@neftaly/editcontext-polyfill@0.1.1": "patches/@neftaly%2Feditcontext-polyfill@0.1.1.patch"
   },
   "trustedDependencies": [
     "lefthook"

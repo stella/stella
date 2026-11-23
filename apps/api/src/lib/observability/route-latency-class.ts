@@ -211,6 +211,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/desktop-edit-sessions/:sessionId/events": "stream",
   "GET /v1/desktop-edit-sessions/:sessionId/status": "crud",
   "GET /v1/desktop/billing-drafts/settings": "crud",
+  "GET /v1/desktop/dictation/cleanup-models": "crud",
   "GET /v1/desktop/dictation/learned-fixes": "crud",
   "GET /v1/desktop/dictation/models": "crud",
   "GET /v1/dictation/learned-fixes": "crud",

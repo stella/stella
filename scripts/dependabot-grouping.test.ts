@@ -76,7 +76,7 @@ const ignorePolicies = {
   },
   katex: {
     blocker: "@streamdown/math",
-    repositoryBlocker: "apps/web/package.json",
+    repositoryBlocker: "packages/markdown-editor/package.json",
     type: "upstream_blocker",
   },
   "react-native": {

@@ -53,17 +53,7 @@ const APP_STATE = {
   sessions: [],
   trustedSelfHostConnections: [],
   update: {
-    baseUrl: null,
-    channel: null,
-    currentHash: null,
     currentVersion: "0.9.4",
-    lastCheckedAt: null,
-    latestHash: null,
-    latestVersion: null,
-    status: "idle",
-    statusMessage: "",
-    updateAvailable: false,
-    updateReady: false,
   },
 } satisfies AppSnapshot;
 
@@ -77,6 +67,7 @@ const ACCOUNT = {
   identity: { organizationId: "organization-1", userId: "user-1" },
   server: "https://app.example.test",
   status: "connected",
+  avatar: null,
 } satisfies DesktopAccountSnapshot;
 
 type Native = {
@@ -104,8 +95,10 @@ const renderApp = async ({
           return snapshot === "ready"
             ? APP_STATE
             : await Promise.withResolvers<never>().promise;
+        case "updater_state":
+          return { revision: 1, state: { status: "idle" } };
         case "check_for_updates":
-          return { status: "up_to_date" };
+          return { revision: 2, state: { status: "up_to_date" } };
         case "is_activity_enabled":
           return activity;
         case "dictation_get_snapshot":

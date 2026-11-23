@@ -16,6 +16,7 @@ import {
   DESKTOP_RUNNER_DESKTOP_MESSAGE,
   DESKTOP_RUNNER_OUTPUT_EVENT,
 } from "@stll/api-contract/desktop-runner";
+import { UNSCANNED_CONTENT_WARNING } from "@stll/api-contract/file-scan-warnings";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatThreads, chatTurns, userFiles } from "@/api/db/schema";
@@ -241,11 +242,13 @@ const storeFile = async ({
   fileName,
   mimeType,
   placeholder = null,
+  scanWarnings = null,
 }: {
   threadId: SafeId<"chatThread">;
   fileName: string;
   mimeType: string;
   placeholder?: string | null;
+  scanWarnings?: string[] | null;
 }) => {
   const id = createSafeId<"userFile">();
   await testDb.insert(userFiles).values({
@@ -262,6 +265,7 @@ const storeFile = async ({
     }),
     threadId,
     placeholder,
+    scanWarnings,
   });
   return id;
 };
@@ -321,6 +325,7 @@ describe("a file a turn on the computer hands back", () => {
               threadId,
               fileName: "report.pdf",
               mimeType: "application/pdf",
+              scanWarnings: [UNSCANNED_CONTENT_WARNING.encrypted],
             });
             const chart = await storeFile({
               threadId,
@@ -362,6 +367,15 @@ describe("a file a turn on the computer hands back", () => {
         },
         source: { type: "url", mimeType: "image/png" },
       });
+      // What the scan could not read is said of the file live and after a
+      // reload alike, and only of the file it holds for.
+      expect(fileParts(reload).map(({ metadata }) => metadata)).toEqual([
+        { filename: "report.pdf", unscannedContent: ["encrypted"] },
+        {
+          filename: "chart.png",
+          placeholder: "data:image/png;base64,AAAA",
+        },
+      ]);
     } finally {
       client.dispose();
       await harness.close();

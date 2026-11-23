@@ -1,4 +1,4 @@
-import { useImperativeHandle, useRef, useState } from "react";
+import { useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import {
@@ -19,8 +19,8 @@ import { panic } from "better-result";
 // missing, so Chromium keeps the native path.
 import "@neftaly/editcontext-polyfill";
 import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
 
+import { useLatest } from "@stll/ui/use-latest";
 import { cn } from "@stll/ui/utils";
 
 import "@vscode/markdown-editor/editor.css";
@@ -31,20 +31,18 @@ import "katex/dist/katex.min.css";
 
 import "./markdown-hybrid-editor.css";
 
-import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useLatestCallback } from "@/hooks/use-latest-callback";
-import { openIsolatedWindow } from "@/lib/open-isolated-window";
-
 // Coalesce keystrokes before emitting upward: hosts persist on every change.
 const EMIT_DELAY_MS = 400;
 
 const NO_COMMENTS: readonly MarkdownEditorComment[] = [];
 
-/** Strips every rendered `<img>` under `root` whose source fails the data-only policy. */
-const enforceDataOnlyImagePolicy = (root: HTMLElement) => {
+/** Strips every rendered `<img>` under `root` whose source the host refuses. */
+const enforceImagePolicy = (
+  root: HTMLElement,
+  allowsImageSource: (src: string | null) => boolean,
+) => {
   for (const img of root.querySelectorAll("img")) {
-    if (!isSafeMarkdownPreviewImageSrc(img.getAttribute("src"))) {
+    if (!allowsImageSource(img.getAttribute("src"))) {
       img.removeAttribute("src");
     }
   }
@@ -61,15 +59,6 @@ export type MarkdownEditorComment = {
   author?: string | undefined;
 };
 
-/**
- * Governs which image sources the editor's rendered (inactive) blocks fetch.
- * `"data-only"` matches {@link MarkdownPreview}: only embedded `data:` image
- * URIs render; anything else is stripped so opening the document cannot
- * trigger an outbound request driven by its content. `"unrestricted"` renders
- * every image url as-is. Every host must pick one explicitly.
- */
-type MarkdownImagePolicy = "data-only" | "unrestricted";
-
 export type MarkdownHybridEditorHandle = {
   /** Flush the current source and lock input before publication begins. */
   captureForSave: () => string;
@@ -84,15 +73,27 @@ export type MarkdownHybridEditorProps = {
   markdown: string;
   /** Fired with the current markdown on every edit; debounced by default. */
   onMarkdownChange: (markdown: string) => void;
+  /** The editor region's accessible name, in the member's language. */
+  label: string;
+  /**
+   * Opens a link the user activates. The host decides how, or that links do
+   * not open at all: left to itself, the engine would navigate to any url the
+   * document names.
+   */
+  onOpenLink: (url: string) => void;
   /** Manual-save hosts need immediate changes for unsaved-work guards. */
   changeEmission?: "debounced" | "immediate";
   /**
+   * Which image sources the rendered (inactive) blocks may fetch; any other
+   * source is stripped, so opening a document cannot trigger an outbound
+   * request driven by its content. Every host decides explicitly.
+   *
    * Decided at mount, like `markdown`: the engine builds image elements
    * directly from source urls with no per-render hook, so this is enforced by
    * watching the mounted DOM rather than by filtering source text. A host
    * that needs a different policy must remount with a different `key`.
    */
-  imagePolicy: MarkdownImagePolicy;
+  allowsImageSource: (src: string | null) => boolean;
   readOnly?: boolean;
   /**
    * Text to diff against. Setting it puts the editor in diff mode: `markdown`
@@ -123,14 +124,18 @@ export type MarkdownHybridEditorProps = {
  * editing byte-for-byte.
  *
  * Generic: it edits a plain markdown string and emits changes. Domain-specific
- * concerns (skill frontmatter, workspace file persistence) live in the host.
+ * concerns (skill frontmatter, workspace file persistence) live in the host,
+ * and so does what only the host can decide: the editor's label, how a link
+ * opens and which images may load.
  */
 export const MarkdownHybridEditor = ({
   ref,
   markdown,
   onMarkdownChange,
+  label,
+  onOpenLink,
   changeEmission = "debounced",
-  imagePolicy,
+  allowsImageSource,
   readOnly = false,
   baseline,
   comments = NO_COMMENTS,
@@ -138,7 +143,6 @@ export const MarkdownHybridEditor = ({
   onDeleteComment,
   className,
 }: MarkdownHybridEditorProps) => {
-  const t = useTranslations();
   const hostRef = useRef<HTMLDivElement>(null);
   // The model is a plain object, so it can be created during render; the view
   // and controller touch the DOM and are created on mount.
@@ -159,7 +163,9 @@ export const MarkdownHybridEditor = ({
   // echoed back.
   const pushedCommentIds = useRef<ReadonlySet<string>>(new Set());
   const emit = useDebouncedCallback(onMarkdownChange, EMIT_DELAY_MS);
-  const publishChange = useLatestCallback((text: string) => {
+  // The engine and its subscriptions outlive the render that created them, so
+  // they call the host's latest callbacks through these refs.
+  const publishChange = useLatest((text: string) => {
     switch (changeEmission) {
       case "debounced":
         emit(text);
@@ -172,6 +178,21 @@ export const MarkdownHybridEditor = ({
         panic("Unhandled markdown change emission mode");
     }
   });
+  const addComment = useLatest(
+    (input: { start: number; end: number; text: string }) => {
+      onAddComment?.(input);
+    },
+  );
+  const deleteComment = useLatest((id: string) => {
+    onDeleteComment?.(id);
+  });
+  const openLink = useLatest(onOpenLink);
+  // Decided at mount, like `markdown`: a host that changes the image policy or
+  // toggles comment mode remounts the editor with a new `key`.
+  const [mountChoices] = useState(() => ({
+    allowsImageSource,
+    commentMode: readOnly && onAddComment !== undefined,
+  }));
   useImperativeHandle(ref, () => ({
     captureForSave: () => {
       hostReadOnly.set(true, undefined);
@@ -188,16 +209,13 @@ export const MarkdownHybridEditor = ({
       onMarkdownChange(nextMarkdown);
     },
   }));
-  const addComment = useLatestCallback(
-    (input: { start: number; end: number; text: string }) => {
-      onAddComment?.(input);
-    },
-  );
-  const deleteComment = useLatestCallback((id: string) => {
-    onDeleteComment?.(id);
-  });
 
-  useMountEffect(() => {
+  // Set up once per mount: every dependency below keeps its identity for the
+  // editor's life, and the engine owns its state after the seed. Later values
+  // reach the engine through the latest-value refs above and the sync effects
+  // below.
+  useEffect(() => {
+    const { allowsImageSource: allowsSource, commentMode } = mountChoices;
     const host = hostRef.current;
     if (!host) {
       panic("markdown editor host is not mounted");
@@ -207,7 +225,7 @@ export const MarkdownHybridEditor = ({
       // The host owns permissions and publication locking.
       showReadonlyToggle: false,
       onOpenLink: (url) => {
-        openIsolatedWindow(url);
+        openLink.current(url);
       },
       onToggleCheckbox: (item, checked) => {
         model.setTaskCheckboxChecked(item, checked);
@@ -227,22 +245,17 @@ export const MarkdownHybridEditor = ({
     // is an editor, and the filtered text is what the model would emit on the
     // next keystroke, so the document would silently lose image destinations the
     // user never touched.
-    if (imagePolicy === "data-only") {
-      enforceDataOnlyImagePolicy(view.element);
-    }
-    const imageObserver =
-      imagePolicy === "data-only"
-        ? new MutationObserver(() => enforceDataOnlyImagePolicy(host))
-        : undefined;
-    imageObserver?.observe(host, {
+    enforceImagePolicy(view.element, allowsSource);
+    const imageObserver = new MutationObserver(() => {
+      enforceImagePolicy(host, allowsSource);
+    });
+    imageObserver.observe(host, {
       attributeFilter: ["src"],
       childList: true,
       subtree: true,
     });
     host.append(view.element);
-    if (imagePolicy === "data-only") {
-      enforceDataOnlyImagePolicy(host);
-    }
+    enforceImagePolicy(host, allowsSource);
     const controller = new EditorController(model, view, {
       historyStrategy: new LocalHistoryStrategy(model),
     });
@@ -255,25 +268,24 @@ export const MarkdownHybridEditor = ({
     const commentsView = new CommentsView(commentsModel, view);
     // The engine only shows the affordance in read-only mode, so mounting it
     // outside a review view would be dead weight.
-    const commentModeController =
-      readOnly && onAddComment
-        ? new CommentModeController(model, view, {
-            onSubmit: ({ range, text }) => {
-              addComment({
-                start: range.start,
-                end: range.endExclusive,
-                text,
-              });
-            },
-          })
-        : undefined;
+    const commentModeController = commentMode
+      ? new CommentModeController(model, view, {
+          onSubmit: ({ range, text }) => {
+            addComment.current({
+              start: range.start,
+              end: range.endExclusive,
+              text,
+            });
+          },
+        })
+      : undefined;
     // Seeded content must not read as an edit; only later changes emit.
     let lastEmitted = model.sourceText.get().value;
     const subscription = createEffect((reader) => {
       const text = model.sourceText.read(reader).value;
       if (text !== lastEmitted) {
         lastEmitted = text;
-        publishChange(text);
+        publishChange.current(text);
       }
     });
     const commentsSubscription = createEffect((reader) => {
@@ -286,14 +298,14 @@ export const MarkdownHybridEditor = ({
       if (removed.length > 0) {
         pushedCommentIds.current = present;
         for (const id of removed) {
-          deleteComment(id);
+          deleteComment.current(id);
         }
       }
     });
     return () => {
       // A pending debounced edit would otherwise be lost on tab switch.
       emit.flush();
-      imageObserver?.disconnect();
+      imageObserver.disconnect();
       commentsSubscription.dispose();
       subscription.dispose();
       readonlySubscription.dispose();
@@ -303,21 +315,32 @@ export const MarkdownHybridEditor = ({
       view.dispose();
       view.element.remove();
     };
-  });
+  }, [
+    addComment,
+    commentsModel,
+    deleteComment,
+    emit,
+    hostReadOnly,
+    model,
+    mountChoices,
+    openLink,
+    publishChange,
+  ]);
 
-  useExternalSyncEffect(() => {
+  // Pushes the host's lock into the engine whenever it changes.
+  useEffect(() => {
     hostReadOnly.set(readOnly, undefined);
     model.readonlyMode.set(readOnly, undefined);
   }, [hostReadOnly, model, readOnly]);
 
-  useExternalSyncEffect(() => {
+  useEffect(() => {
     model.baseline.set(
       baseline === undefined ? undefined : new StringValue(baseline),
       undefined,
     );
   }, [model, baseline]);
 
-  useExternalSyncEffect(() => {
+  useEffect(() => {
     pushedCommentIds.current = new Set(comments.map((comment) => comment.id));
     commentsModel.set(
       comments.map((comment) => ({
@@ -331,7 +354,7 @@ export const MarkdownHybridEditor = ({
 
   return (
     <div
-      aria-label={t("markdownEditor.rawLabel")}
+      aria-label={label}
       // Markdown source is a left-to-right document even under an RTL locale:
       // syntax markers, caret movement, and block layout must not mirror.
       dir="ltr"

@@ -467,6 +467,10 @@
     "retry": "Reintentar",
     "title": "Documento",
     "unrendered": "Este documento no se puede mostrar aquí, pero la vista previa del sistema quizá pueda abrirlo.",
+    "unscannedContent": {
+      "encrypted": "Algunos archivos que contiene están protegidos con contraseña, por lo que no se han analizado en busca de amenazas.",
+      "unsupportedCompression": "Algunos archivos que contiene están comprimidos en un formato que stella no puede leer, por lo que no se han analizado en busca de amenazas."
+    },
     "zoomFit": "Ajustar al ancho",
     "zoomIn": "Acercar",
     "zoomOut": "Alejar"
@@ -550,6 +554,8 @@
     "noFilesInside": "No contiene ningún archivo.",
     "noMatches": "Ningún archivo coincide con «{query}».",
     "open": "Abrir {fileName} ({details})",
+    "saveFailed": "No se ha podido guardar el archivo en el asunto. Inténtalo de nuevo.",
+    "saveNamed": "Guardar {fileName} en un asunto",
     "search": "Buscar un archivo por nombre o carpeta",
     "unavailable": {
       "encrypted": "Protegido con contraseña, no se puede abrir",

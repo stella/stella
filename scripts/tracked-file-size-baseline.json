@@ -11,8 +11,8 @@
   },
   {
     "path": "apps/landing/public/media/changelog/legal-file-formats.mp4",
-    "maxBytes": 2737991,
-    "reason": "Changelog demo video for the v0.9.88 file formats note, served by the landing site."
+    "maxBytes": 3285374,
+    "reason": "Changelog demo video for the v0.9.88 file formats note (refreshed recording with mailbox exports), served by the landing site."
   },
   {
     "path": "provenance/projects/root/sbom.cdx.json",

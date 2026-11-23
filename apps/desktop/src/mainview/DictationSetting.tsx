@@ -54,10 +54,15 @@ import type {
   DictationAppSetting,
   DictationRecentApp,
 } from "./DictationAppSettings";
+import {
+  DictationCleanupInstructionsRow,
+  DictationCleanupModelRow,
+} from "./DictationCleanupPreferences";
 import { DictationCustomWords } from "./DictationCustomWords";
 import { DictationDestination } from "./DictationDestination";
 import type { DictationDestinationValue } from "./DictationDestination";
 import { DictationInputFix } from "./DictationInputFix";
+import { DictationLearnedFixes } from "./DictationLearnedFixes";
 import { DictationMicrophoneRow } from "./DictationMicrophone";
 import { DictationWhileDictatingRows } from "./DictationWhileDictating";
 import type { WhileDictating } from "./DictationWhileDictating";
@@ -103,6 +108,11 @@ export type DictationSnapshot = {
   cleanupStyle: DesktopDictationCleanupStyle;
   /** The language cleanup writes the text in; null: the spoken one. */
   translateTo: DesktopDictationTranslationLanguage | null;
+  /** What the speaker wrote for cleanup to follow; null: nothing. */
+  cleanupInstructions: string | null;
+  /** The model the speaker chose for cleanup, as the list names it; null:
+   *  automatic, the organization's fast model. */
+  cleanupModel: string | null;
   /** Whether the server enables transcription by stella AI; without it the
    *  choice of destination is not offered. */
   cloudAvailable: boolean;
@@ -144,6 +154,11 @@ export type DictationSnapshot = {
     | null;
   /** Whether the failed dictation's text is in clipboard history. */
   failureKeptInHistory: boolean;
+  /** Whether a shortcut opens the panel that fixes a dictation's words,
+   *  its keys, and whether another app holds them. */
+  fixKeys: ShortcutKeys;
+  fixShortcut: boolean;
+  fixShortcutTaken: boolean;
   /** The key dictation listens for, and what this computer offers. */
   holdKey: HoldKey;
   holdKeys: HoldKey[];
@@ -511,6 +526,14 @@ const DictationPage = ({
             onChange={setCustomWords}
             words={snapshot.customWords}
           />
+          <DictationLearnedFixes
+            shortcut={formatShortcut({
+              keys: snapshot.fixKeys,
+              layout,
+              locale,
+              platform: DESKTOP_PLATFORM,
+            })}
+          />
           {/* With stella AI the model is not needed, but a downloaded one
               can still be removed. */}
           {(snapshot.destination === "local" ||
@@ -603,6 +626,19 @@ const DictationShortcutSection = ({
           platform: DESKTOP_PLATFORM,
         })}
         taken={snapshot.retypeShortcutTaken}
+      />
+      <DictationFixRow
+        checked={snapshot.fixShortcut}
+        onChange={(enabled) => {
+          change("dictation_set_fix_shortcut", { enabled });
+        }}
+        shortcut={formatShortcut({
+          keys: snapshot.fixKeys,
+          layout,
+          locale,
+          platform: DESKTOP_PLATFORM,
+        })}
+        taken={snapshot.fixShortcutTaken}
       />
     </SettingsSection>
   );
@@ -772,6 +808,41 @@ const DictationRetypeRow = ({
   );
 };
 
+/** The shortcut that opens the panel fixing a dictation's words; the tray
+ *  offers the same whether or not it is on. */
+const DictationFixRow = ({
+  checked,
+  onChange,
+  shortcut,
+  taken,
+}: {
+  checked: boolean;
+  onChange: (enabled: boolean) => void;
+  shortcut: string;
+  taken: boolean;
+}) => {
+  const t = useTranslations("dictation.fix");
+  const ids = settingsRowIds("dictation-fix");
+  return (
+    <SettingsRow
+      description={
+        checked && taken
+          ? t("taken", { shortcut })
+          : t("description", { shortcut })
+      }
+      id="dictation-fix"
+      title={t("title")}
+    >
+      <Switch
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        checked={checked}
+        onCheckedChange={onChange}
+      />
+    </SettingsRow>
+  );
+};
+
 /** AI cleanup: the switch, how it writes, and what it may also read. */
 const DictationCleanupSection = ({
   change,
@@ -841,6 +912,26 @@ const DictationCleanupSection = ({
         }}
         translateTo={snapshot.translateTo}
       />
+      {/* The speaker's own guidance and the model; offered only while
+          cleanup runs. */}
+      {snapshot.cleanup && (
+        <>
+          <DictationCleanupModelRow
+            cleanupModel={snapshot.cleanupModel}
+            onChange={async (model) =>
+              await change("dictation_set_cleanup_model", { model })
+            }
+          />
+          <DictationCleanupInstructionsRow
+            instructions={snapshot.cleanupInstructions}
+            onSave={async (instructions) =>
+              await change("dictation_set_cleanup_instructions", {
+                instructions,
+              })
+            }
+          />
+        </>
+      )}
       {/* What cleanup may also read; offered only while it runs. */}
       <DictationSwitchRow
         checked={snapshot.shareWindowTitle}
