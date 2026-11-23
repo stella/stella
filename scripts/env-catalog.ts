@@ -1479,6 +1479,11 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_SIDECAR_VERSION",
   "STELLA_TIMING",
   "STELLA_WEB_PORT",
+  // Web runtime only, read once at start: how many requests the server
+  // renderer handles at once before it answers 503 with Retry-After (a whole
+  // number from 2 to 1024; unset uses the default sized for a 512 MB-1 GB
+  // task). apps/web/src/ssr-admission.ts parses it.
+  "STELLA_WEB_SSR_MAX_IN_FLIGHT",
   // Set by the API for each extraction worker run, never deployed: the code
   // page a tie between readings of a ZIP archive's undeclared file names
   // goes to (`ibm437` or `ibm852`). apps/api/src/lib/files/zip-name-code-page.ts
