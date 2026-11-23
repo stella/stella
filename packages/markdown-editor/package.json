@@ -15,7 +15,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",
-    "test": "bun test src",
+    "test": "bun test --isolate src",
     "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
     "lint": "cd ../.. && bun scripts/lint.ts packages/markdown-editor",
     "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/markdown-editor"

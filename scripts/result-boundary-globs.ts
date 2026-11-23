@@ -195,7 +195,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/flows/**/*.{ts,tsx}",
   "apps/web/src/components/inbox/**/*.{ts,tsx}",
   "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
-  "apps/web/src/components/markdown/**/*.{ts,tsx}",
+  "packages/markdown-editor/src/**/*.{ts,tsx}",
   "apps/web/src/components/oauth-consent/**/*.{ts,tsx}",
   "apps/web/src/components/organization/**/*.{ts,tsx}",
   "apps/web/src/components/billing/**/*.{ts,tsx}",
