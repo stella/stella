@@ -415,6 +415,7 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
             mimeType: "application/pdf",
             originalMimeType: "application/pdf",
             encrypted: false,
+            unscannedContent: [],
             stampable: false,
             presignedUrl: new URL(pdfPath, route.request().url()).href,
           }),

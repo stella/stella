@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/data-box";
 import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import type { EmailReading } from "@stll/api-contract/email-reading";
+import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import type { MailboxPreview } from "@stll/api-contract/mailbox";
 import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import type { ZipArchivePreview } from "@stll/api-contract/zip-archive";
@@ -83,7 +84,12 @@ const history = (
   versions: {
     id: string;
     versionNumber?: number;
-    file: { fieldId: string; fileName?: string; mimeType?: string } | null;
+    file: {
+      fieldId: string;
+      fileName?: string;
+      mimeType?: string;
+      unscannedContent?: UnscannedContentReason[];
+    } | null;
   }[],
 ) => ({
   entityId: "entity-1",
@@ -98,6 +104,7 @@ const history = (
             propertyId: "property-1",
             fileName: "Smlouva.docx",
             mimeType: DOCX,
+            unscannedContent: [],
             ...version.file,
             sizeBytes: 1200,
           },
@@ -273,10 +280,34 @@ describe("reading a document's file", () => {
       mimeType: "application/pdf",
       url: "https://storage.example.com/file-1?signature=abc",
       viewer: "pdf",
+      unscannedContent: [],
     });
     expect(calls).toEqual([
       "/v1/entities/matter-1/entity/entity-1/versions",
       "/v1/files/matter-1/url/field-1?purpose=display",
+    ]);
+  });
+
+  test("names the content the upload scan could not read", async () => {
+    const { fetch } = server((path) =>
+      path.endsWith("/versions")
+        ? Response.json(
+            history("version-1", [
+              {
+                id: "version-1",
+                file: {
+                  fieldId: "field-1",
+                  unscannedContent: ["encrypted", "unsupportedCompression"],
+                },
+              },
+            ]),
+          )
+        : Response.json(delivered("application/pdf")),
+    );
+    const result = await read(fetch);
+    expect(result.isOk() && result.value.unscannedContent).toEqual([
+      "encrypted",
+      "unsupportedCompression",
     ]);
   });
 

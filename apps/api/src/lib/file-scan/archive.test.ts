@@ -2,11 +2,16 @@ import { compile } from "@litko/yara-x";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import {
+  UNSCANNED_CONTENT_WARNING,
+  type UnscannedContentReason,
+} from "@stll/api-contract/file-scan-warnings";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
 
 import {
   ARCHIVE_REFUSAL_RULES,
+  ARCHIVE_UNSCANNED,
   createArchiveContentScanner,
 } from "@/api/lib/file-scan/archive";
 import type { ArchiveInspectionBudget } from "@/api/lib/file-scan/archive";
@@ -21,6 +26,9 @@ import {
   yaraWindowedRuleNames,
   yaraWindowedRules,
 } from "@/api/lib/file-scan/yara";
+import { eicarTestFile } from "@/api/tests/fixtures/eicar";
+import { makeZipArchive } from "@/api/tests/fixtures/zip-archive";
+import type { RawZipEntry } from "@/api/tests/fixtures/zip-archive";
 
 // Never fires, so every verdict below comes from inspecting the entries.
 const permissiveGuard = createZipBombGuard({
@@ -308,26 +316,6 @@ const patched = async (
 describe("archives that cannot be inspected", () => {
   test.each([
     [
-      "an encrypted entry",
-      "archive-encrypted",
-      async () =>
-        await patched((view) => {
-          for (const flagsAt of [6, centralHeaderAt(view, 0) + 8]) {
-            // oxlint-disable-next-line no-bitwise -- ZIP flag bit
-            view.setUint16(flagsAt, view.getUint16(flagsAt, true) | 1, true);
-          }
-        }),
-    ],
-    [
-      "an unsupported compression method",
-      "archive-compression-unsupported",
-      async () =>
-        await patched((view) => {
-          view.setUint16(8, 12, true);
-          view.setUint16(centralHeaderAt(view, 0) + 10, 12, true);
-        }),
-    ],
-    [
       "a damaged compressed stream",
       "archive-corrupt",
       async () =>
@@ -461,6 +449,202 @@ describe("archives that cannot be inspected", () => {
           if (refusals.length > 0) {
             expect(verdictOf(matches)).toBe("reject");
           }
+        },
+      ),
+      { numRuns: 60 },
+    );
+  });
+});
+
+// Ways an archiver writes an entry whose content cannot be read: the
+// traditional encryption flag, the strong encryption flag, WinZip AES, and a
+// compression method the inspector does not inflate (bzip2, LZMA, zstd).
+const LOCKED_KINDS = [
+  "encryptedFlag",
+  "strongEncryption",
+  "winZipAes",
+  "bzip2",
+  "lzma",
+  "zstd",
+] as const;
+type LockedKind = (typeof LOCKED_KINDS)[number];
+const LOCKED_ENTRIES = {
+  encryptedFlag: { method: 8, flags: 0x00_01, reason: "encrypted" },
+  strongEncryption: { method: 8, flags: 0x00_41, reason: "encrypted" },
+  winZipAes: { method: 99, flags: 0x00_01, reason: "encrypted" },
+  bzip2: { method: 12, flags: 0, reason: "unsupportedCompression" },
+  lzma: { method: 14, flags: 0, reason: "unsupportedCompression" },
+  zstd: { method: 93, flags: 0, reason: "unsupportedCompression" },
+} as const satisfies Record<
+  LockedKind,
+  { method: number; flags: number; reason: UnscannedContentReason }
+>;
+
+const locked = (
+  kind: LockedKind,
+  name: string,
+  data: string | Uint8Array = "<w:instrText>DDEAUTO c</w:instrText>",
+): RawZipEntry => ({
+  name,
+  data,
+  method: LOCKED_ENTRIES[kind].method,
+  flags: LOCKED_ENTRIES[kind].flags,
+});
+
+describe("entries whose content cannot be read", () => {
+  test.each(LOCKED_KINDS)("warn, not refuse, for %s", async (kind) => {
+    const matches = await scanArchive(
+      makeZipArchive([
+        locked(kind, "secret/contract.docx"),
+        { name: "readme.txt", data: "Readable notes" },
+      ]),
+      REFUSAL_BUDGET,
+    );
+    const { reason } = LOCKED_ENTRIES[kind];
+
+    expect(rulesOf(matches)).toEqual([ARCHIVE_UNSCANNED[reason].rule]);
+    expect(verdictOf(matches)).toBe("warn");
+    expect(matches.map(mapMatchFinding).map(({ message }) => message)).toEqual([
+      UNSCANNED_CONTENT_WARNING[reason],
+    ]);
+  });
+
+  test("carry one warning per reason, however many entries share it", async () => {
+    const matches = await scanArchive(
+      makeZipArchive([
+        locked("encryptedFlag", "a.pdf"),
+        locked("winZipAes", "b.pdf"),
+        locked("bzip2", "c.pdf"),
+        locked("zstd", "d.pdf"),
+      ]),
+      REFUSAL_BUDGET,
+    );
+
+    expect(rulesOf(matches)).toEqual(
+      [
+        ARCHIVE_UNSCANNED.encrypted.rule,
+        ARCHIVE_UNSCANNED.unsupportedCompression.rule,
+      ].toSorted(),
+    );
+    expect(verdictOf(matches)).toBe("warn");
+  });
+
+  test.each(["store", "deflate"] as const)(
+    "still refuse malware in a readable entry beside them (%s)",
+    async (compression) => {
+      const matches = await scanArchive(
+        makeZipArchive([
+          locked("encryptedFlag", "locked.pdf"),
+          {
+            name: "tools/readme.txt",
+            data: eicarTestFile(),
+            method: compression === "store" ? 0 : 8,
+          },
+          locked("lzma", "also-locked.pdf"),
+        ]),
+        REFUSAL_BUDGET,
+      );
+
+      expect(rulesOf(matches)).toContain("eicar_test_file");
+      expect(verdictOf(matches)).toBe("reject");
+    },
+  );
+
+  test("still scan the name of a locked entry", async () => {
+    const matches = await scanArchive(
+      makeZipArchive([
+        { name: "[Content_Types].xml", data: "<Types/>" },
+        // The macro rule needs this name, which only the locked entry gives.
+        locked("encryptedFlag", "word/vbaProject.bin", "x"),
+      ]),
+      REFUSAL_BUDGET,
+    );
+
+    expect(rulesOf(matches)).toEqual(
+      [ARCHIVE_UNSCANNED.encrypted.rule, "ooxml_macros"].toSorted(),
+    );
+  });
+
+  test("follow the same rule inside a nested archive", async () => {
+    const inner = (entries: readonly RawZipEntry[]) => ({
+      name: "bundle/inner.zip",
+      data: makeZipArchive(entries),
+      method: 0,
+    });
+    const warned = await scanArchive(
+      makeZipArchive([
+        inner([locked("winZipAes", "inner/locked.pdf"), { name: "n.txt" }]),
+      ]),
+      REFUSAL_BUDGET,
+    );
+    const refused = await scanArchive(
+      makeZipArchive([
+        inner([
+          locked("winZipAes", "inner/locked.pdf"),
+          { name: "inner/readme.txt", data: eicarTestFile() },
+        ]),
+      ]),
+      REFUSAL_BUDGET,
+    );
+
+    expect(rulesOf(warned)).toEqual([ARCHIVE_UNSCANNED.encrypted.rule]);
+    expect(verdictOf(warned)).toBe("warn");
+    expect(rulesOf(refused)).toContain("eicar_test_file");
+    expect(verdictOf(refused)).toBe("reject");
+  });
+
+  test("leave every readable entry inspected as if they were absent", async () => {
+    await assertProperty(
+      "leave every readable entry inspected as if they were absent",
+      fc.asyncProperty(
+        fc.record({
+          entries: fc.array(entryArbitrary, { minLength: 1, maxLength: 4 }),
+          lockedEntries: fc.array(
+            fc.record({
+              kind: fc.constantFrom(...LOCKED_KINDS),
+              content: entryArbitrary,
+              at: fc.nat(),
+            }),
+            { maxLength: 3 },
+          ),
+          method: fc.constantFrom(0, 8),
+        }),
+        async ({ entries, lockedEntries, method }) => {
+          const readable = uniqueNames(entries);
+          const archive: RawZipEntry[] = readable.map(({ name, content }) => ({
+            name,
+            data: content,
+            method,
+          }));
+          for (const [
+            index,
+            { kind, content, at },
+          ] of lockedEntries.entries()) {
+            // Locked content carries rule markers that must never be read.
+            archive.splice(
+              at % (archive.length + 1),
+              0,
+              locked(kind, `locked-${index}.bin`, content.content),
+            );
+          }
+          const reasons = new Set(
+            lockedEntries.map(({ kind }) => LOCKED_ENTRIES[kind].reason),
+          );
+
+          const matches = await scanArchive(
+            makeZipArchive(archive),
+            REFUSAL_BUDGET,
+          );
+
+          expect(rulesOf(matches)).toEqual(
+            [
+              ...(await wholeArchiveRules(readable)),
+              ...[...reasons].map((reason) => ARCHIVE_UNSCANNED[reason].rule),
+            ].toSorted(),
+          );
+          expect(
+            matches.filter(({ rule }) => ARCHIVE_REFUSAL_RULES.includes(rule)),
+          ).toEqual([]);
         },
       ),
       { numRuns: 60 },

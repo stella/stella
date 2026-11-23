@@ -467,6 +467,10 @@
     "retry": "Réessayer",
     "title": "Document",
     "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",
+    "unscannedContent": {
+      "encrypted": "Certains fichiers qu’il contient sont protégés par un mot de passe : ils n’ont donc pas été analysés pour détecter des menaces.",
+      "unsupportedCompression": "Certains fichiers qu’il contient sont compressés dans un format que stella ne sait pas lire : ils n’ont donc pas été analysés pour détecter des menaces."
+    },
     "zoomFit": "Ajuster à la largeur",
     "zoomIn": "Zoom avant",
     "zoomOut": "Zoom arrière"

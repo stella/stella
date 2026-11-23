@@ -57,7 +57,11 @@ import {
   readDocumentPartList,
   readOriginalDocumentFile,
 } from "@/state/document-file";
-import type { DocumentFile, LegalDocumentFile } from "@/state/document-file";
+import type {
+  DocumentFile,
+  LegalDocumentFile,
+  UnscannedContent,
+} from "@/state/document-file";
 import { useAppColors } from "@/theme";
 
 /** The key the original's control is busy under; part addresses are others. */
@@ -70,7 +74,7 @@ type Phase =
   | { readonly status: "failed"; readonly failure: Failure }
   | {
       readonly status: "legalPreview";
-      readonly file: LegalDocumentFile;
+      readonly file: LegalDocumentFile & UnscannedContent;
     }
   | {
       readonly status: "open";
@@ -275,6 +279,11 @@ const OpenedDocument = ({
     phase.status === "open" || phase.status === "legalPreview"
       ? phase.file.fileName
       : (name ?? t("title"));
+  // Content the upload scan could not read is named above the file itself.
+  const unscannedContent =
+    phase.status === "open" || phase.status === "legalPreview"
+      ? phase.file.unscannedContent
+      : [];
 
   const body = (() => {
     if (source === null || phase.status === "opening") {
@@ -435,6 +444,22 @@ const OpenedDocument = ({
           title,
         }}
       />
+      {unscannedContent.length === 0 ? null : (
+        <View
+          accessibilityRole="alert"
+          className="bg-warning/10 gap-1 px-4 py-2"
+        >
+          {unscannedContent.map((reason) => (
+            <Text
+              className="text-warning-foreground"
+              key={reason}
+              variant="caption"
+            >
+              {t(`unscannedContent.${reason}`)}
+            </Text>
+          ))}
+        </View>
+      )}
       {body}
     </View>
   );

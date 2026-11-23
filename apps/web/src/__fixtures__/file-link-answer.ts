@@ -27,6 +27,7 @@ export const fileLinkAnswer = ({
   mimeType,
   originalMimeType: mimeType,
   encrypted: false,
+  unscannedContent: [],
   presignedUrl,
   stampable: false,
 });
