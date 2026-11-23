@@ -101,11 +101,12 @@ export const readSignatureWorkerReply = async (
   if (result.isErr()) {
     return Result.err(result.error);
   }
-  if (result.value === "unreadable") {
+  const output = result.value;
+  if (output === "unreadable") {
     return Result.ok(null);
   }
   const reply = Result.try(() =>
-    new TextDecoder("utf-8", { fatal: true }).decode(result.value),
+    new TextDecoder("utf-8", { fatal: true }).decode(output),
   );
   const parsed = Result.isError(reply)
     ? null
