@@ -751,7 +751,7 @@ describe("projectForChat", () => {
         contactsOverflow: false,
         matter: {
           id: WS_UUID,
-          name: "Acme retainer",
+          name: "Lindqvist retainer",
           reference: "REF-1",
           status: "active",
           clientName: null,
