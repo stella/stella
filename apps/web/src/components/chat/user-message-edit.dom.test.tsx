@@ -258,6 +258,31 @@ describe("editing a sent message", () => {
     expect(view.getByText(en.chat.editMessageNotice)).toBeDefined();
   });
 
+  test("an attachment part of which was not scanned keeps saying so", () => {
+    const { actions } = createActions();
+    const view = renderMessage({
+      actions,
+      target: {
+        ...message,
+        parts: [
+          { type: "text", content: "Review the bundle" },
+          {
+            ...ndaDocument,
+            metadata: { filename: "nda.pdf", unscannedContent: ["encrypted"] },
+          },
+        ],
+      },
+    });
+
+    openEditor(view);
+
+    expect(
+      view.getByRole("button", {
+        name: en.workspaces.files.unscannedContent.encrypted,
+      }),
+    ).toBeDefined();
+  });
+
   test("cancel puts the message back as it was", () => {
     const { actions, submitted } = createActions();
     const view = renderMessage({ actions });

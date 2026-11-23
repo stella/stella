@@ -18,6 +18,10 @@ import {
   type ChatTurnSteering,
   chatTurnSteeringSchema,
 } from "@stll/api-contract/chat-send-intent";
+import {
+  knownUnscannedContentReasons,
+  type UnscannedContentReason,
+} from "@stll/api-contract/file-scan-warnings";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
@@ -46,12 +50,41 @@ const partSchema = v.looseObject({
   metadata: v.optional(v.unknown()),
 });
 
-/** An attached file's part: an image or a document, with the file's name and type. */
+/**
+ * An attached file's part: an image or a document, with the file's name and
+ * type, and why some of its content was not scanned, if it was not. A reason
+ * this build does not know is skipped rather than failing the file.
+ */
 const filePartSchema = v.object({
   type: v.picklist(["image", "document"]),
   source: v.looseObject({ mimeType: v.optional(v.string()) }),
-  metadata: v.optional(v.looseObject({ filename: v.optional(v.string()) })),
+  metadata: v.optional(
+    v.looseObject({
+      filename: v.optional(v.string()),
+      unscannedContent: v.optional(v.unknown()),
+    }),
+  ),
 });
+
+/** A file as a message in the thread shows it. */
+export type ShownFile = SentFile & {
+  /** Why some of the file's content was not scanned when it was stored. */
+  readonly unscannedContent: readonly UnscannedContentReason[];
+};
+
+/** The file a stored part attaches, as the thread shows it; null for any other part. */
+export const shownFileOf = (part: unknown): ShownFile | null => {
+  const file = v.safeParse(filePartSchema, part);
+  return file.success
+    ? {
+        name: file.output.metadata?.filename ?? "",
+        mimeType: file.output.source.mimeType ?? "",
+        unscannedContent: knownUnscannedContentReasons(
+          file.output.metadata?.unscannedContent,
+        ),
+      }
+    : null;
+};
 
 const messageSchema = v.object({
   id: v.pipe(v.string(), v.minLength(1)),
@@ -92,7 +125,7 @@ export type ChatEntry = {
   readonly text: string;
   /** An answer as it is drawn; a person's own message draws its `text`. */
   readonly blocks: readonly AnswerBlock[];
-  readonly files: readonly SentFile[];
+  readonly files: readonly ShownFile[];
   readonly drafts: readonly ChatDraftDocument[];
   /** Why the answer's turn failed; absent for one that did not. */
   readonly failure?: AIErrorKind;
@@ -187,17 +220,7 @@ export const toChatEntry = (message: StoredMessage): ChatEntry | undefined => {
   const text = messageText(message.parts);
   const blocks =
     message.role === "assistant" ? answerBlocks(message.parts) : [];
-  const files = message.parts.flatMap((part): SentFile[] => {
-    const file = v.safeParse(filePartSchema, part);
-    return file.success
-      ? [
-          {
-            name: file.output.metadata?.filename ?? "",
-            mimeType: file.output.source.mimeType ?? "",
-          },
-        ]
-      : [];
-  });
+  const files = message.parts.flatMap((part) => shownFileOf(part) ?? []);
   const drafts = draftDocumentsOf(message.parts);
   const failure =
     message.role === "assistant"
@@ -282,7 +305,11 @@ export const sentEntry = ({
   text,
   blocks: [],
   // The thread names each file; its bytes have gone with the message.
-  files: files.map(({ mimeType, name }) => ({ mimeType, name })),
+  files: files.map(({ mimeType, name }) => ({
+    mimeType,
+    name,
+    unscannedContent: [],
+  })),
   drafts: [],
   contextNotice: null,
 });

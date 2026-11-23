@@ -358,12 +358,20 @@ pub async fn email_support() -> Result<bool, String> {
   Ok(SessionManager::email_support())
 }
 
-/// Settings → About: whether a newer version exists. Installs nothing.
+/// Settings → About: what the updater is doing, whoever started it. Changes
+/// follow as `updater::UPDATER_STATE_EVENT`.
+#[tauri::command]
+pub fn updater_state() -> crate::updater::UpdaterSnapshot {
+  crate::updater::current()
+}
+
+/// Settings → About: whether a newer version exists. Installs nothing; a
+/// failure is the answer's state.
 #[tauri::command]
 pub async fn check_for_updates(
   app: tauri::AppHandle,
-) -> Result<crate::updater::SettingsCheck, String> {
-  crate::updater::check_from_settings(&app).await
+) -> Result<crate::updater::UpdaterSnapshot, String> {
+  Ok(crate::updater::check_from_settings(&app).await)
 }
 
 /// Settings → About: installs through the check the tray and the
@@ -372,13 +380,11 @@ pub async fn check_for_updates(
 pub async fn install_update(
   app: tauri::AppHandle,
   state: State<'_, AppState>,
-) -> Result<crate::updater::SettingsCheck, String> {
+) -> Result<crate::updater::UpdaterSnapshot, String> {
   let sessions = state.inner().as_ref();
   let active_edit_sessions =
     move || async move { sessions.lock().await.has_active_edit_sessions() };
-  crate::updater::settings_outcome(
-    crate::updater::run_check(&app, active_edit_sessions).await,
-  )
+  Ok(crate::updater::install_from_settings(&app, active_edit_sessions).await)
 }
 
 #[tauri::command]

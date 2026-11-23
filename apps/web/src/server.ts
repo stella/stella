@@ -14,6 +14,7 @@ import { readRequestPresentationPrefs } from "@/lib/account/presentation-prefs/s
 import { getAnalytics } from "@/lib/analytics/provider";
 import { browserApiBaseUrl, externalApiOrigin } from "@/lib/api-origins";
 import { frameSandboxUrls } from "@/lib/api-url";
+import { isSearchUnavailableError } from "@/lib/public-law-api";
 import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
 import { withContentSecurityPolicy } from "@/security/content-security-policy.server";
 import {
@@ -22,7 +23,11 @@ import {
 } from "@/ssr-error-reporter";
 import { renderSsrResponse } from "@/ssr-renderer";
 import { isSsrDocumentRequest } from "@/ssr-request";
-import { documentStatus, SSR_STATUS_HEADER } from "@/ssr-response-status";
+import {
+  documentStatus,
+  markRetryableDocumentFailure,
+  SSR_STATUS_HEADER,
+} from "@/ssr-response-status";
 import { fetchBoundedSsrResponse } from "@/ssr-response-stream";
 
 // @stll/anonymize-wasm's native pipeline (2.0+) runs on a
@@ -88,6 +93,14 @@ export default createServerEntry({
                               readRequestPresentationPrefs(),
                             );
                           }
+                          markRetryableDocumentFailure({
+                            errors: router.state.matches.flatMap((match) =>
+                              match.status === "error" ? [match.error] : [],
+                            ),
+                            headers: responseHeaders,
+                            isRetryable: isSearchUnavailableError,
+                            routerStatus: getSsrStatus(router),
+                          });
                           const rendered = await renderSsrResponse({
                             request: renderRequest,
                             rendererSignal,

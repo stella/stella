@@ -219,6 +219,36 @@ describe("local-only data stays in the feature's own windows", () => {
     expect(settings).not.toContain("activity_get_day");
   });
 
+  test("the Settings window reaches clipboard settings, never the history", async () => {
+    const featureById = (id: string) => {
+      const feature = LOCAL_ONLY_FEATURES.find(
+        (candidate) => candidate.id === id,
+      );
+      if (!feature) {
+        throw new TypeError(`Missing local-only feature: ${id}`);
+      }
+      return feature;
+    };
+    const settings = await featureCommands(featureById("clipboard_settings"));
+    const history = await featureCommands(featureById("clipboard"));
+    const capability = parseJson(await readNative("capabilities/default.json"));
+    if (!isRecord(capability)) {
+      throw new TypeError("Invalid default capability");
+    }
+    const granted = new Set(
+      stringArray(capability["permissions"], "default.json"),
+    );
+    expect(history).toContain("clipboard_get_snapshot");
+    for (const command of history) {
+      expect(granted, command).not.toContain(commandPermission(command));
+    }
+    expect(settings).toContain("clipboard_get_settings");
+    expect(settings).not.toContain("clipboard_get_snapshot");
+    for (const command of settings) {
+      expect(granted, command).toContain(commandPermission(command));
+    }
+  });
+
   test.each(featureCases)(
     "every %s command requires a verified caller",
     async (_id, feature) => {

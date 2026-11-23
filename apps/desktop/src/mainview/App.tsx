@@ -71,6 +71,7 @@ import type { DesktopAccountState } from "./account-presentation";
 import { AccountAvatar } from "./AccountAvatar";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
+import { ClipboardSettingsSections } from "./ClipboardSettings";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting, useDictationAvailability } from "./DictationSetting";
 import { KeepAwakeSection } from "./KeepAwakeSection";
@@ -548,6 +549,7 @@ const ClipboardPane = () => {
           <ShortcutSetting />
         </SettingsPanel>
       </SettingsSection>
+      <ClipboardSettingsSections />
     </>
   );
 };
@@ -1306,8 +1308,6 @@ const App = () => {
         accountState={accountState}
         current={shownPage}
         onSelect={(nextPage) => {
-          // An update check's answer belongs to the visit that asked.
-          updateCheck.dismiss();
           setActivePage(nextPage);
           // Choosing a page by hand is never the link's visit.
           setAgentSettingsFocus(null);

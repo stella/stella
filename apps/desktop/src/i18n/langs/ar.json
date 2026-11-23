@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "كل المقتطفات",
+    "allResults": "كل النتائج",
     "bold": "عريض",
     "bulletedList": "قائمة نقطية",
     "cancel": "إلغاء",
@@ -378,6 +379,7 @@
     "moveToGroup": "النقل إلى مجموعة",
     "newGroupOption": "مجموعة جديدة…",
     "noGroup": "بلا مجموعة",
+    "noGroupMatches": "لا توجد نتائج مطابقة في هذه المجموعة",
     "noResults": "لا توجد مقتطفات مطابقة",
     "noResultsSearchRegistries": "البحث عن «{query}» في السجلات",
     "numberedList": "قائمة مرقّمة",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "افتحها من أي مكان.",
     "welcomeStart": "ابدأ النسخ",
     "welcomeTitle": "تعرّف على حافظتك"
+  },
+  "clipboardSettings": {
+    "capture": "حفظ المقاطع الجديدة",
+    "captureDescription": "أوقف هذا الخيار للتوقف عن حفظ ما تنسخه.",
+    "errorSave": "تعذّر حفظ التغيير. حاول مرة أخرى.",
+    "excludedDescription": "لا يُحفظ أي شيء تنسخه في هذه التطبيقات.",
+    "excludedEmpty": "لاستبعاد تطبيق، انقر بزر الماوس الأيمن على أحد مقاطعه في الحافظة واختر إيقاف حفظ المقاطع الجديدة منه.",
+    "groupActions": "إجراءات {groupName}",
+    "groupsDescription": "اسحب مجموعة لتغيير موضعها في الحافظة.",
+    "groupsEmpty": "أنشئ مجموعة، ثم اسحب المقاطع إليها في الحافظة.",
+    "history": "السجل",
+    "moveGroupDown": "نقل لأسفل",
+    "moveGroupUp": "نقل لأعلى",
+    "recordingsDescription": "السماح بظهور الحافظة في لقطات الشاشة والتسجيلات ومشاركة الشاشة.",
+    "retentionDescription": "تُحذف المقاطع الأقدم، وتبقى المقاطع الموجودة في مجموعة."
   },
   "dialog": {
     "accountEmail": "الحساب",
@@ -1170,6 +1187,8 @@
       "available": "الإصدار {version} متاح.",
       "checkFailed": "تعذّر على stella desktop التحقق من التحديثات.",
       "deferred": "ينتظر الإصدار {version} ما دامت المستندات المفتوحة قيد التحرير. عند الانتهاء، تحقّق مجددًا لتثبيته، وإلا فسيُثبَّت عند التحقق التلقائي التالي.",
+      "downloadProgress": "تم تنزيل {percent}%",
+      "downloading": "جارٍ تنزيل الإصدار {version}. سيُعاد تشغيل stella desktop بعد تثبيته.",
       "install": "التثبيت وإعادة التشغيل",
       "installFailed": "تعذّر على stella desktop تثبيت التحديث.",
       "installInProgress": "جارٍ تثبيت تحديث.",
@@ -1398,7 +1417,6 @@
     "supportRevealAppData": "إظهار بيانات التطبيق",
     "temporaryWorkingCopies": "نسخ العمل المؤقتة",
     "transcribeRecording": "تحويل تسجيل إلى نص…",
-    "updateReady": "التحديث جاهز",
     "updatesManaged": "تدير مؤسستك التحديثات"
   }
 }

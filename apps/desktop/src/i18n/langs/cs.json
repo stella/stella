@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Všechny klipy",
+    "allResults": "Všechny výsledky",
     "bold": "Tučné",
     "bulletedList": "Odrážkový seznam",
     "cancel": "Zrušit",
@@ -378,6 +379,7 @@
     "moveToGroup": "Přesunout do skupiny",
     "newGroupOption": "Nová skupina…",
     "noGroup": "Bez skupiny",
+    "noGroupMatches": "V této skupině nic neodpovídá",
     "noResults": "Žádné odpovídající výstřižky",
     "noResultsSearchRegistries": "Hledat „{query}“ v rejstřících",
     "numberedList": "Číslovaný seznam",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Otevřete ji odkudkoli.",
     "welcomeStart": "Začít kopírovat",
     "welcomeTitle": "Seznamte se se schránkou"
+  },
+  "clipboardSettings": {
+    "capture": "Ukládat nové výstřižky",
+    "captureDescription": "Po vypnutí se nic, co zkopírujete, neukládá.",
+    "errorSave": "Změnu se nepodařilo uložit. Zkuste to znovu.",
+    "excludedDescription": "Nic, co v těchto aplikacích zkopírujete, se neukládá.",
+    "excludedEmpty": "Chcete-li aplikaci vyloučit, klikněte ve schránce pravým tlačítkem na některý její výstřižek a zvolte, že se z ní nové výstřižky ukládat nemají.",
+    "groupActions": "Akce pro skupinu {groupName}",
+    "groupsDescription": "Přetažením skupiny změníte její pořadí ve schránce.",
+    "groupsEmpty": "Vytvořte skupinu a ve schránce do ní přetáhněte výstřižky.",
+    "history": "Historie",
+    "moveGroupDown": "Posunout dolů",
+    "moveGroupUp": "Posunout nahoru",
+    "recordingsDescription": "Umožní zobrazit schránku na snímcích obrazovky, v nahrávkách a při sdílení obrazovky.",
+    "retentionDescription": "Starší výstřižky se mažou. Výstřižky ve skupině zůstávají."
   },
   "dialog": {
     "accountEmail": "Účet",
@@ -1170,6 +1187,8 @@
       "available": "Je k dispozici verze {version}.",
       "checkFailed": "stella desktop nemohl zkontrolovat aktualizace.",
       "deferred": "Verze {version} čeká, dokud upravujete otevřené dokumenty. Až skončíte, zkontrolujte aktualizace znovu a nainstalujte ji, jinak se nainstaluje při příští automatické kontrole.",
+      "downloadProgress": "Staženo {percent} %",
+      "downloading": "Stahuje se verze {version}. Po instalaci se stella desktop restartuje.",
       "install": "Nainstalovat a restartovat",
       "installFailed": "stella desktop nemohl nainstalovat aktualizaci.",
       "installInProgress": "Instaluje se aktualizace.",
@@ -1398,7 +1417,6 @@
     "supportRevealAppData": "Zobrazit data aplikace",
     "temporaryWorkingCopies": "Dočasné pracovní kopie",
     "transcribeRecording": "Přepsat nahrávku…",
-    "updateReady": "Aktualizace připravena",
     "updatesManaged": "Aktualizace spravuje vaše organizace"
   }
 }

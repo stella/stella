@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Todos los clips",
+    "allResults": "Todos los resultados",
     "bold": "Negrita",
     "bulletedList": "Lista con viñetas",
     "cancel": "Cancelar",
@@ -378,6 +379,7 @@
     "moveToGroup": "Mover al grupo",
     "newGroupOption": "Grupo nuevo…",
     "noGroup": "Sin grupo",
+    "noGroupMatches": "No hay coincidencias en este grupo",
     "noResults": "No hay recortes coincidentes",
     "noResultsSearchRegistries": "Buscar «{query}» en los registros",
     "numberedList": "Lista numerada",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Ábrelo desde cualquier lugar.",
     "welcomeStart": "Empezar a copiar",
     "welcomeTitle": "Conoce tu portapapeles"
+  },
+  "clipboardSettings": {
+    "capture": "Guardar recortes nuevos",
+    "captureDescription": "Desactívalo para dejar de guardar lo que copias.",
+    "errorSave": "No se pudo guardar el cambio. Inténtalo de nuevo.",
+    "excludedDescription": "No se guarda nada de lo que copias en estas aplicaciones.",
+    "excludedEmpty": "Para excluir una aplicación, haz clic derecho en uno de sus recortes en el portapapeles y elige dejar de guardar sus recortes nuevos.",
+    "groupActions": "Acciones de {groupName}",
+    "groupsDescription": "Arrastra un grupo para cambiar su posición en el portapapeles.",
+    "groupsEmpty": "Crea un grupo y luego arrastra recortes a él en el portapapeles.",
+    "history": "Historial",
+    "moveGroupDown": "Mover abajo",
+    "moveGroupUp": "Mover arriba",
+    "recordingsDescription": "Permite que las capturas de pantalla, las grabaciones y la pantalla compartida muestren el portapapeles.",
+    "retentionDescription": "Los recortes más antiguos se eliminan. Los recortes de un grupo se conservan."
   },
   "dialog": {
     "accountEmail": "Cuenta",
@@ -1170,6 +1187,8 @@
       "available": "La versión {version} está disponible.",
       "checkFailed": "stella desktop no pudo buscar actualizaciones.",
       "deferred": "La versión {version} espera mientras se editan documentos abiertos. Cuando termine, vuelva a buscar actualizaciones para instalarla, o se instalará en la próxima comprobación automática.",
+      "downloadProgress": "{percent} % descargado",
+      "downloading": "Descargando la versión {version}. stella desktop se reiniciará cuando esté instalada.",
       "install": "Instalar y reiniciar",
       "installFailed": "stella desktop no pudo instalar la actualización.",
       "installInProgress": "Se está instalando una actualización.",
@@ -1398,7 +1417,6 @@
     "supportRevealAppData": "Mostrar datos de la app",
     "temporaryWorkingCopies": "Copias de trabajo temporales",
     "transcribeRecording": "Transcribir una grabación…",
-    "updateReady": "Actualización lista",
     "updatesManaged": "Las actualizaciones las gestiona tu organización"
   }
 }
