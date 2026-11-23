@@ -1392,12 +1392,16 @@
     "sessionOpeningInOffice": "Otváranie v Office",
     "sessionSavingDraft": "Ukladanie konceptu",
     "settings": "Nastavenia",
+    "showTranscription": "Zobraziť prepis",
     "support": "Podpora",
     "supportCopyDiagnostics": "Kopírovať diagnostiku",
     "supportEmailSupport": "E-mailová podpora",
     "supportRevealAppData": "Zobraziť dáta aplikácie",
     "temporaryWorkingCopies": "Dočasné pracovné kópie",
     "transcribeRecording": "Prepísať nahrávku…",
+    "transcriptionProgress": "Prebieha prepis: {done} z {total} min",
+    "transcriptionProgressSoFar": "Prebieha prepis: zatiaľ {done} min",
+    "transcriptionReady": "Prepis je hotový",
     "updateReady": "Aktualizácia pripravená",
     "updatesManaged": "Aktualizácie spravuje vaša organizácia"
   }

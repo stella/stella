@@ -69,17 +69,22 @@ mod macos {
     if app.get_webview_window(GUIDE_WINDOW_LABEL).is_some() {
       return;
     }
-    let builder = crate::app_window::builder(app, GUIDE_WINDOW_LABEL, "index.html")
-      .title("stella desktop")
-      .inner_size(WIDTH, HEIGHT)
-      .resizable(false)
-      .decorations(false)
-      .transparent(true)
-      .shadow(true)
-      .always_on_top(true)
-      .focused(false)
-      .skip_taskbar(true)
-      .visible(false);
+    let builder = crate::app_window::builder(
+      app,
+      GUIDE_WINDOW_LABEL,
+      "index.html",
+      crate::app_window::WindowKind::Panel,
+    )
+    .title("stella desktop")
+    .inner_size(WIDTH, HEIGHT)
+    .resizable(false)
+    .decorations(false)
+    .transparent(true)
+    .shadow(true)
+    .always_on_top(true)
+    .focused(false)
+    .skip_taskbar(true)
+    .visible(false);
     if builder.build().is_err() {
       tracing::warn!("accessibility guide could not be created");
       return;

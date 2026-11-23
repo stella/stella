@@ -4,6 +4,9 @@
 # Screen selection has one owner: `window_placement`. The raw placement APIs
 # are banned everywhere else so a second "which screen" rule cannot appear;
 # the owner carries the only `allow`.
+#
+# The Dock presence has one owner too, `app_window`: the windows it built
+# decide whether stella shows in the Dock.
 disallowed-methods = [
   { path = "winsafe::MoveFileEx", reason = "create private desktop files through local_store" },
   { path = "std::fs::rename", reason = "create private desktop files through local_store" },
@@ -78,6 +81,10 @@ disallowed-methods = [
   { path = "tauri::window::Window::monitor_from_point", reason = "screen selection lives in window_placement" },
   { path = "tauri::window::Window::primary_monitor", reason = "screen selection lives in window_placement" },
   { path = "tauri::window::Window::available_monitors", reason = "screen selection lives in window_placement" },
+  { path = "tauri::App::set_activation_policy", reason = "open app windows decide the Dock presence in app_window" },
+  { path = "tauri::AppHandle::set_activation_policy", reason = "open app windows decide the Dock presence in app_window" },
+  { path = "tauri::App::set_dock_visibility", reason = "open app windows decide the Dock presence in app_window" },
+  { path = "tauri::AppHandle::set_dock_visibility", reason = "open app windows decide the Dock presence in app_window" },
   { path = "tauri::window::Window::current_monitor", reason = "screen selection lives in window_placement" },
   { path = "objc2_app_kit::NSScreen::screens", reason = "screen selection lives in window_placement" },
   { path = "objc2_app_kit::NSScreen::mainScreen", reason = "screen selection lives in window_placement" },

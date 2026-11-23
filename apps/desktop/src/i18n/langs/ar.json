@@ -1392,12 +1392,16 @@
     "sessionOpeningInOffice": "جارٍ الفتح في Office",
     "sessionSavingDraft": "حفظ المسودة",
     "settings": "الإعدادات",
+    "showTranscription": "إظهار النص",
     "support": "الدعم",
     "supportCopyDiagnostics": "نسخ معلومات التشخيص",
     "supportEmailSupport": "مراسلة الدعم بالبريد",
     "supportRevealAppData": "إظهار بيانات التطبيق",
     "temporaryWorkingCopies": "نسخ العمل المؤقتة",
     "transcribeRecording": "تحويل تسجيل إلى نص…",
+    "transcriptionProgress": "جارٍ التحويل إلى نص: {done} من {total} د",
+    "transcriptionProgressSoFar": "جارٍ التحويل إلى نص: {done} د حتى الآن",
+    "transcriptionReady": "النص جاهز",
     "updateReady": "التحديث جاهز",
     "updatesManaged": "تدير مؤسستك التحديثات"
   }

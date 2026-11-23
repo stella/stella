@@ -1392,12 +1392,16 @@
     "sessionOpeningInOffice": "Abrindo no Office",
     "sessionSavingDraft": "Salvando rascunho",
     "settings": "Configurações",
+    "showTranscription": "Mostrar transcrição",
     "support": "Suporte",
     "supportCopyDiagnostics": "Copiar diagnósticos",
     "supportEmailSupport": "Enviar e-mail ao suporte",
     "supportRevealAppData": "Mostrar dados do aplicativo",
     "temporaryWorkingCopies": "Cópias de trabalho temporárias",
     "transcribeRecording": "Transcrever uma gravação…",
+    "transcriptionProgress": "Transcrição em andamento: {done} de {total} min",
+    "transcriptionProgressSoFar": "Transcrição em andamento: {done} min até agora",
+    "transcriptionReady": "Transcrição pronta",
     "updateReady": "Atualização pronta",
     "updatesManaged": "Atualizações gerenciadas pela sua organização"
   }

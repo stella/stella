@@ -3266,6 +3266,7 @@ async fn show_takeover_dialog(
     handle,
     "takeover-dialog",
     format!("takeover-dialog.html#{hash}"),
+    crate::app_window::WindowKind::App,
   )
   .title(crate::i18n::t("dialog.takeoverWindowTitle"))
   .inner_size(400.0, 260.0)

@@ -1392,12 +1392,16 @@
     "sessionOpeningInOffice": "Opening in Office",
     "sessionSavingDraft": "Saving draft",
     "settings": "Settings",
+    "showTranscription": "Show transcription",
     "support": "Support",
     "supportCopyDiagnostics": "Copy diagnostics",
     "supportEmailSupport": "Email support",
     "supportRevealAppData": "Reveal app data",
     "temporaryWorkingCopies": "Temporary working copies",
     "transcribeRecording": "Transcribe a recording…",
+    "transcriptionProgress": "Transcription in progress: {done} of {total} min",
+    "transcriptionProgressSoFar": "Transcription in progress: {done} min so far",
+    "transcriptionReady": "Transcription ready",
     "updateReady": "Update ready",
     "updatesManaged": "Updates managed by your organization"
   }

@@ -1392,12 +1392,16 @@
     "sessionOpeningInOffice": "Atidaroma Office programoje",
     "sessionSavingDraft": "Išsaugomas juodraštis",
     "settings": "Nustatymai",
+    "showTranscription": "Rodyti transkripciją",
     "support": "Palaikymas",
     "supportCopyDiagnostics": "Kopijuoti diagnostiką",
     "supportEmailSupport": "El. pašto palaikymas",
     "supportRevealAppData": "Rodyti programos duomenis",
     "temporaryWorkingCopies": "Laikinos darbinės kopijos",
     "transcribeRecording": "Transkribuoti įrašą…",
+    "transcriptionProgress": "Transkribuojama: {done} iš {total} min.",
+    "transcriptionProgressSoFar": "Transkribuojama: kol kas {done} min.",
+    "transcriptionReady": "Transkripcija paruošta",
     "updateReady": "Naujinimas paruoštas",
     "updatesManaged": "Naujinimus valdo jūsų organizacija"
   }
