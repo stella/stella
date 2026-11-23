@@ -114,29 +114,39 @@ pub struct LearnedFix {
   pub status: FixStatus,
 }
 
-/// A change made on this computer, as the server takes it. Its id makes a
-/// resent change count once.
+/// A change made on this computer, as the server takes it. Its number, the
+/// next of this computer's, makes a resent change count once: the server
+/// applies only numbers above the highest it applied from this computer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Change {
   /// The speaker said how dictated words are spelled: on at once.
   Taught {
-    id: String,
+    /// 0 for a change an earlier build queued, numbered before it is sent.
+    #[serde(default)]
+    seq: u64,
     from: String,
     to: String,
   },
   /// The speaker switched a fix on or off.
   Switched {
-    id: String,
+    #[serde(default)]
+    seq: u64,
     from: String,
     status: Switch,
   },
 }
 
 impl Change {
-  fn id(&self) -> &str {
+  const fn seq(&self) -> u64 {
     match self {
-      Self::Taught { id, .. } | Self::Switched { id, .. } => id,
+      Self::Taught { seq, .. } | Self::Switched { seq, .. } => *seq,
+    }
+  }
+
+  const fn number(&mut self, number: u64) {
+    match self {
+      Self::Taught { seq, .. } | Self::Switched { seq, .. } => *seq = number,
     }
   }
 }
@@ -155,6 +165,50 @@ struct Stored {
   /// waiting.
   #[serde(default)]
   clear_count: u64,
+  /// The id this computer's changes go out under, made with its first
+  /// change. Kept in this file with `seq`, so the two are only ever lost
+  /// together: an id kept with a lost count would number new changes the
+  /// server already counted, and it would drop them.
+  #[serde(default)]
+  device: Option<String>,
+  /// The number of the last change made here; the next one is one more.
+  #[serde(default)]
+  seq: u64,
+}
+
+impl Stored {
+  /// Queues `change` as this computer's next.
+  fn queue(&mut self, mut change: Change) {
+    self.number_queued();
+    self.seq += 1;
+    change.number(self.seq);
+    self.pending.push(change);
+    self.with_device();
+  }
+
+  /// Numbers the changes an earlier build queued without a number; true
+  /// when it changed the file.
+  fn number_queued(&mut self) -> bool {
+    let mut numbered = false;
+    for change in &mut self.pending {
+      if change.seq() == 0 {
+        self.seq += 1;
+        change.number(self.seq);
+        numbered = true;
+      }
+    }
+    if !self.pending.is_empty() && self.device.is_none() {
+      self.with_device();
+      numbered = true;
+    }
+    numbered
+  }
+
+  fn with_device(&mut self) {
+    if self.device.is_none() {
+      self.device = Some(uuid::Uuid::new_v4().to_string());
+    }
+  }
 }
 
 /// The server's answer to every learned-fixes request.
@@ -396,11 +450,7 @@ pub fn teach(app: &AppHandle, from: &str, to: &str) -> Result<(), TeachFailure> 
     || dictation_namespace(app),
     |stored| {
       stored.fixes = taught(&stored.fixes, &from, &to);
-      stored.pending.push(Change::Taught {
-        id: uuid::Uuid::new_v4().to_string(),
-        from,
-        to,
-      });
+      stored.queue(Change::Taught { seq: 0, from, to });
     },
   )
   .map_err(|_error| TeachFailure::NotSaved)?
@@ -469,8 +519,8 @@ pub fn dictation_learned_switch(
   let namespace = dictation_namespace(&app).ok_or(NO_ACCOUNT)?;
   let fixes = update(&namespace, |stored| {
     stored.fixes = switched(&stored.fixes, &from, status);
-    stored.pending.push(Change::Switched {
-      id: uuid::Uuid::new_v4().to_string(),
+    stored.queue(Change::Switched {
+      seq: 0,
       from,
       status,
     });
@@ -488,16 +538,19 @@ pub fn dictation_learned_delete(app: AppHandle) -> Result<LearnedView, String> {
   let namespace = dictation_namespace(&app).ok_or(NO_ACCOUNT)?;
   {
     let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
-    let (generation, clear_count) =
-      read(&namespace).map_or((0, 0), |stored| (stored.generation, stored.clear_count));
+    // The count goes on: the server knows this computer's earlier numbers.
+    // A file that cannot be read starts again under a new id.
+    let kept = read(&namespace).unwrap_or_default();
     write(
       &namespace,
       &Stored {
-        generation,
+        generation: kept.generation,
         fixes: Vec::new(),
         pending: Vec::new(),
         clear_pending: true,
-        clear_count: clear_count.wrapping_add(1),
+        clear_count: kept.clear_count.wrapping_add(1),
+        device: kept.device,
+        seq: kept.seq,
       },
     )?;
   }
@@ -565,34 +618,33 @@ enum Stop {
 
 /// What one request does, decided from the file.
 enum Request {
-  /// The delete with this count; a later one stays waiting.
-  Clear(u64),
+  /// The delete with this count, of this generation: a later delete stays
+  /// waiting, and a resent one leaves what was learned after it.
+  Clear {
+    count: u64,
+    generation: u64,
+  },
   Send {
     generation: u64,
+    device: String,
     changes: Vec<Change>,
   },
-  Read,
+  Read {
+    generation: u64,
+  },
 }
 
 async fn sync_round(app: &AppHandle, namespace: &str) -> Result<Round, Stop> {
   let request = {
     let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
-    let stored = read(namespace).map_err(|_error| Stop::Failed)?;
-    if stored.clear_pending {
-      Request::Clear(stored.clear_count)
-    } else if stored.pending.is_empty() {
-      Request::Read
-    } else {
-      Request::Send {
-        generation: stored.generation,
-        changes: stored
-          .pending
-          .iter()
-          .take(contract().max_changes_per_request)
-          .cloned()
-          .collect(),
-      }
+    let mut stored = read(namespace).map_err(|_error| Stop::Failed)?;
+    // Changes an earlier build queued are numbered and written back before
+    // they go out, so a resend carries the same numbers. Otherwise nothing
+    // is written: a file Disconnect erased stays erased.
+    if stored.number_queued() {
+      write(namespace, &stored).map_err(|_error| Stop::Failed)?;
     }
+    request_for(&stored)
   };
   // The account lease is held until the reply is written, so Disconnect
   // cannot erase the file while the reply is read and then see it written
@@ -605,22 +657,63 @@ async fn sync_round(app: &AppHandle, namespace: &str) -> Result<Round, Stop> {
   Ok(if again { Round::Again } else { Round::Done })
 }
 
+/// The request for what the file holds.
+fn request_for(stored: &Stored) -> Request {
+  if stored.clear_pending {
+    return Request::Clear {
+      count: stored.clear_count,
+      generation: stored.generation,
+    };
+  }
+  let device = stored
+    .device
+    .as_ref()
+    .filter(|_device| !stored.pending.is_empty());
+  if let Some(device) = device {
+    Request::Send {
+      generation: stored.generation,
+      device: device.clone(),
+      changes: stored
+        .pending
+        .iter()
+        .take(contract().max_changes_per_request)
+        .cloned()
+        .collect(),
+    }
+  } else {
+    Request::Read {
+      generation: stored.generation,
+    }
+  }
+}
+
 /// `stored` after the server answered `request`: what it took no longer
 /// waits, and its list replaces the one here once nothing waits. True while
 /// something still waits.
 fn settle(stored: &mut Stored, request: &Request, reply: Snapshot) -> bool {
   match request {
-    Request::Clear(count) => {
+    Request::Clear { count, .. } => {
       if stored.clear_count == *count {
         stored.clear_pending = false;
       }
     }
-    Request::Send { changes, .. } => {
-      stored
-        .pending
-        .retain(|change| changes.iter().all(|sent| sent.id() != change.id()));
+    // Deleted here while the request was out: the delete goes first, and
+    // this answer is not taken.
+    Request::Send { .. } | Request::Read { .. } if stored.clear_pending => {
+      return true;
     }
-    Request::Read => {}
+    // Deleted on another device: what was learned here before it went with
+    // it, also what was learned while the request was out.
+    Request::Send { generation, .. } | Request::Read { generation }
+      if reply.generation != *generation =>
+    {
+      stored.pending.clear();
+    }
+    Request::Send { changes, .. } => {
+      let sent = changes.last().map_or(0, Change::seq);
+      stored.pending.retain(|change| change.seq() > sent);
+    }
+    Request::Read { .. } => {}
   }
   stored.generation = reply.generation;
   let settled = stored.pending.is_empty() && !stored.clear_pending;
@@ -650,15 +743,19 @@ async fn send(
   .map_err(|_error| Stop::Failed)?;
   let url = format!("{}{}", account.api_base_url, contract().path);
   let builder = match request {
-    Request::Clear(_) => client.delete(url),
+    Request::Clear { generation, .. } => {
+      client.delete(format!("{url}?generation={generation}"))
+    }
     Request::Send {
       generation,
+      device,
       changes,
     } => client.post(url).json(&serde_json::json!({
       "generation": generation,
+      "device": device,
       "changes": changes,
     })),
-    Request::Read => client.get(url),
+    Request::Read { .. } => client.get(url),
   };
   let signed = crate::http_client::device_proof_request(
     builder,
@@ -737,21 +834,141 @@ mod tests {
   fn a_reply_to_an_earlier_delete_leaves_a_later_one_waiting() {
     let mut stored = Stored {
       generation: 1,
-      fixes: Vec::new(),
-      pending: Vec::new(),
       clear_pending: true,
       clear_count: 2,
+      ..Stored::default()
     };
     let reply = || Snapshot {
       generation: 2,
       fixes: vec![fix("kept", "Kept", FixStatus::On)],
     };
-    assert!(settle(&mut stored, &Request::Clear(1), reply()));
+    let clear = |count| Request::Clear {
+      count,
+      generation: 1,
+    };
+    assert!(settle(&mut stored, &clear(1), reply()));
     assert!(stored.clear_pending);
     assert!(stored.fixes.is_empty());
-    assert!(!settle(&mut stored, &Request::Clear(2), reply()));
+    assert!(!settle(&mut stored, &clear(2), reply()));
     assert!(!stored.clear_pending);
     assert_eq!(stored.fixes, vec![fix("kept", "Kept", FixStatus::On)]);
+  }
+
+  fn taught_change(from: &str) -> Change {
+    Change::Taught {
+      seq: 0,
+      from: from.to_string(),
+      to: from.to_uppercase(),
+    }
+  }
+
+  #[test]
+  fn changes_are_numbered_in_turn_under_one_id_that_a_delete_keeps() {
+    let mut stored = Stored::default();
+    stored.queue(taught_change("one"));
+    stored.queue(taught_change("two"));
+    let numbers = stored.pending.iter().map(Change::seq).collect::<Vec<_>>();
+    assert_eq!(numbers, vec![1, 2]);
+    let device = stored.device.clone();
+    assert!(device.is_some());
+    // What a delete writes keeps the id and the count.
+    let mut deleted = Stored {
+      clear_pending: true,
+      device: stored.device.clone(),
+      seq: stored.seq,
+      ..Stored::default()
+    };
+    deleted.queue(taught_change("three"));
+    assert_eq!(deleted.pending.first().map(Change::seq), Some(3));
+    assert_eq!(deleted.device, device);
+  }
+
+  #[test]
+  fn an_answer_takes_the_changes_sent_and_leaves_the_ones_made_since() {
+    let mut stored = Stored::default();
+    stored.queue(taught_change("one"));
+    stored.queue(taught_change("two"));
+    let Request::Send {
+      generation,
+      device,
+      changes,
+    } = request_for(&stored)
+    else {
+      panic!("changes wait, so they are sent");
+    };
+    stored.queue(taught_change("three"));
+    let request = Request::Send {
+      generation,
+      device,
+      changes,
+    };
+    let reply = Snapshot {
+      generation: 0,
+      fixes: Vec::new(),
+    };
+    assert!(settle(&mut stored, &request, reply));
+    let numbers = stored.pending.iter().map(Change::seq).collect::<Vec<_>>();
+    assert_eq!(numbers, vec![3]);
+  }
+
+  #[test]
+  fn a_read_that_finds_another_devices_delete_drops_what_waits() {
+    let mut stored = Stored {
+      generation: 3,
+      ..Stored::default()
+    };
+    let request = request_for(&stored);
+    assert!(matches!(request, Request::Read { generation: 3 }));
+    // Learned here while the read was out, before the delete it finds.
+    stored.queue(taught_change("late"));
+    let reply = Snapshot {
+      generation: 4,
+      fixes: Vec::new(),
+    };
+    assert!(!settle(&mut stored, &request, reply));
+    assert!(stored.pending.is_empty());
+    assert_eq!(stored.generation, 4);
+  }
+
+  #[test]
+  fn a_delete_made_while_a_request_was_out_goes_first() {
+    let mut stored = Stored::default();
+    stored.queue(taught_change("one"));
+    let request = request_for(&stored);
+    stored.pending.clear();
+    stored.clear_pending = true;
+    stored.queue(taught_change("after"));
+    let reply = Snapshot {
+      generation: 0,
+      fixes: vec![fix("one", "ONE", FixStatus::On)],
+    };
+    assert!(settle(&mut stored, &request, reply));
+    assert!(stored.clear_pending);
+    assert!(stored.fixes.is_empty());
+    assert_eq!(stored.pending.len(), 1);
+    assert!(matches!(
+      request_for(&stored),
+      Request::Clear { generation: 0, .. }
+    ));
+  }
+
+  #[test]
+  fn changes_an_earlier_build_queued_by_id_are_numbered_once() {
+    let mut stored: Stored = serde_json::from_value(serde_json::json!({
+      "generation": 0,
+      "fixes": [],
+      "pending": [
+        {"type": "taught", "id": "id-1", "from": "novak", "to": "Novák"},
+        {"type": "switched", "id": "id-2", "from": "novak", "status": "off"},
+      ],
+      "clearPending": false,
+    }))
+    .unwrap();
+    assert!(stored.number_queued());
+    let numbers = stored.pending.iter().map(Change::seq).collect::<Vec<_>>();
+    assert_eq!(numbers, vec![1, 2]);
+    assert!(stored.device.is_some());
+    assert!(!stored.number_queued());
   }
 
   #[test]
@@ -830,22 +1047,22 @@ mod tests {
   #[test]
   fn changes_go_out_in_the_contract_shape() {
     let taught = Change::Taught {
-      id: "id-1".to_string(),
+      seq: 1,
       from: "novak".to_string(),
       to: "Novák".to_string(),
     };
     assert_eq!(
       serde_json::to_value(&taught).unwrap(),
-      serde_json::json!({"type": "taught", "id": "id-1", "from": "novak", "to": "Novák"})
+      serde_json::json!({"type": "taught", "seq": 1, "from": "novak", "to": "Novák"})
     );
     let switched = Change::Switched {
-      id: "id-2".to_string(),
+      seq: 2,
       from: "novak".to_string(),
       status: Switch::Off,
     };
     assert_eq!(
       serde_json::to_value(&switched).unwrap(),
-      serde_json::json!({"type": "switched", "id": "id-2", "from": "novak", "status": "off"})
+      serde_json::json!({"type": "switched", "seq": 2, "from": "novak", "status": "off"})
     );
   }
 
