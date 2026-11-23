@@ -6663,7 +6663,7 @@ jobs:
 
       - name: Check generated WebAssembly from a fresh Cargo cache
         id: wasm-check
-        run: bash scripts/check-generated-wasm.sh
+        run: bash scripts/check-generated-wasm.sh packages/scan-engine packages/heic-decoder packages/pst-reader
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'
