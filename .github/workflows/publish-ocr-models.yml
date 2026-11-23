@@ -84,8 +84,9 @@ jobs:
         timeout-minutes: 10
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
-          context: ${{ runner.temp }}/ocr-models
+          context: docker/ocr-models
           file: docker/ocr-models/Dockerfile
+          build-contexts: models=${{ runner.temp }}/ocr-models
           platforms: linux/amd64,linux/arm64
           provenance: false
           push: true
