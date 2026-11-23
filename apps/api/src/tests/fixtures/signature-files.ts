@@ -139,7 +139,8 @@ const DS = "http://www.w3.org/2000/09/xmldsig#";
 const XADES = "http://uri.etsi.org/01903/v1.3.2#";
 const SHA256_METHOD = "http://www.w3.org/2001/04/xmlenc#sha256";
 
-const certificateBase64 = async (commonName: string) =>
+/** The base64 DER of the certificate the fixtures embed for `commonName`. */
+export const certificateBase64 = async (commonName: string) =>
   Buffer.from(
     (await signerCertificate(commonName)).toSchema().toBER(false),
   ).toString("base64");

@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { parseXadesFile } from "@/api/lib/files/xades";
 import {
+  certificateBase64,
   detachedXades,
   digestOf,
   envelopedXades,
@@ -160,5 +161,148 @@ describe("XAdES signature files", () => {
     expect(encoded.includes(Buffer.from("Žiadosť"))).toBe(false);
     const parsed = parseXadesFile(new Uint8Array(encoded)).unwrap();
     expect(parsed.documentText).toBe("Žiadosť o vydanie");
+  });
+
+  const text = async (bytes: Promise<Uint8Array>) =>
+    new TextDecoder().decode(await bytes);
+
+  test("a countersigner's time is not the outer signer's", async () => {
+    const outer = (await text(envelopingXades(pdfLike))).replace(
+      /<xades:SigningTime>[^<]*<\/xades:SigningTime>/u,
+      "",
+    );
+    const counter = (
+      await text(envelopingXades(pdfLike, { signer: "Example countersigner" }))
+    ).replace(/^<\?xml[^>]*>\n/u, "");
+    const nested = outer.replace(
+      "</xades:QualifyingProperties>",
+      () =>
+        `<xades:UnsignedProperties><xades:UnsignedSignatureProperties><xades:CounterSignature>${counter}</xades:CounterSignature></xades:UnsignedSignatureProperties></xades:UnsignedProperties></xades:QualifyingProperties>`,
+    );
+    const parsed = parseXadesFile(encode(nested)).unwrap();
+    expect(parsed.signers).toEqual([
+      {
+        id: "signature-0.signer-0",
+        name: SIGNATURE_FIXTURE_SIGNERS[0],
+        signedAt: null,
+      },
+    ]);
+  });
+
+  test("qualifying properties without referenced signed properties are not XAdES", async () => {
+    const detached = await text(detachedXades("smlouva.pdf", pdfLike));
+    const unreferenced = detached.replace(
+      'URI="#signature-1-props"',
+      'URI="#elsewhere"',
+    );
+    expect(unreferenced).not.toBe(detached);
+    const parsed = parseXadesFile(encode(unreferenced));
+    expect(parsed.isErr() && parsed.error.reason).toBe("not_signature");
+  });
+
+  test("names the signer the signed properties identify among several certificates", async () => {
+    const signed = await text(detachedXades("smlouva.pdf", pdfLike));
+    const signerCertificate = await certificateBase64(
+      SIGNATURE_FIXTURE_SIGNERS[0],
+    );
+    const issuerCertificate = await certificateBase64(
+      SIGNATURE_FIXTURE_SIGNERS[1],
+    );
+    const issuerFirst = signed.replace(
+      "<ds:X509Data>",
+      () =>
+        `<ds:X509Data><ds:X509Certificate>${issuerCertificate}</ds:X509Certificate>`,
+    );
+    expect(
+      parseXadesFile(encode(issuerFirst)).unwrap().signers.at(0)?.name,
+    ).toBeNull();
+    const certDigest = Buffer.from(
+      await digestOf("SHA-256", Buffer.from(signerCertificate, "base64")),
+    ).toString("base64");
+    const identified = issuerFirst.replace(
+      "<xades:SignedSignatureProperties>",
+      () =>
+        `<xades:SignedSignatureProperties><xades:SigningCertificateV2><xades:Cert><xades:CertDigest><ds:DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/><ds:DigestValue>${certDigest}</ds:DigestValue></xades:CertDigest></xades:Cert></xades:SigningCertificateV2>`,
+    );
+    expect(
+      parseXadesFile(encode(identified)).unwrap().signers.at(0)?.name,
+    ).toBe(SIGNATURE_FIXTURE_SIGNERS[0]);
+  });
+
+  test("an unencoded text object is read as text, not as base64", async () => {
+    const enveloping = await text(envelopingXades(pdfLike));
+    const plain = enveloping.replace(
+      /<ds:Object Id="document"[^>]*>[^<]*<\/ds:Object>/u,
+      '<ds:Object Id="document" MimeType="text/plain">Paid</ds:Object>',
+    );
+    expect(plain).not.toBe(enveloping);
+    expect(parseXadesFile(encode(plain)).unwrap()).toMatchObject({
+      packaging: "enveloping",
+      embedded: null,
+      documentText: "Paid",
+    });
+  });
+
+  test("a reference may name an element inside an object", async () => {
+    const enveloping = await text(envelopingXades(pdfLike));
+    const nested = enveloping
+      .replace(
+        /<ds:Object Id="document"[^>]*>[^<]*<\/ds:Object>/u,
+        '<ds:Object><Terms Id="terms">Payment within 30 days</Terms></ds:Object>',
+      )
+      .replace('URI="#document"', 'URI="#terms"');
+    expect(parseXadesFile(encode(nested)).unwrap()).toMatchObject({
+      packaging: "enveloping",
+      documentText: "Payment within 30 days",
+    });
+  });
+
+  test("an enveloped signature of one element reads only that element", async () => {
+    const signed = (
+      await text(
+        envelopedXades(
+          '<doc><Terms Id="terms">Signed terms</Terms><Notes>Unsigned note</Notes></doc>',
+        ),
+      )
+    ).replace('URI=""', 'URI="#terms"');
+    const parsed = parseXadesFile(encode(signed)).unwrap();
+    expect(parsed.packaging).toBe("enveloped");
+    expect(parsed.documentText).toBe("Signed terms");
+  });
+
+  test("a wrapper whose signature signs only another file is detached", async () => {
+    const detached = (
+      await text(detachedXades("contract.pdf", pdfLike))
+    ).replace(/^<\?xml[^>]*>\n/u, "");
+    const parsed = parseXadesFile(
+      encode(`<envelope><meta>Filed 2026</meta>${detached}</envelope>`),
+    ).unwrap();
+    expect(parsed.packaging).toBe("detached");
+    expect(parsed.documentText).toBeNull();
+    expect(parsed.references.map(({ fileName }) => fileName)).toEqual([
+      "contract.pdf",
+    ]);
+  });
+
+  test("a fragment reference names its file but states no file digest", async () => {
+    const detached = (await text(detachedXades("form.xml", pdfLike))).replace(
+      'URI="form.xml"',
+      'URI="form.xml#section"',
+    );
+    expect(parseXadesFile(encode(detached)).unwrap().references).toEqual([
+      { fileName: "form.xml", digest: null },
+    ]);
+  });
+
+  test("a digest of the wrong length is not a stated digest", async () => {
+    const detached = await text(detachedXades("smlouva.pdf", pdfLike));
+    const short = detached.replace(
+      /(<ds:Reference URI="smlouva\.pdf">[\s\S]*?<ds:DigestValue>)[^<]*/u,
+      "$1AAAA",
+    );
+    expect(short).not.toBe(detached);
+    expect(parseXadesFile(encode(short)).unwrap().references).toEqual([
+      { fileName: "smlouva.pdf", digest: null },
+    ]);
   });
 });

@@ -1,9 +1,13 @@
 import { Result } from "better-result";
+import { createHash } from "node:crypto";
+
+import { sha256Hex } from "@stll/sha256/bun";
 
 import {
   certificateSubjectName,
   type SignedDigestAlgorithm,
   type StatedDigest,
+  statedDigestOf,
 } from "@/api/lib/files/cms-signed-data";
 import {
   decodeBase64Text,
@@ -114,21 +118,77 @@ const isSignature = (node: DocumentXmlNode) => isXmlDsig(node, "Signature");
 const outermostSignatures = (node: DocumentXmlNode): DocumentXmlNode[] =>
   isSignature(node) ? [node] : node.children.flatMap(outermostSignatures);
 
-const signingTime = (signature: DocumentXmlNode) => {
-  const value = findDescendant(signature, (node) =>
-    isXades(node, "SigningTime"),
-  )?.text.trim();
+/** A digest method and value, when both are well formed. */
+const statedDigest = (holder: DocumentXmlNode): StatedDigest | null => {
+  const method = dsChildren(holder, "DigestMethod").at(0);
+  const algorithm = method
+    ? DIGEST_METHODS.get(attribute(method, "Algorithm") ?? "")
+    : undefined;
+  const value = dsChildren(holder, "DigestValue").at(0);
+  const digest = value ? decodeBase64Text(value.text) : null;
+  return algorithm === undefined || digest === null
+    ? null
+    : statedDigestOf(algorithm, digest);
+};
+
+/** The signature's own nodes: a countersignature inside it is its own. */
+const ownNodes = (signature: DocumentXmlNode) => [
+  ...walk(signature, isSignature),
+];
+
+const signingTime = (own: readonly DocumentXmlNode[]) => {
+  const value = own.find((node) => isXades(node, "SigningTime"))?.text.trim();
   const time = value ? new Date(value) : null;
   return time && !Number.isNaN(time.getTime()) ? time.toISOString() : null;
 };
 
-const signerName = (signature: DocumentXmlNode) => {
+const CERTIFICATE_DIGESTS = {
+  "SHA-1": (der) => createHash("sha1").update(der).digest("hex"),
+  "SHA-224": (der) => createHash("sha224").update(der).digest("hex"),
+  "SHA-256": (der) => sha256Hex(der),
+  "SHA-384": (der) => createHash("sha384").update(der).digest("hex"),
+  "SHA-512": (der) => createHash("sha512").update(der).digest("hex"),
+} as const satisfies Record<SignedDigestAlgorithm, (der: Uint8Array) => string>;
+
+/** The digests the signed properties state for the signing certificate. */
+const signingCertificateDigests = (own: readonly DocumentXmlNode[]) =>
+  own
+    .filter((node) => isXades(node, "CertDigest"))
+    .flatMap((certDigest) => {
+      const digest = statedDigest(certDigest);
+      return digest === null ? [] : [digest];
+    });
+
+/**
+ * The signer's certificate: the only one the key info holds, or the one the
+ * signed properties identify by digest. Certificates need not come signer
+ * first, so with several and none identified the signer stays unnamed.
+ */
+const signerName = (
+  signature: DocumentXmlNode,
+  own: readonly DocumentXmlNode[],
+) => {
   const keyInfo = dsChildren(signature, "KeyInfo").at(0);
-  const certificate =
-    keyInfo &&
-    findDescendant(keyInfo, (node) => isXmlDsig(node, "X509Certificate"));
-  const der = certificate ? decodeBase64Text(certificate.text) : null;
-  return der === null ? null : certificateSubjectName(der);
+  const certificates = keyInfo
+    ? [...walk(keyInfo)].flatMap((node) => {
+        const der = isXmlDsig(node, "X509Certificate")
+          ? decodeBase64Text(node.text)
+          : null;
+        return der === null ? [] : [der];
+      })
+    : [];
+  if (certificates.length <= 1) {
+    const only = certificates.at(0);
+    return only === undefined ? null : certificateSubjectName(only);
+  }
+  const digests = signingCertificateDigests(own);
+  const identified = certificates.filter((der) =>
+    digests.some(
+      ({ algorithm, hex }) => CERTIFICATE_DIGESTS[algorithm](der) === hex,
+    ),
+  );
+  const signer = identified.length === 1 ? identified.at(0) : undefined;
+  return signer === undefined ? null : certificateSubjectName(signer);
 };
 
 /** The last path segment of an external reference, as a file name. */
@@ -140,69 +200,109 @@ const referencedFileName = (uri: string) => {
   return name.length > 0 && name.length <= 1024 ? name : null;
 };
 
+const transformsOf = (reference: DocumentXmlNode) =>
+  dsChildren(reference, "Transforms").flatMap((transforms) =>
+    dsChildren(transforms, "Transform"),
+  );
+
 /**
- * A digest compared only against untransformed bytes: once a reference names
- * a transform, its digest covers the transform's output, not the file.
+ * A digest compared only against a whole file's untransformed bytes: once a
+ * reference names a transform or a fragment, its digest covers that output.
  */
-const statedDigest = (reference: DocumentXmlNode): StatedDigest | null => {
-  const transforms = dsChildren(reference, "Transforms").at(0);
-  if (transforms !== undefined && transforms.children.length > 0) {
-    return null;
-  }
-  const method = dsChildren(reference, "DigestMethod").at(0);
-  const algorithm = method
-    ? DIGEST_METHODS.get(attribute(method, "Algorithm") ?? "")
-    : undefined;
-  const value = dsChildren(reference, "DigestValue").at(0);
-  const digest = value ? decodeBase64Text(value.text) : null;
-  return algorithm === undefined || digest === null
+const fileDigest = (
+  reference: DocumentXmlNode,
+  uri: string,
+): StatedDigest | null =>
+  transformsOf(reference).length > 0 || uri.includes("#")
     ? null
-    : { algorithm, hex: Buffer.from(digest).toString("hex") };
-};
+    : statedDigest(reference);
 
 // `#id` or `#xpointer(id('id'))`.
 const SAME_DOCUMENT_REFERENCE =
   /^#(?:xpointer\(id\(['"]([^'"]{1,256})['"]\)\)|([^\s#]{1,256}))$/u;
 
+type SignedObject = { node: DocumentXmlNode; base64Transform: boolean };
+
 type SignatureRead = {
   signer: SignatureSigner;
-  objects: DocumentXmlNode[];
+  objects: SignedObject[];
   references: SignatureReference[];
+  /** A `URI=""` reference: the whole document holding the signature. */
   coversEnclosingDocument: boolean;
+  /** Elements of the enclosing document a `#id` reference signs. */
+  enclosedTargets: DocumentXmlNode[];
+};
+
+const idsOf = (nodes: Iterable<DocumentXmlNode>) =>
+  new Map(
+    [...nodes].flatMap((node) => {
+      const id = nodeId(node);
+      return id === undefined ? [] : [[id, node] as const];
+    }),
+  );
+
+/** The ids of the signed properties this signature's own properties hold. */
+const signedPropertiesIds = (own: readonly DocumentXmlNode[]) =>
+  new Set(
+    own
+      .filter((node) => isXades(node, "SignedProperties"))
+      .flatMap((node) => {
+        const id = nodeId(node);
+        return id === undefined ? [] : [id];
+      }),
+  );
+
+const sameDocumentId = (uri: string) => {
+  const match = SAME_DOCUMENT_REFERENCE.exec(uri);
+  return match ? (match[1] ?? match[2] ?? "") : null;
+};
+
+/**
+ * An XAdES signature has signed properties of its own that its signed info
+ * references; qualifying properties alone, or a countersignature's, do not
+ * make an XML signature XAdES. This reads structure only; nothing is verified.
+ */
+const hasSignedProperties = (signature: DocumentXmlNode) => {
+  const ids = signedPropertiesIds(ownNodes(signature));
+  const signedInfo = dsChildren(signature, "SignedInfo").at(0);
+  return (signedInfo ? dsChildren(signedInfo, "Reference") : []).some(
+    (reference) => {
+      const id = sameDocumentId(attribute(reference, "URI") ?? "");
+      return id !== null && ids.has(id);
+    },
+  );
 };
 
 const readSignature = (
   signature: DocumentXmlNode,
   index: number,
+  documentIds: ReadonlyMap<string, DocumentXmlNode>,
 ): SignatureRead => {
+  const own = ownNodes(signature);
   // An object holding the signature's qualifying properties is metadata,
-  // never the signed document.
+  // never the signed document. A reference may name the object or an
+  // element inside it.
   const objects = new Map(
-    dsChildren(signature, "Object").flatMap((object) => {
-      const id = nodeId(object);
-      return id === undefined ||
-        findDescendant(object, (node) => isXades(node, "QualifyingProperties"))
-        ? []
-        : [[id, object] as const];
-    }),
-  );
-  // Ids inside the signature itself (its signed properties, its key info).
-  const ownIds = new Set(
-    [...walk(signature)].flatMap((node) => {
-      const id = nodeId(node);
-      return id === undefined ? [] : [id];
-    }),
+    dsChildren(signature, "Object")
+      .filter(
+        (object) =>
+          !findDescendant(object, (node) =>
+            isXades(node, "QualifyingProperties"),
+          ),
+      )
+      .flatMap((object) => [...idsOf(walk(object))]),
   );
   const signedInfo = dsChildren(signature, "SignedInfo").at(0);
   const read: SignatureRead = {
     signer: {
       id: `signature-${index}.signer-0`,
-      name: signerName(signature),
-      signedAt: signingTime(signature),
+      name: signerName(signature, own),
+      signedAt: signingTime(own),
     },
     objects: [],
     references: [],
     coversEnclosingDocument: false,
+    enclosedTargets: [],
   };
   for (const reference of signedInfo
     ? dsChildren(signedInfo, "Reference")
@@ -212,48 +312,69 @@ const readSignature = (
       continue;
     }
     const uri = attribute(reference, "URI");
-    if (uri === undefined || uri === "") {
+    // An omitted URI leaves the signed data to the application: nothing
+    // here says what it is.
+    if (uri === undefined) {
+      continue;
+    }
+    if (uri === "") {
       read.coversEnclosingDocument = true;
       continue;
     }
-    const sameDocument = SAME_DOCUMENT_REFERENCE.exec(uri);
-    if (sameDocument) {
-      const id = sameDocument[1] ?? sameDocument[2] ?? "";
+    const id = sameDocumentId(uri);
+    if (id !== null) {
       const object = objects.get(id);
+      const target = documentIds.get(id);
       if (object) {
-        read.objects.push(object);
-      } else if (!ownIds.has(id)) {
-        read.coversEnclosingDocument = true;
+        read.objects.push({
+          node: object,
+          base64Transform: transformsOf(reference).some(
+            (transform) =>
+              attribute(transform, "Algorithm") === BASE64_ENCODING,
+          ),
+        });
+      } else if (target) {
+        read.enclosedTargets.push(target);
       }
       continue;
     }
     read.references.push({
       fileName: referencedFileName(uri),
-      digest: statedDigest(reference),
+      digest: fileDigest(reference, uri),
     });
   }
   return read;
 };
 
-/** An enveloping object's bytes: base64 unless it holds XML elements. */
-const embeddedObject = (
-  object: DocumentXmlNode,
-): Pick<ParsedSignatureFile, "embedded" | "documentText"> => {
-  if (object.children.length > 0) {
-    return { embedded: null, documentText: subtreeText(object) || null };
+const TEXT_MEDIA_TYPE = /^(?:text\/|application\/(?:[\w.+-]+\+)?xml$)/iu;
+
+/**
+ * An enveloping object's content. It is base64 only when it says so: by its
+ * encoding, by a base64 transform, or by a media type that is not text.
+ * Otherwise its text is the document, even when it happens to parse as base64.
+ */
+const embeddedObject = ({
+  node,
+  base64Transform,
+}: SignedObject): Pick<ParsedSignatureFile, "embedded" | "documentText"> => {
+  if (node.children.length > 0) {
+    return { embedded: null, documentText: subtreeText(node) || null };
   }
-  const bytes = decodeBase64Text(object.text);
-  const declaredBase64 = attribute(object, "Encoding") === BASE64_ENCODING;
+  const mimeType = attribute(node, "MimeType") ?? null;
+  const declaredBase64 =
+    attribute(node, "Encoding") === BASE64_ENCODING || base64Transform;
+  const binary = mimeType !== null && !TEXT_MEDIA_TYPE.test(mimeType);
+  if (!declaredBase64 && !binary) {
+    return { embedded: null, documentText: node.text.trim() || null };
+  }
+  const bytes = decodeBase64Text(node.text);
   if (bytes === null) {
     return {
       embedded: null,
-      documentText: declaredBase64 ? null : object.text.trim() || null,
+      documentText: declaredBase64 ? null : node.text.trim() || null,
     };
   }
-  return {
-    embedded: { bytes, mimeType: attribute(object, "MimeType") ?? null },
-    documentText: null,
-  };
+  return { embedded: { bytes, mimeType }, documentText: null };
 };
 
 const XMLDSIG_MARKER = Buffer.from(XMLDSIG_NAMESPACE);
@@ -291,35 +412,44 @@ export const parseXadesFile = (
     );
   }
   const root = parsed.value;
-  const signatures = outermostSignatures(root).filter((signature) =>
-    findDescendant(signature, (node) => isXades(node, "QualifyingProperties")),
-  );
+  const signatures = outermostSignatures(root).filter(hasSignedProperties);
   if (signatures.length === 0) {
     return signatureFailure("not_signature");
   }
   if (signatures.length > SIGNATURE_FILE_LIMITS.maxEntries) {
     return signatureFailure("limit");
   }
-  const reads = signatures.map(readSignature);
+  // Ids of the enclosing document's own elements, outside every signature.
+  const documentIds = isSignature(root)
+    ? new Map<string, DocumentXmlNode>()
+    : idsOf(walk(root, isSignature));
+  const reads = signatures.map((signature, index) =>
+    readSignature(signature, index, documentIds),
+  );
   const references = reads.flatMap((read) => read.references);
   if (references.length > SIGNATURE_FILE_LIMITS.maxEntries) {
     return signatureFailure("limit");
   }
   const signers = reads.map(({ signer }) => signer);
-  // A signature root, or a container holding only signatures, stands alone.
-  // Any other root is the signed document itself.
-  const standsAlone =
-    isSignature(root) ||
-    (root.children.every(isSignature) &&
-      !reads.some((read) => read.coversEnclosingDocument));
-  if (!standsAlone) {
+  // A signature is enveloped when it signs its enclosing document: the whole
+  // of it, or elements of it. A wrapper whose signatures sign only other
+  // files or their own objects stands alone, whatever else it holds.
+  const wholeDocument = reads.some((read) => read.coversEnclosingDocument);
+  const targets = [...new Set(reads.flatMap((read) => read.enclosedTargets))];
+  if (!isSignature(root) && (wholeDocument || targets.length > 0)) {
+    const documentText = wholeDocument
+      ? subtreeText(root, isSignature)
+      : targets
+          .map((target) => subtreeText(target, isSignature))
+          .filter((text) => text !== "")
+          .join("\n");
     return Result.ok({
       standard: "xades",
       packaging: "enveloped",
       signers,
       references,
       embedded: null,
-      documentText: subtreeText(root, isSignature) || null,
+      documentText: documentText || null,
     });
   }
   const object = reads.flatMap((read) => read.objects).at(0);

@@ -797,6 +797,7 @@ test("a detached signature lists its signers and links the signed document", asy
     signedFiles: [
       {
         entityId: ENTITY_ID,
+        fieldId: "field-signed",
         fileName: "smlouva.pdf",
         binding: "digestMatches",
       },

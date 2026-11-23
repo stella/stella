@@ -144,18 +144,25 @@ export const parseCmsSignatureFile = (
           : "unsupported",
       );
     }
+    const attachedSigners = attached.value.layers.flatMap(({ signers }) =>
+      signers.map(({ id, name, signedAt }) => ({ id, name, signedAt })),
+    );
+    if (attachedSigners.length > SIGNATURE_FILE_LIMITS.maxEntries) {
+      return signatureFailure("limit");
+    }
     return Result.ok({
       standard: "cades",
       packaging: "enveloping",
-      signers: attached.value.layers.flatMap(({ signers }) =>
-        signers.map(({ id, name, signedAt }) => ({ id, name, signedAt })),
-      ),
+      signers: attachedSigners,
       references: [],
       embedded: { bytes: attached.value.bytes, mimeType: null },
       documentText: null,
     });
   }
   const { signers } = signature.value;
+  if (signers.length > SIGNATURE_FILE_LIMITS.maxEntries) {
+    return signatureFailure("limit");
+  }
   const digests = distinctDigests(
     signers.flatMap(({ messageDigest }) =>
       messageDigest === null ? [] : [messageDigest],

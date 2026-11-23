@@ -696,6 +696,7 @@ describe("reading a document's file", () => {
     signedFiles: [
       {
         entityId: "entity-2",
+        fieldId: "field-2",
         fileName: "smlouva.pdf",
         binding: "digestMatches",
       },

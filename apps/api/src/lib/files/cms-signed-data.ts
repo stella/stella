@@ -62,6 +62,26 @@ const hex = (bytes: Uint8Array | ArrayBuffer) =>
     bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
   ).toString("hex");
 
+const DIGEST_BYTE_LENGTHS = {
+  "SHA-1": 20,
+  "SHA-224": 28,
+  "SHA-256": 32,
+  "SHA-384": 48,
+  "SHA-512": 64,
+} as const satisfies Record<SignedDigestAlgorithm, number>;
+
+/**
+ * A stated digest, or null when its length is not the algorithm's: such a
+ * value is malformed metadata, never evidence that the signed bytes changed.
+ */
+export const statedDigestOf = (
+  algorithm: SignedDigestAlgorithm,
+  bytes: Uint8Array,
+): StatedDigest | null =>
+  bytes.byteLength === DIGEST_BYTE_LENGTHS[algorithm]
+    ? { algorithm, hex: hex(bytes) }
+    : null;
+
 const octetParts = (
   value: asn1js.OctetString,
   parts: Uint8Array[],
@@ -155,7 +175,7 @@ const messageDigest = (signer: pkijs.SignerInfo): StatedDigest | null => {
     return null;
   }
   const bytes = octetStringBytes(value);
-  return bytes && bytes.byteLength > 0 ? { algorithm, hex: hex(bytes) } : null;
+  return bytes ? statedDigestOf(algorithm, bytes) : null;
 };
 
 /**

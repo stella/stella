@@ -3037,6 +3037,7 @@ describe("detached signature delivery", () => {
       signedFiles: [
         {
           entityId: signed.entityId,
+          fieldId: signed.fieldId,
           fileName: "smlouva.pdf",
           binding: "digestMatches",
         },
@@ -3084,11 +3085,13 @@ describe("detached signature delivery", () => {
     expect(preview.type === "signature" && preview.signedFiles).toEqual([
       {
         entityId: renamed.entityId,
+        fieldId: renamed.fieldId,
         fileName: "sken 0042.pdf",
         binding: "digestMatches",
       },
       {
         entityId: changed.entityId,
+        fieldId: changed.fieldId,
         fileName: "dodatek.pdf",
         binding: "digestDiffers",
       },
@@ -3113,7 +3116,33 @@ describe("detached signature delivery", () => {
     expect(preview.type === "signature" && preview.signedFiles).toEqual([
       {
         entityId: signed.entityId,
+        fieldId: signed.fieldId,
         fileName: "wniosek.pdf",
+        binding: "digestMatches",
+      },
+    ]);
+  });
+
+  test("finds the signed file whatever the case of its name", async () => {
+    const SIGNED_TEXT = signedText();
+    const signed = await seedCurrent(
+      { fileName: "Odvolani.Pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+      SIGNED_TEXT,
+    );
+    const signature = await seedCurrent(
+      {
+        fileName: "odvolani.p7s",
+        mimeType: "application/octet-stream",
+        pdfFileId: null,
+      },
+      await detachedCms(SIGNED_TEXT, { digestAlgorithm: "SHA-1" }),
+    );
+    const preview = await signaturePreview(signature.fieldId);
+    expect(preview.type === "signature" && preview.signedFiles).toEqual([
+      {
+        entityId: signed.entityId,
+        fieldId: signed.fieldId,
+        fileName: "Odvolani.Pdf",
         binding: "digestMatches",
       },
     ]);

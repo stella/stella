@@ -9,6 +9,7 @@ import type {
 } from "@/api/lib/file-scan/scan-upload";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { detectEmbeddedPayload } from "@/api/lib/files/embedded-payload-format";
+import { containerMemberMimeType } from "@/api/lib/files/part-media-type";
 import {
   parseCmsSignatureFile,
   type SignatureParseError,
@@ -19,9 +20,35 @@ import {
   sanitizeFilename,
   sanitizeFilenamePreservingExtension,
 } from "@/api/lib/sanitize-filename";
+import {
+  DOCX_MIME_TYPE,
+  ODP_MIME_TYPE,
+  ODS_MIME_TYPE,
+  ODT_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  XLSX_MIME_TYPE,
+} from "@/api/mime-types";
 
 const SIGNATURE_SUFFIX = /(?:\.(?:p7s|sig|xades|xml))+$/iu;
 const XML_MIME_TYPE = "application/xml";
+
+// An Office or OpenDocument package is a ZIP: its type comes from its parts.
+const PACKAGE_EXTENSIONS: ReadonlyMap<string, string> = new Map([
+  [DOCX_MIME_TYPE, "docx"],
+  [XLSX_MIME_TYPE, "xlsx"],
+  [PPTX_MIME_TYPE, "pptx"],
+  [ODT_MIME_TYPE, "odt"],
+  [ODS_MIME_TYPE, "ods"],
+  [ODP_MIME_TYPE, "odp"],
+]);
+
+/** The carried document's type and extension, from its own bytes. */
+const embeddedPayloadType = async (bytes: Uint8Array) => {
+  const mimeType = await containerMemberMimeType(bytes);
+  const extension =
+    PACKAGE_EXTENSIONS.get(mimeType) ?? detectEmbeddedPayload(bytes).extension;
+  return { mimeType, extension };
+};
 
 const parseSignatureFile = (
   kind: SignatureFileFormatKind,
@@ -90,7 +117,7 @@ export const extractSignaturePreview = async ({
       },
     });
   }
-  const { mimeType, extension } = detectEmbeddedPayload(embedded.bytes);
+  const { mimeType, extension } = await embeddedPayloadType(embedded.bytes);
   const { scanUpload } = await import("@/api/lib/file-scan/scan-upload");
   const scanned = await scanUpload({
     bytes: embedded.bytes,

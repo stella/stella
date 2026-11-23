@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { SignaturePreview } from "@stll/api-contract/signature";
@@ -74,19 +75,18 @@ const conventionalSignedFileNames = (signatureFileName: string) => {
   if (HAS_EXTENSION.test(stem)) {
     return [stem];
   }
-  return SIGNED_FILE_EXTENSIONS.flatMap((extension) => [
-    `${stem}${extension}`,
-    `${stem}${extension.toUpperCase()}`,
-  ]);
+  return SIGNED_FILE_EXTENSIONS.map((extension) => `${stem}${extension}`);
 };
 
-// File names compare as names, not as words: case folded, accents kept.
+// File names compare as names, not as words: case folded, accents kept. The
+// lookup folds stored names the same way, so `Contract.Pdf` is found too.
 const nameKey = (name: string) => normalizeUnicode(name, "NFC").toLowerCase();
 const sameName = (left: string, right: string) =>
   nameKey(left) === nameKey(right);
 
 type Candidate = {
   entityId: SafeId<"entity">;
+  fieldId: SafeId<"field">;
   name: string;
   content: FileContent;
   foundByDigest: boolean;
@@ -126,6 +126,7 @@ const readCandidates = async ({
     // scoped connection: a document the reader cannot open is never found.
     const select = {
       entityId: entities.id,
+      fieldId: fields.id,
       name: entities.name,
       content: fields.content,
     };
@@ -154,7 +155,9 @@ const readCandidates = async ({
                   and(
                     documentInMatter,
                     fileInMatter,
-                    inArray(entities.name, [...names]),
+                    inArray(sql`lower(${entities.name})`, [
+                      ...new Set(names.map(nameKey)),
+                    ]),
                   ),
                 )
                 .orderBy(asc(entities.name), asc(entities.id)),
@@ -166,8 +169,10 @@ const readCandidates = async ({
         ? []
         : completeRows(
             await readBounded(
+              // One row per document, however many of its files match: the
+              // cap counts documents.
               tx
-                .select(select)
+                .selectDistinctOn([entities.createdAt, entities.id], select)
                 .from(fields)
                 .innerJoin(
                   entities,
@@ -193,6 +198,7 @@ const readCandidates = async ({
         if (row.content.type === "file" && !candidates.has(row.entityId)) {
           candidates.set(row.entityId, {
             entityId: row.entityId,
+            fieldId: row.fieldId,
             name: row.name,
             content: row.content,
             foundByDigest,
@@ -203,7 +209,11 @@ const readCandidates = async ({
     return [...candidates.values()].slice(0, MAX_SIGNED_FILES);
   });
 
-/** The stated digests that speak about this document. */
+/**
+ * The stated digests that speak about this document: those of references
+ * naming it, else those of references naming no file. A reference naming
+ * another file says nothing about this one.
+ */
 const digestsFor = (
   candidate: Candidate,
   references: SignatureWorkerReply["references"],
@@ -215,14 +225,28 @@ const digestsFor = (
         sameName(fileName, candidate.content.fileName) ||
         sameName(sanitizeFilename(fileName), candidate.name)),
   );
-  const unnamed = references.filter(({ fileName }) => fileName === null);
-  let relevant = references;
-  if (named.length > 0) {
-    relevant = named;
-  } else if (unnamed.length > 0) {
-    relevant = unnamed;
-  }
+  const relevant =
+    named.length > 0
+      ? named
+      : references.filter(({ fileName }) => fileName === null);
   return relevant.flatMap(({ digest }) => (digest === null ? [] : [digest]));
+};
+
+/** Whether any of `digests` is the stored file's, hashing it once a method. */
+const storedBytesMatch = async (
+  bytes: ArrayBuffer,
+  digests: readonly RehashedDigest[],
+) => {
+  const algorithms = [...new Set(digests.map(({ algorithm }) => algorithm))];
+  const hashes = await Promise.all(
+    algorithms.map(async (algorithm) => ({
+      algorithm,
+      hex: await hexDigest(algorithm, bytes),
+    })),
+  );
+  return digests.some(({ algorithm, hex }) =>
+    hashes.some((hash) => hash.algorithm === algorithm && hash.hex === hex),
+  );
 };
 
 /**
@@ -264,7 +288,7 @@ export const findSignedFiles = async ({
   });
 
   // Only a digest other than SHA-256 needs the stored bytes read again, and
-  // only for a bounded number of documents found by name.
+  // only for a bounded number of documents.
   const plans = candidates.map((candidate) => {
     const digests = digestsFor(candidate, references);
     const sha256 = digests.filter(({ algorithm }) => algorithm === "SHA-256");
@@ -272,13 +296,12 @@ export const findSignedFiles = async ({
     const sha256Matches = sha256.some(
       ({ hex }) => hex === candidate.content.sha256Hex.toLowerCase(),
     );
-    return { candidate, sha256, other, sha256Matches };
+    return { candidate, digests, sha256, other, sha256Matches };
   });
   const rehashed = new Set(
     plans
       .filter(
         ({ candidate, other, sha256Matches }) =>
-          !candidate.foundByDigest &&
           !sha256Matches &&
           other.length > 0 &&
           candidate.content.sizeBytes <= FILE_SIZE_LIMIT_BYTES.document,
@@ -290,40 +313,57 @@ export const findSignedFiles = async ({
     plans.map(
       async ({
         candidate,
+        digests,
         sha256,
         other,
         sha256Matches,
       }): Promise<SignedFile> => {
         const signedFile = (binding: SignedFile["binding"]) => ({
           entityId: candidate.entityId,
+          fieldId: candidate.fieldId,
           fileName: candidate.name,
           binding,
         });
-        if (candidate.foundByDigest || sha256Matches) {
+        // No reference speaks about this document: found by its bytes, it
+        // matches a stated digest; found by name alone, nothing is compared.
+        if (digests.length === 0) {
+          return signedFile(
+            candidate.foundByDigest ? "digestMatches" : "notCompared",
+          );
+        }
+        if (sha256Matches) {
           return signedFile("digestMatches");
         }
-        if (!rehashed.has(candidate.entityId)) {
+        if (other.length === 0) {
           return signedFile(
             sha256.length > 0 ? "digestDiffers" : "notCompared",
           );
         }
-        const stored = await readStoredFile({
-          key: createFileKey({
-            organizationId,
-            workspaceId,
-            fileId: candidate.content.id,
-            mimeType: candidate.content.mimeType,
-          }),
-          mimeType: candidate.content.mimeType,
-        });
-        const hashes = await Promise.all(
-          other.map(
-            async ({ algorithm, hex }) =>
-              (await hexDigest(algorithm, stored.bytes)) === hex,
-          ),
+        // A digest left unchecked may still match: never call it different.
+        if (!rehashed.has(candidate.entityId)) {
+          return signedFile("notCompared");
+        }
+        const stored = await Result.tryPromise(
+          async () =>
+            await readStoredFile({
+              key: createFileKey({
+                organizationId,
+                workspaceId,
+                fileId: candidate.content.id,
+                mimeType: candidate.content.mimeType,
+              }),
+              mimeType: candidate.content.mimeType,
+            }),
         );
-        const matches = hashes.includes(true);
-        return signedFile(matches ? "digestMatches" : "digestDiffers");
+        // An unreadable file is not compared, never reported as different.
+        if (stored.isErr()) {
+          return signedFile("notCompared");
+        }
+        return signedFile(
+          (await storedBytesMatch(stored.value.bytes, other))
+            ? "digestMatches"
+            : "digestDiffers",
+        );
       },
     ),
   );

@@ -47,6 +47,8 @@ const signaturePreview = v.object({
   signedFiles: v.array(
     v.object({
       entityId: v.string(),
+      /** The document's file the binding speaks about. */
+      fieldId: v.string(),
       fileName: v.string(),
       binding: v.picklist(SIGNED_FILE_BINDINGS),
     }),

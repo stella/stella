@@ -83,53 +83,32 @@ describe("structured invoice files", () => {
       ).toBeGreaterThan(0);
       const extracted = await extractFileTextResult(
         storedFile(source, declared, file),
-        {
-          zipNameCodePage: "ibm437",
-        },
+        { zipNameCodePage: "ibm437" },
       );
       expect(extracted.unwrap()).toBe(xmlDocumentPreviewText(preview));
     },
   );
 
-  test("shows plain XML as its indented text, never as an invoice", async () => {
-    const preview = (
-      await readEInvoicePreview(
-        storedFile(xmlBytes(plainXml()), XML_FILE_FORMAT.mimeType, "data.xml"),
-      )
-    ).unwrap();
-    expect(preview).toMatchObject({ type: "xml", truncated: false });
-    expect(preview.type === "xml" && preview.text).toContain(
-      "<item>Not an invoice</item>",
-    );
-    const extracted = await extractFileTextResult(
-      storedFile(xmlBytes(plainXml()), "text/xml", "data.xml"),
-      { zipNameCodePage: "ibm437" },
-    );
-    expect(extracted.unwrap()).toBe(xmlDocumentPreviewText(preview));
-  });
-
-  test("an XAdES signature is never an invoice; its .xml text is the signature's", async () => {
-    const preview = (
-      await readEInvoicePreview(
-        storedFile(
-          xmlBytes(xadesSignatureXml()),
-          XML_FILE_FORMAT.mimeType,
-          "data.xml",
-        ),
-      )
-    ).unwrap();
-    expect(preview).toMatchObject({ type: "xml", truncated: false });
-    expect(preview.type === "xml" && preview.text).toContain(
-      "<SignatureValue>AAAA",
-    );
-    const extracted = await extractFileTextResult(
-      storedFile(xmlBytes(xadesSignatureXml()), "text/xml", "data.xml"),
-      { zipNameCodePage: "ibm437" },
-    );
-    expect(extracted.unwrap()).toBe(
-      "XAdES signature, detached. Signatures are unverified.\nSigner 1: Unknown signer\nSigns: invoice.xml",
-    );
-  });
+  test.each([
+    ["plain XML", plainXml(), "<item>Not an invoice</item>"],
+    ["an XAdES signature", xadesSignatureXml(), "<SignatureValue>AAAA"],
+  ])(
+    "shows %s as its indented text, never as an invoice",
+    async (_, xml, expected) => {
+      const preview = (
+        await readEInvoicePreview(
+          storedFile(xmlBytes(xml), XML_FILE_FORMAT.mimeType, "data.xml"),
+        )
+      ).unwrap();
+      expect(preview).toMatchObject({ type: "xml", truncated: false });
+      expect(preview.type === "xml" && preview.text).toContain(expected);
+      const extracted = await extractFileTextResult(
+        storedFile(xmlBytes(xml), "text/xml", "data.xml"),
+        { zipNameCodePage: "ibm437" },
+      );
+      expect(extracted.unwrap()).toBe(xmlDocumentPreviewText(preview));
+    },
+  );
 
   test("shows XML the bounded parser refuses as the text it holds", async () => {
     const xml =

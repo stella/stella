@@ -111,7 +111,9 @@ describe("signature text for search, chat and agents", () => {
       ),
       { zipNameCodePage: "ibm437" },
     );
-    expect(text.unwrap() ?? "").not.toContain("signature");
+    const value = text.unwrap() ?? "";
+    expect(value).toContain("100");
+    expect(value).not.toContain("signature");
   });
 
   test.each([

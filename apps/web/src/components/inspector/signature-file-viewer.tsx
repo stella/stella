@@ -54,7 +54,7 @@ const SignedFiles = ({
         </p>
       ) : (
         <ul className="divide-y rounded-lg border">
-          {signedFiles.map(({ entityId, fileName, binding }) => (
+          {signedFiles.map(({ entityId, fieldId, fileName, binding }) => (
             <li className="min-w-0 space-y-0.5 px-3 py-2" key={entityId}>
               <Button
                 className="min-w-0"
@@ -65,6 +65,9 @@ const SignedFiles = ({
                         router.state.matches,
                       ),
                       entityId,
+                      // The binding speaks about this file, not the
+                      // document's first one.
+                      fieldId,
                       label: fileName,
                       workspaceId,
                     }),
