@@ -1559,6 +1559,7 @@
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
+        "$TURBO_ROOT$/packages/pst-reader/**",
         "$TURBO_ROOT$/packages/runtime-mode/**",
         "$TURBO_ROOT$/packages/scripts/**",
         "$TURBO_ROOT$/packages/sha256/**",
