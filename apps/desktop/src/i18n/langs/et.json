@@ -1170,6 +1170,8 @@
       "available": "Saadaval on versioon {version}.",
       "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
       "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
+      "downloadProgress": "{percent}% alla laaditud",
+      "downloading": "Laaditakse alla versiooni {version}. Pärast installimist taaskäivitub stella desktop.",
       "install": "Installi ja taaskäivita",
       "installFailed": "stella desktop ei saanud värskendust installida.",
       "installInProgress": "Värskendust installitakse.",
@@ -1398,7 +1400,6 @@
     "supportRevealAppData": "Kuva rakenduse andmed",
     "temporaryWorkingCopies": "Ajutised töökoopiad",
     "transcribeRecording": "Transkribeeri salvestis…",
-    "updateReady": "Värskendus valmis",
     "updatesManaged": "Värskendusi haldab teie organisatsioon"
   }
 }

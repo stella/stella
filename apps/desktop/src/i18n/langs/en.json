@@ -1170,6 +1170,8 @@
       "available": "Version {version} is available.",
       "checkFailed": "stella desktop could not check for updates.",
       "deferred": "Version {version} waits while documents are open for editing. When you finish, check again to install it, or it installs at the next automatic check.",
+      "downloadProgress": "{percent}% downloaded",
+      "downloading": "Downloading version {version}. stella desktop restarts once it is installed.",
       "install": "Install and restart",
       "installFailed": "stella desktop could not install the update.",
       "installInProgress": "An update is being installed.",
@@ -1398,7 +1400,6 @@
     "supportRevealAppData": "Reveal app data",
     "temporaryWorkingCopies": "Temporary working copies",
     "transcribeRecording": "Transcribe a recording…",
-    "updateReady": "Update ready",
     "updatesManaged": "Updates managed by your organization"
   }
 }

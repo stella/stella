@@ -1170,6 +1170,8 @@
       "available": "Je k dispozícii verzia {version}.",
       "checkFailed": "stella desktop nemohol skontrolovať aktualizácie.",
       "deferred": "Verzia {version} čaká, kým upravujete otvorené dokumenty. Keď skončíte, skontrolujte aktualizácie znova a nainštalujte ju, inak sa nainštaluje pri ďalšej automatickej kontrole.",
+      "downloadProgress": "Stiahnuté {percent} %",
+      "downloading": "Sťahuje sa verzia {version}. Po inštalácii sa stella desktop reštartuje.",
       "install": "Nainštalovať a reštartovať",
       "installFailed": "stella desktop nemohol nainštalovať aktualizáciu.",
       "installInProgress": "Inštaluje sa aktualizácia.",
@@ -1398,7 +1400,6 @@
     "supportRevealAppData": "Zobraziť dáta aplikácie",
     "temporaryWorkingCopies": "Dočasné pracovné kópie",
     "transcribeRecording": "Prepísať nahrávku…",
-    "updateReady": "Aktualizácia pripravená",
     "updatesManaged": "Aktualizácie spravuje vaša organizácia"
   }
 }

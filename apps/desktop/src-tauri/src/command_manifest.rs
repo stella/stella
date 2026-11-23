@@ -31,6 +31,7 @@ macro_rules! with_stella_commands {
       commands::fit_static_dialog => "fit_static_dialog",
       commands::copy_diagnostics => "copy_diagnostics",
       commands::email_support => "email_support",
+      commands::updater_state => "updater_state",
       commands::check_for_updates => "check_for_updates",
       commands::install_update => "install_update",
       commands::reveal_support_root => "reveal_support_root",

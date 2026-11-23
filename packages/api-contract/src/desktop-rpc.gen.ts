@@ -24,9 +24,7 @@ export type DesktopLinkFailure = "account_conflict" | "switch_declined" | "decli
 
 export type DesktopNotificationPreferences = { documentReady: boolean, revisionCreated: boolean, syncIssues: boolean, };
 
-export type DesktopUpdateSnapshot = { baseUrl: string | null, channel: string | null, currentHash: string | null, currentVersion: string | null, lastCheckedAt: string | null, latestHash: string | null, latestVersion: string | null, status: DesktopUpdateStatus, statusMessage: string, updateAvailable: boolean, updateReady: boolean, };
-
-export type DesktopUpdateStatus = "idle" | "checking" | "available" | "downloading" | "ready" | "applying" | "up_to_date" | "error" | "disabled";
+export type DesktopUpdateSnapshot = { currentVersion: string | null, };
 
 export type DocumentRecoverySnapshot = { edits: RecoveryEdit[], unassigned: boolean, pending: boolean, access: RecoveryAccess, };
 
@@ -52,6 +50,10 @@ export type SessionSnapshot = { baseVersionNumber: number, entityId: string, fil
 
 export type SessionStatus = "opening" | "ready" | "syncing" | "finalizing" | "error";
 
-export type SettingsCheck = { "status": "up_to_date" } | { "status": "available", version: string, } | { "status": "deferred", version: string, } | { "status": "installing", version: string, } | { "status": "managed" };
-
 export type TrustedSelfHostConnection = { apiBaseUrl: string, trustedAt: string, webOrigin: string, };
+
+export type UpdaterSnapshot = { revision: number, state: UpdaterState, };
+
+export type UpdaterState = { "status": "idle" } | { "status": "checking" } | { "status": "up_to_date" } | { "status": "available", version: string, } | { "status": "downloading", version: string, receivedBytes: number, totalBytes: number | null, } | { "status": "installing", version: string, } | { "status": "deferred", version: string, } | { "status": "failed", during: UpdaterStep, } | { "status": "managed" };
+
+export type UpdaterStep = "check" | "install";

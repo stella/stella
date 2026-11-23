@@ -1170,6 +1170,8 @@
       "available": "الإصدار {version} متاح.",
       "checkFailed": "تعذّر على stella desktop التحقق من التحديثات.",
       "deferred": "ينتظر الإصدار {version} ما دامت المستندات المفتوحة قيد التحرير. عند الانتهاء، تحقّق مجددًا لتثبيته، وإلا فسيُثبَّت عند التحقق التلقائي التالي.",
+      "downloadProgress": "تم تنزيل {percent}%",
+      "downloading": "جارٍ تنزيل الإصدار {version}. سيُعاد تشغيل stella desktop بعد تثبيته.",
       "install": "التثبيت وإعادة التشغيل",
       "installFailed": "تعذّر على stella desktop تثبيت التحديث.",
       "installInProgress": "جارٍ تثبيت تحديث.",
@@ -1398,7 +1400,6 @@
     "supportRevealAppData": "إظهار بيانات التطبيق",
     "temporaryWorkingCopies": "نسخ العمل المؤقتة",
     "transcribeRecording": "تحويل تسجيل إلى نص…",
-    "updateReady": "التحديث جاهز",
     "updatesManaged": "تدير مؤسستك التحديثات"
   }
 }

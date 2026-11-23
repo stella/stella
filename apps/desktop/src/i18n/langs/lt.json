@@ -1170,6 +1170,8 @@
       "available": "Galima versija {version}.",
       "checkFailed": "stella desktop nepavyko patikrinti naujinimų.",
       "deferred": "Versija {version} laukia, kol redaguojami atidaryti dokumentai. Baigę patikrinkite dar kartą, kad ją įdiegtumėte, kitaip ji bus įdiegta per kitą automatinį patikrinimą.",
+      "downloadProgress": "Atsisiųsta {percent} %",
+      "downloading": "Atsisiunčiama versija {version}. Įdiegus stella desktop pasileis iš naujo.",
       "install": "Įdiegti ir paleisti iš naujo",
       "installFailed": "stella desktop nepavyko įdiegti naujinimo.",
       "installInProgress": "Diegiamas naujinimas.",
@@ -1398,7 +1400,6 @@
     "supportRevealAppData": "Rodyti programos duomenis",
     "temporaryWorkingCopies": "Laikinos darbinės kopijos",
     "transcribeRecording": "Transkribuoti įrašą…",
-    "updateReady": "Naujinimas paruoštas",
     "updatesManaged": "Naujinimus valdo jūsų organizacija"
   }
 }
