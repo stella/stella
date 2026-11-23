@@ -10,7 +10,13 @@ trap 'rm -rf "${SCRATCH_DIR}"' EXIT
 
 export CARGO_HOME="${SCRATCH_DIR}/cargo"
 export CARGO_TARGET_DIR="${SCRATCH_DIR}/target"
-export PST_READER_WASM_OUT_DIR="${PST_READER_WASM_OUT_DIR:-${SCRATCH_DIR}/generated}"
+# On a CI runner the build goes to its temporary directory, which the
+# workflow uploads when the build differs from generated/.
+default_out_dir="${SCRATCH_DIR}/generated"
+if [[ -n "${RUNNER_TEMP:-}" ]]; then
+  default_out_dir="${RUNNER_TEMP}/pst-reader-wasm"
+fi
+export PST_READER_WASM_OUT_DIR="${PST_READER_WASM_OUT_DIR:-${default_out_dir}}"
 export PATH="${CARGO_HOME}/bin:${PATH}"
 mkdir -p "${CARGO_HOME}"
 
