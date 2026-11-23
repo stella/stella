@@ -262,6 +262,7 @@
         "@stll/locales": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "0.4.3",
+        "@stll/transcript": "workspace:*",
         "@stll/ui": "workspace:*",
         "@tauri-apps/api": "^2.12.5",
         "better-result": "catalog:",
