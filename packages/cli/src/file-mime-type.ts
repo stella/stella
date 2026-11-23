@@ -14,6 +14,8 @@ const MIME_TYPE_BY_EXTENSION: Readonly<Record<string, string>> = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   ".eml": "message/rfc822",
   ".gif": "image/gif",
+  ".heic": "image/heic",
+  ".heif": "image/heif",
   ".htm": "text/html",
   ".html": "text/html",
   ".jpeg": "image/jpeg",

@@ -109,6 +109,7 @@
         "@stll/fetch": "workspace:*",
         "@stll/folio-agents": "catalog:",
         "@stll/folio-core": "catalog:",
+        "@stll/heic-decoder": "workspace:*",
         "@stll/html": "workspace:*",
         "@stll/infosoud": "workspace:*",
         "@stll/invoicing": "workspace:*",
@@ -1221,6 +1222,14 @@
         "bun-types": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+      },
+    },
+    "packages/heic-decoder": {
+      "name": "@stll/heic-decoder",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/html": {
@@ -3541,6 +3550,8 @@
     "@stll/fuzzy-search-wasm32-wasi": ["@stll/fuzzy-search-wasm32-wasi@1.4.2", "", { "dependencies": { "@emnapi/core": "2.0.0-beta.2", "@emnapi/runtime": "2.0.0-beta.2", "@napi-rs/wasm-runtime": "1.2.6" }, "cpu": "none" }, "sha512-9KalIQNISNnXvLC9/T5d389lj9P6YJEuMHp/cC4Or7vefeb8HobWiMNrM9q2EklrEbsotkr5apc4uNRDwDhY6g=="],
 
     "@stll/fuzzy-search-win32-x64-msvc": ["@stll/fuzzy-search-win32-x64-msvc@1.4.2", "", { "os": "win32", "cpu": "x64" }, "sha512-QN39sybmF5yVLlVpFLIm4TUL+SMgvIW0cILxL7jldfG7I+j73SZWHEyiZjUUvLOs6HxJVWDRPlTZRIPVxiFzlQ=="],
+
+    "@stll/heic-decoder": ["@stll/heic-decoder@workspace:packages/heic-decoder"],
 
     "@stll/html": ["@stll/html@workspace:packages/html"],
 

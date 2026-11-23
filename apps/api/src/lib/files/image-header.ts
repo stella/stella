@@ -28,6 +28,16 @@ type ImageEncoding =
       frameMarker: number;
       precision: number;
       components: number;
+    }
+  | {
+      format: "heif";
+      /** Whether the primary image's colour is an ICC profile (Display P3 on
+       *  most phones) rather than `nclx` code points or nothing. */
+      iccProfile: boolean;
+      /** Whether the primary image is derived from other images (a grid of
+       *  tiles, as phones write) rather than coded itself: its size then
+       *  says nothing about what one decode holds. */
+      tiled: boolean;
     };
 
 export type ImageHeader = {
@@ -36,7 +46,7 @@ export type ImageHeader = {
   /** Stored (pre-orientation) height in pixels. */
   height: number;
   orientation: ImageOrientation;
-  /** Present for PNG and JPEG. */
+  /** Present for PNG, JPEG and HEIF. */
   encoding?: ImageEncoding;
 };
 
@@ -403,9 +413,316 @@ const readWebpHeader = (bytes: Uint8Array): ImageHeader | null => {
   return null;
 };
 
+// ── HEIF (HEIC photos) ──
+
+/** Boxes one level of a HEIF file may hold before it counts as unreadable. */
+const HEIF_BOXES_MAX = 4096;
+/** Item property associations read before the file counts as unreadable. */
+const HEIF_ASSOCIATIONS_MAX = 65_536;
+
+type HeifBox = { type: string; start: number; end: number };
+
+/** The boxes between `start` and `end`, or `null` if one overruns them. */
+const heifBoxes = (
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+): HeifBox[] | null => {
+  const data = view(bytes);
+  const boxes: HeifBox[] = [];
+  let offset = start;
+  while (offset + 8 <= end) {
+    if (boxes.length >= HEIF_BOXES_MAX) {
+      return null;
+    }
+    let size = data.getUint32(offset);
+    let headerSize = 8;
+    if (size === 1) {
+      if (offset + 16 > end || data.getUint32(offset + 8) !== 0) {
+        return null;
+      }
+      size = data.getUint32(offset + 12);
+      headerSize = 16;
+    } else if (size === 0) {
+      size = end - offset;
+    }
+    if (size < headerSize || offset + size > end) {
+      return null;
+    }
+    boxes.push({
+      type: String.fromCodePoint(...bytes.subarray(offset + 4, offset + 8)),
+      start: offset + headerSize,
+      end: offset + size,
+    });
+    offset += size;
+  }
+  return boxes;
+};
+
+/** A 2x2 integer matrix, row-major, acting on (x right, y down). */
+type Turn = readonly [number, number, number, number];
+
+const TURN_BY_ORIENTATION = {
+  1: [1, 0, 0, 1],
+  2: [-1, 0, 0, 1],
+  3: [-1, 0, 0, -1],
+  4: [1, 0, 0, -1],
+  5: [0, 1, 1, 0],
+  6: [0, -1, 1, 0],
+  7: [0, -1, -1, 0],
+  8: [0, 1, -1, 0],
+} as const satisfies Record<ImageOrientation, Turn>;
+
+/** `after` applied to the result of `before`. */
+const compose = (after: Turn, before: Turn): Turn => [
+  after[0] * before[0] + after[1] * before[2],
+  after[0] * before[1] + after[1] * before[3],
+  after[2] * before[0] + after[3] * before[2],
+  after[2] * before[1] + after[3] * before[3],
+];
+
+const orientationOfTurn = (turn: Turn): ImageOrientation => {
+  for (const orientation of [1, 2, 3, 4, 5, 6, 7, 8] as const) {
+    if (TURN_BY_ORIENTATION[orientation].every((v, i) => v === turn[i])) {
+      return orientation;
+    }
+  }
+  return 1;
+};
+
+/**
+ * `irot` turns anticlockwise in quarter turns; `imir` mirrors top to bottom
+ * (axis 0) or left to right (axis 1). Transformative properties apply in the
+ * order the item lists them.
+ */
+const heifTurn = (property: HeifBox, bytes: Uint8Array): Turn | null => {
+  const value = bytes[property.start];
+  if (value === undefined || property.end <= property.start) {
+    return null;
+  }
+  if (property.type === "irot") {
+    const quarterTurns = [1, 8, 3, 6] as const;
+    return TURN_BY_ORIENTATION[quarterTurns[value % 4] ?? 1];
+  }
+  if (property.type === "imir") {
+    return TURN_BY_ORIENTATION[value % 2 === 0 ? 4 : 2];
+  }
+  return null;
+};
+
+/**
+ * An image sequence without a still primary image: the size of its first
+ * video track's pictures, from `moov/trak/tkhd` (16.16 fixed point).
+ */
+const readHeifSequenceHeader = (
+  bytes: Uint8Array,
+  top: readonly HeifBox[],
+): ImageHeader | null => {
+  const moov = top.find((box) => box.type === "moov");
+  if (moov === undefined) {
+    return null;
+  }
+  const traks = heifBoxes(bytes, moov.start, moov.end);
+  if (traks === null) {
+    return null;
+  }
+  const data = view(bytes);
+  for (const trak of traks) {
+    if (trak.type !== "trak") {
+      continue;
+    }
+    const tkhd = heifBoxes(bytes, trak.start, trak.end)?.find(
+      (box) => box.type === "tkhd",
+    );
+    if (tkhd === undefined) {
+      return null;
+    }
+    // Version 1 widens creation, modification time and duration to 64 bits.
+    const sizeOffset = tkhd.start + (bytes[tkhd.start] === 1 ? 88 : 76);
+    if (sizeOffset + 8 > tkhd.end) {
+      return null;
+    }
+    const width = Math.floor(data.getUint32(sizeOffset) / 0x1_00_00);
+    const height = Math.floor(data.getUint32(sizeOffset + 4) / 0x1_00_00);
+    if (width > 0 && height > 0) {
+      return header(width, height, 1, {
+        format: "heif",
+        iccProfile: false,
+        tiled: false,
+      });
+    }
+  }
+  return null;
+};
+
+/** The primary item's id from `pitm` (16-bit in version 0, else 32-bit). */
+const heifPrimaryItem = (bytes: Uint8Array, pitm: HeifBox): number | null => {
+  if (pitm.start + 6 > pitm.end) {
+    return null;
+  }
+  const data = view(bytes);
+  if (bytes[pitm.start] === 0) {
+    return data.getUint16(pitm.start + 4);
+  }
+  return pitm.start + 8 > pitm.end ? null : data.getUint32(pitm.start + 4);
+};
+
+/**
+ * The properties `item` is associated with in one `ipma` box, in order, or
+ * `null` when the box overruns itself. `budget` counts associations read so
+ * far across boxes, so a file cannot make this loop for long.
+ */
+const heifAssociations = (
+  bytes: Uint8Array,
+  ipma: HeifBox,
+  {
+    budget,
+    item,
+    properties,
+  }: {
+    budget: { read: number };
+    item: number;
+    properties: readonly HeifBox[];
+  },
+): HeifBox[] | null => {
+  if (ipma.start + 8 > ipma.end) {
+    return null;
+  }
+  const data = view(bytes);
+  const idSize = (bytes[ipma.start] ?? 0) < 1 ? 2 : 4;
+  // Flag bit 0 widens each property index to 16 bits.
+  const indexSize = (bytes[ipma.start + 3] ?? 0) % 2 === 1 ? 2 : 1;
+  const entries = data.getUint32(ipma.start + 4);
+  const associated: HeifBox[] = [];
+  let offset = ipma.start + 8;
+  for (let entry = 0; entry < entries; entry += 1) {
+    if (offset + idSize + 1 > ipma.end) {
+      return null;
+    }
+    const entryItem =
+      idSize === 2 ? data.getUint16(offset) : data.getUint32(offset);
+    const count = bytes[offset + idSize] ?? 0;
+    offset += idSize + 1;
+    budget.read += count;
+    if (
+      offset + count * indexSize > ipma.end ||
+      budget.read > HEIF_ASSOCIATIONS_MAX
+    ) {
+      return null;
+    }
+    for (let association = 0; association < count; association += 1) {
+      // The top bit marks an essential property; the rest is its 1-based index.
+      const index =
+        indexSize === 2
+          ? data.getUint16(offset) % 0x80_00
+          : (bytes[offset] ?? 0) % 0x80;
+      offset += indexSize;
+      const property = properties[index - 1];
+      if (entryItem === item && property !== undefined) {
+        associated.push(property);
+      }
+    }
+  }
+  return associated;
+};
+
+/** The properties of the primary item listed in a `meta` box, in order. */
+const heifPrimaryProperties = (
+  bytes: Uint8Array,
+  meta: HeifBox,
+): HeifBox[] | null => {
+  // `meta` is a full box: version and flags precede its children.
+  const children = heifBoxes(bytes, meta.start + 4, meta.end);
+  const pitm = children?.find((box) => box.type === "pitm");
+  const iprp = children?.find((box) => box.type === "iprp");
+  const primary = pitm === undefined ? null : heifPrimaryItem(bytes, pitm);
+  if (primary === null || iprp === undefined) {
+    return null;
+  }
+  const iprpChildren = heifBoxes(bytes, iprp.start, iprp.end);
+  if (iprpChildren === null) {
+    return null;
+  }
+  const ipco = iprpChildren.find((box) => box.type === "ipco");
+  const properties =
+    ipco === undefined ? null : heifBoxes(bytes, ipco.start, ipco.end);
+  if (properties === null) {
+    return null;
+  }
+  const budget = { read: 0 };
+  const associated: HeifBox[] = [];
+  for (const ipma of iprpChildren.filter((box) => box.type === "ipma")) {
+    const own = heifAssociations(bytes, ipma, {
+      budget,
+      item: primary,
+      properties,
+    });
+    if (own === null) {
+      return null;
+    }
+    associated.push(...own);
+  }
+  return associated;
+};
+
+/**
+ * HEIF (HEIC photos): the primary item's `ispe` size, the orientation its
+ * `irot` and `imir` properties make, and whether its colour is an ICC
+ * profile. Reads only the `ftyp` and `meta` boxes; the image data is never
+ * touched, so the answer is the same whether previews decode or not.
+ */
+const readHeifHeader = (bytes: Uint8Array): ImageHeader | null => {
+  if (bytes.length < 16 || !startsWith(bytes, 4, "ftyp")) {
+    return null;
+  }
+  const top = heifBoxes(bytes, 0, bytes.length);
+  if (top === null) {
+    return null;
+  }
+  const meta = top.find((box) => box.type === "meta");
+  if (meta === undefined) {
+    return readHeifSequenceHeader(bytes, top);
+  }
+  const associated = heifPrimaryProperties(bytes, meta);
+  const ispe = associated?.find((box) => box.type === "ispe");
+  if (associated === null || ispe === undefined || ispe.start + 12 > ispe.end) {
+    return null;
+  }
+  let turn: Turn = TURN_BY_ORIENTATION[1];
+  for (const property of associated) {
+    const next = heifTurn(property, bytes);
+    if (next !== null) {
+      turn = compose(next, turn);
+    }
+  }
+  const colour = associated.find((box) => box.type === "colr");
+  const colourType =
+    colour === undefined || colour.start + 4 > colour.end
+      ? null
+      : String.fromCodePoint(...bytes.subarray(colour.start, colour.start + 4));
+  const data = view(bytes);
+  // ispe is a full box: version and flags, then width and height.
+  return header(
+    data.getUint32(ispe.start + 4),
+    data.getUint32(ispe.start + 8),
+    orientationOfTurn(turn),
+    {
+      format: "heif",
+      iccProfile: colourType === "prof" || colourType === "rICC",
+      // A coded image carries its decoder configuration; a derived one has
+      // none of its own.
+      tiled: !associated.some((box) => box.type === "hvcC"),
+    },
+  );
+};
+
 const IMAGE_HEADER_READERS = {
   "image/bmp": readBmpHeader,
   "image/gif": readGifHeader,
+  "image/heic": readHeifHeader,
+  "image/heic-sequence": readHeifHeader,
+  "image/heif": readHeifHeader,
+  "image/heif-sequence": readHeifHeader,
   "image/jpeg": readJpegHeader,
   "image/png": readPngHeader,
   "image/tiff": readTiffHeader,
