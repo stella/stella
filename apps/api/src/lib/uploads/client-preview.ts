@@ -157,7 +157,10 @@ export const clientPreviewRefusal = ({
   }
   const photo = displayedSize(original);
   const longSide = Math.max(shown.width, shown.height);
-  if (longSide < Math.min(PREVIEW_MIN_LONG_SIDE, photo.width, photo.height)) {
+  if (
+    longSide <
+    Math.min(PREVIEW_MIN_LONG_SIDE, Math.max(photo.width, photo.height))
+  ) {
     return "too-small";
   }
   const photoAspect = photo.width / photo.height;
@@ -175,7 +178,8 @@ export type LoadedClientPreview =
   | { type: "accepted"; preview: ScannedFile }
   | {
       type: "refused";
-      reason: ClientPreviewRefusal | "missing" | "checksum" | "scan";
+      reason:
+        ClientPreviewRefusal | "missing" | "unreadable" | "checksum" | "scan";
     };
 
 /**
@@ -191,11 +195,16 @@ export const loadClientPreview = async ({
   queued: QueuedClientPreview;
 }): Promise<LoadedClientPreview> => {
   const signal = AbortSignal.timeout(PREVIEW_IO_TIMEOUT_MS);
-  const bytes = await readS3ObjectBoundedIfPresent({
-    key: queued.key,
-    maxBytes: queued.size,
-    signal,
-  });
+  // A failed read (a timeout, a storage error) refuses the preview, so the
+  // job renders the photo itself instead of failing the attempt.
+  const read = await Result.tryPromise(
+    async () =>
+      await readS3ObjectBoundedIfPresent({
+        key: queued.key,
+        maxBytes: queued.size,
+        signal,
+      }),
+  );
   const removed = await Result.tryPromise(
     async () => await deleteS3ObjectWithSignal(queued.key, signal),
   );
@@ -205,6 +214,10 @@ export const loadClientPreview = async ({
       key: queued.key,
     });
   }
+  if (Result.isError(read)) {
+    return { type: "refused", reason: "unreadable" };
+  }
+  const bytes = read.value;
   if (bytes === null) {
     return { type: "refused", reason: "missing" };
   }

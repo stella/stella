@@ -189,6 +189,16 @@ describe("whether a client preview stands for the photo", () => {
     ).toBeNull();
   });
 
+  test("a photo short on one side still needs its longer side shown in full up to 1024", () => {
+    expect(
+      clientPreviewRefusal({
+        declared: declared(770, 490),
+        original: header(1100, 700),
+        preview: header(770, 490),
+      }),
+    ).toBe("too-small");
+  });
+
   test("holds exactly when the preview has the photo's shape and fits the budget", () => {
     assertProperty(
       "holds exactly when the preview has the photo's shape and fits the budget",
@@ -207,7 +217,8 @@ describe("whether a client preview stands for the photo", () => {
             Math.abs(width / height / (photoWidth / photoHeight) - 1) <= 0.01;
           const fits = width * height <= LIMITS.pdfRenderImagePixelsMax;
           const bigEnough =
-            Math.max(width, height) >= Math.min(1024, photoWidth, photoHeight);
+            Math.max(width, height) >=
+            Math.min(1024, Math.max(photoWidth, photoHeight));
           expect(refusal === null).toBe(sameShape && fits && bigEnough);
         },
       ),
