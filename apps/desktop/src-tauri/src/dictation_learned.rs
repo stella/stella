@@ -794,7 +794,7 @@ mod tests {
       || {
         // A disconnect erases under the same lock, so it cannot run between
         // this lookup and the write.
-        assert!(FILES.try_lock().is_err());
+        assert!(FILES.try_lock().is_err()); // kit-allow: asserts the lookup runs under the process-global files lock
         None
       },
       |_stored| applied = true,
