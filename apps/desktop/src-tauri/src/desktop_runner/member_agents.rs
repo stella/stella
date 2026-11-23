@@ -173,10 +173,18 @@ pub enum AntigravityCliStatus {
 const ANTIGRAVITY_MIN_VERSION: (u64, u64, u64) = (1, 5, 0);
 
 pub(crate) fn version_at_least(version: &str, min: (u64, u64, u64)) -> bool {
-  let mut parts = version.split('.').filter_map(|part| part.parse::<u64>().ok());
-  let Some(major) = parts.next() else { return false; };
-  let Some(minor) = parts.next() else { return false; };
-  let Some(patch) = parts.next() else { return false; };
+  let mut parts = version
+    .split('.')
+    .filter_map(|part| part.parse::<u64>().ok());
+  let Some(major) = parts.next() else {
+    return false;
+  };
+  let Some(minor) = parts.next() else {
+    return false;
+  };
+  let Some(patch) = parts.next() else {
+    return false;
+  };
   parts.next().is_none() && (major, minor, patch) >= min
 }
 
@@ -258,7 +266,9 @@ mod tests {
     assert!(version_at_least("2.0.0", ANTIGRAVITY_MIN_VERSION));
     assert_eq!(
       antigravity_cli_token_path(None, Some(Path::new("/home/m"))),
-      Some(PathBuf::from("/home/m/.gemini/antigravity-cli/antigravity-oauth-token"))
+      Some(PathBuf::from(
+        "/home/m/.gemini/antigravity-cli/antigravity-oauth-token"
+      ))
     );
     assert_eq!(
       antigravity_cli_token_path(Some(Path::new("/g")), Some(Path::new("/home/m"))),

@@ -237,7 +237,7 @@
       "checkAgain": "Sprawdź ponownie",
       "notInstalled": "Zainstaluj Antigravity 1.5 lub nowszą wersję, a następnie się w niej zaloguj.",
       "signedIn": "Zalogowano do Antigravity",
-      "signedOut": "Zaloguj się w CLI Antigravity, aby używać go w stelli.",
+      "signedOut": "Zaloguj się w CLI Antigravity, aby używać go w aplikacji stella.",
       "title": "Antigravity",
       "tooOld": "Zaktualizuj Antigravity do wersji 1.5 lub nowszej, a następnie się w niej zaloguj."
     },
