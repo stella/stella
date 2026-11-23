@@ -39,7 +39,7 @@ export default createSafeHandler(
               recordAuditEvent,
             },
             STRUCTURED_DOCUMENT_KINDS,
-            readStructuredDocumentPreview,
+            async (source) => await readStructuredDocumentPreview(source),
           ),
       ),
     );

@@ -155,6 +155,7 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "desktop_runners",
   "desktop_time_entry_batches",
   "dictation_learned_fixes",
+  "dictation_vocabulary_terms",
   "document_processing_runs",
   "document_reference_counters",
   "document_review_findings",

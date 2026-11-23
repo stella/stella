@@ -1,0 +1,5 @@
+{
+  "create-table-references": "The new dictation_vocabulary_terms table is empty, so its organization and user foreign keys validate no existing rows. The referenced tables take short catalog locks bounded by the migration's 1s lock_timeout and 10s statement_timeout.",
+  "row-level-security": "Enabling and forcing RLS changes only metadata on the new empty dictation_vocabulary_terms table, bounded by the 1s lock_timeout and 10s statement_timeout.",
+  "create-policy": "The organization and owner policies are metadata on the new empty dictation_vocabulary_terms table, bounded by the 1s lock_timeout and 10s statement_timeout."
+}

@@ -27,6 +27,7 @@ import {
   readZipArchiveFile,
 } from "@/api/lib/files/zip-archive";
 import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
 
 type ArchiveRow = {
@@ -42,10 +43,12 @@ export const extractZipArchivePreview = async ({
   fileBytes,
   maxChars,
   readText,
+  nameCodePage,
 }: {
   fileBytes: Uint8Array;
   maxChars: number;
   readText: ReadMemberText;
+  nameCodePage: ZipNameCodePage;
 }): Promise<
   Result<
     ZipArchivePreview,
@@ -55,7 +58,7 @@ export const extractZipArchivePreview = async ({
     | UnhandledException
   >
 > => {
-  const archive = await readZipArchive(fileBytes);
+  const archive = await readZipArchive(fileBytes, { nameCodePage });
   if (archive.isErr()) {
     return Result.err(archive.error);
   }

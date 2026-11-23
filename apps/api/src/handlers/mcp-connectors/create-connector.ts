@@ -171,7 +171,7 @@ export const createMcpConnectorHandler = ({
       }
       const displayName =
         input.displayName?.trim() || new URL(normalizedUrl).hostname;
-      const [slug, iconUrl] = await Promise.all([
+      const [slug, iconDiscovery] = await Promise.all([
         nextSlug({
           base: connectorSlug(displayName),
           organizationId: session.activeOrganizationId,
@@ -179,6 +179,8 @@ export const createMcpConnectorHandler = ({
         }),
         discoverIconUrl(normalizedUrl, permit),
       ]);
+      const iconUrl =
+        iconDiscovery.status === "discovered" ? iconDiscovery.url : null;
 
       const inserted = yield* Result.await(
         safeDb(async (tx) => {

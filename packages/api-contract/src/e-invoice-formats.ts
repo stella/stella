@@ -3,8 +3,8 @@
 //
 // - ISDOC 6 invoice (`http://isdoc.cz/namespace/2013`), one XML file.
 // - ISDOCX: a ZIP holding the ISDOC invoice, its manifest and supplements.
-// - Any XML file. Its reader decides by the root element's namespace, so only
-//   a recognised structured invoice is read as one; other XML is never claimed.
+// - Any XML file. Its reader decides by the root element's namespace: a
+//   recognised structured invoice is read as one, any other XML as its text.
 export const E_INVOICE_FILE_FORMATS = [
   {
     kind: "isdoc",
