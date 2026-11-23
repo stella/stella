@@ -34,3 +34,16 @@ export const unscannedContentReasons = (
     : UNSCANNED_CONTENT_REASONS.filter((reason) =>
         scanWarnings.includes(UNSCANNED_CONTENT_WARNING[reason]),
       );
+
+/**
+ * The reasons a client reads from a list the server sent, such as a chat
+ * attachment's `unscannedContent`, in the fixed order. A reason this client
+ * does not know, from a newer server, is skipped rather than failing the
+ * file it belongs to.
+ */
+export const knownUnscannedContentReasons = (
+  value: unknown,
+): UnscannedContentReason[] =>
+  Array.isArray(value)
+    ? UNSCANNED_CONTENT_REASONS.filter((reason) => value.includes(reason))
+    : [];

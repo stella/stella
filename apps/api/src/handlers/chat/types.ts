@@ -20,6 +20,7 @@ import type {
   ChatLocalRunContext,
   ChatLocalRunModel,
 } from "@stll/api-contract/chat-run-target";
+import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import type { ChatTurnPauseReason } from "@stll/chat-limits";
 import type { ChatTurnResumeProbe } from "@stll/chat/resume-contract";
@@ -109,6 +110,11 @@ export type ChatClientTools = ChatClientToolsFor<
 export type ChatAttachmentMetadata = {
   filename?: string | undefined;
   placeholder?: string | undefined;
+  /**
+   * Why some of the file's content was not scanned when it was stored, read
+   * from the file's own scan warnings; absent when everything was scanned.
+   */
+  unscannedContent?: UnscannedContentReason[] | undefined;
 };
 
 export type ChatAttachmentPart =

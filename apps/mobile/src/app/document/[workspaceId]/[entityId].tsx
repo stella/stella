@@ -33,6 +33,7 @@ import {
 import { LegalFilePreviewText } from "@/components/legal-file-preview-text";
 import { MailboxMessages } from "@/components/mailbox-messages";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
+import { UnscannedContentNotice } from "@/components/unscanned-content-notice";
 import { useDocumentEditing } from "@/components/use-document-editing";
 import { useOpenDeliveredFile } from "@/components/use-open-delivered-file";
 import {
@@ -444,22 +445,7 @@ const OpenedDocument = ({
           title,
         }}
       />
-      {unscannedContent.length === 0 ? null : (
-        <View
-          accessibilityRole="alert"
-          className="bg-warning/10 gap-1 px-4 py-2"
-        >
-          {unscannedContent.map((reason) => (
-            <Text
-              className="text-warning-foreground"
-              key={reason}
-              variant="caption"
-            >
-              {t(`unscannedContent.${reason}`)}
-            </Text>
-          ))}
-        </View>
-      )}
+      <UnscannedContentNotice reasons={unscannedContent} />
       {body}
     </View>
   );

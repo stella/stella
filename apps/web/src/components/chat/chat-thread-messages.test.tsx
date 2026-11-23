@@ -1620,6 +1620,41 @@ describe("chat thread messages", () => {
       expect(html).toContain("report.html");
     });
 
+    // The chip says what the file view's notice says, in the same words.
+    const expectUnscannedContentMark = (role: ChatUIMessage["role"]) => {
+      const html = render({
+        role,
+        parts: [
+          {
+            ...documentPart,
+            metadata: {
+              filename: "bundle.asice",
+              unscannedContent: ["encrypted", "unsupportedCompression"],
+            },
+          },
+        ],
+      });
+      const said = [
+        messages.workspaces.files.unscannedContent.encrypted,
+        messages.workspaces.files.unscannedContent.unsupportedCompression,
+      ].join(" ");
+      expect(html).toContain(`aria-label="${said}"`);
+      expect(html).toContain(
+        'data-unscanned-content="encrypted unsupportedCompression"',
+      );
+      expect(render({ role, parts: [documentPart] })).not.toContain(
+        "data-unscanned-content",
+      );
+    };
+
+    test("a sent file says which of its content was not scanned", () => {
+      expectUnscannedContentMark("user");
+    });
+
+    test("an answer's file says which of its content was not scanned", () => {
+      expectUnscannedContentMark("assistant");
+    });
+
     test("names what could not be shared", () => {
       const html = render({
         parts: [{ type: "text", content: "It is ready." }],
