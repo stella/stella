@@ -233,6 +233,7 @@
     "scripts/disarm-auto-merge.test.ts": ["**"],
     "scripts/docker-login-action.test.ts": [
       ".github/actions/docker-login/**",
+      "scripts/docker-login-action.ts",
       "scripts/docker-login-action.test.ts"
     ],
     "scripts/docker-source-closure.test.ts": ["**"],

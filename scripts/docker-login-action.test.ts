@@ -12,8 +12,8 @@ import path from "node:path";
 import {
   isNonRetryableLoginError,
   runDockerLogin,
-} from "../.github/actions/docker-login/main.mjs";
-import { runDockerLogout } from "../.github/actions/docker-login/post.mjs";
+  runDockerLogout,
+} from "./docker-login-action";
 
 function makeFakeDocker(dir: string, scriptBody: string): string {
   const bin = path.join(dir, "docker");

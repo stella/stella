@@ -428,7 +428,7 @@ test("GHCR attestations run before the job logs out of GHCR", () => {
           uses.startsWith("docker/login-action@") ||
           uses.endsWith("/docker-login") ||
           uses.endsWith("/build-web-image") ||
-          run.includes(".github/actions/docker-login/main.mjs")
+          run.includes("scripts/docker-login-action.ts")
         ) {
           loggedIn = true;
         }

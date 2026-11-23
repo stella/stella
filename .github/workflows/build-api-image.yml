@@ -119,7 +119,7 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
-            .github/actions/docker-login/main.mjs
+            scripts/docker-login-action.ts
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
@@ -134,7 +134,7 @@ jobs:
           INPUT_USERNAME: ${{ github.actor }}
           INPUT_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           INPUT_LOGOUT: "false"
-        run: bun .workflow-tooling/.github/actions/docker-login/main.mjs
+        run: bun .workflow-tooling/scripts/docker-login-action.ts
 
       - name: Resolve API base images
         id: base-contexts
