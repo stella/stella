@@ -301,7 +301,9 @@ describe("shed reporting", () => {
     const report = createSsrShedReporter({
       intervalMs: 10_000,
       now: () => now,
-      writeDiagnostic: (line) => lines.push(line),
+      writeDiagnostic: (line) => {
+        lines.push(line);
+      },
     });
     report(admission);
     for (let index = 0; index < 50; index++) {
