@@ -68,11 +68,12 @@ import {
   MAILBOX_READ_TIMEOUT_MS,
   readStoredMailboxMessage,
 } from "@/api/lib/files/mailbox-file";
+import type { ZipNameCodePageSource } from "@/api/lib/files/organization-zip-name-code-page";
 import { readStoredPstMessage } from "@/api/lib/files/pst-file";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
-import { spawnBinaryWorker } from "@/api/lib/subprocess";
+import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 /** Room for the reply's header line: a part's name and type. */
 const EMBEDDED_PART_HEADER_MAX_BYTES = 4096;
@@ -92,6 +93,8 @@ export type FilePartRead = {
 type PartReader = (
   source: ScannedFile,
   part: FilePart,
+  /** The code page a ZIP archive's names tie in, at any depth. */
+  zipNameCodePage: ZipNameCodePage,
 ) => Promise<Result<FilePartRead, HandlerError>>;
 
 /** A stored file read from its object, never loaded whole. */
@@ -166,11 +169,11 @@ const invalidReply = () =>
  * invoice's attachment, or a part of any of these), read, typed and scanned
  * in the worker, down the part's path.
  */
-const embeddedPart: PartReader = async (source, part) => {
+const embeddedPart: PartReader = async (source, part, zipNameCodePage) => {
   // The stored file's own size bound applies when it is loaded; an archive
   // is held to the archive reader's budget there.
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionBinaryWorker({
+    zipNameCodePage,
     args: [
       EMBEDDED_PART_WORKER_MODE,
       String(LIMITS.extractedContentMaxChars),
@@ -321,9 +324,9 @@ const EMAIL_FORMAT = "email";
  * An email's attachment, as its preview lists it, scanned in this process; a
  * part of an attachment is read in the worker, as any nested part is.
  */
-const emailAttachment: PartReader = async (source, part) => {
+const emailAttachment: PartReader = async (source, part, zipNameCodePage) => {
   if (part.within !== undefined) {
-    return await embeddedPart(source, part);
+    return await embeddedPart(source, part, zipNameCodePage);
   }
   const { index } = part;
   const parsed = await parseEmail(source.bytes, source.mimeType);
@@ -406,6 +409,7 @@ const partSourceFormat =
 /** A stored file as a part reader finds it: its object, loaded on demand. */
 type PartSource = StoredObject & {
   readonly load: () => Promise<Result<ScannedFile, HandlerError>>;
+  readonly zipNameCodePage: ZipNameCodePageSource;
 };
 
 /**
@@ -436,7 +440,11 @@ const readPart = async (
     const loaded = await source.load();
     return loaded.isErr()
       ? Result.err(loaded.error)
-      : await reader.read(loaded.value.withMimeType(format.mimeType), part);
+      : await reader.read(
+          loaded.value.withMimeType(format.mimeType),
+          part,
+          await source.zipNameCodePage(),
+        );
   }
   const opened = await openObjectPart(reader.read, source, part);
   if (opened.isErr()) {
@@ -449,7 +457,7 @@ const readPart = async (
         fileName: sanitizeFilenamePreservingExtension(file.fileName),
         mimeType: file.mimeType,
       })
-    : await readPartOfFile(file, inner);
+    : await readPartOfFile(file, inner, await source.zipNameCodePage());
 };
 
 /**
@@ -459,6 +467,7 @@ const readPart = async (
 export const readPartOfFile = async (
   source: ScannedFile,
   part: FilePart,
+  zipNameCodePage: ZipNameCodePage,
 ): Promise<Result<FilePartRead, HandlerError>> => {
   const format = partSourceFormat(part)(source);
   const reader = format?.reader;
@@ -466,7 +475,11 @@ export const readPartOfFile = async (
   // is only bytes, such as inside another file: the worker reads those.
   return format === null || reader?.from !== "bytes"
     ? Result.err(noSuchPart())
-    : await reader.read(source.withMimeType(format.mimeType), part);
+    : await reader.read(
+        source.withMimeType(format.mimeType),
+        part,
+        zipNameCodePage,
+      );
 };
 
 export type FilePartReadOptions = LegalFileReadOptions & {
@@ -517,9 +530,10 @@ const nestedPartId = (id: string, container: FilePart): string => {
 const listPartsInWorker = async (
   file: ScannedFile,
   part: FilePart | null,
+  zipNameCodePage: ZipNameCodePage,
 ): Promise<Result<FilePartList, HandlerError>> => {
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionBinaryWorker({
+    zipNameCodePage,
     args: [
       EMBEDDED_PART_LIST_WORKER_MODE,
       String(LIMITS.extractedContentMaxChars),
@@ -560,7 +574,7 @@ export const readFilePartList = async ({
   if (opened.isErr()) {
     return Result.err(opened.error);
   }
-  const { format, deliver } = opened.value;
+  const { format, deliver, zipNameCodePage } = opened.value;
   const { reader } = format;
   if (reader === undefined) {
     return Result.err(noSuchPart());
@@ -573,6 +587,7 @@ export const readFilePartList = async ({
       : await listPartsInWorker(
           source.value.withMimeType(format.mimeType),
           part,
+          await zipNameCodePage(),
         );
   } else {
     // The parts of a message are listed from the message, then addressed
@@ -580,20 +595,24 @@ export const readFilePartList = async ({
     const message = await openObjectPart(reader.read, opened.value, part);
     listing = message.isErr()
       ? Result.err(message.error)
-      : (await listPartsInWorker(message.value.file, message.value.inner)).map(
-          ({ files }) => ({
-            files: files.map((file) => ({
-              ...file,
-              part:
-                file.part === null
-                  ? null
-                  : {
-                      ...file.part,
-                      part: nestedPartId(file.part.part, message.value.opened),
-                    },
-            })),
-          }),
-        );
+      : (
+          await listPartsInWorker(
+            message.value.file,
+            message.value.inner,
+            await zipNameCodePage(),
+          )
+        ).map(({ files }) => ({
+          files: files.map((file) => ({
+            ...file,
+            part:
+              file.part === null
+                ? null
+                : {
+                    ...file.part,
+                    part: nestedPartId(file.part.part, message.value.opened),
+                  },
+          })),
+        }));
   }
   if (listing.isErr()) {
     return Result.err(listing.error);

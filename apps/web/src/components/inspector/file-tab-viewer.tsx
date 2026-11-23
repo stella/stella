@@ -152,8 +152,8 @@ const legalFileViewers = {
   uyap: structuredDocumentViewer,
   isdoc: eInvoiceViewer,
   isdocx: eInvoiceViewer,
-  // Any XML file opens here; the reader refuses one that is not an invoice.
-  xml: { ...eInvoiceViewer, unreadable: "eInvoice.notRecognized" },
+  // Any XML file opens here: an invoice as one, other XML as its text.
+  xml: { ...eInvoiceViewer, unreadable: "eInvoice.xmlUnreadable" },
   dataBox: {
     Viewer: DataBoxFileViewer,
     unreadable: "correspondence.dataBox.unreadable",

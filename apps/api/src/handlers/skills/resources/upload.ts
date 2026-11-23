@@ -30,6 +30,7 @@ import { fileSchema, resourceIdSchema } from "@/api/lib/custom-schema";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
+import { readZipNameCodePage } from "@/api/lib/files/organization-zip-name-code-page";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { writeS3ObjectWithRetry } from "@/api/lib/s3";
 import { extractFileText } from "@/api/lib/search/extract-content";
@@ -211,10 +212,19 @@ export const createUploadSkillResource = (
         );
         // One character past the cap, so a longer text is refused below
         // rather than stored cut short.
+        const zipNameCodePage = yield* Result.await(
+          safeDb(
+            async (tx) =>
+              await readZipNameCodePage(tx, session.activeOrganizationId),
+          ),
+        );
         const extracted = await extractFileText(
           scanned,
           { source: "skill-resource-upload", skillId: params.skillId },
-          { maxChars: LIMITS.agentSkillResourceMaxChars + 1 },
+          {
+            maxChars: LIMITS.agentSkillResourceMaxChars + 1,
+            zipNameCodePage,
+          },
         );
         if (!extracted) {
           return Result.err(

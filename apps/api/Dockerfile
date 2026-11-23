@@ -362,10 +362,9 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       /app/bundles/runtime/workers/pst_reader_bg.wasm && \
     cp apps/api/src/lib/ocr-local/latin-v5-dict.txt \
       /app/bundles/runtime/workers/latin-v5-dict.txt
-# Local OCR runtime assets: the pinned ONNX models, plus the onnxruntime
-# native binding, which the bundled worker resolves relative to its own
-# location (`../bin/...`), so the directory must sit beside the workers.
-RUN cd apps/api && bun src/scripts/fetch-ocr-models.ts /app/ocr-models
+# Local OCR runtime assets: the onnxruntime native binding, which the
+# bundled worker resolves relative to its own location (`../bin/...`), so the
+# directory must sit beside the workers. The models come from `ocr-models`.
 # Materialize only this image's ONNX Runtime closure. The package contains
 # binaries for every supported OS and architecture; copying its whole `bin`
 # directory adds more than 200 MB of unreachable files. The materializer
@@ -380,6 +379,15 @@ RUN DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
     S3_BUCKET=smoke \
     S3_REGION=eu-central-1 \
     bun apps/legal-atlas-runner/dist/index.js run eu-ecj-refetch --help
+
+# The pinned local OCR models, alone at the stage root. Trusted CI builds
+# replace this stage with the same files from a private registry copy
+# (scripts/ci-service-images.ts); every other build downloads them here.
+FROM builder AS ocr-models-fetch
+RUN cd apps/api && bun src/scripts/fetch-ocr-models.ts /ocr-models
+
+FROM scratch AS ocr-models
+COPY --from=ocr-models-fetch /ocr-models/ /
 
 # Run the API as non-root. Built from the bare base image: every entrypoint is
 # a `bun build --target bun` bundle (the scripts share /app/chunk-*.js) run by
@@ -421,7 +429,7 @@ COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/dr
 # bundled worker resolves this package-owned directory as `../bin`; the image
 # smoke executes a real model so a broken native closure fails the build.
 COPY --chown=stella:stella --from=builder /app/runtime-onnx/bin /app/runtime/bin
-COPY --chown=stella:stella --from=builder /app/ocr-models /app/ocr-models
+COPY --chown=stella:stella --from=ocr-models / /app/ocr-models
 COPY --chown=stella:stella --from=install-inputs \
     /app/apps/landing/public/fonts/CabinetGrotesk-Regular.otf \
     /app/runtime/fonts/CabinetGrotesk-Regular.otf

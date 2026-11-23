@@ -3,7 +3,7 @@ import { queryOptions } from "@tanstack/react-query";
 import { RESOURCE_TYPE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
-import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
+import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
 import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
@@ -232,9 +232,9 @@ export const eInvoicePreviewOptions = (props: FileOptionsProps) =>
           fieldId: props.fieldId,
         }).get({ fetch: { signal } });
         return parseSuccessBody(
-          eInvoicePreviewSchema,
+          xmlDocumentPreviewSchema,
           unwrapApiResponse(response),
-          "Structured invoice preview must match its response schema",
+          "Invoice or XML preview must match its response schema",
         );
       },
     }),

@@ -15,7 +15,10 @@ export default {
     "when they are UTF-8, else as the legacy charset whose reading the " +
     "CLDR exemplar letters explain best. decodeUndeclaredFileNames reads " +
     "the names one ZIP archive stores without its UTF-8 flag the same way, " +
-    "weighed together across code pages 437 and 852 and the ANSI ones. " +
+    "weighed together across code pages 437 and 852 and the ANSI ones, a " +
+    "tie going to the code page the caller names: the API reads it from the " +
+    "organization's practice jurisdictions (852 for Czechia, Slovakia, " +
+    "Poland or Hungary, else 437) and hands it to the extraction worker. " +
     "A lenient TextDecoder on a user's " +
     "file turns windows-1250 or windows-1252 text into U+FFFD; the " +
     "lenient-text-decoders ratchet counts older lenient decoders and permits " +

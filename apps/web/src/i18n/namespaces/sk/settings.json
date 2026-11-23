@@ -694,6 +694,44 @@
         "remove": "Odobrať dátovú schránku {address}",
         "title": "Dátové schránky organizácie"
       },
+      "dictation": {
+        "addCount": "{count, plural, one {Pridať # slovo} few {Pridať # slová} many {Pridať # slova} other {Pridať # slov}}",
+        "addLabel": "Pridať slovo alebo meno",
+        "addMany": "Pridať viac",
+        "addedToast": "Pridané „{word}“.",
+        "alreadyListedToast": "„{word}“ už v zozname je.",
+        "count": "{total, number} z {max, number}",
+        "deleteSelected": "{count, plural, one {Odobrať # slovo} few {Odobrať # slová} many {Odobrať # slova} other {Odobrať # slov}}",
+        "deleteSelectedDescription": "Diktovanie ich prestane používať pre celý tím.",
+        "deleteSelectedInput": "Na potvrdenie napíšte {number}",
+        "deleteSelectedTitle": "{count, plural, one {Odobrať # slovo?} few {Odobrať # slová?} many {Odobrať # slova?} other {Odobrať # slov?}}",
+        "deleteWord": "Odobrať {word}",
+        "deletedToast": "{count, plural, one {Odobrané # slovo.} few {Odobrané # slová.} many {Odobratých # slova.} other {Odobratých # slov.}}",
+        "description": "Slová a mená, ktoré má diktovanie celého tímu písať správne, napríklad mená klientov alebo anglické výrazy používané v inom jazyku. stella z nich použije tie, ktoré daný diktát potrebuje, takže zoznam môže byť dlhý.",
+        "empty": "Pridajte slovo vyššie alebo ich pridajte viac zo zoznamu či súboru.",
+        "export": "Exportovať zoznam",
+        "exportFileName": "slova-na-diktovanie.txt",
+        "full": "Zoznam je plný. Ak chcete pridať nové slová, niektoré odoberte.",
+        "importHint": "Vložte jedno slovo na riadok alebo vyberte súbor .txt s jedným slovom na riadok či súbor .csv so slovami v prvom stĺpci.",
+        "importedToast": "{count, plural, one {Pridané # slovo.} few {Pridané # slová.} many {Pridaných # slova.} other {Pridaných # slov.}}",
+        "invalid": "Slovo nesmie obsahovať zalomenie riadka ani riadiace znaky.",
+        "noMatch": "Hľadaniu „{search}“ nezodpovedá žiadne slovo.",
+        "pasteLabel": "Slová na pridanie",
+        "pastePlaceholder": "Jedno slovo na riadok",
+        "review": "Skontrolovať slová",
+        "reviewInvalid": "{count, plural, one {# neplatné, vynechané} few {# neplatné, vynechané} many {# neplatného, vynechané} other {# neplatných, vynechaných}}",
+        "reviewListed": "{count, plural, one {# už je v zozname} few {# už sú v zozname} many {# už je v zozname} other {# už je v zozname}}",
+        "reviewNew": "{count, plural, one {# nové slovo} few {# nové slová} many {# nového slova} other {# nových slov}}",
+        "reviewOverLimit": "Zoznam obsahuje {total, number} slov a zmestí sa doň ešte {room, number} (najviac {max, number}). Pridajte menej slov alebo najprv niektoré zo zoznamu odoberte.",
+        "reviewRepeated": "{count, plural, one {# sa v importe opakuje} few {# sa v importe opakujú} many {# sa v importe opakuje} other {# sa v importe opakuje}}",
+        "reviewTooLong": "{count, plural, one {# je príliš dlhé, vynechané} few {# sú príliš dlhé, vynechané} many {# je príliš dlhého, vynechané} other {# je príliš dlhých, vynechaných}}",
+        "searchPlaceholder": "Hľadať slová",
+        "selectWord": "Vybrať {word}",
+        "showMore": "Zobraziť ďalšie ({shown, number} z {matching, number})",
+        "title": "Diktovanie",
+        "tooLong": "Toto slovo je na diktovanie príliš dlhé.",
+        "wordsTitle": "Tímové slová"
+      },
       "documentProcessing": {
         "description": "Automaticky rozpoznávajte text v naskenovaných PDF, aby sa v ich obsahu dalo vyhľadávať.",
         "title": "Rozpoznávanie textu dokumentov",
@@ -707,7 +745,6 @@
         "reorder": "Zmeniť poradie typu dokumentu",
         "title": "Typy dokumentov"
       },
-      "enterSlug": "Zadajte identifikátor organizácie pre adresu URL.",
       "localRuns": {
         "description": "Najviac, čo smie programovací agent urobiť bez pýtania, keď spúšťa chat v počítači člena. Nižší limit platí od ďalšej správy každého člena; beh, ktorý už prebieha, si svoje oprávnenia ponechá.",
         "title": "Programovací agenti v počítačoch členov",
@@ -764,7 +801,6 @@
       },
       "uploadLogo": "Nahrať logo",
       "usage": "Využitie",
-      "usageCheckoutProviderUnavailable": "Poskytovateľ platieb nie je pre platbu online dostupný.",
       "usageDescription": "Limity využitia a stav oprávnenia pre túto organizáciu",
       "usageEmptyDescription": "Nakonfigurujte oprávnenie na využitie, aby organizácia mohla používať merané funkcie AI.",
       "usageEmptyTitle": "Žiadne oprávnenie na využitie",
@@ -781,11 +817,9 @@
       "usageManageError": "Nepodarilo sa otvoriť správu hostovaného využitia",
       "usageManuallyManaged": "Spravované manuálne",
       "usagePacksDescription": "Jednorazové balíčky jednotiek pridané do aktuálneho obdobia.",
-      "usagePacksRequireActivePlan": "Na nákup balíčkov jednotiek aktivujte alebo obnovte hostovaný program.",
       "usagePacksTitle": "Balíčky jednotiek",
       "usagePlanCheckout": "Pokračovať k objednávke",
       "usagePlanCheckoutError": "Nepodarilo sa spustiť objednávku",
-      "usagePlanCheckoutUnavailable": "Pre tento program nie je dostupná platba online.",
       "usagePlanPriceMonthTemplate": "{price} / mesiac",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / miesto / mesiac",
@@ -807,7 +841,11 @@
         "title": "Závery pri overovaní dokumentov",
         "unavailable": "Tejto organizácii nie je k dispozícii žiadny rozhodovací model.",
         "updated": "Nastavenie overovania bolo aktualizované"
-      }
+      },
+      "enterSlug": "Zadajte identifikátor organizácie pre adresu URL.",
+      "usageCheckoutProviderUnavailable": "Poskytovateľ platieb nie je pre platbu online dostupný.",
+      "usagePacksRequireActivePlan": "Na nákup balíčkov jednotiek aktivujte alebo obnovte hostovaný program.",
+      "usagePlanCheckoutUnavailable": "Pre tento program nie je dostupná platba online."
     }
   }
 }

@@ -17,7 +17,7 @@ import { savePdfForModelInput } from "@/api/lib/files/pdf-signatures";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import { readS3BytesBounded } from "@/api/lib/s3";
-import { extractFileTextResult } from "@/api/lib/search/extract-content";
+import { extractOfficeDocumentTextResult } from "@/api/lib/search/extract-content";
 import {
   canPrepareExtractedTextFile,
   isAISupportedFile,
@@ -181,8 +181,10 @@ export const fetchAndPrepareFiles = async (
           fileId: meta.fileId,
           mimeType: meta.mimeType,
         });
-        const extracted = await extractFileTextResult(
+        // `canPrepareExtractedTextFile` admits Office documents alone.
+        const extracted = await extractOfficeDocumentTextResult(
           await readStoredFile({ key: fileKey, mimeType: meta.mimeType }),
+          {},
         );
         if (Result.isError(extracted)) {
           throw new WorkflowIntegrationError({

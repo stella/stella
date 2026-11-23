@@ -694,6 +694,44 @@
         "remove": "Remove data box {address}",
         "title": "Organization data boxes"
       },
+      "dictation": {
+        "addCount": "{count, plural, one {Add # word} other {Add # words}}",
+        "addLabel": "Add a word or name",
+        "addMany": "Add many",
+        "addedToast": "Added “{word}”.",
+        "alreadyListedToast": "“{word}” is already in the list.",
+        "count": "{total, number} of {max, number}",
+        "deleteSelected": "{count, plural, one {Remove # word} other {Remove # words}}",
+        "deleteSelectedDescription": "Dictation stops using them for the whole team.",
+        "deleteSelectedInput": "Type {number} to confirm",
+        "deleteSelectedTitle": "{count, plural, one {Remove # word?} other {Remove # words?}}",
+        "deleteWord": "Remove {word}",
+        "deletedToast": "{count, plural, one {Removed # word.} other {Removed # words.}}",
+        "description": "Words and names the whole team's dictation should spell correctly, such as client names or English terms used in another language. stella uses the ones each dictation needs, so the list can be long.",
+        "empty": "Add a word above, or add many from a list or a file.",
+        "export": "Export list",
+        "exportFileName": "dictation-words.txt",
+        "full": "The list is full. Remove words to add new ones.",
+        "importHint": "Paste one word per line, or choose a .txt file with one word per line or a .csv file with the words in its first column.",
+        "importedToast": "{count, plural, one {Added # word.} other {Added # words.}}",
+        "invalid": "A word can't contain line breaks or control characters.",
+        "noMatch": "No words match “{search}”.",
+        "pasteLabel": "Words to add",
+        "pastePlaceholder": "One word per line",
+        "review": "Review words",
+        "reviewInvalid": "{count, plural, one {# not valid, left out} other {# not valid, left out}}",
+        "reviewListed": "{count, plural, one {# already in the list} other {# already in the list}}",
+        "reviewNew": "{count, plural, one {# new word} other {# new words}}",
+        "reviewOverLimit": "The list holds {total, number} words and has room for {room, number} more (at most {max, number}). Add fewer words, or remove some from the list first.",
+        "reviewRepeated": "{count, plural, one {# repeated in this import} other {# repeated in this import}}",
+        "reviewTooLong": "{count, plural, one {# too long, left out} other {# too long, left out}}",
+        "searchPlaceholder": "Search words",
+        "selectWord": "Select {word}",
+        "showMore": "Show more ({shown, number} of {matching, number})",
+        "title": "Dictation",
+        "tooLong": "This word is longer than dictation accepts.",
+        "wordsTitle": "Team words"
+      },
       "documentProcessing": {
         "description": "Automatically recognize text in scanned PDFs so their contents can be searched.",
         "title": "Document text recognition",
@@ -707,7 +745,6 @@
         "reorder": "Reorder document type",
         "title": "Document types"
       },
-      "enterSlug": "Enter the organization URL slug.",
       "localRuns": {
         "description": "The most a coding agent may do without asking when it runs a chat on a member's computer. A lower limit applies from each member's next message; a run already going keeps its permissions.",
         "title": "Coding agents on members' computers",
@@ -764,7 +801,6 @@
       },
       "uploadLogo": "Upload logo",
       "usage": "Usage",
-      "usageCheckoutProviderUnavailable": "The payment provider is unavailable for online checkout.",
       "usageDescription": "Usage limits and entitlement state for this organization",
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organization.",
       "usageEmptyTitle": "No usage entitlement",
@@ -781,11 +817,9 @@
       "usageManageError": "Could not open hosted usage management",
       "usageManuallyManaged": "Manually managed",
       "usagePacksDescription": "One-time unit packs added to your current period.",
-      "usagePacksRequireActivePlan": "Start or resume a hosted plan to buy unit packs.",
       "usagePacksTitle": "Unit packs",
       "usagePlanCheckout": "Continue to checkout",
       "usagePlanCheckoutError": "Could not start checkout",
-      "usagePlanCheckoutUnavailable": "Online checkout is unavailable for this plan.",
       "usagePlanPriceMonthTemplate": "{price} / month",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / seat / month",
@@ -807,7 +841,11 @@
         "title": "Verdicts in document verification",
         "unavailable": "No decision model is available to this organization.",
         "updated": "Verification setting updated"
-      }
+      },
+      "enterSlug": "Enter the organization URL slug.",
+      "usageCheckoutProviderUnavailable": "The payment provider is unavailable for online checkout.",
+      "usagePacksRequireActivePlan": "Start or resume a hosted plan to buy unit packs.",
+      "usagePlanCheckoutUnavailable": "Online checkout is unavailable for this plan."
     }
   }
 }

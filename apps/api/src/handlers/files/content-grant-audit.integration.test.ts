@@ -32,6 +32,7 @@ import {
 import { SIGNED_DOSSIER_FORMATS } from "@stll/api-contract/signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "@stll/api-contract/structured-document-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
+import { encodeDosCodePage } from "@stll/mojibake/dos-code-pages";
 import { rejectionOf } from "@stll/property-testing/rejection";
 import { sha256Hex } from "@stll/sha256/bun";
 import { dbClock } from "@stll/test-kit/db";
@@ -45,6 +46,7 @@ import {
   entities,
   entityVersions,
   fields,
+  organizationSettings,
   properties,
   syntheticSessionControl,
   workspaceMembers,
@@ -82,7 +84,7 @@ import { dataBoxPayloadIdentity } from "@/api/lib/email/correspondence/data-box/
 import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCUMENT_ARCHIVE_MAX_BYTES } from "@/api/lib/files/archive-preview-protocol";
-import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+import { xmlDocumentPreviewText } from "@/api/lib/files/e-invoice-text";
 import {
   checkFileContentGrant,
   FILE_CONTENT_GRANT_TTL_MS,
@@ -1445,7 +1447,9 @@ describe.each(eInvoiceFixtures)(
       if (preview instanceof HttpStatusResponse) {
         panic("Expected a structured invoice preview");
       }
-      expect(preview.invoices.length).toBeGreaterThan(0);
+      expect(
+        preview.type === "invoice" && preview.invoice.invoices.length,
+      ).toBeGreaterThan(0);
       await expectOneContentRow(entityId, {
         action: "access",
         metadata: {
@@ -1463,7 +1467,7 @@ describe.each(eInvoiceFixtures)(
         purpose: "agent",
       });
       expect(agent.unwrap()).toEqual({
-        text: eInvoiceDocumentText(preview),
+        text: xmlDocumentPreviewText(preview),
         attachments: [],
       });
       const rows = await auditRowsFor(entityId);
@@ -1571,20 +1575,35 @@ describe.each(eInvoiceFixtures)(
   },
 );
 
-test("plain XML is never read as an invoice and nothing is delivered", async () => {
-  const { fieldId, entityId } = await seedStored(
+test("plain XML is never read as an invoice: Files and the agent get its text", async () => {
+  const { fieldId, entityId, entityVersionId } = await seedStored(
     { fileName: "catalog.xml", mimeType: "application/xml", pdfFileId: null },
     xmlBytes(plainXml()),
   );
-  expect(
-    await eInvoicePreviewEndpoint.handler(
-      legalFileContext(fieldId, scopedDbA()),
-    ),
-  ).toMatchObject({
-    code: 422,
-    response: { code: PREVIEW_UNAVAILABLE_ERROR_CODE },
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: entityVersionId })
+    .where(eq(entities.id, entityId));
+  const preview = await eInvoicePreviewEndpoint.handler(
+    legalFileContext(fieldId, scopedDbA()),
+  );
+  if (preview instanceof HttpStatusResponse) {
+    panic("Expected the XML text preview");
+  }
+  expect(preview).toMatchObject({ type: "xml", truncated: false });
+  await expectOneContentRow(entityId, {
+    action: "access",
+    metadata: { fieldId, format: "xml", disposition: "inline" },
   });
-  expect(await auditRowsFor(entityId)).toEqual([]);
+  const agent = await LEGAL_FILE_READERS.xml({
+    fieldId,
+    scopedDb: scopedDbA(),
+    workspaceId: ids.wsA1,
+    organizationId: ids.orgA,
+    recordAuditEvent: recorderA(),
+    purpose: "agent",
+  });
+  expect(agent.unwrap().text).toBe(xmlDocumentPreviewText(preview));
 });
 
 describe("email text reading", () => {
@@ -2231,6 +2250,106 @@ describe("ZIP archive delivery", () => {
     const large = await filePartListScalingScenario.measure(context);
     expect(small.statements).toBeGreaterThan(0);
     expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
+
+describe("ZIP names in the organization's code page", () => {
+  // "Důkazy.pdf" written by Windows set to code page 852, without the UTF-8
+  // flag: its one byte above 0x7F is "ů" in 852 and "à" in 437, a tie.
+  const TIED_NAME =
+    encodeDosCodePage("Důkazy.pdf", "ibm852") ?? panic("852 writes the name");
+
+  /** An archive holding the name, and an archive in it holding it too. */
+  const seedTiedZip = async () =>
+    await seedStored(
+      {
+        fileName: "dukazy-ke-sporu.zip",
+        mimeType: "application/zip",
+        pdfFileId: null,
+      },
+      makeZipArchive([
+        { name: TIED_NAME, data: "%PDF-1.7", flags: 0 },
+        {
+          name: "spis.zip",
+          data: makeZipArchive([
+            { name: TIED_NAME, data: "%PDF-1.7", flags: 0 },
+          ]),
+          method: 0,
+        },
+      ]),
+    );
+
+  const practising = async (countryCode: "CZ" | "DE") =>
+    await testDb
+      .insert(organizationSettings)
+      .values({
+        organizationId: ids.orgA,
+        practiceJurisdictions: [{ countryCode, isPrimary: true }],
+      })
+      .onConflictDoUpdate({
+        target: organizationSettings.organizationId,
+        set: { practiceJurisdictions: [{ countryCode, isPrimary: true }] },
+      });
+
+  /**
+   * The tied name as the preview, the part list of the archive inside and
+   * the text an agent reads all show it: `shown`, never `other`.
+   */
+  const expectShown = async (
+    fieldId: SafeId<"field">,
+    { shown, other }: { shown: string; other: string },
+  ) => {
+    expect(
+      await zipArchivePreviewEndpoint.handler(
+        legalFileContext(fieldId, scopedDbA()),
+      ),
+    ).toMatchObject({
+      files: [{ fileName: shown }, { fileName: "spis.zip" }],
+    });
+    expect(
+      await readFilePartListEndpoint.handler(
+        partListContext(fieldId, "member:1", scopedDbA()),
+      ),
+    ).toMatchObject({ files: [{ fileName: shown }] });
+    const { text } = (
+      await LEGAL_FILE_READERS.zip({
+        fieldId,
+        scopedDb: scopedDbA(),
+        workspaceId: ids.wsA1,
+        organizationId: ids.orgA,
+        recordAuditEvent: recorderA(),
+        purpose: "agent",
+      })
+    ).unwrap();
+    expect(text).toContain(shown);
+    expect(text).not.toContain(other);
+  };
+
+  test("a tie reads in 852 for a Czech practice and in 437 for a German one", async () => {
+    const before = await testDb.query.organizationSettings.findFirst({
+      where: { organizationId: { eq: ids.orgA } },
+      columns: { practiceJurisdictions: true },
+    });
+    const { fieldId, entityId, entityVersionId } = await seedTiedZip();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    try {
+      await practising("CZ");
+      await expectShown(fieldId, { shown: "Důkazy.pdf", other: "Dàkazy.pdf" });
+      await practising("DE");
+      await expectShown(fieldId, { shown: "Dàkazy.pdf", other: "Důkazy.pdf" });
+    } finally {
+      await (before === undefined
+        ? testDb
+            .delete(organizationSettings)
+            .where(eq(organizationSettings.organizationId, ids.orgA))
+        : testDb
+            .update(organizationSettings)
+            .set({ practiceJurisdictions: before.practiceJurisdictions })
+            .where(eq(organizationSettings.organizationId, ids.orgA)));
+    }
   });
 });
 

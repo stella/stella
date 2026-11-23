@@ -6,7 +6,10 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
 import { readSignedDossierPreview } from "@/api/lib/files/archive-preview";
-import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
+import {
+  readingZipNames,
+  readLegalFilePreview,
+} from "@/api/lib/files/read-legal-file-preview";
 
 const config = {
   contract: "patch",
@@ -39,7 +42,7 @@ export const signedDossierPreviewEndpoint = createSafeHandler(
               recordAuditEvent,
             },
             SIGNED_DOSSIER_KINDS,
-            readSignedDossierPreview,
+            readingZipNames(readSignedDossierPreview),
           ),
       ),
     );

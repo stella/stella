@@ -31,6 +31,7 @@ import {
   isWithinArchiveLimits,
   readArchiveEntry,
 } from "@/api/lib/files/document-archive";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 
 /** The largest file the archive reader inflates. */
 export const ZIP_ARCHIVE_MAX_FILE_BYTES = 32 * 1024 * 1024;
@@ -100,9 +101,13 @@ const unicodePathName = (entry: ZipEntry): string | null => {
  * Each entry's name as the archive states it, decoded: the Unicode path an
  * Info-ZIP field gives, else the name in UTF-8 when the entry's flag says
  * so. The names left declare no charset; they are read together, as one
- * program wrote them (`decodeUndeclaredFileNames`).
+ * program wrote them (`decodeUndeclaredFileNames`), a tie going to the
+ * reading organization's code page.
  */
-const statedNames = (entries: readonly ZipEntry[]): string[] => {
+const statedNames = (
+  entries: readonly ZipEntry[],
+  nameCodePage: ZipNameCodePage,
+): string[] => {
   const declared = entries.map(
     (entry) =>
       unicodePathName(entry) ??
@@ -114,6 +119,7 @@ const statedNames = (entries: readonly ZipEntry[]): string[] => {
     entries.flatMap((entry, index) =>
       declared[index] === null ? [entry.name] : [],
     ),
+    { tieBreak: nameCodePage },
   ).names;
   let next = 0;
   return declared.map((name) => name ?? undeclared[next++] ?? "");
@@ -224,10 +230,12 @@ const invalid = (message: string) =>
 /**
  * The files of a ZIP archive in its order; folders and system metadata are
  * not files. A file's position in this list addresses it as a part
- * (`member:N`).
+ * (`member:N`). Names that declare no charset and could be read alike in
+ * more than one code page are read in `nameCodePage`.
  */
 export const readZipArchive = async (
   bytes: Uint8Array,
+  { nameCodePage }: { nameCodePage: ZipNameCodePage },
 ): Promise<Result<ZipArchiveFile[], DocumentPackageError>> => {
   if (!hasZipMagic(bytes) && !isEmptyArchive(bytes)) {
     return invalid("The file is not a ZIP archive");
@@ -244,7 +252,7 @@ export const readZipArchive = async (
   if (index.type === "malformed") {
     return invalid("The archive has a malformed ZIP index");
   }
-  const names = statedNames(index.entries);
+  const names = statedNames(index.entries, nameCodePage);
   return Result.ok(
     index.entries.flatMap((entry, position) => {
       const name = names[position] ?? "";

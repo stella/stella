@@ -48,7 +48,7 @@ const unreadableXml = () =>
 
 // The declaration is ASCII-compatible for both legacy encodings. Honor only
 // explicit declarations; malformed UTF-8 must never silently change alphabets.
-const xmlEncoding = (bytes: Uint8Array) => {
+export const xmlEncoding = (bytes: Uint8Array) => {
   if (bytes[0] === 0xff && bytes[1] === 0xfe) {
     return "utf-16le";
   }
