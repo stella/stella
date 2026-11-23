@@ -21,7 +21,10 @@ import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { canonicalSnapshotId } from "@stll/folio-core/canonical/canonicalRoomBase";
 import type { CanonicalRoomCollaboration } from "@stll/folio-core/controller/canonicalRoomEditor";
-import { openCanonicalYjsRoom } from "@stll/folio-core/controller/canonicalYjsRoom";
+import {
+  type CanonicalYjsConnection,
+  openCanonicalYjsRoom,
+} from "@stll/folio-core/controller/canonicalYjsRoom";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
@@ -284,6 +287,37 @@ const connectedState = (
       return panic(`Unhandled status: ${String(status)}`);
     }
   }
+};
+
+/** A room connection the provider's events switch on and off. */
+const createRoomConnection = (): {
+  connection: CanonicalYjsConnection;
+  setConnected: (connected: boolean) => void;
+} => {
+  let connected = false;
+  const listeners = new Set<(connected: boolean) => void>();
+  return {
+    connection: {
+      get connected() {
+        return connected;
+      },
+      onChange: (listener) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+    },
+    setConnected: (next) => {
+      if (connected === next) {
+        return;
+      }
+      connected = next;
+      for (const listener of listeners) {
+        listener(next);
+      }
+    },
+  };
 };
 
 export const useFolioCollaborationRoom = ({
@@ -647,28 +681,8 @@ export const useFolioCollaborationRoom = ({
         collaborationDocument = ydoc;
         // The room follows the journal while the provider is synced with the
         // server; its requests wait in the document's inbox otherwise.
-        let roomConnected = false;
-        const roomConnectionListeners = new Set<(connected: boolean) => void>();
-        const setRoomConnected = (connected: boolean) => {
-          if (roomConnected === connected) {
-            return;
-          }
-          roomConnected = connected;
-          for (const listener of roomConnectionListeners) {
-            listener(connected);
-          }
-        };
-        const roomConnection = {
-          get connected() {
-            return roomConnected;
-          },
-          onChange: (listener: (connected: boolean) => void) => {
-            roomConnectionListeners.add(listener);
-            return () => {
-              roomConnectionListeners.delete(listener);
-            };
-          },
-        };
+        const { connection: roomConnection, setConnected: setRoomConnected } =
+          createRoomConnection();
         provider = new hocuspocus.HocuspocusProvider({
           document: ydoc,
           name: data.roomName,
@@ -862,21 +876,23 @@ export const useFolioCollaborationRoom = ({
           () => void,
           ReturnType<typeof setTimeout>
         >();
-        const whenLocalEditsSequenced = () =>
-          unsequencedBatches === 0
-            ? Promise.resolve()
-            : new Promise<void>((resolve, reject) => {
-                const timer = setTimeout(() => {
-                  sequencedWaiters.delete(resolve);
-                  reject(
-                    new CollaborationFlushError({
-                      message:
-                        "Timed out while the room sequenced this editor's edits.",
-                    }),
-                  );
-                }, COLLAB_FLUSH_TIMEOUT_MS);
-                sequencedWaiters.set(resolve, timer);
-              });
+        const whenLocalEditsSequenced = async (): Promise<void> => {
+          if (unsequencedBatches === 0) {
+            return;
+          }
+          await new Promise<void>((resolve, reject) => {
+            const timer = setTimeout(() => {
+              sequencedWaiters.delete(resolve);
+              reject(
+                new CollaborationFlushError({
+                  message:
+                    "Timed out while the room sequenced this editor's edits.",
+                }),
+              );
+            }, COLLAB_FLUSH_TIMEOUT_MS);
+            sequencedWaiters.set(resolve, timer);
+          });
+        };
         let seedAcknowledgementStarted = false;
         const collaboration: CanonicalRoomCollaboration = {
           snapshot: roomSnapshot,

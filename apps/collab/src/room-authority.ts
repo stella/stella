@@ -65,6 +65,7 @@ type RoomAuthorityState =
   | { type: "stopped" };
 
 type RunningRoom = {
+  roomId: string;
   state: RoomAuthorityState;
   timer: ReturnType<typeof setInterval> | undefined;
 };
@@ -106,8 +107,7 @@ export const createRoomAuthorities = ({
       held.authority.stop();
     }
     if (coordination.type === "redis") {
-      // A release that fails leaves the lease to expire.
-      await Result.tryPromise({
+      const released = await Result.tryPromise({
         try: async () =>
           await coordination.redis.eval(
             RELEASE_LEASE,
@@ -117,6 +117,14 @@ export const createRoomAuthorities = ({
           ),
         catch: (cause) => cause,
       });
+      // A release that fails leaves the lease to expire.
+      if (Result.isError(released)) {
+        logCollabEvent({
+          event: "room_authority_lease_release_failed",
+          level: "warn",
+          roomId: room.roomId,
+        });
+      }
     }
   };
 
@@ -127,7 +135,11 @@ export const createRoomAuthorities = ({
     seedDocx,
   }: StartRoomAuthorityOptions) => {
     await stop(roomName);
-    const room: RunningRoom = { state: { type: "opening" }, timer: undefined };
+    const room: RunningRoom = {
+      roomId,
+      state: { type: "opening" },
+      timer: undefined,
+    };
     rooms.set(roomName, room);
     const base = await Result.tryPromise({
       try: async () =>

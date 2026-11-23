@@ -72,6 +72,11 @@ type CollabLogEvent =
       event: "room_authority_lease_lost";
       level: "warn";
       roomId: string;
+    }
+  | {
+      event: "room_authority_lease_release_failed";
+      level: "warn";
+      roomId: string;
     };
 
 /** Closed event shapes prevent credentials, identities, or document data entering logs. */

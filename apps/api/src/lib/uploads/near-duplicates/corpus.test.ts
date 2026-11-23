@@ -12,8 +12,6 @@
 import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
-import { ZipArchive } from "@stll/docx-core/zip";
-
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import {
   estimateSimilarity,
@@ -24,6 +22,7 @@ import {
   shingleHashes,
 } from "@/api/lib/uploads/near-duplicates/minhash";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
+import { minimalDocx } from "@/api/tests/helpers/minimal-docx";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const CORPUS = new URL("__fixtures__/corpus/", import.meta.url);
@@ -86,22 +85,15 @@ const escapeXml = (text: string) =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
 const docxText = async (text: string): Promise<string> => {
-  const zip = new ZipArchive();
-  zip.set(
-    "[Content_Types].xml",
-    '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
-  );
-  zip.set(
-    "word/document.xml",
-    `<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${text
+  const bytes = await minimalDocx(
+    text
       .split("\n")
       .map(
         (paragraph) =>
           `<w:p><w:r><w:t xml:space="preserve">${escapeXml(paragraph)}</w:t></w:r></w:p>`,
       )
-      .join("")}</w:body></w:document>`,
+      .join(""),
   );
-  const bytes = await zip.generate();
   const extracted = await extractFileTextResult(
     testScannedFile({
       bytes: new Uint8Array(bytes).buffer,
