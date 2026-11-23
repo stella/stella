@@ -972,7 +972,7 @@ describe("bounded search-index replay", () => {
           name: "reindex",
           run: async () => ({
             count: Number(
-              await runSearchIndexReplayAttempt({
+              (await runSearchIndexReplayAttempt({
                 indexEntity: async () => await new Promise<void>(() => {}),
                 onFailure: async (error) => {
                   replayError = error;
@@ -983,7 +983,7 @@ describe("bounded search-index replay", () => {
                   return true;
                 },
                 timeoutMs: 5, // timeout under test
-              }),
+              })) === "replayed",
             ),
             hasMore: false,
           }),
