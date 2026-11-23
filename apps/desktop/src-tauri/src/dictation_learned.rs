@@ -254,11 +254,10 @@ fn taught(fixes: &[LearnedFix], from: &str, to: &str) -> Vec<LearnedFix> {
     .collect::<Vec<_>>();
   next.push(fix);
   while next.len() > contract().max_fixes {
+    // Only a fix that is on is in use, as in `@stll/transcript`.
     let unused = next
       .iter()
-      .position(|fix| {
-        matches!(fix.status, FixStatus::Learning | FixStatus::Contradicted)
-      })
+      .position(|fix| fix.status != FixStatus::On)
       .unwrap_or(0);
     next.remove(unused);
   }
@@ -767,9 +766,12 @@ mod tests {
       .map(|index| fix(&format!("word{index}"), "Word", FixStatus::On))
       .collect::<Vec<_>>();
     fixes[3].status = FixStatus::Learning;
+    fixes[1].status = FixStatus::Off;
     let next = taught(&fixes, "fresh", "Fresh");
     assert_eq!(next.len(), contract().max_fixes);
-    assert!(next.iter().all(|each| each.from != "word3"));
+    // A fix switched off is unused too, and the older one goes.
+    assert!(next.iter().all(|each| each.from != "word1"));
+    assert!(next.iter().any(|each| each.from == "word3"));
     assert_eq!(next.last().map(|each| each.from.as_str()), Some("fresh"));
   }
 
