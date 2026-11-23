@@ -49,6 +49,9 @@ export type ClientMessage = {
   parts: ChatPart[];
 };
 
+/** A file the page holds no row of says nothing of its content. */
+const NO_REASONS: readonly UnscannedContentReason[] = [];
+
 /** What the page serves of a stored file beside a part that references it. */
 export type ServedFileDetails = {
   /** The blur placeholder, when a thumbnail was generated. */
@@ -66,7 +69,7 @@ export type ServedFileDetails = {
  * says of them is replaced, so a value a client wrote into a part never
  * reaches the page, and a file that holds none shows none.
  */
-export const attachServedFileDetails = (
+const attachServedFileDetails = (
   parts: ChatPart[],
   detailsById: ReadonlyMap<string, ServedFileDetails>,
 ): ChatPart[] =>
@@ -77,7 +80,8 @@ export const attachServedFileDetails = (
     const fileId = parseUserFileId(getChatAttachmentUrl(part));
     const details = fileId ? detailsById.get(fileId) : undefined;
     const placeholder = details?.placeholder ?? null;
-    const unscannedContent = details?.unscannedContent ?? [];
+    const unscannedContent =
+      details === undefined ? NO_REASONS : details.unscannedContent;
     const { unscannedContent: stored, ...metadata } = part.metadata ?? {};
     if (
       placeholder === null &&
@@ -91,7 +95,9 @@ export const attachServedFileDetails = (
       metadata: {
         ...metadata,
         ...(placeholder === null ? {} : { placeholder }),
-        ...(unscannedContent.length === 0 ? {} : { unscannedContent }),
+        ...(unscannedContent.length === 0
+          ? {}
+          : { unscannedContent: [...unscannedContent] }),
       },
     };
   });
