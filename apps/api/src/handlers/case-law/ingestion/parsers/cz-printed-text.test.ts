@@ -150,6 +150,36 @@ describe("page furniture", () => {
     ]);
   });
 
+  test("Nejvyšší soud: the print page's tabs, source line breaks and space runs read as one space", async () => {
+    const names = [
+      "22-cdo-4223-2018",
+      "30-cdo-5117-2017",
+      "22-cdo-1717-2000",
+      "30-cdo-1883-2013",
+      "8-tdo-245-2026",
+      "25-cdo-803-2003",
+      "5-tdo-242-2005",
+      "29-odo-231-2002",
+    ];
+    for (const name of names) {
+      const lines = (await readNs(name)).blocks
+        .filter(
+          (block) => block.type === "paragraph" || block.type === "heading",
+        )
+        .flatMap((block) => block.plainText.split("\n"));
+      expect({
+        name,
+        raw: lines.filter((line) => /\t| {2}|^ /u.test(line)),
+      }).toEqual({ name, raw: [] });
+    }
+    expect(texts(await readNs("22-cdo-4223-2018"))).toContain(
+      "Mgr. Michal Králík, Ph.D. předseda senátu",
+    );
+    expect(texts(await readNs("5-tdo-242-2005"))).toContainEqual(
+      expect.stringMatching(/^Poučení: Proti rozhodnutí o dovolání není /u),
+    );
+  });
+
   test("soft hyphens leave the text", async () => {
     for (const ast of [
       await readNss("57-af-17-2023"),
@@ -340,7 +370,10 @@ describe("structure", () => {
     ).toEqual(["ROZSUDEK"]);
     expect(
       ast.blocks.find((block) => block.plainText === "JMÉNEM REPUBLIKY"),
-    ).toMatchObject({ type: "paragraph", role: "opening-formula" });
+    ).toMatchObject({
+      type: "paragraph",
+      role: "opening-formula",
+    });
   });
 
   test("Nejvyšší soud: a caption below the court's name is split into docket and title", async () => {

@@ -4,6 +4,7 @@ import * as v from "valibot";
 import {
   DESKTOP_DICTATION_APP_KINDS,
   DESKTOP_DICTATION_CLEANUP_STYLES,
+  desktopDictationCleanupRequestSchema,
   desktopDictationCleanupResponseSchema,
 } from "@stll/api-contract/desktop-dictation-cleanup";
 import plausibilityCases from "@stll/api-contract/desktop-dictation-cleanup.plausibility";
@@ -151,7 +152,8 @@ test("spoken commands do not count as dictated content an answer must keep", () 
 });
 
 // The desktop runs the same cases against its own check
-// (dictation_cleanup.rs), so both sides refuse the same answers.
+// (dictation_cleanup.rs), so both sides refuse the same answers, a case's
+// style and language to write in included.
 test.each(plausibilityCases)("plausibility: $name", (scenario) => {
   const { segments } = v.parse(desktopDictationCleanupResponseSchema, {
     segments: scenario.segments,
@@ -164,7 +166,12 @@ test.each(plausibilityCases)("plausibility: $name", (scenario) => {
           : { type: segment.type, text: "", bold: false },
       ),
     },
-    { transcript: scenario.transcript },
+    // The style and the language to write in, as a request names them.
+    v.parse(desktopDictationCleanupRequestSchema, {
+      transcript: scenario.transcript,
+      style: scenario.style,
+      translateTo: scenario.translateTo,
+    }),
   );
   expect(accepted.isOk()).toBe(scenario.plausible);
 });

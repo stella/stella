@@ -5,6 +5,10 @@ import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import {
+  documentNamePatternProblem,
+  MAX_DOCUMENT_NAME_PATTERN_LENGTH,
+} from "@stll/api-contract/document-name";
+import {
   parsePlainDate,
   parseTimeZoneId,
   Temporal,
@@ -91,6 +95,18 @@ const updateOrganizationSettingsBodySchema = v.object({
     ),
   ),
   matterNumberingEnabled: v.optional(v.boolean()),
+  documentNamePattern: v.optional(
+    v.nullable(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(MAX_DOCUMENT_NAME_PATTERN_LENGTH),
+        v.description(
+          "Token pattern new uploads are renamed to in matters that opt in, e.g. {date}_{matterNumber}_{docType}_{title}. Tokens: {date}, {dateCompact}, {matterNumber}, {docType}, {title}. Send null to turn automatic naming off.",
+        ),
+      ),
+    ),
+  ),
   promptCachingEnabled: v.optional(v.boolean()),
   aiInstructions: v.optional(
     v.pipe(
@@ -243,6 +259,7 @@ type ExistingGeneralSettings = ExistingTimePolicy &
     | "timeZone"
     | "practiceJurisdictions"
     | "matterNumberingEnabled"
+    | "documentNamePattern"
   >;
 
 const timeZoneAuditChanges = (
@@ -286,6 +303,10 @@ const generalSettingAuditChanges = (
     body.matterNumberingEnabled,
     existing?.matterNumberingEnabled ?? false,
   );
+  const documentNamePattern = settingChange(
+    body.documentNamePattern,
+    existing?.documentNamePattern ?? null,
+  );
   const managedAIResidency = settingChange(
     body.managedAIResidency,
     existing?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
@@ -304,6 +325,7 @@ const generalSettingAuditChanges = (
   );
   return {
     ...(matterNumberingEnabled ? { matterNumberingEnabled } : {}),
+    ...(documentNamePattern ? { documentNamePattern } : {}),
     ...(managedAIResidency ? { managedAIResidency } : {}),
     ...(promptCachingEnabled ? { promptCachingEnabled } : {}),
     ...(documentProcessingMode ? { documentProcessingMode } : {}),
@@ -446,6 +468,20 @@ export const updateOrganizationSettingsHandler = async function* ({
     }
   }
 
+  const namePatternProblem =
+    typeof body.documentNamePattern === "string"
+      ? documentNamePatternProblem(body.documentNamePattern)
+      : null;
+  if (namePatternProblem !== null) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        code: "invalid_document_name_pattern",
+        message: namePatternProblem,
+      }),
+    );
+  }
+
   if (
     body.timeMinimumUnitMinutes !== undefined &&
     (body.timeMinimumUnitMinutes < 1 || 60 % body.timeMinimumUnitMinutes !== 0)
@@ -471,6 +507,7 @@ export const updateOrganizationSettingsHandler = async function* ({
 
   const timePolicyUpdate = timePolicyValues(body);
   const matterNumberingUpdate = pickDefined(body, ["matterNumberingEnabled"]);
+  const documentNamingUpdate = pickDefined(body, ["documentNamePattern"]);
 
   const updateOutcome = yield* Result.await(
     safeDb(async (tx) => {
@@ -492,8 +529,11 @@ export const updateOrganizationSettingsHandler = async function* ({
         wantsDocumentProcessingUpdate,
         wantsMemoryExtractionUpdate,
         wantsTimeZoneUpdate,
-        Object.keys({ ...timePolicyUpdate, ...matterNumberingUpdate }).length >
-          0,
+        Object.keys({
+          ...timePolicyUpdate,
+          ...matterNumberingUpdate,
+          ...documentNamingUpdate,
+        }).length > 0,
       ].some(Boolean);
 
       // Coordinate extraction consent changes with the background worker's
@@ -536,6 +576,8 @@ export const updateOrganizationSettingsHandler = async function* ({
                       organizationSettings.memoryExtractionEnabled,
                     matterNumberingEnabled:
                       organizationSettings.matterNumberingEnabled,
+                    documentNamePattern:
+                      organizationSettings.documentNamePattern,
                     promptCachingEnabled:
                       organizationSettings.promptCachingEnabled,
                     aiInstructions: organizationSettings.aiInstructions,
@@ -631,6 +673,7 @@ export const updateOrganizationSettingsHandler = async function* ({
           ...timePolicyUpdate,
           ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
           matterNumberingEnabled: body.matterNumberingEnabled,
+          documentNamePattern: body.documentNamePattern,
         })
         .onConflictDoUpdate({
           target: organizationSettings.organizationId,
@@ -667,6 +710,7 @@ export const updateOrganizationSettingsHandler = async function* ({
             timeNarrativeRequired: timePolicyUpdate.timeNarrativeRequired,
             ...(wantsTimeZoneUpdate ? { timeZone: body.timeZone } : {}),
             matterNumberingEnabled: body.matterNumberingEnabled,
+            documentNamePattern: body.documentNamePattern,
             updatedAt: new Date(),
           },
         });
@@ -724,6 +768,7 @@ export const updateOrganizationSettingsHandler = async function* ({
     ...timePolicyUpdate,
     ...(body.timeZone !== undefined ? { timeZone: body.timeZone } : {}),
     ...matterNumberingUpdate,
+    ...documentNamingUpdate,
   });
 };
 

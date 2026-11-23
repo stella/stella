@@ -6,11 +6,7 @@ import { SIGNED_DIGEST_ALGORITHMS } from "@/api/lib/files/cms-signed-data";
 
 export const SIGNATURE_WORKER_MODE = {
   preview: "signature-preview",
-  pdf: "signature-pdf",
 } as const;
-
-export type SignatureWorkerMode =
-  (typeof SIGNATURE_WORKER_MODE)[keyof typeof SIGNATURE_WORKER_MODE];
 
 export const SIGNATURE_WORKER_EXIT = {
   unreadable: 20,

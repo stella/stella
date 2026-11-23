@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 1,
-  "reason": "The account deletion step that revokes credentials now also clears the registrant of any SSO provider the person registered. Like the neighbouring deletion steps it runs inside verifyAndDeleteUser, which records the parent account-deletion request in the same transaction, so the step carries the same skip directive and its rows leave the unaudited-write ledger."
-}

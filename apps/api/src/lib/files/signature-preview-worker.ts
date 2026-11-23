@@ -1,6 +1,7 @@
 import { Result, type UnhandledException } from "better-result";
 
 import type { SignatureFileFormatKind } from "@stll/api-contract/legal-file-formats";
+import type { PreviewText } from "@stll/api-contract/preview-text";
 
 import type {
   FileScanFailedError,
@@ -53,7 +54,7 @@ type ExtractSignaturePreviewOptions = {
   readText: (
     file: ScannedFile,
     maxChars: number,
-  ) => Promise<Result<string | null, UnhandledException>>;
+  ) => Promise<Result<PreviewText | null, UnhandledException>>;
 };
 
 /**
@@ -67,10 +68,7 @@ export const extractSignaturePreview = async ({
   maxChars,
   readText,
 }: ExtractSignaturePreviewOptions): Promise<
-  Result<
-    { reply: SignatureWorkerReply; file: ScannedFile | null },
-    SignaturePreviewReadError
-  >
+  Result<{ reply: SignatureWorkerReply }, SignaturePreviewReadError>
 > => {
   const parsed = parseSignatureFile(kind, fileBytes);
   if (parsed.isErr()) {
@@ -90,7 +88,6 @@ export const extractSignaturePreview = async ({
                 text: documentText.slice(0, maxChars),
               },
       },
-      file: null,
     });
   }
   const { mimeType, extension } = detectEmbeddedPayload(embedded.bytes);
@@ -117,9 +114,8 @@ export const extractSignaturePreview = async ({
       document: {
         fileName: sanitizeFilename(file.fileName),
         mimeType: file.mimeType,
-        text: text.value ?? "",
+        text: text.value?.text ?? "",
       },
     },
-    file,
   });
 };

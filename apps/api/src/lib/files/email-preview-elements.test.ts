@@ -37,6 +37,7 @@ const htmlEmail = (html: string): ParsedEmail => ({
   body: { type: "html", html },
   inlineImages: [],
   attachments: [],
+  certified: null,
 });
 
 const textEmail = (): ParsedEmail => ({

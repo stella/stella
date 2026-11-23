@@ -1,5 +1,0 @@
-{
-  "metric": "lint-suppression-directives",
-  "delta": 2,
-  "reason": "no-truncated-timestamp-comparison on two database-side comparisons in recipient-deliverability.ts: the upsert guard compares two stored provider event times, and the retention prune compares against the database clock minus whole days. Neither compares a round-tripped Date."
-}

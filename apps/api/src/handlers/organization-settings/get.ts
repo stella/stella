@@ -88,6 +88,7 @@ type OrganizationSettingsRow = {
   matterNumberingEnabled: boolean;
   matterNumberPadding: number;
   matterNumberPattern: string;
+  documentNamePattern: string | null;
   practiceJurisdictions: PracticeJurisdiction[];
   promptCachingEnabled: boolean;
   aiInstructions: string;
@@ -169,6 +170,7 @@ export const projectOrganizationSettingsRow = (
     matterNumberPadding:
       row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
     matterNumberingEnabled: row?.matterNumberingEnabled ?? false,
+    documentNamePattern: row?.documentNamePattern ?? null,
     practiceJurisdictions,
     promptCachingEnabled: row?.promptCachingEnabled ?? true,
     aiInstructions: row?.aiInstructions ?? "",
@@ -193,6 +195,7 @@ const readOrganizationSettings = createSafeRootHandler(
             matterNumberPattern: true,
             matterNumberPadding: true,
             matterNumberingEnabled: true,
+            documentNamePattern: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
             aiInstructions: true,

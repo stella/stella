@@ -45,6 +45,7 @@ const CORRESPONDENCE_DETAIL_COLUMNS = {
   originalSignature: correspondence.originalSignature,
   messageId: correspondence.messageId,
   dataBox: correspondence.dataBox,
+  certifiedEmail: correspondence.certifiedEmail,
   from: correspondence.from,
   to: correspondence.to,
   cc: correspondence.cc,
@@ -149,7 +150,7 @@ const readDataBoxContacts = async ({
 const config = {
   contract: "patch",
   description:
-    "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email).",
+    "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email). A pec record is an uploaded Italian certified email: certifiedEmail carries the provider's certification data as stated in the file (kind, certified sender and recipients, delivery outcome, certification time, provider message ID; the provider signature is not verified), and from, to, subject and body are the original message's when the file carries it.",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -263,6 +264,7 @@ const getCorrespondence = createSafeHandler(
         const {
           channel: _channel,
           dataBox: _dataBox,
+          certifiedEmail: _certifiedEmail,
           source,
           sourceEntityId,
           intake,

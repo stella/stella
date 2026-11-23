@@ -10,6 +10,7 @@ import {
   RecordingReadError,
   recordingsToTranscribe,
   RECOVERED_OFFER_MS,
+  refusalOf,
   retriesByItself,
   retryDelayMs,
   stillOffered,
@@ -25,12 +26,16 @@ const KEPT: KeptDictation = {
   field: "chat",
   matterId: "matter-1",
   modelId: null,
+  modelClass: null,
   locale: "en",
   cleanup: false,
+  style: "polished",
+  translateTo: null,
   keptAt: 1000,
   state: {
     type: "waiting",
     refused: false,
+    refusedFor: null,
     pieces: [
       { type: "text", text: "First part." },
       { type: "audio", file: "1.m4a" },
@@ -48,12 +53,29 @@ describe("kept dictations", () => {
     expect(read).toMatchObject({ success: true, output: KEPT });
   });
 
+  test("one kept with a style and language reads them back; one kept before them reads the defaults", () => {
+    const read = (kept: object) =>
+      v.safeParse(
+        v.pipe(v.string(), v.parseJson(), keptDictationSchema),
+        JSON.stringify(kept),
+      );
+    const styled: KeptDictation = {
+      ...KEPT,
+      style: "notes",
+      translateTo: "de",
+    };
+    expect(read(styled)).toMatchObject({ success: true, output: styled });
+    const { style: _style, translateTo: _translateTo, ...before } = styled;
+    expect(read(before)).toMatchObject({ success: true, output: KEPT });
+  });
+
   test("a recording outside the dictation's folder does not read", () => {
     const outside = {
       ...KEPT,
       state: {
         type: "waiting",
         refused: false,
+        refusedFor: null,
         pieces: [{ type: "audio", file: "../x" }],
       },
     };
@@ -77,6 +99,18 @@ describe("kept dictations", () => {
     expect(retriesByItself(failure(502))).toBe(true);
     expect(retriesByItself(failure(400))).toBe(false);
     expect(retriesByItself(failure(413))).toBe(false);
+    const unserved = new ApiRequestError({
+      message: "synthetic",
+      status: 503,
+      code: "transcription_model_unavailable",
+    });
+    expect(retriesByItself(unserved)).toBe(false);
+    const timedOut = new ApiRequestError({
+      message: "synthetic",
+      status: 503,
+      code: "ai_deadline_exceeded",
+    });
+    expect(retriesByItself(timedOut)).toBe(true);
     expect(retriesByItself(new TokenError({ message: "synthetic" }))).toBe(
       true,
     );
@@ -126,5 +160,23 @@ describe("kept dictations", () => {
       "Second.",
       "Third.",
     ]);
+  });
+
+  test("only a model the server does not serve is a refusal for the model", () => {
+    expect(
+      refusalOf(
+        new ApiRequestError({
+          message: "synthetic",
+          status: 503,
+          code: "transcription_model_unavailable",
+        }),
+      ),
+    ).toBe("model");
+    expect(
+      refusalOf(new ApiRequestError({ message: "synthetic", status: 400 })),
+    ).toBeNull();
+    expect(
+      refusalOf(new RecordingReadError({ message: "synthetic" })),
+    ).toBeNull();
   });
 });

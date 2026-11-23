@@ -35,12 +35,22 @@ local-only feature follows every rule below and adds one entry to
   window pulls data through commands that take the feature's `LocalCaller`
   (`local_window.rs`), which checks the window label and the app origin.
 - **Single-window capability.** The feature's commands are granted only in
-  its own capability file, for its own windows. Activity settings are the one
-  exception: `activity_settings.rs` takes an `ActivitySettingsCaller`, which
-  also accepts the Settings window, and its read returns settings, deletion
-  state and the names of one day's apps, never the timeline. The Settings
-  window is granted those commands only; the day timeline, its review and
-  copying stay with `ActivityCaller` and the activity window.
+  its own capability file, for its own windows. Activity settings and setup
+  are the exceptions: `activity_settings.rs` takes an
+  `ActivitySettingsCaller`, which also accepts the Settings window, and its
+  read returns settings, deletion state and the names of one day's apps,
+  never the timeline. `activity_setup.rs` and `billing_draft_settings.rs`
+  take an `ActivitySetupCaller`, which also accepts the setup window; they
+  start recording, change details, calls and consent to AI drafts, and
+  their read returns only those choices. Neither deletes history. The
+  Settings and setup windows are granted those commands only; the day
+  timeline, its review and copying stay with `ActivityCaller` and the
+  activity window. Clipboard settings follow the same shape:
+  `clipboard_settings.rs` takes a `ClipboardSettingsCaller`, which also
+  accepts the Settings window; its commands change capture, retention,
+  screen recordings, excluded applications and groups, and every answer is
+  those settings, never a clip. Clips stay with `ClipboardCaller` and the
+  Clips windows.
 - **No network imports.** Feature modules and the shared machinery
   (`local_store`, `local_window`, `foreground_app`, `idle_time`,
   `feature_gate`) contain no HTTP client or socket code.
@@ -67,7 +77,7 @@ local-only feature follows every rule below and adds one entry to
 - `tests/local-only-window-boundary.test.ts`: commands granted only to the
   feature's windows, every granted command belongs to a feature's owner
   module, every command takes the caller proof, every caller type is listed,
-  and the Settings window holds no timeline command.
+  and the Settings window holds no timeline or clipboard history command.
 - `tests/window-capabilities.test.ts`: each window's capability grants what
   its page invokes.
 
@@ -178,8 +188,8 @@ Tray source is covered by the local-only network and fixed-code guards.
 ## stella AI drafts
 
 A suggestion leaves the device for a stella AI draft only after the user has
-consented on the server, from a card's prompt; consent is asked once and
-withdrawn in the Settings window's Activity tab. Without consent, or where the
+consented on the server, from a card's prompt or setup's Activity step;
+consent is asked once and withdrawn in the Settings window's Activity tab. Without consent, or where the
 firm has drafting off, the card keeps its local template and sends nothing.
 With consent, a card with a matter is drafted as it opens and on Draft again;
 text the user typed meanwhile wins over the draft, and the draft never blocks
@@ -191,7 +201,7 @@ titles its card shows, and those only while titles are recorded. Each name is
 cut to the API contract's length and their number bounded.
 `billing_draft_commands` takes the activity caller proof and the same
 linked-account binding as draft creation; `billing_draft_settings` reads,
-grants and withdraws consent from the activity window or Settings and answers
+grants and withdraws consent from the activity window, Settings or setup and answers
 with the linked account it belongs to, so a window never applies an answer for
 another account. `billing_draft_submit` sends only those fields and the
 server's settings changes, refuses unknown fields, and reads back the draft and

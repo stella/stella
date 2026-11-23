@@ -975,7 +975,6 @@
       "waitingForInput": "Aguardando informações",
       "writing": "Escrevendo"
     },
-    "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
     "usageFallbackNotice": "Cota diária de IA esgotada; as respostas continuam no modelo padrão.",
     "videoContent": "Vídeo gerado",

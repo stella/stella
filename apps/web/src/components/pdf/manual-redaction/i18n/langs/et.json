@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Lohistage üle lehe, et katta kõik, mille tuvastamine vahele jättis. Anonüümses PDF-is kaetakse iga märgitud ala mustaga.",
+    "markingSurface": "Lohistage, et märkida mustaga kaetav ala",
+    "pageArea": "Ala leheküljel {page}",
+    "removeArea": "Eemalda märgitud ala leheküljelt {page}",
+    "startMarking": "Märgi alad",
+    "stopMarking": "Lõpeta märkimine",
+    "title": "Märgitud alad"
+  }
+}

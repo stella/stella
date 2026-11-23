@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 1,
-  "reason": "Clearing retained publisher inputs adds one global ingestion lifecycle write exemption beyond the moved failure-ledger owner. The source-scoped failure ledger records the observation; this ingestion-only evidence has no tenant or human actor, and canonical erasure must remove its body bytes atomically."
-}

@@ -6,20 +6,17 @@ import type { SignatureFileFormatKind } from "@stll/api-contract/legal-file-form
 import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   SIGNATURE_WORKER_EXIT,
   SIGNATURE_WORKER_MODE,
-  type SignatureWorkerMode,
   type SignatureWorkerReply,
   signatureWorkerReplySchema,
 } from "@/api/lib/files/signature-preview-protocol";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
-import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
-import { spawnBinaryWorker } from "@/api/lib/subprocess";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 const SIGNATURE_PREVIEW_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const replySchema = v.pipe(
@@ -39,32 +36,32 @@ const unavailable = (message: string) =>
 export const signatureUnreadable = () =>
   unavailable("The signature could not be read");
 
-/** `unreadable`: the bytes hold no signature the reader recognizes. */
+/**
+ * `unreadable`: the bytes hold no signature the reader recognizes. A carried
+ * document may be a ZIP archive, whose names tie in `zipNameCodePage`.
+ */
 const runSignatureWorker = async (
   { bytes }: ScannedFile,
   kind: SignatureFileFormatKind,
   fileName: string,
-  mode: SignatureWorkerMode,
+  zipNameCodePage: ZipNameCodePage,
 ): Promise<Result<Uint8Array | "unreadable", HandlerError<422 | 503>>> => {
   if (bytes.byteLength > FILE_SIZE_LIMIT_BYTES.document) {
     return Result.err(
       unavailable("The signature file exceeds the preview size limit"),
     );
   }
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionBinaryWorker({
+    zipNameCodePage,
     args: [
-      mode,
+      SIGNATURE_WORKER_MODE.preview,
       String(LIMITS.extractedContentMaxChars),
       kind,
       sanitizeFilenamePreservingExtension(fileName),
     ],
     stdin: new Blob([bytes]),
     timeoutMs: LIMITS.extractionTimeoutMs,
-    maxOutputBytes:
-      mode === SIGNATURE_WORKER_MODE.pdf
-        ? bytes.byteLength
-        : SIGNATURE_PREVIEW_MAX_OUTPUT_BYTES,
+    maxOutputBytes: SIGNATURE_PREVIEW_MAX_OUTPUT_BYTES,
   });
   if (result.isOk()) {
     return Result.ok(result.value);
@@ -91,6 +88,7 @@ const runSignatureWorker = async (
 export const readSignatureWorkerReply = async (
   source: ScannedFile,
   kind: SignatureFileFormatKind,
+  zipNameCodePage: ZipNameCodePage,
 ): Promise<
   Result<SignatureWorkerReply | null, HandlerError<422 | 500 | 503>>
 > => {
@@ -98,7 +96,7 @@ export const readSignatureWorkerReply = async (
     source,
     kind,
     source.fileName,
-    SIGNATURE_WORKER_MODE.preview,
+    zipNameCodePage,
   );
   if (result.isErr()) {
     return Result.err(result.error);
@@ -121,36 +119,4 @@ export const readSignatureWorkerReply = async (
           "response_invalid",
         ),
       );
-};
-
-export const readSignaturePdf = async (
-  source: ScannedFile,
-  kind: SignatureFileFormatKind,
-): Promise<Result<Uint8Array, HandlerError<422 | 500 | 503>>> => {
-  const result = await runSignatureWorker(
-    source,
-    kind,
-    source.fileName,
-    SIGNATURE_WORKER_MODE.pdf,
-  );
-  if (result.isErr()) {
-    return Result.err(result.error);
-  }
-  if (result.value === "unreadable") {
-    return Result.err(
-      unavailable("The signature does not carry a readable PDF"),
-    );
-  }
-  if (!declaredMimeMatchesMagic(PDF_MIME_TYPE, result.value)) {
-    return Result.err(
-      classifyFailure(
-        new HandlerError({
-          status: 500,
-          message: "Invalid PDF response from the signature reader",
-        }),
-        "response_invalid",
-      ),
-    );
-  }
-  return Result.ok(result.value);
 };

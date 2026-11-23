@@ -79,19 +79,15 @@ const singleLine = (text: string) => text.replace(/\s+/gu, " ").trim();
 const inlineText = (
   node: DocumentXmlNode,
   stop: (node: DocumentXmlNode) => boolean,
-): string => {
-  let text = "";
-  let offset = 0;
-  for (const [index, child] of node.children.entries()) {
-    const start = node.childTextOffsets[index] ?? node.text.length;
-    text += node.text.slice(offset, start);
-    offset = start;
-    if (!stop(child)) {
-      text += ` ${inlineText(child, stop)} `;
-    }
-  }
-  return text + node.text.slice(offset);
-};
+): string =>
+  node.content
+    .map((part) => {
+      if (typeof part === "string") {
+        return part;
+      }
+      return stop(part) ? "" : ` ${inlineText(part, stop)} `;
+    })
+    .join("");
 
 /**
  * The readable text of a subtree: an element holding text beside its
@@ -288,7 +284,7 @@ export const parseXadesFile = (
   if (!mayHoldXadesSignature(bytes)) {
     return signatureFailure("not_signature");
   }
-  const parsed = parseStandaloneXml(bytes);
+  const parsed = parseStandaloneXml(bytes, SIGNATURE_FILE_LIMITS.maxFileBytes);
   if (parsed.isErr()) {
     return signatureFailure(
       parsed.error.reason === "limit" ? "limit" : "not_signature",

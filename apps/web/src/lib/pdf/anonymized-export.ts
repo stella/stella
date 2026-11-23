@@ -5,6 +5,15 @@ import { NEUTRAL_COLORS } from "@stll/brand";
 import { ClientOperationError } from "@/lib/errors/client";
 import { hasUnsupportedAnonymizationContent } from "@/lib/pdf/anonymized-export-content.logic";
 import { UnsupportedAnonymizedExportError } from "@/lib/pdf/anonymized-export-errors";
+import {
+  manualRedactionAreaToPdfBox,
+  manualRedactionPageMatches,
+  pdfDocumentKey,
+} from "@/lib/pdf/manual-redaction.logic";
+import type {
+  ManualRedactionArea,
+  ManualRedactionExport,
+} from "@/lib/pdf/manual-redaction.logic";
 import type { PDFSearchBox } from "@/lib/pdf/pdf-search";
 import { toPDFSearchViewportBox } from "@/lib/pdf/pdf-search";
 import { loadPdfjs } from "@/lib/pdf/pdfjs-loader";
@@ -15,11 +24,26 @@ const MAX_PAGE_PIXELS = 16_000_000;
 // Embedded page images remain in memory until the output PDF is saved.
 const MAX_DOCUMENT_PIXELS = 64_000_000;
 const NO_MASKS: readonly PDFSearchBox[] = [];
+const NO_AREAS: readonly ManualRedactionArea[] = [];
 
-export const rasterizeAnonymizedPdf = async (
-  buffer: ArrayBuffer,
-  masks: ReadonlyMap<number, readonly PDFSearchBox[]>,
-) =>
+type RasterizeAnonymizedPdfOptions = {
+  buffer: ArrayBuffer;
+  masks: ReadonlyMap<number, readonly PDFSearchBox[]>;
+  /** Areas drawn in the reader; honoured only on the PDF they were drawn on. */
+  manualRedaction: ManualRedactionExport | null;
+};
+
+const manualRedactionMismatch = () =>
+  new ClientOperationError({
+    action: "anonymized-export",
+    message: "The marked areas were drawn on a different version of the file",
+  });
+
+export const rasterizeAnonymizedPdf = async ({
+  buffer,
+  masks,
+  manualRedaction,
+}: RasterizeAnonymizedPdfOptions) =>
   await Result.tryPromise({
     try: async () => {
       const [{ PDF }, pdfjs] = await Promise.all([
@@ -29,6 +53,17 @@ export const rasterizeAnonymizedPdf = async (
       const loadingTask = pdfjs.getDocument({ data: buffer.slice(0) });
       try {
         const pdfDocument = await loadingTask.promise;
+        const areas = manualRedaction?.areas ?? NO_AREAS;
+        // Fail closed: an area placed on other bytes would cover the wrong text.
+        if (
+          manualRedaction !== null &&
+          areas.length > 0 &&
+          (manualRedaction.documentKey !==
+            pdfDocumentKey(pdfDocument.fingerprints) ||
+            areas.some(({ pageIndex }) => pageIndex >= pdfDocument.numPages))
+        ) {
+          return Result.err(manualRedactionMismatch());
+        }
         let documentPixels = 0;
         // Check the complete document before allocating any raster canvases.
         for (
@@ -47,6 +82,19 @@ export const rasterizeAnonymizedPdf = async (
                 message: "A page exceeds the anonymized export size limit",
               }),
             );
+          }
+          const displayedPage = {
+            width: viewport.width / EXPORT_SCALE,
+            height: viewport.height / EXPORT_SCALE,
+          };
+          if (
+            areas.some(
+              (area) =>
+                area.pageIndex === pageNumber - 1 &&
+                !manualRedactionPageMatches(area, displayedPage),
+            )
+          ) {
+            return Result.err(manualRedactionMismatch());
           }
           documentPixels += pagePixels;
           if (documentPixels > MAX_DOCUMENT_PIXELS) {
@@ -100,9 +148,25 @@ export const rasterizeAnonymizedPdf = async (
             viewport,
             annotationMode: pdfjs.AnnotationMode.DISABLE,
           }).promise;
+          const pageMasks = [...(masks.get(pageNumber - 1) ?? NO_MASKS)];
+          for (const area of areas) {
+            if (area.pageIndex !== pageNumber - 1) {
+              continue;
+            }
+            const box = manualRedactionAreaToPdfBox(area, viewport);
+            if (box === null) {
+              return Result.err(
+                new ClientOperationError({
+                  action: "anonymized-export",
+                  message: "A marked area could not be positioned",
+                }),
+              );
+            }
+            pageMasks.push(box);
+          }
           // Redaction masks are solid ink.
           context.fillStyle = NEUTRAL_COLORS.black;
-          for (const box of masks.get(pageNumber - 1) ?? NO_MASKS) {
+          for (const box of pageMasks) {
             const rect = toPDFSearchViewportBox(
               {
                 x: box.x - MASK_PADDING_PT,

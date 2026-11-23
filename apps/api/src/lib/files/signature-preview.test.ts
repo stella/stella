@@ -6,10 +6,7 @@ import {
   XADES_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 
-import {
-  readSignaturePdf,
-  readSignatureWorkerReply,
-} from "@/api/lib/files/signature-preview";
+import { readSignatureWorkerReply } from "@/api/lib/files/signature-preview";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import {
@@ -40,10 +37,12 @@ const signedPdf = async () => {
 };
 
 describe("signature file reading", () => {
-  test("an enveloping XAdES file previews its PDF with the exact signed bytes", async () => {
+  test("an enveloping XAdES file reads the document it carries", async () => {
     const pdf = await signedPdf();
     const file = stored(await envelopingXades(pdf), "podanie.xml", "text/xml");
-    const reply = (await readSignatureWorkerReply(file, "xades")).unwrap();
+    const reply = (
+      await readSignatureWorkerReply(file, "xades", "ibm437")
+    ).unwrap();
     expect(reply).toMatchObject({
       standard: "xades",
       packaging: "enveloping",
@@ -53,7 +52,6 @@ describe("signature file reading", () => {
         text: expect.stringContaining("Petition to the court"),
       },
     });
-    expect((await readSignaturePdf(file, "xades")).unwrap()).toEqual(pdf);
   });
 
   test("a detached CMS signature reports its signers and stated digest", async () => {
@@ -63,15 +61,13 @@ describe("signature file reading", () => {
       CADES_DETACHED_FILE_FORMAT.mimeType,
     );
     const reply = (
-      await readSignatureWorkerReply(file, "cadesDetached")
+      await readSignatureWorkerReply(file, "cadesDetached", "ibm437")
     ).unwrap();
     expect(reply?.packaging).toBe("detached");
     expect(reply?.document).toBeNull();
     expect(reply?.signers.map(({ name }) => name)).toEqual([
       SIGNATURE_FIXTURE_SIGNERS[0],
     ]);
-    const pdf = await readSignaturePdf(file, "cadesDetached");
-    expect(pdf.isErr() && pdf.error.status).toBe(422);
   });
 
   test("bytes that hold no signature read as none, not as a failure", async () => {
@@ -81,7 +77,7 @@ describe("signature file reading", () => {
       "application/xml",
     );
     expect(
-      (await readSignatureWorkerReply(plain, "xades")).unwrap(),
+      (await readSignatureWorkerReply(plain, "xades", "ibm437")).unwrap(),
     ).toBeNull();
   });
 });
@@ -96,6 +92,7 @@ describe("signature text for search, chat and agents", () => {
         "wniosek.xml",
         "text/xml",
       ),
+      { zipNameCodePage: "ibm437" },
     );
     const value = text.unwrap() ?? "";
     expect(value).toContain(
@@ -105,15 +102,16 @@ describe("signature text for search, chat and agents", () => {
     expect(value).toContain("Wniosek o wpis do rejestru");
   });
 
-  test("a plain .xml file still has no extracted text", async () => {
+  test("a plain .xml file is read as XML, not as a signature", async () => {
     const text = await extractFileTextResult(
       stored(
         new TextEncoder().encode("<invoice><total>100</total></invoice>"),
         "invoice.xml",
         "text/xml",
       ),
+      { zipNameCodePage: "ibm437" },
     );
-    expect(text.unwrap()).toBeNull();
+    expect(text.unwrap() ?? "").not.toContain("signature");
   });
 
   test.each([
@@ -126,6 +124,7 @@ describe("signature text for search, chat and agents", () => {
         fileName,
         mimeType,
       ),
+      { zipNameCodePage: "ibm437" },
     );
     expect(text.unwrap()).toContain(
       `CAdES signature, detached. Signatures are unverified.\nSigner 1: ${SIGNATURE_FIXTURE_SIGNERS[0]}`,
@@ -139,6 +138,7 @@ describe("signature text for search, chat and agents", () => {
         "smlouva.pdf.xades",
         XADES_FILE_FORMAT.mimeType,
       ),
+      { zipNameCodePage: "ibm437" },
     );
     expect(text.unwrap()).toContain("Signs: smlouva.pdf");
   });
@@ -152,6 +152,7 @@ describe("signature text for search, chat and agents", () => {
         "release.sig",
         "application/pgp-signature",
       ),
+      { zipNameCodePage: "ibm437" },
     );
     expect(text.unwrap()).toBeNull();
   });

@@ -72,6 +72,10 @@ impl DesktopHttpClient {
     self.0.post(url)
   }
 
+  pub fn delete(&self, url: impl reqwest::IntoUrl) -> reqwest::RequestBuilder {
+    self.0.delete(url)
+  }
+
   #[cfg(test)]
   pub fn request(
     &self,

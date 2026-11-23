@@ -10,12 +10,22 @@ const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DictationSetting } = await import("../src/mainview/DictationSetting");
 
-afterEach(() => {
+/** One macrotask, for the mocked IPC promises and React's scheduler. */
+const nextMacrotask = async () =>
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+// A native answer that lands after a test's last assertion still renders,
+// and React schedules its effects; both settle before the DOM goes away.
+afterEach(async () => {
+  await act(nextMacrotask);
   cleanup();
   clearMocks();
 });
 
 afterAll(async () => {
+  await nextMacrotask();
   await GlobalRegistrator.unregister();
 });
 
@@ -39,8 +49,13 @@ const ENABLED_SNAPSHOT = {
   sounds: true,
   speakersOnly: true,
   textBeforeCursorAvailable: true,
+  cleanupStyle: "polished",
+  translateTo: null,
   failure: null,
   failureKeptInHistory: false,
+  fixKeys: { code: "KeyT", modifiers: ["control", "alt", "shift"] },
+  fixShortcut: true,
+  fixShortcutTaken: false,
   holdKey: "combination",
   holdKeys: ["combination"],
   holdKeyWaiting: false,
@@ -67,6 +82,10 @@ const renderSetting = async (
     // A test may answer the snapshot read itself, to change it between reads.
     if (command === "dictation_get_snapshot") {
       return answered ?? snapshot;
+    }
+    // Nothing learned yet, unless a test answers otherwise.
+    if (command === "dictation_learned_get") {
+      return answered ?? { fixes: [] };
     }
     return answered;
   });
@@ -227,6 +246,87 @@ test("turning cleanup off asks the native side and shows its answer", async () =
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
   expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("the speaker picks a cleanup style, and its description follows", async () => {
+  const picked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_cleanup_style") {
+      return undefined;
+    }
+    picked.push(payload);
+    return { ...ENABLED_SNAPSHOT, cleanupStyle: "notes" };
+  });
+  const { cleanupStyle } = defaultMessages.dictation;
+  expect(
+    view.container.querySelector("#dictation-cleanup-style-description")
+      ?.textContent,
+  ).toBe(cleanupStyle.polished.description);
+
+  const listbox = await openSelect(view, cleanupStyle.title);
+  expect(within(listbox).getAllByRole("option")).toHaveLength(4);
+  const notes = within(listbox).getByRole("option", {
+    name: cleanupStyle.notes.title,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(notes, { pointerType: "mouse" });
+    fireEvent.click(notes);
+  });
+
+  await waitFor(() => {
+    expect(picked).toEqual([{ style: "notes" }]);
+  });
+  await waitFor(() => {
+    expect(
+      view.container.querySelector("#dictation-cleanup-style-description")
+        ?.textContent,
+    ).toBe(cleanupStyle.notes.description);
+  });
+});
+
+test("the speaker picks a language to write in, and turns it off again", async () => {
+  const asked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_translate_to") {
+      return undefined;
+    }
+    asked.push(payload);
+    return { ...ENABLED_SNAPSHOT, translateTo: "en" };
+  });
+  const { translateTo } = defaultMessages.dictation;
+
+  const listbox = await openSelect(view, translateTo.title);
+  // Off, then every language cleanup can write in.
+  expect(within(listbox).getAllByRole("option")).toHaveLength(14);
+  const english = within(listbox).getByRole("option", { name: "English" });
+  await act(async () => {
+    fireEvent.pointerDown(english, { pointerType: "mouse" });
+    fireEvent.click(english);
+  });
+  await waitFor(() => {
+    expect(asked).toEqual([{ language: "en" }]);
+  });
+
+  const again = await openSelect(view, translateTo.title);
+  const off = within(again).getByRole("option", { name: translateTo.off });
+  await act(async () => {
+    fireEvent.pointerDown(off, { pointerType: "mouse" });
+    fireEvent.click(off);
+  });
+  await waitFor(() => {
+    expect(asked).toEqual([{ language: "en" }, { language: null }]);
+  });
+});
+
+test("the cleanup style and language are offered only while cleanup runs", async () => {
+  const view = await renderSetting({ ...ENABLED_SNAPSHOT, cleanup: false });
+  const { cleanupStyle, translateTo } = defaultMessages.dictation;
+
+  for (const name of [cleanupStyle.title, translateTo.title]) {
+    expect(
+      Object.hasOwn(view.getByRole("combobox", { name }).dataset, "disabled"),
+    ).toBe(true);
+  }
 });
 
 test("hides the cleanup switch while dictation is off", async () => {
@@ -455,6 +555,81 @@ test("a retype shortcut another app holds says so", async () => {
     retypeShortcutTaken: true,
   });
   expect(await findByText(/^Another app is using /u)).toBeTruthy();
+});
+
+test("turning the fix shortcut off asks the native side and shows its answer", async () => {
+  const calls: unknown[] = [];
+  const { getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called !== "dictation_set_fix_shortcut") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, fixShortcut: false };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.fix.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("learned fixes that are on or off are listed with a switch, and all can be deleted", async () => {
+  const learned = {
+    fixes: [
+      { from: "novak", seen: 2, status: "on", to: "Novák" },
+      { from: "smith", seen: 1, status: "learning", to: "Smyth" },
+    ],
+  };
+  const calls: [string, unknown][] = [];
+  const { findByLabelText, getByText, queryByLabelText } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called === "dictation_learned_get") {
+        return learned;
+      }
+      if (called === "dictation_learned_switch") {
+        calls.push([called, payload]);
+        return { fixes: [{ ...learned.fixes[0], status: "off" }] };
+      }
+      if (called === "dictation_learned_delete") {
+        calls.push([called, payload]);
+        return { fixes: [] };
+      }
+      return undefined;
+    },
+  );
+  const toggle = await findByLabelText("novak → Novák");
+  expect(toggle.getAttribute("role")).toBe("switch");
+  // A fix still being learned is not listed.
+  expect(queryByLabelText("smith → Smyth")).toBeNull();
+
+  // Each change answers with the list it leaves; act waits for that answer.
+  await act(async () => {
+    fireEvent.click(toggle);
+  });
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  await act(async () => {
+    fireEvent.click(getByText(defaultMessages.dictation.learned.delete));
+  });
+  await waitFor(() => {
+    expect(queryByLabelText("novak → Novák")).toBeNull();
+  });
+  expect(calls).toEqual([
+    ["dictation_learned_switch", { from: "novak", status: "off" }],
+    ["dictation_learned_delete", {}],
+  ]);
 });
 
 test("removing an app's own settings stores the rest", async () => {
@@ -750,7 +925,7 @@ test("without the stella AI decision only this computer is named and no models a
   expect(commands).not.toContain("dictation_get_cloud_models");
 });
 
-test("picking the shown model stores it when the stored one is no longer offered", async () => {
+test("a stored model no longer offered stays the choice until another is picked", async () => {
   const stored: unknown[] = [];
   const snapshot = {
     ...ENABLED_SNAPSHOT,
@@ -769,13 +944,18 @@ test("picking the shown model stores it when the stored one is no longer offered
     }
     return undefined;
   });
+  // Not shown as the default: the picker asks for a model and says why.
   await waitFor(() => {
     expect(
       view.getByRole("combobox", {
         name: defaultMessages.dictation.destination.model,
       }).textContent,
-    ).toContain("Voxtral Mini Transcribe");
+    ).toContain(defaultMessages.dictation.destination.chooseModel);
   });
+  expect(
+    view.getByText(defaultMessages.dictation.destination.modelWithdrawn),
+  ).toBeTruthy();
+  expect(stored).toEqual([]);
   const listbox = await openSelect(
     view,
     defaultMessages.dictation.destination.model,

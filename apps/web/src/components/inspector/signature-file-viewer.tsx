@@ -13,25 +13,16 @@ import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { TruncatedText } from "@stll/ui/truncated-text";
-import { cn } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { FileTab } from "@/components/inspector/file-tab";
 import { FilePreviewUnavailable } from "@/components/inspector/inspector-pdf-error-fallback";
-import { PeekSuspenseFallback } from "@/components/pdf/peek/peek-pdf-viewer";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
-import { PDF_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
-import {
-  signaturePdfOptions,
-  signaturePreviewOptions,
-} from "@/lib/files/queries";
-import { PDFProvider } from "@/lib/pdf/pdf-context";
-import { PDFPage } from "@/lib/pdf/pdf-page";
-import { PDFViewport } from "@/lib/pdf/pdf-viewport";
+import { signaturePreviewOptions } from "@/lib/files/legal-file-queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 import { getCurrentWorkspaceDocument } from "@/lib/workspaces/use-workspace-view-params";
 
@@ -151,7 +142,6 @@ export const SignatureFileViewer = ({
     );
   }
   const { document, signers, packaging } = data;
-  const hasPdf = document?.mimeType === PDF_MIME;
   const text = document?.text.trim() ? (
     <pre
       className="font-sans text-sm leading-relaxed wrap-break-word whitespace-pre-wrap"
@@ -171,17 +161,8 @@ export const SignatureFileViewer = ({
       className="flex h-full min-h-0 flex-col"
       workspaceId={tab.workspaceId}
     >
-      <ScrollArea
-        axis="vertical"
-        className={cn(
-          "min-h-0",
-          hasPdf ? "h-auto max-h-[40%] shrink-0" : "flex-1",
-        )}
-      >
-        <article
-          {...(hasPdf ? {} : DOCKED_COMPOSER_CLEARANCE)}
-          className="space-y-4 p-4"
-        >
+      <ScrollArea axis="vertical" className="min-h-0 flex-1">
+        <article {...DOCKED_COMPOSER_CLEARANCE} className="space-y-4 p-4">
           <header className="space-y-1">
             <h2 className="text-base font-medium wrap-break-word">
               <BidiText>{document?.fileName ?? tab.fileName}</BidiText>
@@ -225,7 +206,6 @@ export const SignatureFileViewer = ({
             <SignedFiles signature={data} workspaceId={tab.workspaceId} />
           )}
           {packaging !== "detached" &&
-            !hasPdf &&
             (text ?? (
               <p className="text-muted-foreground text-sm">
                 {t("signedFile.noReadableContent")}
@@ -233,53 +213,6 @@ export const SignatureFileViewer = ({
             ))}
         </article>
       </ScrollArea>
-      {hasPdf && (
-        <div className="document-preview-surface min-h-0 flex-1 border-t">
-          <PDFProvider
-            fallback={{
-              suspense: <PeekSuspenseFallback />,
-              error: () => (
-                <ScrollArea axis="vertical" className="h-full">
-                  <div className="space-y-3 p-4" {...DOCKED_COMPOSER_CLEARANCE}>
-                    <p className="text-muted-foreground text-sm">
-                      {t("signedFile.pdfUnavailable")}
-                    </p>
-                    {text}
-                  </div>
-                </ScrollArea>
-              ),
-            }}
-            fieldId={`signature:${tab.id}`}
-            onDownload={onDownload}
-            startPage={1}
-            surface="inspector-signature"
-          >
-            <SignaturePdf fieldId={tab.id} workspaceId={tab.workspaceId} />
-          </PDFProvider>
-        </div>
-      )}
     </FileViewerWithAI>
-  );
-};
-
-const SignaturePdf = ({
-  fieldId,
-  workspaceId,
-}: {
-  fieldId: string;
-  workspaceId: string;
-}) => {
-  const { data: buffer } = useSuspenseQuery(
-    signaturePdfOptions({ fieldId, workspaceId }),
-  );
-  return (
-    <PDFViewport
-      buffer={buffer}
-      className="h-full"
-      contentClassName="relative mt-2 space-y-2 px-2"
-      fileId={`signature:${fieldId}`}
-      pageSource="document"
-      renderPage={(props) => <PDFPage {...props} />}
-    />
   );
 };

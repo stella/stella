@@ -52,8 +52,12 @@ import {
   watchChunk,
 } from "@/state/dictation-chunks";
 import type { ChunkWatch } from "@/state/dictation-chunks";
-import { retriesByItself } from "@/state/dictation-kept";
-import type { DictationField, PieceFailure } from "@/state/dictation-kept";
+import { refusalOf, retriesByItself } from "@/state/dictation-kept";
+import type {
+  DictationField,
+  KeptRefusal,
+  PieceFailure,
+} from "@/state/dictation-kept";
 import { readLearnedFixes } from "@/state/dictation-learned";
 import {
   meterShare,
@@ -451,9 +455,12 @@ const keptSetupOf = (
 ): KeptSetup => ({
   field,
   matterId: current.matterId ?? null,
-  modelId: chosenModelId(preferences, null) ?? null,
+  modelId: chosenModelId(preferences) ?? null,
+  modelClass: preferences.modelClass,
   locale: current.locale,
   cleanup: preferences.cleanup,
+  style: preferences.style,
+  translateTo: preferences.translateTo,
 });
 
 /**
@@ -498,6 +505,7 @@ const settleGathered = ({
           setup,
           pieces: gathered.pieces,
           refused: gathered.refused,
+          refusedFor: gathered.refusedFor,
         }) ?? false;
       if (!isKept) {
         for (const piece of gathered.pieces) {
@@ -517,7 +525,7 @@ const settleGathered = ({
 
 /** A kept dictation as a field shows it. */
 export type DictationWaiting = {
-  readonly status: "waiting" | "retrying" | "needs-person";
+  readonly status: "waiting" | "retrying" | "needs-person" | "needs-model";
   /** Dictated into a field since closed, not this one. */
   readonly earlier: boolean;
 };
@@ -612,7 +620,12 @@ const waitingOf = (
   earlier: boolean,
 ): DictationWaiting | undefined => {
   const statuses = new Set(views.map(({ status }) => status));
-  for (const status of ["retrying", "waiting", "needs-person"] as const) {
+  for (const status of [
+    "retrying",
+    "waiting",
+    "needs-model",
+    "needs-person",
+  ] as const) {
     if (statuses.has(status)) {
       return { status, earlier };
     }
@@ -889,6 +902,7 @@ type Gathered =
       readonly type: "keep";
       readonly pieces: readonly FinishedPiece[];
       readonly refused: boolean;
+      readonly refusedFor: KeptRefusal | null;
     };
 
 /**
@@ -903,6 +917,7 @@ const gatherText = async (current: Run): Promise<Gathered> => {
   const failures = outcomes.flatMap((outcome) =>
     outcome.type === "failed" ? [outcome.error] : [],
   );
+  const refused = !failures.some(retriesByItself);
   if (failures.length > 0) {
     return {
       type: "keep",
@@ -919,7 +934,11 @@ const gatherText = async (current: Run): Promise<Gathered> => {
             return panic("A piece came to no known outcome");
         }
       }),
-      refused: !failures.some(retriesByItself),
+      refused,
+      refusedFor:
+        refused && failures.some((failure) => refusalOf(failure) === "model")
+          ? "model"
+          : null,
     };
   }
   const partly = outcomes.some(({ type }) => type === "lost");
@@ -935,6 +954,8 @@ const gatherText = async (current: Run): Promise<Gathered> => {
   const text = await finalText({
     source: setup.source,
     cleanup: setup.preferences.cleanup,
+    style: setup.preferences.style,
+    translateTo: setup.preferences.translateTo,
     joined,
     locale: current.locale,
   });
@@ -1068,7 +1089,12 @@ const pieceOutcome = async (
   const transcribed = await transcribePiece({
     source,
     uri,
-    choice: { modelId: chosenModelId(preferences, null), matterId, vocabulary },
+    choice: {
+      modelId: chosenModelId(preferences),
+      modelClass: preferences.modelClass,
+      matterId,
+      vocabulary,
+    },
   });
   if (transcribed.isErr()) {
     return { type: "failed", uri, error: transcribed.error };

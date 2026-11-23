@@ -10,7 +10,7 @@
     "aiDraftAllow": "Autoriser",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Tâche {task} · Activité {activity}",
-    "aiDraftConsent": "stella AI peut rédiger des descriptions à partir du dossier, de la date, de la durée et des noms d’applications de chaque entrée, ainsi que des noms de documents et des titres de fenêtres affichés ici lorsque vous les enregistrez. Vos entrées précédentes sur le dossier l’aident à reprendre votre façon d’écrire. Rien d’autre sur votre journée ne quitte cet ordinateur.",
+    "aiDraftConsent": "Pour rédiger une description, stella AI utilise : {inputs}. Le tout part chez {provider}, uniquement pour rédiger le brouillon. Rien d’autre sur votre journée ne quitte cet ordinateur.",
     "aiDraftConsentRequired": "Autorisez à nouveau stella AI pour rédiger cette description.",
     "aiDraftDisclosure": "Les propositions d’IA sont des suggestions que stella génère à partir de l’entrée que vous vérifiez, de vos entrées précédentes sur le dossier et, si votre cabinet les a ajoutées, de ses règles de facturation. Vérifiez chaque entrée avant de la créer.",
     "aiDraftEarlierEntries": "{count, plural, one {Reprend # entrée précédente} other {Reprend # entrées précédentes}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI est désactivé sur cet ordinateur. Votre retrait sera envoyé à stella dès qu’il sera joignable.",
     "browserAnsweredAppNameOnly": "Seul le nom de l’application est enregistré pour <bdi>{browser}</bdi>. Vous pouvez le modifier dans les Réglages.",
     "browserAnsweredTitles": "Les titres des onglets dans <bdi>{browser}</bdi> sont enregistrés. Vous pouvez le modifier dans les Réglages.",
-    "browserPrivacyNote": "Les fenêtres privées peuvent aussi être enregistrées ; mettez l’enregistrement en pause ou excluez le navigateur lors de la navigation privée.",
+    "browserPrivacyNote": "stella ne reconnaît pas toutes les fenêtres privées ; mettez donc l’enregistrement en pause avant de naviguer en privé.",
     "browserQuestionAppNameOnly": "Nom de l’application seul",
-    "browserQuestionDescription": "Les titres des onglets aident à décrire le travail. stella ne reconnaît pas toutes les fenêtres privées ; mettez donc l’enregistrement en pause avant de naviguer en privé.",
+    "browserQuestionDescription": "Les titres des onglets aident à décrire le travail.",
     "browserQuestionLater": "Décider plus tard",
     "browserQuestionRecordTitles": "Enregistrer les titres",
     "browserQuestionTitle": "Enregistrer aussi les titres des onglets dans <bdi>{browser}</bdi> ?",
@@ -103,7 +103,19 @@
     "detectCalls": "Enregistrer les appels",
     "detectCallsDescription": "Lorsque Teams, Zoom ou un navigateur utilise votre micro, ce temps compte comme l’appel, même si vous ne faites qu’écouter ou travaillez dans une autre app. Aucun son n’est enregistré.",
     "disclosure": {
-      "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement dans Activité. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
+      "aiDraftInputs": {
+        "appNames": "les noms d’applications",
+        "billingFormat": "le format de facturation du client",
+        "date": "la date",
+        "duration": "la durée",
+        "earlierDescriptions": "vos descriptions précédentes sur le dossier",
+        "firmGuidelines": "les éventuelles règles de facturation de votre cabinet",
+        "instructions": "les consignes que vous saisissez",
+        "matter": "le dossier",
+        "titles": "les titres de fenêtres et noms de documents enregistrés"
+      },
+      "aiDraftProvider": "le fournisseur d’IA de votre cabinet, ou celui de stella AI",
+      "control": "Rien n'est enregistré tant que vous n'avez pas cliqué sur Commencer l'enregistrement. Mettez en pause, excluez des apps ou supprimez une journée quand vous le souhaitez.",
       "never": {
         "audio": "Le son du micro",
         "keystrokes": "Frappes au clavier ou texte saisi",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Ce qui est enregistré",
       "sent": {
-        "aiDrafts": "Brouillons de stella AI que vous demandez, une fois autorisés : dossier, date, durée et noms d’applications de l’entrée, ses titres de fenêtres et noms de documents lorsqu’ils sont enregistrés, et les consignes que vous saisissez. stella y ajoute vos descriptions précédentes sur le dossier, le format de facturation du client et, si votre cabinet les utilise, ses règles de facturation. Le tout part chez le fournisseur d’IA de votre cabinet, ou celui de stella AI, uniquement pour rédiger le brouillon ; stella ne conserve ni le brouillon ni ce qui a été envoyé pour lui.",
+        "aiDrafts": "Brouillons de stella AI que vous demandez, une fois autorisés. Pour chacun, stella AI utilise : {inputs}. Le tout part chez {provider}, uniquement pour rédiger le brouillon ; stella ne conserve ni le brouillon ni ce qui a été envoyé pour lui.",
         "timeEntries": "Saisies de temps que vous créez : dossier, date, durée, description, caractère facturable et éventuels codes de facturation"
       },
       "sentTitle": "Ce qui quitte cet ordinateur",
@@ -300,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Tous les extraits",
+    "allResults": "Tous les résultats",
     "bold": "Gras",
     "bulletedList": "Liste à puces",
     "cancel": "Annuler",
@@ -366,6 +379,7 @@
     "moveToGroup": "Déplacer vers le groupe",
     "newGroupOption": "Nouveau groupe…",
     "noGroup": "Aucun groupe",
+    "noGroupMatches": "Aucun résultat dans ce groupe",
     "noResults": "Aucun extrait correspondant",
     "noResultsSearchRegistries": "Rechercher « {query} » dans les registres",
     "numberedList": "Liste numérotée",
@@ -449,6 +463,21 @@
     "welcomeShortcutTitle": "Ouvrez-le partout.",
     "welcomeStart": "Commencer à copier",
     "welcomeTitle": "Découvrez votre presse-papiers"
+  },
+  "clipboardSettings": {
+    "capture": "Enregistrer les nouveaux extraits",
+    "captureDescription": "Désactivez cette option pour ne plus enregistrer ce que vous copiez.",
+    "errorSave": "La modification n’a pas pu être enregistrée. Réessayez.",
+    "excludedDescription": "Rien de ce que vous copiez dans ces applications n’est enregistré.",
+    "excludedEmpty": "Pour exclure une application, faites un clic droit sur l’un de ses extraits dans le presse-papiers et choisissez de ne plus enregistrer ses nouveaux extraits.",
+    "groupActions": "Actions pour {groupName}",
+    "groupsDescription": "Faites glisser un groupe pour changer sa place dans le presse-papiers.",
+    "groupsEmpty": "Créez un groupe, puis faites-y glisser des extraits dans le presse-papiers.",
+    "history": "Historique",
+    "moveGroupDown": "Déplacer vers le bas",
+    "moveGroupUp": "Déplacer vers le haut",
+    "recordingsDescription": "Autoriser les captures d’écran, les enregistrements et le partage d’écran à montrer le presse-papiers.",
+    "retentionDescription": "Les extraits plus anciens sont supprimés. Ceux d’un groupe sont conservés."
   },
   "dialog": {
     "accountEmail": "Compte",
@@ -575,6 +604,25 @@
       "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail.",
       "title": "Corriger avec l’IA"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Garde un ton détendu, avec une ponctuation légère.",
+        "title": "Décontracté"
+      },
+      "notes": {
+        "description": "Des points courts, un par ligne, sans mots de remplissage.",
+        "title": "Notes"
+      },
+      "polished": {
+        "description": "Corrige les erreurs de reconnaissance et conserve votre formulation.",
+        "title": "Soigné"
+      },
+      "title": "Style",
+      "verbatim": {
+        "description": "Chaque mot tel qu’il a été dit ; seules la ponctuation et les majuscules sont ajoutées.",
+        "title": "Mot à mot"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Jusqu’à {limit, number} caractères du document où vous êtes, pour que la dictée s’accorde avec ce que vous écrivez.",
@@ -606,6 +654,7 @@
       "local": "Cet ordinateur",
       "localDescription": "La parole est transcrite sur cet ordinateur et n'est pas conservée.",
       "model": "Modèle de transcription",
+      "modelWithdrawn": "Le modèle choisi n’est plus proposé. Choisissez-en un autre ; en attendant, la dictée est transcrite sur cet ordinateur.",
       "outsideRegion": "Hors de votre région",
       "retainsData": "Conserve votre audio",
       "retainsDataTitle": "{provider} conserve ce que vous dictez",
@@ -632,6 +681,30 @@
       "transcription": "La transcription a échoué. Réessayez."
     },
     "failureKeptInHistory": "Le texte se trouve dans l’historique du presse-papiers.",
+    "fix": {
+      "description": "Sélectionnez dans n’importe quelle app les mots qu’une dictée a mal écrits et appuyez sur {shortcut} pour indiquer leur orthographe. stella lit la sélection uniquement quand vous appuyez sur le raccourci.",
+      "taken": "Une autre app utilise {shortcut}. Le menu Dictée de l’icône stella propose la même chose.",
+      "title": "Raccourci pour corriger une dictée"
+    },
+    "fixPanel": {
+      "dictatedAs": "Dicté",
+      "hint": "stella écrira ces mots ainsi dans vos prochaines dictées, sur tous vos appareils.",
+      "notSaved": "La correction n’a pas pu être enregistrée. Vérifiez que stella est connecté à votre compte.",
+      "nothing": "Sélectionnez d’abord les mots erronés dans l’app, ou saisissez-les ici.",
+      "pick": "Choisissez les mots erronés de votre dernière dictée :",
+      "refused": {
+        "empty": "Remplissez les deux champs.",
+        "lineBreak": "Une correction tient sur une seule ligne.",
+        "punctuation": "Sélectionnez les mots dictés sans ponctuation.",
+        "same": "Les mots sont déjà écrits ainsi.",
+        "tooLong": "C’est trop long pour une correction.",
+        "tooManyWords": "Une correction compte au plus trois mots."
+      },
+      "save": "Enregistrer la correction",
+      "saving": "Enregistrement de la correction…",
+      "title": "Corriger un mot dicté",
+      "writtenAs": "Orthographe correcte"
+    },
     "groups": {
       "cleanup": "Correction",
       "shortcut": "Raccourci",
@@ -652,6 +725,17 @@
       "description": "Automatique utilise les langues d’affichage et de clavier de cet ordinateur. S’il y en a plusieurs, chaque mot est reconnu dans la langue où vous le prononcez.",
       "noResults": "Aucune langue trouvée",
       "title": "Langue de dictée"
+    },
+    "learned": {
+      "delete": "Supprimer ce que stella a appris",
+      "description": "Quand vous corrigez un mot dicté deux fois de la même façon, ou avec {shortcut}, stella l’écrit ainsi dans les dictées suivantes. Synchronisé avec vos autres appareils ; vous seul les voyez.",
+      "empty": "Aucune correction apprise pour l’instant.",
+      "failed": "La correction n’a pas pu être modifiée.",
+      "fix": "{from} → {to}",
+      "group": "Corrections apprises",
+      "title": "Corrections apprises de vos modifications",
+      "unreadable": "Ce que stella a appris n’a pas pu être lu.",
+      "working": "Enregistrement de la modification…"
     },
     "lede": "Maintenez <key>{shortcut}</key> et parlez. Le texte apparaît là où vous écrivez.",
     "microphone": {
@@ -677,10 +761,13 @@
       "checkBodyMac": "Vérifiez l'accès au micro dans les Réglages Système, puis réessayez.",
       "checkBodyPc": "Vérifiez l'accès au micro dans les Paramètres Windows, puis réessayez.",
       "chooseMicrophone": "Choisir le micro…",
+      "chooseModel": "Choisir un modèle…",
       "dismiss": "Fermer",
       "inputDevice": "Entrée : {device}",
       "missingBody": "La dictée utilise {device} à la place.",
       "missingTitle": "{missing} n'est pas connecté",
+      "modelBody": "Choisissez-en un dans Paramètres → Dictée. Cette dictée a été transcrite sur cet ordinateur.",
+      "modelTitle": "Votre modèle de transcription n’est plus proposé",
       "nothingBody": "Parlez en maintenant la touche, ou choisissez une autre entrée dans les réglages Son.",
       "nothingTitle": "stella n'a entendu aucune parole",
       "openSettingsMac": "Ouvrir les Réglages Système",
@@ -742,6 +829,11 @@
       "failed": "Impossible d’ouvrir la fenêtre. Réessayez.",
       "open": "Ouvrir",
       "title": "Transcrire un enregistrement"
+    },
+    "translateTo": {
+      "description": "Écrit le texte nettoyé dans cette langue, quelle que soit la langue que vous parlez.",
+      "off": "Langue parlée",
+      "title": "Écrire en"
     },
     "whileDictating": {
       "choices": {
@@ -838,6 +930,30 @@
   },
   "onboarding": {
     "activityBody": "Voyez où est passée votre journée de travail et transformez-la en brouillons de saisies de temps. Vous décidez de ce qui est enregistré et de ce qui est envoyé.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Rédiger les descriptions avec stella AI",
+        "body": "stella AI peut rédiger la description de chaque saisie de temps. Autorisez-le maintenant ou lorsque vous passerez une journée en revue pour la première fois.",
+        "withdraw": "Vous pouvez retirer votre consentement à tout moment dans les Réglages."
+      },
+      "calls": {
+        "body": "Comptez le temps passé en appel.",
+        "title": "Appels"
+      },
+      "details": {
+        "appNamesOnly": "Seuls les noms des applications sont enregistrés.",
+        "body": "Ils vous aident à distinguer vos dossiers lorsque vous passez la journée en revue.",
+        "browsers": "Les navigateurs n’enregistrent les titres des onglets qu’une fois que vous l’autorisez. Activité vous pose la question pour chaque navigateur la première fois qu’elle le voit.",
+        "title": "Titres de fenêtres et documents"
+      },
+      "screens": {
+        "aiDrafts": "Propositions IA",
+        "calls": "Appels",
+        "details": "Détails",
+        "recording": "Aperçu"
+      },
+      "starting": "Démarrage de l’enregistrement…"
+    },
     "activityStoryDraft": "Brouillon",
     "activityStoryRecordTitle": "Enregistré",
     "activityStoryReviewCaption": "Vous passez la journée en revue et choisissez le dossier",
@@ -876,7 +992,6 @@
         "choose": "Microphone pour dicter",
         "title": "Laissez stella vous entendre"
       },
-      "progress": "Étape {current} sur {total}",
       "screens": {
         "app": "Correction",
         "context": "Contexte",
@@ -884,7 +999,6 @@
         "transcription": "Transcription",
         "words": "Mots"
       },
-      "skipRest": "Passer la suite",
       "transcription": {
         "body": "Vous pourrez le modifier plus tard dans les Réglages.",
         "bodyLocal": "Le modèle vocal tourne ici, la dictée fonctionne donc aussi hors ligne.",
@@ -954,6 +1068,7 @@
     "permissionsTitlePc": "Configurer ce PC",
     "progress": "Étape {current} sur {total}",
     "skip": "Passer",
+    "skipRest": "Passer la suite",
     "staysLocalMac": "Reste sur ce Mac",
     "staysLocalPc": "Reste sur ce PC",
     "tryAgain": "Réessayer",
@@ -1000,7 +1115,6 @@
     "errorUpdateLanguage": "stella desktop n'a pas pu changer la langue de l’interface.",
     "errorUpdatePreferences": "stella desktop n'a pas pu mettre à jour les paramètres de notification.",
     "language": "Langue",
-    "lastVerified": "Dernière vérification",
     "loadingAccount": "Vérification de la connexion de votre compte…",
     "managedOfficeEditing": "Modification de fichiers Office gérée pour stella.",
     "neverRequested": "Jamais demandé",
@@ -1073,6 +1187,8 @@
       "available": "La version {version} est disponible.",
       "checkFailed": "stella desktop n'a pas pu vérifier les mises à jour.",
       "deferred": "La version {version} attend tant que des documents ouverts sont en cours de modification. Une fois terminé, vérifiez à nouveau pour l'installer, sinon elle s'installera lors de la prochaine vérification automatique.",
+      "downloadProgress": "{percent} % téléchargés",
+      "downloading": "Téléchargement de la version {version}. stella desktop redémarrera une fois l'installation terminée.",
       "install": "Installer et redémarrer",
       "installFailed": "stella desktop n'a pas pu installer la mise à jour.",
       "installInProgress": "Une mise à jour est en cours d’installation.",
@@ -1272,6 +1388,7 @@
     "activityResume": "Reprendre l’enregistrement",
     "checkForUpdates": "Vérifier les mises à jour",
     "dictation": "Dictée",
+    "dictationFix": "Corriger la dernière dictée…",
     "dictationHint": "Maintenez {key} pour dicter",
     "dictationRetype": "Retaper la dernière dictée",
     "dictationSettings": "Réglages de la dictée…",
@@ -1300,7 +1417,6 @@
     "supportRevealAppData": "Afficher les données de l'app",
     "temporaryWorkingCopies": "Copies de travail temporaires",
     "transcribeRecording": "Transcrire un enregistrement…",
-    "updateReady": "Mise à jour prête",
     "updatesManaged": "Mises à jour gérées par votre organisation"
   }
 }

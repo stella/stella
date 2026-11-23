@@ -80,6 +80,7 @@ export const SearchDocumentPreview = ({
       onWheelZoom={(deltaY) => handleWheelZoom(target.fieldId, deltaY)}
       scaleOffset={scaleOffset}
       searchText={searchText}
+      underOverlayBar
       viewId={viewId}
       workspaceId={target.workspaceId}
     />

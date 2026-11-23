@@ -104,17 +104,20 @@ export const VersionsFacet = ({
   // passive effect) so a response resolving in the commit→effect window is
   // still caught.
   const seededDataRef = useRef(data);
-  if (data !== undefined && seededData !== data) {
-    setSeededData(data);
-    setAccumulated(data.versions);
-    setOlderCursor(data.olderCursor);
-    setIsLoadingOlder(false);
-    setLoadOlderError(false);
-    /* oxlint-disable react/refs -- deliberate render-time ref writes: they keep loadOlder's latest-value refs in sync with the re-seed so a response resolving in the commit→effect window is still caught by the stale-response guard; an effect would miss that window */
-    olderCursorRef.current = data.olderCursor;
-    isLoadingOlderRef.current = false;
-    seededDataRef.current = data;
-    /* oxlint-enable react/refs */
+  const nextSeededData = data ?? seededData;
+  if (seededData !== nextSeededData) {
+    setSeededData(nextSeededData);
+    if (nextSeededData !== undefined) {
+      setAccumulated(nextSeededData.versions);
+      setOlderCursor(nextSeededData.olderCursor);
+      setIsLoadingOlder(false);
+      setLoadOlderError(false);
+      /* oxlint-disable react/refs -- deliberate render-time ref writes: they keep loadOlder's latest-value refs in sync with the re-seed so a response resolving in the commit→effect window is still caught by the stale-response guard; an effect would miss that window */
+      olderCursorRef.current = nextSeededData.olderCursor;
+      isLoadingOlderRef.current = false;
+      seededDataRef.current = nextSeededData;
+      /* oxlint-enable react/refs */
+    }
   }
 
   const loadOlder = useCallback(async () => {

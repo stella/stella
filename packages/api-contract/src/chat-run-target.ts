@@ -15,6 +15,7 @@ import {
   type DesktopRunnerLinkedFolder,
 } from "./desktop-runner";
 import { displayNameSchema } from "./display-name";
+import { UNSCANNED_CONTENT_REASONS } from "./file-scan-warnings";
 import { USER_FILE_URL_PREFIX } from "./user-file-url";
 
 /**
@@ -551,6 +552,8 @@ export const chatLocalRunFileSchema = v.strictObject({
   filename: v.string(),
   mimeType: v.string(),
   placeholder: v.optional(v.string()),
+  /** Why some of the file's content was not scanned when it was stored. */
+  unscannedContent: v.optional(v.array(v.picklist(UNSCANNED_CONTENT_REASONS))),
 });
 export type ChatLocalRunFile = v.InferOutput<typeof chatLocalRunFileSchema>;
 
@@ -562,6 +565,7 @@ export const chatLocalRunFilePart = ({
   filename,
   mimeType,
   placeholder,
+  unscannedContent,
 }: ChatLocalRunFile) =>
   ({
     type: mimeType.startsWith("image/") ? "image" : "document",
@@ -569,6 +573,9 @@ export const chatLocalRunFilePart = ({
     metadata: {
       filename,
       ...(placeholder === undefined ? {} : { placeholder }),
+      ...(unscannedContent === undefined || unscannedContent.length === 0
+        ? {}
+        : { unscannedContent }),
     },
   }) as const;
 

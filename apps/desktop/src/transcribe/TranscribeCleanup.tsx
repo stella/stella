@@ -4,9 +4,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
+import {
+  nextCleanupPart,
+  parseCleanedMarkdown,
+} from "@stll/transcript/cleanup";
+import type { CleanedBlock, CleanedRun } from "@stll/transcript/cleanup";
 import { Button } from "@stll/ui/button";
 import { CopyButton } from "@stll/ui/copy-button";
-import { ChevronDownIcon, InfoIcon } from "@stll/ui/icons";
+import { DocumentMark } from "@stll/ui/document-mark";
+import { ChevronDownIcon, FileTextIcon, InfoIcon } from "@stll/ui/icons";
 import {
   Menu,
   MenuItem,
@@ -18,8 +24,6 @@ import {
 } from "@stll/ui/menu";
 import { Skeleton } from "@stll/ui/skeleton";
 
-import { nextCleanupPart, parseMarkdown } from "./cleaned-text";
-import type { Block, Inline } from "./cleaned-text";
 import type { Paragraph } from "./transcribe-logic";
 
 /** The longest part one cleanup request carries, in characters; the API
@@ -43,7 +47,7 @@ type RecordingCleanup = {
   running: boolean;
   /** Each part's blocks, read separately so a list in one part never
    *  continues another's numbering. */
-  blocks: Block[];
+  blocks: CleanedBlock[];
   /** A part is being cleaned up; Try again waits for it. */
   busy: boolean;
   failed: number;
@@ -202,7 +206,7 @@ export const useRecordingCleanup = ({
             kind: "paragraph" as const,
             inline: [{ text, bold: false, italic: false }],
           }))
-        : parseMarkdown(part.result.markdown),
+        : parseCleanedMarkdown(part.result.markdown),
     ),
     busy: parts.some((part) => part.status === "running"),
     failed: parts.filter((part) => part.status === "failed").length,
@@ -218,7 +222,7 @@ const previousMarkdown = (
   index: number,
 ): string | null => parts[index - 1]?.result?.markdown ?? null;
 
-const InlineRuns = ({ inline }: { inline: readonly Inline[] }) =>
+const InlineRuns = ({ inline }: { inline: readonly CleanedRun[] }) =>
   inline.map((run, index) => {
     const key = `${index}:${run.text.length}`;
     const text = run.italic ? <em>{run.text}</em> : run.text;
@@ -241,7 +245,7 @@ const HEADING_CLASSES = {
   3: "mt-1 text-sm font-semibold",
 } as const;
 
-const CleanedBlocks = ({ blocks }: { blocks: readonly Block[] }) =>
+const CleanedBlocks = ({ blocks }: { blocks: readonly CleanedBlock[] }) =>
   blocks.map((block, index) => {
     const key = `${block.kind}:${index}`;
     switch (block.kind) {
@@ -361,7 +365,9 @@ export const CleanedText = ({
         }
         return (
           <Fragment key={key}>
-            <CleanedBlocks blocks={parseMarkdown(part.result.markdown)} />
+            <CleanedBlocks
+              blocks={parseCleanedMarkdown(part.result.markdown)}
+            />
           </Fragment>
         );
       })}
@@ -421,7 +427,23 @@ export const useCopyFormat = (): [CopyFormat, (next: CopyFormat) => void] => {
   return [format, choose];
 };
 
-type SaveOption = { id: string; label: string; onSave: () => void };
+/** The file a save writes, which picks the icon beside its label. */
+type SaveFileKind = "docx" | "text";
+
+export type SaveOption = {
+  id: string;
+  file: SaveFileKind;
+  label: string;
+  onSave: () => void;
+};
+
+/** A Word document shows Word's own mark, as files do on the web. */
+const SaveFileIcon = ({ file }: { file: SaveFileKind }) =>
+  file === "docx" ? (
+    <DocumentMark className="size-4" kind="word" />
+  ) : (
+    <FileTextIcon aria-hidden="true" className="text-muted-foreground" />
+  );
 
 /** Copy (in the remembered format, with a menu to change it) and Save as,
  *  for one pane. */
@@ -513,6 +535,7 @@ export const PaneActions = ({
         <MenuPopup align="end" className="w-64">
           {saveOptions.map((option) => (
             <MenuItem key={option.id} onClick={option.onSave}>
+              <SaveFileIcon file={option.file} />
               {option.label}
             </MenuItem>
           ))}

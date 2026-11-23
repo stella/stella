@@ -39,7 +39,7 @@ const archiveHandlerError = (error: unknown): HandlerError<422> | null => {
     }
     if (HandlerError.is(candidate)) {
       if (candidate.status !== 500) {
-        return null;
+        break;
       }
       candidate = candidate.cause;
       continue;
@@ -71,7 +71,7 @@ const admissionHandlerError = (
       });
     }
     if (HandlerError.is(candidate) && candidate.status !== 500) {
-      return null;
+      break;
     }
     if (!(candidate instanceof Error)) {
       return null;

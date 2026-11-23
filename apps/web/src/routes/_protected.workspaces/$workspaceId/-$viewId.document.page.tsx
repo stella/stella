@@ -19,7 +19,6 @@ import { getRouteApi, Navigate, useRouter } from "@tanstack/react-router";
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -31,20 +30,16 @@ import {
   DialogTitle,
 } from "@stll/ui/dialog";
 import { UploadIcon } from "@stll/ui/icons";
-import { composeRefs } from "@stll/ui/utils";
 import "@stll/folio-react/editor.css";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
-import {
-  useDocxFitZoom,
-  useDocxWheelZoom,
-} from "@/components/docx-preview-zoom";
 import { shouldUseDocxBrowserEditor } from "@/components/docx/docx-browser-editor.logic";
 import { DocxEditorActionBar } from "@/components/docx/docx-editor-action-bar";
 import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
 import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
 import type { DocxEditorSlotBindings } from "@/components/docx/docx-editor-host.logic";
 import { DocxLoadingShell } from "@/components/docx/docx-loading-shell";
+import { ReadOnlyDocxDocument } from "@/components/docx/read-only-docx-document";
 import type { DocxBrowserEditorActions } from "@/components/docx/use-docx-browser-editor-actions";
 import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import type { DocumentPane } from "@/components/inspector/document-pane";
@@ -117,11 +112,6 @@ import {
 const routeApi = getRouteApi(
   "/_protected/workspaces/$workspaceId/$viewId/document",
 );
-
-const ReadOnlyDocxViewer = lazy(async () => {
-  const m = await import("@/components/docx/app-docx-editor");
-  return { default: m.DocxEditor };
-});
 
 const OfficeFileViewer = lazy(async () => {
   const m = await import("@/components/office/office-file-viewer");
@@ -982,6 +972,9 @@ function RouteComponentInner({
               <PDFProvider
                 key={fieldId}
                 fieldId={fieldId}
+                // The full-screen page sets its own scale; it does not fit a
+                // measured box.
+                fitToWidth={null}
                 initialScaleOffset={scaleOffset}
                 startPage={pageNumber}
                 surface="document-pdf"
@@ -1114,57 +1107,11 @@ const FullscreenDocxViewer = ({
   );
 
   return (
-    <ReadOnlyDocxDocumentViewer
+    <ReadOnlyDocxDocument
       documentBuffer={file.buffer}
       fileName={file.fileName}
       scaleOffset={scaleOffset}
     />
-  );
-};
-
-const ReadOnlyDocxDocumentViewer = ({
-  documentBuffer,
-  fileName,
-  scaleOffset,
-}: {
-  documentBuffer: ArrayBuffer;
-  fileName: string;
-  scaleOffset: number;
-}) => {
-  const editorRef = useRef<DocxEditorRef>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
-    fit: { type: "editor" },
-    scaleOffset,
-  });
-  // Stable ref callback so React doesn't detach/re-attach the fit-zoom
-  // ResizeObserver every render.
-  const composedContainerRef = useMemo(
-    () => composeRefs(containerRef, fitZoomRef),
-    [fitZoomRef],
-  );
-
-  useLayoutEffect(() => {
-    editorRef.current?.setZoom(targetZoom);
-  }, [targetZoom]);
-  useDocxWheelZoom(containerRef, editorRef);
-
-  return (
-    <div ref={composedContainerRef} className="h-full overflow-auto">
-      <ReadOnlyDocxViewer
-        ref={editorRef}
-        accessibleName={fileName}
-        className="folio-docx-preview h-full"
-        autoOpenReviewSidebar={false}
-        documentBuffer={documentBuffer}
-        initialZoom={targetZoom}
-        mode="viewing"
-        preserveDocumentWhileLoading
-        readOnly
-        showToolbar={false}
-        showZoomControl={false}
-      />
-    </div>
   );
 };
 

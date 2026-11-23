@@ -53,17 +53,7 @@ const APP_STATE = {
   sessions: [],
   trustedSelfHostConnections: [],
   update: {
-    baseUrl: null,
-    channel: null,
-    currentHash: null,
     currentVersion: "0.9.4",
-    lastCheckedAt: null,
-    latestHash: null,
-    latestVersion: null,
-    status: "idle",
-    statusMessage: "",
-    updateAvailable: false,
-    updateReady: false,
   },
 } satisfies AppSnapshot;
 
@@ -82,20 +72,32 @@ const ACCOUNT = {
 type Native = {
   activity?: boolean;
   dictation?: boolean;
+  /** "pending" never answers `get_state`, as before the snapshot arrives. */
+  snapshot?: "ready" | "pending";
 };
 
 /** The native side of a linked account; features as `native` says. */
-const renderApp = async ({ activity = false, dictation = false }: Native) => {
+const renderApp = async ({
+  activity = false,
+  dictation = false,
+  snapshot = "ready",
+}: Native) => {
   const commands: string[] = [];
   mockWindows("main");
   mockIPC(
-    (command) => {
+    async (command) => {
       commands.push(command);
       switch (command) {
         case "account_get_state":
           return ACCOUNT;
         case "get_state":
-          return APP_STATE;
+          return snapshot === "ready"
+            ? APP_STATE
+            : await Promise.withResolvers<never>().promise;
+        case "updater_state":
+          return { revision: 1, state: { status: "idle" } };
+        case "check_for_updates":
+          return { revision: 2, state: { status: "up_to_date" } };
         case "is_activity_enabled":
           return activity;
         case "dictation_get_snapshot":
@@ -202,7 +204,7 @@ test("pages a feature decides are offered only with that feature", async () => {
 });
 
 test("General holds the account as one row, the app settings and privacy", async () => {
-  const { container, getByRole, queryByText } = await renderApp({});
+  const { container, getByRole } = await renderApp({});
   const settingsPage =
     container.querySelector<HTMLElement>("[data-slot=settings-page]") ??
     document.body;
@@ -220,8 +222,6 @@ test("General holds the account as one row, the app settings and privacy", async
       name: defaultMessages.settings.disconnect,
     }),
   ).toBeTruthy();
-  // When it was last verified is on About now.
-  expect(queryByText(defaultMessages.settings.lastVerified)).toBeNull();
   await waitFor(() => {
     expect(
       getByRole("switch", { name: defaultMessages.settings.startOnLogin }),
@@ -243,7 +243,49 @@ test("the native side opens a page by its id", async () => {
   expect(getByRole("heading", { level: 1 }).textContent).toBe(pages.about);
   expect(
     getByRole("heading", { level: 1 }).ownerDocument.body.textContent,
-  ).toContain(defaultMessages.settings.lastVerified);
+  ).toContain(APP_STATE.update.currentVersion);
+});
+
+test("the tray's update check opens About and answers there", async () => {
+  const { commands, findByText, nav } = await renderApp({});
+
+  await act(async () => {
+    await emit("activate-tab", { tab: "about", focus: "update-check" });
+  });
+
+  expect(currentEntries(nav)).toEqual([{ current: "page", name: pages.about }]);
+  expect(
+    await findByText(defaultMessages.settings.updates.upToDate),
+  ).toBeTruthy();
+  expect(commands.filter((command) => command === "check_for_updates")).toEqual(
+    ["check_for_updates"],
+  );
+});
+
+test("a window opened for the update check runs it once", async () => {
+  window.location.hash = "#about/update-check";
+  const { commands, findByText, nav } = await renderApp({});
+
+  expect(currentEntries(nav)).toEqual([{ current: "page", name: pages.about }]);
+  expect(
+    await findByText(defaultMessages.settings.updates.upToDate),
+  ).toBeTruthy();
+  expect(commands.filter((command) => command === "check_for_updates")).toEqual(
+    ["check_for_updates"],
+  );
+  expect(window.location.hash).toBe("#about");
+});
+
+test("About never names a preview build while the version loads", async () => {
+  const { entry, queryByText } = await renderApp({ snapshot: "pending" });
+
+  fireEvent.click(entry(pages.about));
+  await act(async () => {
+    await drainReactScheduler();
+  });
+
+  expect(queryByText(defaultMessages.settings.previewBuild)).toBeNull();
+  expect(queryByText(defaultMessages.settings.developmentBuild)).toBeNull();
 });
 
 test("a link to a coding agent opens AI and agents and brings its card into view", async () => {

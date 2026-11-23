@@ -61,6 +61,11 @@ export default {
           "Flow steps, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
       },
       {
+        path: "apps/api/src/lib/uploads/document-naming/document-naming.ts",
+        reason:
+          "Organization automation renaming an upload as a matter member.",
+      },
+      {
         path: "apps/api/src/lib/folio-collab-rooms.ts",
         reason: "Persists a collaboration room re-checked on every token use.",
       },

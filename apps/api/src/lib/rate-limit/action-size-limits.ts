@@ -3,9 +3,9 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { declareFingerprintFields } from "@stll/errors";
 
-import { env } from "@/api/env";
 import { reframeBoundedRequest } from "@/api/http/request-body";
 import type { BoundedRequest } from "@/api/http/request-body";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import {
@@ -15,6 +15,10 @@ import {
 import type { OwnedMessage } from "@/api/lib/observability/owned-message";
 import { emitActionResponseOversizeMetric } from "@/api/lib/observability/request-metrics";
 import { observedResponse } from "@/api/lib/observability/server-error-answer";
+import {
+  type ActionSizeLimitSettings,
+  readActionSizeLimits,
+} from "@/api/lib/rate-limit/action-size-settings";
 
 /** A deployment whose action size policy is on but not configured. */
 const ACTION_SIZE_UNCONFIGURED = failureSink({
@@ -46,16 +50,29 @@ export class ActionSizeError extends TaggedError("ActionSizeError")<{
   }
 }
 
-type ActionSizeConfiguration = Pick<
-  typeof env,
-  | "FEATURE_ACTION_ADMISSION"
-  | "ACTION_REQUEST_MAX_BYTES"
-  | "ACTION_RESPONSE_MAX_BYTES"
-  | "ACTION_PAGE_SIZE_MAX"
->;
+type ActionSizeConfiguration = ActionSizeLimitSettings & {
+  readonly FEATURE_ACTION_ADMISSION: boolean;
+};
+
+// Each setting is read when the policy asks for it, so a disabled policy
+// reads no limit and the module loads without the API environment.
+const deployedConfiguration: ActionSizeConfiguration = {
+  get FEATURE_ACTION_ADMISSION() {
+    return isDeploymentFeatureEnabled("FEATURE_ACTION_ADMISSION");
+  },
+  get ACTION_REQUEST_MAX_BYTES() {
+    return readActionSizeLimits().ACTION_REQUEST_MAX_BYTES;
+  },
+  get ACTION_RESPONSE_MAX_BYTES() {
+    return readActionSizeLimits().ACTION_RESPONSE_MAX_BYTES;
+  },
+  get ACTION_PAGE_SIZE_MAX() {
+    return readActionSizeLimits().ACTION_PAGE_SIZE_MAX;
+  },
+};
 
 export const getActionSizePolicy = (
-  configuration: ActionSizeConfiguration = env,
+  configuration: ActionSizeConfiguration = deployedConfiguration,
 ): Result<ActionSizePolicy | undefined, ActionSizeError> => {
   if (!configuration.FEATURE_ACTION_ADMISSION) {
     return Result.ok(undefined);

@@ -1185,6 +1185,10 @@ pub async fn account_disconnect(
     crate::transcribe_history::erase_account(&app, account.local_data_namespace())
       .await;
   }
+  // So do the learned dictation fixes kept here, also when the account had
+  // expired and its namespace is gone; the server keeps the member's own
+  // list.
+  crate::dictation_learned::erase_all();
   *BROWSER_CONNECTION
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;

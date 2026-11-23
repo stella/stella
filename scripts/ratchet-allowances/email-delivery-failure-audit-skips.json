@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 2,
-  "reason": "The email delivery failure table holds only an address, a classified reason and the provider's event time, written from the provider's bounce events and expired by retention. Recording a failure and pruning expired ones are system bookkeeping of mail delivery, not member actions on tenant data."
-}

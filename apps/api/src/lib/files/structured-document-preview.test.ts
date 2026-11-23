@@ -38,7 +38,11 @@ test.each(STRUCTURED_DOCUMENT_FORMATS)(
       file.withMimeType(mimeType),
     );
     expect(preview.unwrap()).toEqual({ text, truncated: false });
-    expect((await extractFileTextResult(file)).unwrap()).toEqual(text);
+    expect(
+      (
+        await extractFileTextResult(file, { zipNameCodePage: "ibm437" })
+      ).unwrap(),
+    ).toEqual(text);
   },
 );
 
@@ -55,6 +59,10 @@ test.each(STRUCTURED_DOCUMENT_FORMATS)(
       status: 422,
       code: "preview_unavailable",
     });
-    expect((await extractFileTextResult(file)).isErr()).toBe(true);
+    expect(
+      (
+        await extractFileTextResult(file, { zipNameCodePage: "ibm437" })
+      ).isErr(),
+    ).toBe(true);
   },
 );

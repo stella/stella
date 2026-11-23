@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 import { beforeEach, describe, expect, test } from "bun:test";
 
+import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
@@ -97,6 +98,7 @@ const storedDecision = () =>
     documentAstSource: null,
     fulltext: "Soud návrh zamítl pro opožděnost podání.",
     sections: null,
+    bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
     sourceUrl: "https://example.test/decision",
     sourceAttributionUrl: "https://example.test/decision",
     documentUrl: "https://example.test/decision.pdf",

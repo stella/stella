@@ -1,4 +1,5 @@
 import type { ActivitySettingsSnapshot } from "../../../src/activity/activity-types";
+import type { ClipboardSettingsSnapshot } from "../../../src/clipboard/clipboard-types";
 import type { DictationSnapshot as DictationSettingSnapshot } from "../../../src/mainview/DictationSetting";
 import type { DictationSnapshot } from "../../../src/onboarding/use-dictation";
 import type { SigningDriverStatus } from "../../../src/mainview/signing-driver-status";
@@ -74,6 +75,7 @@ export const SETTINGS_DICTATION = {
   ],
   available: true,
   cleanup: true,
+  cleanupStyle: "polished",
   cloudAvailable: true,
   cloudModel: "elevenlabs-direct/scribe-v3",
   customWords: ["Libeňská", "custom terms list", "22 Cdo 120/2026"],
@@ -81,6 +83,9 @@ export const SETTINGS_DICTATION = {
   enabled: true,
   failure: null,
   failureKeptInHistory: false,
+  fixKeys: { code: "KeyT", modifiers: ["alt", "shift"] },
+  fixShortcut: true,
+  fixShortcutTaken: false,
   holdKey: "fn",
   holdKeys: ["fn", "rightOption", "rightCommand", "combination"],
   holdKeyWaiting: false,
@@ -106,6 +111,7 @@ export const SETTINGS_DICTATION = {
   sounds: true,
   speakersOnly: true,
   textBeforeCursorAvailable: true,
+  translateTo: null,
   whileDictating: "lower",
   whileDictatingOffered: ["nothing", "lower", "pause"],
 } as const satisfies DictationSettingSnapshot;
@@ -130,6 +136,33 @@ export const CLOUD_MODELS = {
     },
   ],
   unavailable: null,
+};
+
+/** The clipboard settings: capture on, two excluded apps and three
+ *  groups, one with a name long enough to test the row's truncation. */
+export const CLIPBOARD_SETTINGS: Omit<ClipboardSettingsSnapshot, "groups"> & {
+  /** Plain colours: the fixture crosses into the page as JSON. */
+  groups: { color: string; id: string; name: string }[];
+} = {
+  captureStatus: "active",
+  groupLimit: 12,
+  groups: [
+    { color: "#3b82f6", id: "group-prompts", name: "Prompts" },
+    {
+      color: "#10b981",
+      id: "group-intake",
+      name: "Client intake for the commercial lease renewal and its annexes",
+    },
+    { color: "#f59e0b", id: "group-clauses", name: "Standard clauses" },
+  ],
+  retention: "month",
+  revision: 3,
+  screenCapture: "hidden",
+  sourceAppExclusionLimit: 64,
+  sourceAppExclusions: [
+    { identifier: "com.example.passwords", name: "Password Manager" },
+    { identifier: "com.example.banking", name: "Online Banking" },
+  ],
 };
 
 /** A chosen smart card driver, as the macOS signing setting reports it. */
@@ -169,17 +202,7 @@ export const APP_STATE = {
   sessions: [],
   trustedSelfHostConnections: [],
   update: {
-    baseUrl: null,
-    channel: null,
-    currentHash: null,
     currentVersion: "0.9.4",
-    lastCheckedAt: null,
-    latestHash: null,
-    latestVersion: null,
-    status: "idle",
-    statusMessage: "",
-    updateAvailable: false,
-    updateReady: false,
   },
 } satisfies AppSnapshot;
 

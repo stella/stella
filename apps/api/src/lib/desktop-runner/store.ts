@@ -2235,6 +2235,7 @@ export const readRunOutputFile = async (
         fileName: userFiles.fileName,
         mimeType: userFiles.mimeType,
         placeholder: userFiles.placeholder,
+        scanWarnings: userFiles.scanWarnings,
       })
       .from(userFiles)
       .innerJoin(chatThreads, eq(chatThreads.id, userFiles.threadId))

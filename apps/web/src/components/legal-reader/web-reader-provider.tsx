@@ -1,3 +1,4 @@
+import { lazy } from "react";
 import type { ReactNode } from "react";
 
 import { panic } from "better-result";
@@ -17,10 +18,18 @@ import { useWebReaderPresentationAdapters } from "@/components/legal-reader/web-
 import { DecisionBodyUnavailable } from "@/features/case-law/components/case-viewer/decision-body-state";
 import { createProvisionViewTab } from "@/features/statutes/provision-inspector.logic";
 
+// Collection attribution and its strings load only when a collection body is
+// read; the reader renders it inside its own Suspense boundary.
+const CollectionAttribution = lazy(
+  async () =>
+    await import("./collection-attribution/web-collection-attribution"),
+);
+
 export const WebReaderProvider = ({ children }: { children: ReactNode }) => {
   const inspector = useInspectorView();
   const adapters = {
     ...useWebReaderPresentationAdapters(),
+    CollectionAttribution,
     // A reader link is a reference in the decision's own text.
     renderDecisionLink: ({
       citation: _citation,

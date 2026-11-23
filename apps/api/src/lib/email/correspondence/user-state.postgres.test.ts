@@ -211,6 +211,7 @@ if (!databaseUrl || !enabled) {
               ...common,
               channel,
               dataBox: null,
+              certifiedEmail: null,
               direction: "in" as const,
               messageId: "original@example.test",
             } satisfies ParsedCorrespondence)
@@ -218,6 +219,7 @@ if (!databaseUrl || !enabled) {
               ...common,
               channel,
               dataBox: parsedBox.value.envelope,
+              certifiedEmail: null,
               direction: null,
               messageId: parsedBox.value.envelope.messageId,
             } satisfies ParsedCorrespondence);

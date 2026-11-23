@@ -14,7 +14,6 @@ import {
 } from "@/api/lib/files/legal-file-source";
 import { findSignedFiles } from "@/api/lib/files/signature-pairing";
 import {
-  readSignaturePdf,
   readSignatureWorkerReply,
   signatureUnreadable,
 } from "@/api/lib/files/signature-preview";
@@ -66,14 +65,16 @@ export const readSignatureFile = async (
   if (loaded.isErr()) {
     return Result.err(loaded.error);
   }
-  const { source, mimeType, kind, sniffed, entityId, fileName, deliver } =
+  const { source, mimeType, format, entityId, fileName, deliver } =
     loaded.value;
+  const { kind, sniffed } = format;
   if (!isSignatureKind(kind)) {
     return Result.err(signatureUnreadable());
   }
   const reply = await readSignatureWorkerReply(
     source.withMimeType(mimeType),
     kind,
+    await loaded.value.zipNameCodePage(),
   );
   if (reply.isErr()) {
     return Result.err(reply.error);
@@ -97,23 +98,4 @@ export const readSignatureFile = async (
       : [];
   const preview = previewOf(signature, signedFiles);
   return await deliver(() => Result.ok({ preview, reply: signature }));
-};
-
-/** The PDF an enveloping signature carries. */
-export const readSignatureFilePdf = async (
-  options: LegalFileReadOptions,
-): Promise<Result<Uint8Array, HandlerError>> => {
-  const loaded = await loadLegalFileSource(options, SIGNATURE_FILE_KINDS);
-  if (loaded.isErr()) {
-    return Result.err(loaded.error);
-  }
-  const { source, mimeType, kind, deliver } = loaded.value;
-  if (!isSignatureKind(kind)) {
-    return Result.err(signatureUnreadable());
-  }
-  const pdf = await readSignaturePdf(source.withMimeType(mimeType), kind);
-  if (pdf.isErr()) {
-    return Result.err(pdf.error);
-  }
-  return await deliver(() => pdf);
 };

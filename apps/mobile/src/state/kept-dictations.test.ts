@@ -14,8 +14,11 @@ const SETUP = {
   field: "chat",
   matterId: null,
   modelId: null,
+  modelClass: null,
   locale: "en",
   cleanup: false,
+  style: "polished",
+  translateTo: null,
 } as const;
 
 /** The phone's files, in memory: each dictation's description and its recordings. */
@@ -128,6 +131,7 @@ describe("kept dictations", () => {
         setup: SETUP,
         pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
         refused: false,
+        refusedFor: null,
       }),
     ).toBe(true);
     expect(disk.recordings.get("kept-1")).toEqual(new Set(["0.m4a"]));
@@ -158,6 +162,7 @@ describe("kept dictations", () => {
       setup: SETUP,
       pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
       refused: false,
+      refusedFor: null,
     });
     release();
     await store.retryWaiting();
@@ -182,6 +187,7 @@ describe("kept dictations", () => {
       setup: SETUP,
       pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
       refused: false,
+      refusedFor: null,
     });
     await store.retryWaiting();
     expect(store.take("kept-1")?.text).toBe("Once.");
@@ -210,6 +216,7 @@ describe("kept dictations", () => {
       setup: SETUP,
       pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
       refused: false,
+      refusedFor: null,
     });
     time.advance(30_000);
     // The retry the timer started.
@@ -252,12 +259,14 @@ describe("kept dictations", () => {
         { type: "audio", uri: "file:///tmp/b.m4a" },
       ],
       refused: false,
+      refusedFor: null,
     });
     await store.retryWaiting();
     expect(disk.recordings.get("kept-1")).toEqual(new Set(["1.m4a"]));
     expect(disk.described.get("kept-1")?.state).toEqual({
       type: "waiting",
       refused: false,
+      refusedFor: null,
       pieces: [
         { type: "text", text: "First." },
         { type: "audio", file: "1.m4a" },
@@ -281,6 +290,7 @@ describe("kept dictations", () => {
       setup: SETUP,
       pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
       refused: false,
+      refusedFor: null,
     });
     const retrying = store.retryWaiting();
     store.discard(["kept-1"]);
@@ -315,6 +325,7 @@ describe("kept dictations", () => {
       state: {
         type: "waiting",
         refused: false,
+        refusedFor: null,
         pieces: [{ type: "audio", file: "0.m4a" }],
       },
     };
@@ -350,6 +361,7 @@ describe("kept dictations", () => {
       setup: SETUP,
       pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
       refused: false,
+      refusedFor: null,
     });
     disk.writes.fail = true;
     await store.retryWaiting();
@@ -365,6 +377,7 @@ describe("kept dictations", () => {
         setup: SETUP,
         pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
         refused: false,
+        refusedFor: null,
       }),
     ).toBe(false);
     store.deliver({
@@ -390,6 +403,7 @@ describe("kept dictations", () => {
       setup: SETUP,
       pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
       refused: false,
+      refusedFor: null,
     });
     await store.retryWaiting();
     expect(store.views()).toEqual([
@@ -406,6 +420,7 @@ describe("kept dictations", () => {
       state: {
         type: "waiting",
         refused: true,
+        refusedFor: null,
         pieces: [{ type: "audio", file: "0.m4a" }],
       },
     };
@@ -414,5 +429,34 @@ describe("kept dictations", () => {
     await store.retryWaiting();
     expect(retried).toEqual([]);
     expect(store.views().at(0)?.status).toBe("needs-person");
+  });
+
+  test("a dictation refused for its withdrawn model asks for another model", async () => {
+    const { disk, store } = setUp({
+      outcomes: [
+        {
+          type: "failed",
+          pieces: [{ type: "audio", file: "0.m4a" }],
+          error: new ApiRequestError({
+            message: "synthetic",
+            status: 503,
+            code: "transcription_model_unavailable",
+          }),
+        },
+      ],
+    });
+    store.keep({
+      owner: "field-1",
+      setup: SETUP,
+      pieces: [{ type: "audio", uri: "file:///tmp/piece.m4a" }],
+      refused: false,
+      refusedFor: null,
+    });
+    await store.retryWaiting();
+    expect(store.views().at(0)?.status).toBe("needs-model");
+    expect(disk.described.get("kept-1")?.state).toMatchObject({
+      refused: true,
+      refusedFor: "model",
+    });
   });
 });

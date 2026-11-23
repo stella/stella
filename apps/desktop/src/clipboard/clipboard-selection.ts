@@ -1,7 +1,9 @@
 import { panic } from "better-result";
 
+import { withClipboardSettings } from "./clipboard-settings";
 import type {
   ClipboardCaptureUpdate,
+  ClipboardSettingsSnapshot,
   ClipboardSnapshot,
 } from "./clipboard-types";
 
@@ -61,6 +63,7 @@ type ClipboardHistoryState = {
 type ClipboardHistoryAction =
   | Exclude<ClipboardSelectionAction, { type: "historyChanged" }>
   | { type: "snapshotReceived"; snapshot: ClipboardSnapshot }
+  | { type: "settingsReceived"; settings: ClipboardSettingsSnapshot }
   | { type: "captureReceived"; update: ClipboardCaptureUpdate };
 
 /** Snapshots and their selection projection commit together for every history update. */
@@ -106,6 +109,10 @@ export const clipboardHistory = (
         ),
       },
     });
+  }
+  if (action.type === "settingsReceived") {
+    const snapshot = withClipboardSettings(state.snapshot, action.settings);
+    return snapshot === state.snapshot ? state : { ...state, snapshot };
   }
   if (action.type === "snapshotReceived") {
     if (action.snapshot.revision < state.snapshot.revision) {

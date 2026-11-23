@@ -10,7 +10,7 @@
     "aiDraftAllow": "Povoliť",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Úkon {task} · Činnosť {activity}",
-    "aiDraftConsent": "stella AI môže navrhovať popisy zo spisu, dátumu, trvania a názvov aplikácií každého záznamu a z názvov dokumentov a okien, ktoré tu vidíte, ak ich zaznamenávate. Vaše skoršie záznamy k spisu jej pomáhajú písať vaším štýlom. Nič iné o vašom dni tento počítač neopustí.",
+    "aiDraftConsent": "Na napísanie popisu stella AI použije: {inputs}. Všetko ide k {provider}, len na napísanie návrhu. Nič ďalšie o vašom dni tento počítač neopustí.",
     "aiDraftConsentRequired": "Na návrh tohto popisu znova povoľte stella AI.",
     "aiDraftDisclosure": "Návrhy AI sú odporúčania, ktoré stella vytvára z kontrolovaného záznamu, vašich skorších záznamov v spise a fakturačných pravidiel kancelárie, ak ich pridala. Každý záznam pred vytvorením skontrolujte.",
     "aiDraftEarlierEntries": "{count, plural, one {Nadväzuje na # skorší záznam} few {Nadväzuje na # skoršie záznamy} other {Nadväzuje na # skorších záznamov}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI je na tomto počítači vypnutá. Odvolanie sa aplikácii stella odošle, hneď ako bude dostupná.",
     "browserAnsweredAppNameOnly": "Pri <bdi>{browser}</bdi> sa zaznamenáva len názov aplikácie. Zmeniť to môžete v Nastaveniach.",
     "browserAnsweredTitles": "Názvy kariet v <bdi>{browser}</bdi> sa zaznamenávajú. Zmeniť to môžete v Nastaveniach.",
-    "browserPrivacyNote": "Môžu sa zaznamenať aj súkromné okná; pri súkromnom prehliadaní pozastavte záznam alebo prehliadač vylúčte.",
+    "browserPrivacyNote": "stella nerozpozná každé súkromné okno, preto pred súkromným prehliadaním záznam pozastavte.",
     "browserQuestionAppNameOnly": "Len názov aplikácie",
-    "browserQuestionDescription": "Názvy kariet pomáhajú s popismi práce. stella nerozpozná každé súkromné okno, preto pred súkromným prehliadaním záznam pozastavte.",
+    "browserQuestionDescription": "Názvy kariet pomáhajú s popismi práce.",
     "browserQuestionLater": "Rozhodnúť neskôr",
     "browserQuestionRecordTitles": "Zaznamenávať názvy",
     "browserQuestionTitle": "Zaznamenávať aj názvy kariet v <bdi>{browser}</bdi>?",
@@ -103,7 +103,19 @@
     "detectCalls": "Zaznamenávať hovory",
     "detectCallsDescription": "Keď Teams, Zoom alebo prehliadač používa mikrofón, tento čas sa počíta ako hovor, aj keď len počúvate alebo pracujete v inej aplikácii. Zvuk sa nikdy nenahráva.",
     "disclosure": {
-      "control": "Nič sa nezaznamenáva, kým v Aktivite nestlačíte Začať zaznamenávať. Kedykoľvek môžete pozastaviť, vylúčiť aplikácie alebo vymazať ktorýkoľvek deň.",
+      "aiDraftInputs": {
+        "appNames": "názvy aplikácií",
+        "billingFormat": "fakturačný formát klienta",
+        "date": "dátum",
+        "duration": "dĺžka",
+        "earlierDescriptions": "vaše skoršie popisy v spise",
+        "firmGuidelines": "prípadné fakturačné pravidlá vašej kancelárie",
+        "instructions": "vami napísané pokyny",
+        "matter": "spis",
+        "titles": "zaznamenané názvy okien a dokumentov"
+      },
+      "aiDraftProvider": "poskytovateľovi AI, ktorého používa vaša kancelária, alebo poskytovateľovi stella AI",
+      "control": "Nič sa nezaznamenáva, kým nestlačíte Začať zaznamenávať. Kedykoľvek môžete pozastaviť, vylúčiť aplikácie alebo vymazať ktorýkoľvek deň.",
       "never": {
         "audio": "Zvuk z mikrofónu",
         "keystrokes": "Stlačenia klávesov ani písaný text",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Čo sa zaznamenáva",
       "sent": {
-        "aiDrafts": "Návrhy od stella AI, o ktoré po udelení súhlasu požiadate: spis, dátum, trvanie a názvy aplikácií záznamu, názvy jeho okien a dokumentov, ak sa zaznamenávajú, a pokyny, ktoré napíšete. stella k nim pridá vaše skoršie popisy v spise, fakturačný formát klienta a fakturačné pravidlá kancelárie, ak ich používa. Všetko ide k poskytovateľovi AI, ktorého kancelária používa, prípadne k poskytovateľovi stella AI, len kvôli napísaniu návrhu; stella návrh ani to, čo sa kvôli nemu odoslalo, neukladá.",
+        "aiDrafts": "Návrhy od stella AI, o ktoré po udelení súhlasu požiadate. Ku každému stella AI použije: {inputs}. Všetko ide k {provider}, len na napísanie návrhu; stella návrh ani to, čo sa kvôli nemu odoslalo, neukladá.",
         "timeEntries": "Časové záznamy, ktoré vytvoríte: spis, dátum, trvanie, popis, fakturovateľnosť a prípadné fakturačné kódy"
       },
       "sentTitle": "Čo opúšťa tento počítač",
@@ -300,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Všetky klipy",
+    "allResults": "Všetky výsledky",
     "bold": "Tučné",
     "bulletedList": "Odrážkový zoznam",
     "cancel": "Zrušiť",
@@ -366,6 +379,7 @@
     "moveToGroup": "Presunúť do skupiny",
     "newGroupOption": "Nová skupina…",
     "noGroup": "Bez skupiny",
+    "noGroupMatches": "V tejto skupine nič nezodpovedá",
     "noResults": "Žiadne zodpovedajúce výstrižky",
     "noResultsSearchRegistries": "Hľadať „{query}“ v registroch",
     "numberedList": "Číslovaný zoznam",
@@ -449,6 +463,21 @@
     "welcomeShortcutTitle": "Otvorte ju odkiaľkoľvek.",
     "welcomeStart": "Začať kopírovať",
     "welcomeTitle": "Zoznámte sa so schránkou"
+  },
+  "clipboardSettings": {
+    "capture": "Ukladať nové výstrižky",
+    "captureDescription": "Po vypnutí sa nič, čo skopírujete, neukladá.",
+    "errorSave": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
+    "excludedDescription": "Nič, čo v týchto aplikáciách skopírujete, sa neukladá.",
+    "excludedEmpty": "Ak chcete aplikáciu vylúčiť, kliknite v schránke pravým tlačidlom na niektorý jej výstrižok a zvoľte, že sa z nej nové výstrižky nemajú ukladať.",
+    "groupActions": "Akcie pre skupinu {groupName}",
+    "groupsDescription": "Presunutím skupiny zmeníte jej poradie v schránke.",
+    "groupsEmpty": "Vytvorte skupinu a v schránke do nej presuňte výstrižky.",
+    "history": "História",
+    "moveGroupDown": "Posunúť nadol",
+    "moveGroupUp": "Posunúť nahor",
+    "recordingsDescription": "Umožní zobraziť schránku na snímkach obrazovky, v nahrávkach a pri zdieľaní obrazovky.",
+    "retentionDescription": "Staršie výstrižky sa mažú. Výstrižky v skupine zostávajú."
   },
   "dialog": {
     "accountEmail": "Účet",
@@ -575,6 +604,25 @@
       "descriptionCloud": "stella AI navyše opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu.",
       "title": "Upraviť pomocou AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Zachová uvoľnený tón s ľahkou interpunkciou.",
+        "title": "Neformálny"
+      },
+      "notes": {
+        "description": "Krátke body, každý na samostatnom riadku, bez výplňových slov.",
+        "title": "Poznámky"
+      },
+      "polished": {
+        "description": "Opraví chyby rozpoznávania a zachová vaše formulácie.",
+        "title": "Uhladený"
+      },
+      "title": "Štýl",
+      "verbatim": {
+        "description": "Každé slovo tak, ako zaznelo; doplní sa len interpunkcia a veľké písmená.",
+        "title": "Doslovný"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Najviac {limit, number} znakov dokumentu, v ktorom ste, aby diktát nadviazal na to, čo píšete.",
@@ -606,6 +654,7 @@
       "local": "Tento počítač",
       "localDescription": "Reč sa prevádza na tomto počítači a neukladá sa.",
       "model": "Model prevodu",
+      "modelWithdrawn": "Zvolený model už nie je k dispozícii. Vyberte iný; dovtedy sa diktát prepisuje v tomto počítači.",
       "outsideRegion": "Mimo vášho regiónu",
       "retainsData": "Uchováva váš zvuk",
       "retainsDataTitle": "{provider} si ponecháva, čo diktujete",
@@ -632,6 +681,30 @@
       "transcription": "Prevod zlyhal. Skúste to znova."
     },
     "failureKeptInHistory": "Text nájdete v histórii schránky.",
+    "fix": {
+      "description": "Označte v ľubovoľnej aplikácii slová, ktoré diktát napísal zle, a stlačte {shortcut}. Potom napíšete, ako sa píšu. stella prečíta označený text, len keď skratku stlačíte.",
+      "taken": "Skratku {shortcut} používa iná aplikácia. To isté ponúka ponuka Diktovanie pri ikone aplikácie stella.",
+      "title": "Skratka na opravu diktátu"
+    },
+    "fixPanel": {
+      "dictatedAs": "Nadiktované ako",
+      "hint": "stella tieto slová v ďalších diktátoch napíše takto, na všetkých vašich zariadeniach.",
+      "notSaved": "Opravu sa nepodarilo uložiť. Skontrolujte, či je stella pripojená k vášmu účtu.",
+      "nothing": "Najprv v aplikácii označte chybné slová alebo ich napíšte sem.",
+      "pick": "Vyberte chybné slová z posledného diktátu:",
+      "refused": {
+        "empty": "Vyplňte obe polia.",
+        "lineBreak": "Oprava je jeden riadok textu.",
+        "punctuation": "Vyberte nadiktované slová bez interpunkcie.",
+        "same": "Slová sú už napísané takto.",
+        "tooLong": "Na jednu opravu je to príliš dlhé.",
+        "tooManyWords": "Oprava môže mať najviac tri slová."
+      },
+      "save": "Uložiť opravu",
+      "saving": "Ukladá sa oprava…",
+      "title": "Opraviť nadiktované slovo",
+      "writtenAs": "Správne"
+    },
     "groups": {
       "cleanup": "Úprava",
       "shortcut": "Skratka",
@@ -652,6 +725,17 @@
       "description": "Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača. Ak ich je viac, každé slovo sa rozpozná v jazyku, v ktorom ho vyslovíte.",
       "noResults": "Nenašli sa žiadne jazyky",
       "title": "Jazyk diktovania"
+    },
+    "learned": {
+      "delete": "Vymazať, čo sa stella naučila",
+      "description": "Keď nadiktované slovo opravíte dvakrát rovnako alebo ho opravíte skratkou {shortcut}, stella ho v ďalších diktátoch napíše takto. Synchronizuje sa do vašich ďalších zariadení; vidíte ich len vy.",
+      "empty": "Zatiaľ žiadne naučené opravy.",
+      "failed": "Opravu sa nepodarilo zmeniť.",
+      "fix": "{from} → {to}",
+      "group": "Naučené opravy",
+      "title": "Opravy naučené z vašich úprav",
+      "unreadable": "To, čo sa stella naučila, sa nedá načítať.",
+      "working": "Ukladá sa zmena…"
     },
     "lede": "Podržte <key>{shortcut}</key> a hovorte. Text sa zobrazí tam, kde píšete.",
     "microphone": {
@@ -677,10 +761,13 @@
       "checkBodyMac": "Skontrolujte prístup k mikrofónu v Systémových nastaveniach a skúste to znova.",
       "checkBodyPc": "Skontrolujte prístup k mikrofónu v Nastaveniach Windows a skúste to znova.",
       "chooseMicrophone": "Vybrať mikrofón…",
+      "chooseModel": "Vybrať model…",
       "dismiss": "Zavrieť",
       "inputDevice": "Vstup: {device}",
       "missingBody": "Diktovanie namiesto toho používa {device}.",
       "missingTitle": "{missing} nie je pripojené",
+      "modelBody": "Vyberte iný v Nastaveniach → Diktovanie. Tento diktát bol prepísaný v tomto počítači.",
+      "modelTitle": "Váš model na prepis už nie je k dispozícii",
       "nothingBody": "Hovorte, kým držíte kláves, alebo v nastaveniach Zvuku vyberte iný vstup.",
       "nothingTitle": "stella nepočula žiadnu reč",
       "openSettingsMac": "Otvoriť Systémové nastavenia",
@@ -742,6 +829,11 @@
       "failed": "Okno sa nepodarilo otvoriť. Skúste to znova.",
       "open": "Otvoriť",
       "title": "Prepísať nahrávku"
+    },
+    "translateTo": {
+      "description": "Upravený text napíše v tomto jazyku, nech hovoríte akýmkoľvek jazykom.",
+      "off": "Jazyk, ktorým hovoríte",
+      "title": "Písať v jazyku"
     },
     "whileDictating": {
       "choices": {
@@ -838,6 +930,30 @@
   },
   "onboarding": {
     "activityBody": "Uvidíte, kam sa podel váš pracovný deň, a premeníte ho na koncepty časových záznamov. O tom, čo sa zaznamená a čo sa odošle, rozhodujete vy.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Navrhovať popisy pomocou stella AI",
+        "body": "stella AI môže navrhnúť popis každého časového záznamu. Povoľte to teraz alebo keď budete prvýkrát prechádzať deň.",
+        "withdraw": "Súhlas môžete kedykoľvek odvolať v Nastaveniach."
+      },
+      "calls": {
+        "body": "Započítavajte čas strávený v hovoroch.",
+        "title": "Hovory"
+      },
+      "details": {
+        "appNamesOnly": "Zaznamenávajú sa len názvy aplikácií.",
+        "body": "Pri prechádzaní dňa podľa nich ľahšie rozlíšite jednotlivé spisy.",
+        "browsers": "Prehliadače zaznamenávajú názvy kariet, až keď to povolíte. Aktivita sa na každý prehliadač opýta, keď ho prvýkrát uvidí.",
+        "title": "Názvy okien a dokumentov"
+      },
+      "screens": {
+        "aiDrafts": "Návrhy AI",
+        "calls": "Hovory",
+        "details": "Podrobnosti",
+        "recording": "Prehľad"
+      },
+      "starting": "Spúšťa sa záznam…"
+    },
     "activityStoryDraft": "Koncept",
     "activityStoryRecordTitle": "Zaznamenané",
     "activityStoryReviewCaption": "Prejdete deň a vyberiete spis",
@@ -876,7 +992,6 @@
         "choose": "Mikrofón na diktovanie",
         "title": "Nech vás stella počuje"
       },
-      "progress": "Krok {current} z {total}",
       "screens": {
         "app": "Úprava",
         "context": "Kontext",
@@ -884,7 +999,6 @@
         "transcription": "Prepis",
         "words": "Slová"
       },
-      "skipRest": "Preskočiť zvyšok",
       "transcription": {
         "body": "Neskôr to môžete zmeniť v Nastaveniach.",
         "bodyLocal": "Rečový model beží tu, takže diktovanie funguje aj offline.",
@@ -954,6 +1068,7 @@
     "permissionsTitlePc": "Nastavte tento počítač",
     "progress": "Krok {current} z {total}",
     "skip": "Preskočiť",
+    "skipRest": "Preskočiť zvyšok",
     "staysLocalMac": "Zostáva v tomto Macu",
     "staysLocalPc": "Zostáva v tomto počítači",
     "tryAgain": "Skúsiť znova",
@@ -1000,7 +1115,6 @@
     "errorUpdateLanguage": "stella desktop nemohol zmeniť jazyk rozhrania.",
     "errorUpdatePreferences": "stella desktop nemohol aktualizovať nastavenia oznámení.",
     "language": "Jazyk",
-    "lastVerified": "Naposledy overené",
     "loadingAccount": "Kontroluje sa pripojenie vášho účtu…",
     "managedOfficeEditing": "Spravované úpravy súborov Office pre aplikáciu stella.",
     "neverRequested": "Nikdy nevyžadované",
@@ -1073,6 +1187,8 @@
       "available": "Je k dispozícii verzia {version}.",
       "checkFailed": "stella desktop nemohol skontrolovať aktualizácie.",
       "deferred": "Verzia {version} čaká, kým upravujete otvorené dokumenty. Keď skončíte, skontrolujte aktualizácie znova a nainštalujte ju, inak sa nainštaluje pri ďalšej automatickej kontrole.",
+      "downloadProgress": "Stiahnuté {percent} %",
+      "downloading": "Sťahuje sa verzia {version}. Po inštalácii sa stella desktop reštartuje.",
       "install": "Nainštalovať a reštartovať",
       "installFailed": "stella desktop nemohol nainštalovať aktualizáciu.",
       "installInProgress": "Inštaluje sa aktualizácia.",
@@ -1272,6 +1388,7 @@
     "activityResume": "Pokračovať v zázname",
     "checkForUpdates": "Skontrolovať aktualizácie",
     "dictation": "Diktovanie",
+    "dictationFix": "Opraviť posledný diktát…",
     "dictationHint": "Na diktovanie podržte {key}",
     "dictationRetype": "Napísať posledný diktát znova",
     "dictationSettings": "Nastavenia diktovania…",
@@ -1300,7 +1417,6 @@
     "supportRevealAppData": "Zobraziť dáta aplikácie",
     "temporaryWorkingCopies": "Dočasné pracovné kópie",
     "transcribeRecording": "Prepísať nahrávku…",
-    "updateReady": "Aktualizácia pripravená",
     "updatesManaged": "Aktualizácie spravuje vaša organizácia"
   }
 }

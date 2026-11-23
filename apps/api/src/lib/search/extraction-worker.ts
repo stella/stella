@@ -24,20 +24,31 @@ import type * as v from "valibot";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import type { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { legalFileFormat } from "@stll/api-contract/document-format";
+import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
 import {
+  FILE_PART_KINDS,
+  filePartId,
+  parseFilePartId,
+} from "@stll/api-contract/file-parts";
+import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
   SIGNATURE_FILE_KINDS,
   type SignatureFileFormatKind,
 } from "@stll/api-contract/legal-file-formats";
+import type {
+  PreviewText,
+  PreviewTextFormat,
+} from "@stll/api-contract/preview-text";
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import { DATA_BOX_PREVIEW_MODE } from "@/api/lib/email/correspondence/data-box/preview-contract";
@@ -51,7 +62,10 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
   ASIC_PREVIEW_WORKER_MODE,
+  MAILBOX_TEXT_WORKER_MODE,
+  SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
+  ZIP_ARCHIVE_PREVIEW_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
 import type { AsicParseError } from "@/api/lib/files/asic-container";
 import { asicDocumentText } from "@/api/lib/files/asic-document-text";
@@ -60,25 +74,62 @@ import { cadesDocumentText } from "@/api/lib/files/cades-document-text";
 import {
   CADES_WORKER_EXIT,
   CADES_WORKER_MODE,
-  type CadesWorkerMode,
 } from "@/api/lib/files/cades-preview-protocol";
 import { scanCadesPayload } from "@/api/lib/files/cades-preview-worker";
 import type { DocumentPackageError } from "@/api/lib/files/document-archive";
+import { readEInvoiceXml } from "@/api/lib/files/e-invoice-document";
+import {
+  E_INVOICE_WORKER_EXIT,
+  E_INVOICE_WORKER_MODE,
+} from "@/api/lib/files/e-invoice-protocol";
+import {
+  eInvoiceDocumentText,
+  XML_DOCUMENT_TEXT_OVERHEAD,
+  xmlDocumentPreviewText,
+} from "@/api/lib/files/e-invoice-text";
+import {
+  extractEInvoicePreview,
+  listEInvoiceParts,
+} from "@/api/lib/files/e-invoice-worker";
 import {
   type EmailAttachment,
   type EmailParseError,
   parsedEmailToText,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
+import {
+  EMBEDDED_PART_LIST_WORKER_MODE,
+  EMBEDDED_PART_WORKER_EXIT,
+  EMBEDDED_PART_WORKER_MODE,
+  encodeEmbeddedPart,
+} from "@/api/lib/files/embedded-part-protocol";
+import {
+  cadesContentCandidate,
+  type EmbeddedPartError,
+  extractEmbeddedPart,
+  listEmbeddedParts,
+} from "@/api/lib/files/embedded-part-worker";
+import { XML_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
+import {
+  readMailboxBytesText,
+  readMailboxText,
+} from "@/api/lib/files/mailbox-text";
+import type { MboxParseError } from "@/api/lib/files/mbox";
 import type { P7mParseError } from "@/api/lib/files/p7m";
+import { partMediaType } from "@/api/lib/files/part-media-type";
 import { signatureDocumentText } from "@/api/lib/files/signature-document-text";
 import {
   SIGNATURE_WORKER_EXIT,
   SIGNATURE_WORKER_MODE,
-  type SignatureWorkerMode,
 } from "@/api/lib/files/signature-preview-protocol";
 import { extractSignaturePreview } from "@/api/lib/files/signature-preview-worker";
+import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
+import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
+import { extractSignedDossierPreview } from "@/api/lib/files/signed-dossier-worker";
 import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
+import { extractZipArchivePreview } from "@/api/lib/files/zip-archive-preview";
+import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
+import { readWorkerZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -114,6 +165,12 @@ import {
   XLSB_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
+
+/**
+ * The code page this run reads ZIP names that tie in, for every archive it
+ * opens at any depth: one run reads one organization's file.
+ */
+const ZIP_NAME_CODE_PAGE = readWorkerZipNameCodePage();
 
 const EMAIL_ATTACHMENT_MAX_COUNT = 25;
 const EMAIL_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -190,9 +247,17 @@ const extractOfficeDocumentMarkdown = async (
 ): Promise<string> =>
   normalizeExtractedText(await toMarkdownBytes(Buffer.from(fileBytes)));
 
-const extractDirectText = (fileBytes: Uint8Array, mimeType: string): string => {
-  const text = new TextDecoder().decode(fileBytes);
-  if (normalizeMimeType(mimeType) !== "text/html") {
+/**
+ * A text file's text, read in the charset its `contentType` (parameters
+ * included) or its own bytes declare, or in the one it was most likely saved
+ * in when nothing does.
+ */
+const extractDirectText = (
+  fileBytes: Uint8Array,
+  contentType: string,
+): string => {
+  const { text } = decodeDeclared(fileBytes, { contentType });
+  if (normalizeMimeType(contentType) !== "text/html") {
     return normalizeExtractedText(text);
   }
 
@@ -333,9 +398,11 @@ type LegalTextReadOptions = {
 type LegalTextReadError =
   | AsicParseError
   | DocumentPackageError
+  | MboxParseError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
+  | SignedDossierParseError
   | UnhandledException;
 
 const extractDataBoxText = async ({
@@ -399,11 +466,11 @@ const extractCadesText = async ({
     return Result.err(scanned.error);
   }
   const { file, layers } = scanned.value;
-  const content = await extractEmbeddedPayloadText(file, maxChars);
+  const content = await readCadesPayloadContent(file, maxChars);
   if (content.isErr()) {
-    return content;
+    return Result.err(content.error);
   }
-  return Result.ok(cadesDocumentText({ layers, text: content.value ?? "" }));
+  return Result.ok(cadesDocumentText({ layers, text: content.value.text }));
 };
 
 const extractAsicText = async ({
@@ -424,6 +491,66 @@ const extractAsicText = async ({
   }
   return Result.ok(asicDocumentText(preview.value));
 };
+
+// Search and AI read the same text the Files preview shows: the invoice, or
+// an XML file's own indented text.
+const extractEInvoiceText = async ({
+  fileBytes,
+  mimeType,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  // An XML file's text is budgeted with its heading and truncation notice,
+  // so the extraction's final cut at `maxChars` keeps the notice.
+  const preview = await extractEInvoicePreview({
+    fileBytes,
+    mimeType,
+    maxChars: Math.max(0, maxChars - XML_DOCUMENT_TEXT_OVERHEAD),
+  });
+  return preview.map(xmlDocumentPreviewText);
+};
+
+const extractSignedDossierText = async ({
+  fileBytes,
+  mimeType,
+  maxChars,
+}: LegalTextReadOptions) => {
+  const preview = await extractSignedDossierPreview({
+    fileBytes,
+    mimeType,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  return preview.map(signedDossierText);
+};
+
+const extractZipText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> => {
+  const preview = await extractZipArchivePreview({
+    fileBytes,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+    nameCodePage: ZIP_NAME_CODE_PAGE,
+  });
+  return preview.map(({ files }) => zipArchiveText({ files, maxChars }));
+};
+
+const extractMailboxText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> =>
+  await readMailboxBytesText({
+    bytes: fileBytes,
+    maxChars,
+    mailboxName: "mailbox",
+  });
 
 /**
  * A file that is not a signature has no text here: a `.sig` or `.xml` file is
@@ -452,6 +579,21 @@ const extractSignatureText =
     return Result.ok(signatureDocumentText(preview.value.reply));
   };
 
+/**
+ * An `.xml` file's text: an XAdES signature reads as one, with its signers
+ * and the document it carries or signs; any other XML as an invoice or as
+ * its text.
+ */
+const extractXmlText = async (
+  options: LegalTextReadOptions,
+): Promise<Result<string | null, LegalTextReadError | EmailParseError>> => {
+  const signature = await extractSignatureText("xades")(options);
+  if (signature.isErr() || signature.value !== null) {
+    return signature;
+  }
+  return await extractEInvoiceText(options);
+};
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -462,10 +604,18 @@ const LEGAL_TEXT_READERS = {
   uyap: extractStructuredText,
   asicE: extractAsicText,
   asicS: extractAsicText,
+  eAkta: extractSignedDossierText,
+  zep: extractSignedDossierText,
+  xadesZep: extractSignedDossierText,
   cades: extractCadesText,
   cadesDetached: extractSignatureText("cadesDetached"),
   xades: extractSignatureText("xades"),
   dataBox: extractDataBoxText,
+  isdoc: extractEInvoiceText,
+  isdocx: extractEInvoiceText,
+  xml: extractXmlText,
+  zip: extractZipText,
+  mbox: extractMailboxText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -508,7 +658,7 @@ const extract = async ({
   } else if (isOfficeDocumentMimeType(normalizedMimeType)) {
     text = await extractOfficeDocumentMarkdown(fileBytes);
   } else if (isDirectTextMimeType(normalizedMimeType)) {
-    text = extractDirectText(fileBytes, normalizedMimeType);
+    text = extractDirectText(fileBytes, mimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
     return await extractEmailPlaintext({
       fileBytes,
@@ -603,28 +753,51 @@ const readMaxCharsArgument = (value: string | undefined): number => {
   return parsed;
 };
 
+/**
+ * A contained document's text with its markup, named by the reader that
+ * produced it: the converters write Markdown, a text file is read as the
+ * text it holds. A preview renders each as what it is and never guesses.
+ */
+const readEmbeddedPayload = async (
+  bytes: Uint8Array,
+  mimeType: string,
+): Promise<{ text: string | null; format: PreviewTextFormat } | null> => {
+  if (mimeType === PDF_MIME_TYPE) {
+    return { text: await extractPdfMarkdown(bytes), format: "markdown" };
+  }
+  if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
+    return {
+      text: await extractOfficeDocumentMarkdown(bytes),
+      format: "markdown",
+    };
+  }
+  // An embedded XML file's text is its markup, as it was before XML had a
+  // type of its own here.
+  if (isDirectTextMimeType(mimeType) || mimeType === XML_EMBEDDED_MIME_TYPE) {
+    return {
+      text: extractDirectText(bytes, mimeType),
+      format: mimeType === "text/markdown" ? "markdown" : "plain",
+    };
+  }
+  return null;
+};
+
 const extractEmbeddedPayloadText = async (
   file: ScannedFile,
   maxChars: number,
-) => {
+): Promise<Result<PreviewText | null, UnhandledException>> => {
   // Embedded data is dispatched only to leaf readers, even if an archive
   // member is itself a signed container or a message.
   const bytes = new Uint8Array(file.bytes);
   const mimeType = normalizeMimeType(file.mimeType);
-  const content = await Result.tryPromise(async () => {
-    if (mimeType === PDF_MIME_TYPE) {
-      return await extractPdfMarkdown(bytes);
-    }
-    if (mimeType === DOCX_MIME_TYPE || isOfficeDocumentMimeType(mimeType)) {
-      return await extractOfficeDocumentMarkdown(bytes);
-    }
-    if (isDirectTextMimeType(mimeType)) {
-      return extractDirectText(bytes, mimeType);
-    }
-    return null;
-  });
+  const content = await Result.tryPromise(
+    async () => await readEmbeddedPayload(bytes, mimeType),
+  );
   if (content.isOk()) {
-    return Result.ok(content.value?.slice(0, maxChars) || null);
+    const text = content.value?.text?.slice(0, maxChars);
+    return Result.ok(
+      content.value && text ? { text, format: content.value.format } : null,
+    );
   }
 
   const error = content.error.cause;
@@ -646,15 +819,57 @@ const extractEmbeddedPayloadText = async (
   return Result.err(content.error);
 };
 
+// Payloads whose signature identifies them as something other than XML.
+const NON_XML_PAYLOAD_MIME_TYPES: ReadonlySet<string> = new Set([
+  PDF_MIME_TYPE,
+  RTF_MIME_TYPE,
+]);
+
+/**
+ * A signed payload's content: a structured invoice when the payload is one,
+ * otherwise the embedded file's own text. The bounded XML reader decides, not
+ * the payload sniff, so a signed invoice opens exactly as an unsigned upload
+ * of the same XML does (a leading comment, UTF-16).
+ */
+const readCadesPayloadContent = async (
+  file: ScannedFile,
+  maxChars: number,
+): Promise<
+  Result<PreviewText & { invoice: EInvoicePreview | null }, UnhandledException>
+> => {
+  if (!NON_XML_PAYLOAD_MIME_TYPES.has(normalizeMimeType(file.mimeType))) {
+    const invoice = readEInvoiceXml(new Uint8Array(file.bytes));
+    const listed =
+      invoice.isOk() && invoice.value !== null
+        ? await listEInvoiceParts(invoice.value)
+        : null;
+    if (listed?.isOk() === true) {
+      const preview = listed.value;
+      return Result.ok({
+        invoice: preview,
+        text: eInvoiceDocumentText(preview).slice(0, maxChars),
+        format: "plain",
+      });
+    }
+  }
+  const text = await extractEmbeddedPayloadText(file, maxChars);
+  if (text.isErr()) {
+    return Result.err(text.error);
+  }
+  return Result.ok({
+    invoice: null,
+    text: text.value?.text ?? "",
+    format: text.value?.format ?? "plain",
+  });
+};
+
 type CadesWorkerOptions = {
-  mode: CadesWorkerMode;
   fileBytes: Uint8Array;
   fileName: string;
   maxChars: number;
 };
 
 const writeCadesPreview = async ({
-  mode,
   fileBytes,
   fileName,
   maxChars,
@@ -671,24 +886,33 @@ const writeCadesPreview = async ({
     }
   }
   const { file, layers } = payload.value;
-  const bytes = new Uint8Array(file.bytes);
-  if (mode === CADES_WORKER_MODE.pdf) {
-    if (file.mimeType !== PDF_MIME_TYPE) {
-      return Result.ok(CADES_WORKER_EXIT.unreadable);
-    }
-    await writeWorkerStdout(bytes);
-    return Result.ok(0);
-  }
-
-  const content = await extractEmbeddedPayloadText(file, maxChars);
+  const content = await readCadesPayloadContent(file, maxChars);
   if (content.isErr()) {
-    return content;
+    return Result.err(content.error);
   }
+  const signed = cadesContentCandidate(fileBytes, fileName);
+  if (signed.isErr()) {
+    return Result.ok(CADES_WORKER_EXIT.unreadable);
+  }
+  const { bytes } = signed.value;
   const preview = {
     fileName: sanitizeFilename(file.fileName),
     mimeType: file.mimeType,
     layers,
-    text: content.value ?? "",
+    text: content.value.text,
+    textFormat: content.value.format,
+    content: {
+      part: filePartId({ kind: FILE_PART_KINDS.content, index: 0 }),
+      fileName: signed.value.fileName,
+      mediaType: await partMediaType({
+        bytes,
+        stated: null,
+        charset: null,
+        fileName: signed.value.fileName,
+      }),
+      sizeBytes: bytes.byteLength,
+    },
+    invoice: content.value.invoice,
   } satisfies v.InferOutput<typeof cadesPreviewSchema>;
   await writeWorkerStdout(JSON.stringify(preview));
   return Result.ok(0);
@@ -718,17 +942,156 @@ const writeAsicPreview = async (options: {
   return Result.ok(0);
 };
 
+const writeEInvoicePreview = async (options: {
+  fileBytes: Uint8Array;
+  mimeType: string;
+  maxChars: number;
+}) => {
+  const preview = await extractEInvoicePreview(options);
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "DocumentPackageError":
+      case "P7mParseError":
+        return Result.ok(E_INVOICE_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(E_INVOICE_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+        return Result.err(preview.error);
+    }
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value));
+  return Result.ok(0);
+};
+
+const writeSignedDossier = async (options: {
+  fileBytes: Uint8Array;
+  mimeType: string;
+  maxChars: number;
+}) => {
+  const output = (
+    await extractSignedDossierPreview({
+      ...options,
+      readText: extractEmbeddedPayloadText,
+    })
+  ).map((preview) => JSON.stringify(preview));
+  if (output.isErr()) {
+    switch (output.error._tag) {
+      case "SignedDossierParseError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(output.error);
+    }
+  }
+  await writeWorkerStdout(output.value);
+  return Result.ok(0);
+};
+
+/** The exit a container that cannot be read, or a refused part, ends with. */
+const embeddedPartExit = (error: EmbeddedPartError) => {
+  switch (error._tag) {
+    case "AsicParseError":
+    case "DataBoxMessageParseError":
+    case "DocumentPackageError":
+    case "EmailParseError":
+    case "MboxParseError":
+    case "P7mParseError":
+    case "SignedDossierParseError":
+      return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
+    case "FileScanRejectedError":
+      return Result.ok(EMBEDDED_PART_WORKER_EXIT.rejected);
+    case "FileScanFailedError":
+    case "UnhandledException":
+      return Result.err(error);
+    default:
+      error satisfies never;
+      return panic("Unhandled embedded part error");
+  }
+};
+
+type EmbeddedPartRequest = {
+  fileBytes: Uint8Array;
+  containerMimeType: string;
+  containerName: string;
+  partId: string;
+};
+
+const writeEmbeddedPart = async (options: EmbeddedPartRequest) => {
+  const part = parseFilePartId(options.partId);
+  if (part === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  const read = await extractEmbeddedPart({
+    ...options,
+    part,
+    zipNameCodePage: ZIP_NAME_CODE_PAGE,
+  });
+  if (read.isErr()) {
+    return embeddedPartExit(read.error);
+  }
+  if (read.value === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  await writeWorkerStdout(encodeEmbeddedPart(read.value));
+  return Result.ok(0);
+};
+
+const writeEmbeddedPartList = async (options: EmbeddedPartRequest) => {
+  // No part lists the file's own parts, as for a mailbox's message.
+  const part = options.partId === "" ? null : parseFilePartId(options.partId);
+  if (part === null && options.partId !== "") {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  const listed = await listEmbeddedParts({
+    ...options,
+    part,
+    zipNameCodePage: ZIP_NAME_CODE_PAGE,
+  });
+  if (listed.isErr()) {
+    return embeddedPartExit(listed.error);
+  }
+  if (listed.value === null) {
+    return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
+  }
+  await writeWorkerStdout(JSON.stringify({ files: listed.value }));
+  return Result.ok(0);
+};
+
+const writeZipArchivePreview = async (options: {
+  fileBytes: Uint8Array;
+  maxChars: number;
+}) => {
+  const preview = await extractZipArchivePreview({
+    ...options,
+    readText: extractEmbeddedPayloadText,
+    nameCodePage: ZIP_NAME_CODE_PAGE,
+  });
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "DocumentPackageError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(ARCHIVE_PREVIEW_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(preview.error);
+    }
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value));
+  return Result.ok(0);
+};
+
 const isSignatureKind = (value: string): value is SignatureFileFormatKind =>
   SIGNATURE_FILE_KINDS.some((kind) => kind === value);
 
 const writeSignaturePreview = async ({
-  mode,
   fileBytes,
   kind,
   fileName,
   maxChars,
 }: {
-  mode: SignatureWorkerMode;
   fileBytes: Uint8Array;
   kind: string;
   fileName: string;
@@ -755,15 +1118,7 @@ const writeSignaturePreview = async ({
         return Result.err(preview.error);
     }
   }
-  const { reply, file } = preview.value;
-  if (mode === SIGNATURE_WORKER_MODE.pdf) {
-    if (file?.mimeType !== PDF_MIME_TYPE) {
-      return Result.ok(SIGNATURE_WORKER_EXIT.unreadable);
-    }
-    await writeWorkerStdout(new Uint8Array(file.bytes));
-    return Result.ok(0);
-  }
-  await writeWorkerStdout(JSON.stringify(reply));
+  await writeWorkerStdout(JSON.stringify(preview.value.reply));
   return Result.ok(0);
 };
 
@@ -778,20 +1133,38 @@ function exitWithWorkerError(error: unknown): never {
 
 // ── Main ──────────────────────────────────────────────────
 
+/**
+ * A mailbox's text, read as its bytes stream in, one message at a time:
+ * the mailbox is never held whole.
+ */
+const writeMailboxText = async (maxChars: number) => {
+  const text = await readMailboxText({
+    chunks: Bun.stdin.stream(),
+    maxChars,
+    mailboxName: process.argv[4] ?? "",
+  });
+  if (text.isErr()) {
+    return ARCHIVE_PREVIEW_WORKER_EXIT.unreadable;
+  }
+  await writeWorkerStdout(text.value);
+  return 0;
+};
+
 try {
   const mimeType = process.argv[2] ?? "";
   const maxChars = readMaxCharsArgument(process.argv[3]);
+  if (mimeType === MAILBOX_TEXT_WORKER_MODE) {
+    process.exit(await writeMailboxText(maxChars));
+  }
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   if (mimeType === DATA_BOX_PREVIEW_MODE) {
-    await writeWorkerStdout(JSON.stringify(extractDataBoxPreview(fileBytes)));
+    await writeWorkerStdout(
+      JSON.stringify(await extractDataBoxPreview(fileBytes)),
+    );
     process.exit(0);
   }
-  if (
-    mimeType === CADES_WORKER_MODE.preview ||
-    mimeType === CADES_WORKER_MODE.pdf
-  ) {
+  if (mimeType === CADES_WORKER_MODE.preview) {
     const preview = await writeCadesPreview({
-      mode: mimeType,
       fileBytes,
       fileName: process.argv[4] ?? "",
       maxChars,
@@ -801,12 +1174,8 @@ try {
     }
     process.exit(preview.value);
   }
-  if (
-    mimeType === SIGNATURE_WORKER_MODE.preview ||
-    mimeType === SIGNATURE_WORKER_MODE.pdf
-  ) {
+  if (mimeType === SIGNATURE_WORKER_MODE.preview) {
     const preview = await writeSignaturePreview({
-      mode: mimeType,
       fileBytes,
       kind: process.argv[4] ?? "",
       fileName: process.argv[5] ?? "",
@@ -829,6 +1198,48 @@ try {
     await writeWorkerStdout(JSON.stringify(preview.value));
     process.exit(0);
   }
+  if (mimeType === E_INVOICE_WORKER_MODE.preview) {
+    const written = await writeEInvoicePreview({
+      fileBytes,
+      mimeType: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
+  }
+  if (mimeType === EMBEDDED_PART_WORKER_MODE) {
+    const written = await writeEmbeddedPart({
+      fileBytes,
+      containerMimeType: process.argv[4] ?? "",
+      partId: process.argv[5] ?? "",
+      containerName: process.argv[6] ?? "",
+    });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
+  }
+  if (mimeType === EMBEDDED_PART_LIST_WORKER_MODE) {
+    const written = await writeEmbeddedPartList({
+      fileBytes,
+      containerMimeType: process.argv[4] ?? "",
+      partId: process.argv[5] ?? "",
+      containerName: process.argv[6] ?? "",
+    });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
+  }
+  if (mimeType === ZIP_ARCHIVE_PREVIEW_MODE) {
+    const preview = await writeZipArchivePreview({ fileBytes, maxChars });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
+  }
   if (mimeType === ASIC_PREVIEW_WORKER_MODE) {
     const preview = await writeAsicPreview({
       fileBytes,
@@ -839,6 +1250,17 @@ try {
       exitWithWorkerError(preview.error);
     }
     process.exit(preview.value);
+  }
+  if (mimeType === SIGNED_DOSSIER_WORKER_MODE.preview) {
+    const written = await writeSignedDossier({
+      fileBytes,
+      mimeType: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (written.isErr()) {
+      exitWithWorkerError(written.error);
+    }
+    process.exit(written.value);
   }
   const result = await extract({
     fileBytes,

@@ -97,7 +97,7 @@ describe("Nejvyšší soud", () => {
     if (ast === undefined) {
       throw new Error("missing 27 Cdo 2709/2017");
     }
-    const items = paragraphsOpeningWith(ast, /^\d{1,2}\)\t/u);
+    const items = paragraphsOpeningWith(ast, /^\d{1,2}\) /u);
     expect(items.length).toBeGreaterThanOrEqual(14);
     expect(
       items.every(
@@ -109,7 +109,7 @@ describe("Nejvyšší soud", () => {
   test("enumerations in an unnumbered decision are not taken for paragraph numbers", async () => {
     const decisions = await readNs();
     for (const [caseNumber, marker] of [
-      ["22 Cdo 5441/2015", /^1\.\tPro zohlednění/u],
+      ["22 Cdo 5441/2015", /^1\. Pro zohlednění/u],
       ["29 Odo 756/2005", /^1\) Zda právo člena/u],
       ["29 Cdo 3633/2007", /^1\/ K možnosti/u],
     ] as const) {

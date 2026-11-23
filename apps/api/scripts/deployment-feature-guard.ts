@@ -83,20 +83,50 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Court document previews use matter file read permissions on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/e-invoice",
+    "Structured invoice previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/signed-dossier",
+    "Signed container previews use matter file read permissions on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/asic",
     "ASiC previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/zip",
+    "ZIP archive previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/mbox",
+    "Mailbox previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/parts",
+    "Listing the files inside a part of a file uses the matter file read permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/cades",
     "Signed document previews use the matter file read permission on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/part",
+    "Saving a part of a file to a matter uses the matter file read and document create permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/email-reading",
+    "Email readings use the matter file read permission on every deployment",
     "/v1/files/:workspaceId/signature",
     "Signature file previews use the matter file read permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/data-box",
     "Data-box previews use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/similar",
+    "Listing similar documents in a matter uses the matter read permission on every deployment",
   ],
   [
     "/v1/organization-settings/correspondence/data-boxes",
@@ -213,6 +243,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/chat/threads/:threadId/limit-reminder",
     "A chat limit reminder is mounted on every deployment; it can be set only for a turn the member's local-agents feature let run",
+  ],
+  [
+    "/v1/organization-settings/dictation-vocabulary",
+    "The organization's dictation words are managed on every deployment; dictation itself stays behind the members' dictation feature decisions",
   ],
   [
     "/v1/organization-settings/local-runs",

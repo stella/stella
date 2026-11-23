@@ -10,7 +10,7 @@
     "aiDraftAllow": "Allow",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Task {task} · Activity {activity}",
-    "aiDraftConsent": "stella AI can draft descriptions from each entry's matter, date, duration and app names, plus the document names and window titles shown here when you record them. Your earlier entries on the matter help it match how you write. Nothing else about your day leaves this computer.",
+    "aiDraftConsent": "To write a description, stella AI uses: {inputs}. All of it goes to {provider} only to write the draft. Nothing else about your day leaves this computer.",
     "aiDraftConsentRequired": "Allow stella AI again to draft this description.",
     "aiDraftDisclosure": "AI drafts are suggestions stella generates from the entry you are reviewing, your earlier entries on the matter and, where your firm has added them, its billing guidelines. Review each entry before you create it.",
     "aiDraftEarlierEntries": "{count, plural, one {Follows # earlier entry} other {Follows # earlier entries}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI is off on this computer. Your withdrawal is sent to stella as soon as it can be reached.",
     "browserAnsweredAppNameOnly": "Only the app name is recorded for <bdi>{browser}</bdi>. You can change this in Settings.",
     "browserAnsweredTitles": "Tab titles in <bdi>{browser}</bdi> are recorded. You can change this in Settings.",
-    "browserPrivacyNote": "Private windows may be recorded too; pause recording or exclude the browser while browsing privately.",
+    "browserPrivacyNote": "stella cannot recognize every private window, so pause recording before you browse privately.",
     "browserQuestionAppNameOnly": "App name only",
-    "browserQuestionDescription": "Tab titles help describe your work. stella cannot recognize every private window, so pause recording before you browse privately.",
+    "browserQuestionDescription": "Tab titles help describe your work.",
     "browserQuestionLater": "Decide later",
     "browserQuestionRecordTitles": "Record titles",
     "browserQuestionTitle": "Also record tab titles in <bdi>{browser}</bdi>?",
@@ -103,7 +103,19 @@
     "detectCalls": "Record calls",
     "detectCallsDescription": "While Teams, Zoom or a browser uses your microphone, that time counts as the call, even if you only listen or work in another app. Audio is never recorded.",
     "disclosure": {
-      "control": "Nothing is recorded until you press Start recording in Activity. Pause, exclude apps or delete any day whenever you like.",
+      "aiDraftInputs": {
+        "appNames": "the app names",
+        "billingFormat": "the client's billing format",
+        "date": "the date",
+        "duration": "the duration",
+        "earlierDescriptions": "your earlier descriptions on the matter",
+        "firmGuidelines": "your firm's billing guidelines if it has any",
+        "instructions": "instructions you type",
+        "matter": "the matter",
+        "titles": "recorded window titles and document names"
+      },
+      "aiDraftProvider": "the AI provider your firm uses, or stella AI's",
+      "control": "Nothing is recorded until you press Start recording. Pause, exclude apps or delete any day whenever you like.",
       "never": {
         "audio": "Sound from the microphone",
         "keystrokes": "Keystrokes or typed text",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "What is recorded",
       "sent": {
-        "aiDrafts": "stella AI drafts you ask for, once allowed: the entry's matter, date, duration and app names, its window titles and document names when recorded, and any instructions you type. stella adds your earlier descriptions on the matter, the client's billing format and, where your firm uses them, its billing guidelines. All of it goes to the AI provider your firm uses, or stella AI's, only to write the draft; stella does not save the draft or what was sent for it.",
+        "aiDrafts": "stella AI drafts you ask for, once allowed. For each, stella AI uses: {inputs}. All of it goes to {provider} only to write the draft; stella does not save the draft or what was sent for it.",
         "timeEntries": "Time entries you create: matter, date, duration, description, billable status and any billing codes"
       },
       "sentTitle": "What leaves this computer",
@@ -300,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "All clips",
+    "allResults": "All results",
     "bold": "Bold",
     "bulletedList": "Bulleted list",
     "cancel": "Cancel",
@@ -366,6 +379,7 @@
     "moveToGroup": "Move to group",
     "newGroupOption": "New group…",
     "noGroup": "No group",
+    "noGroupMatches": "No matches in this group",
     "noResults": "No matching clips",
     "noResultsSearchRegistries": "Search registries for “{query}”",
     "numberedList": "Numbered list",
@@ -449,6 +463,21 @@
     "welcomeShortcutTitle": "Open it anywhere.",
     "welcomeStart": "Start copying",
     "welcomeTitle": "Meet your clipboard"
+  },
+  "clipboardSettings": {
+    "capture": "Save new clips",
+    "captureDescription": "Turn this off to stop saving what you copy.",
+    "errorSave": "The change could not be saved. Try again.",
+    "excludedDescription": "Nothing you copy in these apps is saved.",
+    "excludedEmpty": "To exclude an app, right-click one of its clips in the clipboard and choose to stop saving new clips from it.",
+    "groupActions": "Actions for {groupName}",
+    "groupsDescription": "Drag a group to change where it appears in the clipboard.",
+    "groupsEmpty": "Create a group, then drag clips into it in the clipboard.",
+    "history": "History",
+    "moveGroupDown": "Move down",
+    "moveGroupUp": "Move up",
+    "recordingsDescription": "Let screenshots, recordings and screen sharing show the clipboard.",
+    "retentionDescription": "Older clips are deleted. Clips in a group are kept."
   },
   "dialog": {
     "accountEmail": "Account",
@@ -575,6 +604,25 @@
       "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email.",
       "title": "Clean up with AI"
     },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Keeps a relaxed tone with light punctuation.",
+        "title": "Casual"
+      },
+      "notes": {
+        "description": "Short points, one per line, without filler words.",
+        "title": "Notes"
+      },
+      "polished": {
+        "description": "Fixes recognition mistakes and keeps your wording.",
+        "title": "Polished"
+      },
+      "title": "Style",
+      "verbatim": {
+        "description": "Every word as heard; only punctuation and capitals are added.",
+        "title": "Verbatim"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Up to {limit, number} characters of the document you are in, so the dictation fits what you are writing.",
@@ -606,6 +654,7 @@
       "local": "This computer",
       "localDescription": "Speech is transcribed on this computer and is not stored.",
       "model": "Transcription model",
+      "modelWithdrawn": "The model you chose is no longer offered. Choose another; until then, dictation is transcribed on this computer.",
       "outsideRegion": "Outside your region",
       "retainsData": "Keeps your audio",
       "retainsDataTitle": "{provider} keeps what you dictate",
@@ -632,6 +681,30 @@
       "transcription": "Transcription failed. Try again."
     },
     "failureKeptInHistory": "The text is in clipboard history.",
+    "fix": {
+      "description": "Select the words a dictation got wrong in any app and press {shortcut} to write how they are spelled. stella reads the selection only when you press it.",
+      "taken": "Another app is using {shortcut}. The Dictation menu of the stella icon offers the same.",
+      "title": "Shortcut to fix a dictation"
+    },
+    "fixPanel": {
+      "dictatedAs": "Dictated as",
+      "hint": "stella will write these words this way in your next dictations, on all your devices.",
+      "notSaved": "The fix could not be saved. Check that stella is connected to your account.",
+      "nothing": "Select the wrong words in the app first, or type them here.",
+      "pick": "Pick the wrong words from your last dictation:",
+      "refused": {
+        "empty": "Fill in both fields.",
+        "lineBreak": "A fix is one line of text.",
+        "punctuation": "Pick the dictated words without punctuation.",
+        "same": "The words are already written this way.",
+        "tooLong": "That is too long for one fix.",
+        "tooManyWords": "A fix takes at most three words."
+      },
+      "save": "Save fix",
+      "saving": "Saving the fix…",
+      "title": "Fix a dictated word",
+      "writtenAs": "Written as"
+    },
     "groups": {
       "cleanup": "Clean up",
       "shortcut": "Shortcut",
@@ -652,6 +725,17 @@
       "description": "Automatic uses this computer’s display and keyboard languages. With more than one, each word is recognized in the language you speak it in.",
       "noResults": "No languages found",
       "title": "Dictation language"
+    },
+    "learned": {
+      "delete": "Delete what stella learned",
+      "description": "When you correct a dictated word the same way twice, or fix it with {shortcut}, stella writes it that way in later dictations. Synced to your other devices; only you can see them.",
+      "empty": "No fixes learned yet.",
+      "failed": "The fix could not be changed.",
+      "fix": "{from} → {to}",
+      "group": "Learned fixes",
+      "title": "Fixes learned from your corrections",
+      "unreadable": "What stella learned could not be read.",
+      "working": "Saving the change…"
     },
     "lede": "Hold <key>{shortcut}</key> and speak. The text appears where you are typing.",
     "microphone": {
@@ -677,10 +761,13 @@
       "checkBodyMac": "Check Microphone access in System Settings, then try again.",
       "checkBodyPc": "Check microphone access in Windows Settings, then try again.",
       "chooseMicrophone": "Choose microphone…",
+      "chooseModel": "Choose model…",
       "dismiss": "Dismiss",
       "inputDevice": "Input: {device}",
       "missingBody": "Dictation is using {device} instead.",
       "missingTitle": "{missing} is not connected",
+      "modelBody": "Pick one in Settings → Dictation. This dictation was transcribed on this computer.",
+      "modelTitle": "Your transcription model is no longer offered",
       "nothingBody": "Speak while you hold the key, or choose another input in Sound settings.",
       "nothingTitle": "stella did not hear any speech",
       "openSettingsMac": "Open System Settings",
@@ -742,6 +829,11 @@
       "failed": "The window could not be opened. Try again.",
       "open": "Open",
       "title": "Transcribe a recording"
+    },
+    "translateTo": {
+      "description": "Writes the cleaned text in this language, whatever language you speak.",
+      "off": "Language you speak",
+      "title": "Write in"
     },
     "whileDictating": {
       "choices": {
@@ -838,6 +930,30 @@
   },
   "onboarding": {
     "activityBody": "See where your working day went and turn it into draft time entries. You decide what is recorded and what is sent.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Draft descriptions with stella AI",
+        "body": "stella AI can draft the description of each time entry. Allow it now, or when you first review a day.",
+        "withdraw": "You can withdraw consent at any time in Settings."
+      },
+      "calls": {
+        "body": "Count the time you spend on calls.",
+        "title": "Calls"
+      },
+      "details": {
+        "appNamesOnly": "Only app names are recorded.",
+        "body": "They help you tell matters apart when you review the day.",
+        "browsers": "Browsers record tab titles only once you allow it. Activity asks about each browser the first time it sees it.",
+        "title": "Window titles and documents"
+      },
+      "screens": {
+        "aiDrafts": "AI drafts",
+        "calls": "Calls",
+        "details": "Details",
+        "recording": "Overview"
+      },
+      "starting": "Starting recording…"
+    },
     "activityStoryDraft": "Draft",
     "activityStoryRecordTitle": "Recorded",
     "activityStoryReviewCaption": "You check the day and choose the matter",
@@ -876,7 +992,6 @@
         "choose": "Microphone to dictate with",
         "title": "Let stella hear you"
       },
-      "progress": "Step {current} of {total}",
       "screens": {
         "app": "Cleanup",
         "context": "Context",
@@ -884,7 +999,6 @@
         "transcription": "Transcription",
         "words": "Words"
       },
-      "skipRest": "Skip the rest",
       "transcription": {
         "body": "You can change this later in Settings.",
         "bodyLocal": "The speech model runs here, so dictation also works offline.",
@@ -954,6 +1068,7 @@
     "permissionsTitlePc": "Set up this PC",
     "progress": "Step {current} of {total}",
     "skip": "Skip",
+    "skipRest": "Skip the rest",
     "staysLocalMac": "Stays on this Mac",
     "staysLocalPc": "Stays on this PC",
     "tryAgain": "Try again",
@@ -1000,7 +1115,6 @@
     "errorUpdateLanguage": "stella desktop could not update the interface language.",
     "errorUpdatePreferences": "stella desktop could not update notification settings.",
     "language": "Language",
-    "lastVerified": "Last verified",
     "loadingAccount": "Checking your account connection…",
     "managedOfficeEditing": "Managed Office file editing for stella.",
     "neverRequested": "Never requested",
@@ -1073,6 +1187,8 @@
       "available": "Version {version} is available.",
       "checkFailed": "stella desktop could not check for updates.",
       "deferred": "Version {version} waits while documents are open for editing. When you finish, check again to install it, or it installs at the next automatic check.",
+      "downloadProgress": "{percent}% downloaded",
+      "downloading": "Downloading version {version}. stella desktop restarts once it is installed.",
       "install": "Install and restart",
       "installFailed": "stella desktop could not install the update.",
       "installInProgress": "An update is being installed.",
@@ -1272,6 +1388,7 @@
     "activityResume": "Resume recording",
     "checkForUpdates": "Check for updates",
     "dictation": "Dictation",
+    "dictationFix": "Fix last dictation…",
     "dictationHint": "Hold {key} to dictate",
     "dictationRetype": "Type last dictation again",
     "dictationSettings": "Dictation settings…",
@@ -1300,7 +1417,6 @@
     "supportRevealAppData": "Reveal app data",
     "temporaryWorkingCopies": "Temporary working copies",
     "transcribeRecording": "Transcribe a recording…",
-    "updateReady": "Update ready",
     "updatesManaged": "Updates managed by your organization"
   }
 }

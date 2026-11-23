@@ -37,6 +37,11 @@ type AttachmentChipProps = {
   title: string;
   open?: AttachmentChipOpen | undefined;
   actions?: readonly AttachmentChipAction[] | undefined;
+  /**
+   * What the chip says of its file beside the title, such as that part of
+   * it was not scanned (`UnscannedContentMark`); drawn at the chip's scale.
+   */
+  notice?: ReactNode;
 };
 
 // A Button's className is read where it is written, so the chip scale's
@@ -112,6 +117,7 @@ export const AttachmentChip = ({
   title,
   open = OPEN_NONE,
   actions = NO_ACTIONS,
+  notice,
 }: AttachmentChipProps) => (
   <span
     className={cn(
@@ -127,6 +133,7 @@ export const AttachmentChip = ({
         <bdi>{title}</bdi>
       </TooltipPopup>
     </Tooltip>
+    {notice}
     {actions.map((action) => (
       <Tooltip key={action.type}>
         <TooltipTrigger

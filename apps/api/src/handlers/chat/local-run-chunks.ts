@@ -75,6 +75,7 @@ import {
   desktopRunnerInputEventSchema,
   desktopRunnerOutputEventSchema,
 } from "@stll/api-contract/desktop-runner";
+import { unscannedContentReasons } from "@stll/api-contract/file-scan-warnings";
 import type {
   StellaMcpAppCall,
   StellaMcpAppPart,
@@ -1172,6 +1173,7 @@ const createRunOutputs = (
         return [];
       } else {
         const url = toUserFileUrl(row.id);
+        const unscannedContent = unscannedContentReasons(row.scanWarnings);
         if (!files.some((file) => file.url === url)) {
           files.push({
             url,
@@ -1180,6 +1182,7 @@ const createRunOutputs = (
             ...(row.placeholder === null
               ? {}
               : { placeholder: row.placeholder }),
+            ...(unscannedContent.length === 0 ? {} : { unscannedContent }),
           });
         }
       }

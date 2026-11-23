@@ -257,16 +257,36 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/files/asic.ts",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/zip/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/zip-archive.ts",
+    exportName: "zipArchivePreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/mbox/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/mailbox.ts",
+    exportName: "mailboxPreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  // The files of a part that is itself a container, such as an email in an
+  // archive; each opens through the part link above.
+  "GET /v1/files/:workspaceId/parts/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/part-list.ts",
+    exportName: "readFilePartListEndpoint",
+    uncataloged: "upload_mechanics",
+  },
   "GET /v1/files/:workspaceId/cades/:fieldId": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/cades.ts",
     exportName: "cadesPreviewEndpoint",
     uncataloged: "upload_mechanics",
   },
-  "GET /v1/files/:workspaceId/cades/:fieldId/content": {
+  "GET /v1/files/:workspaceId/signed-dossier/:fieldId": {
     scope: "stella:read",
-    handler: "apps/api/src/handlers/files/cades.ts",
-    exportName: "cadesContentEndpoint",
+    handler: "apps/api/src/handlers/files/signed-dossier.ts",
+    exportName: "signedDossierPreviewEndpoint",
     uncataloged: "upload_mechanics",
   },
   "GET /v1/files/:workspaceId/signature/:fieldId": {
@@ -275,15 +295,14 @@ export const API_OAUTH_ROUTES = {
     exportName: "signaturePreviewEndpoint",
     uncataloged: "upload_mechanics",
   },
-  "GET /v1/files/:workspaceId/signature/:fieldId/content": {
-    scope: "stella:read",
-    handler: "apps/api/src/handlers/files/signature.ts",
-    exportName: "signatureContentEndpoint",
-    uncataloged: "upload_mechanics",
-  },
   "GET /v1/files/:workspaceId/data-box/:fieldId": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/data-box.ts",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/email-reading/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/email-reading.ts",
     uncataloged: "upload_mechanics",
   },
   "POST /v1/entities/:workspaceId/upload-version": {

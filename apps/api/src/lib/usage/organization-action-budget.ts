@@ -133,6 +133,7 @@ export const FREE_WITHOUT_OWN_KEY = {
   "case-law.research-answers": "counts",
   "documents.bounding-boxes": "counts",
   "documents.scan-deadlines": "counts",
+  "documents.suggest-name": "counts",
   "document-reviews.parties": "counts",
   "document-reviews.propose-positions": "counts",
   "document-reviews.start": "counts",
