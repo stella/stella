@@ -10,7 +10,6 @@ import {
 import { and, eq, inArray, TransactionRollbackError } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   contacts,
@@ -21,6 +20,7 @@ import {
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { reassignActiveTaskAssignmentsAndDropMemberships } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

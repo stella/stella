@@ -5,8 +5,8 @@ import { alias } from "drizzle-orm/pg-core";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 import { createTestState } from "@stll/test-state";
 
-import type { Transaction } from "@/api/db/root";
 import { auditLogs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import {

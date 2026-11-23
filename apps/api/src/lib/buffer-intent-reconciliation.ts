@@ -7,7 +7,6 @@ import {
 } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
@@ -17,6 +16,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { PendingUploadPurposeData } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

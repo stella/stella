@@ -16,9 +16,9 @@ import {
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import type { TimeSubmitRefusal } from "@stll/api-contract/time-entries";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";

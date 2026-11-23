@@ -1,5 +1,5 @@
-import type { Transaction } from "@/api/db/root";
 import { caseLawCourtWeights, caseLawFtsConfigs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,

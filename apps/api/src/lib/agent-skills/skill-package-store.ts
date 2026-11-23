@@ -5,10 +5,10 @@ import { SKILL_PACKAGE_SKILL_NOT_FOUND_CODE } from "@stll/api-contract";
 import { SKILL_FILE_NAME } from "@stll/skills/format";
 import { parseSkillFile } from "@stll/skills/frontmatter";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillScope } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { canManageSkill } from "@/api/lib/agent-skills/access";
 import { auditedSkillBody } from "@/api/lib/agent-skills/audited-body";
 import { UNBOUND } from "@/api/lib/agent-skills/binding";
