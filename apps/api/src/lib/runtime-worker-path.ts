@@ -30,6 +30,7 @@ export const RUNTIME_WORKER_SIDECAR_FILES = [
   "latin-v5-dict.txt",
   "pdfium.wasm",
   "pptx_parser_bg.wasm",
+  "pst_reader_bg.wasm",
   "xlsx_parser_bg.wasm",
 ] as const;
 

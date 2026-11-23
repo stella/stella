@@ -123,6 +123,7 @@
         "@stll/parameter-store": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/portable-path": "workspace:*",
+        "@stll/pst-reader": "workspace:*",
         "@stll/redis-config": "workspace:*",
         "@stll/regex-set": "catalog:",
         "@stll/runtime-mode": "workspace:*",
@@ -1486,6 +1487,14 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "oxc-parser": "catalog:",
+      },
+    },
+    "packages/pst-reader": {
+      "name": "@stll/pst-reader",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/redis-config": {
@@ -3596,6 +3605,8 @@
     "@stll/portable-path": ["@stll/portable-path@workspace:packages/portable-path"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
+
+    "@stll/pst-reader": ["@stll/pst-reader@workspace:packages/pst-reader"],
 
     "@stll/redis-config": ["@stll/redis-config@workspace:packages/redis-config"],
 

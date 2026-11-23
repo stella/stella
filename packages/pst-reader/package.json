@@ -1,0 +1,30 @@
+{
+  "name": "@stll/pst-reader",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bounded Outlook PST/OST mailbox reader (Rust, WebAssembly) for server-side workers",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/pst-reader.ts",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "scripts": {
+    "clean": "git clean -xdf target .cache .turbo node_modules",
+    "test": "bun run test:bun && cargo test --features assemble",
+    "test:bun": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/pst-reader",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/pst-reader",
+    "format:rust": "cargo fmt",
+    "fixtures": "cargo run --example write-fixtures --features assemble",
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "build:wasm:container": "bash scripts/build-wasm-container.sh",
+    "check:wasm": "bun --preload ../../scripts/offline-network-preload.ts scripts/check-wasm.ts"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  }
+}

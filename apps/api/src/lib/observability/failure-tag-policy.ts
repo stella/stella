@@ -435,6 +435,7 @@ export const TAGGED_FAILURE_REASON = {
   ProviderEventReplayError: "tagged_failure",
   ProvisionBackfillUnitError: "tagged_failure",
   ProvisionWalkIndexNotReadyError: "tagged_failure",
+  PstReadError: "tagged_failure",
   PublicLawStatementError: "tagged_failure",
   PublicReadAdmissionCoordinationError: "tagged_failure",
   PublicReadCleanupError: "tagged_failure",

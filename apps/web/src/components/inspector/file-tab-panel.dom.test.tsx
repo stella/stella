@@ -1018,6 +1018,67 @@ test("finds a mailbox's messages by subject, sender or folder", async () => {
   expect(mounted.getByText("No message matches “rozsudek”.")).toBeTruthy();
 });
 
+test("lists an Outlook mailbox's messages with their folders in the mailbox viewer", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-pst"),
+    fileName: "korespondence.pst",
+    // Browsers hold no type for a PST; its name says what it is.
+    mimeType: "application/octet-stream",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const message = (index: number, subject: string | null, folder: string) => ({
+    fileName: `${subject ?? `korespondence-${String(index + 1)}`}.eml`,
+    folder,
+    sizeBytes: 4096,
+    subject,
+    from: "Petra Vlková",
+    date: "Mon, 04 Mar 2024 09:00:00 +0000",
+    part: {
+      part: `message:${String(index)}`,
+      fileName: `${subject ?? `korespondence-${String(index + 1)}`}.eml`,
+      mediaType: "message/rfc822",
+      sizeBytes: 4096,
+    },
+    unavailable: null,
+  });
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(mailboxPreviewOptions(key).queryKey, {
+      truncated: false,
+      messages: [
+        message(0, "Smlouva o převodu podílu", "Doručená pošta"),
+        message(
+          1,
+          "Fwd: Výzva k úhradě",
+          "Doručená pošta/Klienti/Fiktivní stavby",
+        ),
+        {
+          ...message(
+            2,
+            "Spis ve skenech",
+            "Doručená pošta/Klienti/Fiktivní stavby",
+          ),
+          sizeBytes: 48 * 1024 * 1024,
+          part: null,
+          unavailable: "tooLarge",
+        },
+      ],
+    });
+  });
+
+  expect(
+    await mounted.findByRole("button", {
+      name: "Open Smlouva o převodu podílu",
+    }),
+  ).toBeTruthy();
+  expect(
+    mounted.getAllByText(/Doručená pošta\/Klienti\/Fiktivní stavby/u),
+  ).toHaveLength(2);
+  expect(
+    mounted.queryByRole("button", { name: "Open Spis ve skenech" }),
+  ).toBeNull();
+});
+
 test("lists a mailbox's messages and opens one in place as an email", async () => {
   const tab = {
     ...pdfTab,

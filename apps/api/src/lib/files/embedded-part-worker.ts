@@ -32,6 +32,7 @@ import {
   type FilePartUnavailableReason,
 } from "@stll/api-contract/file-parts";
 import { LEGAL_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
+import { Temporal } from "@stll/time";
 
 import type { DataBoxMessageParseError } from "@/api/lib/email/correspondence/data-box/zfo";
 import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
@@ -66,6 +67,13 @@ import {
 import { type P7mParseError, parseP7m } from "@/api/lib/files/p7m";
 import { partMediaType } from "@/api/lib/files/part-media-type";
 import {
+  PST_OPERATION_MAX_MS,
+  pstBytesFile,
+  type PstReadError,
+  readMessageEntry,
+  visitPstMessages,
+} from "@/api/lib/files/pst-mailbox";
+import {
   readSignedDossier,
   type SignedDossierReadError,
 } from "@/api/lib/files/signed-dossier-worker";
@@ -84,6 +92,7 @@ export type EmbeddedPartError =
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
+  | PstReadError
   | SignedDossierReadError;
 
 /** A part before it is typed and scanned. */
@@ -263,6 +272,48 @@ const mailboxMessages = async ({
   return Result.ok(slots);
 };
 
+/**
+ * An Outlook mailbox's messages, each an email named after its subject,
+ * read one at a time from its bytes.
+ */
+const pstMessages = async ({
+  bytes,
+  fileName,
+}: Container): Promise<SlotsResult> => {
+  const slots: ContainerSlot[] = [];
+  const read = await visitPstMessages(
+    pstBytesFile(
+      bytes,
+      Temporal.Now.instant().epochMilliseconds + PST_OPERATION_MAX_MS,
+    ),
+    fileName,
+    async (message) => {
+      const entry = readMessageEntry(message);
+      slots.push(
+        message.email?.isOk() === true
+          ? part(
+              {
+                fileName: entry.fileName,
+                bytes: message.email.value,
+                statedMimeType: EML_MIME_TYPE,
+                fixedMimeType: EML_MIME_TYPE,
+              },
+              entry.folder,
+            )
+          : {
+              type: "unavailable",
+              fileName: entry.fileName,
+              folder: entry.folder,
+              sizeBytes: entry.length,
+              reason: entry.unavailable ?? "tooLarge",
+            },
+      );
+      return await Promise.resolve(true);
+    },
+  );
+  return read.map(() => slots);
+};
+
 const dataBoxFiles = ({ bytes }: Container): SlotsResult =>
   parseDataBoxMessage(bytes).map(({ files }) =>
     files.map((file) =>
@@ -411,6 +462,8 @@ const containerSlots = async (
       return await zipFiles(container);
     case "mbox":
       return await mailboxMessages(container);
+    case "pst":
+      return await pstMessages(container);
     case "dataBox":
       return dataBoxFiles(container);
     case "eAkta":

@@ -171,6 +171,7 @@
     "@stll/parameter-store": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/portable-path": "workspace:*",
+    "@stll/pst-reader": "workspace:*",
     "@stll/redis-config": "workspace:*",
     "@stll/regex-set": "catalog:",
     "@stll/runtime-mode": "workspace:*",

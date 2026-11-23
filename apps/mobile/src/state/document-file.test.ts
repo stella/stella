@@ -752,6 +752,8 @@ describe("reading a document's file", () => {
     ["spis-23-C-118-2026.mbox", "application/mbox"],
     ["Doručená pošta.mbox", "application/octet-stream"],
     ["korespondence.MBX", "application/octet-stream"],
+    ["korespondence.pst", "application/octet-stream"],
+    ["Archiv 2023.PST", "application/vnd.ms-outlook-pst"],
   ])(
     "reads the mailbox %s (%s) through the mailbox preview",
     async (fileName, mimeType) => {

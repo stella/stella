@@ -25,6 +25,11 @@ const CRATES = [
     toolchainFile: "packages/heic-decoder/rust-toolchain.toml",
     marker: "packages/heic-decoder",
   },
+  {
+    name: "pst-reader",
+    toolchainFile: "packages/pst-reader/rust-toolchain.toml",
+    marker: "packages/pst-reader",
+  },
 ] as const;
 
 const channel = (file: string): string => {

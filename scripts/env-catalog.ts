@@ -1665,6 +1665,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // The WebAssembly drift checks build into a scratch directory and compare it.
   "SCAN_ENGINE_WASM_OUT_DIR",
   "HEIC_DECODER_WASM_OUT_DIR",
+  "PST_READER_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",
