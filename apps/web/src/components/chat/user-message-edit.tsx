@@ -430,7 +430,10 @@ const UserMessageEditAttachments = ({
           name: title,
         });
         const removeAttachment = () => onRemove(attachment.id);
-        if (!pasted && mimeType.startsWith("image/")) {
+        if (
+          !isChatPastedTextPart(attachment.part) &&
+          mimeType.startsWith("image/")
+        ) {
           const url = attachment.part.source.value;
           const contentUrl = getUserFileContentUrl(url) ?? undefined;
           const thumbnailUrl =

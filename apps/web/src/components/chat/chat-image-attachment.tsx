@@ -157,10 +157,7 @@ export const ChatImageThumbnailCard = ({
             />
           ) : (
             <span className="flex size-full items-center justify-center">
-              <DocumentIcon
-                className="text-muted-foreground size-5"
-                mimeType={mimeType}
-              />
+              <DocumentIcon className="size-5" mimeType={mimeType} />
             </span>
           )}
         </TooltipTrigger>
