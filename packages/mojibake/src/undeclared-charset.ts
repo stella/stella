@@ -46,9 +46,10 @@ type UndeclaredText = { text: string; charset: UndeclaredCharset };
 
 /**
  * The readings weighed for file names a ZIP archive stores without its UTF-8
- * flag, in the order a tie is settled. The ZIP specification gives such
- * names code page 437; Windows writes them in its OEM code page (852 in
- * Central Europe), and some archivers in its ANSI one.
+ * flag, in the order a tie is settled unless the caller names the candidate
+ * a tie goes to. The ZIP specification gives such names code page 437;
+ * Windows writes them in its OEM code page (852 in Central Europe), and some
+ * archivers in its ANSI one.
  */
 const UNDECLARED_FILE_NAME_CHARSETS = [
   "ibm437",
@@ -57,7 +58,8 @@ const UNDECLARED_FILE_NAME_CHARSETS = [
   "windows-1252",
 ] as const;
 
-type FileNameCharset = (typeof UNDECLARED_FILE_NAME_CHARSETS)[number];
+/** A code page that file names declaring no charset may be read in. */
+export type FileNameCharset = (typeof UNDECLARED_FILE_NAME_CHARSETS)[number];
 
 /** Reads bytes in a charset; a byte the charset leaves undefined is U+FFFD. */
 const reader = (
@@ -261,12 +263,14 @@ const NAME_SEPARATOR = 0x2f;
  * setting the flag are common, and a legacy name of accented letters is
  * almost never valid UTF-8. The other names were written by one program in
  * one code page, so they are weighed together and all read in the candidate
- * that explains them best (`UNDECLARED_FILE_NAME_CHARSETS`); code page 437,
- * the specification's, wins a tie, as when no name holds a letter that
- * tells the candidates apart.
+ * that explains them best (`UNDECLARED_FILE_NAME_CHARSETS`). A tie, as when
+ * no name holds a letter that tells the candidates apart, goes to
+ * `tieBreak`: code page 437, the specification's, unless the caller knows
+ * the archives it reads mostly come from Windows set to another one.
  */
 export const decodeUndeclaredFileNames = (
   names: readonly Uint8Array[],
+  { tieBreak = "ibm437" }: { tieBreak?: FileNameCharset } = {},
 ): { names: string[]; charset: FileNameCharset | null } => {
   const fatalUtf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
   const utf8 = names.map((name) =>
@@ -285,7 +289,12 @@ export const decodeUndeclaredFileNames = (
     joined[offset + name.byteLength] = NAME_SEPARATOR;
     offset += name.byteLength + 1;
   }
-  const charset = bestReading(joined, UNDECLARED_FILE_NAME_CHARSETS);
+  const charset = bestReading(joined, [
+    tieBreak,
+    ...UNDECLARED_FILE_NAME_CHARSETS.filter(
+      (candidate) => candidate !== tieBreak,
+    ),
+  ]);
   const read = reader(charset);
   return {
     names: names.map((name, index) => utf8[index] ?? read(name)),

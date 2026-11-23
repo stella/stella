@@ -159,7 +159,6 @@ describe("file names that declare no charset", () => {
       ).names,
     ).toEqual(["Důkazy.pdf", "Předávací_protokol.docx"]);
   });
-
   test("Czech, Slovak and Polish names in code page 852 read back, whichever words they hold", () => {
     // Letters whose 852 byte no scored language writes in 437 (ř is "²",
     // š "τ", ż "╛"); one of them in any name tells the code pages apart.
@@ -197,6 +196,92 @@ describe("file names that declare no charset", () => {
         },
       ),
       { numRuns: 200, seed: propertySeed() },
+    );
+  });
+});
+
+describe("the code page a tie goes to", () => {
+  const LONE_TIE = inDosCodePage(["Důkazy.pdf"], "ibm852");
+
+  test("ů alone reads as 852's letter when 852 settles a tie, and as 437's otherwise", () => {
+    // The fixture ties: its one byte above 0x7F is ů in 852 and à in 437.
+    expect(decodeDosCodePage(LONE_TIE[0] ?? new Uint8Array(), "ibm437")).toBe(
+      "Dàkazy.pdf",
+    );
+    expect(decodeUndeclaredFileNames(LONE_TIE, { tieBreak: "ibm852" })).toEqual(
+      { names: ["Důkazy.pdf"], charset: "ibm852" },
+    );
+    expect(decodeUndeclaredFileNames(LONE_TIE, { tieBreak: "ibm437" })).toEqual(
+      { names: ["Dàkazy.pdf"], charset: "ibm437" },
+    );
+    expect(decodeUndeclaredFileNames(LONE_TIE)).toEqual(
+      decodeUndeclaredFileNames(LONE_TIE, { tieBreak: "ibm437" }),
+    );
+  });
+
+  test("names one candidate explains best read alike whichever code page settles a tie", () => {
+    const won = [
+      { names: CZECH_NAMES, codePage: "ibm852", charset: "ibm852" },
+      {
+        names: ["Procès-verbal_à_signer.pdf", "Übergabeprotokoll_Müller.pdf"],
+        codePage: "ibm437",
+        charset: "ibm437",
+      },
+    ] as const;
+    for (const { names, codePage, charset } of won) {
+      const bytes = inDosCodePage(names, codePage);
+      for (const tieBreak of ["ibm437", "ibm852"] as const) {
+        expect(decodeUndeclaredFileNames(bytes, { tieBreak })).toEqual({
+          names: [...names],
+          charset,
+        });
+      }
+    }
+    const ansi = inAnsiCodePage(CZECH_NAMES, "windows-1250");
+    for (const tieBreak of ["ibm437", "ibm852"] as const) {
+      expect(decodeUndeclaredFileNames(ansi, { tieBreak })).toEqual({
+        names: CZECH_NAMES,
+        charset: "windows-1250",
+      });
+    }
+  });
+
+  test("a tie-break moves a reading only to itself", () => {
+    // Bytes an archiver could write: ASCII letters, digits and separators
+    // around bytes above 0x7F.
+    const nameByte = fc.oneof(
+      fc.integer({ min: 0x80, max: 0xff }),
+      fc.constantFrom(
+        ...new TextEncoder().encode("abcdeklmnorstuyzABKMPS_-. 0123"),
+      ),
+    );
+    assertProperty(
+      "a tie-break moves a reading only to itself",
+      fc.property(
+        fc.array(
+          fc
+            .array(nameByte, { minLength: 1, maxLength: 24 })
+            .map((bytes) => Uint8Array.from(bytes)),
+          { minLength: 1, maxLength: 6 },
+        ),
+        (names) => {
+          const by437 = decodeUndeclaredFileNames(names, {
+            tieBreak: "ibm437",
+          });
+          const by852 = decodeUndeclaredFileNames(names, {
+            tieBreak: "ibm852",
+          });
+          if (by437.charset !== by852.charset) {
+            expect([by437.charset, by852.charset]).toEqual([
+              "ibm437",
+              "ibm852",
+            ]);
+          } else {
+            expect(by852.names).toEqual(by437.names);
+          }
+        },
+      ),
+      { numRuns: 300, seed: propertySeed() },
     );
   });
 });

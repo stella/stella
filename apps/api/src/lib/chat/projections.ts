@@ -182,7 +182,8 @@ export const LIST_MATTERS_DETAIL_PROJECTION = v.strictObject({
         // recent entity belongs to the one matter this response describes,
         // so its workspace is the payload's `matter.id`.
         entityId: chatEntityRef({ from: "outputPath", path: "matter.id" }),
-        name: v.string(),
+        // The entity's own name (often a file name): content, not a handle.
+        name: contentText(),
         kind: v.string(),
         status: v.nullable(v.string()),
         priority: v.nullable(v.string()),

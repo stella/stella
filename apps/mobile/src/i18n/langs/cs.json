@@ -492,7 +492,6 @@
     "linesShown": "Zobrazeno {shown, number} z {count, plural, one {# položky} few {# položek} many {# položky} other {# položek}}",
     "netAmount": "Cena bez DPH",
     "netTotal": "Celkem bez DPH",
-    "notRecognized": "Tento soubor XML není rozpoznaná strukturovaná faktura.",
     "notes": "Poznámky k faktuře",
     "otherIdentifier": "Jiný identifikátor",
     "payableAmount": "K úhradě",
@@ -526,7 +525,8 @@
     "unreadable": "Fakturu nelze přečíst.",
     "vat": "DPH",
     "vatBreakdown": "Rekapitulace DPH",
-    "vatId": "DIČ"
+    "vatId": "DIČ",
+    "xmlUnreadable": "Tento soubor XML se nepodařilo přečíst."
   },
   "email": {
     "cc": "Kopie",

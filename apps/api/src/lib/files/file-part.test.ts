@@ -108,21 +108,27 @@ type PartCase = {
 };
 
 const asicMembers = async (source: ScannedFile) =>
-  (await readAsicPreview(source)).unwrap().members.map(listedOf);
+  (await readAsicPreview(source, { zipNameCodePage: "ibm437" }))
+    .unwrap()
+    .members.map(listedOf);
 
 const dossierDocuments = async (source: ScannedFile) =>
-  (await readSignedDossierPreview(source))
+  (await readSignedDossierPreview(source, { zipNameCodePage: "ibm437" }))
     .unwrap()
     .documents.flatMap(({ part }) => (part === null ? [] : [listedOf(part)]));
 
 // A file that does not open (encrypted, a link) is listed without a part.
 const zipFiles = async (source: ScannedFile) =>
-  (await readZipArchivePreview(source))
+  (await readZipArchivePreview(source, { zipNameCodePage: "ibm437" }))
     .unwrap()
     .files.flatMap(({ part }) => (part === null ? [] : [listedOf(part)]));
 
-const invoiceAttachments = async (source: ScannedFile) =>
-  (await readEInvoicePreview(source)).unwrap().attachments.map(listedOf);
+const invoiceAttachments = async (source: ScannedFile) => {
+  const preview = (await readEInvoicePreview(source)).unwrap();
+  return preview.type === "invoice"
+    ? preview.invoice.attachments.map(listedOf)
+    : [];
+};
 
 // `readDataBoxFile` lists a message's files at their positions.
 const dataBoxFiles = async (source: ScannedFile) => {
@@ -295,7 +301,9 @@ const CASES: PartCase[] = [
     storedMimeType: CADES_FILE_FORMAT.mimeType,
     bytes: async () => await wrapP7m(DECISION),
     list: async (source) => {
-      const { content } = (await readCadesPreview(source)).unwrap();
+      const { content } = (
+        await readCadesPreview(source, { zipNameCodePage: "ibm437" })
+      ).unwrap();
       return content === null ? [] : [listedOf(content)];
     },
     parts: 1,
@@ -308,7 +316,7 @@ const CASES: PartCase[] = [
     storedMimeType: CADES_FILE_FORMAT.mimeType,
     bytes: async () => await wrapP7m(xmlBytes(fatturaPaXml())),
     list: async (source) =>
-      (await readCadesPreview(source))
+      (await readCadesPreview(source, { zipNameCodePage: "ibm437" }))
         .unwrap()
         .invoice?.attachments.map(listedOf) ?? [],
     parts: 1,
@@ -437,7 +445,7 @@ describe("a part opens as its file's preview lists it", () => {
         continue;
       }
       positions.add(part.index);
-      const read = (await readPartOfFile(source, part)).unwrap();
+      const read = (await readPartOfFile(source, part, "ibm437")).unwrap();
       expect(descriptor).toEqual({
         part: descriptor.part,
         fileName: read.fileName,
@@ -452,10 +460,14 @@ describe("a part opens as its file's preview lists it", () => {
       if (positions.has(index)) {
         continue;
       }
-      const refused = await readPartOfFile(source, {
-        kind: fixture.kind,
-        index,
-      });
+      const refused = await readPartOfFile(
+        source,
+        {
+          kind: fixture.kind,
+          index,
+        },
+        "ibm437",
+      );
       expect({
         index,
         status: refused.isErr() && refused.error.status,
@@ -559,7 +571,7 @@ describe("an email's parts are the attachments its preview lists", () => {
       if (part === null) {
         throw new Error(`Unaddressable part ${descriptor.part}`);
       }
-      const read = (await readPartOfFile(source, part)).unwrap();
+      const read = (await readPartOfFile(source, part, "ibm437")).unwrap();
       expect(listedOf(descriptor)).toEqual({
         part: descriptor.part,
         fileName: read.fileName,
@@ -573,10 +585,14 @@ describe("an email's parts are the attachments its preview lists", () => {
     ]);
 
     for (let index = 0; index <= parsed.attachments.length; index += 1) {
-      const read = await readPartOfFile(source, {
-        kind: FILE_PART_KINDS.attachment,
-        index,
-      });
+      const read = await readPartOfFile(
+        source,
+        {
+          kind: FILE_PART_KINDS.attachment,
+          index,
+        },
+        "ibm437",
+      );
       expect({ index, opens: read.isOk() }).toEqual({
         index,
         opens: positions.includes(index),

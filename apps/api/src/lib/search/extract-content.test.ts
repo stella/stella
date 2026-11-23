@@ -84,7 +84,9 @@ describe("resolveExtractionMimeType", () => {
 });
 
 const extractFixtureText = async (bytes: ArrayBuffer, mimeType: string) =>
-  await extractFileText(testScannedFile({ bytes, mimeType }));
+  await extractFileText(testScannedFile({ bytes, mimeType }), undefined, {
+    zipNameCodePage: "ibm437",
+  });
 
 describe("extractFileText", () => {
   let logs: RecordingLogger | null = null;
@@ -127,13 +129,13 @@ describe("extractFileText", () => {
     const kept = await extractFileText(
       testScannedFile({ bytes, mimeType: "text/plain" }),
       undefined,
-      { maxChars: shared + 5 },
+      { zipNameCodePage: "ibm437", maxChars: shared + 5 },
     );
     expect(kept).toHaveLength(shared + 5);
     const whole = await extractFileText(
       testScannedFile({ bytes, mimeType: "text/plain" }),
       undefined,
-      { maxChars: shared + 20 },
+      { zipNameCodePage: "ibm437", maxChars: shared + 20 },
     );
     expect(whole).toHaveLength(shared + 10);
   });

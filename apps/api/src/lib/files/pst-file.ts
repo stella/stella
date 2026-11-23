@@ -30,8 +30,7 @@ import {
 } from "@/api/lib/files/mailbox-stream-text";
 import { MBOX_MESSAGE_MAX_BYTES } from "@/api/lib/files/mbox";
 import { LIMITS } from "@/api/lib/limits";
-import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
-import { spawnBinaryWorker } from "@/api/lib/subprocess";
+import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 /** How long the worker may take over a stored mailbox's list or message. */
 const PST_READ_TIMEOUT_MS = LIMITS.extractionTimeoutMs;
@@ -89,8 +88,9 @@ const askWorker = async ({
 }): Promise<Result<Uint8Array, StoredPstRefusal | HandlerError>> => {
   const opened = await openStoredMailbox({ key, signal });
   const { stream, state } = streamOf(opened.chunks);
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
+  const result = await runExtractionBinaryWorker({
+    // A mailbox's messages are listed and read, never opened as archives.
+    zipNameCodePage: null,
     args,
     stdin: stream,
     timeoutMs: PST_READ_TIMEOUT_MS,

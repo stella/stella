@@ -18,9 +18,9 @@ import {
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
   ZIP_ARCHIVE_PREVIEW_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
-import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
-import { spawnBinaryWorker } from "@/api/lib/subprocess";
+import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 const ARCHIVE_PREVIEW_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
@@ -43,7 +43,13 @@ function archivePreviewReader<Schema extends v.GenericSchema>({
   const replySchema = v.pipe(v.string(), v.parseJson(), schema);
   return async (
     source: ScannedFile,
-    expectedMimeType = source.mimeType,
+    {
+      zipNameCodePage,
+      expectedMimeType = source.mimeType,
+    }: {
+      zipNameCodePage: ZipNameCodePage | null;
+      expectedMimeType?: string | undefined;
+    },
   ): Promise<Result<v.InferOutput<Schema>, HandlerError<422 | 500 | 503>>> => {
     const { bytes } = source;
     if (bytes.byteLength > DOCUMENT_ARCHIVE_MAX_BYTES) {
@@ -52,8 +58,8 @@ function archivePreviewReader<Schema extends v.GenericSchema>({
       );
     }
 
-    const result = await spawnBinaryWorker({
-      workerPath: EXTRACTION_WORKER_PATH,
+    const result = await runExtractionBinaryWorker({
+      zipNameCodePage,
       args: [mode, String(LIMITS.extractedContentMaxChars), expectedMimeType],
       stdin: new Blob([bytes]),
       timeoutMs: LIMITS.extractionTimeoutMs,
@@ -96,23 +102,57 @@ function archivePreviewReader<Schema extends v.GenericSchema>({
         );
   };
 }
-export const readAsicPreview = archivePreviewReader({
+
+/**
+ * How a preview that reads the files it holds is run: one of them may be a
+ * ZIP archive, whose names tie in the reading organization's code page.
+ */
+type ArchivePreviewRun = {
+  zipNameCodePage: ZipNameCodePage;
+  expectedMimeType?: string | undefined;
+};
+
+const asicPreview = archivePreviewReader({
   mode: ASIC_PREVIEW_WORKER_MODE,
   schema: asicPreviewSchema,
   label: "ASiC",
 });
-export const readStructuredDocumentPreview = archivePreviewReader({
+export const readAsicPreview = async (
+  source: ScannedFile,
+  run: ArchivePreviewRun,
+) => await asicPreview(source, run);
+
+const structuredDocumentPreview = archivePreviewReader({
   mode: STRUCTURED_DOCUMENT_PREVIEW_MODE,
   schema: structuredDocumentPreviewSchema,
   label: "document",
 });
-export const readZipArchivePreview = archivePreviewReader({
+/** An OFD or UDF document; its reader opens no ZIP archive's names. */
+export const readStructuredDocumentPreview = async (
+  source: ScannedFile,
+  expectedMimeType?: string,
+) =>
+  await structuredDocumentPreview(source, {
+    zipNameCodePage: null,
+    expectedMimeType,
+  });
+
+const zipArchivePreview = archivePreviewReader({
   mode: ZIP_ARCHIVE_PREVIEW_MODE,
   schema: zipArchivePreviewSchema,
   label: "ZIP archive",
 });
-export const readSignedDossierPreview = archivePreviewReader({
+export const readZipArchivePreview = async (
+  source: ScannedFile,
+  run: ArchivePreviewRun,
+) => await zipArchivePreview(source, run);
+
+const signedDossierPreview = archivePreviewReader({
   mode: SIGNED_DOSSIER_WORKER_MODE.preview,
   schema: signedDossierPreviewSchema,
   label: "signed container",
 });
+export const readSignedDossierPreview = async (
+  source: ScannedFile,
+  run: ArchivePreviewRun,
+) => await signedDossierPreview(source, run);

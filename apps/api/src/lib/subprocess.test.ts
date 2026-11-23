@@ -9,6 +9,7 @@ import {
   SUBPROCESS_TERMINATION_REASON,
   SubprocessError,
 } from "@/api/lib/errors/tagged-errors";
+import { ZIP_NAME_CODE_PAGE_ENV } from "@/api/lib/files/zip-name-code-page";
 import {
   classifySubprocessTermination,
   readProcessRss,
@@ -49,6 +50,21 @@ describe("spawnWorker", () => {
       const childEnvironment: unknown = JSON.parse(result.value);
       expect(childEnvironment).toEqual(["PATH"]);
     }
+  });
+
+  test("adds only the declared variables it is given to that environment", async () => {
+    const result = await spawnBinaryWorker({
+      workerPath: ENVIRONMENT_WORKER,
+      env: { [ZIP_NAME_CODE_PAGE_ENV]: "ibm852" },
+      stdin: new Blob([""]),
+      timeoutMs: 5000,
+      maxOutputBytes: 1024,
+    });
+
+    const childEnvironment: unknown = JSON.parse(
+      new TextDecoder().decode(result.unwrap()),
+    );
+    expect(childEnvironment).toEqual(["PATH", ZIP_NAME_CODE_PAGE_ENV]);
   });
 
   test("returns SubprocessError on non-zero exit", async () => {

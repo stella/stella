@@ -39,7 +39,7 @@ export const eInvoicePreviewEndpoint = createSafeHandler(
               recordAuditEvent,
             },
             E_INVOICE_KINDS,
-            readEInvoicePreview,
+            async (source) => await readEInvoicePreview(source),
           ),
       ),
     );

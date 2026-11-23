@@ -465,14 +465,14 @@ describe("reading a document's file", () => {
     ]);
   });
 
-  test("opens a plain .xml as before once the server says it is no invoice", async () => {
+  test("opens an .xml as before when the server cannot read it as text", async () => {
     const { fetch, calls } = server((path) => {
       if (path.endsWith("/versions")) {
         return Response.json(legalFileVersion("settings.xml", "text/xml"));
       }
       if (path.includes("/e-invoice/")) {
         return Response.json(
-          { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Not an invoice" },
+          { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Not readable" },
           { status: 422 },
         );
       }
@@ -613,14 +613,15 @@ describe("reading a document's file", () => {
         Response.json(
           path.endsWith("/versions")
             ? legalFileVersion(fileName, "application/octet-stream")
-            : invoicePreview,
+            : { type: "invoice", invoice: invoicePreview },
         ),
       );
       const file = (await read(fetch)).unwrap();
       expect(file).toMatchObject({ viewer: "e-invoice", format, fileName });
-      expect(file.viewer === "e-invoice" && file.preview.unwrap()).toEqual(
-        invoicePreview,
-      );
+      expect(file.viewer === "e-invoice" && file.preview.unwrap()).toEqual({
+        type: "invoice",
+        invoice: invoicePreview,
+      });
       expect(calls).toEqual([
         "/v1/entities/matter-1/entity/entity-1/versions",
         "/v1/files/matter-1/e-invoice/field%3F1",
@@ -635,7 +636,7 @@ describe("reading a document's file", () => {
         Response.json(
           path.endsWith("/versions")
             ? legalFileVersion("export", mimeType)
-            : invoicePreview,
+            : { type: "xml", text: "<export/>", truncated: false },
         ),
       );
       const file = (await read(fetch)).unwrap();

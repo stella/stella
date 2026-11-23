@@ -37,14 +37,21 @@ describe("CAdES file reading", () => {
       name,
     );
 
-    const content = (await readPartOfFile(signed, SIGNED_CONTENT)).unwrap();
+    const content = (
+      await readPartOfFile(signed, SIGNED_CONTENT, "ibm437")
+    ).unwrap();
     expect(content).toEqual({
       fileName: "filing.pdf",
       mimeType: PDF_MIME_TYPE,
       bytes,
     });
 
-    const preview = (await readCadesPreview(signed, name)).unwrap();
+    const preview = (
+      await readCadesPreview(signed, {
+        zipNameCodePage: "ibm437",
+        fileName: name,
+      })
+    ).unwrap();
     expect(preview).toMatchObject({
       fileName: "filing.pdf",
       mimeType: PDF_MIME_TYPE,
@@ -77,26 +84,37 @@ describe("CAdES file reading", () => {
       name,
     );
 
-    const preview = await readCadesPreview(signed, name);
+    const preview = await readCadesPreview(signed, {
+      zipNameCodePage: "ibm437",
+      fileName: name,
+    });
     expect(preview.unwrap()).toMatchObject({
       mimeType: "text/plain",
       text,
       textFormat: "plain",
     });
     // The signed document opens as what its bytes are, whatever its name says.
-    const content = (await readPartOfFile(signed, SIGNED_CONTENT)).unwrap();
+    const content = (
+      await readPartOfFile(signed, SIGNED_CONTENT, "ibm437")
+    ).unwrap();
     expect(content).toMatchObject({
       fileName: "notice.pdf.txt",
       mimeType: "text/plain",
     });
     expect(new TextDecoder().decode(content.bytes)).toBe(text);
-    const beyond = await readPartOfFile(signed, {
-      ...SIGNED_CONTENT,
-      index: 1,
-    });
+    const beyond = await readPartOfFile(
+      signed,
+      {
+        ...SIGNED_CONTENT,
+        index: 1,
+      },
+      "ibm437",
+    );
     expect(beyond.isErr() && beyond.error.status).toBe(404);
 
-    const extraction = await extractFileTextResult(signed);
+    const extraction = await extractFileTextResult(signed, {
+      zipNameCodePage: "ibm437",
+    });
     expect(extraction.unwrap()).toContain(text);
     expect(extraction.unwrap()).toContain("Signatures are unverified.");
   });
@@ -107,7 +125,10 @@ describe("CAdES file reading", () => {
       await wrapP7m(Uint8Array.of(0xf5, 0xfe, 0xff)),
       name,
     );
-    const preview = await readCadesPreview(signed, name);
+    const preview = await readCadesPreview(signed, {
+      zipNameCodePage: "ibm437",
+      fileName: name,
+    });
 
     expect(preview.unwrap()).toMatchObject({
       fileName: "unknown.bin",
@@ -130,12 +151,17 @@ describe("CAdES file reading", () => {
       await wrapP7m(malformedZip, { constructed: true }),
       name,
     );
-    const result = await readCadesPreview(signed, name);
+    const result = await readCadesPreview(signed, {
+      zipNameCodePage: "ibm437",
+      fileName: name,
+    });
     expect(result.isErr() && result.error.message).toBe(
       "The embedded file did not pass the security scan",
     );
 
-    const extraction = await extractFileTextResult(signed);
+    const extraction = await extractFileTextResult(signed, {
+      zipNameCodePage: "ibm437",
+    });
     expect(extraction.isErr() && extraction.error.workerErrorClass).toBe(
       "FileScanRejectedError",
     );

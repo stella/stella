@@ -21,6 +21,7 @@ import {
   ExtractionWorkerError,
 } from "@/api/lib/errors/tagged-errors";
 import { ScannedFile } from "@/api/lib/file-scan/scanned-file";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import {
   executeNativeExtraction as executeNativeExtractionWithDependencies,
@@ -160,6 +161,14 @@ const extractionDatabase = asTestRaw<NativeExtractionDatabase>({
   transaction: transactionMock,
   update: updateMock,
 });
+/** The run's organization practises in Czechia: its code page is 852. */
+const readZipNameCodePageMock = mock(
+  async (
+    ..._args: Parameters<
+      ExecuteNativeExtractionDependencies["readZipNameCodePage"]
+    >
+  ): Promise<ZipNameCodePage> => "ibm852",
+);
 const recordLanguageMock = mock(
   async (
     ..._args: Parameters<ExecuteNativeExtractionDependencies["recordLanguage"]>
@@ -193,6 +202,7 @@ const executeDependencies = {
   recordSignature: recordSignatureMock,
   requestAutomaticOcr: requestAutomaticDocumentOcrMock,
   restoreManualOcr: restoreManualOcrRunAfterProjectionLossMock,
+  readZipNameCodePage: readZipNameCodePageMock,
 } satisfies ExecuteNativeExtractionDependencies;
 
 const executeNativeExtraction = async (
@@ -304,6 +314,7 @@ beforeEach(() => {
   requestAutomaticDocumentOcrMock.mockClear();
   restoreManualOcrRunAfterProjectionLossMock.mockClear();
   recordLanguageMock.mockClear();
+  readZipNameCodePageMock.mockClear();
   recordSignatureMock.mockClear();
   enqueueUploadedMailMock.mockReset();
   enqueueUploadedMailMock.mockImplementation(async () => undefined);
@@ -504,7 +515,13 @@ describe("processExtraction", () => {
     expect(extractFileTextResultMock).toHaveBeenCalledWith(expect.anything(), {
       signal: lifecycleSignal,
       timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs, // timeout: asserted call argument, not a deadline
+      zipNameCodePage: "ibm852",
     });
+    // The code page is the run's organization's, read on the extraction's
+    // own connection.
+    expect(readZipNameCodePageMock.mock.calls).toEqual([
+      [extractionDatabase, organizationId],
+    ]);
     const extracted = extractFileTextResultMock.mock.calls.at(0)?.[0];
     // The bytes reach the extractor as a stored file under the run's key.
     expect(extracted?.mimeType).toBe(fileContent.mimeType);

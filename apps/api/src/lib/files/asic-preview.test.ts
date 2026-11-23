@@ -42,7 +42,10 @@ test("reads ASiC-E payloads for preview and search from a legacy generic upload"
     ],
   });
   const source = storedAsic(bytes, "filing.asice", "application/octet-stream");
-  const preview = await readAsicPreview(source, ASIC_E_FILE_FORMAT.mimeType);
+  const preview = await readAsicPreview(source, {
+    zipNameCodePage: "ibm437",
+    expectedMimeType: ASIC_E_FILE_FORMAT.mimeType,
+  });
   expect(preview.unwrap().members).toMatchObject([
     {
       fileName: "filing.txt",
@@ -64,7 +67,9 @@ test("reads ASiC-E payloads for preview and search from a legacy generic upload"
     },
   ]);
 
-  const extracted = (await extractFileTextResult(source)).unwrap();
+  const extracted = (
+    await extractFileTextResult(source, { zipNameCodePage: "ibm437" })
+  ).unwrap();
   expect(extracted).toContain("Signatures are unverified.");
   expect(extracted).toContain("Sdělení č. 47");
   expect(extracted).toContain(marker);
@@ -84,7 +89,9 @@ test("reads a recognized Office payload from ASiC-S", async () => {
     members: [{ fileName: "agreement.bin", bytes: office }],
   });
   const source = storedAsic(bytes, "filing.asics", ASIC_S_FILE_FORMAT.mimeType);
-  const preview = (await readAsicPreview(source)).unwrap();
+  const preview = (
+    await readAsicPreview(source, { zipNameCodePage: "ibm437" })
+  ).unwrap();
   expect(preview.members).toEqual([
     {
       part: "member:0",
@@ -106,15 +113,20 @@ test("refuses preview and indexing when the member scan rejects unreadable ZIP b
   });
   const source = storedAsic(bytes, "filing.asice", ASIC_E_FILE_FORMAT.mimeType);
 
-  const malformed = await readAsicPreview(source, ASIC_S_FILE_FORMAT.mimeType);
+  const malformed = await readAsicPreview(source, {
+    zipNameCodePage: "ibm437",
+    expectedMimeType: ASIC_S_FILE_FORMAT.mimeType,
+  });
   expect(malformed.isErr() && malformed.error.status).toBe(422);
 
-  const preview = await readAsicPreview(source);
+  const preview = await readAsicPreview(source, { zipNameCodePage: "ibm437" });
   expect(preview.isErr() && preview.error.message).toBe(
     "An embedded file did not pass the security scan",
   );
 
-  const extraction = await extractFileTextResult(source);
+  const extraction = await extractFileTextResult(source, {
+    zipNameCodePage: "ibm437",
+  });
   expect(extraction.isErr() && extraction.error.workerErrorClass).toBe(
     "FileScanRejectedError",
   );
@@ -129,7 +141,9 @@ test("within the indexing text budget, retains later filenames and marks clippin
   });
   const source = storedAsic(bytes, "filing.asice", ASIC_E_FILE_FORMAT.mimeType);
   const maxChars = 300;
-  const text = (await extractFileTextResult(source, { maxChars })).unwrap();
+  const text = (
+    await extractFileTextResult(source, { zipNameCodePage: "ibm437", maxChars })
+  ).unwrap();
   expect(text).toContain("Filing text");
   expect(text).toContain("Attachment: short.txt");
   expect(text?.match(/Attachment text was truncated\./gu)).toHaveLength(2);
