@@ -235,6 +235,9 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "organization_creation_requests",
+  // Sign-in locations and review state: auth data read and written only by
+  // the owner connection, scoped to the authenticated user in each query.
+  "session_sign_ins",
   // Work-identifier aliases are served through the public-law reader; the
   // request role has no direct access to this ingestion-owned relation.
   "legislation_work_identifiers",

@@ -12,7 +12,10 @@ const WorkspaceViewSwitcherFixture = () => {
   const direction = query.has("rtl") ? "rtl" : "ltr";
   const dark = query.has("dark");
   const overflow = query.has("overflow");
-  const views = direction === "rtl" ? RTL_VIEWS : LTR_VIEWS;
+  const views = (direction === "rtl" ? RTL_VIEWS : LTR_VIEWS).slice(
+    0,
+    overflow ? undefined : 2,
+  );
   const [activeViewId, setActiveViewId] = useState("table");
 
   useEffect(() => {
@@ -31,7 +34,7 @@ const WorkspaceViewSwitcherFixture = () => {
     <DirectionProvider direction={direction}>
       <main className="flex flex-col gap-4 p-4">
         <div
-          className={overflow ? "w-[240px]" : "w-[640px]"}
+          className={overflow ? "w-[360px]" : "w-[640px]"}
           data-workspace-switcher
         >
           <WorkspaceViewSwitcher
@@ -40,6 +43,7 @@ const WorkspaceViewSwitcherFixture = () => {
             ariaLabel={direction === "rtl" ? "العروض المحفوظة" : "Saved views"}
             direction={direction}
             onViewChange={setActiveViewId}
+            overflowLabel={direction === "rtl" ? "عرض المزيد" : "Show more"}
             actionMenu={{
               label: actionsLabel,
               renderItems: (view) =>
@@ -78,11 +82,15 @@ const WorkspaceViewSwitcherFixture = () => {
 const LTR_VIEWS = [
   { id: "table", name: "All matters", kind: "table" },
   { id: "calendar", name: "Deadlines", kind: "calendar" },
+  { id: "filesystem", name: "Lists", kind: "filesystem" },
+  { id: "correspondence", name: "Correspondence", kind: "correspondence" },
 ];
 
 const RTL_VIEWS = [
   { id: "table", name: "كل القضايا", kind: "table" },
   { id: "calendar", name: "المواعيد النهائية", kind: "calendar" },
+  { id: "filesystem", name: "القوائم", kind: "filesystem" },
+  { id: "correspondence", name: "المراسلات", kind: "correspondence" },
 ];
 
 const root = document.querySelector("#root");

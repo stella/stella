@@ -85,6 +85,7 @@ test.each([false, true])(
         deploymentFeatures: { legalLists: false, invoiceLinks: true },
         documentProcessingMode: "off",
         matterNumberPattern: "{year}/{number}",
+        documentNamePattern: null,
         matterNumberPadding: 3,
         matterNumberingEnabled: false,
         practiceJurisdictions: [],

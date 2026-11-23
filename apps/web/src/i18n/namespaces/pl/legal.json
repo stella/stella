@@ -1,0 +1,1457 @@
+{
+  "caseLaw": {
+    "analysis": {
+      "abstract": "Streszczenie",
+      "aiLayer": "{layer} (AI)",
+      "backToSection": "Wróć do początku tej części",
+      "categories": {
+        "facts": "Stan faktyczny",
+        "holding": "Teza",
+        "procedural-history": "Przebieg postępowania",
+        "reasoning": "Rozumowanie"
+      },
+      "errors": {
+        "analysisDisabled": "Generowanie analiz AI jest wyłączone na tym serwerze. Przeczytaj tekst orzeczenia lub spróbuj ponownie później.",
+        "answerIncomplete": "{source, select, organization {Klucz {provider} Twojej organizacji zwrócił niepełną odpowiedź.} other {Model AI zwrócił niepełną odpowiedź.}}",
+        "decisionNotFound": "Nie znaleziono tego orzeczenia. Otwórz je ponownie z wyników wyszukiwania.",
+        "documentUnparseable": "Tekst orzeczenia nie jest gotowy do analizy. Przeczytaj materiał źródłowy.",
+        "languageUnsupported": "Analiza AI jest dostępna tylko dla orzeczeń w tych językach: {languages}.",
+        "openLanguageVersion": "Otwórz wersję językową: {language}",
+        "providerRefused": "{source, select, organization {{provider} odrzucił żądanie wysłane z kluczem Twojej organizacji. Sprawdź klucz, jego limit i rozliczenia w ustawieniach organizacji.} other {Dostawca AI odrzucił żądanie.}}",
+        "providerUnavailable": "{source, select, organization {{provider} jest teraz niedostępny dla klucza Twojej organizacji.} other {Dostawca AI jest teraz niedostępny.}}",
+        "retryAfter": "Możesz spróbować ponownie po {time}.",
+        "sourceRestricted": "Źródło nie zezwala na analizę AI. Przeczytaj tekst orzeczenia lub materiał źródłowy.",
+        "timedOut": "{source, select, organization {{provider} nie odpowiedział na czas z kluczem Twojej organizacji.} other {Model AI nie odpowiedział na czas.}}"
+      },
+      "generate": "Ułóż tezy w AI",
+      "invitation": "Z bezpłatnym kontem AI przygotuje robocze notatki do tego orzeczenia.",
+      "noCurrentSection": "Nie ma bieżącej sekcji, do której można przejść.",
+      "topics": "Tematy",
+      "treatment": "Późniejsze orzecznictwo"
+    },
+    "analyzing": "Analizowanie…",
+    "browse": {
+      "courtDescription": "{court} ({country}): orzeczenia w publicznej bazie prawnej aplikacji stella według roku i miesiąca.",
+      "courts": "Sądy",
+      "days": "Dni",
+      "jurisdictionDescription": "{country}: orzeczenia sądów w publicznej bazie prawnej aplikacji stella według sądu, roku i miesiąca.",
+      "periodDescription": "{court} ({country}), {period}: orzeczenia w publicznej bazie prawnej aplikacji stella."
+    },
+    "chat": {
+      "prompts": {
+        "facts": {
+          "body": "Jaki był stan faktyczny i co podnosiła każda ze stron?",
+          "name": "Stan faktyczny i stanowiska stron"
+        },
+        "holding": {
+          "body": "Jak sąd orzekł i dlaczego?",
+          "name": "Sentencja i uzasadnienie"
+        },
+        "precedent": {
+          "body": "Na których wcześniejszych orzeczeniach się opiera i czy je stosuje?",
+          "name": "Wcześniejsze orzeczenia"
+        },
+        "provisions": {
+          "body": "Które przepisy sąd zastosował i jak je wyłożył?",
+          "name": "Zastosowane przepisy"
+        }
+      }
+    },
+    "citation": {
+      "citedAtLeast": "Cytowane co najmniej {count, plural, one {# raz} few {# razy} many {# razy} other {# raza}}",
+      "citedSummary": "{count, plural, =0 {Niecytowane} one {Cytowane raz} few {Cytowane # razy} many {Cytowane # razy} other {Cytowane # razy}}",
+      "dateUnavailable": "Data niedostępna",
+      "decisionCount": "{count, plural, =0 {Brak orzeczeń} one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}}",
+      "goToMention": "Przejdź do wzmianki {number}",
+      "goToParagraph": "Przejdź do punktu {paragraph}",
+      "lastNegative": "ostatnie negatywne powołanie w {year} r.",
+      "mentionMark": "wzmianka {number}",
+      "mentionsInDecision": "{count, plural, one {Cytowane raz w tym orzeczeniu} few {Cytowane # razy w tym orzeczeniu} many {Cytowane # razy w tym orzeczeniu} other {Cytowane # razy w tym orzeczeniu}}",
+      "negativeCount": "{count, plural, one {# negatywne} few {# negatywne} many {# negatywnych} other {# negatywnych}}",
+      "none": "Nie odnotowano jeszcze żadnych cytowań.",
+      "notInStella": "Jeszcze nie ma go w aplikacji stella",
+      "openDecision": "Otwórz orzeczenie",
+      "paragraphLabel": "Punkt {paragraph}",
+      "paragraphMark": "¶ {paragraph}",
+      "paragraphReferenceLabel": "{court}, {caseNumber}, {date}, punkt {paragraph}",
+      "partialSummary": "Sumy cytowań i oś czasu są niepełne.",
+      "passageNotFound": "Nie znaleziono cytującego fragmentu w tekście",
+      "positiveCount": "{count, plural, one {# pozytywne} few {# pozytywne} many {# pozytywnych} other {# pozytywnych}}",
+      "referenceLabel": "{court}, {caseNumber}, {date}",
+      "showAll": "{count, plural, one {Pokaż # orzeczenie} few {Pokaż wszystkie # orzeczenia} many {Pokaż wszystkie # orzeczeń} other {Pokaż wszystkie # orzeczeń}}",
+      "stripLabel": "Powołania według lat",
+      "treatment": {
+        "mixed": "Mieszane",
+        "negative": "Negatywne",
+        "neutral": "Wzmiankowane",
+        "positive": "Zaaprobowane",
+        "supportive": "Podzielone",
+        "unclassified": "Niesklasyfikowane"
+      },
+      "unresolved": "Nieprzypisane do orzeczenia",
+      "whereCited": "Gdzie cytuje to orzeczenie",
+      "yearTitle": "{year}: {count, plural, one {# powołanie} few {# powołania} many {# powołań} other {# powołania}}"
+    },
+    "columns": {
+      "caseNumber": "Sygnatura akt",
+      "citedBy": "Cytowane przez",
+      "headnote": "Teza",
+      "summary": "Teza / trafienie"
+    },
+    "corpusStatus": {
+      "courtCount": "{count, plural, one {# sąd} few {# sądy} many {# sądów} other {# sądu}}",
+      "newLast24Hours": "{count} z ostatnich 24 h",
+      "newLast7Days": "Nowe z ostatnich 7 dni",
+      "otherCourts": "Inne sądy"
+    },
+    "courtTiers": {
+      "constitutional": "Trybunały konstytucyjne",
+      "other": "Pozostałe sądy",
+      "regional": "Sądy apelacyjne i okręgowe",
+      "supreme": "Sądy najwyższe"
+    },
+    "coverage": {
+      "allCurrent": "Wszystkie źródła są aktualne",
+      "censusComparison": "{stored} zapisanych / {publisher} opublikowanych · {withText} z tekstem",
+      "censusComplete": "Kompletne",
+      "censusIncomplete": "Niekompletne",
+      "censusSliceMemberships": "Liczby z poszczególnych części są sumowane; jedno orzeczenie może być liczone więcej niż raz.",
+      "completeness": "Kompletność",
+      "completenessHelp": "Zapisane orzeczenia względem liczby podanej przez wydawcę, jego wykazu lub odnotowanej liczby całkowitej. Orzeczenia z wykazu wydawcy, których brak wykazało uzgodnienie, nie są wliczane.",
+      "countryNavigation": "Przejdź do kraju",
+      "courtsHeading": "Według sądu",
+      "decisionYears": "Lata orzeczeń",
+      "decisionsAcross": "orzeczeń z {count, plural, one {# jurysdykcji} few {# jurysdykcji} many {# jurysdykcji} other {# jurysdykcji}}",
+      "description": "Ile orzecznictwa zawiera korpus w podziale na kraje i sądy oraz jak aktualne jest każde źródło.",
+      "generatedAt": "Dane na {date}",
+      "healthCurrent": "Aktualne",
+      "healthDelayed": "Opóźnione",
+      "healthDisabled": "Wyłączone",
+      "healthSnapshot": "Stały zrzut danych",
+      "healthStalled": "Bez postępu",
+      "healthUnknown": "Jeszcze nieuruchomione",
+      "inPreparation": "W przygotowaniu",
+      "lastSync": "Ostatnia synchronizacja",
+      "notCountedYet": "Jeszcze niepoliczone",
+      "notMeasuredYet": "Jeszcze niezmierzone",
+      "searchable": "Wyszukiwalne",
+      "sourceExceptions": "{count, plural, one {# źródło wymaga uwagi} few {# źródła wymagają uwagi} many {# źródeł wymaga uwagi} other {# źródła wymaga uwagi}}",
+      "sourcesCurrent": "Aktualne źródła",
+      "syncedAt": "Zsynchronizowano {time}",
+      "title": "Zakres orzecznictwa",
+      "totalFrom": "Suma z {date}",
+      "unavailable": "Dane o zakresie są chwilowo niedostępne."
+    },
+    "decisionNotFound": "Nie znaleziono orzeczenia",
+    "decisionTypes": {
+      "administrative_decision": "Decyzja administracyjna",
+      "binding_excise_information": "Wiążąca informacja akcyzowa",
+      "binding_rate_information": "Wiążąca informacja stawkowa",
+      "court_direction": "Zarządzenie",
+      "decision": "Orzeczenie",
+      "finding": "Orzeczenie merytoryczne",
+      "general_tax_ruling": "Interpretacja ogólna",
+      "individual_tax_ruling": "Interpretacja indywidualna",
+      "judgment": "Wyrok",
+      "leave_refused": "Odrzucenie z braku istotnego zagadnienia prawnego",
+      "merits_decision": "Rozstrzygnięcie co do istoty",
+      "ministry_of_justice_decision": "Rozstrzygnięcie Ministerstwa Sprawiedliwości",
+      "minutes_extract": "Wyciąg z protokołu",
+      "opinion": "Opinia",
+      "order": "Postanowienie",
+      "other": "Inne",
+      "payment_order": "Nakaz zapłaty",
+      "penal_order": "Nakaz karny",
+      "principle_decision": "Orzeczenie zasadnicze",
+      "protective_opinion": "Opinia zabezpieczająca",
+      "resolution": "Uchwała",
+      "signalling_decision": "Sygnalizacja",
+      "statement_of_reasons": "Uzasadnienie",
+      "tax_explanations": "Objaśnienia podatkowe",
+      "top_up_tax_opinion": "Opinia w sprawie opodatkowania wyrównawczego",
+      "uniformity_decision": "Orzeczenie w sprawie jednolitości orzecznictwa"
+    },
+    "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
+    "filters": {
+      "countryMismatch": "Usunięto filtry, które nie dotyczą kraju {country}: {filters}.",
+      "remove": "Usuń filtr {filter}",
+      "showInCountry": "Pokaż {filter} dla kraju {country}"
+    },
+    "languages": {
+      "count": "{count, plural, one {# język} few {# języki} many {# języków} other {# języka}}",
+      "matchedIn": "Dopasowanie w języku {language}"
+    },
+    "linkedPassageGone": "Wskazanego fragmentu nie ma już w tym tekście.",
+    "loadingMore": "Ładowanie kolejnych…",
+    "marginFilter": {
+      "label": "Filtr przywołanych przepisów",
+      "paragraph": "{count, plural, one {# przepis przywołany w ¶{paragraph}} few {# przepisy przywołane w ¶{paragraph}} many {# przepisów przywołanych w ¶{paragraph}} other {# przepisu przywołanego w ¶{paragraph}}}",
+      "selection": "{count, plural, one {# przepis przywołany w zaznaczonym fragmencie} few {# przepisy przywołane w zaznaczonym fragmencie} many {# przepisów przywołanych w zaznaczonym fragmencie} other {# przepisu przywołanego w zaznaczonym fragmencie}}",
+      "unnumberedParagraph": "{count, plural, one {# przepis przywołany w tym akapicie} few {# przepisy przywołane w tym akapicie} many {# przepisów przywołanych w tym akapicie} other {# przepisu przywołanego w tym akapicie}}"
+    },
+    "matterLinks": {
+      "alreadySaved": "{count, plural, one {# orzeczenie było już tutaj zapisane} few {# orzeczenia były już tutaj zapisane} many {# orzeczeń było już tutaj zapisanych} other {# orzeczeń było już tutaj zapisanych}}",
+      "empty": "W tej sprawie nie zapisano jeszcze żadnego orzeczenia.",
+      "emptyAction": "Szukaj w orzecznictwie",
+      "note": "Notatka",
+      "notePlaceholder": "Dlaczego te orzeczenia są tu istotne…",
+      "rejectedLimit": "{count, plural, one {# orzeczenie nie zostało zapisane: sprawa jest pełna} few {# orzeczenia nie zostały zapisane: sprawa jest pełna} many {# orzeczeń nie zostało zapisanych: sprawa jest pełna} other {# orzeczeń nie zostało zapisanych: sprawa jest pełna}}",
+      "rejectedMissing": "{count, plural, one {# orzeczenia nie znaleziono} few {# orzeczeń nie znaleziono} many {# orzeczeń nie znaleziono} other {# orzeczeń nie znaleziono}}",
+      "remove": "Usuń ze sprawy",
+      "save": "Zapisz do sprawy",
+      "savePage": "Z tej strony {count, plural, one {zostanie zapisane # orzeczenie} few {zostaną zapisane # orzeczenia} many {zostanie zapisanych # orzeczeń} other {zostanie zapisanych # orzeczeń}}.",
+      "saveSelection": "{count, plural, one {Zostanie zapisane # wybrane orzeczenie} few {Zostaną zapisane # wybrane orzeczenia} many {Zostanie zapisanych # wybranych orzeczeń} other {Zostanie zapisanych # wybranych orzeczeń}}.",
+      "saveTitle": "Zapisz do sprawy",
+      "saved": "Zapisano {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczeń}} do sprawy {matter}"
+    },
+    "newestDecisions": "Najnowsze orzeczenia",
+    "noResults": {
+      "hint": "Spróbuj innych słów, popraw zapytanie za pomocą AI lub zadaj pytanie na czacie."
+    },
+    "notesFilter": {
+      "ai": "AI",
+      "human": "Ludzkie",
+      "toggleState": "{label}: {state, select, on {włączone} other {wyłączone}}"
+    },
+    "oldestDecisions": "Najstarsze orzeczenia",
+    "pagination": {
+      "goToPage": "Przejdź do strony {page}",
+      "label": "Strony wyników",
+      "pageOfCount": "Strona {page} z {pageCount}",
+      "pageOfEstimatedCount": "Strona {page} z ~{pageCount}",
+      "pageOfEstimatedCountLabel": "Strona {page} z około {pageCount}",
+      "pageWithEstimatedMatchCounts": "Strona {page} · około {exactCount, plural, one {# dokładne dopasowanie} few {# dokładne dopasowania} many {# dokładnych dopasowań} other {# dokładnego dopasowania}} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
+      "pageWithEstimatedResultCount": "Strona {page} · około {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
+      "pageWithMatchCounts": "Strona {page} · {exactCount, plural, one {# dokładne dopasowanie} few {# dokładne dopasowania} many {# dokładnych dopasowań} other {# dokładnego dopasowania}} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
+      "pageWithPartialMatchCount": "Strona {page} · {relaxedCount, plural, one {# częściowe dopasowanie} few {# częściowe dopasowania} many {# częściowych dopasowań} other {# częściowego dopasowania}} na tej stronie",
+      "pageWithResultCount": "Strona {page} · {count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyniku}}",
+      "perPage": "Na stronę",
+      "refineForMore": "Zawęź wyszukiwanie, aby zobaczyć więcej wyników"
+    },
+    "paragraphRangeNotFound": "{count, plural, one {Nie znaleziono akapitu {range} w tym tekście.} few {Nie znaleziono akapitów {range} w tym tekście.} many {Nie znaleziono akapitów {range} w tym tekście.} other {Nie znaleziono akapitów {range} w tym tekście.}}",
+    "paragraphRangeSelected": "{count, plural, one {Akapit {range} jest wyróżniony.} few {Akapity {range} są wyróżnione.} many {Akapity {range} są wyróżnione.} other {Akapity {range} są wyróżnione.}}",
+    "provision": {
+      "article": "art. {value}",
+      "letter": "litera {value})",
+      "openEnded": "i nast.",
+      "point": "pkt {value}",
+      "sentence": "zdanie {value}",
+      "subsection": "ust. {value}"
+    },
+    "reader": {
+      "documentUpdated": "Dokument został zaktualizowany.",
+      "expandProvisions": "Rozwiń przepisy",
+      "headMatter": "Informacje o sprawie",
+      "sourceAttribution": "Dane źródłowe są ogólnodostępne pod adresem <link>{source}</link>."
+    },
+    "research": {
+      "answering": "{count, plural, one {Odpowiadam na # komórkę…} few {Odpowiadam na # komórki…} many {Odpowiadam na # komórek…} other {Odpowiadam na # komórki…}}",
+      "answers": {
+        "failureReasons": {
+          "decisionUnavailable": "Orzeczenie niedostępne",
+          "missingAnswer": "Model nie odpowiedział",
+          "modelError": "Błąd modelu",
+          "noText": "Brak tekstu orzeczenia",
+          "runError": "Uruchomienie przerwane",
+          "wrongType": "Odpowiedź w złym formacie"
+        },
+        "no": "Nie",
+        "notAllowed": "Niedozwolone przez warunki źródła",
+        "notRun": "Nieuruchomione",
+        "notStated": "Orzeczenie tego nie wskazuje",
+        "pending": "Odpowiadam…",
+        "showSource": "Pokaż źródło",
+        "yes": "Tak"
+      },
+      "deleteColumnConfirm": "Pytanie i wszystkie jego odpowiedzi zostaną usunięte dla całej organizacji, ze wszystkich wyszukiwań i u wszystkich członków. Aby usunąć je tylko z tego wyszukiwania, wybierz „Usuń z tego wyszukiwania”.",
+      "editQuestionHint": "Zmiana treści, rodzaju odpowiedzi lub jego opcji odrzuca obecne odpowiedzi; uruchom kolumnę ponownie.",
+      "emptyPage": "Na tej stronie nie ma orzeczeń.",
+      "newQuestionColumn": "Nowe",
+      "nothingToRun": "Każda komórka ma już odpowiedź",
+      "questionAdded": "Dodano „{question}” do tabeli",
+      "questionPlaceholder": "np. Czy sąd uznał wypowiedzenie za skuteczne?",
+      "removeFromSearch": "Usuń z tego wyszukiwania",
+      "runAll": "Odpowiedz na wszystko",
+      "runConfirm": "Odpowiedz teraz",
+      "runEstimate": "{rows, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} × {columns, plural, one {# pytanie} few {# pytania} many {# pytań} other {# pytania}} na tej stronie: {cells, plural, one {powstanie # odpowiedź} few {powstaną # odpowiedzi} many {powstanie # odpowiedzi} other {powstanie # odpowiedzi}}.",
+      "runInProgress": "Trwa już przetwarzanie pytania badawczego.",
+      "runPermissionRequired": "Do uruchamiania pytań badawczych potrzebne jest uprawnienie.",
+      "runTitle": "Odpowiedz na tej stronie",
+      "savedQuestions": "Zapisane pytania",
+      "title": "Tabele badawcze"
+    },
+    "results": {
+      "excerpt": {
+        "label": "Fragment",
+        "long": "Długi",
+        "medium": "Średni",
+        "short": "Krótki"
+      }
+    },
+    "rewritten": {
+      "line": "Brak dokładnych wyników dla <bdi>{original}</bdi>; wyniki dla <bdi>{query}</bdi>",
+      "searchOriginal": "Szukaj moich oryginalnych słów"
+    },
+    "sameCaseNumber": "{count, plural, one {# orzeczenie ma} few {# orzeczenia mają} many {# orzeczeń ma} other {# orzeczenia ma}} tę sygnaturę. Wybierz sąd.",
+    "searchLabel": "Szukaj w orzecznictwie",
+    "searchPlaceholder": "Sygnatura, ECLI lub słowa, np. II CSK 123/19",
+    "searchStillSearching": "Usługa wyszukiwania jest przeciążona. Nadal szukamy…",
+    "searchUnavailable": {
+      "description": "Nie udało się połączyć z wyszukiwaniem orzecznictwa. Twoje zapytanie pozostaje w pasku adresu, spróbuj ponownie za chwilę.",
+      "title": "Wyszukiwanie jest tymczasowo niedostępne"
+    },
+    "searchWarnings": {
+      "collectionCitationUnresolved": {
+        "hint": "Wyszukaj orzeczenie po sygnaturze akt lub ECLI, jeśli je znasz.",
+        "message": "Nie znaleziono orzeczenia odpowiadającego dokładnie temu oznaczeniu w zbiorze."
+      },
+      "noHits": {
+        "hint": "Spróbuj mniej lub innych słów: pojęć, których użyłoby orzeczenie, a nie zdania, w którym zadaje się pytanie.",
+        "message": "Nic nie odpowiada słowom wymaganym przez to wyszukiwanie."
+      },
+      "noHitsFiltered": {
+        "hint": "Usuń lub poszerz filtr i wyszukaj ponownie.",
+        "message": "Nic nie odpowiada wybranym filtrom."
+      },
+      "partialMatch": "Częściowe dopasowanie",
+      "partialMatchMissing": "Brakujące słowa: {terms}",
+      "partialMatches": "Częściowe dopasowania dla: <bdi>{query}</bdi>",
+      "resultsFor": "Wyniki dla: <bdi>{query}</bdi>",
+      "searchEveryWord": "Szukaj wszystkich słów"
+    },
+    "seo": {
+      "collectionName": "Orzecznictwo stella",
+      "description": "Publiczna baza orzecznictwa z orzeczeniami sądów i źródłami prawa, które można indeksować.",
+      "homeDescription": "Publiczna baza prawna: orzeczenia sądów i ujednolicone akty prawne, z wyszukiwaniem według identyfikatora lub słów.",
+      "scopedDescription": "Publiczna baza orzecznictwa ({scope}) z orzeczeniami sądów i źródłami prawa, które można indeksować."
+    },
+    "showWholeHeadnote": "Pokaż całą tezę",
+    "sort": {
+      "newest": "Najnowsze",
+      "oldest": "Najstarsze",
+      "oldestUnavailable": "Wyniki wyszukiwania są sortowane według trafności lub od najnowszych. Aby zobaczyć najpierw najstarsze orzeczenia, wyczyść wyszukiwanie.",
+      "relevance": "Najtrafniejsze"
+    },
+    "viewer": {
+      "abstract": "Streszczenie",
+      "appealReviews": {
+        "conflict": "Informacje o kontroli orzeczenia są niepełne lub sprzeczne. Wynik kontroli wymaga weryfikacji.",
+        "corpusOnly": "W dostępnym korpusie nie znaleziono orzeczenia kontrolującego to orzeczenie. Nie oznacza to, że nie wniesiono środka zaskarżenia.",
+        "noneFound": "Nie znaleziono orzeczenia kontrolnego",
+        "overturned": "Uchylone lub zmienione",
+        "partly": "Częściowo uchylone",
+        "reviewedBy": "Orzeczenia kontrolujące",
+        "reviews": "Orzeczenia kontrolowane",
+        "sourceHistory": "Historia postępowania",
+        "sourceMetadata": "Metadane wydawcy",
+        "sourceOpening": "Akapit wstępny",
+        "title": "Kontrola odwoławcza",
+        "truncated": "Wyświetlono tylko część historii kontroli.",
+        "underReview": "W trakcie kontroli",
+        "unknown": "Wynik nieznany",
+        "upheld": "Utrzymane w mocy"
+      },
+      "appliedVersionNotStated": "Nie podano zastosowanego brzmienia",
+      "appliedVersionNotStatedCompact": "Wersja niewskazana",
+      "appliedVersionStatedAmendment": "Brzmienie po nowelizacji <reference>{amendment}</reference>",
+      "appliedVersionStatedAmendmentCompact": "Wskazano: <reference>{amendment}</reference>",
+      "appliedVersionStatedDate": "{relation, select, on {Brzmienie obowiązujące w dniu {date}} until {Brzmienie obowiązujące do {date}} from {Brzmienie obowiązujące od {date}} other {Brzmienie obowiązujące w dniu {date}}}",
+      "appliedVersionStatedDateCompact": "{relation, select, on {Wskazano: {date}} until {Wskazano: do {date}} from {Wskazano: od {date}} other {Wskazano: {date}}}",
+      "caseFileDocuments": "Dokumenty w aktach tej sprawy",
+      "caseFileMayHoldOthers": "Akta tej sprawy mogą zawierać także inne orzeczenia.",
+      "citedBy": "Cytowane przez",
+      "citedDecisionPassage": "Fragment orzeczenia",
+      "cites": "Cytuje",
+      "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
+      "goToParagraph": "{count, plural, one {Przejdź do akapitu} few {Przejdź do akapitów} many {Przejdź do akapitów} other {Przejdź do akapitów}}",
+      "judgeRole": {
+        "advocateGeneral": "Rzecznik generalny",
+        "dissenting": "Zdanie odrębne",
+        "panelMember": "Członek składu",
+        "presiding": "Przewodniczący składu",
+        "rapporteur": "Sędzia sprawozdawca"
+      },
+      "judges": "Sędziowie",
+      "legalArea": "Dziedzina prawa",
+      "legalSentence": "Teza orzeczenia",
+      "paragraphReference": "Akapit {number}",
+      "popularName": "Nazwa potoczna",
+      "portraitCredit": "Źródło portretów: {source}",
+      "provisionMentions": "{count, number}×",
+      "provisionMentionsLabel": "{count, plural, one {# wzmianka} few {# wzmianki} many {# wzmianek} other {# wzmianki}}",
+      "provisionsCited": "Powołane przepisy",
+      "provisionsFailed": "Przetwarzanie cytowań nie powiodło się",
+      "provisionsNoneFound": "Nie znaleziono powołanych przepisów",
+      "provisionsProcessing": "Trwa przetwarzanie cytowań",
+      "provisionsUnavailable": "Cytowania są niedostępne",
+      "provisionsUnplaceable": "Nie można umiejscowić cytowań w tekście orzeczenia",
+      "provisionsUnsupported": "Przetwarzanie cytowań nie jest obsługiwane dla tego orzeczenia",
+      "provisionsWithheld": "Cytowania nie są udostępniane",
+      "sourceFields": {
+        "decisionCategory": "Kategoria orzeczenia",
+        "publishedOnWeb": "Opublikowano w sieci"
+      },
+      "statutes": "Powołane przepisy",
+      "textNotYetAvailable": "Sąd nie opublikował treści orzeczenia lub nie jest ona jeszcze tutaj dostępna.",
+      "textPending": "Tekst orzeczenia jest wciąż pobierany",
+      "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
+      "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu",
+      "versionAtDecisionDateInferred": "Brzmienie na dzień orzeczenia (wywnioskowane)",
+      "versionBasisInferredCompact": "Data orzeczenia · wywnioskowane",
+      "versionBasisInferredExplanation": "Wersję ustalono na podstawie daty orzeczenia. Orzeczenie nie wskazuje, które brzmienie ma zastosowanie."
+    },
+    "withdrawnByPublisher": "Wycofane przez wydawcę"
+  },
+  "catalogue": {
+    "addCustom": "Dodaj własne",
+    "addCustomMcp": "Dodaj integrację",
+    "addCustomSkill": "Dodaj umiejętność",
+    "by": "Autor: {author}",
+    "configuration": "Konfiguracja",
+    "cost": {
+      "free": "Bezpłatne",
+      "paid": "Płatne"
+    },
+    "detailAuthMethod": "Uwierzytelnianie",
+    "empty": "Żadne wpisy nie odpowiadają bieżącemu filtrowi.",
+    "filter": {
+      "mcps": "Integracje",
+      "nativeTools": "Wbudowane narzędzia",
+      "skills": "Umiejętności"
+    },
+    "filterHint": "Filtrowane do: {codes}",
+    "firstParty": "stella",
+    "firstPartyTooltip": "Stworzone przez zespół stella",
+    "installFailed": "Instalacja nie powiodła się",
+    "installPack": "{count, plural, one {Zainstaluj # narzędzie} few {Zainstaluj # narzędzia} many {Zainstaluj # narzędzi} other {Zainstaluj # narzędzi}}",
+    "installed": "Zainstalowano: {name}",
+    "installedShort": "Zainstalowano",
+    "onboarding": {
+      "packTitle": "Polecane dla Twojej jurysdykcji"
+    },
+    "openHomepage": "Otwórz stronę główną",
+    "packDescription": "{count, plural, one {# narzędzie} few {# narzędzia} many {# narzędzi} other {# narzędzi}} wybranych dla Twojej praktyki. Zainstaluj jednym kliknięciem lub wybierz poniżej.",
+    "packInstalled": "{count, plural, one {Zainstalowano # narzędzie} few {Zainstalowano # narzędzia} many {Zainstalowano # narzędzi} other {Zainstalowano # narzędzi}}",
+    "packPartial": "Zainstalowano {installed}, {failed} nieudane",
+    "removed": "To narzędzie nie jest już dostępne.",
+    "sectionOthers": "Pozostałe",
+    "settings": {
+      "packTitle": "Polecany pakiet"
+    },
+    "setup": {
+      "account": "Konto",
+      "apiKey": "Klucz API",
+      "none": "Bez konfiguracji"
+    },
+    "skillNeedsUnavailableTools": "Niedostępna w czacie. Wymaga narzędzia, które nie jest tam dostępne: {tools}",
+    "toolDescriptions": {
+      "anonymize": "Ukrywa nazwiska klientów, numery rachunków, adresy i inne dane osobowe przed udostępnieniem zawartości sprawy dostawcom AI. Działanie odwracalne po stronie klienta; tekst jawny nigdy nie opuszcza Twojego obszaru roboczego.",
+      "ares": "Wyszukiwanie czeskich firm po numerze IČO lub nazwie w publicznym rejestrze ARES (administracyjny rejestr podmiotów gospodarczych, czeski odpowiednik rejestru handlowego).",
+      "boe": "Hiszpańskie skonsolidowane akty prawne, dziennik urzędowy i BORME (biuletyn rejestru handlowego) z oficjalnego otwartego API Boletín Oficial del Estado.",
+      "brreg": "Wyszukiwanie norweskich firm po organisasjonsnummer lub nazwie w publicznym otwartym API Enhetsregisteret (Brreg).",
+      "companiesHouse": "Wyszukiwanie brytyjskich firm po numerze rejestracyjnym Companies House lub nazwie w publicznym API danych Companies House. Wymaga bezpłatnego klucza API.",
+      "createDocx": "Tworzy dokumenty Word z poziomu czatu, z formatowaniem, tabelami, nagłówkami i osadzonymi stylami. Wynik można pobrać i edytować w Wordzie, LibreOffice i Pages.",
+      "denue": "Wyszukiwanie meksykańskich zakładów i jednostek gospodarczych po identyfikatorze zakładu DENUE, nazwie lub firmie w oficjalnym API DENUE instytutu INEGI. DENUE to katalog zakładów, a nie rejestr spółek Registro Público de Comercio. Wymaga bezpłatnego tokenu API INEGI.",
+      "edgar": "Wyszukiwanie amerykańskich spółek publicznych po Central Index Key (CIK) w API zgłoszeń EDGAR komisji SEC.",
+      "gcis": "Wyszukiwanie tajwańskich firm po 統一編號 (tongbian, identyfikator podatkowy) lub nazwie w otwartym API portalu Commerce Industrial Services Ministerstwa Gospodarki (MoEA).",
+      "infosoud": "Wyszukiwanie czeskich spraw sądowych i kalendarz rozpraw z infosoud.gov.cz. Szukaj po sygnaturze, sądzie lub stronie, aby poznać terminy rozpraw i stan sprawy.",
+      "krs": "Wyszukiwanie polskich firm po numerze KRS w otwartym API Krajowego Rejestru Sądowego (KRS) Ministerstwa Sprawiedliwości. Obejmuje Rejestr Przedsiębiorców oraz Rejestr Stowarzyszeń (stowarzyszenia i fundacje).",
+      "orsr": "Wyszukiwanie słowackich firm po numerze IČO lub nazwie w API JSON Obchodný register Slovenskej republiky prowadzonym przez Ministerstwo Sprawiedliwości.",
+      "prh": "Wyszukiwanie fińskich firm po Y-tunnus lub nazwie w otwartym API AvoinData v3 urzędu Patentti- ja rekisterihallitus (PRH).",
+      "rechercheEntreprises": "Wyszukiwanie francuskich firm po SIREN, SIRET lub nazwie w otwartym API recherche-entreprises.api.gouv.fr (data.gouv.fr / Etalab, Licence Ouverte 2.0).",
+      "rpo": "Słowackie wyszukiwanie po IČO lub nazwie w Register právnických osôb, podnikateľov a orgánov verejnej moci (RPO) prowadzonym przez Urząd Statystyczny Republiki Słowackiej. Obejmuje wszystkie osoby prawne i przedsiębiorców, w tym jednoosobowe działalności, stowarzyszenia, fundacje i organy publiczne spoza rejestru handlowego.",
+      "vies": "Weryfikacja numerów VAT w całej UE przez API REST systemu wymiany informacji o VAT (VIES) Komisji Europejskiej. Potwierdza, czy numer VAT jest zarejestrowany w państwie członkowskim dostawcy, i zwraca nazwę oraz adres podmiotu, jeśli państwo członkowskie je ujawnia.",
+      "webSearch": "Wyszukiwanie w publicznej sieci i czytanie poszczególnych stron. Gdy ustawiono jurysdykcję, zapytania trafiają najpierw do źródeł pierwotnych (sądy, portale prawne), w przeciwnym razie do otwartej sieci. Włączane dla każdej rozmowy osobno."
+    },
+    "toolNames": {
+      "anonymize": "Anonimizuj",
+      "createDocx": "Utwórz DOCX",
+      "gcis": "Rejestr spółek GCIS",
+      "vies": "Weryfikacja VAT UE (VIES)",
+      "webSearch": "Wyszukiwanie w sieci"
+    },
+    "unavailable": "Jeszcze niedostępne"
+  },
+  "guides": {
+    "action": {
+      "replay": "Uruchom ponownie",
+      "skip": "Pomiń"
+    },
+    "checklist": {
+      "activeTour": "Proszę najpierw ukończyć lub zamknąć bieżący przewodnik.",
+      "progress": "Ukończono {completed} z {total}"
+    },
+    "community": {
+      "personalSupport": "Indywidualne wsparcie"
+    },
+    "help": {
+      "buttonLabel": "Pomoc i opinie",
+      "title": "Pomoc i opinie"
+    },
+    "leave": "Zakończ przewodnik",
+    "minutes": "{count} min.",
+    "nudge": {
+      "action": "Otwórz przewodniki",
+      "body": "Nowy tutaj? Kilka krótkich przewodników pokaże Ci wszystko."
+    },
+    "status": {
+      "skipped": "Pominięto"
+    },
+    "tours": {
+      "chat": {
+        "description": "Dodaj kontekst dla AI i bezpiecznie wyślij zapytanie",
+        "examplePrompt": "Podsumuj najważniejsze obowiązki wynikające z tej umowy",
+        "steps": {
+          "anonymize": {
+            "body": "Ukrywa dane osobowe przed wysłaniem, a następnie przywraca je w odpowiedzi.",
+            "title": "Wyślij anonimowo",
+            "when": "Włącz, gdy tekst zawiera dane osobowe, a pytanie nie zależy od tego, kim są strony. Zostaw wyłączone, gdy chodzi właśnie o tożsamość, na przykład przy badaniu konfliktu interesów: symbole zastępcze zabierają dokładnie to, o co pytasz."
+          },
+          "attach": {
+            "body": "Przesyła plik z tego urządzenia do rozmowy. Jest czytany tylko na potrzeby tego wątku i nie trafia do sprawy.",
+            "title": "Załącz plik",
+            "when": "Najlepsze do jednorazowego dokumentu, którego nie musisz zachowywać: projektu, który właśnie przyszedł mailem, skanu albo arkusza, z którego chcesz tylko streszczenie."
+          },
+          "composer": {
+            "body": "Napisz zwykłym językiem, czego chcesz: jakie zadanie, czego dotyczy i jakiej postaci odpowiedzi oczekujesz. Wszystko inne tutaj tylko doprecyzowuje już napisane polecenie.",
+            "title": "Zacznij od polecenia"
+          },
+          "context": {
+            "body": "Używa jako kontekstu zapisanej już sprawy lub pliku. Niczego ponownie nie przesyła ani nie kopiuje.",
+            "title": "Odwołaj się do sprawy lub pliku",
+            "when": "Używaj zamiast załączania pliku zawsze, gdy dokument jest już zapisany. Wskaż sprawę, gdy asystent ma przejrzeć ją w całości; jeden plik, gdy dokładnie wiesz, który ma przeczytać. Wpisanie @ w pustym edytorze otwiera tę listę od razu."
+          },
+          "plusMenu": {
+            "body": "Za pomocą + załączysz plik lub wskażesz sprawę.",
+            "title": "Dodaj materiały przez +",
+            "when": "Gdy potrzebnych materiałów nie ma jeszcze na czacie."
+          },
+          "send": {
+            "body": "Wysyła wiadomość razem ze wszystkim, co powyżej załączono, wskazano lub włączono. Edytor zostaje na miejscu, więc kolejnym pytaniem uzupełnisz to, czego zabrakło w pierwszej odpowiedzi.",
+            "title": "Wyślij wiadomość",
+            "when": "Pierwsza odpowiedź pokaże, czego jeszcze brakuje."
+          }
+        },
+        "title": "Zacznij od czatu"
+      },
+      "chatPower": {
+        "description": "Użyj umiejętności lub podłącz inne przydatne narzędzia",
+        "steps": {
+          "mcp": {
+            "body": "Włącza i wyłącza narzędzia podłączonego serwera w twoich czatach: rejestry przedsiębiorców, systemy wewnętrzne, wszystko, co podłączył twój zespół.",
+            "title": "Podłączone serwery narzędzi",
+            "when": "Włącz, gdy odpowiedź wymaga aktualnych danych spoza obszaru roboczego. Resztę zostaw wyłączoną: im mniej narzędzi w grze, tym węższa i bardziej przewidywalna odpowiedź."
+          },
+          "models": {
+            "body": "Zmienia model tylko w tej rozmowie. Pozostałe wątki zachowują model domyślny ustawiony dla twojego obszaru roboczego.",
+            "title": "Który model"
+          },
+          "plusMenu": {
+            "body": "To samo menu zawiera też zmianę modelu, umiejętności i podłączone serwery narzędzi. Kolejne kroki je otworzą i omówią każdą opcję po kolei.",
+            "title": "Więcej za przyciskiem +"
+          },
+          "skills": {
+            "body": "Wstawia zapisany prompt albo umiejętność napisaną przez twój zespół: zatwierdzony zestaw instrukcji, dzięki któremu to samo zadanie za każdym razem wykonywane jest tak samo.",
+            "title": "Umiejętności i zapisane prompty",
+            "when": "Użyj, gdy zadanie się powtarza i liczy się sformułowanie, na przykład przy standardowej weryfikacji umowy albo streszczeniu zlecenia. Wpisanie / w pustym edytorze otwiera tę listę od razu."
+          }
+        },
+        "title": "Wykorzystaj czat w pełni"
+      },
+      "documents": {
+        "description": "Dodaj dokument do sprawy i znajdź go później",
+        "steps": {
+          "browse": {
+            "body": "Ta tabela jest listą dokumentów sprawy. Przesłane pliki pojawiają się tutaj jako wiersze. Aby wrócić później, otwórz sprawę z paska bocznego, wybierz jej widok tabeli, a następnie wybierz wiersz dokumentu.",
+            "title": "Znajdź dokument ponownie"
+          },
+          "upload": {
+            "body": "Przycisk Prześlij otwiera selektor plików; możesz też przeciągać pliki do sprawy. Każdy plik staje się dokumentem w tej sprawie, dzięki czemu zespół może go znaleźć, a stella może wykorzystać podczas przeglądu.",
+            "title": "Dodaj dokument do sprawy",
+            "when": "Prześlij plik tutaj, jeśli należy do sprawy i powinien pozostać dostępny. Dołącz go bezpośrednio w czacie tylko wtedy, gdy stanowi tymczasowy kontekst jednej rozmowy."
+          }
+        },
+        "title": "Praca z dokumentami"
+      },
+      "playbooks": {
+        "description": "Zapisz sposób weryfikacji dokumentów na przyszłość",
+        "steps": {
+          "basics": {
+            "body": "Dodaj nazwę i opis. W razie potrzeby ogranicz go do określonego typu dokumentu.",
+            "title": "Nazwij playbook"
+          },
+          "create": {
+            "body": "Zacznij od pustego playbooka.",
+            "title": "Utwórz playbook"
+          },
+          "overview": {
+            "body": "Playbook zachowa pytania i zasady dla kolejnych dokumentów.",
+            "title": "Zapisz sposób weryfikacji"
+          },
+          "positions": {
+            "body": "Dla każdej zasady wybierz, czy stella ma ocenić tekst, czy pobrać z niego informację.",
+            "title": "Dodaj zasady weryfikacji"
+          }
+        },
+        "title": "Utwórz playbook"
+      },
+      "tabularReview": {
+        "description": "Wydobądź odpowiedzi z wielu plików naraz",
+        "steps": {
+          "addColumn": {
+            "body": "Opcja Nowa kolumna otwiera edytor kolumny. Nadaj kolumnie jasną nazwę w formie pytania i dokładnie wskaż aplikacji stella, czego ma szukać; ta sama instrukcja zostanie zastosowana do każdego wiersza dokumentu.",
+            "title": "Zadaj jedno pytanie o każdy dokument",
+            "when": "Utwórz osobną kolumnę dla każdej odpowiedzi, którą chcesz porównywać, filtrować, sortować lub eksportować. Powiązany kontekst umieść w prompcie zamiast łączyć kilka odpowiedzi w jednej komórce."
+          },
+          "answerType": {
+            "body": "Pole Zwraca określa format każdej odpowiedzi. Gdy wynik ma strukturę, wybierz liczbę, datę, pojedynczy wybór lub wielokrotny wybór; stella zachowa spójność kolumny zamiast zwracać dowolny tekst.",
+            "title": "Wybierz typ odpowiedzi",
+            "when": "Użyj wyboru dla stałego zestawu wyników, liczby lub daty do sortowania i obliczeń, a tekstu tylko wtedy, gdy odpowiedź rzeczywiście wymaga szczegółowego opisu."
+          },
+          "table": {
+            "body": "Każdy wiersz to dokument, a każda kolumna niestandardowa to jedno pytanie zadawane jednocześnie o wszystkie dokumenty. W ten sposób folder plików zmienia się w porównywalne odpowiedzi bez otwierania każdego pliku osobno.",
+            "title": "Przejrzyj cały zestaw, nie jeden plik",
+            "when": "Użyj tabeli, gdy potrzebujesz tych samych faktów lub decyzji z kilku dokumentów. Otwórz dokument bezpośrednio, jeśli układ, sformułowania lub otaczający kontekst są ważniejsze niż porównanie."
+          }
+        },
+        "title": "Przegląd w tabeli"
+      },
+      "workflows": {
+        "description": "Połącz kroki w powtarzalny przepływ pracy",
+        "steps": {
+          "create": {
+            "body": "Opcja Utwórz otwiera niezapisaną wersję roboczą przepływu pracy. Kolejne kroki określają, kiedy przepływ się uruchamia, co robi i w którym miejscu człowiek musi zdecydować, czy może być kontynuowany.",
+            "title": "Rozpocznij wersję roboczą przepływu pracy"
+          },
+          "overview": {
+            "body": "Przepływ pracy łączy wyzwalacz z sekwencją działań, dzięki czemu rutynowy proces za każdym razem przebiega tak samo. Może automatycznie przygotować pracę, pozostawiając w razie potrzeby decyzję osobie przeprowadzającej przegląd.",
+            "title": "Zautomatyzuj powtarzalny proces",
+            "when": "Automatyzuj pracę, która ma stabilny wyzwalacz, powtarzalne kroki i jasno wskazaną osobę odpowiedzialną za wyjątki. Pracę zmienną lub wymagającą dużej dozy osądu wykonuj ręcznie, dopóki sam proces się nie ustabilizuje."
+          },
+          "reviewGate": {
+            "body": "Punkt zatwierdzenia wstrzymuje wykonanie, dopóki ktoś go nie zatwierdzi lub nie odrzuci. Umieść go przed pierwszym działaniem, którego nie należy podejmować wyłącznie na podstawie automatycznego wyniku.",
+            "title": "Pozostaw decyzję osobie przeprowadzającej przegląd",
+            "when": "Użyj punktu zatwierdzenia przed wysłaniem, zarejestrowaniem, eskalacją lub innym ostatecznym przyjęciem wyniku o istotnych skutkach. Pomiń go tylko wtedy, gdy następny krok można bezpiecznie cofnąć i nie wymaga ludzkiej oceny."
+          },
+          "steps": {
+            "body": "Kroki są wykonywane w tej kolejności i przekazują wyniki pracy dalej. Każdy krok powinien odpowiadać za jedno jasno określone działanie, aby błędy były zrozumiałe, a kolejność łatwa do zmiany.",
+            "title": "Zbuduj sekwencję kroków"
+          },
+          "trigger": {
+            "body": "Wyzwalacz określa, kiedy rozpoczyna się wykonanie: ręcznie, według harmonogramu lub po przesłaniu pasujących plików. Zawęź warunki dotyczące sprawy i plików, aby niepowiązana praca nigdy nie uruchomiła przepływu.",
+            "title": "Wybierz, co uruchamia przepływ pracy",
+            "when": "Gdy proces jest nowy, uruchamiaj go ręcznie; w rutynowych działaniach zależnych od czasu użyj harmonogramu, a przesyłania pliku tylko wtedy, gdy przychodzący dokument stanowi wiarygodny sygnał do rozpoczęcia."
+          }
+        },
+        "title": "Zautomatyzuj przepływ pracy"
+      }
+    },
+    "unavailable": "Ten przewodnik jest obecnie niedostępny",
+    "whenLabel": "Kiedy tego użyć:"
+  },
+  "knowledge": {
+    "agentSkills": {
+      "availabilityClient": "Jeden klient",
+      "availabilityClientBadgeHelp": "Dostępna tylko w sprawach jednego klienta.",
+      "availabilityClientHelp": "Można jej używać tylko w sprawach tego klienta. Później nie da się tego zmienić.",
+      "availabilityFixedHelp": "Ustawione przy tworzeniu umiejętności. Nie da się tego zmienić.",
+      "availabilityLabel": "Dostępna w",
+      "availabilityMatter": "Jedna sprawa",
+      "availabilityMatterBadgeHelp": "Dostępna tylko w jednej sprawie.",
+      "availabilityMatterHelp": "Można jej używać tylko w tej sprawie. Później nie da się tego zmienić.",
+      "availabilityOrganization": "Cała organizacja",
+      "availabilityTeamNeedsMatter": "Aby udostępnić umiejętność zespołowi, wybierz sprawę, dla której jest przeznaczona. Później nie da się tego zmienić.",
+      "builtIn": {
+        "playbookBuilder": {
+          "description": "Utwórz playbook do przeglądu umów stanowisko po stanowisku na podstawie wcześniej podpisanych umów, krótkiego wywiadu i standardów rynkowych.",
+          "name": "Utwórz playbook",
+          "openingPrompts": {
+            "extendExisting": {
+              "body": "Dodaj stanowiska do jednego z moich istniejących playbooków.",
+              "name": "Rozszerz playbook"
+            },
+            "fromContracts": {
+              "body": "Utwórz playbook dla umów o zachowaniu poufności na podstawie moich wcześniej podpisanych umów.",
+              "name": "Zacznij od wcześniejszych umów"
+            },
+            "fromMarketStandards": {
+              "body": "Utwórz playbook dla umów z dostawcami, wychodząc od stanowisk zgodnych ze standardami rynkowymi.",
+              "name": "Zacznij od standardów rynkowych"
+            }
+          }
+        }
+      },
+      "builtInSection": "Wbudowane umiejętności",
+      "deleteFile": "Usuń plik",
+      "deleteFileConfirm": "Usunąć plik? Tej operacji nie można cofnąć.",
+      "disableSkill": "Wyłącz umiejętność",
+      "discoverSkills": "Znajdź umiejętności",
+      "discoveredSkills": "{count, plural, one {Znaleziono # umiejętność} few {Znaleziono # umiejętności} many {Znaleziono # umiejętności} other {Znaleziono # umiejętności}}",
+      "discoveryEmpty": "W tym repozytorium lub folderze nie znaleziono umiejętności.",
+      "discoverySkippedInvalid": "{count, plural, one {Pominięto # nieprawidłową umiejętność} few {Pominięto # nieprawidłowe umiejętności} many {Pominięto # nieprawidłowych umiejętności} other {Pominięto # nieprawidłowych umiejętności}}",
+      "dropPack": "Upuść plik .zip/.skill lub SKILL.md, aby zaimportować umiejętność",
+      "editSkill": "Edytuj umiejętność",
+      "enableSkill": "Włącz umiejętność",
+      "enterFileName": "Wpisz nazwę pliku.",
+      "exportAsSkill": "Eksportuj jako .skill",
+      "exportAsZip": "Eksportuj jako .zip",
+      "exportFailed": "Nie udało się wyeksportować umiejętności",
+      "exportSkill": "Eksportuj umiejętność",
+      "fileExists": "Plik o tej ścieżce już istnieje",
+      "howItRuns": "Jak działa",
+      "importFailureFetch": "Nie udało się wczytać źródła umiejętności.",
+      "importFailureIntegrity": "Źródło umiejętności zmieniło się po jego wykryciu. Przejrzyj je ponownie.",
+      "importFailureLimit": "Osiągnięto limit umiejętności.",
+      "importFailureNameConflict": "Umiejętność o tej nazwie już istnieje.",
+      "importHelp": "Wklej adres URL publicznego repozytorium lub folderu GitHub albo pliku SKILL.md. Przejrzyj znalezione umiejętności przed instalacją.",
+      "importPartial": "{installedCount, plural, one {Zaimportowano: {installed}} few {Zaimportowano: {installed}} many {Zaimportowano: {installed}} other {Zaimportowano: {installed}}}; {failedCount, plural, one {niepowodzenie: {failed}} few {niepowodzenia: {failed}} many {niepowodzenia: {failed}} other {niepowodzenia: {failed}}}.",
+      "importSelected": "Importuj wybrane ({count})",
+      "importSkill": "Importuj z URL",
+      "importTitle": "Importuj umiejętność",
+      "importedSkills": "{count, plural, one {Zaimportowano # umiejętność} few {Zaimportowano # umiejętności} many {Zaimportowano # umiejętności} other {Zaimportowano # umiejętności}}",
+      "invalidPath": "Użyj ścieżki względnej. Nazwy plików i folderów nie mogą być . ani .., zaczynać się ani kończyć spacją, kończyć się kropką ani zawierać \\ : * ? \" |, nawiasów ostrych ani znaków sterujących.",
+      "invocationAuto": "Automatycznie",
+      "invocationAutoHelp": "AI może sama użyć tej umiejętności, gdy pasuje do prośby.",
+      "invocationManual": "Tylko na żądanie",
+      "invocationManualHelp": "Używana tylko wtedy, gdy wywołasz ją przez / lub dodasz do wiadomości.",
+      "license": "Licencja: {license}",
+      "newFile": "Nowy plik",
+      "newFileFilenamePlaceholder": "notes.md",
+      "newFilePathPlaceholder": "folder/notes.md",
+      "newFolder": "Nowy folder",
+      "pdfPreviewSoon": "Podgląd PDF będzie dostępny po wprowadzeniu obsługi binarnych zasobów umiejętności.",
+      "renameFile": "Zmień nazwę",
+      "scopePrivate": "Tylko ja",
+      "scopeTeam": "Wszyscy w zespole",
+      "selectSkillToImport": "Wybierz co najmniej jedną umiejętność.",
+      "selectionLimit": "Wybierz jednocześnie maksymalnie {count, plural, one {# umiejętność} few {# umiejętności} many {# umiejętności} other {# umiejętności}}.",
+      "skippedFiles": "{count, plural, one {# plik nie został zaimportowany} few {# pliki nie zostały zaimportowane} many {# plików nie zostało zaimportowanych} other {# pliku nie zaimportowano}}",
+      "skippedReasonNotUtf8Text": "To nie jest tekst UTF-8",
+      "skippedReasonOutsideSkillFolder": "Poza folderem umiejętności",
+      "skippedReasonUnsupportedExtension": "Nieobsługiwany typ pliku",
+      "skippedReasonUnsupportedFolder": "Poza folderem zasobów",
+      "starter": {
+        "compare": {
+          "body": "Porównaj dwie wersje tego dokumentu i wypisz każdą istotną zmianę wraz z jej lokalizacją.",
+          "description": "Wypisz każdą istotną zmianę między dwiema wersjami",
+          "name": "Porównaj wersje"
+        },
+        "draft": {
+          "body": "Przygotuj wyważoną odpowiedź na to pismo. Zachowaj profesjonalny ton, odnieś się do każdego poruszonego punktu i wskaż otwarte kwestie, które mam potwierdzić.",
+          "description": "Przygotuj profesjonalną odpowiedź na pismo",
+          "name": "Przygotuj odpowiedź"
+        },
+        "risks": {
+          "body": "Sprawdź ten dokument pod kątem ryzyk prawnych, brakujących zabezpieczeń i niejednoznacznych klauzul. Przy każdym ustaleniu wskaż konkretną klauzulę.",
+          "description": "Wskaż ryzyka prawne i niejednoznaczne klauzule",
+          "name": "Znajdź ryzyka"
+        },
+        "summarize": {
+          "body": "Podsumuj ten dokument. Uwzględnij strony, główne zobowiązania, terminy, warunki finansowe oraz ewentualne klauzule dotyczące rozwiązania umowy lub odpowiedzialności.",
+          "description": "Uzyskaj uporządkowane podsumowanie najważniejszych warunków",
+          "name": "Podsumuj dokument"
+        }
+      },
+      "uploadHelp": "Użyj pliku SKILL.md lub folderu .zip/.skill zawierającego SKILL.md i opcjonalne zasoby tylko do odczytu.",
+      "uploadPack": "Prześlij .zip/.skill lub SKILL.md",
+      "urlPlaceholder": "https://github.com/org/repo/tree/main/sciezka/do/umiejetnosci",
+      "version": "Wersja: {version}"
+    },
+    "catalogue": {
+      "addToLibrary": "Dodaj do biblioteki",
+      "added": "{name} jest w Twojej bibliotece",
+      "confirmAddTitle": "Dodać {name} do {organization}?",
+      "confirmDescription": "Kopia tego szablonu trafi do biblioteki {organization}.",
+      "confirmDownloadTitle": "Pobrać {name} dla {organization}?",
+      "confirmStarterDescription": "Kopia tego playbooka trafi do biblioteki {organization}.",
+      "confirmUseTitle": "Użyć {name} w {organization}?",
+      "installFailed": "Nie udało się dodać szablonu",
+      "noPreview": "Podgląd tego szablonu jest niedostępny.",
+      "notFound": "Tego szablonu nie ma w katalogu.",
+      "unavailable": "Katalog jest teraz niedostępny."
+    },
+    "landing": {
+      "accountLine": "Z bezpłatnym kontem przechowasz własne szablony, klauzule i playbooki swojej organizacji.",
+      "withAccount": "Z bezpłatnym kontem"
+    },
+    "mcp": {
+      "addAndConnect": "Dodaj i połącz",
+      "addServer": "Dodaj serwer",
+      "addServerCardTitle": "Dodaj nową integrację",
+      "auth": {
+        "bearer": "Token Bearer",
+        "none": "Bez uwierzytelniania",
+        "oauth2": "OAuth 2.0"
+      },
+      "authorizationReviewDescription": "Przed zatwierdzeniem sprawdź serwer autoryzacji i domeny punktów końcowych.",
+      "authorizationServer": "Serwer autoryzacji",
+      "bearerTokenDescription": "Ten serwer używa tokenu Bearer. Wklej token od dostawcy, aby zakończyć łączenie.",
+      "callbackConnectedDescription": "Jej narzędzia są gotowe do użycia w czacie.",
+      "callbackConnectedTitle": "Integracja połączona",
+      "callbackFailedDescription": "Logowanie nie zostało ukończone, więc nic nie połączono.",
+      "callbackFailedTitle": "Integracja nie została połączona",
+      "connectedToast": "MCP połączone",
+      "connectedWithLastUsed": "Połączono · ostatnio użyto {time}",
+      "description": "Zarządzaj integracjami, które mogą dodawać narzędzia do czatu. Tokeny są przechowywane osobno dla każdego użytkownika.",
+      "detected": "Wykryto {authType}",
+      "disable": "Wyłącz",
+      "disabled": "Połączono · wyłączone",
+      "emptyDescription": "Wybrane prawnicze integracje pojawią się tutaj po włączeniu ich dla Twojego obszaru roboczego.",
+      "emptyTitle": "Brak integracji",
+      "enable": "Włącz",
+      "endpointOrigins": "Domeny punktów końcowych",
+      "enterToken": "Wpisz token dostępu.",
+      "errorDescription": "Nie udało się zaktualizować integracji.",
+      "errorTitle": "MCP nieudane",
+      "mcpExplainer": "Integracje łączą z czatem usługi zewnętrzne, z którymi może pracować AI.",
+      "needsReapproval": "Wymaga ponownego zatwierdzenia",
+      "needsReauth": "Wymaga ponownego połączenia",
+      "off": "Wył.",
+      "on": "Wł.",
+      "openTools": "Otwórz Narzędzia",
+      "otherTitle": "Pozostałe integracje",
+      "probe": "Sprawdź",
+      "recommendedFor": "Rekomendowane dla {jurisdictions}",
+      "saveToken": "Zapisz token",
+      "tokenHelp": "Jak uzyskać token",
+      "tokenLabel": "Token Bearer",
+      "tokenPlaceholder": "Wklej token",
+      "urlLabel": "URL serwera MCP",
+      "urlPlaceholder": "https://example.com/mcp",
+      "useInChat": "Używaj w czacie",
+      "whatIsAnMcpServer": "Co to jest serwer MCP?"
+    },
+    "playbooks": {
+      "addCheck": "Dodaj dokładną regułę",
+      "addExtractPosition": "Tylko ekstrakcja",
+      "addExtractPositionHint": "Przechwytuje wartość, bez oceny",
+      "addGradedPosition": "Stanowisko oceniane",
+      "addGradedPositionHint": "Wielopoziomowe reguły z werdyktem",
+      "addOption": "Dodaj opcję",
+      "addPosition": "Dodaj stanowisko",
+      "addRule": "Reguła",
+      "adoptAsIdeal": "Przyjmij jako idealne brzmienie",
+      "all": "Wszystkie playbooki",
+      "approval": {
+        "approve": "Zatwierdź",
+        "approveFailed": "Nie udało się zatwierdzić playbooka",
+        "approvedOn": "Zatwierdzono {date}",
+        "approvedToast": "Playbook zatwierdzony",
+        "saveBeforeApprove": "Zapisz zmiany przed zatwierdzeniem tego playbooka.",
+        "sourcesNotice": "Przed zatwierdzeniem sprawdź, czy żadne stanowisko nie wymienia dokumentu, sprawy ani kontrahenta: ten playbook może czytać cała organizacja.",
+        "statusApproved": "Zatwierdzony",
+        "statusDraft": "Wersja robocza"
+      },
+      "askContentLabel": "Typ odpowiedzi",
+      "askQuestionLabel": "Treść pytania",
+      "askQuestionPlaceholder": "Co odczytać z każdego dokumentu? Pozostaw puste, aby wprowadzić ręcznie.",
+      "autosave": {
+        "failed": "Nie udało się zapisać",
+        "nameMissing": "Nie zapisano: podaj nazwę",
+        "positionsNeedAttention": "Nie zapisano: {count, plural, one {# stanowisko wymaga} few {# stanowiska wymagają} many {# stanowisk wymaga} other {# stanowiska wymaga}} uwagi"
+      },
+      "buildWithAi": {
+        "description": "Odpowiedz na kilka pytań na czacie, a playbook będzie zapisywany na bieżąco.",
+        "title": "Utwórz z AI"
+      },
+      "check": "Użyj dokładnej reguły zamiast AI",
+      "checkHint": "Do mierzalnych warunków, na przykład: termin płatności ≤ 30 dni.",
+      "checkKind": {
+        "constraint": "Sprawdź odpowiedź według warunku",
+        "presence": "Wymagaj odpowiedzi lub jej zabroń"
+      },
+      "clausePlaceholder": "Szukaj klauzul…",
+      "clauseSearchEmpty": "Nie znaleziono klauzul",
+      "collapsePosition": "Zwiń stanowisko",
+      "confirmDelete": "Spowoduje to trwałe usunięcie playbooka.",
+      "contentType": {
+        "int": "Liczba",
+        "singleSelect": "Jednokrotny wybór",
+        "text": "Tekst"
+      },
+      "convertToExtract": "Tylko wyodrębnij odpowiedź",
+      "convertToExtractDescription": "Spowoduje to usunięcie poziomów oceny i samej oceny dla tego stanowiska. Tej czynności nie można cofnąć.",
+      "convertToExtractTitle": "Przekształcić na tylko ekstrakcję?",
+      "convertToGraded": "Dodaj reguły oceny",
+      "convertToRules": "Przekształć w reguły",
+      "createPlaybook": "Nowy playbook",
+      "created": "Playbook utworzony",
+      "creatingFromStarter": "Trwa tworzenie playbooka z wybranego szablonu…",
+      "customizeAnswer": "Zmień wyodrębnianą odpowiedź",
+      "customizeAnswerHint": "Edytuj pytanie lub format odpowiedzi.",
+      "decisionLine": "{runs, plural, one {zaakceptowano {accepted, number} · odrzucono {dismissed, number} · w # weryfikacji} few {zaakceptowano {accepted, number} · odrzucono {dismissed, number} · w # weryfikacjach} many {zaakceptowano {accepted, number} · odrzucono {dismissed, number} · w # weryfikacjach} other {zaakceptowano {accepted, number} · odrzucono {dismissed, number} · w # weryfikacjach}}",
+      "deleteFailed": "Nie udało się usunąć playbooka",
+      "deletePlaybook": "Usuń playbook",
+      "deletePosition": "Usuń stanowisko",
+      "deleted": "Playbook usunięty",
+      "deletedElsewhere": "Ten playbook został usunięty.",
+      "derivedAutomatically": "Pytanie wyodrębniające i format odpowiedzi są generowane na podstawie tej pozycji. Nie trzeba nic konfigurować.",
+      "derivedQuestion": "Pytanie wyodrębniające",
+      "derivedType": "Format odpowiedzi",
+      "descriptionPlaceholder": "Co sprawdza ten playbook?",
+      "disabledBadge": "Wyłączone: pomijane podczas uruchomień",
+      "discardChanges": "Odrzuć zmiany",
+      "duplicatePosition": "Duplikuj stanowisko",
+      "empty": "Brak playbooków",
+      "emptyDescription": "Utwórz playbook, aby sprawdzać dokumenty pod kątem swoich standardów.",
+      "enablePosition": "Włącz stanowisko",
+      "entryLabelPlaceholder": "Etykieta (opcjonalnie)",
+      "entryPlaceholder": "Akceptowalne alternatywne brzmienie",
+      "entryRank": "#{index}",
+      "expandPosition": "Rozwiń stanowisko",
+      "expectation": {
+        "required": "Odpowiedź musi być obecna",
+        "restricted": "Odpowiedź musi być nieobecna"
+      },
+      "extractOnlyBadge": "Tylko ekstrakcja",
+      "extractOnlyDescription": "Bez oceny; wartość jest zapisywana w tabeli.",
+      "extraction": "Ekstrakcja",
+      "extractionAuto": "Automatyczna",
+      "extractionManual": "Ręczna",
+      "fixErrorsBeforeSaving": "Popraw podświetlone pola przed zapisaniem.",
+      "gradedNeedsContent": "Dodaj co najmniej jedną regułę, wpis alternatywny lub idealne brzmienie.",
+      "guidanceLabel": "Dodaj instrukcje przeglądu",
+      "guidancePlaceholder": "Dodaj wyjątek lub instrukcję, których nie obejmują powyższe reguły.",
+      "homeDescription": "Ustal standardy przeglądu raz, a następnie stosuj je konsekwentnie do każdego dokumentu.",
+      "idealFromClause": "Z biblioteki klauzul",
+      "idealInline": "Tekst własny",
+      "idealInlinePlaceholder": "Wklej idealne brzmienie…",
+      "idealLanguage": "Idealne brzmienie",
+      "issueLabel": "Zagadnienie",
+      "issuePlaceholder": "np. Ograniczenie odpowiedzialności",
+      "lastUsed": "Ostatnio użyto: {date}",
+      "loadFailed": "Nie udało się załadować playbooków",
+      "loading": "Ładowanie playbooków…",
+      "manageTypes": "Zarządzaj typami…",
+      "namePlaceholder": "np. przegląd NDA",
+      "nameRequired": "Podaj nazwę.",
+      "negotiation": {
+        "addTalkingPoint": "Dodaj argument",
+        "escalationLabel": "Eskalacja",
+        "escalationPlaceholder": "Kiedy i do kogo eskalować (opcjonalnie)",
+        "rationaleLabel": "Uzasadnienie",
+        "rationalePlaceholder": "Dlaczego zależy nam na tym stanowisku (opcjonalnie)",
+        "talkingPointPlaceholder": "Co powiedzieć",
+        "talkingPointsLabel": "Argumenty",
+        "title": "Negocjacje"
+      },
+      "noPositions": "Brak stanowisk. Dodaj pierwsze.",
+      "noSettledPosition": "Brak ustalonego stanowiska",
+      "openInPane": "Otwórz playbook",
+      "optionPlaceholder": "Wartość opcji",
+      "optionsLabel": "Opcje",
+      "outline": "Spis treści",
+      "pendingPane": {
+        "description": "Odpowiedz na pytania na czacie. Gdy zatwierdzisz pierwszy zapis, playbook otworzy się tutaj i będzie można go edytować obok rozmowy.",
+        "title": "Twój playbook pojawi się tutaj"
+      },
+      "positionOfTotal": "Stanowisko {index} z {total}",
+      "positionRemoved": "Stanowisko usunięte",
+      "positions": "Stanowiska",
+      "recent": "Ostatnio używane",
+      "recommended": "Polecane szablony",
+      "redLinePlaceholder": "Brzmienie, które nigdy nie jest akceptowalne",
+      "referenceStandard": "Z referencji",
+      "removeCheck": "Usuń kontrolę",
+      "removeIdeal": "Usuń idealne brzmienie",
+      "removeSource": "Usuń źródło {documentName}",
+      "reorderPosition": "Zmień kolejność stanowiska",
+      "review": {
+        "changePlaybook": "Wybierz inny playbook",
+        "extractedLabel": "Znaleziono:",
+        "facetTitle": "Sprawdzenie według playbooka",
+        "failed": "Nie udało się sprawdzić dokumentu",
+        "fixAccepted": "Zaakceptowano",
+        "insertFailed": "Nie udało się wstawić preferowanej klauzuli",
+        "insertPreferred": "Wstaw preferowaną klauzulę",
+        "launcherDescription": "Sprawdź ten dokument pod kątem playbooka organizacji i zobacz ustalenia bezpośrednio w tekście.",
+        "matchedFallback": "Dopasowana alternatywa:",
+        "noFindings": "Nie znaleziono problemów",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Wybierz playbook",
+        "reject": "Odrzuć",
+        "reviewAgain": "Sprawdź ponownie",
+        "reviewedAgainst": "Sprawdzono według {name}",
+        "reviewing": "Sprawdzanie…",
+        "reviewingHint": "W przypadku obszernych playbooków może to potrwać nawet kilka minut.",
+        "run": "Sprawdź",
+        "scrollToChange": "Przejdź do zmiany",
+        "viewClause": "Zobacz klauzulę",
+        "violatedRedLine": "Narusza nieakceptowalną regułę:"
+      },
+      "ruleNumber": "Reguła {index}",
+      "rulePlaceholder": "np. Termin płatności nie może przekraczać 30 dni",
+      "saveFailed": "Nie udało się zapisać playbooka",
+      "severity": {
+        "blocker": "Blokująca"
+      },
+      "severityLabel": "Waga",
+      "staleCopy": {
+        "loaded": "Wczytano nowszą wersję tego playbooka. Wczytaj ponownie przed edycją.",
+        "unavailable": "Nie udało się załadować najnowszej wersji tego playbooka. To ostatnio wczytana kopia, która może być nieaktualna."
+      },
+      "starters": {
+        "addedToast": "Dodano playbook",
+        "browseButton": "Przeglądaj gotowe playbooki",
+        "positionCount": "{count, plural, one {# pozycja} few {# pozycje} many {# pozycji} other {# pozycji}}",
+        "title": "Gotowe playbooki",
+        "useStarter": "Użyj tego szablonu"
+      },
+      "switchToAuto": "Generuj pytanie i format automatycznie",
+      "switchToManual": "Dostosuj pytanie i format odpowiedzi",
+      "termKind": {
+        "enumeration": "Wyliczenie",
+        "language": "Brzmienie",
+        "parameter": "Parametr",
+        "presence": "Obecność"
+      },
+      "tier": {
+        "acceptable": "Akceptowalne",
+        "fallback": "Alternatywne",
+        "notAcceptable": "Nieakceptowalne"
+      },
+      "untitledPosition": "Stanowisko bez nazwy",
+      "updated": "Playbook zaktualizowany",
+      "updatedAt": "Zaktualizowano: {date}",
+      "verdict": {
+        "additional": "Dodatkowe",
+        "compliant": "Zgodne",
+        "deviation": "Odstępstwo",
+        "fallback": "Alternatywne brzmienie",
+        "missing": "Brak",
+        "notApplicable": "Nie dotyczy"
+      },
+      "versions": {
+        "confirmRestore": "Treść bieżącej wersji roboczej zostanie zastąpiona treścią tej wersji.",
+        "restoreFailed": "Nie udało się przywrócić wersji",
+        "restoredToast": "Przywrócono wersję",
+        "versionHistory": "Historia wersji"
+      }
+    },
+    "sections": {
+      "caseLaw": {
+        "description": "Orzeczenia sądowe i baza orzecznictwa"
+      },
+      "clauses": {
+        "description": "Biblioteka klauzul wielokrotnego użytku"
+      },
+      "mcp": {
+        "description": "Połącz aplikację stella z zewnętrznymi narzędziami",
+        "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Oceniane listy kontrolne, które weryfikują dokumenty względem Twoich standardów"
+      },
+      "skills": {
+        "title": "Umiejętności"
+      },
+      "templates": {
+        "description": "Szablony dokumentów z symbolami zastępczymi",
+        "title": "Szablony"
+      },
+      "tools": {
+        "description": "Umiejętności, integracje i zawsze dostępne narzędzia, z których AI może korzystać na czacie",
+        "title": "Narzędzia"
+      },
+      "workflows": {
+        "description": "Zautomatyzuj pracę z dokumentami za pomocą wielokrokowych przepływów pracy wielokrotnego użytku."
+      }
+    },
+    "skills": {
+      "blueprintGallery": {
+        "cards": {
+          "answerFromSources": {
+            "blurb": "Odpowiedz na pytanie na podstawie wiarygodnych źródeł.",
+            "inside": "hierarchia źródeł · prompt badawczy",
+            "title": "Odpowiedź na podstawie źródeł"
+          },
+          "checkAgainstRules": {
+            "blurb": "Przejrzyj dokument, wskaż niezgodności i poprzyj je odwołaniami do źródeł.",
+            "inside": "materiały według jurysdykcji · lista kontrolna · prompt przeglądu",
+            "title": "Weryfikacja zgodności z regułami"
+          },
+          "intakeToDraft": {
+            "blurb": "Zbierz informacje, a następnie opracuj projekt dokumentu.",
+            "inside": "wywiad · dokumenty wzorcowe · prompt do opracowania projektu",
+            "title": "Od zebrania informacji do projektu"
+          }
+        },
+        "insideLabel": "W środku",
+        "startBlank": "Zacznij od pustej umiejętności",
+        "startBlankHint": "Pusta umiejętność na wypadek, gdy dokładnie wiesz, czego potrzebujesz.",
+        "subtitle": "Wybierz punkt wyjścia. Przygotujemy foldery i przeprowadzimy Cię przez ich uzupełnianie.",
+        "title": "Jak ma działać Twoja umiejętność?"
+      },
+      "commandConflict": "Umiejętność z tym poleceniem / już istnieje",
+      "commandHelp": "Wpisz to na czacie, aby uruchomić tę umiejętność.",
+      "commandLabel": "Polecenie czatu (opcjonalne)",
+      "commandPlaceholder": "np. podsumuj",
+      "errors": {
+        "commandInvalid": "Używaj tylko małych liter, cyfr, łączników i podkreśleń"
+      },
+      "form": {
+        "scope": "Widoczność",
+        "scopePrivate": "Tylko ja",
+        "scopeTeam": "Wszyscy w zespole"
+      }
+    }
+  },
+  "lawHome": {
+    "clearRecent": "Wyczyść ostatnie",
+    "clearRecentConfirmation": "Usunąć wszystkie Twoje ostatnie wyszukiwania, orzeczenia i akty prawne w tej organizacji? Tej czynności nie można cofnąć.",
+    "importFailed": "Nie udało się zaimportować lokalnej historii. Nadal jest zapisana na tym urządzeniu.",
+    "inForceFrom": "Obowiązuje od {date}",
+    "noRecent": "Brak ostatniej aktywności",
+    "noSignals": "Brak sygnałów",
+    "prompt": "Czego szukasz?",
+    "recent": "Ostatnie",
+    "recentCasesFilter": "Orzeczenia",
+    "recentLoadFailed": "Nie udało się wczytać ostatniej aktywności.",
+    "recentSearchFilter": "Wyszukiwania",
+    "recentUpdateFailed": "Nie udało się zaktualizować ostatniej aktywności.",
+    "searchLabel": "Szukaj w bazie prawnej",
+    "searchPlaceholder": "Sygnatura, numer aktu, ECLI lub słowa kluczowe",
+    "signals": "Sygnały",
+    "topCourts": "Z najwyższych sądów"
+  },
+  "legalReader": {
+    "annotations": {
+      "askPassagePrompt": "W sprawie tego fragmentu {citation}:\n\n„{quote}”\n\n",
+      "colorGreen": "Zielony",
+      "colorRed": "Czerwony",
+      "colorSky": "Niebieski",
+      "colorViolet": "Fioletowy",
+      "colorYellow": "Żółty",
+      "commentPlaceholder": "Napisz komentarz…",
+      "commentText": "Treść komentarza",
+      "commentedPassage": "Skomentowany fragment",
+      "editComment": "Edytuj komentarz",
+      "editedAt": "Edytowano {time}",
+      "guestAuthor": "Ty",
+      "guestLimitReached": "Ta karta może pomieścić do {count, plural, one {# wyróżnienia lub notatki} few {# wyróżnień i notatek} many {# wyróżnień i notatek} other {# wyróżnienia i notatki}}. Utwórz konto, aby zapisać więcej.",
+      "guestMigrationComplete": "Wyróżnienia i notatki zapisane.",
+      "guestMigrationFailed": "Niektórych wyróżnień i notatek nie udało się zapisać. Pozostaną na tej karcie do kolejnej próby.",
+      "guestSavePrompt": "Twoje wyróżnienia i notatki zostaną zapisane po utworzeniu bezpłatnego konta.",
+      "guestStorageUnavailable": "Nie udało się zapisać wyróżnień i notatek na tej karcie.",
+      "highlight": "Wyróżnij",
+      "highlightedPassage": "Wyróżniony fragment",
+      "history": {
+        "colorRestored": "Przywrócono kolor",
+        "commentRemoved": "Usunięto komentarz",
+        "commentRestored": "Przywrócono komentarz",
+        "highlightRemoved": "Usunięto wyróżnienie",
+        "highlightRestored": "Przywrócono wyróżnienie",
+        "markChanged": "To wyróżnienie lub komentarz zmieniono w międzyczasie w innym miejscu, więc pozostawiono je bez zmian.",
+        "markGone": "To wyróżnienie lub komentarz już nie istnieje.",
+        "nothingToRedo": "Nie ma czego ponowić",
+        "nothingToUndo": "Nie ma czego cofnąć",
+        "redoShortcut": "Ponów zmianę wyróżnienia lub komentarza",
+        "styleRestored": "Przywrócono styl",
+        "textRestored": "Przywrócono treść komentarza",
+        "undoShortcut": "Cofnij zmianę wyróżnienia lub komentarza",
+        "visibilityRestored": "Przywrócono udostępnianie"
+      },
+      "orphaned": {
+        "description": "Tekst tego dokumentu zmienił się od ich utworzenia: nie udało się ponownie odnaleźć w nim oznaczonych fragmentów albo występują one teraz w kilku miejscach. Nie są one wyświetlane w tekście.",
+        "summary": "{count, plural, one {# zaznaczenie lub komentarz nie pasuje już do tekstu} few {# zaznaczenia lub komentarze nie pasują już do tekstu} many {# zaznaczeń lub komentarzy nie pasuje już do tekstu} other {# zaznaczenia lub komentarza nie pasuje już do tekstu}}"
+      },
+      "removeHighlight": "Usuń wyróżnienie",
+      "styleHighlight": "Wyróżnienie",
+      "styleSquiggly": "Falista linia",
+      "styleStrikethrough": "Przekreślenie",
+      "visibilityShared": "Udostępnione organizacji",
+      "visibilitySharedWithMatter": "Udostępnione w sprawie"
+    },
+    "contents": {
+      "aiSection": "{section} (część wygenerowana przez AI)",
+      "headingWithAiSection": "{heading} (część wygenerowana przez AI: {section})"
+    },
+    "copyMenu": {
+      "blockQuoteWithCitation": "Cytat blokowy z odesłaniem",
+      "citationOnly": "Tylko odesłanie",
+      "citationWithQuote": "Odesłanie z cytatem",
+      "quoteWithCitation": "Cytat z odesłaniem",
+      "textOnly": "Tylko tekst"
+    }
+  },
+  "publicTools": {
+    "addSkill": "Dodaj umiejętność",
+    "addToStella": "Dodaj do stella",
+    "alreadyInstalled": "To narzędzie jest już zainstalowane.",
+    "content": "Treść",
+    "contentUnavailable": "Nie udało się wczytać treści tej umiejętności. Zobacz ją na GitHubie.",
+    "contribute": {
+      "contributingLink": "Przeczytaj przewodnik dla współtwórców",
+      "cta": "Współtwórz",
+      "form": {
+        "authorLabel": "Nazwa autora",
+        "authorUrlLabel": "Adres URL autora (opcjonalnie)",
+        "commitError": "Nie udało się pobrać najnowszego commita. Wklej poniżej 40-znakowy SHA.",
+        "costLabel": "Koszt",
+        "directoryLabel": "Ścieżka w repozytorium (opcjonalnie)",
+        "directoryPlaceholder": "skills/my-skill",
+        "inTreeReminder": "Dodaj plik SKILL.md obok manifestu w tym samym pull requeście.",
+        "intro": "Uzupełnij dane, aby wygenerować manifest, a następnie otwórz pull request. Konto nie jest potrzebne.",
+        "invalidHint": "Uzupełnij wymagane pola, aby móc otworzyć pull request.",
+        "jurisdictionPlaceholder": "CZ",
+        "jurisdictionsHint": "Dodaj kody krajów ISO. W przypadku umiejętności niezależnych od jurysdykcji pozostaw puste.",
+        "jurisdictionsLabel": "Jurysdykcje",
+        "licenseLabel": "Licencja",
+        "manifestPreview": "Wygenerowany plik manifest.json",
+        "name": "Nazwa umiejętności",
+        "openPr": "Otwórz pull request na GitHubie",
+        "practiceAreasLabel": "Dziedziny prawa",
+        "repoLabel": "Repozytorium",
+        "repoPlaceholder": "owner/name lub adres URL GitHub",
+        "resolvingCommit": "Ustalanie…",
+        "revLabel": "Przypięty commit",
+        "revPlaceholder": "40-znakowy SHA commita",
+        "setupLabel": "Konfiguracja",
+        "slugHint": "Identyfikator pisany małymi literami, używany w adresie URL i nazwie folderu.",
+        "slugLabel": "Identyfikator slug",
+        "sourceGithub": "Repozytorium GitHub",
+        "sourceGithubHint": "Dla większych lub niezależnie utrzymywanych umiejętności, przypiętych do commita.",
+        "sourceInTree": "W tym repozytorium",
+        "sourceInTreeHint": "Dla małych umiejętności, których treść znajduje się tutaj.",
+        "sourceLabel": "Gdzie znajduje się umiejętność?",
+        "title": "Dodaj umiejętność",
+        "useLatestCommit": "Użyj najnowszego commita"
+      },
+      "githubBody": "Duże lub niezależnie utrzymywane umiejętności pozostają we własnym repozytorium GitHub, przypięte do konkretnego commita. Gdy repozytorium źródłowe się zmieni, zaplanowane sprawdzenie otwiera pull request, aby po weryfikacji przypięta wersja pozostała aktualna.",
+      "githubTitle": "Umiejętność przypięta do commita na GitHubie:",
+      "inTreeBody": "Małe umiejętności znajdują się w tym repozytorium obok swojego manifestu; każdy wpis może mieć do 10 MB. Ich treść jest udostępniana i pakowana bezpośrednio z katalogu.",
+      "inTreeTitle": "Folder w repozytorium:",
+      "intro": "Katalog zawiera umiejętności, integracje i wbudowane narzędzia do pracy prawniczej. Każdy może zaproponować wpis za pomocą pull requestu.",
+      "licenseBody": "Każdy wpis deklaruje licencję z poniższej listy dozwolonych licencji liberalnych. Licencje copyleft nie są akceptowane, aby osoby samodzielnie hostujące system mogły swobodnie go redystrybuować.",
+      "licenseTitle": "Lista dozwolonych licencji",
+      "mcpBody": "Integracje są opisane manifestem zawierającym adres URL serwera, typ uwierzytelniania i wymagane zakresy dostępu. Dane logowania nie są przechowywane w katalogu; użytkownicy podają własne w swoim kliencie.",
+      "mcpTitle": "Integracje MCP",
+      "recommendedBody": "Odznaka \"Polecane\" jest przyznawana przez opiekunów w pliku objętym kontrolą wersji. Nie można jej ustawić w publicznej witrynie ani wyłącznie za pomocą pull requestu.",
+      "recommendedTitle": "Status polecenia",
+      "repoLink": "Przeglądaj wpisy w katalogu",
+      "title": "Dodaj narzędzie"
+    },
+    "discovery": {
+      "allBody": "Poznaj procedury wielokrotnego użytku, zaufane publiczne źródła danych i funkcje dostępne w stella.",
+      "allTitle": "Wszystkie narzędzia",
+      "aresBody": "Wyszukaj czeską organizację według nazwy lub numeru IČO w oficjalnym rejestrze ARES.",
+      "contractReviewBody": "Sprawdzaj umowy handlowe klauzula po klauzuli na podstawie wytycznych negocjacyjnych, z wyraźnie wskazanymi odstępstwami i sugerowanymi zmianami.",
+      "editorsPick": "Wybór redakcji",
+      "exampleReview": "Przykładowa analiza",
+      "featuredTitle": "Zacznij od przepływu pracy",
+      "fromCommunity": "Od społeczności",
+      "groups": {
+        "dataSources": "Źródła danych i integracje",
+        "dataSourcesBody": "Podłącz wiarygodne rejestry i specjalistyczne usługi, gdy sprawa wymaga informacji zewnętrznych.",
+        "included": "Dostępne w stella",
+        "includedBody": "Podstawowe funkcje gotowe do użycia bez dodawania osobnej umiejętności ani konta.",
+        "skillsBody": "Prawnicze procedury wielokrotnego użytku z instrukcjami, które można sprawdzić przed ich dodaniem."
+      },
+      "heroBody": "Wyszukuj według zadania, jurysdykcji lub źródła. Każde narzędzie możesz sprawdzić, zanim dodasz je do swojego obszaru roboczego.",
+      "heroTitle": "Nad czym pracujesz?",
+      "howBody": "Umiejętność zapisuje metodę prawniczą w postaci instrukcji, które można przejrzeć. Dodaj ją raz, a potem stosuj to samo podejście za każdym razem, gdy pojawi się dane zadanie.",
+      "howTitle": "Czym jest umiejętność?",
+      "includedBadge": "W zestawie",
+      "jurisRankBody": "Oceń rangę precedensów argentyńskiego Sądu Najwyższego na podstawie wpływu cytowań i rozwoju doktryny.",
+      "noResults": "Żadne narzędzie nie pasuje jeszcze do tego wyszukiwania.",
+      "openSkill": "Zobacz, jak to działa",
+      "review": {
+        "aligned": "Zgodne",
+        "governingLaw": "Prawo właściwe",
+        "liabilityCap": "Limit odpowiedzialności",
+        "missing": "Nie podano",
+        "outsidePlaybook": "Poza wytycznymi",
+        "termination": "Rozwiązanie umowy"
+      },
+      "searchPlaceholder": "Co chcesz zrobić?",
+      "tasks": {
+        "prepareDocuments": "Przygotuj dokumenty",
+        "protectClientData": "Chroń dane klientów",
+        "researchPrecedents": "Zbadaj orzecznictwo",
+        "reviewAgreements": "Przeanalizuj umowy",
+        "verifyOrganizations": "Zweryfikuj organizację"
+      },
+      "tasksTitle": "Albo wybierz zadanie"
+    },
+    "documentation": "Dokumentacja",
+    "downloadUpstream": "Pobierz archiwum źródłowe",
+    "installConfirm": {
+      "mcpBody": "Łącznik MCP \"{name}\" zostanie dodany do Twojego obszaru roboczego. Następnie podaj własne dane logowania w ustawieniach MCP.",
+      "nativeToolBody": "Wbudowane narzędzie \"{name}\" zostanie włączone w Twoim obszarze roboczym.",
+      "skillBody": "Umiejętność \"{name}\" zostanie zainstalowana w Twoim obszarze roboczym.",
+      "title": "Dodać {name} do Twojego obszaru roboczego?"
+    },
+    "installUnavailable": "W Państwa organizacji nie można zainstalować tego narzędzia.",
+    "mcpConfigHint": "Dane połączenia niezależne od klienta. Wklej je do dowolnego klienta zgodnego z MCP i dodaj własne dane logowania.",
+    "metaDescription": "Przeglądaj otwarty katalog umiejętności, integracji i wbudowanych narzędzi do pracy prawniczej.",
+    "missingFromCatalogue": "Tego narzędzia nie ma w katalogu Twojej organizacji.",
+    "nativeToolInfo": "To wbudowana funkcja stella. Włącz ją w swoim obszarze roboczym, aby używać jej na czacie.",
+    "notFound": "Nie znaleziono narzędzia.",
+    "practiceArea": "Dziedzina prawa",
+    "practiceAreas": {
+      "bankingFinance": "Prawo bankowe i finansowe",
+      "capitalMarkets": "Rynki kapitałowe",
+      "commercial": "Prawo handlowe",
+      "competition": "Prawo konkurencji",
+      "corporate": "Prawo korporacyjne",
+      "criminal": "Prawo karne",
+      "dataProtection": "Ochrona danych",
+      "disputeResolution": "Rozwiązywanie sporów",
+      "employment": "Prawo pracy",
+      "energy": "Prawo energetyczne",
+      "environmental": "Prawo ochrony środowiska",
+      "family": "Prawo rodzinne",
+      "immigration": "Prawo imigracyjne",
+      "insolvency": "Prawo upadłościowe",
+      "intellectualProperty": "Własność intelektualna",
+      "litigation": "Postępowania sądowe",
+      "mergersAcquisitions": "Fuzje i przejęcia",
+      "privateClient": "Obsługa klientów indywidualnych",
+      "publicAdministrative": "Prawo publiczne i administracyjne",
+      "realEstate": "Nieruchomości",
+      "regulatory": "Prawo regulacyjne",
+      "tax": "Prawo podatkowe",
+      "technology": "Prawo nowych technologii",
+      "whiteCollarCrime": "Przestępczość gospodarcza"
+    },
+    "tokenHelp": "Jak uzyskać token",
+    "viewOnGithub": "Zobacz na GitHubie"
+  },
+  "readerAnswers": {
+    "answerLanguage": "Język odpowiedzi",
+    "budgetError": "Budżet na odpowiedzi został wyczerpany.",
+    "documentLanguage": "Język dokumentu ({language})",
+    "expand": "Rozwiń odpowiedź",
+    "explain": "Wyjaśnij",
+    "followUp": "Zadaj dodatkowe pytanie",
+    "followUpRequired": "Proszę wpisać dodatkowe pytanie, aby je wysłać.",
+    "invalidCitations": "{count, plural, one {Nie udało się zweryfikować # cytowania.} few {Nie udało się zweryfikować # cytowań.} many {Nie udało się zweryfikować # cytowań.} other {Nie udało się zweryfikować # cytowania.}}",
+    "loading": "Generowanie odpowiedzi…",
+    "minimise": "Zwiń odpowiedź",
+    "modelError": "Model nie zdołał dokończyć tej odpowiedzi.",
+    "networkError": "Połączenie zostało przerwane. Spróbuj ponownie.",
+    "regenerate": "Wygeneruj odpowiedź ponownie",
+    "selectionError": "Zaznacz tekst z samego orzeczenia.",
+    "send": "Wyślij dodatkowe pytanie",
+    "share": "Udostępnij zespołowi",
+    "timeoutError": "Upłynął limit czasu na odpowiedź. Spróbuj ponownie.",
+    "title": "Odpowiedź dotycząca zaznaczonego tekstu",
+    "waitForCurrentAction": "Proszę poczekać na zakończenie bieżącej operacji dotyczącej tej odpowiedzi."
+  },
+  "statutes": {
+    "amendedTimes": "{count, plural, =0 {Bez nowelizacji} one {Nowelizowany raz} few {Nowelizowany # razy} many {Nowelizowany # razy} other {Nowelizowany # razy}}",
+    "asOf": "Tekst obowiązujący na dzień",
+    "backToList": "Wszystkie akty prawne",
+    "citingDecisionHideSnippet": "Zwiń fragment",
+    "citingDecisionMentionCount": "cytowano {count}×",
+    "citingDecisionOlderVersion": "Starsza wersja",
+    "citingDecisionShowSnippet": "Pokaż cały fragment",
+    "citingDecisionsCourtPlaceholder": "Wszystkie sądy",
+    "citingDecisionsFilterPlaceholder": "Filtruj wczytane orzeczenia",
+    "citingDecisionsSnapshotCapped": "Wyświetlono {count, plural, one {# orzeczenie} few {# orzeczenia} many {# orzeczeń} other {# orzeczenia}} (do {limit} najczęściej wspominających o tym przepisie).",
+    "citingDecisionsSortCitations": "Wzmianki o tym przepisie",
+    "citingDecisionsSortDate": "Data orzeczenia",
+    "citingDecisionsYear": "Rok orzeczenia",
+    "citingDecisionsYearOutOfRange": "Wpisz rok od {min} do {max}.",
+    "citingDecisionsYearPlaceholder": "Wszystkie lata",
+    "columns": {
+      "act": "Akt",
+      "amendments": "Nowelizacje",
+      "firstVersion": "Pierwsza wersja",
+      "lastAmended": "Ostatnia nowelizacja"
+    },
+    "compareAbsent": "Brak w tej wersji",
+    "compareAddedLater": "W tej wersji tego przepisu jeszcze nie było.",
+    "compareClose": "Zamknij porównanie",
+    "compareMoved": "Przeniesiono:",
+    "compareMovedFrom": "Przeniesiono tutaj z {provision}",
+    "compareMovedFromElsewhere": "Przeniesiono tutaj z innego miejsca",
+    "compareMovedTo": "Przeniesiono do {provision}",
+    "compareMovedToElsewhere": "Przeniesiono w inne miejsce",
+    "compareNoChanges": "Brzmienie jest takie samo w obu wersjach.",
+    "compareNoLongerPresent": "W tej wersji tego przepisu już nie ma. Został uchylony lub przenumerowany.",
+    "compareProvisionNeither": "Żadna z wersji nie zawiera tego przepisu.",
+    "compareProvisionTitle": "Zmiany w {provision} między wersjami",
+    "compareSameVersion": "To jest wyświetlana wersja. Wybierz inną do porównania.",
+    "compareShowUnchanged": "Pokaż niezmienione przepisy",
+    "compareSideBySide": "Porównaj obok siebie",
+    "compareTitle": "Zmiany między wersjami",
+    "compareUnavailable": "Nie udało się porównać wersji.",
+    "compareUnstructured": "Jedna z wersji jest dostępna tylko jako zwykły tekst, więc nie można ich porównać.",
+    "compareVersionMissing": "Wersji do porównania nie ma w historii tego aktu.",
+    "compareWholeAct": "Porównaj cały akt",
+    "compareWithPreviousWording": "Porównaj z poprzednim brzmieniem",
+    "compareWithVersion": "Porównaj z brzmieniem {version}",
+    "currentWording": "Aktualne brzmienie",
+    "description": "Publiczna baza ujednoliconych aktów prawnych, indeksowana według aktu i jego wersji.",
+    "diffInserted": "Dodano:",
+    "diffRemoved": "Usunięto:",
+    "emptyDocument": "Ta wersja nie ma dostępnego tekstu.",
+    "emptyState": "Nie znaleziono aktów prawnych.",
+    "expression": {
+      "invalidWindow": "Sprzeczne daty wydawcy",
+      "promulgated": "Tekst ogłoszony",
+      "withdrawn": "Wydawca już go nie publikuje"
+    },
+    "inForceSince": "Obowiązuje od {date}",
+    "inForceSinceAtLeast": "Obowiązuje co najmniej od {date}",
+    "ineligibleVersion": "{range} ({label})",
+    "leadingDecision": "Orzeczenie wiodące",
+    "leadingDecisionsExplanation": "Pierwsza wzmianka w każdym orzeczeniu, uszeregowana według autorytetu cytowania: ważone cytowania przychodzące, z uwzględnieniem rangi sądu, wydźwięku cytowania i jego wieku.",
+    "noVersionInForce": "W wybranym dniu nie obowiązywała żadna wersja tego aktu.",
+    "openEnded": "nadal",
+    "outline": "Spis treści",
+    "outlineJumpLabel": "Przejdź do przepisu",
+    "outlineJumpPlaceholder": "§ 10 lub tytuł",
+    "pendingChanges": "Nadchodzące nowelizacje",
+    "pendingChangesIncomplete": "Dane wydawcy mogą nie obejmować wszystkich nadchodzących nowelizacji.",
+    "provisionAbsentVersions": "{count, plural, one {Brak w tej wersji ustawy} few {Brak w tych # wersjach ustawy} many {Brak w tych # wersjach ustawy} other {Brak w tych # wersji ustawy}}",
+    "provisionAskContextPrompt": "\n\nFragmenty stosujące przepis w najbardziej miarodajnych orzeczeniach:\n{passages}\n\nSkorzystaj z narzędzi orzecznictwa, aby przeczytać w całości którekolwiek z tych orzeczeń lub znaleźć kolejne orzeczenia powołujące ten przepis.",
+    "provisionAskSummarize": "Podsumuj, jak sądy stosują ten przepis",
+    "provisionAskSummarizePrompt": "Podsumuj, jak sądy stosują {subject}, i przywołaj orzeczenia, na których się opierasz.",
+    "provisionDetailsFor": "Szczegóły: {provision}",
+    "provisionEffectiveFrom": "obowiązuje od {date}",
+    "provisionHistoryEmpty": "Brak zapisanych wersji tego przepisu.",
+    "provisionHistoryUnavailable": "Nie udało się wczytać historii tego przepisu.",
+    "provisionPartTextUnavailable": "Treść {provisionLabel} jest niedostępna",
+    "provisionPromptSubject": "{provision} aktu {statute} ({eli}) w brzmieniu obowiązującym od {date}",
+    "provisionPromptSubjectUndated": "{provision} aktu {statute} ({eli})",
+    "provisionRunAlsoFrom": "także od {date}",
+    "provisionRunShowVersions": "Pokaż wersje ustawy z okresu {range}",
+    "provisionRunUnchanged": "{count, plural, one {bez zmian w # wersji ustawy} few {bez zmian w # wersjach ustawy} many {bez zmian w # wersjach ustawy} other {bez zmian w # wersji ustawy}}",
+    "provisionTextUnavailable": "Tekst niedostępny dla tej wersji",
+    "provisionVersionsAll": "Wszystkie wersje ustawy",
+    "provisionWordingAdded": "Nowy przepis",
+    "provisionWordingChanged": "Zmieniono",
+    "provisionWordingEarliest": "Najstarsza dostępna wersja",
+    "publisherWindowInconsistent": "Nie można ustalić tekstu obowiązującego w tym dniu: dane wydawcy są sprzeczne.",
+    "resolvedAlias": "Rozpoznano jako {label}",
+    "searchLabel": "Szukaj w aktach prawnych",
+    "searchPlaceholder": "Numer, skrót lub tytuł, np. 89/2012 Sb.",
+    "showCitedPartOnly": "Pokaż tylko cytowaną część",
+    "showFullProvision": "Pokaż cały przepis",
+    "showInText": "Pokaż w tekście",
+    "sortNeedsYear": "Aby sortować według tej kolumny, wybierz rok w filtrach.",
+    "statedWindow": "Daty podane przez wydawcę: {range}",
+    "status": {
+      "current": "Obowiązujący",
+      "draft": "Projektowany",
+      "ended": "Nieobowiązujący",
+      "future": "Przyszły",
+      "historical": "Zastąpiony",
+      "neverInForce": "Nigdy nie wszedł w życie",
+      "repealed": "Uchylony",
+      "unknown": "Status niejasny"
+    },
+    "title": "Akty prawne",
+    "validity": "Obowiązuje od {from} do {to}",
+    "versionAlreadySelected": "Ta wersja jest już wyświetlana.",
+    "versionAppliedInDecision": "Wersja zastosowana w orzeczeniu <bdi>{court}</bdi> <bdi>{caseNumber}</bdi> (<bdi>{range}</bdi>) · {status}",
+    "versionChangesAdded": "{count, plural, one {# dodany przepis} few {# dodane przepisy} many {# dodanych przepisów} other {# dodanego przepisu}}",
+    "versionChangesChanged": "{count, plural, one {# zmieniony przepis} few {# zmienione przepisy} many {# zmienionych przepisów} other {# zmienionego przepisu}}",
+    "versionChangesNone": "Brzmienie bez zmian",
+    "versionChangesRemoved": "{count, plural, one {# skreślony przepis} few {# skreślone przepisy} many {# skreślonych przepisów} other {# skreślonego przepisu}}",
+    "versionChangesWords": "{inserted, plural, one {# dodane słowo} few {# dodane słowa} many {# dodanych słów} other {# dodanego słowa}}, {deleted, plural, one {# skreślone słowo} few {# skreślone słowa} many {# skreślonych słów} other {# skreślonego słowa}}",
+    "wordingVersionUnknown": "Data wersji brzmienia jest niedostępna"
+  }
+}

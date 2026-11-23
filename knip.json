@@ -189,6 +189,9 @@
     "packages/decision-reader": {
       "entry": ["src/**/*.test.{ts,tsx}"]
     },
+    "packages/docx-authoring": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/html": {
       "entry": ["src/load.ts", "src/**/*.test.ts"]
     },
@@ -233,6 +236,10 @@
       "entry": ["src/**/*.test.ts"],
       "ignore": ["generated/**"]
     },
+    "packages/heic-decoder": {
+      "entry": ["src/**/*.test.ts"],
+      "ignore": ["generated/**"]
+    },
     "packages/scripts": {
       // The Postgres lifecycle owner is invoked by scripts/configure-test-postgres.sh.
       "entry": [
@@ -259,6 +266,8 @@
     "packages/transcript": {
       "entry": [
         "src/transcript.ts",
+        "src/spelling.ts",
+        "src/corrections.ts",
         "src/timeline.ts",
         "src/exporters.ts",
         "src/vocabulary.ts",

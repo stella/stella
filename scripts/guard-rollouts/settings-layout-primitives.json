@@ -1,0 +1,19 @@
+{
+  "id": "settings-layout-primitives",
+  "rules": ["settings-layout-primitives/settings-layout-primitives"],
+  "type": "changed-lines",
+  "expiresAt": "2026-11-27T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "settings-layout-primitives/settings-layout-primitives",
+    "apps/web/src/routes/_protected.settings",
+    "apps/web/src/routes/_protected.admin"
+  ]
+}

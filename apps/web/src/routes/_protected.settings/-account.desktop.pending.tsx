@@ -1,12 +1,12 @@
 import type { ReactNode } from "react";
 
 import { FaceLabelPending } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import {
   ClipboardListIcon,
   FileTextIcon,
   LockKeyholeIcon,
 } from "@stll/ui/icons";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
@@ -34,7 +34,7 @@ const DesktopFeature = ({
   icon: Icon,
   title,
 }: DesktopFeatureProps) => (
-  <section className="flex items-start gap-3 rounded-xl p-1">
+  <section className="flex items-start gap-3">
     <span className="bg-muted text-muted-foreground grid size-9 shrink-0 place-items-center rounded-xl">
       <Icon aria-hidden="true" className="size-4" />
     </span>
@@ -70,8 +70,8 @@ export const DesktopPageShell = ({
       title="settings.account.desktop"
     />
     {connectionCard}
-    <Frame className="overflow-hidden">
-      <FramePanel className="overflow-hidden p-0">
+    <SettingsSection>
+      <SettingsPanel inset="flush">
         <section className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-center">
           <div className="flex max-w-2xl flex-col items-start">
             <h2 className="text-foreground text-2xl font-semibold tracking-tight text-balance">
@@ -112,21 +112,23 @@ export const DesktopPageShell = ({
             </p>
           </div>
         </section>
-      </FramePanel>
+      </SettingsPanel>
 
-      <FramePanel className="grid gap-4 sm:grid-cols-2">
-        <DesktopFeature
-          description="settings.account.desktopPrivacyDescription"
-          icon={LockKeyholeIcon}
-          title="settings.account.desktopPrivacyTitle"
-        />
-        <DesktopFeature
-          description="settings.account.desktopDocumentsDescription"
-          icon={FileTextIcon}
-          title="settings.account.desktopDocumentsTitle"
-        />
-      </FramePanel>
-    </Frame>
+      <SettingsPanel>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <DesktopFeature
+            description="settings.account.desktopPrivacyDescription"
+            icon={LockKeyholeIcon}
+            title="settings.account.desktopPrivacyTitle"
+          />
+          <DesktopFeature
+            description="settings.account.desktopDocumentsDescription"
+            icon={FileTextIcon}
+            title="settings.account.desktopDocumentsTitle"
+          />
+        </div>
+      </SettingsPanel>
+    </SettingsSection>
     {children}
   </>
 );

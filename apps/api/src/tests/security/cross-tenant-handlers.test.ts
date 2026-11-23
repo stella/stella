@@ -551,6 +551,7 @@ const compareDocumentDependencies = {
       testScannedFile({ bytes: new ArrayBuffer(1), mimeType: DOCX_MIME_TYPE }),
     ),
   readFileHandler: async () => ({
+    kind: "file" as const,
     fileId: compareTargetFileB,
     mimeType: DOCX_MIME_TYPE,
     originalMimeType: DOCX_MIME_TYPE,
@@ -1200,11 +1201,13 @@ const desktopCredentialIsolationCases = (): IsolationCase[] => [
               {
                 entryId: "entry_1",
                 narrative: "Reviewed the agreement",
+                narrativeLanguage: "en",
                 matchedEarlierEntryIds: [],
               },
             ],
           },
           earlierEntries: [],
+          codeNames: [],
         },
       }),
   },
@@ -5053,6 +5056,7 @@ const desktopServer = (): TestServer => {
         ).entries.map(({ entryId }) => ({
           entryId,
           narrative: "Reviewed the agreement",
+          narrativeLanguage: "en",
           matchedEarlierEntryIds: [],
         })),
       }),

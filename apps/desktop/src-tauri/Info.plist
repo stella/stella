@@ -4,5 +4,7 @@
 <dict>
   <key>NSMicrophoneUsageDescription</key>
   <string>stella listens only while you hold the dictation shortcut, and transcribes on this computer.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>If you choose it in Settings, stella pauses Music or Spotify while you dictate and resumes them afterwards.</string>
 </dict>
 </plist>

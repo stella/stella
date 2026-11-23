@@ -137,8 +137,8 @@ const isRefusedRecipient = async (to: string): Promise<boolean> => {
     "user.id": refusal.value.userId,
     "delivery.refusal_reason": refusal.value.reason,
   });
-  // A dropped send fails like a provider suppression-list bounce, so the
-  // sign-in screen explains it the same way, account or not.
+  // A dropped send is recorded like a provider suppression-list bounce,
+  // account or not.
   const recorded = await Result.tryPromise(
     async () =>
       await recordRecipientFailures(
@@ -159,13 +159,13 @@ const getTransport = (): EmailTransport => {
   cachedTransport ??= {
     send: async (message) => {
       if (isSyntheticPrincipal({ email: message.to })) {
-        return;
+        return { type: "skipped" };
       }
       if (await isRefusedRecipient(message.to)) {
-        return;
+        return { type: "skipped" };
       }
       deliveryTransport ??= resolveTransport();
-      await deliveryTransport.send(message);
+      return await deliveryTransport.send(message);
     },
   };
   return cachedTransport;
@@ -199,7 +199,7 @@ export const sendOTPEmail = async ({
   const node = <BetterAuthOTP.Email lang={lang} otp={otp} type={type} />;
   const { html, text } = renderEmail(node);
 
-  await getTransport().send({
+  return await getTransport().send({
     from: getTransactionalEmailFrom(),
     to: email,
     subject: betterAuthOTPSubject(lang),

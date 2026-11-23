@@ -1125,6 +1125,50 @@
         "fr": "Justification",
         "pt-BR": "Justificativa"
       }
+    },
+    {
+      "id": "signed-in-devices",
+      "en": "Signed-in devices",
+      "note": "The account's live sign-ins, one per browser or app, listed under Settings > Security. People see devices, not the session records behind them, so the copy names the device (\"sign out this device\"). Czech drops the calques sezení and relace, Slovak relácia, in this account copy; on keys under `account.sessions` and `settings.account.security` they are banned outright, since that English no longer says \"session\".",
+      "translations": {
+        "ar": "الأجهزة المسجَّل الدخول منها",
+        "cs": "Přihlášená zařízení",
+        "sk": "Prihlásené zariadenia",
+        "pl": "Zalogowane urządzenia",
+        "de": "Angemeldete Geräte",
+        "et": "Sisselogitud seadmed",
+        "hu": "Bejelentkezett eszközök",
+        "lt": "Prisijungę įrenginiai",
+        "lv": "Pieslēgtās ierīces",
+        "es": "Dispositivos con sesión iniciada",
+        "fr": "Appareils connectés",
+        "pt-BR": "Dispositivos conectados"
+      },
+      "forbidden": {
+        "cs": [
+          "Sezení",
+          "sezení",
+          "Relace",
+          "relace",
+          "relaci",
+          "relací",
+          "relacím",
+          "relacemi",
+          "relacích"
+        ],
+        "sk": [
+          "Relácia",
+          "relácia",
+          "Relácie",
+          "relácie",
+          "reláciu",
+          "relácií",
+          "reláciám",
+          "reláciami",
+          "reláciách"
+        ]
+      },
+      "keyTriggers": ["account.sessions.", "settings.account.security."]
     }
   ],
   "ptBR": [

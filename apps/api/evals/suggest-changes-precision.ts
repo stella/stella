@@ -35,6 +35,7 @@ import { panic, Result } from "better-result";
 import { writeFile } from "node:fs/promises";
 
 import { DOCX_SUGGEST_CHANGES_AUTO_APPLY_OPTIONS } from "@stll/api-contract/chat-docx-suggestions";
+import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
 import {
   createReviewerBridge,
   executeFolioToolCallUntyped,
@@ -51,7 +52,6 @@ import type { FolioAIEditSnapshot } from "@stll/folio-core/server";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
-import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { NO_ORGANIZATION_MODEL_DISPATCH } from "@/api/lib/rate-limit/model-dispatch-admission";
 import {
   mergeGenerationOptions,

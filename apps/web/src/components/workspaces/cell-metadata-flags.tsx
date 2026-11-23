@@ -68,6 +68,8 @@ const VERIFIED_CELL_FLAG = cellFlagDefinition(VERIFIED_FLAG_ID);
 // The 12px corner badges sit 2px from the cell edge and end 14px down: inside
 // the cell's 8px padding and the space above a value's first line (a `py-1`
 // control, or a shorter item centred on that line), so they never cover text.
+// Their backing is a plain tint: every cell draws two of them, and a backdrop
+// filter would make each its own compositing layer.
 const CELL_CORNER_CLASS = {
   start: "absolute start-0.5 top-0.5 z-20",
   end: "absolute end-0.5 top-0.5 z-20",
@@ -190,7 +192,7 @@ export const CellMetadataFlags = ({
             />
           }
         >
-          <span className="text-foreground-ghost bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]">
+          <span className="text-foreground-ghost bg-background/85 flex size-3 items-center justify-center rounded-full">
             <LockOpenIcon className="size-2.5" strokeWidth={2.5} />
           </span>
         </Tooltip>
@@ -227,7 +229,7 @@ export const CellMetadataFlags = ({
             />
           }
         >
-          <span className="text-foreground-ghost bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]">
+          <span className="text-foreground-ghost bg-background/85 flex size-3 items-center justify-center rounded-full">
             <CheckCircle2Icon className="size-2.5" strokeWidth={2.5} />
           </span>
         </Tooltip>
@@ -279,7 +281,7 @@ const CellCornerFlag = ({ flags, metadata, onDrop }: CellCornerFlagProps) => {
             }
           >
             <span
-              className="bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px]"
+              className="bg-background/85 flex size-3 items-center justify-center rounded-full"
               style={{ color: flag.color }}
             >
               <Icon className="size-2.5" strokeWidth={2.5} />
@@ -348,7 +350,7 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
           shape="round"
           variant="plain"
         >
-          <span className="text-foreground animate-in fade-in-0 zoom-in-75 bg-background/55 flex size-3 items-center justify-center rounded-full backdrop-blur-[2px] duration-150 motion-reduce:animate-none">
+          <span className="text-foreground animate-in fade-in-0 zoom-in-75 bg-background/85 flex size-3 items-center justify-center rounded-full duration-150 motion-reduce:animate-none">
             <LockIcon className="size-2.5" strokeWidth={2.5} />
           </span>
         </Button>

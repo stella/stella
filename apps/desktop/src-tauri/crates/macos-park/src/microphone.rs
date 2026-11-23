@@ -12,17 +12,17 @@ use core_foundation::{
 };
 
 #[repr(C)]
-struct AudioObjectPropertyAddress {
-  selector: u32,
-  scope: u32,
-  element: u32,
+pub(crate) struct AudioObjectPropertyAddress {
+  pub(crate) selector: u32,
+  pub(crate) scope: u32,
+  pub(crate) element: u32,
 }
 
-const fn four_char_code(code: &[u8; 4]) -> u32 {
+pub(crate) const fn four_char_code(code: &[u8; 4]) -> u32 {
   u32::from_be_bytes(*code)
 }
 
-const SYSTEM_OBJECT: u32 = 1;
+pub(crate) const SYSTEM_OBJECT: u32 = 1;
 const PROCESS_OBJECT_LIST: u32 = four_char_code(b"prs#");
 const PROCESS_BUNDLE_ID: u32 = four_char_code(b"pbid");
 const PROCESS_IS_RUNNING_INPUT: u32 = four_char_code(b"piri");
@@ -34,7 +34,7 @@ const TRANSPORT_BLUETOOTH_LE: u32 = four_char_code(b"blea");
 /// What CoreAudio answers for a UID no device has.
 const UNKNOWN_OBJECT: u32 = 0;
 const SCOPE_GLOBAL: u32 = four_char_code(b"glob");
-const ELEMENT_MAIN: u32 = 0;
+pub(crate) const ELEMENT_MAIN: u32 = 0;
 /// More capturing processes than this is not a call worth attributing.
 const MAX_PROCESSES: usize = 512;
 
@@ -47,7 +47,7 @@ unsafe extern "C" {
     qualifier: *const c_void,
     size: *mut u32,
   ) -> i32;
-  fn AudioObjectGetPropertyData(
+  pub(crate) fn AudioObjectGetPropertyData(
     object: u32,
     address: *const AudioObjectPropertyAddress,
     qualifier_size: u32,
@@ -81,6 +81,11 @@ pub enum AudioTransport {
 /// How the audio device with CoreAudio UID `uid` is connected; `None` when
 /// no connected device has that UID.
 pub fn audio_device_transport(uid: &str) -> Option<AudioTransport> {
+  transport(device_for_uid(uid)?)
+}
+
+/// The CoreAudio object of the device with UID `uid`, while it is connected.
+pub(crate) fn device_for_uid(uid: &str) -> Option<u32> {
   let uid = CFString::new(uid);
   let uid_ref = uid.as_concrete_TypeRef();
   let mut device = UNKNOWN_OBJECT;
@@ -97,9 +102,11 @@ pub fn audio_device_transport(uid: &str) -> Option<AudioTransport> {
       (&raw mut device).cast(),
     )
   };
-  if status != 0 || device == UNKNOWN_OBJECT {
-    return None;
-  }
+  (status == 0 && device != UNKNOWN_OBJECT).then_some(device)
+}
+
+/// How the device with CoreAudio object `device` is connected.
+pub(crate) fn transport(device: u32) -> Option<AudioTransport> {
   let mut transport = 0u32;
   let mut size = size_of::<u32>() as u32;
   // SAFETY: the property is a UInt32 and `transport` is a writable u32.
@@ -123,7 +130,7 @@ pub fn audio_device_transport(uid: &str) -> Option<AudioTransport> {
   })
 }
 
-fn address(selector: u32) -> AudioObjectPropertyAddress {
+pub(crate) fn address(selector: u32) -> AudioObjectPropertyAddress {
   AudioObjectPropertyAddress {
     selector,
     scope: SCOPE_GLOBAL,

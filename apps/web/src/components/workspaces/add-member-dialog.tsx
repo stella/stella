@@ -168,6 +168,11 @@ const AddMemberDialogBody = ({
         </DialogClose>
         <Button
           disabled={selectedUserId === null || addMember.isPending}
+          disabledReason={
+            addMember.isPending
+              ? t("workspaces.members.addingMember")
+              : t("workspaces.members.selectMemberToAdd")
+          }
           onClick={handleSubmit}
         >
           {t("workspaces.members.addMember")}

@@ -1,5 +1,85 @@
 # @stll/ui
 
+## 0.84.1
+
+### Patch Changes
+
+- [#9245](https://github.com/stella/stella/pull/9245) [`98abe28`](https://github.com/stella/stella/commit/98abe2841a69b052cdfd34cfd8e42fe5d7a53105) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep a gutter between body columns of a compact table, as its header already has.
+
+## 0.84.0
+
+### Minor Changes
+
+- [#9242](https://github.com/stella/stella/pull/9242) [`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for ZIP archives.
+
+## 0.83.0
+
+### Minor Changes
+
+- [#9240](https://github.com/stella/stella/pull/9240) [`10ef464`](https://github.com/stella/stella/commit/10ef464329c555633c59a8307bbd6bf85e22fe5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared web and native document marks for WordPerfect, Works, Pages, Numbers, web archive and EPUB files, and export `DOCUMENT_MARK_KINDS`.
+
+## 0.82.0
+
+### Minor Changes
+
+- [#9231](https://github.com/stella/stella/pull/9231) [`39eabb8`](https://github.com/stella/stella/commit/39eabb8eee2640bdda32e928239460602aefc23b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `formatFileSize` writes sizes under 1 kB with the long, plural-aware unit ("333 bytes", "333 bajtů") instead of the short English unit, which has no plural ("333 byte"). Larger sizes keep the short units.
+
+  The `format` argument now receives `unitDisplay: "long"` for bytes, so a formatter passed in must accept `"long" | "short"`.
+
+## 0.81.1
+
+### Patch Changes
+
+- [#9232](https://github.com/stella/stella/pull/9232) [`76bd78b`](https://github.com/stella/stella/commit/76bd78b75de4b4179f90bc3a89d4187ead4bd174) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Count which inline-overflow items fit in the same commit that renders the row, so the first paint never shows items past its edge.
+
+## 0.81.0
+
+### Minor Changes
+
+- [#9186](https://github.com/stella/stella/pull/9186) [`9db6ee1`](https://github.com/stella/stella/commit/9db6ee1cbde7b4e6b85210e46bf93c705034e64b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Give P7M, ASiC-E, ASiC-S, BDOC, UYAP and OFD files document marks of their own, each the format's page in its colour with its tag.
+
+- [#9193](https://github.com/stella/stella/pull/9193) [`94387e7`](https://github.com/stella/stella/commit/94387e7ca464e5f26cf95913f20b0a4a503b79b9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/inline-overflow` holds the policy that decides which items of a single-line row fit and which move into a trailing "show more" menu (`resolveInlineOverflow`, `splitInlineOverflow`), and `@stll/ui/use-inline-overflow` measures a row for it. `InspectorFacetBar` runs on them. `WorkspaceViewSwitcher` takes a required `overflowLabel` and moves the views that do not fit into a menu after the tabs, keeping the active or renamed view on screen, instead of scrolling the tabs; the strip's add control no longer draws a divider.
+
+- [#9185](https://github.com/stella/stella/pull/9185) [`7192259`](https://github.com/stella/stella/commit/7192259afbb8e3e3ffbbb906b9be3129e1ab3882) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared document marks for Hungarian e-akta dossiers and Slovak ZEPf containers.
+
+- [#9202](https://github.com/stella/stella/pull/9202) [`f55e84a`](https://github.com/stella/stella/commit/f55e84a17a4847c2d6722799990f5932fdd7b004) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add document marks for Slovak XAdES_ZEP envelopes and Hungarian e-akta delivery receipts.
+
+- [#9157](https://github.com/stella/stella/pull/9157) [`62c29aa`](https://github.com/stella/stella/commit/62c29aa31dfa732c9962227ae90b54ccb4bddbd6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `DayCalendarColumn` gains a `pending` variant that shimmers at known ranges and takes no selection; a one-line block shows its caption whole or not at all. `MATTER_SWATCHES` no longer includes `--option-red`, so a matter without a stored colour is never drawn in the error colour.
+
+- [#9189](https://github.com/stella/stella/pull/9189) [`b0f575f`](https://github.com/stella/stella/commit/b0f575f1ef2b403299e222e2dc21293b916785c7) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared web and native document marks for structured invoice and XML files.
+
+## 0.80.1
+
+### Patch Changes
+
+- [#9117](https://github.com/stella/stella/pull/9117) [`ecc187e`](https://github.com/stella/stella/commit/ecc187e85fe3cd60d2ba579af7ecbbfa41185102) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export the smartphone and tablet icons, which name a signed-in device's kind.
+
+## 0.80.0
+
+### Minor Changes
+
+- [#9081](https://github.com/stella/stella/pull/9081) [`d357728`](https://github.com/stella/stella/commit/d357728224fb93f2fda81a1fb619a2f6f7fe5557) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Buttons expose the disabled reason as an accessible description and retain keyboard focus when it changes. A disabled inline text run requires a reason. File, search, and secret inputs accept a localized `disabledReason` for their action buttons. Split buttons use `primaryDisabledReason` for their primary action. Review controls use `disabledReason`, `applyingReason`, or `actionDisabledReason` to explain pending and restricted decisions.
+
+  Condition builder labels now include `noFields` and `groupFull` to explain why a condition or group cannot be added.
+
+## 0.79.0
+
+### Minor Changes
+
+- [#9091](https://github.com/stella/stella/pull/9091) [`2d31b6d`](https://github.com/stella/stella/commit/2d31b6d446bf6c1a38c09d27d0b56456dcbed015) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/settings` holds the pieces settings pages are composed from: `SettingsSection` (a title, one quiet line and an optional trailing action over one list surface), `SettingsRow` (an optional media tile, a title, one secondary line and a trailing control; `interaction="label"` makes the row's text the label of its switch or checkbox), `SettingsPanel` (a form or other content on the same surface) and `settingsRowIds`. It imports no Base UI, so a pending view can draw it. `ListGroupTitle` takes `tone="destructive"`, and `ListGroupAction` and `ListItemMedia` move to `@stll/ui/list-shell`; `@stll/ui/list` still exports both.
+
+## 0.78.0
+
+### Minor Changes
+
+- [#9097](https://github.com/stella/stella/pull/9097) [`b6194a7`](https://github.com/stella/stella/commit/b6194a73bae3624e7afb0f8a6b21ac9facdb97f8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `inspectorPaneWidthCss`, the docked inspector pane's width rule as CSS for a frame drawn before the viewport is known.
+
+## 0.77.1
+
+### Patch Changes
+
+- [#9071](https://github.com/stella/stella/pull/9071) [`d35cd3c`](https://github.com/stella/stella/commit/d35cd3ce9faba8a766dfd58b1e71681838cc10b0) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The composer status row declares the `composer-status` container, so controls in it can compact by the row's width, and its end slot can shrink instead of overflowing.
+
 ## 0.77.0
 
 ### Minor Changes

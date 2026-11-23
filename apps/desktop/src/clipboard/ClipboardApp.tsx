@@ -638,11 +638,15 @@ const ClipboardCard = ({
   const [nameDraft, setNameDraft] = useState(item.name ?? "");
   const formatShortcutsVisible =
     active && !editingName && item.type === "formattedText";
+  const [prevShortcutsVisible, setPrevShortcutsVisible] = useState(
+    formatShortcutsVisible,
+  );
   const [shortcutPastePreview, setShortcutPastePreview] =
     useState<ClipboardPastePreview>(NO_CLIPBOARD_PASTE_PREVIEW);
   // The shortcut row unmounts without a pointer leave or blur when the card
   // stops being active, so its preview must not outlive the row.
-  if (!formatShortcutsVisible && shortcutPastePreview.type !== "none") {
+  if (prevShortcutsVisible !== formatShortcutsVisible) {
+    setPrevShortcutsVisible(formatShortcutsVisible);
     setShortcutPastePreview(NO_CLIPBOARD_PASTE_PREVIEW);
   }
   const renderFormat = clipboardCardRenderFormat(item, [
@@ -984,6 +988,7 @@ const DialogShell = ({
             </DialogClose>
             <Button
               disabled={submitDisabled}
+              disabledReason={t("enterGroupName")}
               type="submit"
               variant={destructive ? "destructive" : "default"}
             >
@@ -1741,6 +1746,11 @@ const ClipboardWelcomeDialog = ({
           <Button
             className="min-h-11 rounded-xl"
             disabled={autostartChoice.status !== "ready"}
+            disabledReason={
+              autostartChoice.status === "saving"
+                ? t("savingAutostart")
+                : t("loadingAutostart")
+            }
             onClick={completeWelcome}
             type="button"
             variant={
@@ -2031,11 +2041,20 @@ const ClipboardApp = () => {
   // The window's group tint fades out on opacity, so its colour outlives the
   // filter: `--clipboard-window-tint` keeps the last group's colour while
   // `--clipboard-group-accent` follows the active group only.
-  const [lastGroupAccent, setLastGroupAccent] = useState<string | null>(null);
-  if (activeGroup !== null && activeGroup.color !== lastGroupAccent) {
-    setLastGroupAccent(activeGroup.color);
+  const activeGroupColor = activeGroup?.color ?? null;
+  const [prevActiveGroupColor, setPrevActiveGroupColor] = useState<
+    string | null
+  >(activeGroupColor);
+  const [lastGroupAccent, setLastGroupAccent] = useState<string | null>(
+    activeGroupColor,
+  );
+  if (prevActiveGroupColor !== activeGroupColor) {
+    setPrevActiveGroupColor(activeGroupColor);
+    if (activeGroupColor !== null) {
+      setLastGroupAccent(activeGroupColor);
+    }
   }
-  const windowTint = activeGroup?.color ?? lastGroupAccent;
+  const windowTint = activeGroupColor ?? lastGroupAccent;
   // Typing must never wait on filtering and card re-render: the rail catches
   // up in a deferred render that further keystrokes interrupt. Clearing stays
   // synchronous (the empty filter is free) so the reopen reset can focus the
@@ -3448,6 +3467,9 @@ const ClipboardApp = () => {
                     aria-label={t("createGroup")}
                     className="size-11 shrink-0 rounded-full"
                     disabled={snapshot.groups.length >= snapshot.groupLimit}
+                    disabledReason={t("groupLimitReached", {
+                      max: snapshot.groupLimit,
+                    })}
                     onClick={() =>
                       setDialog({
                         color: nextGroupColor,

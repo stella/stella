@@ -324,16 +324,6 @@ const browserStorageAreas = (): Areas => ({
   session: browserStorage("session"),
 });
 
-/**
- * Who this tab last belonged to, from an earlier document of it, before this
- * document's session is read: a reload's first paint may follow that owner's
- * presentation hints. Never a grant: what a session reads waits for
- * `assignUserStorage`.
- */
-export const lastTabStorageOwner = (
-  areas: Areas = browserStorageAreas(),
-): StorageOwner | null => Result.try(() => readTabOwner(areas)).unwrapOr(null);
-
 export const hasCurrentTabStorageOwner = (
   areas: Areas = browserStorageAreas(),
 ) => {

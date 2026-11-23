@@ -1,4 +1,11 @@
-import { Fragment, type ReactNode, useRef, useState } from "react";
+import {
+  Fragment,
+  lazy,
+  type ReactNode,
+  Suspense,
+  useRef,
+  useState,
+} from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -25,7 +32,6 @@ import { cn } from "@stll/ui/utils";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import { FILE_CHAT_OVERLAY_ACTIVATION } from "@/components/ai-suggestions/file-viewer-with-ai-config";
 import { DocumentIcon } from "@/components/document-icon";
-import { getEmailAttachmentActivationId } from "@/components/inspector/email-attachments-facet.logic";
 import {
   EMAIL_CHAT_HOST,
   EMAIL_CHAT_MODE,
@@ -53,6 +59,13 @@ import { EMAIL_BODY_FOLD_KIND } from "@/lib/files/email-preview";
 import { emailHtmlPreviewOptions } from "@/lib/files/queries";
 import { revealEnclosingDisclosures } from "@/lib/platform/reveal-disclosures";
 import { formatFullTimestamp } from "@/lib/relative-time";
+
+// Only a certified email needs its envelope; other emails never load it.
+const CertifiedEmailEnvelope = lazy(async () => {
+  const m =
+    await import("@/features/correspondence/certified-email/certified-email-envelope");
+  return { default: m.CertifiedEmailEnvelope };
+});
 
 /** A header field a citation points at wears the active text mark. */
 const ACTIVE_CITATION_CLASS = textMarkClass({
@@ -302,7 +315,6 @@ export const EmailHtmlViewer = ({
     : preview.date;
   const hasAdditionalParticipants =
     preview.cc.length > 0 || preview.bcc.length > 0;
-  const attachmentKeyOccurrences = new Map<string, number>();
   const bodyHtml = localizeEmailBodyHtml({
     bodyFolds: preview.bodyFolds,
     bodyHtml: preview.bodyHtml,
@@ -413,15 +425,11 @@ export const EmailHtmlViewer = ({
             </h2>
             <ul className="flex flex-wrap gap-1.5">
               {preview.attachments.map((attachment) => (
-                <li
-                  key={getAttachmentKey(attachment, attachmentKeyOccurrences)}
-                >
+                <li key={attachment.part}>
                   <Button
                     className="max-w-full"
                     onClick={() => {
-                      onOpenAttachment(
-                        getEmailAttachmentActivationId(attachment),
-                      );
+                      onOpenAttachment(attachment.part);
                     }}
                     variant="plain"
                   >
@@ -432,9 +440,7 @@ export const EmailHtmlViewer = ({
                           attachment.fileName ??
                           t("emailViewer.unnamedAttachment")
                         }
-                        mimeType={
-                          attachment.mimeType ?? "application/octet-stream"
-                        }
+                        mimeType={attachment.mediaType}
                       />
                       <TruncatedText
                         className="max-w-48"
@@ -456,6 +462,13 @@ export const EmailHtmlViewer = ({
           </section>
         ) : null}
       </header>
+      {preview.certified ? (
+        <div className="shrink-0 border-b p-4">
+          <Suspense fallback={null}>
+            <CertifiedEmailEnvelope envelope={preview.certified} />
+          </Suspense>
+        </div>
+      ) : null}
       <div className="bg-muted/30 min-w-0 shrink-0 p-2">
         <iframe
           className="bg-background w-full border-0"
@@ -632,22 +645,6 @@ const findEmailCitationElement = (
     }
   }
   return null;
-};
-
-const getAttachmentKey = (
-  attachment: {
-    fileName: string | null;
-    mimeType: string | null;
-    sizeBytes: number;
-  },
-  occurrences: Map<string, number>,
-): string => {
-  const signature = JSON.stringify([
-    attachment.fileName,
-    attachment.mimeType,
-    attachment.sizeBytes,
-  ]);
-  return getOccurrenceKey(signature, occurrences);
 };
 
 const getOccurrenceKey = (

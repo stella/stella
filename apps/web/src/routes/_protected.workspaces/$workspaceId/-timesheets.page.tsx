@@ -172,6 +172,7 @@ export function TimesheetsPage() {
                       .toPlainDate(),
                   )
                 }
+                disabledReason={tCommon("todayReached")}
                 onClick={() => moveDay(1)}
                 size="icon"
                 variant="ghost"

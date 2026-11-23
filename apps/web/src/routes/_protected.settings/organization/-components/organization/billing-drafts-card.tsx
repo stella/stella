@@ -9,10 +9,10 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
-import { Frame, FramePanel } from "@stll/ui/frame";
 import { List, ListItem, ListItemContent, ListItemTitle } from "@stll/ui/list";
 import { ListItemSkeleton } from "@stll/ui/list-shell";
 import { SearchField } from "@stll/ui/search-field";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { ContactPicker } from "@/components/contact-picker";
 import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
@@ -170,11 +170,11 @@ export const BillingDraftsCard = () => {
   });
   if (config.isError) {
     return (
-      <Frame>
-        <FramePanel>
+      <SettingsSection>
+        <SettingsPanel>
           <QueryViewFeedback view={queryView(config)} />
-        </FramePanel>
-      </Frame>
+        </SettingsPanel>
+      </SettingsSection>
     );
   }
   if (!config.data) {
@@ -281,6 +281,7 @@ export const BillingDraftsCard = () => {
             <Button
               variant="ghost"
               disabled={save.isPending}
+              disabledReason={t("common.saving")}
               onClick={() => {
                 setEditing(file);
                 setContent(undefined);
@@ -307,6 +308,7 @@ export const BillingDraftsCard = () => {
           />
           <Button
             disabled={save.isPending}
+            disabledReason={t("common.saving")}
             onClick={() => {
               if (!editorHandle.current) {
                 panic("Knowledge editor save requires a mounted editor");

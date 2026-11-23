@@ -8,7 +8,6 @@ import {
 } from "@stll/api-contract/desktop-dictation-cleanup";
 import { createTestState } from "@stll/test-state";
 
-import { safeDbFromScoped } from "@/api/db/safe-db";
 import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
 import {
@@ -20,26 +19,16 @@ import {
   buildVocabularyIndex,
   selectVocabulary,
 } from "@/api/lib/dictation/vocabulary-index";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
-import type { generateTanStackObjectForTask } from "@/api/lib/tanstack-ai-generate";
 import {
-  admitInline,
-  DICTATING_EMAIL as EMAIL,
   DICTATING_ORGANIZATION_ID as ORGANIZATION_ID,
   DICTATING_USER_ID as USER_ID,
-  dictationLimit,
   exerciseDesktopDictationEndpoint,
+  exerciseMemberDictationEndpoint,
   grantDesktopDictation,
-  recordingModel,
   testDesktopDictationGate,
+  testMemberDictationGate,
 } from "@/api/tests/helpers/desktop-dictation-endpoint";
-import {
-  createTestHandlerContext,
-  NO_AUDIT,
-} from "@/api/tests/helpers/handler-context";
 import type { TestServer } from "@/api/tests/helpers/test-server";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDictationCleanupEndpoint } from "./cleanup";
 import {
@@ -47,7 +36,6 @@ import {
   type DictationCleanupModelOutput,
   dictationCleanupModelOutputSchema,
 } from "./cleanup-model";
-import type { consumeDictationLimit } from "./limits";
 import { createMemberDictationCleanupEndpoint } from "./member-cleanup";
 
 const testState = createTestState({ file: import.meta.path, config: env });
@@ -285,43 +273,28 @@ test("where the text goes reaches the model as its own field, and the answer is 
 });
 
 /** The member route: a signed-in member's session, no desktop decision. */
-const exerciseMember = async ({
-  role = "member",
-  limited = false,
-}: { role?: "member" | "external"; limited?: boolean } = {}) => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  const { calls, generate } = recordingModel(() => CLEANED);
-  const { scopedDb } = createScopedDbMock({});
-  const limit = dictationLimit(limited);
-  const endpoint = createMemberDictationCleanupEndpoint({
-    admit: admitInline,
-    limit: asTestRaw<typeof consumeDictationLimit>(limit),
-    generateObjectForTask:
-      asTestRaw<typeof generateTanStackObjectForTask>(generate),
-    readVocabulary: organizationWords([]),
-  });
-  const result = await endpoint.handler(
-    createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
-      audit: NO_AUDIT,
-      scopedDb,
-      safeDb: safeDbFromScoped(scopedDb),
-      memberRole: sessionMemberRole(role),
-      session: { activeOrganizationId: ORGANIZATION_ID },
-      user: { id: USER_ID, email: EMAIL },
-      body: { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
-      request: new Request("https://stella.test/v1/dictation/cleanup", {
-        method: "POST",
+const exerciseMember = async (
+  options: { role?: "member" | "external"; limited?: boolean } = {},
+) =>
+  await exerciseMemberDictationEndpoint({
+    createEndpoint: (endpointOptions) =>
+      createMemberDictationCleanupEndpoint({
+        ...endpointOptions,
+        readVocabulary: organizationWords([]),
       }),
-      route: "/v1/dictation/cleanup",
-    }),
-  );
-  return { result, calls, generate, limit };
-};
+    testState,
+    route: "/v1/dictation/cleanup",
+    body: { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
+    answer: () => CLEANED,
+    ...options,
+  });
 
 test("a signed-in member gets the same cleanup as a desktop, without any desktop decision", async () => {
   const { result, calls, limit } = await exerciseMember();
   if (result instanceof HttpStatusResponse) {
-    throw new TypeError(`Expected the cleaned segments, got ${result.code}`);
+    throw new TypeError(
+      `Expected the cleaned segments, got ${String(result.code)}`,
+    );
   }
   expect(v.parse(desktopDictationCleanupResponseSchema, result)).toEqual({
     segments: [
@@ -346,17 +319,4 @@ test("a signed-in member gets the same cleanup as a desktop, without any desktop
   });
 });
 
-test("a member whose role may not use AI is refused before the limit or any model call", async () => {
-  const { result, generate, limit } = await exerciseMember({
-    role: "external",
-  });
-  expect(result instanceof HttpStatusResponse && result.code).toBe(403);
-  expect(limit).not.toHaveBeenCalled();
-  expect(generate).not.toHaveBeenCalled();
-});
-
-test("a member over the cleanup budget is refused before any model call", async () => {
-  const { result, generate } = await exerciseMember({ limited: true });
-  expect(result instanceof HttpStatusResponse && result.code).toBe(429);
-  expect(generate).not.toHaveBeenCalled();
-});
+testMemberDictationGate(exerciseMember);

@@ -79,6 +79,7 @@ import {
   caseNumberTypeProjection,
   searchTotalProjection,
 } from "./case-law-result-projections";
+import { decisionBodySourceProjection } from "./decision-body-source-projection";
 import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
@@ -297,7 +298,7 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
       entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
       workspaceId: chatRef("matter"),
       workspaceName: v.string(),
-      name: v.string(),
+      name: contentText(),
       kind: v.picklist(ENTITY_KINDS),
       headline: v.nullable(contentText()),
     }),
@@ -325,7 +326,7 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
   // declaration, kept verbatim) only backs a non-echo payload.
   entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
   kind: v.picklist(ENTITY_KINDS),
-  name: v.string(),
+  name: contentText(),
   text: contentText(),
   truncated: v.boolean(),
   nextCursor: v.nullable(v.string()),
@@ -383,7 +384,7 @@ export const LIST_DOCUMENTS_PROJECTION = v.strictObject({
   documents: v.array(
     v.strictObject({
       id: chatEntityRef({ from: "inputParam", param: "matter_id" }),
-      name: v.string(),
+      name: contentText(),
       kind: v.string(),
       parentId: v.nullable(
         chatEntityRef({ from: "inputParam", param: "matter_id" }),
@@ -418,7 +419,7 @@ const documentFieldContentProjection = v.variant("type", [
       version: v.literal(1),
       type: v.literal("file"),
       id: strippedField(),
-      fileName: v.string(),
+      fileName: contentText(),
       mimeType: v.string(),
       sizeBytes: v.number(),
       encrypted: v.boolean(),
@@ -642,7 +643,7 @@ const documentSearchIndexStateProjection = v.variant("status", [
 export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
   kind: v.string(),
-  name: v.string(),
+  name: contentText(),
   fields: v.array(documentFieldProjection),
   contentState: documentContentStateProjection,
   searchIndexState: documentSearchIndexStateProjection,
@@ -654,7 +655,7 @@ export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
 /** read_document, `version_id` branch: one version's metadata + fields. */
 export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
-  name: v.string(),
+  name: contentText(),
   version: v.strictObject({
     id: passthroughId(),
     versionNumber: v.number(),
@@ -672,7 +673,7 @@ export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
  */
 export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
-  name: v.string(),
+  name: contentText(),
   diff: v.strictObject({
     // Entity-version handles, no chat ref kind.
     baseVersionId: passthroughId(),
@@ -1785,6 +1786,7 @@ const caseLawDecisionProjection = v.strictObject({
   page: v.optional(v.number()),
   pageCount: v.optional(v.number()),
   charCount: v.optional(v.number()),
+  bodySource: v.optional(decisionBodySourceProjection),
   textSource: v.optional(
     v.pipe(
       v.picklist(Object.values(DECISION_TEXT_SOURCE)),
@@ -2865,6 +2867,7 @@ export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   matterNumberingEnabled: v.optional(v.boolean()),
+  documentNamePattern: v.optional(v.nullable(v.string())),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),

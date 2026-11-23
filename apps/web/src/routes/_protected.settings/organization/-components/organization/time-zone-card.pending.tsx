@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { FaceLabelPending, FieldTriggerFace } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 
@@ -21,9 +21,9 @@ export const OrganizationTimeZoneCardFrame = ({
   /** The picker (with its hidden caption), or its face. */
   children: ReactNode;
 }) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
+  <SettingsSection>
+    <SettingsPanel>
+      <div className="flex flex-col gap-3">
         <p className="text-muted-foreground text-sm">
           <PendingText
             barClassName="w-80 max-w-full"
@@ -32,8 +32,8 @@ export const OrganizationTimeZoneCardFrame = ({
         </p>
         {children}
       </div>
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 /** The card while the organization's settings are on their way. */

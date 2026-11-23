@@ -1090,12 +1090,16 @@ export const SearchDialog = ({
     string | null
   >(null);
   const [lastRecentsOwner, setLastRecentsOwner] = useState(owner);
-  if (
-    recentsSnapshotKey !== lastRecentsSnapshotKey ||
-    owner !== lastRecentsOwner
-  ) {
-    setLastRecentsOwner(owner);
+  if (recentsSnapshotKey !== lastRecentsSnapshotKey) {
     setLastRecentsSnapshotKey(recentsSnapshotKey);
+    setLastRecentsOwner(owner);
+    setRegistryExpanded(false);
+    setCaseLawExpansion(null);
+    setSupplementalPreview({ type: "internal" });
+    setRecentPreviewFile(null);
+  }
+  if (owner !== lastRecentsOwner) {
+    setLastRecentsOwner(owner);
     setRegistryExpanded(false);
     setCaseLawExpansion(null);
     setSupplementalPreview({ type: "internal" });
@@ -2103,6 +2107,11 @@ export const SearchDialog = ({
                   aria-label={t("search.aiRefine")}
                   className="size-8 shrink-0"
                   disabled={!query.trim() || refineSearchMutation.isPending}
+                  disabledReason={
+                    refineSearchMutation.isPending
+                      ? t("search.refiningQuery")
+                      : t("search.enterQueryToRefine")
+                  }
                   onClick={() => {
                     handleRefineQuery();
                   }}
@@ -2703,6 +2712,7 @@ const SearchDialogFooter = ({
                 aria-keyshortcuts="Tab"
                 className="h-auto gap-1.5"
                 disabled={isAskingAI}
+                disabledReason={t("chat.forkingThread")}
                 onClick={onAskAI}
                 size="xs"
                 variant="muted"

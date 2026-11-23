@@ -220,6 +220,7 @@ export const StatuteVersionList = ({
               aria-current={selected ? "true" : undefined}
               className="group/plain flex w-full"
               disabled={selected}
+              disabledReason={t("statutes.versionAlreadySelected")}
               onClick={() => onVersionChange(version.id)}
               variant="plain"
             >

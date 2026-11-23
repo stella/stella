@@ -499,6 +499,99 @@ describe("activity blocks", () => {
   });
 });
 
+describe("an activity block's stated time", () => {
+  const recordedMs = (
+    segments: readonly { endMs: number; startMs: number }[],
+  ) => segments.reduce((sum, { endMs, startMs }) => sum + endMs - startMs, 0);
+  const generatedSegment = fc.record({
+    // Back to back, or a pause on either side of the two-minute bridge.
+    gapMinutes: fc.oneof(
+      fc.constant(0),
+      fc.double({ max: 6, min: 0, noNaN: true }),
+    ),
+    // Many brief stretches, so short unmatched ones join matter blocks.
+    lengthMinutes: fc.oneof(
+      fc.double({ max: 3, min: 1 / 6, noNaN: true }),
+      fc.double({ max: 45, min: 1 / 6, noNaN: true }),
+    ),
+    app: fc.constantFrom("editor", "browser", "mail"),
+    title: fc.integer({ max: 3, min: 0 }),
+    matterId: fc.constantFrom("lease", "services", undefined),
+  });
+
+  test(
+    "a matter block states only its matter's own time, the time its suggestion counts",
+    () => {
+      assertProperty(
+        "a matter block states only its matter's own time, the time its suggestion counts",
+        fc.property(
+          fc.array(generatedSegment, { maxLength: 40, minLength: 1 }),
+          fc.constantFrom(15, 30, 60),
+          (parts, granularity) => {
+            let minute = 0;
+            const generated = parts.map(
+              ({ app, gapMinutes, lengthMinutes, matterId, title }) => {
+                minute += gapMinutes;
+                const generatedPart = segment({
+                  app,
+                  from: minute,
+                  matterId,
+                  title: `Title ${String(title)}`,
+                  to: minute + lengthMinutes,
+                });
+                minute += lengthMinutes;
+                return generatedPart;
+              },
+            );
+            const { groups, segments } = day(generated);
+            const blocks = activityBlocks(segments, granularity);
+            for (const block of blocks) {
+              const { matter: blockMatter } = block;
+              const own =
+                blockMatter === null
+                  ? block.sources
+                  : block.sources.filter(
+                      (source) => source.matter?.id === blockMatter.id,
+                    );
+              expect(block.durationMs).toBe(recordedMs(own));
+              // What a matter block took in is listed, never lost.
+              expect(block.durationMs + recordedMs(block.joined)).toBe(
+                recordedMs(block.sources),
+              );
+              expect(
+                block.joined.every((source) => source.matter === null),
+              ).toBe(true);
+              if (blockMatter === null) {
+                expect(block.joined).toEqual([]);
+              }
+            }
+            for (const suggestion of matchedSuggestions(groups, new Set())) {
+              const stated = blocks
+                .filter((block) => block.matter?.id === suggestion.matter?.id)
+                .reduce((sum, block) => sum + block.durationMs, 0);
+              expect(stated).toBe(suggestion.durationMs);
+            }
+          },
+        ),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
+
+  test("a short unmatched look inside a matter's time is listed, not counted", () => {
+    const { segments } = day([
+      segment({ from: 0, to: 40, matterId: "lease", title: "Lease.docx" }),
+      segment({ from: 40, to: 43, app: "browser", title: "News" }),
+      segment({ from: 43, to: 90, matterId: "lease", title: "Lease.docx" }),
+    ]);
+    const [block, ...rest] = activityBlocks(segments, 30);
+    expect(rest).toEqual([]);
+    expect(block?.matter?.id).toBe("lease");
+    expect(block?.durationMs).toBe(87 * MINUTE);
+    expect(block?.joined.map(({ startMs }) => startMs)).toEqual([ms(40)]);
+  });
+});
+
 describe("calendar hours", () => {
   const options = { date: "2026-10-09", timeZone: "UTC" };
   test("the working day stays visible and grows to whole hours around activity", () => {
@@ -959,7 +1052,7 @@ describe("suggestion pieces", () => {
     return suggestion;
   };
 
-  test("each piece counts its own recorded time, and the card's summary adds them up", () => {
+  test("each piece counts its own recorded time, and the card's summary states the billed tenths once", () => {
     const suggestion = onlySuggestion([
       segment({ from: 0, to: 30, matterId: "lease", title: "Lease draft" }),
       // A two-minute pause keeps one piece but is not time worked.
@@ -973,7 +1066,6 @@ describe("suggestion pieces", () => {
     ]);
     expect(suggestionSummary(suggestion)).toEqual({
       count: 2,
-      minutes: 106,
       tenths: suggestion.roundedTenths,
       type: "pieces",
     });
@@ -985,7 +1077,6 @@ describe("suggestion pieces", () => {
     ]);
     expect(suggestionSummary(suggestion)).toEqual({
       endMs: ms(55),
-      minutes: 45,
       startMs: ms(10),
       tenths: 8,
       type: "range",
@@ -1004,7 +1095,6 @@ describe("suggestion pieces", () => {
     ]);
     expect(suggestionSummary(suggestion)).toMatchObject({
       count: 2,
-      minutes: 50,
       type: "pieces",
     });
   });

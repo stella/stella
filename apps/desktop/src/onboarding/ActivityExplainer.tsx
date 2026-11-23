@@ -1,4 +1,3 @@
-import { Fragment } from "react";
 import type { ReactNode } from "react";
 
 import { useFormatter, useTranslations } from "use-intl";
@@ -8,16 +7,12 @@ import {
   CheckIcon,
   LockKeyholeIcon,
   SendIcon,
-  XIcon,
 } from "@stll/ui/icons";
-import { ScrollArea } from "@stll/ui/scroll-area";
-import { TruncatedText } from "@stll/ui/truncated-text";
-import { cn } from "@stll/ui/utils";
 
-import { PermissionsSection } from "../mainview/PermissionsSection";
-import type { Permission } from "../shared/permissions";
-import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
-import { DESKTOP_TELEMETRY_WINDOWS } from "../telemetry/desktop-telemetry";
+import {
+  ActivityDisclosure,
+  useStoredFact,
+} from "../activity/ActivityDisclosure";
 import "./activity-story.css";
 
 /** Sample apps of the illustrated morning, as shares of its length. */
@@ -32,135 +27,97 @@ const STORY_MATTER_COLOR = "var(--option-emerald)";
 /** Story length in hours, as the draft entry rounds it. */
 const STORY_HOURS = 0.9;
 
-/** Side by side: what is recorded, and what never is. */
-const CLAIM_ROWS = [
-  { never: "activityNeverScreen", recorded: "activityRecordsApp" },
-  { never: "activityNeverKeys", recorded: "activityRecordsDetails" },
-  { never: "activityNeverWeb", recorded: "activityRecordsActive" },
-] as const;
-
-type ActivityExplainerProps = {
-  permissions: readonly Permission[];
-};
-
 /**
  * What activity records, where it stays and what leaves, told as the
- * morning it turns into a draft entry. Shared by the tour and by the
- * introduction shown when activity arrives later.
+ * morning it turns into a draft entry: the first screen of the Activity
+ * step, in the tour and in the introduction shown when activity arrives
+ * later. The screen around it scrolls.
  */
-export const ActivityExplainer = ({ permissions }: ActivityExplainerProps) => {
+export const ActivityExplainer = () => {
   const t = useTranslations("onboarding");
   const activity = useTranslations("activity");
   const format = useFormatter();
-  const askForDetails = DESKTOP_PLATFORM === "mac" && permissions.length > 0;
+  const stored = useStoredFact();
 
   return (
-    // Longer translations scroll here, inside the window, rather than
-    // squeezing a block below its own text.
-    <ScrollArea axis="vertical">
-      <div className="flex flex-col gap-4">
-        <ol
-          className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2"
-          data-activity-story=""
+    <div className="flex flex-col gap-4">
+      <ol
+        className="grid grid-cols-[1fr_auto_1fr_auto_1fr] items-stretch gap-2"
+        data-activity-story=""
+      >
+        <StoryStage
+          caption={stored}
+          icon={<LockKeyholeIcon className="size-3" />}
+          title={t("activityStoryRecordTitle")}
         >
-          <StoryStage
-            caption={
-              DESKTOP_PLATFORM === "mac"
-                ? t("activityStoryRecordMac")
-                : t("activityStoryRecordPc")
-            }
-            icon={<LockKeyholeIcon className="size-3" />}
-            title={t("activityStoryRecordTitle")}
-          >
-            <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
-              {STORY_APPS.map(({ color, share }) => (
-                <span
-                  className="h-full rounded-sm"
-                  data-activity-story-bar=""
-                  key={color}
-                  style={{ backgroundColor: color, flexGrow: share }}
-                />
-              ))}
-            </div>
-          </StoryStage>
-          <StoryArrow />
-          <StoryStage
-            caption={t("activityStoryReviewCaption")}
-            icon={<CheckIcon className="size-3" />}
-            title={t("activityStoryReviewTitle")}
-          >
-            <div
-              className="bg-background flex items-center gap-1.5 rounded-lg border px-2 py-1.5"
-              data-activity-story-matter=""
-            >
+          <div className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full">
+            {STORY_APPS.map(({ color, share }) => (
               <span
-                aria-hidden="true"
-                className="size-2 shrink-0 rounded-full"
-                style={{ backgroundColor: STORY_MATTER_COLOR }}
+                className="h-full rounded-sm"
+                data-activity-story-bar=""
+                key={color}
+                style={{ backgroundColor: color, flexGrow: share }}
               />
-              <TruncatedText className="text-xs font-medium">
-                {activity("welcomePreviewMatter")}
-              </TruncatedText>
-            </div>
-          </StoryStage>
-          <StoryArrow />
-          <StoryStage
-            caption={activity("batchPrivacy")}
-            icon={<SendIcon className="size-3" />}
-            title={t("activityStorySendTitle")}
-          >
-            <div
-              className="bg-background flex flex-col gap-1 rounded-lg border px-2 py-1.5"
-              data-activity-story-entry=""
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-2xs bg-muted text-muted-foreground rounded-full px-1.5 py-px font-medium">
-                  {t("activityStoryDraft")}
-                </span>
-                <span className="text-xs font-semibold tabular-nums">
-                  {activity("hours", {
-                    hours: format.number(STORY_HOURS, {
-                      maximumFractionDigits: 1,
-                      minimumFractionDigits: 1,
-                    }),
-                  })}
-                </span>
-              </div>
-              <span className="bg-muted h-1.5 w-4/5 rounded-full" />
-              <span className="bg-muted h-1.5 w-3/5 rounded-full" />
-            </div>
-          </StoryStage>
-        </ol>
-
-        <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
-          <p className="text-foreground font-medium">
-            {t("activityRecordsTitle")}
-          </p>
-          <p className="text-foreground font-medium">
-            {t("activityNeverTitle")}
-          </p>
-          {CLAIM_ROWS.map(({ never, recorded }) => (
-            <Fragment key={recorded}>
-              <Claim kind="recorded" text={t(recorded)} />
-              <Claim kind="never" text={t(never)} />
-            </Fragment>
-          ))}
-        </div>
-
-        {askForDetails ? (
-          <div className="bg-card rounded-xl border">
-            <PermissionsSection
-              only={permissions}
-              window={DESKTOP_TELEMETRY_WINDOWS.onboarding}
-            />
+            ))}
           </div>
-        ) : null}
+        </StoryStage>
+        <StoryArrow />
+        <StoryStage
+          caption={t("activityStoryReviewCaption")}
+          icon={<CheckIcon className="size-3" />}
+          title={t("activityStoryReviewTitle")}
+        >
+          {/* The sample matter wraps rather than truncates: a cut name
+                reads as a fault in the illustration. */}
+          <div
+            className="bg-background flex items-start gap-1.5 rounded-lg border px-2 py-1.5"
+            data-activity-story-matter=""
+          >
+            <span
+              aria-hidden="true"
+              className="mt-1 size-2 shrink-0 rounded-full"
+              style={{ backgroundColor: STORY_MATTER_COLOR }}
+            />
+            <span className="min-w-0 text-xs leading-snug font-medium text-pretty wrap-break-word">
+              {activity("welcomePreviewMatter")}
+            </span>
+          </div>
+        </StoryStage>
+        <StoryArrow />
+        <StoryStage
+          caption={t("activityStorySendCaption")}
+          icon={<SendIcon className="size-3" />}
+          title={t("activityStorySendTitle")}
+        >
+          <div
+            className="bg-background flex flex-col gap-1 rounded-lg border px-2 py-1.5"
+            data-activity-story-entry=""
+          >
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-2xs bg-muted text-muted-foreground rounded-full px-1.5 py-px font-medium">
+                {t("activityStoryDraft")}
+              </span>
+              <span className="text-xs font-semibold tabular-nums">
+                {activity("hours", {
+                  hours: format.number(STORY_HOURS, {
+                    maximumFractionDigits: 1,
+                    minimumFractionDigits: 1,
+                  }),
+                })}
+              </span>
+            </div>
+            <span className="bg-muted h-1.5 w-4/5 rounded-full" />
+            <span className="bg-muted h-1.5 w-3/5 rounded-full" />
+          </div>
+        </StoryStage>
+      </ol>
 
-        <p className="text-muted-foreground text-xs leading-relaxed text-pretty">
-          {t("activityConsentNote")} {t("activityAiNote")}
-        </p>
-      </div>
-    </ScrollArea>
+      <ActivityDisclosure />
+
+      <p className="text-muted-foreground text-xs leading-relaxed text-pretty">
+        {activity("disclosure.control")}
+      </p>
+    </div>
   );
 };
 
@@ -202,31 +159,4 @@ const StoryArrow = () => (
   >
     <ArrowRightIcon className="size-3.5 rtl:-scale-x-100" />
   </li>
-);
-
-const Claim = ({
-  kind,
-  text,
-}: {
-  kind: "recorded" | "never";
-  text: string;
-}) => (
-  <p className="text-muted-foreground flex items-start gap-1.5 leading-snug">
-    <span
-      aria-hidden="true"
-      className={cn(
-        "mt-px grid size-3.5 shrink-0 place-items-center rounded-full",
-        kind === "recorded"
-          ? "bg-success/15 text-success-foreground"
-          : "bg-muted text-muted-foreground",
-      )}
-    >
-      {kind === "recorded" ? (
-        <CheckIcon className="size-2.5" />
-      ) : (
-        <XIcon className="size-2.5" />
-      )}
-    </span>
-    {text}
-  </p>
 );

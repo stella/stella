@@ -1,0 +1,238 @@
+{
+  "duplicatesCommon": [],
+  "duplicateValues": [
+    "chat.documentClose",
+    "chat.documentOpen",
+    "chat.edit.cancel",
+    "chat.limitReminderFailed",
+    "chat.loadMoreFailed",
+    "chat.localRun.limitReminderCancel",
+    "chat.localRun.status.running",
+    "chat.queue.cancel",
+    "chat.queue.moveDown",
+    "chat.queue.moveUp",
+    "chat.retry",
+    "chat.scanDocument",
+    "chat.sections.today",
+    "chat.tool.delete_matter",
+    "chat.tool.delete_task",
+    "document.details",
+    "document.edit.done",
+    "document.retry",
+    "document.title",
+    "header.search",
+    "law.retry",
+    "law.share",
+    "law.title",
+    "link.cancel",
+    "link.open",
+    "link.share",
+    "matter.add",
+    "matter.details",
+    "matter.documents",
+    "matter.kind.document",
+    "matter.loadFailed",
+    "matter.loadMore",
+    "matter.newTask",
+    "matter.retry",
+    "matter.scanDocument",
+    "matter.status.done",
+    "matter.status.in_progress",
+    "matter.status.open",
+    "matter.tasks",
+    "matterInfo.actions",
+    "matterInfo.cancel",
+    "matterInfo.client",
+    "matterInfo.delete",
+    "matterInfo.done",
+    "matterInfo.loadFailed",
+    "matterInfo.members",
+    "matterInfo.retry",
+    "matterInfo.saveFailed",
+    "matterInfo.someone",
+    "matterInfo.typeName",
+    "matterInfo.you",
+    "matters.client",
+    "matters.groupClient",
+    "matters.loadFailed",
+    "matters.name",
+    "matters.retry",
+    "matters.team",
+    "matters.you",
+    "more.timers",
+    "role.retry",
+    "scan.discard",
+    "scan.matterTitle",
+    "scan.moveDown",
+    "scan.moveUp",
+    "scan.save",
+    "scan.share",
+    "scan.title",
+    "search.cancel",
+    "search.retry",
+    "search.type.document",
+    "search.type.matter",
+    "search.type.task",
+    "settings.server",
+    "share.start",
+    "shortcuts.search",
+    "signIn.done",
+    "signIn.serverTitle",
+    "tabs.close",
+    "tabs.law",
+    "tabs.matters",
+    "tabs.tasks",
+    "tasks.add",
+    "tasks.cancel",
+    "tasks.delete",
+    "tasks.doneAssigning",
+    "tasks.due.today",
+    "tasks.dueChoice.today",
+    "tasks.loadMore",
+    "tasks.matterTitle",
+    "tasks.mattersFailed",
+    "tasks.newTask",
+    "tasks.retry",
+    "tasks.saveFailed",
+    "tasks.show.open",
+    "tasks.someone",
+    "timers.discard",
+    "timers.matterTitle",
+    "timers.retry",
+    "timers.save",
+    "timers.start",
+    "timers.title"
+  ],
+  "identicalToSource": {
+    "chat.threadTitle": [
+      "fr"
+    ],
+    "document.details": [
+      "de"
+    ],
+    "document.title": [
+      "fr"
+    ],
+    "entity.type": [
+      "fr"
+    ],
+    "matter.details": [
+      "de"
+    ],
+    "matter.documents": [
+      "fr"
+    ],
+    "matter.kind.document": [
+      "fr"
+    ],
+    "matter.kind.folder": [
+      "pl"
+    ],
+    "matterInfo.client": [
+      "fr"
+    ],
+    "matterInfo.name": [
+      "de"
+    ],
+    "matterInfo.parties": [
+      "fr"
+    ],
+    "matterInfo.role.mediator": [
+      "de",
+      "pl"
+    ],
+    "matters.client": [
+      "fr"
+    ],
+    "matters.groupClient": [
+      "fr"
+    ],
+    "matters.personal": [
+      "es"
+    ],
+    "scan.defaultName": [
+      "de"
+    ],
+    "scan.kilobytes": [
+      "de",
+      "es",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR"
+    ],
+    "scan.megabytes": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "scan.page": [
+      "fr"
+    ],
+    "scan.pages": [
+      "fr"
+    ],
+    "search.type.chat": [
+      "de"
+    ],
+    "search.type.document": [
+      "fr"
+    ],
+    "search.type.link": [
+      "de",
+      "pt-BR"
+    ],
+    "settings.server": [
+      "cs",
+      "de",
+      "et",
+      "sk"
+    ],
+    "signIn.serverPlaceholder": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "signIn.serverTitle": [
+      "cs",
+      "de",
+      "et",
+      "sk"
+    ],
+    "tabs.chat": [
+      "cs",
+      "de",
+      "es",
+      "pt-BR",
+      "sk"
+    ],
+    "tasks.filter": [
+      "de",
+      "et",
+      "sk"
+    ],
+    "tasks.statusTitle": [
+      "de",
+      "pl",
+      "pt-BR"
+    ]
+  },
+  "unusedKeys": []
+}

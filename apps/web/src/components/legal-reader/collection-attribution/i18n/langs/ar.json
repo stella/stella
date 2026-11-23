@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "تُعرض الأقسام المنشورة؛ ولم يُثبت اكتمال النص.",
+    "provenanceOmitted": "سجلات النشر المحذوفة من العرض: {omittedCount, number} من {totalCount, number}.",
+    "sourceAttribution": "منشور المجموعة: <link>{source}</link>. تم الاسترجاع في {date}.",
+    "sourceAttributionUnknownDate": "منشور المجموعة: <link>{source}</link>. تاريخ الاسترجاع غير معروف.",
+    "unclassifiedText": "نطاق نص المجموعة هذا غير معروف."
+  }
+}

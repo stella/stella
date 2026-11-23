@@ -1480,15 +1480,18 @@ type PackageScriptOptions = {
   cwd: string;
   expand: SourceCommandOptions["expand"];
 };
+const packageScripts = (context: CommandContext, cwd: string) => {
+  const owner = context.tree.get(`${cwd}/package.json`);
+  return typeof owner === "string"
+    ? (JSON.parse(text(context.root, owner)).scripts ?? {})
+    : {};
+};
+
 const packageScriptEntries = (
   context: CommandContext,
   options: PackageScriptOptions,
 ) => {
-  const owner = context.tree.get(`${options.cwd}/package.json`);
-  const scripts =
-    typeof owner === "string"
-      ? (JSON.parse(text(context.root, owner)).scripts ?? {})
-      : {};
+  const scripts = packageScripts(context, options.cwd);
   if (!Object.hasOwn(scripts, options.name)) {
     return undefined;
   }
@@ -1818,6 +1821,30 @@ const unwrapSourceCommand = (
   }
 };
 
+const BUN_RUNTIME_SWITCHES = new Set(["--bun", "-b"]);
+const BUN_SUBCOMMANDS = new Set(["build", "run", "test", "x"]);
+
+/**
+ * `bun --bun <executable>` starts a package executable on Bun instead of the
+ * Node its shebang names, so it reads what the bare executable reads.
+ */
+const withoutBunRuntimeSwitch = (
+  context: CommandContext,
+  words: string[],
+  cwd: string,
+): string[] => {
+  const [program, flag, executable] = words;
+  return program === "bun" &&
+    BUN_RUNTIME_SWITCHES.has(flag ?? "") &&
+    executable !== undefined &&
+    /^[\w@][\w.@-]*$/u.test(executable) &&
+    !modulePattern.test(executable) &&
+    !BUN_SUBCOMMANDS.has(executable) &&
+    !Object.hasOwn(packageScripts(context, cwd), executable)
+    ? words.slice(2)
+    : words;
+};
+
 const walkCommand = (
   context: CommandContext,
   command: string,
@@ -1843,7 +1870,11 @@ const walkCommand = (
     if (event.type !== "command") {
       continue;
     }
-    const words = unwrapSourceCommand(event.words, runContext.environment);
+    const words = withoutBunRuntimeSwitch(
+      runContext,
+      unwrapSourceCommand(event.words, runContext.environment),
+      cwd,
+    );
     const program = words.shift();
     if (program === "sh" || program === "bash") {
       const script = words.at(1);

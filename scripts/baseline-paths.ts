@@ -129,6 +129,14 @@ export const BASELINE_PATHS = {
   /** packages/scripts/src/i18n-check.ts, packages/transactional */
   transactionalI18nSourceLock:
     "packages/transactional/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, apps/desktop */
+  desktopI18nCheck: "apps/desktop/src/i18n/i18n-check-baseline.json",
+  /** packages/scripts/src/i18n-check.ts, apps/desktop */
+  desktopI18nSourceLock: "apps/desktop/src/i18n/i18n-source-lock.json",
+  /** packages/scripts/src/i18n-check.ts, apps/mobile */
+  mobileI18nCheck: "apps/mobile/src/i18n/i18n-check-baseline.json",
+  /** packages/scripts/src/i18n-check.ts, apps/mobile */
+  mobileI18nSourceLock: "apps/mobile/src/i18n/i18n-source-lock.json",
 } as const satisfies Record<string, string>;
 
 export const isSeededBaselineFile = (file: string): boolean =>

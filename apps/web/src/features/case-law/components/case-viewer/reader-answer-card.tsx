@@ -135,6 +135,11 @@ export const ReaderAnswerCard = ({
     }
   }
   const expanded = busy || display === "expanded";
+  const busyReason = t(
+    answer.messages.some((message) => message.status === "streaming")
+      ? "readerAnswers.loading"
+      : "readerAnswers.waitForCurrentAction",
+  );
   const observe = (node: HTMLElement | null) => {
     if (node === null) {
       return undefined;
@@ -229,6 +234,7 @@ export const ReaderAnswerCard = ({
             }
           }}
           disabled={busy}
+          disabledReason={busyReason}
           aria-expanded={expanded}
         >
           {expanded ? t("readerAnswers.minimise") : t("readerAnswers.expand")}
@@ -302,6 +308,7 @@ export const ReaderAnswerCard = ({
                 <Button
                   className="min-h-11"
                   disabled={busy}
+                  disabledReason={busyReason}
                   size="sm"
                   type="button"
                   variant="ghost"
@@ -312,6 +319,7 @@ export const ReaderAnswerCard = ({
                 <Button
                   className="min-h-11"
                   disabled={busy}
+                  disabledReason={busyReason}
                   size="sm"
                   type="button"
                   variant="ghost"
@@ -365,6 +373,9 @@ export const ReaderAnswerCard = ({
                 size="sm"
                 type="submit"
                 disabled={busy || question.trim() === ""}
+                disabledReason={
+                  busy ? busyReason : t("readerAnswers.followUpRequired")
+                }
               >
                 {t("readerAnswers.send")}
               </Button>

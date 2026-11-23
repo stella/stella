@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test";
 
 import { BROWSER_CONTROL_ERROR_CODE } from "@stll/api-contract/browser-control";
 
+import { BROWSER_CONTAINED_TABS_STORAGE_KEY } from "../src/lib/storage-keys";
 import {
   createCommandSender,
   elementNamed,
@@ -162,6 +163,45 @@ const latestPong = async (stella: Page): Promise<unknown> =>
     return received.at(-1);
   });
 
+/**
+ * Opens a tab as the user does. It is confined like any other until Chrome
+ * reports a navigation only the browser starts and the extension records
+ * the tab as the user's.
+ */
+const openUserTab = async (harness: Harness): Promise<Page> => {
+  const tab = await harness.context.newPage();
+  await expect
+    .poll(
+      async () =>
+        await harness.worker.evaluate(async (key) => {
+          // Chrome numbers tabs in the order it creates them.
+          const newest = Math.max(
+            ...(await chrome.tabs.query({})).map(({ id }) => id ?? -1),
+          );
+          const contained: unknown = (await chrome.storage.session.get(key))[
+            key
+          ];
+          const userTabIds: unknown =
+            typeof contained === "object" && contained !== null
+              ? Reflect.get(contained, "userTabIds")
+              : undefined;
+          return Array.isArray(userTabIds) && userTabIds.includes(newest);
+        }, BROWSER_CONTAINED_TABS_STORAGE_KEY),
+    )
+    .toBe(true);
+  return tab;
+};
+
+/**
+ * Blocks this process, and with it Playwright, which holds every new window
+ * at start until it has attached to it, as DevTools set to open for popups
+ * does. Chrome meanwhile reports the window to the extension.
+ */
+const holdNewWindowsAtStart = (): void => {
+  // real-time: the hold stands in for a debugger; nothing in Chrome ends it.
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+};
+
 /** Opens the containment fixture; the first load of a new tab can miss routing. */
 const openContainmentPage = async (
   harness: Harness,
@@ -284,7 +324,10 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
   const intranetRequests = await routeFixtures(harness);
   try {
     await harness.pair(CONTROLLER_ID);
-    const { send } = createCommandSender(harness.stella, CONTROLLER_ID);
+    const { post, result, send } = createCommandSender(
+      harness.stella,
+      CONTROLLER_ID,
+    );
     let snapshot = await openContainmentPage(harness, send);
     const page = () => ({ revision: snapshot.revision, url: snapshot.url });
 
@@ -405,7 +448,9 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
 
     // Tabs a page opens are confined from their very first request, whether
     // the page keeps a handle on them or not and whichever frame opens them:
-    // none reaches the intranet host, and each is closed.
+    // none reaches the intranet host, and each is closed. Each is held at
+    // start while the extension hears of it, and is closed only once it
+    // loads, so the page that opened it keeps working.
     const popupOpeners = [
       "Open intranet window",
       "Open intranet window without opener",
@@ -414,13 +459,13 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     ];
     for (const name of popupOpeners) {
       const popup = harness.context.waitForEvent("page");
-      snapshot = successful(
-        await send({
-          action: "click",
-          page: page(),
-          target: targetOf(elementNamed(snapshot.elements, name)),
-        }),
-      );
+      const click = await post({
+        action: "click",
+        page: page(),
+        target: targetOf(elementNamed(snapshot.elements, name)),
+      });
+      holdNewWindowsAtStart();
+      snapshot = successful(await result(click));
       const opened = await popup;
       await expect.poll(() => opened.isClosed()).toBe(true);
     }
@@ -439,10 +484,9 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     expect(intranetRequests).toEqual([]);
     await beaconPage.close();
 
-    // A tab no page opened is the user's once Chrome has had the moment it
-    // takes to name an opener: it reaches the intranet host.
-    const userTab = await harness.context.newPage();
-    await harness.stella.waitForTimeout(1500);
+    // A tab no page opened is the user's once Chrome reports a navigation
+    // only the browser starts: it reaches the intranet host.
+    const userTab = await openUserTab(harness);
     await userTab.goto(`${INTRANET_ORIGIN}/user-tab`);
     expect(intranetRequests).toEqual([`${INTRANET_ORIGIN}/user-tab`]);
     intranetRequests.length = 0;
@@ -512,8 +556,7 @@ test("pages cannot escape the controlled tab or read what they hide", async () =
     // saves from an https page carries no referrer, so nothing can tell it
     // from one a confined page saved: it is stopped while stella controls a
     // tab.
-    const userSiteTab = await harness.context.newPage();
-    await harness.stella.waitForTimeout(500);
+    const userSiteTab = await openUserTab(harness);
     await userSiteTab.goto(`${ELSEWHERE_ORIGIN}/landing.html`);
     await saveFromScript(userSiteTab, "blob");
     await saveFromScript(userSiteTab, "data");
@@ -698,10 +741,7 @@ test("downloads are traced to the tab that navigated to them", async () => {
     // In the user's own tab, a frame on another host loads a file from a
     // third host with no referrer: it is traced to the user's tab and saved,
     // and nothing is noted.
-    const userTab = await harness.context.newPage();
-    // real-time: a new tab counts as the user's only once Chrome has had the
-    // moment it takes to report an opener, and none comes.
-    await harness.stella.waitForTimeout(1500);
+    const userTab = await openUserTab(harness);
     await userTab.goto(`${USER_SITE_ORIGIN}/files.html`);
     await followWithoutReferrer(
       userTab.frameLocator("iframe[title='Viewer']"),

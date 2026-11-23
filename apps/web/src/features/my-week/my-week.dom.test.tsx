@@ -56,6 +56,14 @@ const SUPPLY_MATTER = {
 const WEEK = weekOf(Temporal.Now.plainDateISO("UTC").toString());
 const MONDAY = WEEK.start;
 
+const findEnabledAction = async (name: string) =>
+  await waitFor(() => {
+    const action = screen.getByRole("button", { name });
+    expect(action.getAttribute("aria-disabled")).toBeNull();
+    expect(action.hasAttribute("disabled")).toBe(false);
+    return action;
+  });
+
 const originalFetch = globalThis.fetch;
 
 afterEach(async () => {
@@ -743,10 +751,11 @@ describe("my week", () => {
     });
     const dialog = await screen.findByRole("dialog");
     await pickCreateMatter(dialog);
-    const save = within(dialog).getByRole("button", {
-      name: messages.common.save,
-    });
-    expect(save.hasAttribute("disabled")).toBe(true);
+    const save = () =>
+      within(dialog).getByRole("button", {
+        name: messages.common.save,
+      });
+    expect(save().getAttribute("aria-disabled")).toBe("true");
     await act(async () => {
       fireEvent.change(
         within(dialog).getByLabelText(messages.common.description),
@@ -755,7 +764,7 @@ describe("my week", () => {
         },
       );
     });
-    expect(save.hasAttribute("disabled")).toBe(true);
+    expect(save().getAttribute("aria-disabled")).toBe("true");
     for (const duration of ["0", "0.5", "0,5", "-1"]) {
       await act(async () => {
         fireEvent.change(
@@ -766,7 +775,7 @@ describe("my week", () => {
         );
         submitCreateForm(dialog);
       });
-      expect(save.hasAttribute("disabled")).toBe(true);
+      expect(save().getAttribute("aria-disabled")).toBe("true");
       expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(0);
     }
     await act(async () => {
@@ -777,7 +786,7 @@ describe("my week", () => {
         },
       );
     });
-    expect(save.hasAttribute("disabled")).toBe(false);
+    expect(save().getAttribute("aria-disabled")).toBeNull();
     await act(async () => {
       fireEvent.change(
         within(dialog).getByLabelText(messages.common.description),
@@ -789,7 +798,7 @@ describe("my week", () => {
     await act(async () => {
       submitCreateForm(dialog);
     });
-    expect(save.hasAttribute("disabled")).toBe(true);
+    expect(save().getAttribute("aria-disabled")).toBe("true");
     expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(0);
   });
 
@@ -1226,11 +1235,8 @@ describe("my week", () => {
     });
     mount();
 
-    const submit = await screen.findByRole("button", {
-      name: messages.timesheets.week.submitWeek,
-    });
+    await findEnabledAction(messages.timesheets.week.submitWeek);
     expect(screen.queryByText("Later draft")).toBeNull();
-    expect(submit.hasAttribute("disabled")).toBe(false);
   });
 
   test("submitting and approving refreshes the matters' time and invoice data", async () => {
@@ -1242,9 +1248,9 @@ describe("my week", () => {
     client.setQueryData(matterTime, { items: [] });
     client.setQueryData(matterInvoices, { items: [] });
 
-    const submitAndApprove = await screen.findByRole("button", {
-      name: messages.timesheets.week.submitAndApprove,
-    });
+    const submitAndApprove = await findEnabledAction(
+      messages.timesheets.week.submitAndApprove,
+    );
     await act(async () => {
       fireEvent.click(submitAndApprove);
     });
@@ -1313,9 +1319,7 @@ describe("my week", () => {
     const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
     mount();
 
-    const submit = await screen.findByRole("button", {
-      name: messages.timesheets.week.submitWeek,
-    });
+    const submit = await findEnabledAction(messages.timesheets.week.submitWeek);
     await act(async () => {
       fireEvent.click(submit);
       fireEvent.click(submit);
@@ -1431,9 +1435,9 @@ describe("my week", () => {
     const calls = serveWeek({ entries: [draftEntry()], suggestions: [] });
     mount();
 
-    const submitAndApprove = await screen.findByRole("button", {
-      name: messages.timesheets.week.submitAndApprove,
-    });
+    const submitAndApprove = await findEnabledAction(
+      messages.timesheets.week.submitAndApprove,
+    );
     await act(async () => {
       fireEvent.click(submitAndApprove);
     });
@@ -1488,11 +1492,15 @@ describe("missing effective rate", () => {
     const dialog = await openCreate();
     await within(dialog).findByText(
       messages.billing.rates.effectiveRateRequired,
+      {
+        selector: "p",
+      },
     );
-    const save = within(dialog).getByRole("button", {
-      name: messages.common.save,
-    });
-    expect(save.hasAttribute("disabled")).toBe(true);
+    const save = () =>
+      within(dialog).getByRole("button", {
+        name: messages.common.save,
+      });
+    expect(save().getAttribute("aria-disabled")).toBe("true");
     await act(async () => {
       submitCreateForm(dialog);
     });
@@ -1510,7 +1518,7 @@ describe("missing effective rate", () => {
       );
     });
     await act(async () => {
-      fireEvent.click(save);
+      fireEvent.click(save());
     });
     await waitFor(() =>
       expect(calls.find(({ method }) => method === "PUT")?.body).toMatchObject({
@@ -1526,18 +1534,24 @@ describe("missing effective rate", () => {
       rejectRate: true,
     });
     const dialog = await openCreate();
-    const save = within(dialog).getByRole("button", {
-      name: messages.common.save,
-    });
-    await waitFor(() => expect(save.hasAttribute("disabled")).toBe(false));
+    const save = () =>
+      within(dialog).getByRole("button", {
+        name: messages.common.save,
+      });
+    await waitFor(() =>
+      expect(save().getAttribute("aria-disabled")).toBeNull(),
+    );
     await act(async () => {
-      fireEvent.click(save);
+      fireEvent.click(save());
     });
     await within(dialog).findByText(
       messages.billing.rates.effectiveRateRequired,
+      {
+        selector: "p",
+      },
     );
     expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(1);
-    expect(save.hasAttribute("disabled")).toBe(true);
+    expect(save().getAttribute("aria-disabled")).toBe("true");
     await act(async () => {
       fireEvent.click(
         within(dialog).getByRole("button", {
@@ -1546,7 +1560,7 @@ describe("missing effective rate", () => {
       );
     });
     await act(async () => {
-      fireEvent.click(save);
+      fireEvent.click(save());
     });
     await waitFor(() =>
       expect(calls.filter(({ method }) => method === "PUT")).toHaveLength(2),
@@ -1574,12 +1588,15 @@ describe("missing effective rate", () => {
     const dialog = await screen.findByRole("dialog");
     await within(dialog).findByText(
       messages.billing.rates.effectiveRateRequired,
+      {
+        selector: "p",
+      },
     );
     expect(
       within(dialog)
         .getByRole("button", { name: messages.common.save })
-        .hasAttribute("disabled"),
-    ).toBe(true);
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
     expect(calls.filter(({ method }) => method === "PATCH")).toHaveLength(0);
     await act(async () => {
       fireEvent.click(

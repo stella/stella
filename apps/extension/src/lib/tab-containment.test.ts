@@ -28,12 +28,27 @@ type Rule = {
 
 const originalChrome = Object.getOwnPropertyDescriptor(globalThis, "chrome");
 
-/** Chrome with tabs 1 (stella) and 2 (a user page) open. */
+type FakeTab = { id: number; status: string; url?: string };
+type UpdateListener = (tabId: number, change: object, tab: FakeTab) => void;
+type RemovalListener = (tabId: number) => void;
+
+/**
+ * Chrome with tabs 1 (stella) and 2 (a user page) open. Every tab is loading
+ * unless the test holds it at start, as a debugger holds a new window.
+ */
 const installFakeChrome = () => {
   const session: Record<string, unknown> = {};
   const openTabIds = [1, 2];
   const removed: number[] = [];
   const state = { rules: [] as Rule[] };
+  const heldTabIds = new Set<number>();
+  const updateListeners = new Set<UpdateListener>();
+  const removalListeners = new Set<RemovalListener>();
+  let listened = Promise.withResolvers<undefined>();
+  const tabOf = (id: number): FakeTab =>
+    heldTabIds.has(id)
+      ? { id, status: "complete" }
+      : { id, status: "loading", url: "about:blank" };
   Object.defineProperty(globalThis, "chrome", {
     configurable: true,
     value: {
@@ -54,15 +69,57 @@ const installFakeChrome = () => {
         },
       },
       tabs: {
-        get: async (id: number) => ({ id, url: "about:blank" }),
+        get: async (id: number) => tabOf(id),
+        onRemoved: {
+          addListener: (listener: RemovalListener) => {
+            removalListeners.add(listener);
+          },
+          removeListener: (listener: RemovalListener) => {
+            removalListeners.delete(listener);
+          },
+        },
+        onUpdated: {
+          addListener: (listener: UpdateListener) => {
+            updateListeners.add(listener);
+            listened.resolve(undefined);
+          },
+          removeListener: (listener: UpdateListener) => {
+            updateListeners.delete(listener);
+          },
+        },
         query: async () => openTabIds.map((id) => ({ id })),
         remove: async (id: number) => {
           removed.push(id);
         },
       },
+      webNavigation: {
+        getFrame: async () => null,
+      },
     },
   });
-  return { openTabIds, removed, session, state };
+  return {
+    close(tabId: number) {
+      for (const listener of removalListeners) {
+        listener(tabId);
+      }
+    },
+    heldTabIds,
+    /** Settles once something next listens for tab updates. */
+    async listening() {
+      listened = Promise.withResolvers<undefined>();
+      await listened.promise;
+    },
+    openTabIds,
+    removed,
+    session,
+    startLoading(tabId: number) {
+      heldTabIds.delete(tabId);
+      for (const listener of updateListeners) {
+        listener(tabId, { status: "loading" }, tabOf(tabId));
+      }
+    },
+    state,
+  };
 };
 
 afterEach(() => {
@@ -192,6 +249,37 @@ describe("controlled tab containment", () => {
     await sortCommittedNavigation(typed(10));
     expect(await readTabOwner(10)).toBe("confined");
     expect(confines(state.rules, 10)).toBe(true);
+  });
+
+  test("a page-opened tab is closed only once Chrome starts loading it", async () => {
+    const fake = await startControl();
+    // Held at start, as a debugger holds a new window: the page that opened
+    // it is still inside `window.open`, and closing the tab would freeze it.
+    fake.heldTabIds.add(5);
+    const listening = fake.listening();
+    const sorted = sortNavigationTarget({
+      sourceTabId: CONTROLLED,
+      tabId: 5,
+      url: "https://printer.local/popup",
+    });
+    await Promise.race([listening, sorted]);
+    expect(fake.removed).toEqual([]);
+    fake.startLoading(5);
+    await sorted;
+    expect(fake.removed).toEqual([5]);
+
+    // One closed while still held is left alone.
+    fake.heldTabIds.add(6);
+    const listeningAgain = fake.listening();
+    const gone = sortNavigationTarget({
+      sourceTabId: CONTROLLED,
+      tabId: 6,
+      url: "https://printer.local/popup",
+    });
+    await Promise.race([listeningAgain, gone]);
+    fake.close(6);
+    await gone;
+    expect(fake.removed).toEqual([5]);
   });
 
   test("a tab an unknown tab opened is confined but never chat's", async () => {

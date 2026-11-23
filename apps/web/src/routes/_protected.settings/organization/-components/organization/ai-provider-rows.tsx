@@ -59,6 +59,7 @@ export const AIProviderRows = ({
   setupErrorCode,
 }: AIProviderRowsProps) => {
   const t = useTranslations("organization.aiConfig");
+  const common = useTranslations("common");
   return (
     <AIProviderRowsFrame
       description={
@@ -71,6 +72,7 @@ export const AIProviderRows = ({
           variant="ghost"
           size="sm"
           disabled={disabled || getNextAvailableProvider(providers) === null}
+          disabledReason={disabled ? common("saving") : t("allProvidersAdded")}
           onClick={() => {
             const provider = getNextAvailableProvider(providers);
             if (provider) {
@@ -236,6 +238,7 @@ function AIProviderRow({
               aria-label={t("apiKey")}
               autoComplete="off"
               disabled={disabled}
+              disabledReason={common("saving")}
               value={draft.apiKey}
               onChange={(event) =>
                 onChange({
@@ -257,6 +260,7 @@ function AIProviderRow({
             variant="ghost"
             size="sm"
             disabled={disabled}
+            disabledReason={common("saving")}
             onClick={() =>
               onChange({ ...draft, apiKey: "", replacingKey: true })
             }
@@ -270,6 +274,7 @@ function AIProviderRow({
           variant="ghost"
           aria-label={t("removeProvider")}
           disabled={disabled}
+          disabledReason={common("saving")}
           onClick={() => {
             if (draft.apiKeyMasked) {
               setRemovalState("confirming");
@@ -327,7 +332,12 @@ function AIProviderRow({
             <AlertDialogClose render={<Button variant="ghost" />}>
               {common("cancel")}
             </AlertDialogClose>
-            <Button variant="destructive" disabled={disabled} onClick={remove}>
+            <Button
+              variant="destructive"
+              disabled={disabled}
+              disabledReason={common("saving")}
+              onClick={remove}
+            >
               {common("confirm")}
             </Button>
           </AlertDialogFooter>

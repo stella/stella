@@ -129,8 +129,10 @@ describe("BYOK provider rows", () => {
       true,
     );
     expect(
-      screen.getByRole("button", { name: labels.addProvider }),
-    ).toHaveProperty("disabled", true);
+      screen
+        .getByRole("button", { name: labels.addProvider })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
     const remove = screen.getByRole("button", { name: labels.removeProvider });
     expect(remove.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(remove);

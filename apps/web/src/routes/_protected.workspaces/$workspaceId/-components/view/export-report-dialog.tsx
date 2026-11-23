@@ -500,18 +500,12 @@ const ExportReportDialogBody = ({
             value={resolvedValue}
           />
           {selectedBuiltinKey !== null && (
-            <Button
-              className="self-start"
+            <CustomizeReportTemplateButton
               disabled={customizing || submitting}
-              onClick={() => {
+              onCustomize={() => {
                 detached(handleCustomize(), "export-report-dialog.customize");
               }}
-              size="sm"
-              type="button"
-              variant="ghost"
-            >
-              {t("workspaces.views.reportExport.customize")}
-            </Button>
+            />
           )}
         </div>
 
@@ -558,6 +552,9 @@ const ExportReportDialogBody = ({
         </DialogClose>
         <Button
           disabled={submitting || !resolvedValue}
+          disabledReason={
+            submitting ? t("common.preparing") : t("common.selectExportOptions")
+          }
           onClick={() => {
             detached(handleSubmit(), "export-report-dialog.submit");
           }}
@@ -567,6 +564,29 @@ const ExportReportDialogBody = ({
         </Button>
       </DialogFooter>
     </DialogPopup>
+  );
+};
+
+const CustomizeReportTemplateButton = ({
+  disabled,
+  onCustomize,
+}: {
+  disabled: boolean;
+  onCustomize: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <Button
+      className="self-start"
+      disabled={disabled}
+      disabledReason={t("common.preparing")}
+      onClick={onCustomize}
+      size="sm"
+      type="button"
+      variant="ghost"
+    >
+      {t("workspaces.views.reportExport.customize")}
+    </Button>
   );
 };
 
@@ -600,6 +620,7 @@ const ReportDeliveryAndFormatPicker = ({
               aria-checked={mode === option.mode}
               key={option.mode}
               disabled={disabled}
+              disabledReason={t("common.preparing")}
               onClick={() => {
                 onModeChange(option.mode);
               }}
@@ -628,6 +649,7 @@ const ReportDeliveryAndFormatPicker = ({
               aria-checked={format === option.format}
               key={option.format}
               disabled={disabled}
+              disabledReason={t("common.preparing")}
               onClick={() => {
                 onChange(option.format);
               }}

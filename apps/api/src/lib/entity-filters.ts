@@ -507,6 +507,7 @@ const compilePropertyPredicate = (
     propertyValueMatches(
       propertyId,
       (v) => sql`LOWER(${v}) = LOWER(${text})`,
+      // sql-perf-allow: bounded by fields_property_id_entity_version_id_key unique probe per scoped entity
       (v) => sql`${v} ILIKE ${`%${escapeLike(text)}%`}`,
     );
   switch (node.op) {
@@ -518,6 +519,7 @@ const compilePropertyPredicate = (
     case "starts_with":
       return same((v) => sql`${v} ILIKE ${`${escapeLike(text)}%`}`);
     case "ends_with":
+      // sql-perf-allow: bounded by fields_property_id_entity_version_id_key unique probe per scoped entity
       return same((v) => sql`${v} ILIKE ${`%${escapeLike(text)}`}`);
     case "is_not_empty":
       return same((v) => sql`${v} <> ''`);
@@ -740,6 +742,7 @@ const FINDABLE_FIELD_TYPES_PREDICATE_SQL: SQL = (() => {
  * through `search_fold`, the term as literal text. Every half of the find
  * predicate (the cell prefilter, the recheck, the name) is this expression.
  */
+// sql-perf-allow: bounded by workspace-scoped fields (fields_workspace_id_idx) and entities within one matter
 export const findTermMatches = (value: SQL, term: string): SQL =>
   sql`${searchFold(value)} LIKE ('%' || ${escapeLikeSql(searchFold(term))} || '%')`;
 

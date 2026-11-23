@@ -375,8 +375,8 @@ describe("createEntityFromBuffer", () => {
       encryption: await detectedEncryptedPdf(),
       parentId,
       provenance: {
-        type: "email_attachment",
-        attachmentId: "ea1.example",
+        type: "file_part",
+        part: "attachment:0",
         sourceEntityId,
         sourceFieldId,
         sourceWorkspaceId: workspaceId,
@@ -411,8 +411,8 @@ describe("createEntityFromBuffer", () => {
       },
       metadata: {
         provenance: {
-          type: "email_attachment",
-          attachmentId: "ea1.example",
+          type: "file_part",
+          part: "attachment:0",
           sourceEntityId,
           sourceFieldId,
           sourceWorkspaceId: workspaceId,

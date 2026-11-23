@@ -504,7 +504,7 @@ test("unavailable AI blocks sending and preserves the draft until availability r
   expect(textbox.textContent).toBe(prompt);
 
   const sendButton = ui.getByRole("button", { name: messages.chat.sendPrompt });
-  expect(isDisabledControl(sendButton)).toBe(true);
+  expect(sendButton.getAttribute("aria-disabled")).toBe("true");
   expect(textbox.getAttribute("contenteditable")).toBe("true");
   await testing.act(async () => {
     testing.fireEvent.click(sendButton);

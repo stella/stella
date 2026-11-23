@@ -383,6 +383,8 @@ test("light coverage prepares through the shared action before checking under th
   );
 });
 
+// timeout: five git processes and a shell; on a contended runner they took
+// 6.9 s, past the default 5 s, and the runner killed the one still going.
 test("cleanup restores the tracked baseline and removes preparation files after partial failure", () => {
   const cleanup = v.parse(
     v.string(),
@@ -432,7 +434,7 @@ test("cleanup restores the tracked baseline and removes preparation files after 
   expect(metadata.every((file) => !existsSync(file))).toBe(true);
   expect(readFileSync(unrelated, "utf-8")).toBe("retain");
   expect(run(["git", "diff", "--exit-code"]).exitCode).toBe(0);
-});
+}, 30_000);
 
 test("validation accepts a checkout without a network budget declaration directory", () => {
   const repository = path.join(directory, "no-budgets");

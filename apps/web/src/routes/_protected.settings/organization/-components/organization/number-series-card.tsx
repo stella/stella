@@ -145,6 +145,7 @@ const NumberSeriesCardBody = ({
         <Button
           onClick={() => open({ type: "create" })}
           disabled={mutation.isPending}
+          disabledReason={t("common.saving")}
         >
           {t("billing.numberSeries.add")}
         </Button>
@@ -237,6 +238,7 @@ const NumberSeriesCardBody = ({
                               variant="outline"
                               size="sm"
                               disabled={mutation.isPending}
+                              disabledReason={t("common.saving")}
                               onClick={() => open({ type: "edit", series })}
                             >
                               {t("common.edit")}
@@ -246,6 +248,7 @@ const NumberSeriesCardBody = ({
                                 variant="outline"
                                 size="sm"
                                 disabled={mutation.isPending}
+                                disabledReason={t("common.saving")}
                                 onClick={() =>
                                   detached(
                                     run({ type: "default", id: series.id }),
@@ -260,6 +263,7 @@ const NumberSeriesCardBody = ({
                               variant="ghost"
                               size="sm"
                               disabled={mutation.isPending}
+                              disabledReason={t("common.archiving")}
                               onClick={() => open({ type: "archive", series })}
                             >
                               {t("common.archive")}
@@ -277,6 +281,7 @@ const NumberSeriesCardBody = ({
         <Button
           variant="outline"
           disabled={query.isFetchingNextPage}
+          disabledReason={t("common.loading")}
           onClick={() =>
             detached(query.fetchNextPage(), "number-series.load-more")
           }
@@ -318,6 +323,7 @@ const NumberSeriesCardBody = ({
                   <Button
                     variant="outline"
                     disabled={mutation.isPending}
+                    disabledReason={t("common.archiving")}
                     onClick={close}
                   >
                     {t("common.cancel")}
@@ -325,6 +331,7 @@ const NumberSeriesCardBody = ({
                   <Button
                     variant="destructive"
                     disabled={mutation.isPending}
+                    disabledReason={t("common.saving")}
                     onClick={() =>
                       detached(
                         run({ type: "archive", id: dialog.series.id }),

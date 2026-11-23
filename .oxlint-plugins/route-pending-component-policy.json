@@ -25,6 +25,7 @@
     "@stll/ui/scroll-area",
     "@stll/ui/outcome-screen-face",
     "@stll/ui/separator",
+    "@stll/ui/settings",
     "@stll/ui/skeleton",
     "@stll/ui/stella-mark",
     "@stll/ui/stella-wordmark",

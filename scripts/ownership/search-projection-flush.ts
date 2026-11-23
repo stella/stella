@@ -22,6 +22,7 @@ export default {
       "apps/api/src/handlers/contacts/delete.ts",
       "apps/api/src/handlers/contacts/import.ts",
       "apps/api/src/handlers/contacts/update.ts",
+      "apps/api/src/handlers/dictation/transcript-folder.ts",
       "apps/api/src/handlers/entities/clip.ts",
       "apps/api/src/handlers/entities/copy.ts",
       "apps/api/src/handlers/entities/folder-from-selection/create.ts",

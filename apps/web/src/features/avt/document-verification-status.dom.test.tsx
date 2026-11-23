@@ -193,8 +193,8 @@ test("pending statuses disable verification and show no unverified verdict", asy
   expect(
     view
       .getByRole("button", { name: messages.common.verify })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(view.queryByText(messages.avt.documents.notVerified)).toBeNull();
   finish(Response.json({ runs: [] }));
   await waitFor(() =>
@@ -222,8 +222,8 @@ test("a status error offers retry, keeps verification disabled, and recovers", a
   expect(
     view
       .getByRole("button", { name: messages.common.verify })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   expect(view.queryByText(messages.avt.documents.notVerified)).toBeNull();
   failed = false;
   fireEvent.click(view.getByRole("button", { name: messages.common.retry }));
@@ -247,8 +247,8 @@ test("a loaded document keeps verification disabled without update permission", 
   expect(
     view
       .getByRole("button", { name: messages.common.verify })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
 });
 
 for (const code of Object.values(MODEL_RUN_CAP_CODES)) {

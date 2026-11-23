@@ -2,6 +2,7 @@ import type { APIRequestContext, Page, Request } from "@playwright/test";
 import path from "node:path";
 
 import { apiPut, apiStatus } from "../helpers/api";
+import { openSavedView } from "../helpers/saved-views";
 import { expect, test } from "../helpers/test";
 import {
   PLAYWRIGHT_EXPECT_TIMEOUT_10_SECONDS_MS,
@@ -80,7 +81,7 @@ const openFilesView = async (
   await page.goto(`/workspaces/${testWorkspace.id}/${testWorkspace.viewId}`, {
     waitUntil: "domcontentloaded",
   });
-  await page.getByRole("tab", { exact: true, name: "Files" }).click();
+  await openSavedView(page, "Files");
 };
 
 const createFolder = async (

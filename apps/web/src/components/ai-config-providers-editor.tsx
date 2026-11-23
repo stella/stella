@@ -100,6 +100,9 @@ export const AIConfigProvidersEditor = ({
         </div>
         <Button
           disabled={disabled || !canAddProvider}
+          disabledReason={
+            disabled ? tCommon("saving") : t("aiConfig.allProvidersAdded")
+          }
           className="ms-auto shrink-0"
           onClick={addProvider}
           size="sm"
@@ -178,6 +181,7 @@ export const AIConfigProvidersEditor = ({
                       }
                       autoComplete="off"
                       disabled={disabled}
+                      disabledReason={tCommon("saving")}
                       onChange={(event) =>
                         updateProvider(index, {
                           ...providerDraft,
@@ -199,6 +203,7 @@ export const AIConfigProvidersEditor = ({
                       </TruncatedText>
                       <Button
                         disabled={disabled}
+                        disabledReason={tCommon("saving")}
                         onClick={() =>
                           updateProvider(index, {
                             ...providerDraft,
@@ -219,6 +224,9 @@ export const AIConfigProvidersEditor = ({
                 {showSaveButton ? (
                   <Button
                     disabled={disabled || rowStatus === "checking"}
+                    disabledReason={
+                      disabled ? tCommon("saving") : tCommon("verifying")
+                    }
                     loading={rowStatus === "checking"}
                     onClick={() => onSaveRow(index)}
                     size="sm"
@@ -233,6 +241,11 @@ export const AIConfigProvidersEditor = ({
                   <Button
                     aria-label={t("aiConfig.removeProvider")}
                     disabled={disabled || providers.length === 1}
+                    disabledReason={
+                      disabled
+                        ? tCommon("saving")
+                        : t("aiConfig.requireProvider")
+                    }
                     onClick={() => removeProvider(index)}
                     size="icon"
                     type="button"
@@ -293,6 +306,7 @@ export const AIConfigProvidersEditor = ({
                       </TruncatedText>
                       <Button
                         disabled={disabled}
+                        disabledReason={tCommon("saving")}
                         onClick={() =>
                           updateProvider(index, {
                             ...providerDraft,
@@ -312,6 +326,7 @@ export const AIConfigProvidersEditor = ({
                   {hasSavedKey && providerDraft.replacingKey && (
                     <Button
                       disabled={disabled}
+                      disabledReason={tCommon("saving")}
                       onClick={() =>
                         updateProvider(index, {
                           ...providerDraft,
@@ -329,6 +344,11 @@ export const AIConfigProvidersEditor = ({
 
                   <Button
                     disabled={disabled || providers.length === 1}
+                    disabledReason={
+                      disabled
+                        ? tCommon("saving")
+                        : t("aiConfig.requireProvider")
+                    }
                     onClick={() => removeProvider(index)}
                     size="sm"
                     type="button"
@@ -351,6 +371,7 @@ export const AIConfigProvidersEditor = ({
                     <SecretInput
                       autoComplete="off"
                       disabled={disabled}
+                      disabledReason={tCommon("saving")}
                       onChange={(event) =>
                         updateProvider(index, {
                           ...providerDraft,

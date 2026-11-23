@@ -40,8 +40,8 @@ test("document upload requires a resolved target and announces upload errors", (
   expect(
     screen
       .getByRole("button", { name: "Nahrát verzi" })
-      .hasAttribute("disabled"),
-  ).toBe(true);
+      .getAttribute("aria-disabled"),
+  ).toBe("true");
   snapshot = {
     ...snapshot,
     file: new File(["version"], "návrh.docx"),

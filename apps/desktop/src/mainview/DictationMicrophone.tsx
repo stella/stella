@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { SettingsRow, settingsRowIds } from "@stll/ui/settings";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import {
@@ -38,7 +39,6 @@ import type {
   MicrophoneLevel,
   MicrophonesSnapshot,
 } from "./dictation-microphone";
-import { SettingsRow, settingsRowIds } from "./settings-layout";
 
 /** With reduced motion the meter shows a level twice a second, not 25. */
 const REDUCED_MOTION_INTERVAL_MS = 500;

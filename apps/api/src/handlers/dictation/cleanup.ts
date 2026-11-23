@@ -108,7 +108,7 @@ export const cleanUpDictation = async ({
       vocabulary === undefined ? body : { ...body, vocabulary },
     ),
     outputSchema: dictationCleanupModelOutputSchema,
-    accept: (output) => acceptDictationCleanup(output, body.transcript),
+    accept: (output) => acceptDictationCleanup(output, body),
   });
 };
 

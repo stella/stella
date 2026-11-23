@@ -39,6 +39,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { toBrowserApiUrl } from "@/lib/api-origins";
 import { DOCX_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
@@ -291,7 +292,7 @@ export const VersionsSidebar = ({
       .url({ fieldId: toSafeId<"field">(fieldId) })
       .get({ query: { purpose: "download" } });
     if (!response.error) {
-      openIsolatedWindow(response.data.presignedUrl);
+      openIsolatedWindow(toBrowserApiUrl(response.data.presignedUrl));
     }
   };
 
@@ -382,6 +383,7 @@ export const VersionsSidebar = ({
           <Button
             className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 border-e px-3 font-normal before:rounded-none"
             disabled={onCompareVersions === undefined}
+            disabledReason={t("fileDetail.compareDocxOnly")}
             onClick={onCompareVersions}
             type="button"
             variant="ghost"
@@ -399,6 +401,7 @@ export const VersionsSidebar = ({
         <Button
           className="text-muted-foreground hover:text-foreground hover:bg-accent flex h-full min-w-0 flex-1 justify-start gap-2 rounded-none border-0 px-3 font-normal before:rounded-none"
           disabled={isUploading}
+          disabledReason={t("workspaces.files.uploading")}
           onClick={() => {
             openFilePicker({
               accept: ".docx,.pdf,.doc",

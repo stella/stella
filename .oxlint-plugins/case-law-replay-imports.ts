@@ -25,29 +25,52 @@ const REPLAY_ENTRYPOINTS = [
  * outside them without building the closure, so the closure refuses any file
  * that would escape them.
  */
-export const REPLAY_CLOSURE_ROOTS = ["apps/", "packages/", "node_modules/"];
+export const REPLAY_CLOSURE_ROOTS = ["apps/api/", "packages/", "node_modules/"];
 
-/** Follow value imports rather than assigning write ownership by directory. */
-export const replayImportClosure = (root: string) => {
+type ValueImportClosureOptions = {
+  root: string;
+  /** Repository-relative modules the closure starts from. */
+  entrypoints: readonly string[];
+  /** Names the closure in its refusals ("Replay import ... cannot be resolved"). */
+  label: string;
+  /** Modules recorded when reached but not followed further. */
+  leaves?: ReadonlySet<string>;
+};
+
+/**
+ * Every repository module the entrypoints reach through value imports,
+ * static or dynamic; type-only imports are erased and do not count.
+ */
+export const valueImportClosure = ({
+  root,
+  entrypoints,
+  label,
+  leaves = new Set(),
+}: ValueImportClosureOptions) => {
   const found = new Set<string>();
-  const pending = [...REPLAY_ENTRYPOINTS];
+  const pending = [...entrypoints];
   while (pending.length > 0) {
     const relative = pending.pop();
     if (relative === undefined || found.has(relative)) {
       continue;
     }
     if (!REPLAY_CLOSURE_ROOTS.some((prefix) => relative.startsWith(prefix))) {
-      panic(`Replay import ${relative} is outside the replay closure roots`);
+      panic(
+        `${label} import ${relative} is outside the ${label.toLowerCase()} closure roots`,
+      );
+    }
+    found.add(relative);
+    if (leaves.has(relative)) {
+      continue;
     }
     const absolute = path.join(root, relative);
     const source = readFileSync(absolute, "utf-8");
-    found.add(relative);
     const { program, errors } = parseSync(relative, source, {
       sourceType: "module",
       range: true,
     });
     if (errors.length > 0) {
-      panic(`Cannot parse replay import ${relative}`);
+      panic(`Cannot parse ${label.toLowerCase()} import ${relative}`);
     }
     const modules: string[] = [];
     for (const statement of program.body) {
@@ -77,7 +100,7 @@ export const replayImportClosure = (root: string) => {
           typeof node.source.value !== "string"
         ) {
           panic(
-            `Replay import in ${relative} must have a static module identity`,
+            `${label} import in ${relative} must have a static module identity`,
           );
         }
         modules.push(node.source.value);
@@ -94,7 +117,7 @@ export const replayImportClosure = (root: string) => {
           typeof argument.value !== "string"
         ) {
           panic(
-            `Replay require in ${relative} must have a static module identity`,
+            `${label} require in ${relative} must have a static module identity`,
           );
         }
         modules.push(argument.value);
@@ -135,7 +158,7 @@ export const replayImportClosure = (root: string) => {
       if (/\.(?:json|md|wasm|node)$/u.test(base)) {
         if (!existsSync(base)) {
           panic(
-            `Replay asset import ${specifier} from ${relative} cannot be resolved`,
+            `${label} asset import ${specifier} from ${relative} cannot be resolved`,
           );
         }
         continue;
@@ -153,10 +176,20 @@ export const replayImportClosure = (root: string) => {
           /\.[cm]?[jt]sx?$/u.test(candidate) && existsSync(candidate),
       );
       if (target === undefined) {
-        panic(`Replay import ${specifier} from ${relative} cannot be resolved`);
+        panic(
+          `${label} import ${specifier} from ${relative} cannot be resolved`,
+        );
       }
       pending.push(repoRelativePath(root, target));
     }
   }
   return found;
 };
+
+/** Follow value imports rather than assigning write ownership by directory. */
+export const replayImportClosure = (root: string) =>
+  valueImportClosure({
+    root,
+    entrypoints: REPLAY_ENTRYPOINTS,
+    label: "Replay",
+  });

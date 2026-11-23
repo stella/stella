@@ -259,7 +259,7 @@ export const runResearchAnswers = async (
   );
 };
 
-type DecisionTextSource =
+export type DecisionTextSource =
   | {
       kind: "passages";
       passages: ResearchPassage[];
@@ -310,7 +310,7 @@ export const selectDecisionPassages = ({
       };
 };
 
-type ResearchDecisionRow = {
+export type ResearchDecisionRow = {
   id: SafeId<"caseLawDecision">;
   caseNumber: string;
   court: string;
@@ -624,7 +624,7 @@ const stillClaimedColumnsFor = async (
   return rows.value.map((row) => row.columnId);
 };
 
-const readResearchDecision = async (
+export const readResearchDecision = async (
   tx: CaseLawPublicReadTransaction,
   decisionId: SafeId<"caseLawDecision">,
 ): Promise<ResearchDecisionRow | null> => {
@@ -670,9 +670,10 @@ const readResearchDecision = async (
  * one unanchored passage. Over budget, the passages most relevant to the
  * questions are retrieved from the corpus index instead.
  */
-const resolveDecisionText = async (
+export const resolveDecisionText = async (
   decision: ResearchDecisionRow,
-  questions: readonly ResearchQuestion[],
+  // Only the wording reaches retrieval, so a citation check passes its claim.
+  questions: readonly { question: string }[],
   caseLawDb: CaseLawPublicReadDb,
   budgetChars: number,
 ): Promise<DecisionTextSource> => {

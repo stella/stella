@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 
@@ -34,21 +34,26 @@ export const OrganizationInstructionsCardFrame = ({
   editor,
   headingId,
 }: OrganizationInstructionsCardFrameProps) => (
-  <Frame>
-    <FramePanel>
+  <SettingsSection
+    description={
+      <span id={descriptionId}>
+        <PendingText
+          barClassName="w-80 max-w-full"
+          id="organization.aiInstructions.description"
+        />
+      </span>
+    }
+    title={
+      <span id={headingId}>
+        <PendingText
+          barClassName="w-36"
+          id="organization.aiInstructions.title"
+        />
+      </span>
+    }
+  >
+    <SettingsPanel>
       <div className="flex flex-col gap-3">
-        <h2 className="text-sm font-medium" id={headingId}>
-          <PendingText
-            barClassName="w-36"
-            id="organization.aiInstructions.title"
-          />
-        </h2>
-        <p className="text-muted-foreground text-xs" id={descriptionId}>
-          <PendingText
-            barClassName="w-80 max-w-full"
-            id="organization.aiInstructions.description"
-          />
-        </p>
         <div
           aria-describedby={descriptionId}
           aria-labelledby={headingId}
@@ -64,8 +69,8 @@ export const OrganizationInstructionsCardFrame = ({
         </p>
         {children}
       </div>
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 /** The card's save and remove actions' row. */

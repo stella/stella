@@ -216,8 +216,10 @@ struct DesktopRecovery<'a> {
 }
 impl RecoveryHost for DesktopRecovery<'_> {
   async fn check_update(&self) -> crate::updater::CheckOutcome {
-    let active = self.manager.lock().await.has_active_edit_sessions();
-    crate::updater::run_check(self.app, active).await
+    let sessions = self.manager;
+    let active_edit_sessions =
+      move || async move { sessions.lock().await.has_active_edit_sessions() };
+    crate::updater::run_check(self.app, active_edit_sessions).await
   }
   async fn confirm(&self, failure: &Failure) -> Result<bool, String> {
     crate::deep_link::show_connection_confirmation(

@@ -1,4 +1,5 @@
 import { rootDb } from "@/api/db/root";
+import { createSessionSignInStore } from "@/api/lib/auth/session-sign-ins";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -19,3 +20,11 @@ export const findOtherSessionDevices = async (
       userAgent: true,
     },
   });
+
+/**
+ * The account holder's sign-in details. Session rows are auth data outside
+ * row security, so the store binds the owner connection; every query scopes
+ * itself to the authenticated user's own sessions.
+ */
+export const sessionSignInStore = () =>
+  createSessionSignInStore({ database: rootDb });

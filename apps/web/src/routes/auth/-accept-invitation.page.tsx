@@ -131,6 +131,7 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
         <Button
           className="w-full"
           disabled={rejectInvitation.isPending}
+          disabledReason={t("common.declining")}
           loading={acceptInvitation.isPending}
           onClick={() => acceptInvitation.mutate()}
           type="button"
@@ -142,6 +143,7 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
         <Button
           className="w-full"
           disabled={acceptInvitation.isPending}
+          disabledReason={t("common.accepting")}
           loading={rejectInvitation.isPending}
           onClick={() => rejectInvitation.mutate()}
           type="button"

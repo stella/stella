@@ -26,6 +26,9 @@ import {
 import { installTauriIpc, tauriInvocations } from "./tauri-ipc";
 import type { TauriInvocation } from "./tauri-ipc";
 
+/** The drafts consent's own text: it names the provider a draft goes to. */
+const AI_DRAFT_CONSENT_TEXT = enMessages.activity.disclosure.aiDraftProvider;
+
 const SNAPSHOT = {
   date: "2026-10-07",
   draftedEntries: [],
@@ -534,6 +537,7 @@ const installNativeBoundary = async ({
                   entryId: entry.entryId,
                   narrative:
                     "steer" in request ? refinedNarrative : generatedNarrative,
+                  narrativeLanguage: "en",
                   classification: {
                     type: "ledes",
                     taskCode: "L120",
@@ -563,6 +567,7 @@ const installNativeBoundary = async ({
                 ],
               },
               earlierEntries: [earlierEntry],
+              codeNames: [],
             };
           }
           return {
@@ -572,10 +577,12 @@ const installNativeBoundary = async ({
                 entryId: entry.entryId,
                 narrative:
                   "steer" in request ? refinedNarrative : generatedNarrative,
+                narrativeLanguage: "en",
                 matchedEarlierEntryIds: [earlierEntry.id],
               })),
             },
             earlierEntries: [earlierEntry],
+            codeNames: [],
           };
         },
         activity_set_recording_status: (args) => {
@@ -682,16 +689,18 @@ const installNativeBoundary = async ({
     },
   });
   const messages = language === "ar" ? arMessages : enMessages;
-  const deletionOnlyNotice = page.getByText(
-    {
-      keyMissing: messages.activity.deletionOnly,
-      unreadable: messages.activity.unreadableEraseNotice,
-      available: messages.activity.errorRead,
-      pending: messages.activity.errorRead,
-      unavailable: messages.activity.errorRead,
-      incompatible: messages.activity.incompatibleActivity,
-    }[snapshot.deletionStatus],
-  );
+  const deletionOnlyNotice = page
+    .getByText(
+      {
+        keyMissing: messages.activity.deletionOnly,
+        unreadable: messages.activity.unreadableEraseNotice,
+        available: messages.activity.errorRead,
+        pending: messages.activity.errorRead,
+        unavailable: messages.activity.errorRead,
+        incompatible: messages.activity.incompatibleActivity,
+      }[snapshot.deletionStatus],
+    )
+    .filter({ visible: true });
   if (view === "settings") {
     await page.setViewportSize(DESKTOP_WINDOW_SIZES.settings);
     await page.goto("/#activity");
@@ -1159,9 +1168,9 @@ test("pending drafts protect every deletion in the activity settings", async ({
     captureMode(page, "Example Editor", "captureModeNothing"),
   ).toBeDisabled();
   await expect(
-    page.getByText(enMessages.activity.pendingActivityProtected, {
-      exact: true,
-    }),
+    page
+      .getByText(enMessages.activity.pendingActivityProtected, { exact: true })
+      .filter({ visible: true }),
   ).toBeVisible();
   for (const command of [
     "activity_delete_day",
@@ -1254,7 +1263,9 @@ test("unreadable saved activity explains why deletion is unavailable", async ({
     },
   });
   await expect(
-    page.getByText(enMessages.activity.errorRead, { exact: true }),
+    page
+      .getByText(enMessages.activity.errorRead, { exact: true })
+      .filter({ visible: true }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", {
@@ -1779,9 +1790,9 @@ test("healthy current activity shows incompatible history guidance and protects 
       otherAccountHistoryDays: 3,
     },
   });
-  await expect(
-    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(
+    enMessages.activity.incompatibleActivity,
+  );
   for (const name of [
     enMessages.activity.deleteDay,
     enMessages.activity.deleteAll,
@@ -1823,9 +1834,9 @@ test("an open erase dialog disappears safely when saved history becomes incompat
     { ...SNAPSHOT, deletionStatus: "incompatible" },
   );
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(
-    page.getByText(enMessages.activity.incompatibleActivity, { exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveText(
+    enMessages.activity.incompatibleActivity,
+  );
   expect(pageErrors).toEqual([]);
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({ command: "activity_delete_day" }),
@@ -2075,15 +2086,17 @@ test("accessibility hint opens system settings only after a user request", async
       detailsAccess: "accessibilityRequired",
     },
   });
-  await expect(
-    page.getByText(enMessages.activity.accessibilityRequired, { exact: true }),
-  ).toBeVisible();
+  // Settings show the Activity window's own strip under the titles row.
+  const strip = page.getByRole("region", {
+    name: enMessages.activity.titlesNotRecorded,
+  });
+  await expect(strip).toBeVisible();
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "activity_open_accessibility_settings",
     }),
   );
-  await page
+  await strip
     .getByRole("button", {
       name: enMessages.activity.openAccessibilitySettings,
     })
@@ -2448,7 +2461,7 @@ for (const language of ["en", "ar"] as const) {
       language,
     });
     await expect(
-      page.getByText(messages.activity.welcomeDetails, { exact: true }),
+      page.getByText(messages.activity.disclosure.aiDraftProvider),
     ).toBeHidden();
     await expect(page.locator("html")).toHaveAttribute(
       "dir",
@@ -2471,9 +2484,10 @@ for (const language of ["en", "ar"] as const) {
     await disclosure.press("Enter");
     await expect(disclosure).toBeFocused();
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    const details = page.getByText(messages.activity.welcomeDetails, {
-      exact: true,
-    });
+    // The drafts fact: it names the provider a draft goes to.
+    const details = page.getByText(
+      messages.activity.disclosure.aiDraftProvider,
+    );
     await expect(details).toBeVisible();
     const card = page
       .getByRole("heading", { name: messages.activity.welcomeTitle })
@@ -3009,7 +3023,7 @@ test("suggestions render as dashed blocks and the day is triaged from the keyboa
           entry: expect.objectContaining({
             matterId: "matter-1",
             durationMinutes: 30,
-            narrative: "Work on Lease draft.docx",
+            narrative: "Work on “Lease draft.docx”",
             billable: true,
           }),
           ranges: [
@@ -3305,13 +3319,11 @@ test("a card asks for consent once, then drafts its description and shows the ea
   const card = suggestionCard(page, "Example matter");
   // One line asks; what a draft sends is a click away.
   await expect(card.getByText(enMessages.activity.aiDraftOffer)).toBeVisible();
-  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toBeHidden();
+  await expect(card.getByText(AI_DRAFT_CONSENT_TEXT)).toBeHidden();
   await card
     .getByRole("button", { name: enMessages.activity.aiDraftWhatIsSent })
     .click();
-  await expect(
-    card.getByText(enMessages.activity.aiDraftConsent),
-  ).toBeVisible();
+  await expect(card.getByText(AI_DRAFT_CONSENT_TEXT)).toBeVisible();
   // Nothing is drafted before the user allows it.
   expect(await draftInvocations(page)).toEqual([]);
   await card
@@ -3345,9 +3357,7 @@ test("a card asks for consent once, then drafts its description and shows the ea
       ],
     },
   });
-  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
-    0,
-  );
+  await expect(card.getByText(AI_DRAFT_CONSENT_TEXT)).toHaveCount(0);
   // The English plural for one earlier entry.
   await card.getByRole("button", { name: "Follows 1 earlier entry" }).click();
   await expect(card.getByText(EARLIER_ENTRY.narrative)).toBeVisible();
@@ -3358,9 +3368,7 @@ test("a card asks for consent once, then drafts its description and shows the ea
   await expect(
     next.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
   ).toHaveValue(GENERATED_NARRATIVE);
-  await expect(page.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
-    0,
-  );
+  await expect(page.getByText(AI_DRAFT_CONSENT_TEXT)).toHaveCount(0);
   expect(await draftInvocations(page)).toHaveLength(2);
 });
 
@@ -3759,6 +3767,7 @@ test("refining a draft proposes the change, accepting applies it and Undo restor
           {
             entryId: "entry_1",
             narrative: GENERATED_NARRATIVE,
+            narrativeLanguage: "en",
             matchedEarlierEntryIds: [EARLIER_ENTRY.id],
           },
         ],
@@ -3766,7 +3775,7 @@ test("refining a draft proposes the change, accepting applies it and Undo restor
     },
   });
   await proposal
-    .getByRole("button", { name: enMessages.activity.aiAccept })
+    .getByRole("button", { name: enMessages.activity.aiApplyChange })
     .click();
   await expect(narrative).toHaveValue(REFINED_NARRATIVE);
   await card.getByRole("button", { name: enMessages.activity.aiUndo }).click();
@@ -3801,7 +3810,7 @@ test("dismissing a proposal keeps the draft, and Use original brings back the te
   await card
     .getByRole("button", { name: enMessages.activity.aiUseOriginal })
     .click();
-  await expect(narrative).toHaveValue("Work on Lease draft.docx");
+  await expect(narrative).toHaveValue("Work on “Lease draft.docx”");
 });
 
 test("an instruction remembered while refining becomes the drafting preference", async ({
@@ -3887,7 +3896,7 @@ test("a failed draft keeps the template and offers to try again", async ({
   await expect(card.getByText(enMessages.activity.aiDraftFailed)).toBeVisible();
   await expect(
     card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-  ).toHaveValue("Work on Lease draft.docx");
+  ).toHaveValue("Work on “Lease draft.docx”");
   await expect(
     card.getByRole("button", { name: enMessages.activity.aiDraftRetry }),
   ).toBeVisible();
@@ -3896,7 +3905,7 @@ test("a failed draft keeps the template and offers to try again", async ({
   ).toBeEnabled();
 });
 
-test("with drafting switched off for the firm, a card offers no stella AI and sends nothing", async ({
+test("with drafting switched off for the firm, a card says so quietly and sends nothing", async ({
   page,
 }) => {
   await installNativeBoundary({
@@ -3907,9 +3916,8 @@ test("with drafting switched off for the firm, a card offers no stella AI and se
   await openSuggestion(page, "Example matter");
   const card = suggestionCard(page, "Example matter");
   await expect(card).toBeFocused();
-  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
-    0,
-  );
+  await expect(card.getByText(enMessages.activity.aiDraftOff)).toBeVisible();
+  await expect(card.getByText(AI_DRAFT_CONSENT_TEXT)).toHaveCount(0);
   await expect(
     card.getByRole("button", { name: enMessages.activity.aiDraftWrite }),
   ).toHaveCount(0);
@@ -3937,5 +3945,28 @@ test("Settings withdraws consent to stella AI drafts and sends nothing else", as
     command: "billing_draft_withdraw_consent",
     args: { scopeKey: '["org_fixture","user_fixture"]' },
   });
+  expect(await draftInvocations(page)).toEqual([]);
+});
+
+test("Settings allows stella AI drafts again with the consent a card asks for", async ({
+  page,
+}) => {
+  await installNativeBoundary({
+    page,
+    view: "settings",
+    drafting: { ...DRAFTING, consent: "revoked" },
+  });
+  await expect(page.getByText(enMessages.activity.aiDraftOffer)).toBeVisible();
+  await page
+    .getByRole("button", { name: enMessages.activity.aiDraftAllow })
+    .click();
+  await expect(
+    page.getByText(enMessages.activity.billingDraftsGranted),
+  ).toBeVisible();
+  await expect
+    .poll(async () =>
+      (await tauriInvocations(page)).map(({ command }) => command),
+    )
+    .toContain("billing_draft_grant_consent");
   expect(await draftInvocations(page)).toEqual([]);
 });

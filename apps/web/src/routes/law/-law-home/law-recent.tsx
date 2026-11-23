@@ -302,6 +302,7 @@ const ScopedLawRecentList = ({
                       <Button
                         aria-label={t("common.remove")}
                         disabled={history.remove.isPending}
+                        disabledReason={t("common.deleting")}
                         onClick={() => history.remove.mutate(entry)}
                         size="icon-xs"
                         variant="ghost"

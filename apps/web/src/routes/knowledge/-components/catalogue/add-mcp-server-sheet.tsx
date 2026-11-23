@@ -331,6 +331,7 @@ export const AddMcpServerSheet = ({
           {wizard.step === "url" && (
             <Button
               disabled={busy || !wizard.url.trim()}
+              disabledReason={busy ? t("common.loading") : t("common.enterUrl")}
               onClick={submitUrl}
               type="button"
             >
@@ -347,6 +348,7 @@ export const AddMcpServerSheet = ({
           {wizard.step === "confirmation" && (
             <Button
               disabled={busy}
+              disabledReason={t("common.loading")}
               onClick={confirmAuthorization}
               type="button"
             >
@@ -363,6 +365,9 @@ export const AddMcpServerSheet = ({
           {wizard.step === "token" && (
             <Button
               disabled={busy || !wizard.token.trim()}
+              disabledReason={
+                busy ? t("common.loading") : t("knowledge.mcp.enterToken")
+              }
               onClick={submitToken}
               type="button"
             >

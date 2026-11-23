@@ -145,6 +145,11 @@ export const PublicLawRefine = ({
         <Button
           aria-label={labelled ? undefined : t("search.aiRefine")}
           disabled={disabled || isPending}
+          disabledReason={
+            isPending
+              ? t("search.refiningQuery")
+              : t("search.enterQueryToRefine")
+          }
           onClick={() => {
             if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
               return;

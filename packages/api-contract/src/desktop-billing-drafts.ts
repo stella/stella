@@ -1,7 +1,7 @@
 import * as v from "valibot";
 
 import { apiDateSchema } from "./api-date";
-import { TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
+import { BILLING_CODE_TYPES, TIME_ENTRY_ACTIVITY_GROUPS } from "./billing";
 import {
   DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH,
   DESKTOP_TIME_ENTRY_NARRATIVE_MAX_LENGTH,
@@ -24,6 +24,9 @@ export const DESKTOP_BILLING_DRAFT_LIMITS = {
   guidelines: 20,
   codeLength: DESKTOP_TIME_ENTRY_CODE_MAX_LENGTH,
   matchedEarlierEntries: 20,
+  languageLength: 35,
+  codeNames: 200,
+  codeNameLength: 256,
 } as const;
 
 const identifierSchema = v.pipe(
@@ -51,6 +54,12 @@ const narrativeSchema = v.pipe(
   v.string(),
   v.minLength(1),
   v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.narrativeLength),
+);
+/** A BCP 47 language tag such as `cs` or `en-GB`. */
+const languageTagSchema = v.pipe(
+  v.string(),
+  v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.languageLength),
+  v.regex(/^[A-Za-z]{2,3}(?:-[A-Za-z\d]{1,8})*$/u),
 );
 const durationSchema = v.pipe(
   v.number(),
@@ -92,6 +101,7 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
   const name = profile === "canonical" ? nameSchema : v.string();
   const narrative = profile === "canonical" ? narrativeSchema : v.string();
   const duration = profile === "canonical" ? durationSchema : v.number();
+  const language = profile === "canonical" ? languageTagSchema : v.string();
   const codeSchema =
     profile === "canonical"
       ? v.pipe(
@@ -185,6 +195,8 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
   const desktopBillingDraftSchema = v.strictObject({
     entryId: identifier,
     narrative,
+    /** The language the narrative is written in. */
+    narrativeLanguage: language,
     classification: desktopBillingDraftClassificationSchema,
     flags: array(desktopBillingDraftFlagSchema, {
       max: DESKTOP_BILLING_DRAFT_LIMITS.flags,
@@ -212,6 +224,8 @@ const createBillingDraftResponseSchemas = (profile: "canonical" | "model") => {
   const desktopBillingPlainDraftSchema = v.strictObject({
     entryId: identifier,
     narrative,
+    /** The language the narrative is written in. */
+    narrativeLanguage: language,
     matchedEarlierEntryIds: array(identifier, {
       max: DESKTOP_BILLING_DRAFT_LIMITS.matchedEarlierEntries,
     }),
@@ -297,10 +311,31 @@ export const desktopBillingDraftEarlierEntrySchema = v.strictObject({
   ),
 });
 
+/** The name a matter's own billing code list gives a code the drafts use. */
+export const desktopBillingDraftCodeNameSchema = v.strictObject({
+  matterId: matterIdSchema,
+  type: v.picklist(BILLING_CODE_TYPES),
+  code: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeLength),
+  ),
+  name: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeNameLength),
+  ),
+});
+
 /** What the endpoint returns: the model's result, which a steering request
- * sends back unchanged as `previousResult`, and the cited earlier entries. */
+ * sends back unchanged as `previousResult`, the cited earlier entries, and
+ * the names the matters' billing code lists give the codes the drafts use. */
 export const desktopBillingDraftReviewSchema = v.strictObject({
   result: desktopBillingDraftResponseSchema,
+  codeNames: v.pipe(
+    v.array(desktopBillingDraftCodeNameSchema),
+    v.maxLength(DESKTOP_BILLING_DRAFT_LIMITS.codeNames),
+  ),
   earlierEntries: v.pipe(
     v.array(desktopBillingDraftEarlierEntrySchema),
     v.maxLength(
@@ -379,6 +414,10 @@ export const DESKTOP_BILLING_DRAFT_REFUSAL_CODE = {
   modeChanged: "billing_draft_mode_changed",
   /** A bound guideline file is past what the drafting prompt may carry. */
   contextTooLarge: "billing_draft_context_too_large",
+  /** The caller may not create time entries, so no draft can become one. */
+  timeEntryNotPermitted: "billing_draft_time_entry_not_permitted",
+  /** A selected matter is not one the caller can record time on. */
+  matterUnavailable: "billing_draft_matter_unavailable",
 } as const;
 
 export const desktopBillingDraftSettingsResponseSchema = v.strictObject({
@@ -436,4 +475,7 @@ export type DesktopBillingDraftSettingsRequest = v.InferOutput<
 >;
 export type DesktopBillingDraftSettingsResponse = v.InferOutput<
   typeof desktopBillingDraftSettingsResponseSchema
+>;
+export type DesktopBillingDraftCodeName = v.InferOutput<
+  typeof desktopBillingDraftCodeNameSchema
 >;

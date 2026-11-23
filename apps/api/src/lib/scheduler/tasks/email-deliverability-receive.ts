@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 
 import { env } from "@/api/env";
+import { markSignInCodeFailure } from "@/api/lib/auth/sign-in-code-delivery";
+import { getSignInCodeDeliveryStore } from "@/api/lib/auth/sign-in-code-delivery-store";
 import { drainDeliverabilityEvents } from "@/api/lib/email/deliverability";
 import { resolveEmailEvents } from "@/api/lib/email/deliverability-config";
 import {
@@ -50,6 +52,7 @@ export const receiveEmailDeliverability: SchedulerTask = async ({
     topicArn: config.topicArn,
     markUndeliverable: recordRecipientRefusals,
     recordFailures: recordRecipientFailures,
+    reportBouncedMessage: markSignInCodeFailure(getSignInCodeDeliveryStore()),
     signal,
     logger,
   });

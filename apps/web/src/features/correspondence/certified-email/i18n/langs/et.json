@@ -1,0 +1,40 @@
+{
+  "certifiedEmail": {
+    "certifiedAt": "Sertifitseerimise aeg",
+    "deliveredTo": "Kätte toimetatud aadressile",
+    "error": "Teatatud viga",
+    "errors": {
+      "noDomain": "Tundmatu domeen",
+      "noRecipient": "Tundmatu saaja",
+      "other": "Muu viga",
+      "virus": "Avastati viirus"
+    },
+    "handedOverFor": "Üle võetud saajale",
+    "kinds": {
+      "acceptance": "Vastuvõtukinnitus (PEC)",
+      "delivery": "Kättetoimetamise kinnitus (PEC)",
+      "deliveryError": "Kättetoimetamata jäämise teade (PEC)",
+      "deliveryErrorWarning": "Kättetoimetamise tähtaja ületamise teade (PEC)",
+      "nonAcceptance": "Mittevastuvõtmise teade (PEC)",
+      "takenInCharge": "Ülevõtmise kinnitus (PEC)",
+      "transport": "Sertifitseeritud e-kiri (PEC)",
+      "virusDetected": "Viiruse avastamise teade (PEC)"
+    },
+    "messageId": "PEC-sõnumi ID",
+    "notDeliveredTo": "Kätte toimetamata aadressile",
+    "ordinaryMailbox": "Tavaline postkast",
+    "originalNotIncluded": "See fail ei sisalda algset sõnumit.",
+    "provider": "PEC-teenuse pakkuja",
+    "receipt": "Taotletud kinnitus",
+    "receiptTypes": {
+      "full": "Täielik kinnitus",
+      "short": "Lühike kinnitus",
+      "summary": "Kokkuvõtlik kinnitus"
+    },
+    "recipients": "Märgitud saajad",
+    "sender": "Märgitud saatja",
+    "signatureNotVerified": "Teenusepakkuja allkiri jääb faili ega ole kontrollitud.",
+    "signedBy": "Allkirjastaja: {name}",
+    "statedInFile": "Nagu failis märgitud"
+  }
+}

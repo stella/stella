@@ -150,6 +150,7 @@ test.each(
     );
     expect(hrefs(view)).toEqual([
       "/settings/account/profile",
+      "/settings/account/security",
       "/settings/account/desktop",
       "/settings/account/connections",
       "/settings/account/beta",

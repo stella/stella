@@ -75,6 +75,7 @@ export function CorrespondenceDetailPage() {
           <Button
             className="min-h-11"
             disabled={update.isPending}
+            disabledReason={t("common.saving")}
             onClick={() =>
               update.mutate({
                 workspaceId,
@@ -205,11 +206,14 @@ export function CorrespondenceDetailPage() {
       )}
 
       <CorrespondenceAttachments
-        files={attachments.map(({ entityId, filename, byteSize }) => ({
-          entityId,
-          fileName: filename,
-          byteSize,
-        }))}
+        files={attachments.map(
+          ({ entityId, filename, mediaType, byteSize }) => ({
+            entityId,
+            fileName: filename,
+            mediaType,
+            byteSize,
+          }),
+        )}
         workspaceId={workspaceId}
       />
 

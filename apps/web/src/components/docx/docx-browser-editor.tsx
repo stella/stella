@@ -199,11 +199,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const editorRef = useRef<DocxEditorRef>(null);
   const attachEditor = useDocxOpenTiming({ editorRef, fieldId, surface });
   const containerRef = useRef<HTMLDivElement>(null);
-  const { editorView, editorProps: editorViewProps } = useDocxEditorView({
-    entityId,
-    fieldId,
-    workspaceId,
-  });
+  const {
+    citationCheckCard,
+    editorView,
+    editorProps: editorViewProps,
+  } = useDocxEditorView({ editorRef, entityId, fieldId, workspaceId });
   const pendingEditRequestRef = useRef(false);
   const optimisticPreviewRef = useRef<OptimisticPreviewFile | null>(null);
   const finalizedBufferRef = useRef<ArrayBuffer | null>(null);
@@ -497,6 +497,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             loadingIndicator={loadingFallback}
             preserveDocumentWhileLoading
           />
+          {citationCheckCard}
         </DocxEditorAiOverlay>
       </div>
     </div>
@@ -606,6 +607,7 @@ const DocxCollaborationToolbarControls = ({
       <Button
         className="min-h-11 px-3"
         disabled={!canPublish}
+        disabledReason={t("folio.syncing")}
         onClick={() => {
           detached(
             onPublish(),

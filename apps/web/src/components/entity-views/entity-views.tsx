@@ -284,6 +284,7 @@ export const EntityViews = ({ organizationId, scope }: EntityViewsProps) => {
               activeViewId={activeView.id}
               ariaLabel={t("workspaces.views.viewSettings")}
               direction={direction}
+              overflowLabel={t("common.showMore")}
               views={views}
               reorder={
                 canUpdateView &&
@@ -639,6 +640,7 @@ const EntityViewContent = ({
           size="sm"
           variant="ghost"
           disabled={loadingMore}
+          disabledReason={t("caseLaw.loadingMore")}
           onClick={onLoadMore}
         >
           {t(loadingMore ? "common.loading" : "common.loadMore")}

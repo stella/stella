@@ -1,5 +1,0 @@
-{
-  "metric": "audit-skip-directives",
-  "delta": 3,
-  "reason": "The settlement queue's lease write, lease release and drained-task delete are scheduling bookkeeping on the derived public corpus projection, written by the ingestion worker with no tenant or user actor; the revision rows they point at stay the record."
-}

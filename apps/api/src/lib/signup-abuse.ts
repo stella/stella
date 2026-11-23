@@ -91,7 +91,16 @@ export const consumeSignupOtpRateLimit = async ({
 };
 
 export type NewAccountOtpPolicyResult =
-  | { status: "allowed"; reason: "existing_account" | "new_account" }
+  | { status: "allowed"; reason: "new_account" }
+  | {
+      status: "allowed";
+      reason: "existing_account";
+      /**
+       * What the same request would get for an address without an account:
+       * `rate_limited` means only accounts receive a code right now.
+       */
+      newAccounts: "allowed" | "rate_limited";
+    }
   | { status: "rejected"; reason: "disposable_email" }
   | {
       status: "rate_limited";
@@ -135,7 +144,15 @@ export const evaluateNewAccountOtpPolicy = async ({
     return emailRateLimitResult.count >
       OTP_DELIVERY_RATE_LIMITS.existingAccountEmailMax
       ? { status: "rate_limited", reason: "email" }
-      : { status: "allowed", reason: "existing_account" };
+      : {
+          status: "allowed",
+          reason: "existing_account",
+          newAccounts:
+            emailRateLimitResult.status === "rate_limited" ||
+            ipRateLimitResult?.status === "rate_limited"
+              ? "rate_limited"
+              : "allowed",
+        };
   }
 
   if (emailRateLimitResult.status === "rate_limited") {

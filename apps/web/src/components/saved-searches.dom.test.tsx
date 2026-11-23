@@ -237,7 +237,7 @@ test("keeps a conflicting draft until explicit exact-resource reload and deliber
     ),
   );
   expect(input.value).toBe("My draft name");
-  expect(save.hasAttribute("disabled")).toBe(true);
+  expect(save.getAttribute("aria-disabled")).toBe("true");
   fireEvent.click(save);
   expect(writes).toHaveLength(1);
   expect(exactReads).toBe(0);
@@ -245,7 +245,9 @@ test("keeps a conflicting draft until explicit exact-resource reload and deliber
     within(dialog).getByRole("button", { name: en.common.reload }),
   );
   await waitFor(() => expect(dialog.textContent).toContain(currentSearch.name));
-  await waitFor(() => expect(save.hasAttribute("disabled")).toBe(false));
+  await waitFor(() =>
+    expect(save.getAttribute("aria-disabled")).not.toBe("true"),
+  );
   expect(input.value).toBe("My draft name");
   expect(exactReads).toBe(1);
   expect(writes).toHaveLength(1);
@@ -297,11 +299,13 @@ test.each([{ outcome: "missing" }, { outcome: "failed" }] as const)(
     });
     fireEvent.click(reload);
     await waitFor(() => expect(exactReads).toBe(1));
-    await waitFor(() => expect(reload.hasAttribute("disabled")).toBe(false));
+    await waitFor(() =>
+      expect(reload.getAttribute("aria-disabled")).not.toBe("true"),
+    );
     expect(input.value).toBe("My draft name");
     expect(dialog.textContent).toContain(originalSearch.name);
     expect(dialog.textContent).not.toContain(currentSearch.name);
-    expect(save.hasAttribute("disabled")).toBe(true);
+    expect(save.getAttribute("aria-disabled")).toBe("true");
     fireEvent.click(save);
     expect(writes).toEqual([
       { name: "My draft name", expectedUpdatedAt: originalSearch.updatedAt },

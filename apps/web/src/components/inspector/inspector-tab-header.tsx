@@ -5,14 +5,17 @@ import { useTranslations } from "use-intl";
 
 import { UserText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { DirectionalIcon } from "@stll/ui/directional-icon";
-import { ArrowLeftIcon, XIcon } from "@stll/ui/icons";
+import { XIcon } from "@stll/ui/icons";
 import { MatterIcon } from "@stll/ui/matter-icon";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
-import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import {
+  InspectorPhoneNavigation,
+  InspectorTabHeaderFrame,
+  InspectorTabSwitcherTrigger,
+} from "@/components/inspector/inspector-tab-header-frame";
 import {
   type Availability,
   filterAvailable,
@@ -121,99 +124,86 @@ export const InspectorTabHeader = ({
   onClose,
 }: InspectorTabHeaderProps) => {
   const tCommon = useTranslations("common");
-  const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   const renaming = rename?.active === true;
   const visibleActions = filterAvailable(actions, usePlatformCapabilities());
 
   return (
-    <div
-      className="flex h-12 shrink-0 items-center justify-between border-b bg-(--matter-sidebar-tint) px-3"
-      data-slot="inspector-panel-header"
-    >
-      {/* Only the label clips: the field's focus ring is drawn outside it.
-          On a phone the box itself starts a little early, so the back
-          button sits optically flush with the edge and is not clipped. */}
-      <div
-        className={cn(
-          "flex min-w-0 items-center gap-2 max-md:-ms-1",
-          !renaming && "overflow-hidden",
-        )}
-      >
-        <Button
-          aria-label={tCommon("back")}
-          className="md:hidden"
-          onClick={() => setMinimized(true)}
-          size="icon-sm"
-          title={tCommon("back")}
-          variant="ghost"
-        >
-          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
-        </Button>
-        {rename?.active ? (
-          <InlineEdit
-            className="text-xs font-medium"
-            action={rename.action}
-            maxLength={rename.maxLength}
-            onCancel={rename.onCancel}
-            onChange={rename.onChange}
-            onCommit={rename.onCommit}
-            suffix={rename.suffix}
-            value={rename.value}
+    <InspectorTabHeaderFrame
+      // Only the label clips: the field's focus ring is drawn outside it.
+      clipLead={!renaming}
+      lead={
+        <>
+          <InspectorPhoneNavigation
+            switcher={<InspectorTabSwitcherTrigger />}
           />
-        ) : (
-          // Compact layouts stack the matter under the name, the way a
-          // sidebar row puts its client under the matter, so the name gets
-          // the whole width instead of sharing one line with the chip.
-          <div className="flex min-w-0 flex-col items-start text-xs font-medium md:flex-row md:items-center md:gap-2">
-            <TruncatedText
-              aria-label={label}
-              className={cn(
-                "max-w-full whitespace-pre",
-                onStartRename !== undefined && "cursor-text",
+          {rename?.active ? (
+            <InlineEdit
+              className="text-xs font-medium"
+              action={rename.action}
+              maxLength={rename.maxLength}
+              onCancel={rename.onCancel}
+              onChange={rename.onChange}
+              onCommit={rename.onCommit}
+              suffix={rename.suffix}
+              value={rename.value}
+            />
+          ) : (
+            // Compact layouts stack the matter under the name, the way a
+            // sidebar row puts its client under the matter, so the name gets
+            // the whole width instead of sharing one line with the chip.
+            <div className="flex min-w-0 flex-col items-start text-xs font-medium md:flex-row md:items-center md:gap-2">
+              <TruncatedText
+                aria-label={label}
+                className={cn(
+                  "max-w-full whitespace-pre",
+                  onStartRename !== undefined && "cursor-text",
+                )}
+                onContextMenu={onLabelContextMenu}
+                onDoubleClick={onStartRename}
+                tabIndex={0}
+                tooltip={label}
+              >
+                <UserText>{label}</UserText>
+              </TruncatedText>
+              {matter !== undefined && (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="text-foreground-subtle hidden text-xs md:inline"
+                  >
+                    ·
+                  </span>
+                  {/* On one line the matter keeps its own width (up to half
+                      the row) and the name gives way, so a long file name
+                      never squeezes the matter down to its first letter. */}
+                  <span className="flex max-w-full min-w-0 md:max-w-1/2 md:shrink-0">
+                    {matter}
+                  </span>
+                </>
               )}
-              onContextMenu={onLabelContextMenu}
-              onDoubleClick={onStartRename}
-              tabIndex={0}
-              tooltip={label}
+            </div>
+          )}
+        </>
+      }
+      trailing={
+        renaming ? null : (
+          <>
+            {visibleActions.map((action) => (
+              <Fragment key={action.id}>{action.render()}</Fragment>
+            ))}
+            <Button
+              aria-label={tCommon("close")}
+              onClick={onClose}
+              size="icon-xs"
+              title={tCommon("close")}
+              variant="ghost"
             >
-              <UserText>{label}</UserText>
-            </TruncatedText>
-            {matter !== undefined && (
-              <>
-                <span
-                  aria-hidden="true"
-                  className="text-foreground-subtle hidden text-xs md:inline"
-                >
-                  ·
-                </span>
-                {/* On one line the matter keeps its own width (up to half
-                    the row) and the name gives way, so a long file name
-                    never squeezes the matter down to its first letter. */}
-                <span className="flex max-w-full min-w-0 md:max-w-1/2 md:shrink-0">
-                  {matter}
-                </span>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-      {renaming ? null : (
-        <div className="flex shrink-0 items-center gap-1 ps-4">
-          {visibleActions.map((action) => (
-            <Fragment key={action.id}>{action.render()}</Fragment>
-          ))}
-          <Button
-            aria-label={tCommon("close")}
-            onClick={onClose}
-            size="icon-xs"
-            title={tCommon("close")}
-            variant="ghost"
-          >
-            <XIcon className="size-3.5" />
-          </Button>
-        </div>
-      )}
-    </div>
+              <XIcon className="size-3.5" />
+            </Button>
+          </>
+        )
+      }
+    />
   );
 };
 

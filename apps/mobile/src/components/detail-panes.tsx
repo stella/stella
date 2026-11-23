@@ -35,6 +35,7 @@ export const ThreadPane = ({ thread }: { thread: ThreadSelection }) => {
       >
         {state.status === "signed-in" ? (
           <ChatThreadView
+            dictated={undefined}
             fresh={thread.fresh === true}
             matterId={thread.matterId}
             shareId={undefined}

@@ -172,9 +172,9 @@ export const AnchorFactsPanel = ({
             {canCreate && (
               <Button
                 disabled={extractionBusy}
+                disabledReason={t("avt.extraction.busy")}
                 onClick={() => setExtractOpen(true)}
                 size="sm"
-                tooltip={extractionBusy ? t("avt.extraction.busy") : undefined}
                 variant={leadWithExtract ? "default" : "ghost"}
               >
                 <FileSearchIcon />

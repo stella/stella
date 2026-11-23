@@ -1,48 +1,74 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace, FaceLabelPending } from "@stll/ui/control-face";
-import { FramePanel } from "@stll/ui/frame";
+import { LockIcon } from "@stll/ui/icons";
+import { ListItemMedia } from "@stll/ui/list-shell";
+import { SettingsRow, SettingsSection } from "@stll/ui/settings";
 import { cn } from "@stll/ui/utils";
 
-import { SettingsCardPending } from "@/routes/_protected.settings/-components/settings-card.pending";
+import { PendingText } from "@/components/pending-text";
 
 /** The status chip's box; the page adds its tone (on, off). */
 export const TWO_FACTOR_STATUS_CLASS =
   "inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium";
 
 type TwoFactorCardFrameProps = {
-  /** Whether two-factor sign-in is on, as a chip. */
+  /** Whether two-factor sign-in is on, as a chip beside the title. */
   status: ReactNode;
-  /** Turning it on or off, and the backup codes. */
-  actions: ReactNode;
-  /** What the card mounts beside its panel (its dialogs). */
+  /** Turning it on or off: the row's one control. */
+  action: ReactNode;
+  /** Further actions while it is on (the backup codes), under the row. */
+  footer?: ReactNode;
+  /** What the section mounts beside its panel (its dialogs). */
   children?: ReactNode;
 };
 
-/** The two-factor card (`TwoFactorCard`): header, status and actions. */
+/** The two-factor section's anchor; the security summary links it. */
+export const TWO_FACTOR_SECTION_ID = "two-factor";
+
+/** The two-factor section (`TwoFactorCard`): header, status and actions. */
 export const TwoFactorCardFrame = ({
-  actions,
+  action,
   children,
+  footer,
   status,
 }: TwoFactorCardFrameProps) => (
-  <SettingsCardPending
-    description="settings.account.twoFactor.description"
-    title="settings.account.twoFactor.title"
-  >
-    <FramePanel>
-      <div className="flex items-center justify-between gap-4 p-4">
-        {status}
-        <div className="flex gap-2">{actions}</div>
-      </div>
-    </FramePanel>
+  <div className="scroll-mt-6" id={TWO_FACTOR_SECTION_ID}>
+    <SettingsSection>
+      <SettingsRow
+        description={
+          <PendingText
+            barClassName="w-72 max-w-full"
+            id="settings.account.twoFactor.description"
+          />
+        }
+        media={
+          <ListItemMedia>
+            <LockIcon />
+          </ListItemMedia>
+        }
+        footer={footer}
+        title={
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <PendingText
+              barClassName="w-36"
+              id="settings.account.twoFactor.title"
+            />
+            {status}
+          </span>
+        }
+      >
+        {action}
+      </SettingsRow>
+    </SettingsSection>
     {children}
-  </SettingsCardPending>
+  </div>
 );
 
-/** The card while the session loads: the chip and the action as faces. */
+/** The section while the session loads: the chip and the action as faces. */
 export const TwoFactorCardPending = () => (
   <TwoFactorCardFrame
-    actions={
+    action={
       <ButtonFace size="sm" variant="outline">
         <FaceLabelPending className="w-16" />
       </ButtonFace>

@@ -6,6 +6,7 @@ mod activity_calls;
 mod activity_commands;
 mod activity_details;
 mod activity_settings;
+mod activity_setup;
 mod activity_store;
 mod activity_window;
 mod app_lifecycle;
@@ -40,6 +41,7 @@ mod device_preference;
 mod device_proof;
 mod diagnostics;
 mod dictation;
+mod dictation_app_settings;
 mod dictation_audio;
 mod dictation_cleanup;
 mod dictation_cloud;
@@ -53,11 +55,13 @@ mod dictation_hold_key;
 mod dictation_input;
 mod dictation_language;
 mod dictation_live;
+mod dictation_media;
 mod dictation_microphone;
 mod dictation_models;
 mod dictation_notice;
 mod dictation_pauses;
 mod dictation_preview;
+mod dictation_retype;
 #[cfg(dictation)]
 mod dictation_sounds;
 mod dictation_spelling;
@@ -113,6 +117,7 @@ mod time_entry_commands;
 mod time_entry_submit;
 mod transcribe_history;
 mod transcribe_recording;
+mod transcribe_save;
 mod transcribe_window;
 mod tray;
 mod types;
@@ -264,6 +269,8 @@ pub fn run() {
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
       let handle = app.handle().clone();
+      // Sound a dictation lowered or paused before a crash comes back.
+      dictation_media::restore();
       #[cfg(target_os = "macos")]
       if let Ok(mut clipboard) = clipboard_manager.lock()
         && let Err(error) = clipboard.reconcile_image_exports()
@@ -433,6 +440,9 @@ pub fn run() {
               tray::MenuAction::OpenTranscribe => {
                 transcribe_window::show(&handle);
               }
+              tray::MenuAction::RetypeDictation => {
+                dictation::retype_from_tray(&handle);
+              }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {
                   best_effort(
@@ -445,39 +455,15 @@ pub fn run() {
                   activity_window::show(&handle);
                 }
               }
-              tray::MenuAction::CheckForUpdates => {
-                let active_edit_sessions = {
-                  let mgr = manager.lock().await;
-                  mgr.has_active_edit_sessions()
-                };
-
-                match updater::run_check(&handle, active_edit_sessions).await {
-                  updater::CheckOutcome::Deferred { version } => {
-                    tracing::info!(
-                        version = %version,
-                        "tray-triggered updater check deferred while desktop edits are active"
-                    );
-                  }
-                  updater::CheckOutcome::UpToDate => {
-                    if let Err(err) = handle
-                      .notification()
-                      .builder()
-                      .title("Stella is up to date")
-                      .show()
-                    {
-                      tracing::warn!(error = %err, "up-to-date notification failed");
-                    }
-                  }
-                  updater::CheckOutcome::Installed { version } => {
-                    tracing::info!(version = %version, "tray-triggered update installed, relaunching");
-                  }
-                  updater::CheckOutcome::Failed(msg) => {
-                    tracing::warn!(error = %msg, "tray-triggered updater check failed");
-                  }
-                  updater::CheckOutcome::Disabled => {
-                    tracing::debug!("tray updater check skipped: updates are managed");
-                  }
+              tray::MenuAction::SetDictationLanguage(language) => {
+                if let Err(error) = dictation::store_language(&handle, &language) {
+                  tracing::warn!(%error, "dictation language from the tray was not stored");
                 }
+              }
+              tray::MenuAction::CheckForUpdates => {
+                // About runs the check and shows its answer in the window: a
+                // notification can be dropped by the system without an error.
+                show_settings(&handle, SettingsView::UpdateCheck);
               }
               tray::MenuAction::OpenEditRoot => {
                 manager.lock().await.open_edit_root().await;
@@ -637,6 +623,8 @@ pub fn run() {
       }
       tauri::RunEvent::Exit => {
         keep_awake::global().release_for_exit();
+        // Sound a dictation lowered or paused comes back.
+        dictation_media::restore();
         activity::flush_on_exit(app);
         desktop_crash::clean_exit(app);
         #[cfg(target_os = "macos")]
@@ -726,21 +714,45 @@ pub(crate) enum SettingsView {
   Agents(AgentSettingsFocus),
   /// Dictation, focused on the microphone it records from.
   Microphone,
+  /// About, running "Check for updates" and showing its answer.
+  UpdateCheck,
 }
 
 impl SettingsView {
-  /// The `activate-tab` event the window reads.
-  fn event_payload(self) -> serde_json::Value {
+  const fn tab(self) -> PreferencesTab {
     match self {
-      Self::Tab(tab) => serde_json::json!({ "tab": tab.id() }),
-      Self::Agents(focus) => serde_json::json!({
-        "tab": PreferencesTab::Agents.id(),
-        "focus": focus.id(),
-      }),
-      Self::Microphone => serde_json::json!({
-        "tab": PreferencesTab::Dictation.id(),
-        "focus": "microphone",
-      }),
+      Self::Tab(tab) => tab,
+      Self::Agents(_) => PreferencesTab::Agents,
+      Self::Microphone => PreferencesTab::Dictation,
+      Self::UpdateCheck => PreferencesTab::About,
+    }
+  }
+
+  const fn focus(self) -> Option<&'static str> {
+    match self {
+      Self::Tab(_) => None,
+      Self::Agents(focus) => Some(focus.id()),
+      Self::Microphone => Some("microphone"),
+      Self::UpdateCheck => Some("update-check"),
+    }
+  }
+
+  /// The `activate-tab` event an open window reads.
+  fn event_payload(self) -> serde_json::Value {
+    let tab = self.tab().id();
+    match self.focus() {
+      Some(focus) => serde_json::json!({ "tab": tab, "focus": focus }),
+      None => serde_json::json!({ "tab": tab }),
+    }
+  }
+
+  /// The page a new window loads. The fragment names the view, so it is there
+  /// however long the window takes to start listening for events.
+  fn page(self) -> String {
+    let tab = self.tab().id();
+    match self.focus() {
+      Some(focus) => format!("index.html#{tab}/{focus}"),
+      None => format!("index.html#{tab}"),
     }
   }
 }
@@ -754,18 +766,17 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
   #[cfg(target_os = "macos")]
   best_effort(handle.show(), "app could not be shown");
 
-  let payload = view.event_payload();
   if let Some(window) = handle.get_webview_window(SETTINGS_WINDOW_LABEL) {
     best_effort(window.show(), "settings window could not be shown");
     best_effort(window.set_focus(), "settings window could not be focused");
     best_effort(
-      handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
+      handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", view.event_payload()),
       "settings tab change was not announced",
     );
     return;
   }
 
-  let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, "index.html")
+  let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, view.page())
     .title("stella desktop")
     .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
     .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
@@ -794,15 +805,6 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
           feature_access::refresh_now();
         }
       });
-      // Emit tab activation after a short delay to let the webview load
-      let handle = handle.clone();
-      tauri::async_runtime::spawn(async move {
-        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
-        best_effort(
-          handle.emit_to(SETTINGS_WINDOW_LABEL, "activate-tab", payload),
-          "tab activation was not announced",
-        );
-      });
     }
     Err(e) => {
       tracing::error!(error = %e, "failed to create settings window");
@@ -812,7 +814,7 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
 
 #[cfg(test)]
 mod preferences_tab_tests {
-  use super::{AgentSettingsFocus, PreferencesTab};
+  use super::{AgentSettingsFocus, PreferencesTab, SettingsView};
 
   /// The ids in one `const NAME = [...]` array literal of `settings-pages.ts`.
   fn declared(name: &str) -> &'static str {
@@ -824,6 +826,18 @@ mod preferences_tab_tests {
       .split_once(']')
       .expect("the array is one array literal")
       .0
+  }
+
+  #[test]
+  fn a_new_window_loads_the_view_it_was_opened_for() {
+    assert_eq!(
+      SettingsView::Tab(PreferencesTab::General).page(),
+      "index.html#general"
+    );
+    assert_eq!(
+      SettingsView::UpdateCheck.page(),
+      "index.html#about/update-check"
+    );
   }
 
   #[test]

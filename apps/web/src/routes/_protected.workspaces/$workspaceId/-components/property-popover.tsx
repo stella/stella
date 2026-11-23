@@ -22,6 +22,7 @@ import { useLatest } from "@stll/ui/use-latest";
 import { cn } from "@stll/ui/utils";
 
 import { propertyAiCellState } from "@/components/workspaces/ai-cell-state.logic";
+import type { AiCellState } from "@/components/workspaces/ai-cell-state.logic";
 import { AiColumnRunButton } from "@/components/workspaces/ai-column-run-controls";
 import {
   aiColumnRunMenu,
@@ -82,6 +83,21 @@ type ColumnMetadataBatchArgs = {
   scoped: boolean;
   set: boolean;
   onlyAddedAt?: string;
+};
+
+const headerRunBlockedReason = (
+  targetIds: readonly string[],
+  states: readonly AiCellState[],
+  t: (key: "aiColumns.waitToRun" | "aiColumns.noRowsToRun") => string,
+) => {
+  if (targetIds.length > 0) {
+    return undefined;
+  }
+  return states.some(
+    (state) => state.type === "queued" || state.type === "running",
+  )
+    ? t("aiColumns.waitToRun")
+    : t("aiColumns.noRowsToRun");
 };
 
 export const PropertyPopover = ({
@@ -379,7 +395,11 @@ export const PropertyPopover = ({
                 states: scopedStates,
                 menuOpen: isOpen,
               })}
-              disabled={headerRunTargetIds.length === 0}
+              disabledReason={headerRunBlockedReason(
+                headerRunTargetIds,
+                scopedStates,
+                t,
+              )}
               onRun={() => {
                 detached(
                   runPropertyRows(headerRunTargetIds),
@@ -463,6 +483,9 @@ export const PropertyPopover = ({
                         <Button
                           className="justify-start gap-1.5 font-normal"
                           disabled={targetIds.length === 0}
+                          disabledReason={t(
+                            "workspaces.properties.noRowsToProcess",
+                          )}
                           onClick={() => {
                             detached(
                               runPropertyRows(targetIds),
@@ -488,6 +511,7 @@ export const PropertyPopover = ({
                 <Button
                   className="justify-start gap-1.5 font-normal"
                   disabled={updateColumnMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={() => {
                     updateColumnMetadata.mutate({
                       action: COLUMN_METADATA_ACTION.markReviewed,
@@ -505,6 +529,7 @@ export const PropertyPopover = ({
               <Button
                 className="justify-start gap-1.5 font-normal"
                 disabled={updateColumnMetadata.isPending}
+                disabledReason={t("common.saving")}
                 onClick={() => {
                   updateColumnMetadata.mutate({
                     action: COLUMN_METADATA_ACTION.markReviewed,
@@ -522,6 +547,7 @@ export const PropertyPopover = ({
                 <Button
                   className="justify-start gap-1.5 font-normal"
                   disabled={updateColumnMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={() => {
                     updateColumnMetadata.mutate({
                       action: COLUMN_METADATA_ACTION.lock,
@@ -539,6 +565,7 @@ export const PropertyPopover = ({
               <Button
                 className="justify-start gap-1.5 font-normal"
                 disabled={updateColumnMetadata.isPending}
+                disabledReason={t("common.saving")}
                 onClick={() => {
                   updateColumnMetadata.mutate({
                     action: COLUMN_METADATA_ACTION.lock,

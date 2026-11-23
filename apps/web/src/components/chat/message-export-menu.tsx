@@ -279,6 +279,11 @@ export const MessageExportMenu = ({
               isExportPending ||
               (!includeMessage && (artifact === undefined || !includeArtifact))
             }
+            disabledReason={
+              isExportPending
+                ? t("inspector.review.export.exporting")
+                : t("chat.selectExportContent")
+            }
             onClick={() => {
               detached(handleExport(), "message-export-menu.export");
             }}

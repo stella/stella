@@ -466,6 +466,7 @@ const ActivityAdvancedFilters = ({
                 <Button
                   className="m-1 min-h-11"
                   disabled={actorsQuery.isFetchingNextPage}
+                  disabledReason={t("common.loading")}
                   onClick={() => {
                     const request = actorsQuery
                       .fetchNextPage()
@@ -530,6 +531,7 @@ const ActivityAdvancedFilters = ({
         <Button
           className="w-full"
           disabled={activeFilterCount === 0 && filters.category === "all"}
+          disabledReason={t("common.noFiltersToClear")}
           onClick={() => {
             onFromDateChange(null);
             onToDateChange(null);
@@ -842,6 +844,7 @@ const ActivityLoadSentinel = ({
           horizontal ? "mx-4 min-h-11 shrink-0 self-end" : "m-2 min-h-11",
         )}
         disabled={isFetching}
+        disabledReason={t("workspaces.overview.activity.loading")}
         onClick={loadEarlier}
         size="sm"
         variant="ghost"

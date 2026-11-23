@@ -144,6 +144,7 @@ import {
   withStaleIfError,
 } from "@/api/lib/auth/cimd-stale-if-error";
 import { sendManageOtp } from "@/api/lib/auth/confirmation-email";
+import type { StellaDatabaseHooks } from "@/api/lib/auth/database-hook-context";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -160,6 +161,7 @@ import {
 } from "@/api/lib/auth/demo-account-policy";
 import {
   EMAIL_OTP_ALLOWED_ATTEMPTS,
+  EMAIL_OTP_LIFETIME_SECONDS,
   emailOtpPromotionEmail,
   requireEmailOtpResetConfirmation,
 } from "@/api/lib/auth/email-otp-reset-confirmation";
@@ -242,7 +244,10 @@ import {
   carriesSessionCredential,
   skippableSessionCookieOf,
 } from "@/api/lib/auth/session-credential";
-import { findOtherSessionDevices } from "@/api/lib/auth/session-history";
+import {
+  findOtherSessionDevices,
+  sessionSignInStore,
+} from "@/api/lib/auth/session-history";
 import {
   createSessionLifetime,
   decidePinnedSessionLifetime,
@@ -253,6 +258,7 @@ import {
   isSecondFactorAuthSessionPath,
   isSessionCreatingAuthPath,
 } from "@/api/lib/auth/session-path-classification";
+import { createSessionSignInsPlugin } from "@/api/lib/auth/session-sign-ins-plugin";
 import { createSessionTokenRedactionPlugin } from "@/api/lib/auth/session-token-redaction";
 import {
   DISCONNECTED_SIGN_IN_MESSAGE,
@@ -261,6 +267,12 @@ import {
   recordSecondFactorRequirement,
   sessionLinkedAccountRequirement,
 } from "@/api/lib/auth/sign-in-account-provider";
+import {
+  createSignInCodeDeliveryPlugin,
+  rememberSignInCodeSend,
+  type SignInCodeAudience,
+} from "@/api/lib/auth/sign-in-code-delivery";
+import { getSignInCodeDeliveryStore } from "@/api/lib/auth/sign-in-code-delivery-store";
 import {
   createMicrosoftProfileMapper,
   createSocialIdentityValidation,
@@ -574,7 +586,11 @@ const NEW_ACCOUNT_EMAIL_OTP_ACTION = {
 } as const;
 
 type NewAccountEmailOtpAction =
-  | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.continue }
+  | {
+      type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.continue;
+      /** Whether the same request for an address without an account sends too. */
+      audience: SignInCodeAudience;
+    }
   | { type: typeof NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
 
 type EmailOtpResponseScheduleOptions = {
@@ -662,7 +678,10 @@ export const getNewAccountEmailOtpAction = async (
     ctx.path !== SEND_VERIFICATION_OTP_PATH ||
     !isSignInEmailOtpBody(ctx.body)
   ) {
-    return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+    return {
+      type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue,
+      audience: "any_address",
+    };
   }
 
   const clientIp = ctx.request
@@ -677,12 +696,22 @@ export const getNewAccountEmailOtpAction = async (
 
   switch (result.status) {
     case "allowed":
-      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+      return {
+        type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue,
+        audience:
+          result.reason === "existing_account" &&
+          result.newAccounts === "rate_limited"
+            ? "accounts_only"
+            : "any_address",
+      };
     case "rejected":
       // Keep the OTP-request response identical for existing and new accounts.
       // The user.create hook rejects the disposable address only after Better
       // Auth has verified the OTP and is about to create an account.
-      return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue };
+      return {
+        type: NEW_ACCOUNT_EMAIL_OTP_ACTION.continue,
+        audience: "any_address",
+      };
     case "rate_limited":
       return { type: NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp };
     default:
@@ -707,10 +736,18 @@ export { isSessionCreatingAuthPath };
 const TWO_FACTOR_CHALLENGE_PATH = "/auth/two-factor";
 
 /**
- * Frontend route that lists the account's active sessions (the settings page
- * hosting the sessions card), linked from the new-device notice.
+ * Frontend route that lists the account's signed-in devices. The new-device
+ * notice links to it with `review` naming the reported session, which opens
+ * the page at that sign-in's review.
  */
-const ACTIVE_SESSIONS_FRONTEND_PATH = "/settings/account/profile";
+const ACTIVE_SESSIONS_FRONTEND_PATH = "/settings/account/security";
+const SIGN_IN_REVIEW_SEARCH_PARAM = "review";
+
+const signInReviewUrl = (sessionId: string): string => {
+  const url = new URL(ACTIVE_SESSIONS_FRONTEND_PATH, env.FRONTEND_URL);
+  url.searchParams.set(SIGN_IN_REVIEW_SEARCH_PARAM, sessionId);
+  return url.toString();
+};
 
 /**
  * True when a sign-in endpoint's response body is the two-factor plugin's
@@ -2478,6 +2515,15 @@ export const createAuth = (
                 message: DISCONNECTED_SIGN_IN_MESSAGE,
               });
             }
+            // Where the session signed in from, recorded only when the request
+            // proved it came through CloudFront; otherwise `unknown`.
+            await sessionSignInStore().record({
+              sessionId: session.id,
+              location: readViewerLocation({
+                headers: ctx?.request?.headers ?? ctx?.headers,
+                clientAddress: sealedRequestClientAddress(),
+              }),
+            });
           },
         },
       },
@@ -2557,7 +2603,7 @@ export const createAuth = (
           after: createUserProjectionUpdateHook(),
         },
       },
-    },
+    } satisfies StellaDatabaseHooks,
     database: membershipAuthAdapter,
     socialProviders: createSocialProviders({
       googleClientId: env.GOOGLE_AUTH_CLIENT_ID,
@@ -2607,6 +2653,7 @@ export const createAuth = (
       CLIENT_METADATA_VALIDATION_SCHEMA_PLUGIN,
       sessionLifetime.plugin,
       createMcpWebHandoffPlugin({ service: getWebHandoffService }),
+      createSessionSignInsPlugin(sessionSignInStore),
       createAgentUserPlugin(),
       createReviewAccountUserPlugin(reviewConfig),
       createReviewAccountPlugin({
@@ -2663,7 +2710,7 @@ export const createAuth = (
         // defaults (6 digits, 5-minute expiry, 3 attempts before the code
         // is invalidated); change deliberately, not by dependency drift.
         otpLength: 6,
-        expiresIn: 5 * 60,
+        expiresIn: EMAIL_OTP_LIFETIME_SECONDS,
         allowedAttempts: EMAIL_OTP_ALLOWED_ATTEMPTS,
         storeOTP: "plain",
         // Returning undefined falls back to the plugin's random generator
@@ -2684,8 +2731,10 @@ export const createAuth = (
                 path: ctx?.path ?? "",
                 request: ctx?.request,
               });
+              let audience: SignInCodeAudience;
               switch (newAccountOtpAction.type) {
                 case NEW_ACCOUNT_EMAIL_OTP_ACTION.continue:
+                  ({ audience } = newAccountOtpAction);
                   break;
                 case NEW_ACCOUNT_EMAIL_OTP_ACTION.suppressOtp:
                   // The endpoint still returns its ordinary success response.
@@ -2720,7 +2769,19 @@ export const createAuth = (
               }
 
               const lang = extractLangFromRequest(ctx?.request);
-              await sendOTPEmail({ email, otp, type, lang });
+              const outcome = await sendOTPEmail({ email, otp, type, lang });
+              // Only the public code request is answered about its bounce.
+              if (
+                type === "sign-in" &&
+                ctx?.path === SEND_VERIFICATION_OTP_PATH
+              ) {
+                await rememberSignInCodeSend({
+                  store: getSignInCodeDeliveryStore(),
+                  headers: ctx.headers,
+                  outcome,
+                  audience,
+                });
+              }
             },
           });
         },
@@ -2743,6 +2804,7 @@ export const createAuth = (
         createAuthMiddleware,
         () => new Date(),
       ),
+      createSignInCodeDeliveryPlugin(getSignInCodeDeliveryStore()),
       createOAuthConsentInfoPlugin([env.FRONTEND_URL, getAuthIssuerUrl()]),
       createStellaOAuthProvider(
         {
@@ -3099,7 +3161,15 @@ export const createAuth = (
             : null,
           dependencies: {
             findPreviousSessions: findOtherSessionDevices,
-            sendNotice: ({ email, device, ipAddress, createdAt }) => {
+            requestReview: async (signIn) =>
+              await sessionSignInStore().requestReview(signIn),
+            sendNotice: ({
+              email,
+              sessionId,
+              device,
+              ipAddress,
+              createdAt,
+            }) => {
               const lang = extractLangFromRequest(ctx.request);
               const formattedTime =
                 getNewDeviceLoginDateTimeFormat(lang).format(createdAt);
@@ -3114,7 +3184,7 @@ export const createAuth = (
                     clientAddress: sealedRequestClientAddress(),
                   }),
                   time: formattedTime,
-                  sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
+                  sessionsUrl: signInReviewUrl(sessionId),
                   lang,
                 }).catch((error: unknown) => {
                   captureError(

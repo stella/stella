@@ -1,10 +1,12 @@
 import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
+import { FILE_PART_KINDS } from "@stll/api-contract/file-parts";
 import { CADES_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { compareCodeUnit } from "@stll/collation";
 
-import { readCadesPdf, readCadesPreview } from "@/api/lib/files/cades-preview";
+import { readCadesPreview } from "@/api/lib/files/cades-preview";
+import { readPartOfFile } from "@/api/lib/files/file-part";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
@@ -14,8 +16,10 @@ const signedFile = (bytes: Uint8Array, fileName: string) =>
   testScannedFile({
     bytes: new Uint8Array(bytes).buffer,
     mimeType: CADES_FILE_FORMAT.mimeType,
-    path: `org/ws/${fileName}`,
+    path: fileName,
   });
+
+const SIGNED_CONTENT = { kind: FILE_PART_KINDS.content, index: 0 } as const;
 
 describe("CAdES file reading", () => {
   test("extracts the deepest PDF and leaves its bytes unchanged", async () => {
@@ -33,14 +37,19 @@ describe("CAdES file reading", () => {
       name,
     );
 
-    const result = await readCadesPdf(signed, name);
-    expect(result.unwrap()).toEqual(bytes);
+    const content = (await readPartOfFile(signed, SIGNED_CONTENT)).unwrap();
+    expect(content).toEqual({
+      fileName: "filing.pdf",
+      mimeType: PDF_MIME_TYPE,
+      bytes,
+    });
 
     const preview = (await readCadesPreview(signed, name)).unwrap();
     expect(preview).toMatchObject({
       fileName: "filing.pdf",
       mimeType: PDF_MIME_TYPE,
       text: expect.stringContaining("Signed filing text"),
+      textFormat: "markdown",
     });
     expect(
       preview.layers.map(({ signers }) =>
@@ -72,9 +81,20 @@ describe("CAdES file reading", () => {
     expect(preview.unwrap()).toMatchObject({
       mimeType: "text/plain",
       text,
+      textFormat: "plain",
     });
-    const pdf = await readCadesPdf(signed, name);
-    expect(pdf.isErr() && pdf.error.status).toBe(422);
+    // The signed document opens as what its bytes are, whatever its name says.
+    const content = (await readPartOfFile(signed, SIGNED_CONTENT)).unwrap();
+    expect(content).toMatchObject({
+      fileName: "notice.pdf.txt",
+      mimeType: "text/plain",
+    });
+    expect(new TextDecoder().decode(content.bytes)).toBe(text);
+    const beyond = await readPartOfFile(signed, {
+      ...SIGNED_CONTENT,
+      index: 1,
+    });
+    expect(beyond.isErr() && beyond.error.status).toBe(404);
 
     const extraction = await extractFileTextResult(signed);
     expect(extraction.unwrap()).toContain(text);
@@ -93,6 +113,7 @@ describe("CAdES file reading", () => {
       fileName: "unknown.bin",
       mimeType: "application/octet-stream",
       text: "",
+      textFormat: "plain",
       layers: [
         {
           id: "layer-0",

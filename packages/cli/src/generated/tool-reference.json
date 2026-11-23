@@ -2258,7 +2258,7 @@
   {
     "access": "write",
     "command": ["capability", "matters", "update"],
-    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, or lead (who must already be a member of it). Only the fields you pass are written. clientId attaches a client to a personal matter or replaces the client of a client matter; members are managed separately. Pass expectedClientId (null for a personal matter) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
+    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, automatic document naming, or lead (who must already be a member of it). Only the fields you pass are written. clientId attaches a client to a personal matter or replaces the client of a client matter; members are managed separately. Pass expectedClientId (null for a personal matter) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
     "name": "capability:matters.update",
     "title": "matters.update"
   },

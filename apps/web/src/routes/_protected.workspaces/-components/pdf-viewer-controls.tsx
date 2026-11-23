@@ -24,6 +24,7 @@ import type { PdfSignTarget } from "@/components/inspector/pdf-sign-action";
 import {
   PDF_PAGE_FIELD_ROW_CLASS,
   PDF_ZOOM_GROUP_CLASS,
+  PdfPageCount,
 } from "@/components/pdf/pdf-viewer.pending";
 import {
   fetchPrintPdf,
@@ -198,6 +199,7 @@ export const PdfViewerControls = ({
           <Separator className="mx-1 h-4" orientation="vertical" />
           <Button
             disabled={currentPage <= 1}
+            disabledReason={t("common.firstPageReached")}
             onClick={() => {
               setEditingPage(null);
               navigateToPage(currentPage - 1);
@@ -210,6 +212,7 @@ export const PdfViewerControls = ({
           </Button>
           <Button
             disabled={currentPage >= totalPages}
+            disabledReason={t("common.lastPageReached")}
             onClick={() => {
               setEditingPage(null);
               navigateToPage(currentPage + 1);
@@ -256,12 +259,26 @@ export const PdfViewerControls = ({
               value={pageInputValue}
             />
             <span>/</span>
-            <span>{format.number(totalPages)}</span>
+            <PdfPageCount
+              formattedCount={
+                totalPages > 0 ? format.number(totalPages) : undefined
+              }
+            />
           </div>
         </>
       )}
     </div>
   );
+
+  const resolvePrintDisabledReason = () => {
+    if (isPrinting) {
+      return t("common.printing");
+    }
+    if (printDisabled) {
+      return t("common.loading");
+    }
+    return t("workspaces.files.pdfSelectToPrint");
+  };
 
   const fileActions =
     showFileActions || extraControls !== undefined ? (
@@ -301,6 +318,7 @@ export const PdfViewerControls = ({
             )}
             <Button
               disabled={printDisabled || isPrinting || fieldId.length === 0}
+              disabledReason={resolvePrintDisabledReason()}
               onClick={() => {
                 detached(handlePrint(), "pdf-viewer-controls.print");
               }}

@@ -19,9 +19,8 @@ import { injectStamp, isStampableDocx } from "@/api/lib/docx-stamp";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { scrubDocumentProperties } from "@/api/lib/files/document-properties";
-import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import { emailToPreview } from "@/api/lib/files/email-to-html";
-import { convertToPdf, isConvertibleMimeType } from "@/api/lib/files/gotenberg";
+import { canConvertToPdf, convertToPdf } from "@/api/lib/files/gotenberg";
 import {
   fileFieldQuery,
   LIVE_VERSION_DELIVERY,
@@ -88,15 +87,7 @@ export const readEmailHtmlPreviewHandler = async ({
   const fileBuffer = (
     await readStoredFile({ key: fileKey, mimeType: content.mimeType })
   ).bytes;
-  const previewResult = await emailToPreview(fileBuffer, emailMimeType, {
-    createAttachmentId: (attachmentIndex) =>
-      createEmailAttachmentDescriptor({
-        attachmentIndex,
-        secret: env.BETTER_AUTH_SECRET,
-        sourceFileId: content.id,
-        sourceVersionId: row.entityVersionId,
-      }),
-  });
+  const previewResult = await emailToPreview(fileBuffer, emailMimeType);
 
   if (Result.isError(previewResult)) {
     captureError(
@@ -315,7 +306,7 @@ export const printPdfHandler = async ({
     return streamedPdfResponse(response.value, outputName);
   }
 
-  if (!isConvertibleMimeType(content.mimeType)) {
+  if (!canConvertToPdf(content.mimeType)) {
     return status(400);
   }
 
