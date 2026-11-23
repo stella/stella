@@ -7354,7 +7354,18 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
       });
       return plan.type === "run" ? plan.matrix.shard : [];
     })(),
-  ).toEqual(["api-1", "api-2", "api-3", "api-4", "api-5", "api-6", "rest-web"]);
+  ).toEqual([
+    "api-1",
+    "api-2",
+    "api-3",
+    "api-4",
+    "api-5",
+    "api-6",
+    "api-7",
+    "api-8",
+    "rest",
+    "web",
+  ]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
@@ -7433,9 +7444,9 @@ test("a crashed API planner widens the real workflow outputs", () => {
     );
     const values = readFileSync(output, "utf-8");
     expect(values).toContain(
-      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}',
+      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","api-7","api-8","rest","web"]}',
     );
-    expect(values).toContain("api_test_shards=6");
+    expect(values).toContain("api_test_shards=8");
     expect(values).toContain("api_test_files_encoded=\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -7830,11 +7841,11 @@ test("API planning only loads dependencies after installation and emits install-
         );
       } else if (packages !== "true") {
         expect(values).toContain("ci_tests_required=false\n");
-        expect(values).toContain('ci_tests_matrix={"shard":["rest-web"]}\n');
+        expect(values).toContain('ci_tests_matrix={"shard":["rest"]}\n');
       } else if (selected) {
         expect(values).toContain("ci_tests_required=true\n");
         expect(values).toContain(
-          'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}\n',
+          'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","api-7","api-8","rest","web"]}\n',
         );
       }
     }

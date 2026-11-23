@@ -115,20 +115,20 @@ test("the ci-tests matrix runs exactly the declared jobs", () => {
   expect(declared).toEqual(FULL_TEST_JOB_SHARDS);
 });
 
-test("merged jobs run every suite exactly once and preserve the package partition", () => {
+test("job shards run every suite exactly once and preserve the package partition", () => {
   const suites = Object.values(TEST_JOB_SHARDS).flat();
   expect(suites.toSorted()).toEqual([...TEST_SHARD_IDS].toSorted());
-  const merged = TEST_JOB_SHARDS["rest-web"].flatMap((shard) =>
-    shardPackages({ packageNames, shard }),
+  const nonApi = [...TEST_JOB_SHARDS.rest, ...TEST_JOB_SHARDS.web].flatMap(
+    (shard) => shardPackages({ packageNames, shard }),
   );
-  expect(new Set(merged).size).toBe(merged.length);
-  expect(merged.toSorted()).toEqual(
+  expect(new Set(nonApi).size).toBe(nonApi.length);
+  expect(nonApi.toSorted()).toEqual(
     packageNames.filter((name) => name !== "@stll/api").toSorted(),
   );
 });
 
-test("both suites in the merged leg report a verdict after an earlier failure", () => {
-  for (const name of ["Test API or rest", "Test web", "Test .claude/mcp"]) {
+test("shard steps report a verdict after an earlier failure", () => {
+  for (const name of ["Test API or rest", "Test .claude/mcp"]) {
     const step = workflowStepByName(ciTestsSteps, name);
     expect(step["if"]).toContain("!cancelled()");
     expect(step["if"]).toContain(
@@ -138,10 +138,7 @@ test("both suites in the merged leg report a verdict after an earlier failure", 
   expect(
     workflowStepByName(ciTestsSteps, "Test API or rest")["env"],
   ).toMatchObject({
-    SHARD: `\${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}`,
-  });
-  expect(workflowStepByName(ciTestsSteps, "Test web")["env"]).toMatchObject({
-    SHARD: "web",
+    SHARD: `\${{ matrix.shard }}`,
   });
 });
 
