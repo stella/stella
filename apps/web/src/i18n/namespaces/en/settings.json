@@ -811,7 +811,13 @@
         "requireSsoTitle": "Require SSO for this organization",
         "testDiscovery": "Test discovery",
         "title": "Single sign-on",
-        "verifyDomain": "Verify now"
+        "verifyDomain": "Verify now",
+        "addSamlProvider": "Add SAML 2.0 provider",
+        "samlEntityIdLabel": "IdP Entity ID / Issuer",
+        "samlEntryPointLabel": "IdP SSO URL (Entry point)",
+        "samlCertLabel": "IdP X.509 signing certificate (PEM)",
+        "acsUrlLabel": "ACS URL",
+        "spMetadataUrlLabel": "SP Metadata URL"
       },
       "timePolicy": {
         "description": "Set time rounding, editing limits and monthly locks.",

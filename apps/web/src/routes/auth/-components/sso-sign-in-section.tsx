@@ -105,14 +105,18 @@ export const SsoSignInSection = ({
       ? t(SSO_ERROR_KEYS[ssoError])
       : null;
 
-  const launchProvider = async (providerId: string, loginHint?: string) => {
+  const launchProvider = async (
+    provider: Pick<PublicSsoProviderOption, "providerId" | "protocol">,
+    loginHint?: string,
+  ) => {
     setBusy(true);
     setLookupError(null);
     const origin = window.location.origin;
     const callbackURL = `${origin}${redirectTo.startsWith("/") ? redirectTo : "/"}`;
     const errorCallbackURL = `${origin}/auth?redirectTo=${encodeURIComponent(redirectTo)}`;
     const result = await startSsoSignInRedirect({
-      providerId,
+      providerId: provider.providerId,
+      protocol: provider.protocol,
       callbackURL,
       errorCallbackURL,
       ...(loginHint !== undefined ? { loginHint } : {}),
@@ -156,7 +160,7 @@ export const SsoSignInSection = ({
     if (response.value.providers.length === 1) {
       const only = response.value.providers.at(0);
       if (only !== undefined) {
-        await launchProvider(only.providerId, trimmed);
+        await launchProvider(only, trimmed);
         return;
       }
     }
@@ -223,7 +227,7 @@ export const SsoSignInSection = ({
             disabledReason={busyReason}
             onClick={() => {
               detached(
-                launchProvider(directProvider.providerId),
+                launchProvider(directProvider),
                 "sso-sign-in.launch-direct",
               );
             }}
@@ -300,7 +304,7 @@ export const SsoSignInSection = ({
                       key={provider.providerId}
                       onClick={() => {
                         detached(
-                          launchProvider(provider.providerId, email.trim()),
+                          launchProvider(provider, email.trim()),
                           "sso-sign-in.launch-discovered",
                         );
                       }}

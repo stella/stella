@@ -3,7 +3,9 @@ import * as v from "valibot";
 
 import type {
   CreateOidcSsoProviderBody,
+  CreateSamlSsoProviderBody,
   DiscoverSsoBody,
+  SsoProtocol,
   OrganizationSsoPolicyRequirement,
   TestOidcSsoProviderBody,
 } from "@stll/api-contract/sso";
@@ -38,6 +40,13 @@ export const registerOidcSsoProvider = async (
       unwrapApiResponse(
         await api["organization-settings"].sso.providers.post(body),
       ),
+  );
+
+export const registerSamlSsoProvider = async (
+  body: CreateSamlSsoProviderBody,
+) =>
+  unwrapApiResponse(
+    await api["organization-settings"].sso.providers.saml.post(body),
   );
 
 export const probeOidcSsoProvider = async (body: TestOidcSsoProviderBody) =>
@@ -113,6 +122,7 @@ const ssoSignInResponseSchema = v.object({
 
 export const startSsoSignInRedirect = async (options: {
   providerId: string;
+  protocol?: SsoProtocol;
   callbackURL: string;
   errorCallbackURL: string;
   loginHint?: string;
@@ -123,6 +133,7 @@ export const startSsoSignInRedirect = async (options: {
         method: "POST",
         body: {
           providerId: options.providerId,
+          providerType: options.protocol ?? "oidc",
           callbackURL: options.callbackURL,
           errorCallbackURL: options.errorCallbackURL,
           ...(options.loginHint ? { loginHint: options.loginHint } : {}),

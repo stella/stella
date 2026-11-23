@@ -33,7 +33,10 @@ import {
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
-import { admitSsoOidcConfig } from "@/api/lib/db/sso-provider-config";
+import {
+  admitSsoOidcConfig,
+  admitSsoSamlConfig,
+} from "@/api/lib/db/sso-provider-config";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -71,6 +74,8 @@ export type SsoManagementDb = Pick<
 
 type ProviderUrlBuilders = {
   callbackUrlFor: (providerId: string) => string;
+  acsUrlFor: (providerId: string) => string;
+  spMetadataUrlFor: (providerId: string) => string;
   launchUrlFor: (providerId: string) => string;
 };
 
@@ -151,12 +156,13 @@ const toProviderSummary = (
   row: typeof ssoProvider.$inferSelect,
   urls: ProviderUrlBuilders,
 ): OrganizationSsoProviderSummary => {
+  const protocol = protocolOfProvider(row);
   const oidc = parseOidcSummaryFields(row.oidcConfig);
   return {
     id: row.id,
     providerId: row.providerId,
     displayName: row.displayName,
-    protocol: protocolOfProvider(row),
+    protocol,
     issuer: row.issuer,
     domains: splitDomains(row.domain),
     clientId: oidc.clientId,
@@ -164,6 +170,9 @@ const toProviderSummary = (
     discoveryEndpoint: oidc.discoveryEndpoint,
     scopes: oidc.scopes,
     callbackUrl: urls.callbackUrlFor(row.providerId),
+    acsUrl: protocol === "saml" ? urls.acsUrlFor(row.providerId) : null,
+    spMetadataUrl:
+      protocol === "saml" ? urls.spMetadataUrlFor(row.providerId) : null,
     launchUrl: urls.launchUrlFor(row.providerId),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
@@ -353,6 +362,123 @@ export const createOrganizationOidcProvider = async (
 
   return Result.ok(toProviderSummary(inserted, params.urls));
 };
+
+export type CreateOrganizationSamlProviderParams = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  displayName: string;
+  issuer: string;
+  entryPoint: string;
+  cert: string;
+  domains: readonly string[];
+  urls: ProviderUrlBuilders;
+};
+
+export const createOrganizationSamlProvider = async (
+  db: SsoManagementDb,
+  params: CreateOrganizationSamlProviderParams,
+): Promise<Result<OrganizationSsoProviderSummary, SsoManagementError>> => {
+  const normalizedIssuer = params.issuer.trim();
+  const normalizedEntryPoint = params.entryPoint.trim();
+  const normalizedCert = params.cert.trim();
+  const normalizedDomains = [
+    ...new Set(params.domains.map((domain) => normalizeSsoDomain(domain))),
+  ].filter((domain) => domain.length > 0);
+
+  if (normalizedDomains.length === 0) {
+    return Result.err(
+      new SsoManagementError({
+        message: "At least one valid domain is required",
+        reason: "invalid_config",
+      }),
+    );
+  }
+
+  const providerId = generateProviderId(params.displayName);
+  const acsUrl = params.urls.acsUrlFor(providerId);
+  const samlConfigJson = JSON.stringify({
+    issuer: normalizedIssuer,
+    entryPoint: normalizedEntryPoint,
+    cert: normalizedCert,
+    callbackUrl: acsUrl,
+    wantAssertionsSigned: true,
+    overrideUserInfo: false,
+    allowIdpInitiated: false,
+    idpMetadata: {
+      entityID: normalizedIssuer,
+      singleSignOnService: [
+        {
+          Binding: "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect",
+          Location: normalizedEntryPoint,
+        },
+      ],
+      cert: normalizedCert,
+    },
+    spMetadata: {
+      entityID: params.urls.spMetadataUrlFor(providerId),
+    },
+  });
+
+  const verifiedDomainRows = await db
+    .select({ domain: organizationSsoDomain.domain })
+    .from(organizationSsoDomain)
+    .where(
+      and(
+        eq(organizationSsoDomain.organizationId, params.organizationId),
+        isNotNull(organizationSsoDomain.verifiedAt),
+        inArray(organizationSsoDomain.domain, normalizedDomains),
+      ),
+    )
+    .limit(normalizedDomains.length);
+  const verifiedSet = new Set(verifiedDomainRows.map((row) => row.domain));
+  const unverified = normalizedDomains.filter((d) => !verifiedSet.has(d));
+  if (unverified.length > 0) {
+    return Result.err(
+      new SsoManagementError({
+        message: `Verify domain ownership via DNS TXT before binding SAML: ${unverified.join(", ")}`,
+        reason: "invalid_config",
+      }),
+    );
+  }
+
+  const admitted = admitSsoSamlConfig(samlConfigJson);
+  if (admitted.isErr()) {
+    return Result.err(
+      new SsoManagementError({
+        message: admitted.error.message,
+        reason: "invalid_config",
+      }),
+    );
+  }
+
+  // audit: skip - caller handler records organization settings audit event
+  const [inserted] = await db
+    .insert(ssoProvider)
+    .values({
+      id: Bun.randomUUIDv7(),
+      providerId,
+      displayName: params.displayName.trim(),
+      organizationId: params.organizationId,
+      issuer: normalizedIssuer,
+      domain: normalizedDomains.join(","),
+      oidcConfig: null,
+      samlConfig: admitted.value,
+      userId: params.userId,
+    })
+    .returning();
+
+  if (inserted === undefined) {
+    return Result.err(
+      new SsoManagementError({
+        message: "Failed to persist SAML SSO provider",
+        reason: "invalid_config",
+      }),
+    );
+  }
+
+  return Result.ok(toProviderSummary(inserted, params.urls));
+};
+
 
 export const deleteOrganizationSsoProvider = async (
   db: SsoManagementDb,

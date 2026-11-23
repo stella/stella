@@ -1,0 +1,4 @@
+{
+  "drop-constraint": "Replaces sso_provider_oidc_only_check with sso_provider_single_protocol_check in the same short catalog-only transaction under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "sso_provider_single_protocol_check is added NOT VALID with no table scan under 1s lock_timeout and 5s statement_timeout; all existing OIDC rows already satisfy it."
+}

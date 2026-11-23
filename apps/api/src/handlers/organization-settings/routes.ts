@@ -40,6 +40,7 @@ import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-s
 import updateSanctionsMonitoring from "@/api/handlers/organization-settings/sanctions-monitoring/update";
 import createOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/create-domain";
 import createOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/create-provider";
+import createOrganizationSamlSsoProvider from "@/api/handlers/organization-settings/sso/create-saml-provider";
 import deleteOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/delete-domain";
 import deleteOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/delete-provider";
 import readOrganizationSso from "@/api/handlers/organization-settings/sso/get";
@@ -95,6 +96,7 @@ export const organizationSettingsRoute = mount(
         "/": { GET: readOrganizationSso },
         "/policy": { PUT: updateOrganizationSsoPolicy },
         "/providers": { POST: createOrganizationSsoProvider },
+        "/providers/saml": { POST: createOrganizationSamlSsoProvider },
         "/providers/test": { POST: testOrganizationSsoProvider },
         "/providers/:providerId": { DELETE: deleteOrganizationSsoProvider },
         "/domains": { POST: createOrganizationSsoDomain },

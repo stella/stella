@@ -101,6 +101,22 @@ export type CreateOidcSsoProviderBody = v.InferOutput<
   typeof createOidcSsoProviderBodySchema
 >;
 
+export const createSamlSsoProviderBodySchema = v.strictObject({
+  displayName: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80)),
+  issuer: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(512)),
+  entryPoint: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
+  cert: v.pipe(v.string(), v.trim(), v.minLength(32), v.maxLength(16_384)),
+  domains: v.pipe(
+    v.array(ssoDomainNameSchema),
+    v.minLength(1),
+    v.maxLength(20),
+  ),
+});
+
+export type CreateSamlSsoProviderBody = v.InferOutput<
+  typeof createSamlSsoProviderBodySchema
+>;
+
 export const testOidcSsoProviderBodySchema = v.strictObject({
   issuer: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
   discoveryEndpoint: v.optional(
@@ -153,6 +169,8 @@ export const organizationSsoProviderSummarySchema = v.object({
   discoveryEndpoint: v.nullable(v.string()),
   scopes: v.array(v.string()),
   callbackUrl: v.string(),
+  acsUrl: v.nullable(v.string()),
+  spMetadataUrl: v.nullable(v.string()),
   launchUrl: v.string(),
   createdAt: v.string(),
   updatedAt: v.string(),

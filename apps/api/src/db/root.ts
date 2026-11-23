@@ -85,6 +85,7 @@ import {
 import type { SsoRequestLookup } from "@/api/lib/db/sso-access";
 import {
   createOrganizationOidcProvider,
+  createOrganizationSamlProvider,
   createOrganizationSsoDomain,
   deleteOrganizationSsoDomain,
   deleteOrganizationSsoProvider,
@@ -96,7 +97,10 @@ import {
   recordOrganizationSsoDomainCheck,
   updateOrganizationSsoRequirement,
 } from "@/api/lib/db/sso-management";
-import type { CreateOrganizationOidcProviderParams } from "@/api/lib/db/sso-management";
+import type {
+  CreateOrganizationOidcProviderParams,
+  CreateOrganizationSamlProviderParams,
+} from "@/api/lib/db/sso-management";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
@@ -402,6 +406,10 @@ export const readOrgSsoSettings = async (
 export const createOrgOidcProvider = async (
   params: CreateOrganizationOidcProviderParams,
 ) => await createOrganizationOidcProvider(rootDb, params);
+
+export const createOrgSamlProvider = async (
+  params: CreateOrganizationSamlProviderParams,
+) => await createOrganizationSamlProvider(rootDb, params);
 
 export const deleteOrgSsoProvider = async (
   params: Parameters<typeof deleteOrganizationSsoProvider>[1],

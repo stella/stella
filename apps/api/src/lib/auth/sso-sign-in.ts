@@ -37,6 +37,8 @@ import { isRecord } from "@/api/lib/type-guards";
 /** The sign-in endpoint; it takes a provider id and nothing that searches. */
 const SSO_SIGN_IN_PATH = "/sign-in/sso";
 const SSO_CALLBACK_PATH_PREFIX = "/sso/callback/";
+const SSO_SAML_ACS_PATH_PREFIX = "/sso/saml2/sp/acs/";
+const SSO_SAML_METADATA_PATH = "/sso/saml2/sp/metadata";
 
 const SSO_PROVIDER_ID = new RegExp(SSO_PROVIDER_ID_PATTERN, "u");
 
@@ -55,10 +57,19 @@ export const ssoCallbackProviderId = (
   ctx: SsoEndpoint | null | undefined,
 ): string | undefined => {
   const path = ctx?.path;
-  if (path === undefined || !path.startsWith(SSO_CALLBACK_PATH_PREFIX)) {
+  if (path === undefined) {
     return undefined;
   }
-  const fromPath = path.slice(SSO_CALLBACK_PATH_PREFIX.length);
+  let prefix: string | undefined;
+  if (path.startsWith(SSO_CALLBACK_PATH_PREFIX)) {
+    prefix = SSO_CALLBACK_PATH_PREFIX;
+  } else if (path.startsWith(SSO_SAML_ACS_PATH_PREFIX)) {
+    prefix = SSO_SAML_ACS_PATH_PREFIX;
+  }
+  if (prefix === undefined) {
+    return undefined;
+  }
+  const fromPath = path.slice(prefix.length);
   const fromParams = isRecord(ctx?.params)
     ? ctx.params["providerId"]
     : undefined;
@@ -193,26 +204,38 @@ const resolveSsoUser = async (
   if (!isEnterpriseSsoDeployed()) {
     return reject(SSO_REJECTION_CODE.unavailable);
   }
-  if (input.protocol !== "oidc") {
-    return reject(SSO_REJECTION_CODE.protocolUnavailable);
-  }
   const { source } = input.providerReference;
   if (source.type !== "persisted") {
     return reject(SSO_REJECTION_CODE.unavailable);
   }
-  // The signed ID token decides verification. With a user-info endpoint the
-  // plugin reads the profile, and its `email_verified`, from that unsigned
-  // response, which may omit the claim; only its address must match.
-  const email = verifiedIdTokenEmail(input.verifiedIdTokenClaims);
-  if (
-    email === undefined ||
-    normalizeEmail(input.providerUser.email) !== email
-  ) {
-    return reject(SSO_REJECTION_CODE.emailUnverified);
-  }
-
-  if (!carriesStateNonce(input.verifiedIdTokenClaims)) {
-    return reject(SSO_REJECTION_CODE.nonceMismatch);
+  let email: string | undefined;
+  if (input.protocol === "oidc") {
+    // The signed ID token decides verification. With a user-info endpoint the
+    // plugin reads the profile, and its `email_verified`, from that unsigned
+    // response, which may omit the claim; only its address must match.
+    email = verifiedIdTokenEmail(input.verifiedIdTokenClaims);
+    if (
+      email === undefined ||
+      normalizeEmail(input.providerUser.email) !== email
+    ) {
+      return reject(SSO_REJECTION_CODE.emailUnverified);
+    }
+    if (!carriesStateNonce(input.verifiedIdTokenClaims)) {
+      return reject(SSO_REJECTION_CODE.nonceMismatch);
+    }
+  } else if (input.protocol === "saml") {
+    // SAML assertions are signature-verified, timestamp-checked, and
+    // InResponseTo-validated by the plugin before reaching resolveUser.
+    const rawEmail = input.providerUser.email;
+    email =
+      typeof rawEmail === "string" && rawEmail.includes("@")
+        ? normalizeEmail(rawEmail)
+        : undefined;
+    if (email === undefined) {
+      return reject(SSO_REJECTION_CODE.emailUnverified);
+    }
+  } else {
+    return reject(SSO_REJECTION_CODE.protocolUnavailable);
   }
 
   const bound = await database.findOne<{
@@ -428,6 +451,17 @@ const SSO_OPTIONS = {
   defaultOverrideUserInfo: false,
   // Server code writes provider rows; the plugin registers none.
   providersLimit: 0,
+  // SAML2Int hardened defaults: SP-initiated only, strict timestamps,
+  // InResponseTo replay protection, and no deprecated signature algorithms.
+  saml: {
+    enableInResponseToValidation: true,
+    allowIdpInitiated: false,
+    requireTimestamps: true,
+    clockSkew: 120_000,
+    algorithms: { onDeprecated: "reject" },
+    maxResponseSize: 262_144,
+    maxMetadataSize: 102_400,
+  },
 } satisfies SSOOptions;
 
 /** Sign-in fields that look a provider up instead of naming it. */
@@ -452,7 +486,9 @@ const ssoDeploymentGate = createAuthMiddleware(async (ctx) => {
   if (
     typeof providerId !== "string" ||
     !isSsoProviderId(providerId) ||
-    (providerType !== undefined && providerType !== "oidc") ||
+    (providerType !== undefined &&
+      providerType !== "oidc" &&
+      providerType !== "saml") ||
     SSO_SIGN_IN_SEARCH_FIELDS.some((field) => fields[field] !== undefined)
   ) {
     throw new APIError("BAD_REQUEST", {
@@ -478,6 +514,10 @@ const bindAuthorizationNonce = createAuthMiddleware(async (ctx) => {
     return undefined;
   }
   const url = new URL(redirect.output.url);
+  // SAML AuthnRequest redirects carry SAMLRequest instead of OIDC state.
+  if (url.searchParams.has("SAMLRequest")) {
+    return undefined;
+  }
   const state = url.searchParams.get("state");
   if (state === null || state === "") {
     throw new APIError("INTERNAL_SERVER_ERROR", {
@@ -532,13 +572,17 @@ export const createSsoSignInPlugin = () => {
     endpoints: {
       signInSSO: plugin.endpoints.signInSSO,
       callbackSSO: plugin.endpoints.callbackSSO,
+      acsEndpoint: plugin.endpoints.acsEndpoint,
+      spMetadata: plugin.endpoints.spMetadata,
     },
     hooks: {
       before: [
         {
           matcher: (ctx) =>
             ctx.path === SSO_SIGN_IN_PATH ||
-            (ctx.path?.startsWith(SSO_CALLBACK_PATH_PREFIX) ?? false),
+            ctx.path === SSO_SAML_METADATA_PATH ||
+            (ctx.path?.startsWith(SSO_CALLBACK_PATH_PREFIX) ?? false) ||
+            (ctx.path?.startsWith(SSO_SAML_ACS_PATH_PREFIX) ?? false),
           handler: ssoDeploymentGate,
         },
       ],
@@ -549,7 +593,8 @@ export const createSsoSignInPlugin = () => {
         },
         {
           matcher: (ctx) =>
-            ctx.path?.startsWith(SSO_CALLBACK_PATH_PREFIX) ?? false,
+            (ctx.path?.startsWith(SSO_CALLBACK_PATH_PREFIX) ?? false) ||
+            (ctx.path?.startsWith(SSO_SAML_ACS_PATH_PREFIX) ?? false),
           handler: publishCallbackError,
         },
       ],

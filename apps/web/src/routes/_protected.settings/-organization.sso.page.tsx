@@ -20,6 +20,7 @@ import { Field, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Switch } from "@stll/ui/switch";
+import { Textarea } from "@stll/ui/textarea";
 import { stellaToast } from "@stll/ui/toast";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
@@ -31,6 +32,7 @@ import {
   fetchOrgSsoSettings,
   probeOidcSsoProvider,
   registerOidcSsoProvider,
+  registerSamlSsoProvider,
   removeOrgSsoDomain,
   removeOrgSsoProvider,
   saveOrgSsoPolicy,
@@ -294,6 +296,127 @@ const AddOidcProviderForm = ({
   );
 };
 
+const AddSamlProviderForm = ({
+  onCreated,
+  onCancel,
+}: {
+  onCreated: () => Promise<void>;
+  onCancel: () => void;
+}) => {
+  const t = useTranslations();
+  const [displayName, setDisplayName] = useState("");
+  const [issuer, setIssuer] = useState("");
+  const [entryPoint, setEntryPoint] = useState("");
+  const [cert, setCert] = useState("");
+  const [domainsInput, setDomainsInput] = useState("");
+
+  const createProviderMutation = useMutation({
+    mutationFn: async () => {
+      const domains = domainsInput
+        .split(/[,\s]+/u)
+        .map((d) => d.trim())
+        .filter((d) => d.length > 0);
+      return await registerSamlSsoProvider({
+        displayName: displayName.trim(),
+        issuer: issuer.trim(),
+        entryPoint: entryPoint.trim(),
+        cert: cert.trim(),
+        domains,
+      });
+    },
+    onSuccess: async () => {
+      await onCreated();
+      stellaToast.add({
+        title: t("settings.organization.sso.providerAdded"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  return (
+    <div className="border-border bg-muted/30 rounded-lg border p-3">
+      <Form
+        className="space-y-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          createProviderMutation.mutate();
+        }}
+      >
+        <Field>
+          <FieldLabel>
+            {t("settings.organization.sso.displayNameLabel")}
+          </FieldLabel>
+          <Input
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Okta SAML"
+            required
+            value={displayName}
+          />
+        </Field>
+        <Field>
+          <FieldLabel>
+            {t("settings.organization.sso.samlEntityIdLabel")}
+          </FieldLabel>
+          <Input
+            onChange={(e) => setIssuer(e.target.value)}
+            placeholder="http://www.okta.com/exk..."
+            required
+            value={issuer}
+          />
+        </Field>
+        <Field>
+          <FieldLabel>
+            {t("settings.organization.sso.samlEntryPointLabel")}
+          </FieldLabel>
+          <Input
+            onChange={(e) => setEntryPoint(e.target.value)}
+            placeholder="https://your-org.okta.com/app/.../sso/saml"
+            required
+            type="url"
+            value={entryPoint}
+          />
+        </Field>
+        <Field>
+          <FieldLabel>
+            {t("settings.organization.sso.samlCertLabel")}
+          </FieldLabel>
+          <Textarea
+            onChange={(e) => setCert(e.target.value)}
+            placeholder="-----BEGIN CERTIFICATE-----"
+            required
+            rows={4}
+            value={cert}
+          />
+        </Field>
+        <Field>
+          <FieldLabel>{t("settings.organization.sso.domainsLabel")}</FieldLabel>
+          <Input
+            onChange={(e) => setDomainsInput(e.target.value)}
+            placeholder="acme.com, acme.eu"
+            required
+            value={domainsInput}
+          />
+        </Field>
+        <div className="flex justify-end gap-2">
+          <Button onClick={onCancel} type="button" variant="ghost">
+            {t("common.cancel")}
+          </Button>
+          <Button
+            disabled={createProviderMutation.isPending}
+            disabledReason={t("common.loading")}
+            type="submit"
+          >
+            {t("common.save")}
+          </Button>
+        </div>
+      </Form>
+    </div>
+  );
+};
+
 const OidcProvidersSection = ({
   providers,
   onChanged,
@@ -303,7 +426,9 @@ const OidcProvidersSection = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const [showAddProvider, setShowAddProvider] = useState(false);
+  const [addProtocol, setAddProtocol] = useState<"closed" | "oidc" | "saml">(
+    "closed",
+  );
 
   const deleteProviderMutation = useMutation({
     mutationFn: resourceMutation({
@@ -326,7 +451,7 @@ const OidcProvidersSection = ({
   });
 
   const handleProviderCreated = async () => {
-    setShowAddProvider(false);
+    setAddProtocol("closed");
     await onChanged();
   };
 
@@ -341,20 +466,36 @@ const OidcProvidersSection = ({
             {t("settings.organization.sso.providersDescription")}
           </p>
         </div>
-        {!showAddProvider && (
-          <Button
-            onClick={() => setShowAddProvider(true)}
-            size="sm"
-            type="button"
-          >
-            {t("settings.organization.sso.addProvider")}
-          </Button>
+        {addProtocol === "closed" && (
+          <div className="flex gap-1.5">
+            <Button
+              onClick={() => setAddProtocol("oidc")}
+              size="sm"
+              type="button"
+            >
+              {t("settings.organization.sso.addProvider")}
+            </Button>
+            <Button
+              onClick={() => setAddProtocol("saml")}
+              size="sm"
+              type="button"
+              variant="outline"
+            >
+              {t("settings.organization.sso.addSamlProvider")}
+            </Button>
+          </div>
         )}
       </div>
 
-      {showAddProvider && (
+      {addProtocol === "oidc" && (
         <AddOidcProviderForm
-          onCancel={() => setShowAddProvider(false)}
+          onCancel={() => setAddProtocol("closed")}
+          onCreated={handleProviderCreated}
+        />
+      )}
+      {addProtocol === "saml" && (
+        <AddSamlProviderForm
+          onCancel={() => setAddProtocol("closed")}
           onCreated={handleProviderCreated}
         />
       )}
@@ -400,10 +541,24 @@ const OidcProvidersSection = ({
               </div>
 
               <div className="grid gap-1.5">
-                <CopyValueRow
-                  label={t("settings.organization.sso.callbackUrlLabel")}
-                  value={provider.callbackUrl}
-                />
+                {provider.protocol === "oidc" && (
+                  <CopyValueRow
+                    label={t("settings.organization.sso.callbackUrlLabel")}
+                    value={provider.callbackUrl}
+                  />
+                )}
+                {provider.acsUrl !== null && (
+                  <CopyValueRow
+                    label={t("settings.organization.sso.acsUrlLabel")}
+                    value={provider.acsUrl}
+                  />
+                )}
+                {provider.spMetadataUrl !== null && (
+                  <CopyValueRow
+                    label={t("settings.organization.sso.spMetadataUrlLabel")}
+                    value={provider.spMetadataUrl}
+                  />
+                )}
                 <CopyValueRow
                   label={t("settings.organization.sso.launchUrlLabel")}
                   value={provider.launchUrl}
