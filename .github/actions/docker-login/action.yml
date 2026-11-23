@@ -1,0 +1,30 @@
+name: Log in to Docker registry with retries
+description: Logs into a Docker registry with bounded retries on transient network or registry failures, and logs out in post.
+inputs:
+  registry:
+    description: Registry hostname (omit for Docker Hub).
+    required: false
+    default: ""
+  username:
+    description: Registry username.
+    required: true
+  password:
+    description: Registry password or token (passed on stdin, never argv).
+    required: true
+  logout:
+    description: Log out of the registry in the post step after a successful login.
+    required: false
+    default: "true"
+  attempts:
+    description: Maximum number of login attempts.
+    required: false
+    default: "3"
+  delays-seconds:
+    description: Space-separated backoff delays in seconds between attempts.
+    required: false
+    default: "5 15"
+runs:
+  using: node24
+  main: main.mjs
+  post: post.mjs
+  post-if: always()
