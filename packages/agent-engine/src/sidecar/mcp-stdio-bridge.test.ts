@@ -158,7 +158,7 @@ describe("mcp-stdio-bridge", () => {
       _input: string | URL | Request,
       init?: RequestInit,
     ) => {
-      const body = String(init?.body);
+      const body = typeof init?.body === "string" ? init.body : "";
       posted.push(body);
       if (body.includes('"method":"tools/call"')) {
         const stream = new ReadableStream<Uint8Array>({
@@ -218,7 +218,7 @@ describe("mcp-stdio-bridge", () => {
       _input: string | URL | Request,
       init?: RequestInit,
     ) => {
-      const body = String(init?.body);
+      const body = typeof init?.body === "string" ? init.body : "";
       posted.push(body);
       if (body.includes('"id":1')) {
         await firstReleased.promise;

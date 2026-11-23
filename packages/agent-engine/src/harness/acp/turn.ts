@@ -234,7 +234,7 @@ const ACP_FAILURE_OF_STOP: Readonly<
 };
 
 /** Milliseconds as `performance.now()` counts them, and a wait. */
-export type AcpStderrClock = {
+type AcpStderrClock = {
   now: () => number;
   sleep: (ms: number) => Promise<void>;
 };
