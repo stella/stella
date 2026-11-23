@@ -15,6 +15,7 @@ import {
 import {
   MBOX_HEADER_MAX_BYTES,
   MBOX_MESSAGE_MAX_BYTES,
+  MBOX_REREAD_MAX_BYTES,
   type MboxMessage,
   mboxMessageBytes,
   MboxScanner,
@@ -131,6 +132,33 @@ describe("a mailbox in every variant", () => {
       decode(message),
       decode(message),
     ]);
+  });
+
+  test("wrong counts never make it read the mailbox again and again", () => {
+    // Every message claims a body running far past the next ones: each miss
+    // would read the rest of the mailbox again.
+    const message = mailMessage({
+      ...MATTER_CORRESPONDENCE[0]!,
+      body: "ok",
+      headers: ["Content-Length: 1000000"],
+    });
+    const separator =
+      "From kalina@ak-kalina-vesela.cz Tue Nov 17 09:30:00 2026\n";
+    const one = `${separator}${decode(message)}\n`;
+    const count = 3000;
+    const bytes = new TextEncoder().encode(one.repeat(count));
+    const messages: MboxMessage[] = [];
+    const scanner = new MboxScanner((found) => messages.push(found));
+    scanner.push(bytes);
+    scanner.finish();
+    expect(messages).toHaveLength(count);
+    expect(messages.every(({ bounded }) => !bounded)).toBe(true);
+    // Each byte once, plus at most the bound read again (and the one miss
+    // that crossed it): reading every miss again would be thousands of times
+    // the mailbox.
+    expect(scanner.bytesRead).toBeLessThanOrEqual(
+      bytes.byteLength + MBOX_REREAD_MAX_BYTES + 1_000_000,
+    );
   });
 
   test("a count past the file's end falls back to the separators", () => {

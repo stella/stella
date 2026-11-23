@@ -11,7 +11,9 @@
  *   body line starting `From ` is no boundary. The count is trusted only
  *   where it lands on the next separator (or the file's end); otherwise the
  *   message ends at the first separator after a blank line, as in mboxo. A
- *   body its count bounds is read as stored, never unquoted.
+ *   body its count bounds is read as stored, never unquoted. Once counts
+ *   that missed have made it read `MBOX_REREAD_MAX_BYTES` again, no further
+ *   count is followed.
  *
  * Lines may end in LF or CRLF. Anything but blank lines before the first
  * separator means the file is not a mailbox.
@@ -25,6 +27,13 @@ export const MBOX_MESSAGE_MAX_BYTES = 32 * 1024 * 1024;
 
 /** The most header bytes a message's list row is read from. */
 export const MBOX_HEADER_MAX_BYTES = 64 * 1024;
+
+/**
+ * The most bytes a mailbox is read again for, over all its counts that
+ * missed. Past it, no further `Content-Length` is followed: separators alone
+ * decide, so a mailbox of wrong counts is read in time linear in its size.
+ */
+export const MBOX_REREAD_MAX_BYTES = MBOX_MESSAGE_MAX_BYTES;
 
 export class MboxParseError extends TaggedError("MboxParseError")<{
   message: string;
@@ -175,6 +184,10 @@ export class MboxScanner {
   private runDropped = false;
   private count = 0;
   private stopped = false;
+  /** Bytes read again after counts that missed. */
+  private reread = 0;
+  /** Every byte handed to the reader, including those read again. */
+  bytesRead = 0;
   truncated = false;
   failure: MboxParseError | null = null;
 
@@ -267,6 +280,7 @@ export class MboxScanner {
     }
     this.lineSeen += bytes.byteLength;
     this.position += bytes.byteLength;
+    this.bytesRead += bytes.byteLength;
     this.keep(bytes);
     const headKnown =
       seenBefore < FROM_LENGTH && (this.lineSeen >= FROM_LENGTH || ends);
@@ -467,7 +481,11 @@ export class MboxScanner {
   private countBody(open: OpenMessage, bodyStart: number): void {
     const stated =
       open.header === null ? null : statedContentLength(open.header);
-    if (stated === null || open.offset === null) {
+    if (
+      stated === null ||
+      open.offset === null ||
+      this.reread > MBOX_REREAD_MAX_BYTES
+    ) {
       return;
     }
     const end = bodyStart + stated;
@@ -500,6 +518,7 @@ export class MboxScanner {
       candidate.separator - open.separator,
       this.position - open.separator,
     );
+    this.reread += again.byteLength;
     this.close(open, candidate.end, false);
     this.position = candidate.separator;
     this.lineStart = candidate.separator;
