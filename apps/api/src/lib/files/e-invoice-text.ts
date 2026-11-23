@@ -230,8 +230,18 @@ export const eInvoiceDocumentText = (preview: EInvoicePreview): string =>
         ]),
   ].join("\n");
 
+const XML_DOCUMENT_HEADING = "XML document.\n\n";
+const XML_DOCUMENT_TRUNCATED = "\nDocument text was truncated.";
+
+/**
+ * What `xmlDocumentPreviewText` adds around an XML file's own text: a reader
+ * budgets it so the text and its truncation notice fit together.
+ */
+export const XML_DOCUMENT_TEXT_OVERHEAD =
+  XML_DOCUMENT_HEADING.length + XML_DOCUMENT_TRUNCATED.length;
+
 /** The text search and AI read for what an invoice reader shows. */
 export const xmlDocumentPreviewText = (preview: XmlDocumentPreview): string =>
   preview.type === "invoice"
     ? eInvoiceDocumentText(preview.invoice)
-    : `XML document.\n\n${preview.text}${preview.truncated ? "\nDocument text was truncated." : ""}`;
+    : `${XML_DOCUMENT_HEADING}${preview.text}${preview.truncated ? XML_DOCUMENT_TRUNCATED : ""}`;

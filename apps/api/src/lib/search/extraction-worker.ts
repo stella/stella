@@ -80,6 +80,7 @@ import {
 } from "@/api/lib/files/e-invoice-protocol";
 import {
   eInvoiceDocumentText,
+  XML_DOCUMENT_TEXT_OVERHEAD,
   xmlDocumentPreviewText,
 } from "@/api/lib/files/e-invoice-text";
 import {
@@ -469,10 +470,12 @@ const extractEInvoiceText = async ({
 }: LegalTextReadOptions): Promise<
   Result<string | null, LegalTextReadError | EmailParseError>
 > => {
+  // An XML file's text is budgeted with its heading and truncation notice,
+  // so the extraction's final cut at `maxChars` keeps the notice.
   const preview = await extractEInvoicePreview({
     fileBytes,
     mimeType,
-    maxChars,
+    maxChars: Math.max(0, maxChars - XML_DOCUMENT_TEXT_OVERHEAD),
   });
   return preview.map(xmlDocumentPreviewText);
 };

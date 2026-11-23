@@ -7,15 +7,22 @@ import {
   documentPackageError,
   type DocumentXmlNode,
   parseStandaloneXml,
+  xmlEncoding,
 } from "@/api/lib/files/xml-document-package";
 
 /**
  * An XML document as readable text: its elements indented one level per
- * nesting depth, with their attributes and text, cut at `maxChars`. Namespace
- * declarations are left out; element names are shown without their prefixes.
+ * nesting depth, with their attributes and text in document order, cut at
+ * `maxChars`. Namespace declarations are left out; element names are shown
+ * without their prefixes. Whitespace in text is collapsed, except under
+ * `xml:space="preserve"`, which an element's descendants inherit.
  */
 
 const INDENT = "  ";
+
+// C0 controls other than tab, line feed and carriage return, and DEL.
+// oxlint-disable-next-line no-control-regex -- matching control characters is the point
+const BINARY_CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
 
 const escapeText = (value: string) =>
   value.replaceAll("&", "&amp;").replaceAll("<", "&lt;");
@@ -31,34 +38,51 @@ const openTag = (node: DocumentXmlNode) => {
   return `${node.localName}${attributes}`;
 };
 
+/** Whether an element keeps its text's whitespace, as `xml:space` says. */
+const preservesSpace = (node: DocumentXmlNode, inherited: boolean) => {
+  const declared = node.attributes.get("xml:space");
+  return declared === undefined ? inherited : declared === "preserve";
+};
+
+const readableText = (run: string, preserve: boolean) =>
+  preserve ? run : run.replace(/\s+/gu, " ").trim();
+
 const formatNode = (
   node: DocumentXmlNode,
   depth: number,
+  inheritedPreserve: boolean,
   append: (part: string) => void,
 ) => {
   const indent = INDENT.repeat(depth);
-  const text = node.text.replace(/\s+/gu, " ").trim();
+  const preserve = preservesSpace(node, inheritedPreserve);
   if (node.children.length === 0) {
+    const text = readableText(node.text, preserve);
     append(
-      text
+      text.trim()
         ? `${indent}<${openTag(node)}>${escapeText(text)}</${node.localName}>\n`
         : `${indent}<${openTag(node)}/>\n`,
     );
     return;
   }
   append(`${indent}<${openTag(node)}>\n`);
-  if (text) {
-    append(`${indent}${INDENT}${escapeText(text)}\n`);
-  }
-  for (const child of node.children) {
-    formatNode(child, depth + 1, append);
+  // Text runs and child elements in the order the document has them, so
+  // mixed content reads as written.
+  for (const part of node.content) {
+    if (typeof part !== "string") {
+      formatNode(part, depth + 1, preserve, append);
+      continue;
+    }
+    const text = readableText(part, preserve);
+    if (text.trim()) {
+      append(`${indent}${INDENT}${escapeText(text)}\n`);
+    }
   }
   append(`${indent}</${node.localName}>\n`);
 };
 
 const formatXmlDocument = (root: DocumentXmlNode, maxChars: number) => {
   const document = createDocumentText(maxChars);
-  formatNode(root, 0, document.append);
+  formatNode(root, 0, false, document.append);
   return document.finish();
 };
 
@@ -75,10 +99,17 @@ export const readXmlDocumentText = (
   if (root.isOk()) {
     return formatXmlDocument(root.value, maxChars);
   }
+  // The encoding the parser reads (a byte-order mark, a declared legacy
+  // encoding, else UTF-8), and markup only: text that does not open with a
+  // tag, or holds control characters, is not an XML document.
   const decoded = Result.try(() =>
-    new TextDecoder("utf-8", { fatal: true }).decode(bytes),
+    new TextDecoder(xmlEncoding(bytes), { fatal: true }).decode(bytes),
   );
-  if (decoded.isErr()) {
+  if (
+    decoded.isErr() ||
+    !decoded.value.trimStart().startsWith("<") ||
+    BINARY_CONTROL.test(decoded.value)
+  ) {
     return Result.err(
       documentPackageError("The XML file is not readable text"),
     );
