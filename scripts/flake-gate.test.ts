@@ -22,6 +22,7 @@ import {
   BUDGET_MS,
   executeGate,
   failureAnnotation,
+  gateBudgetMs,
   MAX_CHANGED_TEST_FILES,
   planRepeats,
   renderReport,
@@ -55,7 +56,17 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
       "          $",
       "{{ needs.ci-plan.outputs.changed_files }}\n",
       "          CHANGED_FILES_JSON\n",
-      `          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
+    ].join(""),
+  );
+  // The repeats end before the job's timeout: the clock starts in the
+  // shard's runner step and the gate gets the deadline.
+  expect(source).toContain(
+    `echo "CI_TESTS_CLOCK_MS=$(date +%s%3N)" >> "$GITHUB_ENV"`,
+  );
+  expect(source).toContain(
+    [
+      "          FLAKE_GATE_DEADLINE_MS=$(( CI_TESTS_CLOCK_MS + 21 * 60 * 1000 )) \\\n",
+      `            CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking`,
     ].join(""),
   );
   expect(source).not.toContain("CHANGED_FILES_JSON: $");
@@ -1181,4 +1192,30 @@ test("a failing trial that names tests without details still names them", async 
   const markdown = renderReport(report);
   expect(markdown).toContain("math > adds");
   expect(markdown).not.toContain("named no test");
+});
+
+test("the gate spends its cap, or only what the job has left before its deadline", () => {
+  const now = 1_800_000_000_000;
+  expect(gateBudgetMs(undefined, now)).toBe(BUDGET_MS);
+  expect(gateBudgetMs("", now)).toBe(BUDGET_MS);
+  expect(gateBudgetMs(String(now + 2 * BUDGET_MS), now)).toBe(BUDGET_MS);
+  expect(gateBudgetMs(String(now + 90_000), now)).toBe(90_000);
+  expect(gateBudgetMs(String(now - 1), now)).toBe(0);
+  expect(() => gateBudgetMs("soon", now)).toThrow("not an epoch millisecond");
+});
+
+test("a report shows the budget its run had", () => {
+  const report: Report = {
+    cleanup: {
+      type: "best-effort",
+      platform: "darwin",
+      note: "cleanup: best-effort",
+    },
+    results: [],
+    skipped: [],
+    errors: [],
+    elapsedMs: 60_000,
+    budgetMs: 90_000,
+  };
+  expect(renderReport(report)).toContain("Budget: 1.50 test-minutes");
 });

@@ -3164,7 +3164,10 @@ jobs:
       # and memory (apps/api/scripts/test-lanes.ts); print what it sees.
       - name: Runner resources
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: nproc; free -g
+        # Also starts the clock the changed-test repeats are bounded by.
+        run: |
+          nproc; free -g
+          echo "CI_TESTS_CLOCK_MS=$(date +%s%3N)" >> "$GITHUB_ENV"
 
       - name: Test API or rest
         id: test-api-or-rest
@@ -3303,7 +3306,11 @@ jobs:
           cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'
           ${{ needs.ci-plan.outputs.changed_files }}
           CHANGED_FILES_JSON
-          CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking
+          # The repeats end 21 minutes after the clock started, inside the
+          # job's 25-minute timeout: setup ran before the clock, and the
+          # uploads run after the repeats.
+          FLAKE_GATE_DEADLINE_MS=$(( CI_TESTS_CLOCK_MS + 21 * 60 * 1000 )) \
+            CHANGED_FILES_PATH="$RUNNER_TEMP/changed-files.json" bun scripts/flake-gate.ts --blocking
 
       - name: Upload quarantined test outcomes
         if: >-
