@@ -551,11 +551,23 @@ const countLenientTextDecoders: FileCounter = (content, { file }) => {
     ) {
       return;
     }
+    // The last property that can set `fatal` decides it: a later spread may
+    // carry `fatal: false`.
     const options = node.arguments.at(1);
-    const fatal =
+    const decidingProperty =
       options?.type === "ObjectExpression"
-        ? specProperty(options, "fatal")?.value
+        ? options.properties.findLast(
+            (property) =>
+              property.type === "SpreadElement" ||
+              (isPropertyAssignment(property, options) &&
+                propertyNameText(property) === "fatal"),
+          )
         : undefined;
+    const fatal =
+      decidingProperty === undefined ||
+      decidingProperty.type === "SpreadElement"
+        ? undefined
+        : decidingProperty.value;
     if (fatal?.type !== "Literal" || fatal.value !== true) {
       total += 1;
     }
@@ -5049,6 +5061,7 @@ const SELF_TEST_LENIENT_TEXT_DECODERS = [
   'new TextDecoder("utf-8", options);',
   'new TextDecoder("utf-8", { fatal: true }).decode(bytes);',
   'new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });',
+  'new TextDecoder("utf-8", { fatal: true, ...options });',
   "new TextEncoder().encode(text);",
   "new TextDecoderStream();",
   'new TextDecoderStream("utf-8", { fatal: true });',
@@ -5061,7 +5074,7 @@ const SELF_TEST_LENIENT_TEXT_DECODERS = [
   "// new TextDecoder().decode(bytes)",
   'const example = "new TextDecoder()";',
 ].join("\n");
-const EXPECTED_LENIENT_TEXT_DECODERS = 9;
+const EXPECTED_LENIENT_TEXT_DECODERS = 10;
 
 const LEGACY_PAINT_TRANSITION_FIXTURE_LINES = [
   `const directClass = "transition transition-colors";`,

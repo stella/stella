@@ -166,6 +166,18 @@ describe("a text file that declares no charset", () => {
     expect(decoded.text).toContain("příslušného");
   });
 
+  test("UTF-8 in a script no legacy candidate writes keeps it past a stray byte", () => {
+    const bytes = new Uint8Array([
+      ...new TextEncoder().encode("こんにちは 世界"),
+      0x20,
+      0x92,
+      0x20,
+    ]);
+    const decoded = decodeDeclared(bytes, PLAIN_TEXT);
+    expect(decoded.charset).toBe("utf-8");
+    expect(decoded.text).toStartWith("こんにちは 世界");
+  });
+
   test("a declared charset still outranks the guess", () => {
     const bytes = saved(LEASE, "windows-1250");
     expect(
