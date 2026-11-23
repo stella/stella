@@ -2,7 +2,10 @@ import { compile } from "@litko/yara-x";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { UNSCANNED_CONTENT_WARNING } from "@stll/api-contract/file-scan-warnings";
+import {
+  UNSCANNED_CONTENT_WARNING,
+  type UnscannedContentReason,
+} from "@stll/api-contract/file-scan-warnings";
 import { ZipArchive } from "@stll/docx-core/zip";
 import { assertProperty } from "@stll/property-testing";
 
@@ -456,6 +459,15 @@ describe("archives that cannot be inspected", () => {
 // Ways an archiver writes an entry whose content cannot be read: the
 // traditional encryption flag, the strong encryption flag, WinZip AES, and a
 // compression method the inspector does not inflate (bzip2, LZMA, zstd).
+const LOCKED_KINDS = [
+  "encryptedFlag",
+  "strongEncryption",
+  "winZipAes",
+  "bzip2",
+  "lzma",
+  "zstd",
+] as const;
+type LockedKind = (typeof LOCKED_KINDS)[number];
 const LOCKED_ENTRIES = {
   encryptedFlag: { method: 8, flags: 0x00_01, reason: "encrypted" },
   strongEncryption: { method: 8, flags: 0x00_41, reason: "encrypted" },
@@ -463,8 +475,10 @@ const LOCKED_ENTRIES = {
   bzip2: { method: 12, flags: 0, reason: "unsupportedCompression" },
   lzma: { method: 14, flags: 0, reason: "unsupportedCompression" },
   zstd: { method: 93, flags: 0, reason: "unsupportedCompression" },
-} as const;
-type LockedKind = keyof typeof LOCKED_ENTRIES;
+} as const satisfies Record<
+  LockedKind,
+  { method: number; flags: number; reason: UnscannedContentReason }
+>;
 
 const locked = (
   kind: LockedKind,
@@ -478,25 +492,22 @@ const locked = (
 });
 
 describe("entries whose content cannot be read", () => {
-  test.each(Object.keys(LOCKED_ENTRIES) as LockedKind[])(
-    "warn, not refuse, for %s",
-    async (kind) => {
-      const matches = await scanArchive(
-        makeZipArchive([
-          locked(kind, "secret/contract.docx"),
-          { name: "readme.txt", data: "Readable notes" },
-        ]),
-        REFUSAL_BUDGET,
-      );
-      const { reason } = LOCKED_ENTRIES[kind];
+  test.each(LOCKED_KINDS)("warn, not refuse, for %s", async (kind) => {
+    const matches = await scanArchive(
+      makeZipArchive([
+        locked(kind, "secret/contract.docx"),
+        { name: "readme.txt", data: "Readable notes" },
+      ]),
+      REFUSAL_BUDGET,
+    );
+    const { reason } = LOCKED_ENTRIES[kind];
 
-      expect(rulesOf(matches)).toEqual([ARCHIVE_UNSCANNED[reason].rule]);
-      expect(verdictOf(matches)).toBe("warn");
-      expect(
-        matches.map(mapMatchFinding).map(({ message }) => message),
-      ).toEqual([UNSCANNED_CONTENT_WARNING[reason]]);
-    },
-  );
+    expect(rulesOf(matches)).toEqual([ARCHIVE_UNSCANNED[reason].rule]);
+    expect(verdictOf(matches)).toBe("warn");
+    expect(matches.map(mapMatchFinding).map(({ message }) => message)).toEqual([
+      UNSCANNED_CONTENT_WARNING[reason],
+    ]);
+  });
 
   test("carry one warning per reason, however many entries share it", async () => {
     const matches = await scanArchive(
@@ -590,9 +601,7 @@ describe("entries whose content cannot be read", () => {
           entries: fc.array(entryArbitrary, { minLength: 1, maxLength: 4 }),
           lockedEntries: fc.array(
             fc.record({
-              kind: fc.constantFrom(
-                ...(Object.keys(LOCKED_ENTRIES) as LockedKind[]),
-              ),
+              kind: fc.constantFrom(...LOCKED_KINDS),
               content: entryArbitrary,
               at: fc.nat(),
             }),
