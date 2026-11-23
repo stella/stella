@@ -1820,6 +1820,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "EXPECTED_COMMIT",
   // Flake trial ownership and isolated subprocess fixture handoffs.
   "FLAKE_CHILD_RECORD",
+  // The test job's clock (epoch ms); the repeats end inside the job's timeout.
+  "CI_T0",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
   // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.
