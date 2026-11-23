@@ -50,6 +50,7 @@ import { decisionFilterValidationScalingScenario } from "./decision-filter-valid
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
+  desktopDictationCleanupModelsScalingScenario,
   desktopDictationModelsScalingScenario,
   dictationModelsScalingScenario,
   dictationScalingScenario,
@@ -191,6 +192,7 @@ const measuredApiScenarios = [
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,
+  desktopDictationCleanupModelsScalingScenario,
   dictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,

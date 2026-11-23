@@ -21,6 +21,7 @@ import {
   ACCOUNT,
   ACTIVITY_SETTINGS,
   APP_STATE,
+  CLEANUP_MODELS,
   CLIPBOARD_SETTINGS,
   CLOUD_MODELS,
   DICTATION_READY,
@@ -136,6 +137,8 @@ type WindowFixture = {
   appState: AppSnapshot;
   /** The region's stella AI transcription models. */
   cloudModels: unknown;
+  /** The models the organization offers for cleanup besides automatic. */
+  cleanupModels: unknown;
   /** The dictation snapshot. */
   dictation: Record<string, unknown>;
   /** What the dictation notice panel offers, where that window is open. */
@@ -233,6 +236,7 @@ const openWindow = async (
       dictation_notice_get_state: () => data.dictationNotice,
       dictation_notice_respond: () => null,
       dictation_get_cloud_models: () => data.cloudModels,
+      dictation_get_cleanup_models: () => data.cleanupModels,
       // Nothing learned yet; Settings lists no fixes.
       dictation_learned_get: () => ({ fixes: [] }),
       dictation_learned_switch: () => ({ fixes: [] }),
@@ -246,6 +250,12 @@ const openWindow = async (
             ["dictation_set_cleanup", "enabled", "cleanup"],
             ["dictation_set_cleanup_style", "style", "cleanupStyle"],
             ["dictation_set_translate_to", "language", "translateTo"],
+            [
+              "dictation_set_cleanup_instructions",
+              "instructions",
+              "cleanupInstructions",
+            ],
+            ["dictation_set_cleanup_model", "model", "cleanupModel"],
             ["dictation_set_sounds", "enabled", "sounds"],
             ["dictation_set_retype_shortcut", "enabled", "retypeShortcut"],
             ["dictation_set_while_dictating", "choice", "whileDictating"],
@@ -321,6 +331,7 @@ export const openOnboardingWindow = async (
       account: { server: ACCOUNT.server, status: "disconnected" },
       activity: null,
       appState: APP_STATE,
+      cleanupModels: CLEANUP_MODELS,
       cloudModels: CLOUD_MODELS,
       dictation: options.dictation ?? DICTATION_READY,
       language: options.language,
@@ -357,6 +368,7 @@ export const openDictationNoticeWindow = async (
       account: ACCOUNT,
       activity: null,
       appState: APP_STATE,
+      cleanupModels: CLEANUP_MODELS,
       cloudModels: CLOUD_MODELS,
       dictation: DICTATION_READY,
       dictationNotice: notice,
@@ -414,6 +426,7 @@ export const openSettingsWindow = async (
       // Dictation pages in the sidebar.
       activity: ACTIVITY_SETTINGS,
       appState: APP_STATE,
+      cleanupModels: CLEANUP_MODELS,
       cloudModels: CLOUD_MODELS,
       dictation: SETTINGS_DICTATION,
       language: options.language,

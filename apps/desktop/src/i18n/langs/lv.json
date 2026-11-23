@@ -612,6 +612,19 @@
       "descriptionCloud": "stella AI arī izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam.",
       "title": "Labot ar AI"
     },
+    "cleanupInstructions": {
+      "description": "Kā vēlaties, lai jūsu teksts būtu uzrakstīts, piemēram, pareizrakstības variants vai vārdi, no kuriem izvairīties. Labošana tiem seko, kur to atļauj tās noteikumi, un nekad nemaina to, ko teicāt.",
+      "placeholder": "Piemēram: Izmanto britu pareizrakstību. Nekad neizmanto emocijzīmes. Saglabā manus nepabeigtos teikumus.",
+      "saveFailed": "Norādījumus neizdevās saglabāt. Mēģiniet vēlreiz.",
+      "title": "Jūsu norādījumi"
+    },
+    "cleanupModel": {
+      "automatic": "Automātiski",
+      "automaticDescription": "Izmanto jūsu organizācijas ātro modeli.",
+      "chosenDescription": "Ja šim modelim vajag vairāk par dažām sekundēm, teksts tiek ievadīts bez labošanas.",
+      "title": "AI modelis",
+      "withdrawn": "Izvēlētais modelis vairs nav pieejams, tāpēc labošana notiek automātiski."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Saglabā nepiespiestu toni ar vieglu pieturzīmju lietojumu.",

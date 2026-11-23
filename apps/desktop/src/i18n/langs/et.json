@@ -612,6 +612,19 @@
       "descriptionCloud": "stella AI parandab ka tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga.",
       "title": "Paranda tehisintellektiga"
     },
+    "cleanupInstructions": {
+      "description": "Kuidas soovite oma teksti kirjutatuna näha, näiteks õigekirja varianti või sõnu, mida vältida. Parandamine järgib neid seal, kus selle reeglid lubavad, ega muuda kunagi seda, mida ütlesite.",
+      "placeholder": "Näiteks: Kasuta Briti õigekirja. Ära kasuta kunagi emojisid. Jäta mu poolikud laused alles.",
+      "saveFailed": "Juhiseid ei õnnestunud salvestada. Proovige uuesti.",
+      "title": "Teie juhised"
+    },
+    "cleanupModel": {
+      "automatic": "Automaatne",
+      "automaticDescription": "Kasutab teie organisatsiooni kiiret mudelit.",
+      "chosenDescription": "Kui see mudel vajab rohkem kui paar sekundit, sisestatakse tekst parandamata.",
+      "title": "Tehisintellekti mudel",
+      "withdrawn": "Valitud mudel pole enam saadaval, seega kasutab parandamine automaatset valikut."
+    },
     "cleanupStyle": {
       "casual": {
         "description": "Hoiab vaba tooni ja kerget kirjavahemärgistust.",

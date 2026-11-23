@@ -39,7 +39,9 @@ use crate::{
   config::APP_DATA_DIR_NAME,
   device_preference::DevicePreference,
   dictation_app_settings::{self, AppSetting, RecentApp},
-  dictation_cleanup::{self, CleanupForm, CleanupStyle},
+  dictation_cleanup::{
+    self, CleanupForm, CleanupModels, CleanupPreferences, CleanupStyle,
+  },
   dictation_cloud::{self, CloudModels, Destination, ModelClass},
   dictation_context::{self, Sharing},
   dictation_fix,
@@ -61,6 +63,13 @@ const CLEANUP_STYLE_PREFERENCE_FILE_NAME: &str = "dictation-cleanup-style";
 /// A language the cleanup contract lists to write the text in, or `off`
 /// (and absent): the spoken language.
 const TRANSLATE_TO_PREFERENCE_FILE_NAME: &str = "dictation-translate-to";
+/// What the speaker wrote for cleanup to follow; absent: nothing. Several
+/// lines may be stored.
+const CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME: &str =
+  "dictation-cleanup-instructions";
+/// The model the speaker chose for cleanup, as the chat model picker names
+/// it; absent: automatic.
+const CLEANUP_MODEL_PREFERENCE_FILE_NAME: &str = "dictation-cleanup-model";
 /// `auto` or a language code the speech model lists.
 const LANGUAGE_PREFERENCE_FILE_NAME: &str = "dictation-language";
 /// `local` (this computer, the default) or `cloud` (stella AI).
@@ -208,6 +217,10 @@ pub struct DictationSnapshot {
   cleanup_style: CleanupStyle,
   /// The language cleanup writes the text in; `None` for the spoken one.
   translate_to: Option<&'static str>,
+  /// What the speaker wrote for cleanup to follow; `None` for nothing.
+  cleanup_instructions: Option<String>,
+  /// The model the speaker chose for cleanup; `None` for automatic.
+  cleanup_model: Option<String>,
   /// Whether a short sound marks the start and the end of listening.
   sounds: bool,
   /// What happens to other sound while recording, what this computer
@@ -291,6 +304,7 @@ struct Inner {
   cleanup: bool,
   cleanup_style: CleanupStyle,
   translate_to: Option<&'static str>,
+  cleanup_preferences: CleanupPreferences,
   app_settings: Vec<AppSetting>,
   /// Only in memory.
   recent_apps: Vec<RecentApp>,
@@ -341,6 +355,10 @@ impl DictationState {
     let translate_to = DevicePreference::in_app_data(TRANSLATE_TO_PREFERENCE_FILE_NAME)
       .read()
       .and_then(|stored| dictation_cleanup::translation_language(&stored));
+    let cleanup_preferences = stored_cleanup_preferences(
+      &DevicePreference::in_app_data(CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME),
+      &DevicePreference::in_app_data(CLEANUP_MODEL_PREFERENCE_FILE_NAME),
+    );
     let sounds = DevicePreference::in_app_data(SOUNDS_PREFERENCE_FILE_NAME)
       .read()
       .as_deref()
@@ -403,6 +421,7 @@ impl DictationState {
       cleanup,
       cleanup_style,
       translate_to,
+      cleanup_preferences,
       app_settings,
       recent_apps: Vec::new(),
       sounds,
@@ -450,6 +469,8 @@ impl DictationState {
       cleanup: inner.cleanup,
       cleanup_style: inner.cleanup_style,
       translate_to: inner.translate_to,
+      cleanup_instructions: inner.cleanup_preferences.custom_instructions.clone(),
+      cleanup_model: inner.cleanup_preferences.model.clone(),
       sounds: inner.sounds,
       while_dictating: inner.while_dictating,
       while_dictating_offered: WhileDictating::OFFERED,
@@ -825,6 +846,31 @@ pub fn cleanup_form(app: &AppHandle) -> CleanupForm {
     style: inner.cleanup_style,
     translate_to: inner.translate_to,
   })
+}
+
+/// What the speaker wrote for cleanup to follow and the model they chose.
+pub fn cleanup_preferences(app: &AppHandle) -> CleanupPreferences {
+  app
+    .state::<DictationState>()
+    .update(|inner| inner.cleanup_preferences.clone())
+}
+
+/// The stored instructions and model, each held to the contract again: a
+/// file edited by hand, or written under an older bound, reads as none.
+fn stored_cleanup_preferences(
+  instructions: &DevicePreference,
+  model: &DevicePreference,
+) -> CleanupPreferences {
+  CleanupPreferences {
+    custom_instructions: instructions.read().and_then(|stored| {
+      dictation_cleanup::custom_instructions(&stored)
+        .ok()
+        .flatten()
+    }),
+    model: model
+      .read()
+      .and_then(|stored| dictation_cleanup::cleanup_model(&stored).ok().flatten()),
+  }
 }
 
 /// Whether a short sound marks the start and the end of listening.
@@ -1406,6 +1452,70 @@ pub fn dictation_set_translate_to(
   Ok(read_snapshot(&app, &state))
 }
 
+/// What the speaker wants cleanup to follow, such as "use British
+/// spelling"; blank or `None` clears it. Refused whole beyond the contract's
+/// bound, never cut.
+#[tauri::command]
+pub fn dictation_set_cleanup_instructions(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  instructions: Option<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let stored =
+    dictation_cleanup::custom_instructions(instructions.as_deref().unwrap_or(""))
+      .map_err(str::to_string)?;
+  change_preference(
+    &app,
+    CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME,
+    stored.as_deref().unwrap_or(""),
+    |inner| {
+      inner
+        .cleanup_preferences
+        .custom_instructions
+        .clone_from(&stored)
+    },
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The model cleanup runs on, as the list names it; `None` for automatic.
+/// The server checks it against the organization's models on every cleanup
+/// and runs automatically on one it no longer offers.
+#[tauri::command]
+pub fn dictation_set_cleanup_model(
+  app: AppHandle,
+  state: State<'_, DictationState>,
+  model: Option<String>,
+) -> Result<DictationSnapshot, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  let stored = dictation_cleanup::cleanup_model(model.as_deref().unwrap_or(""))
+    .map_err(str::to_string)?;
+  change_preference(
+    &app,
+    CLEANUP_MODEL_PREFERENCE_FILE_NAME,
+    stored.as_deref().unwrap_or(""),
+    |inner| inner.cleanup_preferences.model.clone_from(&stored),
+  )?;
+  Ok(read_snapshot(&app, &state))
+}
+
+/// The models the dictation account's organization offers for cleanup
+/// besides automatic.
+#[tauri::command]
+pub async fn dictation_get_cleanup_models(
+  app: AppHandle,
+) -> Result<CleanupModels, String> {
+  if !available(&app) {
+    return Err("dictation is not available on this computer".to_string());
+  }
+  dictation_cleanup::models(&app).await
+}
+
 /// Whether a short sound marks the start and the end of listening.
 #[tauri::command]
 pub fn dictation_set_sounds(
@@ -1943,6 +2053,7 @@ mod tests {
       cleanup,
       cleanup_style: CleanupStyle::Polished,
       translate_to: None,
+      cleanup_preferences: CleanupPreferences::default(),
       app_settings: Vec::new(),
       recent_apps: Vec::new(),
       sounds: true,
@@ -2038,6 +2149,73 @@ mod tests {
       serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
     assert_eq!(notes["cleanupStyle"], serde_json::json!("notes"));
     assert_eq!(notes["translateTo"], serde_json::json!("en"));
+  }
+
+  #[test]
+  fn cleanup_instructions_and_model_are_stored_and_read_back_with_the_snapshot() {
+    let dir =
+      std::env::temp_dir().join(format!("stella-dictation-{}", uuid::Uuid::new_v4()));
+    let instructions =
+      DevicePreference::at(dir.join(CLEANUP_INSTRUCTIONS_PREFERENCE_FILE_NAME));
+    let model = DevicePreference::at(dir.join(CLEANUP_MODEL_PREFERENCE_FILE_NAME));
+    let state = state(true);
+    let unset =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(unset["cleanupInstructions"], serde_json::Value::Null);
+    assert_eq!(unset["cleanupModel"], serde_json::Value::Null);
+
+    let written = dictation_cleanup::custom_instructions(
+      "Use British spelling.\r\nNever use emoji.",
+    )
+    .unwrap();
+    state
+      .store(&instructions, written.as_deref().unwrap_or(""), |inner| {
+        inner.cleanup_preferences.custom_instructions = written.clone();
+      })
+      .unwrap();
+    let chosen =
+      dictation_cleanup::cleanup_model("anthropic::claude-sonnet-4-5").unwrap();
+    state
+      .store(&model, chosen.as_deref().unwrap_or(""), |inner| {
+        inner.cleanup_preferences.model = chosen.clone();
+      })
+      .unwrap();
+    let set =
+      serde_json::to_value(state.snapshot(true, false, Vec::new(), false)).unwrap();
+    assert_eq!(
+      set["cleanupInstructions"],
+      "Use British spelling.\nNever use emoji."
+    );
+    assert_eq!(set["cleanupModel"], "anthropic::claude-sonnet-4-5");
+    // What a restart reads is what was set.
+    assert_eq!(
+      stored_cleanup_preferences(&instructions, &model),
+      state.update(|inner| inner.cleanup_preferences.clone())
+    );
+
+    // Cleared, both files read as nothing: automatic, no instructions.
+    state
+      .store(&instructions, "", |inner| {
+        inner.cleanup_preferences.custom_instructions = None;
+      })
+      .unwrap();
+    state
+      .store(&model, "", |inner| inner.cleanup_preferences.model = None)
+      .unwrap();
+    assert_eq!(
+      stored_cleanup_preferences(&instructions, &model),
+      CleanupPreferences::default()
+    );
+
+    // A file beyond the contract's bound reads as none, never cut.
+    let too_long = "x".repeat(5000);
+    assert!(dictation_cleanup::custom_instructions(&too_long).is_err());
+    instructions.write(&too_long).unwrap();
+    assert_eq!(
+      stored_cleanup_preferences(&instructions, &model).custom_instructions,
+      None
+    );
+    std::fs::remove_dir_all(dir).unwrap();
   }
 
   #[test]
