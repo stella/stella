@@ -123,6 +123,7 @@ if (!databaseUrl || !runPostgresTests) {
             const parsed = {
               channel: "email",
               dataBox: null,
+              certifiedEmail: null,
               direction: "in",
               source: "delivery",
               intake: "direct",
