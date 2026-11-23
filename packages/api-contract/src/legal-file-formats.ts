@@ -43,6 +43,20 @@ export const ZIP_FILE_FORMAT = {
   mimeAliases: ["application/x-zip-compressed"],
 } as const;
 
+/**
+ * A mailbox: messages one after another, each opened by a `From ` line
+ * (RFC 4155), as mail clients and mail exports write them. Every message is
+ * a part of the file (`message:N`) and opens as an email of its own.
+ */
+export const MBOX_FILE_FORMAT = {
+  kind: "mbox",
+  auditFormat: "mbox",
+  label: "MBOX",
+  extensions: [".mbox", ".mbx"],
+  mimeType: "application/mbox",
+  mimeAliases: [],
+} as const;
+
 export const [ASIC_E_FILE_FORMAT, ASIC_S_FILE_FORMAT] = ASIC_FILE_FORMATS;
 
 export const ASIC_FILE_KINDS = ASIC_FILE_FORMATS.map(({ kind }) => kind);
@@ -63,6 +77,7 @@ export const LEGAL_FILE_FORMATS = [
   ...STRUCTURED_DOCUMENT_FORMATS,
   ...E_INVOICE_FILE_FORMATS,
   ZIP_FILE_FORMAT,
+  MBOX_FILE_FORMAT,
 ] as const;
 
 export type LegalFileFormat = (typeof LEGAL_FILE_FORMATS)[number];

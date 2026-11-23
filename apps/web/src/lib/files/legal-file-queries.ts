@@ -4,6 +4,7 @@ import { RESOURCE_TYPE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
+import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
@@ -41,6 +42,12 @@ const legalFileKeys = {
     workspaceId,
     fieldId,
   ],
+  mbox: ({ fieldId, workspaceId }: LegalFileKey) => [
+    ...filesKeys.all(),
+    "mbox",
+    workspaceId,
+    fieldId,
+  ],
 };
 
 export const zipArchivePreviewOptions = (props: FileOptionsProps) =>
@@ -56,6 +63,32 @@ export const zipArchivePreviewOptions = (props: FileOptionsProps) =>
           zipArchivePreviewSchema,
           unwrapApiResponse(response),
           "ZIP archive preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
+export const mailboxPreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: legalFileKeys.mbox(props),
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .mbox({ fieldId: props.fieldId })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          mailboxPreviewSchema,
+          unwrapApiResponse(response),
+          "Mailbox preview must match its response schema",
         );
       },
     }),

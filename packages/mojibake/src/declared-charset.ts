@@ -3,19 +3,20 @@
  * a byte-order mark, then the HTTP `Content-Type` charset, then the
  * document's own declaration (a UTF-16 `<?x` prefix, `<?xml encoding>`,
  * `<meta charset>`, `<meta http-equiv="Content-Type">`) in its first
- * kilobyte, then UTF-8.
+ * kilobyte, for a markup type or an unknown one. Bytes that declare nothing are read by `decodeUndeclared`: as
+ * UTF-8 when they are UTF-8, else as the legacy charset they read best in.
  *
- * `Response.text()` and `Buffer.toString("utf-8")` ignore all of these and
- * always read UTF-8, so a page served in windows-1250 loses every non-ASCII
- * byte to U+FFFD before a parser sees it.
+ * `Response.text()`, `Buffer.toString("utf-8")` and `new TextDecoder()`
+ * ignore all of these and always read UTF-8, so a page served, or a text file
+ * saved, in windows-1250 loses every non-ASCII byte to U+FFFD. Every reading
+ * of a user's file as text goes through here.
  */
 
 import { panic, Result } from "better-result";
-// node:util's constructor takes any label string, which is what a charset
-// read off the wire is; the global one is typed to a closed list of labels.
-import { TextDecoder as LabelledTextDecoder } from "node:util";
 
-export type DeclaredCharsetSource = "bom" | "http" | "document" | "default";
+import { decodeUndeclared } from "./undeclared-charset.js";
+
+export type DeclaredCharsetSource = "bom" | "http" | "document" | "undeclared";
 
 export type DeclaredText = {
   text: string;
@@ -49,11 +50,29 @@ const UTF16_XML_PREFIXES = [
   { bytes: [0x00, 0x3c, 0x00, 0x3f, 0x00, 0x78], charset: "utf-16be" },
 ] as const;
 
+/**
+ * A label the platform's decoder takes: Bun types it as the closed list of
+ * WHATWG labels, the DOM as any string.
+ */
+type DecoderLabel = NonNullable<ConstructorParameters<typeof TextDecoder>[0]>;
+
+/**
+ * Whether the platform decodes `label`. A charset read off the wire or out
+ * of a document is an arbitrary string; the WHATWG constructor refuses one
+ * that names no encoding with a `RangeError`, and that refusal is the answer.
+ */
+const isDecoderLabel = (label: string): label is DecoderLabel =>
+  Result.try((): unknown => Reflect.construct(TextDecoder, [label])).isOk();
+
 /** A decoder for a label the platform knows, or null. */
-const decoderFor = (label: string): LabelledTextDecoder | null =>
-  Result.try(
-    () => new LabelledTextDecoder(label.trim().toLowerCase()),
-  ).unwrapOr(null);
+const decoderFor = (label: string): TextDecoder | null => {
+  const normalized = label.trim().toLowerCase();
+  return isDecoderLabel(normalized) ? new TextDecoder(normalized) : null;
+};
+
+/** A decoder for a label this module names itself. */
+const namedDecoder = (label: string): TextDecoder =>
+  decoderFor(label) ?? panic(`The platform has no ${label} decoder`);
 
 type BytePrefix = { bytes: readonly number[]; charset: string };
 
@@ -329,10 +348,10 @@ const prescan = (head: string): string | null => {
 const XML_DECLARATION =
   /^<\?xml[\t\n\r ][^>]*?\bencoding\s*=\s*["'](?<label>[^"']+)["']/u;
 
-const documentDecoder = (bytes: Uint8Array): LabelledTextDecoder | null => {
+const documentDecoder = (bytes: Uint8Array): TextDecoder | null => {
   const utf16 = prefixCharset(bytes, UTF16_XML_PREFIXES);
   if (utf16 !== null) {
-    return new LabelledTextDecoder(utf16);
+    return namedDecoder(utf16);
   }
   // Every other declaration is ASCII, and every charset it can name writes
   // ASCII as ASCII, so a byte-per-character reading finds it.
@@ -342,12 +361,34 @@ const documentDecoder = (bytes: Uint8Array): LabelledTextDecoder | null => {
   // A declaration of UTF-16 in ASCII bytes is not UTF-16; WHATWG reads such
   // a document as UTF-8, and one declaring x-user-defined as windows-1252.
   if (declared?.encoding.startsWith("utf-16") === true) {
-    return new LabelledTextDecoder("utf-8");
+    return namedDecoder("utf-8");
   }
   if (declared?.encoding === "x-user-defined") {
-    return new LabelledTextDecoder("windows-1252");
+    return namedDecoder("windows-1252");
   }
   return declared;
+};
+
+/**
+ * Markup media types: a document of one of these may declare its own charset.
+ * In plain text, Markdown or CSV a `<meta charset>` or `<?xml encoding>` is
+ * content (an example, a quotation), not an instruction.
+ */
+const MARKUP_TYPE =
+  /^(?:text\/html|text\/xml|application\/xml|application\/xhtml\+xml|image\/svg\+xml|application\/[\w.-]+\+xml)$/u;
+
+/** Whether bytes of `contentType`, or of an unknown type, declare their charset. */
+const readsOwnDeclaration = (contentType: string | null): boolean => {
+  // A caller's metadata can lack the type at run time despite its type.
+  if (typeof contentType !== "string") {
+    return true;
+  }
+  const essence = contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  return (
+    essence === "" ||
+    essence === "application/octet-stream" ||
+    MARKUP_TYPE.test(essence)
+  );
 };
 
 export const decodeDeclared = (
@@ -358,7 +399,7 @@ export const decodeDeclared = (
   if (bom !== null) {
     // The platform decoders strip the BOM they were built for.
     return {
-      text: new LabelledTextDecoder(bom).decode(bytes),
+      text: namedDecoder(bom).decode(bytes),
       charset: bom,
       source: "bom",
     };
@@ -373,7 +414,9 @@ export const decodeDeclared = (
   if (http !== null) {
     return { text: http.decode(bytes), charset: http.encoding, source: "http" };
   }
-  const document = documentDecoder(bytes);
+  const document = readsOwnDeclaration(contentType)
+    ? documentDecoder(bytes)
+    : null;
   if (document !== null) {
     return {
       text: document.decode(bytes),
@@ -381,9 +424,5 @@ export const decodeDeclared = (
       source: "document",
     };
   }
-  return {
-    text: new TextDecoder().decode(bytes),
-    charset: "utf-8",
-    source: "default",
-  };
+  return { ...decodeUndeclared(bytes), source: "undeclared" };
 };

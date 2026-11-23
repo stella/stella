@@ -47,6 +47,19 @@ describe("documentFormat", () => {
     expect(documentFormat(mimeType, fileName).kind).toBe(kind);
   });
 
+  test.each([
+    ["application/mbox", "korespondence.mbox"],
+    ["application/mbox", null],
+    ["application/octet-stream", "Doručená pošta.mbox"],
+    ["application/octet-stream", "spis.MBX"],
+  ] as const)("a mailbox stored as %s named %s is an mbox", (type, name) => {
+    expect(documentFormat(type, name)).toEqual({
+      kind: "mbox",
+      mark: "mbox",
+      label: "MBOX",
+    });
+  });
+
   test("uses the email mark for EML and Outlook MSG files", () => {
     expect(kindOf(EML_MIME_TYPE)).toBe("email");
     expect(kindOf(MSG_MIME_TYPE)).toBe("email");

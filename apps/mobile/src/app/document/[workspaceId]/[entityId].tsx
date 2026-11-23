@@ -31,6 +31,7 @@ import {
   FilePartRow,
 } from "@/components/file-part-list";
 import { LegalFilePreviewText } from "@/components/legal-file-preview-text";
+import { MailboxMessages } from "@/components/mailbox-messages";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
 import { useDocumentEditing } from "@/components/use-document-editing";
 import { useOpenDeliveredFile } from "@/components/use-open-delivered-file";
@@ -50,6 +51,7 @@ import {
 import type { OpenedFile } from "@/native/document-files";
 import {
   isOffline,
+  readDocumentEmailPart,
   readDocumentFile,
   readDocumentPart,
   readDocumentPartList,
@@ -106,7 +108,8 @@ const openDocument = async ({
     file.value.viewer === "dataBox" ||
     file.value.viewer === "e-invoice" ||
     file.value.viewer === "structured-document" ||
-    file.value.viewer === "zip"
+    file.value.viewer === "zip" ||
+    file.value.viewer === "mailbox"
   ) {
     return { status: "legalPreview", file: file.value };
   }
@@ -456,6 +459,7 @@ const LegalFilePreview = ({
   const structuredDocument = useTranslations("structuredDocument");
   const eInvoice = useTranslations("eInvoice");
   const fileParts = useTranslations("fileParts");
+  const mailbox = useTranslations("mailbox");
   const { fieldId, preview, viewer } = file;
   const { opening, open: openDelivered } = useOpenDeliveredFile(showPreview);
   const openOriginal = async () => {
@@ -579,7 +583,24 @@ const LegalFilePreview = ({
         return (
           <ContainedFileList
             files={preview.value.files}
+            searchable
             title={fileParts("files")}
+          />
+        );
+      }
+      if (viewer === "mailbox") {
+        return (
+          <MailboxMessages
+            preview={preview.value}
+            readMessage={async (part) =>
+              await readDocumentEmailPart({
+                fetch,
+                source,
+                workspaceId,
+                fieldId,
+                part,
+              })
+            }
           />
         );
       }
@@ -673,6 +694,7 @@ const LegalFilePreview = ({
       ),
       asic: signedFile("unreadable"),
       zip: fileParts("archiveUnreadable"),
+      mailbox: mailbox("unreadable"),
       cades: signedFile("unreadable"),
       email: t(requestFailure),
       "signed-dossier": signedFile("unreadable"),

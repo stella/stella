@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { lazy, Suspense } from "react";
 
 import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -33,6 +33,13 @@ import {
   useRevokeCorrespondenceAddress,
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
+
+// Only a certified email record needs its chip; its strings load with it.
+const CertifiedEmailKindChip = lazy(async () => {
+  const m =
+    await import("@/features/correspondence/certified-email/certified-email-envelope");
+  return { default: m.CertifiedEmailKindChip };
+});
 
 const DataBoxDirectionLabel = ({ basis }: { basis: DataBoxDirectionBasis }) => {
   const t = useTranslations();
@@ -232,6 +239,11 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
                     <DataBoxDirectionLabel
                       basis={item.dataBox.directionBasis}
                     />
+                  )}
+                  {item.channel === "pec" && (
+                    <Suspense fallback={null}>
+                      <CertifiedEmailKindChip kind={item.certifiedEmail.kind} />
+                    </Suspense>
                   )}
                 </span>
                 {item.channel === "data_box" ? (

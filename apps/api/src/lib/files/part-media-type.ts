@@ -87,19 +87,20 @@ const essence = (mediaType: string) =>
 const NOT_TEXT = /[^\P{Cc}\t\n\r]|\uFFFD/u;
 
 /**
- * Whether the bytes are text in the charset they declare: their byte-order
- * mark, else the charset their container states. Only these two count, as
- * they are what a reader decodes the part with; bytes without either are
- * text only where the detector read them as UTF-8.
+ * Whether the bytes are text as `decodeDeclared`, the one reader every
+ * preview and extraction uses, reads them: in their byte-order mark's
+ * charset, else the one their container states, else the one they were most
+ * likely saved in. Bytes it can only read with control or replacement
+ * characters are not text.
  */
 const isDeclaredText = (bytes: Uint8Array, charset: string | null) => {
   if (bytes.byteLength === 0) {
     return false;
   }
-  const { text, source } = decodeDeclared(bytes, {
+  const { text } = decodeDeclared(bytes, {
     contentType: charset === null ? null : `text/plain; charset=${charset}`,
   });
-  return (source === "bom" || source === "http") && !NOT_TEXT.test(text);
+  return !NOT_TEXT.test(text);
 };
 
 type PartMediaTypeClaim = {
@@ -135,7 +136,8 @@ export const partMediaTypeOf = ({
     }),
   );
   if (TEXTUAL_MEDIA_TYPE.test(claimed)) {
-    // The detector reads only UTF-8 as text; other text declares its charset.
+    // The detector reads only UTF-8 as text; the reader also reads a
+    // declared or legacy charset.
     return isDeclaredText(bytes, charset) ? claimed : OPAQUE_EMBEDDED_MIME_TYPE;
   }
   if (claimed === "" || !declaredMimeMatchesMagic(claimed, bytes)) {

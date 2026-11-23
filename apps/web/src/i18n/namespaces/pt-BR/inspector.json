@@ -576,7 +576,9 @@
         "tooLarge": "Grande demais para abrir",
         "unreadable": "Danificado, não pode ser aberto",
         "unsupported": "Compactado de um modo que não pode ser aberto"
-      }
+      },
+      "search": "Encontrar um arquivo por nome ou pasta",
+      "noMatches": "Nenhum arquivo corresponde a “{query}”."
     },
     "firstSourceReached": "Esta é a primeira fonte.",
     "groups": {
@@ -837,6 +839,14 @@
     },
     "showPane": "Mostrar painel",
     "swapViews": "Trocar a visualização principal e o painel lateral",
-    "title": "Inspetor"
+    "title": "Inspetor",
+    "mailbox": {
+      "messages": "Mensagens",
+      "noMatches": "Nenhuma mensagem corresponde a “{query}”.",
+      "noMessages": "Esta caixa de correio não contém mensagens.",
+      "search": "Pesquisar mensagens",
+      "truncated": "Somente as primeiras {count, number} mensagens são exibidas.",
+      "unreadable": "Não foi possível ler esta caixa de correio."
+    }
   }
 }

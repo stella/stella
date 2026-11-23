@@ -13,6 +13,7 @@ import { Result } from "better-result";
 
 import { legalFileFormat } from "@stll/api-contract/document-format";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import { MBOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
 import { captureError } from "@/api/lib/analytics/capture";
@@ -21,11 +22,13 @@ import {
   ExtractionWorkerError,
   extractionWorkerErrorCode,
   SUBPROCESS_TERMINATION_REASON,
+  type SubprocessError,
 } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   DOCUMENT_ARCHIVE_MAX_BYTES,
   isDocumentArchiveMimeType,
+  MAILBOX_TEXT_WORKER_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -204,26 +207,74 @@ export const extractFileTextResult = async (
   });
 
   if (Result.isError(result)) {
-    const termination =
-      result.error.termination === null
-        ? null
-        : {
-            reason: result.error.termination.reason,
-            signalCode: result.error.termination.signalCode,
-          };
-    const error = new ExtractionWorkerError({
-      code: extractionWorkerErrorCode(termination),
-      message: result.error.message,
-      exitCode: result.error.exitCode,
-      mimeType: normalizedMimeType,
-      sizeBytes: buffer.byteLength,
-      termination,
-      workerErrorClass: parseWorkerErrorClass(result.error.message),
-    });
-    return Result.err(error);
+    return Result.err(
+      extractionWorkerError(result.error, {
+        mimeType: normalizedMimeType,
+        sizeBytes: buffer.byteLength,
+      }),
+    );
   }
 
   return Result.ok(result.value || null);
+};
+
+const extractionWorkerError = (
+  error: SubprocessError,
+  { mimeType, sizeBytes }: { mimeType: string; sizeBytes: number },
+) => {
+  const termination =
+    error.termination === null
+      ? null
+      : {
+          reason: error.termination.reason,
+          signalCode: error.termination.signalCode,
+        };
+  return new ExtractionWorkerError({
+    code: extractionWorkerErrorCode(termination),
+    message: error.message,
+    exitCode: error.exitCode,
+    mimeType,
+    sizeBytes,
+    termination,
+    workerErrorClass: parseWorkerErrorClass(error.message),
+  });
+};
+
+/**
+ * A stored mailbox's text, streamed from the store into the worker, which
+ * reads one message at a time: the mailbox is never held whole on either
+ * side, whatever its size.
+ */
+export const extractMailboxStreamText = async ({
+  stream,
+  sizeBytes,
+  fileName,
+  maxChars = LIMITS.extractedContentMaxChars,
+  signal,
+  timeoutMs = LIMITS.extractionTimeoutMs,
+}: {
+  stream: ReadableStream<Uint8Array>;
+  sizeBytes: number;
+  fileName: string;
+  maxChars?: number;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}): Promise<Result<string | null, ExtractionWorkerError>> => {
+  const result = await spawnWorker({
+    workerPath: EXTRACTION_WORKER_PATH,
+    args: [MAILBOX_TEXT_WORKER_MODE, String(maxChars), fileName],
+    ...(signal ? { signal } : {}),
+    stdin: stream,
+    timeoutMs,
+  });
+  return Result.isError(result)
+    ? Result.err(
+        extractionWorkerError(result.error, {
+          mimeType: MBOX_FILE_FORMAT.mimeType,
+          sizeBytes,
+        }),
+      )
+    : Result.ok(result.value || null);
 };
 
 /**

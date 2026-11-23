@@ -396,11 +396,23 @@ const stored = (bytes: Uint8Array, fileName: string, mimeType: string) =>
 
 describe("a part opens as its file's preview lists it", () => {
   test("every format with parts, and every kind of part it has, is exercised", () => {
+    // A part read from the stored object, never from the file's bytes (a
+    // mailbox's message), is exercised against an object store in
+    // `mailbox-file.test.ts` and the content delivery integration test.
     const declared = Object.entries(LEGAL_FILE_PARTS)
       .flatMap(([format, readers]) =>
-        Object.keys(readers).map((kind) => `${format}/${kind}`),
+        Object.entries(readers).flatMap(([kind, reading]) =>
+          reading.from === "bytes" ? [`${format}/${kind}`] : [],
+        ),
       )
       .toSorted();
+    const fromObject = Object.entries(LEGAL_FILE_PARTS).flatMap(
+      ([format, readers]) =>
+        Object.entries(readers).flatMap(([kind, reading]) =>
+          reading.from === "object" ? [`${format}/${kind}`] : [],
+        ),
+    );
+    expect(fromObject).toEqual(["mbox/message"]);
     const exercised = [
       ...new Set(CASES.map(({ format, kind }) => `${format}/${kind}`)),
     ].toSorted();

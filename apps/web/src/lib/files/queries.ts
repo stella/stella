@@ -93,11 +93,14 @@ export const filesKeys = {
   byFieldId: fileContentQueryKey,
   contentByFieldId: fileContentByFieldQueryRoot,
   metadataByFieldId: fileMetadataQueryKey,
-  emailHtmlByFieldId: (key: FileByFieldIdKey) => [
+  emailHtmlByFieldId: (
+    key: FileByFieldIdKey & { part?: string | undefined },
+  ) => [
     ...filesKeys.all(),
     "email-html",
     key.workspaceId,
     key.fieldId,
+    key.part ?? null,
   ],
   officeCitation: ({
     blockId,
@@ -225,14 +228,23 @@ export const dataBoxPreviewOptions = (props: FileOptionsProps) =>
     },
   );
 
-export const emailHtmlPreviewOptions = (props: FileOptionsProps) =>
+/**
+ * An email file's preview, or, with `part`, the preview of an email that is
+ * a part of the file (a mailbox's message, an email in an archive).
+ */
+export const emailHtmlPreviewOptions = (
+  props: FileOptionsProps & { part?: string | undefined },
+) =>
   queryOptions({
     queryKey: filesKeys.emailHtmlByFieldId(props),
     queryFn: async ({ signal }) => {
       const fileRoutes = api.files({ workspaceId: props.workspaceId });
       const response = await fileRoutes["email-html"]({
         fieldId: props.fieldId,
-      }).get({ fetch: { signal } });
+      }).get({
+        query: props.part === undefined ? {} : { part: props.part },
+        fetch: { signal },
+      });
 
       // The answer is the preview and its source, field for field.
       const data: EmailHtmlPreviewData = unwrapApiResponse(response);
@@ -363,12 +375,18 @@ export const textFileOptions = (props: FileOptionsProps) =>
           purpose: "download",
         });
 
+        // Loaded with the file, not the app: the decoder carries the CLDR
+        // letters it weighs an undeclared legacy charset against.
+        const { decodeDeclared } =
+          await import("@stll/mojibake/declared-charset");
         return {
           fileId: data.fileId,
           fileName: data.fileName,
           mimeType: data.mimeType,
           originalMimeType: data.originalMimeType,
-          text: new TextDecoder().decode(buffer),
+          text: decodeDeclared(new Uint8Array(buffer), {
+            contentType: data.originalMimeType,
+          }).text,
         } satisfies TextFileData;
       },
     }),

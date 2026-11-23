@@ -25,6 +25,7 @@ import { xmlDocumentPreviewText } from "@/api/lib/files/e-invoice-text";
 import type { LegalFileReadOptions } from "@/api/lib/files/legal-file-source";
 import { readDataBoxFile } from "@/api/lib/files/read-data-box-file";
 import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
+import { readMailboxContent } from "@/api/lib/files/read-mailbox-file";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
 import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
 import { LIMITS } from "@/api/lib/limits";
@@ -124,6 +125,7 @@ export const LEGAL_FILE_READERS = {
   zep: readSignedDossierContent,
   xadesZep: readSignedDossierContent,
   zip: readZipArchiveContent,
+  mbox: readMailboxContent,
   cades: async (options) => {
     const read = await readLegalFilePreview(
       options,

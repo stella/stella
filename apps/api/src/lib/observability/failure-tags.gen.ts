@@ -352,6 +352,7 @@ export const FAILURE_TAGS = [
   "ManualCallbackParseError",
   "ManualEntitlementRefusedError",
   "MarkedPdfWriteError",
+  "MboxParseError",
   "McpAuthenticationError",
   "McpClientError",
   "McpDiscoveryError",

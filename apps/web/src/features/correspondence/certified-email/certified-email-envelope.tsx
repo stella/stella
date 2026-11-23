@@ -210,3 +210,21 @@ export const CertifiedEmailEnvelope = ({
     <EnvelopeSection envelope={envelope} />
   </certifiedEmailCatalog.Provider>
 );
+
+const KindLabel = ({ kind }: { kind: CertifiedEmailKind }) => {
+  const t = certifiedEmailCatalog.useTranslations();
+  return <>{t(KIND_TITLE_KEYS[kind])}</>;
+};
+
+/** What a certified email record is, as a list chip names its channel. */
+export const CertifiedEmailKindChip = ({
+  kind,
+}: {
+  kind: CertifiedEmailKind;
+}) => (
+  <certifiedEmailCatalog.Provider fallback={null}>
+    <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-xs">
+      <KindLabel kind={kind} />
+    </span>
+  </certifiedEmailCatalog.Provider>
+);
