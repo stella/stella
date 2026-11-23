@@ -820,7 +820,7 @@ export const PromptBar = (props: PromptBarProps) => {
             <div
               className={cn(
                 DOC_FLOAT_SURFACE_CLASS,
-                "border-foreground/15 shadow-floating absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border",
+                "border-foreground/15 shadow-floating absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border pb-2",
               )}
             >
               <ChatDraftAttachmentChips
