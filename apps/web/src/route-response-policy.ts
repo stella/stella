@@ -56,6 +56,8 @@ type ResponseCachePolicyInput = {
 
 type ResponseCachePolicy = {
   cacheControl: string;
+  /** A shared cache may store the response. */
+  shared: boolean;
   /** Headers a shared cache must key on, when it may store the response. */
   vary: string | null;
   indexable: boolean;
@@ -63,6 +65,7 @@ type ResponseCachePolicy = {
 
 const PRIVATE_POLICY = {
   cacheControl: PRIVATE_CACHE_CONTROL,
+  shared: false,
   vary: null,
 } as const;
 
@@ -94,11 +97,17 @@ export const responseCachePolicy = ({
     case "origin-policy":
       return isHtml || routeCacheControl === null
         ? { ...PRIVATE_POLICY, indexable }
-        : { cacheControl: routeCacheControl, vary: null, indexable };
+        : {
+            cacheControl: routeCacheControl,
+            shared: true,
+            vary: null,
+            indexable,
+          };
     case "anonymous-document":
       return isHtml && isAnonymous
         ? {
             cacheControl: ANONYMOUS_DOCUMENT_CACHE_CONTROL,
+            shared: true,
             // The document is rendered in the request's language, and a
             // request with a cookie gets its own private document.
             vary: "Accept-Language, Cookie",

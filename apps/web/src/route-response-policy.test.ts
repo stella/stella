@@ -207,6 +207,7 @@ test("signed-in and app documents are never shared", () => {
         fullPath,
       ).toEqual({
         cacheControl: PRIVATE_CACHE_CONTROL,
+        shared: false,
         vary: null,
         indexable: false,
       });
