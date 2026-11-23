@@ -40,6 +40,15 @@ const storedSchema = v.object({
     v.array(dictationLearnedFixSchema),
     v.maxLength(DICTATION_LEARNED_FIX_LIMITS.fixes),
   ),
+  /**
+   * The id this phone's changes go out under, made with its first change.
+   * Kept in the same entry as `seq`, so the two are only ever lost together:
+   * an id kept with a lost count would number new changes the server already
+   * counted, and it would drop them.
+   */
+  device: v.nullable(v.pipe(v.string(), v.uuid())),
+  /** The number of the last change made here; the next one is one more. */
+  seq: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),
   /** Changes not yet sent, in the order they were made. */
   pending: v.array(dictationLearnedFixChangeSchema),
   /** Everything was deleted here; the server's copy is deleted first. */
@@ -57,6 +66,8 @@ const phoneOnlySchema = v.pipe(
 const EMPTY: Stored = {
   generation: 0,
   fixes: [],
+  device: null,
+  seq: 0,
   pending: [],
   clearPending: false,
 };
@@ -117,22 +128,38 @@ const parseStored = (kept: string | null, newId: () => string): Stored => {
   }
   const phoneOnly = v.safeParse(phoneOnlySchema, json.output);
   return phoneOnly.success
-    ? {
-        ...EMPTY,
-        fixes: phoneOnly.output,
-        pending: withIds(changesRebuilding(phoneOnly.output), newId),
-      }
+    ? queue(
+        { ...EMPTY, fixes: phoneOnly.output },
+        changesRebuilding(phoneOnly.output),
+        newId,
+      )
     : EMPTY;
 };
 
-const withIds = (
+/**
+ * `stored` with `changes` numbered after its last one and kept to send; the
+ * phone's id is made with its first change.
+ */
+const queue = (
+  stored: Stored,
   changes: readonly LearnedFixChange[],
   newId: () => string,
-): DictationLearnedFixChange[] =>
-  changes
-    .map((change) => ({ ...change, id: newId() }))
+): Stored => {
+  const numbered = changes
+    .map((change, index) => ({ ...change, seq: stored.seq + index + 1 }))
     // A change the server would refuse would hold back every later one.
     .filter((change) => v.is(dictationLearnedFixChangeSchema, change));
+  const last = numbered.at(-1);
+  if (last === undefined) {
+    return stored;
+  }
+  return {
+    ...stored,
+    device: stored.device ?? newId(),
+    seq: last.seq,
+    pending: [...stored.pending, ...numbered].slice(-PENDING_LIMIT),
+  };
+};
 
 /** What the phone learned, or nothing when it kept nothing this build reads. */
 export const readLearnedFixes = async (
@@ -202,15 +229,11 @@ export const updateLearnedFixes = async (
 ): Promise<LearnedFix[]> =>
   (
     await rewrite(store, signIn, newId, (kept) => {
-      const changes = withIds(learn(kept.fixes), newId);
-      if (changes.length === 0) {
-        return kept;
-      }
-      return {
-        ...kept,
-        fixes: applyLearnedFixChanges(kept.fixes, changes),
-        pending: [...kept.pending, ...changes].slice(-PENDING_LIMIT),
-      };
+      const next = queue(kept, learn(kept.fixes), newId);
+      const added = next.pending.filter(({ seq }) => seq > kept.seq);
+      return added.length === 0
+        ? kept
+        : { ...next, fixes: applyLearnedFixChanges(kept.fixes, added) };
     })
   ).fixes;
 
@@ -229,6 +252,9 @@ export const deleteLearnedFixes = async (
     (kept) => ({
       ...EMPTY,
       generation: kept.generation,
+      // The count goes on: the server knows this phone's earlier numbers.
+      device: kept.device,
+      seq: kept.seq,
       clearPending: true,
     }),
   );
@@ -255,13 +281,14 @@ type SyncOptions = {
 const SYNC_ROUNDS = 5;
 
 type Asked =
-  | { readonly method: "DELETE" }
+  | { readonly method: "DELETE"; readonly generation: number }
   | {
       readonly method: "POST";
       readonly generation: number;
+      readonly device: string;
       readonly changes: readonly DictationLearnedFixChange[];
     }
-  | { readonly method: "GET" };
+  | { readonly method: "GET"; readonly generation: number };
 
 const ask = async (
   { fetch, source }: SyncOptions,
@@ -270,12 +297,21 @@ const ask = async (
   const answered = await requestApi({
     fetch,
     source,
-    path: DICTATION_LEARNED_FIXES_PATH,
+    // A deletion names the generation it deletes, so a retried one cannot
+    // take what another device learned after it.
+    path:
+      asked.method === "DELETE"
+        ? `${DICTATION_LEARNED_FIXES_PATH}?generation=${String(asked.generation)}`
+        : DICTATION_LEARNED_FIXES_PATH,
     schema: dictationLearnedFixesSchema,
     method: asked.method,
     ...(asked.method === "POST"
       ? {
-          body: { generation: asked.generation, changes: asked.changes },
+          body: {
+            generation: asked.generation,
+            device: asked.device,
+            changes: asked.changes,
+          },
         }
       : {}),
   });
@@ -286,14 +322,15 @@ const ask = async (
 /** Which request a sync round makes for what is stored. */
 const nextAsk = (stored: Stored): Asked => {
   if (stored.clearPending) {
-    return { method: "DELETE" };
+    return { method: "DELETE", generation: stored.generation };
   }
-  if (stored.pending.length === 0) {
-    return { method: "GET" };
+  if (stored.pending.length === 0 || stored.device === null) {
+    return { method: "GET", generation: stored.generation };
   }
   return {
     method: "POST",
     generation: stored.generation,
+    device: stored.device,
     changes: stored.pending.slice(
       0,
       DICTATION_LEARNED_FIX_LIMITS.changesPerRequest,
@@ -315,16 +352,22 @@ const afterAnswer = (
   if (asked.method !== "DELETE" && kept.clearPending) {
     return kept;
   }
-  if (asked.method === "POST" && answer.generation !== asked.generation) {
-    // Deleted on another device: what was learned here before went with it.
-    return { ...EMPTY, generation: answer.generation, fixes: answer.fixes };
+  if (asked.method !== "DELETE" && answer.generation !== asked.generation) {
+    // Deleted on another device: what was learned here before went with it,
+    // also what was learned while this request was out.
+    return {
+      ...EMPTY,
+      generation: answer.generation,
+      fixes: answer.fixes,
+      device: kept.device,
+      seq: kept.seq,
+    };
   }
-  const sent = new Set(
-    asked.method === "POST" ? asked.changes.map(({ id }) => id) : [],
-  );
+  const sent = asked.method === "POST" ? (asked.changes.at(-1)?.seq ?? 0) : 0;
   // Changes made since the request went out, or after a deletion here.
-  const pending = kept.pending.filter(({ id }) => !sent.has(id));
+  const pending = kept.pending.filter(({ seq }) => seq > sent);
   return {
+    ...kept,
     generation: answer.generation,
     fixes:
       pending.length === 0

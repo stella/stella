@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
 import { applyLearnedFixChanges } from "@stll/transcript/learned-fixes";
-import type { LearnedFix } from "@stll/transcript/learned-fixes";
+import type {
+  LearnedFix,
+  LearnedFixChange,
+} from "@stll/transcript/learned-fixes";
 
 import type { Fetch } from "@/connection/http";
 import {
@@ -82,42 +85,80 @@ const sourceFor = (fetch: Fetch, session: StoredSession) => {
   });
 };
 
-type Sent = { readonly method: string; readonly body: unknown };
+type Sent = {
+  readonly method: string;
+  readonly url: string;
+  readonly body: unknown;
+};
 
-/** The account's copy on the server, changed as the API changes it. */
+type SentChanges = {
+  generation: number;
+  device: string;
+  changes: (LearnedFixChange & { seq: number })[];
+};
+
+const isSentChanges = (body: unknown): body is SentChanges =>
+  typeof body === "object" &&
+  body !== null &&
+  "generation" in body &&
+  "device" in body &&
+  "changes" in body &&
+  Array.isArray(body.changes);
+
+const PATH = "https://stella.example.com/v1/dictation/learned-fixes";
+
+/**
+ * The account's copy on the server, changed as the API changes it: each
+ * device's changes apply above the highest number applied from it, and a
+ * deletion applies only to the generation it names.
+ */
 const fakeServer = (start: { generation: number; fixes: LearnedFix[] }) => {
-  const held = { ...start, seenIds: new Set<string>() };
+  const held = { ...start, devices: new Map<string, number>() };
   const sent: Sent[] = [];
   let status = 200;
+  /** Requests applied, but answered as failed, as when the answer is lost. */
+  let lost = 0;
+  /** Runs while a GET is out, before the server answers it. */
+  let whileReading: (() => Promise<void>) | undefined;
   const fetch: Fetch = async (url, init) => {
-    expect(url).toBe("https://stella.example.com/v1/dictation/learned-fixes");
     const method = init?.method ?? "GET";
+    const target = new URL(String(url));
+    expect(`${target.origin}${target.pathname}`).toBe(PATH);
     const body: unknown =
       typeof init?.body === "string" ? JSON.parse(init.body) : undefined;
-    sent.push({ method, body });
+    sent.push({ method, url: String(url), body });
     if (status !== 200) {
       return Response.json({ message: "no" }, { status });
     }
-    if (method === "DELETE") {
+    if (method === "GET" && whileReading !== undefined) {
+      const run = whileReading;
+      whileReading = undefined;
+      await run();
+    }
+    if (
+      method === "DELETE" &&
+      target.searchParams.get("generation") === String(held.generation)
+    ) {
       held.generation += 1;
       held.fixes = [];
+      held.devices.clear();
     }
     if (
       method === "POST" &&
-      typeof body === "object" &&
-      body !== null &&
-      "generation" in body &&
-      "changes" in body &&
-      Array.isArray(body.changes) &&
+      isSentChanges(body) &&
       body.generation === held.generation
     ) {
-      const fresh = body.changes.filter(
-        (change: { id: string }) => !held.seenIds.has(change.id),
-      );
-      for (const { id } of fresh) {
-        held.seenIds.add(id);
+      const applied = held.devices.get(body.device) ?? 0;
+      const fresh = body.changes.filter(({ seq }) => seq > applied);
+      const last = fresh.at(-1);
+      if (last !== undefined) {
+        held.devices.set(body.device, last.seq);
+        held.fixes = applyLearnedFixChanges(held.fixes, fresh);
       }
-      held.fixes = applyLearnedFixChanges(held.fixes, fresh);
+    }
+    if (lost > 0) {
+      lost -= 1;
+      return Response.json({ message: "gone" }, { status: 502 });
     }
     return Response.json({ generation: held.generation, fixes: held.fixes });
   };
@@ -127,6 +168,12 @@ const fakeServer = (start: { generation: number; fixes: LearnedFix[] }) => {
     sent,
     refuse: (next: number) => {
       status = next;
+    },
+    loseNextAnswer: () => {
+      lost += 1;
+    },
+    whileNextRead: (run: () => Promise<void>) => {
+      whileReading = run;
     },
   };
 };
@@ -283,6 +330,81 @@ describe("syncing learned fixes with the person's other devices", () => {
     server.refuse(200);
     expect(await syncLearnedFixes(options)).toEqual([FIX]);
     expect(server.held.fixes).toEqual([FIX]);
+  });
+
+  test("changes whose answer was lost are applied once when sent again", async () => {
+    const { store } = memoryStore();
+    const session = signIn();
+    const server = fakeServer({ generation: 0, fixes: [] });
+    const options = {
+      store,
+      fetch: server.fetch,
+      source: sourceFor(server.fetch, session),
+      newId: ids(),
+    } as const;
+    await updateLearnedFixes(store, session, ids(), () => [
+      { type: "corrected", from: "stela", to: "stella" },
+    ]);
+    server.loseNextAnswer();
+    expect(await syncLearnedFixes(options)).toBeUndefined();
+    expect(await syncLearnedFixes(options)).toEqual([
+      { from: "stela", to: "stella", seen: 1, status: "learning" },
+    ]);
+    const posts = server.sent.filter(({ method }) => method === "POST");
+    expect(posts.map(({ body }) => body)).toEqual([
+      posts[0]?.body,
+      posts[0]?.body,
+    ]);
+  });
+
+  test("a deletion sent again after its answer was lost leaves what was learned since", async () => {
+    const { store } = memoryStore();
+    const session = signIn();
+    const server = fakeServer({ generation: 0, fixes: [FIX] });
+    const options = {
+      store,
+      fetch: server.fetch,
+      source: sourceFor(server.fetch, session),
+      newId: ids(),
+    } as const;
+    await deleteLearnedFixes(store, session);
+    server.loseNextAnswer();
+    expect(await syncLearnedFixes(options)).toBeUndefined();
+    // Another device learns after the deletion went through.
+    const other = {
+      from: "Novakovi",
+      to: "Novákovi",
+      seen: 1,
+      status: "on",
+    } as const;
+    server.held.fixes = [other];
+    expect(await syncLearnedFixes(options)).toEqual([other]);
+    expect(server.held).toMatchObject({ generation: 1, fixes: [other] });
+    expect(
+      server.sent
+        .filter(({ method }) => method === "DELETE")
+        .map(({ url }) => new URL(url).searchParams.get("generation")),
+    ).toEqual(["0", "0"]);
+  });
+
+  test("a read that finds another device's deletion drops what was learned here while it was out", async () => {
+    const { store } = memoryStore();
+    const session = signIn();
+    const server = fakeServer({ generation: 3, fixes: [] });
+    const options = {
+      store,
+      fetch: server.fetch,
+      source: sourceFor(server.fetch, session),
+      newId: ids(),
+    } as const;
+    server.whileNextRead(async () => {
+      await updateLearnedFixes(store, session, ids(), () => [TAUGHT]);
+    });
+    expect(await syncLearnedFixes(options)).toEqual([]);
+    expect(await readLearnedFixes(store, session)).toEqual([]);
+    await syncLearnedFixes(options);
+    expect(server.sent.map(({ method }) => method)).toEqual(["GET", "GET"]);
+    expect(server.held.fixes).toEqual([]);
   });
 
   test("fixes an earlier build kept on the phone alone are sent once", async () => {
