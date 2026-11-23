@@ -254,18 +254,17 @@ export const fetchPublicSitemapDecisions = async ({
     publicCaseLawPageCountryFromParam(shard.country) === null
       ? null
       : await fetchImpl(url, { signal });
-  if (response === null) {
-    throw new SitemapNotFoundError({
-      action: "fetchPublicCaseLawSitemap",
-      message: "The case-law sitemap shard is not published.",
-    });
-  }
-  if (!response.ok) {
-    throw classifySitemapUpstreamFailure({
-      action: "fetchPublicCaseLawSitemap",
-      addressesShard: true,
-      response,
-    });
+  if (response === null || !response.ok) {
+    throw response === null
+      ? new SitemapNotFoundError({
+          action: "fetchPublicCaseLawSitemap",
+          message: "The case-law sitemap shard is not published.",
+        })
+      : classifySitemapUpstreamFailure({
+          action: "fetchPublicCaseLawSitemap",
+          addressesShard: true,
+          response,
+        });
   }
 
   const parseResult = v.safeParse(
