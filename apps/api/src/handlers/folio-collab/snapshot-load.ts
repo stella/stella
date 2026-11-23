@@ -11,6 +11,7 @@ import { ACCOUNT_ACCESS, createSafeTokenHandler } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
+  type FolioCollabSnapshotTarget,
   loadFolioCollabSnapshot,
   readFolioCollabSeedDocx,
 } from "@/api/lib/folio-collab-rooms";
@@ -32,6 +33,23 @@ const config = {
   }),
 } satisfies TokenHandlerConfig;
 
+/** The DOCX the room's authority reads revision 0 from, as base64. */
+const readSeedDocxBase64 = async (
+  room: FolioCollabSnapshotTarget,
+): Promise<Result<string, HandlerError>> => {
+  const seedDocx = await readFolioCollabSeedDocx(room);
+  if (seedDocx === null) {
+    return Result.err(
+      new HandlerError({
+        code: "folio_collab_seed_unavailable",
+        status: 409,
+        message: "Collaborative room source file is no longer available.",
+      }),
+    );
+  }
+  return Result.ok(Buffer.from(seedDocx).toBase64());
+};
+
 const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
   config,
   verifyFolioCollabServiceCaller,
@@ -50,28 +68,17 @@ const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
       );
     }
     const { snapshot } = stored;
-    if (snapshot.loadOutcome !== FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded) {
-      return Result.ok(snapshot);
-    }
-
-    // The room's authority reads revision 0 from the DOCX it was seeded from.
-    const seedDocx = await readFolioCollabSeedDocx(value);
-    if (seedDocx === null) {
-      return Result.err(
-        new HandlerError({
-          code: "folio_collab_seed_unavailable",
-          status: 409,
-          message: "Collaborative room source file is no longer available.",
-        }),
-      );
-    }
-    return Result.ok({
-      loadOutcome: snapshot.loadOutcome,
-      generation: snapshot.generation,
-      seedDocxBase64: Buffer.from(seedDocx).toBase64(),
-      snapshotBase64: snapshot.snapshotBase64,
-      snapshotRevision: snapshot.snapshotRevision,
-    } satisfies FolioCollabSnapshotLoadResponse);
+    const response: FolioCollabSnapshotLoadResponse =
+      snapshot.loadOutcome === FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded
+        ? {
+            loadOutcome: snapshot.loadOutcome,
+            generation: snapshot.generation,
+            seedDocxBase64: yield* Result.await(readSeedDocxBase64(value)),
+            snapshotBase64: snapshot.snapshotBase64,
+            snapshotRevision: snapshot.snapshotRevision,
+          }
+        : snapshot;
+    return Result.ok(response);
   },
 );
 
