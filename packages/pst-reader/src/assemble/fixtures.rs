@@ -222,6 +222,7 @@ pub fn law_firm() -> Mailbox {
     Mailbox {
         display_name: "Petra Vlková".to_owned(),
         search_folder: true,
+        leading_search_folders: 0,
         folders: vec![
             MailFolder {
                 name: "Doručená pošta".to_owned(),
@@ -294,6 +295,7 @@ pub fn large(count: usize, folders: usize, attachment_bytes: usize) -> Mailbox {
     Mailbox {
         display_name: "Generated mailbox".to_owned(),
         search_folder: false,
+        leading_search_folders: 0,
         folders: buckets
             .into_iter()
             .enumerate()

@@ -183,7 +183,7 @@ describe("an Outlook mailbox", () => {
     expect(short).toHaveLength(120);
   });
 
-  test("a stored mailbox is written to a private file that is removed after", async () => {
+  test("a stored mailbox is read from a private file that has no name on disk", async () => {
     const bytes = pstFixture("law-firm.pst");
     const before = readdirSync(tmpdir()).filter((name) =>
       name.startsWith("stella-pst-"),
@@ -194,10 +194,18 @@ describe("an Outlook mailbox", () => {
         yield bytes.subarray(1000);
       })(),
       bytes.byteLength,
-      async (open) =>
-        await Promise.resolve(
+      async (open) => {
+        // Already while it is read, nothing of it is left on disk: a worker
+        // killed now leaves nothing behind.
+        expect(
+          readdirSync(tmpdir()).filter((name) =>
+            name.startsWith("stella-pst-"),
+          ),
+        ).toEqual(before);
+        return await Promise.resolve(
           readPstEntries(open(LATER()), LAW_FIRM_MAILBOX_NAME),
-        ),
+        );
+      },
     );
     expect(listed.unwrap().unwrap().entries).toHaveLength(9);
     const tooLarge = await withPstFile(

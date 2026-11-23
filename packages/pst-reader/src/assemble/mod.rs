@@ -24,8 +24,13 @@ mod node_type {
 }
 
 const NID_MESSAGE_STORE: u32 = 0x21;
-/// The index the search folder's row names.
+/// The index the search folder's row names; leading search folders name
+/// the indexes below it.
 const SEARCH_FOLDER_INDEX: u32 = 0x3FF;
+
+fn is_search_folder(index: u32) -> bool {
+    (SEARCH_FOLDER_INDEX - 0xFF..=SEARCH_FOLDER_INDEX).contains(&index)
+}
 const NID_ROOT_FOLDER: u32 = 0x122;
 const NID_ATTACHMENT_TABLE: u32 = 0x671;
 const NID_RECIPIENT_TABLE: u32 = 0x692;
@@ -82,6 +87,9 @@ pub struct Mail {
     /// What the contents table claims the message's size is; by default
     /// the bytes its bodies and attachments take.
     pub claimed_size: Option<i32>,
+    /// Writes the subject in the message's contents-table row as a value
+    /// whose reference names nothing: a row that cannot be read.
+    pub damaged_row: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -102,6 +110,8 @@ pub struct Mailbox {
     /// Lists a search folder among the top folder's subfolders, as Outlook
     /// keeps its search folders: a view of messages filed elsewhere.
     pub search_folder: bool,
+    /// Search folders listed before the top folder's own subfolders.
+    pub leading_search_folders: u32,
 }
 
 const HIERARCHY_COLUMNS: &[Column] = &[
@@ -275,7 +285,9 @@ impl Mail {
             ),
             (0x3008, Value::Time(self.sent)),
         ];
-        if let Some(subject) = &self.subject {
+        if self.damaged_row {
+            row.push((0x0037, Value::Dangling(UNICODE)));
+        } else if let Some(subject) = &self.subject {
             row.push((0x0037, text(subject)));
         }
         let shown = |kind: i32| {
@@ -364,7 +376,7 @@ impl Writer {
         let hierarchy: Vec<(u32, Vec<(u16, Value)>)> = children
             .iter()
             .map(|(child, folder)| {
-                let kind = if *child == SEARCH_FOLDER_INDEX {
+                let kind = if is_search_folder(*child) {
                     node_type::SEARCH_FOLDER
                 } else {
                     node_type::NORMAL_FOLDER
@@ -607,7 +619,10 @@ pub fn assemble(mailbox: &Mailbox) -> Vec<u8> {
         name: "Nepřečtená pošta".to_owned(),
         ..MailFolder::default()
     };
-    let mut child_refs = child_refs;
+    let leading: Vec<(u32, &MailFolder)> = (1..=mailbox.leading_search_folders)
+        .map(|offset| (SEARCH_FOLDER_INDEX - offset, &search))
+        .collect();
+    let mut child_refs = [leading, child_refs].concat();
     if mailbox.search_folder {
         // A search folder's row: a node of `NID_TYPE_SEARCH_FOLDER`, which
         // the walk never opens as a folder of its own.

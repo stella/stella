@@ -169,6 +169,29 @@ describe("createPstReader", () => {
     ).toThrow("limits must be positive integers");
   });
 
+  test("a host read cannot start another reading", () => {
+    const bytes = fixture("law-firm.pst");
+    const other = open(bytes);
+    const nested: PstRead<unknown>[] = [];
+    const reentrant: PstHostFile = {
+      size: bytes.byteLength,
+      readAt: (offset, buffer) => {
+        if (nested.length === 0) {
+          nested.push(reader.open(inMemory(bytes), LIMITS), other.list());
+          other.close();
+        }
+        return inMemory(bytes).readAt(offset, buffer);
+      },
+    };
+    const mailbox = read(reader.open(reentrant, LIMITS));
+    expect(nested.map((result) => result.type)).toEqual(["failed", "failed"]);
+    // The outer reading is unaffected, and the close took effect after it.
+    expect(read(mailbox.list()).messages).toHaveLength(9);
+    expect(other.list()).toMatchObject({ type: "failed" });
+    mailbox.close();
+    expect(read(open(bytes).list()).messages).toHaveLength(9);
+  });
+
   test("a closed mailbox's memory is released", () => {
     const mailbox = open(fixture("law-firm.pst"));
     read(mailbox.list());

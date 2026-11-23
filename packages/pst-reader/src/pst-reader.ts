@@ -140,6 +140,19 @@ const instance = {
   loaded: false,
   /** Mailboxes open in the current instance. */
   open: new Set<WasmPstMailbox>(),
+  /**
+   * A call into the module is running. A host read runs inside it, and an
+   * operation that read started would enter the module again: a trap there
+   * would replace the instance the outer call is still running in.
+   */
+  reading: false,
+  /** Mailboxes closed by a host read, released once the call returns. */
+  closing: new Set<WasmPstMailbox>(),
+};
+
+const REENTERED: PstRefusal = {
+  type: "failed",
+  message: "The reader is already reading: a host read cannot start another",
 };
 
 /**
@@ -184,7 +197,16 @@ export const createPstReader = (
       instance.generation += 1;
     }
   };
+  /**
+   * Runs one call into the module. A call made while another runs (from a
+   * host read) is refused before it reaches the module, so every call ends
+   * against the instance it entered.
+   */
   const guarded = <T>(read: () => PstRead<T>): PstRead<T> => {
+    if (instance.reading) {
+      return REENTERED;
+    }
+    instance.reading = true;
     try {
       return read();
     } catch (error) {
@@ -193,6 +215,15 @@ export const createPstReader = (
       }
       discardInstance();
       return { type: "failed", message: error.message };
+    } finally {
+      instance.reading = false;
+      for (const mailbox of instance.closing) {
+        // A trap forgot the instance's mailboxes; the others are released.
+        if (instance.open.delete(mailbox)) {
+          mailbox.free();
+        }
+      }
+      instance.closing.clear();
     }
   };
   const outcome = <T>(
@@ -250,10 +281,16 @@ export const createPstReader = (
                   )
                 : gone(),
             close: () => {
-              if (live()) {
-                instance.open.delete(mailbox);
-                mailbox.free();
+              if (!live()) {
+                return;
               }
+              // Released when the running call returns, never inside it.
+              if (instance.reading) {
+                instance.closing.add(mailbox);
+                return;
+              }
+              instance.open.delete(mailbox);
+              mailbox.free();
             },
           },
         };

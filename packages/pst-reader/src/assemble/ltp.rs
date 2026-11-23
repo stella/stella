@@ -30,7 +30,14 @@ pub enum Value {
         node: u32,
         size: u32,
     },
+    /// A table value of the given type whose reference names no heap item:
+    /// a damaged row.
+    Dangling(u16),
 }
+
+/// The reference a [`Value::Dangling`] row value holds: the last item of a
+/// heap page no table has.
+const DANGLING_REFERENCE: u32 = 0x7FF << 5;
 
 impl Value {
     pub fn prop_type(&self) -> u16 {
@@ -44,6 +51,7 @@ impl Value {
             Self::String8(_) => 0x001E,
             Self::Binary(_) => 0x0102,
             Self::Object { .. } => 0x000D,
+            Self::Dangling(kind) => *kind,
         }
     }
 
@@ -60,6 +68,7 @@ impl Value {
                 bytes.extend_from_slice(&size.to_le_bytes());
                 bytes
             }
+            Self::Dangling(_) => Vec::new(),
         }
     }
 
@@ -353,6 +362,7 @@ pub fn table_context(
             let bytes = match value {
                 Value::Integer64(_) | Value::Time(_) => value.bytes(),
                 Value::Integer16(_) | Value::Integer32(_) | Value::Boolean(_) => value.bytes(),
+                Value::Dangling(_) => DANGLING_REFERENCE.to_le_bytes().to_vec(),
                 _ => heap.reference(&value, ndb, subnodes).to_le_bytes().to_vec(),
             };
             row[*at..*at + usize::from(*size)].copy_from_slice(&bytes[..usize::from(*size)]);

@@ -331,6 +331,28 @@ describe("a part that is itself a container", () => {
     expect(new TextDecoder().decode(message.bytes)).toContain(
       "Subject: =?UTF-8?B?",
     );
+    // A later message opens on its own, past one whose row is over the bound.
+    const last = LAW_FIRM_MESSAGES.length - 1;
+    const closing = (
+      await readPartOfFile(
+        source,
+        { kind: FILE_PART_KINDS.message, index: last, within: member(0) },
+        "ibm437",
+      )
+    ).unwrap();
+    expect(closing.fileName).toBe(LAW_FIRM_MESSAGES[last].fileName);
+    // The message over the bound and one past the end have no part to open.
+    for (const index of [6, LAW_FIRM_MESSAGES.length]) {
+      expect(
+        (
+          await readPartOfFile(
+            source,
+            { kind: FILE_PART_KINDS.message, index, within: member(0) },
+            "ibm437",
+          )
+        ).isErr(),
+      ).toBe(true);
+    }
     const notes = (
       await readPartOfFile(
         source,

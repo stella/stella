@@ -382,8 +382,12 @@ pub struct Mailbox {
     store: PstStore,
     meter: Rc<Meter>,
     limits: Limits,
-    /// The complete list, once walked.
+    /// The last list walked.
     listing: Option<Listing>,
+    /// Whether `listing` is the mailbox's list for every later operation:
+    /// not when the budget stopped its walk, which a later walk with a
+    /// fresh budget may finish.
+    listing_final: bool,
 }
 
 impl Mailbox {
@@ -397,7 +401,10 @@ impl Mailbox {
     /// walk's budget.
     pub fn open<S: Source + 'static>(mut source: S, limits: Limits) -> Result<Self, Refusal> {
         // `wVer`: 14 and 15 are the 32-bit (ANSI) layout, 23 the 64-bit
-        // (Unicode) one ([MS-PST] 2.2.2.6).
+        // (Unicode) one ([MS-PST] 2.2.2.6). The other Unicode versions, 36
+        // (4 KiB pages, as newer offline stores use) and 37 (written by an
+        // Outlook that can protect its data), are not read: the reading
+        // library reads 14, 15 and 23 only, so they are unreadable here.
         let mut version = [0_u8; 2];
         match source.read_at(10, &mut version) {
             Ok(2) => {}
@@ -423,6 +430,7 @@ impl Mailbox {
                 meter,
                 limits,
                 listing: None,
+                listing_final: false,
             }),
             Err(_) => Err(match meter.exhausted() {
                 Some(_) => Refusal::Exhausted,
@@ -432,16 +440,18 @@ impl Mailbox {
     }
 
     /// The mailbox's folders and messages, in walk order, at most
-    /// `max_messages` of them.
+    /// `max_messages` of them. A list the budget stopped is this call's
+    /// only: the next call walks again with a fresh budget.
     ///
     /// # Errors
     ///
     /// [`Refusal::Unreadable`] when not even the top folder can be read.
     pub fn list(&mut self) -> Result<&Listing, Refusal> {
-        if self.listing.is_none() {
+        if !self.listing_final {
             self.meter
                 .start(self.limits.max_walk_bytes, self.limits.max_reads);
             let listing = self.walk(None)?;
+            self.listing_final = self.meter.exhausted().is_none();
             self.listing = Some(listing);
         }
         self.listing.as_ref().ok_or(Refusal::Unreadable)
@@ -455,7 +465,7 @@ impl Mailbox {
     /// for a message over its bounds, [`Refusal::Unreadable`] for one that
     /// cannot be read, [`Refusal::Exhausted`] past the host-read budget.
     pub fn message(&mut self, index: usize) -> Result<MessageBody, Refusal> {
-        let row = match &self.listing {
+        let row = match self.listing.as_ref().filter(|_| self.listing_final) {
             Some(listing) => listing.messages.get(index).cloned(),
             None => {
                 self.meter
@@ -564,10 +574,14 @@ impl Mailbox {
                         listing.truncated = true;
                         return Ok(listing);
                     }
-                    // The rows before the one that failed are listed.
+                    // The rows before the one that failed are listed, and
+                    // the folder's subfolders are still walked unless the
+                    // budget is what failed.
                     RowsEnd::Failed => {
                         listing.truncated = true;
-                        continue;
+                        if self.meter.exhausted().is_some() {
+                            break;
+                        }
                     }
                 }
             } else if self.meter.exhausted().is_some() {
@@ -583,15 +597,17 @@ impl Mailbox {
                 }
                 continue;
             };
-            let Ok((children, _)) = table_rows(hierarchy.as_ref(), &[], limits.max_folders) else {
+            // Only folders count against the bound: a search folder's row
+            // is never walked. Subfolders past the bound, or past a row
+            // that cannot be read, are left out, and the list says so.
+            let (children, end) =
+                table_rows_where(hierarchy.as_ref(), &[], limits.max_folders, |node| {
+                    node_type(node) == Some(NodeIdType::NormalFolder)
+                });
+            if end != RowsEnd::Complete {
                 listing.truncated = true;
-                continue;
-            };
-            let children: Vec<u32> = children
-                .into_iter()
-                .map(|(node, _)| node)
-                .filter(|node| node_type(*node) == Some(NodeIdType::NormalFolder))
-                .collect();
+            }
+            let children: Vec<u32> = children.into_iter().map(|(node, _)| node).collect();
             if children.is_empty() {
                 continue;
             }

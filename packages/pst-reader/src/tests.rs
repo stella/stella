@@ -259,6 +259,7 @@ fn a_message_larger_than_it_claims_is_stopped_at_the_bound() -> Result<(), Refus
     let bytes = assemble::assemble(&assemble::Mailbox {
         display_name: "x".to_owned(),
         search_folder: false,
+        leading_search_folders: 0,
         folders: vec![MailFolder {
             name: "Inbox".to_owned(),
             messages: vec![big],
@@ -296,6 +297,7 @@ fn one_attachment(bytes: usize, claimed: Option<i32>) -> Vec<u8> {
     assemble::assemble(&assemble::Mailbox {
         display_name: "x".to_owned(),
         search_folder: false,
+        leading_search_folders: 0,
         folders: vec![MailFolder {
             name: "Inbox".to_owned(),
             messages: vec![Mail {
@@ -600,4 +602,115 @@ fn the_wire_layout_round_trips_sizes() -> Result<(), Refusal> {
     assert_eq!(&encoded[..4], wire::LISTING_MAGIC);
     assert_eq!(encoded.last(), Some(&0));
     Ok(())
+}
+
+#[test]
+fn unicode_versions_the_library_does_not_read_are_unreadable() {
+    for version in [36_u16, 37] {
+        let mut bytes = law_firm();
+        bytes[10..12].copy_from_slice(&version.to_le_bytes());
+        assert!(matches!(open(bytes, LIMITS), Err(Refusal::Unreadable)));
+    }
+}
+
+#[test]
+fn search_folders_take_no_place_in_the_folder_bound() -> Result<(), Refusal> {
+    let mut mailbox = fixtures::law_firm();
+    mailbox.leading_search_folders = 3;
+    let bytes = assemble::assemble(&mailbox);
+    assert_eq!(
+        listing(bytes.clone(), LIMITS)?,
+        listing(law_firm(), LIMITS)?
+    );
+    let few = listing(
+        bytes,
+        Limits {
+            max_folders: 3,
+            ..LIMITS
+        },
+    )?;
+    assert_eq!(few.folders.len(), 3);
+    assert!(few.truncated);
+    Ok(())
+}
+
+#[test]
+fn a_damaged_message_row_leaves_its_folders_subfolders_listed() -> Result<(), Refusal> {
+    let mut mailbox = fixtures::law_firm();
+    // The inbox's last message; the inbox's subfolders hold two more.
+    let inbox = &mut mailbox.folders[0];
+    let last = inbox.messages.len() - 1;
+    inbox.messages[last].damaged_row = true;
+    let listing = listing(assemble::assemble(&mailbox), LIMITS)?;
+    assert!(listing.truncated);
+    let folders: Vec<String> = listing
+        .messages
+        .iter()
+        .map(|message| folder_path(&listing, message.folder))
+        .collect();
+    assert_eq!(
+        folders,
+        [
+            "Doručená pošta",
+            "Doručená pošta",
+            "Doručená pošta",
+            "Doručená pošta",
+            "Doručená pošta/Klienti/Fiktivní stavby",
+            "Doručená pošta/Klienti/Fiktivní stavby",
+            "Odeslaná pošta",
+            "Archiv/2023",
+        ]
+    );
+    Ok(())
+}
+
+/// A host whose reads the test grants: it stops answering when `left`
+/// runs out, and answers again once the test grants more.
+struct Granted {
+    bytes: Vec<u8>,
+    left: std::rc::Rc<std::cell::Cell<usize>>,
+}
+
+impl Source for Granted {
+    fn size(&self) -> u64 {
+        self.bytes.len() as u64
+    }
+
+    fn read_at(&mut self, offset: u64, buffer: &mut [u8]) -> std::io::Result<usize> {
+        let left = self.left.get();
+        if left == 0 {
+            return Err(std::io::Error::other("deadline"));
+        }
+        self.left.set(left - 1);
+        self.bytes.read_at(offset, buffer)
+    }
+}
+
+#[test]
+fn a_list_the_host_stopped_is_walked_again() -> Result<(), Refusal> {
+    for reads in 1..400 {
+        let left = std::rc::Rc::new(std::cell::Cell::new(reads));
+        let Ok(mut mailbox) = Mailbox::open(
+            Granted {
+                bytes: law_firm(),
+                left: left.clone(),
+            },
+            LIMITS,
+        ) else {
+            continue;
+        };
+        if !matches!(mailbox.list(), Ok(listing) if listing.truncated) {
+            continue;
+        }
+        // The host answers again: the next call walks with a fresh budget.
+        left.set(usize::MAX);
+        let again = mailbox.list()?;
+        assert_eq!(again.messages.len(), 9);
+        assert!(!again.truncated);
+        // A complete list is kept: it takes no further read.
+        left.set(0);
+        assert_eq!(mailbox.list()?.messages.len(), 9);
+        return Ok(());
+    }
+    Err(Refusal::NoMessage)
 }

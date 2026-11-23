@@ -4,6 +4,13 @@
 # parallel, and two rustup installs of the same toolchain at once leave it
 # half installed, so the pinned toolchain (with its targets and components)
 # is installed first under one lock per toolchain.
+#
+# The lock is an exclusive lock on a file, held on a descriptor the
+# installer inherits: the system releases it once the installer and its
+# holder have both ended, however they end. No lock outlives its installer,
+# and no caller ever removes one. Perl holds it (it ships with macOS and
+# every Debian and Ubuntu image the tests run on; `flock(1)` is not on
+# macOS).
 set -euo pipefail
 
 if [[ ! -f rust-toolchain.toml ]]; then
@@ -13,22 +20,15 @@ fi
 channel="$(sed -n 's/^channel = "\([^"]*\)"/\1/p' rust-toolchain.toml)"
 readonly channel
 readonly lock="${TMPDIR:-/tmp}/stella-rust-toolchain-${channel}.lock"
-# A lock left by a killed run is taken over after ten minutes.
-readonly wait_seconds=600
 
-waited=0
-until mkdir "${lock}" 2>/dev/null; do
-  if ((waited >= wait_seconds)); then
-    rm -rf "${lock}"
-    waited=0
-    continue
-  fi
-  sleep 1
-  waited=$((waited + 1))
-done
-trap 'rmdir "${lock}" 2>/dev/null || true' EXIT
-rustup toolchain install --no-self-update >/dev/null
-rmdir "${lock}"
-trap - EXIT
+# Holds the lock while the installer runs and exits with its status.
+# shellcheck disable=SC2016 # Perl's own variables, not the shell's.
+perl -MFcntl=:flock,F_SETFD -e '
+  open(my $lock, ">>", shift @ARGV) or die "cargo-test: lock: $!\n";
+  flock($lock, LOCK_EX) or die "cargo-test: lock: $!\n";
+  fcntl($lock, F_SETFD, 0) or die "cargo-test: lock: $!\n";
+  system { $ARGV[0] } @ARGV;
+  exit($? == -1 ? 127 : ($? & 127) ? 128 + ($? & 127) : $? >> 8);
+' "${lock}" rustup toolchain install --no-self-update >/dev/null
 
 exec cargo test "$@"

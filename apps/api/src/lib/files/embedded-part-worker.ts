@@ -69,9 +69,10 @@ import { partMediaType } from "@/api/lib/files/part-media-type";
 import {
   PST_OPERATION_MAX_MS,
   pstBytesFile,
+  type PstMailboxEntry,
   type PstReadError,
-  readMessageEntry,
-  visitPstMessages,
+  readPstEntries,
+  readPstMessage,
 } from "@/api/lib/files/pst-mailbox";
 import {
   readSignedDossier,
@@ -281,51 +282,75 @@ const mailboxMessages = async ({
   return Result.ok(slots);
 };
 
+const pstUnavailable = (
+  entry: PstMailboxEntry,
+  reason: FilePartUnavailableReason,
+): ContainerSlot => ({
+  type: "unavailable",
+  fileName: entry.fileName,
+  folder: entry.folder,
+  sizeBytes: entry.length,
+  reason,
+});
+
 /**
- * An Outlook mailbox's messages, each an email named after its subject,
- * read one at a time from its bytes.
+ * An Outlook mailbox's messages, each an email named after its subject. A
+ * list is the mailbox's own list, as its preview shows it, and converts no
+ * message; the message asked for is the only one read, so no message
+ * before it spends the reading's deadline.
  */
-const pstMessages = async (
+const pstMessages = (
   { bytes, fileName }: Container,
   wanted: number | null,
-): Promise<SlotsResult> => {
-  // Messages are read one at a time and only the one asked for keeps its
-  // email; a list keeps each message's size, never its bytes.
-  const slots: ContainerSlot[] = [];
-  const read = await visitPstMessages(
-    pstBytesFile(
-      bytes,
-      Temporal.Now.instant().epochMilliseconds + PST_OPERATION_MAX_MS,
-    ),
-    fileName,
-    async (message) => {
-      const entry = readMessageEntry(message);
-      const kept = wanted === entry.index;
-      slots.push(
-        message.email?.isOk() === true
+): SlotsResult => {
+  const file = pstBytesFile(
+    bytes,
+    Temporal.Now.instant().epochMilliseconds + PST_OPERATION_MAX_MS,
+  );
+  if (wanted === null) {
+    return readPstEntries(file, fileName).map(({ entries }) =>
+      entries.map((entry) =>
+        entry.unavailable === null
           ? part(
               {
                 fileName: entry.fileName,
-                bytes: kept ? message.email.value : new Uint8Array(0),
-                sizeBytes: message.email.value.byteLength,
+                bytes: new Uint8Array(0),
+                sizeBytes: entry.length,
                 statedMimeType: EML_MIME_TYPE,
                 fixedMimeType: EML_MIME_TYPE,
               },
               entry.folder,
             )
-          : {
-              type: "unavailable",
-              fileName: entry.fileName,
-              folder: entry.folder,
-              sizeBytes: entry.length,
-              reason: entry.unavailable ?? "tooLarge",
-            },
-      );
-      // Reading stops at the message asked for.
-      return await Promise.resolve(wanted === null || entry.index < wanted);
-    },
-  );
-  return read.map(() => slots);
+          : pstUnavailable(entry, entry.unavailable),
+      ),
+    );
+  }
+  const read = readPstMessage(file, wanted, fileName);
+  // Only the position asked for is filled; extraction reads no other.
+  const before = Array.from({ length: wanted }, (): ContainerSlot => ({
+    type: "unlisted",
+  }));
+  if (read.isOk()) {
+    const { entry, email } = read.value;
+    return Result.ok([
+      ...before,
+      part(
+        {
+          fileName: entry.fileName,
+          bytes: email,
+          statedMimeType: EML_MIME_TYPE,
+          fixedMimeType: EML_MIME_TYPE,
+        },
+        entry.folder,
+      ),
+    ]);
+  }
+  const refusal = read.error;
+  if ("_tag" in refusal) {
+    return Result.err(refusal);
+  }
+  // No such message, or one over the bound: there is no part to open.
+  return Result.ok(before);
 };
 
 const dataBoxFiles = ({ bytes }: Container): SlotsResult =>
@@ -480,7 +505,7 @@ const containerSlots = async (
     case "mbox":
       return await mailboxMessages(container);
     case "pst":
-      return await pstMessages(container, wanted);
+      return pstMessages(container, wanted);
     case "dataBox":
       return dataBoxFiles(container);
     case "eAkta":

@@ -7,7 +7,7 @@
  * held in memory; one inside another file is read from its bytes.
  */
 import { panic, Result, TaggedError } from "better-result";
-import { closeSync, openSync, readSync } from "node:fs";
+import { readSync } from "node:fs";
 import { mkdtemp, open, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -120,7 +120,10 @@ const pstDiskFile = (
 
 /**
  * Writes `chunks` (the stored mailbox) to a private temporary file, at most
- * `maxBytes` of them, and runs `read` on it; the file is removed after.
+ * `maxBytes` of them, and runs `read` on it. The file's name is removed as
+ * soon as it is opened, so its open descriptor is its only reference: the
+ * system frees it when the worker ends, however it ends (a timeout, an abort
+ * or a kill on its memory bound), and nothing is left on disk.
  */
 export const withPstFile = async <T>(
   chunks: AsyncIterable<Uint8Array>,
@@ -128,36 +131,32 @@ export const withPstFile = async <T>(
   read: (open: (deadline: number) => PstHostFile) => Promise<T>,
 ): Promise<Result<T, PstReadError>> => {
   const directory = await mkdtemp(path.join(tmpdir(), "stella-pst-"));
-  const file = path.join(directory, "mailbox.pst");
-  try {
-    const handle = await open(file, "wx", 0o600);
-    let size = 0;
-    try {
-      for await (const chunk of chunks) {
-        size += chunk.byteLength;
-        if (size > maxBytes) {
-          return Result.err(
-            new PstReadError({
-              message: "The mailbox is larger than a stored file may be",
-              reason: "unreadable",
-            }),
-          );
-        }
-        await handle.write(chunk);
-      }
-    } finally {
-      await handle.close();
-    }
-    const descriptor = openSync(file, "r");
-    try {
-      return Result.ok(
-        await read((deadline) => pstDiskFile(descriptor, size, deadline)),
-      );
-    } finally {
-      closeSync(descriptor);
-    }
-  } finally {
+  const handle = await open(
+    path.join(directory, "mailbox.pst"),
+    "wx+",
+    0o600,
+  ).finally(async () => {
     await rm(directory, { recursive: true, force: true });
+  });
+  try {
+    let size = 0;
+    for await (const chunk of chunks) {
+      size += chunk.byteLength;
+      if (size > maxBytes) {
+        return Result.err(
+          new PstReadError({
+            message: "The mailbox is larger than a stored file may be",
+            reason: "unreadable",
+          }),
+        );
+      }
+      await handle.write(chunk);
+    }
+    return Result.ok(
+      await read((deadline) => pstDiskFile(handle.fd, size, deadline)),
+    );
+  } finally {
+    await handle.close();
   }
 };
 
@@ -312,7 +311,7 @@ export const readPstMessage = (
 };
 
 /** A message as reading it gives it: its row, and its email or why not. */
-export type PstReadMessage = {
+type PstReadMessage = {
   readonly entry: PstMailboxEntry;
   /** The email; null when its row is over the bound, so it is not read. */
   readonly email: Result<Uint8Array, PstMessageRefusal | PstReadError> | null;
@@ -323,7 +322,7 @@ export type PstReadMessage = {
  * handed to `visit`, which answers whether to go on. A message the reader
  * is stopped on (its deadline) ends the reading before it is handed on.
  */
-export const visitPstMessages = async (
+const visitPstMessages = async (
   file: PstHostFile,
   mailboxName: string,
   visit: (message: PstReadMessage) => Promise<boolean>,
@@ -360,10 +359,7 @@ export const visitPstMessages = async (
 };
 
 /** A message's row as its text and list give it once read. */
-export const readMessageEntry = ({
-  entry,
-  email,
-}: PstReadMessage): PstMailboxEntry =>
+const readMessageEntry = ({ entry, email }: PstReadMessage): PstMailboxEntry =>
   email?.isErr() === true
     ? {
         ...entry,
