@@ -29,7 +29,9 @@ const createFakeClient = (stderrText = "") => {
     },
     respond: () => undefined,
     respondError: () => undefined,
-    stderr: () => stderrText,
+    // The fake's stderr is written once the turn has begun.
+    stderrBytesSeen: () => 0,
+    stderrSince: () => stderrText,
     exited,
     closeInput: () => undefined,
     kill: async () => {

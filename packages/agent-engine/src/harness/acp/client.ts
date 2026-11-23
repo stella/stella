@@ -83,8 +83,10 @@ export type AcpClient = {
   pid: number;
   /** Settles when the process has exited, however that happened. */
   exited: Promise<HarnessExit>;
-  /** Bounded tail of stderr captured in memory for error classification. */
-  stderr: () => string;
+  /** Bytes of stderr read so far, a mark for `stderrSince`. */
+  stderrBytesSeen: () => number;
+  /** Stderr from a `stderrBytesSeen` mark on, within the bounded tail. */
+  stderrSince: (start: number) => string;
   /** Ends stdin, which asks the agent to exit. */
   closeInput: () => void;
   /** SIGTERM, then SIGKILL once the termination deadline passes. */
@@ -232,7 +234,8 @@ export const startAcpAgent = ({
       agent.write({ jsonrpc: "2.0", id, error: { code, message } });
     },
     exited: agent.exited,
-    stderr: agent.stderr,
+    stderrBytesSeen: agent.stderrBytesSeen,
+    stderrSince: agent.stderrSince,
     closeInput: agent.closeInput,
     kill: agent.kill,
   });

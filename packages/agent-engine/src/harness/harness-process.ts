@@ -48,6 +48,18 @@ export const decodeStderrTail = (bytes: Uint8Array): string => {
   );
 };
 
+/**
+ * The part of a stderr tail written from byte `start` of the stream on, as
+ * text. `seen` counts every byte read; the tail holds the newest of them, so
+ * bytes before its start that were dropped are simply absent.
+ */
+export const stderrTailSince = (
+  tail: Uint8Array,
+  seen: number,
+  start: number,
+): string =>
+  decodeStderrTail(tail.subarray(Math.max(0, start - (seen - tail.length))));
+
 export type HarnessProcessDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
   requestMs: number;
@@ -107,8 +119,13 @@ type HarnessProcess<TId, TError> = {
   exited: Promise<HarnessExit>;
   /** A request went unanswered past its deadline, which ended the process. */
   missedDeadline: () => boolean;
-  /** Tail of stderr captured in memory (empty unless `captureStderr` was enabled). */
-  stderr: () => string;
+  /** Bytes of stderr read so far (0 unless `captureStderr` was enabled). */
+  stderrBytesSeen: () => number;
+  /**
+   * Stderr written from byte `start` on, as far as the in-memory tail still
+   * holds it (empty unless `captureStderr` was enabled).
+   */
+  stderrSince: (start: number) => string;
   /** Ends stdin, which asks the harness to finish and exit. */
   closeInput: () => void;
   /**
@@ -230,8 +247,10 @@ export const startHarnessProcess = <TId, TError>({
     lines.end();
   };
 
-  // The newest bytes of stderr, decoded only when they are read.
+  // The newest bytes of stderr, decoded only when they are read. The tail
+  // holds bytes [stderrSeen - stderrTail.length, stderrSeen) of the stream.
   let stderrTail: Uint8Array = new Uint8Array(0);
+  let stderrSeen = 0;
   const readStderr = async () => {
     const stderrStream = child.stderr;
     if (
@@ -242,6 +261,7 @@ export const startHarnessProcess = <TId, TError>({
       return;
     }
     for await (const bytes of stderrStream) {
+      stderrSeen += bytes.length;
       const joined = new Uint8Array(stderrTail.length + bytes.length);
       joined.set(stderrTail);
       joined.set(bytes, stderrTail.length);
@@ -318,7 +338,8 @@ export const startHarnessProcess = <TId, TError>({
     },
     exited,
     missedDeadline: () => state.missedDeadline,
-    stderr: () => decodeStderrTail(stderrTail),
+    stderrBytesSeen: () => stderrSeen,
+    stderrSince: (start) => stderrTailSince(stderrTail, stderrSeen, start),
     closeInput: () => {
       if (!state.closed) {
         onInput(() => {

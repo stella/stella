@@ -300,7 +300,7 @@ export class AcpTurnSession {
   /** The highest prompt index whose answer has arrived. */
   private answeredPrompt = 0;
   /** Length of client stderr when this turn attached, for turn-scoped classification. */
-  private stderrStartLength = 0;
+  private stderrStartByte = 0;
   /** What every answered prompt of the turn used, steered ones included. */
   private readonly promptUsage: PromptUsage[] = [];
 
@@ -347,7 +347,7 @@ export class AcpTurnSession {
   };
 
   attach(client: AcpClient) {
-    this.stderrStartLength = client.stderr().length;
+    this.stderrStartByte = client.stderrBytesSeen();
     this.lifecycle.attach(client);
   }
 
@@ -933,11 +933,10 @@ export class AcpTurnSession {
     if (classify === undefined) {
       return null;
     }
-    const fullStderr = this.lifecycle.client?.stderr() ?? "";
+    // Only what the agent wrote during this turn. A length taken from the
+    // bounded tail stops growing once it is full, so the mark counts bytes.
     const stderr =
-      fullStderr.length >= this.stderrStartLength
-        ? fullStderr.slice(this.stderrStartLength)
-        : fullStderr;
+      this.lifecycle.client?.stderrSince(this.stderrStartByte) ?? "";
     return classify({
       stderr,
       errorMessage,
