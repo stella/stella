@@ -282,7 +282,7 @@ const EntityFixture = ({ contentMode, columnLayout }: FixtureProps) => {
             {
               id: "_flags",
               cell: CellReviewFixture,
-              meta: { contextMenu: "cell" },
+              meta: { contextMenu: "cell" as const },
             },
           ];
         case "with-value":
