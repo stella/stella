@@ -12,7 +12,7 @@
 
 import type { PlaybookRunProjection } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

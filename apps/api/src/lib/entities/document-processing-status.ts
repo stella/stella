@@ -1,11 +1,11 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   documentProcessingRuns,
   type DocumentProcessingStatus,
   entities,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const getCurrentVersionProcessingStatuses = async (

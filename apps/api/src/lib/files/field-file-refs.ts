@@ -1,8 +1,8 @@
 import { and, eq, inArray, not, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { entityVersions, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { PDF_MIME_TYPE } from "@/api/mime-types";

@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 
-import type { Transaction } from "@/api/db/root";
 import { legalReaderAnnotations } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";

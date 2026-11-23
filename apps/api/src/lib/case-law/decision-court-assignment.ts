@@ -1,8 +1,8 @@
 import { panic, Result, UnhandledException } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockCaseLawDecisionRows } from "@/api/lib/db/aggregate-lock";
 import {

@@ -1,8 +1,8 @@
 import { TaggedError } from "better-result";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import {
   CORPUS_INDEX_ACTIVE_GENERATION_STATUSES,

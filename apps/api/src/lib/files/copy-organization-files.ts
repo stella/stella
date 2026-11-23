@@ -4,12 +4,12 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockObjectCleanupIntentsForWriter,

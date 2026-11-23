@@ -4,12 +4,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { documentReferenceBase } from "@stll/api-contract";
 import { compareCodeUnit } from "@stll/collation";
 
-import type { Transaction } from "@/api/db/root";
 import {
   documentCounters,
   documentReferenceCounters,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toDocumentReference } from "@/api/lib/document-reference";

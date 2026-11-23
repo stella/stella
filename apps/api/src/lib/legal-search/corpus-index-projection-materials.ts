@@ -3,7 +3,6 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
@@ -13,6 +12,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { readCaseLawJurisdictionVacatedTx } from "@/api/lib/legal-search/corpus-index-jurisdiction-serving-store";
 import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { deriveCorpusIndexProjectionDescriptor } from "@/api/lib/legal-search/corpus-index-projection-descriptor";

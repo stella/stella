@@ -3,12 +3,12 @@ import { and, sql } from "drizzle-orm";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legislationDocuments,
   legislationFacetCounts,
   legislationFacetRefreshes,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { isLatestOpenedVersionOfWorkAt } from "@/api/lib/legal-search/legislation-listed-version";

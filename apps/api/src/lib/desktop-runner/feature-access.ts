@@ -1,6 +1,6 @@
 import { DESKTOP_RUNNER_FEATURE_ID } from "@stll/api-contract/desktop-runner";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 

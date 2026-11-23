@@ -26,13 +26,13 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, gt, notExists, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   corpusIndexGenerations,
   corpusIndexJurisdictionServing,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import {
   parseCorpusIndexClusterForGeneration,

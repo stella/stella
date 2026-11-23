@@ -12,13 +12,13 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { PlaybookRunProjection } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import {
   documentReviewRuns,
   entities,
   fields,
   properties,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { NEUTRAL_PERSPECTIVE } from "@/api/lib/document-review/contract";

@@ -100,12 +100,12 @@ import { alias } from "drizzle-orm/pg-core";
 import { declareFingerprintFields } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import {

@@ -1,7 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawSources,
   corpusIndexGenerations,
@@ -9,6 +8,7 @@ import {
   corpusIndexProjectionStates,
   legislationSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import {

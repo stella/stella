@@ -29,8 +29,8 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { stableStringify } from "@stll/stable-stringify";
 
-import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, documentReviewRuns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { CarryOutcome } from "@/api/lib/document-review/carry-outcomes";
