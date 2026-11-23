@@ -587,6 +587,14 @@
     "server": "Serverī radās problēma (kļūdas kods {status}). Pēc brīža mēģiniet vēlreiz.",
     "session": "Jūsu pieteikšanās ir beigusies. Piesakieties vēlreiz."
   },
+  "mailbox": {
+    "back": "Atpakaļ uz e-pasta ziņojumiem",
+    "messages": "E-pasta ziņojumi",
+    "noMessages": "Šajā pastkastītē nav e-pasta ziņojumu.",
+    "openFailed": "Šo e-pasta ziņojumu neizdevās atvērt. Pieskarieties, lai mēģinātu vēlreiz.",
+    "truncated": "Tiek rādīti tikai pirmie {count, number} e-pasta ziņojumi.",
+    "unreadable": "Šo pastkastīti neizdevās nolasīt."
+  },
   "matter": {
     "add": "Pievienot",
     "details": "Informācija",

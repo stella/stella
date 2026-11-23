@@ -837,6 +837,12 @@
     },
     "showPane": "Rādīt paneli",
     "swapViews": "Apmainīt galveno skatu un sānu paneli",
-    "title": "Inspektors"
+    "title": "Inspektors",
+    "mailbox": {
+      "messages": "E-pasta ziņojumi",
+      "noMessages": "Šajā pastkastītē nav e-pasta ziņojumu.",
+      "truncated": "Tiek rādīti tikai pirmie {count, number} e-pasta ziņojumi.",
+      "unreadable": "Šo pastkastīti neizdevās nolasīt."
+    }
   }
 }

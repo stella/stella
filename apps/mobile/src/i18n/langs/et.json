@@ -587,6 +587,14 @@
     "server": "Serveris tekkis viga (veakood {status}). Proovige hetke pärast uuesti.",
     "session": "Teie sisselogimine on aegunud. Logige uuesti sisse."
   },
+  "mailbox": {
+    "back": "Tagasi kirjade juurde",
+    "messages": "Kirjad",
+    "noMessages": "Selles postkastis pole kirju.",
+    "openFailed": "Kirja ei õnnestunud avada. Uuesti proovimiseks puudutage.",
+    "truncated": "Kuvatakse ainult esimesed {count, number} kirja.",
+    "unreadable": "Seda postkasti ei õnnestunud lugeda."
+  },
   "matter": {
     "add": "Lisa",
     "details": "Üksikasjad",

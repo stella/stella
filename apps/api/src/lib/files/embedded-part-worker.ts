@@ -1,8 +1,8 @@
 /**
  * Reads the files inside a stored container in the extraction worker: an
  * ASiC or BDOC member, a file in a ZIP archive, a data-box message's file, a
- * signed container's document, the document a signed `.p7m` wraps, an
- * invoice's or an email's attachment. A part that is itself a container is
+ * signed container's document, the document a signed `.p7m` wraps, a
+ * mailbox's message, an invoice's or an email's attachment. A part that is itself a container is
  * read in turn, down the part's path (`member:2/attachment:0`): every part
  * on the way is typed by `partMediaType`, as its container's list gives it,
  * and scanned exactly as an upload of its bytes would be.
@@ -14,7 +14,10 @@ import {
   type EmailTextAttachmentCharset,
 } from "@stll/api-contract";
 import { ASIC_FILE_FORMATS } from "@stll/api-contract/asic-file-formats";
-import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import {
+  EML_MIME_TYPE,
+  resolveEmailMimeType,
+} from "@stll/api-contract/email-mime-types";
 import {
   FILE_PART_KINDS_BY_FORMAT,
   type FilePartContainerFormat,
@@ -54,6 +57,12 @@ import {
 } from "@/api/lib/files/email-to-html";
 import type { EmbeddedPart } from "@/api/lib/files/embedded-part-protocol";
 import { detectEmbeddedPayload } from "@/api/lib/files/embedded-payload-format";
+import { mailboxEntry } from "@/api/lib/files/mailbox-messages";
+import {
+  mboxMessageBytes,
+  type MboxParseError,
+  scanMbox,
+} from "@/api/lib/files/mbox";
 import { type P7mParseError, parseP7m } from "@/api/lib/files/p7m";
 import { partMediaType } from "@/api/lib/files/part-media-type";
 import {
@@ -71,6 +80,7 @@ export type EmbeddedPartError =
   | DataBoxMessageParseError
   | DocumentPackageError
   | EmailParseError
+  | MboxParseError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -84,6 +94,11 @@ export type PartCandidate = {
   statedMimeType: string | null;
   /** The charset the container states for the part's text, if any. */
   charset?: EmailTextAttachmentCharset | null;
+  /**
+   * The type the container makes the part, whatever its bytes look like:
+   * a mailbox's message is an email.
+   */
+  fixedMimeType?: string;
 };
 
 /**
@@ -212,6 +227,41 @@ const zipFiles = async ({ bytes }: Container): Promise<SlotsResult> =>
           );
     }),
   );
+
+/** A mailbox's messages, each an email named after its subject. */
+const mailboxMessages = async ({
+  bytes,
+  fileName,
+}: Container): Promise<SlotsResult> => {
+  const scanned = scanMbox(bytes, { keepMessages: true });
+  if (scanned.failure !== null) {
+    return Result.err(scanned.failure);
+  }
+  const slots: ContainerSlot[] = [];
+  for (const message of scanned.messages) {
+    const entry = await mailboxEntry(message, fileName);
+    slots.push(
+      entry.unavailable !== null || message.stored === null
+        ? {
+            type: "unavailable",
+            fileName: entry.fileName,
+            folder: entry.folder,
+            sizeBytes: entry.length,
+            reason: entry.unavailable ?? "tooLarge",
+          }
+        : part(
+            {
+              fileName: entry.fileName,
+              bytes: mboxMessageBytes(message.stored, message.bounded),
+              statedMimeType: EML_MIME_TYPE,
+              fixedMimeType: EML_MIME_TYPE,
+            },
+            entry.folder,
+          ),
+    );
+  }
+  return Result.ok(slots);
+};
 
 const dataBoxFiles = ({ bytes }: Container): SlotsResult =>
   parseDataBoxMessage(bytes).map(({ files }) =>
@@ -359,6 +409,8 @@ const containerSlots = async (
       return await asicMembers(container);
     case "zip":
       return await zipFiles(container);
+    case "mbox":
+      return await mailboxMessages(container);
     case "dataBox":
       return dataBoxFiles(container);
     case "eAkta":
@@ -394,19 +446,30 @@ const containerSlots = async (
   }
 };
 
+/** The type a part is listed and delivered as. */
+const candidateMediaType = async ({
+  bytes,
+  statedMimeType,
+  charset = null,
+  fileName,
+  fixedMimeType,
+}: PartCandidate): Promise<string> =>
+  fixedMimeType ??
+  (await partMediaType({
+    bytes,
+    stated: statedMimeType,
+    charset,
+    fileName,
+  }));
+
 /** A part typed and scanned, ready to deliver or to read in turn. */
 const typedPart = async (
   candidate: PartCandidate,
 ): Promise<
   Result<EmbeddedPart, FileScanFailedError | FileScanRejectedError>
 > => {
-  const { fileName, bytes, statedMimeType, charset = null } = candidate;
-  const mimeType = await partMediaType({
-    bytes,
-    stated: statedMimeType,
-    charset,
-    fileName,
-  });
+  const { fileName, bytes } = candidate;
+  const mimeType = await candidateMediaType(candidate);
   const scanned = await scanContainerMember({ fileName, bytes }, mimeType);
   return scanned.isErr()
     ? Result.err(scanned.error)
@@ -429,13 +492,16 @@ const outermostFirst = (target: FilePart): FilePart[] => [
   target,
 ];
 
-/** The part a container holds at `part`, typed and scanned; null when none. */
+/**
+ * The part a container holds at `part`, typed and scanned; null when none.
+ * With no part, the file itself.
+ */
 export const extractEmbeddedPart = async ({
   fileBytes,
   containerMimeType,
   containerName,
   part: target,
-}: StoredContainer & { part: FilePart }): Promise<
+}: StoredContainer & { part: FilePart | null }): Promise<
   Result<EmbeddedPart | null, EmbeddedPartError>
 > => {
   let file: EmbeddedPart = {
@@ -443,7 +509,7 @@ export const extractEmbeddedPart = async ({
     mimeType: containerMimeType,
     bytes: fileBytes,
   };
-  for (const { kind, index } of outermostFirst(target)) {
+  for (const { kind, index } of target === null ? [] : outermostFirst(target)) {
     const container = containerOf(file);
     if (container === null) {
       return Result.ok(null);
@@ -468,11 +534,11 @@ export const extractEmbeddedPart = async ({
 /**
  * The files of the part at `part`, which is itself a container, as its own
  * preview would list them: each typed as reading it delivers it, addressed
- * by the path through `part`. Null when the part is not there or holds no
- * parts.
+ * by the path through `part`. With no part, the files of the file itself.
+ * Null when the part is not there or holds no parts.
  */
 export const listEmbeddedParts = async (
-  options: StoredContainer & { part: FilePart },
+  options: StoredContainer & { part: FilePart | null },
 ): Promise<Result<ContainedFile[] | null, EmbeddedPartError>> => {
   const read = await extractEmbeddedPart(options);
   if (read.isErr()) {
@@ -509,14 +575,13 @@ export const listEmbeddedParts = async (
         folder: slot.folder,
         sizeBytes: candidate.bytes.byteLength,
         part: {
-          part: filePartId({ kind, index, within: options.part }),
+          part: filePartId(
+            options.part === null
+              ? { kind, index }
+              : { kind, index, within: options.part },
+          ),
           fileName,
-          mediaType: await partMediaType({
-            bytes: candidate.bytes,
-            stated: candidate.statedMimeType,
-            charset: candidate.charset ?? null,
-            fileName: candidate.fileName,
-          }),
+          mediaType: await candidateMediaType(candidate),
           sizeBytes: candidate.bytes.byteLength,
         },
         unavailable: null,

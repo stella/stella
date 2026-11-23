@@ -587,6 +587,14 @@
     "server": "Hiba történt a szerveren (hibakód: {status}). Próbálja újra egy kis idő múlva.",
     "session": "A bejelentkezése lejárt. Jelentkezzen be újra."
   },
+  "mailbox": {
+    "back": "Vissza az üzenetekhez",
+    "messages": "Üzenetek",
+    "noMessages": "Ez a postafiók nem tartalmaz üzeneteket.",
+    "openFailed": "Az üzenetet nem sikerült megnyitni. Koppintson az újrapróbálkozáshoz.",
+    "truncated": "Csak az első {count, number} üzenet látható.",
+    "unreadable": "Ezt a postafiókot nem sikerült beolvasni."
+  },
   "matter": {
     "add": "Hozzáadás",
     "details": "Részletek",

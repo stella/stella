@@ -25,6 +25,7 @@ import {
   E_AKTA_FILE_FORMAT,
   ISDOC_FILE_FORMAT,
   ISDOCX_FILE_FORMAT,
+  MBOX_FILE_FORMAT,
   XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 import { SIGNED_DOSSIER_FORMATS } from "@stll/api-contract/signed-dossier-formats";
@@ -61,6 +62,7 @@ import {
   readEmailHtmlPreviewHandler,
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
+import { mailboxPreviewEndpoint } from "@/api/handlers/files/mailbox";
 import { readMarkedDownload } from "@/api/handlers/files/marked-download";
 import { readFilePartListEndpoint } from "@/api/handlers/files/part-list";
 import saveFilePartEndpoint from "@/api/handlers/files/part-save";
@@ -114,6 +116,11 @@ import {
   SAMPLE_ATTACHMENT_TEXT,
   xmlBytes,
 } from "@/api/tests/fixtures/e-invoice";
+import {
+  mailMessage,
+  MATTER_CORRESPONDENCE,
+  writeMbox,
+} from "@/api/tests/fixtures/mbox";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
 import {
   PEC_FIXTURE,
@@ -134,6 +141,7 @@ import { dataBoxPreviewScalingScenario } from "@/api/tests/read-scaling/data-box
 import { eInvoicePreviewScalingScenario } from "@/api/tests/read-scaling/e-invoice";
 import { emailReadingScalingScenario } from "@/api/tests/read-scaling/email-reading";
 import { filePartListScalingScenario } from "@/api/tests/read-scaling/file-part-list";
+import { mailboxScalingScenario } from "@/api/tests/read-scaling/mailbox";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
 import { signedDossierPreviewScalingScenario } from "@/api/tests/read-scaling/signed-dossier";
 import { structuredDocumentScalingScenario } from "@/api/tests/read-scaling/structured-document";
@@ -1092,6 +1100,7 @@ const legalFileContext = (
     scopedDb,
     safeDb: createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
     params: { workspaceId: ids.wsA1, fieldId },
+    query: {},
   });
 
 const seedAsic = async () =>
@@ -1139,6 +1148,62 @@ const seedZip = async () =>
       },
     ]),
   );
+
+const POWER_OF_ATTORNEY = "Plná moc ze dne 2. 11. 2026";
+
+/** A forwarded message, attached as an email file of its own. */
+const FORWARDED = mailMessage(
+  {
+    from: "Jitka Skořepová <skorepova@stavby-hradec.cz>",
+    to: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+    subject: "Fwd: Výzva k zaplacení",
+    date: "Mon, 16 Nov 2026 16:40:00 +0100",
+    body: "Přeposílám výzvu, kterou jsme obdrželi.",
+  },
+  "\r\n",
+);
+
+/**
+ * A matter's mailbox as a mail client exports it (mboxrd): three messages,
+ * then one with a power of attorney and a forwarded email attached.
+ */
+const MAILBOX = writeMbox(
+  [
+    ...MATTER_CORRESPONDENCE.map((message) => mailMessage(message)),
+    mailMessage({
+      from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+      to: "Jitka Skořepová <skorepova@stavby-hradec.cz>",
+      subject: "Plná moc a výzva",
+      date: "Thu, 19 Nov 2026 10:15:00 +0100",
+      body: "Dobrý den, v příloze posílám plnou moc.",
+      attachments: [
+        {
+          fileName: "plna-moc.txt",
+          mediaType: "text/plain; charset=utf-8",
+          bytes: new TextEncoder().encode(POWER_OF_ATTORNEY),
+        },
+        {
+          fileName: "vyzva.eml",
+          mediaType: "message/rfc822",
+          bytes: FORWARDED,
+        },
+      ],
+    }),
+  ],
+  "mboxrd",
+);
+
+const seedMbox = async (tenant: "a" | "b" = "a") => {
+  const stored = {
+    fileName: "spis-23-C-118-2026.mbox",
+    mimeType: "application/octet-stream",
+    pdfFileId: null,
+  };
+  if (tenant === "b") {
+    return await seedFile(stored, "b");
+  }
+  return await seedStored(stored, MAILBOX.bytes);
+};
 
 const partListContext = (
   fieldId: SafeId<"field">,
@@ -2154,6 +2219,136 @@ describe("ZIP archive delivery", () => {
   });
 });
 
+describe("mailbox delivery", () => {
+  test("a mailbox lists its messages in Files and reads its text for AI", async () => {
+    const { fieldId, entityId, entityVersionId } = await seedMbox();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const view = await mailboxPreviewEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    );
+    expect(view).toMatchObject({
+      truncated: false,
+      messages: [
+        {
+          subject: "Spis 23 C 118/2026, podklady k jednání",
+          from: expect.stringContaining("kalina@ak-kalina-vesela.cz"),
+          folder: null,
+          part: {
+            part: "message:0",
+            fileName: "Spis 23 C 118_2026, podklady k jednání.eml",
+            mediaType: EML_MIME_TYPE,
+          },
+          unavailable: null,
+        },
+        { folder: "Spisy/23 C 118-2026,Důležité", part: { part: "message:1" } },
+        { subject: "Vyjádření k žalobě", folder: "Spisy/Stavby Hradec" },
+        { subject: "Plná moc a výzva", part: { part: "message:3" } },
+      ],
+    });
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: MBOX_FILE_FORMAT.auditFormat },
+    });
+    const read = await LEGAL_FILE_READERS.mbox({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    const { text } = read.unwrap();
+    expect(text).toStartWith("Mailbox.");
+    expect(text).toContain("Subject: Vyjádření k žalobě");
+    expect(text).toContain("From the court's summons");
+    expect(text).toContain("Attachments: plna-moc.txt, vyzva.eml");
+  });
+
+  test("a message opens as an email, and its attachments by their paths", async () => {
+    const { fieldId, entityId } = await seedMbox();
+    const issued = (await readPartUrl(fieldId, "message:3")).unwrap();
+    expect(issued).toMatchObject({
+      fileName: "Plná moc a výzva.eml",
+      mimeType: EML_MIME_TYPE,
+    });
+    const message = await (
+      await redeemPartUrl(issued.presignedUrl)
+    )
+      .unwrap()
+      .text();
+    expect(message).toBe(new TextDecoder().decode(MAILBOX.expected[3]));
+    // The message alone was read, by its range; the mailbox was streamed.
+    const ranges = fake.requests.flatMap(({ method, range }) =>
+      method === "GET" && range !== null ? [range] : [],
+    );
+    expect(ranges.length).toBeGreaterThan(0);
+    expect(new Set(ranges).size).toBe(1);
+
+    const listed = await readFilePartListEndpoint.handler(
+      partListContext(fieldId, "message:3", scopedDbA()),
+    );
+    expect(listed).toMatchObject({
+      files: [
+        { fileName: "plna-moc.txt", part: { part: "message:3/attachment:0" } },
+        { fileName: "vyzva.eml", part: { part: "message:3/attachment:1" } },
+      ],
+    });
+    const attachment = (
+      await readPartUrl(fieldId, "message:3/attachment:0")
+    ).unwrap();
+    expect(
+      await (await redeemPartUrl(attachment.presignedUrl)).unwrap().text(),
+    ).toBe(POWER_OF_ATTORNEY);
+
+    const reading = await emailReadingEndpoint.handler({
+      ...legalFileContext(fieldId, scopedDbA()),
+      query: { part: "message:3" },
+    });
+    expect(reading).toMatchObject({
+      subject: "Plná moc a výzva",
+      text: expect.stringContaining("posílám plnou moc"),
+      attachments: [
+        { part: "message:3/attachment:0", fileName: "plna-moc.txt" },
+        { part: "message:3/attachment:1", fileName: "vyzva.eml" },
+      ],
+    });
+    const forwarded = await emailReadingEndpoint.handler({
+      ...legalFileContext(fieldId, scopedDbA()),
+      query: { part: "message:3/attachment:1" },
+    });
+    expect(forwarded).toMatchObject({ subject: "Fwd: Výzva k zaplacení" });
+    expect(
+      (await auditRowsFor(entityId)).map(({ metadata }) => metadata),
+    ).toContainEqual(
+      expect.objectContaining({ format: "mbox", part: "message:3" }),
+    );
+  });
+
+  test("a message the mailbox does not have is not found and records nothing", async () => {
+    const { fieldId, entityId } = await seedMbox();
+    const missing = await readPartUrl(fieldId, "message:9");
+    expect(missing.isErr() && missing.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("refuses another matter's mailbox and its messages", async () => {
+    const { fieldId, entityId } = await seedMbox("b");
+    expect(
+      answeredStatus(
+        await mailboxPreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+    const message = await readPartUrl(fieldId, "message:0");
+    expect(message.isErr() && message.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+});
+
 describe("signed container delivery", () => {
   test("an existing generic upload shows the same documents and signers in Files and AI", async () => {
     const { fieldId, entityId, entityVersionId } = await seedEAkta();
@@ -2340,6 +2535,7 @@ describe("CAdES file delivery", () => {
     { scenario: cadesPreviewScalingScenario, seed: seedCades },
     { scenario: asicPreviewScalingScenario, seed: seedAsic },
     { scenario: zipArchiveScalingScenario, seed: seedZip },
+    { scenario: mailboxScalingScenario, seed: seedMbox },
   ])(
     "$scenario.name cost stays bounded as a matter grows",
     async ({ scenario: { measure }, seed }) => {

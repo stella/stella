@@ -587,6 +587,14 @@
     "server": "Your server ran into a problem (error {status}). Try again in a moment.",
     "session": "Your sign-in has expired. Sign in again."
   },
+  "mailbox": {
+    "back": "Back to messages",
+    "messages": "Messages",
+    "noMessages": "This mailbox holds no messages.",
+    "openFailed": "Couldn’t open this message. Tap to try again.",
+    "truncated": "Only the first {count, number} messages are listed.",
+    "unreadable": "This mailbox couldn’t be read."
+  },
   "matter": {
     "add": "Add",
     "details": "Details",

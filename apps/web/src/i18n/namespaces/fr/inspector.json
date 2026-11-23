@@ -837,6 +837,12 @@
     },
     "showPane": "Afficher le volet",
     "swapViews": "Échanger la vue principale et le panneau latéral",
-    "title": "Inspecteur"
+    "title": "Inspecteur",
+    "mailbox": {
+      "messages": "Courriels",
+      "noMessages": "Cette boîte aux lettres ne contient aucun message.",
+      "truncated": "Seuls les {count, number} premiers messages sont affichés.",
+      "unreadable": "Impossible de lire cette boîte aux lettres."
+    }
   }
 }

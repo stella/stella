@@ -837,6 +837,12 @@
     },
     "showPane": "Pokaż panel",
     "swapViews": "Zamień widok główny z panelem bocznym",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "mailbox": {
+      "messages": "Wiadomości",
+      "noMessages": "Ta skrzynka pocztowa nie zawiera wiadomości.",
+      "truncated": "Wyświetlono tylko pierwsze {count, number} wiadomości.",
+      "unreadable": "Nie udało się odczytać tej skrzynki pocztowej."
+    }
   }
 }

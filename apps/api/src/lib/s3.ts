@@ -1922,7 +1922,7 @@ export const readCorpusS3ObjectBounded = async (
     }),
   });
 
-type CorpusRangeReadOptions = {
+type ObjectRangeReadOptions = {
   s3Policy?: S3CredentialRefreshOptions;
   key: string;
   /** First byte of the range, inclusive. */
@@ -1937,8 +1937,9 @@ type CorpusRangeReadOptions = {
 const CONTENT_RANGE_PATTERN = /^bytes (?<first>\d+)-(?<last>\d+)\/(?:\d+|\*)$/u;
 
 /**
- * Read `length` bytes of a legal-corpus object starting at `offset` with a
- * range GET, so a member of a pack transfers without the pack around it.
+ * Read `length` bytes of an object starting at `offset` with a range GET, so
+ * a member of a pack, or a message of a mailbox, transfers without the
+ * object around it.
  *
  * The response is accepted only as a 206 whose `Content-Range` names exactly
  * the requested range and whose `Content-Length` equals `length`. A store
@@ -1948,22 +1949,21 @@ const CONTENT_RANGE_PATTERN = /^bytes (?<first>\d+)-(?<last>\d+)\/(?:\d+|\*)$/u;
  * transfer is bounded by `length`, which the caller checks against its
  * ceiling before asking.
  */
-export const readCorpusS3Range = async ({
+const readObjectRange = async ({
+  store,
   key,
   offset,
   length,
   signal,
   s3Policy,
-}: CorpusRangeReadOptions): Promise<Uint8Array> => {
+}: ObjectRangeReadOptions & { store: ObjectStore }): Promise<Uint8Array> => {
   if (!Number.isSafeInteger(offset) || offset < 0) {
     return panic(
-      `Corpus range read offset must be a non-negative integer, got ${offset}`,
+      `Range read offset must be a non-negative integer, got ${offset}`,
     );
   }
   if (!Number.isSafeInteger(length) || length < 1) {
-    return panic(
-      `Corpus range read length must be a positive integer, got ${length}`,
-    );
+    return panic(`Range read length must be a positive integer, got ${length}`);
   }
   const last = offset + length - 1;
   // The status check runs inside the guard: a refused credential arrives as a
@@ -1972,10 +1972,11 @@ export const readCorpusS3Range = async ({
   return await withPublicReadIo(
     "object-storage",
     async (io) =>
-      await corpusCredentials.run(
+      await store.run(
         async () =>
           await io.fetch(
-            getCorpusS3().presign(key, {
+            // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- store is one of this module's ObjectStore records, whose client() is getS3 or getCorpusS3
+            store.client().presign(key, {
               expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
             }),
             {
@@ -2028,6 +2029,21 @@ export const readCorpusS3Range = async ({
       ),
   );
 };
+
+/** A range of a legal-corpus object. See {@link readObjectRange}. */
+export const readCorpusS3Range = async (
+  options: ObjectRangeReadOptions,
+): Promise<Uint8Array> =>
+  await readObjectRange({ ...options, store: corpusStore });
+
+/**
+ * A range of a documents-bucket object, such as one message of a stored
+ * mailbox. See {@link readObjectRange}.
+ */
+export const readDocumentS3Range = async (
+  options: ObjectRangeReadOptions,
+): Promise<Uint8Array> =>
+  await readObjectRange({ ...options, store: documentsStore });
 
 /**
  * Read a documents-bucket object with a hard deadline.

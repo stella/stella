@@ -32,7 +32,8 @@ export const writeWorkerStdout = async (
 type SpawnWorkerOptions = {
   workerPath: string;
   args?: string[];
-  stdin: Blob;
+  /** The worker's input: whole, or streamed in as it is read. */
+  stdin: Blob | ReadableStream<Uint8Array>;
   timeoutMs: number;
   /** Aborting kills the subprocess instead of letting it run to timeout. */
   signal?: AbortSignal;
@@ -153,7 +154,8 @@ type SpawnedWorker = ReturnType<typeof spawn>;
 
 type SpawnWorkerProcessOptions = {
   args: string[];
-  stdin: Blob;
+  /** The worker's input: whole, or streamed in as it is read. */
+  stdin: Blob | ReadableStream<Uint8Array>;
   workerPath: string;
 };
 

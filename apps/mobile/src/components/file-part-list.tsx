@@ -57,7 +57,7 @@ type FilesInside =
   | { readonly status: "failed" }
   | { readonly status: "open"; readonly files: readonly ContainedFile[] };
 
-const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
+export const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
 
 export const FilePartOpenerProvider = ({
   children,

@@ -12,6 +12,7 @@ import { useTranslations } from "use-intl";
 
 import {
   EMAIL_HEADER_CITATION_ID,
+  type EmailAttachmentDescriptor,
   type EmailHeaderCitationId,
 } from "@stll/api-contract";
 import { BidiText } from "@stll/ui/bidi-text";
@@ -75,12 +76,29 @@ const ACTIVE_CITATION_CLASS = textMarkClass({
 });
 
 type EmailHtmlViewerProps = {
-  entityId: string;
   fieldId: string;
   layout?: EmailViewerLayout;
-  onOpenAttachment: (attachmentId: string | null) => void;
   workspaceId: string;
-};
+} & (
+  | {
+      entityId: string;
+      onOpenAttachment: (attachmentId: string | null) => void;
+      onOpenPart?: undefined;
+      part?: undefined;
+    }
+  | {
+      entityId?: undefined;
+      onOpenAttachment?: undefined;
+      /** Opens an attachment, a part of the file in turn, as listed. */
+      onOpenPart: (attachment: EmailAttachmentDescriptor) => void;
+      /**
+       * An email that is a part of the file (a mailbox's message), shown the
+       * same way, its attachments opening by their paths through it.
+       * Citations point at a document's own email, never at a part.
+       */
+      part: string;
+    }
+);
 
 type EmailFileViewerBaseProps = EmailHtmlViewerProps & {
   entityId: string;
@@ -215,6 +233,8 @@ export const EmailHtmlViewer = ({
   fieldId,
   layout = EMAIL_VIEWER_LAYOUT.standard,
   onOpenAttachment,
+  onOpenPart,
+  part,
   workspaceId,
 }: EmailHtmlViewerProps) => {
   const t = useTranslations();
@@ -227,7 +247,7 @@ export const EmailHtmlViewer = ({
   >(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const previewQuery = useQuery(
-    emailHtmlPreviewOptions({ workspaceId, fieldId }),
+    emailHtmlPreviewOptions({ workspaceId, fieldId, part }),
   );
 
   useMountEffect(() => () => {
@@ -235,7 +255,7 @@ export const EmailHtmlViewer = ({
   });
 
   useExternalSyncEffect(() => {
-    if (!previewQuery.data) {
+    if (!previewQuery.data || entityId === undefined) {
       return undefined;
     }
     return registerEmailCitationBlocks({
@@ -246,6 +266,9 @@ export const EmailHtmlViewer = ({
   }, [entityId, fieldId, previewQuery.data]);
 
   useExternalSyncEffect(() => {
+    if (entityId === undefined) {
+      return undefined;
+    }
     const handleCitation = (event: Event): void => {
       if (!("detail" in event) || !isEmailCitationTargetDetail(event.detail)) {
         return;
@@ -429,7 +452,11 @@ export const EmailHtmlViewer = ({
                   <Button
                     className="max-w-full"
                     onClick={() => {
-                      onOpenAttachment(attachment.part);
+                      if (onOpenPart === undefined) {
+                        onOpenAttachment?.(attachment.part);
+                      } else {
+                        onOpenPart(attachment);
+                      }
                     }}
                     variant="plain"
                   >

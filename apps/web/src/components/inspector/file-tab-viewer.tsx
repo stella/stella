@@ -87,6 +87,11 @@ const ZipArchiveViewer = lazy(async () => {
   return { default: m.ZipArchiveViewer };
 });
 
+const MailboxViewer = lazy(async () => {
+  const m = await import("@/components/inspector/mailbox-viewer");
+  return { default: m.MailboxViewer };
+});
+
 const StructuredDocumentViewer = lazy(async () => {
   const m = await import("@/components/inspector/structured-document-viewer");
   return { default: m.StructuredDocumentViewer };
@@ -160,6 +165,12 @@ const legalFileViewers = {
     unreadable: "inspector.fileParts.archiveUnreadable",
     download: "common.downloadOriginal",
     surface: "inspector-zip",
+  },
+  mbox: {
+    Viewer: MailboxViewer,
+    unreadable: "inspector.mailbox.unreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-mbox",
   },
 } as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
 
@@ -319,7 +330,8 @@ const FileTabViewerComponent = ({
       case "isdoc":
       case "isdocx":
       case "xml":
-      case "zip": {
+      case "zip":
+      case "mbox": {
         const { Viewer, unreadable, download, surface } =
           legalFileViewers[nativePreviewKind];
         return (

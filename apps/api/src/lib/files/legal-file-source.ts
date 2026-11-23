@@ -93,17 +93,25 @@ const legalSourceFormat =
     };
   };
 
+/** A legal file of one of `acceptedKinds`, found but not read; see below. */
+export const openLegalFileSource = async (
+  options: LegalFileReadOptions,
+  acceptedKinds: readonly LegalFileFormatKind[],
+) => await openFileSource(options, legalSourceFormat(acceptedKinds));
+
 export const loadLegalFileSource = async (
   options: LegalFileReadOptions,
   acceptedKinds: readonly LegalFileFormatKind[],
 ) => await loadFileSource(options, legalSourceFormat(acceptedKinds));
 
 /**
- * Reads a stored file that `accept` recognizes, outside any lock, and hands
- * back `deliver`, which releases a result only while the same live version is
- * share-locked and after its delivery has been recorded.
+ * Finds a stored file that `accept` recognizes without reading it, and hands
+ * back its key, `load`, which reads it whole within its format's budget, and
+ * `deliver`, which releases a result only while the same live version is
+ * share-locked and after its delivery has been recorded. A file read another
+ * way (a mailbox streamed one message at a time) never calls `load`.
  */
-export const loadFileSource = async <TFormat extends FileSourceFormat>(
+export const openFileSource = async <TFormat extends FileSourceFormat>(
   {
     scopedDb,
     workspaceId,
@@ -141,32 +149,30 @@ export const loadFileSource = async <TFormat extends FileSourceFormat>(
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const source = await readStoredFile({
-    key,
-    mimeType: content.mimeType,
-    fileName: content.fileName,
-    ...(maxBytes === undefined ? {} : { maxBytes }),
-  }).then(
-    (file) => Result.ok(file),
-    async (error: unknown) => {
-      // Only an archive's own read budget becomes a preview refusal.
-      if (
-        isArchive &&
-        (S3ObjectBudgetError.is(error) || BodyByteLimitError.is(error))
-      ) {
-        return archiveTooLarge();
-      }
-      // Other read failures keep their rejection path and Error identity.
-      return await Promise.reject(
-        error instanceof Error
-          ? error
-          : new UnhandledException({ cause: error }),
-      );
-    },
-  );
-  if (source.isErr()) {
-    return Result.err(source.error);
-  }
+  const load = async () =>
+    await readStoredFile({
+      key,
+      mimeType: content.mimeType,
+      fileName: content.fileName,
+      ...(maxBytes === undefined ? {} : { maxBytes }),
+    }).then(
+      (file) => Result.ok(file),
+      async (error: unknown) => {
+        // Only an archive's own read budget becomes a preview refusal.
+        if (
+          isArchive &&
+          (S3ObjectBudgetError.is(error) || BodyByteLimitError.is(error))
+        ) {
+          return archiveTooLarge();
+        }
+        // Other read failures keep their rejection path and Error identity.
+        return await Promise.reject(
+          error instanceof Error
+            ? error
+            : new UnhandledException({ cause: error }),
+        );
+      },
+    );
 
   // Parse outside the transaction. Only release a result while the same live
   // source is share-locked, after its delivery has been recorded.
@@ -219,10 +225,32 @@ export const loadFileSource = async <TFormat extends FileSourceFormat>(
       return prepared;
     });
   return Result.ok({
-    source: source.value,
+    key,
+    fileName: content.fileName,
     mimeType: format.mimeType,
     format,
     entityId,
+    load,
     deliver,
   });
+};
+
+/**
+ * Reads a stored file that `accept` recognizes, outside any lock, and hands
+ * back `deliver`, which releases a result only while the same live version is
+ * share-locked and after its delivery has been recorded.
+ */
+export const loadFileSource = async <TFormat extends FileSourceFormat>(
+  options: LegalFileReadOptions,
+  accept: (content: StoredFileContent) => TFormat | null,
+) => {
+  const opened = await openFileSource(options, accept);
+  if (opened.isErr()) {
+    return Result.err(opened.error);
+  }
+  const { load, ...file } = opened.value;
+  const source = await load();
+  return source.isErr()
+    ? Result.err(source.error)
+    : Result.ok({ ...file, source: source.value });
 };

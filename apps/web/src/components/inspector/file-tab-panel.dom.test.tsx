@@ -283,15 +283,16 @@ const { AuthenticatedUserProvider } =
 const { useDocxEditorHostStore } =
   await import("@/components/docx/docx-editor-host-store");
 const { FileTabPanel } = await import("./file-tab-panel");
-const { dataBoxPreviewOptions, fileOptions } =
+const { dataBoxPreviewOptions, emailHtmlPreviewOptions, fileOptions } =
   await import("@/lib/files/queries");
 const {
   asicPreviewOptions,
   cadesPreviewOptions,
+  mailboxPreviewOptions,
   signedDossierPreviewOptions,
   zipArchivePreviewOptions,
 } = await import("@/lib/files/legal-file-queries");
-const { filePartContentOptions, filePartListOptions } =
+const { filePartContentOptions } =
   await import("@/lib/files/file-part-queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
@@ -895,22 +896,36 @@ test("lists a ZIP archive's files with their folders and opens an email inside i
       ],
     });
     client.setQueryData(
-      filePartListOptions({ ...key, part: "member:2" }).queryKey,
+      emailHtmlPreviewOptions({ ...key, part: "member:2" }).queryKey,
       {
-        files: [
+        attachments: [
           {
+            charset: null,
+            part: "member:2/attachment:0",
             fileName: "usneseni.pdf",
-            folder: null,
+            mediaType: "application/pdf",
             sizeBytes: 4210,
-            part: {
-              part: "member:2/attachment:0",
-              fileName: "usneseni.pdf",
-              mediaType: "application/pdf",
-              sizeBytes: 4210,
-            },
-            unavailable: null,
           },
         ],
+        bcc: [],
+        bodyFolds: [],
+        bodyHtml: "<p>Dobrý den, v příloze posílám usnesení.</p>",
+        certified: null,
+        citationBlocks: [],
+        cc: [],
+        date: "Tue, 17 Nov 2026 09:30:00 +0100",
+        from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+        source: {
+          entityId: toSafeId<"entity">("entity-zip"),
+          entityName: "Podklady ke sporu",
+          fieldId: toSafeId<"field">("field-zip"),
+          fileName: "podklady-ke-sporu.zip",
+          mimeType: "application/zip",
+          pdfFileId: null,
+          propertyId: toSafeId<"property">("property-zip"),
+        },
+        subject: "Podklady k jednání",
+        to: ["Jitka Skořepová <skorepova@stavby-hradec.cz>"],
       },
     );
   });
@@ -928,22 +943,127 @@ test("lists a ZIP archive's files with their folders and opens an email inside i
     mounted.queryByRole("button", { name: "Download posudek.pdf" }),
   ).toBeNull();
 
-  // An email in the archive lists its own attachments, which open in turn.
+  // An email in the archive opens as an email, its attachments in turn.
   fireEvent.click(mounted.getByRole("button", { name: "Open podklady.eml" }));
+  expect(
+    await mounted.findByRole("heading", { name: "Podklady k jednání" }),
+  ).toBeTruthy();
   fireEvent.click(
-    await mounted.findByRole("button", { name: "Open usneseni.pdf" }),
+    await mounted.findByRole("button", { name: /usneseni\.pdf/u }),
   );
   expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
   expect(partLinkRequests).toContain("field-zip/member:2/attachment:0");
   fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
   expect(
-    await mounted.findByRole("button", { name: "Open usneseni.pdf" }),
+    await mounted.findByRole("heading", { name: "Podklady k jednání" }),
   ).toBeTruthy();
   fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
   expect(
     await mounted.findByRole("button", { name: "Open žaloba.pdf" }),
   ).toBeTruthy();
   expect(partLinkRequests).not.toContain("field-zip/member:2");
+});
+
+test("lists a mailbox's messages and opens one in place as an email", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-mbox"),
+    fileName: "spis-23-C-118-2026.mbox",
+    mimeType: "application/octet-stream",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(mailboxPreviewOptions(key).queryKey, {
+      truncated: false,
+      messages: [
+        {
+          fileName: "Plná moc a výzva.eml",
+          folder: "Spisy/Stavby Hradec",
+          sizeBytes: 9120,
+          subject: "Plná moc a výzva",
+          from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+          date: "not a date",
+          part: {
+            part: "message:0",
+            fileName: "Plná moc a výzva.eml",
+            mediaType: "message/rfc822",
+            sizeBytes: 9120,
+          },
+          unavailable: null,
+        },
+        {
+          fileName: "spis-23-C-118-2026-2.eml",
+          folder: null,
+          sizeBytes: 40_000_000,
+          subject: null,
+          from: null,
+          date: null,
+          part: null,
+          unavailable: "tooLarge",
+        },
+      ],
+    });
+    client.setQueryData(
+      emailHtmlPreviewOptions({ ...key, part: "message:0" }).queryKey,
+      {
+        attachments: [
+          {
+            charset: null,
+            part: "message:0/attachment:0",
+            fileName: "plna-moc.pdf",
+            mediaType: "application/pdf",
+            sizeBytes: 4210,
+          },
+        ],
+        bcc: [],
+        bodyFolds: [],
+        bodyHtml: "<p>Dobrý den, v příloze posílám plnou moc.</p>",
+        certified: null,
+        citationBlocks: [],
+        cc: [],
+        date: "Thu, 19 Nov 2026 10:15:00 +0100",
+        from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+        source: {
+          entityId: toSafeId<"entity">("entity-mbox"),
+          entityName: "Korespondence",
+          fieldId: toSafeId<"field">("field-mbox"),
+          fileName: "spis-23-C-118-2026.mbox",
+          mimeType: "application/octet-stream",
+          pdfFileId: null,
+          propertyId: toSafeId<"property">("property-mbox"),
+        },
+        subject: "Plná moc a výzva",
+        to: ["Jitka Skořepová <skorepova@stavby-hradec.cz>"],
+      },
+    );
+  });
+
+  // Each message shows who sent it, when (as stated) and where it was filed.
+  expect(
+    await mounted.findByText(
+      "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz> · not a date · Spisy/Stavby Hradec",
+    ),
+  ).toBeTruthy();
+  // One too large to open is listed with why, and nothing opens it.
+  expect(mounted.getByText("(No subject)")).toBeTruthy();
+  expect(mounted.getByText("Too large to open")).toBeTruthy();
+  expect(
+    mounted.queryByRole("button", { name: "Open (No subject)" }),
+  ).toBeNull();
+
+  fireEvent.click(
+    mounted.getByRole("button", { name: "Open Plná moc a výzva" }),
+  );
+  expect(
+    await mounted.findByRole("heading", { name: "Plná moc a výzva" }),
+  ).toBeTruthy();
+  fireEvent.click(
+    await mounted.findByRole("button", { name: /plna-moc\.pdf/u }),
+  );
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(partLinkRequests).toContain("field-mbox/message:0/attachment:0");
+  // Opening a message reads nothing more than its preview.
+  expect(partLinkRequests).not.toContain("field-mbox/message:0");
 });
 
 test("opens a document member no viewer draws as the PDF the server converts it to", async () => {

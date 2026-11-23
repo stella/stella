@@ -21,6 +21,12 @@ describe("a part that is itself a container", () => {
     ["application/octet-stream", "odpoved.msg", "email"],
     ["application/vnd.etsi.asic-e+zip", "leping.bdoc", "asicE"],
     ["application/xml", "FV-2026-0042.isdoc", "isdoc"],
+    ["application/mbox", "spis-23-C-118-2026.mbox", "mbox"],
+    // Browsers declare a mailbox they hold no type for as bytes; its name
+    // says what it is.
+    ["application/octet-stream", "Doručená pošta.mbox", "mbox"],
+    ["application/octet-stream", "korespondence.mbx", "mbox"],
+    ["", "Archiv.mbox", "mbox"],
   ] as const)("%s named %s is a %s container", (mediaType, name, format) => {
     expect(filePartContainerFormat(mediaType, name)).toBe(format);
   });

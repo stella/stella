@@ -587,6 +587,14 @@
     "server": "Su servidor tuvo un problema (error {status}). Inténtelo de nuevo en un momento.",
     "session": "Su sesión ha caducado. Vuelva a iniciar sesión."
   },
+  "mailbox": {
+    "back": "Volver a los mensajes",
+    "messages": "Mensajes",
+    "noMessages": "Este buzón no contiene mensajes.",
+    "openFailed": "No se ha podido abrir este mensaje. Toca para volver a intentarlo.",
+    "truncated": "Solo se muestran los primeros {count, number} mensajes.",
+    "unreadable": "No se ha podido leer este buzón."
+  },
   "matter": {
     "add": "Añadir",
     "details": "Detalles",

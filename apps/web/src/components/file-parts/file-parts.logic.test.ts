@@ -7,6 +7,7 @@ import {
   decodeFilePartText,
   FILE_PART_PREVIEW_KIND,
   filePartActions,
+  filePartIsEmail,
   filePartOpensInside,
   filePartPreviewKind,
   filePartViewId,
@@ -162,6 +163,19 @@ describe("a text part's preview", () => {
     const decoded = decodeFilePartText({ buffer: bytes.buffer, charset: null });
     expect(decoded.truncated).toBe(true);
     expect(decoded.text).toHaveLength(FILE_PART_TEXT_PREVIEW_MAX_BYTES);
+  });
+});
+
+describe("a part that is an email", () => {
+  test.each([
+    ["message/rfc822", true],
+    ["MESSAGE/RFC822; charset=utf-8", true],
+    ["application/vnd.ms-outlook", true],
+    // An `.eml` its bytes show only as text previews as text.
+    ["text/plain", false],
+    ["application/pdf", false],
+  ])("%s opens in the email viewer: %p", (mediaType, email) => {
+    expect(filePartIsEmail({ mediaType })).toBe(email);
   });
 });
 
