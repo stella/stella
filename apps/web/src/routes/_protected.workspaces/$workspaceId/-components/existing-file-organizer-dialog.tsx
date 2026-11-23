@@ -443,14 +443,25 @@ export const ExistingFileOrganizerDialog = ({
         }
         const { client } = matterSnapshot;
         if (client) {
-          const clientId =
-            client.id ??
-            (
-              await createContact.mutateAsync({
-                type: client.type,
-                displayName: client.displayName,
-              })
-            ).id;
+          let clientId = client.id;
+          if (clientId === null) {
+            const created = await createContact.mutateAsync({
+              type: client.type,
+              displayName: client.displayName,
+            });
+            clientId = created.id;
+            // A retry after a failed client update reuses this contact
+            // instead of creating it again.
+            const createdClient = { ...client, id: created.id };
+            setCachedSuggestions((cached) =>
+              cached
+                ? {
+                    ...cached,
+                    matter: { ...matterSnapshot, client: createdClient },
+                  }
+                : cached,
+            );
+          }
           await updateWorkspace.mutateAsync({
             workspaceId,
             update: {

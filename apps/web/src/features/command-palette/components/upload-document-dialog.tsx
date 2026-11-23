@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -64,21 +64,45 @@ export const UploadDocumentDialog = ({
   const createWorkspace = useCreateWorkspace();
   const draftOnce = useSingleFlight();
   const deleteWorkspace = useDeleteWorkspace();
-  // Closing before any upload discards the still-empty draft matter.
-  const cancel = () => {
-    if (draftMatterId !== null) {
-      deleteWorkspace.mutate({ workspaceId: draftMatterId });
+  // Bumped when the dialog moves on, so a draft still being created is
+  // deleted on arrival instead of selected.
+  const draftRequest = useRef(0);
+  // Leaving before any upload discards the still-empty draft. A failed delete
+  // keeps it, so the user can retry rather than strand it.
+  const discardDraft = async () => {
+    draftRequest.current += 1;
+    if (draftMatterId === null) {
+      return true;
     }
-    onClose();
+    const result = await Result.tryPromise(
+      async () =>
+        await deleteWorkspace.mutateAsync({ workspaceId: draftMatterId }),
+    );
+    if (Result.isError(result)) {
+      return false;
+    }
+    setDraftMatterId(null);
+    return true;
+  };
+  const cancel = async () => {
+    if (await discardDraft()) {
+      onClose();
+    }
   };
   const navigate = useNavigate();
   const createDraftMatter = async () => {
+    draftRequest.current += 1;
+    const request = draftRequest.current;
     const name = t("common.newMatter");
     const result = await Result.tryPromise(
       async () => await createWorkspace.mutateAsync({ name }),
     );
     if (Result.isError(result)) {
       notifyUserError(result.error, t("errors.actionFailed"));
+      return;
+    }
+    if (request !== draftRequest.current) {
+      deleteWorkspace.mutate({ workspaceId: result.value.id });
       return;
     }
     setDraftMatterId(result.value.id);
@@ -105,7 +129,7 @@ export const UploadDocumentDialog = ({
     <Dialog
       onOpenChange={(open) => {
         if (!open) {
-          cancel();
+          detached(cancel(), "upload-document.cancel");
         }
       }}
       open
@@ -129,11 +153,15 @@ export const UploadDocumentDialog = ({
                 userId={userId}
                 id="upload-matter"
                 onChange={(matter) => {
-                  if (draftMatterId !== null) {
-                    deleteWorkspace.mutate({ workspaceId: draftMatterId });
-                    setDraftMatterId(null);
-                  }
-                  setPicked(matter);
+                  detached(
+                    discardDraft().then((discarded) => {
+                      if (discarded) {
+                        setPicked(matter);
+                      }
+                      return;
+                    }),
+                    "upload-document.discard-draft",
+                  );
                 }}
                 value={picked}
               />
@@ -222,7 +250,10 @@ export const UploadDocumentDialog = ({
           )}
         </DialogPanel>
         <DialogFooter>
-          <Button onClick={cancel} variant="ghost">
+          <Button
+            onClick={() => detached(cancel(), "upload-document.cancel")}
+            variant="ghost"
+          >
             {t("common.cancel")}
           </Button>
         </DialogFooter>
