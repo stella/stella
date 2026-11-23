@@ -134,7 +134,7 @@ jobs:
           INPUT_USERNAME: ${{ github.actor }}
           INPUT_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           INPUT_LOGOUT: "false"
-        run: node .workflow-tooling/.github/actions/docker-login/main.mjs
+        run: bun .workflow-tooling/.github/actions/docker-login/main.mjs
 
       - name: Resolve API base images
         id: base-contexts

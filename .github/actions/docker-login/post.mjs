@@ -19,6 +19,7 @@ export function runDockerLogout(options) {
   const args = registry ? ["logout", registry] : ["logout"];
   const result = spawnSync(dockerBin, args, {
     encoding: "utf-8",
+    maxBuffer: 1024 * 1024,
     stdio: ["ignore", "pipe", "pipe"],
   });
   if (result.stdout) {

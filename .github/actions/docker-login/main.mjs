@@ -122,6 +122,7 @@ export async function runDockerLogin(options) {
     const result = spawnSync(dockerBin, args, {
       input: `${password}\n`,
       encoding: "utf-8",
+      maxBuffer: 1024 * 1024,
       stdio: ["pipe", "pipe", "pipe"],
     });
 
