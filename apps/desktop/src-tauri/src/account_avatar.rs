@@ -13,8 +13,7 @@
 
 use std::{
   fs,
-  io::Write as _,
-  path::{Path, PathBuf},
+  path::PathBuf,
   sync::{Arc, OnceLock},
   time::Duration,
 };
@@ -111,9 +110,8 @@ pub(crate) enum AvatarSource {
   Remote(reqwest::Url),
 }
 
-/// Reads the verification's `accountImage`. `Ok(None)` is no picture;
-/// anything that is not an `https` URL or a base64 raster `data:` URL is
-/// refused.
+/// Reads the verification's `accountImage`. Anything that is not an `https`
+/// URL or a base64 raster `data:` URL is refused.
 pub(crate) fn parse_source(reference: &str) -> Result<AvatarSource, AvatarError> {
   if reference.len() > MAX_REFERENCE_LENGTH {
     return Err(AvatarError::TooLarge);
@@ -261,16 +259,15 @@ impl AvatarCache {
     let parent = path
       .parent()
       .ok_or_else(|| "app data directory is unavailable".to_string())?;
-    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+    crate::local_store::create_private_dir(parent)
+      .map_err(|error| error.to_string())?;
     let body = serde_json::to_vec(&CachedAvatar {
       namespace: namespace.into(),
       source: source.into(),
       data_url: image.data_url(),
     })
     .map_err(|error| error.to_string())?;
-    let staged = path.with_extension("json.partial");
-    write_private(&staged, &body)?;
-    fs::rename(&staged, path).map_err(|error| error.to_string())
+    crate::local_store::write_private_atomic(path, &body)
   }
 
   /// Removes the picture; nothing cached is not an error.
@@ -284,19 +281,6 @@ impl AvatarCache {
       Err(error) => Err(error.to_string()),
     }
   }
-}
-
-fn write_private(path: &Path, body: &[u8]) -> Result<(), String> {
-  let mut options = fs::OpenOptions::new();
-  options.write(true).create(true).truncate(true);
-  #[cfg(unix)]
-  {
-    use std::os::unix::fs::OpenOptionsExt as _;
-    options.mode(0o600);
-  }
-  let mut file = options.open(path).map_err(|error| error.to_string())?;
-  file.write_all(body).map_err(|error| error.to_string())?;
-  file.sync_all().map_err(|error| error.to_string())
 }
 
 /// A digest of the reference, so a changed picture is fetched again while the
