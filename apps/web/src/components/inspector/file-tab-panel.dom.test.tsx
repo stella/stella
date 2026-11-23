@@ -964,6 +964,60 @@ test("lists a ZIP archive's files with their folders and opens an email inside i
   expect(partLinkRequests).not.toContain("field-zip/member:2");
 });
 
+test("finds a mailbox's messages by subject, sender or folder", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-mbox-search"),
+    fileName: "korespondence.mbox",
+    mimeType: "application/mbox",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const subjects = [
+    "Výzva k zaplacení",
+    "Plná moc",
+    "Termín jednání 3. 12.",
+    "Návrh smíru",
+    "Vyjádření k žalobě",
+    "Faktura za říjen",
+  ];
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(mailboxPreviewOptions(key).queryKey, {
+      truncated: false,
+      messages: subjects.map((subject, index) => ({
+        fileName: `${subject}.eml`,
+        folder: index === 5 ? "Účetnictví" : "korespondence",
+        sizeBytes: 2048,
+        subject,
+        from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+        date: null,
+        part: {
+          part: `message:${String(index)}`,
+          fileName: `${subject}.eml`,
+          mediaType: "message/rfc822",
+          sizeBytes: 2048,
+        },
+        unavailable: null,
+      })),
+    });
+  });
+
+  const search = await mounted.findByRole("searchbox", {
+    name: "Search messages",
+  });
+  // Accents and case do not matter.
+  fireEvent.change(search, { target: { value: "VYJADRENI" } });
+  expect(
+    mounted.getByRole("button", { name: "Open Vyjádření k žalobě" }),
+  ).toBeTruthy();
+  expect(mounted.queryByRole("button", { name: "Open Plná moc" })).toBeNull();
+  fireEvent.change(search, { target: { value: "ucetnictvi" } });
+  expect(
+    mounted.getByRole("button", { name: "Open Faktura za říjen" }),
+  ).toBeTruthy();
+  fireEvent.change(search, { target: { value: "rozsudek" } });
+  expect(mounted.getByText("No message matches “rozsudek”.")).toBeTruthy();
+});
+
 test("lists a mailbox's messages and opens one in place as an email", async () => {
   const tab = {
     ...pdfTab,

@@ -1,9 +1,16 @@
+import { useState } from "react";
+
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import {
+  LIST_SEARCH_MIN_ROWS,
+  listRowMatches,
+} from "@stll/api-contract/list-search";
 import { Button } from "@stll/ui/button";
 import { DownloadIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { SearchField } from "@stll/ui/search-field";
 import { cn } from "@stll/ui/utils";
 
 import { DOCKED_COMPOSER_CLEARANCE } from "@/components/ai-suggestions/composer-geometry";
@@ -42,6 +49,10 @@ export const ZipArchiveViewer = ({
       : [{ ...file.part, detail: file.folder, reading: file }],
   );
   const { open, openPart, close } = useOpenFilePart(parts);
+  const [query, setQuery] = useState("");
+  const shown = data.files.filter(({ fileName, folder }) =>
+    listRowMatches([fileName, folder], query),
+  );
 
   return (
     <FileViewerWithAI
@@ -87,18 +98,31 @@ export const ZipArchiveViewer = ({
             <DownloadIcon />
             {t("common.downloadOriginal")}
           </Button>
+          {data.files.length >= LIST_SEARCH_MIN_ROWS ? (
+            <SearchField
+              aria-label={t("inspector.fileParts.search")}
+              clearLabel={t("common.clearSearch")}
+              onValueChange={setQuery}
+              placeholder={t("inspector.fileParts.search")}
+              value={query}
+            />
+          ) : null}
           {data.files.length === 0 ? (
             <p className="text-muted-foreground text-sm">
               {t("inspector.fileParts.noFilesInside")}
             </p>
-          ) : (
-            <ContainedFileList
-              actions={actions}
-              files={data.files}
-              onOpen={openPart}
-              title={t("common.files")}
-            />
-          )}
+          ) : null}
+          {data.files.length > 0 && shown.length === 0 ? (
+            <p className="text-muted-foreground text-sm">
+              {t("inspector.fileParts.noMatches", { query: query.trim() })}
+            </p>
+          ) : null}
+          <ContainedFileList
+            actions={actions}
+            files={shown}
+            onOpen={openPart}
+            title={t("common.files")}
+          />
         </article>
       </ScrollArea>
       {actions.dialog}

@@ -576,7 +576,9 @@
         "tooLarge": "Too large to open",
         "unreadable": "Damaged, can’t be opened",
         "unsupported": "Compressed in a way that can’t be opened"
-      }
+      },
+      "search": "Find a file by name or folder",
+      "noMatches": "No file matches “{query}”."
     },
     "firstSourceReached": "This is the first source.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Inspector",
     "mailbox": {
       "messages": "Messages",
+      "noMatches": "No message matches “{query}”.",
       "noMessages": "This mailbox holds no messages.",
+      "search": "Search messages",
       "truncated": "Only the first {count, number} messages are listed.",
       "unreadable": "This mailbox couldn’t be read."
     }

@@ -30,7 +30,9 @@ const FOLDER_MAX_CHARS = 255;
 /**
  * Headers naming where a mail client filed a message, in the order they are
  * preferred: a folder (`X-Folder`, as several clients and exports write it),
- * else Gmail's labels (`X-Gmail-Labels`, as its export writes them).
+ * else Gmail's labels (`X-Gmail-Labels`, as its export writes them). A
+ * message without either is in the folder the mailbox itself is: clients
+ * such as Thunderbird keep one folder per mailbox file, named after it.
  */
 const FOLDER_HEADERS = ["x-folder", "x-gmail-labels"] as const;
 
@@ -66,6 +68,15 @@ const headerFields = (header: string): Map<string, string> => {
     }
   }
   return fields;
+};
+
+/** The folder a mailbox file is: its name, less a mailbox extension. */
+export const mailboxFolderName = (mailboxName: string): string | null => {
+  const folder = mailboxName
+    .replace(/\.(?:mbox|mbx)$/iu, "")
+    .trim()
+    .slice(0, FOLDER_MAX_CHARS);
+  return folder || null;
 };
 
 const folderOf = (fields: Map<string, string>): string | null => {
@@ -144,7 +155,7 @@ export const mailboxEntry = async (
     subject,
     from: nonBlank(email?.from),
     date: nonBlank(email?.date),
-    folder: folderOf(fields),
+    folder: folderOf(fields) ?? mailboxFolderName(mailboxName),
     fileName: mailboxMessageFileName(subject, mailboxName, span.index),
     unavailable: unavailableReason({ readable, tooLarge }),
   };

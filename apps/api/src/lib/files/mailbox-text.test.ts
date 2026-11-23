@@ -48,7 +48,7 @@ describe("a mailbox's text", () => {
     const text = (await read(mailbox.bytes)).unwrap();
     expect(text).toStartWith("Mailbox.");
     expect(text).toContain(
-      "Message 1\nFrom: Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+      "Message 1 (folder: spis)\nFrom: Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
     );
     expect(text).toContain("Subject: Spis 23 C 118/2026, podklady k jednání");
     // Unquoted as the message was written, its body decoded as it declares.

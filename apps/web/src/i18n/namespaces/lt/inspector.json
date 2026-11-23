@@ -576,7 +576,9 @@
         "tooLarge": "Per didelis, kad būtų galima atidaryti",
         "unreadable": "Sugadintas, negalima atidaryti",
         "unsupported": "Suglaudintas būdu, kurio negalima atidaryti"
-      }
+      },
+      "search": "Rasti failą pagal pavadinimą ar aplanką",
+      "noMatches": "Užklausą „{query}“ atitinkančių failų nėra."
     },
     "firstSourceReached": "Tai pirmas šaltinis.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Inspektorius",
     "mailbox": {
       "messages": "Laiškai",
+      "noMatches": "Užklausą „{query}“ atitinkančių laiškų nėra.",
       "noMessages": "Šioje pašto dėžutėje nėra laiškų.",
+      "search": "Ieškoti laiškų",
       "truncated": "Rodomi tik pirmieji {count, number} laiškų.",
       "unreadable": "Nepavyko perskaityti šios pašto dėžutės."
     }

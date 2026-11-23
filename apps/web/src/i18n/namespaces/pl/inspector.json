@@ -576,7 +576,9 @@
         "tooLarge": "Za duży, by go otworzyć",
         "unreadable": "Uszkodzony, nie można otworzyć",
         "unsupported": "Skompresowany w sposób, którego nie można otworzyć"
-      }
+      },
+      "search": "Znajdź plik po nazwie lub folderze",
+      "noMatches": "Żaden plik nie pasuje do „{query}”."
     },
     "firstSourceReached": "To pierwsze źródło.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Inspektor",
     "mailbox": {
       "messages": "Wiadomości",
+      "noMatches": "Żadna wiadomość nie pasuje do „{query}”.",
       "noMessages": "Ta skrzynka pocztowa nie zawiera wiadomości.",
+      "search": "Szukaj w wiadomościach",
       "truncated": "Wyświetlono tylko pierwsze {count, number} wiadomości.",
       "unreadable": "Nie udało się odczytać tej skrzynki pocztowej."
     }

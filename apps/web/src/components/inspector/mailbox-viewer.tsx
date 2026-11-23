@@ -1,8 +1,12 @@
-import { useId } from "react";
+import { useId, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
+import {
+  LIST_SEARCH_MIN_ROWS,
+  listRowMatches,
+} from "@stll/api-contract/list-search";
 import {
   type MailboxMessage,
   mailboxMessageDetails,
@@ -12,6 +16,7 @@ import { Button } from "@stll/ui/button";
 import { formatFileSize } from "@stll/ui/file-size";
 import { DownloadIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import { SearchField } from "@stll/ui/search-field";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
@@ -160,6 +165,15 @@ export const MailboxViewer = ({
     message.part === null ? [] : [{ ...message.part, detail: message.folder }],
   );
   const { open, openPart, close } = useOpenFilePart(parts);
+  const [query, setQuery] = useState("");
+  const shown = data.messages.flatMap((message, position) =>
+    listRowMatches(
+      [message.subject, message.from, message.folder, message.fileName],
+      query,
+    )
+      ? [{ message, position }]
+      : [],
+  );
 
   return (
     <FileViewerWithAI
@@ -203,6 +217,15 @@ export const MailboxViewer = ({
               <h2 className="text-sm font-medium" id={titleId}>
                 {t("inspector.mailbox.messages")}
               </h2>
+              {data.messages.length >= LIST_SEARCH_MIN_ROWS ? (
+                <SearchField
+                  aria-label={t("inspector.mailbox.search")}
+                  clearLabel={t("common.clearSearch")}
+                  onValueChange={setQuery}
+                  placeholder={t("inspector.mailbox.search")}
+                  value={query}
+                />
+              ) : null}
               {data.truncated ? (
                 <p className="text-muted-foreground text-xs">
                   {t("inspector.mailbox.truncated", {
@@ -210,18 +233,24 @@ export const MailboxViewer = ({
                   })}
                 </p>
               ) : null}
-              <ul className="divide-y rounded-lg border">
-                {data.messages.map((message, position) => (
-                  <MessageRow
-                    actions={actions}
-                    key={
-                      message.part?.part ?? `unavailable:${String(position)}`
-                    }
-                    message={message}
-                    onOpen={openPart}
-                  />
-                ))}
-              </ul>
+              {shown.length === 0 ? (
+                <p className="text-muted-foreground text-sm">
+                  {t("inspector.mailbox.noMatches", { query: query.trim() })}
+                </p>
+              ) : (
+                <ul className="divide-y rounded-lg border">
+                  {shown.map(({ message, position }) => (
+                    <MessageRow
+                      actions={actions}
+                      key={
+                        message.part?.part ?? `unavailable:${String(position)}`
+                      }
+                      message={message}
+                      onOpen={openPart}
+                    />
+                  ))}
+                </ul>
+              )}
             </section>
           )}
         </article>

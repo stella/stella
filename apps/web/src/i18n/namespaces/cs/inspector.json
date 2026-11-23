@@ -576,7 +576,9 @@
         "tooLarge": "Příliš velký, nelze otevřít",
         "unreadable": "Poškozený, nelze otevřít",
         "unsupported": "Komprimováno způsobem, který nelze otevřít"
-      }
+      },
+      "search": "Najít soubor podle názvu nebo složky",
+      "noMatches": "Výrazu „{query}“ neodpovídá žádný soubor."
     },
     "firstSourceReached": "Toto je první zdroj.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Inspektor",
     "mailbox": {
       "messages": "Zprávy",
+      "noMatches": "Výrazu „{query}“ neodpovídá žádná zpráva.",
       "noMessages": "Tato poštovní schránka neobsahuje žádné zprávy.",
+      "search": "Hledat ve zprávách",
       "truncated": "Zobrazuje se jen prvních {count, number} zpráv.",
       "unreadable": "Tuto poštovní schránku se nepodařilo přečíst."
     }

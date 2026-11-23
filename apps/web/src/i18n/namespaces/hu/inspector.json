@@ -576,7 +576,9 @@
         "tooLarge": "Túl nagy a megnyitáshoz",
         "unreadable": "Sérült, nem nyitható meg",
         "unsupported": "Olyan módon tömörített, amely nem nyitható meg"
-      }
+      },
+      "search": "Fájl keresése név vagy mappa alapján",
+      "noMatches": "Egyetlen fájl sem felel meg ennek: „{query}”."
     },
     "firstSourceReached": "Ez az első forrás.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Ellenőrző panel",
     "mailbox": {
       "messages": "Üzenetek",
+      "noMatches": "Egyetlen üzenet sem felel meg ennek: „{query}”.",
       "noMessages": "Ez a postafiók nem tartalmaz üzeneteket.",
+      "search": "Keresés az üzenetekben",
       "truncated": "Csak az első {count, number} üzenet látható.",
       "unreadable": "Ezt a postafiókot nem sikerült beolvasni."
     }

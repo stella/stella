@@ -576,7 +576,9 @@
         "tooLarge": "Trop volumineux pour être ouvert",
         "unreadable": "Endommagé, impossible à ouvrir",
         "unsupported": "Compressé d’une manière impossible à ouvrir"
-      }
+      },
+      "search": "Rechercher un fichier par nom ou dossier",
+      "noMatches": "Aucun fichier ne correspond à « {query} »."
     },
     "firstSourceReached": "Il s’agit de la première source.",
     "groups": {
@@ -840,7 +842,9 @@
     "title": "Inspecteur",
     "mailbox": {
       "messages": "Courriels",
+      "noMatches": "Aucun courriel ne correspond à « {query} ».",
       "noMessages": "Cette boîte aux lettres ne contient aucun message.",
+      "search": "Rechercher dans les courriels",
       "truncated": "Seuls les {count, number} premiers messages sont affichés.",
       "unreadable": "Impossible de lire cette boîte aux lettres."
     }
