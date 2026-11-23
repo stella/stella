@@ -12,6 +12,8 @@ import {
 import {
   batchPeakRss,
   composeTestBatches,
+  EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB,
+  embeddedPostgresOverlapPeakRss,
   measuredTestRssTable,
   MIN_TEST_RSS_CLASS_MEASUREMENTS,
   parseRssMeasurementArguments,
@@ -526,5 +528,73 @@ test("every production batch fits its cap, and every shared batch its measured h
         batch.length > 1 ? budgetMb * TEST_BATCH_RSS_HEADROOM_RATIO : budgetMb,
       ),
     });
+    const overlap = embeddedPostgresOverlapPeakRss({
+      files: batch,
+      rssTable: table,
+      budgetMb,
+      dbTestPaths,
+    });
+    expect({ batch, overlap }).toEqual({
+      batch,
+      overlap: Math.min(overlap, budgetMb),
+    });
   }
 }, 20_000);
+
+test("embedded-Postgres files share a process only while their solo peaks and the overlap allowance fit the cap", () => {
+  const sitemap = "src/sitemap.db.test.ts";
+  const draft = "src/draft.integration.test.ts";
+  const analysis = "src/analysis.db.test.ts";
+  const logic = "src/logic.test.ts";
+  // Solo peaks of the pair that peaked at 2571 MB together on a hosted runner.
+  const table = calibrated(233, {
+    [sitemap]: 1248,
+    [analysis]: 233,
+    [draft]: 773,
+    [logic]: 300,
+  });
+  const embedded = new Set([sitemap, draft, analysis]);
+  // The increment estimate alone (1788 MB) fits the composition budget.
+  expect(
+    batchPeakRss({
+      files: [sitemap, analysis, draft],
+      rssTable: table,
+      budgetMb: BUDGET_MB,
+      dbTestPaths: embedded,
+    }),
+  ).toBeLessThanOrEqual(BUDGET_MB * TEST_BATCH_RSS_HEADROOM_RATIO);
+  // 1248 + 233 + 773 + the allowance passes the cap; 1248 + 233 does not.
+  expect(
+    splitMemoryBoundedBatches({
+      batches: [[sitemap, analysis, draft]],
+      rssTable: table,
+      budgetMb: BUDGET_MB,
+      dbTestPaths: embedded,
+    }),
+  ).toEqual([[sitemap, analysis], [draft]]);
+  expect(
+    embeddedPostgresOverlapPeakRss({
+      files: [sitemap, analysis, draft],
+      rssTable: table,
+      budgetMb: BUDGET_MB,
+      dbTestPaths: embedded,
+    }),
+  ).toBe(1248 + 233 + 773 + EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB);
+  // A file without an embedded database keeps its increment-only weight.
+  expect(
+    splitMemoryBoundedBatches({
+      batches: [[sitemap, logic]],
+      rssTable: table,
+      budgetMb: BUDGET_MB,
+      dbTestPaths: embedded,
+    }),
+  ).toEqual([[sitemap, logic]]);
+  expect(
+    embeddedPostgresOverlapPeakRss({
+      files: [sitemap, logic],
+      rssTable: table,
+      budgetMb: BUDGET_MB,
+      dbTestPaths: embedded,
+    }),
+  ).toBe(0);
+});

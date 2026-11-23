@@ -166,6 +166,7 @@
     "./legal-file-formats": "./src/legal-file-formats.ts",
     "./structured-document-formats": "./src/structured-document-formats.ts",
     "./structured-document": "./src/structured-document.ts",
+    "./e-invoice-codes": "./src/e-invoice-codes.ts",
     "./e-invoice-formats": "./src/e-invoice-formats.ts",
     "./e-invoice": "./src/e-invoice.ts",
     "./asic": "./src/asic.ts",

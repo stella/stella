@@ -298,7 +298,7 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
       entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
       workspaceId: chatRef("matter"),
       workspaceName: v.string(),
-      name: v.string(),
+      name: contentText(),
       kind: v.picklist(ENTITY_KINDS),
       headline: v.nullable(contentText()),
     }),
@@ -326,7 +326,7 @@ export const READ_CONTENT_ACROSS_MATTERS_PROJECTION = v.strictObject({
   // declaration, kept verbatim) only backs a non-echo payload.
   entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
   kind: v.picklist(ENTITY_KINDS),
-  name: v.string(),
+  name: contentText(),
   text: contentText(),
   truncated: v.boolean(),
   nextCursor: v.nullable(v.string()),
@@ -384,7 +384,7 @@ export const LIST_DOCUMENTS_PROJECTION = v.strictObject({
   documents: v.array(
     v.strictObject({
       id: chatEntityRef({ from: "inputParam", param: "matter_id" }),
-      name: v.string(),
+      name: contentText(),
       kind: v.string(),
       parentId: v.nullable(
         chatEntityRef({ from: "inputParam", param: "matter_id" }),
@@ -419,7 +419,7 @@ const documentFieldContentProjection = v.variant("type", [
       version: v.literal(1),
       type: v.literal("file"),
       id: strippedField(),
-      fileName: v.string(),
+      fileName: contentText(),
       mimeType: v.string(),
       sizeBytes: v.number(),
       encrypted: v.boolean(),
@@ -643,7 +643,7 @@ const documentSearchIndexStateProjection = v.variant("status", [
 export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
   kind: v.string(),
-  name: v.string(),
+  name: contentText(),
   fields: v.array(documentFieldProjection),
   contentState: documentContentStateProjection,
   searchIndexState: documentSearchIndexStateProjection,
@@ -655,7 +655,7 @@ export const READ_DOCUMENT_DEFAULT_PROJECTION = v.strictObject({
 /** read_document, `version_id` branch: one version's metadata + fields. */
 export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
-  name: v.string(),
+  name: contentText(),
   version: v.strictObject({
     id: passthroughId(),
     versionNumber: v.number(),
@@ -673,7 +673,7 @@ export const READ_DOCUMENT_VERSION_PROJECTION = v.strictObject({
  */
 export const READ_DOCUMENT_DIFF_PROJECTION = v.strictObject({
   entityId: readDocumentEntityId(),
-  name: v.string(),
+  name: contentText(),
   diff: v.strictObject({
     // Entity-version handles, no chat ref kind.
     baseVersionId: passthroughId(),

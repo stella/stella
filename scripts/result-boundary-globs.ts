@@ -449,6 +449,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // this adapter converts that runtime contract to a typed Result.
   "packages/scan-engine/src/scan-engine.ts",
   "packages/scan-engine/src/scan-engine.worker.ts",
+  // A trap in the HEIC decoder's module surfaces as a thrown
+  // WebAssembly.RuntimeError; the adapter turns it into a typed outcome.
+  "packages/heic-decoder/src/heic-decoder.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

@@ -39,6 +39,19 @@ export default {
           "The retention oracle's own reading of a publisher's RTF: it must not share the reader whose parse it checks.",
       },
       {
+        path: "apps/api/src/lib/files/rtf-body.ts",
+        reason:
+          "An Outlook message body, not a document: it de-encapsulates the HTML an RTF body carries ([MS-OXRTFEX]) and shows a plain RTF body as its text.",
+      },
+      {
+        path: "apps/api/src/lib/files/rtf-body.test.ts",
+        reason: "Provides synthetic RTF message bodies to the body reader.",
+      },
+      {
+        path: "apps/api/src/tests/fixtures/tnef.ts",
+        reason: "Provides a synthetic RTF body inside a TNEF stream.",
+      },
+      {
         path: ".oxlint-plugins/__tests__/confine-owner.test.ts",
         reason: "Verifies the rejecting second-reader mutation.",
       },

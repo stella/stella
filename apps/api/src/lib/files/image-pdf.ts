@@ -58,6 +58,9 @@ export const canEmbedInProcess = (header: ImageHeader): boolean => {
       EMBEDDABLE_PNG_COLOR_TYPES.has(encoding.colorType)
     );
   }
+  if (encoding.format !== "jpeg") {
+    return false;
+  }
   return (
     EMBEDDABLE_JPEG_FRAMES.has(encoding.frameMarker) &&
     encoding.precision === 8 &&

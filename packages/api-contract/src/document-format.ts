@@ -5,7 +5,13 @@ import {
   type HtmlRenderedDocumentFormat,
 } from "./converted-document-formats";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
-import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
+import {
+  EML_MIME_TYPE,
+  isTnefFileName,
+  MSG_MIME_TYPE,
+  TNEF_MIME_ALIASES,
+  TNEF_MIME_TYPE,
+} from "./email-mime-types";
 import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
@@ -66,6 +72,14 @@ export type RecognisedDocumentFormat = {
   readonly label: string;
   readonly mimeTypes: readonly string[];
   readonly extensions: readonly string[];
+};
+
+/** Outlook's TNEF stream: a message, read as an email. */
+const TNEF: RecognisedDocumentFormat = {
+  kind: "email",
+  label: "TNEF",
+  mimeTypes: [TNEF_MIME_TYPE, ...TNEF_MIME_ALIASES],
+  extensions: [],
 };
 
 /**
@@ -163,6 +177,19 @@ const DOCUMENT_FORMATS: readonly RecognisedDocumentFormat[] = [
     mimeTypes: ["image/webp"],
     extensions: [".webp"],
   },
+  // A sequence (a burst) previews as its first picture, like the still.
+  {
+    kind: "image",
+    label: "HEIC",
+    mimeTypes: ["image/heic", "image/heic-sequence"],
+    extensions: [".heic", ".heics"],
+  },
+  {
+    kind: "image",
+    label: "HEIF",
+    mimeTypes: ["image/heif", "image/heif-sequence"],
+    extensions: [".heif", ".heifs", ".hif"],
+  },
   ...[...CONVERTED_DOCUMENT_FORMATS, ...HTML_RENDERED_DOCUMENT_FORMATS].map(
     ({
       kind,
@@ -206,6 +233,9 @@ const DOCUMENT_FORMATS: readonly RecognisedDocumentFormat[] = [
     mimeTypes: [MSG_MIME_TYPE],
     extensions: [".msg"],
   },
+  // Known by its media type, or by the one name Outlook gives it
+  // (`winmail.dat`): `.dat` alone names no format.
+  TNEF,
   {
     kind: "markdown",
     label: "MD",
@@ -296,14 +326,17 @@ export const documentFormat = (
         : byMimeType,
     );
   }
+  if (isTnefFileName(fileName)) {
+    return formatOf(TNEF);
+  }
   if (byExtension !== undefined) {
     return formatOf(byExtension);
   }
   if (media === "text/plain") {
     return formatOf(PLAIN_TEXT);
   }
-  // A type outside the table still names its family: an image/heic photo is
-  // an image, as an unlisted text/ type is text.
+  // A type outside the table still names its family: an image/avif picture
+  // is an image, as an unlisted text/ type is text.
   const label = extensionLabel(fileName);
   if (media.startsWith("image/")) {
     return { kind: "image", mark: "image", label };

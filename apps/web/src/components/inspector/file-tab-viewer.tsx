@@ -445,7 +445,10 @@ const FileTabViewerComponent = ({
       case null:
         if (entity.conversionRefusal !== undefined) {
           return (
-            <ConversionRefusalFallback refusal={entity.conversionRefusal} />
+            <ConversionRefusalFallback
+              onDownload={handleDownload}
+              refusal={entity.conversionRefusal}
+            />
           );
         }
         return (
@@ -476,6 +479,7 @@ const FileTabViewerComponent = ({
                 : undefined
             }
             scaleOffset={scaleOffset}
+            underOverlayBar={isZoomOverlayVisible}
             viewId={peekPdfViewId}
             workspaceId={tab.workspaceId}
           />

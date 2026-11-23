@@ -10,7 +10,7 @@
  * of consecutive columns, each band a table of its own with every record.
  *
  * Fonts are embedded as subsets shared by each run of
- * {@link PAGES_PER_FONT_SUBSET} pages, so the laid-out glyphs held at once
+ * `TextPages.pagesPerFontRun` pages, so the laid-out glyphs held at once
  * stay bounded however long the file is.
  */
 
@@ -51,15 +51,18 @@ import {
   textLayout,
   type TextRow,
 } from "@/api/lib/files/text-preview-layout";
-import { LIMITS } from "@/api/lib/limits";
 
 /** A4, in points. */
 const A4 = { width: 595.28, height: 841.89 } as const;
 const A4_LANDSCAPE = { width: A4.height, height: A4.width } as const;
 type PageSize = { width: number; height: number };
 
-/** Pages that share one subset of each embedded font. */
-const PAGES_PER_FONT_SUBSET = 50;
+/**
+ * How many pages a text preview lays out, and how many it holds before
+ * writing them out with one subset of each font: the pages held, and the
+ * layout garbage collected after them, are what its memory peaks with.
+ */
+export type TextPages = { pagesMax: number; pagesPerFontRun: number };
 
 const TEXT_FONT_SIZE = 10;
 /** 2 cm. */
@@ -94,7 +97,7 @@ const encoder = new TextEncoder();
  * Collects pages and writes them, in the order they are added, in runs that
  * share their font subsets.
  */
-const pageWriter = (pdf: PDF) => {
+const pageWriter = (pdf: PDF, pagesPerFontRun: number) => {
   let pending: PreviewPage[] = [];
   let written = 0;
   const flush = () => {
@@ -134,7 +137,7 @@ const pageWriter = (pdf: PDF) => {
   return {
     add: (page: PreviewPage) => {
       pending.push(page);
-      if (pending.length >= PAGES_PER_FONT_SUBSET) {
+      if (pending.length >= pagesPerFontRun) {
         flush();
       }
     },
@@ -199,7 +202,7 @@ const baseFace = (fonts: StampFonts): StampFace =>
 
 /**
  * What a text preview lays out: the start of the file, and whether there is
- * more of it (see `LIMITS.pdfRenderTextSourceBytesMax`).
+ * more of it (see `PdfRenderBudget.textSourceBytesMax`).
  */
 export type TextPreviewSource = { text: string; shortened: boolean };
 
@@ -238,21 +241,21 @@ const shortenedNotePage = (fonts: StampFonts): PreviewPage => {
 
 /** Adds the shortened note to `pdf` as its next page. */
 export const addShortenedNotePage = (pdf: PDF, fonts: StampFonts): void => {
-  const writer = pageWriter(pdf);
+  const writer = pageWriter(pdf, 1);
   writer.add(shortenedNotePage(fonts));
   writer.flush();
 };
 
 /**
- * Plain text as an A4 PDF of at most `LIMITS.pdfRenderTextPagesMax` pages,
- * then the shortened note when the file has more than that or than the
- * text given.
+ * Plain text as an A4 PDF of at most `pages.pagesMax` pages, then the
+ * shortened note when the file has more than that or than the text given.
  */
 export const plainTextToPdf = async (
   { shortened, text }: TextPreviewSource,
   fonts: StampFonts,
+  { pagesMax, pagesPerFontRun }: TextPages,
 ): Promise<Uint8Array> => {
-  const writer = pageWriter(PdfDocument.create());
+  const writer = pageWriter(PdfDocument.create(), pagesPerFontRun);
   const layout = textLayout(fonts);
   const base = baseFace(fonts);
   const size = TEXT_FONT_SIZE;
@@ -265,7 +268,7 @@ export const plainTextToPdf = async (
     writer.add({ rows, size: A4, underlay: [] });
     rows = [];
     y = top;
-    return writer.count() < LIMITS.pdfRenderTextPagesMax;
+    return writer.count() < pagesMax;
   };
   /** Sets the text page by page; `true` when the page limit cut it short. */
   const place = (): boolean => {
@@ -539,18 +542,19 @@ const takeLines = (cursor: CellCursor, height: number): PlacedCell => {
 };
 
 /**
- * CSV as a PDF table of at most `LIMITS.pdfRenderTextPagesMax` pages, then
+ * CSV as a PDF table of at most `pages.pagesMax` pages, then
  * the shortened note when the file has more; or as plain text when it does
  * not read as CSV.
  */
 export const csvToPdf = async (
   source: TextPreviewSource,
   fonts: StampFonts,
+  pages: TextPages,
 ): Promise<Uint8Array> => {
   const { shortened } = source;
   const records = readCsvRecords(source);
   if (records === null) {
-    return await plainTextToPdf(source, fonts);
+    return await plainTextToPdf(source, fonts, pages);
   }
   const base = baseFace(fonts);
   const layout = textLayout(fonts);
@@ -594,8 +598,8 @@ export const csvToPdf = async (
   );
   const total = natural.reduce((sum, width) => sum + width, 0);
   const size = total <= A4.width - 2 * TABLE_MARGIN ? A4 : A4_LANDSCAPE;
-  const writer = pageWriter(PdfDocument.create());
-  const full = () => writer.count() >= LIMITS.pdfRenderTextPagesMax;
+  const writer = pageWriter(PdfDocument.create(), pages.pagesPerFontRun);
+  const full = () => writer.count() >= pages.pagesMax;
   const bands = columnBands(natural, size.width - 2 * TABLE_MARGIN);
 
   /** One band's table; `true` when the page limit cut it short. */
