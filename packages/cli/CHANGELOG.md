@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.1.3
+
+### Patch Changes
+
+- [#9254](https://github.com/stella/stella/pull/9254) [`fcf4215`](https://github.com/stella/stella/commit/fcf421569917f12d081fec6faed0188b0003b8a6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read Outlook TNEF messages (`winmail.dat`), alone or attached to an email, through document content commands.
+
 ## 8.1.2
 
 ### Patch Changes
