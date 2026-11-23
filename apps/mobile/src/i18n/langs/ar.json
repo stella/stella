@@ -831,7 +831,7 @@
     "dictationLearnedDelete": "حذف ما تعلّمته stella",
     "dictationLearnedEmpty": "لم تُتعلَّم أي تصحيحات بعد.",
     "dictationLearnedFix": "{from} ← {to}",
-    "dictationLearnedHint": "عندما تصحّح تهجئة كلمة أو اسم مُملى بالطريقة نفسها مرتين، تكتبه stella هكذا في الإملاءات التالية. يُحفظ على هذا الهاتف فقط.",
+    "dictationLearnedHint": "عندما تصحّح تهجئة كلمة أو اسم مُملى بالطريقة نفسها مرتين، تكتبه stella هكذا في الإملاءات التالية. تُزامَن مع أجهزتك الأخرى، ولا يراها أحد سواك.",
     "dictationLearnedTitle": "تصحيحات تعلّمتها stella من تعديلاتك",
     "dictationLearnedUnreadable": "تعذّرت قراءة ما تعلّمته stella.",
     "dictationModelDefault": "الافتراضي",

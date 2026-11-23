@@ -224,11 +224,15 @@ const fetchEcsCredentials = async ({
   signal?: AbortSignal;
   fetchImpl?: Fetcher;
   runtimeEnv?: CredentialRuntimeEnv;
-} = {}): Promise<S3Credentials | null> => {
+} = {}): Promise<
+  | { status: "loaded"; credentials: S3Credentials }
+  | { status: "unconfigured" }
+  | { status: "unavailable" }
+> => {
   signal?.throwIfAborted();
   const url = containerCredentialsUrl(runtimeEnv);
   if (!url) {
-    return null;
+    return { status: "unconfigured" };
   }
 
   const headers: Record<string, string> = {};
@@ -260,16 +264,19 @@ const fetchEcsCredentials = async ({
           classifyFailure(token.error, "credentials_token_unreadable"),
         ),
       );
-      return null;
+      return { status: "unavailable" };
     }
     headers["Authorization"] = token.value.trim();
   }
 
-  return await fetchCredentialJson(url, {
+  const credentials = await fetchCredentialJson(url, {
     fetchImpl,
     headers,
     ...(signal === undefined ? {} : { signal }),
   });
+  return credentials === null
+    ? { status: "unavailable" }
+    : { status: "loaded", credentials };
 };
 
 /**
@@ -413,13 +420,13 @@ const resolveAwsRuntimeCredentials = async ({
   signal,
 }: ResolveAwsRuntimeCredentialsOptions): Promise<S3Credentials | null> => {
   signal?.throwIfAborted();
-  const ecsCredentials = await fetchEcsCredentials({
+  const ecsOutcome = await fetchEcsCredentials({
     fetchImpl,
     runtimeEnv,
     ...(signal === undefined ? {} : { signal }),
   });
-  if (ecsCredentials) {
-    return ecsCredentials;
+  if (ecsOutcome.status === "loaded") {
+    return ecsOutcome.credentials;
   }
 
   // A task configured for container credentials does not fall through to the

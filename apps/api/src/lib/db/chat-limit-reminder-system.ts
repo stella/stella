@@ -2,8 +2,8 @@ import { and, asc, eq, lte, not, or, sql } from "drizzle-orm";
 
 import { CHAT_LIMIT_RESET_ACTION } from "@stll/api-contract/chat-limit-reminder";
 
-import type { Transaction } from "@/api/db/root";
 import { chatLimitReminders } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**

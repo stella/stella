@@ -1120,12 +1120,12 @@ const readmitSettledMirrorsTx = async (
     },
   });
   if (reclaimed.length > 0) {
-    const claims = sql.join(
-      reclaimed.map(
-        ({ receipt, sourceHash, observationOrder }) =>
-          sql`(${receipt.id}::text, ${sourceHash}::text, ${observationOrder}::bigint)`,
-      ),
-      sql`, `,
+    const claimsPayload = JSON.stringify(
+      reclaimed.map(({ receipt, sourceHash, observationOrder }) => ({
+        id: receipt.id,
+        source_hash: sourceHash,
+        observation_order: String(observationOrder),
+      })),
     );
     const write = replayWrite(euCompletionReceipts, {
       claimedSourceHash: sql`claim.source_hash`,
@@ -1135,7 +1135,7 @@ const readmitSettledMirrorsTx = async (
       .update(euCompletionReceipts)
       .set(write.set)
       .from(
-        sql`(VALUES ${claims}) AS claim(id, source_hash, observation_order)`,
+        sql`jsonb_to_recordset(${claimsPayload}::text::jsonb) AS claim(id text, source_hash text, observation_order bigint)`,
       )
       .where(and(write.setWhere, eq(euCompletionReceipts.id, sql`claim.id`)));
   }

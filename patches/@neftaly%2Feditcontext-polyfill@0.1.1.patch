@@ -1,0 +1,16 @@
+diff --git a/dist/index.mjs b/dist/index.mjs
+index de56c90d9ace5f896ae6c473248cd6dc3ed44dfe..bd5729fb91142152dfb8340af33648ac5bd8a1d8 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1567,6 +1567,11 @@ function installEditContextProperty() {
+         );
+       }
+       const current = getEditContext(this);
++      // Assigning the context the element already has changes nothing, as
++      // with the native API. Re-attaching it re-focuses the hidden textarea,
++      // so a host that re-assigns its context on focus would recurse until
++      // the stack overflows.
++      if (value === current) return;
+       const wasFocused = isElementActive(this);
+       if (current !== null) {
+         if (wasFocused) current._blur();

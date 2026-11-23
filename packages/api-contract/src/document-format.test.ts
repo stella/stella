@@ -64,6 +64,22 @@ describe("documentFormat", () => {
     });
   });
 
+  test.each([
+    ["application/vnd.ms-outlook-pst", "korespondence.pst"],
+    ["application/vnd.ms-outlook-pst", null],
+    ["application/octet-stream", "Archiv 2023.PST"],
+    ["application/octet-stream", "mailbox.ost"],
+  ] as const)(
+    "an Outlook mailbox stored as %s named %s is a PST",
+    (type, name) => {
+      expect(documentFormat(type, name)).toEqual({
+        kind: "pst",
+        mark: "pst",
+        label: "PST",
+      });
+    },
+  );
+
   test("uses the email mark for EML and Outlook MSG files", () => {
     expect(kindOf(EML_MIME_TYPE)).toBe("email");
     expect(kindOf(MSG_MIME_TYPE)).toBe("email");

@@ -7,6 +7,7 @@ import { expect, mock, test } from "bun:test";
 import { assertSsrDocument } from "@stll/ssr-testkit";
 
 import {
+  ANONYMOUS_DOCUMENT_CACHE_CONTROL,
   ROUTE_CACHE_CLASSES,
   SSR_CACHE_CLASS_HEADER,
 } from "@/route-response-policy";
@@ -41,6 +42,9 @@ const fixtureHandler = {
     }
     if (url.searchParams.get("policy") === "absent") {
       headers.delete("Cache-Control");
+    }
+    if (url.searchParams.get("cookie") === "set") {
+      headers.set("Set-Cookie", "fixture=1; Path=/");
     }
     return await Promise.resolve(
       new Response(HTML, { headers, status, statusText: STATUS_TEXT }),
@@ -85,60 +89,107 @@ const mediaTypes = [
 ];
 const statuses = [200, 302, 404, 500, 503];
 
+const expectedCacheControl = ({
+  sharedDocument,
+  sharedResource,
+}: {
+  sharedDocument: boolean;
+  sharedResource: boolean;
+}) => {
+  if (sharedDocument) {
+    return ANONYMOUS_DOCUMENT_CACHE_CONTROL;
+  }
+  return sharedResource ? PUBLIC_POLICY : DOCUMENT_POLICY;
+};
+
+const viewers = [
+  ["anonymous", {}],
+  ["with a session cookie", { Cookie: "session=fixture" }],
+  ["with an authorization header", { Authorization: "Bearer fixture" }],
+] as const;
+
 for (const cacheClass of [null, ...cacheClasses]) {
   for (const contentType of mediaTypes) {
     for (const status of statuses) {
-      test(`response policy: ${cacheClass ?? "default"}, ${contentType ?? "unspecified"}, ${status}`, async () => {
-        const url = new URL("https://stella.test/law");
-        if (cacheClass !== null) {
-          url.searchParams.set("class", cacheClass);
-        }
-        if (contentType !== null) {
-          url.searchParams.set("type", contentType);
-        }
-        url.searchParams.set("status", String(status));
-        const response = await server.fetch(new Request(url));
-        const successful = status === 200;
-        const html =
-          contentType?.toLowerCase().startsWith("text/html") ?? false;
-        expect(response.headers.get("Cache-Control")).toBe(
-          cacheClass === "public-anonymous" && successful && !html
-            ? PUBLIC_POLICY
-            : DOCUMENT_POLICY,
-        );
-        expect(response.headers.get("X-Robots-Tag")).toBe(
-          cacheClass === "public-indexable" && successful && html
-            ? null
-            : "noindex",
-        );
-        expect(response.headers.get(SSR_CACHE_CLASS_HEADER)).toBeNull();
-        expect(response.headers.get(SSR_STATUS_HEADER)).toBeNull();
-        expect(response.status).toBe(status);
-        expect(response.statusText).toBe(STATUS_TEXT);
-        expect(response.headers.get("Location")).toBe(
-          status === 302 ? REDIRECT_LOCATION : null,
-        );
-        expect(response.headers.get("Cross-Origin-Opener-Policy")).toBe(
-          "same-origin",
-        );
-        expect(response.headers.get("Cross-Origin-Embedder-Policy")).toBe(
-          "credentialless",
-        );
-        const document = await response.text();
-        if (html) {
-          assertSsrDocument({
-            contentType: response.headers.get("Content-Type"),
-            html: document,
-            requiredContent: ["<main>Catalogue</main>"],
-            status: response.status,
-            expectedStatus: status,
-          });
-        }
-        expect(document).toBe(HTML);
-      });
+      for (const [viewer, requestHeaders] of viewers) {
+        test(`response policy: ${cacheClass ?? "default"}, ${contentType ?? "unspecified"}, ${status}, ${viewer}`, async () => {
+          const url = new URL("https://stella.test/law");
+          if (cacheClass !== null) {
+            url.searchParams.set("class", cacheClass);
+          }
+          if (contentType !== null) {
+            url.searchParams.set("type", contentType);
+          }
+          url.searchParams.set("status", String(status));
+          const response = await server.fetch(
+            new Request(url, { headers: requestHeaders }),
+          );
+          const successful = status === 200;
+          const html =
+            contentType?.toLowerCase().startsWith("text/html") ?? false;
+          const sharedDocument =
+            cacheClass === "public-indexable" &&
+            successful &&
+            html &&
+            viewer === "anonymous";
+          const sharedResource =
+            cacheClass === "public-anonymous" && successful && !html;
+          expect(response.headers.get("Cache-Control")).toBe(
+            expectedCacheControl({ sharedDocument, sharedResource }),
+          );
+          expect(response.headers.get("Vary")).toBe(
+            sharedDocument ? "Accept-Language, Cookie" : null,
+          );
+          expect(response.headers.get("X-Robots-Tag")).toBe(
+            cacheClass === "public-indexable" && successful && html
+              ? null
+              : "noindex",
+          );
+          expect(response.headers.get(SSR_CACHE_CLASS_HEADER)).toBeNull();
+          expect(response.headers.get(SSR_STATUS_HEADER)).toBeNull();
+          expect(response.status).toBe(status);
+          expect(response.statusText).toBe(STATUS_TEXT);
+          expect(response.headers.get("Location")).toBe(
+            status === 302 ? REDIRECT_LOCATION : null,
+          );
+          expect(response.headers.get("Cross-Origin-Opener-Policy")).toBe(
+            "same-origin",
+          );
+          expect(response.headers.get("Cross-Origin-Embedder-Policy")).toBe(
+            "credentialless",
+          );
+          const document = await response.text();
+          if (html) {
+            assertSsrDocument({
+              contentType: response.headers.get("Content-Type"),
+              html: document,
+              requiredContent: ["<main>Catalogue</main>"],
+              status: response.status,
+              expectedStatus: status,
+            });
+          }
+          expect(document).toBe(HTML);
+        });
+      }
     }
   }
 }
+
+test("a response that sets a cookie is never shared", async () => {
+  for (const [cacheClass, type] of [
+    ["public-indexable", "text/html"],
+    ["public-anonymous", "application/xml"],
+  ] as const) {
+    const url = new URL("https://stella.test/law");
+    url.searchParams.set("class", cacheClass);
+    url.searchParams.set("type", type);
+    url.searchParams.set("cookie", "set");
+    const response = await server.fetch(new Request(url));
+    expect(response.headers.get("Cache-Control")).toBe(DOCUMENT_POLICY);
+    expect(response.headers.get("Vary")).toBeNull();
+    await response.text();
+  }
+});
 
 test("document status determines the final response policy", async () => {
   for (const cacheClass of cacheClasses) {

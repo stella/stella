@@ -10,37 +10,19 @@
  * part of a word, as "ne" in Czech turns a word into its negation. A
  * dictation rewritten for more than half of its words teaches nothing.
  */
+import { learnedFixKey } from "./learned-fixes";
+import type { LearnedFix, LearnedFixChange } from "./learned-fixes";
 import { casedLike, distance, fold, splitWords } from "./spelling";
 
-export const LEARNED_FIX_STATUSES = [
-  /** Seen once; not applied yet. */
-  "learning",
-  /** Applied to every dictation. */
-  "on",
-  /** Switched off by the person. */
-  "off",
-  /** Corrected another way, or kept as dictated: never applied. */
-  "contradicted",
-] as const;
+export {
+  LEARNED_FIX_LIMIT,
+  LEARNED_FIX_STATUSES,
+  type LearnedFix,
+  type LearnedFixStatus,
+} from "./learned-fixes";
 
-export type LearnedFixStatus = (typeof LEARNED_FIX_STATUSES)[number];
-
-export type LearnedFix = {
-  /** The words as dictated. */
-  readonly from: string;
-  /** The words as the person wrote them. */
-  readonly to: string;
-  /** How many dictations were corrected this way. */
-  readonly seen: number;
-  readonly status: LearnedFixStatus;
-};
-
-/** How many fixes are kept; the oldest not in use go first. */
-export const LEARNED_FIX_LIMIT = 30;
 /** The longest side of a fix, in UTF-16 units. */
 export const LEARNED_FIX_TEXT_LIMIT = 48;
-/** Corrections seen before a fix applies itself. */
-const SIGHTINGS_TO_APPLY = 2;
 /** The most words on either side of one fix. */
 const MAX_FIX_WORDS = 3;
 /** Shorter fixes, in letters, are too likely to be different words. */
@@ -124,40 +106,50 @@ export const editsOf = (span: DictatedSpan, final: string): DictationEdits => {
   return { corrections, kept: keptRuns(before, inside, { first, end }) };
 };
 
-/** `fixes` after what the person did to one dictation. */
-export const learnFrom = (
+/**
+ * The changes that teach stella what the person did to one dictation, given
+ * the fixes learned so far: each distinct correction, then every fix whose
+ * dictated words they left alone. Applied with `applyLearnedFixChanges`, on
+ * this device or by the server for another device.
+ */
+export const learnedFixChangesOf = (
   fixes: readonly LearnedFix[],
   { corrections, kept }: DictationEdits,
-): LearnedFix[] => {
-  let next = [...fixes];
+): LearnedFixChange[] => {
   // The same correction twice in one dictation is one sighting.
-  const distinct = new Map(
-    corrections.map((correction) => [
-      `${correction.from}\u0000${correction.to}`,
-      correction,
-    ]),
-  );
-  for (const { from, to } of distinct.values()) {
-    const fromKey = phraseKey(from);
-    // The person turned a fix's words back: it was wrong.
-    next = next.map((fix) =>
-      turnsBack(fix, { from, to }) ? contradicted(fix) : fix,
-    );
-    const known = next.find((fix) => phraseKey(fix.from) === fromKey);
-    const updated =
-      known === undefined ? firstSighting(from, to) : sighted(known, to);
-    next = [...next.filter((fix) => fix !== known), updated];
+  const distinct = [
+    ...new Map(
+      corrections.map((correction) => [
+        `${correction.from}\u0000${correction.to}`,
+        correction,
+      ]),
+    ).values(),
+  ];
+  const corrected = distinct.map(({ from, to }): LearnedFixChange => ({
+    type: "corrected",
+    from,
+    to,
+  }));
+  if (kept.length === 0) {
+    return corrected;
   }
-  next = next.map((fix) =>
-    kept.some((run) => keptAsDictated(run, fix)) ? contradicted(fix) : fix,
+  // A correction's words make a new fix unless one is known for them.
+  const known = new Set(fixes.map(({ from }) => learnedFixKey(from)));
+  const candidates = [
+    ...fixes,
+    ...distinct
+      .filter(({ from }) => !known.has(learnedFixKey(from)))
+      .map(({ from, to }) => ({ from, to })),
+  ];
+  const keptFixes = candidates.filter((fix) =>
+    kept.some((run) => keptAsDictated(run, fix)),
   );
-  while (next.length > LEARNED_FIX_LIMIT) {
-    const unused = next.findIndex(
-      ({ status }) => status === "learning" || status === "contradicted",
-    );
-    next.splice(Math.max(unused, 0), 1);
-  }
-  return next;
+  return [
+    ...corrected,
+    ...[...new Set(keptFixes.map(({ from }) => from))].map(
+      (from): LearnedFixChange => ({ type: "kept", from }),
+    ),
+  ];
 };
 
 /** `text` with the words of every fix that is on written as the person writes them. */
@@ -230,22 +222,11 @@ const fixAt = (
 const caseOnly = (fix: { from: string; to: string }): boolean =>
   phraseKey(fix.from) === phraseKey(fix.to);
 
-/**
- * Whether a correction turns a fix's words back: compared in any case,
- * or as written for a fix that changes only case.
- */
-const turnsBack = (
-  fix: LearnedFix,
-  correction: { from: string; to: string },
-): boolean => {
-  const same = caseOnly(fix)
-    ? (left: string, right: string) => exactPhrase(left) === exactPhrase(right)
-    : (left: string, right: string) => phraseKey(left) === phraseKey(right);
-  return same(fix.from, correction.to) && same(fix.to, correction.from);
-};
-
 /** Whether a run of words kept as dictated holds a fix's dictated words. */
-const keptAsDictated = (run: readonly string[], fix: LearnedFix): boolean => {
+const keptAsDictated = (
+  run: readonly string[],
+  fix: { readonly from: string; readonly to: string },
+): boolean => {
   if (caseOnly(fix)) {
     return containsRun(run, exactPhrase(fix.from).split(" "));
   }
@@ -256,32 +237,6 @@ const exactPhrase = (phrase: string): string =>
   wordsOf(phrase)
     .map(({ exact }) => exact)
     .join(" ");
-
-const firstSighting = (from: string, to: string): LearnedFix => ({
-  from,
-  to,
-  seen: 1,
-  status: "learning",
-});
-
-const contradicted = (fix: LearnedFix): LearnedFix =>
-  fix.status === "off" ? fix : { ...fix, status: "contradicted" };
-
-/** A fix seen corrected again: the same way counts, another way contradicts it. */
-const sighted = (fix: LearnedFix, to: string): LearnedFix => {
-  if (fix.to !== to) {
-    return contradicted(fix);
-  }
-  const seen = fix.seen + 1;
-  return {
-    ...fix,
-    seen,
-    status:
-      fix.status === "learning" && seen >= SIGHTINGS_TO_APPLY
-        ? "on"
-        : fix.status,
-  };
-};
 
 type Word = {
   readonly text: string;

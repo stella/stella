@@ -233,6 +233,14 @@
     "writeDescription": "Įveskite šio įrašo aprašymą."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Patikrinti dar kartą",
+      "notInstalled": "Įdiekite „Antigravity“ 1.5 ar naujesnę versiją ir prisijunkite per ją.",
+      "signedIn": "Prisijungta prie „Antigravity“",
+      "signedOut": "Prisijunkite per „Antigravity“ CLI, kad galėtumėte naudoti „stella“.",
+      "title": "Antigravity",
+      "tooOld": "Atnaujinkite „Antigravity“ iki 1.5 ar naujesnės versijos ir prisijunkite per ją."
+    },
     "callbackAccount": "Paskyra",
     "callbackCloseTab": "Šį skirtuką galite uždaryti.",
     "callbackConnectedBody": "DI užklausos programoje stella dabar naudoja jūsų ChatGPT prenumeratą.",
@@ -603,6 +611,19 @@
       "description": "Ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui. Per stella jūsų organizacijos DI teikėjui siunčiamas tik tekstas, ne garsas; stella jo nesaugo.",
       "descriptionCloud": "stella DI taip pat ištaiso atpažinimo klaidas ir padiktuotą formatavimą, pavyzdžiui, „nauja eilutė“ arba „paryškinti“, ir pritaiko tekstą programai, pavyzdžiui, el. paštui.",
       "title": "Taisyti su DI"
+    },
+    "cleanupInstructions": {
+      "description": "Kaip norite, kad būtų parašytas jūsų tekstas, pavyzdžiui, rašybos variantas ar vengtini žodžiai. Taisymas jų laikosi ten, kur leidžia jo taisyklės, ir niekada nekeičia to, ką pasakėte.",
+      "placeholder": "Pavyzdžiui: Naudok britišką rašybą. Niekada nenaudok jaustukų. Palik mano nebaigtus sakinius.",
+      "saveFailed": "Nurodymų išsaugoti nepavyko. Bandykite dar kartą.",
+      "title": "Jūsų nurodymai"
+    },
+    "cleanupModel": {
+      "automatic": "Automatiškai",
+      "automaticDescription": "Naudojamas greitasis jūsų organizacijos modelis.",
+      "chosenDescription": "Jei šiam modeliui prireikia daugiau nei kelių sekundžių, tekstas įvedamas netaisytas.",
+      "title": "DI modelis",
+      "withdrawn": "Pasirinktas modelis nebepasiekiamas, todėl taisymas vyksta automatiškai."
     },
     "cleanupStyle": {
       "casual": {
@@ -1253,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Atmesti mano pakeitimus",
+      "editorLabel": "Sutvarkyto teksto redaktorius",
       "failedCount": "{count, plural, one {# dalis nesutvarkyta} few {# dalys nesutvarkytos} other {# dalių nesutvarkyta}}",
       "fileNameMarkdown": "{title} sutvarkytas.md",
       "fileNameText": "{title} sutvarkytas.txt",
@@ -1324,6 +1347,7 @@
       "audioMissing": "Įrašas šiame lange nebeatidarytas, todėl jis neišsaugotas byloje.",
       "audioTooLarge": "Įrašas didesnis nei {size}, todėl jis neišsaugotas byloje.",
       "cleanedDocxFileName": "{title} – sutvarkytas tekstas.docx",
+      "cleanedNotFiled": "Nepavyko išsaugoti sutvarkyto teksto byloje.",
       "cleanedTitle": "{title} – sutvarkytas tekstas",
       "documents": "Išsaugomi Word dokumentai…",
       "docxFileName": "{title} – transkripcija.docx",
@@ -1366,7 +1390,6 @@
       "saveToMatterFailed": "Nepavyko išsaugoti transkripcijos byloje. Bandykite dar kartą.",
       "saveWithTimestamps": "Tekstas su laiko žymomis (.txt)",
       "saveWithoutTimestamps": "Tekstas be laiko žymų (.txt)",
-      "savedToMatter": "Išsaugota byloje {matter} kaip {fileName}.",
       "savingToMatter": "Išsaugoma…",
       "thisComputer": "Šis kompiuteris",
       "transcriptTitle": "Transkripcija"
@@ -1411,12 +1434,16 @@
     "sessionOpeningInOffice": "Atidaroma Office programoje",
     "sessionSavingDraft": "Išsaugomas juodraštis",
     "settings": "Nustatymai",
+    "showTranscription": "Rodyti transkripciją",
     "support": "Palaikymas",
     "supportCopyDiagnostics": "Kopijuoti diagnostiką",
     "supportEmailSupport": "El. pašto palaikymas",
     "supportRevealAppData": "Rodyti programos duomenis",
     "temporaryWorkingCopies": "Laikinos darbinės kopijos",
     "transcribeRecording": "Transkribuoti įrašą…",
+    "transcriptionProgress": "Transkribuojama: {done} iš {total} min.",
+    "transcriptionProgressSoFar": "Transkribuojama: kol kas {done} min.",
+    "transcriptionReady": "Transkripcija paruošta",
     "updatesManaged": "Naujinimus valdo jūsų organizacija"
   }
 }

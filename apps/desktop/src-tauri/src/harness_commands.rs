@@ -6,6 +6,7 @@
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::desktop_runner::member_agents::{self, AntigravityCliStatus};
 use crate::feature_gate::{DesktopFeature, FeatureGates};
 use crate::harness_auto_install::HarnessAutoInstall;
 use crate::harness_installation::{
@@ -66,6 +67,22 @@ pub fn harness_get_status(
       })
       .collect(),
   )
+}
+
+#[tauri::command]
+pub async fn antigravity_get_status(
+  gates: State<'_, FeatureGates>,
+  refresh: Option<bool>,
+) -> Result<AntigravityCliStatus, HarnessCommandError> {
+  if !gates.is_enabled(DesktopFeature::LocalAgents) {
+    return Err(HarnessCommandError::FeatureDisabled);
+  }
+  let refresh = refresh.unwrap_or(false);
+  tauri::async_runtime::spawn_blocking(move || {
+    member_agents::antigravity_status(refresh)
+  })
+  .await
+  .map_err(|_error| HarnessCommandError::Unavailable)
 }
 
 #[tauri::command]

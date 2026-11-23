@@ -24,7 +24,8 @@ export const mailboxMessageSchema = v.object({
 export type MailboxMessage = v.InferOutput<typeof mailboxMessageSchema>;
 
 /**
- * A mailbox (`.mbox`) in the order its messages are stored, at most
+ * A mailbox (`.mbox`, Outlook `.pst`) in the order its messages are stored
+ * (a PST's folder by folder, down its folder tree), at most
  * `MAILBOX_MAX_MESSAGES` of them; `truncated` says it holds more than that.
  */
 export const mailboxPreviewSchema = v.object({

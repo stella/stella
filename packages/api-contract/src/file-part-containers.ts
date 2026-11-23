@@ -41,6 +41,7 @@ export const FILE_PART_KINDS_BY_FORMAT = {
   xades: [],
   zip: [member],
   mbox: [message],
+  pst: [message],
   email: [attachment],
 } as const satisfies Record<
   LegalFileFormatKind | "email",

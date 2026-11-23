@@ -16,6 +16,9 @@ platform APIs. Invalid inputs return `better-result` errors.
 - `@stll/transcript/corrections`: fixes learned from how a person corrects
   dictated words: word diff of the dictated text against the text sent, two
   matching sightings to apply, never after a contradiction.
+- `@stll/transcript/learned-fixes`: the dictation fixes learned from a person's
+  corrections and the changes that update them, applied the same way on every
+  device and on the server.
 
 `detectKeptIntervals` treats each dBFS sample as the following fixed-width
 interval. Samples at or below the threshold are silence; `-Infinity` is valid.

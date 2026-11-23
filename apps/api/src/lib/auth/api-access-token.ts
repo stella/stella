@@ -75,6 +75,26 @@ export const API_OAUTH_ROUTES = {
     uncataloged: "native_tool_ui",
     client: "mobile",
   },
+  // The phone's learned dictation fixes: the member's own spellings, synced
+  // between their devices; nothing is sent to a model.
+  "GET /v1/dictation/learned-fixes": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/dictation/learned-fixes/list.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
+  "POST /v1/dictation/learned-fixes": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/learned-fixes/change.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
+  "DELETE /v1/dictation/learned-fixes": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/learned-fixes/clear.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
   "POST /v1/dictation/recording-cleanup": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/member-recording-cleanup.ts",

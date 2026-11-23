@@ -85,6 +85,7 @@
     "allow-claude-code-auth-cancel",
     "allow-claude-code-auth-open-sign-in-page",
     "allow-claude-code-auth-sign-out",
+    "allow-antigravity-get-status",
     "allow-harness-get-status",
     "allow-harness-install",
     "allow-harness-cancel-install",

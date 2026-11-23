@@ -1,14 +1,26 @@
-import { Suspense, use, useState, useTransition } from "react";
+import {
+  Suspense,
+  use,
+  useEffect,
+  useEffectEvent,
+  useState,
+  useTransition,
+} from "react";
 
+import { randomUUID } from "expo-crypto";
 import { View } from "react-native";
 import { useTranslations } from "use-intl";
 
-import type { LearnedFix } from "@stll/transcript/corrections";
+import type {
+  LearnedFix,
+  LearnedFixChange,
+} from "@stll/transcript/learned-fixes";
 import { Button } from "@stll/ui/button";
 import { Switch } from "@stll/ui/switch";
 import { Text } from "@stll/ui/text";
 
-import type { StoredSession } from "@/connection/session";
+import { syncLearned } from "@/components/learned-fixes-sync";
+import type { AccessTokenSource, StoredSession } from "@/connection/session";
 import { deviceAccountStore } from "@/native/account-store";
 import {
   deleteLearnedFixes,
@@ -17,17 +29,21 @@ import {
 } from "@/state/dictation-learned";
 
 /**
- * The fixes stella learned from how the person corrects dictated words on
- * this phone: each with a switch, and a way to delete them all. Fixes still
- * being learned, or corrected another way, are not listed; deleting removes
- * them too. When the phone cannot read them it says so, with a way to try
- * again, and deleting still works. The read lives here, outside the part
- * that waits for it, so waiting does not start it again.
+ * The fixes stella learned from how the person corrects dictated words,
+ * synced with their other devices: each with a switch, and a way to delete
+ * them all, here and there. Fixes still being learned, or corrected another
+ * way, are not listed; deleting removes them too. When the phone cannot read
+ * them it says so, with a way to try again, and deleting still works. The
+ * read lives here, outside the part that waits for it, so waiting does not
+ * start it again. Opening the setting, and each change, syncs; the list
+ * shows the fixes as kept on the phone after.
  */
 export const DictationLearnedSetting = ({
   session,
+  source,
 }: {
   session: StoredSession;
+  source: AccessTokenSource;
 }) => {
   const read = async (): Promise<Stored> =>
     await readLearnedFixes(deviceAccountStore, session).then(
@@ -37,15 +53,29 @@ export const DictationLearnedSetting = ({
   const [stored, setStored] = useState(read);
   const [saving, startSaving] = useTransition();
 
-  /** Changes the fixes as kept now, not as last shown, then shows them again. */
-  const save = (change: (current: LearnedFix[]) => LearnedFix[]) => {
+  /** Shows the fixes as kept now, once any sync is done. */
+  const syncAndShow = async () => {
+    await syncLearned(source).catch(() => undefined);
+    const again = read();
+    await again;
+    setStored(again);
+  };
+
+  // Once per opening, after the fixes kept here show; each change syncs on its own.
+  const syncOnOpen = useEffectEvent(() => {
+    startSaving(syncAndShow);
+  });
+  useEffect(() => {
+    syncOnOpen();
+  }, []);
+
+  /** Changes the fixes as kept now, not as last shown, then syncs and shows them. */
+  const save = (change: LearnedFixChange) => {
     startSaving(async () => {
-      await updateLearnedFixes(deviceAccountStore, session, change).catch(
-        () => undefined,
-      );
-      const again = read();
-      await again;
-      setStored(again);
+      await updateLearnedFixes(deviceAccountStore, session, randomUUID, () => [
+        change,
+      ]).catch(() => undefined);
+      await syncAndShow();
     });
   };
 
@@ -57,9 +87,7 @@ export const DictationLearnedSetting = ({
             await deleteLearnedFixes(deviceAccountStore, session).catch(
               () => undefined,
             );
-            const again = read();
-            await again;
-            setStored(again);
+            await syncAndShow();
           });
         }}
         onRetry={() => {
@@ -70,11 +98,7 @@ export const DictationLearnedSetting = ({
           });
         }}
         onSwitch={(from, status) => {
-          save((current) =>
-            current.map((each) =>
-              each.from === from ? { ...each, status } : each,
-            ),
-          );
+          save({ type: "switched", from, status });
         }}
         saving={saving}
         stored={stored}

@@ -1021,6 +1021,13 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["global:fetch"],
   },
   {
+    path: "packages/agent-engine/src/sidecar/mcp-stdio-bridge.ts",
+    class: "package-owned-client",
+    reason:
+      "Relays a stdio-only harness's MCP messages to stella's local MCP proxy; it refuses any URL that is not loopback HTTP and does not follow redirects.",
+    transports: ["global:fetch"],
+  },
+  {
     path: "packages/agent-engine/src/sidecar/outputs.ts",
     class: "operator-configured-infrastructure",
     reason:

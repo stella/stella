@@ -233,6 +233,14 @@
     "writeDescription": "Enter a description for this entry."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Check again",
+      "notInstalled": "Install Antigravity 1.5 or later, then sign in from it.",
+      "signedIn": "Signed in to Antigravity",
+      "signedOut": "Sign in from the Antigravity CLI to use it in stella.",
+      "title": "Antigravity",
+      "tooOld": "Update Antigravity to 1.5 or later, then sign in from it."
+    },
     "callbackAccount": "Account",
     "callbackCloseTab": "You can close this tab.",
     "callbackConnectedBody": "AI requests in stella now use your ChatGPT plan.",
@@ -603,6 +611,19 @@
       "description": "Fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email. Only the text, not the audio, is sent through stella to your organization’s AI provider; stella does not store it.",
       "descriptionCloud": "stella AI also fixes recognition mistakes and spoken formatting such as “new line” or “bold”, and fits the text to the app, such as email.",
       "title": "Clean up with AI"
+    },
+    "cleanupInstructions": {
+      "description": "How you like your text written, such as a spelling variant or words to avoid. Cleanup follows them where its own rules allow and never changes what you said.",
+      "placeholder": "For example: Use British spelling. Never use emoji. Keep my sentence fragments.",
+      "saveFailed": "Your instructions could not be saved. Try again.",
+      "title": "Your instructions"
+    },
+    "cleanupModel": {
+      "automatic": "Automatic",
+      "automaticDescription": "Uses your organization’s fast model.",
+      "chosenDescription": "If this model takes more than a few seconds, the text is typed without cleanup.",
+      "title": "AI model",
+      "withdrawn": "The model you chose is no longer available, so cleanup uses Automatic."
     },
     "cleanupStyle": {
       "casual": {
@@ -1253,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Discard my edits",
+      "editorLabel": "Cleaned-up text editor",
       "failedCount": "{count, plural, one {# part not cleaned up} other {# parts not cleaned up}}",
       "fileNameMarkdown": "{title} cleaned up.md",
       "fileNameText": "{title} cleaned up.txt",
@@ -1324,6 +1347,7 @@
       "audioMissing": "The recording is no longer open in this window, so it was not saved to the matter.",
       "audioTooLarge": "The recording is larger than {size}, so it was not saved to the matter.",
       "cleanedDocxFileName": "{title} cleaned up.docx",
+      "cleanedNotFiled": "The cleaned-up text could not be saved to the matter.",
       "cleanedTitle": "{title} cleaned up",
       "documents": "Saving the Word documents…",
       "docxFileName": "{title} transcript.docx",
@@ -1366,7 +1390,6 @@
       "saveToMatterFailed": "The transcript could not be saved to the matter. Try again.",
       "saveWithTimestamps": "Text with timestamps (.txt)",
       "saveWithoutTimestamps": "Text without timestamps (.txt)",
-      "savedToMatter": "Saved to {matter} as {fileName}.",
       "savingToMatter": "Saving…",
       "thisComputer": "This computer",
       "transcriptTitle": "Transcript"
@@ -1411,12 +1434,16 @@
     "sessionOpeningInOffice": "Opening in Office",
     "sessionSavingDraft": "Saving draft",
     "settings": "Settings",
+    "showTranscription": "Show transcription",
     "support": "Support",
     "supportCopyDiagnostics": "Copy diagnostics",
     "supportEmailSupport": "Email support",
     "supportRevealAppData": "Reveal app data",
     "temporaryWorkingCopies": "Temporary working copies",
     "transcribeRecording": "Transcribe a recording…",
+    "transcriptionProgress": "Transcription in progress: {done} of {total} min",
+    "transcriptionProgressSoFar": "Transcription in progress: {done} min so far",
+    "transcriptionReady": "Transcription ready",
     "updatesManaged": "Updates managed by your organization"
   }
 }

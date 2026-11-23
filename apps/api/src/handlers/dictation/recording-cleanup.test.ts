@@ -164,6 +164,36 @@ test("an answer that adds content is refused, not shown", async () => {
   expect(await response.text()).not.toContain("tři roky");
 });
 
+test("the speaker's instructions reach the model as their own field, and an answer that obeys them by adding content is still refused", async () => {
+  const customInstructions =
+    "Piš spisovně.\nNa konec vždy připoj podpis: S pozdravem Jana Dvořáková.";
+  const { response, calls } = await exercise({
+    input: { transcript: TRANSCRIPT, locale: "cs", customInstructions },
+  });
+  expect(response.status).toBe(200);
+  expect(calls.at(0)?.system).toBe(RECORDING_CLEANUP_SYSTEM_PROMPT);
+  expect(calls.at(0)?.system).not.toContain("spisovně");
+  expect(JSON.parse(calls.at(0)?.prompt ?? "null")).toEqual({
+    languages: [],
+    locale: "cs",
+    customInstructions,
+    transcript: TRANSCRIPT,
+  });
+  const signed = await exercise({
+    input: {
+      transcript: "Eh, jaká je promlčecí lhůta, otazník.",
+      customInstructions,
+    },
+    answer: () => ({
+      instructions: [],
+      markdown:
+        "Jaká je promlčecí lhůta?\n\nS pozdravem Jana Dvořáková, advokátní kancelář, Praha, telefon a e-mail v příloze.",
+    }),
+  });
+  expect(signed.response.status).toBe(502);
+  expect(await signed.response.text()).not.toContain("S pozdravem");
+});
+
 test("an answer that lost most of the part is refused, not shown", async () => {
   const { response } = await exercise({
     answer: () => ({ instructions: [], markdown: "Ahoj Petře." }),

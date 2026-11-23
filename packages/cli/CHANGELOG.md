@@ -1,5 +1,29 @@
 # @stll/cli
 
+## 8.2.0
+
+### Minor Changes
+
+- [#9069](https://github.com/stella/stella/pull/9069) [`4932387`](https://github.com/stella/stella/commit/4932387e20c4c0fd8c3ec7a7af623ae55261aeee) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Manage the organization's dictation words: list and search them, check and add words in batches, delete words, and export the whole list.
+
+### Patch Changes
+
+- [#9209](https://github.com/stella/stella/pull/9209) [`54dbe8c`](https://github.com/stella/stella/commit/54dbe8c85eea53a1fbc2b0aba01a406f4dd60e29) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read an XML file that holds no structured invoice as its indented text through document content commands.
+
+## 8.1.4
+
+### Patch Changes
+
+- [#9211](https://github.com/stella/stella/pull/9211) [`b5b04e6`](https://github.com/stella/stella/commit/b5b04e6e95a0defd44bd24d13a102ab7e5295e90) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The `matters.correspondence.get` and `matters.correspondence.list` references describe `pec` records: uploaded Italian certified emails whose `certifiedEmail` carries the provider's certification data as stated in the file.
+
+- [#9275](https://github.com/stella/stella/pull/9275) [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read mailboxes (`.mbox`) through document content commands: each message's sender, recipients, date, subject, text and attachments' names.
+
+## 8.1.3
+
+### Patch Changes
+
+- [#9254](https://github.com/stella/stella/pull/9254) [`fcf4215`](https://github.com/stella/stella/commit/fcf421569917f12d081fec6faed0188b0003b8a6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read Outlook TNEF messages (`winmail.dat`), alone or attached to an email, through document content commands.
+
 ## 8.1.2
 
 ### Patch Changes

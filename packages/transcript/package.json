@@ -13,6 +13,7 @@
     "./timeline": "./src/timeline.ts",
     "./exporters": "./src/exporters.ts",
     "./vocabulary": "./src/vocabulary.ts",
+    "./learned-fixes": "./src/learned-fixes.ts",
     "./cleanup": "./src/cleanup.ts"
   },
   "scripts": {

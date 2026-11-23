@@ -233,6 +233,14 @@
     "writeDescription": "Saisissez une description pour cette saisie."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Vérifier à nouveau",
+      "notInstalled": "Installez Antigravity 1.5 ou une version ultérieure, puis connectez-vous depuis celui-ci.",
+      "signedIn": "Connecté à Antigravity",
+      "signedOut": "Connectez-vous depuis la CLI Antigravity pour l’utiliser dans stella.",
+      "title": "Antigravity",
+      "tooOld": "Mettez à jour Antigravity vers la version 1.5 ou ultérieure, puis connectez-vous depuis celui-ci."
+    },
     "callbackAccount": "Compte",
     "callbackCloseTab": "Vous pouvez fermer cet onglet.",
     "callbackConnectedBody": "Les requêtes d’IA dans stella utilisent désormais votre forfait ChatGPT.",
@@ -603,6 +611,19 @@
       "description": "Corrige les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail. Seul le texte, et non l’audio, est envoyé via stella au fournisseur d’IA de votre organisation ; stella ne le conserve pas.",
       "descriptionCloud": "stella AI corrige aussi les erreurs de reconnaissance et la mise en forme dictée, comme « nouvelle ligne » ou « gras », et adapte le texte à l’application, comme un e-mail.",
       "title": "Corriger avec l’IA"
+    },
+    "cleanupInstructions": {
+      "description": "La façon dont vous voulez que votre texte soit écrit, par exemple une variante orthographique ou des mots à éviter. La correction les suit lorsque ses règles le permettent et ne change jamais ce que vous avez dit.",
+      "placeholder": "Par exemple : Utilise l’orthographe britannique. N’utilise jamais d’emoji. Garde mes phrases incomplètes.",
+      "saveFailed": "Vos instructions n’ont pas pu être enregistrées. Réessayez.",
+      "title": "Vos instructions"
+    },
+    "cleanupModel": {
+      "automatic": "Automatique",
+      "automaticDescription": "Utilise le modèle rapide de votre organisation.",
+      "chosenDescription": "Si ce modèle met plus de quelques secondes, le texte est saisi sans correction.",
+      "title": "Modèle d’IA",
+      "withdrawn": "Le modèle choisi n’est plus disponible ; la correction utilise donc le mode automatique."
     },
     "cleanupStyle": {
       "casual": {
@@ -1253,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Annuler mes modifications",
+      "editorLabel": "Éditeur du texte nettoyé",
       "failedCount": "{count, plural, one {# partie non nettoyée} other {# parties non nettoyées}}",
       "fileNameMarkdown": "{title} nettoyé.md",
       "fileNameText": "{title} nettoyé.txt",
@@ -1324,6 +1347,7 @@
       "audioMissing": "L’enregistrement n’est plus ouvert dans cette fenêtre et n’a donc pas été enregistré dans le dossier.",
       "audioTooLarge": "L’enregistrement dépasse {size} et n’a donc pas été enregistré dans le dossier.",
       "cleanedDocxFileName": "{title} - texte révisé.docx",
+      "cleanedNotFiled": "Impossible d’enregistrer le texte nettoyé dans le dossier.",
       "cleanedTitle": "{title} - texte révisé",
       "documents": "Enregistrement des documents Word…",
       "docxFileName": "{title} - transcription.docx",
@@ -1366,7 +1390,6 @@
       "saveToMatterFailed": "Impossible d’enregistrer la transcription dans le dossier. Réessayez.",
       "saveWithTimestamps": "Texte avec horodatage (.txt)",
       "saveWithoutTimestamps": "Texte sans horodatage (.txt)",
-      "savedToMatter": "Enregistré dans {matter} sous {fileName}.",
       "savingToMatter": "Enregistrement…",
       "thisComputer": "Cet ordinateur",
       "transcriptTitle": "Transcription"
@@ -1411,12 +1434,16 @@
     "sessionOpeningInOffice": "Ouverture dans Office",
     "sessionSavingDraft": "Enregistrement du brouillon",
     "settings": "Paramètres",
+    "showTranscription": "Afficher la transcription",
     "support": "Support",
     "supportCopyDiagnostics": "Copier les diagnostics",
     "supportEmailSupport": "Support par e-mail",
     "supportRevealAppData": "Afficher les données de l'app",
     "temporaryWorkingCopies": "Copies de travail temporaires",
     "transcribeRecording": "Transcrire un enregistrement…",
+    "transcriptionProgress": "Transcription en cours : {done} sur {total} min",
+    "transcriptionProgressSoFar": "Transcription en cours : {done} min jusqu’ici",
+    "transcriptionReady": "Transcription prête",
     "updatesManaged": "Mises à jour gérées par votre organisation"
   }
 }

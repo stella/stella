@@ -8,6 +8,7 @@ import {
   EML_MIME_TYPE,
   MSG_MIME_TYPE,
 } from "@stll/api-contract/email-mime-types";
+import { PST_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { ZipArchive } from "@stll/docx-core/zip";
 
 import type { rootDb } from "@/api/db/root";
@@ -605,6 +606,44 @@ describe("processExtraction", () => {
     expect(extractMailboxTextMock).toHaveBeenCalledTimes(1);
     expect(extractMailboxTextMock.mock.calls.at(0)?.[0]).toMatchObject({
       fileName: mailbox.fileName,
+    });
+    expect(readSource).not.toHaveBeenCalled();
+    expect(extractFileTextResultMock).not.toHaveBeenCalled();
+    expect((await persistedProjection()).text).toBe(MAILBOX_TEXT);
+  });
+
+  test("streams an Outlook mailbox into the worker and never reads it whole", async () => {
+    const mailbox = {
+      ...fileContent,
+      fileName: "korespondence.pst",
+      id: "file_pst",
+      // Browsers declare a mailbox as bytes; its name says what it is.
+      mimeType: "application/octet-stream",
+    } satisfies FieldContent;
+    const readSource = mock(async ({ mimeType }: { mimeType: string }) =>
+      testScannedFile({ bytes: new ArrayBuffer(8), mimeType }),
+    );
+
+    const outcome = await executeNativeExtraction({
+      fileField: mailbox,
+      lifecycleSignal: new AbortController().signal,
+      readSource,
+      run: {
+        entityId,
+        entityVersionId,
+        fieldId,
+        organizationId,
+        sourceFileId: mailbox.id,
+        sourceSha256Hex: mailbox.sha256Hex,
+        workspaceId,
+      },
+    });
+
+    expect(outcome).toBe("persisted");
+    expect(extractMailboxTextMock).toHaveBeenCalledTimes(1);
+    expect(extractMailboxTextMock.mock.calls.at(0)?.[0]).toMatchObject({
+      fileName: mailbox.fileName,
+      format: PST_FILE_FORMAT,
     });
     expect(readSource).not.toHaveBeenCalled();
     expect(extractFileTextResultMock).not.toHaveBeenCalled();

@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 

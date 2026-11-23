@@ -831,7 +831,7 @@
     "dictationLearnedDelete": "Delete what stella learned",
     "dictationLearnedEmpty": "No fixes learned yet.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "When you correct the spelling of a dictated word or name the same way twice, stella spells it that way in later dictations. Kept only on this phone.",
+    "dictationLearnedHint": "When you correct the spelling of a dictated word or name the same way twice, stella spells it that way in later dictations. Synced to your other devices; only you can see them.",
     "dictationLearnedTitle": "Fixes learned from your corrections",
     "dictationLearnedUnreadable": "What stella learned could not be read.",
     "dictationModelDefault": "Default",

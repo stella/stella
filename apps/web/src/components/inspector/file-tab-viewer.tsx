@@ -193,6 +193,12 @@ const legalFileViewers = {
     download: "common.downloadOriginal",
     surface: "inspector-mbox",
   },
+  pst: {
+    Viewer: MailboxViewer,
+    unreadable: "inspector.mailbox.unreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-mbox",
+  },
 } as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
 
 /**
@@ -432,7 +438,8 @@ const FileTabViewerComponent = ({
       case "isdocx":
       case "xml":
       case "zip":
-      case "mbox": {
+      case "mbox":
+      case "pst": {
         const legalViewer = (
           <LegalFileTabViewer
             key={tab.id}

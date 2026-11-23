@@ -5,6 +5,10 @@ import { rejectionOf } from "@stll/property-testing/rejection";
 import { createQueryPerfDeadline } from "./deadline";
 import { QUERY_PERF_OWNER_DEADLINES } from "./owner-deadlines";
 import { SERVER_STATEMENT_TIMEOUT_MS } from "./plan-analyzer";
+import {
+  QUERY_PERF_CONNECTION_SETTINGS,
+  queryPerfTemplateCopySettings,
+} from "./settings";
 
 test("every measured owner deadline is within the server statement bound", () => {
   for (const deadlineMs of Object.values(QUERY_PERF_OWNER_DEADLINES)) {
@@ -70,4 +74,33 @@ test("a stalled phase rejects at the remaining profile deadline", async () => {
   } finally {
     jest.useRealTimers();
   }
+});
+
+test("a phase is handed what is left of the profile's budget", async () => {
+  let now = 0;
+  const deadline = createQueryPerfDeadline({
+    profileId: "corpus",
+    timeoutMs: 300, // timeout under test
+    now: () => now,
+  });
+  await deadline.run("seed", async () => {
+    now = 130;
+  });
+  const handed = await deadline.run(
+    "CREATE DATABASE from template",
+    async (remainingMs) => await Promise.resolve(remainingMs),
+  );
+  expect(handed).toBe(170);
+  // The copy's session bound is that budget, not the generic statement bound.
+  expect(queryPerfTemplateCopySettings(handed)).toEqual({
+    ...QUERY_PERF_CONNECTION_SETTINGS,
+    statement_timeout: 170,
+  });
+  expect(queryPerfTemplateCopySettings(169_607.7).statement_timeout).toBe(
+    169_608,
+  );
+  expect(
+    queryPerfTemplateCopySettings(169_608).statement_timeout,
+  ).toBeGreaterThan(QUERY_PERF_CONNECTION_SETTINGS.statement_timeout);
+  expect(queryPerfTemplateCopySettings(0).statement_timeout).toBe(1);
 });

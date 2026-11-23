@@ -233,6 +233,14 @@
     "writeDescription": "Ievadiet šī ieraksta aprakstu."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Pārbaudīt vēlreiz",
+      "notInstalled": "Instalējiet Antigravity 1.5 vai jaunāku versiju un pierakstieties tajā.",
+      "signedIn": "Pierakstījies Antigravity",
+      "signedOut": "Pierakstieties Antigravity CLI, lai to izmantotu stella.",
+      "title": "Antigravity",
+      "tooOld": "Atjauniniet Antigravity uz 1.5 vai jaunāku versiju un pierakstieties tajā."
+    },
     "callbackAccount": "Konts",
     "callbackCloseTab": "Šo cilni varat aizvērt.",
     "callbackConnectedBody": "AI pieprasījumi lietotnē stella tagad izmanto jūsu ChatGPT abonementu.",
@@ -603,6 +611,19 @@
       "description": "Izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam. Caur stella jūsu organizācijas AI pakalpojumu sniedzējam tiek nosūtīts tikai teksts, ne audio; stella to nesaglabā.",
       "descriptionCloud": "stella AI arī izlabo atpazīšanas kļūdas un diktēto formatējumu, piemēram, “jauna rinda” vai “treknraksts”, un pielāgo tekstu lietotnei, piemēram, e-pastam.",
       "title": "Labot ar AI"
+    },
+    "cleanupInstructions": {
+      "description": "Kā vēlaties, lai jūsu teksts būtu uzrakstīts, piemēram, pareizrakstības variants vai vārdi, no kuriem izvairīties. Labošana tiem seko, kur to atļauj tās noteikumi, un nekad nemaina to, ko teicāt.",
+      "placeholder": "Piemēram: Izmanto britu pareizrakstību. Nekad neizmanto emocijzīmes. Saglabā manus nepabeigtos teikumus.",
+      "saveFailed": "Norādījumus neizdevās saglabāt. Mēģiniet vēlreiz.",
+      "title": "Jūsu norādījumi"
+    },
+    "cleanupModel": {
+      "automatic": "Automātiski",
+      "automaticDescription": "Izmanto jūsu organizācijas ātro modeli.",
+      "chosenDescription": "Ja šim modelim vajag vairāk par dažām sekundēm, teksts tiek ievadīts bez labošanas.",
+      "title": "AI modelis",
+      "withdrawn": "Izvēlētais modelis vairs nav pieejams, tāpēc labošana notiek automātiski."
     },
     "cleanupStyle": {
       "casual": {
@@ -1253,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Atmest manas izmaiņas",
+      "editorLabel": "Sakārtotā teksta redaktors",
       "failedCount": "{count, plural, zero {# daļas nav sakārtotas} one {# daļa nav sakārtota} other {# daļas nav sakārtotas}}",
       "fileNameMarkdown": "{title} sakārtots.md",
       "fileNameText": "{title} sakārtots.txt",
@@ -1324,6 +1347,7 @@
       "audioMissing": "Ieraksts šajā logā vairs nav atvērts, tāpēc tas netika saglabāts lietā.",
       "audioTooLarge": "Ieraksts ir lielāks par {size}, tāpēc tas netika saglabāts lietā.",
       "cleanedDocxFileName": "{title} – rediģēts teksts.docx",
+      "cleanedNotFiled": "Sakārtoto tekstu neizdevās saglabāt lietā.",
       "cleanedTitle": "{title} – rediģēts teksts",
       "documents": "Saglabā Word dokumentus…",
       "docxFileName": "{title} – transkripcija.docx",
@@ -1366,7 +1390,6 @@
       "saveToMatterFailed": "Neizdevās saglabāt transkripciju lietā. Mēģiniet vēlreiz.",
       "saveWithTimestamps": "Teksts ar laika zīmogiem (.txt)",
       "saveWithoutTimestamps": "Teksts bez laika zīmogiem (.txt)",
-      "savedToMatter": "Saglabāts lietā {matter} kā {fileName}.",
       "savingToMatter": "Saglabā…",
       "thisComputer": "Šis dators",
       "transcriptTitle": "Transkripcija"
@@ -1411,12 +1434,16 @@
     "sessionOpeningInOffice": "Tiek atvērts Office",
     "sessionSavingDraft": "Tiek saglabāts melnraksts",
     "settings": "Iestatījumi",
+    "showTranscription": "Rādīt transkripciju",
     "support": "Atbalsts",
     "supportCopyDiagnostics": "Kopēt diagnostiku",
     "supportEmailSupport": "E-pasta atbalsts",
     "supportRevealAppData": "Rādīt lietotnes datus",
     "temporaryWorkingCopies": "Pagaidu darba kopijas",
     "transcribeRecording": "Transkribēt ierakstu…",
+    "transcriptionProgress": "Notiek transkribēšana: {done} no {total} min",
+    "transcriptionProgressSoFar": "Notiek transkribēšana: līdz šim {done} min",
+    "transcriptionReady": "Transkripcija ir gatava",
     "updatesManaged": "Atjauninājumus pārvalda jūsu organizācija"
   }
 }

@@ -26,6 +26,7 @@ import {
   ISDOC_FILE_FORMAT,
   ISDOCX_FILE_FORMAT,
   MBOX_FILE_FORMAT,
+  PST_FILE_FORMAT,
   XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 import { SIGNED_DOSSIER_FORMATS } from "@stll/api-contract/signed-dossier-formats";
@@ -130,6 +131,7 @@ import {
   PEC_SIGNER_NAME,
   pecMessage,
 } from "@/api/tests/fixtures/pec";
+import { LAW_FIRM_MAILBOX_NAME, pstFixture } from "@/api/tests/fixtures/pst";
 import {
   detachedCms,
   envelopingXades,
@@ -1211,6 +1213,19 @@ const seedMbox = async (tenant: "a" | "b" = "a") => {
     return await seedFile(stored, "b");
   }
   return await seedStored(stored, MAILBOX.bytes);
+};
+
+/** An Outlook mailbox, stored as bytes named `.pst` as a browser uploads it. */
+const seedPst = async (tenant: "a" | "b" = "a") => {
+  const stored = {
+    fileName: LAW_FIRM_MAILBOX_NAME,
+    mimeType: "application/octet-stream",
+    pdfFileId: null,
+  };
+  if (tenant === "b") {
+    return await seedFile(stored, "b");
+  }
+  return await seedStored(stored, pstFixture("law-firm.pst"));
 };
 
 const partListContext = (
@@ -2464,6 +2479,142 @@ describe("mailbox delivery", () => {
 
   test("refuses another matter's mailbox and its messages", async () => {
     const { fieldId, entityId } = await seedMbox("b");
+    expect(
+      answeredStatus(
+        await mailboxPreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+    const message = await readPartUrl(fieldId, "message:0");
+    expect(message.isErr() && message.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+});
+
+describe("Outlook mailbox delivery", () => {
+  test("a PST lists its messages folder by folder and reads its text for AI", async () => {
+    const { fieldId, entityId, entityVersionId } = await seedPst();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const view = await mailboxPreviewEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    );
+    expect(view).toMatchObject({
+      truncated: false,
+      messages: [
+        {
+          subject: "Smlouva o převodu podílu: návrh k připomínkám",
+          from: "Petra Vlková",
+          folder: "Doručená pošta",
+          part: {
+            part: "message:0",
+            fileName: "Smlouva o převodu podílu_ návrh k připomínkám.eml",
+            mediaType: EML_MIME_TYPE,
+          },
+          unavailable: null,
+        },
+        { subject: "Re: Termín jednání" },
+        { subject: null, fileName: "korespondence-3.eml" },
+        { subject: "Zápis z porady" },
+        { subject: "Plná moc" },
+        {
+          subject: "Fwd: Výzva k úhradě",
+          folder: "Doručená pošta/Klienti/Fiktivní stavby",
+        },
+        { subject: "Spis ve skenech", part: null, unavailable: "tooLarge" },
+        { folder: "Odeslaná pošta" },
+        { subject: "Uzavření věci", folder: "Archiv/2023" },
+      ],
+    });
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: PST_FILE_FORMAT.auditFormat },
+    });
+    const read = await LEGAL_FILE_READERS.pst({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    const { text } = read.unwrap();
+    expect(text).toStartWith("Mailbox.");
+    expect(text).toContain("Subject: Re: Termín jednání");
+    expect(text).toContain(
+      "Attachments: navrh-smlouvy.pdf, poznámky k návrhu.txt",
+    );
+  });
+
+  test("a message opens as an email, and its attachments by their paths", async () => {
+    const { fieldId, entityId } = await seedPst();
+    const issued = (await readPartUrl(fieldId, "message:0")).unwrap();
+    expect(issued).toMatchObject({
+      fileName: "Smlouva o převodu podílu_ návrh k připomínkám.eml",
+      mimeType: EML_MIME_TYPE,
+    });
+    const message = await (
+      await redeemPartUrl(issued.presignedUrl)
+    )
+      .unwrap()
+      .text();
+    expect(message).toContain("From: =?UTF-8?B?");
+    expect(message).toContain("<petra.vlkova@vlkova-lisy.example>");
+
+    const listed = await readFilePartListEndpoint.handler(
+      partListContext(fieldId, "message:0", scopedDbA()),
+    );
+    expect(listed).toMatchObject({
+      files: [
+        {
+          fileName: "navrh-smlouvy.pdf",
+          part: { part: "message:0/attachment:0" },
+        },
+        {
+          fileName: "poznámky k návrhu.txt",
+          part: { part: "message:0/attachment:1" },
+        },
+      ],
+    });
+    const notes = (
+      await readPartUrl(fieldId, "message:0/attachment:1")
+    ).unwrap();
+    expect(
+      await (await redeemPartUrl(notes.presignedUrl)).unwrap().text(),
+    ).toContain("Konkurenční doložka");
+
+    const reading = await emailReadingEndpoint.handler({
+      ...legalFileContext(fieldId, scopedDbA()),
+      query: { part: "message:0" },
+    });
+    expect(reading).toMatchObject({
+      subject: "Smlouva o převodu podílu: návrh k připomínkám",
+      attachments: [
+        { part: "message:0/attachment:0", fileName: "navrh-smlouvy.pdf" },
+        { part: "message:0/attachment:1", fileName: "poznámky k návrhu.txt" },
+      ],
+    });
+    expect(
+      (await auditRowsFor(entityId)).map(({ metadata }) => metadata),
+    ).toContainEqual(
+      expect.objectContaining({ format: "pst", part: "message:0" }),
+    );
+  });
+
+  test("a message over the bound, or one it does not have, is not opened and records nothing", async () => {
+    const { fieldId, entityId } = await seedPst();
+    const tooLarge = await readPartUrl(fieldId, "message:6");
+    expect(tooLarge.isErr() && tooLarge.error.status).toBe(422);
+    const missing = await readPartUrl(fieldId, "message:9");
+    expect(missing.isErr() && missing.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("refuses another matter's mailbox and its messages", async () => {
+    const { fieldId, entityId } = await seedPst("b");
     expect(
       answeredStatus(
         await mailboxPreviewEndpoint.handler(

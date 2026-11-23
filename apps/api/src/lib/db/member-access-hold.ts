@@ -2,8 +2,8 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
-import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockMatterAccessAssignments,

@@ -2,7 +2,7 @@ import { sql } from "drizzle-orm";
 import type { SQLWrapper } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 
 /**
  * The door through which an operator script outside the case-law tables

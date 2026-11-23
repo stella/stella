@@ -281,7 +281,6 @@
     "apps/web/src/components/inspector/playbook-facet.tsx": 4,
     "apps/web/src/components/inspector/versions-facet.tsx": 1,
     "apps/web/src/components/legal-reader/legal-reader-controls.pending.tsx": 1,
-    "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx": 1,
     "apps/web/src/components/notification-bell.tsx": 1,
     "apps/web/src/components/pdf/peek/peek-pdf-viewer.tsx": 1,
     "apps/web/src/components/public-law-table/public-law-results-toolbar.pending.tsx": 1,

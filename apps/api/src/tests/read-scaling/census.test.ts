@@ -50,10 +50,12 @@ import { decisionFilterValidationScalingScenario } from "./decision-filter-valid
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
+  desktopDictationCleanupModelsScalingScenario,
   desktopDictationModelsScalingScenario,
   dictationModelsScalingScenario,
   dictationScalingScenario,
 } from "./dictation";
+import { learnedFixesScalingScenarios } from "./dictation-learned-fixes";
 import { dictationVocabularyScalingScenarios } from "./dictation-vocabulary";
 import {
   documentAnnotationScalingScenarios,
@@ -171,6 +173,7 @@ const measuredApiScenarios = [
   dataBoxPreviewScalingScenario,
   emailReadingScalingScenario,
   ...dataBoxSettingsScalingScenarios,
+  ...learnedFixesScalingScenarios,
   ...dictationVocabularyScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,
@@ -191,6 +194,7 @@ const measuredApiScenarios = [
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,
+  desktopDictationCleanupModelsScalingScenario,
   dictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,

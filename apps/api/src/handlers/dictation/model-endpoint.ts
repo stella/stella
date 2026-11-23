@@ -76,6 +76,9 @@ type DictationAnswerOptions<
   feature: string;
   failureName: string;
   task: DictationModelTask;
+  /** A model the caller checked the organization offers for `task`;
+   *  absent: the organization's model for it. */
+  modelId?: string | undefined;
   deadlineMs: number;
   outputTokenBudget: number;
   system: string;
@@ -103,6 +106,7 @@ export const generateDictationAnswer = async <
   feature,
   failureName,
   task,
+  modelId,
   deadlineMs,
   outputTokenBudget,
   system,
@@ -153,6 +157,7 @@ export const generateDictationAnswer = async <
               orgAIConfig,
               managedAIResidency,
               task,
+              ...(modelId === undefined ? {} : { modelId }),
               serviceTier: "standard",
               analytics,
               caching: resolveCaching({

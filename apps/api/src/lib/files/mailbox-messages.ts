@@ -70,10 +70,13 @@ const headerFields = (header: string): Map<string, string> => {
   return fields;
 };
 
+/** A mailbox file's extension: `.mbox`, `.mbx`, or Outlook's `.pst`, `.ost`. */
+const MAILBOX_EXTENSION = /\.(?:mbox|mbx|pst|ost)$/iu;
+
 /** The folder a mailbox file is: its name, less a mailbox extension. */
 export const mailboxFolderName = (mailboxName: string): string | null => {
   const folder = mailboxName
-    .replace(/\.(?:mbox|mbx)$/iu, "")
+    .replace(MAILBOX_EXTENSION, "")
     .trim()
     .slice(0, FOLDER_MAX_CHARS);
   return folder || null;
@@ -108,7 +111,7 @@ export const mailboxMessageFileName = (
     .trim();
   const base =
     shown ||
-    `${mailboxName.replace(/\.(?:mbox|mbx)$/iu, "") || "mailbox"}-${String(index + 1)}`;
+    `${mailboxName.replace(MAILBOX_EXTENSION, "") || "mailbox"}-${String(index + 1)}`;
   return sanitizeFilenamePreservingExtension(`${base}.eml`);
 };
 
@@ -161,8 +164,23 @@ export const mailboxEntry = async (
   };
 };
 
+/** What a message's row and text are made from, in any mailbox. */
+export type MailboxListedMessage = Pick<
+  MailboxEntry,
+  | "index"
+  | "length"
+  | "subject"
+  | "from"
+  | "date"
+  | "folder"
+  | "fileName"
+  | "unavailable"
+>;
+
 /** The row a message's list shows, opening as `message:N` when it can. */
-export const mailboxMessageRow = (entry: MailboxEntry): MailboxMessage => ({
+export const mailboxMessageRow = (
+  entry: MailboxListedMessage,
+): MailboxMessage => ({
   fileName: entry.fileName,
   folder: entry.folder,
   sizeBytes: entry.length,

@@ -831,7 +831,7 @@
     "dictationLearnedDelete": "Kustuta, mida stella õppis",
     "dictationLearnedEmpty": "Veel pole midagi õpitud.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Kui parandate dikteeritud sõna või nime kirjapilti kaks korda ühtmoodi, kirjutab stella selle järgmistes dikteerimistes nii. Jääb ainult sellesse telefoni.",
+    "dictationLearnedHint": "Kui parandate dikteeritud sõna või nime kirjapilti kaks korda ühtmoodi, kirjutab stella selle järgmistes dikteerimistes nii. Sünkroonitakse teie teiste seadmetega; seda näete ainult teie.",
     "dictationLearnedTitle": "Teie parandustest õpitud parandused",
     "dictationLearnedUnreadable": "Seda, mida stella õppis, ei saanud lugeda.",
     "dictationModelDefault": "Vaikimisi",

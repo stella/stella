@@ -3,7 +3,6 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   abortableTx,
   abortTransaction,
@@ -11,6 +10,7 @@ import {
 } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";

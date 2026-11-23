@@ -831,7 +831,7 @@
     "dictationLearnedDelete": "Supprimer ce que stella a appris",
     "dictationLearnedEmpty": "Aucune correction apprise pour l’instant.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Quand vous corrigez deux fois de la même façon l’orthographe d’un mot ou d’un nom dicté, stella l’écrit ainsi dans les dictées suivantes. Conservé uniquement sur ce téléphone.",
+    "dictationLearnedHint": "Quand vous corrigez deux fois de la même façon l’orthographe d’un mot ou d’un nom dicté, stella l’écrit ainsi dans les dictées suivantes. Synchronisé avec vos autres appareils ; vous seul pouvez le voir.",
     "dictationLearnedTitle": "Corrections apprises de vos modifications",
     "dictationLearnedUnreadable": "Ce que stella a appris n’a pas pu être lu.",
     "dictationModelDefault": "Par défaut",

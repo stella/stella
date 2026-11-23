@@ -1,0 +1,6 @@
+{
+  "create-table-references": "The new dictation_learned_fixes table references organization and user; the SHARE ROW EXCLUSIVE locks on them are catalog changes that scan no rows, bounded by 1s lock_timeout and 10s statement_timeout.",
+  "row-level-security": "Row security is enabled and forced on dictation_learned_fixes in the migration that creates it, before any row or reader exists.",
+  "create-policy": "The policies are created on dictation_learned_fixes in the migration that creates it, before any row or reader exists.",
+  "create-index": "The user index is built on dictation_learned_fixes created empty in the same migration, before any row or reader exists, under 1s lock_timeout."
+}

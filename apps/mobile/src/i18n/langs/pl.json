@@ -831,7 +831,7 @@
     "dictationLearnedDelete": "Usuń to, czego nauczyła się stella",
     "dictationLearnedEmpty": "Brak wyuczonych poprawek.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Gdy dwa razy poprawisz w ten sam sposób pisownię podyktowanego słowa lub nazwiska, stella zapisze je tak w kolejnych dyktowaniach. Przechowywane tylko na tym telefonie.",
+    "dictationLearnedHint": "Gdy dwa razy poprawisz w ten sam sposób pisownię podyktowanego słowa lub nazwiska, stella zapisze je tak w kolejnych dyktowaniach. Synchronizowane z innymi Twoimi urządzeniami; widzisz to tylko Ty.",
     "dictationLearnedTitle": "Poprawki wyuczone z Twoich zmian",
     "dictationLearnedUnreadable": "Nie udało się odczytać tego, czego nauczyła się stella.",
     "dictationModelDefault": "Domyślny",

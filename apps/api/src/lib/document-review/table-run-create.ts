@@ -284,9 +284,14 @@ export const createPlaybookTableRuns = async ({
   // `::text::jsonb`, never a bare `::jsonb`: a bare cast fixes the bind
   // parameter's type, so the driver re-encodes the already-serialized string
   // and the column ends up holding a jsonb *string* instead of the object.
-  const documentTuples = offered.map(
-    (run) =>
-      sql`(${run.runId}::uuid, ${run.entityId}::uuid, ${run.fileFieldId}::uuid, ${run.entityVersionId}::uuid, ${run.contentSha256}::varchar)`,
+  const documentsPayload = JSON.stringify(
+    offered.map((run) => ({
+      id: run.runId,
+      entity_id: run.entityId,
+      file_field_id: run.fileFieldId,
+      entity_version_id: run.entityVersionId,
+      content_sha256: run.contentSha256,
+    })),
   );
 
   // audit: skip — the caller audits the playbook run once.
@@ -310,8 +315,8 @@ export const createPlaybookTableRuns = async ({
            ${expectedFindingCount}::integer,
            ${userId}::text,
            ${startedAt}::timestamptz
-      FROM (VALUES ${sql.join(documentTuples, sql`, `)})
-        AS target(id, entity_id, file_field_id, entity_version_id, content_sha256)
+      FROM jsonb_to_recordset(${documentsPayload}::text::jsonb)
+        AS target(id uuid, entity_id uuid, file_field_id uuid, entity_version_id uuid, content_sha256 varchar)
     ON CONFLICT DO NOTHING`);
 
   // Read back what actually landed rather than assuming it was everything

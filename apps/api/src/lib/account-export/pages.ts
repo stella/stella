@@ -18,6 +18,7 @@ import {
   chatMessages,
   chatQueuedMessages,
   chatThreads,
+  dictationLearnedFixes,
   legalReaderAnnotations,
   legalReaderAnswerMessages,
   legalReaderAnswers,
@@ -573,6 +574,34 @@ const readBillingDraftSettingsPage = async ({
     }));
   });
 
+const readDictationLearnedFixesPage = async ({
+  projections,
+  narrowScopedDb,
+  organizationId,
+  userId,
+  cursor,
+}: OrganizationPageQueryOptions) =>
+  await narrowScopedDb(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(dictationLearnedFixes)
+      .where(
+        and(
+          eq(dictationLearnedFixes.organizationId, organizationId),
+          eq(dictationLearnedFixes.userId, userId),
+          stillMember(organizationId, userId),
+          after(dictationLearnedFixes.userId, cursor),
+        ),
+      )
+      .limit(1);
+    return await Promise.all(
+      rows.map(async (row) => ({
+        id: row.userId,
+        value: await projections.dictation_learned_fixes(organizationId, row),
+      })),
+    );
+  });
+
 const readTemplateDefaultsPage = async ({
   projections,
   narrowScopedDb,
@@ -657,6 +686,8 @@ const readOrganizationPage = async ({
       return await readSavedTimeNarrativesPage(options);
     case "billing_draft_user_settings":
       return await readBillingDraftSettingsPage(options);
+    case "dictation_learned_fixes":
+      return await readDictationLearnedFixesPage(options);
     case "template_lookup_format_user_defaults":
       return await readTemplateDefaultsPage(options);
     case "workspace_view_templates":

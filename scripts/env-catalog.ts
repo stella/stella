@@ -1479,6 +1479,11 @@ export const MANUAL_SCHEMA_KEYS = new Set([
   "STELLA_SIDECAR_VERSION",
   "STELLA_TIMING",
   "STELLA_WEB_PORT",
+  // Web runtime only, read once at start: how many requests the server
+  // renderer handles at once before it answers 503 with Retry-After (a whole
+  // number from 2 to 1024; unset uses the default sized for a 512 MB-1 GB
+  // task). apps/web/src/ssr-admission.ts parses it.
+  "STELLA_WEB_SSR_MAX_IN_FLIGHT",
   // Set by the API for each extraction worker run, never deployed: the code
   // page a tie between readings of a ZIP archive's undeclared file names
   // goes to (`ibm437` or `ibm852`). apps/api/src/lib/files/zip-name-code-page.ts
@@ -1582,6 +1587,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
   "FAKE_HARNESS_LOG",
   "CODEX_HOME",
+  "GEMINI_HOME",
+  "STELLA_MCP_URL",
+  "STELLA_MCP_TOKEN",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
   // The pause between a paced fake Codex scenario's outputs.
@@ -1670,6 +1678,7 @@ export const TOOLING_ENV_KEYS = new Set([
   // The WebAssembly drift checks build into a scratch directory and compare it.
   "SCAN_ENGINE_WASM_OUT_DIR",
   "HEIC_DECODER_WASM_OUT_DIR",
+  "PST_READER_WASM_OUT_DIR",
   // The manual checks workflow passes its inputs and result files to its scripts.
   "CHECK_CHECK",
   "CHECK_EXIT_FILE",
@@ -1820,6 +1829,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "EXPECTED_COMMIT",
   // Flake trial ownership and isolated subprocess fixture handoffs.
   "FLAKE_CHILD_RECORD",
+  // The test job's clock (epoch ms); the repeats end inside the job's timeout.
+  "CI_T0",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
   // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.

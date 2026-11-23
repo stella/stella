@@ -1,10 +1,29 @@
 # @stll/workspace-ui
 
+## 0.24.2
+
+### Patch Changes
+
+- Updated dependencies [[`b280d21`](https://github.com/stella/stella/commit/b280d21b8b6bc7149a342a08f2d78036f1099186)]:
+  - @stll/ui@0.86.0
+
+## 0.24.1
+
+### Patch Changes
+
+- Updated dependencies [[`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63), [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b)]:
+  - @stll/ui@0.85.0
+
 ## 0.24.0
 
 ### Minor Changes
 
 - [#9246](https://github.com/stella/stella/pull/9246) [`f292e0a`](https://github.com/stella/stella/commit/f292e0af50fa6912cdced0f28f0b4cfd22c61c01) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `FileConversionRefusal` adds `{ kind: "no_preview", format, cause }`: an image this deployment makes no preview of, because it does not decode the format (`"decoding_off"`) or cannot read the file's pictures (`"unreadable"`). `format` is the file's short tag, such as `"HEIC"`.
+
+### Patch Changes
+
+- Updated dependencies [[`98abe28`](https://github.com/stella/stella/commit/98abe2841a69b052cdfd34cfd8e42fe5d7a53105)]:
+  - @stll/ui@0.84.1
 
 ## 0.23.3
 

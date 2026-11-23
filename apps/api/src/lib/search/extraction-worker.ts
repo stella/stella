@@ -49,6 +49,7 @@ import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
+import { Temporal } from "@stll/time";
 
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import { DATA_BOX_PREVIEW_MODE } from "@/api/lib/email/correspondence/data-box/preview-contract";
@@ -63,6 +64,7 @@ import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
   ASIC_PREVIEW_WORKER_MODE,
   MAILBOX_TEXT_WORKER_MODE,
+  PST_WORKER_EXIT,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
   ZIP_ARCHIVE_PREVIEW_MODE,
@@ -117,6 +119,17 @@ import {
 import type { MboxParseError } from "@/api/lib/files/mbox";
 import type { P7mParseError } from "@/api/lib/files/p7m";
 import { partMediaType } from "@/api/lib/files/part-media-type";
+import {
+  PST_OPERATION_MAX_MS,
+  pstBytesFile,
+  type PstReadError,
+  readPstText,
+} from "@/api/lib/files/pst-mailbox";
+import {
+  isPstWorkerMode,
+  readPstWorkerRequest,
+  runPstWorker,
+} from "@/api/lib/files/pst-worker";
 import { signatureDocumentText } from "@/api/lib/files/signature-document-text";
 import {
   SIGNATURE_WORKER_EXIT,
@@ -399,6 +412,7 @@ type LegalTextReadError =
   | AsicParseError
   | DocumentPackageError
   | MboxParseError
+  | PstReadError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -594,6 +608,19 @@ const extractXmlText = async (
   return await extractEInvoiceText(options);
 };
 
+const extractPstText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> =>
+  await readPstText({
+    open: (deadline) => pstBytesFile(fileBytes, deadline),
+    maxChars,
+    mailboxName: "mailbox",
+    deadline: Temporal.Now.instant().epochMilliseconds + PST_OPERATION_MAX_MS,
+  });
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -616,6 +643,7 @@ const LEGAL_TEXT_READERS = {
   xml: extractXmlText,
   zip: extractZipText,
   mbox: extractMailboxText,
+  pst: extractPstText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -998,6 +1026,7 @@ const embeddedPartExit = (error: EmbeddedPartError) => {
     case "EmailParseError":
     case "MboxParseError":
     case "P7mParseError":
+    case "PstReadError":
     case "SignedDossierParseError":
       return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
     case "FileScanRejectedError":
@@ -1155,6 +1184,18 @@ try {
   const maxChars = readMaxCharsArgument(process.argv[3]);
   if (mimeType === MAILBOX_TEXT_WORKER_MODE) {
     process.exit(await writeMailboxText(maxChars));
+  }
+  if (isPstWorkerMode(mimeType)) {
+    const request = readPstWorkerRequest(
+      mimeType,
+      maxChars,
+      process.argv.slice(4),
+    );
+    process.exit(
+      request === null
+        ? PST_WORKER_EXIT.unreadable
+        : await runPstWorker(request, Bun.stdin.stream()),
+    );
   }
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   if (mimeType === DATA_BOX_PREVIEW_MODE) {

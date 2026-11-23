@@ -7,12 +7,12 @@ import type {
   PgQueryResultHKT,
 } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import type {
   AUDIT_ACTIVITY_CATEGORIES,
   SearchHistoryKind,
 } from "@/api/db/schema";
 import { accountAuditLogs, auditLogs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";

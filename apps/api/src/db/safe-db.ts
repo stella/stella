@@ -2,11 +2,11 @@ import { Result } from "better-result";
 import type { UnhandledException } from "better-result";
 import { TransactionRollbackError } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type {
   CreateIngestionDbOptions,
   SafeDbRetryConfig as BaseSafeDbRetryConfig,
 } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";

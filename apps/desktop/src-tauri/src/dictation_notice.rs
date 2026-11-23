@@ -404,16 +404,21 @@ fn tell(app: &AppHandle, shown: Shown) {
 
 fn show(app: &AppHandle) {
   let size = LogicalSize::new(WIDTH, HEIGHT);
-  let mut builder = crate::app_window::builder(app, NOTICE_WINDOW_LABEL, "index.html")
-    .title("stella desktop")
-    .inner_size(size.width, size.height)
-    .resizable(false)
-    .decorations(false)
-    .transparent(true)
-    .shadow(true)
-    .always_on_top(true)
-    .focused(false)
-    .skip_taskbar(true);
+  let mut builder = crate::app_window::builder(
+    app,
+    NOTICE_WINDOW_LABEL,
+    "index.html",
+    crate::app_window::WindowKind::Panel,
+  )
+  .title("stella desktop")
+  .inner_size(size.width, size.height)
+  .resizable(false)
+  .decorations(false)
+  .transparent(true)
+  .shadow(true)
+  .always_on_top(true)
+  .focused(false)
+  .skip_taskbar(true);
   if let Some(area) = crate::window_placement::target_work_area(app) {
     let origin = crate::window_placement::centered_origin(area, size);
     let y = (area.y + area.height - HEIGHT - BOTTOM_GAP).max(area.y);

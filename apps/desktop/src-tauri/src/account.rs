@@ -261,11 +261,13 @@ impl LinkedAccount {
   }
 
   pub(crate) fn snapshot(self) -> DesktopAccountSnapshot {
+    let avatar = crate::account_avatar::data_url_for(&self.local_data_namespace());
     DesktopAccountSnapshot::Connected {
       account: self.account,
       identity: self.identity,
       expires_at: self.credential.expires_at,
       server: self.web_origin,
+      avatar,
     }
   }
 }
@@ -1062,6 +1064,8 @@ pub async fn invalidate(
       );
       keychain_clear_failed()
     })?;
+    // The ended link's picture goes with it.
+    crate::account_avatar::clear();
   }
   drop(store);
   Ok(())
@@ -1111,6 +1115,8 @@ pub fn notify(app: &tauri::AppHandle) {
     });
   }
   crate::feature_access::account_changed(app, crate::activity::unload_account);
+  // Linking, switching and ending the link all read the picture again.
+  crate::account_avatar::refresh(app);
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
     tracing::warn!(error = %error, "desktop account change was not delivered");
   }
@@ -1189,6 +1195,8 @@ pub async fn account_disconnect(
   // expired and its namespace is gone; the server keeps the member's own
   // list.
   crate::dictation_learned::erase_all();
+  // The picture leaves with the account, before any window reads again.
+  crate::account_avatar::clear();
   *BROWSER_CONNECTION
     .lock()
     .map_err(with_cause_logged("Desktop connection is unavailable"))? = None;

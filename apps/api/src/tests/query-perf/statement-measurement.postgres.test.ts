@@ -7,6 +7,8 @@ import { runWithQueryCounter } from "@/api/lib/db-query-counter";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 
+import { withQueryPerfRollbackWhen } from "./rollback";
+import { QUERY_PERF_TIME_CONFIRMATION_SAMPLES } from "./sampling";
 import { classifyMeasuredStatement } from "./scheduled-run";
 import { measureJobStatements } from "./statement-measurement";
 
@@ -31,6 +33,7 @@ describe.skipIf(!enabled)(
       );
       const measured = await measureJobStatements({
         database: db,
+        overTimeAllowance: () => false,
         run: async (database) =>
           await runWithQueryCounter(async (counter) => {
             const inserted = await database.transaction(async (tx) => {
@@ -112,6 +115,7 @@ describe.skipIf(!enabled)(
       await db.execute(sql`INSERT INTO measured_row_counts VALUES (1)`);
       const measured = await measureJobStatements({
         database: db,
+        overTimeAllowance: () => false,
         run: async (database) => [
           executedRows(
             await database.execute(
@@ -145,6 +149,64 @@ describe.skipIf(!enabled)(
             }).writtenRows,
         ),
       ).toEqual(measured.value.map((rows) => rows.length));
+    });
+    test("confirmation samples of a slow write roll back before its one real execution", async () => {
+      await db.execute(
+        sql`CREATE TEMP TABLE confirmed_samples (id integer PRIMARY KEY)`,
+      );
+      const measured = await measureJobStatements({
+        database: db,
+        overTimeAllowance: () => true,
+        run: async (database) =>
+          executedRows(
+            await database.execute(
+              sql`INSERT INTO confirmed_samples VALUES (1), (2) ON CONFLICT DO NOTHING RETURNING id`,
+            ),
+          ),
+      });
+      expect(measured.value).toHaveLength(2);
+      expect(
+        measured.statements.map(({ executionTimesMs, plans }) => [
+          executionTimesMs.length,
+          plans.length,
+        ]),
+      ).toEqual([
+        [
+          QUERY_PERF_TIME_CONFIRMATION_SAMPLES,
+          QUERY_PERF_TIME_CONFIRMATION_SAMPLES,
+        ],
+      ]);
+      expect(
+        executedRows(
+          await db.execute(
+            sql`SELECT count(*)::int AS rows FROM confirmed_samples`,
+          ),
+        ),
+      ).toEqual([{ rows: 2 }]);
+    });
+    test("an in-order sample keeps its writes unless its timing asks for a rollback", async () => {
+      await db.execute(
+        sql`CREATE TEMP TABLE in_order_samples (id integer PRIMARY KEY)`,
+      );
+      const insert = async (
+        rollBack: boolean,
+      ): Promise<{ value: number; rolledBack: boolean }> =>
+        await db.transaction(
+          async (tx) =>
+            await withQueryPerfRollbackWhen(
+              tx,
+              async (savepoint) =>
+                executedRows(
+                  await savepoint.execute(
+                    sql`INSERT INTO in_order_samples VALUES (1) ON CONFLICT DO NOTHING RETURNING id`,
+                  ),
+                ).length,
+              () => rollBack,
+            ),
+        );
+      expect(await insert(true)).toEqual({ value: 1, rolledBack: true });
+      expect(await insert(false)).toEqual({ value: 1, rolledBack: false });
+      expect(await insert(false)).toEqual({ value: 0, rolledBack: false });
     });
   },
 );
