@@ -426,6 +426,7 @@ test("GHCR attestations run before the job logs out of GHCR", () => {
         const run = typeof step["run"] === "string" ? step["run"] : "";
         if (
           uses.startsWith("docker/login-action@") ||
+          uses.endsWith("/docker-login") ||
           uses.endsWith("/build-web-image")
         ) {
           loggedIn = true;
