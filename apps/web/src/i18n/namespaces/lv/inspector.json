@@ -563,10 +563,20 @@
       "anonymization": "Anonimizācija"
     },
     "fileParts": {
+      "archiveUnreadable": "Arhīvu neizdevās nolasīt.",
       "back": "Atpakaļ uz sarakstu",
       "download": "Lejupielādēt {fileName}",
+      "noFilesInside": "Iekšā nav neviena faila.",
       "noPreview": "Šim faila veidam nav priekšskatījuma. Lejupielādējiet to vai saglabājiet lietā.",
-      "open": "Atvērt {fileName}"
+      "notConverted": "Šo failu neizdevās pārveidot priekšskatījumam. Lejupielādējiet to vai saglabājiet lietā.",
+      "open": "Atvērt {fileName}",
+      "unavailable": {
+        "encrypted": "Aizsargāts ar paroli, nevar atvērt",
+        "link": "Saite uz citu failu, netiek atvērta",
+        "tooLarge": "Pārāk liels, lai atvērtu",
+        "unreadable": "Bojāts, nevar atvērt",
+        "unsupported": "Saspiests veidā, ko nevar atvērt"
+      }
     },
     "firstSourceReached": "Šis ir pirmais avots.",
     "groups": {

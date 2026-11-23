@@ -77,21 +77,24 @@ if (Symbol.dispose)
  * and positive; anything else is a caller defect.
  * @param {Uint8Array | number[]} bytes
  * @param {number} max_decoded_pixels
+ * @param {number} max_canvas_pixels
  * @param {number} max_output_pixels
  * @returns {WasmHeicPreview}
  */
 export function decode_heic_preview(
   bytes,
   max_decoded_pixels,
+  max_canvas_pixels,
   max_output_pixels,
 ) {
   try {
     const retptr = wasm.__wbindgen_add_to_stack_pointer(-16) >>> 0;
     const val2 = +max_decoded_pixels;
-    const val3 = +max_output_pixels;
+    const val3 = +max_canvas_pixels;
+    const val4 = +max_output_pixels;
     const ptr0 = passArray8ToWasm0(bytes, wasm.__wbindgen_export);
     const len0 = WASM_VECTOR_LEN;
-    wasm.decode_heic_preview(retptr, ptr0, len0, val2, val3);
+    wasm.decode_heic_preview(retptr, ptr0, len0, val2, val3, val4);
     var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
     var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
     var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);

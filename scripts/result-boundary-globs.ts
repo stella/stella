@@ -348,6 +348,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/account-export/organization-audit-archive.ts",
   "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
+  "apps/api/src/lib/uploads/document-naming/worker.ts",
   "apps/api/src/lib/document-processing-queue.ts",
   "apps/api/src/lib/document-review/run-queue.ts",
   "apps/api/src/lib/document-translation/run-queue.ts",

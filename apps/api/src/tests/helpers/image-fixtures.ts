@@ -440,11 +440,13 @@ export const splitTiffPage = (
 /**
  * A synthetic HEIC photo made with the platform's own encoder (see the
  * decoder package's `fixtures/README.md`): `grid.heic` (1100x700, a grid of
- * 3x2 tiles), `single.heic` (96x64), `alpha.heic` (300x200, transparent
- * corners) or `p3.heic` (as `alpha.heic`, Display P3).
+ * 3x2 tiles), `grid-48mp.heic` (8064x6048, 9x6 tiles), `single.heic`
+ * (96x64), `alpha.heic` (300x200, transparent corners) or `p3.heic` (as
+ * `alpha.heic`, Display P3).
  */
 export const heicFixture = (
-  name: "alpha.heic" | "grid.heic" | "p3.heic" | "single.heic",
+  name:
+    "alpha.heic" | "grid-48mp.heic" | "grid.heic" | "p3.heic" | "single.heic",
 ): Uint8Array =>
   new Uint8Array(
     readFileSync(

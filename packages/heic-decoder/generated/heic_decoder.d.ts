@@ -23,6 +23,7 @@ export class WasmHeicPreview {
 export function decode_heic_preview(
   bytes: Uint8Array | number[],
   max_decoded_pixels: number,
+  max_canvas_pixels: number,
   max_output_pixels: number,
 ): WasmHeicPreview;
 
@@ -38,6 +39,7 @@ export interface InitOutput {
     c: number,
     d: number,
     e: number,
+    f: number,
   ) => void;
   readonly wasmheicpreview_height: (a: number) => number;
   readonly wasmheicpreview_status: (a: number, b: number) => void;

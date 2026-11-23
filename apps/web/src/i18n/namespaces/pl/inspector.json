@@ -563,10 +563,20 @@
       "anonymization": "Anonimizacja"
     },
     "fileParts": {
+      "archiveUnreadable": "Nie udało się odczytać archiwum.",
       "back": "Wróć do listy",
       "download": "Pobierz {fileName}",
+      "noFilesInside": "W środku nie ma żadnych plików.",
       "noPreview": "Tego typu pliku nie można wyświetlić w podglądzie. Pobierz go lub zapisz w sprawie.",
-      "open": "Otwórz {fileName}"
+      "notConverted": "Nie udało się przekonwertować tego pliku do podglądu. Pobierz go lub zapisz w sprawie.",
+      "open": "Otwórz {fileName}",
+      "unavailable": {
+        "encrypted": "Chroniony hasłem, nie można otworzyć",
+        "link": "Odnośnik do innego pliku, nie jest otwierany",
+        "tooLarge": "Za duży, by go otworzyć",
+        "unreadable": "Uszkodzony, nie można otworzyć",
+        "unsupported": "Skompresowany w sposób, którego nie można otworzyć"
+      }
     },
     "firstSourceReached": "To pierwsze źródło.",
     "groups": {

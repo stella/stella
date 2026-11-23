@@ -9,9 +9,13 @@
  * - TIFF: the first `LIMITS.pdfRenderImagePagesMax` pages, decoded one at a
  *   time by `tiff-pages.ts`, each with its own orientation and decoding to
  *   at most `LIMITS.pdfRenderTiffPageDecodedBytesMax`.
- * - HEIC/HEIF: decoded in WebAssembly by `@stll/heic-decoder` within the
- *   same decoded budget and scaled down to the same page size, rotation,
- *   mirroring and colour profile applied.
+ * - HEIC/HEIF: decoded in WebAssembly by `@stll/heic-decoder`, scaled down
+ *   to `LIMITS.pdfRenderImagePixelsMax` with rotation, mirroring and colour
+ *   profile applied. A grid photo (every phone photo) is decoded tile by
+ *   tile straight into the page image, each tile and a coded image within
+ *   `LIMITS.pdfRenderImageDecodedBytesMax`, its canvas within
+ *   `LIMITS.heifTiledCanvasPixelsMax`: a 48 MP photo holds what a 12 MP one
+ *   does.
  * - Every other image type: at most `LIMITS.pdfRenderImageDecodedBytesMax`
  *   decoded, by Bun's built-in image pipeline in its static-codec mode
  *   (identical on Linux and macOS), which applies EXIF orientation, reads
@@ -150,18 +154,23 @@ const scaledImage = async (
 /** Loads its WebAssembly module (a sidecar of the bundled worker) on first use. */
 const heicDecoder = createHeicDecoder();
 
+/** RGBA: four bytes for every pixel a HEIF image or tile decodes to. */
+const HEIF_DECODED_BYTES_PER_PIXEL = 4;
+
 /**
- * A HEIC/HEIF photo (the first frame of a sequence without a still image),
- * decoded in WebAssembly whose memory cannot grow past its own limit, to
- * at most `LIMITS.pdfRenderImageDecodedBytesMax` and scaled down to
- * `LIMITS.pdfRenderImagePixelsMax`, with rotation, mirroring and colour
- * profile applied.
+ * A HEIC/HEIF photo (the first frame of a sequence without a still image).
+ * The decoder checks every size against these limits from the container
+ * before it allocates for it, and its WebAssembly memory cannot grow past
+ * its own maximum.
  */
 const renderHeif = async (
   bytes: Uint8Array,
 ): Promise<Result<RenderedPdf, PdfRenderInputError>> => {
   const preview = heicDecoder.decode(bytes, {
-    maxDecodedPixels: Math.floor(LIMITS.pdfRenderImageDecodedBytesMax / 4),
+    maxDecodedPixels: Math.floor(
+      LIMITS.pdfRenderImageDecodedBytesMax / HEIF_DECODED_BYTES_PER_PIXEL,
+    ),
+    maxCanvasPixels: LIMITS.heifTiledCanvasPixelsMax,
     maxOutputPixels: LIMITS.pdfRenderImagePixelsMax,
   });
   switch (preview.type) {
@@ -199,6 +208,10 @@ const renderImage = async (
   if (mimeType === "image/tiff") {
     return await renderTiff(bytes);
   }
+  // Bounded by the decoder per tile and canvas, not by the header's size.
+  if (isHeifMimeType(mimeType)) {
+    return await renderHeif(bytes);
+  }
   const header = isHeaderReadableImageMimeType(mimeType)
     ? readImageHeader(bytes, mimeType)
     : null;
@@ -209,9 +222,6 @@ const renderImage = async (
       LIMITS.pdfRenderImageDecodedBytesMax
   ) {
     return Result.ok({ type: "too-large" });
-  }
-  if (isHeifMimeType(mimeType)) {
-    return await renderHeif(bytes);
   }
   Bun.Image.backend = "bun";
   const png = await Result.tryPromise({

@@ -373,6 +373,7 @@ test("the real invoice send form sends its capability request without an idempot
       deploymentFeatures: { legalLists: false, invoiceLinks: true },
       documentProcessingMode: "off",
       matterNumberPattern: "{year}/{number}",
+      documentNamePattern: null,
       matterNumberPadding: 3,
       matterNumberingEnabled: false,
       practiceJurisdictions: [],

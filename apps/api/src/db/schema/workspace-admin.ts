@@ -232,6 +232,11 @@ export const organizationSettings = p.pgTable(
       .varchar("matter_number_pattern", { length: 128 })
       .notNull()
       .default("{SEQ}"),
+    /**
+     * Token pattern new uploads are renamed to in matters that opt in; null
+     * leaves uploaded names alone. See `@stll/api-contract/document-name`.
+     */
+    documentNamePattern: p.varchar("document_name_pattern", { length: 128 }),
     matterNumberPadding: p
       .integer("matter_number_padding")
       .notNull()

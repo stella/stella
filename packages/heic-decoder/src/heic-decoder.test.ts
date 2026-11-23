@@ -26,7 +26,11 @@ const reference = (name: string): Reference =>
 
 const decoder = createHeicDecoder();
 
-const GENEROUS = { maxDecodedPixels: 50_000_000, maxOutputPixels: 50_000_000 };
+const GENEROUS = {
+  maxDecodedPixels: 50_000_000,
+  maxCanvasPixels: 50_000_000,
+  maxOutputPixels: 50_000_000,
+};
 
 const decoded = (result: HeicPreview) => {
   if (result.type !== "decoded") {
@@ -106,7 +110,7 @@ describe("createHeicDecoder", () => {
   test("scales a photo down to the output budget, keeping its shape", () => {
     const result = decoded(
       decoder.decode(fixture("grid.heic"), {
-        maxDecodedPixels: 1100 * 700,
+        ...GENEROUS,
         maxOutputPixels: 110 * 70,
       }),
     );
@@ -130,15 +134,57 @@ describe("createHeicDecoder", () => {
     expect([result.width, result.height]).toEqual([700, 1100]);
   });
 
-  test("refuses a photo over the decoded budget", () => {
-    const limits = { maxDecodedPixels: 1100 * 700, maxOutputPixels: 1 };
+  test("refuses a single image over the decoded budget", () => {
+    // The coded picture may be padded past the 96 x 64 it shows.
+    const limits = {
+      maxDecodedPixels: 128 * 128,
+      maxCanvasPixels: 1,
+      maxOutputPixels: 1,
+    };
+    expect(decoder.decode(fixture("single.heic"), limits).type).toBe("decoded");
+    expect(
+      decoder.decode(fixture("single.heic"), {
+        ...limits,
+        maxDecodedPixels: 96 * 64 - 1,
+      }),
+    ).toEqual({ type: "too-large" });
+  });
+
+  test("bounds a grid photo by its canvas, never by decoding it whole", () => {
+    // Its tiles are 512 x 512; the canvas is 1100 x 700.
+    const limits = {
+      maxDecodedPixels: 512 * 512,
+      maxCanvasPixels: 1100 * 700,
+      maxOutputPixels: 8000,
+    };
     expect(decoder.decode(fixture("grid.heic"), limits).type).toBe("decoded");
     expect(
       decoder.decode(fixture("grid.heic"), {
         ...limits,
-        maxDecodedPixels: 1100 * 700 - 1,
+        maxCanvasPixels: 1100 * 700 - 1,
       }),
     ).toEqual({ type: "too-large" });
+  });
+
+  test("previews a 48 MP phone photo tile by tile", () => {
+    // 8064 x 6048 in 9 x 6 tiles: 195 MB as whole RGBA.
+    const expected = reference("grid-48mp-reference.json");
+    const result = decoded(
+      decoder.decode(fixture("grid-48mp.heic"), {
+        maxDecodedPixels: 25_000_000,
+        maxCanvasPixels: 200_000_000,
+        maxOutputPixels: 8_000_000,
+      }),
+    );
+    expect(result.width * result.height).toBeLessThanOrEqual(8_000_000);
+    expect(result.width / result.height).toBeCloseTo(8064 / 6048, 2);
+    // Block means do not depend on the scale.
+    for (const [index, value] of blockMeans(
+      result,
+      expected.blocks,
+    ).entries()) {
+      expect(Math.abs(value - (expected.means[index] ?? 0))).toBeLessThan(2);
+    }
   });
 
   test("refuses bytes that are not HEIF", () => {
@@ -156,6 +202,7 @@ describe("createHeicDecoder", () => {
       expect(() =>
         decoder.decode(fixture("single.heic"), {
           maxDecodedPixels: limit,
+          maxCanvasPixels: 1,
           maxOutputPixels: 1,
         }),
       ).toThrow("pixel limits must be positive integers");

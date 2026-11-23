@@ -238,6 +238,7 @@ export const TAGGED_FAILURE_REASON = {
   DockerKeeperError: "tagged_failure",
   DocumentBuildError: "tagged_failure",
   DocumentDeadlineScoutError: "tagged_failure",
+  DocumentNamingError: "tagged_failure",
   DocumentOcrError: "tagged_failure",
   DocumentPacingOutcome: "tagged_failure",
   DocumentProcessingJobError: "tagged_failure",

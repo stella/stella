@@ -211,6 +211,15 @@
     "creationRateLimited": "Muitas organizações foram criadas recentemente. Tente novamente mais tarde.",
     "creationRefused": "Não foi possível criar a organização. Confira os dados e tente novamente.",
     "creationSlugConflict": "Este endereço de organização já está em uso. Escolha outro nome ou endereço.",
+    "documentNaming": {
+      "description": "Renomeia novos envios nos casos que ativarem a opção. A stella lê a data, o tipo e o título de cada documento e preenche este padrão. Deixe em branco para manter os nomes originais.",
+      "invalid": "Use apenas os marcadores listados e nenhum dos caracteres \\ / : * ? \" < > |.",
+      "pattern": "Padrão de nome",
+      "preview": "Um contrato assinado se chamaria:",
+      "sampleDocType": "Contrato",
+      "sampleTitle": "Contrato de compra e venda de quotas",
+      "tokenHelp": "Marcadores: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Um marcador sem valor é omitido com o separador."
+    },
     "invitations": {
       "cancelConfirmDescription": "O link do convite enviado para {email} deixará de funcionar. Para convidar essa pessoa novamente, envie um novo convite.",
       "cancelInvitation": "Cancelar convite",

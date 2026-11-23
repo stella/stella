@@ -534,8 +534,19 @@
     "type": "Tipas"
   },
   "fileParts": {
+    "archiveUnreadable": "Archyvo nepavyko perskaityti.",
     "attachments": "Priedai",
+    "files": "Failai",
+    "insideFailed": "Nepavyko įkelti viduje esančių failų. Bakstelėkite, kad bandytumėte dar kartą.",
+    "noFilesInside": "Viduje nėra jokių failų.",
     "open": "Atidaryti {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",
+      "link": "Nuoroda į kitą failą, jis neatidaromas",
+      "tooLarge": "Per didelis, kad būtų galima atidaryti",
+      "unreadable": "Sugadintas, negalima atidaryti",
+      "unsupported": "Suglaudintas būdu, kurio negalima atidaryti"
+    },
     "unnamed": "Failas be pavadinimo"
   },
   "header": {

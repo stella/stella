@@ -11,15 +11,20 @@ import {
   type LegalFileFormatKind,
   legalFileFormatProfiles,
   XML_FILE_FORMAT,
+  ZIP_FILE_FORMAT,
 } from "./legal-file-formats";
 
 /**
- * Media types that only say a file is XML. Many XML formats are uploaded
- * under them, so a name whose extension names a format is that format.
+ * Media types that only say a file is XML or a ZIP archive. Many formats are
+ * uploaded under them (an invoice as XML, an ASiC container or an Office
+ * document as a ZIP), so a name whose extension names a format is that
+ * format.
  */
-const GENERIC_XML_MEDIA_TYPES: ReadonlySet<string> = new Set([
+const GENERIC_MEDIA_TYPES: ReadonlySet<string> = new Set([
   XML_FILE_FORMAT.mimeType,
   ...XML_FILE_FORMAT.mimeAliases,
+  ZIP_FILE_FORMAT.mimeType,
+  ...ZIP_FILE_FORMAT.mimeAliases,
 ]);
 
 /** The family a file's mark stands for; each has its own mark. */
@@ -292,7 +297,7 @@ export const documentFormat = (
   if (
     byExtension !== undefined &&
     byExtension.kind !== byMimeType?.kind &&
-    GENERIC_XML_MEDIA_TYPES.has(media)
+    GENERIC_MEDIA_TYPES.has(media)
   ) {
     return formatOf(byExtension);
   }

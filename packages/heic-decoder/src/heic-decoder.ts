@@ -22,16 +22,26 @@ export const heicDecoderWasmUrl = (): URL => {
 };
 
 export type HeicPreviewLimits = {
-  /** Pixels the decoded image may hold; a file declaring more is refused. */
+  /**
+   * Pixels an image decoded whole may hold, and each tile of a grid photo;
+   * a file declaring more is refused.
+   */
   maxDecodedPixels: number;
+  /**
+   * Pixels the canvas of a grid photo may hold. A grid is decoded tile by
+   * tile straight into the output, so memory does not grow with the canvas;
+   * decoding time does.
+   */
+  maxCanvasPixels: number;
   /** Pixels of the returned image; a larger one is scaled down to fit. */
   maxOutputPixels: number;
 };
 
 /**
  * - `decoded`: 8-bit sRGB RGBA pixels, rotation and mirroring applied.
- * - `too-large`: the file declares an image above `maxDecodedPixels`, or a
- *   grid of tiles that holds far more pixels than it shows.
+ * - `too-large`: the file declares an image or tile above
+ *   `maxDecodedPixels`, a grid canvas above `maxCanvasPixels`, or a grid
+ *   whose tiles hold far more pixels than it shows.
  * - `unreadable`: not a HEIF file this decoder reads, or a damaged one.
  * - `failed`: the decoder stopped (its memory limit, or a defect in it).
  *   Its instance is discarded; the next call loads a fresh one.
@@ -63,12 +73,17 @@ export const createHeicDecoder = (
     }
   };
   return {
-    decode: (bytes, { maxDecodedPixels, maxOutputPixels }) => {
+    decode: (bytes, { maxCanvasPixels, maxDecodedPixels, maxOutputPixels }) => {
       // The module refuses (throws) limits that are not positive integers.
       load();
       let result: WasmHeicPreview | undefined;
       try {
-        result = decode_heic_preview(bytes, maxDecodedPixels, maxOutputPixels);
+        result = decode_heic_preview(
+          bytes,
+          maxDecodedPixels,
+          maxCanvasPixels,
+          maxOutputPixels,
+        );
         const status = result.status;
         switch (status) {
           case "decoded": {

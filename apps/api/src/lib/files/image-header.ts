@@ -34,6 +34,10 @@ type ImageEncoding =
       /** Whether the primary image's colour is an ICC profile (Display P3 on
        *  most phones) rather than `nclx` code points or nothing. */
       iccProfile: boolean;
+      /** Whether the primary image is derived from other images (a grid of
+       *  tiles, as phones write) rather than coded itself: its size then
+       *  says nothing about what one decode holds. */
+      tiled: boolean;
     };
 
 export type ImageHeader = {
@@ -541,7 +545,11 @@ const readHeifSequenceHeader = (
     const width = Math.floor(data.getUint32(sizeOffset) / 0x1_00_00);
     const height = Math.floor(data.getUint32(sizeOffset + 4) / 0x1_00_00);
     if (width > 0 && height > 0) {
-      return header(width, height, 1, { format: "heif", iccProfile: false });
+      return header(width, height, 1, {
+        format: "heif",
+        iccProfile: false,
+        tiled: false,
+      });
     }
   }
   return null;
@@ -701,6 +709,9 @@ const readHeifHeader = (bytes: Uint8Array): ImageHeader | null => {
     {
       format: "heif",
       iccProfile: colourType === "prof" || colourType === "rICC",
+      // A coded image carries its decoder configuration; a derived one has
+      // none of its own.
+      tiled: !associated.some((box) => box.type === "hvcC"),
     },
   );
 };

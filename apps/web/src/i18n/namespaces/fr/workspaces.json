@@ -552,6 +552,10 @@
     "deleteWorkspaceConfirmDescription": "Voulez-vous vraiment supprimer ce dossier ? Cette action est irréversible.",
     "deletedItem": "Supprimé : {name}",
     "deletingWorkspace": "Suppression du dossier",
+    "documentNaming": {
+      "description": "Les nouveaux documents reçoivent le modèle de nom de l'organisation : {pattern}",
+      "label": "Renommer les nouveaux fichiers"
+    },
     "documentSwitcher": {
       "download": "Télécharger ce fichier",
       "renditionsFailed": "Rechargez le document et réessayez de le télécharger.",

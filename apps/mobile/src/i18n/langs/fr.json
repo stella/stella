@@ -534,8 +534,19 @@
     "type": "Type"
   },
   "fileParts": {
+    "archiveUnreadable": "Impossible de lire l’archive.",
     "attachments": "Pièces jointes",
+    "files": "Fichiers",
+    "insideFailed": "Impossible de charger les fichiers qu’il contient. Touchez pour réessayer.",
+    "noFilesInside": "Aucun fichier à l’intérieur.",
     "open": "Ouvrir {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
+      "link": "Lien vers un autre fichier, non ouvert",
+      "tooLarge": "Trop volumineux pour être ouvert",
+      "unreadable": "Endommagé, impossible à ouvrir",
+      "unsupported": "Compressé d’une manière impossible à ouvrir"
+    },
     "unnamed": "Fichier sans nom"
   },
   "header": {

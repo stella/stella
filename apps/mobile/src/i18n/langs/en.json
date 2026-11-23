@@ -534,8 +534,19 @@
     "type": "Type"
   },
   "fileParts": {
+    "archiveUnreadable": "This archive couldn’t be read.",
     "attachments": "Attachments",
+    "files": "Files",
+    "insideFailed": "Couldn’t list the files inside. Tap to try again.",
+    "noFilesInside": "There are no files inside.",
     "open": "Open {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Password-protected, can’t be opened",
+      "link": "A link to another file, not followed",
+      "tooLarge": "Too large to open",
+      "unreadable": "Damaged, can’t be opened",
+      "unsupported": "Compressed in a way that can’t be opened"
+    },
     "unnamed": "Unnamed file"
   },
   "header": {

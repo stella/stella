@@ -3,23 +3,30 @@
 //! Decodes the primary image of a HEIF file coded in HEVC (an iPhone photo:
 //! a grid of 512x512 tiles, 8-bit 4:2:0), or the first frame of an image
 //! sequence without one, converts it to 8-bit sRGB, and scales it down to a
-//! pixel budget. Every size is checked against the caller's limits from the
+//! pixel budget. A grid is decoded tile by tile straight into the preview
+//! (`tiled.rs`), so its memory is bounded by a tile and the preview, never by
+//! the canvas. Every size is checked against the caller's limits from the
 //! container before the decoder allocates anything for it.
 
 use heifer::heifer_isobmff::{FourCC, HeifFile, ItemId};
 
+mod tiled;
 #[cfg(target_arch = "wasm32")]
 mod wasm;
 
 /// Tiles one grid may hold. A 200 MP photo in 512x512 tiles needs about 770.
 pub const MAX_GRID_TILES: u32 = 4096;
 
-const RGBA: usize = 4;
+pub(crate) const RGBA: usize = 4;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct Limits {
-    /// Pixels the decoded image may hold before it is scaled down.
+    /// Pixels an image decoded whole may hold before it is scaled down, and
+    /// pixels of each tile of a grid decoded tile by tile.
     pub max_decoded_pixels: u64,
+    /// Pixels the canvas of a grid decoded tile by tile may hold. Memory does
+    /// not grow with it; decoding time does.
+    pub max_canvas_pixels: u64,
     /// Pixels of the returned image: a larger one is scaled down to fit.
     pub max_output_pixels: u64,
 }
@@ -67,9 +74,14 @@ fn within(width: u32, height: u32, max: u64) -> Result<(), Refusal> {
 
 /// The decoded size a grid commits to, checked before any tile is decoded:
 /// its canvas, and tiles that cover it without a whole spare row or column.
-fn check_grid(file: &HeifFile<'_>, id: ItemId, max: u64) -> Result<(), Refusal> {
+fn check_grid(
+    file: &HeifFile<'_>,
+    id: ItemId,
+    canvas_max: u64,
+    tile_max: u64,
+) -> Result<(), Refusal> {
     let grid = file.grid(id).map_err(|_| Refusal::Unreadable)?;
-    within(grid.output_width, grid.output_height, max)?;
+    within(grid.output_width, grid.output_height, canvas_max)?;
     let columns = u32::from(grid.columns);
     let rows = u32::from(grid.rows);
     if columns * rows > MAX_GRID_TILES {
@@ -84,7 +96,7 @@ fn check_grid(file: &HeifFile<'_>, id: ItemId, max: u64) -> Result<(), Refusal> 
             .image_size(tile)
             .map_err(|_| Refusal::Unreadable)?
             .ok_or(Refusal::Unreadable)?;
-        within(tile_width, tile_height, max)?;
+        within(tile_width, tile_height, tile_max)?;
         let covered_width = u64::from(tile_width) * u64::from(columns);
         let covered_height = u64::from(tile_height) * u64::from(rows);
         if covered_width < u64::from(grid.output_width)
@@ -106,7 +118,7 @@ fn check_primary(file: &HeifFile<'_>, max: u64) -> Result<(), Refusal> {
     let id = file.primary_id;
     let item = file.item(id).map_err(|_| Refusal::Unreadable)?;
     if item.item_type == FourCC(*b"grid") {
-        return check_grid(file, id, max);
+        return check_grid(file, id, max, max);
     }
     match file.image_size(id).map_err(|_| Refusal::Unreadable)? {
         Some((width, height)) => within(width, height, max),
@@ -115,7 +127,7 @@ fn check_primary(file: &HeifFile<'_>, max: u64) -> Result<(), Refusal> {
     }
 }
 
-fn options(limits: Limits) -> heifer::Options {
+pub(crate) fn options(limits: Limits) -> heifer::Options {
     heifer::Options::new()
         .with_max_threads(1)
         .with_max_pixels(limits.max_decoded_pixels.max(1))
@@ -157,7 +169,7 @@ fn decode_first_frame(bytes: &[u8], limits: Limits) -> Result<heifer::Image<u8>,
 
 /// The largest size with the same aspect ratio within `max` pixels, never
 /// below one pixel a side.
-fn fitted_size(width: u32, height: u32, max: u64) -> (u32, u32) {
+pub(crate) fn fitted_size(width: u32, height: u32, max: u64) -> (u32, u32) {
     if pixels(width, height) <= max {
         return (width, height);
     }
@@ -285,6 +297,21 @@ pub fn fit_rgba(rgba: Vec<u8>, width: u32, height: u32, max: u64) -> Preview {
 /// Decodes the image a HEIF file shows (its primary image, or the first
 /// frame of a sequence without one) to 8-bit sRGB RGBA within `limits`.
 pub fn decode_preview(bytes: &[u8], limits: Limits) -> Result<Preview, Refusal> {
+    if let Ok(file) = HeifFile::parse(bytes) {
+        let primary = file.primary_id;
+        let is_grid = file
+            .item(primary)
+            .is_ok_and(|item| item.item_type == FourCC(*b"grid"));
+        if is_grid && tiled::streamable(&file, primary) {
+            check_grid(
+                &file,
+                primary,
+                limits.max_canvas_pixels,
+                limits.max_decoded_pixels,
+            )?;
+            return tiled::decode_grid_preview(&file, primary, limits);
+        }
+    }
     let image = match decode_primary(bytes, limits) {
         Err(Refusal::Unreadable) if heifer::read_sequence(bytes).is_ok_and(|s| s.is_some()) => {
             decode_first_frame(bytes, limits)?

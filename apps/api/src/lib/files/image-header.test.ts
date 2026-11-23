@@ -254,13 +254,13 @@ describe("HEIF headers", () => {
   test("says whether the colour is an ICC profile", () => {
     expect(readImageHeader(heicFixture("p3.heic"), "image/heic")).toMatchObject(
       {
-        encoding: { format: "heif", iccProfile: true },
+        encoding: { format: "heif", iccProfile: true, tiled: false },
       },
     );
     expect(
       readImageHeader(heicFixture("grid.heic"), "image/heic"),
     ).toMatchObject({
-      encoding: { format: "heif", iccProfile: false },
+      encoding: { format: "heif", iccProfile: false, tiled: true },
     });
   });
 

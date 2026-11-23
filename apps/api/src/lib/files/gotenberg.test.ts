@@ -536,6 +536,24 @@ describe("HEIC/HEIF photos", () => {
     }
   });
 
+  test("a 48 MP photo renders under the render worker's memory ceiling", async () => {
+    // 8064 x 6048 is above the whole-image pixel budgets; tile by tile it is
+    // admitted and rendered by the worker the ceiling watches.
+    const { failures, result } = await convertWithConverterStub(
+      async () =>
+        await convertToPdf(
+          fileOf(heicFixture("grid-48mp.heic"), "image/heic"),
+          { heifDecoding: true },
+        ),
+    );
+
+    expect(failures).toEqual([]);
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isOk(result)) {
+      expect(await pageCountOf(result.value.buffer)).toBe(1);
+    }
+  });
+
   test.each([
     ["a container that cannot be read", new TextEncoder().encode("not HEIF")],
     // The header reads; the tiles' pictures are cut off.

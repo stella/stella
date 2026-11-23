@@ -49,6 +49,7 @@ fn refused(refusal: Refusal) -> WasmHeicPreview {
 pub fn decode_heic_preview(
     bytes: &[u8],
     max_decoded_pixels: f64,
+    max_canvas_pixels: f64,
     max_output_pixels: f64,
 ) -> Result<WasmHeicPreview, JsValue> {
     let limit = |value: f64| {
@@ -61,6 +62,7 @@ pub fn decode_heic_preview(
     };
     let limits = Limits {
         max_decoded_pixels: limit(max_decoded_pixels)?,
+        max_canvas_pixels: limit(max_canvas_pixels)?,
         max_output_pixels: limit(max_output_pixels)?,
     };
     Ok(match decode_preview(bytes, limits) {

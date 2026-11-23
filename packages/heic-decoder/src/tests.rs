@@ -1,5 +1,8 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+use heifer::heifer_isobmff::HeifFile;
+use heifer::heifer_isobmff::writer::{HeifWriter, ImageSpec};
+
 use crate::{Limits, MAX_GRID_TILES, Preview, Refusal, decode_preview, fit_rgba};
 
 const SEED: u64 = 0x4845_4943_0000_0001;
@@ -7,6 +10,7 @@ const MUTATIONS: usize = 400;
 
 const GENEROUS: Limits = Limits {
     max_decoded_pixels: 50_000_000,
+    max_canvas_pixels: 50_000_000,
     max_output_pixels: 50_000_000,
 };
 
@@ -103,6 +107,7 @@ fn decodes_a_tiled_grid_as_one_picture() {
 fn scales_a_larger_image_down_to_the_output_budget() {
     let limits = Limits {
         max_decoded_pixels: 1_000_000,
+        max_canvas_pixels: 1_000_000,
         max_output_pixels: 100_000,
     };
     let preview = decode_preview(&heic(1100, 700), limits).expect("decodes");
@@ -117,18 +122,119 @@ fn scales_a_larger_image_down_to_the_output_budget() {
 }
 
 #[test]
-fn refuses_an_image_over_the_decoded_budget_before_decoding() {
-    let bytes = heic(1100, 700);
+fn refuses_a_single_image_over_the_decoded_budget_before_decoding() {
+    let bytes = heic(320, 200);
     let at_budget = Limits {
-        max_decoded_pixels: 1100 * 700,
+        max_decoded_pixels: 320 * 200,
+        max_canvas_pixels: 1,
         max_output_pixels: 1,
     };
     assert!(decode_preview(&bytes, at_budget).is_ok());
     let below = Limits {
-        max_decoded_pixels: 1100 * 700 - 1,
-        max_output_pixels: 1,
+        max_decoded_pixels: 320 * 200 - 1,
+        ..at_budget
     };
     assert_eq!(decode_preview(&bytes, below), Err(Refusal::TooLarge));
+}
+
+#[test]
+fn bounds_a_grid_by_its_canvas_and_each_tile_not_by_the_decoded_budget() {
+    let bytes = heic(1100, 700);
+    // A whole decode of the canvas would need 770,000 pixels; tile by tile,
+    // only a 512x512 tile is ever decoded.
+    let tiles_only = Limits {
+        max_decoded_pixels: 512 * 512,
+        max_canvas_pixels: 1100 * 700,
+        max_output_pixels: 10_000,
+    };
+    assert!(decode_preview(&bytes, tiles_only).is_ok());
+    let small_canvas = Limits {
+        max_canvas_pixels: 1100 * 700 - 1,
+        ..tiles_only
+    };
+    assert_eq!(decode_preview(&bytes, small_canvas), Err(Refusal::TooLarge));
+    let small_tiles = Limits {
+        max_decoded_pixels: 512 * 512 - 1,
+        ..tiles_only
+    };
+    assert_eq!(decode_preview(&bytes, small_tiles), Err(Refusal::TooLarge));
+}
+
+/// A grid of `columns` x `rows` copies of one coded tile, cropped to
+/// `width` x `height`: a large photo made without encoding one.
+fn repeated_grid(tile_source: &[u8], columns: u16, rows: u16, width: u32, height: u32) -> Vec<u8> {
+    let source = HeifFile::parse(tile_source).expect("parses");
+    let tile = source.primary_id;
+    let (tile_width, tile_height) = source.image_size(tile).expect("ispe").expect("ispe");
+    let config = source
+        .hevc_config(tile)
+        .expect("hvcC")
+        .expect("hvcC")
+        .clone();
+    let data = source.item_data(tile).expect("data");
+    let length = usize::from(config.nal_length_size);
+    let mut slices = Vec::new();
+    let mut offset = 0;
+    while offset < data.len() {
+        let size = data[offset..offset + length]
+            .iter()
+            .fold(0usize, |value, &byte| (value << 8) | usize::from(byte));
+        slices.push(data[offset + length..offset + length + size].to_vec());
+        offset += length + size;
+    }
+    let mut writer = HeifWriter::new();
+    let ids: Vec<_> = (0..u32::from(columns) * u32::from(rows))
+        .map(|_| {
+            writer.add_image(&ImageSpec {
+                hidden: true,
+                ..ImageSpec::new(tile_width, tile_height, config.clone(), &slices)
+            })
+        })
+        .collect();
+    let grid = writer.add_grid(rows, columns, width, height, &ids, None, None);
+    writer.set_primary(grid);
+    writer.finish()
+}
+
+#[test]
+fn previews_a_48_megapixel_grid_tile_by_tile() {
+    // One 512x512 tile repeated as iPhone's 48 MP layout: 16 x 12 tiles
+    // cropped to 8064 x 6048.
+    let tile = heic(512, 512);
+    let bytes = repeated_grid(&tile, 16, 12, 8064, 6048);
+    let limits = Limits {
+        max_decoded_pixels: 25_000_000,
+        max_canvas_pixels: 200_000_000,
+        max_output_pixels: 8_000_000,
+    };
+    let preview = decode_preview(&bytes, limits).expect("decodes");
+    assert!(u64::from(preview.width) * u64::from(preview.height) <= 8_000_000);
+    let ratio = f64::from(preview.width) / f64::from(preview.height);
+    assert!((ratio - 8064.0 / 6048.0).abs() < 0.01, "{ratio}");
+    // The top-left preview pixel averages the tile's own top-left corner.
+    let corner = &preview.rgba[..4];
+    assert!(corner[0] < 8 && corner[1] < 8, "{corner:?}");
+}
+
+#[test]
+fn tile_by_tile_matches_the_whole_picture_scaled_down() {
+    let bytes = heic(1100, 700);
+    let limits = Limits {
+        max_decoded_pixels: 50_000_000,
+        max_canvas_pixels: 50_000_000,
+        max_output_pixels: 300_000,
+    };
+    let tiled = decode_preview(&bytes, limits).expect("decodes");
+    let whole = heifer::decode_srgb_rgba8(&bytes, &heifer::Options::new().with_max_threads(1))
+        .expect("decodes whole");
+    let reference = fit_rgba(whole.data, whole.width, whole.height, 300_000);
+    assert_eq!(
+        (tiled.width, tiled.height),
+        (reference.width, reference.height)
+    );
+    // Both average the same areas; they differ only by rounding.
+    let quality = psnr(&tiled.rgba, &reference.rgba);
+    assert!(quality > 48.0, "{quality} dB");
 }
 
 #[test]
@@ -211,6 +317,7 @@ fn mutated_files_decode_within_limits_or_are_refused() {
     let mut generator = Generator(SEED);
     let limits = Limits {
         max_decoded_pixels: 1_000_000,
+        max_canvas_pixels: 1_000_000,
         max_output_pixels: 250_000,
     };
     for _ in 0..MUTATIONS {

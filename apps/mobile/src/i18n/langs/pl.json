@@ -534,8 +534,19 @@
     "type": "Typ"
   },
   "fileParts": {
+    "archiveUnreadable": "Nie udało się odczytać archiwum.",
     "attachments": "Załączniki",
+    "files": "Pliki",
+    "insideFailed": "Nie udało się wczytać plików ze środka. Stuknij, aby spróbować ponownie.",
+    "noFilesInside": "W środku nie ma żadnych plików.",
     "open": "Otwórz {fileName} ({details})",
+    "unavailable": {
+      "encrypted": "Chroniony hasłem, nie można otworzyć",
+      "link": "Odnośnik do innego pliku, nie jest otwierany",
+      "tooLarge": "Za duży, by go otworzyć",
+      "unreadable": "Uszkodzony, nie można otworzyć",
+      "unsupported": "Skompresowany w sposób, którego nie można otworzyć"
+    },
     "unnamed": "Plik bez nazwy"
   },
   "header": {

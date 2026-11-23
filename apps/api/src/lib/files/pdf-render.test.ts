@@ -196,6 +196,21 @@ describe("images rendered in-process", () => {
     expect(pages[0]?.height).toBeCloseTo(525, 3);
   });
 
+  test("a 48 MP HEIC photo becomes one page at the page-image budget", async () => {
+    // 8064 x 6048 (48.8 MP, 195 MB as whole RGBA) decodes tile by tile.
+    const pages = await renderPages(
+      await rendered("image/heic", heicFixture("grid-48mp.heic")),
+    );
+    expect(pages).toHaveLength(1);
+    const width = (pages[0]?.width ?? 0) / (72 / 96);
+    const height = (pages[0]?.height ?? 0) / (72 / 96);
+    expect(width * height).toBeLessThanOrEqual(LIMITS.pdfRenderImagePixelsMax);
+    expect(width * height).toBeGreaterThan(
+      LIMITS.pdfRenderImagePixelsMax * 0.99,
+    );
+    expect(width / height).toBeCloseTo(8064 / 6048, 2);
+  });
+
   test("a rotated HEIC photo is shown upright", async () => {
     const turned = withHeifRotation(heicFixture("grid.heic"), 1);
     expect(readImageHeader(turned, "image/heic")?.orientation).toBe(8);
@@ -204,21 +219,18 @@ describe("images rendered in-process", () => {
     expect(page?.height).toBeCloseTo(825, 3);
   });
 
-  test("a HEIC photo declaring more than the decode budget is too large", async () => {
+  test("a HEIC grid declaring a canvas past the tiled budget is too large", async () => {
     const huge = heicFixture("grid.heic");
-    // The grid's ispe (version and flags, then 1100 and 700) declares
-    // 20000 x 20000 instead; the tiles are untouched.
-    const ispe = indexOfBytes(
+    // The grid item: version and flags, 2 rows and 3 columns less one, then
+    // 1100 x 700 in 16 bits, which becomes 65535 x 65535.
+    const grid = indexOfBytes(
       huge,
-      Uint8Array.from([
-        ...new TextEncoder().encode("ispe"),
-        ...[0, 0, 0, 0, 0, 0, 0x04, 0x4c, 0, 0, 0x02, 0xbc],
-      ]),
+      Uint8Array.from([0, 0, 1, 2, 0x04, 0x4c, 0x02, 0xbc]),
     );
-    expect(ispe).toBeGreaterThan(0);
+    expect(grid).toBeGreaterThan(0);
     const view = new DataView(huge.buffer, huge.byteOffset);
-    view.setUint32(ispe + 8, 20_000);
-    view.setUint32(ispe + 12, 20_000);
+    view.setUint16(grid + 4, 0xff_ff);
+    view.setUint16(grid + 6, 0xff_ff);
     const result = await renderPdf("image/heic", huge);
     expect(Result.isOk(result) && result.value.type).toBe("too-large");
   });

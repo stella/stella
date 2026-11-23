@@ -563,10 +563,20 @@
       "anonymization": "Anonimizálás"
     },
     "fileParts": {
+      "archiveUnreadable": "Az archívumot nem sikerült beolvasni.",
       "back": "Vissza a listához",
       "download": "{fileName} letöltése",
+      "noFilesInside": "Nincsenek benne fájlok.",
       "noPreview": "Ehhez a fájltípushoz nincs előnézet. Töltse le, vagy mentse egy ügybe.",
-      "open": "{fileName} megnyitása"
+      "notConverted": "Ezt a fájlt nem sikerült átalakítani az előnézethez. Töltse le, vagy mentse egy ügybe.",
+      "open": "{fileName} megnyitása",
+      "unavailable": {
+        "encrypted": "Jelszóval védett, nem nyitható meg",
+        "link": "Hivatkozás egy másik fájlra, nem nyitjuk meg",
+        "tooLarge": "Túl nagy a megnyitáshoz",
+        "unreadable": "Sérült, nem nyitható meg",
+        "unsupported": "Olyan módon tömörített, amely nem nyitható meg"
+      }
     },
     "firstSourceReached": "Ez az első forrás.",
     "groups": {

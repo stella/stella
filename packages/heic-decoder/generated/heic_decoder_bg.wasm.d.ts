@@ -7,6 +7,7 @@ export const decode_heic_preview: (
   c: number,
   d: number,
   e: number,
+  f: number,
 ) => void;
 export const wasmheicpreview_height: (a: number) => number;
 export const wasmheicpreview_status: (a: number, b: number) => void;

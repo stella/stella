@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.83.0
+
+### Minor Changes
+
+- [#9240](https://github.com/stella/stella/pull/9240) [`10ef464`](https://github.com/stella/stella/commit/10ef464329c555633c59a8307bbd6bf85e22fe5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared web and native document marks for WordPerfect, Works, Pages, Numbers, web archive and EPUB files, and export `DOCUMENT_MARK_KINDS`.
+
 ## 0.82.0
 
 ### Minor Changes
