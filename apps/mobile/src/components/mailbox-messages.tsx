@@ -23,7 +23,7 @@ import { Text } from "@stll/ui/text";
 
 import { EmailReading } from "@/components/email-reading";
 import { FilePartOpenerContext } from "@/components/file-part-list";
-import { ArrowLeftIcon, MailIcon } from "@/icons.gen";
+import { ArrowLeftIcon, MailIcon, SaveIcon } from "@/icons.gen";
 import { useUiColors } from "@/theme";
 
 const ICON_SIZE = 18;
@@ -130,6 +130,7 @@ export const MailboxMessages = ({
 }) => {
   const t = useTranslations("mailbox");
   const document = useTranslations("document");
+  const scan = useTranslations("scan");
   const opener = use(FilePartOpenerContext);
   const ui = useUiColors();
   const [open, setOpen] = useState<OpenMessage | null>(null);
@@ -176,6 +177,18 @@ export const MailboxMessages = ({
           </Button>
         ) : null}
         {open.status === "open" ? <EmailReading read={open.reading} /> : null}
+        {opener === null || part === null ? null : (
+          <Button
+            icon={<SaveIcon color={ui.foreground} size={ICON_SIZE} />}
+            onPress={() => {
+              opener.save(part);
+            }}
+            size="sm"
+            variant="outline"
+          >
+            {scan("saveTitle")}
+          </Button>
+        )}
         {opener === null || part === null ? null : (
           // The message itself still opens as a file, as any part does.
           <Button

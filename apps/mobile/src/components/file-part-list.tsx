@@ -34,6 +34,7 @@ import {
   FileTextIcon,
   MailIcon,
   MonitorIcon,
+  SaveIcon,
 } from "@/icons.gen";
 import { useUiColors } from "@/theme";
 
@@ -53,6 +54,8 @@ type FilePartOpener = {
   readonly opening: string | null;
   /** The files of a part that is itself a container, such as an email. */
   readonly list: (part: string) => Promise<Result<ContainedFiles, unknown>>;
+  /** Offers to save the part into a matter as a document of its own. */
+  readonly save: (part: FilePartDescriptor) => void;
 };
 
 /** A container part's files, as its row shows them under itself. */
@@ -63,6 +66,9 @@ type FilesInside =
   | { readonly status: "open"; readonly files: readonly ContainedFile[] };
 
 export const FilePartOpenerContext = createContext<FilePartOpener | null>(null);
+
+/** The way to the open document's parts, where it can open them. */
+export const useFilePartOpener = () => use(FilePartOpenerContext);
 
 export const FilePartOpenerProvider = ({
   children,
@@ -208,12 +214,29 @@ export const FilePartRow = ({
       {text}
     </Button>
   );
+  const saveButton = (
+    <Button
+      accessibilityLabel={t("saveNamed", { fileName: name })}
+      icon={<SaveIcon color={ui.mutedForeground} size={ICON_SIZE} />}
+      onPress={() => {
+        opener.save({ part, fileName, mediaType, sizeBytes });
+      }}
+      size="icon"
+      variant="ghost"
+    />
+  );
+  const rowWithSave = (
+    <View className="flex-row items-start">
+      <View className="flex-1">{row}</View>
+      {saveButton}
+    </View>
+  );
   if (!container || inside.status === "closed" || inside.status === "loading") {
-    return row;
+    return rowWithSave;
   }
   return (
     <View>
-      {row}
+      {rowWithSave}
       <View className="gap-2 ps-6">
         {inside.status === "failed" ? (
           <Text variant="caption">{t("insideFailed")}</Text>

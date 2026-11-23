@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale, useTranslations } from "use-intl";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
+import type { FilePartDescriptor } from "@stll/api-contract/file-parts";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
@@ -460,6 +461,7 @@ const LegalFilePreview = ({
   const eInvoice = useTranslations("eInvoice");
   const fileParts = useTranslations("fileParts");
   const mailbox = useTranslations("mailbox");
+  const router = useRouter();
   const { fieldId, preview, viewer } = file;
   const { opening, open: openDelivered } = useOpenDeliveredFile(showPreview);
   const openOriginal = async () => {
@@ -494,6 +496,18 @@ const LegalFilePreview = ({
             fieldId,
             part,
           }),
+        save: ({ part, fileName, sizeBytes }: FilePartDescriptor) => {
+          router.push({
+            pathname: "/part/save",
+            params: {
+              workspaceId,
+              fieldId,
+              part,
+              name: fileName ?? "",
+              size: String(sizeBytes),
+            },
+          });
+        },
       }
     : null;
 

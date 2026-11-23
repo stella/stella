@@ -550,6 +550,8 @@
     "noFilesInside": "Viduje nėra jokių failų.",
     "noMatches": "Užklausą „{query}“ atitinkančių failų nėra.",
     "open": "Atidaryti {fileName} ({details})",
+    "saveFailed": "Nepavyko išsaugoti failo byloje. Bandykite dar kartą.",
+    "saveNamed": "Išsaugoti {fileName} byloje",
     "search": "Rasti failą pagal pavadinimą ar aplanką",
     "unavailable": {
       "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",

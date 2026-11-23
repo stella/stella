@@ -550,6 +550,8 @@
     "noFilesInside": "Iekšā nav neviena faila.",
     "noMatches": "Vaicājumam “{query}” neatbilst neviens fails.",
     "open": "Atvērt {fileName} ({details})",
+    "saveFailed": "Failu neizdevās saglabāt lietā. Mēģiniet vēlreiz.",
+    "saveNamed": "Saglabāt {fileName} lietā",
     "search": "Atrast failu pēc nosaukuma vai mapes",
     "unavailable": {
       "encrypted": "Aizsargāts ar paroli, nevar atvērt",

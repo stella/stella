@@ -550,6 +550,8 @@
     "noFilesInside": "There are no files inside.",
     "noMatches": "No file matches “{query}”.",
     "open": "Open {fileName} ({details})",
+    "saveFailed": "The file could not be saved to the matter. Try again.",
+    "saveNamed": "Save {fileName} to a matter",
     "search": "Find a file by name or folder",
     "unavailable": {
       "encrypted": "Password-protected, can’t be opened",
