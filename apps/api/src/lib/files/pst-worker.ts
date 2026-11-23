@@ -73,15 +73,17 @@ export const runPstWorker = async (
   chunks: AsyncIterable<Uint8Array>,
 ): Promise<number> => {
   const started = Temporal.Now.instant().epochMilliseconds;
-  const deadline = Math.min(
-    started + request.timeoutMs - REPLY_MARGIN_MS,
-    started + PST_OPERATION_MAX_MS,
-  );
   const { mailboxName } = request;
   const replied = await withPstFile(
     chunks,
     FILE_SIZE_LIMIT_BYTES.document,
     async (open): Promise<number> => {
+      // A list or one message gets its own window from when reading starts,
+      // after the mailbox is written; the worker's timeout bounds the whole.
+      const deadline = Math.min(
+        Temporal.Now.instant().epochMilliseconds + PST_OPERATION_MAX_MS,
+        started + request.timeoutMs - REPLY_MARGIN_MS,
+      );
       switch (request.mode) {
         case PST_WORKER_MODE.list: {
           const listed = readPstEntries(open(deadline), mailboxName);

@@ -109,6 +109,11 @@ export type PartCandidate = {
    * a mailbox's message is an email.
    */
   fixedMimeType?: string;
+  /**
+   * The part's size when its bytes are not held: a part listed, never
+   * read, such as each message of an Outlook mailbox but the one asked for.
+   */
+  sizeBytes?: number;
 };
 
 /**
@@ -280,10 +285,12 @@ const mailboxMessages = async ({
  * An Outlook mailbox's messages, each an email named after its subject,
  * read one at a time from its bytes.
  */
-const pstMessages = async ({
-  bytes,
-  fileName,
-}: Container): Promise<SlotsResult> => {
+const pstMessages = async (
+  { bytes, fileName }: Container,
+  wanted: number | null,
+): Promise<SlotsResult> => {
+  // Messages are read one at a time and only the one asked for keeps its
+  // email; a list keeps each message's size, never its bytes.
   const slots: ContainerSlot[] = [];
   const read = await visitPstMessages(
     pstBytesFile(
@@ -293,12 +300,14 @@ const pstMessages = async ({
     fileName,
     async (message) => {
       const entry = readMessageEntry(message);
+      const kept = wanted === entry.index;
       slots.push(
         message.email?.isOk() === true
           ? part(
               {
                 fileName: entry.fileName,
-                bytes: message.email.value,
+                bytes: kept ? message.email.value : new Uint8Array(0),
+                sizeBytes: message.email.value.byteLength,
                 statedMimeType: EML_MIME_TYPE,
                 fixedMimeType: EML_MIME_TYPE,
               },
@@ -312,7 +321,8 @@ const pstMessages = async ({
               reason: entry.unavailable ?? "tooLarge",
             },
       );
-      return await Promise.resolve(true);
+      // Reading stops at the message asked for.
+      return await Promise.resolve(wanted === null || entry.index < wanted);
     },
   );
   return read.map(() => slots);
@@ -452,6 +462,8 @@ const containerSlots = async (
   container: Container,
   kind: FilePartKind,
   zipNameCodePage: ZipNameCodePage,
+  /** The position asked for, when only that part is read; null to list. */
+  wanted: number | null = null,
 ): Promise<SlotsResult> => {
   const kinds: readonly FilePartKind[] =
     FILE_PART_KINDS_BY_FORMAT[container.format];
@@ -468,7 +480,7 @@ const containerSlots = async (
     case "mbox":
       return await mailboxMessages(container);
     case "pst":
-      return await pstMessages(container);
+      return await pstMessages(container, wanted);
     case "dataBox":
       return dataBoxFiles(container);
     case "eAkta":
@@ -575,7 +587,7 @@ export const extractEmbeddedPart = async ({
     if (container === null) {
       return Result.ok(null);
     }
-    const slots = await containerSlots(container, kind, zipNameCodePage);
+    const slots = await containerSlots(container, kind, zipNameCodePage, index);
     if (slots.isErr()) {
       return Result.err(slots.error);
     }
@@ -638,7 +650,7 @@ export const listEmbeddedParts = async (
       files.push({
         fileName: candidate.fileName,
         folder: slot.folder,
-        sizeBytes: candidate.bytes.byteLength,
+        sizeBytes: candidate.sizeBytes ?? candidate.bytes.byteLength,
         part: {
           part: filePartId(
             options.part === null
@@ -647,7 +659,7 @@ export const listEmbeddedParts = async (
           ),
           fileName,
           mediaType: await candidateMediaType(candidate),
-          sizeBytes: candidate.bytes.byteLength,
+          sizeBytes: candidate.sizeBytes ?? candidate.bytes.byteLength,
         },
         unavailable: null,
         // A text part decodes with the charset its container declares.

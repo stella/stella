@@ -130,20 +130,58 @@ export type PstReader = {
 };
 
 /**
+ * The module's one instance in this process. The generated bindings keep the
+ * instance's exports in a single module-scoped binding, so every reader
+ * shares it: a trap discards it for all of them, and each mailbox remembers
+ * the instance (generation) that opened it.
+ */
+const instance = {
+  generation: 0,
+  loaded: false,
+  /** Mailboxes open in the current instance. */
+  open: new Set<WasmPstMailbox>(),
+};
+
+/**
+ * Forgets `mailbox` without calling into the module: its pointer belongs to
+ * an instance that trapped, and freeing it (now or from the bindings'
+ * finaliser) would reach the instance that replaced it.
+ */
+/** The bindings' own release of a handle: it unregisters the finaliser. */
+type Destroyable = { readonly __destroy_into_raw: () => number };
+
+const isDestroyable = (handle: object): handle is Destroyable =>
+  "__destroy_into_raw" in handle &&
+  typeof handle.__destroy_into_raw === "function";
+
+const forget = (mailbox: WasmPstMailbox) => {
+  if (isDestroyable(mailbox)) {
+    mailbox.__destroy_into_raw();
+  }
+};
+
+/** A trap leaves the instance's memory in an unknown state: it is discarded. */
+const discardInstance = () => {
+  instance.loaded = false;
+  for (const mailbox of instance.open) {
+    forget(mailbox);
+  }
+  instance.open.clear();
+};
+
+/**
  * A reader backed by the WebAssembly module at `wasmPath` (by default
- * `pstReaderWasmUrl()`), loaded on the first call.
+ * `pstReaderWasmUrl()`), loaded on the first call. Readers share the
+ * process's one instance; the first to load it names the file.
  */
 export const createPstReader = (
   wasmPath: string | URL = pstReaderWasmUrl(),
 ): PstReader => {
-  // A trap leaves the instance's memory in an unknown state: every mailbox
-  // opened in it is gone with it.
-  const state = { generation: 0, loaded: false };
   const load = () => {
-    if (!state.loaded) {
+    if (!instance.loaded) {
       initSync({ module: readFileSync(wasmPath) });
-      state.loaded = true;
-      state.generation += 1;
+      instance.loaded = true;
+      instance.generation += 1;
     }
   };
   const guarded = <T>(read: () => PstRead<T>): PstRead<T> => {
@@ -153,7 +191,7 @@ export const createPstReader = (
       if (!(error instanceof WebAssembly.RuntimeError)) {
         throw error;
       }
-      state.loaded = false;
+      discardInstance();
       return { type: "failed", message: error.message };
     }
   };
@@ -178,7 +216,7 @@ export const createPstReader = (
     open: (file, limits) =>
       guarded(() => {
         load();
-        const generation = state.generation;
+        const generation = instance.generation;
         const mailbox: WasmPstMailbox = open_pst_mailbox(
           file,
           file.size,
@@ -189,7 +227,11 @@ export const createPstReader = (
           mailbox.free();
           return refusal(status);
         }
-        const live = () => state.loaded && state.generation === generation;
+        instance.open.add(mailbox);
+        const live = () =>
+          instance.loaded &&
+          instance.generation === generation &&
+          instance.open.has(mailbox);
         const gone = (): PstRefusal => ({
           type: "failed",
           message: "The reader stopped while this mailbox was open",
@@ -209,6 +251,7 @@ export const createPstReader = (
                 : gone(),
             close: () => {
               if (live()) {
+                instance.open.delete(mailbox);
                 mailbox.free();
               }
             },

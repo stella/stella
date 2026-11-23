@@ -148,19 +148,23 @@ impl<S: Source> Metered<S> {
         let length = usize::try_from(left)
             .unwrap_or(usize::MAX)
             .min(wanted.max(READ_AHEAD_BYTES));
-        self.buffer.resize(length, 0);
+        // The cache holds bytes only once they are all read: a refill that
+        // fails leaves it empty, never stale bytes under the old offset.
+        self.buffer.clear();
+        let mut refill = vec![0; length];
         let mut filled = 0;
         while filled < length {
             let read = self
                 .source
-                .read_at(self.position + filled as u64, &mut self.buffer[filled..])
+                .read_at(self.position + filled as u64, &mut refill[filled..])
                 .map_err(|_| self.meter.exhaust(Exhaustion::Stopped))?;
             if read == 0 {
                 break;
             }
             filled += read;
         }
-        self.buffer.truncate(filled);
+        refill.truncate(filled);
+        self.buffer = refill;
         self.buffer_offset = self.position;
         Ok(())
     }
@@ -254,6 +258,49 @@ mod tests {
         assert!(reader.seek(SeekFrom::Start(90_000)).is_ok());
         assert!(reader.read_exact(&mut out).is_err());
         assert_eq!(meter.exhausted(), Some(Exhaustion::Reads));
+    }
+
+    /// A host that fails every read after the first.
+    struct FailsAfterFirst {
+        bytes: Vec<u8>,
+        reads: usize,
+    }
+
+    impl Source for FailsAfterFirst {
+        fn size(&self) -> u64 {
+            self.bytes.len() as u64
+        }
+
+        fn read_at(&mut self, offset: u64, buffer: &mut [u8]) -> io::Result<usize> {
+            self.reads += 1;
+            if self.reads > 1 {
+                return Err(io::Error::other("stopped"));
+            }
+            self.bytes.read_at(offset, buffer)
+        }
+    }
+
+    #[test]
+    fn a_failed_refill_leaves_no_stale_bytes() {
+        let bytes: Vec<u8> = (0..100_000_u32).map(|index| (index % 251) as u8).collect();
+        let meter = Rc::new(Meter::default());
+        meter.start(u64::MAX, u64::MAX);
+        let mut reader = Metered::new(
+            FailsAfterFirst {
+                bytes: bytes.clone(),
+                reads: 0,
+            },
+            meter.clone(),
+        );
+        let mut out = [0_u8; 8];
+        assert!(reader.read_exact(&mut out).is_ok());
+        assert!(reader.seek(SeekFrom::Start(40_000)).is_ok());
+        let mut large = vec![0_u8; 20_000];
+        assert!(reader.read_exact(&mut large).is_err());
+        // Bytes past the first read are never served from a stale cache.
+        meter.start(u64::MAX, u64::MAX);
+        assert!(reader.seek(SeekFrom::Start(17_000)).is_ok());
+        assert!(reader.read_exact(&mut out).is_err());
     }
 
     #[test]

@@ -299,12 +299,32 @@ fn integer(props: &[Prop], id: u16) -> Option<i64> {
     }
 }
 
-/// A table's rows (row id and wanted columns) and whether it has more.
-type TableRows = (Vec<(u32, Vec<Prop>)>, bool);
+/// How reading a table's rows ended.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum RowsEnd {
+    /// Every row was read.
+    Complete,
+    /// The table has more rows than were asked for.
+    More,
+    /// A row could not be read; the rows before it are kept.
+    Failed,
+}
 
-/// A table's rows as their row ids and wanted columns, at most `max_rows`;
-/// the flag says the table has more.
-fn table_rows(table: &dyn TableContext, wanted: &[u16], max_rows: usize) -> io::Result<TableRows> {
+/// Rows by their row id, each with its wanted columns.
+type Rows = Vec<(u32, Vec<Prop>)>;
+
+/// A table's rows and how reading them ended.
+type TableRows = (Rows, RowsEnd);
+
+/// A table's rows as their row ids and wanted columns, at most `max_rows` of
+/// those whose row id `keep` accepts. A row is checked by its id before any
+/// of its columns is read, and reading stops at the bound.
+fn table_rows_where(
+    table: &dyn TableContext,
+    wanted: &[u16],
+    max_rows: usize,
+    keep: impl Fn(u32) -> bool,
+) -> TableRows {
     let context = table.context();
     let columns: Vec<_> = context
         .columns()
@@ -315,20 +335,41 @@ fn table_rows(table: &dyn TableContext, wanted: &[u16], max_rows: usize) -> io::
         .collect();
     let mut rows = Vec::new();
     for row in table.rows_matrix() {
-        if rows.len() == max_rows {
-            return Ok((rows, true));
+        let id = u32::from(row.id());
+        if !keep(id) {
+            continue;
         }
-        let values = row.columns(context)?;
+        if rows.len() == max_rows {
+            return (rows, RowsEnd::More);
+        }
+        let Ok(values) = row.columns(context) else {
+            return (rows, RowsEnd::Failed);
+        };
         let mut props = Vec::with_capacity(columns.len());
         for (index, id, prop_type) in &columns {
             if let Some(Some(value)) = values.get(*index) {
-                let value = table.read_column(value, *prop_type)?;
+                let Ok(value) = table.read_column(value, *prop_type) else {
+                    return (rows, RowsEnd::Failed);
+                };
                 props.extend(Prop::from_value(*id, &value));
             }
         }
-        rows.push((u32::from(row.id()), props));
+        rows.push((id, props));
     }
-    Ok((rows, false))
+    (rows, RowsEnd::Complete)
+}
+
+/// Every row (at most `max_rows`) of a table read whole: a row that cannot
+/// be read fails the table.
+fn table_rows(
+    table: &dyn TableContext,
+    wanted: &[u16],
+    max_rows: usize,
+) -> io::Result<(Rows, bool)> {
+    match table_rows_where(table, wanted, max_rows, |_| true) {
+        (_, RowsEnd::Failed) => Err(io::Error::other("a table row could not be read")),
+        (rows, end) => Ok((rows, end == RowsEnd::More)),
+    }
 }
 
 fn node_type(node: u32) -> Option<NodeIdType> {
@@ -499,19 +540,14 @@ impl Mailbox {
             });
             if let Some(contents) = folder.contents_table() {
                 let left = limits.max_messages - listing.messages.len();
-                let rows = table_rows(contents.as_ref(), ROW_PROPS, usize::MAX);
-                let Ok((rows, _)) = rows else {
-                    listing.truncated = true;
-                    continue;
-                };
-                let messages = rows
-                    .into_iter()
-                    .filter(|(node, _)| node_type(*node) == Some(NodeIdType::NormalMessage));
-                for (taken, (node, props)) in messages.enumerate() {
-                    if taken == left {
-                        listing.truncated = true;
-                        return Ok(listing);
-                    }
+                // Read no further than the message asked for, or the bound.
+                let needed = stop.map_or(left, |stop| {
+                    (stop + 1).saturating_sub(listing.messages.len()).min(left)
+                });
+                let (rows, end) = table_rows_where(contents.as_ref(), ROW_PROPS, needed, |node| {
+                    node_type(node) == Some(NodeIdType::NormalMessage)
+                });
+                for (node, props) in rows {
                     listing.messages.push(MessageRecord {
                         folder: index,
                         node,
@@ -521,11 +557,30 @@ impl Mailbox {
                         return Ok(listing);
                     }
                 }
+                match end {
+                    RowsEnd::Complete => {}
+                    // More messages than the list's bound.
+                    RowsEnd::More => {
+                        listing.truncated = true;
+                        return Ok(listing);
+                    }
+                    // The rows before the one that failed are listed.
+                    RowsEnd::Failed => {
+                        listing.truncated = true;
+                        continue;
+                    }
+                }
             } else if self.meter.exhausted().is_some() {
                 listing.truncated = true;
                 break;
             }
             let Some(hierarchy) = folder.hierarchy_table() else {
+                // The library reads a hierarchy it could not read as none:
+                // one the budget stopped means subfolders were left out.
+                if self.meter.exhausted().is_some() {
+                    listing.truncated = true;
+                    break;
+                }
                 continue;
             };
             let Ok((children, _)) = table_rows(hierarchy.as_ref(), &[], limits.max_folders) else {
