@@ -183,7 +183,9 @@ export const withSsrAdmission = ({
   admission,
   handler,
   onShed,
-}: WithSsrAdmissionOptions): FetchHandler => ({
+}: WithSsrAdmissionOptions): {
+  fetch: (request: Request) => Promise<Response>;
+} => ({
   async fetch(request) {
     const permit = admission.tryAdmit(request);
     if (permit === null) {
