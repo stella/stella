@@ -1,5 +1,5 @@
 /** A transcript paragraph: when it starts and what was said. */
-export type TranscriptParagraph = { startMs: number; text: string };
+type TranscriptParagraph = { startMs: number; text: string };
 
 /**
  * The cleaned-up text of a recording: the Markdown subset the API returns
