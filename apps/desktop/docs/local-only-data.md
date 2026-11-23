@@ -45,7 +45,12 @@ local-only feature follows every rule below and adds one entry to
   their read returns only those choices. Neither deletes history. The
   Settings and setup windows are granted those commands only; the day
   timeline, its review and copying stay with `ActivityCaller` and the
-  activity window.
+  activity window. Clipboard settings follow the same shape:
+  `clipboard_settings.rs` takes a `ClipboardSettingsCaller`, which also
+  accepts the Settings window; its commands change capture, retention,
+  screen recordings, excluded applications and groups, and every answer is
+  those settings, never a clip. Clips stay with `ClipboardCaller` and the
+  Clips windows.
 - **No network imports.** Feature modules and the shared machinery
   (`local_store`, `local_window`, `foreground_app`, `idle_time`,
   `feature_gate`) contain no HTTP client or socket code.
@@ -72,7 +77,7 @@ local-only feature follows every rule below and adds one entry to
 - `tests/local-only-window-boundary.test.ts`: commands granted only to the
   feature's windows, every granted command belongs to a feature's owner
   module, every command takes the caller proof, every caller type is listed,
-  and the Settings window holds no timeline command.
+  and the Settings window holds no timeline or clipboard history command.
 - `tests/window-capabilities.test.ts`: each window's capability grants what
   its page invokes.
 

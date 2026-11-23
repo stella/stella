@@ -462,6 +462,21 @@
     "welcomeStart": "Začať kopírovať",
     "welcomeTitle": "Zoznámte sa so schránkou"
   },
+  "clipboardSettings": {
+    "capture": "Ukladať nové výstrižky",
+    "captureDescription": "Po vypnutí sa nič, čo skopírujete, neukladá.",
+    "errorSave": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
+    "excludedDescription": "Nič, čo v týchto aplikáciách skopírujete, sa neukladá.",
+    "excludedEmpty": "Ak chcete aplikáciu vylúčiť, kliknite v schránke pravým tlačidlom na niektorý jej výstrižok a zvoľte, že sa z nej nové výstrižky nemajú ukladať.",
+    "groupActions": "Akcie pre skupinu {groupName}",
+    "groupsDescription": "Presunutím skupiny zmeníte jej poradie v schránke.",
+    "groupsEmpty": "Vytvorte skupinu a v schránke do nej presuňte výstrižky.",
+    "history": "História",
+    "moveGroupDown": "Posunúť nadol",
+    "moveGroupUp": "Posunúť nahor",
+    "recordingsDescription": "Umožní zobraziť schránku na snímkach obrazovky, v nahrávkach a pri zdieľaní obrazovky.",
+    "retentionDescription": "Staršie výstrižky sa mažú. Výstrižky v skupine zostávajú."
+  },
   "dialog": {
     "accountEmail": "Účet",
     "accountSubtitle": "Pripojte stella desktop k tomuto účtu a organizácii.",

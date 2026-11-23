@@ -22,6 +22,7 @@ import {
   ACTIVITY_SETTINGS,
   APP_STATE,
   CLEANUP_MODELS,
+  CLIPBOARD_SETTINGS,
   CLOUD_MODELS,
   DICTATION_READY,
   MICROPHONES,
@@ -152,6 +153,8 @@ type WindowFixture = {
   shortcut: ClipboardShortcutSnapshot;
   /** The smart card driver setting, or null where it is not offered. */
   signingDriver: unknown;
+  /** The clipboard settings, where the window shows them. */
+  clipboardSettings?: unknown;
 };
 
 const openWindow = async (
@@ -193,6 +196,7 @@ const openWindow = async (
       harness_get_status: () => null,
       local_skill_folders_get: () => null,
       signing_driver_get: () => data.signingDriver,
+      clipboard_get_settings: () => data.clipboardSettings ?? null,
       local_linked_folders_get: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
@@ -429,6 +433,7 @@ export const openSettingsWindow = async (
       requestOutcome: "granted",
       shortcut: SHORTCUT,
       signingDriver: SIGNING_DRIVER,
+      clipboardSettings: CLIPBOARD_SETTINGS,
     },
     path: `/#${tab}`,
     platform: options.platform,

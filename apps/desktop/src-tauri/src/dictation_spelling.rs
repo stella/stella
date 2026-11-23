@@ -3,10 +3,15 @@
 //! is off: cleanup gets the words itself.
 //!
 //! A word or phrase in the text is replaced only when it is close to one
-//! custom word and to no other: the same letters with other case or
-//! diacritics, or, in a longer word, one or two letters off. Whole words
-//! only, never part of one, and short words only when they differ in case or
-//! diacritics alone. Pure: tested without a model.
+//! custom word and to no other: the same letters with other case,
+//! diacritics, apostrophes or hyphens, or, in a longer word, one or two
+//! letters off. A Czech or Slovak case ending, or an English possessive, on
+//! a name keeps the ending, so "dvoraka" of "Dvořák" reads "Dvořáka".
+//! Whole words only, never part of one, and short words only when they
+//! differ in case or diacritics alone; a word with digits only as written.
+//! The twin of `@stll/transcript/spelling`: both pass the cases in
+//! `packages/transcript/src/spelling.fixtures.json`. Pure: tested without a
+//! model.
 
 #![cfg_attr(
   not(dictation),
@@ -23,11 +28,51 @@ const ONE_OFF_LETTERS: usize = 6;
 /// From this many letters on, two letters may differ.
 const TWO_OFF_LETTERS: usize = 10;
 
-/// A custom word or phrase as compared: its words, folded.
-struct Target<'a> {
-  spelling: &'a str,
-  folded: Vec<String>,
+/// Czech and Slovak case endings a name takes: after a word ending in a
+/// consonant (Novák, Nováka, Novákovi), in place of a final -a, -o or -e
+/// (Hrdlička, Hrdličky), and in place of a final -ý or -í (Novotný,
+/// Novotného). Any word takes the "s" of an English possessive. Written
+/// with their accents where only one spelling exists, so an ending spoken
+/// without them gets them back; an ending that could be either is kept as
+/// spoken.
+const CONSONANT_ENDINGS: &[&str] = &[
+  "a", "u", "e", "ovi", "em", "om", "ové", "i", "y", "ům", "ech", "och", "ov", "ami",
+];
+const VOWEL_ENDINGS: &[&str] = &[
+  "a", "y", "e", "u", "ou", "o", "ám", "ách", "ami", "em", "ech", "ům", "i",
+];
+const ADJECTIVE_ENDINGS: &[&str] = &[
+  "ého", "ému", "ým", "ých", "ými", "ího", "ímu", "ím", "á", "é", "ou",
+];
+const POSSESSIVE_ENDINGS: &[&str] = &["s"];
+
+/// A piece of a custom word: a word, also folded, or what lies between two.
+enum Wanted {
+  Word { text: String, folded: String },
+  Between(String),
+}
+
+/// A custom word or phrase as compared, from its first word on.
+struct Target {
+  pieces: Vec<Wanted>,
+  words: usize,
   letters: usize,
+}
+
+/// How one word of the text reads as one word of a custom word.
+struct WordMatch {
+  distance: usize,
+  /// The word as it should be written, its ending kept.
+  spelled: String,
+  inflected: bool,
+}
+
+/// How the pieces at one place read as a custom word.
+struct Aligned {
+  spelled: String,
+  taken: usize,
+  distance: usize,
+  inflected: usize,
 }
 
 /// A piece of the text: a word, or what lies between two words.
@@ -39,9 +84,17 @@ enum Piece<'a> {
 
 /// `text` with every close miss of a custom word spelled as in `words`.
 pub fn respell(text: &str, words: &[String]) -> String {
-  let targets = words
+  // One target per spelling: the same name twice is no tie.
+  let mut spellings: Vec<String> = Vec::new();
+  for word in words {
+    let spelling = compose(word.trim());
+    if !spellings.contains(&spelling) {
+      spellings.push(spelling);
+    }
+  }
+  let targets = spellings
     .iter()
-    .filter_map(|word| target(word))
+    .filter_map(|spelling| target(spelling))
     .collect::<Vec<_>>();
   if targets.is_empty() {
     return text.to_string();
@@ -50,22 +103,19 @@ pub fn respell(text: &str, words: &[String]) -> String {
   let mut out = String::with_capacity(text.len());
   let mut index = 0;
   while index < pieces.len() {
-    match pieces[index] {
-      Piece::Between(between) => {
-        out.push_str(between);
+    let found = match pieces[index] {
+      Piece::Word(_) => best_match(&pieces, index, &targets),
+      Piece::Between(_) => None,
+    };
+    match found {
+      Some((spelled, taken)) => {
+        out.push_str(&spelled);
+        index += taken;
+      }
+      None => {
+        out.push_str(&joined(&pieces[index..=index]));
         index += 1;
       }
-      Piece::Word(word) => match best_match(&pieces[index..], &targets) {
-        Some((target, taken)) => {
-          let original = joined(&pieces[index..index + taken]);
-          out.push_str(&cased_like(target.spelling, &original));
-          index += taken;
-        }
-        None => {
-          out.push_str(word);
-          index += 1;
-        }
-      },
     }
   }
   out
@@ -179,16 +229,39 @@ fn learned_key(word: &str) -> String {
   word.to_lowercase().replace('’', "'")
 }
 
-fn target(word: &str) -> Option<Target<'_>> {
-  let folded = word
-    .split_whitespace()
-    .map(fold)
-    .filter(|part| !part.is_empty())
+/// A custom word as compared, from its first word on; what follows its last
+/// word stays, as the full stop of "s.r.o.". Composed by the caller, so its
+/// last letter is one character.
+fn target(spelling: &str) -> Option<Target> {
+  let split = pieces(spelling);
+  let start = split
+    .iter()
+    .position(|piece| matches!(piece, Piece::Word(_)))
+    .unwrap_or(0);
+  let wanted = split[start..]
+    .iter()
+    .map(|piece| match piece {
+      Piece::Word(text) => Wanted::Word {
+        text: (*text).to_string(),
+        folded: fold(text),
+      },
+      Piece::Between(text) => Wanted::Between((*text).to_string()),
+    })
     .collect::<Vec<_>>();
-  let letters = folded.iter().map(|part| part.chars().count()).sum();
+  let letters = wanted
+    .iter()
+    .map(|piece| match piece {
+      Wanted::Word { folded, .. } => folded.chars().count(),
+      Wanted::Between(_) => 0,
+    })
+    .sum();
+  let words = wanted
+    .iter()
+    .filter(|piece| matches!(piece, Wanted::Word { .. }))
+    .count();
   (letters >= MIN_LETTERS).then_some(Target {
-    spelling: word,
-    folded,
+    pieces: wanted,
+    words,
     letters,
   })
 }
@@ -202,7 +275,7 @@ fn pieces(text: &str) -> Vec<Piece<'_>> {
   let mut in_word = false;
   let chars = text.char_indices().collect::<Vec<_>>();
   for (position, &(offset, character)) in chars.iter().enumerate() {
-    let joins = matches!(character, '\'' | '’' | '-')
+    let joins = joiner(character)
       && in_word
       && chars
         .get(position + 1)
@@ -238,47 +311,376 @@ fn joined(pieces: &[Piece<'_>]) -> String {
     .collect()
 }
 
-/// How close a custom word is: fewer edits first, then more words.
-type Rank = (usize, Reverse<usize>);
+/// How close a custom word is: fewer edits first, then fewer endings, then
+/// more words.
+type Rank = (usize, usize, Reverse<usize>);
 
-/// The custom word the words at the start of `pieces` are a close miss of,
-/// and how many pieces it covers; the closest wins, then the longest phrase.
-/// `None` when none is close, when two are equally close, or when the words
-/// already read as the custom word.
-fn best_match<'t>(
+/// The custom word the words from `start` on are a close miss of, spelled,
+/// and how many pieces it covers; the closest wins, then the one without
+/// endings, then the longest phrase. A match already spelled right is still
+/// returned, so its words are not matched again one by one. `None` when none
+/// is close or when two are equally close.
+fn best_match(
   pieces: &[Piece<'_>],
-  targets: &'t [Target<'t>],
-) -> Option<(&'t Target<'t>, usize)> {
-  let mut best: Option<(&Target, usize, Rank)> = None;
+  start: usize,
+  targets: &[Target],
+) -> Option<(String, usize)> {
+  let mut best: Option<(String, usize, Rank)> = None;
   let mut tied = false;
   for target in targets {
-    let Some((words, taken)) = leading_words(pieces, target.folded.len()) else {
+    let Some(aligned) = align(pieces, start, target) else {
       continue;
     };
-    let Some(distance) = words
-      .iter()
-      .zip(&target.folded)
-      .map(|(word, folded)| word_distance(&fold(word), folded))
-      .sum::<Option<usize>>()
-    else {
-      continue;
-    };
-    if distance > allowed(target.letters) {
+    if aligned.distance > allowed(target.letters) {
       continue;
     }
-    let rank = (distance, Reverse(target.folded.len()));
-    match best {
-      Some((_, _, known)) if known < rank => {}
-      Some((_, _, known)) if known == rank => tied = true,
+    let rank = (aligned.distance, aligned.inflected, Reverse(target.words));
+    match &best {
+      Some((_, _, known)) if *known < rank => {}
+      Some((_, _, known)) if *known == rank => tied = true,
       _ => {
-        best = Some((target, taken, rank));
+        let original = joined(&pieces[start..start + aligned.taken]);
+        best = Some((cased_like(&aligned.spelled, &original), aligned.taken, rank));
         tied = false;
       }
     }
   }
-  let (target, taken, _) = best.filter(|_| !tied)?;
-  (joined(&pieces[..taken]) != target.spelling).then_some((target, taken))
+  let (spelled, taken, _) = best.filter(|_| !tied)?;
+  Some((spelled, taken))
 }
+
+/// How the pieces from `start` on read as the custom word: each word close
+/// to its word, spaces where it has spaces and the same punctuation where it
+/// has punctuation; a full stop it ends with may be followed by more. `None`
+/// when the pieces do not line up.
+fn align(pieces: &[Piece<'_>], start: usize, target: &Target) -> Option<Aligned> {
+  let mut aligned = Aligned {
+    spelled: String::new(),
+    taken: target.pieces.len(),
+    distance: 0,
+    inflected: 0,
+  };
+  for (index, want) in target.pieces.iter().enumerate() {
+    let piece = pieces.get(start + index)?;
+    match (want, piece) {
+      (Wanted::Word { text, folded }, Piece::Word(word)) => {
+        let matched = match_word(word, text, folded)?;
+        aligned.spelled.push_str(&matched.spelled);
+        aligned.distance += matched.distance;
+        aligned.inflected += usize::from(matched.inflected);
+      }
+      (Wanted::Between(want), Piece::Between(between)) => {
+        if want.chars().all(char::is_whitespace) {
+          if !between.chars().all(|character| character == ' ') {
+            return None;
+          }
+          aligned.spelled.push_str(want);
+        } else if index == target.pieces.len() - 1 && between.starts_with(want.as_str())
+        {
+          aligned.spelled.push_str(between);
+        } else if between == want {
+          aligned.spelled.push_str(want);
+        } else {
+          return None;
+        }
+      }
+      _ => return None,
+    }
+  }
+  Some(aligned)
+}
+
+/// How `word` reads as one word of a custom word: as it stands, or as its
+/// stem with a case ending. `None` when the two differ in a word with digits,
+/// such as a section or standard number, which must match exactly.
+fn match_word(word: &str, spelling: &str, custom: &str) -> Option<WordMatch> {
+  // A number matches only as written: folding would drop the hyphen of
+  // "27-001".
+  if word.chars().chain(spelling.chars()).any(char::is_numeric) {
+    return (word.to_lowercase() == spelling.to_lowercase()).then(|| WordMatch {
+      distance: 0,
+      spelled: spelling.to_string(),
+      inflected: false,
+    });
+  }
+  let folded = fold(word);
+  let mut best = WordMatch {
+    distance: distance(&folded, custom),
+    spelled: spelling.to_string(),
+    inflected: false,
+  };
+  if best.distance == 0 {
+    return Some(best);
+  }
+  let folded_letters = folded.chars().collect::<Vec<_>>();
+  for (stem, written, endings) in stems(spelling, custom) {
+    for ending in endings {
+      let key = fold(ending).chars().collect::<Vec<_>>();
+      if folded_letters.len() <= key.len() || !folded_letters.ends_with(&key) {
+        continue;
+      }
+      let rest = folded_letters[..folded_letters.len() - key.len()]
+        .iter()
+        .collect::<String>();
+      let apart = distance(&rest, &stem);
+      if apart < best.distance {
+        best = WordMatch {
+          distance: apart,
+          spelled: format!("{written}{}", spoken_ending(word, ending)),
+          inflected: true,
+        };
+      }
+    }
+  }
+  Some(best)
+}
+
+/// The stems a custom word takes endings on: the whole word after a
+/// consonant or before a possessive, the word without its final vowel, and
+/// the word without the "e" of a final -ek or -ec (Dvořáček, Dvořáčka).
+/// Only stems of at least `MIN_LETTERS` letters, so a short word does not
+/// become an ending away from ordinary words.
+fn stems(
+  spelling: &str,
+  custom: &str,
+) -> Vec<(String, String, &'static [&'static str])> {
+  let letters = spelling.chars().collect::<Vec<_>>();
+  let custom_letters = custom.chars().collect::<Vec<_>>();
+  let without = |list: &[char], count: usize| -> String {
+    list[..list.len().saturating_sub(count)].iter().collect()
+  };
+  let mut found = vec![(custom.to_string(), spelling.to_string(), POSSESSIVE_ENDINGS)];
+  match custom_letters.last() {
+    Some('a' | 'e' | 'o') => found.push((
+      without(&custom_letters, 1),
+      without(&letters, 1),
+      VOWEL_ENDINGS,
+    )),
+    Some('y' | 'i') => found.push((
+      without(&custom_letters, 1),
+      without(&letters, 1),
+      ADJECTIVE_ENDINGS,
+    )),
+    Some(&last) if last.is_alphabetic() => {
+      found.push((custom.to_string(), spelling.to_string(), CONSONANT_ENDINGS));
+      let before_last = letters
+        .len()
+        .checked_sub(2)
+        .and_then(|at| letters.get(at))
+        .map(|letter| fold(&letter.to_string()));
+      if (custom.ends_with("ek") || custom.ends_with("ec"))
+        && before_last.as_deref() == Some("e")
+      {
+        let mut stem = without(&custom_letters, 2);
+        stem.push(last);
+        let mut written = without(&letters, 2);
+        written.extend(letters.last());
+        found.push((stem, written, CONSONANT_ENDINGS));
+      }
+    }
+    _ => {}
+  }
+  found
+    .into_iter()
+    .filter(|(stem, _, _)| stem.chars().count() >= MIN_LETTERS)
+    .collect()
+}
+
+/// The ending of `word` as spoken, with the apostrophe before an English
+/// "s"; spoken without accents, as written in `ending`, in the case spoken.
+fn spoken_ending(word: &str, ending: &str) -> String {
+  let spoken = last_letters(word, fold(ending).chars().count());
+  // Accents or an apostrophe: the ending was spoken in full.
+  if fold(&spoken) != spoken.to_lowercase() {
+    return spoken;
+  }
+  if spoken == spoken.to_uppercase() && spoken != spoken.to_lowercase() {
+    ending.to_uppercase()
+  } else {
+    ending.to_string()
+  }
+}
+
+/// The last `letters` letters of `word`, with their accents and the
+/// apostrophe or hyphen before them.
+fn last_letters(word: &str, letters: usize) -> String {
+  let characters = word.chars().collect::<Vec<_>>();
+  let mut start = characters.len();
+  let mut counted = 0;
+  while start > 0 && counted < letters {
+    start -= 1;
+    if !combining(characters[start]) && !joiner(characters[start]) {
+      counted += 1;
+    }
+  }
+  while start > 0 && joiner(characters[start - 1]) {
+    start -= 1;
+  }
+  characters[start..].iter().collect()
+}
+
+const fn joiner(character: char) -> bool {
+  matches!(character, '\'' | '’' | '-')
+}
+
+/// `text` with each Latin letter the dictation languages use, written as a
+/// letter and its combining accent, as the one composed letter (NFC), so a
+/// custom word's last letter is one character. Other text stays as written.
+fn compose(text: &str) -> String {
+  let mut out = String::with_capacity(text.len());
+  let mut characters = text.chars().peekable();
+  while let Some(character) = characters.next() {
+    let composed = characters.peek().and_then(|&mark| {
+      COMPOSED
+        .binary_search_by(|(base, accent, _)| (*base, *accent).cmp(&(character, mark)))
+        .ok()
+        .map(|at| COMPOSED[at].2)
+    });
+    match composed {
+      Some(letter) => {
+        out.push(letter);
+        characters.next();
+      }
+      None => out.push(character),
+    }
+  }
+  out
+}
+
+/// Letter, combining accent, and the letter they compose, sorted by the
+/// first two.
+const COMPOSED: &[(char, char, char)] = &[
+  ('A', '\u{300}', 'À'),
+  ('A', '\u{301}', 'Á'),
+  ('A', '\u{302}', 'Â'),
+  ('A', '\u{303}', 'Ã'),
+  ('A', '\u{304}', 'Ā'),
+  ('A', '\u{306}', 'Ă'),
+  ('A', '\u{308}', 'Ä'),
+  ('A', '\u{30a}', 'Å'),
+  ('A', '\u{328}', 'Ą'),
+  ('C', '\u{301}', 'Ć'),
+  ('C', '\u{30c}', 'Č'),
+  ('C', '\u{327}', 'Ç'),
+  ('D', '\u{30c}', 'Ď'),
+  ('E', '\u{300}', 'È'),
+  ('E', '\u{301}', 'É'),
+  ('E', '\u{302}', 'Ê'),
+  ('E', '\u{304}', 'Ē'),
+  ('E', '\u{307}', 'Ė'),
+  ('E', '\u{308}', 'Ë'),
+  ('E', '\u{30c}', 'Ě'),
+  ('E', '\u{328}', 'Ę'),
+  ('G', '\u{327}', 'Ģ'),
+  ('I', '\u{300}', 'Ì'),
+  ('I', '\u{301}', 'Í'),
+  ('I', '\u{302}', 'Î'),
+  ('I', '\u{304}', 'Ī'),
+  ('I', '\u{308}', 'Ï'),
+  ('I', '\u{328}', 'Į'),
+  ('K', '\u{327}', 'Ķ'),
+  ('L', '\u{301}', 'Ĺ'),
+  ('L', '\u{30c}', 'Ľ'),
+  ('L', '\u{327}', 'Ļ'),
+  ('N', '\u{301}', 'Ń'),
+  ('N', '\u{303}', 'Ñ'),
+  ('N', '\u{30c}', 'Ň'),
+  ('N', '\u{327}', 'Ņ'),
+  ('O', '\u{300}', 'Ò'),
+  ('O', '\u{301}', 'Ó'),
+  ('O', '\u{302}', 'Ô'),
+  ('O', '\u{303}', 'Õ'),
+  ('O', '\u{304}', 'Ō'),
+  ('O', '\u{308}', 'Ö'),
+  ('O', '\u{30b}', 'Ő'),
+  ('R', '\u{301}', 'Ŕ'),
+  ('R', '\u{30c}', 'Ř'),
+  ('S', '\u{301}', 'Ś'),
+  ('S', '\u{30c}', 'Š'),
+  ('S', '\u{326}', 'Ș'),
+  ('S', '\u{327}', 'Ş'),
+  ('T', '\u{30c}', 'Ť'),
+  ('T', '\u{326}', 'Ț'),
+  ('T', '\u{327}', 'Ţ'),
+  ('U', '\u{300}', 'Ù'),
+  ('U', '\u{301}', 'Ú'),
+  ('U', '\u{302}', 'Û'),
+  ('U', '\u{304}', 'Ū'),
+  ('U', '\u{308}', 'Ü'),
+  ('U', '\u{30a}', 'Ů'),
+  ('U', '\u{30b}', 'Ű'),
+  ('U', '\u{328}', 'Ų'),
+  ('Y', '\u{301}', 'Ý'),
+  ('Y', '\u{308}', 'Ÿ'),
+  ('Z', '\u{301}', 'Ź'),
+  ('Z', '\u{307}', 'Ż'),
+  ('Z', '\u{30c}', 'Ž'),
+  ('a', '\u{300}', 'à'),
+  ('a', '\u{301}', 'á'),
+  ('a', '\u{302}', 'â'),
+  ('a', '\u{303}', 'ã'),
+  ('a', '\u{304}', 'ā'),
+  ('a', '\u{306}', 'ă'),
+  ('a', '\u{308}', 'ä'),
+  ('a', '\u{30a}', 'å'),
+  ('a', '\u{328}', 'ą'),
+  ('c', '\u{301}', 'ć'),
+  ('c', '\u{30c}', 'č'),
+  ('c', '\u{327}', 'ç'),
+  ('d', '\u{30c}', 'ď'),
+  ('e', '\u{300}', 'è'),
+  ('e', '\u{301}', 'é'),
+  ('e', '\u{302}', 'ê'),
+  ('e', '\u{304}', 'ē'),
+  ('e', '\u{307}', 'ė'),
+  ('e', '\u{308}', 'ë'),
+  ('e', '\u{30c}', 'ě'),
+  ('e', '\u{328}', 'ę'),
+  ('g', '\u{327}', 'ģ'),
+  ('i', '\u{300}', 'ì'),
+  ('i', '\u{301}', 'í'),
+  ('i', '\u{302}', 'î'),
+  ('i', '\u{304}', 'ī'),
+  ('i', '\u{308}', 'ï'),
+  ('i', '\u{328}', 'į'),
+  ('k', '\u{327}', 'ķ'),
+  ('l', '\u{301}', 'ĺ'),
+  ('l', '\u{30c}', 'ľ'),
+  ('l', '\u{327}', 'ļ'),
+  ('n', '\u{301}', 'ń'),
+  ('n', '\u{303}', 'ñ'),
+  ('n', '\u{30c}', 'ň'),
+  ('n', '\u{327}', 'ņ'),
+  ('o', '\u{300}', 'ò'),
+  ('o', '\u{301}', 'ó'),
+  ('o', '\u{302}', 'ô'),
+  ('o', '\u{303}', 'õ'),
+  ('o', '\u{304}', 'ō'),
+  ('o', '\u{308}', 'ö'),
+  ('o', '\u{30b}', 'ő'),
+  ('r', '\u{301}', 'ŕ'),
+  ('r', '\u{30c}', 'ř'),
+  ('s', '\u{301}', 'ś'),
+  ('s', '\u{30c}', 'š'),
+  ('s', '\u{326}', 'ș'),
+  ('s', '\u{327}', 'ş'),
+  ('t', '\u{30c}', 'ť'),
+  ('t', '\u{326}', 'ț'),
+  ('t', '\u{327}', 'ţ'),
+  ('u', '\u{300}', 'ù'),
+  ('u', '\u{301}', 'ú'),
+  ('u', '\u{302}', 'û'),
+  ('u', '\u{304}', 'ū'),
+  ('u', '\u{308}', 'ü'),
+  ('u', '\u{30a}', 'ů'),
+  ('u', '\u{30b}', 'ű'),
+  ('u', '\u{328}', 'ų'),
+  ('y', '\u{301}', 'ý'),
+  ('y', '\u{308}', 'ÿ'),
+  ('z', '\u{301}', 'ź'),
+  ('z', '\u{307}', 'ż'),
+  ('z', '\u{30c}', 'ž'),
+];
 
 /// The first `count` words of `pieces` when only spaces separate them, and
 /// how many pieces they span.
@@ -300,15 +702,6 @@ fn leading_words<'p>(
     }
   }
   None
-}
-
-/// Edits between a folded word and a folded custom word; `None` when they
-/// differ in a word with digits, such as a section or standard number, which
-/// must match exactly.
-fn word_distance(word: &str, custom: &str) -> Option<usize> {
-  let apart = distance(word, custom);
-  let numbered = |text: &str| text.chars().any(|character| character.is_numeric());
-  (apart == 0 || !(numbered(word) || numbered(custom))).then_some(apart)
 }
 
 /// How many letters may differ in a custom word of `letters` letters.
@@ -342,9 +735,7 @@ fn cased_like(spelling: &str, original: &str) -> String {
 fn fold(word: &str) -> String {
   word
     .chars()
-    .filter(|character| {
-      !matches!(character, '\'' | '’' | '-') && !combining(*character)
-    })
+    .filter(|character| !joiner(*character) && !combining(*character))
     .flat_map(char::to_lowercase)
     .map(base_letter)
     .collect()
@@ -466,142 +857,41 @@ mod tests {
     assert_eq!(phrase_words("..."), None);
   }
 
-  fn words(list: &[&str]) -> Vec<String> {
-    list.iter().map(ToString::to_string).collect()
+  /// Cases shared with `respell` in `@stll/transcript/spelling`.
+  #[derive(serde::Deserialize)]
+  struct SpellingCase {
+    name: String,
+    text: String,
+    words: Vec<String>,
+    expected: String,
   }
 
   #[test]
-  fn missing_diacritics_and_case_are_restored() {
-    assert_eq!(
-      respell(
-        "dopis pro pana novaka a dvoracka",
-        &words(&["Nováka", "Dvořáčka"])
-      ),
-      "dopis pro pana Nováka a Dvořáčka"
-    );
+  fn custom_words_respell_the_shared_cases() {
+    let cases: Vec<SpellingCase> = serde_json::from_str(include_str!(
+      "../../../../packages/transcript/src/spelling.fixtures.json"
+    ))
+    .unwrap();
+    assert!(!cases.is_empty());
+    for case in cases {
+      assert_eq!(
+        respell(&case.text, &case.words),
+        case.expected,
+        "{}",
+        case.name
+      );
+    }
   }
 
   #[test]
-  fn a_longer_word_may_be_a_letter_off() {
-    assert_eq!(
-      respell("smlouva s firmou Kubernetis", &words(&["Kubernetes"])),
-      "smlouva s firmou Kubernetes"
-    );
-    assert_eq!(
-      respell("klient Hrdlicka", &words(&["Hrdlička"])),
-      "klient Hrdlička"
-    );
-  }
-
-  #[test]
-  fn a_word_too_far_off_stays() {
-    assert_eq!(
-      respell("Nováková přijde", &words(&["Novák"])),
-      "Nováková přijde"
-    );
-    assert_eq!(respell("pan Novy", &words(&["Novák"])), "pan Novy");
-  }
-
-  #[test]
-  fn short_words_change_only_in_case_or_diacritics() {
-    assert_eq!(respell("firma stll", &words(&["STLL"])), "firma STLL");
-    assert_eq!(respell("firma stil", &words(&["STLL"])), "firma stil");
-  }
-
-  #[test]
-  fn very_short_custom_words_are_left_alone() {
-    assert_eq!(
-      respell("ano, to je ono", &words(&["ANO"])),
-      "ano, to je ono"
-    );
-  }
-
-  #[test]
-  fn only_whole_words_change() {
-    assert_eq!(
-      respell("dvorackova a dvoracek", &words(&["Dvořák"])),
-      "dvorackova a dvoracek"
-    );
-  }
-
-  #[test]
-  fn phrases_match_word_for_word() {
-    assert_eq!(
-      respell(
-        "podle smlouvy s Baker Mckenzie včera",
-        &words(&["Baker McKenzie"])
-      ),
-      "podle smlouvy s Baker McKenzie včera"
-    );
-    // The whole phrase wins over one of its words.
-    assert_eq!(
-      respell("baker mckenzie", &words(&["Baker", "Baker McKenzie"])),
-      "Baker McKenzie"
-    );
-    // Punctuation between the words is not a phrase.
-    assert_eq!(
-      respell("Baker. Mckenzie", &words(&["Baker McKenzie"])),
-      "Baker. Mckenzie"
-    );
-  }
-
-  #[test]
-  fn a_word_close_to_two_custom_words_stays() {
-    assert_eq!(
-      respell("pan Kovarik", &words(&["Kovářík", "Kovarík"])),
-      "pan Kovarik"
-    );
-  }
-
-  #[test]
-  fn a_capital_at_the_start_of_a_sentence_stays() {
-    assert_eq!(
-      respell("Ebitda vzrostla.", &words(&["EBITDA", "e-mailem"])),
-      "EBITDA vzrostla."
-    );
-    assert_eq!(
-      respell("Emailem posílám.", &words(&["e-mailem"])),
-      "E-mailem posílám."
-    );
-  }
-
-  #[test]
-  fn punctuation_and_spacing_are_kept() {
-    assert_eq!(
-      respell("„novak“, (dvorak)!", &words(&["Novák", "Dvořák"])),
-      "„Novák“, (Dvořák)!"
-    );
-  }
-
-  #[test]
-  fn the_right_spelling_and_no_words_change_nothing() {
-    assert_eq!(respell("pan Novák", &words(&["Novák"])), "pan Novák");
-    assert_eq!(respell("pan novak", &[]), "pan novak");
-  }
-
-  #[test]
-  fn numbers_must_match_exactly() {
-    assert_eq!(
-      respell("podle ISO 27002", &words(&["ISO 27001"])),
-      "podle ISO 27002"
-    );
-    assert_eq!(
-      respell("viz section 124", &words(&["Section 123"])),
-      "viz section 124"
-    );
-    assert_eq!(
-      respell("podle iso 27001", &words(&["ISO 27001"])),
-      "podle ISO 27001"
-    );
-  }
-
-  #[test]
-  fn combining_accents_stay_with_their_word() {
-    assert_eq!(respell("pan Jose\u{301}", &words(&["José"])), "pan José");
-    assert_eq!(respell("pan jose\u{301}", &words(&["José"])), "pan José");
-    assert_eq!(
-      respell("Dvor\u{30c}a\u{301}k", &words(&["Dvořák"])),
-      "Dvořák"
+  fn composing_joins_a_letter_and_its_accent_and_leaves_the_rest() {
+    assert_eq!(compose("Dvor\u{30c}a\u{301}k"), "Dvořák");
+    assert_eq!(compose("Novotny\u{301}"), "Novotný");
+    assert_eq!(compose("q\u{301}"), "q\u{301}");
+    assert!(
+      COMPOSED
+        .windows(2)
+        .all(|pair| (pair[0].0, pair[0].1) < (pair[1].0, pair[1].1))
     );
   }
 

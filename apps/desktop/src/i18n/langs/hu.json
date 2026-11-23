@@ -462,6 +462,21 @@
     "welcomeStart": "Másolás megkezdése",
     "welcomeTitle": "Ismerje meg a vágólapot"
   },
+  "clipboardSettings": {
+    "capture": "Új klipek mentése",
+    "captureDescription": "Kikapcsolva semmi sem kerül mentésre, amit kimásol.",
+    "errorSave": "A módosítást nem sikerült menteni. Próbálja újra.",
+    "excludedDescription": "Az ezekben az alkalmazásokban másolt tartalom nem kerül mentésre.",
+    "excludedEmpty": "Egy alkalmazás kizárásához kattintson jobb gombbal a vágólapon az egyik klipjére, és válassza, hogy ne mentse az onnan származó új klipeket.",
+    "groupActions": "Műveletek: {groupName}",
+    "groupsDescription": "Húzzon el egy csoportot a vágólapon elfoglalt helyének módosításához.",
+    "groupsEmpty": "Hozzon létre egy csoportot, majd húzzon bele klipeket a vágólapon.",
+    "history": "Előzmények",
+    "moveGroupDown": "Mozgatás lefelé",
+    "moveGroupUp": "Mozgatás felfelé",
+    "recordingsDescription": "A vágólap megjelenhet képernyőképeken, felvételeken és képernyőmegosztáskor.",
+    "retentionDescription": "A régebbi klipek törlődnek. A csoportokban lévő klipek megmaradnak."
+  },
   "dialog": {
     "accountEmail": "Fiók",
     "accountSubtitle": "Csatlakoztassa a stella desktop alkalmazást ehhez a fiókhoz és szervezethez.",

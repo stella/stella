@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  knownUnscannedContentReasons,
   UNSCANNED_CONTENT_REASONS,
   UNSCANNED_CONTENT_WARNING,
   unscannedContentReasons,
@@ -37,5 +38,23 @@ describe("unscannedContentReasons", () => {
         unscannedContentReasons([UNSCANNED_CONTENT_WARNING[reason]]),
       ).toEqual([reason]);
     }
+  });
+});
+
+describe("knownUnscannedContentReasons", () => {
+  test("keeps the reasons this client knows, in the fixed order", () => {
+    expect(
+      knownUnscannedContentReasons([
+        "unsupportedCompression",
+        "aNewerReason",
+        "encrypted",
+      ]),
+    ).toEqual(["encrypted", "unsupportedCompression"]);
+  });
+
+  test("reads nothing from a value that is not a list", () => {
+    expect(knownUnscannedContentReasons(undefined)).toEqual([]);
+    expect(knownUnscannedContentReasons("encrypted")).toEqual([]);
+    expect(knownUnscannedContentReasons({ encrypted: true })).toEqual([]);
   });
 });

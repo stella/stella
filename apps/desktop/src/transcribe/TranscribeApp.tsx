@@ -9,7 +9,6 @@ import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
 import {
   blocksToHtml,
   blocksToText,
-  cleanedMarkdown,
   escapeHtmlText,
   paragraphsToHtml,
 } from "@stll/transcript/cleanup";
@@ -65,6 +64,7 @@ import {
   useRecordingCleanup,
 } from "./TranscribeCleanup";
 import { TranscribeMatterPicker } from "./TranscribeMatterPicker";
+import { useTranscriptSaveOptions } from "./use-transcript-save-options";
 
 const MAC = detectDesktopPlatform(navigator.userAgent) === "mac";
 
@@ -832,21 +832,6 @@ const ResultScreen = ({
     { hasText, running, saving, cleanup },
     t,
   );
-  const save = async (
-    text: string,
-    fileName: string,
-    format: "text" | "markdown",
-  ) => {
-    setActionFailed(false);
-    const result = await Result.tryPromise(async () =>
-      invoke<boolean>("transcribe_save_text", {
-        request: { text, fileName, format },
-      }),
-    );
-    if (Result.isError(result)) {
-      setActionFailed(true);
-    }
-  };
   const copy = async (text: string, html: string | null) => {
     const result = await Result.tryPromise(async () =>
       html === null
@@ -877,6 +862,13 @@ const ResultScreen = ({
       : []),
     blocksToHtml(cleanedBlocks),
   ].join("\n");
+  const saveOptions = useTranscriptSaveOptions({
+    title,
+    paragraphs,
+    cleanup,
+    cleanedPlain,
+    onResult: setActionFailed,
+  });
   const saveToMatter = async () => {
     if (session.matter === null) {
       return;
@@ -951,30 +943,7 @@ const ResultScreen = ({
                 )
               }
               onCopyFormatChange={setCopyFormat}
-              saveOptions={[
-                {
-                  id: "timestamps",
-                  label: t("result.saveWithTimestamps"),
-                  onSave: () => {
-                    void save(
-                      transcriptText(paragraphs, { timestamps: true }),
-                      t("result.fileName", { title }),
-                      "text",
-                    );
-                  },
-                },
-                {
-                  id: "plain",
-                  label: t("result.saveWithoutTimestamps"),
-                  onSave: () => {
-                    void save(
-                      transcriptText(paragraphs, { timestamps: false }),
-                      t("result.fileName", { title }),
-                      "text",
-                    );
-                  },
-                },
-              ]}
+              saveOptions={saveOptions.transcript}
             />
           </div>
           <ScrollArea className="min-h-0 flex-1">
@@ -1027,34 +996,7 @@ const ResultScreen = ({
                 )
               }
               onCopyFormatChange={setCopyFormat}
-              saveOptions={[
-                {
-                  id: "markdown",
-                  label: t("cleaned.saveMarkdown"),
-                  onSave: () => {
-                    void save(
-                      cleanedMarkdown(
-                        cleanup.instructions,
-                        cleanup.markdown,
-                        instructionsLabel,
-                      ),
-                      t("cleaned.fileNameMarkdown", { title }),
-                      "markdown",
-                    );
-                  },
-                },
-                {
-                  id: "text",
-                  label: t("cleaned.saveText"),
-                  onSave: () => {
-                    void save(
-                      cleanedPlain,
-                      t("cleaned.fileNameText", { title }),
-                      "text",
-                    );
-                  },
-                },
-              ]}
+              saveOptions={saveOptions.cleaned}
             />
           </div>
           <ScrollArea className="min-h-0 flex-1">

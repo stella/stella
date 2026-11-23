@@ -462,6 +462,21 @@
     "welcomeStart": "Empezar a copiar",
     "welcomeTitle": "Conoce tu portapapeles"
   },
+  "clipboardSettings": {
+    "capture": "Guardar recortes nuevos",
+    "captureDescription": "Desactívalo para dejar de guardar lo que copias.",
+    "errorSave": "No se pudo guardar el cambio. Inténtalo de nuevo.",
+    "excludedDescription": "No se guarda nada de lo que copias en estas aplicaciones.",
+    "excludedEmpty": "Para excluir una aplicación, haz clic derecho en uno de sus recortes en el portapapeles y elige dejar de guardar sus recortes nuevos.",
+    "groupActions": "Acciones de {groupName}",
+    "groupsDescription": "Arrastra un grupo para cambiar su posición en el portapapeles.",
+    "groupsEmpty": "Crea un grupo y luego arrastra recortes a él en el portapapeles.",
+    "history": "Historial",
+    "moveGroupDown": "Mover abajo",
+    "moveGroupUp": "Mover arriba",
+    "recordingsDescription": "Permite que las capturas de pantalla, las grabaciones y la pantalla compartida muestren el portapapeles.",
+    "retentionDescription": "Los recortes más antiguos se eliminan. Los recortes de un grupo se conservan."
+  },
   "dialog": {
     "accountEmail": "Cuenta",
     "accountSubtitle": "Conecta stella desktop a esta cuenta y organización.",

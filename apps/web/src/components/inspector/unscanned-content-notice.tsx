@@ -6,7 +6,9 @@ import {
   type UnscannedContentReason,
   unscannedContentReasons,
 } from "@stll/api-contract/file-scan-warnings";
+import { Button } from "@stll/ui/button";
 import { AlertTriangleIcon } from "@stll/ui/icons";
+import { Tooltip, TooltipPopup, TooltipTrigger } from "@stll/ui/tooltip";
 
 import type { TranslationKey } from "@/i18n/types";
 
@@ -66,6 +68,51 @@ const UnscannedContentNotice = ({
         </p>
       ))}
     </div>
+  );
+};
+
+/**
+ * The same notice where a file is named in a line, such as a chat
+ * attachment chip: a warning sign whose tooltip and accessible name say what
+ * the notice above a file's viewer says. Nothing when everything was scanned.
+ */
+export const UnscannedContentMark = ({
+  reasons,
+}: {
+  reasons: readonly UnscannedContentReason[];
+}) => {
+  const t = useTranslations();
+  if (reasons.length === 0) {
+    return null;
+  }
+  const messages = reasons.map((reason) =>
+    t(UNSCANNED_CONTENT_MESSAGE[reason]),
+  );
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          // Sized as a chip's own actions, so it keeps the chip's scale and
+          // its coarse touch target (chip-scale.dom.test.tsx holds both).
+          <Button
+            aria-label={messages.join(" ")}
+            className="static inline-flex size-4 shrink-0 items-center justify-center pointer-coarse:min-h-11 pointer-coarse:min-w-11"
+            data-unscanned-content={reasons.join(" ")}
+            variant="plain"
+          />
+        }
+      >
+        <AlertTriangleIcon
+          aria-hidden="true"
+          className="text-warning-foreground size-3"
+        />
+      </TooltipTrigger>
+      <TooltipPopup>
+        {messages.map((message) => (
+          <p key={message}>{message}</p>
+        ))}
+      </TooltipPopup>
+    </Tooltip>
   );
 };
 

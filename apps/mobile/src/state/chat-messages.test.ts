@@ -106,7 +106,7 @@ describe("what a thread shows of a stored message", () => {
         },
         { type: "text", key: "5", markdown: "First.\n\nSecond." },
       ],
-      files: [{ name: "", mimeType: "" }],
+      files: [{ name: "", mimeType: "", unscannedContent: [] }],
       drafts: [],
       contextNotice: null,
     });
@@ -170,14 +170,48 @@ describe("what a thread shows of a stored message", () => {
       text: "",
       blocks: [],
       files: [
-        { name: "Lease.pdf", mimeType: "application/pdf" },
-        { name: "Stamp.png", mimeType: "image/png" },
+        {
+          name: "Lease.pdf",
+          mimeType: "application/pdf",
+          unscannedContent: [],
+        },
+        { name: "Stamp.png", mimeType: "image/png", unscannedContent: [] },
       ],
       drafts: [],
       contextNotice: null,
       // Kept as stored, so an edit sends the files back as they are.
       parts,
     });
+  });
+
+  test("says which of a sent file's content was not scanned, as stored", () => {
+    const archive = (unscannedContent: unknown) => ({
+      type: "document",
+      source: {
+        type: "url",
+        value: "userfile://f3",
+        mimeType: "application/vnd.etsi.asic-e+zip",
+      },
+      metadata: { filename: "Bundle.asice", unscannedContent },
+    });
+    const filesOf = (unscannedContent: unknown) =>
+      toChatEntry({
+        id: "m6",
+        role: "user",
+        createdAt: CREATED_AT,
+        parts: [archive(unscannedContent)],
+      })?.files;
+
+    expect(filesOf(["unsupportedCompression", "encrypted"])).toEqual([
+      {
+        name: "Bundle.asice",
+        mimeType: "application/vnd.etsi.asic-e+zip",
+        unscannedContent: ["encrypted", "unsupportedCompression"],
+      },
+    ]);
+    // A reason a newer server added, or a malformed list, still shows the file.
+    expect(filesOf(["aNewerReason"])?.at(0)?.unscannedContent).toEqual([]);
+    expect(filesOf("encrypted")?.at(0)?.unscannedContent).toEqual([]);
   });
 
   test("keeps no parts on an answer, which cannot be edited", () => {
@@ -213,7 +247,13 @@ describe("what a thread shows of a stored message", () => {
       createdAt: CREATED_AT,
       text: "Summarise this",
       blocks: [],
-      files: [{ name: "Lease.pdf", mimeType: "application/pdf" }],
+      files: [
+        {
+          name: "Lease.pdf",
+          mimeType: "application/pdf",
+          unscannedContent: [],
+        },
+      ],
       drafts: [],
       contextNotice: null,
     });
@@ -435,7 +475,10 @@ describe("reading a thread", () => {
     // Nothing loaded is known to come before the page: it stands alone.
     expect(
       ids(withLatestPage(["u1", "a1", "u2"].map(entry), [entry("u9")])),
-    ).toEqual({ ids: ["u9"], standalone: true });
+    ).toEqual({
+      ids: ["u9"],
+      standalone: true,
+    });
     expect(ids(withLatestPage([entry("u1")], []))).toEqual({
       ids: [],
       standalone: true,

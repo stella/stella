@@ -60,7 +60,7 @@ import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   isClipboardEditorContext,
   isClipboardEditorSession,
-  isClipboardSnapshot,
+  isClipboardSettingsSnapshot,
 } from "./clipboard-types";
 import type {
   ClipboardEditorContext,
@@ -834,9 +834,9 @@ const ClipboardEditor = ({ onIdle }: ClipboardEditorProps) => {
       name: groupName,
     })
       .then((value) => {
-        // The command answers with the snapshot the timeline renders; the one
-        // group the editor has not seen before is the one just created.
-        const groups = isClipboardSnapshot(value) ? value.groups : null;
+        // The command answers with the clipboard settings; the one group the
+        // editor has not seen before is the one just created.
+        const groups = isClipboardSettingsSnapshot(value) ? value.groups : null;
         const created = groups?.find((group) => !knownGroupIds.has(group.id));
         if (!groups || !created) {
           reportDesktopError({
