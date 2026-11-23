@@ -332,7 +332,7 @@ describe("a part that is itself a container", () => {
       "Subject: =?UTF-8?B?",
     );
     // A later message opens on its own, past one whose row is over the bound.
-    const last = LAW_FIRM_MESSAGES.length - 1;
+    const last = 8;
     const closing = (
       await readPartOfFile(
         source,
@@ -340,7 +340,8 @@ describe("a part that is itself a container", () => {
         "ibm437",
       )
     ).unwrap();
-    expect(closing.fileName).toBe(LAW_FIRM_MESSAGES.at(-1)?.fileName);
+    expect(closing.fileName).toBe(LAW_FIRM_MESSAGES[last].fileName);
+    expect(LAW_FIRM_MESSAGES).toHaveLength(last + 1);
     // The message over the bound and one past the end have no part to open.
     for (const index of [6, LAW_FIRM_MESSAGES.length]) {
       expect(
