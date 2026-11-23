@@ -1,7 +1,8 @@
 import { useId } from "react";
 import type { ReactNode } from "react";
 
-import { useTranslations } from "use-intl";
+import { panic } from "better-result";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { CheckIcon, SendIcon, XIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
@@ -11,6 +12,7 @@ import {
   ACTIVITY_NEVER_RECORDED,
   ACTIVITY_RECORDED,
   ACTIVITY_SENT,
+  AI_DRAFT_INPUTS,
 } from "./activity-disclosure";
 
 /** Where recorded activity is kept, as this platform names the computer. */
@@ -51,9 +53,41 @@ export const ActivityDisclosure = () => {
  *  a place that already has a heading. */
 export const ActivitySentFacts = () => {
   const t = useTranslations("activity.disclosure");
-  return ACTIVITY_SENT.map((fact) => (
-    <Fact key={fact} kind="sent" text={t(`sent.${fact}`)} />
-  ));
+  const aiDraftInputs = useAiDraftInputs();
+  return ACTIVITY_SENT.map((fact) => {
+    switch (fact) {
+      case "timeEntries":
+        return <Fact key={fact} kind="sent" text={t("sent.timeEntries")} />;
+      case "aiDrafts":
+        return (
+          <Fact
+            key={fact}
+            kind="sent"
+            text={t("sent.aiDrafts", aiDraftInputs)}
+          />
+        );
+      default:
+        fact satisfies never;
+        return panic("Unknown activity sent fact.");
+    }
+  });
+};
+
+/**
+ * What a stella AI draft is written from and where it goes, as list text:
+ * the one source the disclosure's drafts fact and the drafts consent both
+ * state, so the two cannot list different inputs.
+ */
+export const useAiDraftInputs = () => {
+  const t = useTranslations("activity.disclosure");
+  const format = useFormatter();
+  return {
+    inputs: format.list(
+      AI_DRAFT_INPUTS.map((input) => t(`aiDraftInputs.${input}`)),
+      { type: "conjunction" },
+    ),
+    provider: t("aiDraftProvider"),
+  };
 };
 
 /** A titled list; the title is a label, not a heading, since the

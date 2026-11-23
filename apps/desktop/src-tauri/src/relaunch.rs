@@ -37,7 +37,7 @@ mod macos {
   // the fallback notification itself when the relaunch does not happen.
   const RELAUNCH_SCRIPT: &str = r#"
 fallback() {
-  /usr/bin/osascript -e 'display notification "Quit and reopen Stella to finish updating." with title "Stella update installed"' >/dev/null 2>&1
+  /usr/bin/osascript -e 'display notification "Quit and reopen stella desktop to finish updating." with title "stella update installed"' >/dev/null 2>&1
   exit 1
 }
 i=0

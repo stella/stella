@@ -211,6 +211,15 @@
     "creationRateLimited": "Hiljuti on loodud liiga palju organisatsioone. Proovi hiljem uuesti.",
     "creationRefused": "Organisatsiooni ei saanud luua. Kontrolli andmeid ja proovi uuesti.",
     "creationSlugConflict": "See organisatsiooni aadress on juba kasutusel. Vali teine nimi või aadress.",
+    "documentNaming": {
+      "description": "Nimetab ümber uued üleslaadimised toimikutes, kus see on sisse lülitatud. stella loeb iga dokumendi kuupäeva, liigi ja pealkirja ning täidab selle mustri. Jätke tühjaks, et säilitada algsed nimed.",
+      "invalid": "Kasutage ainult loetletud märgendeid ja mitte märke \\ / : * ? \" < > |.",
+      "pattern": "Nimemuster",
+      "preview": "Allkirjastatud leping saaks nime:",
+      "sampleDocType": "Leping",
+      "sampleTitle": "Osaluse ostu-müügileping",
+      "tokenHelp": "Märgendid: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Väärtuseta märgend jäetakse koos eraldajaga välja."
+    },
     "invitations": {
       "cancelConfirmDescription": "Aadressile {email} saadetud kutse link lakkab töötamast. Selle inimese uuesti kutsumiseks saatke uus kutse.",
       "cancelInvitation": "Tühista kutse",
@@ -685,6 +694,44 @@
         "remove": "Eemalda andmepostkast {address}",
         "title": "Organisatsiooni andmepostkastid"
       },
+      "dictation": {
+        "addCount": "{count, plural, one {Lisa # sõna} other {Lisa # sõna}}",
+        "addLabel": "Lisa sõna või nimi",
+        "addMany": "Lisa mitu",
+        "addedToast": "Lisati „{word}”.",
+        "alreadyListedToast": "„{word}” on juba loendis.",
+        "count": "{total, number} / {max, number}",
+        "deleteSelected": "{count, plural, one {Eemalda # sõna} other {Eemalda # sõna}}",
+        "deleteSelectedDescription": "Dikteerimine lõpetab nende kasutamise kogu meeskonna jaoks.",
+        "deleteSelectedInput": "Kinnitamiseks sisestage {number}",
+        "deleteSelectedTitle": "{count, plural, one {Kas eemaldada # sõna?} other {Kas eemaldada # sõna?}}",
+        "deleteWord": "Eemalda {word}",
+        "deletedToast": "{count, plural, one {Eemaldati # sõna.} other {Eemaldati # sõna.}}",
+        "description": "Sõnad ja nimed, mida kogu meeskonna dikteerimine peab õigesti kirjutama, näiteks klientide nimed või teises keeles kasutatavad ingliskeelsed terminid. stella kasutab neist neid, mida konkreetne dikteerimine vajab, seega võib loend olla pikk.",
+        "empty": "Lisage sõna ülal või lisage mitu loendist või failist.",
+        "export": "Ekspordi loend",
+        "exportFileName": "dikteerimise-sonad.txt",
+        "full": "Loend on täis. Uute lisamiseks eemaldage mõni sõna.",
+        "importHint": "Kleepige iga sõna eraldi reale või valige .txt-fail, kus on üks sõna real, või .csv-fail, mille esimeses veerus on sõnad.",
+        "importedToast": "{count, plural, one {Lisati # sõna.} other {Lisati # sõna.}}",
+        "invalid": "Sõna ei tohi sisaldada reavahetusi ega juhtmärke.",
+        "noMatch": "Otsingule „{search}” ei vasta ükski sõna.",
+        "pasteLabel": "Lisatavad sõnad",
+        "pastePlaceholder": "Üks sõna real",
+        "review": "Vaata sõnad üle",
+        "reviewInvalid": "{count, plural, one {# vigane, välja jäetud} other {# viganet, välja jäetud}}",
+        "reviewListed": "{count, plural, one {# on juba loendis} other {# on juba loendis}}",
+        "reviewNew": "{count, plural, one {# uus sõna} other {# uut sõna}}",
+        "reviewOverLimit": "Loendis on {total, number} sõna ja ruumi on veel {room, number} jaoks (kõige rohkem {max, number}). Lisage vähem sõnu või eemaldage enne mõni loendist.",
+        "reviewRepeated": "{count, plural, one {# kordub selles impordis} other {# korduvad selles impordis}}",
+        "reviewTooLong": "{count, plural, one {# liiga pikk, välja jäetud} other {# liiga pikka, välja jäetud}}",
+        "searchPlaceholder": "Otsi sõnu",
+        "selectWord": "Vali {word}",
+        "showMore": "Näita rohkem ({shown, number} / {matching, number})",
+        "title": "Dikteerimine",
+        "tooLong": "See sõna on dikteerimise jaoks liiga pikk.",
+        "wordsTitle": "Meeskonna sõnad"
+      },
       "documentProcessing": {
         "description": "Tuvastage skannitud PDF-ides tekst automaatselt, et nende sisu oleks otsitav.",
         "title": "Dokumenditeksti tuvastamine",
@@ -698,7 +745,6 @@
         "reorder": "Muuda dokumendiliigi järjestust",
         "title": "Dokumendiliigid"
       },
-      "enterSlug": "Sisestage organisatsiooni URL-i lühinimi.",
       "localRuns": {
         "description": "Kõige rohkem, mida programmeerimisagent tohib küsimata teha, kui ta käitab vestlust liikme arvutis. Madalam piir kehtib iga liikme järgmisest sõnumist; juba käimasolev käivitus säilitab oma õigused.",
         "title": "Programmeerimisagendid liikmete arvutites",
@@ -755,7 +801,6 @@
       },
       "uploadLogo": "Laadi logo üles",
       "usage": "Kasutus",
-      "usageCheckoutProviderUnavailable": "Makseteenuse pakkuja pole veebimakseks saadaval.",
       "usageDescription": "Selle organisatsiooni kasutuslimiidid ja õiguse olek",
       "usageEmptyDescription": "Seadista kasutusõigus, et lubada selles organisatsioonis mõõdetud AI-funktsioonid.",
       "usageEmptyTitle": "Kasutusõigus puudub",
@@ -772,11 +817,9 @@
       "usageManageError": "Majutatud kasutuse haldust ei saanud avada",
       "usageManuallyManaged": "Käsitsi hallatud",
       "usagePacksDescription": "Ühekordsed ühikupaketid, mis lisatakse praegusele perioodile.",
-      "usagePacksRequireActivePlan": "Ühikupakettide ostmiseks aktiveerige või taastage majutatud pakett.",
       "usagePacksTitle": "Ühikupaketid",
       "usagePlanCheckout": "Jätka kassasse",
       "usagePlanCheckoutError": "Kassasse ei saanud siirduda",
-      "usagePlanCheckoutUnavailable": "Selle paketi eest ei saa veebis tasuda.",
       "usagePlanPriceMonthTemplate": "{price} / kuus",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / koht / kuus",
@@ -798,7 +841,11 @@
         "title": "Dokumentide kontrollimise otsused",
         "unavailable": "Sellel organisatsioonil pole ühtegi otsustusmudelit saadaval.",
         "updated": "Kontrollimise seadistus on uuendatud"
-      }
+      },
+      "enterSlug": "Sisestage organisatsiooni URL-i lühinimi.",
+      "usageCheckoutProviderUnavailable": "Makseteenuse pakkuja pole veebimakseks saadaval.",
+      "usagePacksRequireActivePlan": "Ühikupakettide ostmiseks aktiveerige või taastage majutatud pakett.",
+      "usagePlanCheckoutUnavailable": "Selle paketi eest ei saa veebis tasuda."
     }
   }
 }

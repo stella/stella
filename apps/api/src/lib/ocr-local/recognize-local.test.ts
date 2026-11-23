@@ -107,7 +107,7 @@ const installStorage = ({
 const createWorkerFake = () => {
   const stdins: Uint8Array[] = [];
   const runWorker: RunWorker = async ({ stdin }) => {
-    stdins.push(new Uint8Array(await stdin.arrayBuffer()));
+    stdins.push(new Uint8Array(await new Response(stdin).arrayBuffer()));
     return Result.ok(WORKER_OUTPUT);
   };
   return { runWorker, stdins };

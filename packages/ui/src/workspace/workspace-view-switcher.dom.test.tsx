@@ -26,6 +26,11 @@ let rowWidth = 250;
 /** Tabs a test draws at a width of their own, by name. */
 const tabWidths = new Map<string, number>();
 
+// The row the tabs share is the strip's first child, `rowWidth` wide.
+const isRow = (target: Element) =>
+  target.parentElement instanceof HTMLElement &&
+  target.parentElement.dataset["slot"] === "workspace-view-switcher";
+
 const originalRect = HTMLElement.prototype.getBoundingClientRect;
 const rect = (width: number) => new DOMRect(0, 0, width, 32);
 HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect(
@@ -37,14 +42,14 @@ HTMLElement.prototype.getBoundingClientRect = function getBoundingClientRect(
   if (this.hasAttribute(INLINE_OVERFLOW_TRIGGER_ATTRIBUTE)) {
     return rect(TRIGGER_WIDTH);
   }
+  if (isRow(this)) {
+    return rect(rowWidth);
+  }
   return originalRect.call(this);
 };
 
-// The row the tabs share is the strip's first child; its observer reports
-// `rowWidth` as the row's content box, the way a browser's would.
-const isRow = (target: Element) =>
-  target.parentElement instanceof HTMLElement &&
-  target.parentElement.dataset["slot"] === "workspace-view-switcher";
+// Its observer reports `rowWidth` as the row's content box, the way a
+// browser's would.
 const observers = new Set<() => void>();
 class ResizeObserverStub implements ResizeObserver {
   private readonly targets = new Set<Element>();

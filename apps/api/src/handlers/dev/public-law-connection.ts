@@ -200,12 +200,15 @@ export const startPublicLawConnection = (): PublicLawConnection => {
   if (config.status === "unconfigured") {
     return config;
   }
-  connectRun ??= runConnectCommand(config.command)
-    .catch((error: unknown) => {
-      lastFailure = `Connect command could not run: ${errorMessage(error)}`;
-    })
-    .finally(() => {
-      connectRun = null;
+  connectRun ??= (async () => {
+    const outcome = await Result.tryPromise({
+      try: async () => await runConnectCommand(config.command),
+      catch: (cause) => cause,
     });
+    if (Result.isError(outcome)) {
+      lastFailure = `Connect command could not run: ${errorMessage(outcome.error)}`;
+    }
+    connectRun = null;
+  })();
   return { status: "connecting" };
 };

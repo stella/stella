@@ -8,6 +8,10 @@ import { panic } from "better-result";
 import * as v from "valibot";
 
 import {
+  isPrintedCourtJurisdiction,
+  readPrintedCourt,
+} from "@stll/api-contract/court-identity";
+import {
   PUBLIC_COUNTRY_CAPABILITIES,
   PUBLIC_COUNTRY_SURFACE_OPEN,
 } from "@stll/api-contract/public-country-capability";
@@ -197,6 +201,32 @@ const searchOf = async (
   return `search still running after ${String(SEARCH_CONTINUATIONS_MAX)} continuations`;
 };
 
+/**
+ * Whether a sampled decision's court is the court its facet named. Facets
+ * name courts as stored, so one directory court can appear under several
+ * spellings; where the directory reads printed names, both are compared by
+ * the court they read to.
+ */
+const isSameCourt = (
+  country: ProbeCountry,
+  sampled: string,
+  named: string,
+): boolean => {
+  if (sampled === named) {
+    return true;
+  }
+  if (!isPrintedCourtJurisdiction(country)) {
+    return false;
+  }
+  const sampledCourt = readPrintedCourt(country, sampled);
+  const namedCourt = readPrintedCourt(country, named);
+  return (
+    sampledCourt.type === "court" &&
+    namedCourt.type === "court" &&
+    sampledCourt.court.id === namedCourt.court.id
+  );
+};
+
 const SEARCH_CLOSED: CaseLawIdentityProbeOutcome = {
   status: "not_applicable",
   detail: "case-law search is not open, so no sample to resolve",
@@ -253,12 +283,16 @@ const probeCountry = async (
     if (hit === undefined) {
       return [`${court}: no decision`];
     }
-    return hit.court === court ? [] : [`${court}: sampled ${hit.court}`];
+    return isSameCourt(country, hit.court, court)
+      ? []
+      : [`${court}: sampled ${hit.court}`];
   });
   const hits = samples.flatMap(({ court, sample }) =>
     typeof sample === "string"
       ? []
-      : sample.results.slice(0, 1).filter((hit) => hit.court === court),
+      : sample.results
+          .slice(0, 1)
+          .filter((hit) => isSameCourt(country, hit.court, court)),
   );
   // Some courts publish no ECLI; their sample proves the docket only, so the
   // detail names them instead of counting the court as fully probed.

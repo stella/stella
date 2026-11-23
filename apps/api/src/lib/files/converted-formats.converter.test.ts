@@ -10,11 +10,14 @@ import { describe, expect, test } from "bun:test";
 
 import { convertToPdf } from "@/api/lib/files/gotenberg";
 import {
+  ebookFile,
   multiPageTiff,
   numbers09File,
   pages09File,
+  webArchiveFile,
   wordPerfectFile,
 } from "@/api/tests/helpers/converted-document-fixtures";
+import { splitPng } from "@/api/tests/helpers/image-fixtures";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const enabled = process.env["STELLA_RUN_CONVERTER_TESTS"] === "true";
@@ -26,7 +29,7 @@ const convertedText = async (
   bytes: Uint8Array,
   mimeType: string,
   path: string,
-): Promise<{ pages: number; text: string }> => {
+): Promise<{ images: number; pages: number; text: string }> => {
   const converted = await convertToPdf(
     testScannedFile({ bytes: bytes.slice().buffer, mimeType, path }),
     { retry: "caller" },
@@ -37,6 +40,12 @@ const convertedText = async (
   const pdf = await PDF.load(new Uint8Array(converted.value.buffer));
   const pages = pdf.getPages();
   return {
+    // Image objects in the PDF; the converter writes each one uncompressed
+    // in its dictionary, so the count is readable without decoding streams.
+    images:
+      Buffer.from(converted.value.buffer)
+        .toString("latin1")
+        .split(/\/Subtype\s*\/Image\b/u).length - 1,
     pages: pages.length,
     text: pages
       .map((page) => page.extractText().text)
@@ -108,6 +117,57 @@ describe.skipIf(!enabled)("formats converted by a running converter", () => {
         "scan.tif",
       );
       expect(pages).toBe(3);
+    },
+    CONVERSION_TIMEOUT_MS, // timeout: a live converter call has a 30 s budget
+  );
+
+  test(
+    "a web archive's page with its embedded image",
+    async () => {
+      const { images, text } = await convertedText(
+        webArchiveFile({
+          body: '<h1>Synthetic archived notice</h1><p>Filed on the first day.</p><img src="seal.png">',
+          images: [
+            {
+              location: "https://example.test/notice/seal.png",
+              type: "image/png",
+              bytes: splitPng(32, 16),
+            },
+          ],
+        }),
+        "multipart/related",
+        "notice.mht",
+      );
+      expect(text).toContain("Synthetic archived notice");
+      expect(text).toContain("Filed on the first day.");
+      expect(images).toBe(1);
+    },
+    CONVERSION_TIMEOUT_MS, // timeout: a live converter call has a 30 s budget
+  );
+
+  test(
+    "an e-book's chapters in reading order",
+    async () => {
+      const { images, text } = await convertedText(
+        await ebookFile({
+          chapters: [
+            { file: "two.xhtml", body: "<h1>Synthetic chapter two</h1>" },
+            {
+              file: "one.xhtml",
+              body: '<h1>Synthetic chapter one</h1><p>Opening text.</p><img src="plate.png">',
+            },
+          ],
+          images: { "plate.png": splitPng(32, 16) },
+          spineOrder: ["one.xhtml", "two.xhtml"],
+        }),
+        "application/epub+zip",
+        "book.epub",
+      );
+      expect(images).toBe(1);
+      expect(text.indexOf("Synthetic chapter one")).toBeGreaterThan(-1);
+      expect(text.indexOf("Synthetic chapter one")).toBeLessThan(
+        text.indexOf("Synthetic chapter two"),
+      );
     },
     CONVERSION_TIMEOUT_MS, // timeout: a live converter call has a 30 s budget
   );

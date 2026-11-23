@@ -207,5 +207,5 @@ export const readZepContainer = async (
   if (signers.length > MAX_DOSSIER_SIGNATURES) {
     return dossierLimit("The container holds too many signatures");
   }
-  return Result.ok({ documents, signers });
+  return Result.ok({ receipt: false, documents, signers });
 };

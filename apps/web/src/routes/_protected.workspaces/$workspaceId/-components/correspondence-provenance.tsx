@@ -13,6 +13,7 @@ import { OriginalSignature } from "./original-signature";
 const UPLOADED_LABEL_KEYS = {
   email: "correspondence.uploadedFile",
   data_box: "correspondence.dataBox.uploaded",
+  pec: "correspondence.uploadedFile",
 } as const satisfies Record<
   CorrespondenceChannelContent["channel"],
   TranslationKey

@@ -6,8 +6,15 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type { DesktopMatter } from "@stll/api-contract/desktop-time-entries";
+import {
+  blocksToHtml,
+  blocksToText,
+  cleanedMarkdown,
+  escapeHtmlText,
+  paragraphsToHtml,
+} from "@stll/transcript/cleanup";
 import { Button } from "@stll/ui/button";
-import { InfoIcon, TriangleAlertIcon, WavesIcon } from "@stll/ui/icons";
+import { TriangleAlertIcon, WavesIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
 import { ToggleGroup, ToggleGroupItem } from "@stll/ui/toggle-group";
 import { TruncatedText } from "@stll/ui/truncated-text";
@@ -21,13 +28,6 @@ import {
   DESKTOP_TELEMETRY_WINDOWS,
   reportDesktopError,
 } from "../telemetry/desktop-telemetry";
-import {
-  blocksToHtml,
-  blocksToText,
-  cleanedMarkdown,
-  escapeHtmlText,
-  paragraphsToHtml,
-} from "./cleaned-text";
 import {
   afterRefusedStart,
   formatTimestamp,
@@ -648,10 +648,6 @@ const ChooseScreen = ({
             <TranscribeMatterPicker matter={matter} onChange={onMatterChange} />
           </div>
         </div>
-        <p className="text-muted-foreground flex gap-2 px-0.5 text-xs text-pretty">
-          <InfoIcon aria-hidden="true" className="mt-0.5 size-3.5 shrink-0" />
-          <span>{t("note")}</span>
-        </p>
       </div>
     </Shell>
   );

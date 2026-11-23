@@ -20,8 +20,9 @@ const ALLOWED_FLAG_READS = {
   // The owner: its disabled branch runs the action and still applies the
   // demo budget; queued period reservation is a no-op while disabled.
   "lib/rate-limit/action-admission.ts": 2,
-  // Request and response size bounds, not action counting.
-  "lib/rate-limit/action-size-limits.ts": 1,
+  // Request and response size bounds, not action counting: the deployed
+  // flag and the policy's read of its configuration.
+  "lib/rate-limit/action-size-limits.ts": 2,
   // The size-bound middleware.
   "lib/rate-limit/tenant-action-boundary.ts": 1,
   // The admission store warmup.

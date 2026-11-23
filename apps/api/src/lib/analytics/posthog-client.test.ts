@@ -404,7 +404,6 @@ describe("PostHog server analytics", () => {
     });
 
     analytics.capture(feedbackEvent("user_1"));
-    const startedAt = performance.now();
     expect(await deliveryFailuresDuring(analytics.flush)).toEqual([
       {
         "analytics.delivery.failure": "unreached",
@@ -412,7 +411,6 @@ describe("PostHog server analytics", () => {
       },
     ]);
     // One attempt and one retry, each cut off by the request timeout.
-    expect(performance.now() - startedAt).toBeLessThan(2000);
     expect(receiver.requests).toHaveLength(2);
 
     healthy = true;

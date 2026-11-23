@@ -540,12 +540,13 @@
       "waitForMatches": "Počkejte na dokončení kontroly pro anonymizaci.",
       "workspaceTermsHeading": "Slovníček pro anonymizaci ({count})"
     },
-    "attachmentNotPreviewable": "Stáhněte přílohu, abyste ji mohli otevřít.",
     "closeAllTabs": "Zavřít {count, plural, one {# kartu} few {všechny # karty} many {# karty} other {všech # karet}}",
     "closeOtherTabs": "Zavřít {count, plural, one {# další kartu} few {# další karty} many {# další karty} other {# dalších karet}}",
     "closeTab": "Zavřít <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší soubor {format}. Chcete-li jej převést, uložte jej znovu jako {replacementExtension}.",
+      "noPreviewDecodingOff": "Tento server nevytváří náhledy obrázků {format}. Chcete-li soubor otevřít, stáhněte si jej.",
+      "noPreviewUnreadable": "Tento obrázek {format} nelze pro náhled načíst. Chcete-li soubor otevřít, stáhněte si jej.",
       "unsupportedEncoding": "Tento dokument používá nepodporované kódování {encoding}, takže jej nelze převést.",
       "unsupportedField": "Tento dokument obsahuje pole {fieldType}, které nelze převést.",
       "unsupportedReference": "Tento dokument odkazuje na externí prostředek v {element} {attribute}, takže jej nelze převést."
@@ -560,6 +561,24 @@
     },
     "facet": {
       "anonymization": "Anonymizace"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Archiv se nepodařilo přečíst.",
+      "back": "Zpět na seznam",
+      "download": "Stáhnout {fileName}",
+      "noFilesInside": "Uvnitř nejsou žádné soubory.",
+      "noPreview": "Tento typ souboru nemá náhled. Stáhněte si ho nebo ho uložte do spisu.",
+      "notConverted": "Tento soubor se nepodařilo převést pro náhled. Stáhněte si ho nebo ho uložte do spisu.",
+      "open": "Otevřít {fileName}",
+      "unavailable": {
+        "encrypted": "Chráněno heslem, nelze otevřít",
+        "link": "Odkaz na jiný soubor, neotevírá se",
+        "tooLarge": "Příliš velký, nelze otevřít",
+        "unreadable": "Poškozený, nelze otevřít",
+        "unsupported": "Komprimováno způsobem, který nelze otevřít"
+      },
+      "search": "Najít soubor podle názvu nebo složky",
+      "noMatches": "Výrazu „{query}“ neodpovídá žádný soubor."
     },
     "firstSourceReached": "Toto je první zdroj.",
     "groups": {
@@ -632,6 +651,10 @@
       "lastUpdatedBy": "Naposledy upravil(a)",
       "matterColumnsHeading": "Údaje ve spisu",
       "noMatterColumns": "K tomuto dokumentu zatím nejsou vyplněné žádné údaje",
+      "similarDocuments": {
+        "heading": "Podobné dokumenty",
+        "similarity": "shoda {percent}"
+      },
       "stellaHeading": "Uloženo v aplikaci stella",
       "versionCurrent": "v{version} (aktuální)"
     },
@@ -814,9 +837,16 @@
       "why": "Proč",
       "whyItMatters": "Proč je to podstatné:"
     },
-    "selectAttachmentToSave": "Vyberte přílohu k uložení.",
     "showPane": "Zobrazit panel",
     "swapViews": "Prohodit hlavní zobrazení a boční panel",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "mailbox": {
+      "messages": "Zprávy",
+      "noMatches": "Výrazu „{query}“ neodpovídá žádná zpráva.",
+      "noMessages": "Tato poštovní schránka neobsahuje žádné zprávy.",
+      "search": "Hledat ve zprávách",
+      "truncated": "Zobrazuje se jen prvních {count, number} zpráv.",
+      "unreadable": "Tuto poštovní schránku se nepodařilo přečíst."
+    }
   }
 }

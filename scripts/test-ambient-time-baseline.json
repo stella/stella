@@ -10,7 +10,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/scripts/test-db-snapshot-cache.test.ts": {
-    "count": 6,
+    "count": 4,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -394,11 +394,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/handlers/chat/tools/execute/script-call-guide.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/handlers/chat/tools/past-chat-tools.integration.test.ts": {
     "count": 3,
     "owner": "api",
@@ -570,11 +565,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/feedback/submit.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/handlers/files/email-attachment-save-rate-limit.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
@@ -964,11 +954,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/analytics/posthog-client.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/anonymization-blacklist.db.test.ts": {
     "count": 2,
     "owner": "api",
@@ -1349,11 +1334,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/email/inbound/authentication.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/email/inbound/ingest.db.test.ts": {
     "count": 6,
     "owner": "api",
@@ -1434,16 +1414,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/file-scan/scan.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/files/conversion-input.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/files/organization-file-usage-reconcile.db.test.ts": {
     "count": 7,
     "owner": "api",
@@ -1471,11 +1441,6 @@
   },
   "apps/api/src/lib/files/pdf-signing/timestamp-authority.test.ts": {
     "count": 4,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/lib/files/xml-scan.test.ts": {
-    "count": 6,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

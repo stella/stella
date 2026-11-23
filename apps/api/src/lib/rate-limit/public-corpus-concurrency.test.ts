@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { createTestState } from "@stll/test-state";
 
 import { env } from "@/api/env";
+import { envPublicCorpus } from "@/api/env-public-corpus";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import type { Middleware, RouteTable } from "@/api/http/route";
@@ -20,6 +21,8 @@ import type { TestServer } from "@/api/tests/helpers/test-server";
 import { publicCorpusConcurrencyLimit } from "./public-corpus-concurrency";
 
 const testState = createTestState({ file: import.meta.path, config: env });
+// The public corpus policy reads its own settings slice.
+const corpusState = testState.forConfig(envPublicCorpus);
 
 const searchPaths = [
   { method: "GET", path: "/v1/law/statutes/search" },
@@ -302,7 +305,7 @@ describe("public corpus active request capacity", () => {
   });
 
   test("dedicated-pool search and aggregate retain independent class ceilings below the total cap", async () => {
-    testState.setConfig(
+    corpusState.setConfig(
       "PUBLIC_LAW_DATABASE_URL",
       "postgres://readonly:password@localhost/corpus",
     );

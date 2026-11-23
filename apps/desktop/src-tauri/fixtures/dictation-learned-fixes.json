@@ -51,6 +51,12 @@
     "expected": "O'Brien called"
   },
   {
+    "name": "a fix whose dictated words hold punctuation never matches their words alone",
+    "text": "Use C and C++.",
+    "fixes": [{ "from": "C++", "to": "Rust" }],
+    "expected": "Use C and C++."
+  },
+  {
     "name": "no fixes leave the text alone",
     "text": "Nothing to change here.",
     "fixes": [],

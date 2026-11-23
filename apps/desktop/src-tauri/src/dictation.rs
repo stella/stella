@@ -507,7 +507,7 @@ impl DictationState {
   }
 }
 
-fn publish(app: &AppHandle) {
+pub(crate) fn publish(app: &AppHandle) {
   if let Err(error) = app.emit(CHANGED_EVENT, ()) {
     tracing::warn!(%error, "dictation change event failed");
   }
@@ -1143,7 +1143,20 @@ fn listen_for_fix(app: &AppHandle) {
       ShortcutListening::Taken
     }
   };
-  change(app, |inner| inner.fix_listening = listening);
+  // The speaker may have turned the shortcut off while it was registered
+  // here: then nothing records it, and it is released at once.
+  let wanted = change(app, |inner| {
+    if inner.fix_shortcut {
+      inner.fix_listening = listening;
+    }
+    inner.fix_shortcut
+  });
+  if !wanted
+    && listening == ShortcutListening::Registered
+    && let Err(error) = app.global_shortcut().unregister(dictation_fix::shortcut())
+  {
+    tracing::warn!(%error, "dictation fix shortcut could not be released");
+  }
 }
 
 fn unlisten_fix(app: &AppHandle) {

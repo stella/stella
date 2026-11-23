@@ -43,6 +43,7 @@ import {
   RecoverableViewerBoundary,
   type ViewerSurface,
 } from "@/components/viewer/recoverable-viewer-boundary";
+import { env } from "@/env";
 import type { TranslationKey } from "@/i18n/types";
 import { PDF_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
@@ -65,9 +66,30 @@ const DataBoxFileViewer = lazy(async () => {
   return { default: m.DataBoxFileViewer };
 });
 
+const EInvoiceViewer = lazy(async () => {
+  const m = await import("@/components/inspector/e-invoice-viewer");
+  return { default: m.EInvoiceViewer };
+});
+
+const ManualRedactionPageLayer = lazy(async () => {
+  const m =
+    await import("@/components/pdf/manual-redaction/manual-redaction-page-layer");
+  return { default: m.ManualRedactionPageLayer };
+});
+
 const SignedDossierViewer = lazy(async () => {
   const m = await import("@/components/inspector/signed-dossier-viewer");
   return { default: m.SignedDossierViewer };
+});
+
+const ZipArchiveViewer = lazy(async () => {
+  const m = await import("@/components/inspector/zip-archive-viewer");
+  return { default: m.ZipArchiveViewer };
+});
+
+const MailboxViewer = lazy(async () => {
+  const m = await import("@/components/inspector/mailbox-viewer");
+  return { default: m.MailboxViewer };
 });
 
 const StructuredDocumentViewer = lazy(async () => {
@@ -107,11 +129,19 @@ const structuredDocumentViewer = {
   surface: "inspector-structured-document",
 } as const satisfies LegalFileViewer;
 
+const eInvoiceViewer = {
+  Viewer: EInvoiceViewer,
+  unreadable: "eInvoice.unreadable",
+  download: "common.downloadOriginal",
+  surface: "inspector-e-invoice",
+} as const satisfies LegalFileViewer;
+
 const legalFileViewers = {
   asicE: asicFileViewer,
   asicS: asicFileViewer,
   eAkta: signedDossierViewer,
   zep: signedDossierViewer,
+  xadesZep: signedDossierViewer,
   cades: {
     Viewer: CadesFileViewer,
     unreadable: "signedFile.unreadable",
@@ -120,13 +150,67 @@ const legalFileViewers = {
   },
   ofd: structuredDocumentViewer,
   uyap: structuredDocumentViewer,
+  isdoc: eInvoiceViewer,
+  isdocx: eInvoiceViewer,
+  // Any XML file opens here: an invoice as one, other XML as its text.
+  xml: { ...eInvoiceViewer, unreadable: "eInvoice.xmlUnreadable" },
   dataBox: {
     Viewer: DataBoxFileViewer,
     unreadable: "correspondence.dataBox.unreadable",
     download: "common.download",
     surface: "inspector-data-box",
   },
+  zip: {
+    Viewer: ZipArchiveViewer,
+    unreadable: "inspector.fileParts.archiveUnreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-zip",
+  },
+  mbox: {
+    Viewer: MailboxViewer,
+    unreadable: "inspector.mailbox.unreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-mbox",
+  },
 } as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
+
+/**
+ * A legal file in its format's viewer; a file its reader refuses shows why,
+ * with its download.
+ */
+const LegalFileTabViewer = ({
+  kind,
+  onDownload,
+  pdfView,
+  tab,
+}: {
+  kind: LegalFileFormatKind;
+  onDownload: () => void;
+  pdfView: LegalFilePdfView;
+  tab: FileTab;
+}) => {
+  const t = useTranslations();
+  const { Viewer, unreadable, download, surface } = legalFileViewers[kind];
+  return (
+    <RecoverableViewerBoundary
+      finalFallback={(error) =>
+        isPreviewUnavailableError(error) ? (
+          <FilePreviewUnavailable
+            downloadLabel={t(download)}
+            message={t(unreadable)}
+            onDownload={onDownload}
+          />
+        ) : undefined
+      }
+      onDownload={onDownload}
+      surface={surface}
+    >
+      <Suspense fallback={<PeekSuspenseFallback />}>
+        <Viewer onDownload={onDownload} pdfView={pdfView} tab={tab} />
+      </Suspense>
+    </RecoverableViewerBoundary>
+  );
+};
 
 const OfficeFileViewer = lazy(async () => {
   const m = await import("@/components/office/office-file-viewer");
@@ -277,36 +361,24 @@ const FileTabViewerComponent = ({
       case "cades":
       case "dataBox":
       case "eAkta":
+      case "xadesZep":
       case "zep":
       case "ofd":
-      case "uyap": {
-        const { Viewer, unreadable, download, surface } =
-          legalFileViewers[nativePreviewKind];
+      case "uyap":
+      case "isdoc":
+      case "isdocx":
+      case "xml":
+      case "zip":
+      case "mbox":
         return (
-          <RecoverableViewerBoundary
-            finalFallback={(error) =>
-              isPreviewUnavailableError(error) ? (
-                <FilePreviewUnavailable
-                  downloadLabel={t(download)}
-                  message={t(unreadable)}
-                  onDownload={handleDownload}
-                />
-              ) : undefined
-            }
+          <LegalFileTabViewer
             key={tab.id}
+            kind={nativePreviewKind}
             onDownload={handleDownload}
-            surface={surface}
-          >
-            <Suspense fallback={<PeekSuspenseFallback />}>
-              <Viewer
-                onDownload={handleDownload}
-                pdfView={legalFilePdfView}
-                tab={tab}
-              />
-            </Suspense>
-          </RecoverableViewerBoundary>
+            pdfView={legalFilePdfView}
+            tab={tab}
+          />
         );
-      }
       case "email":
         if (entity.shouldSurfaceEmailResolutionError) {
           return (
@@ -405,7 +477,10 @@ const FileTabViewerComponent = ({
       case null:
         if (entity.conversionRefusal !== undefined) {
           return (
-            <ConversionRefusalFallback refusal={entity.conversionRefusal} />
+            <ConversionRefusalFallback
+              onDownload={handleDownload}
+              refusal={entity.conversionRefusal}
+            />
           );
         }
         return (
@@ -423,7 +498,20 @@ const FileTabViewerComponent = ({
             onError={onViewerError}
             onPeekNavigate={closeAll}
             onWheelZoom={handlePdfWheelZoom}
+            pdfPageOverlay={
+              env.VITE_FEATURE_PDF_AREA_REDACTION
+                ? (pageId) => (
+                    <Suspense fallback={null}>
+                      <ManualRedactionPageLayer
+                        fieldId={tab.id}
+                        pageId={pageId}
+                      />
+                    </Suspense>
+                  )
+                : undefined
+            }
             scaleOffset={scaleOffset}
+            underOverlayBar={isZoomOverlayVisible}
             viewId={peekPdfViewId}
             workspaceId={tab.workspaceId}
           />

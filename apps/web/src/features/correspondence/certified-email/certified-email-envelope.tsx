@@ -8,7 +8,7 @@ import type {
 import { useFormatter } from "@/i18n/formatting-context";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
 
-import { EnvelopeField as Field } from "../envelope-field";
+import { EnvelopeCard, EnvelopeField as Field } from "../envelope-field";
 import {
   certifiedEmailCatalog,
   type CertifiedEmailTranslationKey,
@@ -89,8 +89,8 @@ const EnvelopeSection = ({ envelope }: { envelope: Envelope }) => {
   const { signerName } = envelope.signature;
 
   return (
-    <section className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2">
-      <div className="space-y-1 sm:col-span-2">
+    <EnvelopeCard>
+      <div className="col-span-full space-y-1">
         <h2 className="text-sm font-medium">
           {t(KIND_TITLE_KEYS[envelope.kind])}
         </h2>
@@ -180,7 +180,7 @@ const EnvelopeSection = ({ envelope }: { envelope: Envelope }) => {
           <Address>{envelope.messageId}</Address>
         </Field>
       )}
-      <p className="text-muted-foreground text-xs sm:col-span-2">
+      <p className="text-muted-foreground col-span-full text-xs">
         {signerName && (
           <span className="block">
             <bdi dir="auto">
@@ -192,7 +192,7 @@ const EnvelopeSection = ({ envelope }: { envelope: Envelope }) => {
         )}
         {t("certifiedEmail.signatureNotVerified")}
       </p>
-    </section>
+    </EnvelopeCard>
   );
 };
 
@@ -208,5 +208,23 @@ export const CertifiedEmailEnvelope = ({
 }) => (
   <certifiedEmailCatalog.Provider fallback={null}>
     <EnvelopeSection envelope={envelope} />
+  </certifiedEmailCatalog.Provider>
+);
+
+const KindLabel = ({ kind }: { kind: CertifiedEmailKind }) => {
+  const t = certifiedEmailCatalog.useTranslations();
+  return <>{t(KIND_TITLE_KEYS[kind])}</>;
+};
+
+/** What a certified email record is, as a list chip names its channel. */
+export const CertifiedEmailKindChip = ({
+  kind,
+}: {
+  kind: CertifiedEmailKind;
+}) => (
+  <certifiedEmailCatalog.Provider fallback={null}>
+    <span className="bg-muted text-muted-foreground rounded-full px-1.5 text-xs">
+      <KindLabel kind={kind} />
+    </span>
   </certifiedEmailCatalog.Provider>
 );

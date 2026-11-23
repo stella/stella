@@ -23,5 +23,10 @@
     "file": "apps/desktop/src-tauri/src/transcribe_recording.rs",
     "line": "std::process::Command::new(\"sleep\") // kit-allow: a real worker process, killed and reaped; no timing is waited on",
     "reason": "Stop must kill a worker child process that is still busy; the process boundary is the subject of the test, and the test waits on the child's exit, never on time"
+  },
+  {
+    "file": "apps/desktop/src-tauri/src/dictation_learned.rs",
+    "line": "assert!(FILES.try_lock().is_err()); // kit-allow: asserts the lookup runs under the process-global files lock",
+    "reason": "the test checks that a change looks up its account while the process-global learned-fixes lock is held, so a disconnect cannot erase between lookup and write; the global lock is the subject of the test"
   }
 ]

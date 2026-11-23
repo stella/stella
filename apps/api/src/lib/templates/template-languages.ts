@@ -151,16 +151,30 @@ export const detectTemplateLanguages = (text: string): string[] => {
 
 /** Best-effort: extraction failures yield [] rather than failing the
  *  surrounding create flow (languages stay editable afterwards). */
-export const detectTemplateLanguagesFromDocx = async (
+type TemplateDocxTextRead =
+  | { readonly kind: "text"; readonly text: string }
+  | { readonly kind: "unreadable" };
+
+const readTemplateDocxText = async (
   file: ScannedFile,
-): Promise<string[]> => {
+): Promise<TemplateDocxTextRead> => {
   const extracted = await Result.tryPromise(
     async () => await extractDocxDocument(file),
   );
   if (Result.isError(extracted)) {
-    return [];
+    return { kind: "unreadable" };
   }
-  return detectTemplateLanguages(
-    extracted.value.paragraphs.map((paragraph) => paragraph.text).join("\n"),
-  );
+  return {
+    kind: "text",
+    text: extracted.value.paragraphs
+      .map((paragraph) => paragraph.text)
+      .join("\n"),
+  };
+};
+
+export const detectTemplateLanguagesFromDocx = async (
+  file: ScannedFile,
+): Promise<string[]> => {
+  const read = await readTemplateDocxText(file);
+  return read.kind === "text" ? detectTemplateLanguages(read.text) : [];
 };

@@ -105,16 +105,18 @@ export const overlappingVatRatePeriods = async (
   if (periods.length === 0) {
     return new Set();
   }
+  const candidatePayload = JSON.stringify(
+    periods.map((period, position) => ({
+      position,
+      code: period.code,
+      valid_from: period.validFrom,
+      valid_to: period.validTo,
+    })),
+  );
   const rows = await tx
     .select({ position: sql<number>`candidate.position` })
     .from(
-      sql`(VALUES ${sql.join(
-        periods.map(
-          (period, position) =>
-            sql`(${position}::int, ${period.code}::text, ${period.validFrom}::date, ${period.validTo}::date)`,
-        ),
-        sql.raw(","),
-      )}) AS candidate(position, code, valid_from, valid_to)`,
+      sql`jsonb_to_recordset(${candidatePayload}::text::jsonb) AS candidate(position int, code text, valid_from date, valid_to date)`,
     )
     .where(
       sql`EXISTS (SELECT 1 FROM ${vatRates} WHERE ${and(

@@ -540,12 +540,13 @@
       "waitForMatches": "انتظر انتهاء فحص إخفاء الهوية.",
       "workspaceTermsHeading": "مصطلحات مساحة العمل ({count})"
     },
-    "attachmentNotPreviewable": "نزّل هذا المرفق لفتحه.",
     "closeAllTabs": "{count, plural, zero {إغلاق # علامة تبويب} one {إغلاق علامة تبويب واحدة} two {إغلاق علامتَي التبويب} few {إغلاق جميع علامات التبويب (#)} many {إغلاق جميع علامات التبويب (#)} other {إغلاق جميع علامات التبويب (#)}}",
     "closeOtherTabs": "{count, plural, zero {إغلاق # علامة تبويب أخرى} one {إغلاق علامة تبويب أخرى} two {إغلاق علامتَي تبويب أخريين} few {إغلاق # علامات تبويب أخرى} many {إغلاق # علامة تبويب أخرى} other {إغلاق # علامة تبويب أخرى}}",
     "closeTab": "إغلاق <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "هذا ملف {format} قديم. أعد حفظه بصيغة {replacementExtension} لتحويله.",
+      "noPreviewDecodingOff": "لا يُنشئ هذا الخادم معاينات لصور {format}. نزِّل الملف لفتحه.",
+      "noPreviewUnreadable": "تعذّرت قراءة صورة {format} هذه لإنشاء معاينة. نزِّل الملف لفتحه.",
       "unsupportedEncoding": "هذا المستند يستخدم ترميز {encoding} غير مدعوم، لذا لا يمكن تحويله.",
       "unsupportedField": "يحتوي هذا المستند على حقل {fieldType} لا يمكن تحويله.",
       "unsupportedReference": "يشير هذا المستند إلى مورد خارجي في {element} {attribute}، لذا لا يمكن تحويله."
@@ -560,6 +561,24 @@
     },
     "facet": {
       "anonymization": "إخفاء الهوية"
+    },
+    "fileParts": {
+      "archiveUnreadable": "تعذّرت قراءة الأرشيف.",
+      "back": "العودة إلى القائمة",
+      "download": "تنزيل {fileName}",
+      "noFilesInside": "لا توجد ملفات بداخله.",
+      "noPreview": "لا تتوفر معاينة لهذا النوع من المستندات. نزّله أو احفظه في ملف.",
+      "notConverted": "تعذّر تحويل هذا المستند لمعاينته. نزّله أو احفظه في ملف.",
+      "open": "فتح {fileName}",
+      "unavailable": {
+        "encrypted": "محمي بكلمة مرور، لا يمكن فتحه",
+        "link": "رابط إلى ملف آخر، لا يُفتح",
+        "tooLarge": "كبير جدًا بحيث لا يمكن فتحه",
+        "unreadable": "تالف، لا يمكن فتحه",
+        "unsupported": "مضغوط بطريقة لا يمكن فتحها"
+      },
+      "search": "البحث عن ملف بالاسم أو المجلد",
+      "noMatches": "لا يوجد ملف يطابق «{query}»."
     },
     "firstSourceReached": "هذا هو المصدر الأول.",
     "groups": {
@@ -632,6 +651,10 @@
       "lastUpdatedBy": "آخر تحديث بواسطة",
       "matterColumnsHeading": "بيانات الملف القانوني",
       "noMatterColumns": "لم يُسجَّل أي شيء عن هذا المستند بعد",
+      "similarDocuments": {
+        "heading": "مستندات مشابهة",
+        "similarity": "تشابه بنسبة {percent}"
+      },
       "stellaHeading": "مخزَّن في stella",
       "versionCurrent": "الإصدار {version} (الحالي)"
     },
@@ -814,9 +837,16 @@
       "why": "لماذا",
       "whyItMatters": "لماذا يهم:"
     },
-    "selectAttachmentToSave": "اختر مرفقًا لحفظه.",
     "showPane": "إظهار اللوحة",
     "swapViews": "تبديل العرض الرئيسي واللوحة الجانبية",
-    "title": "لوحة الفحص"
+    "title": "لوحة الفحص",
+    "mailbox": {
+      "messages": "الرسائل",
+      "noMatches": "لا توجد رسالة تطابق «{query}».",
+      "noMessages": "لا يحتوي صندوق البريد هذا على أي رسائل.",
+      "search": "البحث في الرسائل",
+      "truncated": "تُعرض أول {count, number} رسالة فقط.",
+      "unreadable": "تعذّرت قراءة صندوق البريد هذا."
+    }
   }
 }

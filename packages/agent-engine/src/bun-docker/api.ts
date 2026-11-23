@@ -187,7 +187,9 @@ export async function* demuxExecStream(
       });
     }
   } finally {
-    await reader.cancel().catch(() => undefined);
+    await reader.cancel().catch(() => {
+      // Stream may already be closed when unwinding.
+    });
     reader.releaseLock();
   }
 }

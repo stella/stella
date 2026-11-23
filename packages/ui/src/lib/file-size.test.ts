@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { getFileSizeDisplay } from "./file-size";
+import { formatFileSize, getFileSizeDisplay } from "./file-size";
 
 describe("file size display", () => {
   test("selects a readable decimal unit", () => {
@@ -47,5 +47,20 @@ describe("file size display", () => {
     for (const { sizeBytes, unit, value } of cases) {
       expect(getFileSizeDisplay(sizeBytes)).toEqual({ unit, value });
     }
+  });
+});
+
+describe("formatted file size", () => {
+  const formatIn = (locale: string) => ({
+    number: (value: number, options: Intl.NumberFormatOptions): string =>
+      new Intl.NumberFormat(locale, options).format(value),
+  });
+
+  test("bytes read as a plural word, larger units stay short", () => {
+    expect(formatFileSize(333, formatIn("en"))).toBe("333 bytes");
+    expect(formatFileSize(1, formatIn("en"))).toBe("1 byte");
+    expect(formatFileSize(333, formatIn("cs"))).toBe("333 bajtů");
+    expect(formatFileSize(783_400, formatIn("en"))).toBe("783.4 kB");
+    expect(formatFileSize(1_200_000, formatIn("en"))).toBe("1.2 MB");
   });
 });

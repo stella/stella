@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { DATA_BOX_MESSAGE_MIME_TYPE } from "@stll/api-contract/data-box";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
+import { encodeText } from "@stll/mojibake/charsets";
 
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import { parseDataBoxDocument } from "@/api/lib/email/correspondence/data-box/zfo";
@@ -83,7 +84,9 @@ describe("resolveExtractionMimeType", () => {
 });
 
 const extractFixtureText = async (bytes: ArrayBuffer, mimeType: string) =>
-  await extractFileText(testScannedFile({ bytes, mimeType }));
+  await extractFileText(testScannedFile({ bytes, mimeType }), undefined, {
+    zipNameCodePage: "ibm437",
+  });
 
 describe("extractFileText", () => {
   let logs: RecordingLogger | null = null;
@@ -102,6 +105,22 @@ describe("extractFileText", () => {
     expect(text).toBe("hello\nworld");
   });
 
+  test("extracts a CSV saved in windows-1250 as the text it holds", async () => {
+    const csv = [
+      "Dlužník;Částka;Splatnost",
+      "Kořínek Jiří;3 200,00 Kč;15. 4. 2026",
+      "Šťastná Lucie;8 750,00 Kč;31. 3. 2026",
+    ].join("\n");
+    const bytes = encodeText(csv, "windows-1250");
+    if (bytes === null) {
+      throw new Error("the ledger is writable in windows-1250");
+    }
+
+    expect(
+      await extractFixtureText(new Uint8Array(bytes).buffer, "text/csv"),
+    ).toBe(csv);
+  });
+
   test("keeps the caller's character budget instead of the shared one", async () => {
     const shared = LIMITS.extractedContentMaxChars;
     const bytes = toArrayBuffer("a".repeat(shared + 10));
@@ -110,13 +129,13 @@ describe("extractFileText", () => {
     const kept = await extractFileText(
       testScannedFile({ bytes, mimeType: "text/plain" }),
       undefined,
-      { maxChars: shared + 5 },
+      { zipNameCodePage: "ibm437", maxChars: shared + 5 },
     );
     expect(kept).toHaveLength(shared + 5);
     const whole = await extractFileText(
       testScannedFile({ bytes, mimeType: "text/plain" }),
       undefined,
-      { maxChars: shared + 20 },
+      { zipNameCodePage: "ibm437", maxChars: shared + 20 },
     );
     expect(whole).toHaveLength(shared + 10);
   });

@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Adjuntos",
     "certifiedAt": "Certificado el",
     "deliveredTo": "Entregado a",
     "error": "Error notificado",
@@ -462,20 +461,110 @@
     },
     "fit": "Ancho",
     "openOriginal": "Abrir original",
+    "openPart": "Abrir {fileName}",
     "preview": "Abrir vista previa",
     "previewDescription": "Este archivo se abre en la vista previa del sistema.",
     "retry": "Reintentar",
     "title": "Documento",
     "unrendered": "Este documento no se puede mostrar aquí, pero la vista previa del sistema quizá pueda abrirlo.",
+    "unscannedContent": {
+      "encrypted": "Algunos archivos que contiene están protegidos con contraseña, por lo que no se han analizado en busca de amenazas.",
+      "unsupportedCompression": "Algunos archivos que contiene están comprimidos en un formato que stella no puede leer, por lo que no se han analizado en busca de amenazas."
+    },
     "zoomFit": "Ajustar al ancho",
     "zoomIn": "Acercar",
     "zoomOut": "Alejar"
+  },
+  "eInvoice": {
+    "accountNumber": "Número de cuenta bancaria",
+    "amountWithCurrency": "{amount} {currency}",
+    "bankCode": "Código bancario",
+    "batchPosition": "Documento {position, number} de {count, number}",
+    "bic": "Código BIC",
+    "currency": "Moneda",
+    "customer": "Cliente",
+    "documentTitle": "{documentType, select, invoice {Factura} creditNote {Nota de crédito} debitNote {Nota de débito} advance {Factura de anticipo} other {Otro documento}}",
+    "documentTitleNumbered": "{documentType, select, invoice {Factura {number}} creditNote {Nota de crédito {number}} debitNote {Nota de débito {number}} advance {Factura de anticipo {number}} other {Documento {number}}}",
+    "exemptionReason": "Motivo de exención",
+    "formatVersion": "{format}, versión {version}",
+    "grossTotal": "Total con IVA",
+    "iban": "IBAN",
+    "identifierWithScheme": "{kind} ({scheme})",
+    "issueDate": "Fecha de emisión",
+    "lineId": "N.º",
+    "lineItems": "Líneas",
+    "linesShown": "Se muestran {shown, number} de {count, plural, one {# línea} many {# líneas} other {# líneas}}",
+    "netAmount": "Importe neto",
+    "netTotal": "Total sin IVA",
+    "notes": "Notas de la factura",
+    "otherIdentifier": "Otro identificador",
+    "payableAmount": "Importe a pagar",
+    "paymentAmount": "Importe del pago",
+    "paymentDetails": "Datos de pago",
+    "paymentDueDate": "Fecha de vencimiento",
+    "paymentMeansCode": "Código del medio de pago",
+    "paymentReference": "Referencia de pago",
+    "prepaidAmount": "Pagado por adelantado",
+    "quantity": "Cantidad y unidad",
+    "quantityWithUnit": "{quantity} {unit}",
+    "ratePercent": "{rate} %",
+    "ratePercentWithCategory": "{rate} % ({category})",
+    "registrationNumber": "Número de registro",
+    "supplier": "Proveedor",
+    "taxAmount": "Cuota de IVA",
+    "taxId": "Identificación fiscal",
+    "taxPointDate": "Fecha de devengo",
+    "taxTotal": "Total de IVA",
+    "taxableAmount": "Base imponible",
+    "totals": "Totales",
+    "unitPrice": "Precio unitario",
+    "units": {
+      "day": "{count, plural, one {{quantity} día} many {{quantity} días} other {{quantity} días}}",
+      "hour": "{count, plural, one {{quantity} hora} many {{quantity} horas} other {{quantity} horas}}",
+      "month": "{count, plural, one {{quantity} mes} many {{quantity} meses} other {{quantity} meses}}",
+      "unit": "{count, plural, one {{quantity} unidad} many {{quantity} unidades} other {{quantity} unidades}}",
+      "week": "{count, plural, one {{quantity} semana} many {{quantity} semanas} other {{quantity} semanas}}",
+      "year": "{count, plural, one {{quantity} año} many {{quantity} años} other {{quantity} años}}"
+    },
+    "unreadable": "No se pudo leer la factura.",
+    "vat": "IVA",
+    "vatBreakdown": "Desglose del IVA",
+    "vatId": "Número de IVA",
+    "xmlUnreadable": "No se pudo leer este archivo XML."
+  },
+  "email": {
+    "cc": "Copia",
+    "date": "Fecha",
+    "from": "Remitente",
+    "noSubject": "(Sin asunto)",
+    "subject": "Asunto",
+    "to": "Destinatarios"
   },
   "entity": {
     "currentVersion": "Versión actual",
     "loadFailed": "No se pudo cargar este elemento.",
     "reference": "Referencia",
     "type": "Tipo"
+  },
+  "fileParts": {
+    "archiveUnreadable": "No se pudo leer el archivo comprimido.",
+    "attachments": "Adjuntos",
+    "files": "Archivos",
+    "insideFailed": "No se pudieron cargar los archivos que contiene. Toca para volver a intentarlo.",
+    "noFilesInside": "No contiene ningún archivo.",
+    "noMatches": "Ningún archivo coincide con «{query}».",
+    "open": "Abrir {fileName} ({details})",
+    "saveFailed": "No se ha podido guardar el archivo en el asunto. Inténtalo de nuevo.",
+    "saveNamed": "Guardar {fileName} en un asunto",
+    "search": "Buscar un archivo por nombre o carpeta",
+    "unavailable": {
+      "encrypted": "Protegido con contraseña, no se puede abrir",
+      "link": "Enlace a otro archivo, no se abre",
+      "tooLarge": "Demasiado grande para abrirlo",
+      "unreadable": "Dañado, no se puede abrir",
+      "unsupported": "Comprimido de un modo que no se puede abrir"
+    },
+    "unnamed": "Archivo sin nombre"
   },
   "header": {
     "search": "Buscar"
@@ -505,6 +594,16 @@
     "refused": "Su servidor rechazó la solicitud (error {status}).",
     "server": "Su servidor tuvo un problema (error {status}). Inténtelo de nuevo en un momento.",
     "session": "Su sesión ha caducado. Vuelva a iniciar sesión."
+  },
+  "mailbox": {
+    "back": "Volver a los mensajes",
+    "messages": "Mensajes",
+    "noMatches": "Ningún mensaje coincide con «{query}».",
+    "noMessages": "Este buzón no contiene mensajes.",
+    "openFailed": "No se ha podido abrir este mensaje. Toca para volver a intentarlo.",
+    "search": "Buscar mensajes",
+    "truncated": "Solo se muestran los primeros {count, number} mensajes.",
+    "unreadable": "No se ha podido leer este buzón."
   },
   "matter": {
     "add": "Añadir",
@@ -800,9 +899,11 @@
     "useStella": "Usar stella"
   },
   "signedFile": {
+    "deliveryReceipt": "Acuse de entrega de un expediente electrónico",
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
     "noSigners": "No se encontraron datos de los firmantes.",
+    "signedContent": "Documento firmado",
     "signers": "Firmantes",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",

@@ -1,5 +1,9 @@
 import { desktopEditFileTypeForMimeType } from "@stll/api-contract";
-import type { ConvertedDocumentMimeType } from "@stll/api-contract/converted-document-formats";
+import {
+  type ConvertedDocumentMimeType,
+  htmlRenderedDocumentFormatOfMimeType,
+  type HtmlRenderedDocumentMimeType,
+} from "@stll/api-contract/converted-document-formats";
 
 /**
  * MIME types accepted by Gotenberg's LibreOffice conversion route, every
@@ -30,6 +34,10 @@ const CONVERTIBLE_MIME_TYPES = {
   "application/xhtml+xml": null,
   "image/bmp": null,
   "image/gif": null,
+  "image/heic": null,
+  "image/heic-sequence": null,
+  "image/heif": null,
+  "image/heif-sequence": null,
   "image/jpeg": null,
   "image/png": null,
   "image/tiff": null,
@@ -47,6 +55,28 @@ export const isConvertibleMimeType = (
 ): mimeType is ConvertibleMime =>
   Object.hasOwn(CONVERTIBLE_MIME_TYPES, mimeType);
 
+/**
+ * Whether `mimeType` declares a format rendered from HTML stella builds out
+ * of it (a web archive, an e-book) before the converter sees it.
+ */
+export const isHtmlRenderedMimeType = (
+  mimeType: string,
+): mimeType is HtmlRenderedDocumentMimeType =>
+  htmlRenderedDocumentFormatOfMimeType(mimeType) !== undefined;
+
+/**
+ * A stored media type without its parameters, lower-cased: a web archive
+ * declared `multipart/related; boundary=...` is a web archive.
+ */
+export const mediaTypeEssence = (mimeType: string): string =>
+  (mimeType.split(";", 1)[0] ?? "").trim().toLowerCase();
+
+/** Whether a file of `mimeType` can become a PDF, as stored or rendered. */
+export const canConvertToPdf = (mimeType: string): boolean => {
+  const essence = mediaTypeEssence(mimeType);
+  return isConvertibleMimeType(essence) || isHtmlRenderedMimeType(essence);
+};
+
 /** OOXML formats rendered in-browser and therefore excluded from the derivative queue. */
 export const isNativelyRenderableMimeType = (mimeType: string): boolean =>
   desktopEditFileTypeForMimeType(mimeType) !== null;
@@ -61,8 +91,8 @@ export const shouldGeneratePdfDerivative = ({
   mimeType,
 }: ShouldGeneratePdfDerivativeOptions): boolean =>
   !encrypted &&
-  isConvertibleMimeType(mimeType) &&
-  !isNativelyRenderableMimeType(mimeType);
+  canConvertToPdf(mimeType) &&
+  !isNativelyRenderableMimeType(mediaTypeEssence(mimeType));
 
 export const pdfDerivativeStateForFile = (
   options: ShouldGeneratePdfDerivativeOptions,

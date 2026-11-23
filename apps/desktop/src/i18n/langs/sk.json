@@ -10,7 +10,7 @@
     "aiDraftAllow": "Povoliť",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Úkon {task} · Činnosť {activity}",
-    "aiDraftConsent": "stella AI môže navrhovať popisy zo spisu, dátumu, trvania a názvov aplikácií každého záznamu a z názvov dokumentov a okien, ktoré tu vidíte, ak ich zaznamenávate. Vaše skoršie záznamy k spisu jej pomáhajú písať vaším štýlom. Nič iné o vašom dni tento počítač neopustí.",
+    "aiDraftConsent": "Na napísanie popisu stella AI použije: {inputs}. Všetko ide k {provider}, len na napísanie návrhu. Nič ďalšie o vašom dni tento počítač neopustí.",
     "aiDraftConsentRequired": "Na návrh tohto popisu znova povoľte stella AI.",
     "aiDraftDisclosure": "Návrhy AI sú odporúčania, ktoré stella vytvára z kontrolovaného záznamu, vašich skorších záznamov v spise a fakturačných pravidiel kancelárie, ak ich pridala. Každý záznam pred vytvorením skontrolujte.",
     "aiDraftEarlierEntries": "{count, plural, one {Nadväzuje na # skorší záznam} few {Nadväzuje na # skoršie záznamy} other {Nadväzuje na # skorších záznamov}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI je na tomto počítači vypnutá. Odvolanie sa aplikácii stella odošle, hneď ako bude dostupná.",
     "browserAnsweredAppNameOnly": "Pri <bdi>{browser}</bdi> sa zaznamenáva len názov aplikácie. Zmeniť to môžete v Nastaveniach.",
     "browserAnsweredTitles": "Názvy kariet v <bdi>{browser}</bdi> sa zaznamenávajú. Zmeniť to môžete v Nastaveniach.",
-    "browserPrivacyNote": "Môžu sa zaznamenať aj súkromné okná; pri súkromnom prehliadaní pozastavte záznam alebo prehliadač vylúčte.",
+    "browserPrivacyNote": "stella nerozpozná každé súkromné okno, preto pred súkromným prehliadaním záznam pozastavte.",
     "browserQuestionAppNameOnly": "Len názov aplikácie",
-    "browserQuestionDescription": "Názvy kariet pomáhajú s popismi práce. stella nerozpozná každé súkromné okno, preto pred súkromným prehliadaním záznam pozastavte.",
+    "browserQuestionDescription": "Názvy kariet pomáhajú s popismi práce.",
     "browserQuestionLater": "Rozhodnúť neskôr",
     "browserQuestionRecordTitles": "Zaznamenávať názvy",
     "browserQuestionTitle": "Zaznamenávať aj názvy kariet v <bdi>{browser}</bdi>?",
@@ -103,7 +103,19 @@
     "detectCalls": "Zaznamenávať hovory",
     "detectCallsDescription": "Keď Teams, Zoom alebo prehliadač používa mikrofón, tento čas sa počíta ako hovor, aj keď len počúvate alebo pracujete v inej aplikácii. Zvuk sa nikdy nenahráva.",
     "disclosure": {
-      "control": "Nič sa nezaznamenáva, kým v Aktivite nestlačíte Začať zaznamenávať. Kedykoľvek môžete pozastaviť, vylúčiť aplikácie alebo vymazať ktorýkoľvek deň.",
+      "aiDraftInputs": {
+        "appNames": "názvy aplikácií",
+        "billingFormat": "fakturačný formát klienta",
+        "date": "dátum",
+        "duration": "dĺžka",
+        "earlierDescriptions": "vaše skoršie popisy v spise",
+        "firmGuidelines": "prípadné fakturačné pravidlá vašej kancelárie",
+        "instructions": "vami napísané pokyny",
+        "matter": "spis",
+        "titles": "zaznamenané názvy okien a dokumentov"
+      },
+      "aiDraftProvider": "poskytovateľovi AI, ktorého používa vaša kancelária, alebo poskytovateľovi stella AI",
+      "control": "Nič sa nezaznamenáva, kým nestlačíte Začať zaznamenávať. Kedykoľvek môžete pozastaviť, vylúčiť aplikácie alebo vymazať ktorýkoľvek deň.",
       "never": {
         "audio": "Zvuk z mikrofónu",
         "keystrokes": "Stlačenia klávesov ani písaný text",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Čo sa zaznamenáva",
       "sent": {
-        "aiDrafts": "Návrhy od stella AI, o ktoré po udelení súhlasu požiadate: spis, dátum, trvanie a názvy aplikácií záznamu, názvy jeho okien a dokumentov, ak sa zaznamenávajú, a pokyny, ktoré napíšete. stella k nim pridá vaše skoršie popisy v spise, fakturačný formát klienta a fakturačné pravidlá kancelárie, ak ich používa. Všetko ide k poskytovateľovi AI, ktorého kancelária používa, prípadne k poskytovateľovi stella AI, len kvôli napísaniu návrhu; stella návrh ani to, čo sa kvôli nemu odoslalo, neukladá.",
+        "aiDrafts": "Návrhy od stella AI, o ktoré po udelení súhlasu požiadate. Ku každému stella AI použije: {inputs}. Všetko ide k {provider}, len na napísanie návrhu; stella návrh ani to, čo sa kvôli nemu odoslalo, neukladá.",
         "timeEntries": "Časové záznamy, ktoré vytvoríte: spis, dátum, trvanie, popis, fakturovateľnosť a prípadné fakturačné kódy"
       },
       "sentTitle": "Čo opúšťa tento počítač",
@@ -666,6 +678,7 @@
       "refused": {
         "empty": "Vyplňte obe polia.",
         "lineBreak": "Oprava je jeden riadok textu.",
+        "punctuation": "Vyberte nadiktované slová bez interpunkcie.",
         "same": "Slová sú už napísané takto.",
         "tooLong": "Na jednu opravu je to príliš dlhé.",
         "tooManyWords": "Oprava môže mať najviac tri slová."
@@ -900,6 +913,30 @@
   },
   "onboarding": {
     "activityBody": "Uvidíte, kam sa podel váš pracovný deň, a premeníte ho na koncepty časových záznamov. O tom, čo sa zaznamená a čo sa odošle, rozhodujete vy.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Navrhovať popisy pomocou stella AI",
+        "body": "stella AI môže navrhnúť popis každého časového záznamu. Povoľte to teraz alebo keď budete prvýkrát prechádzať deň.",
+        "withdraw": "Súhlas môžete kedykoľvek odvolať v Nastaveniach."
+      },
+      "calls": {
+        "body": "Započítavajte čas strávený v hovoroch.",
+        "title": "Hovory"
+      },
+      "details": {
+        "appNamesOnly": "Zaznamenávajú sa len názvy aplikácií.",
+        "body": "Pri prechádzaní dňa podľa nich ľahšie rozlíšite jednotlivé spisy.",
+        "browsers": "Prehliadače zaznamenávajú názvy kariet, až keď to povolíte. Aktivita sa na každý prehliadač opýta, keď ho prvýkrát uvidí.",
+        "title": "Názvy okien a dokumentov"
+      },
+      "screens": {
+        "aiDrafts": "Návrhy AI",
+        "calls": "Hovory",
+        "details": "Podrobnosti",
+        "recording": "Prehľad"
+      },
+      "starting": "Spúšťa sa záznam…"
+    },
     "activityStoryDraft": "Koncept",
     "activityStoryRecordTitle": "Zaznamenané",
     "activityStoryReviewCaption": "Prejdete deň a vyberiete spis",
@@ -938,7 +975,6 @@
         "choose": "Mikrofón na diktovanie",
         "title": "Nech vás stella počuje"
       },
-      "progress": "Krok {current} z {total}",
       "screens": {
         "app": "Úprava",
         "context": "Kontext",
@@ -946,7 +982,6 @@
         "transcription": "Prepis",
         "words": "Slová"
       },
-      "skipRest": "Preskočiť zvyšok",
       "transcription": {
         "body": "Neskôr to môžete zmeniť v Nastaveniach.",
         "bodyLocal": "Rečový model beží tu, takže diktovanie funguje aj offline.",
@@ -1016,6 +1051,7 @@
     "permissionsTitlePc": "Nastavte tento počítač",
     "progress": "Krok {current} z {total}",
     "skip": "Preskočiť",
+    "skipRest": "Preskočiť zvyšok",
     "staysLocalMac": "Zostáva v tomto Macu",
     "staysLocalPc": "Zostáva v tomto počítači",
     "tryAgain": "Skúsiť znova",
@@ -1062,7 +1098,6 @@
     "errorUpdateLanguage": "stella desktop nemohol zmeniť jazyk rozhrania.",
     "errorUpdatePreferences": "stella desktop nemohol aktualizovať nastavenia oznámení.",
     "language": "Jazyk",
-    "lastVerified": "Naposledy overené",
     "loadingAccount": "Kontroluje sa pripojenie vášho účtu…",
     "managedOfficeEditing": "Spravované úpravy súborov Office pre aplikáciu stella.",
     "neverRequested": "Nikdy nevyžadované",

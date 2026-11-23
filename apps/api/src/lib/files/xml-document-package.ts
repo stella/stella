@@ -12,7 +12,10 @@ export type DocumentXmlNode = {
   namespaceURI: string;
   attributes: ReadonlyMap<string, string>;
   children: DocumentXmlNode[];
+  /** The element's own text, its runs joined, without its children's. */
   text: string;
+  /** Text runs and child elements in document order, for mixed content. */
+  content: (string | DocumentXmlNode)[];
 };
 
 export type DocumentXmlReader = (
@@ -45,7 +48,7 @@ const unreadableXml = () =>
 
 // The declaration is ASCII-compatible for both legacy encodings. Honor only
 // explicit declarations; malformed UTF-8 must never silently change alphabets.
-const xmlEncoding = (bytes: Uint8Array) => {
+export const xmlEncoding = (bytes: Uint8Array) => {
   if (bytes[0] === 0xff && bytes[1] === 0xfe) {
     return "utf-16le";
   }
@@ -130,10 +133,12 @@ const parseXmlPart = (
       ),
       children: [],
       text: "",
+      content: [],
     };
     const parent = stack.at(-1);
     if (parent) {
       parent.children.push(node);
+      parent.content.push(node);
     } else {
       read.root = node;
     }
@@ -143,6 +148,13 @@ const parseXmlPart = (
     const node = stack.at(-1);
     if (node && !read.failure) {
       node.text += value;
+      const last = node.content.length - 1;
+      const previous = node.content[last];
+      if (typeof previous === "string") {
+        node.content[last] = previous + value;
+      } else {
+        node.content.push(value);
+      }
     }
   };
   parser.on("text", append);

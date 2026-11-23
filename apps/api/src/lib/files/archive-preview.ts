@@ -5,10 +5,10 @@ import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
+import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
 import { classifyFailure } from "@stll/errors";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { declaredMimeMatchesMagic } from "@/api/lib/file-scan/magic";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
@@ -16,11 +16,11 @@ import {
   DOCUMENT_ARCHIVE_MAX_BYTES,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
+  ZIP_ARCHIVE_PREVIEW_MODE,
 } from "@/api/lib/files/archive-preview-protocol";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
-import { EXTRACTION_WORKER_PATH } from "@/api/lib/search/extract-content";
-import { spawnBinaryWorker } from "@/api/lib/subprocess";
-import { PDF_MIME_TYPE } from "@/api/mime-types";
+import { runExtractionBinaryWorker } from "@/api/lib/search/extract-content";
 
 const ARCHIVE_PREVIEW_MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 
@@ -43,7 +43,13 @@ function archivePreviewReader<Schema extends v.GenericSchema>({
   const replySchema = v.pipe(v.string(), v.parseJson(), schema);
   return async (
     source: ScannedFile,
-    expectedMimeType = source.mimeType,
+    {
+      zipNameCodePage,
+      expectedMimeType = source.mimeType,
+    }: {
+      zipNameCodePage: ZipNameCodePage | null;
+      expectedMimeType?: string | undefined;
+    },
   ): Promise<Result<v.InferOutput<Schema>, HandlerError<422 | 500 | 503>>> => {
     const { bytes } = source;
     if (bytes.byteLength > DOCUMENT_ARCHIVE_MAX_BYTES) {
@@ -52,8 +58,8 @@ function archivePreviewReader<Schema extends v.GenericSchema>({
       );
     }
 
-    const result = await spawnBinaryWorker({
-      workerPath: EXTRACTION_WORKER_PATH,
+    const result = await runExtractionBinaryWorker({
+      zipNameCodePage,
       args: [mode, String(LIMITS.extractedContentMaxChars), expectedMimeType],
       stdin: new Blob([bytes]),
       timeoutMs: LIMITS.extractionTimeoutMs,
@@ -96,79 +102,57 @@ function archivePreviewReader<Schema extends v.GenericSchema>({
         );
   };
 }
-export const readAsicPreview = archivePreviewReader({
+
+/**
+ * How a preview that reads the files it holds is run: one of them may be a
+ * ZIP archive, whose names tie in the reading organization's code page.
+ */
+type ArchivePreviewRun = {
+  zipNameCodePage: ZipNameCodePage;
+  expectedMimeType?: string | undefined;
+};
+
+const asicPreview = archivePreviewReader({
   mode: ASIC_PREVIEW_WORKER_MODE,
   schema: asicPreviewSchema,
   label: "ASiC",
 });
-export const readStructuredDocumentPreview = archivePreviewReader({
+export const readAsicPreview = async (
+  source: ScannedFile,
+  run: ArchivePreviewRun,
+) => await asicPreview(source, run);
+
+const structuredDocumentPreview = archivePreviewReader({
   mode: STRUCTURED_DOCUMENT_PREVIEW_MODE,
   schema: structuredDocumentPreviewSchema,
   label: "document",
 });
-export const readSignedDossierPreview = archivePreviewReader({
+/** An OFD or UDF document; its reader opens no ZIP archive's names. */
+export const readStructuredDocumentPreview = async (
+  source: ScannedFile,
+  expectedMimeType?: string,
+) =>
+  await structuredDocumentPreview(source, {
+    zipNameCodePage: null,
+    expectedMimeType,
+  });
+
+const zipArchivePreview = archivePreviewReader({
+  mode: ZIP_ARCHIVE_PREVIEW_MODE,
+  schema: zipArchivePreviewSchema,
+  label: "ZIP archive",
+});
+export const readZipArchivePreview = async (
+  source: ScannedFile,
+  run: ArchivePreviewRun,
+) => await zipArchivePreview(source, run);
+
+const signedDossierPreview = archivePreviewReader({
   mode: SIGNED_DOSSIER_WORKER_MODE.preview,
   schema: signedDossierPreviewSchema,
   label: "signed container",
 });
-
-/** One PDF document of a signed container, scanned like an upload. */
-export const readSignedDossierPdf = async (
+export const readSignedDossierPreview = async (
   source: ScannedFile,
-  document: number,
-): Promise<Result<Uint8Array, HandlerError<422 | 500 | 503>>> => {
-  const { bytes } = source;
-  if (bytes.byteLength > DOCUMENT_ARCHIVE_MAX_BYTES) {
-    return Result.err(
-      unavailable("The signed container exceeds the preview size limit"),
-    );
-  }
-  const result = await spawnBinaryWorker({
-    workerPath: EXTRACTION_WORKER_PATH,
-    args: [
-      SIGNED_DOSSIER_WORKER_MODE.pdf,
-      String(LIMITS.extractedContentMaxChars),
-      source.mimeType,
-      String(document),
-    ],
-    stdin: new Blob([bytes]),
-    timeoutMs: LIMITS.extractionTimeoutMs,
-    // A compressed document can inflate past its container, never past the
-    // archive reader's retained-content budget.
-    maxOutputBytes: DOCUMENT_ARCHIVE_MAX_BYTES,
-  });
-  if (result.isErr()) {
-    const { exitCode } = result.error;
-    if (exitCode === ARCHIVE_PREVIEW_WORKER_EXIT.unreadable) {
-      return Result.err(
-        unavailable(
-          "The signed container has no readable PDF at this position",
-        ),
-      );
-    }
-    if (exitCode === ARCHIVE_PREVIEW_WORKER_EXIT.rejected) {
-      return Result.err(
-        unavailable("An embedded file did not pass the security scan"),
-      );
-    }
-    return Result.err(
-      new HandlerError({
-        status: 503,
-        code: "upstream_unavailable",
-        message: "The signed container reader is unavailable",
-        cause: result.error,
-      }),
-    );
-  }
-  return declaredMimeMatchesMagic(PDF_MIME_TYPE, result.value)
-    ? Result.ok(result.value)
-    : Result.err(
-        classifyFailure(
-          new HandlerError({
-            status: 500,
-            message: "Invalid PDF response from the signed container reader",
-          }),
-          "response_invalid",
-        ),
-      );
-};
+  run: ArchivePreviewRun,
+) => await signedDossierPreview(source, run);

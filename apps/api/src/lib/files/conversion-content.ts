@@ -69,6 +69,10 @@ const EXPECTED_CONTENT = {
   "application/xhtml+xml": ["markup", "text"],
   "image/bmp": ["image"],
   "image/gif": ["image"],
+  "image/heic": ["image"],
+  "image/heic-sequence": ["image"],
+  "image/heif": ["image"],
+  "image/heif-sequence": ["image"],
   "image/jpeg": ["image"],
   "image/png": ["image"],
   "image/tiff": ["image"],
@@ -107,10 +111,37 @@ const IMAGE_SIGNATURES: readonly (readonly number[])[] = [
   [0x4d, 0x4d, 0x00, 0x2a],
 ];
 
+/**
+ * Major brands of the HEIF still image and image sequence files the HEIC
+ * preview reads: HEVC-coded (`heic`, `heix`, `heim`, `heis`, `hevc`, `hevx`,
+ * `hevm`, `hevs`) and the generic structural brands (`mif1`, `mif2`,
+ * `msf1`) phones and cameras also write as the major brand.
+ */
+const HEIF_MAJOR_BRANDS: ReadonlySet<string> = new Set([
+  "heic",
+  "heix",
+  "heim",
+  "heis",
+  "hevc",
+  "hevx",
+  "hevm",
+  "hevs",
+  "mif1",
+  "mif2",
+  "msf1",
+]);
+
+/** An ISO base media file whose first box is `ftyp` with a HEIF major brand. */
+const isHeif = (bytes: Uint8Array): boolean =>
+  startsWithBytes(bytes, ascii("ftyp"), 4) &&
+  bytes.byteLength >= 12 &&
+  HEIF_MAJOR_BRANDS.has(String.fromCodePoint(...bytes.subarray(8, 12)));
+
 const isImage = (bytes: Uint8Array): boolean =>
   IMAGE_SIGNATURES.some((signature) => startsWithBytes(bytes, signature)) ||
   (startsWithBytes(bytes, ascii("RIFF")) &&
-    startsWithBytes(bytes, ascii("WEBP"), 8));
+    startsWithBytes(bytes, ascii("WEBP"), 8)) ||
+  isHeif(bytes);
 
 /** Top-level streams that name what a compound file is, compared uppercase. */
 const COMPOUND_STREAM_CONTENT: ReadonlyMap<string, ConversionContent> = new Map(

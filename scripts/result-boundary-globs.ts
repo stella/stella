@@ -52,6 +52,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/native/**/*.{ts,tsx}",
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
   "apps/mobile/src/app/document/**/*.{ts,tsx}",
+  "apps/mobile/src/app/part/**/*.{ts,tsx}",
   "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
   "apps/outlook/src/components/**/*.{ts,tsx}",
   "apps/outlook/src/i18n/**/*.{ts,tsx}",
@@ -189,6 +190,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/catalogue/**/*.{ts,tsx}",
   "apps/web/src/components/conditions/**/*.{ts,tsx}",
   "apps/web/src/components/entity-views/**/*.{ts,tsx}",
+  "apps/web/src/components/file-parts/**/*.{ts,tsx}",
   "apps/web/src/components/file-tree/**/*.{ts,tsx}",
   "apps/web/src/components/flows/**/*.{ts,tsx}",
   "apps/web/src/components/inbox/**/*.{ts,tsx}",
@@ -347,6 +349,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/account-export/organization-audit-archive.ts",
   "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
+  "apps/api/src/lib/uploads/document-naming/worker.ts",
   "apps/api/src/lib/document-processing-queue.ts",
   "apps/api/src/lib/document-review/run-queue.ts",
   "apps/api/src/lib/document-translation/run-queue.ts",
@@ -447,6 +450,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // this adapter converts that runtime contract to a typed Result.
   "packages/scan-engine/src/scan-engine.ts",
   "packages/scan-engine/src/scan-engine.worker.ts",
+  // A trap in the HEIC decoder's module surfaces as a thrown
+  // WebAssembly.RuntimeError; the adapter turns it into a typed outcome.
+  "packages/heic-decoder/src/heic-decoder.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

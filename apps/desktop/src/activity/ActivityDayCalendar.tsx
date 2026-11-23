@@ -1250,10 +1250,7 @@ const draftAssistView = ({
     return { type: "needsMatter" };
   }
   if (settings.consent !== "granted") {
-    return {
-      pending: settings.consent === "pending-grant",
-      type: "consent",
-    };
+    return { consent: settings.consent, type: "consent" };
   }
   if (status.type === "failed" && status.matterId === edit.matter.id) {
     return { kind: status.kind, type: "failed" };

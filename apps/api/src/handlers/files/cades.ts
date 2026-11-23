@@ -3,10 +3,11 @@ import { Result } from "better-result";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
-import { readCadesPdf, readCadesPreview } from "@/api/lib/files/cades-preview";
-import { readLegalFilePreview } from "@/api/lib/files/read-legal-file-preview";
-import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { secureDocumentResponse } from "@/api/lib/secure-document-response";
+import { readCadesPreview } from "@/api/lib/files/cades-preview";
+import {
+  readingZipNames,
+  readLegalFilePreview,
+} from "@/api/lib/files/read-legal-file-preview";
 
 const config = {
   contract: "patch",
@@ -39,48 +40,10 @@ export const cadesPreviewEndpoint = createSafeHandler(
               recordAuditEvent,
             },
             ["cades"],
-            readCadesPreview,
+            readingZipNames(readCadesPreview),
           ),
       ),
     );
     return Result.ok(yield* result);
-  },
-);
-
-export const cadesContentEndpoint = createSafeHandler(
-  config,
-  async function* ({
-    params: { fieldId },
-    scopedDb,
-    workspaceId,
-    session,
-    recordAuditEvent,
-  }) {
-    const result = yield* Result.await(
-      Result.tryPromise(
-        async () =>
-          await readLegalFilePreview(
-            {
-              fieldId,
-              scopedDb,
-              workspaceId,
-              organizationId: session.activeOrganizationId,
-              recordAuditEvent,
-            },
-            ["cades"],
-            readCadesPdf,
-          ),
-      ),
-    );
-    const bytes = yield* result;
-    return Result.ok(
-      secureDocumentResponse({
-        body: new Uint8Array(bytes),
-        contentType: "application/pdf",
-        contentLength: bytes.byteLength,
-        disposition: "inline",
-        fileName: sanitizeFilename("document.pdf"),
-      }),
-    );
   },
 );

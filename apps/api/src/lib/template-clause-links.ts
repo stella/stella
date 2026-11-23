@@ -1,6 +1,5 @@
 import { panic, Result } from "better-result";
 import { and, eq, or, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
 /** Shared template-clause link operations used by the clause and template slices. */
 import * as v from "valibot";
 
@@ -734,7 +733,7 @@ export const syncAllClausesHandler = async ({
     // One bulk sync is one audit group: the events are recorded together
     // after the loop so they share a single groupId.
     const auditEvents: AuditEvent[] = [];
-    const repointed: SQL[] = [];
+    const repointed: { link_id: string; clause_version_id: string }[] = [];
 
     for (const link of links) {
       if (!isOutdatedLink(link) || !link.clauseId || !link.clause) {
@@ -747,7 +746,7 @@ export const syncAllClausesHandler = async ({
         continue;
       }
 
-      repointed.push(sql`(${link.id}::uuid, ${latestVersion.id}::uuid)`);
+      repointed.push({ link_id: link.id, clause_version_id: latestVersion.id });
 
       auditEvents.push({
         action: AUDIT_ACTION.UPDATE,
@@ -773,8 +772,8 @@ export const syncAllClausesHandler = async ({
       await tx.execute(sql`
         UPDATE ${templateClauses} AS target
            SET clause_version_id = repoint.clause_version_id
-          FROM (VALUES ${sql.join(repointed, sql`, `)})
-               AS repoint(link_id, clause_version_id)
+          FROM jsonb_to_recordset(${JSON.stringify(repointed)}::text::jsonb)
+               AS repoint(link_id uuid, clause_version_id uuid)
          WHERE target.id = repoint.link_id
            AND target.template_id = ${templateId}`);
     }

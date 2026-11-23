@@ -211,6 +211,15 @@
     "creationRateLimited": "Pastaruoju metu sukurta per daug organizacijų. Bandykite dar kartą vėliau.",
     "creationRefused": "Organizacijos sukurti nepavyko. Patikrinkite duomenis ir bandykite dar kartą.",
     "creationSlugConflict": "Šis organizacijos adresas jau naudojamas. Pasirinkite kitą pavadinimą arba adresą.",
+    "documentNaming": {
+      "description": "Pervadina naujai įkeltus failus bylose, kuriose tai įjungta. stella perskaito kiekvieno dokumento datą, rūšį ir pavadinimą ir užpildo šį šabloną. Palikite tuščią, kad liktų pradiniai pavadinimai.",
+      "invalid": "Naudokite tik išvardytas žymas ir jokių simbolių \\ / : * ? \" < > |.",
+      "pattern": "Pavadinimo šablonas",
+      "preview": "Pasirašyta sutartis vadintųsi:",
+      "sampleDocType": "Sutartis",
+      "sampleTitle": "Akcijų pirkimo–pardavimo sutartis",
+      "tokenHelp": "Žymos: '{'date'}', '{'dateCompact'}', '{'matterNumber'}', '{'docType'}', '{'title'}'. Žyma be reikšmės praleidžiama kartu su skyrikliu."
+    },
     "invitations": {
       "cancelConfirmDescription": "Adresu {email} išsiųsta kvietimo nuoroda nebeveiks. Norėdami pakviesti šį asmenį dar kartą, išsiųskite naują kvietimą.",
       "cancelInvitation": "Atšaukti kvietimą",
@@ -685,6 +694,44 @@
         "remove": "Pašalinti duomenų dėžutę {address}",
         "title": "Organizacijos duomenų dėžutės"
       },
+      "dictation": {
+        "addCount": "{count, plural, one {Pridėti # žodį} few {Pridėti # žodžius} many {Pridėti # žodžio} other {Pridėti # žodžių}}",
+        "addLabel": "Pridėti žodį ar pavadinimą",
+        "addMany": "Pridėti kelis",
+        "addedToast": "Pridėta: „{word}“.",
+        "alreadyListedToast": "„{word}“ jau yra sąraše.",
+        "count": "{total, number} iš {max, number}",
+        "deleteSelected": "{count, plural, one {Pašalinti # žodį} few {Pašalinti # žodžius} many {Pašalinti # žodžio} other {Pašalinti # žodžių}}",
+        "deleteSelectedDescription": "Diktavimas nustos juos naudoti visai komandai.",
+        "deleteSelectedInput": "Patvirtinkite įvesdami {number}",
+        "deleteSelectedTitle": "{count, plural, one {Pašalinti # žodį?} few {Pašalinti # žodžius?} many {Pašalinti # žodžio?} other {Pašalinti # žodžių?}}",
+        "deleteWord": "Pašalinti {word}",
+        "deletedToast": "{count, plural, one {Pašalintas # žodis.} few {Pašalinti # žodžiai.} many {Pašalinta # žodžio.} other {Pašalinta # žodžių.}}",
+        "description": "Žodžiai ir pavadinimai, kuriuos visos komandos diktavimas turi rašyti teisingai, pavyzdžiui, klientų pavadinimai ar kita kalba vartojami angliški terminai. stella naudoja tuos, kurių reikia konkrečiam diktavimui, todėl sąrašas gali būti ilgas.",
+        "empty": "Pridėkite žodį aukščiau arba kelis iš sąrašo ar failo.",
+        "export": "Eksportuoti sąrašą",
+        "exportFileName": "diktavimo-zodziai.txt",
+        "full": "Sąrašas pilnas. Pašalinkite žodžių, kad galėtumėte pridėti naujų.",
+        "importHint": "Įklijuokite po vieną žodį eilutėje arba pasirinkite .txt failą su vienu žodžiu eilutėje ar .csv failą, kurio pirmame stulpelyje yra žodžiai.",
+        "importedToast": "{count, plural, one {Pridėtas # žodis.} few {Pridėti # žodžiai.} many {Pridėta # žodžio.} other {Pridėta # žodžių.}}",
+        "invalid": "Žodyje negali būti eilučių lūžių ar valdymo simbolių.",
+        "noMatch": "Joks žodis neatitinka „{search}“.",
+        "pasteLabel": "Pridedami žodžiai",
+        "pastePlaceholder": "Po vieną žodį eilutėje",
+        "review": "Peržiūrėti žodžius",
+        "reviewInvalid": "{count, plural, one {# netinkamas, praleistas} few {# netinkami, praleisti} many {# netinkamo, praleista} other {# netinkamų, praleista}}",
+        "reviewListed": "{count, plural, one {# jau yra sąraše} few {# jau yra sąraše} many {# jau yra sąraše} other {# jau yra sąraše}}",
+        "reviewNew": "{count, plural, one {# naujas žodis} few {# nauji žodžiai} many {# naujo žodžio} other {# naujų žodžių}}",
+        "reviewOverLimit": "Sąraše yra {total, number} žodžių, ir dar telpa {room, number} (daugiausia {max, number}). Pridėkite mažiau žodžių arba pirmiausia pašalinkite kai kuriuos iš sąrašo.",
+        "reviewRepeated": "{count, plural, one {# kartojasi šiame importe} few {# kartojasi šiame importe} many {# kartojasi šiame importe} other {# kartojasi šiame importe}}",
+        "reviewTooLong": "{count, plural, one {# per ilgas, praleistas} few {# per ilgi, praleisti} many {# per ilgo, praleista} other {# per ilgų, praleista}}",
+        "searchPlaceholder": "Ieškoti žodžių",
+        "selectWord": "Pasirinkti {word}",
+        "showMore": "Rodyti daugiau ({shown, number} iš {matching, number})",
+        "title": "Diktavimas",
+        "tooLong": "Šis žodis ilgesnis, nei leidžia diktavimas.",
+        "wordsTitle": "Komandos žodžiai"
+      },
       "documentProcessing": {
         "description": "Automatiškai atpažinkite tekstą nuskenuotuose PDF, kad jų turinį būtų galima ieškoti.",
         "title": "Dokumentų teksto atpažinimas",
@@ -698,7 +745,6 @@
         "reorder": "Keisti dokumento tipo eilės tvarką",
         "title": "Dokumentų tipai"
       },
-      "enterSlug": "Įveskite organizacijos URL identifikatorių.",
       "localRuns": {
         "description": "Daugiausia, ką programavimo agentas gali daryti neklausdamas, kai vykdo pokalbį nario kompiuteryje. Žemesnė riba taikoma nuo kito kiekvieno nario pranešimo; jau vykstantis paleidimas išlaiko savo leidimus.",
         "title": "Programavimo agentai narių kompiuteriuose",
@@ -755,7 +801,6 @@
       },
       "uploadLogo": "Įkelti logotipą",
       "usage": "Naudojimas",
-      "usageCheckoutProviderUnavailable": "Mokėjimo paslaugų teikėjas nepasiekiamas atsiskaityti internetu.",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
       "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos DI funkcijos.",
       "usageEmptyTitle": "Nėra naudojimo teisės",
@@ -772,11 +817,9 @@
       "usageManageError": "Nepavyko atidaryti prieglobos naudojimo valdymo",
       "usageManuallyManaged": "Valdoma rankiniu būdu",
       "usagePacksDescription": "Vienkartiniai vienetų paketai, pridedami prie dabartinio laikotarpio.",
-      "usagePacksRequireActivePlan": "Norėdami įsigyti vienetų paketų, aktyvinkite arba atnaujinkite priglobtą planą.",
       "usagePacksTitle": "Vienetų paketai",
       "usagePlanCheckout": "Pereiti prie apmokėjimo",
       "usagePlanCheckoutError": "Nepavyko pradėti apmokėjimo",
-      "usagePlanCheckoutUnavailable": "Už šį planą negalima sumokėti internetu.",
       "usagePlanPriceMonthTemplate": "{price} / mėnesį",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / vietai / mėnesį",
@@ -798,7 +841,11 @@
         "title": "Dokumentų tikrinimo išvados",
         "unavailable": "Šiai organizacijai nėra prieinamo sprendimų modelio.",
         "updated": "Tikrinimo nustatymas atnaujintas"
-      }
+      },
+      "enterSlug": "Įveskite organizacijos URL identifikatorių.",
+      "usageCheckoutProviderUnavailable": "Mokėjimo paslaugų teikėjas nepasiekiamas atsiskaityti internetu.",
+      "usagePacksRequireActivePlan": "Norėdami įsigyti vienetų paketų, aktyvinkite arba atnaujinkite priglobtą planą.",
+      "usagePlanCheckoutUnavailable": "Už šį planą negalima sumokėti internetu."
     }
   }
 }

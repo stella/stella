@@ -53,6 +53,10 @@ import type { FileTab } from "@/components/inspector/inspector-tabs-store";
 import { MarkdownDraftActions } from "@/components/inspector/markdown-file-viewer";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
 import { resolvePdfSignTarget } from "@/components/inspector/pdf-signing.logic";
+import {
+  fieldUnscannedContent,
+  WithUnscannedContentNotice,
+} from "@/components/inspector/unscanned-content-notice";
 import { useDocxEditorBindings } from "@/components/inspector/use-docx-editor-bindings";
 import { useEmailAttachmentSelection } from "@/components/inspector/use-email-attachment-selection";
 import { useFileTabEntity } from "@/components/inspector/use-file-tab-entity";
@@ -403,28 +407,33 @@ export const FileTabPanel = ({
     pulseChatInputForReview(next, tab.entityId);
   };
 
+  // Content the upload scan could not read is named above the file itself.
   const viewerContent = (
-    <FileTabViewer
-      canUpdateEntity={canUpdateEntity}
-      closeAll={closeAll}
-      desktopEditTarget={desktopEditTarget}
-      display={display}
-      docxEditor={docxEditor}
-      docxInitialScrollTop={docxScrollTopByTab.get(tab.id)}
-      emailAttachments={emailAttachments}
-      entity={entity}
-      handleResetZoom={handleResetZoom}
-      handleWheelZoom={handleWheelZoom}
-      handleZoom={handleZoom}
-      isEditingNativeDocx={isEditingNativeDocx}
-      isZoomOverlayVisible={isPreviewOverlayVisible}
-      markdown={markdown}
-      onPdfColorModeChange={setPDFColorMode}
-      onViewerError={handleViewerError}
-      pdfColorMode={pdfColorMode}
-      peekPdfViewId={peekPdfViewId}
-      tab={tab}
-    />
+    <WithUnscannedContentNotice
+      reasons={fieldUnscannedContent(entity.query.data, tab.id)}
+    >
+      <FileTabViewer
+        canUpdateEntity={canUpdateEntity}
+        closeAll={closeAll}
+        desktopEditTarget={desktopEditTarget}
+        display={display}
+        docxEditor={docxEditor}
+        docxInitialScrollTop={docxScrollTopByTab.get(tab.id)}
+        emailAttachments={emailAttachments}
+        entity={entity}
+        handleResetZoom={handleResetZoom}
+        handleWheelZoom={handleWheelZoom}
+        handleZoom={handleZoom}
+        isEditingNativeDocx={isEditingNativeDocx}
+        isZoomOverlayVisible={isPreviewOverlayVisible}
+        markdown={markdown}
+        onPdfColorModeChange={setPDFColorMode}
+        onViewerError={handleViewerError}
+        pdfColorMode={pdfColorMode}
+        peekPdfViewId={peekPdfViewId}
+        tab={tab}
+      />
+    </WithUnscannedContentNotice>
   );
   const facetContentProps = {
     emailAttachments: isEmailDisplay ? emailAttachments : null,

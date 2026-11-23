@@ -35,6 +35,7 @@ const settings = (status: "enabled" | "hidden" | "undeclared") =>
     deploymentFeatures: { legalLists: false, invoiceLinks: false },
     documentProcessingMode: "off",
     matterNumberPattern: "{year}/{number}",
+    documentNamePattern: null,
     matterNumberPadding: 3,
     matterNumberingEnabled: false,
     practiceJurisdictions: [],

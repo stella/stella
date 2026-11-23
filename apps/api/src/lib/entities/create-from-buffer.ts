@@ -99,8 +99,10 @@ type CreateEntityFromBufferInput = {
   scanWarnings?: string[] | undefined;
   provenance?:
     | {
-        type: "email_attachment";
-        attachmentId: string;
+        /** A part of another stored file, such as an email's attachment. */
+        type: "file_part";
+        /** The part's address, such as `attachment:0`. */
+        part: string;
         sourceEntityId: SafeId<"entity">;
         sourceFieldId: SafeId<"field">;
         sourceWorkspaceId: SafeId<"workspace">;

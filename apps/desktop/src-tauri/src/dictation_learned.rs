@@ -30,7 +30,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::{
   device_preference::DevicePreference,
-  dictation_spelling::LearnedSpelling,
+  dictation_spelling::{LearnedSpelling, phrase_words},
   dictation_words::dictation_namespace,
   http_client::{DesktopHttpClient, HttpClientOptions},
 };
@@ -114,29 +114,39 @@ pub struct LearnedFix {
   pub status: FixStatus,
 }
 
-/// A change made on this computer, as the server takes it. Its id makes a
-/// resent change count once.
+/// A change made on this computer, as the server takes it. Its number, the
+/// next of this computer's, makes a resent change count once: the server
+/// applies only numbers above the highest it applied from this computer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Change {
   /// The speaker said how dictated words are spelled: on at once.
   Taught {
-    id: String,
+    /// 0 for a change an earlier build queued, numbered before it is sent.
+    #[serde(default)]
+    seq: u64,
     from: String,
     to: String,
   },
   /// The speaker switched a fix on or off.
   Switched {
-    id: String,
+    #[serde(default)]
+    seq: u64,
     from: String,
     status: Switch,
   },
 }
 
 impl Change {
-  fn id(&self) -> &str {
+  const fn seq(&self) -> u64 {
     match self {
-      Self::Taught { id, .. } | Self::Switched { id, .. } => id,
+      Self::Taught { seq, .. } | Self::Switched { seq, .. } => *seq,
+    }
+  }
+
+  const fn number(&mut self, number: u64) {
+    match self {
+      Self::Taught { seq, .. } | Self::Switched { seq, .. } => *seq = number,
     }
   }
 }
@@ -151,6 +161,54 @@ struct Stored {
   pending: Vec<Change>,
   /// The speaker deleted what stella learned; the server is told first.
   clear_pending: bool,
+  /// Counts the deletes, so a reply to an earlier one leaves a later one
+  /// waiting.
+  #[serde(default)]
+  clear_count: u64,
+  /// The id this computer's changes go out under, made with its first
+  /// change. Kept in this file with `seq`, so the two are only ever lost
+  /// together: an id kept with a lost count would number new changes the
+  /// server already counted, and it would drop them.
+  #[serde(default)]
+  device: Option<String>,
+  /// The number of the last change made here; the next one is one more.
+  #[serde(default)]
+  seq: u64,
+}
+
+impl Stored {
+  /// Queues `change` as this computer's next.
+  fn queue(&mut self, mut change: Change) {
+    self.number_queued();
+    self.seq += 1;
+    change.number(self.seq);
+    self.pending.push(change);
+    self.with_device();
+  }
+
+  /// Numbers the changes an earlier build queued without a number; true
+  /// when it changed the file.
+  fn number_queued(&mut self) -> bool {
+    let mut numbered = false;
+    for change in &mut self.pending {
+      if change.seq() == 0 {
+        self.seq += 1;
+        change.number(self.seq);
+        numbered = true;
+      }
+    }
+    if !self.pending.is_empty() && self.device.is_none() {
+      self.with_device();
+      numbered = true;
+    }
+    numbered
+  }
+
+  fn with_device(&mut self) {
+    if self.device.is_none() {
+      self.device = Some(uuid::Uuid::new_v4().to_string());
+    }
+  }
 }
 
 /// The server's answer to every learned-fixes request.
@@ -177,6 +235,9 @@ pub enum Refusal {
   TooLong,
   TooManyWords,
   Same,
+  /// Punctuation inside the dictated words, or at their edge without the
+  /// same in how they are written: a fix matches words only.
+  Punctuation,
 }
 
 /// `text` as a fix's side: trimmed, single spaces between its words, within
@@ -198,6 +259,24 @@ pub fn accepted(text: &str) -> Result<String, Refusal> {
     return Err(Refusal::TooLong);
   }
   Ok(joined)
+}
+
+/// `from` → `to` as a fix of dictated words: punctuation at the edges of
+/// `from` comes off both sides when `to` has the same there, so selecting
+/// `Novak,` teaches `Novak` → `Novák`. Other punctuation in `from` could
+/// never match dictated words and is refused.
+fn learnable(from: &str, to: &str) -> Result<(String, String), Refusal> {
+  let (before, words, after) = phrase_words(from).ok_or(Refusal::Punctuation)?;
+  if before.is_empty() && after.is_empty() {
+    return Ok((from.to_string(), to.to_string()));
+  }
+  let written = to
+    .strip_prefix(before)
+    .and_then(|rest| rest.strip_suffix(after))
+    .map(str::trim)
+    .filter(|rest| !rest.is_empty())
+    .ok_or(Refusal::Punctuation)?;
+  Ok((words.trim().to_string(), written.to_string()))
 }
 
 /// How two fixes' dictated words compare: lower case, curly apostrophes
@@ -229,11 +308,10 @@ fn taught(fixes: &[LearnedFix], from: &str, to: &str) -> Vec<LearnedFix> {
     .collect::<Vec<_>>();
   next.push(fix);
   while next.len() > contract().max_fixes {
+    // Only a fix that is on is in use, as in `@stll/transcript`.
     let unused = next
       .iter()
-      .position(|fix| {
-        matches!(fix.status, FixStatus::Learning | FixStatus::Contradicted)
-      })
+      .position(|fix| fix.status != FixStatus::On)
       .unwrap_or(0);
     next.remove(unused);
   }
@@ -289,6 +367,29 @@ fn update<T>(
   apply: impl FnOnce(&mut Stored) -> T,
 ) -> Result<T, String> {
   let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
+  change(namespace, apply)
+}
+
+/// Changes the file of the account `resolve` names, resolving it under the
+/// files lock: a disconnect that erased the files first leaves no account,
+/// so a change arriving after it never recreates a file. `None` without an
+/// account.
+fn update_resolved<T>(
+  resolve: impl FnOnce() -> Option<String>,
+  apply: impl FnOnce(&mut Stored) -> T,
+) -> Result<Option<T>, String> {
+  let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
+  let Some(namespace) = resolve() else {
+    return Ok(None);
+  };
+  change(&namespace, apply).map(Some)
+}
+
+/// Reads, changes and writes the file; the caller holds the files lock.
+fn change<T>(
+  namespace: &str,
+  apply: impl FnOnce(&mut Stored) -> T,
+) -> Result<T, String> {
   let mut stored = read(namespace)?;
   let value = apply(&mut stored);
   write(namespace, &stored)?;
@@ -302,23 +403,31 @@ fn changed(app: &AppHandle) {
 }
 
 /// The fixes that are on for the account dictation runs for, as the
-/// spelling pass takes them; none without an account or a readable file.
-pub fn on_fixes(app: &AppHandle) -> Vec<LearnedFix> {
-  dictation_namespace(app)
-    .and_then(|namespace| read(&namespace).ok())
-    .map(|stored| {
-      stored
-        .fixes
-        .into_iter()
-        .filter(|fix| fix.status == FixStatus::On)
-        .collect()
-    })
-    .unwrap_or_default()
+/// spelling pass takes them: none without an account, an error when the
+/// file cannot be read.
+fn on_fixes(app: &AppHandle) -> Result<Vec<LearnedFix>, String> {
+  let Some(namespace) = dictation_namespace(app) else {
+    return Ok(Vec::new());
+  };
+  Ok(
+    read(&namespace)?
+      .fixes
+      .into_iter()
+      .filter(|fix| fix.status == FixStatus::On)
+      .collect(),
+  )
 }
 
-/// `text` with every fix that is on applied.
+/// `text` with every fix that is on applied. A file that cannot be read
+/// leaves the text as dictated and says so in the log, never what it holds.
 pub fn apply(app: &AppHandle, text: &str) -> String {
-  let fixes = on_fixes(app);
+  let fixes = match on_fixes(app) {
+    Ok(fixes) => fixes,
+    Err(error) => {
+      tracing::warn!(%error, "learned dictation fixes not applied");
+      return text.to_string();
+    }
+  };
   let spellings = fixes
     .iter()
     .map(|fix| LearnedSpelling {
@@ -333,19 +442,19 @@ pub fn apply(app: &AppHandle, text: &str) -> String {
 pub fn teach(app: &AppHandle, from: &str, to: &str) -> Result<(), TeachFailure> {
   let from = accepted(from).map_err(TeachFailure::Refused)?;
   let to = accepted(to).map_err(TeachFailure::Refused)?;
+  let (from, to) = learnable(&from, &to).map_err(TeachFailure::Refused)?;
   if from == to {
     return Err(TeachFailure::Refused(Refusal::Same));
   }
-  let namespace = dictation_namespace(app).ok_or(TeachFailure::NotSaved)?;
-  update(&namespace, |stored| {
-    stored.fixes = taught(&stored.fixes, &from, &to);
-    stored.pending.push(Change::Taught {
-      id: uuid::Uuid::new_v4().to_string(),
-      from,
-      to,
-    });
-  })
-  .map_err(|_error| TeachFailure::NotSaved)?;
+  update_resolved(
+    || dictation_namespace(app),
+    |stored| {
+      stored.fixes = taught(&stored.fixes, &from, &to);
+      stored.queue(Change::Taught { seq: 0, from, to });
+    },
+  )
+  .map_err(|_error| TeachFailure::NotSaved)?
+  .ok_or(TeachFailure::NotSaved)?;
   changed(app);
   sync_soon(app);
   Ok(())
@@ -359,12 +468,36 @@ pub enum TeachFailure {
   NotSaved,
 }
 
-/// Forgets the account's fixes on this computer, as it disconnects: the
-/// server keeps the speaker's list for their other devices.
-pub fn erase_account(namespace: &str) {
+/// Forgets every account's fixes on this computer, as the account
+/// disconnects: the server keeps the speaker's list for their other devices.
+/// Files of an account that expired before are erased too, since its
+/// namespace is no longer known.
+pub fn erase_all() {
   let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
-  if let Err(error) = preference(namespace).remove() {
-    tracing::warn!(%error, "learned dictation fixes were not erased");
+  let Some(directory) =
+    dirs::data_dir().map(|data| data.join(crate::config::APP_DATA_DIR_NAME))
+  else {
+    return;
+  };
+  let entries = match std::fs::read_dir(&directory) {
+    Ok(entries) => entries,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
+    Err(error) => {
+      tracing::warn!(%error, "learned dictation fixes were not erased");
+      return;
+    }
+  };
+  for entry in entries.flatten() {
+    let name = entry.file_name();
+    let Some(name) = name.to_str() else {
+      continue;
+    };
+    if !name.starts_with(FILE_PREFIX) {
+      continue;
+    }
+    if let Err(error) = DevicePreference::in_app_data(name).remove() {
+      tracing::warn!(%error, "learned dictation fixes were not erased");
+    }
   }
 }
 
@@ -386,8 +519,8 @@ pub fn dictation_learned_switch(
   let namespace = dictation_namespace(&app).ok_or(NO_ACCOUNT)?;
   let fixes = update(&namespace, |stored| {
     stored.fixes = switched(&stored.fixes, &from, status);
-    stored.pending.push(Change::Switched {
-      id: uuid::Uuid::new_v4().to_string(),
+    stored.queue(Change::Switched {
+      seq: 0,
       from,
       status,
     });
@@ -405,14 +538,19 @@ pub fn dictation_learned_delete(app: AppHandle) -> Result<LearnedView, String> {
   let namespace = dictation_namespace(&app).ok_or(NO_ACCOUNT)?;
   {
     let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
-    let generation = read(&namespace).map_or(0, |stored| stored.generation);
+    // The count goes on: the server knows this computer's earlier numbers.
+    // A file that cannot be read starts again under a new id.
+    let kept = read(&namespace).unwrap_or_default();
     write(
       &namespace,
       &Stored {
-        generation,
+        generation: kept.generation,
         fixes: Vec::new(),
         pending: Vec::new(),
         clear_pending: true,
+        clear_count: kept.clear_count.wrapping_add(1),
+        device: kept.device,
+        seq: kept.seq,
       },
     )?;
   }
@@ -461,6 +599,9 @@ async fn sync(app: &AppHandle) {
       }
     }
   }
+  // The rounds ran out with changes still waiting: the rest goes in a sync
+  // of its own rather than waiting for the next change.
+  sync_soon(app);
 }
 
 enum Round {
@@ -477,62 +618,118 @@ enum Stop {
 
 /// What one request does, decided from the file.
 enum Request {
-  Clear,
+  /// The delete with this count, of this generation: a later delete stays
+  /// waiting, and a resent one leaves what was learned after it.
+  Clear {
+    count: u64,
+    generation: u64,
+  },
   Send {
     generation: u64,
+    device: String,
     changes: Vec<Change>,
   },
-  Read,
+  Read {
+    generation: u64,
+  },
 }
 
 async fn sync_round(app: &AppHandle, namespace: &str) -> Result<Round, Stop> {
   let request = {
     let _files = FILES.lock().unwrap_or_else(|error| error.into_inner());
-    let stored = read(namespace).map_err(|_error| Stop::Failed)?;
-    if stored.clear_pending {
-      Request::Clear
-    } else if stored.pending.is_empty() {
-      Request::Read
-    } else {
-      Request::Send {
-        generation: stored.generation,
-        changes: stored
-          .pending
-          .iter()
-          .take(contract().max_changes_per_request)
-          .cloned()
-          .collect(),
-      }
+    let mut stored = read(namespace).map_err(|_error| Stop::Failed)?;
+    // Changes an earlier build queued are numbered and written back before
+    // they go out, so a resend carries the same numbers. Otherwise nothing
+    // is written: a file Disconnect erased stays erased.
+    if stored.number_queued() {
+      write(namespace, &stored).map_err(|_error| Stop::Failed)?;
     }
+    request_for(&stored)
   };
-  let reply = send(app, namespace, &request).await?;
-  let again = update(namespace, |stored| {
-    match &request {
-      Request::Clear => stored.clear_pending = false,
-      Request::Send { changes, .. } => {
-        stored
-          .pending
-          .retain(|change| changes.iter().all(|sent| sent.id() != change.id()));
-      }
-      Request::Read => {}
-    }
-    stored.generation = reply.generation;
-    let settled = stored.pending.is_empty() && !stored.clear_pending;
-    if settled {
-      stored.fixes = reply.fixes;
-    }
-    !settled
-  })
-  .map_err(|_error| Stop::Failed)?;
+  // The account lease is held until the reply is written, so Disconnect
+  // cannot erase the file while the reply is read and then see it written
+  // back.
+  let (reply, account) = send(app, namespace, &request).await?;
+  let again = update(namespace, |stored| settle(stored, &request, reply))
+    .map_err(|_error| Stop::Failed)?;
+  drop(account);
   changed(app);
   Ok(if again { Round::Again } else { Round::Done })
 }
 
+/// The request for what the file holds.
+fn request_for(stored: &Stored) -> Request {
+  if stored.clear_pending {
+    return Request::Clear {
+      count: stored.clear_count,
+      generation: stored.generation,
+    };
+  }
+  let device = stored
+    .device
+    .as_ref()
+    .filter(|_device| !stored.pending.is_empty());
+  if let Some(device) = device {
+    Request::Send {
+      generation: stored.generation,
+      device: device.clone(),
+      changes: stored
+        .pending
+        .iter()
+        .take(contract().max_changes_per_request)
+        .cloned()
+        .collect(),
+    }
+  } else {
+    Request::Read {
+      generation: stored.generation,
+    }
+  }
+}
+
+/// `stored` after the server answered `request`: what it took no longer
+/// waits, and its list replaces the one here once nothing waits. True while
+/// something still waits.
+fn settle(stored: &mut Stored, request: &Request, reply: Snapshot) -> bool {
+  match request {
+    Request::Clear { count, .. } => {
+      if stored.clear_count == *count {
+        stored.clear_pending = false;
+      }
+    }
+    // Deleted here while the request was out: the delete goes first, and
+    // this answer is not taken.
+    Request::Send { .. } | Request::Read { .. } if stored.clear_pending => {
+      return true;
+    }
+    // Deleted on another device: what was learned here before it went with
+    // it, also what was learned while the request was out.
+    Request::Send { generation, .. } | Request::Read { generation }
+      if reply.generation != *generation =>
+    {
+      stored.pending.clear();
+    }
+    Request::Send { changes, .. } => {
+      let sent = changes.last().map_or(0, Change::seq);
+      stored.pending.retain(|change| change.seq() > sent);
+    }
+    Request::Read { .. } => {}
+  }
+  stored.generation = reply.generation;
+  let settled = stored.pending.is_empty() && !stored.clear_pending;
+  if settled {
+    stored.fixes = reply.fixes;
+  }
+  !settled
+}
+
+/// The server's answer, and the account request whose lease the caller holds
+/// until the answer is written.
 async fn send(
   app: &AppHandle,
   namespace: &str,
   request: &Request,
-) -> Result<Snapshot, Stop> {
+) -> Result<(Snapshot, crate::account::AccountRequest), Stop> {
   let account = crate::dictation_cleanup::dictation_account(app)
     .await
     .map_err(|_error| Stop::Failed)?;
@@ -546,15 +743,19 @@ async fn send(
   .map_err(|_error| Stop::Failed)?;
   let url = format!("{}{}", account.api_base_url, contract().path);
   let builder = match request {
-    Request::Clear => client.delete(url),
+    Request::Clear { generation, .. } => {
+      client.delete(format!("{url}?generation={generation}"))
+    }
     Request::Send {
       generation,
+      device,
       changes,
     } => client.post(url).json(&serde_json::json!({
       "generation": generation,
+      "device": device,
       "changes": changes,
     })),
-    Request::Read => client.get(url),
+    Request::Read { .. } => client.get(url),
   };
   let signed = crate::http_client::device_proof_request(
     builder,
@@ -564,7 +765,6 @@ async fn send(
   )
   .map_err(|_error| Stop::Failed)?;
   let response = signed.send().await.map_err(|_error| Stop::Failed)?;
-  drop(account);
   let status = response.status();
   if status == reqwest::StatusCode::NOT_FOUND {
     return Err(Stop::OlderServer);
@@ -578,12 +778,30 @@ async fn send(
     return Err(Stop::Failed);
   }
   // A serde error is never logged: it can quote a fix.
-  serde_json::from_slice(&bytes).map_err(|_error| Stop::Failed)
+  let snapshot: Snapshot =
+    serde_json::from_slice(&bytes).map_err(|_error| Stop::Failed)?;
+  Ok((snapshot, account))
 }
 
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn a_change_resolves_its_account_under_the_files_lock() {
+    let mut applied = false;
+    let changed = update_resolved(
+      || {
+        // A disconnect erases under the same lock, so it cannot run between
+        // this lookup and the write.
+        assert!(FILES.try_lock().is_err()); // kit-allow: asserts the lookup runs under the process-global files lock
+        None
+      },
+      |_stored| applied = true,
+    );
+    assert_eq!(changed, Ok(None));
+    assert!(!applied);
+  }
 
   fn fix(from: &str, to: &str, status: FixStatus) -> LearnedFix {
     LearnedFix {
@@ -592,6 +810,177 @@ mod tests {
       seen: 1,
       status,
     }
+  }
+
+  #[test]
+  fn edge_punctuation_comes_off_both_sides_and_other_punctuation_is_refused() {
+    assert_eq!(
+      learnable("Novak,", "Novák,"),
+      Ok(("Novak".to_string(), "Novák".to_string()))
+    );
+    assert_eq!(
+      learnable("jon smith", "Jon Smyth"),
+      Ok(("jon smith".to_string(), "Jon Smyth".to_string()))
+    );
+    assert_eq!(learnable("C++", "Rust"), Err(Refusal::Punctuation));
+    assert_eq!(learnable("Novak,", "Novák"), Err(Refusal::Punctuation));
+    assert_eq!(
+      learnable("St. John", "Saint John"),
+      Err(Refusal::Punctuation)
+    );
+  }
+
+  #[test]
+  fn a_reply_to_an_earlier_delete_leaves_a_later_one_waiting() {
+    let mut stored = Stored {
+      generation: 1,
+      clear_pending: true,
+      clear_count: 2,
+      ..Stored::default()
+    };
+    let reply = || Snapshot {
+      generation: 2,
+      fixes: vec![fix("kept", "Kept", FixStatus::On)],
+    };
+    let clear = |count| Request::Clear {
+      count,
+      generation: 1,
+    };
+    assert!(settle(&mut stored, &clear(1), reply()));
+    assert!(stored.clear_pending);
+    assert!(stored.fixes.is_empty());
+    assert!(!settle(&mut stored, &clear(2), reply()));
+    assert!(!stored.clear_pending);
+    assert_eq!(stored.fixes, vec![fix("kept", "Kept", FixStatus::On)]);
+  }
+
+  fn taught_change(from: &str) -> Change {
+    Change::Taught {
+      seq: 0,
+      from: from.to_string(),
+      to: from.to_uppercase(),
+    }
+  }
+
+  #[test]
+  fn changes_are_numbered_in_turn_under_one_id_that_a_delete_keeps() {
+    let mut stored = Stored::default();
+    stored.queue(taught_change("one"));
+    stored.queue(taught_change("two"));
+    let numbers = stored.pending.iter().map(Change::seq).collect::<Vec<_>>();
+    assert_eq!(numbers, vec![1, 2]);
+    let device = stored.device.clone();
+    assert!(device.is_some());
+    // What a delete writes keeps the id and the count.
+    let mut deleted = Stored {
+      clear_pending: true,
+      device: stored.device.clone(),
+      seq: stored.seq,
+      ..Stored::default()
+    };
+    deleted.queue(taught_change("three"));
+    assert_eq!(deleted.pending.first().map(Change::seq), Some(3));
+    assert_eq!(deleted.device, device);
+  }
+
+  #[test]
+  fn an_answer_takes_the_changes_sent_and_leaves_the_ones_made_since() {
+    let mut stored = Stored::default();
+    stored.queue(taught_change("one"));
+    stored.queue(taught_change("two"));
+    let Request::Send {
+      generation,
+      device,
+      changes,
+    } = request_for(&stored)
+    else {
+      panic!("changes wait, so they are sent");
+    };
+    stored.queue(taught_change("three"));
+    let request = Request::Send {
+      generation,
+      device,
+      changes,
+    };
+    let reply = Snapshot {
+      generation: 0,
+      fixes: Vec::new(),
+    };
+    assert!(settle(&mut stored, &request, reply));
+    let numbers = stored.pending.iter().map(Change::seq).collect::<Vec<_>>();
+    assert_eq!(numbers, vec![3]);
+  }
+
+  #[test]
+  fn a_read_that_finds_another_devices_delete_drops_what_waits() {
+    let mut stored = Stored {
+      generation: 3,
+      ..Stored::default()
+    };
+    let request = request_for(&stored);
+    assert!(matches!(request, Request::Read { generation: 3 }));
+    // Learned here while the read was out, before the delete it finds.
+    stored.queue(taught_change("late"));
+    let reply = Snapshot {
+      generation: 4,
+      fixes: Vec::new(),
+    };
+    assert!(!settle(&mut stored, &request, reply));
+    assert!(stored.pending.is_empty());
+    assert_eq!(stored.generation, 4);
+  }
+
+  #[test]
+  fn a_delete_made_while_a_request_was_out_goes_first() {
+    let mut stored = Stored::default();
+    stored.queue(taught_change("one"));
+    let request = request_for(&stored);
+    stored.pending.clear();
+    stored.clear_pending = true;
+    stored.queue(taught_change("after"));
+    let reply = Snapshot {
+      generation: 0,
+      fixes: vec![fix("one", "ONE", FixStatus::On)],
+    };
+    assert!(settle(&mut stored, &request, reply));
+    assert!(stored.clear_pending);
+    assert!(stored.fixes.is_empty());
+    assert_eq!(stored.pending.len(), 1);
+    assert!(matches!(
+      request_for(&stored),
+      Request::Clear { generation: 0, .. }
+    ));
+  }
+
+  #[test]
+  fn changes_an_earlier_build_queued_by_id_are_numbered_once() {
+    let mut stored: Stored = serde_json::from_value(serde_json::json!({
+      "generation": 0,
+      "fixes": [],
+      "pending": [
+        {"type": "taught", "id": "id-1", "from": "novak", "to": "Novák"},
+        {"type": "switched", "id": "id-2", "from": "novak", "status": "off"},
+      ],
+      "clearPending": false,
+    }))
+    .unwrap();
+    assert!(stored.number_queued());
+    let numbers = stored.pending.iter().map(Change::seq).collect::<Vec<_>>();
+    assert_eq!(numbers, vec![1, 2]);
+    assert!(stored.device.is_some());
+    assert!(!stored.number_queued());
+  }
+
+  #[test]
+  fn a_stored_file_without_a_delete_count_reads() {
+    let stored: Stored = serde_json::from_value(serde_json::json!({
+      "generation": 3,
+      "fixes": [],
+      "pending": [],
+      "clearPending": false,
+    }))
+    .unwrap();
+    assert_eq!(stored.clear_count, 0);
   }
 
   #[test]
@@ -636,9 +1025,12 @@ mod tests {
       .map(|index| fix(&format!("word{index}"), "Word", FixStatus::On))
       .collect::<Vec<_>>();
     fixes[3].status = FixStatus::Learning;
+    fixes[1].status = FixStatus::Off;
     let next = taught(&fixes, "fresh", "Fresh");
     assert_eq!(next.len(), contract().max_fixes);
-    assert!(next.iter().all(|each| each.from != "word3"));
+    // A fix switched off is unused too, and the older one goes.
+    assert!(next.iter().all(|each| each.from != "word1"));
+    assert!(next.iter().any(|each| each.from == "word3"));
     assert_eq!(next.last().map(|each| each.from.as_str()), Some("fresh"));
   }
 
@@ -655,22 +1047,22 @@ mod tests {
   #[test]
   fn changes_go_out_in_the_contract_shape() {
     let taught = Change::Taught {
-      id: "id-1".to_string(),
+      seq: 1,
       from: "novak".to_string(),
       to: "Novák".to_string(),
     };
     assert_eq!(
       serde_json::to_value(&taught).unwrap(),
-      serde_json::json!({"type": "taught", "id": "id-1", "from": "novak", "to": "Novák"})
+      serde_json::json!({"type": "taught", "seq": 1, "from": "novak", "to": "Novák"})
     );
     let switched = Change::Switched {
-      id: "id-2".to_string(),
+      seq: 2,
       from: "novak".to_string(),
       status: Switch::Off,
     };
     assert_eq!(
       serde_json::to_value(&switched).unwrap(),
-      serde_json::json!({"type": "switched", "id": "id-2", "from": "novak", "status": "off"})
+      serde_json::json!({"type": "switched", "seq": 2, "from": "novak", "status": "off"})
     );
   }
 
