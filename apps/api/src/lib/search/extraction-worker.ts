@@ -38,7 +38,6 @@ import {
 import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
-  XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 import type {
   PreviewText,
@@ -47,6 +46,7 @@ import type {
 import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import { DATA_BOX_PREVIEW_MODE } from "@/api/lib/email/correspondence/data-box/preview-contract";
@@ -60,6 +60,7 @@ import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
   ASIC_PREVIEW_WORKER_MODE,
+  MAILBOX_TEXT_WORKER_MODE,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
   ZIP_ARCHIVE_PREVIEW_MODE,
@@ -79,7 +80,11 @@ import {
   E_INVOICE_WORKER_EXIT,
   E_INVOICE_WORKER_MODE,
 } from "@/api/lib/files/e-invoice-protocol";
-import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+import {
+  eInvoiceDocumentText,
+  XML_DOCUMENT_TEXT_OVERHEAD,
+  xmlDocumentPreviewText,
+} from "@/api/lib/files/e-invoice-text";
 import {
   extractEInvoicePreview,
   listEInvoiceParts,
@@ -103,6 +108,11 @@ import {
   listEmbeddedParts,
 } from "@/api/lib/files/embedded-part-worker";
 import { XML_EMBEDDED_MIME_TYPE } from "@/api/lib/files/embedded-payload-format";
+import {
+  readMailboxBytesText,
+  readMailboxText,
+} from "@/api/lib/files/mailbox-text";
+import type { MboxParseError } from "@/api/lib/files/mbox";
 import type { P7mParseError } from "@/api/lib/files/p7m";
 import { partMediaType } from "@/api/lib/files/part-media-type";
 import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
@@ -111,6 +121,7 @@ import { extractSignedDossierPreview } from "@/api/lib/files/signed-dossier-work
 import { extractStructuredDocument } from "@/api/lib/files/structured-document-worker";
 import { extractZipArchivePreview } from "@/api/lib/files/zip-archive-preview";
 import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
+import { readWorkerZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import {
@@ -146,6 +157,12 @@ import {
   XLSB_MIME_TYPE,
   XLSX_MIME_TYPE,
 } from "@/api/mime-types";
+
+/**
+ * The code page this run reads ZIP names that tie in, for every archive it
+ * opens at any depth: one run reads one organization's file.
+ */
+const ZIP_NAME_CODE_PAGE = readWorkerZipNameCodePage();
 
 const EMAIL_ATTACHMENT_MAX_COUNT = 25;
 const EMAIL_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
@@ -222,9 +239,17 @@ const extractOfficeDocumentMarkdown = async (
 ): Promise<string> =>
   normalizeExtractedText(await toMarkdownBytes(Buffer.from(fileBytes)));
 
-const extractDirectText = (fileBytes: Uint8Array, mimeType: string): string => {
-  const text = new TextDecoder().decode(fileBytes);
-  if (normalizeMimeType(mimeType) !== "text/html") {
+/**
+ * A text file's text, read in the charset its `contentType` (parameters
+ * included) or its own bytes declare, or in the one it was most likely saved
+ * in when nothing does.
+ */
+const extractDirectText = (
+  fileBytes: Uint8Array,
+  contentType: string,
+): string => {
+  const { text } = decodeDeclared(fileBytes, { contentType });
+  if (normalizeMimeType(contentType) !== "text/html") {
     return normalizeExtractedText(text);
   }
 
@@ -365,6 +390,7 @@ type LegalTextReadOptions = {
 type LegalTextReadError =
   | AsicParseError
   | DocumentPackageError
+  | MboxParseError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -458,25 +484,23 @@ const extractAsicText = async ({
   return Result.ok(asicDocumentText(preview.value));
 };
 
-// Only an invoice is read from an XML file; any other XML, readable or not,
-// keeps having no extracted text, as before it had a reader.
+// Search and AI read the same text the Files preview shows: the invoice, or
+// an XML file's own indented text.
 const extractEInvoiceText = async ({
   fileBytes,
   mimeType,
+  maxChars,
 }: LegalTextReadOptions): Promise<
   Result<string | null, LegalTextReadError | EmailParseError>
 > => {
-  const preview = await extractEInvoicePreview({ fileBytes, mimeType });
-  if (
-    preview.isErr() &&
-    preview.error._tag === "DocumentPackageError" &&
-    mimeType === XML_FILE_FORMAT.mimeType
-  ) {
-    return Result.ok(null);
-  }
-  return preview.map((value) =>
-    value === null ? null : eInvoiceDocumentText(value),
-  );
+  // An XML file's text is budgeted with its heading and truncation notice,
+  // so the extraction's final cut at `maxChars` keeps the notice.
+  const preview = await extractEInvoicePreview({
+    fileBytes,
+    mimeType,
+    maxChars: Math.max(0, maxChars - XML_DOCUMENT_TEXT_OVERHEAD),
+  });
+  return preview.map(xmlDocumentPreviewText);
 };
 
 const extractSignedDossierText = async ({
@@ -503,9 +527,22 @@ const extractZipText = async ({
     fileBytes,
     maxChars,
     readText: extractEmbeddedPayloadText,
+    nameCodePage: ZIP_NAME_CODE_PAGE,
   });
   return preview.map(({ files }) => zipArchiveText({ files, maxChars }));
 };
+
+const extractMailboxText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> =>
+  await readMailboxBytesText({
+    bytes: fileBytes,
+    maxChars,
+    mailboxName: "mailbox",
+  });
 
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
@@ -526,6 +563,7 @@ const LEGAL_TEXT_READERS = {
   isdocx: extractEInvoiceText,
   xml: extractEInvoiceText,
   zip: extractZipText,
+  mbox: extractMailboxText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -568,7 +606,7 @@ const extract = async ({
   } else if (isOfficeDocumentMimeType(normalizedMimeType)) {
     text = await extractOfficeDocumentMarkdown(fileBytes);
   } else if (isDirectTextMimeType(normalizedMimeType)) {
-    text = extractDirectText(fileBytes, normalizedMimeType);
+    text = extractDirectText(fileBytes, mimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
     return await extractEmailPlaintext({
       fileBytes,
@@ -855,6 +893,7 @@ const writeAsicPreview = async (options: {
 const writeEInvoicePreview = async (options: {
   fileBytes: Uint8Array;
   mimeType: string;
+  maxChars: number;
 }) => {
   const preview = await extractEInvoicePreview(options);
   if (preview.isErr()) {
@@ -867,9 +906,6 @@ const writeEInvoicePreview = async (options: {
       case "FileScanFailedError":
         return Result.err(preview.error);
     }
-  }
-  if (preview.value === null) {
-    return Result.ok(E_INVOICE_WORKER_EXIT.notInvoice);
   }
   await writeWorkerStdout(JSON.stringify(preview.value));
   return Result.ok(0);
@@ -908,6 +944,7 @@ const embeddedPartExit = (error: EmbeddedPartError) => {
     case "DataBoxMessageParseError":
     case "DocumentPackageError":
     case "EmailParseError":
+    case "MboxParseError":
     case "P7mParseError":
     case "SignedDossierParseError":
       return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
@@ -934,7 +971,11 @@ const writeEmbeddedPart = async (options: EmbeddedPartRequest) => {
   if (part === null) {
     return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
   }
-  const read = await extractEmbeddedPart({ ...options, part });
+  const read = await extractEmbeddedPart({
+    ...options,
+    part,
+    zipNameCodePage: ZIP_NAME_CODE_PAGE,
+  });
   if (read.isErr()) {
     return embeddedPartExit(read.error);
   }
@@ -946,11 +987,16 @@ const writeEmbeddedPart = async (options: EmbeddedPartRequest) => {
 };
 
 const writeEmbeddedPartList = async (options: EmbeddedPartRequest) => {
-  const part = parseFilePartId(options.partId);
-  if (part === null) {
+  // No part lists the file's own parts, as for a mailbox's message.
+  const part = options.partId === "" ? null : parseFilePartId(options.partId);
+  if (part === null && options.partId !== "") {
     return Result.ok(EMBEDDED_PART_WORKER_EXIT.noPart);
   }
-  const listed = await listEmbeddedParts({ ...options, part });
+  const listed = await listEmbeddedParts({
+    ...options,
+    part,
+    zipNameCodePage: ZIP_NAME_CODE_PAGE,
+  });
   if (listed.isErr()) {
     return embeddedPartExit(listed.error);
   }
@@ -968,6 +1014,7 @@ const writeZipArchivePreview = async (options: {
   const preview = await extractZipArchivePreview({
     ...options,
     readText: extractEmbeddedPayloadText,
+    nameCodePage: ZIP_NAME_CODE_PAGE,
   });
   if (preview.isErr()) {
     switch (preview.error._tag) {
@@ -995,9 +1042,29 @@ function exitWithWorkerError(error: unknown): never {
 
 // ── Main ──────────────────────────────────────────────────
 
+/**
+ * A mailbox's text, read as its bytes stream in, one message at a time:
+ * the mailbox is never held whole.
+ */
+const writeMailboxText = async (maxChars: number) => {
+  const text = await readMailboxText({
+    chunks: Bun.stdin.stream(),
+    maxChars,
+    mailboxName: process.argv[4] ?? "",
+  });
+  if (text.isErr()) {
+    return ARCHIVE_PREVIEW_WORKER_EXIT.unreadable;
+  }
+  await writeWorkerStdout(text.value);
+  return 0;
+};
+
 try {
   const mimeType = process.argv[2] ?? "";
   const maxChars = readMaxCharsArgument(process.argv[3]);
+  if (mimeType === MAILBOX_TEXT_WORKER_MODE) {
+    process.exit(await writeMailboxText(maxChars));
+  }
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   if (mimeType === DATA_BOX_PREVIEW_MODE) {
     await writeWorkerStdout(
@@ -1032,6 +1099,7 @@ try {
     const written = await writeEInvoicePreview({
       fileBytes,
       mimeType: process.argv[4] ?? "",
+      maxChars,
     });
     if (written.isErr()) {
       exitWithWorkerError(written.error);

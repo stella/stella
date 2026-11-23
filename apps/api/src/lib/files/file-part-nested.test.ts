@@ -11,6 +11,11 @@ import {
 import { ZIP_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 
 import { listEmbeddedParts } from "@/api/lib/files/embedded-part-worker";
+import {
+  mailMessage,
+  MATTER_CORRESPONDENCE,
+  writeMbox,
+} from "@/api/tests/fixtures/mbox";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
 import { zfoFile } from "@/api/tests/fixtures/zfo";
 import { makeZipArchive } from "@/api/tests/fixtures/zip-archive";
@@ -94,6 +99,7 @@ const listOf = async (fileBytes: Uint8Array, part: FilePart) =>
       fileBytes,
       containerMimeType: ZIP_FILE_FORMAT.mimeType,
       containerName: "podklady-ke-sporu.zip",
+      zipNameCodePage: "ibm437",
       part,
     })
   ).unwrap();
@@ -122,7 +128,7 @@ describe("a part that is itself a container", () => {
         if (part === null) {
           continue;
         }
-        const read = (await readPartOfFile(source, part)).unwrap();
+        const read = (await readPartOfFile(source, part, "ibm437")).unwrap();
         expect(descriptor).toEqual({
           part: descriptor.part,
           fileName: read.fileName,
@@ -138,17 +144,25 @@ describe("a part that is itself a container", () => {
     expect(await listOf(bytes, member(4))).toBeNull();
     expect(await listOf(bytes, member(9))).toBeNull();
     const source = stored(bytes, "podklady-ke-sporu.zip", "application/zip");
-    const past = await readPartOfFile(source, {
-      kind: FILE_PART_KINDS.attachment,
-      index: 1,
-      within: member(0),
-    });
+    const past = await readPartOfFile(
+      source,
+      {
+        kind: FILE_PART_KINDS.attachment,
+        index: 1,
+        within: member(0),
+      },
+      "ibm437",
+    );
     expect(past.isErr() && past.error.status).toBe(404);
-    const wrongKind = await readPartOfFile(source, {
-      kind: FILE_PART_KINDS.attachment,
-      index: 0,
-      within: member(1),
-    });
+    const wrongKind = await readPartOfFile(
+      source,
+      {
+        kind: FILE_PART_KINDS.attachment,
+        index: 0,
+        within: member(1),
+      },
+      "ibm437",
+    );
     expect(wrongKind.isErr() && wrongKind.error.status).toBe(404);
   });
 
@@ -166,7 +180,7 @@ describe("a part that is itself a container", () => {
       index: 0,
       within: { kind: FILE_PART_KINDS.attachment, index: 1 },
     } satisfies FilePart;
-    const read = (await readPartOfFile(source, inner)).unwrap();
+    const read = (await readPartOfFile(source, inner, "ibm437")).unwrap();
     expect(read.fileName).toBe("plna-moc.txt");
     expect(new TextDecoder().decode(read.bytes)).toBe(
       "Plná moc ze dne 2. 11. 2026",
@@ -211,6 +225,71 @@ describe("a part that is itself a container", () => {
     expect(files?.map(({ fileName, charset }) => [fileName, charset])).toEqual([
       ["lhuta.txt", "windows-1250"],
     ]);
+  });
+
+  test("a mailbox in an archive opens each message as an email, and its attachments", async () => {
+    const mailbox = writeMbox(
+      [
+        ...MATTER_CORRESPONDENCE.map((message) => mailMessage(message)),
+        eml([{ fileName: "usneseni.pdf", bytes: RULING }]),
+      ],
+      "mboxrd",
+    );
+    const bytes = makeZipArchive([
+      { name: "korespondence/spis.mbox", data: mailbox.bytes },
+    ]);
+    const source = stored(bytes, "podklady-ke-sporu.zip", "application/zip");
+    const messages = await listOf(bytes, member(0));
+    expect(
+      messages?.map(({ fileName, folder, part }) => [
+        fileName,
+        folder,
+        part?.mediaType,
+      ]),
+    ).toEqual([
+      ["Spis 23 C 118_2026, podklady k jednání.eml", "spis", "message/rfc822"],
+      [
+        "Re_ Spis 23 C 118_2026, podklady k jednání.eml",
+        "Spisy/23 C 118-2026,Důležité",
+        "message/rfc822",
+      ],
+      ["Vyjádření k žalobě.eml", "Spisy/Stavby Hradec", "message/rfc822"],
+      ["Spis 23 C 118_2026, podklady k jednání.eml", "spis", "message/rfc822"],
+    ]);
+    const third = (
+      await readPartOfFile(
+        source,
+        {
+          kind: FILE_PART_KINDS.message,
+          index: 1,
+          within: member(0),
+        },
+        "ibm437",
+      )
+    ).unwrap();
+    expect(new TextDecoder().decode(third.bytes)).toBe(
+      new TextDecoder().decode(mailbox.expected[1]),
+    );
+    const ruling = (
+      await readPartOfFile(
+        source,
+        {
+          kind: FILE_PART_KINDS.attachment,
+          index: 0,
+          within: {
+            kind: FILE_PART_KINDS.message,
+            index: 3,
+            within: member(0),
+          },
+        },
+        "ibm437",
+      )
+    ).unwrap();
+    expect(ruling).toMatchObject({
+      fileName: "usneseni.pdf",
+      mimeType: "application/pdf",
+    });
+    expect(ruling.bytes).toEqual(RULING);
   });
 
   test("a path runs at most the deepest a part may sit", () => {

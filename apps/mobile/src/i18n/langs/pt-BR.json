@@ -492,7 +492,6 @@
     "linesShown": "Exibindo {shown, number} de {count, plural, one {# item} many {# itens} other {# itens}}",
     "netAmount": "Valor líquido",
     "netTotal": "Total sem IVA",
-    "notRecognized": "Este arquivo XML não é uma fatura estruturada reconhecida.",
     "notes": "Observações da fatura",
     "otherIdentifier": "Outro identificador",
     "payableAmount": "Valor a pagar",
@@ -526,7 +525,8 @@
     "unreadable": "Não foi possível ler a fatura.",
     "vat": "IVA",
     "vatBreakdown": "Detalhamento do IVA",
-    "vatId": "Número de IVA"
+    "vatId": "Número de IVA",
+    "xmlUnreadable": "Não foi possível ler este arquivo XML."
   },
   "email": {
     "cc": "Cópia",
@@ -548,7 +548,9 @@
     "files": "Arquivos",
     "insideFailed": "Não foi possível carregar os arquivos dentro dele. Toque para tentar de novo.",
     "noFilesInside": "Não há arquivos dentro.",
+    "noMatches": "Nenhum arquivo corresponde a “{query}”.",
     "open": "Abrir {fileName} ({details})",
+    "search": "Encontrar um arquivo por nome ou pasta",
     "unavailable": {
       "encrypted": "Protegido por senha, não pode ser aberto",
       "link": "Link para outro arquivo, não é aberto",
@@ -586,6 +588,16 @@
     "refused": "Seu servidor recusou a solicitação (erro {status}).",
     "server": "Seu servidor teve um problema (erro {status}). Tente novamente em instantes.",
     "session": "Seu login expirou. Entre novamente."
+  },
+  "mailbox": {
+    "back": "Voltar às mensagens",
+    "messages": "Mensagens",
+    "noMatches": "Nenhuma mensagem corresponde a “{query}”.",
+    "noMessages": "Esta caixa de correio não contém mensagens.",
+    "openFailed": "Não foi possível abrir esta mensagem. Toque para tentar novamente.",
+    "search": "Pesquisar mensagens",
+    "truncated": "Somente as primeiras {count, number} mensagens são exibidas.",
+    "unreadable": "Não foi possível ler esta caixa de correio."
   },
   "matter": {
     "add": "Adicionar",

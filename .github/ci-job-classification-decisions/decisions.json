@@ -699,6 +699,10 @@
     "kind": "support",
     "qualifier": "Prerequisites follow the workflow's execution conditions."
   },
+  "candidate:.github/workflows/publish-ocr-models.yml/publish": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
   "candidate:.github/workflows/publish-product-media.yml/publish": {
     "kind": "priority",
     "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
@@ -838,6 +842,10 @@
   "candidate:.github/workflows/render-census.yml/render-census": {
     "kind": "ordinary",
     "qualifier": "Records synthetic render measurements on explicit invocation; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/route-scale-nightly.yml/build": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
   },
   "candidate:.github/workflows/route-scale-nightly.yml/measure": {
     "kind": "ordinary",

@@ -2132,14 +2132,14 @@
   {
     "access": "read",
     "command": ["capability", "matters", "correspondence-get"],
-    "description": "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email).",
+    "description": "Read one matter correspondence record with its filers and attachments. When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox, the files of the message as attachments, and in dataBoxContacts the organization contacts whose data boxes list the sender or recipient box ID (null on email). A pec record is an uploaded Italian certified email: certifiedEmail carries the provider's certification data as stated in the file (kind, certified sender and recipients, delivery outcome, certification time, provider message ID; the provider signature is not verified), and from, to, subject and body are the original message's when the file carries it.",
     "name": "capability:matters.correspondence.get",
     "title": "matters.correspondence.get"
   },
   {
     "access": "read",
     "command": ["capability", "matters", "correspondence-list"],
-    "description": "List correspondence filed in a matter, newest received first; filter by channel (email or data_box). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation.",
+    "description": "List correspondence filed in a matter, newest received first; filter by channel (email, data_box or pec). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation. A pec record is an uploaded Italian certified email whose certifiedEmail carries the provider's certification data as stated in the file (not verified).",
     "name": "capability:matters.correspondence.list",
     "title": "matters.correspondence.list"
   },
@@ -2515,6 +2515,61 @@
     "description": "Report whether the organization has a translation provider key configured, as a single boolean. Nothing about the key itself, not even a masked preview, is returned here.",
     "name": "capability:organization-settings.deepl-availability.get",
     "title": "organization-settings.deepl-availability.get"
+  },
+  {
+    "access": "write",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-add"
+    ],
+    "description": "Add words to the organization's dictation list, which every member's dictation uses to spell names and terms. A word already listed (in any case) is skipped. The request is refused whole when the new words would take the list over its limit.",
+    "name": "capability:organization-settings.dictation-vocabulary.add",
+    "title": "organization-settings.dictation-vocabulary.add"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-check"
+    ],
+    "description": "Check words before adding them to the organization's dictation list: how many the list already holds (in any case) and how many words it holds now. Nothing is stored.",
+    "name": "capability:organization-settings.dictation-vocabulary.check",
+    "title": "organization-settings.dictation-vocabulary.check"
+  },
+  {
+    "access": "destructive",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-delete"
+    ],
+    "description": "Delete words from the organization's dictation list by id. Ids not in the list are ignored. Returns how many were deleted and how many words the list still holds.",
+    "name": "capability:organization-settings.dictation-vocabulary.delete",
+    "title": "organization-settings.dictation-vocabulary.delete"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-export"
+    ],
+    "description": "Every word of the organization's dictation list, in alphabetical order, for export or backup.",
+    "name": "capability:organization-settings.dictation-vocabulary.export",
+    "title": "organization-settings.dictation-vocabulary.export"
+  },
+  {
+    "access": "read",
+    "command": [
+      "capability",
+      "organization-settings",
+      "dictation-vocabulary-list"
+    ],
+    "description": "List the organization's dictation words in alphabetical order, a page at a time, optionally only those containing a search text (case insensitive). Also returns how many words the list holds, how many match, and the most it may hold.",
+    "name": "capability:organization-settings.dictation-vocabulary.list",
+    "title": "organization-settings.dictation-vocabulary.list"
   },
   {
     "access": "read",

@@ -492,7 +492,6 @@
     "linesShown": "Showing {shown, number} of {count, plural, one {# line} other {# lines}}",
     "netAmount": "Net amount",
     "netTotal": "Total without VAT",
-    "notRecognized": "This XML file is not a recognized structured invoice.",
     "notes": "Invoice notes",
     "otherIdentifier": "Other identifier",
     "payableAmount": "Amount due",
@@ -526,7 +525,8 @@
     "unreadable": "The invoice could not be read.",
     "vat": "VAT",
     "vatBreakdown": "VAT breakdown",
-    "vatId": "VAT ID"
+    "vatId": "VAT ID",
+    "xmlUnreadable": "This XML file could not be read."
   },
   "email": {
     "cc": "Cc",
@@ -548,7 +548,9 @@
     "files": "Files",
     "insideFailed": "Couldn’t list the files inside. Tap to try again.",
     "noFilesInside": "There are no files inside.",
+    "noMatches": "No file matches “{query}”.",
     "open": "Open {fileName} ({details})",
+    "search": "Find a file by name or folder",
     "unavailable": {
       "encrypted": "Password-protected, can’t be opened",
       "link": "A link to another file, not followed",
@@ -586,6 +588,16 @@
     "refused": "Your server refused the request (error {status}).",
     "server": "Your server ran into a problem (error {status}). Try again in a moment.",
     "session": "Your sign-in has expired. Sign in again."
+  },
+  "mailbox": {
+    "back": "Back to messages",
+    "messages": "Messages",
+    "noMatches": "No message matches “{query}”.",
+    "noMessages": "This mailbox holds no messages.",
+    "openFailed": "Couldn’t open this message. Tap to try again.",
+    "search": "Search messages",
+    "truncated": "Only the first {count, number} messages are listed.",
+    "unreadable": "This mailbox couldn’t be read."
   },
   "matter": {
     "add": "Add",

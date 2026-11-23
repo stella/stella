@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { encodeText } from "@stll/mojibake/charsets";
+import { encodeDosCodePage } from "@stll/mojibake/dos-code-pages";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -17,16 +19,24 @@ import {
   readZipArchiveFile,
   ZIP_ARCHIVE_MAX_FILE_BYTES,
 } from "./zip-archive";
+import type { ZipNameCodePage } from "./zip-name-code-page";
 
-const read = async (entries: readonly RawZipEntry[]) =>
-  (await readZipArchive(makeZipArchive(entries))).unwrap();
+const read = async (
+  entries: readonly RawZipEntry[],
+  nameCodePage: ZipNameCodePage = "ibm437",
+) => (await readZipArchive(makeZipArchive(entries), { nameCodePage })).unwrap();
 
-const listed = async (entries: readonly RawZipEntry[]) =>
-  (await read(entries)).map(({ fileName, folder, unavailable }) => ({
-    fileName,
-    folder,
-    unavailable,
-  }));
+const listed = async (
+  entries: readonly RawZipEntry[],
+  nameCodePage?: ZipNameCodePage,
+) =>
+  (await read(entries, nameCodePage)).map(
+    ({ fileName, folder, unavailable }) => ({
+      fileName,
+      folder,
+      unavailable,
+    }),
+  );
 
 const text = (bytes: Uint8Array) => new TextDecoder().decode(bytes);
 
@@ -96,7 +106,109 @@ describe("a ZIP archive's files", () => {
     ]);
   });
 
-  test("a name without the UTF-8 flag is UTF-8 when it decodes as such, else code page 437", async () => {
+  test("Czech names without the UTF-8 flag read in the code page the archiver wrote", async () => {
+    const names = [
+      "Smlouva_o_dílo_Kratochvíl.pdf",
+      "Předávací_protokol.docx",
+      "Přílohy/Výpis_z_účtu.pdf",
+    ];
+    const expected = [
+      { fileName: "Smlouva_o_dílo_Kratochvíl.pdf", folder: null },
+      { fileName: "Předávací_protokol.docx", folder: null },
+      { fileName: "Výpis_z_účtu.pdf", folder: "Přílohy" },
+    ];
+    // Windows' compressed folders and 7-Zip on Czech Windows write the OEM
+    // code page, 852; some archivers write the ANSI one, windows-1250.
+    const writtenBy = {
+      oem: names.map((name) => encodeDosCodePage(name, "ibm852")),
+      ansi: names.map((name) => encodeText(name, "windows-1250")),
+    };
+    for (const encoded of Object.values(writtenBy)) {
+      const files = await read(
+        encoded.map((name, index) => ({
+          name: name ?? new Uint8Array(),
+          data: `příloha ${String(index)}`,
+          flags: 0,
+        })),
+      );
+      expect(
+        files.map(({ fileName, folder }) => ({ fileName, folder })),
+      ).toEqual(expected);
+    }
+  });
+
+  test("a name that reads alike in 437 and 852 reads in the code page the reader is given", async () => {
+    // "ů" in 852 is the byte of "à" in 437, and both readings are letters
+    // some scored language writes: a tie.
+    const tied = encodeDosCodePage("Důkazy.pdf", "ibm852");
+    expect(tied).toEqual(encodeDosCodePage("Dàkazy.pdf", "ibm437"));
+    const entries = [{ name: tied ?? new Uint8Array(), data: "x", flags: 0 }];
+    expect(
+      (await listed(entries, "ibm852")).map(({ fileName }) => fileName),
+    ).toEqual(["Důkazy.pdf"]);
+    expect(
+      (await listed(entries, "ibm437")).map(({ fileName }) => fileName),
+    ).toEqual(["Dàkazy.pdf"]);
+    // Names one code page explains better read alike whichever is given,
+    // and a name the archive flags as UTF-8 is never weighed.
+    const won = [
+      {
+        name:
+          encodeDosCodePage("Procès-verbal_à_signer.pdf", "ibm437") ??
+          new Uint8Array(),
+        data: "x",
+        flags: 0,
+      },
+      { name: "Důkazy_UTF-8.pdf", data: "y" },
+    ];
+    for (const nameCodePage of ["ibm437", "ibm852"] as const) {
+      expect(
+        (await listed(won, nameCodePage)).map(({ fileName }) => fileName),
+      ).toEqual(["Procès-verbal_à_signer.pdf", "Důkazy_UTF-8.pdf"]);
+    }
+  });
+
+  test("names the operating system adds for itself are not files", async () => {
+    // A folder zipped in the macOS Finder, and one that held Windows
+    // thumbnails and folder settings.
+    const files = await read([
+      {
+        name: "Spis/",
+        externalAttributes: unixExternalAttributes(UNIX_DIRECTORY),
+      },
+      { name: "Spis/Žaloba.pdf", data: "%PDF-1.7" },
+      { name: "Spis/.DS_Store", data: "Bud1" },
+      {
+        name: "__MACOSX/",
+        externalAttributes: unixExternalAttributes(UNIX_DIRECTORY),
+      },
+      { name: "__MACOSX/Spis/._Žaloba.pdf", data: "\u0000\u0005\u0016\u0007" },
+      { name: "._Plná moc.pdf", data: "\u0000\u0005\u0016\u0007" },
+      { name: "Plná moc.pdf", data: "%PDF-1.7" },
+      { name: "Fotky/Thumbs.db", data: "thumbnails" },
+      { name: "Fotky/DESKTOP.INI", data: "[.ShellClassInfo]" },
+      { name: "Fotky/ohledání.jpg", data: "ÿØÿ" },
+      // Names that only resemble them are files.
+      { name: "Spis/DS_Store.txt", data: "poznámka" },
+      { name: "MACOSX/zápis.txt", data: "zápis" },
+    ]);
+    expect(files.map(({ fileName, folder }) => ({ fileName, folder }))).toEqual(
+      [
+        { fileName: "Žaloba.pdf", folder: "Spis" },
+        { fileName: "Plná moc.pdf", folder: null },
+        { fileName: "ohledání.jpg", folder: "Fotky" },
+        { fileName: "DS_Store.txt", folder: "Spis" },
+        { fileName: "zápis.txt", folder: "MACOSX" },
+      ],
+    );
+    // Parts are addressed by their place in this list, so the files after a
+    // hidden entry still open as themselves.
+    expect(
+      files.map((file) => text(readZipArchiveFile(file).unwrap())),
+    ).toEqual(["%PDF-1.7", "%PDF-1.7", "ÿØÿ", "poznámka", "zápis"]);
+  });
+
+  test("a name without the UTF-8 flag is UTF-8 when it decodes as such, else in a code page", async () => {
     // 0x82 is "é" and 0xA0 is "á" in code page 437; neither starts UTF-8.
     const cp437 = new Uint8Array([
       ...new TextEncoder().encode("vyj"),
@@ -234,10 +346,12 @@ describe("a ZIP archive's files", () => {
       { name: "bomba.txt", data: new Uint8Array(8 * 1024 * 1024) },
     ]);
     for (const bytes of [tooMany, bomb]) {
-      const result = await readZipArchive(bytes);
+      const result = await readZipArchive(bytes, { nameCodePage: "ibm852" });
       expect(result.isErr() && result.error.reason).toBe("limit");
     }
-    const notZip = await readZipArchive(new TextEncoder().encode("PK no"));
+    const notZip = await readZipArchive(new TextEncoder().encode("PK no"), {
+      nameCodePage: "ibm437",
+    });
     expect(notZip.isErr() && notZip.error.reason).toBe("invalid");
   });
 
@@ -248,7 +362,9 @@ describe("a ZIP archive's files", () => {
         maxLength: 3,
       })
       .map((segments) => segments.join("/"))
-      .filter((name) => !name.endsWith("/") && !name.endsWith("\\"));
+      .filter((name) => !name.endsWith("/") && !name.endsWith("\\"))
+      // A segment starting "." or "_" may name system metadata, never listed.
+      .filter((name) => !/(?:^|[/\\])[._]/u.test(name));
     await assertProperty(
       "any archive of files reads back each file whole, under a shown name",
       fc.asyncProperty(

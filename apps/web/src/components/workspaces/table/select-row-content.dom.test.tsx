@@ -28,8 +28,9 @@ globalThis.fetch = Object.assign(async () => Response.json(null), {
   preconnect: () => undefined,
 });
 
-const { cleanup, fireEvent, render } = await import("@testing-library/react");
-const { useState, useRef } = await import("react");
+const { cleanup, fireEvent, render, within } =
+  await import("@testing-library/react");
+const { useContext, useState, useRef } = await import("react");
 const { useTable } = await import("@tanstack/react-table");
 const { QueryClient, QueryClientProvider, onlineManager } =
   await import("@tanstack/react-query");
@@ -40,6 +41,8 @@ const { PublicLawRow } =
   await import("@/components/public-law-table/public-law-row");
 const { DraggableRow } =
   await import("@/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells");
+const { TableCellEngagement } =
+  await import("@/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
@@ -52,7 +55,7 @@ const { propertiesOptions } =
 const { toSafeId } = await import("@/lib/safe-id");
 const { selectColId, addPropertyColId, getWorkspaceGridColumnMetadata } =
   await import("./workspace-table/internals-helpers");
-const { CellMetadataFlags } =
+const { CellMetadataFlags, useCellMetadataFlags } =
   await import("@/components/workspaces/cell-metadata-flags");
 
 const wasOnline = onlineManager.isOnline();
@@ -234,6 +237,28 @@ const PublicLawFixture = ({ contentMode, onOpen }: FixtureProps) => {
     ));
 };
 
+const REVIEW_CELL_VALUE = "Review value";
+
+const CellReviewFixture = () => {
+  const engaged = useContext(TableCellEngagement);
+  const flags = useCellMetadataFlags({
+    workspaceId: "selection-test",
+    entityId: "task-0",
+    propertyId: "property-test",
+    metadata: undefined,
+  });
+  return (
+    <>
+      <span>{REVIEW_CELL_VALUE}</span>
+      <CellMetadataFlags
+        flags={flags}
+        metadata={undefined}
+        showActions={engaged}
+      />
+    </>
+  );
+};
+
 const EntityFixture = ({ contentMode, columnLayout }: FixtureProps) => {
   const [rowSelection, onRowSelectionChange] = useState<RowSelectionState>({});
   const lastSelectedIndex = useRef<number | null>(null);
@@ -256,14 +281,8 @@ const EntityFixture = ({ contentMode, columnLayout }: FixtureProps) => {
             ...columns,
             {
               id: "_flags",
-              cell: () => (
-                <CellMetadataFlags
-                  workspaceId="selection-test"
-                  entityId="task-0"
-                  propertyId="property-test"
-                  metadata={undefined}
-                />
-              ),
+              cell: CellReviewFixture,
+              meta: { contextMenu: "cell" as const },
             },
           ];
         case "with-value":
@@ -478,26 +497,34 @@ describe("every shared selection-column host", () => {
     },
   );
 
-  test("cell lock and verification controls remain visible to coarse pointers", async () => {
+  test("review controls follow keyboard focus and the first touch selects the cell", async () => {
     const { view } = await renderHost({
       host: "routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx",
       columnLayout: "with-flags",
     });
-    const lock = view
-      .getAllByRole("button", { name: messages.workspaces.table.lock.lock })
-      .at(0);
-    const verified = view
-      .getAllByRole("button", { name: messages.common.verified })
-      .at(0);
-    for (const button of [lock, verified]) {
-      expect(button).toBeDefined();
-      expect(button?.className.split(" ")).toContain(
-        "pointer-coarse:opacity-100",
-      );
-      expect(button?.className.split(" ")).not.toContain(
-        "pointer-coarse:hidden",
-      );
+    const [first, second] = view.getAllByRole("gridcell", {
+      name: REVIEW_CELL_VALUE,
+    });
+    if (!first || !second) {
+      throw new Error("Expected two review cells");
     }
+    const lock = { name: messages.workspaces.table.lock.lock };
+    const verified = { name: messages.common.verified };
+    expect(view.queryByRole("button", lock)).toBeNull();
+    expect(view.queryByRole("button", verified)).toBeNull();
+    expect(first.tabIndex).toBe(0);
+
+    fireEvent.pointerDown(first, { pointerType: "touch" });
+    fireEvent.click(first, { detail: 1 });
+    expect(document.activeElement).toBe(first);
+    expect(within(first).getByRole("button", lock)).toBeDefined();
+    expect(within(first).getByRole("button", verified)).toBeDefined();
+
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(second);
+    expect(within(first).queryByRole("button", lock)).toBeNull();
+    expect(within(second).getByRole("button", lock)).toBeDefined();
+    expect(within(second).getByRole("button", verified)).toBeDefined();
   });
 
   test("the exercised host set equals the imports in product source", () => {

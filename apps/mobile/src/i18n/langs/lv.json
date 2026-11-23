@@ -492,7 +492,6 @@
     "linesShown": "Rāda {shown, number} no {count, plural, zero {# pozīcijām} one {# pozīcijas} other {# pozīcijām}}",
     "netAmount": "Summa bez PVN",
     "netTotal": "Kopā bez PVN",
-    "notRecognized": "Šī XML datne nav atpazīts strukturēts rēķins.",
     "notes": "Rēķina piezīmes",
     "otherIdentifier": "Cits identifikators",
     "payableAmount": "Summa apmaksai",
@@ -526,7 +525,8 @@
     "unreadable": "Rēķinu neizdevās nolasīt.",
     "vat": "PVN",
     "vatBreakdown": "PVN sadalījums",
-    "vatId": "PVN numurs"
+    "vatId": "PVN numurs",
+    "xmlUnreadable": "Šo XML failu neizdevās nolasīt."
   },
   "email": {
     "cc": "Kopija",
@@ -548,7 +548,9 @@
     "files": "Faili",
     "insideFailed": "Neizdevās ielādēt iekšā esošos failus. Pieskarieties, lai mēģinātu vēlreiz.",
     "noFilesInside": "Iekšā nav neviena faila.",
+    "noMatches": "Vaicājumam “{query}” neatbilst neviens fails.",
     "open": "Atvērt {fileName} ({details})",
+    "search": "Atrast failu pēc nosaukuma vai mapes",
     "unavailable": {
       "encrypted": "Aizsargāts ar paroli, nevar atvērt",
       "link": "Saite uz citu failu, netiek atvērta",
@@ -586,6 +588,16 @@
     "refused": "Serveris noraidīja pieprasījumu (kļūdas kods {status}).",
     "server": "Serverī radās problēma (kļūdas kods {status}). Pēc brīža mēģiniet vēlreiz.",
     "session": "Jūsu pieteikšanās ir beigusies. Piesakieties vēlreiz."
+  },
+  "mailbox": {
+    "back": "Atpakaļ uz e-pasta ziņojumiem",
+    "messages": "E-pasta ziņojumi",
+    "noMatches": "Vaicājumam “{query}” neatbilst neviens e-pasta ziņojums.",
+    "noMessages": "Šajā pastkastītē nav e-pasta ziņojumu.",
+    "openFailed": "Šo e-pasta ziņojumu neizdevās atvērt. Pieskarieties, lai mēģinātu vēlreiz.",
+    "search": "Meklēt e-pasta ziņojumos",
+    "truncated": "Tiek rādīti tikai pirmie {count, number} e-pasta ziņojumi.",
+    "unreadable": "Šo pastkastīti neizdevās nolasīt."
   },
   "matter": {
     "add": "Pievienot",

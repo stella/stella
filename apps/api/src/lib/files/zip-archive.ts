@@ -10,10 +10,16 @@
  * archive states it. A file that does not open is listed with the reason:
  * encrypted, a link (never followed), a compression method other than stored
  * or deflate, too large, or damaged.
+ *
+ * What an operating system leaves in a folder it zips for its own use (the
+ * macOS `__MACOSX/` tree and `._` AppleDouble files, `.DS_Store`, Windows'
+ * `Thumbs.db` and `desktop.ini`) is not listed, so it is never a part, in
+ * search text or in what an agent reads; it stays in the archive itself.
  */
 import { Result } from "better-result";
 
 import type { FilePartUnavailableReason } from "@stll/api-contract/file-parts";
+import { decodeUndeclaredFileNames } from "@stll/mojibake/undeclared-charset";
 
 import {
   hasZipMagic,
@@ -25,6 +31,7 @@ import {
   isWithinArchiveLimits,
   readArchiveEntry,
 } from "@/api/lib/files/document-archive";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 
 /** The largest file the archive reader inflates. */
 export const ZIP_ARCHIVE_MAX_FILE_BYTES = 32 * 1024 * 1024;
@@ -49,20 +56,8 @@ const MAX_NAME_CHARS = 1024;
 /** The end of central directory record, all an empty archive holds. */
 const EMPTY_ARCHIVE_BYTES = 22;
 
-/**
- * The upper half of code page 437, the encoding the ZIP specification gives
- * names stored without the UTF-8 flag.
- */
-const CP437_HIGH =
-  "ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒáíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ";
-
 const hasFlag = (flags: number, flag: number): boolean =>
   Math.floor(flags / flag) % 2 === 1;
-
-const decodeCp437 = (bytes: Uint8Array): string =>
-  Array.from(bytes, (byte) =>
-    byte < 0x80 ? String.fromCodePoint(byte) : (CP437_HIGH[byte - 0x80] ?? ""),
-  ).join("");
 
 const strictUtf8 = new TextDecoder("utf-8", { fatal: true });
 const lenientUtf8 = new TextDecoder("utf-8");
@@ -102,12 +97,54 @@ const unicodePathName = (entry: ZipEntry): string | null => {
   return null;
 };
 
-/** The entry's name as the archive states it, decoded. */
-const statedName = (entry: ZipEntry): string =>
-  unicodePathName(entry) ??
-  (hasFlag(entry.flags, ZIP_FLAG_UTF8)
-    ? lenientUtf8.decode(entry.name)
-    : (decodeUtf8(entry.name) ?? decodeCp437(entry.name)));
+/**
+ * Each entry's name as the archive states it, decoded: the Unicode path an
+ * Info-ZIP field gives, else the name in UTF-8 when the entry's flag says
+ * so. The names left declare no charset; they are read together, as one
+ * program wrote them (`decodeUndeclaredFileNames`), a tie going to the
+ * reading organization's code page.
+ */
+const statedNames = (
+  entries: readonly ZipEntry[],
+  nameCodePage: ZipNameCodePage,
+): string[] => {
+  const declared = entries.map(
+    (entry) =>
+      unicodePathName(entry) ??
+      (hasFlag(entry.flags, ZIP_FLAG_UTF8)
+        ? lenientUtf8.decode(entry.name)
+        : null),
+  );
+  const undeclared = decodeUndeclaredFileNames(
+    entries.flatMap((entry, index) =>
+      declared[index] === null ? [entry.name] : [],
+    ),
+    { tieBreak: nameCodePage },
+  ).names;
+  let next = 0;
+  return declared.map((name) => name ?? undeclared[next++] ?? "");
+};
+
+/** Names of files an operating system keeps for itself, matched in any case. */
+const SYSTEM_FILE_NAMES = new Set([".ds_store", "thumbs.db", "desktop.ini"]);
+const MACOS_METADATA_FOLDER = "__macosx";
+const APPLE_DOUBLE_PREFIX = "._";
+
+/**
+ * Whether a stated name is folder metadata an operating system adds when it
+ * zips a folder: the `__MACOSX/` tree (resource forks and extended
+ * attributes), `._` AppleDouble files, `.DS_Store`, `Thumbs.db` and
+ * `desktop.ini`.
+ */
+const isSystemMetadataName = (name: string): boolean => {
+  const segments = name.split(/[/\\]/u).filter((segment) => segment !== "");
+  const fileName = segments.at(-1) ?? "";
+  return (
+    segments.at(0)?.toLowerCase() === MACOS_METADATA_FOLDER ||
+    fileName.startsWith(APPLE_DOUBLE_PREFIX) ||
+    SYSTEM_FILE_NAMES.has(fileName.toLowerCase())
+  );
+};
 
 /** A stated name or folder as shown: bounded, control characters replaced. */
 const shown = (text: string): string =>
@@ -191,11 +228,14 @@ const invalid = (message: string) =>
   Result.err(new DocumentPackageError({ message, reason: "invalid" }));
 
 /**
- * The files of a ZIP archive in its order; folders are not files. A file's
- * position in this list addresses it as a part (`member:N`).
+ * The files of a ZIP archive in its order; folders and system metadata are
+ * not files. A file's position in this list addresses it as a part
+ * (`member:N`). Names that declare no charset and could be read alike in
+ * more than one code page are read in `nameCodePage`.
  */
 export const readZipArchive = async (
   bytes: Uint8Array,
+  { nameCodePage }: { nameCodePage: ZipNameCodePage },
 ): Promise<Result<ZipArchiveFile[], DocumentPackageError>> => {
   if (!hasZipMagic(bytes) && !isEmptyArchive(bytes)) {
     return invalid("The file is not a ZIP archive");
@@ -212,10 +252,13 @@ export const readZipArchive = async (
   if (index.type === "malformed") {
     return invalid("The archive has a malformed ZIP index");
   }
+  const names = statedNames(index.entries, nameCodePage);
   return Result.ok(
-    index.entries.flatMap((entry) => {
-      const name = statedName(entry);
-      return isDirectory(entry, name) ? [] : [archiveFile(entry, name)];
+    index.entries.flatMap((entry, position) => {
+      const name = names[position] ?? "";
+      return isDirectory(entry, name) || isSystemMetadataName(name)
+        ? []
+        : [archiveFile(entry, name)];
     }),
   );
 };

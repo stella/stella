@@ -6,6 +6,7 @@ import {
 } from "@stll/api-contract";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import type { EmailReading } from "@stll/api-contract/email-reading";
+import type { FilePart } from "@stll/api-contract/file-parts";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { HTTP_FAILURE } from "@/api/http/errors";
@@ -18,6 +19,7 @@ import {
   buildEmailPreview,
   describeEmailAttachments,
   emailBodyToText,
+  type ParsedEmail,
   parseEmail,
 } from "@/api/lib/files/email-to-html";
 import {
@@ -25,6 +27,10 @@ import {
   LIVE_VERSION_DELIVERY,
   recordLiveVersionDelivery,
 } from "@/api/lib/files/live-version-field";
+import {
+  attachmentsWithin,
+  readEmailPart,
+} from "@/api/lib/files/read-email-part";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 
@@ -34,6 +40,8 @@ type ReadEmailFileOptions = {
   organizationId: SafeId<"organization">;
   fieldId: SafeId<"field">;
   recordAuditEvent: AuditRecorder;
+  /** An email that is a part of the file, such as a mailbox's message. */
+  part?: FilePart | undefined;
 };
 
 const missingFile = () =>
@@ -61,13 +69,77 @@ const unavailable = (message: string) =>
  * cannot be read as one, is refused as preview-unavailable, so a reader can
  * fall back to its own view.
  */
+/** An email as a reader that does not render email reads it. */
+const emailReading = async (email: ParsedEmail): Promise<EmailReading> => {
+  // The same attachments the web viewer lists, inline images left out.
+  const attachments = await describeEmailAttachments(
+    email,
+    buildEmailPreview(email, {
+      citationBlockMode: EMAIL_CITATION_BLOCK_MODE.omit,
+    }).attachments,
+  );
+  return {
+    certified: email.certified,
+    subject: email.subject,
+    from: email.from,
+    to: email.to,
+    cc: email.cc,
+    date: email.date,
+    text: emailBodyToText(email.body),
+    attachments: attachments.map(
+      ({ part, fileName, mediaType, sizeBytes }) => ({
+        part,
+        fileName,
+        mediaType,
+        sizeBytes,
+      }),
+    ),
+  };
+};
+
+/**
+ * An email that is a part of a stored file, read through the part link's
+ * reader, which records its delivery with the part.
+ */
+const readEmailPartReading = async ({
+  part,
+  ...options
+}: ReadEmailFileOptions & { part: FilePart }): Promise<
+  Result<EmailReading, HandlerError>
+> => {
+  const read = await readEmailPart({ ...options, part });
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  const parsed = await parseEmail(read.value.buffer, read.value.mimeType);
+  if (parsed.isErr()) {
+    return unavailable("The email could not be read");
+  }
+  const reading = await emailReading(parsed.value);
+  return Result.ok({
+    ...reading,
+    attachments: attachmentsWithin(reading.attachments, part),
+  });
+};
+
 export const readEmailFile = async ({
   scopedDb,
   workspaceId,
   organizationId,
   fieldId,
   recordAuditEvent,
+  part,
 }: ReadEmailFileOptions): Promise<Result<EmailReading, HandlerError>> => {
+  if (part !== undefined) {
+    return await readEmailPartReading({
+      scopedDb,
+      workspaceId,
+      organizationId,
+      fieldId,
+      recordAuditEvent,
+      part,
+    });
+  }
   const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
   if (row?.content.type !== "file") {
     return missingFile();
@@ -97,13 +169,7 @@ export const readEmailFile = async ({
     return unavailable("The email could not be read");
   }
   const email = parsed.value;
-  // The same attachments the web viewer lists, inline images left out.
-  const attachments = await describeEmailAttachments(
-    email,
-    buildEmailPreview(email, {
-      citationBlockMode: EMAIL_CITATION_BLOCK_MODE.omit,
-    }).attachments,
-  );
+  const reading = await emailReading(email);
   const delivery = await recordLiveVersionDelivery({
     scopedDb,
     fieldId,
@@ -126,21 +192,5 @@ export const readEmailFile = async ({
   if (delivery === LIVE_VERSION_DELIVERY.withdrawn) {
     return missingFile();
   }
-  return Result.ok({
-    certified: email.certified,
-    subject: email.subject,
-    from: email.from,
-    to: email.to,
-    cc: email.cc,
-    date: email.date,
-    text: emailBodyToText(email.body),
-    attachments: attachments.map(
-      ({ part, fileName, mediaType, sizeBytes }) => ({
-        part,
-        fileName,
-        mediaType,
-        sizeBytes,
-      }),
-    ),
-  });
+  return Result.ok(reading);
 };

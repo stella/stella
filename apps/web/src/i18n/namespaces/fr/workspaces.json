@@ -99,7 +99,6 @@
     "linesShown": "Affichage de {shown, number} sur {count, plural, one {# ligne} many {# lignes} other {# lignes}}",
     "netAmount": "Montant HT",
     "netTotal": "Total HT",
-    "notRecognized": "Ce fichier XML n’est pas une facture structurée reconnue.",
     "otherIdentifier": "Autre identifiant",
     "payableAmount": "Montant à payer",
     "paymentAmount": "Montant du paiement",
@@ -129,7 +128,8 @@
     },
     "unreadable": "Impossible de lire la facture.",
     "vat": "TVA",
-    "vatBreakdown": "Ventilation de la TVA"
+    "vatBreakdown": "Ventilation de la TVA",
+    "xmlUnreadable": "Impossible de lire ce fichier XML."
   },
   "emailViewer": {
     "attachments": "Pièces jointes",

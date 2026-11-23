@@ -492,7 +492,6 @@
     "linesShown": "Zobrazeno {shown, number} z {count, plural, one {# položky} few {# položek} many {# položky} other {# položek}}",
     "netAmount": "Cena bez DPH",
     "netTotal": "Celkem bez DPH",
-    "notRecognized": "Tento soubor XML není rozpoznaná strukturovaná faktura.",
     "notes": "Poznámky k faktuře",
     "otherIdentifier": "Jiný identifikátor",
     "payableAmount": "K úhradě",
@@ -526,7 +525,8 @@
     "unreadable": "Fakturu nelze přečíst.",
     "vat": "DPH",
     "vatBreakdown": "Rekapitulace DPH",
-    "vatId": "DIČ"
+    "vatId": "DIČ",
+    "xmlUnreadable": "Tento soubor XML se nepodařilo přečíst."
   },
   "email": {
     "cc": "Kopie",
@@ -548,7 +548,9 @@
     "files": "Soubory",
     "insideFailed": "Soubory uvnitř se nepodařilo načíst. Klepnutím to zkusíte znovu.",
     "noFilesInside": "Uvnitř nejsou žádné soubory.",
+    "noMatches": "Výrazu „{query}“ neodpovídá žádný soubor.",
     "open": "Otevřít {fileName} ({details})",
+    "search": "Najít soubor podle názvu nebo složky",
     "unavailable": {
       "encrypted": "Chráněno heslem, nelze otevřít",
       "link": "Odkaz na jiný soubor, neotevírá se",
@@ -586,6 +588,16 @@
     "refused": "Server požadavek odmítl (kód {status}).",
     "server": "Na serveru došlo k chybě (kód {status}). Zkuste to za chvíli znovu.",
     "session": "Vaše přihlášení vypršelo. Přihlaste se znovu."
+  },
+  "mailbox": {
+    "back": "Zpět na zprávy",
+    "messages": "Zprávy",
+    "noMatches": "Výrazu „{query}“ neodpovídá žádná zpráva.",
+    "noMessages": "Tato poštovní schránka neobsahuje žádné zprávy.",
+    "openFailed": "Zprávu se nepodařilo otevřít. Klepnutím to zkusíte znovu.",
+    "search": "Hledat ve zprávách",
+    "truncated": "Zobrazuje se jen prvních {count, number} zpráv.",
+    "unreadable": "Tuto poštovní schránku se nepodařilo přečíst."
   },
   "matter": {
     "add": "Přidat",

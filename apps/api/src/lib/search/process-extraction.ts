@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 /** Durable native extraction request and worker-side execution. */
 import { and, eq, sql } from "drizzle-orm";
 
+import { MBOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { rootDb } from "@/api/db/root";
@@ -25,7 +26,10 @@ import { enqueueUploadedMailFiling } from "@/api/lib/email/inbound/upload-enqueu
 import type { FileKey } from "@/api/lib/file-key";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
+import { readStoredMailboxText } from "@/api/lib/files/mailbox-stream-text";
+import { readZipNameCodePage } from "@/api/lib/files/organization-zip-name-code-page";
 import { createFileKey } from "@/api/lib/files/utils";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
@@ -312,7 +316,7 @@ type NativeExtractionRun = Pick<
  */
 export type NativeExtractionDatabase = Pick<
   typeof rootDb,
-  "transaction" | "update"
+  "query" | "transaction" | "update"
 >;
 
 type RecordDocxVersionLanguageOptions = {
@@ -470,6 +474,54 @@ const recordUploadedMail = async ({
   }
 };
 
+/** A stored file read whole within its budget, then extracted. */
+const readAndExtract = async ({
+  extractText,
+  key,
+  lifecycleSignal,
+  maxBytes,
+  mimeType,
+  readSource,
+  zipNameCodePage,
+}: {
+  extractText: typeof extractFileTextResult;
+  key: FileKey;
+  lifecycleSignal: AbortSignal;
+  maxBytes: number | undefined;
+  mimeType: string;
+  zipNameCodePage: ZipNameCodePage;
+  readSource: (input: {
+    key: FileKey;
+    mimeType: string;
+    signal: AbortSignal;
+    maxBytes?: number;
+  }) => Promise<ScannedFile>;
+}) => {
+  const stored = await withTimeout(
+    async (signal) =>
+      await readSource({
+        key,
+        mimeType,
+        signal,
+        ...(maxBytes === undefined ? {} : { maxBytes }),
+      }),
+    {
+      label: "native extraction source read",
+      signal: lifecycleSignal,
+      timeoutMs: LIMITS.documentProcessingObjectReadTimeoutMs,
+    },
+  );
+  lifecycleSignal.throwIfAborted();
+  return {
+    buffer: stored.bytes,
+    extraction: await extractText(stored, {
+      signal: lifecycleSignal,
+      timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+      zipNameCodePage,
+    }),
+  };
+};
+
 export const executeNativeExtraction = async ({
   database,
   fileField,
@@ -493,11 +545,13 @@ export const executeNativeExtraction = async ({
   const {
     enqueueUploadedMail,
     extractText,
+    extractMailboxText,
     persistProjection,
     recordLanguage,
     recordSignature,
     requestAutomaticOcr,
     restoreManualOcr,
+    readZipNameCodePage: readOrganizationZipNameCodePage,
   } = dependencies;
   const source = pickExtractionSource(fileField);
   const key = createFileKey({
@@ -506,28 +560,37 @@ export const executeNativeExtraction = async ({
     fileId: source.fileId,
     mimeType: source.storageMimeType,
   });
-  const stored = await withTimeout(
-    async (signal) =>
-      await readSource({
-        key,
-        mimeType: source.extractionMimeType,
-        signal,
-        ...(source.fileId === fileField.pdfFileId
-          ? { maxBytes: LIMITS.fileDerivativePdfMaxBytes }
-          : {}),
-      }),
-    {
-      label: "native extraction source read",
-      signal: lifecycleSignal,
-      timeoutMs: LIMITS.documentProcessingObjectReadTimeoutMs,
-    },
-  );
-  lifecycleSignal.throwIfAborted();
-  const buffer = stored.bytes;
-  const extraction = await extractText(stored, {
-    signal: lifecycleSignal,
-    timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
-  });
+  // A mailbox is streamed into the worker one message at a time, never read
+  // whole; any other file is read, then extracted.
+  const { buffer, extraction } =
+    source.extractionMimeType === MBOX_FILE_FORMAT.mimeType
+      ? {
+          buffer: new ArrayBuffer(0),
+          extraction: await extractMailboxText({
+            key,
+            fileName: fileField.fileName,
+            signal: lifecycleSignal,
+            openTimeoutMs: LIMITS.documentProcessingObjectReadTimeoutMs,
+            timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,
+          }),
+        }
+      : await readAndExtract({
+          extractText,
+          key,
+          lifecycleSignal,
+          maxBytes:
+            source.fileId === fileField.pdfFileId
+              ? LIMITS.fileDerivativePdfMaxBytes
+              : undefined,
+          mimeType: source.extractionMimeType,
+          readSource,
+          // One indexed read of the organization's settings row, on the
+          // extraction's connection.
+          zipNameCodePage: await readOrganizationZipNameCodePage(
+            database,
+            run.organizationId,
+          ),
+        });
   if (Result.isError(extraction)) {
     throw extraction.error;
   }
@@ -610,22 +673,26 @@ export const executeNativeExtraction = async ({
 export type ExecuteNativeExtractionDependencies = {
   enqueueUploadedMail: typeof enqueueUploadedMailFiling;
   extractText: typeof extractFileTextResult;
+  extractMailboxText: typeof readStoredMailboxText;
   persistProjection: typeof persistNativeExtractionProjection;
   recordLanguage: typeof recordEntityVersionDetectedLanguage;
   recordSignature: typeof recordNearDuplicateSignature;
   requestAutomaticOcr: typeof requestAutomaticDocumentOcr;
   restoreManualOcr: typeof restoreManualOcrRunAfterProjectionLoss;
+  readZipNameCodePage: typeof readZipNameCodePage;
 };
 
 const EXECUTE_NATIVE_EXTRACTION_DEPENDENCIES: ExecuteNativeExtractionDependencies =
   {
     enqueueUploadedMail: enqueueUploadedMailFiling,
     extractText: extractFileTextResult,
+    extractMailboxText: readStoredMailboxText,
     persistProjection: persistNativeExtractionProjection,
     recordLanguage: recordEntityVersionDetectedLanguage,
     recordSignature: recordNearDuplicateSignature,
     requestAutomaticOcr: requestAutomaticDocumentOcr,
     restoreManualOcr: restoreManualOcrRunAfterProjectionLoss,
+    readZipNameCodePage,
   };
 
 /**

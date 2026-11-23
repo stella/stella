@@ -218,6 +218,8 @@ const DEFAULT_DOCUMENT_FILE_UPLOAD_DEPENDENCIES = {
   put: putPresignedFile,
 } satisfies DocumentFileUploadDependencies;
 
+type AbortReservationOutcome = { status: "aborted" } | { status: "failed" };
+
 const abortCreatedReservation = async ({
   context,
   dependencies,
@@ -228,7 +230,7 @@ const abortCreatedReservation = async ({
   dependencies: DocumentFileUploadDependencies;
   uploadId: string;
   workspaceId: string;
-}): Promise<boolean> => {
+}): Promise<AbortReservationOutcome> => {
   const aborted = await Result.tryPromise({
     try: async () =>
       await dependencies.abort({ context, uploadId, workspaceId }),
@@ -243,10 +245,10 @@ const abortCreatedReservation = async ({
         workspaceId,
       }),
     );
-    return false;
+    return { status: "failed" };
   }
   if (aborted.value.status === "ok") {
-    return true;
+    return { status: "aborted" };
   }
 
   dependencies.captureCleanupFailure(
@@ -259,7 +261,7 @@ const abortCreatedReservation = async ({
       workspaceId,
     }),
   );
-  return false;
+  return { status: "failed" };
 };
 
 const normalizedMimeType = (
@@ -366,7 +368,7 @@ export const uploadRemoteDocumentVersion = async ({
 
   const put = await dependencies.put({ bytes, reservation });
   if (Result.isError(put) || !put.value.ok) {
-    const cleanedUp = await abortCreatedReservation({
+    const cleanup = await abortCreatedReservation({
       context,
       dependencies,
       uploadId: reservation.uploadId,
@@ -374,9 +376,10 @@ export const uploadRemoteDocumentVersion = async ({
     });
     return structuredErrorResult({
       code: "internal_error",
-      message: cleanedUp
-        ? "The attached file could not be transferred to stella storage"
-        : "The attached file could not be transferred, and its reserved upload could not be cleaned up",
+      message:
+        cleanup.status === "aborted"
+          ? "The attached file could not be transferred to stella storage"
+          : "The attached file could not be transferred, and its reserved upload could not be cleaned up",
       retryable: true,
     });
   }

@@ -253,6 +253,13 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
   staticRoute("/time/approvals"),
   staticRoute("/time/report"),
   staticRoute("/settings/account/security"),
+  staticRoute("/settings/organization/dictation"),
+  staticRoute("/admin/dictation", {
+    expectation: {
+      kind: "redirectsTo",
+      to: "/settings/organization/dictation",
+    },
+  }),
 ];
 
 /** The validated scale fixture grants lists to both measured organizations. */

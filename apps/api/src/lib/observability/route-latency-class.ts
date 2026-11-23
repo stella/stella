@@ -251,6 +251,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/files/:workspaceId/email-html/:fieldId": "crud",
   "GET /v1/files/:workspaceId/email-reading/:fieldId": "crud",
   "GET /v1/files/:workspaceId/marked/:fieldId": "crud",
+  "GET /v1/files/:workspaceId/mbox/:fieldId": "crud",
   "GET /v1/files/:workspaceId/ocr-export/:fieldId": "crud",
   "GET /v1/files/:workspaceId/parts/:fieldId": "crud",
   "GET /v1/files/:workspaceId/office-citation/:entityId/:fieldId/:blockId":
@@ -335,6 +336,8 @@ export const ROUTE_LATENCY_CLASSES = {
   "GET /v1/organization-settings/ai-availability": "crud",
   "GET /v1/organization-settings/ai-config": "crud",
   "GET /v1/organization-settings/anonymization-blacklist": "crud",
+  "GET /v1/organization-settings/dictation-vocabulary": "crud",
+  "GET /v1/organization-settings/dictation-vocabulary/export": "crud",
   "GET /v1/organization-settings/billing-drafts": "crud",
   "GET /v1/organization-settings/billing-drafts/knowledge-files": "crud",
   "GET /v1/organization-settings/billing-drafts/knowledge-files/:resourceId":
@@ -972,6 +975,9 @@ export const ROUTE_LATENCY_CLASSES = {
   "PUT /v1/me/push-devices": "crud",
   "PUT /v1/me/timer-activity-devices/:deviceId": "crud",
   "PUT /v1/organization-settings/anonymization-blacklist": "crud",
+  "POST /v1/organization-settings/dictation-vocabulary": "batch",
+  "POST /v1/organization-settings/dictation-vocabulary/check": "batch",
+  "DELETE /v1/organization-settings/dictation-vocabulary": "batch",
   "PUT /v1/organization-settings/feature-enrolments/:featureId": "crud",
   "PUT /v1/playbooks/:playbookId": "crud",
   "PUT /v1/properties/:workspaceId": "crud",

@@ -99,6 +99,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "ZIP archive previews use matter file read permissions on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/mbox",
+    "Mailbox previews use matter file read permissions on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/parts",
     "Listing the files inside a part of a file uses the matter file read permission on every deployment",
   ],
@@ -237,6 +241,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/chat/threads/:threadId/limit-reminder",
     "A chat limit reminder is mounted on every deployment; it can be set only for a turn the member's local-agents feature let run",
+  ],
+  [
+    "/v1/organization-settings/dictation-vocabulary",
+    "The organization's dictation words are managed on every deployment; dictation itself stays behind the members' dictation feature decisions",
   ],
   [
     "/v1/organization-settings/local-runs",

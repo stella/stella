@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/data-box";
 import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import type { EmailReading } from "@stll/api-contract/email-reading";
+import type { MailboxPreview } from "@stll/api-contract/mailbox";
 import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import type { ZipArchivePreview } from "@stll/api-contract/zip-archive";
 
@@ -23,6 +24,7 @@ import {
   currentVersionFile,
   fileUrlPath,
   isOffline,
+  readDocumentEmailPart,
   readDocumentFile,
   readDocumentPart,
   readDocumentPartList,
@@ -463,14 +465,14 @@ describe("reading a document's file", () => {
     ]);
   });
 
-  test("opens a plain .xml as before once the server says it is no invoice", async () => {
+  test("opens an .xml as before when the server cannot read it as text", async () => {
     const { fetch, calls } = server((path) => {
       if (path.endsWith("/versions")) {
         return Response.json(legalFileVersion("settings.xml", "text/xml"));
       }
       if (path.includes("/e-invoice/")) {
         return Response.json(
-          { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Not an invoice" },
+          { code: PREVIEW_UNAVAILABLE_ERROR_CODE, message: "Not readable" },
           { status: 422 },
         );
       }
@@ -611,14 +613,15 @@ describe("reading a document's file", () => {
         Response.json(
           path.endsWith("/versions")
             ? legalFileVersion(fileName, "application/octet-stream")
-            : invoicePreview,
+            : { type: "invoice", invoice: invoicePreview },
         ),
       );
       const file = (await read(fetch)).unwrap();
       expect(file).toMatchObject({ viewer: "e-invoice", format, fileName });
-      expect(file.viewer === "e-invoice" && file.preview.unwrap()).toEqual(
-        invoicePreview,
-      );
+      expect(file.viewer === "e-invoice" && file.preview.unwrap()).toEqual({
+        type: "invoice",
+        invoice: invoicePreview,
+      });
       expect(calls).toEqual([
         "/v1/entities/matter-1/entity/entity-1/versions",
         "/v1/files/matter-1/e-invoice/field%3F1",
@@ -633,7 +636,7 @@ describe("reading a document's file", () => {
         Response.json(
           path.endsWith("/versions")
             ? legalFileVersion("export", mimeType)
-            : invoicePreview,
+            : { type: "xml", text: "<export/>", truncated: false },
         ),
       );
       const file = (await read(fetch)).unwrap();
@@ -742,6 +745,61 @@ describe("reading a document's file", () => {
       expect(calls).toEqual([
         "/v1/entities/matter-1/entity/entity-1/versions",
         "/v1/files/matter-1/zip/field%3F1",
+      ]);
+    },
+  );
+
+  test.each([
+    ["spis-23-C-118-2026.mbox", "application/mbox"],
+    ["Doručená pošta.mbox", "application/octet-stream"],
+    ["korespondence.MBX", "application/octet-stream"],
+  ])(
+    "reads the mailbox %s (%s) through the mailbox preview",
+    async (fileName, mimeType) => {
+      const preview = {
+        truncated: false,
+        messages: [
+          {
+            fileName: "Spis 23 C 118_2026.eml",
+            folder: "Spisy/Stavby Hradec",
+            sizeBytes: 4210,
+            subject: "Spis 23 C 118/2026",
+            from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+            date: "2026-11-17T08:30:00.000Z",
+            part: {
+              part: "message:0",
+              fileName: "Spis 23 C 118_2026.eml",
+              mediaType: "message/rfc822",
+              sizeBytes: 4210,
+            },
+            unavailable: null,
+          },
+          {
+            fileName: "korespondence-2.eml",
+            folder: null,
+            sizeBytes: 40_000_000,
+            subject: null,
+            from: null,
+            date: null,
+            part: null,
+            unavailable: "tooLarge",
+          },
+        ],
+      } satisfies MailboxPreview;
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, mimeType)
+            : preview,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "mailbox" && file.preview.unwrap()).toEqual(
+        preview,
+      );
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/mbox/field%3F1",
       ]);
     },
   );
@@ -989,6 +1047,38 @@ describe("reading a document's file", () => {
     expect(listed.unwrap().files).toEqual(files);
     expect(calls.at(-1)).toBe(
       "/v1/files/matter-1/parts/field-1?part=member%3A2",
+    );
+  });
+
+  test("a mailbox's message is read as an email by its path", async () => {
+    const reading = {
+      certified: null,
+      subject: "Plná moc a výzva",
+      from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+      to: ["Jitka Skořepová <skorepova@stavby-hradec.cz>"],
+      cc: [],
+      date: "2026-11-19T09:15:00.000Z",
+      text: "Dobrý den, v příloze posílám plnou moc.",
+      attachments: [
+        {
+          part: "message:3/attachment:0",
+          fileName: "plna-moc.pdf",
+          mediaType: "application/pdf",
+          sizeBytes: 5120,
+        },
+      ],
+    } satisfies EmailReading;
+    const { fetch, calls } = server(() => Response.json(reading));
+    const message = await readDocumentEmailPart({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "matter-1",
+      fieldId: "field-1",
+      part: "message:3",
+    });
+    expect(message.unwrap()).toEqual(reading);
+    expect(calls.at(-1)).toBe(
+      "/v1/files/matter-1/email-reading/field-1?part=message%3A3",
     );
   });
 

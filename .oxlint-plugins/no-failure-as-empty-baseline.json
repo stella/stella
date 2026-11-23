@@ -1,20 +1,14 @@
 {
   "entries": {
     "apps/api/src/handlers/case-law/decisions/coverage.ts::readArrivals::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/case-law/decisions/dev-reparse.ts::reparseForDev::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/case-law/decisions/document-on-demand.ts::readThroughDeferredDocument::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/case-law/decisions/document-on-demand.ts::runFetch::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/case-law/decisions/search.ts::readCaseLawSearchFacets::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/case-law/decisions/search.ts::readCaseLawSearchFacets::result-error-returns-empty#2": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/chat/stream-chat.ts::resolveFallbackTextModel::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/chat/thread-recap.ts::generateThreadRecapText::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts::runHostCall::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/chat/tools/external-mcp-tools.ts::loadConnectorTools::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/chat/tools/template-ai-boundary.ts::adaptAiValue::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/chat/tools/template-ai-boundary.ts::decideAiCondition::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/dev/public-law-connection.ts::startPublicLawConnection::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/legislation/ingestion.ts::storeSourceRaw::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/mcp-connectors/icons.ts::discoverMcpIconUrl::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/analytics/tanstack-ai.ts::meterUsage::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/buffer-intent-reconciliation.ts::reconcileBufferObjectCleanupIntents::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/buffer-intent-reconciliation.ts::reconcileStaleBufferIntentBatch::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
@@ -47,7 +41,6 @@
     "apps/api/src/lib/style-set-package-cleanup-queue.ts::handle::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/templates/suggest-template-fields.ts::suggestTemplateFieldsOrEmpty::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/workflow-queue.ts::handleWorkflowJobFailed::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/mcp/document-file-upload.ts::abortCreatedReservation::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "packages/cli/src/registry-cache.ts::readCacheFile::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure."
   }
 }

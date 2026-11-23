@@ -1,4 +1,4 @@
-Correct the DNS resolver declaration to match mailauth 8.0.6 runtime: SPF's
+Correct the DNS resolver declaration to match mailauth 8.1.0 runtime: SPF's
 MX mechanism sorts the resolver's MX answer by priority (spf-verify.js).
 Remove when upstream declarations include MX records.
 

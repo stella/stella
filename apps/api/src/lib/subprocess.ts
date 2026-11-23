@@ -8,6 +8,7 @@ import {
   SubprocessError,
   type SubprocessTerminationReason,
 } from "@/api/lib/errors/tagged-errors";
+import type { ZIP_NAME_CODE_PAGE_ENV } from "@/api/lib/files/zip-name-code-page";
 
 /**
  * Writes a worker's answer to stdout and resolves once the pipe has taken all
@@ -29,10 +30,22 @@ export const writeWorkerStdout = async (
   });
 };
 
+/**
+ * The variables a worker may be given besides `PATH`, each declared here so
+ * the child environment stays a closed list: a worker never inherits the
+ * API's environment.
+ */
+type WorkerEnv = Readonly<
+  Partial<Record<typeof ZIP_NAME_CODE_PAGE_ENV, string>>
+>;
+
 type SpawnWorkerOptions = {
   workerPath: string;
   args?: string[];
-  stdin: Blob;
+  /** Variables the worker reads for its whole run, whatever its mode. */
+  env?: WorkerEnv;
+  /** The worker's input: whole, or streamed in as it is read. */
+  stdin: Blob | ReadableStream<Uint8Array>;
   timeoutMs: number;
   /** Aborting kills the subprocess instead of letting it run to timeout. */
   signal?: AbortSignal;
@@ -153,7 +166,9 @@ type SpawnedWorker = ReturnType<typeof spawn>;
 
 type SpawnWorkerProcessOptions = {
   args: string[];
-  stdin: Blob;
+  env: WorkerEnv;
+  /** The worker's input: whole, or streamed in as it is read. */
+  stdin: Blob | ReadableStream<Uint8Array>;
   workerPath: string;
 };
 
@@ -347,17 +362,18 @@ const watchWorkerTermination = ({
   });
 };
 
-const spawn = ({ args, stdin, workerPath }: SpawnWorkerProcessOptions) =>
+const spawn = ({ args, env, stdin, workerPath }: SpawnWorkerProcessOptions) =>
   Bun.spawn(["bun", "run", "--no-env-file", workerPath, ...args], {
     stdin,
     stdout: "pipe",
     stderr: "pipe",
-    env: { PATH: process.env["PATH"] ?? "" },
+    env: { ...env, PATH: process.env["PATH"] ?? "" },
   });
 
 export const spawnWorker = async ({
   workerPath,
   args = [],
+  env = {},
   stdin,
   timeoutMs,
   signal,
@@ -366,7 +382,7 @@ export const spawnWorker = async ({
 }: SpawnWorkerOptions): Promise<Result<string, SubprocessError>> => {
   signal?.throwIfAborted();
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
-  const subprocess = spawn({ args, stdin, workerPath });
+  const subprocess = spawn({ args, env, stdin, workerPath });
   const getTermination = watchWorkerTermination({
     maxRssBytes,
     signal,
@@ -417,6 +433,7 @@ export const spawnWorker = async ({
 export const spawnBinaryWorker = async ({
   workerPath,
   args = [],
+  env = {},
   stdin,
   timeoutMs,
   signal,
@@ -425,7 +442,7 @@ export const spawnBinaryWorker = async ({
 }: SpawnBinaryWorkerOptions): Promise<Result<Uint8Array, SubprocessError>> => {
   signal?.throwIfAborted();
   const timeoutSignal = AbortSignal.timeout(timeoutMs);
-  const subprocess = spawn({ args, stdin, workerPath });
+  const subprocess = spawn({ args, env, stdin, workerPath });
   const getTermination = watchWorkerTermination({
     maxRssBytes,
     signal,

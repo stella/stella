@@ -576,7 +576,9 @@
         "tooLarge": "Zu groß zum Öffnen",
         "unreadable": "Beschädigt, lässt sich nicht öffnen",
         "unsupported": "Mit einem Verfahren komprimiert, das sich nicht öffnen lässt"
-      }
+      },
+      "search": "Datei nach Name oder Ordner suchen",
+      "noMatches": "Keine Datei entspricht „{query}“."
     },
     "firstSourceReached": "Dies ist die erste Quelle.",
     "groups": {
@@ -837,6 +839,14 @@
     },
     "showPane": "Bereich anzeigen",
     "swapViews": "Hauptansicht und Seitenleiste tauschen",
-    "title": "Inspektor"
+    "title": "Inspektor",
+    "mailbox": {
+      "messages": "Nachrichten",
+      "noMatches": "Keine Nachricht entspricht „{query}“.",
+      "noMessages": "Dieses Postfach enthält keine Nachrichten.",
+      "search": "Nachrichten durchsuchen",
+      "truncated": "Nur die ersten {count, number} Nachrichten werden angezeigt.",
+      "unreadable": "Dieses Postfach konnte nicht gelesen werden."
+    }
   }
 }

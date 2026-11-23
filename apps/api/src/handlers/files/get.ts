@@ -1,7 +1,11 @@
 import { Result } from "better-result";
 
-import { DOCUMENT_PROPERTIES_MAX_BYTES } from "@stll/api-contract";
+import {
+  DOCUMENT_PROPERTIES_MAX_BYTES,
+  PREVIEW_UNAVAILABLE_ERROR_CODE,
+} from "@stll/api-contract";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import type { FilePart } from "@stll/api-contract/file-parts";
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
@@ -26,6 +30,10 @@ import {
   LIVE_VERSION_DELIVERY,
   recordLiveVersionDelivery,
 } from "@/api/lib/files/live-version-field";
+import {
+  attachmentsWithin,
+  readEmailPart,
+} from "@/api/lib/files/read-email-part";
 import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
@@ -49,6 +57,67 @@ type ReadEmailHtmlPreviewHandlerProps = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
+};
+
+/**
+ * The preview of an email that is a part of a stored file (a mailbox's
+ * message, an email in an archive): read through the part link's reader,
+ * which checks access and liveness, scans the part and records its delivery
+ * with the part; its attachments open through the same link, under the part.
+ */
+export const readEmailPartHtmlPreview = async ({
+  scopedDb,
+  fieldId,
+  organizationId,
+  workspaceId,
+  recordAuditEvent,
+  part,
+}: ReadEmailHtmlPreviewHandlerProps & { part: FilePart }) => {
+  const [row] = await fileFieldQuery(scopedDb, fieldId, workspaceId);
+  if (row?.content.type !== "file") {
+    return Result.err(
+      new HandlerError({
+        status: 404,
+        code: "not_found",
+        message: "File not found",
+      }),
+    );
+  }
+  const read = await readEmailPart({
+    scopedDb,
+    fieldId,
+    organizationId,
+    workspaceId,
+    recordAuditEvent,
+    part,
+  });
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  const preview = await emailToPreview(read.value.buffer, read.value.mimeType);
+  if (preview.isErr()) {
+    return Result.err(
+      new HandlerError({
+        status: 422,
+        code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+        message: "The email could not be read",
+      }),
+    );
+  }
+  const { content } = row;
+  return Result.ok({
+    ...preview.value,
+    attachments: attachmentsWithin(preview.value.attachments, part),
+    source: {
+      entityId: row.entityId,
+      entityName: row.entityName,
+      fieldId,
+      fileName: content.fileName,
+      mimeType: content.mimeType,
+      pdfFileId: content.pdfFileId,
+      propertyId: row.propertyId,
+    },
+  });
 };
 
 export const readEmailHtmlPreviewHandler = async ({

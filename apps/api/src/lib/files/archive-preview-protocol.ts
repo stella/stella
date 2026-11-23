@@ -23,6 +23,12 @@ export const ASIC_PREVIEW_WORKER_MODE = "asic-preview";
 
 export const ZIP_ARCHIVE_PREVIEW_MODE = "zip-archive-preview";
 
+/**
+ * A mailbox's text, read from the worker's input as it streams in: a
+ * mailbox is never held whole, so it is not bounded like an archive.
+ */
+export const MAILBOX_TEXT_WORKER_MODE = "mailbox-text";
+
 export const STRUCTURED_DOCUMENT_PREVIEW_MODE = "structured-document-preview";
 
 export const SIGNED_DOSSIER_WORKER_MODE = {

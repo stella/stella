@@ -9,13 +9,14 @@ import {
   documentFormat,
   legalFileFormat,
 } from "@stll/api-contract/document-format";
-import { eInvoicePreviewSchema } from "@stll/api-contract/e-invoice";
+import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
 import { emailReadingSchema } from "@stll/api-contract/email-reading";
 import {
   filePartDescriptorSchema,
   filePartListSchema,
   isFilePartConvertedMediaType,
 } from "@stll/api-contract/file-parts";
+import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
@@ -170,7 +171,7 @@ type EInvoiceDocumentFile = {
   readonly fileName: string;
   readonly fieldId: string;
   readonly preview: Result<
-    v.InferOutput<typeof eInvoicePreviewSchema>,
+    v.InferOutput<typeof xmlDocumentPreviewSchema>,
     ApiError
   >;
 };
@@ -181,6 +182,17 @@ type ZipArchiveDocumentFile = {
   readonly fieldId: string;
   readonly preview: Result<
     v.InferOutput<typeof zipArchivePreviewSchema>,
+    ApiError
+  >;
+};
+
+/** A mailbox (.mbox): its messages, each opening as an email. */
+type MailboxDocumentFile = {
+  readonly viewer: "mailbox";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof mailboxPreviewSchema>,
     ApiError
   >;
 };
@@ -199,6 +211,7 @@ export type LegalDocumentFile =
   | DataBoxDocumentFile
   | EInvoiceDocumentFile
   | EmailDocumentFile
+  | MailboxDocumentFile
   | SignedDossierDocumentFile
   | StructuredDocumentFile
   | ZipArchiveDocumentFile;
@@ -282,6 +295,31 @@ export const readDocumentPartList = async ({
     source,
     path: `/v1/files/${encodeURIComponent(workspaceId)}/parts/${encodeURIComponent(fieldId)}?part=${encodeURIComponent(part)}`,
     schema: filePartListSchema,
+  });
+
+/**
+ * An email that is a part of a document's file, such as a mailbox's message,
+ * read as an email file is: its header, its text and its attachments, each
+ * opening by its path through the part.
+ */
+export const readDocumentEmailPart = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+  part,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  readonly part: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `/v1/files/${encodeURIComponent(workspaceId)}/email-reading/${encodeURIComponent(fieldId)}?part=${encodeURIComponent(part)}`,
+    schema: emailReadingSchema,
   });
 
 /** The document has no file: it was created empty, or its file was removed. */
@@ -425,6 +463,20 @@ export const readDocumentFile = async ({
           preview,
         } satisfies ZipArchiveDocumentFile);
       }
+      case "mbox": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/mbox/${encodeURIComponent(fieldId)}`,
+          schema: mailboxPreviewSchema,
+        });
+        return Result.ok({
+          viewer: "mailbox",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies MailboxDocumentFile);
+      }
       case "ofd":
       case "uyap": {
         const preview = await requestApi({
@@ -447,10 +499,10 @@ export const readDocumentFile = async ({
           fetch,
           source,
           path: `/v1/files/${encodeURIComponent(workspaceId)}/e-invoice/${encodeURIComponent(fieldId)}`,
-          schema: eInvoicePreviewSchema,
+          schema: xmlDocumentPreviewSchema,
         });
-        // Any XML file is tried as an invoice; one the server does not read
-        // as an invoice opens as before, like any other file.
+        // Any XML file is read as an invoice or as its text; one the server
+        // cannot read as text at all opens as before, like any other file.
         const notAnInvoice =
           kind === "xml" &&
           Result.isError(preview) &&
