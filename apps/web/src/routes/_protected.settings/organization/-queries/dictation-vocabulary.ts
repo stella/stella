@@ -143,7 +143,10 @@ export const addDictationTerm = async (term: string) => await postTerms([term]);
 /** Adds the words a batch at a time; returns how many were added, and the
  *  first batch that failed. */
 export const addDictationTerms = async (terms: readonly string[]) => {
-  const { done, failure } = await settleBatches(terms, postTerms);
+  const { done, failure } = await settleBatches(
+    terms,
+    async (batch) => await postTerms(batch),
+  );
   return { added: sum(done.map((result) => result.added)), failure };
 };
 

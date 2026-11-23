@@ -45,10 +45,11 @@ import { DictationImportSheet } from "@/routes/_protected.settings/organization/
 import {
   addDictationTerm,
   deleteDictationTerms,
+  type DictationBatchFailure,
   dictationVocabularyOptions,
+  type DictationVocabularyTerm,
   exportDictationTerms,
 } from "@/routes/_protected.settings/organization/-queries/dictation-vocabulary";
-import type { DictationVocabularyTerm } from "@/routes/_protected.settings/organization/-queries/dictation-vocabulary";
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -76,18 +77,22 @@ export const DictationVocabularyCard = () => {
     list.data === undefined
       ? []
       : list.data.pages.flatMap(({ items }) => items);
-  // The words' resource contracts refresh the list after every write. Built
-  // outside useMutation so its types are inferred from the write.
-  const deleteTerms = resourceMutation({
-    mutation: "deleteDictationVocabulary",
-    queryClient,
-    scope: { type: "organization" },
-    mutationFn: deleteDictationTerms,
-  });
-  // A batch that failed leaves the others' words removed; the write still
-  // settles, so the list refreshes either way.
+  // The words' resource contracts refresh the list after every write. A
+  // batch that failed leaves the others' words removed; the write still
+  // settles, so the list refreshes either way. The type arguments are
+  // explicit: useMutation's contextual type would otherwise infer the answer
+  // as unknown.
   const remove = useMutation({
-    mutationFn: deleteTerms,
+    mutationFn: resourceMutation<
+      "deleteDictationVocabulary",
+      { deleted: number; failure: DictationBatchFailure },
+      readonly DictationVocabularyTerm["id"][]
+    >({
+      mutation: "deleteDictationVocabulary",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: deleteDictationTerms,
+    }),
     onSuccess: ({ deleted, failure }) => {
       setSelected(new Set());
       if (deleted > 0 || failure === null) {
@@ -297,14 +302,17 @@ const AddWordForm = ({ full }: { full: boolean }) => {
   const queryClient = useQueryClient();
   const [draft, setDraft] = useState("");
   const reading = readDictationTerm(draft);
-  const addTerm = resourceMutation({
-    mutation: "addDictationVocabulary",
-    queryClient,
-    scope: { type: "organization" },
-    mutationFn: addDictationTerm,
-  });
   const add = useMutation({
-    mutationFn: addTerm,
+    mutationFn: resourceMutation<
+      "addDictationVocabulary",
+      { added: number },
+      string
+    >({
+      mutation: "addDictationVocabulary",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: addDictationTerm,
+    }),
     onSuccess: ({ added }, term) => {
       setDraft("");
       stellaToast.add({

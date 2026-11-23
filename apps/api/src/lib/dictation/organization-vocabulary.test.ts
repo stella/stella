@@ -1,6 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
 
-import { createSafeId } from "@/api/lib/branded-types";
 import {
   cachedVocabularyIndexCount,
   fitGroqPrompt,
@@ -8,6 +7,7 @@ import {
   rememberVocabularyIndex,
 } from "@/api/lib/dictation/organization-vocabulary";
 import { buildVocabularyIndex } from "@/api/lib/dictation/vocabulary-index";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 afterEach(() => {
   forgetOrganizationVocabularyIndexes();
@@ -15,7 +15,7 @@ afterEach(() => {
 
 test("organizations without words leave nothing in the cache", () => {
   for (let organization = 0; organization < 50; organization += 1) {
-    rememberVocabularyIndex(createSafeId<"organization">(), {
+    rememberVocabularyIndex(mintAuthProviderId<"organization">(), {
       version: "0:",
       index: buildVocabularyIndex([]),
     });
@@ -24,7 +24,7 @@ test("organizations without words leave nothing in the cache", () => {
 });
 
 test("a list emptied since it was cached drops its index", () => {
-  const organizationId = createSafeId<"organization">();
+  const organizationId = mintAuthProviderId<"organization">();
   rememberVocabularyIndex(organizationId, {
     version: "1:2026-11-20T00:00:00.000Z",
     index: buildVocabularyIndex(["Novák"]),

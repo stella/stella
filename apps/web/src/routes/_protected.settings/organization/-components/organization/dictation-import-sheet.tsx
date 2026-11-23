@@ -30,6 +30,7 @@ import { resourceMutation } from "@/lib/workspace-realtime";
 import {
   addDictationTerms,
   checkDictationTerms,
+  type DictationBatchFailure,
 } from "@/routes/_protected.settings/organization/-queries/dictation-vocabulary";
 
 type DictationImportSheetProps = {
@@ -86,18 +87,21 @@ const DictationImportSheetBody = ({
   const fresh = review === null ? 0 : review.terms.length - review.listed;
   const room =
     review === null ? 0 : MAX_ORGANIZATION_DICTATION_TERMS - review.total;
-  // Built outside useMutation so its types are inferred from the write.
-  const addTerms = resourceMutation({
-    mutation: "addDictationVocabulary",
-    queryClient,
-    scope: { type: "organization" },
-    mutationFn: addDictationTerms,
-  });
   // A batch that failed leaves the others' words added; the write still
   // settles, so the list refreshes, and the review is read again before a
-  // retry.
+  // retry. Explicit type arguments: useMutation's contextual type would
+  // otherwise infer the answer as unknown.
   const add = useMutation({
-    mutationFn: addTerms,
+    mutationFn: resourceMutation<
+      "addDictationVocabulary",
+      { added: number; failure: DictationBatchFailure },
+      readonly string[]
+    >({
+      mutation: "addDictationVocabulary",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: addDictationTerms,
+    }),
     onSuccess: ({ added, failure }) => {
       if (added > 0 || failure === null) {
         stellaToast.add({
