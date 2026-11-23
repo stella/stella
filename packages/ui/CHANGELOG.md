@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.87.0
+
+### Minor Changes
+
+- [#9294](https://github.com/stella/stella/pull/9294) [`1798f66`](https://github.com/stella/stella/commit/1798f6615a61ddf02e091d925269ed735bef75fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for Outlook mailboxes (`.pst`).
+
 ## 0.86.0
 
 ### Minor Changes
