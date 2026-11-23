@@ -250,6 +250,7 @@ const createHarness = ({
         originalMimeType: DOCX_MIME_TYPE,
         fileName: "Agreement redline.docx",
         encrypted: false,
+        unscannedContent: [],
         presignedUrl: "https://files.example/redline.docx",
         stampable: false,
       };

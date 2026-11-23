@@ -557,6 +557,7 @@ const compareDocumentDependencies = {
     originalMimeType: DOCX_MIME_TYPE,
     fileName: "comparison.docx",
     encrypted: false,
+    unscannedContent: [],
     presignedUrl: "https://files.example/comparison.docx",
     stampable: false,
   }),
