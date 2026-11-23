@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Összes vágólapelem",
+    "allResults": "Összes találat",
     "bold": "Félkövér",
     "bulletedList": "Felsorolás",
     "cancel": "Mégse",
@@ -378,6 +379,7 @@
     "moveToGroup": "Áthelyezés csoportba",
     "newGroupOption": "Új csoport…",
     "noGroup": "Nincs csoport",
+    "noGroupMatches": "Nincs találat ebben a csoportban",
     "noResults": "Nincs egyező kivágás",
     "noResultsSearchRegistries": "„{query}” keresése a nyilvántartásokban",
     "numberedList": "Számozott lista",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Bárhonnan megnyitható.",
     "welcomeStart": "Másolás megkezdése",
     "welcomeTitle": "Ismerje meg a vágólapot"
+  },
+  "clipboardSettings": {
+    "capture": "Új klipek mentése",
+    "captureDescription": "Kikapcsolva semmi sem kerül mentésre, amit kimásol.",
+    "errorSave": "A módosítást nem sikerült menteni. Próbálja újra.",
+    "excludedDescription": "Az ezekben az alkalmazásokban másolt tartalom nem kerül mentésre.",
+    "excludedEmpty": "Egy alkalmazás kizárásához kattintson jobb gombbal a vágólapon az egyik klipjére, és válassza, hogy ne mentse az onnan származó új klipeket.",
+    "groupActions": "Műveletek: {groupName}",
+    "groupsDescription": "Húzzon el egy csoportot a vágólapon elfoglalt helyének módosításához.",
+    "groupsEmpty": "Hozzon létre egy csoportot, majd húzzon bele klipeket a vágólapon.",
+    "history": "Előzmények",
+    "moveGroupDown": "Mozgatás lefelé",
+    "moveGroupUp": "Mozgatás felfelé",
+    "recordingsDescription": "A vágólap megjelenhet képernyőképeken, felvételeken és képernyőmegosztáskor.",
+    "retentionDescription": "A régebbi klipek törlődnek. A csoportokban lévő klipek megmaradnak."
   },
   "dialog": {
     "accountEmail": "Fiók",
@@ -664,6 +681,30 @@
       "transcription": "Az átírás nem sikerült. Próbálja újra."
     },
     "failureKeptInHistory": "A szöveg megtalálható a vágólap előzményeiben.",
+    "fix": {
+      "description": "Jelölje ki bármelyik alkalmazásban a szavakat, amelyeket a diktálás rosszul írt, és nyomja meg a(z) {shortcut} billentyűket a helyes írásmód megadásához. A stella csak akkor olvassa be a kijelölést, amikor megnyomja a billentyűparancsot.",
+      "taken": "Egy másik alkalmazás használja ezt: {shortcut}. A stella ikon Diktálás menüje ugyanezt kínálja.",
+      "title": "Billentyűparancs diktálás javításához"
+    },
+    "fixPanel": {
+      "dictatedAs": "Diktálva",
+      "hint": "A stella a következő diktálásokban így írja ezeket a szavakat, minden eszközén.",
+      "notSaved": "A javítást nem sikerült menteni. Ellenőrizze, hogy a stella csatlakozik-e a fiókjához.",
+      "nothing": "Előbb jelölje ki a hibás szavakat az alkalmazásban, vagy írja be őket ide.",
+      "pick": "Válassza ki a hibás szavakat az utolsó diktálásból:",
+      "refused": {
+        "empty": "Töltse ki mindkét mezőt.",
+        "lineBreak": "Egy javítás egy sor szöveg.",
+        "punctuation": "Válassza ki a diktált szavakat írásjelek nélkül.",
+        "same": "A szavak már így vannak írva.",
+        "tooLong": "Ez túl hosszú egy javításhoz.",
+        "tooManyWords": "Egy javítás legfeljebb három szó lehet."
+      },
+      "save": "Javítás mentése",
+      "saving": "A javítás mentése…",
+      "title": "Diktált szó javítása",
+      "writtenAs": "Helyesen"
+    },
     "groups": {
       "cleanup": "Javítás",
       "shortcut": "Billentyűparancs",
@@ -684,6 +725,17 @@
       "description": "Az Automatikus a számítógép megjelenítési és billentyűzetnyelveit használja. Ha több ilyen van, minden szót azon a nyelven ismer fel, amelyen kimondja.",
       "noResults": "Nem található nyelv",
       "title": "Diktálás nyelve"
+    },
+    "learned": {
+      "delete": "A stella által tanultak törlése",
+      "description": "Ha egy diktált szót kétszer ugyanúgy javít, vagy a(z) {shortcut} billentyűkkel javítja, a stella a későbbi diktálásokban így írja. Szinkronizálódik a többi eszközére; csak Ön látja.",
+      "empty": "Még nincs tanult javítás.",
+      "failed": "A javítást nem sikerült módosítani.",
+      "fix": "{from} → {to}",
+      "group": "Tanult javítások",
+      "title": "A javításaiból tanult javítások",
+      "unreadable": "A stella által tanultakat nem sikerült beolvasni.",
+      "working": "A módosítás mentése…"
     },
     "lede": "Tartsa lenyomva a(z) <key>{shortcut}</key> billentyűt, és beszéljen. A szöveg ott jelenik meg, ahol éppen ír.",
     "microphone": {
@@ -1135,6 +1187,8 @@
       "available": "Elérhető a(z) {version} verzió.",
       "checkFailed": "A stella desktop nem tudta ellenőrizni a frissítéseket.",
       "deferred": "A(z) {version} verzió vár, amíg megnyitott dokumentumokat szerkeszt. Ha végzett, ellenőrizze újra a telepítéshez, különben a következő automatikus ellenőrzéskor települ.",
+      "downloadProgress": "{percent}% letöltve",
+      "downloading": "A(z) {version} verzió letöltése folyamatban. A stella desktop a telepítés után újraindul.",
       "install": "Telepítés és újraindítás",
       "installFailed": "A stella desktop nem tudta telepíteni a frissítést.",
       "installInProgress": "Egy frissítés telepítése folyamatban van.",
@@ -1334,6 +1388,7 @@
     "activityResume": "Rögzítés folytatása",
     "checkForUpdates": "Frissítések keresése",
     "dictation": "Diktálás",
+    "dictationFix": "Utolsó diktálás javítása…",
     "dictationHint": "A diktáláshoz tartsa lenyomva a(z) {key} billentyűt",
     "dictationRetype": "Utolsó diktálás újbóli beírása",
     "dictationSettings": "Diktálási beállítások…",
@@ -1362,7 +1417,6 @@
     "supportRevealAppData": "Alkalmazásadatok megjelenítése",
     "temporaryWorkingCopies": "Ideiglenes munkamásolatok",
     "transcribeRecording": "Felvétel átírása…",
-    "updateReady": "Frissítés kész",
     "updatesManaged": "A frissítéseket a szervezete kezeli"
   }
 }

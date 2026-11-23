@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Alle Clips",
+    "allResults": "Alle Ergebnisse",
     "bold": "Fett",
     "bulletedList": "Aufzählung",
     "cancel": "Abbrechen",
@@ -378,6 +379,7 @@
     "moveToGroup": "In Gruppe verschieben",
     "newGroupOption": "Neue Gruppe…",
     "noGroup": "Keine Gruppe",
+    "noGroupMatches": "Keine Treffer in dieser Gruppe",
     "noResults": "Keine passenden Inhalte",
     "noResultsSearchRegistries": "In Registern nach „{query}“ suchen",
     "numberedList": "Nummerierte Liste",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Überall öffnen.",
     "welcomeStart": "Mit dem Kopieren beginnen",
     "welcomeTitle": "Ihre neue Zwischenablage"
+  },
+  "clipboardSettings": {
+    "capture": "Neue Ausschnitte speichern",
+    "captureDescription": "Wenn diese Option aus ist, wird nichts gespeichert, was Sie kopieren.",
+    "errorSave": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "excludedDescription": "Was Sie in diesen Apps kopieren, wird nicht gespeichert.",
+    "excludedEmpty": "Um eine App auszuschließen, klicken Sie in der Zwischenablage mit der rechten Maustaste auf einen ihrer Ausschnitte und wählen Sie, dass neue Ausschnitte daraus nicht mehr gespeichert werden.",
+    "groupActions": "Aktionen für {groupName}",
+    "groupsDescription": "Ziehen Sie eine Gruppe, um ihre Position in der Zwischenablage zu ändern.",
+    "groupsEmpty": "Erstellen Sie eine Gruppe und ziehen Sie dann in der Zwischenablage Ausschnitte hinein.",
+    "history": "Verlauf",
+    "moveGroupDown": "Nach unten verschieben",
+    "moveGroupUp": "Nach oben verschieben",
+    "recordingsDescription": "Screenshots, Aufnahmen und Bildschirmfreigaben dürfen die Zwischenablage zeigen.",
+    "retentionDescription": "Ältere Ausschnitte werden gelöscht. Ausschnitte in einer Gruppe bleiben erhalten."
   },
   "dialog": {
     "accountEmail": "Konto",
@@ -664,6 +681,30 @@
       "transcription": "Die Umwandlung ist fehlgeschlagen. Versuchen Sie es erneut."
     },
     "failureKeptInHistory": "Der Text ist im Zwischenablageverlauf.",
+    "fix": {
+      "description": "Markieren Sie in einer beliebigen App die Wörter, die ein Diktat falsch geschrieben hat, und drücken Sie {shortcut}, um die richtige Schreibweise einzugeben. stella liest die Markierung nur, wenn Sie das Kürzel drücken.",
+      "taken": "Eine andere App verwendet {shortcut}. Das Menü Diktieren am stella-Symbol bietet dasselbe.",
+      "title": "Tastenkürzel zum Korrigieren eines Diktats"
+    },
+    "fixPanel": {
+      "dictatedAs": "Diktiert als",
+      "hint": "stella schreibt diese Wörter in Ihren nächsten Diktaten so, auf allen Ihren Geräten.",
+      "notSaved": "Die Korrektur konnte nicht gespeichert werden. Prüfen Sie, ob stella mit Ihrem Konto verbunden ist.",
+      "nothing": "Markieren Sie zuerst die falschen Wörter in der App oder geben Sie sie hier ein.",
+      "pick": "Wählen Sie die falschen Wörter aus Ihrem letzten Diktat:",
+      "refused": {
+        "empty": "Füllen Sie beide Felder aus.",
+        "lineBreak": "Eine Korrektur ist eine Textzeile.",
+        "punctuation": "Wählen Sie die diktierten Wörter ohne Satzzeichen.",
+        "same": "Die Wörter sind bereits so geschrieben.",
+        "tooLong": "Das ist für eine Korrektur zu lang.",
+        "tooManyWords": "Eine Korrektur umfasst höchstens drei Wörter."
+      },
+      "save": "Korrektur speichern",
+      "saving": "Korrektur wird gespeichert…",
+      "title": "Diktiertes Wort korrigieren",
+      "writtenAs": "Richtig geschrieben"
+    },
     "groups": {
       "cleanup": "Überarbeitung",
       "shortcut": "Tastenkürzel",
@@ -684,6 +725,17 @@
       "description": "Automatisch verwendet die Sprachen der Anzeige und Tastaturen dieses Computers. Sind es mehrere, wird jedes Wort in der Sprache erkannt, in der Sie es sprechen.",
       "noResults": "Keine Sprachen gefunden",
       "title": "Diktiersprache"
+    },
+    "learned": {
+      "delete": "Gelerntes löschen",
+      "description": "Wenn Sie ein diktiertes Wort zweimal gleich korrigieren oder mit {shortcut} korrigieren, schreibt stella es in späteren Diktaten so. Wird mit Ihren anderen Geräten synchronisiert; nur Sie sehen es.",
+      "empty": "Noch nichts gelernt.",
+      "failed": "Die Korrektur konnte nicht geändert werden.",
+      "fix": "{from} → {to}",
+      "group": "Gelernte Korrekturen",
+      "title": "Aus Ihren Korrekturen gelernt",
+      "unreadable": "Was stella gelernt hat, konnte nicht gelesen werden.",
+      "working": "Änderung wird gespeichert…"
     },
     "lede": "Halten Sie <key>{shortcut}</key> gedrückt und sprechen Sie. Der Text erscheint dort, wo Sie gerade schreiben.",
     "microphone": {
@@ -1135,6 +1187,8 @@
       "available": "Version {version} ist verfügbar.",
       "checkFailed": "stella desktop konnte nicht nach Aktualisierungen suchen.",
       "deferred": "Version {version} wartet, solange geöffnete Dokumente bearbeitet werden. Prüfen Sie danach erneut, um sie zu installieren, oder sie wird bei der nächsten automatischen Prüfung installiert.",
+      "downloadProgress": "{percent} % heruntergeladen",
+      "downloading": "Version {version} wird heruntergeladen. stella desktop startet nach der Installation neu.",
       "install": "Installieren und neu starten",
       "installFailed": "stella desktop konnte die Aktualisierung nicht installieren.",
       "installInProgress": "Eine Aktualisierung wird installiert.",
@@ -1334,6 +1388,7 @@
     "activityResume": "Aufzeichnung fortsetzen",
     "checkForUpdates": "Nach Aktualisierungen suchen",
     "dictation": "Diktieren",
+    "dictationFix": "Letztes Diktat korrigieren…",
     "dictationHint": "Zum Diktieren {key} gedrückt halten",
     "dictationRetype": "Letztes Diktat erneut eingeben",
     "dictationSettings": "Diktiereinstellungen…",
@@ -1362,7 +1417,6 @@
     "supportRevealAppData": "App-Daten anzeigen",
     "temporaryWorkingCopies": "Temporäre Arbeitskopien",
     "transcribeRecording": "Aufnahme transkribieren…",
-    "updateReady": "Aktualisierung bereit",
     "updatesManaged": "Aktualisierungen werden von Ihrer Organisation verwaltet"
   }
 }

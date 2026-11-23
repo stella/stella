@@ -31,6 +31,7 @@ const DICTATION_HINT_ITEM: &str = "dictation-hint";
 /// Followed by the stored language choice (`auto` or a language code).
 const DICTATION_LANGUAGE_PREFIX: &str = "dictation-language:";
 const RETYPE_DICTATION_ACTION: &str = "dictation-retype";
+const FIX_DICTATION_ACTION: &str = "dictation-fix";
 const PAUSE_ACTIVITY_ACTION: &str = "activity-pause";
 const RESUME_ACTIVITY_ACTION: &str = "activity-resume";
 const ACTIVITY_STATUS_ITEM: &str = "activity-status";
@@ -101,8 +102,8 @@ enum DictationMenu {
   /// Switched off: one item, opening the page where it is turned on.
   Off,
   /// On: a line naming the key to hold, typing the last dictation again
-  /// (enabled while there is one), a quick language switch, then its
-  /// settings.
+  /// (enabled while there is one), fixing a dictation's words, a quick
+  /// language switch, then its settings.
   On {
     hint: String,
     can_retype: bool,
@@ -237,10 +238,6 @@ fn can_retry_session(session: &SessionSnapshot) -> bool {
 }
 
 fn get_tray_status_label(snapshot: &AppSnapshot) -> String {
-  if snapshot.update.update_ready {
-    return t("tray.updateReady").to_string();
-  }
-
   let needs_attention = snapshot
     .sessions
     .iter()
@@ -485,7 +482,8 @@ fn build_tray_menu_with_activity(
       .build(app)?,
   );
 
-  // Check for updates, unless the organization deploys them itself
+  // Check for updates, unless the organization deploys them itself. It opens
+  // About, which shows a check or install already under way.
   if crate::managed_policy::current().updates_disabled {
     builder = builder.item(
       &MenuItemBuilder::with_id(UPDATES_MANAGED_ITEM, t("tray.updatesManaged"))
@@ -495,12 +493,6 @@ fn build_tray_menu_with_activity(
   } else {
     builder = builder.item(
       &MenuItemBuilder::with_id(CHECK_FOR_UPDATES_ACTION, t("tray.checkForUpdates"))
-        .enabled(!matches!(
-          snapshot.update.status,
-          crate::types::DesktopUpdateStatus::Checking
-            | crate::types::DesktopUpdateStatus::Downloading
-            | crate::types::DesktopUpdateStatus::Applying
-        ))
         .build(app)?,
     );
   }
@@ -634,6 +626,10 @@ fn build_dictation_menu(
           .enabled(*can_retype)
           .build(app)?,
       )
+      .item(
+        &MenuItemBuilder::with_id(FIX_DICTATION_ACTION, t("tray.dictationFix"))
+          .build(app)?,
+      )
       .item(&build_dictation_language_menu(app, languages)?)
       .separator()
       .item(&transcribe)
@@ -731,6 +727,9 @@ pub fn handle_menu_action(action: &str) -> MenuAction {
   if action == RETYPE_DICTATION_ACTION {
     return MenuAction::RetypeDictation;
   }
+  if action == FIX_DICTATION_ACTION {
+    return MenuAction::FixDictation;
+  }
   if action == PAUSE_ACTIVITY_ACTION {
     return MenuAction::SetActivityRecording(ActivityRecordingStatus::Paused);
   }
@@ -783,6 +782,7 @@ pub enum MenuAction {
   OpenActivity,
   OpenTranscribe,
   RetypeDictation,
+  FixDictation,
   SetActivityRecording(ActivityRecordingStatus),
   /// The stored dictation language choice the quick switch picked.
   SetDictationLanguage(String),
@@ -1001,6 +1001,14 @@ mod tests {
   }
 
   #[test]
+  fn the_dictation_submenu_fixes_a_dictation() {
+    assert!(matches!(
+      handle_menu_action(FIX_DICTATION_ACTION),
+      MenuAction::FixDictation
+    ));
+  }
+
+  #[test]
   fn the_dictation_submenu_opens_the_transcribe_window() {
     assert!(matches!(
       handle_menu_action(OPEN_TRANSCRIBE_ACTION),
@@ -1022,6 +1030,7 @@ mod tests {
       "tray.dictation",
       "tray.dictationHint",
       "tray.dictationRetype",
+      "tray.dictationFix",
       "tray.dictationSettings",
       "tray.dictationTurnOn",
     ] {
@@ -1201,14 +1210,6 @@ mod tests {
     init_i18n();
     let snap = make_snapshot(vec![make_session(SessionStatus::Syncing)]);
     assert_eq!(get_tray_status_label(&snap), "1 document syncing");
-  }
-
-  #[test]
-  fn test_status_label_update_ready() {
-    init_i18n();
-    let mut snap = make_snapshot(vec![make_session(SessionStatus::Ready)]);
-    snap.update.update_ready = true;
-    assert_eq!(get_tray_status_label(&snap), "Update ready");
   }
 
   // -- get_session_id_from_action --

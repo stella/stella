@@ -467,6 +467,10 @@
     "retry": "Try again",
     "title": "Document",
     "unrendered": "This document cannot be shown here, but the system preview may open it.",
+    "unscannedContent": {
+      "encrypted": "Some files inside are password-protected, so they weren’t checked for threats.",
+      "unsupportedCompression": "Some files inside are compressed in a format stella can’t read, so they weren’t checked for threats."
+    },
     "zoomFit": "Fit to width",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"
@@ -550,6 +554,8 @@
     "noFilesInside": "There are no files inside.",
     "noMatches": "No file matches “{query}”.",
     "open": "Open {fileName} ({details})",
+    "saveFailed": "The file could not be saved to the matter. Try again.",
+    "saveNamed": "Save {fileName} to a matter",
     "search": "Find a file by name or folder",
     "unavailable": {
       "encrypted": "Password-protected, can’t be opened",

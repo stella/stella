@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { UNSCANNED_CONTENT_WARNING } from "@stll/api-contract/file-scan-warnings";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   chatMessages,
@@ -10,7 +12,10 @@ import {
   userFiles,
 } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
-import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
+import {
+  createChatAttachmentPart,
+  toPersistedChatMessageContentV3,
+} from "@/api/handlers/chat/chat-message-parts";
 import {
   decodeMessagePageCursor,
   loadChatMessagePage,
@@ -35,6 +40,8 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 // rows that share a millisecond (e.g. inserted in one transaction). A
 // millisecond-precision cursor would silently drop same-millisecond rows at a
 // page boundary; the "share a millisecond" test fails on that regression.
+
+const ARCHIVE_MIME_TYPE = "application/vnd.etsi.asic-e+zip";
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -354,5 +361,80 @@ describe("loadClientMessages", () => {
     });
 
     expect(served).toEqual(Result.ok(page.messages));
+  });
+
+  test("serves a sent file's unscanned content from the file's scan warnings", async () => {
+    const base = Date.parse("2026-05-02T00:00:00.000Z");
+    const { threadId } = await seedThread([new Date(base)]);
+    const storeArchive = async (scanWarnings: string[] | null) => {
+      const fileId = toSafeId<"userFile">(Bun.randomUUIDv7());
+      await testDb.insert(userFiles).values({
+        fileName: "bundle.asice",
+        id: fileId,
+        mimeType: ARCHIVE_MIME_TYPE,
+        s3Key: createUserFileKey({
+          fileId,
+          mimeType: ARCHIVE_MIME_TYPE,
+          organizationId: ids.orgA,
+        }),
+        scanWarnings,
+        sha256Hex: "c".repeat(64),
+        sizeBytes: 4,
+        threadId,
+        userId: ids.userA1,
+      });
+      seededFileIds.push(fileId);
+      return fileId;
+    };
+    const locked = await storeArchive([
+      "OLE2 compound file container detected",
+      UNSCANNED_CONTENT_WARNING.encrypted,
+    ]);
+    const readable = await storeArchive(null);
+    const messageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    await testDb.insert(chatMessages).values({
+      content: toPersistedChatMessageContentV3({
+        data: [
+          createChatAttachmentPart({
+            filename: "bundle.asice",
+            mimeType: ARCHIVE_MIME_TYPE,
+            url: toUserFileUrl(locked),
+          }),
+          // A part that claims what its file does not say.
+          createChatAttachmentPart({
+            filename: "bundle.asice",
+            mimeType: ARCHIVE_MIME_TYPE,
+            unscannedContent: ["unsupportedCompression"],
+            url: toUserFileUrl(readable),
+          }),
+        ],
+      }),
+      createdAt: new Date(base + 1),
+      id: messageId,
+      role: "user",
+      threadId,
+      userId: ids.userA1,
+      workspaceId: ids.wsA1,
+    });
+
+    const page = await loadPage(threadId);
+    const sent = page.messages.find(({ id }) => id === messageId);
+
+    expect(
+      asTestRaw<{ metadata?: unknown }[]>(sent?.parts ?? []).map(
+        ({ metadata }) => metadata,
+      ),
+    ).toEqual([
+      { filename: "bundle.asice", unscannedContent: ["encrypted"] },
+      { filename: "bundle.asice" },
+    ]);
+    expect(
+      await loadClientMessages({
+        messageIds: [messageId],
+        safeDb,
+        threadId,
+        userId: ids.userA1,
+      }),
+    ).toEqual(Result.ok(sent === undefined ? [] : [sent]));
   });
 });

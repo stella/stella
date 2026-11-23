@@ -267,14 +267,14 @@ const preflightAndAdopt = async ({
       }
       const unnamedReceipts = decisions.flatMap((decision) =>
         decision.type === "mapped" && decision.receipt.name === null
-          ? [sql`(${decision.receipt.id}::integer, ${decision.name}::text)`]
+          ? [{ id: decision.receipt.id, name: decision.name }]
           : [],
       );
       if (unnamedReceipts.length > 0) {
         await tx.execute(sql`
           UPDATE ${sql.identifier(migrationsSchema)}.${sql.identifier(migrationsTable)} AS ledger
           SET name = adopted.name, applied_at = NULL
-          FROM (VALUES ${sql.join(unnamedReceipts, sql`, `)}) AS adopted(id, name)
+          FROM jsonb_to_recordset(${JSON.stringify(unnamedReceipts)}::text::jsonb) AS adopted(id integer, name text)
           WHERE ledger.id = adopted.id
         `);
       }

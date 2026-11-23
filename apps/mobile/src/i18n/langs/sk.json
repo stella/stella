@@ -467,6 +467,10 @@
     "retry": "Skúsiť znova",
     "title": "Dokument",
     "unrendered": "Tento dokument sa tu nedá zobraziť, systémový náhľad ho však možno otvorí.",
+    "unscannedContent": {
+      "encrypted": "Niektoré súbory vo vnútri sú chránené heslom, a preto neboli skontrolované na hrozby.",
+      "unsupportedCompression": "Niektoré súbory vo vnútri sú komprimované vo formáte, ktorý stella nevie prečítať, a preto neboli skontrolované na hrozby."
+    },
     "zoomFit": "Prispôsobiť šírke",
     "zoomIn": "Priblížiť",
     "zoomOut": "Oddialiť"
@@ -550,6 +554,8 @@
     "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
     "noMatches": "Výrazu „{query}“ nezodpovedá žiadny súbor.",
     "open": "Otvoriť {fileName} ({details})",
+    "saveFailed": "Súbor sa nepodarilo uložiť do spisu. Skúste to znova.",
+    "saveNamed": "Uložiť {fileName} do spisu",
     "search": "Nájsť súbor podľa názvu alebo priečinka",
     "unavailable": {
       "encrypted": "Chránené heslom, nedá sa otvoriť",

@@ -467,6 +467,10 @@
     "retry": "Újra",
     "title": "Dokumentum",
     "unrendered": "Ez a dokumentum itt nem jeleníthető meg, de a rendszer előnézete talán meg tudja nyitni.",
+    "unscannedContent": {
+      "encrypted": "Néhány benne lévő fájl jelszóval védett, ezért nem ellenőriztük őket fenyegetések szempontjából.",
+      "unsupportedCompression": "Néhány benne lévő fájl olyan formátumban van tömörítve, amelyet a stella nem tud beolvasni, ezért nem ellenőriztük őket fenyegetések szempontjából."
+    },
     "zoomFit": "Szélességhez igazítás",
     "zoomIn": "Nagyítás",
     "zoomOut": "Kicsinyítés"
@@ -550,6 +554,8 @@
     "noFilesInside": "Nincsenek benne fájlok.",
     "noMatches": "Egyetlen fájl sem felel meg ennek: „{query}”.",
     "open": "{fileName} ({details}) megnyitása",
+    "saveFailed": "A fájlt nem sikerült az ügybe menteni. Próbálja újra.",
+    "saveNamed": "{fileName} mentése egy ügybe",
     "search": "Fájl keresése név vagy mappa alapján",
     "unavailable": {
       "encrypted": "Jelszóval védett, nem nyitható meg",

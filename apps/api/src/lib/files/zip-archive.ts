@@ -24,6 +24,8 @@ import { decodeUndeclaredFileNames } from "@stll/mojibake/undeclared-charset";
 import {
   hasZipMagic,
   readZipIndex,
+  unreadableZipEntry,
+  ZIP_METHOD_STORED,
   type ZipEntry,
 } from "@/api/lib/file-scan/zip";
 import {
@@ -36,13 +38,7 @@ import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 /** The largest file the archive reader inflates. */
 export const ZIP_ARCHIVE_MAX_FILE_BYTES = 32 * 1024 * 1024;
 
-const ZIP_FLAG_ENCRYPTED = 0x00_01;
-const ZIP_FLAG_STRONG_ENCRYPTION = 0x00_40;
 const ZIP_FLAG_UTF8 = 0x08_00;
-const ZIP_METHOD_STORED = 0;
-const ZIP_METHOD_DEFLATE = 8;
-/** WinZip AES encryption, stated as a method of its own. */
-const ZIP_METHOD_AES = 99;
 const ZIP_EXTRA_UNICODE_PATH = 0x70_75;
 // The high 16 bits of the external attributes hold a Unix mode; its top
 // nibble is the file type.
@@ -163,20 +159,14 @@ const isDirectory = (entry: ZipEntry, name: string): boolean =>
 const unavailableReason = (
   entry: ZipEntry,
 ): FilePartUnavailableReason | null => {
-  if (
-    entry.method === ZIP_METHOD_AES ||
-    hasFlag(entry.flags, ZIP_FLAG_ENCRYPTED) ||
-    hasFlag(entry.flags, ZIP_FLAG_STRONG_ENCRYPTION)
-  ) {
+  const unreadable = unreadableZipEntry(entry);
+  if (unreadable === "encrypted") {
     return "encrypted";
   }
   if (unixFileType(entry) === UNIX_SYMLINK_TYPE) {
     return "link";
   }
-  if (
-    entry.method !== ZIP_METHOD_STORED &&
-    entry.method !== ZIP_METHOD_DEFLATE
-  ) {
+  if (unreadable === "unsupportedCompression") {
     return "unsupported";
   }
   if (entry.uncompressedSize > ZIP_ARCHIVE_MAX_FILE_BYTES) {

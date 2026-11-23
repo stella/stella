@@ -53,6 +53,9 @@ const ENABLED_SNAPSHOT = {
   translateTo: null,
   failure: null,
   failureKeptInHistory: false,
+  fixKeys: { code: "KeyT", modifiers: ["control", "alt", "shift"] },
+  fixShortcut: true,
+  fixShortcutTaken: false,
   holdKey: "combination",
   holdKeys: ["combination"],
   holdKeyWaiting: false,
@@ -79,6 +82,10 @@ const renderSetting = async (
     // A test may answer the snapshot read itself, to change it between reads.
     if (command === "dictation_get_snapshot") {
       return answered ?? snapshot;
+    }
+    // Nothing learned yet, unless a test answers otherwise.
+    if (command === "dictation_learned_get") {
+      return answered ?? { fixes: [] };
     }
     return answered;
   });
@@ -548,6 +555,81 @@ test("a retype shortcut another app holds says so", async () => {
     retypeShortcutTaken: true,
   });
   expect(await findByText(/^Another app is using /u)).toBeTruthy();
+});
+
+test("turning the fix shortcut off asks the native side and shows its answer", async () => {
+  const calls: unknown[] = [];
+  const { getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called !== "dictation_set_fix_shortcut") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, fixShortcut: false };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.fix.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("learned fixes that are on or off are listed with a switch, and all can be deleted", async () => {
+  const learned = {
+    fixes: [
+      { from: "novak", seen: 2, status: "on", to: "Novák" },
+      { from: "smith", seen: 1, status: "learning", to: "Smyth" },
+    ],
+  };
+  const calls: [string, unknown][] = [];
+  const { findByLabelText, getByText, queryByLabelText } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called === "dictation_learned_get") {
+        return learned;
+      }
+      if (called === "dictation_learned_switch") {
+        calls.push([called, payload]);
+        return { fixes: [{ ...learned.fixes[0], status: "off" }] };
+      }
+      if (called === "dictation_learned_delete") {
+        calls.push([called, payload]);
+        return { fixes: [] };
+      }
+      return undefined;
+    },
+  );
+  const toggle = await findByLabelText("novak → Novák");
+  expect(toggle.getAttribute("role")).toBe("switch");
+  // A fix still being learned is not listed.
+  expect(queryByLabelText("smith → Smyth")).toBeNull();
+
+  // Each change answers with the list it leaves; act waits for that answer.
+  await act(async () => {
+    fireEvent.click(toggle);
+  });
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+
+  await act(async () => {
+    fireEvent.click(getByText(defaultMessages.dictation.learned.delete));
+  });
+  await waitFor(() => {
+    expect(queryByLabelText("novak → Novák")).toBeNull();
+  });
+  expect(calls).toEqual([
+    ["dictation_learned_switch", { from: "novak", status: "off" }],
+    ["dictation_learned_delete", {}],
+  ]);
 });
 
 test("removing an app's own settings stores the rest", async () => {

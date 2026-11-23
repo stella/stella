@@ -25,6 +25,7 @@ mod clipboard_commands;
 #[cfg(target_os = "macos")]
 mod clipboard_image_export;
 mod clipboard_screen_capture;
+mod clipboard_settings;
 mod clipboard_shortcut;
 mod clipboard_store;
 mod clipboard_welcome;
@@ -48,12 +49,14 @@ mod dictation_cloud;
 mod dictation_context;
 #[cfg(dictation)]
 mod dictation_engine;
+mod dictation_fix;
 mod dictation_focus;
 mod dictation_format;
 mod dictation_hold_key;
 #[cfg(dictation)]
 mod dictation_input;
 mod dictation_language;
+mod dictation_learned;
 mod dictation_live;
 mod dictation_media;
 mod dictation_microphone;
@@ -252,6 +255,7 @@ pub fn run() {
     .manage(transcribe_recording::TranscribeState::default())
     .manage(transcribe_history::TranscribeHistoryState::default())
     .manage(dictation_notice::DictationNotice::default())
+    .manage(dictation_fix::FixPanel::default())
     .manage(dictation_microphone::MicrophoneTest::default())
     .manage(dictation_preview::PreviewState::new())
     .manage::<clipboard_shortcut::ClipboardShortcutState>(std::sync::Mutex::new(
@@ -443,6 +447,9 @@ pub fn run() {
               }
               tray::MenuAction::RetypeDictation => {
                 dictation::retype_from_tray(&handle);
+              }
+              tray::MenuAction::FixDictation => {
+                dictation::fix_from_tray(&handle);
               }
               tray::MenuAction::SetActivityRecording(status) => {
                 if activity::set_recording_from_tray(&handle, status).is_err() {

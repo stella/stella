@@ -252,56 +252,22 @@ pub struct OpenFileRemoteSession {
   pub took_over_existing_session: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(test, derive(ts_rs::TS))]
-#[serde(rename_all = "snake_case")]
-pub enum DesktopUpdateStatus {
-  Idle,
-  Checking,
-  Available,
-  Downloading,
-  Ready,
-  Applying,
-  UpToDate,
-  Error,
-  Disabled,
-}
-
+// The running build's version. What the updater is doing has one owner,
+// `updater::UpdaterSnapshot`, which Settings reads on its own.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopUpdateSnapshot {
-  pub base_url: Option<String>,
-  pub channel: Option<String>,
-  pub current_hash: Option<String>,
   pub current_version: Option<String>,
-  pub last_checked_at: Option<String>,
-  pub latest_hash: Option<String>,
-  pub latest_version: Option<String>,
-  pub status: DesktopUpdateStatus,
-  pub status_message: String,
-  pub update_available: bool,
-  pub update_ready: bool,
 }
 
 impl Default for DesktopUpdateSnapshot {
   fn default() -> Self {
     Self {
-      base_url: None,
-      channel: None,
-      current_hash: None,
-      // Stamp the build's own version so the Settings panel shows
-      // it immediately, before any updater check populates the
-      // remote-version fields. Without this, the UI falls back to
-      // the "Preview build" / "Development build" label.
+      // Stamp the build's own version so the Settings panel shows it
+      // immediately. Without this, the UI falls back to the
+      // "Preview build" / "Development build" label.
       current_version: Some(env!("CARGO_PKG_VERSION").to_string()),
-      last_checked_at: None,
-      latest_hash: None,
-      latest_version: None,
-      status: DesktopUpdateStatus::Disabled,
-      status_message: "Updates will appear here once configured.".to_string(),
-      update_available: false,
-      update_ready: false,
     }
   }
 }
@@ -318,7 +284,7 @@ pub struct TrustedSelfHostConnection {
 /// Monotonic bridge contract revision. Increment whenever the bridge
 /// surface changes so the web app can require a minimum revision without
 /// coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 44;
+pub const BRIDGE_VERSION: u32 = 46;
 
 /// Versioned contracts advertised to the web app. A client requires the
 /// capability it uses; breaking semantics receive a new capability id.
@@ -768,7 +734,7 @@ mod rpc_codegen_tests {
     OpenFileRequest,
     OpenFileResponse,
     RecoveryTarget,
-    crate::updater::SettingsCheck,
+    crate::updater::UpdaterSnapshot,
   );
 
   struct DeclarationVisitor<'a> {

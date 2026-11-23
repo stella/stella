@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Todos los clips",
+    "allResults": "Todos los resultados",
     "bold": "Negrita",
     "bulletedList": "Lista con viñetas",
     "cancel": "Cancelar",
@@ -378,6 +379,7 @@
     "moveToGroup": "Mover al grupo",
     "newGroupOption": "Grupo nuevo…",
     "noGroup": "Sin grupo",
+    "noGroupMatches": "No hay coincidencias en este grupo",
     "noResults": "No hay recortes coincidentes",
     "noResultsSearchRegistries": "Buscar «{query}» en los registros",
     "numberedList": "Lista numerada",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Ábrelo desde cualquier lugar.",
     "welcomeStart": "Empezar a copiar",
     "welcomeTitle": "Conoce tu portapapeles"
+  },
+  "clipboardSettings": {
+    "capture": "Guardar recortes nuevos",
+    "captureDescription": "Desactívalo para dejar de guardar lo que copias.",
+    "errorSave": "No se pudo guardar el cambio. Inténtalo de nuevo.",
+    "excludedDescription": "No se guarda nada de lo que copias en estas aplicaciones.",
+    "excludedEmpty": "Para excluir una aplicación, haz clic derecho en uno de sus recortes en el portapapeles y elige dejar de guardar sus recortes nuevos.",
+    "groupActions": "Acciones de {groupName}",
+    "groupsDescription": "Arrastra un grupo para cambiar su posición en el portapapeles.",
+    "groupsEmpty": "Crea un grupo y luego arrastra recortes a él en el portapapeles.",
+    "history": "Historial",
+    "moveGroupDown": "Mover abajo",
+    "moveGroupUp": "Mover arriba",
+    "recordingsDescription": "Permite que las capturas de pantalla, las grabaciones y la pantalla compartida muestren el portapapeles.",
+    "retentionDescription": "Los recortes más antiguos se eliminan. Los recortes de un grupo se conservan."
   },
   "dialog": {
     "accountEmail": "Cuenta",
@@ -664,6 +681,30 @@
       "transcription": "La transcripción ha fallado. Inténtalo de nuevo."
     },
     "failureKeptInHistory": "El texto está en el historial del portapapeles.",
+    "fix": {
+      "description": "Selecciona en cualquier app las palabras que un dictado escribió mal y pulsa {shortcut} para escribir cómo se escriben. stella lee la selección solo cuando pulsas el atajo.",
+      "taken": "Otra app está usando {shortcut}. El menú Dictado del icono de stella ofrece lo mismo.",
+      "title": "Atajo para corregir un dictado"
+    },
+    "fixPanel": {
+      "dictatedAs": "Dictado como",
+      "hint": "stella escribirá estas palabras así en tus próximos dictados, en todos tus dispositivos.",
+      "notSaved": "No se pudo guardar la corrección. Comprueba que stella esté conectada a tu cuenta.",
+      "nothing": "Primero selecciona las palabras incorrectas en la app o escríbelas aquí.",
+      "pick": "Elige las palabras incorrectas de tu último dictado:",
+      "refused": {
+        "empty": "Rellena los dos campos.",
+        "lineBreak": "Una corrección es una sola línea de texto.",
+        "punctuation": "Elija las palabras dictadas sin signos de puntuación.",
+        "same": "Las palabras ya están escritas así.",
+        "tooLong": "Es demasiado largo para una corrección.",
+        "tooManyWords": "Una corrección admite como máximo tres palabras."
+      },
+      "save": "Guardar corrección",
+      "saving": "Guardando la corrección…",
+      "title": "Corregir una palabra dictada",
+      "writtenAs": "Se escribe"
+    },
     "groups": {
       "cleanup": "Corrección",
       "shortcut": "Atajo",
@@ -684,6 +725,17 @@
       "description": "Automático usa los idiomas de la pantalla y los teclados de este ordenador. Si hay varios, cada palabra se reconoce en el idioma en que la pronuncia.",
       "noResults": "No se encontraron idiomas",
       "title": "Idioma del dictado"
+    },
+    "learned": {
+      "delete": "Borrar lo que aprendió stella",
+      "description": "Cuando corriges una palabra dictada dos veces de la misma forma, o la corriges con {shortcut}, stella la escribe así en los siguientes dictados. Se sincroniza con tus otros dispositivos; solo tú puedes verlas.",
+      "empty": "Aún no se ha aprendido ninguna corrección.",
+      "failed": "No se pudo cambiar la corrección.",
+      "fix": "{from} → {to}",
+      "group": "Correcciones aprendidas",
+      "title": "Correcciones aprendidas de tus cambios",
+      "unreadable": "No se pudo leer lo que aprendió stella.",
+      "working": "Guardando el cambio…"
     },
     "lede": "Mantén pulsado <key>{shortcut}</key> y habla. El texto aparece donde estás escribiendo.",
     "microphone": {
@@ -1135,6 +1187,8 @@
       "available": "La versión {version} está disponible.",
       "checkFailed": "stella desktop no pudo buscar actualizaciones.",
       "deferred": "La versión {version} espera mientras se editan documentos abiertos. Cuando termine, vuelva a buscar actualizaciones para instalarla, o se instalará en la próxima comprobación automática.",
+      "downloadProgress": "{percent} % descargado",
+      "downloading": "Descargando la versión {version}. stella desktop se reiniciará cuando esté instalada.",
       "install": "Instalar y reiniciar",
       "installFailed": "stella desktop no pudo instalar la actualización.",
       "installInProgress": "Se está instalando una actualización.",
@@ -1334,6 +1388,7 @@
     "activityResume": "Reanudar registro",
     "checkForUpdates": "Buscar actualizaciones",
     "dictation": "Dictado",
+    "dictationFix": "Corregir el último dictado…",
     "dictationHint": "Mantenga pulsado {key} para dictar",
     "dictationRetype": "Volver a escribir el último dictado",
     "dictationSettings": "Ajustes de dictado…",
@@ -1362,7 +1417,6 @@
     "supportRevealAppData": "Mostrar datos de la app",
     "temporaryWorkingCopies": "Copias de trabajo temporales",
     "transcribeRecording": "Transcribir una grabación…",
-    "updateReady": "Actualización lista",
     "updatesManaged": "Las actualizaciones las gestiona tu organización"
   }
 }

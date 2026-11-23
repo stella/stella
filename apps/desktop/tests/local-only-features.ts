@@ -40,6 +40,31 @@ export const LOCAL_ONLY_FEATURES = [
     windows: ["clipboard", "clipboard-editor"],
   },
   {
+    // Clipboard settings, also offered in the Settings window: capture,
+    // retention, screen recordings, excluded applications and groups. None
+    // of these commands returns a clip.
+    callerType: "ClipboardSettingsCaller",
+    commandOwners: [
+      { module: "src/clipboard_settings.rs", prefixes: ["clipboard_"] },
+    ],
+    id: "clipboard_settings",
+    telemetry: "fixedCodes",
+    nativeModules: [],
+    windowModules: {
+      "src-tauri/capabilities/clipboard.json": [
+        "src/clipboard/clipboard-settings.ts",
+        "src/clipboard/ClipboardGroupDialog.tsx",
+      ],
+      "src-tauri/capabilities/default.json": [
+        "src/mainview/ClipboardSettings.tsx",
+        "src/clipboard/clipboard-settings.ts",
+        "src/clipboard/ClipboardGroupDialog.tsx",
+        "src/clipboard/ClipboardGroupFields.tsx",
+      ],
+    },
+    windows: ["clipboard", "clipboard-editor", "main"],
+  },
+  {
     callerType: "ActivityCaller",
     commandOwners: [
       { module: "src/activity_commands.rs", prefixes: ["activity_"] },

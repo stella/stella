@@ -312,6 +312,7 @@
   },
   "clipboard": {
     "allClips": "Všetky klipy",
+    "allResults": "Všetky výsledky",
     "bold": "Tučné",
     "bulletedList": "Odrážkový zoznam",
     "cancel": "Zrušiť",
@@ -378,6 +379,7 @@
     "moveToGroup": "Presunúť do skupiny",
     "newGroupOption": "Nová skupina…",
     "noGroup": "Bez skupiny",
+    "noGroupMatches": "V tejto skupine nič nezodpovedá",
     "noResults": "Žiadne zodpovedajúce výstrižky",
     "noResultsSearchRegistries": "Hľadať „{query}“ v registroch",
     "numberedList": "Číslovaný zoznam",
@@ -461,6 +463,21 @@
     "welcomeShortcutTitle": "Otvorte ju odkiaľkoľvek.",
     "welcomeStart": "Začať kopírovať",
     "welcomeTitle": "Zoznámte sa so schránkou"
+  },
+  "clipboardSettings": {
+    "capture": "Ukladať nové výstrižky",
+    "captureDescription": "Po vypnutí sa nič, čo skopírujete, neukladá.",
+    "errorSave": "Zmenu sa nepodarilo uložiť. Skúste to znova.",
+    "excludedDescription": "Nič, čo v týchto aplikáciách skopírujete, sa neukladá.",
+    "excludedEmpty": "Ak chcete aplikáciu vylúčiť, kliknite v schránke pravým tlačidlom na niektorý jej výstrižok a zvoľte, že sa z nej nové výstrižky nemajú ukladať.",
+    "groupActions": "Akcie pre skupinu {groupName}",
+    "groupsDescription": "Presunutím skupiny zmeníte jej poradie v schránke.",
+    "groupsEmpty": "Vytvorte skupinu a v schránke do nej presuňte výstrižky.",
+    "history": "História",
+    "moveGroupDown": "Posunúť nadol",
+    "moveGroupUp": "Posunúť nahor",
+    "recordingsDescription": "Umožní zobraziť schránku na snímkach obrazovky, v nahrávkach a pri zdieľaní obrazovky.",
+    "retentionDescription": "Staršie výstrižky sa mažú. Výstrižky v skupine zostávajú."
   },
   "dialog": {
     "accountEmail": "Účet",
@@ -664,6 +681,30 @@
       "transcription": "Prevod zlyhal. Skúste to znova."
     },
     "failureKeptInHistory": "Text nájdete v histórii schránky.",
+    "fix": {
+      "description": "Označte v ľubovoľnej aplikácii slová, ktoré diktát napísal zle, a stlačte {shortcut}. Potom napíšete, ako sa píšu. stella prečíta označený text, len keď skratku stlačíte.",
+      "taken": "Skratku {shortcut} používa iná aplikácia. To isté ponúka ponuka Diktovanie pri ikone aplikácie stella.",
+      "title": "Skratka na opravu diktátu"
+    },
+    "fixPanel": {
+      "dictatedAs": "Nadiktované ako",
+      "hint": "stella tieto slová v ďalších diktátoch napíše takto, na všetkých vašich zariadeniach.",
+      "notSaved": "Opravu sa nepodarilo uložiť. Skontrolujte, či je stella pripojená k vášmu účtu.",
+      "nothing": "Najprv v aplikácii označte chybné slová alebo ich napíšte sem.",
+      "pick": "Vyberte chybné slová z posledného diktátu:",
+      "refused": {
+        "empty": "Vyplňte obe polia.",
+        "lineBreak": "Oprava je jeden riadok textu.",
+        "punctuation": "Vyberte nadiktované slová bez interpunkcie.",
+        "same": "Slová sú už napísané takto.",
+        "tooLong": "Na jednu opravu je to príliš dlhé.",
+        "tooManyWords": "Oprava môže mať najviac tri slová."
+      },
+      "save": "Uložiť opravu",
+      "saving": "Ukladá sa oprava…",
+      "title": "Opraviť nadiktované slovo",
+      "writtenAs": "Správne"
+    },
     "groups": {
       "cleanup": "Úprava",
       "shortcut": "Skratka",
@@ -684,6 +725,17 @@
       "description": "Automaticky sa použijú jazyky zobrazenia a klávesníc tohto počítača. Ak ich je viac, každé slovo sa rozpozná v jazyku, v ktorom ho vyslovíte.",
       "noResults": "Nenašli sa žiadne jazyky",
       "title": "Jazyk diktovania"
+    },
+    "learned": {
+      "delete": "Vymazať, čo sa stella naučila",
+      "description": "Keď nadiktované slovo opravíte dvakrát rovnako alebo ho opravíte skratkou {shortcut}, stella ho v ďalších diktátoch napíše takto. Synchronizuje sa do vašich ďalších zariadení; vidíte ich len vy.",
+      "empty": "Zatiaľ žiadne naučené opravy.",
+      "failed": "Opravu sa nepodarilo zmeniť.",
+      "fix": "{from} → {to}",
+      "group": "Naučené opravy",
+      "title": "Opravy naučené z vašich úprav",
+      "unreadable": "To, čo sa stella naučila, sa nedá načítať.",
+      "working": "Ukladá sa zmena…"
     },
     "lede": "Podržte <key>{shortcut}</key> a hovorte. Text sa zobrazí tam, kde píšete.",
     "microphone": {
@@ -1135,6 +1187,8 @@
       "available": "Je k dispozícii verzia {version}.",
       "checkFailed": "stella desktop nemohol skontrolovať aktualizácie.",
       "deferred": "Verzia {version} čaká, kým upravujete otvorené dokumenty. Keď skončíte, skontrolujte aktualizácie znova a nainštalujte ju, inak sa nainštaluje pri ďalšej automatickej kontrole.",
+      "downloadProgress": "Stiahnuté {percent} %",
+      "downloading": "Sťahuje sa verzia {version}. Po inštalácii sa stella desktop reštartuje.",
       "install": "Nainštalovať a reštartovať",
       "installFailed": "stella desktop nemohol nainštalovať aktualizáciu.",
       "installInProgress": "Inštaluje sa aktualizácia.",
@@ -1334,6 +1388,7 @@
     "activityResume": "Pokračovať v zázname",
     "checkForUpdates": "Skontrolovať aktualizácie",
     "dictation": "Diktovanie",
+    "dictationFix": "Opraviť posledný diktát…",
     "dictationHint": "Na diktovanie podržte {key}",
     "dictationRetype": "Napísať posledný diktát znova",
     "dictationSettings": "Nastavenia diktovania…",
@@ -1362,7 +1417,6 @@
     "supportRevealAppData": "Zobraziť dáta aplikácie",
     "temporaryWorkingCopies": "Dočasné pracovné kópie",
     "transcribeRecording": "Prepísať nahrávku…",
-    "updateReady": "Aktualizácia pripravená",
     "updatesManaged": "Aktualizácie spravuje vaša organizácia"
   }
 }

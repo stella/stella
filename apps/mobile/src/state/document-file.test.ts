@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/data-box";
 import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import type { EmailReading } from "@stll/api-contract/email-reading";
+import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import type { MailboxPreview } from "@stll/api-contract/mailbox";
 import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import type { ZipArchivePreview } from "@stll/api-contract/zip-archive";
@@ -29,6 +30,7 @@ import {
   readDocumentPart,
   readDocumentPartList,
   readOriginalDocumentFile,
+  saveDocumentPart,
   versionsPath,
   viewerFor,
 } from "./document-file";
@@ -83,7 +85,12 @@ const history = (
   versions: {
     id: string;
     versionNumber?: number;
-    file: { fieldId: string; fileName?: string; mimeType?: string } | null;
+    file: {
+      fieldId: string;
+      fileName?: string;
+      mimeType?: string;
+      unscannedContent?: UnscannedContentReason[];
+    } | null;
   }[],
 ) => ({
   entityId: "entity-1",
@@ -98,6 +105,7 @@ const history = (
             propertyId: "property-1",
             fileName: "Smlouva.docx",
             mimeType: DOCX,
+            unscannedContent: [],
             ...version.file,
             sizeBytes: 1200,
           },
@@ -273,10 +281,34 @@ describe("reading a document's file", () => {
       mimeType: "application/pdf",
       url: "https://storage.example.com/file-1?signature=abc",
       viewer: "pdf",
+      unscannedContent: [],
     });
     expect(calls).toEqual([
       "/v1/entities/matter-1/entity/entity-1/versions",
       "/v1/files/matter-1/url/field-1?purpose=display",
+    ]);
+  });
+
+  test("names the content the upload scan could not read", async () => {
+    const { fetch } = server((path) =>
+      path.endsWith("/versions")
+        ? Response.json(
+            history("version-1", [
+              {
+                id: "version-1",
+                file: {
+                  fieldId: "field-1",
+                  unscannedContent: ["encrypted", "unsupportedCompression"],
+                },
+              },
+            ]),
+          )
+        : Response.json(delivered("application/pdf")),
+    );
+    const result = await read(fetch);
+    expect(result.isOk() && result.value.unscannedContent).toEqual([
+      "encrypted",
+      "unsupportedCompression",
     ]);
   });
 
@@ -1050,6 +1082,44 @@ describe("reading a document's file", () => {
     expect(calls.at(-1)).toBe(
       "/v1/files/matter-1/parts/field-1?part=member%3A2",
     );
+  });
+
+  test("a part is saved into the chosen matter at its top", async () => {
+    const sent: { path: string; method: string | undefined; body: unknown }[] =
+      [];
+    const fetch: Fetch = async (input, init) => {
+      sent.push({
+        path: input.replace(SESSION.serverUrl, ""),
+        method: init?.method,
+        body: typeof init?.body === "string" ? JSON.parse(init.body) : null,
+      });
+      return Response.json({
+        entityId: "entity-9",
+        fieldId: "field-9",
+        fileName: "plna-moc.pdf",
+        workspaceId: "matter-2",
+      });
+    };
+    const saved = await saveDocumentPart({
+      fetch,
+      source: sourceFor(fetch),
+      workspaceId: "matter-1",
+      fieldId: "field-1",
+      part: "message:3/attachment:0",
+      destinationWorkspaceId: "matter-2",
+    });
+    expect(saved.unwrap()).toMatchObject({ workspaceId: "matter-2" });
+    expect(sent).toEqual([
+      {
+        path: "/v1/files/matter-1/part/field-1/save",
+        method: "POST",
+        body: {
+          part: "message:3/attachment:0",
+          destinationWorkspaceId: "matter-2",
+          parentId: null,
+        },
+      },
+    ]);
   });
 
   test("a mailbox's message is read as an email by its path", async () => {

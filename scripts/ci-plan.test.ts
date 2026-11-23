@@ -5776,6 +5776,11 @@ test("every browser suite runs on its required matrix legs, the playground on ev
         `bun run test:e2e:ui-playground "\${specs[@]}"`,
       );
       expect(suite.run, suite.name).not.toContain("--shard");
+    } else if (suite.name === "Test desktop browser interactions") {
+      expect(suite.if, suite.name).toContain(
+        "startsWith(matrix.suite, 'desktop-')",
+      );
+      expect(suite.run, suite.name).toContain("--shard=");
     } else {
       expect(suite.if, suite.name).toContain("matrix.suite ==");
     }

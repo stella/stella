@@ -13,6 +13,7 @@ import {
   isChatFileMimeType,
   isRunOutputMimeType,
 } from "@stll/api-contract/chat-file-types";
+import { unscannedContentReasons } from "@stll/api-contract/file-scan-warnings";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
@@ -217,6 +218,7 @@ export const uploadMessageFiles = async ({
       ...createChatAttachmentPart({
         filename: uploadedFile.value.fileName,
         mimeType: uploadedFile.value.mimeType,
+        unscannedContent: uploadedFile.value.unscannedContent,
         url: toUserFileUrl(uploadedFile.value.id),
       }),
     });
@@ -1358,6 +1360,7 @@ export const uploadUserFile = async ({
         fileName: sanitizedFileName,
         s3Key,
         thumbnailS3Key: thumbnailKey,
+        unscannedContent: unscannedContentReasons(scanWarnings),
       });
     }
 

@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useLocale, useTranslations } from "use-intl";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
+import type { FilePartDescriptor } from "@stll/api-contract/file-parts";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
@@ -33,6 +34,7 @@ import {
 import { LegalFilePreviewText } from "@/components/legal-file-preview-text";
 import { MailboxMessages } from "@/components/mailbox-messages";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
+import { UnscannedContentNotice } from "@/components/unscanned-content-notice";
 import { useDocumentEditing } from "@/components/use-document-editing";
 import { useOpenDeliveredFile } from "@/components/use-open-delivered-file";
 import {
@@ -57,7 +59,11 @@ import {
   readDocumentPartList,
   readOriginalDocumentFile,
 } from "@/state/document-file";
-import type { DocumentFile, LegalDocumentFile } from "@/state/document-file";
+import type {
+  DocumentFile,
+  LegalDocumentFile,
+  UnscannedContent,
+} from "@/state/document-file";
 import { useAppColors } from "@/theme";
 
 /** The key the original's control is busy under; part addresses are others. */
@@ -70,7 +76,7 @@ type Phase =
   | { readonly status: "failed"; readonly failure: Failure }
   | {
       readonly status: "legalPreview";
-      readonly file: LegalDocumentFile;
+      readonly file: LegalDocumentFile & UnscannedContent;
     }
   | {
       readonly status: "open";
@@ -275,6 +281,11 @@ const OpenedDocument = ({
     phase.status === "open" || phase.status === "legalPreview"
       ? phase.file.fileName
       : (name ?? t("title"));
+  // Content the upload scan could not read is named above the file itself.
+  const unscannedContent =
+    phase.status === "open" || phase.status === "legalPreview"
+      ? phase.file.unscannedContent
+      : [];
 
   const body = (() => {
     if (source === null || phase.status === "opening") {
@@ -435,9 +446,36 @@ const OpenedDocument = ({
           title,
         }}
       />
+      <UnscannedContentNotice reasons={unscannedContent} />
       {body}
     </View>
   );
+};
+
+/**
+ * Opens the sheet that saves one part of the file into a matter. Saving a part
+ * only names it to the server, so it needs no native viewer.
+ */
+const usePartSave = ({
+  workspaceId,
+  fieldId,
+}: {
+  workspaceId: string;
+  fieldId: string;
+}) => {
+  const router = useRouter();
+  return ({ part, fileName, sizeBytes }: FilePartDescriptor) => {
+    router.push({
+      pathname: "/part/save",
+      params: {
+        workspaceId,
+        fieldId,
+        part,
+        name: fileName ?? "",
+        size: String(sizeBytes),
+      },
+    });
+  };
 };
 
 const LegalFilePreview = ({
@@ -496,6 +534,7 @@ const LegalFilePreview = ({
           }),
       }
     : null;
+  const savePart = usePartSave({ workspaceId, fieldId });
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
@@ -730,7 +769,7 @@ const LegalFilePreview = ({
           {t("openOriginal")}
         </Button>
       ) : null}
-      <FilePartOpenerProvider opener={partOpener}>
+      <FilePartOpenerProvider opener={partOpener} save={savePart}>
         {previewBody}
       </FilePartOpenerProvider>
     </ScrollView>
