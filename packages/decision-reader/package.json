@@ -14,6 +14,7 @@
     "./citation-link": "./src/citation-link.tsx",
     "./citation-treatment": "./src/citation-treatment.ts",
     "./cited-provision": "./src/cited-provision.tsx",
+    "./collection-attribution": "./src/collection-attribution.tsx",
     "./court-name": "./src/court-name.tsx",
     "./decision-identity": "./src/decision-identity.tsx",
     "./decision-title": "./src/decision-title.ts",

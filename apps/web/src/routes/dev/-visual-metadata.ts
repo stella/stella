@@ -85,6 +85,7 @@ export const visualRegistry = {
   "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
+  "document-naming": { label: "Document name pattern field", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   "chat-composer-reference": {
     label: "Chat composer references",
@@ -125,6 +126,10 @@ export const visualRegistry = {
   ui: { label: "UI components", layout: "plain" },
   "control-sizes": { label: "Control sizes", layout: "control-sizes" },
   "inspector-pane": { label: "Inspector pane", layout: "inspector-pane" },
+  "inspector-phone-header": {
+    label: "Inspector phone header",
+    layout: "plain",
+  },
   "playbook-editor": { label: "Playbook editor lifecycle", layout: "plain" },
   "provision-header": { label: "Provision header", layout: "provision-header" },
   "shell-pending": { label: "Shell pending", layout: "plain" },

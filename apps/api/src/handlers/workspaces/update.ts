@@ -49,6 +49,14 @@ const updateWorkspaceBodySchema = v.object({
     v.nullable(v.pipe(v.string(), v.maxLength(128))),
   ),
   color: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(32)))),
+  documentNamingEnabled: v.optional(
+    v.pipe(
+      v.boolean(),
+      v.description(
+        "Rename new uploads in this matter to the organization's document name pattern.",
+      ),
+    ),
+  ),
   leadUserId: v.optional(v.nullable(userIdSchema)),
 });
 
@@ -56,7 +64,8 @@ const config = {
   contract: "patch",
   description:
     "Change a matter: its name, client, reference, billing reference, the " +
-    "language its billing narratives are written in, colour, or lead (who " +
+    "language its billing narratives are written in, colour, automatic " +
+    "document naming, or lead (who " +
     "must already be a member of it). Only the fields you pass " +
     "are written. clientId attaches a client to a personal matter or replaces " +
     "the client of a client matter; members are managed separately. " +
@@ -211,6 +220,79 @@ const heldClient = async ({
     : null;
 };
 
+type AuditedWorkspace = Record<
+  | "name"
+  | "clientId"
+  | "reference"
+  | "billingNarrativeLanguage"
+  | "billingReference"
+  | "color"
+  | "documentNamingEnabled"
+  | "leadUserId",
+  unknown
+>;
+
+const workspaceAuditChanges = (
+  body: UpdateWorkspaceHandlerProps["body"],
+  workspace: AuditedWorkspace,
+) => {
+  const changes: Record<string, { old: unknown; new: unknown }> = {};
+  if (body.name !== undefined && body.name !== workspace.name) {
+    changes["name"] = { old: workspace.name, new: body.name };
+  }
+  if (body.clientId !== undefined && body.clientId !== workspace.clientId) {
+    changes["clientId"] = { old: workspace.clientId, new: body.clientId };
+  }
+  if (body.reference !== undefined && body.reference !== workspace.reference) {
+    changes["reference"] = {
+      old: workspace.reference,
+      new: body.reference,
+    };
+  }
+  if (
+    body.billingNarrativeLanguage !== undefined &&
+    body.billingNarrativeLanguage !== workspace.billingNarrativeLanguage
+  ) {
+    Object.assign(changes, {
+      billingNarrativeLanguage: {
+        old: workspace.billingNarrativeLanguage,
+        new: body.billingNarrativeLanguage,
+      },
+    });
+  }
+  if (
+    body.billingReference !== undefined &&
+    body.billingReference !== workspace.billingReference
+  ) {
+    changes["billingReference"] = {
+      old: workspace.billingReference,
+      new: body.billingReference,
+    };
+  }
+  if (body.color !== undefined && body.color !== workspace.color) {
+    changes["color"] = { old: workspace.color, new: body.color };
+  }
+  if (
+    body.documentNamingEnabled !== undefined &&
+    body.documentNamingEnabled !== workspace.documentNamingEnabled
+  ) {
+    changes["documentNamingEnabled"] = {
+      old: workspace.documentNamingEnabled,
+      new: body.documentNamingEnabled,
+    };
+  }
+  if (
+    body.leadUserId !== undefined &&
+    body.leadUserId !== workspace.leadUserId
+  ) {
+    changes["leadUserId"] = {
+      old: workspace.leadUserId,
+      new: body.leadUserId,
+    };
+  }
+  return changes;
+};
+
 // Shared matter-update logic reused by the HTTP handler and the
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
@@ -237,6 +319,7 @@ export const updateWorkspaceHandler = async function* ({
         billingReference: workspaces.billingReference,
         billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
         color: workspaces.color,
+        documentNamingEnabled: workspaces.documentNamingEnabled,
         leadUserId: workspaces.leadUserId,
       })
       .from(workspaces)
@@ -327,6 +410,7 @@ export const updateWorkspaceHandler = async function* ({
           "billingReference",
           "billingNarrativeLanguage",
           "color",
+          "documentNamingEnabled",
           "leadUserId",
         ]),
       })
@@ -344,54 +428,7 @@ export const updateWorkspaceHandler = async function* ({
       );
     }
 
-    const changes: Record<string, { old: unknown; new: unknown }> = {};
-    if (body.name !== undefined && body.name !== workspace.name) {
-      changes["name"] = { old: workspace.name, new: body.name };
-    }
-    if (body.clientId !== undefined && body.clientId !== workspace.clientId) {
-      changes["clientId"] = { old: workspace.clientId, new: body.clientId };
-    }
-    if (
-      body.reference !== undefined &&
-      body.reference !== workspace.reference
-    ) {
-      changes["reference"] = {
-        old: workspace.reference,
-        new: body.reference,
-      };
-    }
-    if (
-      body.billingNarrativeLanguage !== undefined &&
-      body.billingNarrativeLanguage !== workspace.billingNarrativeLanguage
-    ) {
-      Object.assign(changes, {
-        billingNarrativeLanguage: {
-          old: workspace.billingNarrativeLanguage,
-          new: body.billingNarrativeLanguage,
-        },
-      });
-    }
-    if (
-      body.billingReference !== undefined &&
-      body.billingReference !== workspace.billingReference
-    ) {
-      changes["billingReference"] = {
-        old: workspace.billingReference,
-        new: body.billingReference,
-      };
-    }
-    if (body.color !== undefined && body.color !== workspace.color) {
-      changes["color"] = { old: workspace.color, new: body.color };
-    }
-    if (
-      body.leadUserId !== undefined &&
-      body.leadUserId !== workspace.leadUserId
-    ) {
-      changes["leadUserId"] = {
-        old: workspace.leadUserId,
-        new: body.leadUserId,
-      };
-    }
+    const changes = workspaceAuditChanges(body, workspace);
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,

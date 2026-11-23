@@ -16,6 +16,7 @@ export const BUDGET_NAMES = [
   "api.two_factor_manage_otp.address",
   "api.hosted_usage_webhook.address",
   "api.translate.address",
+  "api.citation_check.address",
   "api.upload.address",
   "api.public_sanctions.address",
   "demo.action.user",

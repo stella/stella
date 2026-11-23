@@ -24,11 +24,13 @@ import { DOCUMENT_PANE } from "@/components/inspector/document-pane";
 import { ExternalReferencePanel } from "@/components/inspector/external-reference-panel";
 import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { FileTabPanel } from "@/components/inspector/file-tab-panel";
+import { useInspectorGroups } from "@/components/inspector/inspector-group-controls";
 import { InspectorRail } from "@/components/inspector/inspector-rail";
 import {
   InspectorTabHeader,
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
+import { InspectorTabSwitcherMenu } from "@/components/inspector/inspector-tab-switcher";
 import { resolveInspectorMatterColor } from "@/components/inspector/inspector-tab-workspace";
 import {
   isGenericInspectorTab,
@@ -114,6 +116,8 @@ export const InspectorPanel = ({
   const minimized = useInspectorTabsStore((s) => s.minimized);
   const setMinimized = useInspectorTabsStore((s) => s.setMinimized);
   const openChat = useInspectorTabsStore((s) => s.openChat);
+  // The rail and the phone tab switcher list the same tabs from one read.
+  const inspectorGroups = useInspectorGroups();
   // The inspector pane mounts under non-workspace routes too
   // (e.g. /chat for a global chat tab). All callers below use
   // absolute `to:` paths, so we don't need a `from` template —
@@ -455,6 +459,7 @@ export const InspectorPanel = ({
         <div className="hidden md:contents">
           <InspectorRail
             activeId={activeId}
+            groups={inspectorGroups}
             minimized={minimized}
             onActivateTab={(tabId) => {
               setActive(tabId);
@@ -608,6 +613,7 @@ export const InspectorPanel = ({
           />
         ))}
         {ribbonContextMenu.element}
+        <InspectorTabSwitcherMenu groups={inspectorGroups} />
       </div>
     </RenderStormRegion>
   );

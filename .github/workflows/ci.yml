@@ -3725,12 +3725,17 @@ jobs:
         || github.event_name == 'workflow_dispatch')
       )
       )
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [lib, handlers, rest]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
       actions: write
     env:
+      API_LINT_SHARD: ${{ matrix.shard }}
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
@@ -3809,6 +3814,7 @@ jobs:
           bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
 
       - name: Result consumption
+        if: matrix.shard == 'rest'
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -5022,17 +5028,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Startup gate base
-        timeout-minutes: 5
-        env:
-          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
-        run: bash scripts/startup-gate-base.sh
-
       - name: Startup bundle gates
         # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
         run: |
           bun scripts/bundle-baseline.ts --self-test
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check --base-dir "$STARTUP_GATE_BASE_DIR"
+          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
 
       - name: Bundle duplicate content guard
         # Blocking: a chunk that repeats a large block of identical content

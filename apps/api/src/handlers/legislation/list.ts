@@ -624,6 +624,7 @@ export const buildListStatutesQuery = (
   const trimmedQuery = query.query?.trim() || null;
 
   if (trimmedQuery !== null) {
+    // sql-perf-allow: index legislation_documents_title_fold_trgm_idx and legislation_documents_eli_trgm_idx
     const titleOrEli = or(
       sql`${legislationTitleFold(legislationDocuments.title)} LIKE '%' || ${escapeLikeSql(legislationTitleFold(trimmedQuery))} || '%'`,
       ilike(legislationDocuments.eli, `%${escapeLike(trimmedQuery)}%`),

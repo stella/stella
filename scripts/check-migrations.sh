@@ -75,7 +75,7 @@ if [[ -d apps/api/drizzle ]]; then
 
     # Lock-safety linting (rule set configured in .squawk.toml). Destructive
     # changes are covered separately by check-migration-safety.ts above.
-    bun squawk "${LINT_SQL_FILES[@]}" || {
+    bun --bun squawk "${LINT_SQL_FILES[@]}" || {
       echo "ERROR: squawk found DDL in the changed migrations that is unsafe to apply under load." >&2
       echo "Rewrite the statement (rule docs: https://squawkhq.com/docs/rules), or suppress a" >&2
       echo "reviewed finding with '-- squawk-ignore <rule-name>' on the line above the statement." >&2

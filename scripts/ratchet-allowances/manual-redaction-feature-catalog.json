@@ -1,0 +1,5 @@
+{
+  "metric": "duplicate-token-blocks",
+  "delta": 1,
+  "reason": "Marking PDF areas to redact gets its own lazy feature catalog so its strings load with the reader's and the anonymization facet's chunks. src/i18n/README.md prescribes one static dynamic import per locale beside the feature, so a typecheck catches a missing locale and the bundler keeps each JSON in the feature's chunk; that loader table is the same 13 lines in every feature catalog."
+}

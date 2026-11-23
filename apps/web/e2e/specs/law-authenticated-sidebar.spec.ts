@@ -3,13 +3,13 @@ import * as v from "valibot";
 import { setFixedBrowserTime } from "@stll/ui/browser-clock";
 
 import { SIDEBAR_STATE_COOKIE } from "../../src/components/sidebar/sidebar-state-cookie";
-import {
-  parsePresentationPrefs,
-  PRESENTATION_PREFS_COOKIE,
-} from "../../src/lib/account/presentation-prefs/preferences";
+import { PRESENTATION_PREFS_COOKIE } from "../../src/lib/account/presentation-prefs/preferences";
 import { E2E_API_ORIGIN } from "../helpers/api";
 import { openGlobalSearchDatePicker } from "../helpers/global-search";
-import { setPresentationPrefs } from "../helpers/presentation-prefs";
+import {
+  readPresentationPrefsCookie,
+  setPresentationPrefs,
+} from "../helpers/presentation-prefs";
 import { createProfileTestSession } from "../helpers/profile-session";
 import { expect, test } from "../helpers/test";
 import { PLAYWRIGHT_EXPECT_TIMEOUT_30_SECONDS_MS } from "../helpers/wait-budgets";
@@ -58,15 +58,12 @@ for (const persistence of ["browser-default", "without-cookie-store"]) {
       await expect(sidebar).toHaveAttribute("data-state", state);
       await expect
         .poll(async () => {
-          const cookie = (await context.cookies()).find(
-            ({ name }) => name === PRESENTATION_PREFS_COOKIE,
-          );
+          const cookie = await readPresentationPrefsCookie(context, page.url());
           if (!cookie) {
             return null;
           }
           expect(cookie.httpOnly).toBe(true);
-          return parsePresentationPrefs(decodeURIComponent(cookie.value))
-            .sidebarOpen;
+          return cookie.prefs.sidebarOpen;
         })
         .toBe(sidebarOpen);
       await page.reload({ waitUntil: "domcontentloaded" });
@@ -107,12 +104,19 @@ test("an existing sidebar cookie keeps its first-paint state until a unified pre
     .getByRole("button")
     .click();
   await expect(sidebar).toHaveAttribute("data-state", "expanded");
+  // The frame's own preference writes (the time billing hint) also replace
+  // the legacy cookie, carrying its collapsed state, and can land before the
+  // toggle's write: only the toggled value proves the reload will read it.
   await expect
-    .poll(async () => (await context.cookies()).map(({ name }) => name))
-    .toContain(PRESENTATION_PREFS_COOKIE);
-  expect(
-    (await context.cookies()).some(({ name }) => name === SIDEBAR_STATE_COOKIE),
-  ).toBe(false);
+    .poll(async () => ({
+      legacyCookie: (await context.cookies(baseURL)).some(
+        ({ name }) => name === SIDEBAR_STATE_COOKIE,
+      ),
+      sidebarOpen:
+        (await readPresentationPrefsCookie(context, baseURL))?.prefs
+          .sidebarOpen ?? null,
+    }))
+    .toEqual({ legacyCookie: false, sidebarOpen: true });
   await page.reload({ waitUntil: "domcontentloaded" });
   await expect(sidebar).toHaveAttribute("data-state", "expanded");
 });

@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Tažením přes stránku zakryjete vše, co detekce přehlédla. Anonymizované PDF začerní každou označenou oblast.",
+    "markingSurface": "Tažením označte oblast k začernění",
+    "pageArea": "Oblast na straně {page}",
+    "removeArea": "Odebrat označenou oblast na straně {page}",
+    "startMarking": "Označit oblasti",
+    "stopMarking": "Dokončit označování",
+    "title": "Označené oblasti"
+  }
+}

@@ -116,6 +116,8 @@ export const FAILURE_REASON_GRADE = {
   deferred_document_owned_elsewhere: "anticipated",
   // parser-output-unchanged: a refusal grade for OCR requests no worker would run; no parser reads it.
   document_ocr_unconfigured: "anticipated",
+  // parser-output-unchanged: a refusal grade for files the preview renderer cannot decode or bound; no parser reads it.
+  file_preview_unrenderable: "anticipated",
   // parser-output-unchanged: sanctions reasons classify telemetry only; no parser reads them.
   sanctions_matcher_deadline: "anticipated",
   sanctions_matcher_saturated: "anticipated",

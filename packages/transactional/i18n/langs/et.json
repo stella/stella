@@ -22,6 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Vaata sisselogitud seadmeid",
+    "actionNote": "Nupp avab selle sisselogimise juures Seaded › Turvalisus.",
     "body": "Teie kontole logiti just sisse uuest seadmest või uuest asukohast.",
     "device": "Seade",
     "deviceName": {
@@ -63,7 +64,7 @@
     "flowRunAwaitingApproval": "Töövoog ootab teie kinnitust",
     "flowRunCompleted": "Töövoog on lõpetatud",
     "flowRunFailed": "Töövoog ebaõnnestus",
-    "localRunLimitReset": "Sinu arvutis töötav programmeerimisagent saab vestlust jätkata",
+    "localRunLimitReset": "Teie arvutis töötav programmeerimisagent saab vestlust jätkata",
     "mention": "Teid mainiti kommentaaris",
     "taskAssigned": "Teile määrati ülesanne"
   },

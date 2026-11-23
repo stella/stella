@@ -259,7 +259,7 @@ export const expectRunOn = async (page: Page, runOn: RunOn) => {
 /** Why the where chip says the computer cannot take a turn now. */
 export const COMPUTER_STATES = {
   offline: "Computer offline",
-  openingDesktop: "Opening stella desktop...",
+  openingDesktop: "Opening stella desktop…",
 } as const;
 
 /** The where chip names the computer `agent` runs on as in `state`. */

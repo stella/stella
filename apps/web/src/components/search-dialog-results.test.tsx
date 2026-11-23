@@ -52,7 +52,7 @@ test.each([
       renderToStaticMarkup(
         <IntlProvider
           locale="en"
-          messages={{ chat: { extractingContent: "Extracting content..." } }}
+          messages={{ chat: { extractingContent: "Extracting content…" } }}
           timeZone="UTC"
         >
           <DocumentExtractionStatus processingStatus={processingStatus} />
@@ -61,8 +61,8 @@ test.each([
 
     const searchResultStatus = renderStatus();
     const workspaceFileStatus = renderStatus();
-    expect(searchResultStatus.includes("Extracting content...")).toBe(visible);
-    expect(workspaceFileStatus.includes("Extracting content...")).toBe(visible);
+    expect(searchResultStatus.includes("Extracting content…")).toBe(visible);
+    expect(workspaceFileStatus.includes("Extracting content…")).toBe(visible);
   },
 );
 

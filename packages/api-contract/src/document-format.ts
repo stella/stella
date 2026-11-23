@@ -1,9 +1,31 @@
+import {
+  CONVERTED_DOCUMENT_FORMATS,
+  type ConvertedDocumentFormat,
+  HTML_RENDERED_DOCUMENT_FORMATS,
+  type HtmlRenderedDocumentFormat,
+} from "./converted-document-formats";
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
 import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
+  legalFileFormatProfiles,
+  XML_FILE_FORMAT,
+  ZIP_FILE_FORMAT,
 } from "./legal-file-formats";
+
+/**
+ * Media types that only say a file is XML or a ZIP archive. Many formats are
+ * uploaded under them (an invoice as XML, an ASiC container or an Office
+ * document as a ZIP), so a name whose extension names a format is that
+ * format.
+ */
+const GENERIC_MEDIA_TYPES: ReadonlySet<string> = new Set([
+  XML_FILE_FORMAT.mimeType,
+  ...XML_FILE_FORMAT.mimeAliases,
+  ZIP_FILE_FORMAT.mimeType,
+  ...ZIP_FILE_FORMAT.mimeAliases,
+]);
 
 /** The family a file's mark stands for; each has its own mark. */
 export type DocumentFormatKind =
@@ -17,19 +39,29 @@ export type DocumentFormatKind =
   | "csv"
   | "image"
   | "email"
+  | ConvertedDocumentFormat["kind"]
+  | HtmlRenderedDocumentFormat["kind"]
   | LegalFileFormatKind
   | "markdown"
   | "text"
   | "file";
 
-/** A file's format: its mark, and its short tag ("PDF", "DOCX"), if any. */
+/**
+ * A file's format: its family, the mark it is drawn with, and its short tag
+ * ("PDF", "DOCX"), if any. The mark is the family's own unless a profile of
+ * the family names one of its own (BDOC within ASiC-E); `@stll/ui`'s
+ * `DOCUMENT_MARKS` holds the artwork under the same key.
+ */
 export type DocumentFormat = {
   readonly kind: DocumentFormatKind;
+  readonly mark: string;
   readonly label: string | undefined;
 };
 
-type FormatEntry = {
-  readonly kind: Exclude<DocumentFormatKind, "file">;
+export type RecognisedDocumentFormat = {
+  readonly kind: DocumentFormatKind;
+  /** The mark's key, when it is not the kind's own. */
+  readonly mark?: string;
   /** The format's short tag. Formats are not translated. */
   readonly label: string;
   readonly mimeTypes: readonly string[];
@@ -40,7 +72,7 @@ type FormatEntry = {
  * Every format a file is recognised as, by media type and by extension. A
  * format's mark is reserved for it: RTF, ODT and ODS are not Word or Excel.
  */
-const DOCUMENT_FORMATS: readonly FormatEntry[] = [
+const DOCUMENT_FORMATS: readonly RecognisedDocumentFormat[] = [
   {
     kind: "pdf",
     label: "PDF",
@@ -131,14 +163,37 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
     mimeTypes: ["image/webp"],
     extensions: [".webp"],
   },
-  ...LEGAL_FILE_FORMATS.map(
-    ({ kind, label, mimeType, mimeAliases, extensions }) => ({
+  ...[...CONVERTED_DOCUMENT_FORMATS, ...HTML_RENDERED_DOCUMENT_FORMATS].map(
+    ({
+      kind,
+      label,
+      mimeType,
+      mimeAliases,
+      extensions,
+    }): RecognisedDocumentFormat => ({
       kind,
       label,
       mimeTypes: [mimeType, ...mimeAliases],
       extensions,
     }),
   ),
+  // A profile follows its format, so its extensions name it rather than the
+  // format; the format alone answers to the shared media type.
+  ...LEGAL_FILE_FORMATS.flatMap((format): RecognisedDocumentFormat[] => [
+    {
+      kind: format.kind,
+      label: format.label,
+      mimeTypes: [format.mimeType, ...format.mimeAliases],
+      extensions: format.extensions,
+    },
+    ...legalFileFormatProfiles(format).map(({ extensions, label, mark }) => ({
+      kind: format.kind,
+      mark,
+      label,
+      mimeTypes: [],
+      extensions,
+    })),
+  ]),
   {
     kind: "email",
     label: "EML",
@@ -159,23 +214,30 @@ const DOCUMENT_FORMATS: readonly FormatEntry[] = [
   },
 ];
 
-const PLAIN_TEXT: FormatEntry = {
+const PLAIN_TEXT: RecognisedDocumentFormat = {
   kind: "text",
   label: "TXT",
   mimeTypes: ["text/plain"],
   extensions: [".txt"],
 };
 
+/**
+ * Every format a file is recognised as, with the media types and extensions
+ * that name it, so a test can walk each one through `documentFormat`.
+ */
+export const RECOGNISED_DOCUMENT_FORMATS: readonly RecognisedDocumentFormat[] =
+  [...DOCUMENT_FORMATS, PLAIN_TEXT];
+
 // Maps, so a media type or extension named like an object key
 // ("constructor") finds nothing rather than an inherited property.
-const BY_MIME_TYPE: ReadonlyMap<string, FormatEntry> = new Map(
+const BY_MIME_TYPE: ReadonlyMap<string, RecognisedDocumentFormat> = new Map(
   DOCUMENT_FORMATS.flatMap((entry) =>
     entry.mimeTypes.map((mimeType) => [mimeType, entry] as const),
   ),
 );
 
-const BY_EXTENSION: ReadonlyMap<string, FormatEntry> = new Map(
-  [...DOCUMENT_FORMATS, PLAIN_TEXT].flatMap((entry) =>
+const BY_EXTENSION: ReadonlyMap<string, RecognisedDocumentFormat> = new Map(
+  RECOGNISED_DOCUMENT_FORMATS.flatMap((entry) =>
     entry.extensions.map((extension) => [extension, entry] as const),
   ),
 );
@@ -194,15 +256,21 @@ const extensionLabel = (
     .match(/\.([a-z0-9]{1,5})$/iu)?.[1]
     ?.toUpperCase();
 
-const formatOf = (entry: FormatEntry): DocumentFormat => ({
+const markOf = (entry: RecognisedDocumentFormat): string =>
+  entry.mark ?? entry.kind;
+
+const formatOf = (entry: RecognisedDocumentFormat): DocumentFormat => ({
   kind: entry.kind,
+  mark: markOf(entry),
   label: entry.label,
 });
 
 /**
  * A file's format from its media type, else its name's extension. A plain
  * text type is the weakest hint: "notes.md" stored as text/plain is Markdown,
- * and only a text file with no better name is plain text.
+ * and only a text file with no better name is plain text. A profile shares
+ * its format's media type, so where both name the same family, the name's
+ * profile (a ".bdoc" stored as ASiC-E) keeps its own tag and mark.
  */
 export const documentFormat = (
   mimeType: string | null | undefined,
@@ -210,12 +278,24 @@ export const documentFormat = (
 ): DocumentFormat => {
   const media = mimeType?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
   const byMimeType = BY_MIME_TYPE.get(media);
-  if (byMimeType !== undefined) {
-    return formatOf(byMimeType);
-  }
   const extension = extensionOf(fileName);
   const byExtension =
     extension === null ? undefined : BY_EXTENSION.get(extension);
+  if (
+    byExtension !== undefined &&
+    byExtension.kind !== byMimeType?.kind &&
+    GENERIC_MEDIA_TYPES.has(media)
+  ) {
+    return formatOf(byExtension);
+  }
+  if (byMimeType !== undefined) {
+    return formatOf(
+      byExtension?.kind === byMimeType.kind &&
+        markOf(byExtension) !== markOf(byMimeType)
+        ? byExtension
+        : byMimeType,
+    );
+  }
   if (byExtension !== undefined) {
     return formatOf(byExtension);
   }
@@ -226,12 +306,12 @@ export const documentFormat = (
   // an image, as an unlisted text/ type is text.
   const label = extensionLabel(fileName);
   if (media.startsWith("image/")) {
-    return { kind: "image", label };
+    return { kind: "image", mark: "image", label };
   }
   if (media.startsWith("text/")) {
-    return { kind: "text", label };
+    return { kind: "text", mark: "text", label };
   }
-  return { kind: "file", label };
+  return { kind: "file", mark: "file", label };
 };
 
 export const legalFileFormat = (

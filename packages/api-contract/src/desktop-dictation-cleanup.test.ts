@@ -7,12 +7,16 @@ import {
   DESKTOP_DICTATION_CLEANUP_LIMITS,
   DESKTOP_DICTATION_CLEANUP_PATH,
   DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY,
+  DESKTOP_DICTATION_CLEANUP_STYLES,
   DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS,
   DESKTOP_DICTATION_RECORDING_CLEANUP_PATH,
+  DESKTOP_DICTATION_TRANSLATION_LANGUAGES,
   desktopDictationCleanupRequestSchema,
   desktopDictationCleanupResponseSchema,
   desktopDictationRecordingCleanupRequestSchema,
   desktopDictationRecordingCleanupResponseSchema,
+  DICTATION_RECORDING_CLEANUP_PATH,
+  dictationCleanupMinAnswerTextPercent,
 } from "./desktop-dictation-cleanup";
 import fixture from "./desktop-dictation-cleanup.fixture.json";
 import contract from "./desktop-dictation-cleanup.json";
@@ -32,6 +36,8 @@ test("the native contract file matches the typed cleanup contract", () => {
     maxTextBeforeCursorLength:
       DESKTOP_DICTATION_CLEANUP_LIMITS.textBeforeCursorLength,
     appKinds: [...DESKTOP_DICTATION_APP_KINDS],
+    styles: [...DESKTOP_DICTATION_CLEANUP_STYLES],
+    translationLanguages: [...DESKTOP_DICTATION_TRANSLATION_LANGUAGES],
     ...DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY,
     recordingCleanup: {
       path: DESKTOP_DICTATION_RECORDING_CLEANUP_PATH,
@@ -50,6 +56,9 @@ test("the native contract file matches the typed cleanup contract", () => {
   expect(
     DESKTOP_DICTATION_RECORDING_CLEANUP_PATH.startsWith("/v1/desktop/"),
   ).toBe(true);
+  expect(
+    DESKTOP_DICTATION_RECORDING_CLEANUP_PATH.replace("/desktop/", "/"),
+  ).toBe(DICTATION_RECORDING_CLEANUP_PATH);
 });
 
 test("formatting commands and correction markers are distinct phrases", () => {
@@ -214,6 +223,46 @@ test("a cleanup may carry the speaker's custom words within the vocabulary limit
   expect(request([""])).toBe(false);
   expect(request(["line\nbreak"])).toBe(false);
   expect(request("custom terms list")).toBe(false);
+});
+
+test("a cleanup may name a style and a language to write the text in", () => {
+  const parses = (fields: Record<string, unknown>) =>
+    v.safeParse(desktopDictationCleanupRequestSchema, {
+      transcript: "first call the client second send the draft",
+      ...fields,
+    }).success;
+  for (const style of DESKTOP_DICTATION_CLEANUP_STYLES) {
+    expect(parses({ style })).toBe(true);
+  }
+  for (const translateTo of DESKTOP_DICTATION_TRANSLATION_LANGUAGES) {
+    expect(parses({ translateTo, style: "notes" })).toBe(true);
+  }
+  expect(parses({})).toBe(true);
+  expect(parses({ style: "formal" })).toBe(false);
+  expect(parses({ style: "" })).toBe(false);
+  expect(parses({ translateTo: "xx" })).toBe(false);
+  expect(parses({ translateTo: "EN" })).toBe(false);
+});
+
+test("notes and translations need to keep only the condensed share of the dictation", () => {
+  const { minAnswerTextPercent, condensedMinAnswerTextPercent } =
+    DESKTOP_DICTATION_CLEANUP_PLAUSIBILITY;
+  expect(condensedMinAnswerTextPercent).toBeLessThan(minAnswerTextPercent);
+  expect(dictationCleanupMinAnswerTextPercent({})).toBe(minAnswerTextPercent);
+  for (const style of ["polished", "casual", "verbatim"] as const) {
+    expect(dictationCleanupMinAnswerTextPercent({ style })).toBe(
+      minAnswerTextPercent,
+    );
+  }
+  expect(dictationCleanupMinAnswerTextPercent({ style: "notes" })).toBe(
+    condensedMinAnswerTextPercent,
+  );
+  expect(
+    dictationCleanupMinAnswerTextPercent({
+      style: "verbatim",
+      translateTo: "en",
+    }),
+  ).toBe(condensedMinAnswerTextPercent);
 });
 
 test("a recording cleanup request is bounded by code point and carries only known fields", () => {

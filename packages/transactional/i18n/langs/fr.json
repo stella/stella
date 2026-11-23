@@ -22,6 +22,7 @@
   },
   "newDeviceLogin": {
     "action": "Vérifier les appareils connectés",
+    "actionNote": "Le bouton ouvre Paramètres › Sécurité sur cette connexion.",
     "body": "Quelqu'un vient de se connecter à votre compte depuis un nouvel appareil ou un nouvel emplacement.",
     "device": "Appareil",
     "deviceName": {

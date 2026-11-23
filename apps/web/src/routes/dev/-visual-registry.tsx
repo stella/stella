@@ -94,6 +94,13 @@ const visualLoaders = {
       return { default: UploadRejectionsPlayground };
     },
   },
+  "document-naming": {
+    load: async () => {
+      const { DocumentNamingPlayground } =
+        await import("./-components/document-naming-playground");
+      return { default: DocumentNamingPlayground };
+    },
+  },
   "page-crop": {
     load: async () => {
       const { PageCropPlayground } =
@@ -294,6 +301,13 @@ const visualLoaders = {
       const { InspectorPanePlayground } =
         await import("./-components/inspector-pane-playground");
       return { default: InspectorPanePlayground };
+    },
+  },
+  "inspector-phone-header": {
+    load: async () => {
+      const { InspectorPhoneHeaderPlayground } =
+        await import("./-components/inspector-phone-header-playground");
+      return { default: InspectorPhoneHeaderPlayground };
     },
   },
   "playbook-editor": {

@@ -13,11 +13,11 @@ import { useChanged } from "@/components/changes";
 import { DictateButton } from "@/components/dictate-button";
 import { screenStyles } from "@/components/empty-state-screen";
 import { MatterPicker } from "@/components/matter-picker";
+import { useDictationField } from "@/components/use-dictation-field";
 import { writeFailure, WriteFailureNotice } from "@/components/write-failure";
 import type { WriteFailure } from "@/components/write-failure";
 import type { AccessTokenSource } from "@/connection/session";
 import { useSession } from "@/connection/session-provider";
-import { appendDictation } from "@/state/dictation";
 import { listMatters } from "@/state/matters";
 import { startTimer } from "@/state/timers";
 
@@ -41,6 +41,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
   const { end } = useSession();
   const changed = useChanged();
   const [description, setDescription] = useState("");
+  const field = useDictationField(description, setDescription);
   const [matterId, setMatterId] = useState<string | null>(null);
   const [failure, setFailure] = useState<WriteFailure | null>(null);
   const [starting, startStarting] = useTransition();
@@ -59,6 +60,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
     if (dictating) {
       return;
     }
+    const learned = field.learnOnceSent(description.trim());
     startStarting(async () => {
       setFailure(null);
       const started = await startTimer({
@@ -68,6 +70,7 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
         source,
       });
       if (Result.isOk(started)) {
+        learned();
         changed("timers");
         router.back();
         return;
@@ -114,16 +117,15 @@ const NewTimerForm = ({ source }: { source: AccessTokenSource }) => {
       >
         <Input
           accessibilityLabel={t("description")}
-          onChangeText={setDescription}
+          {...field.inputProps}
           placeholder={t("description")}
           value={description}
         />
         <DictateButton
+          field="timer"
           matterId={matterId ?? undefined}
           onBusyChange={setDictating}
-          onText={(dictated) => {
-            setDescription((typed) => appendDictation(typed, dictated));
-          }}
+          onText={field.insert}
         />
         <WriteFailureNotice failure={failure} message={t("startFailed")} />
         <View className="gap-2">

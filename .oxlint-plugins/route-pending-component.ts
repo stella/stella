@@ -16,11 +16,8 @@
 //   `component: redirectRouteComponent({ to })`, which shows its target's
 //   pending view. `DefaultPendingComponent` and `lazyRouteComponent` (which
 //   hides the page chunk from the manifest's preloads) are banned there.
-//   Today's offenders are listed in `route-pending-component-exceptions.json`;
-//   the list only shrinks: a listed file that conforms is reported until its
-//   line is deleted. The pending view a route names is a frame view: its
-//   module marks it with `framePendingView`, unless the module is listed in
-//   `route-pending-component-unmarked.json` (below).
+//   The pending view a route names is a frame view: its module marks it
+//   with `framePendingView`.
 // - `pending-module-imports` (every `*.pending.tsx`, which the cold-load
 //   frame may draw before any provider mounts): imports are closed: other
 //   `.pending` modules, `.logic` modules, type-only imports, and the modules
@@ -28,11 +25,7 @@
 //   no `lazy`, no `useTranslations` (use `PendingText`), no query, navigation
 //   or route hooks, except the loose URL reads `useParams({ strict: false })`
 //   and `useSearch({ strict: false })` and the named synchronous cache
-//   readers in the policy file. Today's pending modules that render only
-//   inside the providers (their views are not marked) are listed in
-//   `route-pending-component-unmarked.json` and go unchecked; that list only
-//   shrinks: a listed module that marks a view is reported until its line is
-//   deleted, so a new pending module is context-free from its first line.
+//   readers in the policy file.
 // - `page-module-shell` (`*.page.tsx` with a sibling `.pending` module): the
 //   page imports and renders the shell that sibling exports.
 
@@ -40,9 +33,7 @@ import { eslintCompatPlugin } from "@oxlint/plugins";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import exceptionList from "./route-pending-component-exceptions.json" with { type: "json" };
 import policy from "./route-pending-component-policy.json" with { type: "json" };
-import unmarkedList from "./route-pending-component-unmarked.json" with { type: "json" };
 import {
   elementName,
   filenameForContext,
@@ -50,15 +41,8 @@ import {
   isAstNode,
   isCallTo,
   isIdentifier,
-  repoRelativeFilename,
 } from "./utils.ts";
 
-const EXCEPTED_FILES: ReadonlySet<string> = new Set(exceptionList);
-// Pending modules whose views render only inside the providers, by
-// repository path; matched as a path suffix, as the frame's own files are.
-const UNMARKED_MODULES: readonly string[] = unmarkedList;
-const isUnmarkedModule = (filename: string): boolean =>
-  UNMARKED_MODULES.some((file) => filename.endsWith(file));
 const PENDING_SAFE_MODULES: ReadonlySet<string> = new Set(
   policy.pendingSafeModules,
 );
@@ -310,32 +294,18 @@ const routePendingComponent = {
         "No `lazyRouteComponent` in route options: it hides the page chunk from the manifest, so the page is fetched one hop late. Import the page from its `.page` module; the bundler splits it.",
       layoutWithoutOutlet:
         "Only a layout (a route file rendering `<Outlet />`) delegates its pending view to its page with `LeafPendingView`.",
-      conformingException:
-        "This route file now declares its pending view: delete its line from .oxlint-plugins/route-pending-component-exceptions.json.",
       unmarkedPendingView:
-        "A route's pending view is a frame view, drawn on a cold load before the providers mount: mark it with `framePendingView` in its `.pending` module. Only the modules listed in .oxlint-plugins/route-pending-component-unmarked.json render inside the providers, and that list only shrinks.",
+        "A route's pending view is a frame view, drawn on a cold load before the providers mount: mark it with `framePendingView` in its `.pending` module.",
     },
-    // `census: true` reports every offender, ignoring the exception list,
-    // so the list can be regenerated from a full run.
-    schema: [
-      {
-        type: "object",
-        properties: { census: { type: "boolean" } },
-        additionalProperties: false,
-      },
-    ],
+    schema: [],
   },
   createOnce(context) {
-    const findings: Parameters<typeof context.report>[0][] = [];
     const importSources = new Map<string, string>();
-    let program: unknown = null;
     let rendersOutlet = false;
     let routeCalls: unknown[] = [];
     return {
-      Program(node) {
-        findings.length = 0;
+      Program() {
         importSources.clear();
-        program = node;
         rendersOutlet = false;
         routeCalls = [];
       },
@@ -357,25 +327,10 @@ const routePendingComponent = {
           routeCalls.push(node);
         }
       },
+      // Checked at the end: a layout's `<Outlet />` may follow its route.
       "Program:exit"() {
         for (const call of routeCalls) {
           checkRoute(call);
-        }
-        const options: unknown = context.options[0];
-        const census =
-          typeof options === "object" &&
-          options !== null &&
-          Reflect.get(options, "census") === true;
-        const excepted =
-          !census && EXCEPTED_FILES.has(repoRelativeFilename(context));
-        if (!excepted) {
-          for (const finding of findings) {
-            context.report(finding);
-          }
-          return;
-        }
-        if (findings.length === 0 && isAstNode(program)) {
-          context.report({ node: program, messageId: "conformingException" });
         }
       },
     };
@@ -402,7 +357,7 @@ const routePendingComponent = {
           property !== undefined &&
           isCallTo(property.value, LAZY_ROUTE_COMPONENT)
         ) {
-          findings.push({ node: property, messageId: "lazyRouteComponent" });
+          context.report({ node: property, messageId: "lazyRouteComponent" });
         }
       }
       const component = properties.get("component");
@@ -414,7 +369,7 @@ const routePendingComponent = {
       }
       const pending = properties.get("pendingComponent");
       if (pending === undefined) {
-        findings.push({
+        context.report({
           node: component,
           messageId: "missingPendingComponent",
         });
@@ -422,12 +377,12 @@ const routePendingComponent = {
       }
       if (isIdentifier(pending.value, LAYOUT_DELEGATE)) {
         if (!rendersOutlet) {
-          findings.push({ node: pending, messageId: "layoutWithoutOutlet" });
+          context.report({ node: pending, messageId: "layoutWithoutOutlet" });
         }
         return;
       }
       if (isDefaultPending(pending.value)) {
-        findings.push({ node: pending, messageId: "defaultPendingComponent" });
+        context.report({ node: pending, messageId: "defaultPendingComponent" });
         return;
       }
       // The page and its pending view come from one pair of siblings, so a
@@ -438,22 +393,17 @@ const routePendingComponent = {
         importedStem(pending.value, ".pending") === pageStemOfRoute &&
         component.value.name !== pending.value.name;
       if (!paired) {
-        findings.push({ node: pending, messageId: "pageModulePair" });
+        context.report({ node: pending, messageId: "pageModulePair" });
         return;
       }
-      // The pending view must be one the frame can draw, unless its module
-      // is one of today's listed exceptions.
+      // The pending view must be one the frame can draw.
       const source = importSources.get(pending.value.name);
       const file =
         source === undefined
           ? null
           : pendingModuleFile(filenameForContext(context), source);
-      if (
-        file !== null &&
-        !isUnmarkedModule(file.replaceAll("\\", "/")) &&
-        !marksFrameView(file)
-      ) {
-        findings.push({ node: pending, messageId: "unmarkedPendingView" });
+      if (file !== null && !marksFrameView(file)) {
+        context.report({ node: pending, messageId: "unmarkedPendingView" });
       }
     }
   },
@@ -469,21 +419,14 @@ const pendingModuleImports = {
         "A pending half loads nothing lazily: it is the view shown while the page loads.",
       bannedCall:
         "A pending half is context-free: no translations hook (use `PendingText`), no query, router or route hook, no `lazy`.",
-      conformingUnmarked:
-        "This pending module now marks a frame view: delete its line from .oxlint-plugins/route-pending-component-unmarked.json.",
     },
     schema: [],
   },
   createOnce(context) {
     // Local names bound to the router's URL hooks, aliases included.
     const urlHookLocals = new Set<string>();
-    // Held until the module is known: a listed module that marks no frame
-    // view renders only inside the providers and goes unchecked.
-    let findings: { node: unknown; messageId: string }[] = [];
-    let marksView = false;
-    let program: unknown = null;
     const report = (node, messageId: string) => {
-      findings.push({ node, messageId });
+      context.report({ node, messageId });
     };
     const checkSource = (node) => {
       if (
@@ -496,26 +439,8 @@ const pendingModuleImports = {
       report(node, "closedImport");
     };
     return {
-      Program(node) {
+      Program() {
         urlHookLocals.clear();
-        findings = [];
-        marksView = false;
-        program = node;
-      },
-      "Program:exit"() {
-        if (isUnmarkedModule(filenameForContext(context))) {
-          // Listed: it renders inside the providers until it marks a view,
-          // and then its line goes.
-          if (marksView && isAstNode(program)) {
-            context.report({ node: program, messageId: "conformingUnmarked" });
-          }
-          return;
-        }
-        for (const { node, messageId } of findings) {
-          if (isAstNode(node)) {
-            context.report({ node, messageId });
-          }
-        }
       },
       ImportDeclaration(node) {
         for (const specifier of node.specifiers ?? []) {
@@ -543,10 +468,6 @@ const pendingModuleImports = {
       },
       CallExpression(node) {
         const callee = node.callee;
-        if (isIdentifier(callee, FRAME_PENDING_VIEW)) {
-          marksView = true;
-          return;
-        }
         if (callee?.type === "Identifier" && urlHookLocals.has(callee.name)) {
           if (!isLooseCall(node)) {
             report(node, "bannedCall");

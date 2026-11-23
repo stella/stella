@@ -40,7 +40,7 @@ import { CHAT_CONTEXT_FILE_MAX_BYTES } from "@stll/chat-limits";
 import { SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { DAY_IN_MS } from "@stll/time";
 
-import type { env } from "@/api/env";
+import type { envPublicCorpus } from "@/api/env-public-corpus";
 import { SITEMAP_RANGE_ROWS_CEILING } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   API_RATE_LIMITS,
@@ -564,6 +564,46 @@ export const LIMITS = {
   imageDerivativeSourcePixelsMax: 40_000_000,
   /** Wall-clock ceiling for one thumbnail plus blur placeholder. */
   imageDerivativeTimeoutMs: 30_000,
+  /** Hard timeout for the PDF worker rendering one image, text or CSV
+   *  file as its preview PDF. */
+  pdfRenderTimeoutMs: 60_000,
+  /** Bytes at the start of a plain text or CSV file that its preview lays
+   *  out, cut back to the last line break inside them. Decoding, CSV parsing
+   *  and the records held grow with this, not with the file: about 230
+   *  pages of prose or 10,000 short CSV records. A longer file's preview
+   *  ends with a note that it is shortened. */
+  pdfRenderTextSourceBytesMax: 1024 * 1024,
+  /** Pages a text or CSV preview lays out; past them it stops and ends with
+   *  the shortened note. Bounds what a file of very short lines, or a wide
+   *  table split into many column bands, can make of the source budget. */
+  pdfRenderTextPagesMax: 200,
+  /** Bytes an image Bun's pipeline renders may decode to: width × height ×
+   *  four (RGBA), or eight for a 16-bit PNG. A larger image is too large to
+   *  preview. The pipeline holds the decoded image and the buffers it scales
+   *  it down through, so this is a render's peak: 96 MiB is a 25 MP 8-bit
+   *  image or a 12.5 MP 16-bit one, which peak near 390 MB. */
+  pdfRenderImageDecodedBytesMax: 96 * 1024 * 1024,
+  /** Pixels of a rendered image page from Bun's pipeline: a larger image
+   *  is scaled down to fit before its pixels are copied out for the PDF.
+   *  8 MP (3464 × 2309) is about what a 4K screen shows. Scaling holds
+   *  buffers in proportion to this. */
+  pdfRenderImagePixelsMax: 8_000_000,
+  /** Bytes one TIFF page may decode to: width × height × its own samples,
+   *  plus four for the RGBA they are converted to. A larger page makes the
+   *  file too large to preview. TIFF pages are not scaled, so this admits
+   *  more than `pdfRenderImageDecodedBytesMax` for the same peak: 160 MiB is
+   *  a 600 dpi A4 scan or a 24 MP colour page. */
+  pdfRenderTiffPageDecodedBytesMax: 160 * 1024 * 1024,
+  /** Pages of a multi-page TIFF its preview shows; a longer file's preview
+   *  ends with the shortened note. Pages are decoded one at a time, so this
+   *  bounds time and the PDF held, not the peak: at the largest page budget
+   *  (about 0.6 s a page) 50 pages finish in half of `pdfRenderTimeoutMs`. */
+  pdfRenderImagePagesMax: 50,
+  /** Resident memory of one PDF render worker. The parent kills a worker
+   *  past it (`SubprocessError` with a `memory` termination), and the file
+   *  gets no preview. The source bounds above keep every measured input
+   *  well under it; this is the backstop for one they missed. */
+  pdfRenderWorkerRssMaxBytes: 512 * 1024 * 1024,
   /** Largest stored source (bytes) a PDF or thumbnail derivative is built
    *  from. Checked against the recorded size before the object is read and
    *  again against the store's declared length, so a refused file is never
@@ -659,6 +699,8 @@ export const LIMITS = {
   caseLawResearchAnswerPassageChars: 1500,
   /** Rationale kept beside an answer. */
   caseLawResearchAnswerRationaleChars: 600,
+  /** Longest sentence a citation check judges. */
+  caseLawCitationCheckClaimChars: 2000,
   caseLawDecisionCitationPageSize: 50,
   /** Documents in a case file, after language-version deduplication. */
   caseLawCaseFilePageSize: 50,
@@ -1047,6 +1089,18 @@ export const LIMITS = {
   workPoolFileScanMaxWaiters: 32,
   workPoolFileScanMaxWaitMs: 20_000,
   workPoolFileScanDeadlineMs: 120_000,
+  /** PDF render workers (image, text and CSV previews) one process runs at
+   *  once. Each may reach `pdfRenderWorkerRssMaxBytes`, outside the process's
+   *  own memory but inside its container's limit, so one at a time keeps
+   *  that to one ceiling per container. Renders are bounded to seconds, so
+   *  callers queue rather than fail. */
+  workPoolPdfRenderSlots: 1,
+  /** Renders that may wait for the slot. Each waiter holds its source
+   *  (at most `fileDerivativeSourceMaxBytes`) while it waits. */
+  workPoolPdfRenderMaxWaiters: 8,
+  /** How long a render waits for the slot before it fails as retryable:
+   *  one render's timeout, so the head of the queue always gets its turn. */
+  workPoolPdfRenderMaxWaitMs: 60_000,
   /** Max distinct footer parts one DOCX stamp operation may update. */
   docxStampFooterPartsMax: 64,
   /** Max org-wide custom blacklist terms for anonymization. */
@@ -1099,21 +1153,7 @@ export const NEW_ACCOUNT_OTP_RATE_LIMITS = {
  */
 export const EMAIL_OTP_MIN_RESPONSE_DURATION_MS = 1000;
 
-export type PublicCorpusLimitsConfiguration = Pick<
-  typeof env,
-  | "PUBLIC_LAW_DATABASE_POOL_MAX"
-  | "PUBLIC_LAW_DATABASE_URL"
-  | "DATABASE_ROOT_POOL_MAX"
-  | "PUBLIC_CORPUS_RESERVED_CONNECTIONS"
-  | "PUBLIC_CORPUS_ASSUMED_REPLICAS"
-  | "PUBLIC_CORPUS_SEARCH_P95_SECONDS"
-  | "PUBLIC_CORPUS_AGGREGATE_P95_SECONDS"
-  | "PUBLIC_CORPUS_SITEMAP_P95_SECONDS"
-  | "PUBLIC_CORPUS_SEARCH_ADDRESS_MAX"
-  | "PUBLIC_CORPUS_SEARCH_GLOBAL_MAX"
-  | "PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX"
-  | "PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX"
->;
+export type PublicCorpusLimitsConfiguration = typeof envPublicCorpus;
 
 /** Derive fleet request budgets from pool permits and assumed p95 latency.
  * Defaults are initial estimates: tune replica count, latency and overrides

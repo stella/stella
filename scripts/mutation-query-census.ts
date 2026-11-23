@@ -19,9 +19,13 @@ const IDEMPOTENT_MUTATION = {
   file: "apps/web/src/lib/idempotency/use-idempotent-mutation.ts",
   name: "useIdempotentMutation",
 } as const;
-const ROUTE_READER_HELPERS = new Set([
+/** Route helpers that take the query client first and the query options
+ *  second (`apps/web/src/lib/react-query.ts`). The census and the
+ *  invalidation check both read options from this one list. */
+export const ROUTE_READER_HELPERS: ReadonlySet<string> = new Set([
   "ensureRouteQueryData",
   "ensureRouteInfiniteQueryData",
+  "prefetchRouteQuery",
 ]);
 const READERS = new Set([
   ...ROUTE_READER_HELPERS,

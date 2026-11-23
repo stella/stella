@@ -9,6 +9,7 @@ import {
 } from "@/components/inspector/file-download-service.logic";
 import { getTranslator } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
+import { toBrowserApiUrl } from "@/lib/api-origins";
 import { apiUrl } from "@/lib/api-url";
 import { toAPIError } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -155,9 +156,12 @@ export const downloadTabFile = async ({
   }
 
   const downloaded = await Result.tryPromise(async () => {
-    const fetched = await fetchWithTimeout(response.data.presignedUrl, {
-      timeoutMs: DOWNLOAD_TIMEOUT_MS,
-    });
+    const fetched = await fetchWithTimeout(
+      toBrowserApiUrl(response.data.presignedUrl),
+      {
+        timeoutMs: DOWNLOAD_TIMEOUT_MS,
+      },
+    );
     return fetched.ok ? await fetched.blob() : null;
   });
 

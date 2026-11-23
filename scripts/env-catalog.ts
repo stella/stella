@@ -170,6 +170,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_AGENT_ID_JAG",
   "FEATURE_AI_MEMORY",
   "FEATURE_CHAT_TURN_HANDOVER",
+  "FEATURE_CITATION_CHECK",
   "FEATURE_CONFLICT_CHECK",
   "FEATURE_ENTERPRISE_SSO",
   "FEATURE_FILE_USAGE_LIMITS",
@@ -736,6 +737,8 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Show governed work-obligation fields on a task (owner, acknowledgement, hard deadline).",
   VITE_FEATURE_INBOX:
     "Show the Inbox and the notification bell for everyone, without the per-browser beta toggle.",
+  VITE_FEATURE_PDF_AREA_REDACTION:
+    "Let readers mark areas of a PDF page that the anonymized PDF download blacks out.",
   VITE_POSTHOG_KEY:
     'Public PostHog project key. The placeholder "phc_" disables local capture.',
   VITE_POSTHOG_LOCAL_DEBUG:
@@ -926,6 +929,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   FEATURE_ACTION_COST_RECORDS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AGENT_ID_JAG: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_AI_MEMORY: ENV_CREDENTIAL_KIND.notCredential,
+  FEATURE_CITATION_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFIGURED_ACCESS: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_CONFLICT_CHECK: ENV_CREDENTIAL_KIND.notCredential,
   FEATURE_ENTERPRISE_SSO: ENV_CREDENTIAL_KIND.notCredential,
@@ -1132,6 +1136,7 @@ export const ENV_CREDENTIAL_CLASSIFICATION = {
   VITE_FEATURE_FOLIO_COLLAB: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_GOVERNED_WORKFLOW: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_INBOX: ENV_CREDENTIAL_KIND.notCredential,
+  VITE_FEATURE_PDF_AREA_REDACTION: ENV_CREDENTIAL_KIND.notCredential,
   VITE_FEATURE_USAGE: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_HOST: ENV_CREDENTIAL_KIND.notCredential,
   VITE_POSTHOG_KEY: ENV_CREDENTIAL_KIND.notCredential,
@@ -1751,6 +1756,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "API_TEST_ARTIFACT_DIR",
   "API_TEST_CHILD_TIMEOUT_MS",
   // Resolved weight identity changes the Turbo test cache key.
+  // Selects a single API lint shard (`lib`, `handlers`, or `rest`) for parallel CI runs.
+  "API_LINT_SHARD",
   "API_TEST_DURATIONS_HASH",
   // Optional main-measured weights path; content identity is keyed separately.
   "API_TEST_DURATIONS_FILE",
@@ -2004,6 +2011,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   // Development render census: verify React Refresh with isolated temporary modules.
   "STELLA_RENDER_CENSUS_HMR",
+  // Opt-in conversion tests against a running document converter.
+  "STELLA_RUN_CONVERTER_TESTS",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
   "STELLA_RUN_POSTGRES_TESTS",
   "STELLA_RUN_QUERY_PERF_TESTS",

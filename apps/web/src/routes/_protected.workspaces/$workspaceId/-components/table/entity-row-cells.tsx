@@ -393,12 +393,6 @@ export const DraggableRow = ({
   );
 
   useExternalSyncEffect(() => {
-    if (rowRef.current) {
-      measureElement(rowRef.current);
-    }
-  }, [contentMode, expandedCellId, measureElement]);
-
-  useExternalSyncEffect(() => {
     const el = rowRef.current;
     if (!el) {
       return undefined;

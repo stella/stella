@@ -16,61 +16,6 @@ export {
   getFileExtension,
 };
 
-/**
- * MIME types browsers report when they have no registered handler
- * for a file (so `File.type` arrives empty or generic). For these
- * we trust the filename extension instead.
- */
-const GENERIC_UPLOAD_MIME_TYPES = new Set([
-  "",
-  "application/octet-stream",
-  "binary/octet-stream",
-]);
-
-const UPLOAD_MIME_TYPE_ALIASES = new Map([
-  ["application/x-pdf", "application/pdf"],
-  ["image/jpg", "image/jpeg"],
-]);
-
-type ResolveUploadMimeProps = {
-  declaredMime: string;
-  fileName: string;
-};
-
-const MAX_MIME_EXTENSION_LENGTH = 32;
-const SAFE_MIME_EXTENSION_RE = /^[a-z0-9]{1,32}$/u;
-
-/**
- * Normalize a client-declared upload MIME type: when the browser
- * reports a generic/empty type, fall back to a known type inferred
- * from the filename extension. Well-typed uploads pass through
- * unchanged.
- */
-export const resolveUploadMime = ({
-  declaredMime,
-  fileName,
-}: ResolveUploadMimeProps): string => {
-  const canonicalDeclaredMime =
-    UPLOAD_MIME_TYPE_ALIASES.get(declaredMime) ?? declaredMime;
-  if (!GENERIC_UPLOAD_MIME_TYPES.has(canonicalDeclaredMime)) {
-    return canonicalDeclaredMime;
-  }
-  const dotIndex = fileName.lastIndexOf(".");
-  if (dotIndex === -1) {
-    return canonicalDeclaredMime;
-  }
-  const extension = fileName
-    .slice(dotIndex + 1, dotIndex + 1 + MAX_MIME_EXTENSION_LENGTH)
-    .toLowerCase();
-  if (!SAFE_MIME_EXTENSION_RE.test(extension)) {
-    return canonicalDeclaredMime;
-  }
-  const lookupName = `file.${extension}`;
-  return (
-    Bun.file(lookupName).type.split(";").at(0)?.trim() || canonicalDeclaredMime
-  );
-};
-
 type DeleteS3ObjectsProps = {
   fileRows: { fileId: string; mimeType: string }[];
   organizationId: SafeId<"organization">;

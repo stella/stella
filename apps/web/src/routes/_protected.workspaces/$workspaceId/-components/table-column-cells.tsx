@@ -41,8 +41,6 @@ import {
 import { offersCellReview } from "@/components/workspaces/row-actions.logic";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";
-import { useCallerFeatureEnabled } from "@/lib/organization/feature-access/access";
-import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type {
   WorkspaceEntity,
   WorkspaceField,
@@ -86,12 +84,7 @@ const PropertyCellContent = ({
   const justification = useWorkspaceStore((s) =>
     selectJustificationByFieldId(s.justifications, field?.id),
   );
-  // Only a cell that holds an override asks for the beta decision.
-  const tableAnalysisEnabled = useCallerFeatureEnabled(
-    CALLER_FEATURE.tableAnalysis,
-    { enabled: cellMetadata?.override !== undefined },
-  );
-  const override = tableAnalysisEnabled ? cellMetadata?.override : undefined;
+  const override = cellMetadata?.override;
   const withOverride = (cell: ReactElement): ReactElement =>
     override === undefined || cellMetadata === undefined ? (
       cell

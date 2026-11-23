@@ -77,12 +77,15 @@ const EMPTY_PAGE: ChatMessagesPage = {
  * its first message, so there is nothing to load yet.
  */
 export const ChatThreadView = ({
+  dictated,
   fresh,
   matterId,
   shareId,
   source,
   threadId,
 }: {
+  /** Dictated text a new conversation's message starts with (`src/app/dictation.tsx`). */
+  dictated: string | undefined;
   fresh: boolean;
   /** The thread's matter; the server refuses a matter's thread read without it. */
   matterId: string | undefined;
@@ -116,6 +119,7 @@ export const ChatThreadView = ({
       <ThreadSteps value={{ source, threadId }}>
         <Suspense fallback={<Loader style={styles.fill} />}>
           <LoadedThread
+            dictated={dictated}
             load={load}
             matterId={matterId}
             onReload={reload}
@@ -131,6 +135,7 @@ export const ChatThreadView = ({
 };
 
 const LoadedThread = ({
+  dictated,
   load,
   matterId,
   onReload,
@@ -139,6 +144,7 @@ const LoadedThread = ({
   source,
   threadId,
 }: {
+  dictated: string | undefined;
   load: Promise<Load<ChatMessagesPage>>;
   matterId: string | undefined;
   onReload: () => void;
@@ -163,6 +169,7 @@ const LoadedThread = ({
 
   return (
     <ThreadMessages
+      dictated={dictated}
       firstPage={result.value}
       // A refresh starts over from the thread's newest page.
       key={loadedAt}
@@ -185,6 +192,7 @@ const LoadedThread = ({
  * person ends the thread with what it waits for, answered right there.
  */
 const ThreadMessages = ({
+  dictated,
   firstPage,
   matterId,
   onReload,
@@ -193,6 +201,7 @@ const ThreadMessages = ({
   source,
   threadId,
 }: {
+  dictated: string | undefined;
   firstPage: ChatMessagesPage;
   matterId: string | undefined;
   onReload: () => void;
@@ -378,11 +387,12 @@ const ThreadMessages = ({
             </Text>
           </View>
           {/* The composer says why a send was refused, as in a thread. A
-              share starts only an empty conversation, so only this one
-              takes it. */}
+              share or a dictation starts only an empty conversation, so
+              only this one takes it. */}
           <ChatComposer
             busy={turn.busy}
             canStop={turn.canStop}
+            dictated={dictated}
             onSend={turn.send}
             onSteer={undefined}
             onStop={turn.stop}
@@ -490,6 +500,7 @@ const ThreadMessages = ({
           <ChatComposer
             busy={turn.busy}
             canStop={turn.canStop}
+            dictated={undefined}
             handle={composer}
             onQueue={turn.queue}
             onSend={send}

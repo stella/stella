@@ -87,7 +87,12 @@ export const ChatComposerActionButton = (
       }
       onClick={handleClick}
       size="icon-round"
-      tooltip={label}
+      // Enabled, it needs no tooltip: its glyph and name say what it does,
+      // and the pointer that pressed it rests on it through the turn it
+      // starts. A tooltip open there would warm the page's delay group, so
+      // every tooltip the pointer crosses next would open at once. Disabled,
+      // the tooltip says why (`disabledReason`).
+      tooltip={false}
       type="button"
       variant="composer"
     >

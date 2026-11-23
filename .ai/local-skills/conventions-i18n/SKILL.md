@@ -14,13 +14,13 @@ modifying user-facing strings.
 
 ## Supported Languages
 
-en is the source language. Check `apps/web/src/i18n/langs/` for
+en is the source language. Check `apps/web/src/i18n/namespaces/` for
 the current list of target languages (add translations to every
 `.json` file found there).
 
 ## Translation Flow
 
-Add keys to `apps/web/src/i18n/langs/en.json`; `bun run i18n:check` (from
+Add keys to `apps/web/src/i18n/namespaces/en/`; `bun run i18n:check` (from
 `apps/web`) names every structural fix.
 
 - Write natural, idiomatic translations into every target language file, then
@@ -46,8 +46,10 @@ longer matches it, and `i18n:sync` never updates an existing entry.
    change leaves every translation correct (casing, punctuation).
    [check: i18n:check]
 
-The product name is lowercase `stella` in every locale and grammatical form,
-sentence starts included (`stellu`, `stelle`).
+The product name is lowercase `stella` in every locale and position,
+sentence starts included. Keep `stella` uninflected in inflected locales and
+decline an appositive noun in front of it instead (e.g. cs `do aplikace stella`,
+pl `w aplikacji stella`, hu `a stella alkalmazásba`).
 
 ## Key Naming
 

@@ -144,6 +144,7 @@ import {
   withStaleIfError,
 } from "@/api/lib/auth/cimd-stale-if-error";
 import { sendManageOtp } from "@/api/lib/auth/confirmation-email";
+import type { StellaDatabaseHooks } from "@/api/lib/auth/database-hook-context";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -735,10 +736,18 @@ export { isSessionCreatingAuthPath };
 const TWO_FACTOR_CHALLENGE_PATH = "/auth/two-factor";
 
 /**
- * Frontend route that lists the account's active sessions (the settings page
- * hosting the sessions card), linked from the new-device notice.
+ * Frontend route that lists the account's signed-in devices. The new-device
+ * notice links to it with `review` naming the reported session, which opens
+ * the page at that sign-in's review.
  */
-const ACTIVE_SESSIONS_FRONTEND_PATH = "/settings/account/profile";
+const ACTIVE_SESSIONS_FRONTEND_PATH = "/settings/account/security";
+const SIGN_IN_REVIEW_SEARCH_PARAM = "review";
+
+const signInReviewUrl = (sessionId: string): string => {
+  const url = new URL(ACTIVE_SESSIONS_FRONTEND_PATH, env.FRONTEND_URL);
+  url.searchParams.set(SIGN_IN_REVIEW_SEARCH_PARAM, sessionId);
+  return url.toString();
+};
 
 /**
  * True when a sign-in endpoint's response body is the two-factor plugin's
@@ -2594,7 +2603,7 @@ export const createAuth = (
           after: createUserProjectionUpdateHook(),
         },
       },
-    },
+    } satisfies StellaDatabaseHooks,
     database: membershipAuthAdapter,
     socialProviders: createSocialProviders({
       googleClientId: env.GOOGLE_AUTH_CLIENT_ID,
@@ -3154,7 +3163,13 @@ export const createAuth = (
             findPreviousSessions: findOtherSessionDevices,
             requestReview: async (signIn) =>
               await sessionSignInStore().requestReview(signIn),
-            sendNotice: ({ email, device, ipAddress, createdAt }) => {
+            sendNotice: ({
+              email,
+              sessionId,
+              device,
+              ipAddress,
+              createdAt,
+            }) => {
               const lang = extractLangFromRequest(ctx.request);
               const formattedTime =
                 getNewDeviceLoginDateTimeFormat(lang).format(createdAt);
@@ -3169,7 +3184,7 @@ export const createAuth = (
                     clientAddress: sealedRequestClientAddress(),
                   }),
                   time: formattedTime,
-                  sessionsUrl: `${env.FRONTEND_URL}${ACTIVE_SESSIONS_FRONTEND_PATH}`,
+                  sessionsUrl: signInReviewUrl(sessionId),
                   lang,
                 }).catch((error: unknown) => {
                   captureError(

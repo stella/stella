@@ -42,6 +42,7 @@ import { DocxEditorHost } from "@/components/docx/docx-editor-host";
 import { DragAndDropLiveRegion } from "@/components/drag-and-drop-live-region";
 import { resolveInspectorDockVisibility } from "@/components/inspector/inspector-dock-visibility";
 import { INSPECTOR_FOCUS_INTENT } from "@/components/inspector/inspector-store-types";
+import { InspectorTabHeaderPending } from "@/components/inspector/inspector-tab-header-frame";
 import { getInspectorTabWorkspaceId } from "@/components/inspector/inspector-tab-workspace";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
@@ -78,7 +79,6 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { ChromeHeaderActionsSlot } from "@/lib/chrome-header-actions";
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -148,18 +148,11 @@ const InspectorRailFallback = () => {
   );
 };
 
+// The phone sheet while the panel chunk loads. Its header is the tab header in
+// its pending phase, so the header does not move when the panel replaces it.
 const MobileInspectorFallback = () => (
   <div className="bg-background flex h-full min-w-0 flex-col">
-    <div
-      className={cn(
-        "flex shrink-0 items-center gap-2 border-b px-3",
-        TOOLBAR_ROW_HEIGHT,
-      )}
-    >
-      <Skeleton className="h-4 w-16" />
-      <Skeleton className="h-4 flex-1" />
-      <Skeleton className="size-7 rounded-md" />
-    </div>
+    <InspectorTabHeaderPending />
     <div className="space-y-3 px-4 py-4">
       <Skeleton className="h-7 w-2/3" />
       <Skeleton className="h-8 w-full" />

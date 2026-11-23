@@ -189,6 +189,9 @@
     "packages/decision-reader": {
       "entry": ["src/**/*.test.{ts,tsx}"]
     },
+    "packages/docx-authoring": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/html": {
       "entry": ["src/load.ts", "src/**/*.test.ts"]
     },
@@ -259,6 +262,8 @@
     "packages/transcript": {
       "entry": [
         "src/transcript.ts",
+        "src/spelling.ts",
+        "src/corrections.ts",
         "src/timeline.ts",
         "src/exporters.ts",
         "src/vocabulary.ts",

@@ -50,6 +50,7 @@ import { gradingSchema } from "@/api/lib/lists/verification/claim-grade";
 import { extractionSchema as memoryExtractionSchema } from "@/api/lib/scheduler/tasks/memory-extractor";
 import { deadlineExtractionSchema } from "@/api/lib/scouts/document-deadlines.logic";
 import { fieldSuggestionsSchema } from "@/api/lib/templates/suggest-template-fields";
+import { documentNamingSchema } from "@/api/lib/uploads/document-naming/document-naming.logic";
 import { buildBatchSchema } from "@/api/lib/workflow/ai-prompts";
 import { generativeDecisionsSchema } from "@/api/lib/workflow/decisions/decide";
 import { choice, noul } from "@/api/lib/workflow/decisions/system-one";
@@ -152,14 +153,14 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       outputSchema: "desktopBillingDraftModelResponseSchema",
       schema: desktopBillingDraftModelResponseSchema,
       answer:
-        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","classification":{"type":"activity_group","activityGroup":"client"},"flags":[],"matchedEarlierEntryIds":[],"operations":[]}],"checkedGuidelines":[]}',
+        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","narrativeLanguage":"en","classification":{"type":"activity_group","activityGroup":"client"},"flags":[],"matchedEarlierEntryIds":[],"operations":[]}],"checkedGuidelines":[]}',
     },
     {
       file: "handlers/desktop-time-entries/billing-drafts.ts",
       outputSchema: "desktopBillingPlainDraftModelResponseSchema",
       schema: desktopBillingPlainDraftModelResponseSchema,
       answer:
-        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","matchedEarlierEntryIds":[]}]}',
+        '{"drafts":[{"entryId":"entry_1","narrative":"Reviewed the supplied agreement.","narrativeLanguage":"en","matchedEarlierEntryIds":[]}]}',
     },
     {
       file: "handlers/dictation/cleanup.ts",
@@ -421,6 +422,13 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       schema: fieldSuggestionsSchema,
       answer:
         '{"suggestions":[{"literalText":"Northwind Logistics s.r.o.","fieldPath":"principal.name","inputType":"text","label":"Principal name","hint":"Full registered company name","exampleValue":"Northwind Logistics s.r.o.","aiPrompt":null},{"literalText":"15 May 2026","fieldPath":"signing.date","inputType":"date","label":"Signing date","hint":null,"exampleValue":"2026-05-15","aiPrompt":null}]}',
+    },
+    {
+      file: "lib/uploads/document-naming/document-naming.ts",
+      outputSchema: "documentNamingSchema",
+      schema: documentNamingSchema,
+      answer:
+        '{"date":"2026-03-14","docType":"Contract","title":"Share purchase agreement between Northwind Logistics and Harbor Freight"}',
     },
     {
       file: "lib/workflow/ai-generate-batch.ts",

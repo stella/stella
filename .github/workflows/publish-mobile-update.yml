@@ -96,10 +96,10 @@ jobs:
           for platform in $platforms; do
             runtime="$(bun scripts/fingerprint.ts "$platform")"
             echo "$runtime" > "$RUNNER_TEMP/runtime-$platform"
-            MOBILE_RUNTIME_VERSION="$runtime" bunx expo export \
+            MOBILE_RUNTIME_VERSION="$runtime" bunx --bun expo export \
               --platform "$platform" \
               --output-dir "$RUNNER_TEMP/dist-$platform"
-            MOBILE_RUNTIME_VERSION="$runtime" bunx expo config --type public --json \
+            MOBILE_RUNTIME_VERSION="$runtime" bunx --bun expo config --type public --json \
               > "$RUNNER_TEMP/config-$platform.json"
           done
 

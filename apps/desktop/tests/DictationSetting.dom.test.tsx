@@ -10,16 +10,27 @@ const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
 const { DictationSetting } = await import("../src/mainview/DictationSetting");
 
-afterEach(() => {
+/** One macrotask, for the mocked IPC promises and React's scheduler. */
+const nextMacrotask = async () =>
+  await new Promise<void>((resolve) => {
+    setImmediate(resolve);
+  });
+
+// A native answer that lands after a test's last assertion still renders,
+// and React schedules its effects; both settle before the DOM goes away.
+afterEach(async () => {
+  await act(nextMacrotask);
   cleanup();
   clearMocks();
 });
 
 afterAll(async () => {
+  await nextMacrotask();
   await GlobalRegistrator.unregister();
 });
 
 const ENABLED_SNAPSHOT = {
+  appSettings: [],
   available: true,
   cleanup: true,
   cloudAvailable: false,
@@ -36,7 +47,10 @@ const ENABLED_SNAPSHOT = {
   shareWindowTitle: false,
   shareTextBeforeCursor: false,
   sounds: true,
+  speakersOnly: true,
   textBeforeCursorAvailable: true,
+  cleanupStyle: "polished",
+  translateTo: null,
   failure: null,
   failureKeptInHistory: false,
   holdKey: "combination",
@@ -46,7 +60,13 @@ const ENABLED_SNAPSHOT = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
+  recentApps: [],
+  retypeKeys: { code: "KeyV", modifiers: ["control", "alt", "shift"] },
+  retypeShortcut: true,
+  retypeShortcutTaken: false,
   shortcutTaken: false,
+  whileDictating: "nothing",
+  whileDictatingOffered: ["nothing", "lower", "pause"],
 };
 
 /** Renders the setting over a native side that answers with `snapshot`. */
@@ -219,6 +239,87 @@ test("turning cleanup off asks the native side and shows its answer", async () =
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
   expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("the speaker picks a cleanup style, and its description follows", async () => {
+  const picked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_cleanup_style") {
+      return undefined;
+    }
+    picked.push(payload);
+    return { ...ENABLED_SNAPSHOT, cleanupStyle: "notes" };
+  });
+  const { cleanupStyle } = defaultMessages.dictation;
+  expect(
+    view.container.querySelector("#dictation-cleanup-style-description")
+      ?.textContent,
+  ).toBe(cleanupStyle.polished.description);
+
+  const listbox = await openSelect(view, cleanupStyle.title);
+  expect(within(listbox).getAllByRole("option")).toHaveLength(4);
+  const notes = within(listbox).getByRole("option", {
+    name: cleanupStyle.notes.title,
+  });
+  await act(async () => {
+    fireEvent.pointerDown(notes, { pointerType: "mouse" });
+    fireEvent.click(notes);
+  });
+
+  await waitFor(() => {
+    expect(picked).toEqual([{ style: "notes" }]);
+  });
+  await waitFor(() => {
+    expect(
+      view.container.querySelector("#dictation-cleanup-style-description")
+        ?.textContent,
+    ).toBe(cleanupStyle.notes.description);
+  });
+});
+
+test("the speaker picks a language to write in, and turns it off again", async () => {
+  const asked: unknown[] = [];
+  const view = await renderSetting(ENABLED_SNAPSHOT, (command, payload) => {
+    if (command !== "dictation_set_translate_to") {
+      return undefined;
+    }
+    asked.push(payload);
+    return { ...ENABLED_SNAPSHOT, translateTo: "en" };
+  });
+  const { translateTo } = defaultMessages.dictation;
+
+  const listbox = await openSelect(view, translateTo.title);
+  // Off, then every language cleanup can write in.
+  expect(within(listbox).getAllByRole("option")).toHaveLength(14);
+  const english = within(listbox).getByRole("option", { name: "English" });
+  await act(async () => {
+    fireEvent.pointerDown(english, { pointerType: "mouse" });
+    fireEvent.click(english);
+  });
+  await waitFor(() => {
+    expect(asked).toEqual([{ language: "en" }]);
+  });
+
+  const again = await openSelect(view, translateTo.title);
+  const off = within(again).getByRole("option", { name: translateTo.off });
+  await act(async () => {
+    fireEvent.pointerDown(off, { pointerType: "mouse" });
+    fireEvent.click(off);
+  });
+  await waitFor(() => {
+    expect(asked).toEqual([{ language: "en" }, { language: null }]);
+  });
+});
+
+test("the cleanup style and language are offered only while cleanup runs", async () => {
+  const view = await renderSetting({ ...ENABLED_SNAPSHOT, cleanup: false });
+  const { cleanupStyle, translateTo } = defaultMessages.dictation;
+
+  for (const name of [cleanupStyle.title, translateTo.title]) {
+    expect(
+      Object.hasOwn(view.getByRole("combobox", { name }).dataset, "disabled"),
+    ).toBe(true);
+  }
 });
 
 test("hides the cleanup switch while dictation is off", async () => {
@@ -414,6 +515,110 @@ test("turning the sounds off asks the native side and shows its answer", async (
     expect(toggle.getAttribute("aria-checked")).toBe("false");
   });
   expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("turning the retype shortcut off asks the native side and shows its answer", async () => {
+  const calls: unknown[] = [];
+  const { getByRole } = await renderSetting(
+    ENABLED_SNAPSHOT,
+    (called, payload) => {
+      if (called !== "dictation_set_retype_shortcut") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, retypeShortcut: false };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.retype.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+});
+
+test("a retype shortcut another app holds says so", async () => {
+  const { findByText } = await renderSetting({
+    ...ENABLED_SNAPSHOT,
+    retypeShortcutTaken: true,
+  });
+  expect(await findByText(/^Another app is using /u)).toBeTruthy();
+});
+
+test("removing an app's own settings stores the rest", async () => {
+  const calls: unknown[] = [];
+  const code = {
+    cleanup: "off",
+    language: null,
+    target: { kind: "code", type: "kind" },
+  };
+  const mail = {
+    cleanup: null,
+    language: "cs",
+    target: { identifier: "com.apple.mail", name: "Mail", type: "app" },
+  };
+  const { getByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, appSettings: [code, mail] },
+    (called, payload) => {
+      if (called !== "dictation_set_app_settings") {
+        return undefined;
+      }
+      calls.push(payload);
+      return { ...ENABLED_SNAPSHOT, appSettings: [mail] };
+    },
+  );
+
+  fireEvent.click(
+    getByRole("button", {
+      name: `Remove ${defaultMessages.dictation.perApp.kinds.code}`,
+    }),
+  );
+
+  await waitFor(() => {
+    expect(calls).toEqual([{ settings: [mail] }]);
+  });
+});
+
+test("speakers only is offered once dictation changes other sound", async () => {
+  const calls: unknown[] = [];
+  const { getByRole, queryByRole } = await renderSetting(
+    { ...ENABLED_SNAPSHOT, whileDictating: "lower" },
+    (called, payload) => {
+      if (called !== "dictation_set_speakers_only") {
+        return undefined;
+      }
+      calls.push(payload);
+      return {
+        ...ENABLED_SNAPSHOT,
+        speakersOnly: false,
+        whileDictating: "lower",
+      };
+    },
+  );
+  const toggle = getByRole("switch", {
+    name: defaultMessages.dictation.whileDictating.speakersOnly.title,
+  });
+  expect(toggle.getAttribute("aria-checked")).toBe("true");
+
+  fireEvent.click(toggle);
+
+  await waitFor(() => {
+    expect(toggle.getAttribute("aria-checked")).toBe("false");
+  });
+  expect(calls).toEqual([{ enabled: false }]);
+  cleanup();
+
+  await renderSetting(ENABLED_SNAPSHOT);
+  expect(
+    queryByRole("switch", {
+      name: defaultMessages.dictation.whileDictating.speakersOnly.title,
+    }),
+  ).toBeNull();
 });
 
 test("an unread focus is not reported as switching apps", () => {
@@ -638,7 +843,7 @@ test("without the stella AI decision only this computer is named and no models a
   expect(commands).not.toContain("dictation_get_cloud_models");
 });
 
-test("picking the shown model stores it when the stored one is no longer offered", async () => {
+test("a stored model no longer offered stays the choice until another is picked", async () => {
   const stored: unknown[] = [];
   const snapshot = {
     ...ENABLED_SNAPSHOT,
@@ -657,13 +862,18 @@ test("picking the shown model stores it when the stored one is no longer offered
     }
     return undefined;
   });
+  // Not shown as the default: the picker asks for a model and says why.
   await waitFor(() => {
     expect(
       view.getByRole("combobox", {
         name: defaultMessages.dictation.destination.model,
       }).textContent,
-    ).toContain("Voxtral Mini Transcribe");
+    ).toContain(defaultMessages.dictation.destination.chooseModel);
   });
+  expect(
+    view.getByText(defaultMessages.dictation.destination.modelWithdrawn),
+  ).toBeTruthy();
+  expect(stored).toEqual([]);
   const listbox = await openSelect(
     view,
     defaultMessages.dictation.destination.model,

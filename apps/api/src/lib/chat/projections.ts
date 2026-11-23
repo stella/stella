@@ -79,6 +79,7 @@ import {
   caseNumberTypeProjection,
   searchTotalProjection,
 } from "./case-law-result-projections";
+import { decisionBodySourceProjection } from "./decision-body-source-projection";
 import { DECISION_REVIEWS_PROJECTION } from "./decision-review-projection";
 import { statuteExpressionLabel } from "./legislation-result-projections";
 import {
@@ -1785,6 +1786,7 @@ const caseLawDecisionProjection = v.strictObject({
   page: v.optional(v.number()),
   pageCount: v.optional(v.number()),
   charCount: v.optional(v.number()),
+  bodySource: v.optional(decisionBodySourceProjection),
   textSource: v.optional(
     v.pipe(
       v.picklist(Object.values(DECISION_TEXT_SOURCE)),
@@ -2865,6 +2867,7 @@ export const UPDATE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   matterNumberingEnabled: v.optional(v.boolean()),
+  documentNamePattern: v.optional(v.nullable(v.string())),
   promptCachingEnabled: v.optional(v.boolean()),
   documentProcessingMode: v.optional(v.string()),
   memoryExtractionEnabled: v.optional(v.boolean()),

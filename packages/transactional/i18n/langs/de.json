@@ -22,14 +22,15 @@
   },
   "newDeviceLogin": {
     "action": "Angemeldete Geräte prüfen",
-    "body": "Bei Ihrem Konto hat sich gerade jemand von einem neuen Gerät oder Standort angemeldet.",
+    "actionNote": "Die Schaltfläche öffnet Einstellungen › Sicherheit direkt bei dieser Anmeldung.",
+    "body": "Es gab eine neue Anmeldung in Ihrem Konto von einem neuen Gerät oder Standort.",
     "device": "Gerät",
     "deviceName": {
       "browserOnOs": "{browser} unter {os}",
       "unknown": "Unbekanntes Gerät"
     },
     "heading": "Neue Anmeldung bei Ihrem Konto",
-    "ignore": "Wenn Sie das waren, müssen Sie nichts tun. Wenn Sie diese Anmeldung nicht kennen, melden Sie dieses Gerät ab.",
+    "ignore": "Wenn Sie das waren, ist keine Aktion erforderlich. Wenn Sie diese Aktivität nicht zuordnen können, überprüfen Sie Ihre aktiven Sitzungen und beenden Sie alle, die Sie nicht kennen.",
     "ipAddress": "IP-Adresse",
     "ipAddressUnknown": "Unbekannt",
     "location": "Standort",

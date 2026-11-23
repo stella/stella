@@ -16,10 +16,11 @@
 use tauri::AppHandle;
 
 /// The focused app: identifier (bundle identifier on macOS, executable on
-/// Windows), process and window.
+/// Windows), display name, process and window.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FocusTarget {
   pub identifier: Option<String>,
+  pub name: String,
   process_id: i64,
   window: Option<isize>,
 }
@@ -115,6 +116,7 @@ pub fn current(app: &AppHandle) -> Option<FocusTarget> {
     .and_then(|number| isize::try_from(number).ok());
   Some(FocusTarget {
     identifier: foreground.identifier,
+    name: foreground.name,
     process_id: i64::from(foreground.process_id),
     window,
   })
@@ -134,6 +136,7 @@ pub fn current(app: &AppHandle) -> Option<FocusTarget> {
   }
   Some(FocusTarget {
     identifier: foreground.identifier,
+    name: foreground.name,
     process_id: i64::from(process_id),
     window: Some(window.ptr() as isize),
   })
@@ -151,6 +154,7 @@ mod tests {
   fn target(identifier: &str, process_id: i64, window: Option<isize>) -> FocusTarget {
     FocusTarget {
       identifier: Some(identifier.to_string()),
+      name: identifier.to_string(),
       process_id,
       window,
     }
