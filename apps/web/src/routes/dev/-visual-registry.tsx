@@ -283,13 +283,6 @@ const visualLoaders = {
       return { default: AnswerEditPlayground };
     },
   },
-  autocomplete: {
-    load: async () => {
-      const { AutocompletePlayground } =
-        await import("./-components/autocomplete-playground");
-      return { default: AutocompletePlayground };
-    },
-  },
   ui: {
     load: async () => {
       const { UiPlayground } = await import("./-components/ui-playground");
