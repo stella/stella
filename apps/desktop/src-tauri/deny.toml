@@ -16,6 +16,10 @@ ignore = [
   "RUSTSEC-2026-0370",
   "RUSTSEC-2026-0371",
   "RUSTSEC-2026-0372",
+  # cookie reaches the graph through tauri-runtime without its `private`
+  # feature, so the affected PrivateJar is not compiled. The fixed 0.18.3 is
+  # inside the release-age window until 2026-11-28; update then and remove.
+  "RUSTSEC-2026-0594",
 ]
 
 [licenses]
