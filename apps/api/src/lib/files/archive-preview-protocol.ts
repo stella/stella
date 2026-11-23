@@ -29,6 +29,42 @@ export const ZIP_ARCHIVE_PREVIEW_MODE = "zip-archive-preview";
  */
 export const MAILBOX_TEXT_WORKER_MODE = "mailbox-text";
 
+/**
+ * An Outlook mailbox (`.pst`) streamed into the worker, which writes it to a
+ * private temporary file and reads it at an offset: its list of messages,
+ * one message as an email, or its text.
+ */
+export const PST_WORKER_MODE = {
+  list: "pst-list",
+  message: "pst-message",
+  text: "pst-text",
+} as const;
+
+/**
+ * A PST mode's arguments after its mode and character budget: the
+ * mailbox's file name, the worker's timeout (its reading ends before it)
+ * and, for one message, its position.
+ */
+export const pstWorkerArguments = ({
+  mailboxName,
+  timeoutMs,
+  index = null,
+}: {
+  mailboxName: string;
+  timeoutMs: number;
+  index?: number | null;
+}): string[] => [
+  mailboxName,
+  String(timeoutMs),
+  ...(index === null ? [] : [String(index)]),
+];
+
+export const PST_WORKER_EXIT = {
+  unreadable: 20,
+  noMessage: 23,
+  tooLarge: 24,
+} as const;
+
 export const STRUCTURED_DOCUMENT_PREVIEW_MODE = "structured-document-preview";
 
 export const SIGNED_DOSSIER_WORKER_MODE = {

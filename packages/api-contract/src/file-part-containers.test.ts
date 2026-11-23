@@ -27,6 +27,9 @@ describe("a part that is itself a container", () => {
     ["application/octet-stream", "Doručená pošta.mbox", "mbox"],
     ["application/octet-stream", "korespondence.mbx", "mbox"],
     ["", "Archiv.mbox", "mbox"],
+    ["application/vnd.ms-outlook-pst", "korespondence.pst", "pst"],
+    ["application/octet-stream", "Archiv 2023.PST", "pst"],
+    ["application/octet-stream", "mailbox.ost", "pst"],
   ] as const)("%s named %s is a %s container", (mediaType, name, format) => {
     expect(filePartContainerFormat(mediaType, name)).toBe(format);
   });

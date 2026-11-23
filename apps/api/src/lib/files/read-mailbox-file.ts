@@ -1,13 +1,18 @@
 /**
- * A stored mailbox as the Files preview and every reader of documents read
- * it: its messages' list for the viewer, and its text for chat, workflows,
- * agents and document reads. Neither ever loads the mailbox whole; each keeps
- * the stored file's access, liveness and delivery audit.
+ * A stored mailbox (`.mbox`, Outlook `.pst`) as the Files preview and every
+ * reader of documents read it: its messages' list for the viewer, and its
+ * text for chat, workflows, agents and document reads. Neither ever loads
+ * the mailbox whole; each keeps the stored file's access, liveness and
+ * delivery audit.
  */
 import { Result } from "better-result";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
-import { MBOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+import {
+  MAILBOX_FILE_FORMATS,
+  MAILBOX_FILE_KINDS,
+  MBOX_FILE_FORMAT,
+} from "@stll/api-contract/legal-file-formats";
 import type { MailboxPreview } from "@stll/api-contract/mailbox";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -21,6 +26,7 @@ import {
   readStoredMailboxPreview,
 } from "@/api/lib/files/mailbox-file";
 import { readStoredMailboxText } from "@/api/lib/files/mailbox-stream-text";
+import { readStoredPstPreview } from "@/api/lib/files/pst-file";
 import { LIMITS } from "@/api/lib/limits";
 
 const unreadable = () =>
@@ -30,22 +36,32 @@ const unreadable = () =>
     message: "The mailbox could not be read",
   });
 
+const formatOf = (kind: string) =>
+  MAILBOX_FILE_FORMATS.find((format) => format.kind === kind) ??
+  MBOX_FILE_FORMAT;
+
 /** A stored mailbox's messages, as the viewer lists them. */
 export const readMailboxPreview = async (
   options: LegalFileReadOptions,
 ): Promise<Result<MailboxPreview, HandlerError>> => {
-  const opened = await openLegalFileSource(options, [MBOX_FILE_FORMAT.kind]);
+  const opened = await openLegalFileSource(options, MAILBOX_FILE_KINDS);
   if (opened.isErr()) {
     return Result.err(opened.error);
   }
-  const { key, fileName, deliver } = opened.value;
-  const preview = await readStoredMailboxPreview({
+  const { key, fileName, deliver, format } = opened.value;
+  const stored = {
     key,
     fileName,
     signal: AbortSignal.timeout(MAILBOX_READ_TIMEOUT_MS),
-  });
+  };
+  const preview =
+    format.kind === "pst"
+      ? (await readStoredPstPreview(stored)).mapError((error) =>
+          "_tag" in error ? error : unreadable(),
+        )
+      : (await readStoredMailboxPreview(stored)).mapError(() => unreadable());
   if (preview.isErr()) {
-    return Result.err(unreadable());
+    return Result.err(preview.error);
   }
   const listed = preview.value;
   return await deliver((): Result<MailboxPreview, HandlerError> =>
@@ -60,14 +76,15 @@ export const readMailboxPreview = async (
 export const readMailboxContent = async (
   options: LegalFileReadOptions,
 ): Promise<Result<{ text: string; attachments: never[] }, HandlerError>> => {
-  const opened = await openLegalFileSource(options, [MBOX_FILE_FORMAT.kind]);
+  const opened = await openLegalFileSource(options, MAILBOX_FILE_KINDS);
   if (opened.isErr()) {
     return Result.err(opened.error);
   }
-  const { key, fileName, deliver } = opened.value;
+  const { key, fileName, deliver, format } = opened.value;
   const text = await readStoredMailboxText({
     key,
     fileName,
+    format: formatOf(format.kind),
     maxChars: LIMITS.extractedContentMaxChars,
     signal: AbortSignal.timeout(MAILBOX_READ_TIMEOUT_MS),
     timeoutMs: MAILBOX_READ_TIMEOUT_MS,

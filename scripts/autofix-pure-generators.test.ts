@@ -146,6 +146,8 @@ const EXCLUDED_AUTOFIX = {
     "Requires canonical Linux Rust host and external WASM toolchain",
   "heic-decoder-wasm":
     "Requires canonical Linux Rust host and external WASM toolchain",
+  "pst-reader-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
     "Migration SQL requires review rather than automatic rewriting",

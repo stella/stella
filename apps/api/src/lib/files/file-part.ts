@@ -9,7 +9,7 @@
  * an upload before it is delivered. A part that is itself a container is
  * read in turn, down its path, in the worker.
  */
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -69,6 +69,7 @@ import {
   readStoredMailboxMessage,
 } from "@/api/lib/files/mailbox-file";
 import type { ZipNameCodePageSource } from "@/api/lib/files/organization-zip-name-code-page";
+import { readStoredPstMessage } from "@/api/lib/files/pst-file";
 import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
@@ -250,6 +251,47 @@ const mailboxMessage: ObjectPartReader = async ({ key, fileName }, part) => {
     : Result.ok(scanned.value.withMimeType(EML_MIME_TYPE));
 };
 
+/**
+ * An Outlook mailbox's message (`message:N`, numbered down its folders), read
+ * by streaming the stored mailbox into the worker, which writes it as an
+ * email, then scanned like an upload of it: an email named after its
+ * subject.
+ */
+const pstMessage: ObjectPartReader = async ({ key, fileName }, part) => {
+  const read = await readStoredPstMessage({
+    key,
+    fileName,
+    index: part.index,
+    signal: AbortSignal.timeout(MAILBOX_READ_TIMEOUT_MS),
+  });
+  if (read.isErr()) {
+    const { error } = read;
+    if ("_tag" in error) {
+      return Result.err(error);
+    }
+    switch (error.type) {
+      case "noMessage":
+        return Result.err(noSuchPart());
+      case "tooLarge":
+        return Result.err(unavailable("The message is too large to open"));
+      case "unreadable":
+        return Result.err(unavailable("The mailbox could not be read"));
+      default:
+        error satisfies never;
+        return panic("Unhandled mailbox message refusal");
+    }
+  }
+  const message = read.value;
+  const scanned = await scanUpload({
+    bytes: message.bytes,
+    declaredMimeType: EML_MIME_TYPE,
+    fileName: sanitizeFilenamePreservingExtension(message.fileName),
+  });
+  return scanned.isErr()
+    ? Result.err(scanFailure(scanned.error))
+    : Result.ok(scanned.value.withMimeType(EML_MIME_TYPE));
+};
+
 /** Every stored format and the parts it has; a format with none has `{}`. */
 export const LEGAL_FILE_PARTS = {
   cades: {
@@ -268,6 +310,7 @@ export const LEGAL_FILE_PARTS = {
   xml: { [FILE_PART_KINDS.attachment]: fromBytes(embeddedPart) },
   zip: { [FILE_PART_KINDS.member]: fromBytes(embeddedPart) },
   mbox: { [FILE_PART_KINDS.message]: { from: "object", read: mailboxMessage } },
+  pst: { [FILE_PART_KINDS.message]: { from: "object", read: pstMessage } },
   uyap: {},
   ofd: {},
 } as const satisfies Record<

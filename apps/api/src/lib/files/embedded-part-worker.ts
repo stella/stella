@@ -32,6 +32,7 @@ import {
   type FilePartUnavailableReason,
 } from "@stll/api-contract/file-parts";
 import { LEGAL_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
+import { Temporal } from "@stll/time";
 
 import type { DataBoxMessageParseError } from "@/api/lib/email/correspondence/data-box/zfo";
 import { parseDataBoxMessage } from "@/api/lib/email/correspondence/data-box/zfo";
@@ -66,6 +67,14 @@ import {
 import { type P7mParseError, parseP7m } from "@/api/lib/files/p7m";
 import { partMediaType } from "@/api/lib/files/part-media-type";
 import {
+  PST_OPERATION_MAX_MS,
+  pstBytesFile,
+  type PstMailboxEntry,
+  type PstReadError,
+  readPstEntries,
+  readPstMessage,
+} from "@/api/lib/files/pst-mailbox";
+import {
   readSignedDossier,
   type SignedDossierReadError,
 } from "@/api/lib/files/signed-dossier-worker";
@@ -85,6 +94,7 @@ export type EmbeddedPartError =
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
+  | PstReadError
   | SignedDossierReadError;
 
 /** A part before it is typed and scanned. */
@@ -100,6 +110,11 @@ export type PartCandidate = {
    * a mailbox's message is an email.
    */
   fixedMimeType?: string;
+  /**
+   * The part's size when its bytes are not held: a part listed, never
+   * read, such as each message of an Outlook mailbox but the one asked for.
+   */
+  sizeBytes?: number;
 };
 
 /**
@@ -267,6 +282,77 @@ const mailboxMessages = async ({
   return Result.ok(slots);
 };
 
+const pstUnavailable = (
+  entry: PstMailboxEntry,
+  reason: FilePartUnavailableReason,
+): ContainerSlot => ({
+  type: "unavailable",
+  fileName: entry.fileName,
+  folder: entry.folder,
+  sizeBytes: entry.length,
+  reason,
+});
+
+/**
+ * An Outlook mailbox's messages, each an email named after its subject. A
+ * list is the mailbox's own list, as its preview shows it, and converts no
+ * message; the message asked for is the only one read, so no message
+ * before it spends the reading's deadline.
+ */
+const pstMessages = (
+  { bytes, fileName }: Container,
+  wanted: number | null,
+): SlotsResult => {
+  const file = pstBytesFile(
+    bytes,
+    Temporal.Now.instant().epochMilliseconds + PST_OPERATION_MAX_MS,
+  );
+  if (wanted === null) {
+    return readPstEntries(file, fileName).map(({ entries }) =>
+      entries.map((entry) =>
+        entry.unavailable === null
+          ? part(
+              {
+                fileName: entry.fileName,
+                bytes: new Uint8Array(0),
+                sizeBytes: entry.length,
+                statedMimeType: EML_MIME_TYPE,
+                fixedMimeType: EML_MIME_TYPE,
+              },
+              entry.folder,
+            )
+          : pstUnavailable(entry, entry.unavailable),
+      ),
+    );
+  }
+  const read = readPstMessage(file, wanted, fileName);
+  // Only the position asked for is filled; extraction reads no other.
+  const before = Array.from({ length: wanted }, (): ContainerSlot => ({
+    type: "unlisted",
+  }));
+  if (read.isOk()) {
+    const { entry, email } = read.value;
+    return Result.ok([
+      ...before,
+      part(
+        {
+          fileName: entry.fileName,
+          bytes: email,
+          statedMimeType: EML_MIME_TYPE,
+          fixedMimeType: EML_MIME_TYPE,
+        },
+        entry.folder,
+      ),
+    ]);
+  }
+  const refusal = read.error;
+  if ("_tag" in refusal) {
+    return Result.err(refusal);
+  }
+  // No such message, or one over the bound: there is no part to open.
+  return Result.ok(before);
+};
+
 const dataBoxFiles = ({ bytes }: Container): SlotsResult =>
   parseDataBoxMessage(bytes).map(({ files }) =>
     files.map((file) =>
@@ -401,6 +487,8 @@ const containerSlots = async (
   container: Container,
   kind: FilePartKind,
   zipNameCodePage: ZipNameCodePage,
+  /** The position asked for, when only that part is read; null to list. */
+  wanted: number | null = null,
 ): Promise<SlotsResult> => {
   const kinds: readonly FilePartKind[] =
     FILE_PART_KINDS_BY_FORMAT[container.format];
@@ -416,6 +504,8 @@ const containerSlots = async (
       return await zipFiles(container, zipNameCodePage);
     case "mbox":
       return await mailboxMessages(container);
+    case "pst":
+      return pstMessages(container, wanted);
     case "dataBox":
       return dataBoxFiles(container);
     case "eAkta":
@@ -522,7 +612,7 @@ export const extractEmbeddedPart = async ({
     if (container === null) {
       return Result.ok(null);
     }
-    const slots = await containerSlots(container, kind, zipNameCodePage);
+    const slots = await containerSlots(container, kind, zipNameCodePage, index);
     if (slots.isErr()) {
       return Result.err(slots.error);
     }
@@ -585,7 +675,7 @@ export const listEmbeddedParts = async (
       files.push({
         fileName: candidate.fileName,
         folder: slot.folder,
-        sizeBytes: candidate.bytes.byteLength,
+        sizeBytes: candidate.sizeBytes ?? candidate.bytes.byteLength,
         part: {
           part: filePartId(
             options.part === null
@@ -594,7 +684,7 @@ export const listEmbeddedParts = async (
           ),
           fileName,
           mediaType: await candidateMediaType(candidate),
-          sizeBytes: candidate.bytes.byteLength,
+          sizeBytes: candidate.sizeBytes ?? candidate.bytes.byteLength,
         },
         unavailable: null,
         // A text part decodes with the charset its container declares.

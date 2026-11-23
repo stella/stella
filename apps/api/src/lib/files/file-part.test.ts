@@ -402,7 +402,8 @@ describe("a part opens as its file's preview lists it", () => {
   test("every format with parts, and every kind of part it has, is exercised", () => {
     // A part read from the stored object, never from the file's bytes (a
     // mailbox's message), is exercised against an object store in
-    // `mailbox-file.test.ts` and the content delivery integration test.
+    // `mailbox-file.test.ts` and the content delivery integration test, and
+    // an Outlook mailbox's in `pst-mailbox.test.ts` and that integration test.
     const declared = Object.entries(LEGAL_FILE_PARTS)
       .flatMap(([format, readers]) =>
         Object.entries(readers).flatMap(([kind, reading]) =>
@@ -416,7 +417,7 @@ describe("a part opens as its file's preview lists it", () => {
           reading.from === "object" ? [`${format}/${kind}`] : [],
         ),
     );
-    expect(fromObject).toEqual(["mbox/message"]);
+    expect(fromObject).toEqual(["mbox/message", "pst/message"]);
     const exercised = [
       ...new Set(CASES.map(({ format, kind }) => `${format}/${kind}`)),
     ].toSorted();

@@ -13,6 +13,7 @@ import { panic, Result } from "better-result";
 
 import { legalFileFormat } from "@stll/api-contract/document-format";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
+import type { PST_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { MBOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { OFFICE_ARCHIVE_FORMATS } from "@stll/docx-utils/office-formats";
 
@@ -29,6 +30,8 @@ import {
   DOCUMENT_ARCHIVE_MAX_BYTES,
   isDocumentArchiveMimeType,
   MAILBOX_TEXT_WORKER_MODE,
+  PST_WORKER_MODE,
+  pstWorkerArguments,
 } from "@/api/lib/files/archive-preview-protocol";
 import {
   ZIP_NAME_CODE_PAGE_ENV,
@@ -311,15 +314,21 @@ const extractionWorkerError = (
   });
 };
 
+/** A mailbox format whose stored files are streamed into the worker. */
+export type StreamedMailboxFormat =
+  typeof MBOX_FILE_FORMAT | typeof PST_FILE_FORMAT;
+
 /**
- * A stored mailbox's text, streamed from the store into the worker, which
- * reads one message at a time: the mailbox is never held whole on either
- * side, whatever its size.
+ * A stored mailbox's text, streamed from the store into the worker: a
+ * `.mbox` is read one message at a time as it streams in, a `.pst` is
+ * written to a temporary file the worker reads at an offset. The mailbox is
+ * never held whole in memory on either side, whatever its size.
  */
 export const extractMailboxStreamText = async ({
   stream,
   sizeBytes,
   fileName,
+  format = MBOX_FILE_FORMAT,
   maxChars = LIMITS.extractedContentMaxChars,
   signal,
   timeoutMs = LIMITS.extractionTimeoutMs,
@@ -327,6 +336,7 @@ export const extractMailboxStreamText = async ({
   stream: ReadableStream<Uint8Array>;
   sizeBytes: number;
   fileName: string;
+  format?: StreamedMailboxFormat;
   maxChars?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
@@ -334,7 +344,14 @@ export const extractMailboxStreamText = async ({
   const result = await runExtractionWorker({
     // A mailbox's text is its messages' own text; no attachment is opened.
     zipNameCodePage: null,
-    args: [MAILBOX_TEXT_WORKER_MODE, String(maxChars), fileName],
+    args:
+      format.kind === "pst"
+        ? [
+            PST_WORKER_MODE.text,
+            String(maxChars),
+            ...pstWorkerArguments({ mailboxName: fileName, timeoutMs }),
+          ]
+        : [MAILBOX_TEXT_WORKER_MODE, String(maxChars), fileName],
     ...(signal ? { signal } : {}),
     stdin: stream,
     timeoutMs,
@@ -342,7 +359,7 @@ export const extractMailboxStreamText = async ({
   return Result.isError(result)
     ? Result.err(
         extractionWorkerError(result.error, {
-          mimeType: MBOX_FILE_FORMAT.mimeType,
+          mimeType: format.mimeType,
           sizeBytes,
         }),
       )

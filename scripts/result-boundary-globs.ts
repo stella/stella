@@ -267,6 +267,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/parameter-store/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
   "packages/portable-path/src/**/*.ts",
+  "packages/pst-reader/src/**/*.ts",
   "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
   "packages/scan-engine/src/**/*.ts",
@@ -453,6 +454,8 @@ export const RESULT_BOUNDARY_GLOBS = [
   // A trap in the HEIC decoder's module surfaces as a thrown
   // WebAssembly.RuntimeError; the adapter turns it into a typed outcome.
   "packages/heic-decoder/src/heic-decoder.ts",
+  // So does a trap in the PST reader's module.
+  "packages/pst-reader/src/pst-reader.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

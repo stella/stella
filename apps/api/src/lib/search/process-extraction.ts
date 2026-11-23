@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 /** Durable native extraction request and worker-side execution. */
 import { and, eq, sql } from "drizzle-orm";
 
-import { MBOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
+import { MAILBOX_FILE_FORMATS } from "@stll/api-contract/legal-file-formats";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
 import { rootDb } from "@/api/db/root";
@@ -560,15 +560,19 @@ export const executeNativeExtraction = async ({
     fileId: source.fileId,
     mimeType: source.storageMimeType,
   });
-  // A mailbox is streamed into the worker one message at a time, never read
-  // whole; any other file is read, then extracted.
+  // A mailbox is streamed into the worker, never read whole; any other
+  // file is read, then extracted.
+  const mailboxFormat = MAILBOX_FILE_FORMATS.find(
+    ({ mimeType }) => mimeType === source.extractionMimeType,
+  );
   const { buffer, extraction } =
-    source.extractionMimeType === MBOX_FILE_FORMAT.mimeType
+    mailboxFormat !== undefined
       ? {
           buffer: new ArrayBuffer(0),
           extraction: await extractMailboxText({
             key,
             fileName: fileField.fileName,
+            format: mailboxFormat,
             signal: lifecycleSignal,
             openTimeoutMs: LIMITS.documentProcessingObjectReadTimeoutMs,
             timeoutMs: LIMITS.documentProcessingExtractionTimeoutMs,

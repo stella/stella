@@ -195,7 +195,7 @@ type ZipArchiveDocumentFile = {
   >;
 };
 
-/** A mailbox (.mbox): its messages, each opening as an email. */
+/** A mailbox (.mbox, Outlook .pst): its messages, each opening as an email. */
 type MailboxDocumentFile = {
   readonly viewer: "mailbox";
   readonly fileName: string;
@@ -541,7 +541,8 @@ const openVersionFile = async ({
           preview,
         } satisfies ZipArchiveDocumentFile);
       }
-      case "mbox": {
+      case "mbox":
+      case "pst": {
         const preview = await requestApi({
           fetch,
           source,

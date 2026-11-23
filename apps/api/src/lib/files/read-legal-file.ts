@@ -129,6 +129,7 @@ export const LEGAL_FILE_READERS = {
   xadesZep: readSignedDossierContent,
   zip: readZipArchiveContent,
   mbox: readMailboxContent,
+  pst: readMailboxContent,
   cades: async (options) => {
     const read = await readLegalFilePreview(
       options,
