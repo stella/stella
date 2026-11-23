@@ -1315,8 +1315,6 @@ const App = () => {
         accountState={accountState}
         current={shownPage}
         onSelect={(nextPage) => {
-          // An update check's answer belongs to the visit that asked.
-          updateCheck.dismiss();
           setActivePage(nextPage);
           // Choosing a page by hand is never the link's visit.
           setAgentSettingsFocus(null);

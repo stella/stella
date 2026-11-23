@@ -1185,6 +1185,8 @@
       "available": "Dostępna jest wersja {version}.",
       "checkFailed": "stella desktop nie mógł sprawdzić aktualizacji.",
       "deferred": "Wersja {version} czeka, dopóki edytujesz otwarte dokumenty. Gdy skończysz, sprawdź ponownie, aby ją zainstalować, w przeciwnym razie zostanie zainstalowana przy następnym automatycznym sprawdzeniu.",
+      "downloadProgress": "Pobrano {percent}%",
+      "downloading": "Pobieranie wersji {version}. Po instalacji stella desktop uruchomi się ponownie.",
       "install": "Zainstaluj i uruchom ponownie",
       "installFailed": "stella desktop nie mógł zainstalować aktualizacji.",
       "installInProgress": "Trwa instalowanie aktualizacji.",
@@ -1413,7 +1415,6 @@
     "supportRevealAppData": "Pokaż dane aplikacji",
     "temporaryWorkingCopies": "Tymczasowe kopie robocze",
     "transcribeRecording": "Transkrybuj nagranie…",
-    "updateReady": "Aktualizacja gotowa",
     "updatesManaged": "Aktualizacjami zarządza Twoja organizacja"
   }
 }

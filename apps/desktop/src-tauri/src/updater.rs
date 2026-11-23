@@ -16,17 +16,22 @@
 //   new binary.
 // - When an administrator set `DisableUpdates`, nothing checks: the
 //   organization deploys new versions itself.
+//
+// What the updater is doing lives in one place, `UPDATER`: every path
+// above moves its state, Settings reads it with `updater_state` and follows
+// `UPDATER_STATE_EVENT`, so a download started anywhere shows on About
+// whenever the page is opened.
 
 use std::future::Future;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::sync::{Arc, PoisonError};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use base64::Engine;
 use futures_util::StreamExt;
 use minisign_verify::{PublicKey, Signature};
 use reqwest::header::{ACCEPT, HeaderValue};
-use tauri::{AppHandle, async_runtime};
+use tauri::{AppHandle, Emitter, async_runtime};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::Mutex;
@@ -37,8 +42,13 @@ use crate::session_manager::SessionManager;
 const STARTUP_CHECK_DELAY: Duration = Duration::from_secs(10);
 const WAKE_CHECK_TICK: Duration = Duration::from_secs(30);
 const MAX_UPDATE_PACKAGE_BYTES: usize = 256 * 1024 * 1024;
+/// Download progress reaches the window at most this often; every other
+/// state change is announced at once.
+const PROGRESS_EVENT_INTERVAL: Duration = Duration::from_millis(250);
+/// The event every updater state change is announced with.
+pub const UPDATER_STATE_EVENT: &str = "updater-state";
 static LAST_CHECK: AtomicU64 = AtomicU64::new(0);
-static CHECK_LOCK: Mutex<()> = Mutex::const_new(());
+static UPDATER: UpdaterBoard = UpdaterBoard::new();
 
 const BACKGROUND_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
@@ -57,6 +67,7 @@ pub enum CheckOutcome {
 pub fn schedule_startup_check(handle: AppHandle, manager: Arc<Mutex<SessionManager>>) {
   if crate::managed_policy::current().updates_disabled {
     tracing::info!("in-app updates are turned off by managed policy");
+    UPDATER.set(&TauriHost(&handle), UpdaterState::Managed);
     return;
   }
   if let Some(path) = last_check_path() {
@@ -205,6 +216,7 @@ where
 
 /// `active_edit_sessions` is asked when an update is found and again right
 /// before it installs, so an edit that starts during the download defers it.
+/// A check or install already running finishes first; this one then runs.
 pub async fn run_check<Active, ActiveFuture>(
   handle: &AppHandle,
   active_edit_sessions: Active,
@@ -213,72 +225,50 @@ where
   Active: Fn() -> ActiveFuture,
   ActiveFuture: Future<Output = bool>,
 {
+  let host = TauriHost(handle);
   if crate::managed_policy::current().updates_disabled {
+    UPDATER.set(&host, UpdaterState::Managed);
     return CheckOutcome::Disabled;
   }
-  // Startup, handoffs and tray actions cannot run installers concurrently.
-  let _check = CHECK_LOCK.lock().await;
-  record_check(unix_seconds(SystemTime::now()));
-  let updater = match build_updater(handle) {
-    Ok(u) => u,
-    Err(err) => return CheckOutcome::Failed(err),
-  };
+  UPDATER.run_check(&host, &active_edit_sessions).await
+}
 
-  let update = match updater.check().await {
-    Ok(Some(update)) => update,
-    Ok(None) => return CheckOutcome::UpToDate,
-    Err(err) => return CheckOutcome::Failed(err.to_string()),
-  };
-
-  let version = update.version.clone();
-  let prepared = prepare_install(&active_edit_sessions, || async {
-    notify(
-      handle,
-      "stella update available",
-      &format!("Installing v{version}…"),
-    );
-    download_update_package(&update).await
-  })
-  .await;
-  let package = match prepared {
-    PreparedInstall::Ready(package) => package,
-    PreparedInstall::Deferred => {
-      notify(
-        handle,
-        "stella update available",
-        "stella desktop will update after active desktop edits are finished.",
-      );
-      return CheckOutcome::Deferred { version };
-    }
-    PreparedInstall::DownloadFailed(err) => {
-      #[cfg(windows)]
-      crate::desktop_crash::resume_after_failed_update(handle);
-      notify(handle, "stella update failed", &err);
-      return CheckOutcome::Failed(err);
-    }
-  };
-
-  if let Err(err) = crate::local_store::install_update(&update, &package) {
-    #[cfg(windows)]
-    crate::desktop_crash::resume_after_failed_update(handle);
-    notify(handle, "stella update failed", &err);
-    return CheckOutcome::Failed(err);
+/// Settings → About: whether a newer version exists. Installs nothing. While
+/// another check or install runs, whoever started it, the answer is what that
+/// one is doing.
+pub async fn check_from_settings(handle: &AppHandle) -> UpdaterSnapshot {
+  let host = TauriHost(handle);
+  if crate::managed_policy::current().updates_disabled {
+    UPDATER.set(&host, UpdaterState::Managed);
+    return UPDATER.snapshot();
   }
+  UPDATER.check_unless_busy(&host).await
+}
 
-  // On Windows the plugin has already handed off to the installer and
-  // exited; this line only runs where the bundle was swapped in place.
-  if let Err(err) = crate::relaunch::after_update(handle) {
-    notify(
-      handle,
-      "stella update installed",
-      "Quit and reopen stella desktop to finish updating.",
-    );
-    return CheckOutcome::Failed(format!(
-      "v{version} installed but the relaunch failed: {err}"
-    ));
+/// Settings → About: installs through the check the background schedule runs,
+/// so active desktop edits defer it the same way. While another check or
+/// install runs, the answer is what that one is doing.
+pub async fn install_from_settings<Active, ActiveFuture>(
+  handle: &AppHandle,
+  active_edit_sessions: Active,
+) -> UpdaterSnapshot
+where
+  Active: Fn() -> ActiveFuture,
+  ActiveFuture: Future<Output = bool>,
+{
+  let host = TauriHost(handle);
+  if crate::managed_policy::current().updates_disabled {
+    UPDATER.set(&host, UpdaterState::Managed);
+    return UPDATER.snapshot();
   }
+  UPDATER
+    .install_unless_busy(&host, &active_edit_sessions)
+    .await
+}
 
-  CheckOutcome::Installed { version }
+/// What the updater is doing now, for Settings and diagnostics.
+pub fn current() -> UpdaterSnapshot {
+  UPDATER.snapshot()
 }
 
 fn build_updater(handle: &AppHandle) -> Result<tauri_plugin_updater::Updater, String> {
@@ -293,53 +283,380 @@ fn build_updater(handle: &AppHandle) -> Result<tauri_plugin_updater::Updater, St
     .map_err(|err| err.to_string())
 }
 
-// What Settings → About shows after a check or an install it started; the
-// webview reads it through the generated desktop RPC contract. A failure is
-// the command's error instead.
+// What the updater is doing, whoever started it: the startup check, the
+// background schedule, a handoff, the tray or Settings. Settings → About
+// renders it; the webview reads it through the generated desktop RPC
+// contract. A download's `totalBytes` is null when the server does not say
+// how large the package is.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[cfg_attr(test, derive(ts_rs::TS))]
 #[serde(tag = "status", rename_all = "snake_case")]
-pub enum SettingsCheck {
+pub enum UpdaterState {
+  Idle,
+  Checking,
   UpToDate,
-  Available { version: String },
-  Deferred { version: String },
-  Installing { version: String },
+  Available {
+    version: String,
+  },
+  Downloading {
+    version: String,
+    #[serde(rename = "receivedBytes")]
+    #[cfg_attr(test, ts(type = "number"))]
+    received_bytes: u64,
+    #[serde(rename = "totalBytes")]
+    #[cfg_attr(test, ts(type = "number | null"))]
+    total_bytes: Option<u64>,
+  },
+  Installing {
+    version: String,
+  },
+  Deferred {
+    version: String,
+  },
+  Failed {
+    during: UpdaterStep,
+  },
   Managed,
 }
 
-/// Asks the release feed whether a newer version exists and installs
-/// nothing: Settings offers the update, then installs through `run_check`.
-pub async fn check_from_settings(handle: &AppHandle) -> Result<SettingsCheck, String> {
-  if crate::managed_policy::current().updates_disabled {
-    return Ok(SettingsCheck::Managed);
+// Which part of the updater's work failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+#[serde(rename_all = "snake_case")]
+pub enum UpdaterStep {
+  Check,
+  Install,
+}
+
+// The updater's state with its revision: every change raises the revision,
+// so a window keeps the newest of the answers and events that reach it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[cfg_attr(test, derive(ts_rs::TS))]
+pub struct UpdaterSnapshot {
+  #[cfg_attr(test, ts(type = "number"))]
+  pub revision: u64,
+  pub state: UpdaterState,
+}
+
+/// What a check and an install need from the platform. The app's is
+/// `TauriHost`; tests drive the same transitions with a fake.
+trait UpdaterHost: Sync {
+  type Update: Send + Sync;
+  type Package: Send;
+
+  /// Asks the release feed for a newer version.
+  fn find(&self) -> impl Future<Output = Result<Option<Self::Update>, String>> + Send;
+  fn version(update: &Self::Update) -> String;
+  /// Downloads and verifies the package, reporting the bytes received so far
+  /// and the total when the server names it.
+  fn download<'a>(
+    &'a self,
+    update: &'a Self::Update,
+    progress: &'a (dyn Fn(u64, Option<u64>) + Send + Sync),
+  ) -> impl Future<Output = Result<Self::Package, String>> + Send + 'a;
+  fn install(
+    &self,
+    update: &Self::Update,
+    package: &Self::Package,
+  ) -> Result<(), String>;
+  fn relaunch(&self) -> Result<(), String>;
+  /// Records when the feed was last asked, for the background schedule.
+  fn record_check(&self);
+  /// Hands crash reporting back after an update that did not install.
+  fn resume_after_failed_update(&self);
+  fn notify(&self, title: &str, body: &str);
+  /// Tells the windows that the updater's state changed.
+  fn announce(&self, snapshot: &UpdaterSnapshot);
+}
+
+struct TauriHost<'a>(&'a AppHandle);
+
+impl UpdaterHost for TauriHost<'_> {
+  type Update = tauri_plugin_updater::Update;
+  type Package = VerifiedUpdatePackage;
+
+  async fn find(&self) -> Result<Option<Self::Update>, String> {
+    build_updater(self.0)?
+      .check()
+      .await
+      .map_err(|err| err.to_string())
   }
-  let found = match build_updater(handle) {
-    Ok(updater) => updater.check().await.map_err(|err| err.to_string()),
-    Err(err) => Err(err),
-  };
-  match found {
-    Ok(Some(update)) => Ok(SettingsCheck::Available {
-      version: update.version,
-    }),
-    Ok(None) => Ok(SettingsCheck::UpToDate),
-    Err(err) => {
-      tracing::warn!(error = %err, "settings updater check failed");
-      Err(err)
-    }
+
+  fn version(update: &Self::Update) -> String {
+    update.version.clone()
+  }
+
+  fn download<'a>(
+    &'a self,
+    update: &'a Self::Update,
+    progress: &'a (dyn Fn(u64, Option<u64>) + Send + Sync),
+  ) -> impl Future<Output = Result<Self::Package, String>> + Send + 'a {
+    download_update_package(update, progress)
+  }
+
+  fn install(
+    &self,
+    update: &Self::Update,
+    package: &Self::Package,
+  ) -> Result<(), String> {
+    crate::local_store::install_update(update, package)
+  }
+
+  fn relaunch(&self) -> Result<(), String> {
+    // On Windows the plugin has already handed off to the installer and
+    // exited; this only runs where the bundle was swapped in place.
+    crate::relaunch::after_update(self.0)
+  }
+
+  fn record_check(&self) {
+    record_check(unix_seconds(SystemTime::now()));
+  }
+
+  fn resume_after_failed_update(&self) {
+    #[cfg(windows)]
+    crate::desktop_crash::resume_after_failed_update(self.0);
+  }
+
+  fn notify(&self, title: &str, body: &str) {
+    notify(self.0, title, body);
+  }
+
+  fn announce(&self, snapshot: &UpdaterSnapshot) {
+    crate::logging::best_effort(
+      self
+        .0
+        .emit_to(crate::SETTINGS_WINDOW_LABEL, UPDATER_STATE_EVENT, snapshot),
+      "updater state change was not announced",
+    );
   }
 }
 
-/// The Settings result of an install that went through `run_check`.
-pub fn settings_outcome(outcome: CheckOutcome) -> Result<SettingsCheck, String> {
-  match outcome {
-    CheckOutcome::Deferred { version } => Ok(SettingsCheck::Deferred { version }),
-    CheckOutcome::UpToDate => Ok(SettingsCheck::UpToDate),
-    CheckOutcome::Installed { version } => Ok(SettingsCheck::Installing { version }),
-    CheckOutcome::Failed(err) => {
-      tracing::warn!(error = %err, "settings update install failed");
-      Err(err)
+struct Published {
+  snapshot: UpdaterSnapshot,
+  announced_at: Option<Instant>,
+}
+
+/// The updater's one state, and the lock that keeps two checks or installs
+/// from running at once.
+struct UpdaterBoard {
+  operation: Mutex<()>,
+  published: std::sync::Mutex<Published>,
+}
+
+impl UpdaterBoard {
+  const fn new() -> Self {
+    Self {
+      operation: Mutex::const_new(()),
+      published: std::sync::Mutex::new(Published {
+        snapshot: UpdaterSnapshot {
+          revision: 0,
+          state: UpdaterState::Idle,
+        },
+        announced_at: None,
+      }),
     }
-    CheckOutcome::Disabled => Ok(SettingsCheck::Managed),
+  }
+
+  fn snapshot(&self) -> UpdaterSnapshot {
+    self
+      .published
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner)
+      .snapshot
+      .clone()
+  }
+
+  /// Records `state` and returns the snapshot to announce. Download progress
+  /// within `PROGRESS_EVENT_INTERVAL` of the last announcement is recorded
+  /// but not announced; the last step of a download, and every other change,
+  /// always is.
+  fn record(&self, state: UpdaterState, now: Instant) -> Option<UpdaterSnapshot> {
+    let mut published = self
+      .published
+      .lock()
+      .unwrap_or_else(PoisonError::into_inner);
+    let progress_step = matches!(
+      (&published.snapshot.state, &state),
+      (
+        UpdaterState::Downloading { version: before, .. },
+        UpdaterState::Downloading { version: after, received_bytes, total_bytes },
+      ) if before == after && Some(*received_bytes) != *total_bytes
+    );
+    let recently_announced = published
+      .announced_at
+      .is_some_and(|at| now.saturating_duration_since(at) < PROGRESS_EVENT_INTERVAL);
+    let revision = published.snapshot.revision + 1;
+    published.snapshot = UpdaterSnapshot { revision, state };
+    if progress_step && recently_announced {
+      return None;
+    }
+    published.announced_at = Some(now);
+    Some(published.snapshot.clone())
+  }
+
+  fn set<Host: UpdaterHost>(&self, host: &Host, state: UpdaterState) {
+    if let Some(snapshot) = self.record(state, Instant::now()) {
+      host.announce(&snapshot);
+    }
+  }
+
+  async fn run_check<Host, Active, ActiveFuture>(
+    &self,
+    host: &Host,
+    active_edit_sessions: &Active,
+  ) -> CheckOutcome
+  where
+    Host: UpdaterHost,
+    Active: Fn() -> ActiveFuture,
+    ActiveFuture: Future<Output = bool>,
+  {
+    let _operation = self.operation.lock().await;
+    self.check_and_install(host, active_edit_sessions).await
+  }
+
+  async fn check_unless_busy<Host: UpdaterHost>(&self, host: &Host) -> UpdaterSnapshot {
+    let Ok(_operation) = self.operation.try_lock() else {
+      return self.snapshot();
+    };
+    self.set(host, UpdaterState::Checking);
+    let found = match host.find().await {
+      Ok(Some(update)) => UpdaterState::Available {
+        version: Host::version(&update),
+      },
+      Ok(None) => UpdaterState::UpToDate,
+      Err(error) => {
+        tracing::warn!(%error, "settings updater check failed");
+        UpdaterState::Failed {
+          during: UpdaterStep::Check,
+        }
+      }
+    };
+    self.set(host, found);
+    self.snapshot()
+  }
+
+  async fn install_unless_busy<Host, Active, ActiveFuture>(
+    &self,
+    host: &Host,
+    active_edit_sessions: &Active,
+  ) -> UpdaterSnapshot
+  where
+    Host: UpdaterHost,
+    Active: Fn() -> ActiveFuture,
+    ActiveFuture: Future<Output = bool>,
+  {
+    let Ok(_operation) = self.operation.try_lock() else {
+      return self.snapshot();
+    };
+    if let CheckOutcome::Failed(error) =
+      self.check_and_install(host, active_edit_sessions).await
+    {
+      tracing::warn!(%error, "settings update install failed");
+    }
+    self.snapshot()
+  }
+
+  /// Runs with `operation` held.
+  async fn check_and_install<Host, Active, ActiveFuture>(
+    &self,
+    host: &Host,
+    active_edit_sessions: &Active,
+  ) -> CheckOutcome
+  where
+    Host: UpdaterHost,
+    Active: Fn() -> ActiveFuture,
+    ActiveFuture: Future<Output = bool>,
+  {
+    let install_failed = || UpdaterState::Failed {
+      during: UpdaterStep::Install,
+    };
+    host.record_check();
+    self.set(host, UpdaterState::Checking);
+    let update = match host.find().await {
+      Ok(Some(update)) => update,
+      Ok(None) => {
+        self.set(host, UpdaterState::UpToDate);
+        return CheckOutcome::UpToDate;
+      }
+      Err(err) => {
+        self.set(
+          host,
+          UpdaterState::Failed {
+            during: UpdaterStep::Check,
+          },
+        );
+        return CheckOutcome::Failed(err);
+      }
+    };
+
+    let version = Host::version(&update);
+    let progress = |received_bytes: u64, total_bytes: Option<u64>| {
+      self.set(
+        host,
+        UpdaterState::Downloading {
+          version: version.clone(),
+          received_bytes,
+          total_bytes,
+        },
+      );
+    };
+    let prepared = prepare_install(active_edit_sessions, || async {
+      host.notify(
+        "stella update available",
+        &format!("Installing v{version}…"),
+      );
+      progress(0, None);
+      host.download(&update, &progress).await
+    })
+    .await;
+    let package = match prepared {
+      PreparedInstall::Ready(package) => package,
+      PreparedInstall::Deferred => {
+        host.notify(
+          "stella update available",
+          "stella desktop will update after active desktop edits are finished.",
+        );
+        self.set(
+          host,
+          UpdaterState::Deferred {
+            version: version.clone(),
+          },
+        );
+        return CheckOutcome::Deferred { version };
+      }
+      PreparedInstall::DownloadFailed(err) => {
+        host.resume_after_failed_update();
+        host.notify("stella update failed", &err);
+        self.set(host, install_failed());
+        return CheckOutcome::Failed(err);
+      }
+    };
+
+    self.set(
+      host,
+      UpdaterState::Installing {
+        version: version.clone(),
+      },
+    );
+    if let Err(err) = host.install(&update, &package) {
+      host.resume_after_failed_update();
+      host.notify("stella update failed", &err);
+      self.set(host, install_failed());
+      return CheckOutcome::Failed(err);
+    }
+
+    if let Err(err) = host.relaunch() {
+      host.notify(
+        "stella update installed",
+        "Quit and reopen stella desktop to finish updating.",
+      );
+      self.set(host, install_failed());
+      return CheckOutcome::Failed(format!(
+        "v{version} installed but the relaunch failed: {err}"
+      ));
+    }
+
+    CheckOutcome::Installed { version }
   }
 }
 
@@ -431,6 +748,7 @@ fn checked_update_size(current: usize, chunk: usize) -> Result<usize, String> {
 
 async fn download_update_package(
   update: &tauri_plugin_updater::Update,
+  progress: &(dyn Fn(u64, Option<u64>) + Send + Sync),
 ) -> Result<VerifiedUpdatePackage, String> {
   let mut headers = update.headers.clone();
   if !headers.contains_key(ACCEPT) {
@@ -461,12 +779,14 @@ async fn download_update_package(
     ));
   }
 
+  let total = response.content_length();
   let mut package = Vec::new();
   let mut stream = response.bytes_stream();
   while let Some(chunk) = stream.next().await {
     let chunk = chunk.map_err(|error| format!("Update download failed: {error}"))?;
     checked_update_size(package.len(), chunk.len())?;
     package.extend_from_slice(&chunk);
+    progress(package.len() as u64, total);
   }
   verify_update_package(package, &update.signature, &update.version)
 }
@@ -553,43 +873,325 @@ mod tests {
     assert_eq!(asked.load(Ordering::SeqCst), 1);
   }
 
+  /// A release feed and installer a test scripts. With `hold_download`, the
+  /// download stops after its first chunk until the test calls `release`, so
+  /// the test can look at the updater while an install is under way.
+  struct FakeHost {
+    found: Result<Option<&'static str>, String>,
+    chunks: &'static [u64],
+    total: Option<u64>,
+    download_result: Result<(), String>,
+    install_result: Result<(), String>,
+    hold_download: bool,
+    download_started: tokio::sync::Notify,
+    download_released: tokio::sync::Notify,
+    finds: AtomicUsize,
+    downloads: AtomicUsize,
+    installs: AtomicUsize,
+    announced: std::sync::Mutex<Vec<UpdaterSnapshot>>,
+  }
+
+  impl FakeHost {
+    fn offering(version: &'static str) -> Self {
+      Self {
+        found: Ok(Some(version)),
+        chunks: &[100, 200, 300],
+        total: Some(300),
+        download_result: Ok(()),
+        install_result: Ok(()),
+        hold_download: false,
+        download_started: tokio::sync::Notify::new(),
+        download_released: tokio::sync::Notify::new(),
+        finds: AtomicUsize::new(0),
+        downloads: AtomicUsize::new(0),
+        installs: AtomicUsize::new(0),
+        announced: std::sync::Mutex::new(Vec::new()),
+      }
+    }
+
+    fn announced(&self) -> Vec<UpdaterSnapshot> {
+      self.announced.lock().unwrap().clone()
+    }
+  }
+
+  impl UpdaterHost for FakeHost {
+    type Update = &'static str;
+    type Package = &'static str;
+
+    fn find(
+      &self,
+    ) -> impl Future<Output = Result<Option<Self::Update>, String>> + Send {
+      self.finds.fetch_add(1, Ordering::SeqCst);
+      std::future::ready(self.found.clone())
+    }
+
+    fn version(update: &Self::Update) -> String {
+      (*update).to_string()
+    }
+
+    async fn download<'a>(
+      &'a self,
+      _update: &'a Self::Update,
+      progress: &'a (dyn Fn(u64, Option<u64>) + Send + Sync),
+    ) -> Result<Self::Package, String> {
+      self.downloads.fetch_add(1, Ordering::SeqCst);
+      for (index, received) in self.chunks.iter().enumerate() {
+        progress(*received, self.total);
+        if index == 0 && self.hold_download {
+          self.download_started.notify_one();
+          self.download_released.notified().await;
+        }
+      }
+      self.download_result.clone().map(|()| "package")
+    }
+
+    fn install(
+      &self,
+      _update: &Self::Update,
+      package: &Self::Package,
+    ) -> Result<(), String> {
+      assert_eq!(*package, "package");
+      self.installs.fetch_add(1, Ordering::SeqCst);
+      self.install_result.clone()
+    }
+
+    fn relaunch(&self) -> Result<(), String> {
+      Ok(())
+    }
+
+    fn record_check(&self) {}
+
+    fn resume_after_failed_update(&self) {}
+
+    fn notify(&self, _title: &str, _body: &str) {}
+
+    fn announce(&self, snapshot: &UpdaterSnapshot) {
+      self.announced.lock().unwrap().push(snapshot.clone());
+    }
+  }
+
+  fn no_edits() -> std::future::Ready<bool> {
+    std::future::ready(false)
+  }
+
+  fn downloading(
+    version: &str,
+    received_bytes: u64,
+    total_bytes: Option<u64>,
+  ) -> UpdaterState {
+    UpdaterState::Downloading {
+      version: version.to_string(),
+      received_bytes,
+      total_bytes,
+    }
+  }
+
+  #[tokio::test]
+  async fn an_install_started_in_the_background_shows_in_later_settings_reads() {
+    let board = UpdaterBoard::new();
+    let host = FakeHost {
+      hold_download: true,
+      ..FakeHost::offering("0.9.90")
+    };
+
+    let background = board.run_check(&host, &no_edits);
+    let settings = async {
+      host.download_started.notified().await;
+      // Settings opened mid-download: the read and a check both name the
+      // download, and the check asks the feed nothing.
+      assert_eq!(
+        board.snapshot().state,
+        downloading("0.9.90", 100, Some(300))
+      );
+      let checked = board.check_unless_busy(&host).await;
+      assert_eq!(checked.state, downloading("0.9.90", 100, Some(300)));
+      assert_eq!(host.finds.load(Ordering::SeqCst), 1);
+      // Install from Settings starts no second install either.
+      let installed = board.install_unless_busy(&host, &no_edits).await;
+      assert_eq!(installed.state, downloading("0.9.90", 100, Some(300)));
+      host.download_released.notify_one();
+    };
+    let (outcome, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+      tokio::join!(background, settings)
+    })
+    .await
+    .expect("a settings check never waits for the install it reports");
+
+    assert!(
+      matches!(outcome, CheckOutcome::Installed { version } if version == "0.9.90")
+    );
+    assert_eq!(host.downloads.load(Ordering::SeqCst), 1);
+    assert_eq!(host.installs.load(Ordering::SeqCst), 1);
+    assert_eq!(
+      board.snapshot().state,
+      UpdaterState::Installing {
+        version: "0.9.90".into()
+      }
+    );
+  }
+
+  #[tokio::test]
+  async fn a_settings_check_offers_the_update_and_installs_nothing() {
+    let board = UpdaterBoard::new();
+    let host = FakeHost::offering("0.9.90");
+
+    let checked = board.check_unless_busy(&host).await;
+
+    assert_eq!(
+      checked.state,
+      UpdaterState::Available {
+        version: "0.9.90".into()
+      }
+    );
+    assert_eq!(host.downloads.load(Ordering::SeqCst), 0);
+    let states: Vec<_> = host.announced().into_iter().map(|s| s.state).collect();
+    assert_eq!(states, vec![UpdaterState::Checking, checked.state]);
+  }
+
+  #[tokio::test]
+  async fn each_check_and_install_outcome_leaves_its_state() {
+    let failed = |during| UpdaterState::Failed { during };
+    let cases: Vec<(FakeHost, bool, UpdaterState)> = vec![
+      (
+        FakeHost {
+          found: Ok(None),
+          ..FakeHost::offering("0.9.90")
+        },
+        false,
+        UpdaterState::UpToDate,
+      ),
+      (
+        FakeHost {
+          found: Err("offline".into()),
+          ..FakeHost::offering("0.9.90")
+        },
+        false,
+        failed(UpdaterStep::Check),
+      ),
+      (
+        FakeHost::offering("0.9.90"),
+        true,
+        UpdaterState::Deferred {
+          version: "0.9.90".into(),
+        },
+      ),
+      (
+        FakeHost {
+          download_result: Err("signature mismatch".into()),
+          ..FakeHost::offering("0.9.90")
+        },
+        false,
+        failed(UpdaterStep::Install),
+      ),
+      (
+        FakeHost {
+          install_result: Err("disk full".into()),
+          ..FakeHost::offering("0.9.90")
+        },
+        false,
+        failed(UpdaterStep::Install),
+      ),
+      (
+        FakeHost::offering("0.9.90"),
+        false,
+        UpdaterState::Installing {
+          version: "0.9.90".into(),
+        },
+      ),
+    ];
+    for (host, editing, expected) in cases {
+      let board = UpdaterBoard::new();
+      let active = move || std::future::ready(editing);
+      board.run_check(&host, &active).await;
+
+      assert_eq!(board.snapshot().state, expected);
+      let announced = host.announced();
+      assert_eq!(
+        announced.first().map(|s| &s.state),
+        Some(&UpdaterState::Checking)
+      );
+      assert_eq!(announced.last().map(|s| &s.state), Some(&expected));
+      assert!(
+        announced
+          .windows(2)
+          .all(|pair| pair[0].revision < pair[1].revision),
+        "{announced:?}"
+      );
+    }
+  }
+
   #[test]
-  fn settings_sees_each_install_outcome() {
-    let version = || "0.9.87".to_string();
-    assert_eq!(
-      settings_outcome(CheckOutcome::Deferred { version: version() }),
-      Ok(SettingsCheck::Deferred { version: version() })
+  fn download_progress_is_announced_at_most_once_per_interval() {
+    let board = UpdaterBoard::new();
+    let start = Instant::now();
+    let at = |millis| start + Duration::from_millis(millis);
+
+    assert!(board.record(UpdaterState::Checking, at(0)).is_some());
+    assert!(
+      board
+        .record(downloading("0.9.90", 0, Some(300)), at(1))
+        .is_some()
+    );
+    // Inside the interval the step is kept, not announced.
+    assert!(
+      board
+        .record(downloading("0.9.90", 100, Some(300)), at(100))
+        .is_none()
     );
     assert_eq!(
-      settings_outcome(CheckOutcome::Installed { version: version() }),
-      Ok(SettingsCheck::Installing { version: version() })
+      board.snapshot().state,
+      downloading("0.9.90", 100, Some(300))
     );
-    assert_eq!(
-      settings_outcome(CheckOutcome::UpToDate),
-      Ok(SettingsCheck::UpToDate)
+    assert!(
+      board
+        .record(
+          downloading("0.9.90", 200, Some(300)),
+          at(1) + PROGRESS_EVENT_INTERVAL
+        )
+        .is_some()
     );
-    assert_eq!(
-      settings_outcome(CheckOutcome::Disabled),
-      Ok(SettingsCheck::Managed)
+    // The last step and the change after it are always announced.
+    assert!(
+      board
+        .record(downloading("0.9.90", 300, Some(300)), at(300))
+        .is_some()
     );
+    let installing = UpdaterState::Installing {
+      version: "0.9.90".into(),
+    };
     assert_eq!(
-      settings_outcome(CheckOutcome::Failed("offline".into())),
-      Err("offline".to_string())
+      board.record(installing.clone(), at(301)),
+      Some(UpdaterSnapshot {
+        revision: 6,
+        state: installing,
+      })
     );
   }
 
   #[test]
-  fn settings_check_serializes_as_a_tagged_status() {
+  fn updater_snapshot_serializes_for_the_settings_window() {
     assert_eq!(
-      serde_json::to_value(SettingsCheck::Available {
-        version: "0.9.87".into()
+      serde_json::to_value(UpdaterSnapshot {
+        revision: 3,
+        state: downloading("0.9.90", 100, None),
       })
-      .expect("settings check serializes"),
-      serde_json::json!({ "status": "available", "version": "0.9.87" })
+      .expect("updater snapshot serializes"),
+      serde_json::json!({
+        "revision": 3,
+        "state": {
+          "status": "downloading",
+          "version": "0.9.90",
+          "receivedBytes": 100,
+          "totalBytes": null,
+        },
+      })
     );
     assert_eq!(
-      serde_json::to_value(SettingsCheck::UpToDate).expect("settings check serializes"),
-      serde_json::json!({ "status": "up_to_date" })
+      serde_json::to_value(UpdaterState::Failed {
+        during: UpdaterStep::Install
+      })
+      .expect("updater state serializes"),
+      serde_json::json!({ "status": "failed", "during": "install" })
     );
   }
 
@@ -706,7 +1308,7 @@ mod tests {
     let (updater_started, started) = tokio::sync::oneshot::channel();
     let (release_updater, released) = tokio::sync::oneshot::channel();
     let updater = tokio::spawn(async move {
-      let _operation = CHECK_LOCK.lock().await;
+      let _operation = UPDATER.operation.lock().await;
       updater_started.send(()).unwrap();
       released.await.unwrap();
     });

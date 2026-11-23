@@ -200,6 +200,8 @@ const openWindow = async (
       get_desktop_language: () => data.language,
       get_desktop_telemetry_enabled: () => true,
       get_state: () => data.appState,
+      // The updater is idle, so About shows only its check button.
+      updater_state: () => ({ revision: 1, state: { status: "idle" } }),
       onboarding_get_snapshot: () => data.onboarding,
       permissions_get_snapshot: () => data.permissions,
       permissions_open_settings: () => null,
