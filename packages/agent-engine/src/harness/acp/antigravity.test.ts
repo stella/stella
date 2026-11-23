@@ -10,13 +10,16 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Temporal } from "temporal-polyfill/full";
 
 import {
   ANTIGRAVITY,
   ANTIGRAVITY_CLI,
   antigravityCliTokenPath,
+  antigravityCommandOutlivesPrompt,
   antigravityDefinition,
   antigravityTokenPath,
+  classifyAntigravityError,
 } from "./antigravity";
 
 const roots: string[] = [];
@@ -91,7 +94,12 @@ describe("Antigravity over ACP", () => {
     for (const file of ["probe-1.db", "probe-1.db-wal", "chat-1.db"]) {
       writeFileSync(path.join(state, "conversations", file), "");
     }
-    ANTIGRAVITY.discardSession?.(configDir, "probe-1");
+    ANTIGRAVITY.discardSession?.({
+      configDir,
+      sessionId: "probe-1",
+      environment: {},
+      cwd: "/tmp/probe",
+    });
     expect(existsSync(path.join(state, "brain", "probe-1"))).toBe(false);
     expect(existsSync(path.join(state, "brain", "chat-1"))).toBe(true);
     expect(readdirSync(path.join(state, "conversations"))).toEqual([
@@ -137,5 +145,141 @@ describe("Antigravity over ACP", () => {
       ANTIGRAVITY_CLI.minimumVersion?.read(path.join(dir, "missing")),
     ]);
     expect(missing.status).toBe("rejected");
+  });
+
+  test("CLI probe session cleanup removes only our probe session from GEMINI_HOME", () => {
+    const home = stateDir();
+    const state = path.join(home, "antigravity-acp");
+    const probeCwd = path.join(home, "probe-cwd");
+    const otherCwd = path.join(home, "other-cwd");
+    mkdirSync(probeCwd, { recursive: true });
+    mkdirSync(otherCwd, { recursive: true });
+    mkdirSync(path.join(state, "brain", "probe-2"), { recursive: true });
+    mkdirSync(path.join(state, "brain", "real-chat"), { recursive: true });
+    mkdirSync(path.join(state, "conversations"), { recursive: true });
+    mkdirSync(path.join(state, "annotations"), { recursive: true });
+    writeFileSync(path.join(state, "conversations", "probe-2.db"), "");
+    writeFileSync(
+      path.join(state, "conversations", "probe-2.meta"),
+      JSON.stringify({ cwd: probeCwd }),
+    );
+    writeFileSync(path.join(state, "annotations", "probe-2.pbtxt"), "");
+    writeFileSync(path.join(state, "conversations", "real-chat.db"), "");
+    writeFileSync(
+      path.join(state, "conversations", "real-chat.meta"),
+      JSON.stringify({ cwd: otherCwd }),
+    );
+
+    ANTIGRAVITY_CLI.discardSession?.({
+      configDir: "/unused",
+      sessionId: "probe-2",
+      environment: { GEMINI_HOME: home },
+      cwd: probeCwd,
+    });
+    expect(existsSync(path.join(state, "brain", "probe-2"))).toBe(false);
+    expect(existsSync(path.join(state, "conversations", "probe-2.db"))).toBe(
+      false,
+    );
+    expect(existsSync(path.join(state, "annotations", "probe-2.pbtxt"))).toBe(
+      false,
+    );
+
+    // Mismatched cwd leaves the member's real session untouched.
+    ANTIGRAVITY_CLI.discardSession?.({
+      configDir: "/unused",
+      sessionId: "real-chat",
+      environment: { GEMINI_HOME: home },
+      cwd: probeCwd,
+    });
+    expect(existsSync(path.join(state, "brain", "real-chat"))).toBe(true);
+    expect(existsSync(path.join(state, "conversations", "real-chat.db"))).toBe(
+      true,
+    );
+  });
+
+  test("execute commands outlive the prompt unless marked as a daemon", () => {
+    const base = {
+      id: "call-1",
+      title: "Run tests",
+      kind: "execute",
+      status: "in_progress",
+      content: [],
+      locations: [],
+      rawOutput: null,
+    };
+    expect(
+      antigravityCommandOutlivesPrompt({
+        ...base,
+        rawInput: { CommandLine: "bun test" },
+      }),
+    ).toBe(true);
+    expect(
+      antigravityCommandOutlivesPrompt({
+        ...base,
+        rawInput: { CommandLine: "bun dev", IsDaemon: true },
+      }),
+    ).toBe(false);
+    expect(
+      antigravityCommandOutlivesPrompt({
+        ...base,
+        kind: "read",
+        rawInput: null,
+      }),
+    ).toBe(false);
+  });
+
+  test("classifies Antigravity stderr errors: quota with reset delay, thinking signature, auth, and mid-turn 404", () => {
+    const now = Temporal.Instant.from("2026-11-22T09:00:00Z");
+    const quota = classifyAntigravityError({
+      stderr:
+        "Error 429, Message: Quota exceeded reason:QUOTA_EXHAUSTED quotaResetDelay:2m30s, Status: RESOURCE_EXHAUSTED",
+      errorMessage: null,
+      stopReason: "end_turn",
+      reachedModel: false,
+      now,
+    });
+    expect(quota).toEqual({
+      failure: {
+        type: "usage_limit",
+        message: "You have reached your Antigravity quota for this period.",
+        resetsAt: "2026-11-22T09:02:30Z",
+      },
+      brokenSession: false,
+    });
+
+    const broken = classifyAntigravityError({
+      stderr: "messages.2.content.0.thinking.signature: Field required",
+      errorMessage: null,
+      stopReason: "end_turn",
+      reachedModel: false,
+      now,
+    });
+    expect(broken?.brokenSession).toBe(true);
+    expect(broken?.failure.type).toBe("provider_error");
+
+    const auth = classifyAntigravityError({
+      stderr: "UNAUTHENTICATED (code 401): Token expired",
+      errorMessage: null,
+      stopReason: null,
+      reachedModel: false,
+      now,
+    });
+    expect(auth?.failure.type).toBe("auth_required");
+
+    const midTurn404 = classifyAntigravityError({
+      stderr: "Error 404, Message: Not found, Status: NOT_FOUND",
+      errorMessage: null,
+      stopReason: null,
+      reachedModel: true,
+      now,
+    });
+    expect(midTurn404).toEqual({
+      failure: {
+        type: "provider_error",
+        message: "Not found",
+        code: "NOT_FOUND",
+      },
+      brokenSession: false,
+    });
   });
 });

@@ -8,6 +8,7 @@ import {
   extraBrowserExtensionIds,
   harnessEnvironment,
   homeFolder,
+  mcpStdioBridgeConfig,
   protocolLogSetting,
   sidecarVersion,
   stellaBrowserDevHost,
@@ -21,6 +22,7 @@ import {
   HOLDER_UNACKED_RETENTION_MS,
 } from "./holder";
 import { startHolderServer } from "./holder-server";
+import { runMcpStdioBridge } from "./mcp-stdio-bridge";
 
 /**
  * The harness sidecar: `bun build --compile` turns this file into
@@ -47,6 +49,7 @@ const { values } = parseArgs({
     dir: { type: "string" },
     endpoint: { type: "string" },
     "native-host": { type: "boolean" },
+    "mcp-stdio-bridge": { type: "boolean" },
     "browser-endpoint": { type: "string" },
     "browser-secret-file": { type: "string" },
   },
@@ -57,6 +60,25 @@ const { values } = parseArgs({
 
 /** Retries a holder that is not there yet, while Chrome keeps the host. */
 const NATIVE_HOST_RETRY_MS = 2000;
+
+if (values["mcp-stdio-bridge"] === true) {
+  const bridgeConfig = mcpStdioBridgeConfig();
+  if (bridgeConfig === null) {
+    process.stderr.write(
+      "usage: STELLA_MCP_URL=<url> STELLA_MCP_TOKEN=<token> stella-agent-sidecar --mcp-stdio-bridge\n",
+    );
+    process.exit(2);
+  }
+  const bridged = await runMcpStdioBridge({
+    url: bridgeConfig.url,
+    token: bridgeConfig.token,
+    input: process.stdin,
+    output: (line) => {
+      process.stdout.write(line);
+    },
+  });
+  process.exit(Result.isOk(bridged) ? 0 : 1);
+}
 
 if (values["native-host"] === true) {
   const endpoint = values["browser-endpoint"];

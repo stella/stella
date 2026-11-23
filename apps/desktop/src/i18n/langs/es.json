@@ -233,6 +233,14 @@
     "writeDescription": "Introduzca una descripción para este registro."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Comprobar de nuevo",
+      "notInstalled": "Instala Antigravity 1.5 o posterior e inicia sesión desde ahí.",
+      "signedIn": "Sesión iniciada en Antigravity",
+      "signedOut": "Inicia sesión desde la CLI de Antigravity para usarlo en stella.",
+      "title": "Antigravity",
+      "tooOld": "Actualiza Antigravity a 1.5 o posterior e inicia sesión desde ahí."
+    },
     "callbackAccount": "Cuenta",
     "callbackCloseTab": "Puedes cerrar esta pestaña.",
     "callbackConnectedBody": "Las solicitudes de IA en stella ya usan tu plan de ChatGPT.",
@@ -1411,12 +1419,16 @@
     "sessionOpeningInOffice": "Abriendo en Office",
     "sessionSavingDraft": "Guardando borrador",
     "settings": "Configuración",
+    "showTranscription": "Mostrar transcripción",
     "support": "Soporte",
     "supportCopyDiagnostics": "Copiar diagnósticos",
     "supportEmailSupport": "Soporte por correo",
     "supportRevealAppData": "Mostrar datos de la app",
     "temporaryWorkingCopies": "Copias de trabajo temporales",
     "transcribeRecording": "Transcribir una grabación…",
+    "transcriptionProgress": "Transcripción en curso: {done} de {total} min",
+    "transcriptionProgressSoFar": "Transcripción en curso: {done} min hasta ahora",
+    "transcriptionReady": "Transcripción lista",
     "updatesManaged": "Las actualizaciones las gestiona tu organización"
   }
 }

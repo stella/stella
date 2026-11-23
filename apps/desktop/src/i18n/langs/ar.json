@@ -233,6 +233,14 @@
     "writeDescription": "أدخل وصفًا لهذا الإدخال."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "التحقق مرة أخرى",
+      "notInstalled": "ثبّت Antigravity 1.5 أو أحدث، ثم سجّل الدخول منه.",
+      "signedIn": "تم تسجيل الدخول إلى Antigravity",
+      "signedOut": "سجّل الدخول من واجهة سطر أوامر Antigravity لاستخدامه في stella.",
+      "title": "Antigravity",
+      "tooOld": "حدّث Antigravity إلى 1.5 أو أحدث، ثم سجّل الدخول منه."
+    },
     "callbackAccount": "الحساب",
     "callbackCloseTab": "يمكنك إغلاق علامة التبويب هذه.",
     "callbackConnectedBody": "تستخدم طلبات الذكاء الاصطناعي في stella الآن خطة ChatGPT الخاصة بك.",
@@ -1411,12 +1419,16 @@
     "sessionOpeningInOffice": "جارٍ الفتح في Office",
     "sessionSavingDraft": "حفظ المسودة",
     "settings": "الإعدادات",
+    "showTranscription": "إظهار النص",
     "support": "الدعم",
     "supportCopyDiagnostics": "نسخ معلومات التشخيص",
     "supportEmailSupport": "مراسلة الدعم بالبريد",
     "supportRevealAppData": "إظهار بيانات التطبيق",
     "temporaryWorkingCopies": "نسخ العمل المؤقتة",
     "transcribeRecording": "تحويل تسجيل إلى نص…",
+    "transcriptionProgress": "جارٍ التحويل إلى نص: {done} من {total} د",
+    "transcriptionProgressSoFar": "جارٍ التحويل إلى نص: {done} د حتى الآن",
+    "transcriptionReady": "النص جاهز",
     "updatesManaged": "تدير مؤسستك التحديثات"
   }
 }

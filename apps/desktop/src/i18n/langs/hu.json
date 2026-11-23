@@ -233,6 +233,14 @@
     "writeDescription": "Adjon meg leírást ehhez a bejegyzéshez."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Ellenőrzés újra",
+      "notInstalled": "Telepítse az Antigravity 1.5 vagy újabb verzióját, majd jelentkezzen be benne.",
+      "signedIn": "Bejelentkezve az Antigravity fiókba",
+      "signedOut": "Jelentkezzen be az Antigravity CLI-ben, hogy a stella alkalmazásban használhassa.",
+      "title": "Antigravity",
+      "tooOld": "Frissítse az Antigravity alkalmazást 1.5 vagy újabb verzióra, majd jelentkezzen be benne."
+    },
     "callbackAccount": "Fiók",
     "callbackCloseTab": "Ezt a lapot bezárhatja.",
     "callbackConnectedBody": "A stella MI-kérései mostantól a ChatGPT-csomagját használják.",
@@ -1411,12 +1419,16 @@
     "sessionOpeningInOffice": "Megnyitás Office-ban",
     "sessionSavingDraft": "Piszkozat mentése",
     "settings": "Beállítások",
+    "showTranscription": "Átirat megjelenítése",
     "support": "Támogatás",
     "supportCopyDiagnostics": "Diagnosztika másolása",
     "supportEmailSupport": "E-mail támogatás",
     "supportRevealAppData": "Alkalmazásadatok megjelenítése",
     "temporaryWorkingCopies": "Ideiglenes munkamásolatok",
     "transcribeRecording": "Felvétel átírása…",
+    "transcriptionProgress": "Átírás folyamatban: {done} / {total} perc",
+    "transcriptionProgressSoFar": "Átírás folyamatban: eddig {done} perc",
+    "transcriptionReady": "Az átirat elkészült",
     "updatesManaged": "A frissítéseket a szervezete kezeli"
   }
 }

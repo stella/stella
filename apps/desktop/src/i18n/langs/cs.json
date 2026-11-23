@@ -233,6 +233,14 @@
     "writeDescription": "Zadejte popis tohoto záznamu."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Zkontrolovat znovu",
+      "notInstalled": "Nainstalujte Antigravity 1.5 nebo novější a přihlaste se v něm.",
+      "signedIn": "Přihlášeno k Antigravity",
+      "signedOut": "Přihlaste se v Antigravity CLI, abyste jej mohli používat v aplikaci stella.",
+      "title": "Antigravity",
+      "tooOld": "Aktualizujte Antigravity na 1.5 nebo novější a přihlaste se v něm."
+    },
     "callbackAccount": "Účet",
     "callbackCloseTab": "Tuto kartu můžete zavřít.",
     "callbackConnectedBody": "Požadavky na AI v aplikaci stella teď využívají váš tarif ChatGPT.",
@@ -1411,12 +1419,16 @@
     "sessionOpeningInOffice": "Otevírání v Office",
     "sessionSavingDraft": "Ukládání konceptu",
     "settings": "Nastavení",
+    "showTranscription": "Zobrazit přepis",
     "support": "Podpora",
     "supportCopyDiagnostics": "Kopírovat diagnostiku",
     "supportEmailSupport": "E-mailová podpora",
     "supportRevealAppData": "Zobrazit data aplikace",
     "temporaryWorkingCopies": "Dočasné pracovní kopie",
     "transcribeRecording": "Přepsat nahrávku…",
+    "transcriptionProgress": "Probíhá přepis: {done} z {total} min",
+    "transcriptionProgressSoFar": "Probíhá přepis: zatím {done} min",
+    "transcriptionReady": "Přepis je hotový",
     "updatesManaged": "Aktualizace spravuje vaše organizace"
   }
 }

@@ -271,6 +271,7 @@
         "src/timeline.ts",
         "src/exporters.ts",
         "src/vocabulary.ts",
+        "src/learned-fixes.ts",
         "src/**/*.test.ts"
       ]
     },

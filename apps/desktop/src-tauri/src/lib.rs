@@ -253,6 +253,7 @@ pub fn run() {
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
     .manage(dictation::DictationState::load())
+    .manage(app_window::AppWindows::default())
     .manage(transcribe_recording::TranscribeState::default())
     .manage(transcribe_history::TranscribeHistoryState::default())
     .manage(dictation_notice::DictationNotice::default())
@@ -566,11 +567,9 @@ pub fn run() {
       // Check for updates in the background after launch settles.
       updater::schedule_startup_check(handle.clone(), Arc::clone(&manager));
 
-      // Hide dock icon on macOS (tray-only app)
+      // A menu bar app on macOS; app windows put it in the Dock while open.
       #[cfg(target_os = "macos")]
-      {
-        app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-      }
+      app_window::start_in_menu_bar(app);
 
       onboarding::show_if_pending(
         &handle,
@@ -621,10 +620,14 @@ pub fn run() {
       tracing::info!("stella desktop started");
       Ok(())
     })
+    .on_page_load(app_window::page_loading)
+    .on_window_event(app_window::window_event)
     .invoke_handler(with_stella_commands!(generate_stella_handler))
     .build(tauri::generate_context!())
     .expect("error while building stella desktop")
     .run(|app, event| match event {
+      #[cfg(target_os = "macos")]
+      tauri::RunEvent::Reopen { .. } => app_window::reopen(app),
       tauri::RunEvent::ExitRequested { api, code, .. } => {
         if app_lifecycle::should_prevent_exit(code) {
           tracing::info!("prevented background desktop process from exiting");
@@ -788,11 +791,16 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
     return;
   }
 
-  let builder = crate::app_window::builder(handle, SETTINGS_WINDOW_LABEL, view.page())
-    .title("stella desktop")
-    .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
-    .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
-    .resizable(true);
+  let builder = crate::app_window::builder(
+    handle,
+    SETTINGS_WINDOW_LABEL,
+    view.page(),
+    crate::app_window::WindowKind::App,
+  )
+  .title("stella desktop")
+  .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
+  .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
+  .resizable(true);
   let builder = window_placement::centered_on_target_screen(
     handle,
     builder,

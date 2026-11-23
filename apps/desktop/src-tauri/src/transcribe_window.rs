@@ -27,12 +27,17 @@ pub fn show(app: &AppHandle) {
     }
     return;
   }
-  let builder = crate::app_window::builder(app, TRANSCRIBE_WINDOW_LABEL, "index.html")
-    .title("stella")
-    .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT)
-    .min_inner_size(760.0, 520.0)
-    .resizable(true)
-    .visible(false);
+  let builder = crate::app_window::builder(
+    app,
+    TRANSCRIBE_WINDOW_LABEL,
+    "index.html",
+    crate::app_window::WindowKind::App,
+  )
+  .title("stella")
+  .inner_size(WINDOW_WIDTH, WINDOW_HEIGHT)
+  .min_inner_size(760.0, 520.0)
+  .resizable(true)
+  .visible(false);
   let builder = window_placement::centered_on_target_screen(
     app,
     builder,
@@ -54,6 +59,7 @@ pub fn show(app: &AppHandle) {
     tracing::error!("transcribe window could not be created");
     return;
   };
+  transcribe_recording::window_opened(app);
   // The dropped path is read here, natively; the page only learns the
   // file's name.
   let handle = app.clone();

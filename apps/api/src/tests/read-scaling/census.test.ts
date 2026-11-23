@@ -54,6 +54,7 @@ import {
   dictationModelsScalingScenario,
   dictationScalingScenario,
 } from "./dictation";
+import { learnedFixesScalingScenarios } from "./dictation-learned-fixes";
 import { dictationVocabularyScalingScenarios } from "./dictation-vocabulary";
 import {
   documentAnnotationScalingScenarios,
@@ -169,6 +170,7 @@ const measuredApiScenarios = [
   dataBoxPreviewScalingScenario,
   emailReadingScalingScenario,
   ...dataBoxSettingsScalingScenarios,
+  ...learnedFixesScalingScenarios,
   ...dictationVocabularyScalingScenarios,
   suggestionRangeScalingScenario,
   timeEntryReportScalingScenario,

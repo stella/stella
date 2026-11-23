@@ -1582,6 +1582,9 @@ export const TOOLING_ENV_KEYS = new Set([
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.
   "FAKE_HARNESS_LOG",
   "CODEX_HOME",
+  "GEMINI_HOME",
+  "STELLA_MCP_URL",
+  "STELLA_MCP_TOKEN",
   // The skill folder the fake harness CLIs' `reads_skill` scenario touches.
   "FAKE_SKILL_PATH",
   // The pause between a paced fake Codex scenario's outputs.
@@ -1820,6 +1823,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "EXPECTED_COMMIT",
   // Flake trial ownership and isolated subprocess fixture handoffs.
   "FLAKE_CHILD_RECORD",
+  // The test job's clock (epoch ms); the repeats end inside the job's timeout.
+  "CI_T0",
   "FLAKE_GATE_FIXTURE_PRELOADED",
   "FLAKE_GATE_TRIAL",
   // Quarantine preload: report directory for its JSON lines; registry path override for fixture trees.

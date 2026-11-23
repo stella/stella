@@ -119,6 +119,9 @@ const RESOURCE_ARBS = {
   conflictCheck: fc
     .subarray([...statements.conflictCheck], { minLength: 1 })
     .map((v): PermissionInput => ({ conflictCheck: v })),
+  dictationLearnedFix: fc
+    .subarray([...statements.dictationLearnedFix], { minLength: 1 })
+    .map((v): PermissionInput => ({ dictationLearnedFix: v })),
 } satisfies Record<keyof typeof statements, fc.Arbitrary<PermissionInput>>;
 
 const ALL_RESOURCE_ARBS: readonly fc.Arbitrary<PermissionInput>[] =

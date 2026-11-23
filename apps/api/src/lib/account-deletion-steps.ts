@@ -54,6 +54,7 @@ import {
   desktopEditSessions,
   desktopRunnerRuns,
   desktopRunners,
+  dictationLearnedFixes,
   entities,
   feedbackReports,
   fileChatThreads,
@@ -1729,12 +1730,14 @@ const DELETE_PERSONAL_RECORDS_TABLES = [
   templateLookupFormatUserDefaults,
   userProfessionalUseAcceptances,
   feedbackReports,
+  dictationLearnedFixes,
 ] as const satisfies readonly PgTable[];
 
 /**
  * 17. Personal records the account export returns: private reader notes,
- * saved narratives and searches, billing-draft and template preferences, and
- * the professional-use acceptance. Shared reader notes stay with the
+ * saved narratives and searches, billing-draft and template preferences, the
+ * dictation fixes learned from the member's corrections, and the
+ * professional-use acceptance. Shared reader notes stay with the
  * organization. Filed feedback stays with the maintainers without its
  * reporter link. The user row is soft-deleted, so none of these foreign-key
  * actions fire on their own.
@@ -1777,6 +1780,10 @@ export const deletePersonalRecords = async (
   await tx
     .delete(userProfessionalUseAcceptances)
     .where(eq(userProfessionalUseAcceptances.userId, currentUserId));
+  // audit: skip - the account deletion request records this erasure
+  await tx
+    .delete(dictationLearnedFixes)
+    .where(eq(dictationLearnedFixes.userId, currentUserId));
   // audit: skip - the account deletion request records this erasure
   await tx
     .update(feedbackReports)

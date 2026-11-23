@@ -32,6 +32,7 @@ import {
   desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
+  dictationLearnedFixes,
   entities,
   flowDefinitions,
   flowRuns,
@@ -1831,6 +1832,15 @@ export const removeOrganizationMemberInTransaction = async (
         eq(searchHistoryEntries.userId, userId),
       ),
     );
+  // The spellings dictation learned from the member; they can name clients.
+  await tx
+    .delete(dictationLearnedFixes)
+    .where(
+      and(
+        eq(dictationLearnedFixes.organizationId, organizationId),
+        eq(dictationLearnedFixes.userId, userId),
+      ),
+    );
   await clearMemberConnectorAuthorization({
     tx,
     organizationId,
@@ -1912,6 +1922,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS: readonly (readonly [
   [searchHistoryEntries.userId, "cleared"],
   [searchHistoryCountryClears.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
+  [dictationLearnedFixes.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
   [taskAssignees.userId, "reassigned"],

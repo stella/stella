@@ -341,6 +341,7 @@ const installNativeBoundary = async ({
         dictation_get_snapshot: () => ({ available: false }),
         chatgpt_auth_get_status: () => null,
         claude_code_auth_get_status: () => null,
+        antigravity_get_status: () => null,
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
