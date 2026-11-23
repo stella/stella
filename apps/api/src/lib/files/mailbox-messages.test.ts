@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { EML_MIME_TYPE } from "@stll/api-contract/email-mime-types";
+import { encodeText } from "@stll/mojibake/charsets";
 
 import {
   mailboxWithLargeMessage,
@@ -64,6 +65,33 @@ describe("a mailbox's list", () => {
     ]);
     // The list never holds a body.
     expect(JSON.stringify(rows)).not.toContain("posílám podklady");
+  });
+
+  test("a raw 8-bit folder header reads in the charset its program wrote", async () => {
+    // Outlook Express and older Thunderbird exports write the folder name
+    // unencoded, in the system's code page.
+    const message = encodeText(
+      [
+        "From: Kalina <kalina@ak-kalina-vesela.cz>",
+        "To: podatelna@ak-kalina-vesela.cz",
+        "Subject: Podklady k jednani",
+        "X-Folder: Došlá pošta/Spisy 2026",
+        "Date: Tue, 17 Nov 2026 09:30:00 +0100",
+        "",
+        "Dobrý den, v příloze zasíláme podklady.",
+        "",
+      ].join("\n"),
+      "windows-1250",
+    );
+    if (message === null) {
+      throw new Error("the message is writable in windows-1250");
+    }
+    const { bytes } = writeMbox([message], "mboxrd");
+    const [row] = await rowsOf(bytes);
+    expect(row).toMatchObject({
+      subject: "Podklady k jednani",
+      folder: "Došlá pošta/Spisy 2026",
+    });
   });
 
   test("a message without a subject or date is named after the mailbox", async () => {

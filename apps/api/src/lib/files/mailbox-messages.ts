@@ -12,6 +12,7 @@ import {
   type FilePartUnavailableReason,
 } from "@stll/api-contract/file-parts";
 import type { MailboxMessage } from "@stll/api-contract/mailbox";
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
 import { parseEmail } from "@/api/lib/files/email-to-html";
 import {
@@ -48,6 +49,8 @@ export type MailboxEntry = MboxMessageSpan & {
 };
 
 const HEADER_FIELD = /^[!-9;-~]+[ \t]*:/u;
+
+const LINE_FEED = 0x0a;
 
 /** The header's fields, unfolded, by lowercase name; first wins. */
 const headerFields = (header: string): Map<string, string> => {
@@ -119,14 +122,17 @@ export const mailboxEntry = async (
   span: MboxMessageSpan,
   mailboxName: string,
 ): Promise<MailboxEntry> => {
-  const header = new TextDecoder().decode(span.header);
+  // Raw 8-bit header values are in whatever charset the sender's program
+  // wrote; the email reader gets the bytes themselves.
+  const header = decodeDeclared(span.header, {
+    contentType: EML_MIME_TYPE,
+  }).text;
   const fields = headerFields(header);
   // A header cut at its bound is read as far as it goes.
-  const parsed = await parseEmail(
-    new TextEncoder().encode(span.headerComplete ? header : `${header}\n\n`)
-      .buffer,
-    EML_MIME_TYPE,
-  );
+  const source = span.headerComplete
+    ? new Uint8Array(span.header)
+    : Uint8Array.from([...span.header, LINE_FEED, LINE_FEED]);
+  const parsed = await parseEmail(source.buffer, EML_MIME_TYPE);
   const email = parsed.isOk() ? parsed.value : null;
   const subject = nonBlank(email?.subject);
   // A message is read when it starts with a header field; one whose header
