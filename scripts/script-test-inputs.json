@@ -231,6 +231,10 @@
     "scripts/dev-seeded-e2e-guard.test.ts": ["**"],
     "scripts/diff-scoped-steps.test.ts": ["**"],
     "scripts/disarm-auto-merge.test.ts": ["**"],
+    "scripts/docker-login-action.test.ts": [
+      ".github/actions/docker-login/**",
+      "scripts/docker-login-action.test.ts"
+    ],
     "scripts/docker-source-closure.test.ts": ["**"],
     "scripts/document-identity-guard.test.ts": ["**"],
     "scripts/dom-test-isolation.test.ts": ["**"],
