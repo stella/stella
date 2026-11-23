@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 /**
  * Development only: re-parse a decision from the publisher on read.
  *
@@ -99,21 +100,33 @@ const reparseNss = async (
  * The decision's document as the current parser reads it, or null when
  * the source is not one this re-parses or the publisher did not answer.
  */
+export type DevReparseOutcome =
+  | { status: "reparsed"; ast: DocumentAst }
+  | { status: "not-applicable" }
+  | { status: "failed" };
+
 export const reparseForDev = async (
   decision: DevReparseDecision,
-): Promise<DocumentAst | null> =>
+): Promise<DevReparseOutcome> =>
   await withPublicReadIo("development", async () => {
     if (decision.adapterKey !== ADAPTER_KEYS.CZ_NSS) {
-      return null;
+      return { status: "not-applicable" };
     }
-    return await reparseNss(decision).catch((error: unknown) => {
+    const reparsed = await Result.tryPromise({
+      try: async () => await reparseNss(decision),
+      catch: (cause) => cause,
+    });
+    if (Result.isError(reparsed)) {
       captureError(
-        error,
+        reparsed.error,
         handlerErrorContext("decisions.attempt", {
           source: "case-law-dev-reparse",
           decisionId: decision.id,
         }),
       );
-      return null;
-    });
+      return { status: "failed" };
+    }
+    return reparsed.value === null
+      ? { status: "not-applicable" }
+      : { status: "reparsed", ast: reparsed.value };
   });

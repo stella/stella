@@ -920,7 +920,7 @@ export const streamChat = async ({
     };
   }
 
-  const resolvedFallbackModel =
+  const fallbackOutcome =
     turnModelSelection.fallbackPolicy === "automatic"
       ? await resolveFallbackTextModel({
           organizationId,
@@ -930,7 +930,9 @@ export const streamChat = async ({
           primaryModel,
           threadId,
         })
-      : null;
+      : ({ status: "none" } as const);
+  const resolvedFallbackModel =
+    fallbackOutcome.status === "resolved" ? fallbackOutcome.model : null;
   // Drop a fallback that would crash on a document the primary accepted, or
   // that cannot carry this turn's tools; a failover must not resurrect a
   // capability mismatch the primary already cleared.
@@ -1708,6 +1710,11 @@ type ResolveFallbackTextModelProps = {
   threadId: SafeId<"chatThread">;
 };
 
+type FallbackTextModelOutcome =
+  | { status: "resolved"; model: ResolvedTanStackTextModel }
+  | { status: "same-as-primary" }
+  | { status: "failed" };
+
 const resolveFallbackTextModel = async ({
   organizationId,
   modelAdmission,
@@ -1715,7 +1722,7 @@ const resolveFallbackTextModel = async ({
   managedAIResidency,
   primaryModel,
   threadId,
-}: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
+}: ResolveFallbackTextModelProps): Promise<FallbackTextModelOutcome> => {
   try {
     const fallbackModel = await resolveTanStackTextModel({
       userId: modelAdmission.userId,
@@ -1730,9 +1737,9 @@ const resolveFallbackTextModel = async ({
       fallbackModel.provider === primaryModel.provider &&
       fallbackModel.modelId === primaryModel.modelId
     ) {
-      return null;
+      return { status: "same-as-primary" };
     }
-    return fallbackModel;
+    return { status: "resolved", model: fallbackModel };
   } catch (error) {
     captureError(
       error,
@@ -1741,7 +1748,7 @@ const resolveFallbackTextModel = async ({
         threadId,
       }),
     );
-    return null;
+    return { status: "failed" };
   }
 };
 
