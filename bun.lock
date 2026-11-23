@@ -1355,14 +1355,11 @@
         "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
-        "@types/react-dom": "catalog:react19",
         "bun-types": "catalog:",
         "react": "catalog:react19",
-        "react-dom": "catalog:react19",
       },
       "peerDependencies": {
         "react": ">=19",
-        "react-dom": ">=19",
       },
     },
     "packages/mcp-apps": {
