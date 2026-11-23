@@ -268,12 +268,29 @@ describe("batched supplemental rebuild", () => {
 
     const dialect = new PgDialect();
     const upsertOrder = ordered.written.flatMap((statements) =>
-      dialect
-        .sqlToQuery(statements.at(2) ?? sql``)
-        .params.filter(
-          (param): param is string =>
-            typeof param === "string" && ids.some((id) => id === param),
-        ),
+      dialect.sqlToQuery(statements.at(2) ?? sql``).params.flatMap((param) => {
+        if (typeof param !== "string") {
+          return [];
+        }
+        const parsed: unknown = JSON.parse(param);
+        if (!Array.isArray(parsed)) {
+          return [];
+        }
+        const rows: readonly unknown[] = parsed;
+        const matched: string[] = [];
+        for (const row of rows) {
+          if (
+            typeof row === "object" &&
+            row !== null &&
+            "workspace_id" in row &&
+            typeof row.workspace_id === "string" &&
+            ids.some((id) => id === row.workspace_id)
+          ) {
+            matched.push(row.workspace_id);
+          }
+        }
+        return matched;
+      }),
     );
     expect(upsertOrder).toEqual(ids.toSorted(compareCodeUnit));
     expect(ordered.written).toHaveLength(2);

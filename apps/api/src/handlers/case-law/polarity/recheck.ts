@@ -31,7 +31,7 @@ import type { CitationTextRevision } from "@/api/handlers/case-law/polarity/text
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CitationEvidenceWindows } from "@/api/lib/case-law/citation-evidence";
 import type { CitedPart } from "@/api/lib/case-law/citation-vocabulary";
-import { numericColumnParam } from "@/api/lib/db/column-storage";
+import { persistedColumnNumber } from "@/api/lib/db/column-storage";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
@@ -61,6 +61,21 @@ export const persistTightened = async (
   if (rows.length === 0) {
     return { applied: 0, skipped: 0 };
   }
+  const payload = rows.map((row) => ({
+    id: row.id,
+    polarity: row.polarity,
+    rule_id: row.ruleId,
+    previous_polarity: row.previousPolarity,
+    evidence_windows: row.evidenceWindows,
+    confidence: persistedColumnNumber(
+      caseLawCitations.polarityConfidence,
+      row.confidence,
+    ),
+    cited_part: row.citedPart,
+    citing_decision_id: row.citingDecisionId,
+    content_hash: row.textRevision.contentHash,
+    sections: row.textRevision.sections,
+  }));
   const changed = await runCitationGraphTransaction(
     scopedDb,
     async (tx) =>
@@ -74,13 +89,18 @@ export const persistTightened = async (
              polarity_evidence_windows = v.evidence_windows,
              polarity_confidence = v.confidence,
              cited_part = v.cited_part
-        FROM (VALUES ${sql.join(
-          rows.map(
-            (row) =>
-              sql`(${row.id}::uuid, ${row.polarity}::text, ${row.ruleId}::uuid, ${row.previousPolarity}::text, ${JSON.stringify(row.evidenceWindows)}::text::jsonb, ${numericColumnParam(caseLawCitations.polarityConfidence, row.confidence)}, ${row.citedPart}::text, ${row.citingDecisionId}::uuid, ${row.textRevision.contentHash}::text, ${row.textRevision.sections === null ? null : JSON.stringify(row.textRevision.sections)}::text::jsonb)`,
-          ),
-          sql.raw(","),
-        )}) AS v(id, polarity, rule_id, previous_polarity, evidence_windows, confidence, cited_part, citing_decision_id, content_hash, sections)
+        FROM jsonb_to_recordset(${JSON.stringify(payload)}::text::jsonb) AS v(
+          id uuid,
+          polarity text,
+          rule_id uuid,
+          previous_polarity text,
+          evidence_windows jsonb,
+          confidence double precision,
+          cited_part text,
+          citing_decision_id uuid,
+          content_hash text,
+          sections jsonb
+        )
        WHERE c.id = v.id
          AND c.citing_decision_id = v.citing_decision_id
          AND ${citationTextRevisionFence({

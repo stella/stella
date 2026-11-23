@@ -238,8 +238,31 @@ const ignoreTransitionAudit = async (): Promise<void> => {
   await Promise.resolve();
 };
 
-const typedColumnParam = (value: unknown, column: AnyPgColumn) =>
-  sql`${sql.param(value, column)}::${sql.raw(column.getSQLType())}`;
+const serializeTransitionColumnValue = (
+  value: unknown,
+  column: AnyPgColumn,
+): unknown => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+  if (typeof value === "bigint") {
+    return value.toString();
+  }
+  if (column.getSQLType() === "jsonb" || column.getSQLType() === "json") {
+    return value;
+  }
+  const mapped: unknown = column.mapToDriverValue(value);
+  if (mapped instanceof Date) {
+    return mapped.toISOString();
+  }
+  if (typeof mapped === "bigint") {
+    return mapped.toString();
+  }
+  return mapped;
+};
 
 const isScopedStateValue = <
   TTable extends ScopedStateTable,
@@ -337,10 +360,7 @@ const executeScopedUpsertWrites = async <
             ),
             sql`, `,
           )}
-          FROM (VALUES ${incomingRows}) AS incoming (${sql.join(
-            insertColumns.map((column) => sql.identifier(column.name)),
-            sql`, `,
-          )})
+          FROM ${incomingRows}
           WHERE incoming.${sql.identifier(state.name)} IN (${sql.join(
             spec.initial.map((initial) => sql`${sql.param(initial, state)}`),
             sql`, `,
@@ -383,10 +403,7 @@ const executeScopedUpsertWrites = async <
             ),
             sql`, `,
           )}
-          FROM (VALUES ${incomingRows}) AS incoming (${sql.join(
-            insertColumns.map((column) => sql.identifier(column.name)),
-            sql`, `,
-          )})
+          FROM ${incomingRows}
           WHERE ${sql.join(
             identityColumns.map(
               (column) =>
@@ -417,10 +434,7 @@ const executeScopedUpsertWrites = async <
         ),
         sql`, `,
       )}
-      FROM (VALUES ${incomingRows}) AS incoming (${sql.join(
-        insertColumns.map((column) => sql.identifier(column.name)),
-        sql`, `,
-      )})
+      FROM ${incomingRows}
       WHERE ${sql.join(
         identityColumns.map(
           (column) =>
@@ -434,10 +448,7 @@ const executeScopedUpsertWrites = async <
   const verified = await tx.execute(sql`
     SELECT 1
     FROM ${spec.table} AS current
-    JOIN (VALUES ${incomingRows}) AS incoming (${sql.join(
-      insertColumns.map((column) => sql.identifier(column.name)),
-      sql`, `,
-    )})
+    JOIN ${incomingRows}
       ON ${sql.join(
         identityColumns.map(
           (column) =>
@@ -785,23 +796,26 @@ export const transitionUpsertBatch = async <
       panic("An upsert state must belong to the declared lifecycle domain");
     }
   }
-  const incomingRows = sql.join(
-    values.map(
-      (row) =>
-        sql`(${sql.join(
-          insertColumns.map((column, index) => {
-            const key = valueKeys[index];
-            if (key === undefined) {
-              panic("Upsert column key is missing");
-            }
-            const value = row[key];
-            return typedColumnParam(value, column);
-          }),
-          sql`, `,
-        )})`,
+  const incomingPayload = values.map((row) =>
+    Object.fromEntries(
+      insertColumns.map((column, index) => {
+        const key = valueKeys[index];
+        if (key === undefined) {
+          panic("Upsert column key is missing");
+        }
+        return [column.name, serializeTransitionColumnValue(row[key], column)];
+      }),
+    ),
+  );
+  const incomingRows = sql`jsonb_to_recordset(${JSON.stringify(
+    incomingPayload,
+  )}::text::jsonb) AS incoming (${sql.join(
+    insertColumns.map(
+      (column) =>
+        sql`${sql.identifier(column.name)} ${sql.raw(column.getSQLType())}`,
     ),
     sql`, `,
-  );
+  )})`;
   const identityColumns = identityKeys.map((key) => {
     const column = columns[key];
     if (column === undefined) {
