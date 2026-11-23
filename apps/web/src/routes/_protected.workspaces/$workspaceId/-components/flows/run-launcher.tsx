@@ -161,6 +161,21 @@ export const RunLauncher = ({
     );
   }
 
+  const resolveWorkflowLaunchDisabledReason = () => {
+    if (starting) {
+      return t("flows.runs.starting");
+    }
+    if (!canRun) {
+      return t("errors.api.forbidden");
+    }
+    if (!definitionId) {
+      return t("flows.runs.selectFlow");
+    }
+    return t("flows.runs.tooManyInputDocuments", {
+      max: format.number(FLOW_RUN_INPUT_ENTITIES_MAX),
+    });
+  };
+
   return (
     <RunLauncherFrame>
       <QueryViewFeedback view={flowsDataView} />
@@ -256,6 +271,7 @@ export const RunLauncher = ({
           disabled={
             !canRun || !definitionId || starting || exceedsInputEntitiesLimit
           }
+          disabledReason={resolveWorkflowLaunchDisabledReason()}
           loading={starting}
           onClick={() => {
             detached(handleStart(), "run-launcher.start");

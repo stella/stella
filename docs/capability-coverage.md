@@ -828,7 +828,7 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
 | assistant_chat | 28 |
-| auth_plumbing | 45 |
+| auth_plumbing | 46 |
 | billing_ui | 1 |
 | chat_thread_ui | 31 |
 | compound_consent | 1 |
@@ -839,13 +839,13 @@ mechanics, and similar), not gaps in coverage.
 | human_confirmation | 3 |
 | mcp_transport | 12 |
 | native_device | 5 |
-| native_tool_ui | 13 |
+| native_tool_ui | 14 |
 | organization_export | 2 |
 | provider_secret | 35 |
 | public_indexing | 13 |
 | realtime_stream | 10 |
-| search_ui | 22 |
+| search_ui | 23 |
 | session_token_exchange | 23 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 30 |
+| upload_mechanics | 34 |
 | url_preview | 2 |

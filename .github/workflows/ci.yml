@@ -1593,6 +1593,8 @@ jobs:
         name: Cancel merge group after failure in this job
         if: failure() && github.event_name == 'merge_group'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           retries: 0
           script: &merge_group_cancel_script |
@@ -1600,6 +1602,8 @@ jobs:
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             let ownJob;
+            const failedHere = process.env.JOB_STATUS === "failure";
+            const failed = (step) => step.conclusion === "failure";
             try {
               const jobs = await Promise.race([
                 github.paginate(
@@ -1616,21 +1620,19 @@ jobs:
                   evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
                 }),
               ]);
+              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
+                .filter(failed)
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              if (failedHere && !ownJob?.steps?.some(failed)) failures.push(`${ownJob?.name || context.job}: failed step not yet listed`);
               const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && !(job.steps || []).some(failed)
                 && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
                 core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
                 return;
               }
-              // A runner runs one job at a time, so its name identifies this job.
-              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling failed merge group; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
@@ -1645,7 +1647,7 @@ jobs:
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
             }
-            if (ownJob && (ownJob.steps || []).some((step) => step.conclusion === "failure")) {
+            if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
               try {
                 await github.rest.actions.createWorkflowDispatch({
                   ...context.repo,
@@ -3723,12 +3725,17 @@ jobs:
         || github.event_name == 'workflow_dispatch')
       )
       )
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [lib, handlers, rest]
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     permissions:
       contents: read
       actions: write
     env:
+      API_LINT_SHARD: ${{ matrix.shard }}
       CI_GENERATED_SOURCES_MANIFEST: ${{ github.workspace }}/.cache/ci-generated-sources/manifest.json
     steps:
       - name: Checkout
@@ -3807,6 +3814,7 @@ jobs:
           bun run code-check:affected -- --leg api --base "$CHECK_BASE_REF"
 
       - name: Result consumption
+        if: matrix.shard == 'rest'
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
           EVENT_NAME: ${{ github.event_name }}
@@ -3838,6 +3846,8 @@ jobs:
             let failureSummary = "failed-step lookup unavailable";
             let evidenceTimer;
             let ownJob;
+            const failedHere = process.env.JOB_STATUS === "failure";
+            const failed = (step) => step.conclusion === "failure";
             try {
               const jobs = await Promise.race([
                 github.paginate(
@@ -3854,21 +3864,19 @@ jobs:
                   evidenceTimer = setTimeout(() => reject(new Error("Failed-step lookup timed out")), 10000);
                 }),
               ]);
+              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               const failures = jobs.flatMap((job) => (job.steps || [])
-                .filter((step) => step.conclusion === "failure")
+                .filter(failed)
                 .map((step) => `${job.name} / ${step.number}: ${step.name} (${job.html_url})`));
-              // A lost runner leaves a failed job whose step ended cancelled (or that never ran a step); with no failed
-              // step and no such evidence the jobs API may still be catching up, so cancel as before.
+              if (failedHere && !ownJob?.steps?.some(failed)) failures.push(`${ownJob?.name || context.job}: failed step not yet listed`);
               const lost = jobs.filter((job) => job.conclusion === "failure"
-                && !(job.steps || []).some((step) => step.conclusion === "failure")
+                && !(job.steps || []).some(failed)
                 && (job.steps || []).every((step) => !step.status || step.status === "completed")
                 && (!(job.steps || []).length || job.steps.some((step) => step.conclusion === "cancelled")));
               if (!failures.length && lost.length) {
                 core.notice(`${lost.map((job) => job.name).join(", ")}: the runner was lost before any step failed; the run continues.`);
                 return;
               }
-              // A runner runs one job at a time, so its name identifies this job.
-              ownJob = jobs.find((job) => job.status === "in_progress" && job.runner_name === process.env.RUNNER_NAME);
               failureSummary = failures.length ? failures.join("; ") : "failed steps not yet available from the jobs API";
               diagnostic = `${context.job}: cancelling the pull request run after a code quality failure; failed steps: ${failures.length ? failures.join("; ") : "not yet available from the jobs API"}`;
             } catch {
@@ -3883,7 +3891,7 @@ jobs:
             } catch {
               core.error(`${context.job}: cancellation step summary could not be written`);
             }
-            if (ownJob && (ownJob.steps || []).some((step) => step.conclusion === "failure")) {
+            if (ownJob && (failedHere || ownJob.steps?.some(failed))) {
               try {
                 await github.rest.actions.createWorkflowDispatch({
                   ...context.repo,
@@ -4247,6 +4255,7 @@ jobs:
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REDIS_URL: redis://127.0.0.1:6379
+          STELLA_ISOLATED_POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection_encoded || '' }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
@@ -5020,17 +5029,11 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-      - name: Startup gate base
-        timeout-minutes: 5
-        env:
-          BASE_SHA: ${{ needs.ci-plan.outputs.target_base_sha }}
-        run: bash scripts/startup-gate-base.sh
-
       - name: Startup bundle gates
         # Blocking: the startup graph's gates (scripts/bundle-startup-gates.ts).
         run: |
           bun scripts/bundle-baseline.ts --self-test
-          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check --base-dir "$STARTUP_GATE_BASE_DIR"
+          bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
 
       - name: Bundle duplicate content guard
         # Blocking: a chunk that repeats a large block of identical content
@@ -6161,6 +6164,8 @@ jobs:
     steps:
       - name: Cancel merge group after failure in this job
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
+        env:
+          JOB_STATUS: ${{ job.status }}
         with:
           retries: 0
           script: *merge_group_cancel_script
@@ -6660,7 +6665,10 @@ jobs:
         id: wasm-check
         env:
           SCAN_ENGINE_WASM_OUT_DIR: ${{ runner.temp }}/scan-engine-wasm
-        run: bash packages/scan-engine/scripts/test-wasm-offline.sh
+          HEIC_DECODER_WASM_OUT_DIR: ${{ runner.temp }}/heic-decoder-wasm
+        run: |
+          bash packages/scan-engine/scripts/test-wasm-offline.sh
+          bash packages/heic-decoder/scripts/test-wasm-offline.sh
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'
@@ -6677,6 +6685,7 @@ jobs:
           name: scan-engine-wasm
           path: |
             ${{ runner.temp }}/scan-engine-wasm/
+            ${{ runner.temp }}/heic-decoder-wasm/
             ${{ runner.temp }}/scan-engine-wasm.sha256
             ${{ runner.temp }}/scan-engine-wasm.toolchain
           retention-days: 7
@@ -6693,10 +6702,10 @@ jobs:
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: bash .github/actions/cargo-deny/fetch.sh packages/scan-engine/Cargo.toml
+        run: for p in scan-engine heic-decoder; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
 
       - name: License audit
-        run: cargo deny --offline --manifest-path packages/scan-engine/Cargo.toml check --config packages/scan-engine/deny.toml --hide-inclusion-graph bans licenses sources
+        run: for p in scan-engine heic-decoder; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
 
       - name: Save Rust build cache
         if: success()

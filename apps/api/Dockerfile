@@ -53,7 +53,9 @@ ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
 # Generator inputs outside the pruned API workspace graph.
 COPY --from=install-inputs /app/apps/web/src/fonts.css /app/apps/web/src/fonts.css
-COPY --from=install-inputs /app/apps/web/src/i18n/langs/ /app/apps/web/src/i18n/langs/
+COPY --from=install-inputs /app/apps/web/src/i18n/namespaces/ /app/apps/web/src/i18n/namespaces/
+COPY --from=install-inputs /app/apps/web/src/i18n/namespaces.json /app/apps/web/src/i18n/namespaces.json
+COPY --from=install-inputs /app/packages/scripts/src/i18n-namespaces.ts /app/packages/scripts/src/i18n-namespaces.ts
 COPY --from=install-inputs /app/apps/web/public/fonts/ /app/apps/web/public/fonts/
 COPY --from=install-inputs /app/scripts/generated-artifacts.ts /app/scripts/generated-artifacts.ts
 RUN bun apps/api/scripts/generate-mcp-app-contracts.ts && bun packages/mcp-apps/scripts/build-mcp-apps.ts
@@ -354,6 +356,8 @@ RUN mkdir -p /app/bundles/runtime/workers && \
       /app/bundles/runtime/workers/pptx_parser_bg.wasm && \
     cp node_modules/@embedpdf/pdfium/dist/pdfium.wasm \
       /app/bundles/runtime/workers/pdfium.wasm && \
+    cp packages/heic-decoder/generated/heic_decoder_bg.wasm \
+      /app/bundles/runtime/workers/heic_decoder_bg.wasm && \
     cp apps/api/src/lib/ocr-local/latin-v5-dict.txt \
       /app/bundles/runtime/workers/latin-v5-dict.txt
 # Local OCR runtime assets: the pinned ONNX models, plus the onnxruntime

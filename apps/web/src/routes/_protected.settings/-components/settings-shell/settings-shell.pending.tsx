@@ -20,6 +20,7 @@ import {
   ListOrderedIcon,
   MonitorIcon,
   PlugIcon,
+  ShieldIcon,
   UserIcon,
   UsersIcon,
   WrenchIcon,
@@ -55,6 +56,11 @@ export const ACCOUNT_SECTION = {
       to: "/settings/account/profile",
       labelKey: "common.profile",
       icon: UserIcon,
+    },
+    {
+      to: "/settings/account/security",
+      labelKey: "settings.account.security.title",
+      icon: ShieldIcon,
     },
     {
       to: "/settings/account/desktop",

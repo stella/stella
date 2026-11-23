@@ -16,6 +16,7 @@ type ChatComposerQueueButtonProps = {
   submitDraft: ChatComposerSubmitHandler;
   /** The draft can be sent: it holds something and sending is allowed. */
   canSend: boolean;
+  sendDisabledReason: string | undefined;
 };
 
 /**
@@ -27,6 +28,7 @@ export const ChatComposerQueueButton = ({
   offered,
   submitDraft,
   canSend,
+  sendDisabledReason,
 }: ChatComposerQueueButtonProps) => {
   const t = useTranslations();
   if (offered !== true) {
@@ -37,6 +39,7 @@ export const ChatComposerQueueButton = ({
     <Button
       aria-label={label}
       disabled={!canSend}
+      disabledReason={sendDisabledReason}
       onClick={() => {
         detached(
           submitDraft(CHAT_MEMBER_SEND_ACTION.queue),

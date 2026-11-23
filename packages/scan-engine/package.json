@@ -39,7 +39,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist target .cache .turbo node_modules",
-    "build": "tsdown",
+    "build": "bun --bun tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun run test:bun && cargo test",
     "test:bun": "bun test src",

@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { DocxLoadingSheetPending } from "@/components/docx/docx-loading-shell";
+import { DocxLoadingSheetPending } from "@/components/docx/docx-loading-sheet";
 import { framePendingView } from "@/routes/-pending-view.logic";
 
 export function VerifyShell({ children }: { children?: ReactNode }) {

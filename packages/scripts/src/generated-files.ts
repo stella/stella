@@ -35,7 +35,22 @@ export const CI_GENERATED_OUTPUTS = {
     "packages/cli/src/generated/route-map.ts",
     "packages/cli/src/generated/tool-annotations.ts",
   ],
-  webMessages: ["apps/web/src/i18n/langs/messages.gen.ts"],
+  webMessages: [
+    "apps/web/src/i18n/langs/messages.gen.ts",
+    "apps/web/src/i18n/langs/ar.json",
+    "apps/web/src/i18n/langs/cs.json",
+    "apps/web/src/i18n/langs/de.json",
+    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/langs/es.json",
+    "apps/web/src/i18n/langs/et.json",
+    "apps/web/src/i18n/langs/fr.json",
+    "apps/web/src/i18n/langs/hu.json",
+    "apps/web/src/i18n/langs/lt.json",
+    "apps/web/src/i18n/langs/lv.json",
+    "apps/web/src/i18n/langs/pl.json",
+    "apps/web/src/i18n/langs/pt-BR.json",
+    "apps/web/src/i18n/langs/sk.json",
+  ],
   routeTree: [
     "apps/web/src/routeTree.gen.ts",
     "apps/web/src/route-templates.gen.ts",
@@ -77,10 +92,10 @@ export const INSTALL_OWNED_IGNORED_GENERATED_OUTPUTS = [
 ] as const;
 
 export const CI_GENERATION_COMMANDS = [
+  ["bun", "--cwd=apps/web", "run", "typegen"],
   ["bun", "--cwd=packages/cli", "run", "codegen:runtime"],
   ["bun", "apps/api/scripts/generate-capability-runtime.ts"],
   ["bun", "scripts/prepare-mcp-apps.ts"],
-  ["bun", "--cwd=apps/web", "run", "typegen"],
   ["bun", "--cwd=apps/web", "run", "generate:route-tree"],
   [
     "bun",

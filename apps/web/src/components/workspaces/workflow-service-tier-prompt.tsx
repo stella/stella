@@ -85,7 +85,7 @@ export const WorkflowServiceTierPromptProvider = ({
             </AlertDialogTitle>
             <AlertDialogDescription>
               {t("workspaces.workflow.serviceTierPrompt.description", {
-                count: String(pendingPrompt?.entityCount ?? 0),
+                count: pendingPrompt?.entityCount ?? 0,
               })}
             </AlertDialogDescription>
           </AlertDialogHeader>

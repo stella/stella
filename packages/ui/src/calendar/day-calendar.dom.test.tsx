@@ -596,6 +596,81 @@ describe("DayCalendar", () => {
     await cleanup();
   });
 
+  test("a pending column shimmers at each known range inside the day, and takes no selection", async () => {
+    const pendingColumn = {
+      id: "activity",
+      label: "Activity",
+      placeholders: [
+        { endMs: at(8, 40), startMs: at(8, 5) },
+        { endMs: at(13, 0), startMs: at(11, 0) },
+        // Outside the grid's hours: nothing to draw.
+        { endMs: at(6, 30), startMs: at(6, 0) },
+      ],
+      type: "pending",
+    } as const satisfies DayCalendarColumn;
+    const { cleanup, container, selected } = await renderCalendar({
+      columns: [pendingColumn, entriesColumn],
+    });
+    const pending = container.querySelector<HTMLElement>(
+      '[data-column-id="activity"]',
+    );
+    const surface = surfaceOf(container, "activity");
+
+    expect(pending?.dataset["type"]).toBe("pending");
+    expect(surface.getAttribute("aria-busy")).toBe("true");
+    expect(surface.getAttribute("role")).toBeNull();
+    expect(
+      pending?.querySelector('[data-slot="day-calendar-block"]'),
+    ).toBeNull();
+    const shimmers = [
+      ...surface.querySelectorAll<HTMLElement>(
+        '[data-slot="day-calendar-pending-block"]',
+      ),
+    ].map((shimmer) => shimmer.parentElement?.style.insetBlockStart);
+    expect(shimmers).toEqual([
+      `${String(pixelsAt(5, 15))}px`,
+      `${String(pixelsAt(180, 15))}px`,
+    ]);
+    // The header and the grid's own chrome are known, so they render.
+    expect(pending?.textContent).toBe("");
+    expect(
+      container.querySelector('[data-slot="day-calendar-column-header"]')
+        ?.textContent,
+    ).toBe("Activity");
+    await pointer(surface, "pointerdown", pixelsAt(60, 15));
+    await pointer(surface, "pointerup", pixelsAt(120, 15));
+    expect(selected).toEqual([]);
+    await cleanup();
+  });
+
+  test("a one-line block keeps title and caption on one wrapping line, so a caption that does not fit wraps out of sight", async () => {
+    const oneLine = {
+      accessibleLabel: "Short call",
+      caption: "Draft description of the call",
+      endMs: at(14, 15),
+      id: "short",
+      kind: "segment",
+      startMs: at(14),
+      title: "Matter · 14:00–14:15 · 15 min",
+      tone: { type: "neutral" },
+    } as const;
+    const { cleanup, container } = await renderCalendar({
+      columns: [{ ...activityColumn, blocks: [oneLine] }],
+    });
+    const line = container.querySelector<HTMLElement>(
+      '[aria-label="Short call"] [data-slot="day-calendar-block-line"]',
+    );
+    const classes = line?.className.split(/\s+/u) ?? [];
+
+    expect(classes).toEqual(
+      expect.arrayContaining(["flex-wrap", "h-[1lh]", "overflow-hidden"]),
+    );
+    expect(
+      [...(line?.children ?? [])].map((child) => child.textContent),
+    ).toEqual([oneLine.title, oneLine.caption]);
+    await cleanup();
+  });
+
   test("a coarser granularity shrinks the grid and snaps drags to it", async () => {
     const { cleanup, container, rerender, selected } = await renderCalendar();
     const column = container.querySelector<HTMLElement>(

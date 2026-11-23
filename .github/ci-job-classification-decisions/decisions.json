@@ -1,0 +1,922 @@
+{
+  "candidate:.github/workflows/agent-sandbox-canary.yml/real-model-mcp-canary": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/ai-provider-canary.yml/provider-canary": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/ai-provider-canary.yml/require-provider-coverage": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/api-served-mcp.yml/journeys": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/api-test-memory.yml/measure": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/api-test-memory.yml/refresh": {
+    "kind": "priority",
+    "qualifier": "Publishes the refreshed API test memory profile as a signed-commit pull request."
+  },
+  "candidate:.github/workflows/audit-branch-protection.yml/audit-branch": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/audit-branch-protection.yml/audit-fork-approval": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/audit-branch-protection.yml/audit-tag": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/auth-md-spec-check.yml/auth-md-spec-check": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/autofix-generated-conflicts.yml/dispatch": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/autofix.yml/dependabot-bun-autofix": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/autofix.yml/regenerate-derived-files": {
+    "kind": "priority",
+    "qualifier": "regenerates and pushes scoped pull-request autofix commits (derived files, lockfile refresh, reviewed safe source fixes); no release publication, tag creation or deployment"
+  },
+  "candidate:.github/workflows/autofix.yml/regenerate-requested-files": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/autofix.yml/regenerate-scope": {
+    "kind": "ordinary",
+    "qualifier": "Plans pull-request autofix scope using settled-run evidence; no release publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/bot-refresh-auto-merge.yml/arm": {
+    "kind": "priority",
+    "qualifier": "Arms auto-merge on bot refresh pull requests with a contents-write app token."
+  },
+  "candidate:.github/workflows/build-api-image.yml/build": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/bundle-size-nightly.yml/report": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/cancel-failed-run.yml/cancel": {
+    "kind": "ordinary",
+    "qualifier": "Cancels a CI Checks run after its named job failed and ended; no publication or deployment."
+  },
+  "candidate:.github/workflows/cancel-stale-merge-groups.yml/cancel": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/case-law-cold-search-gate.yml/cold-search": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/case-law-search-probe.yml/probe": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/catalogue-upstream.yml/catalogue-upstream": {
+    "kind": "priority",
+    "qualifier": "Publishes refreshed catalogue upstream inputs as a signed-commit pull request."
+  },
+  "candidate:.github/workflows/ci-runner-loss-retry.yml/retry": {
+    "kind": "ordinary",
+    "qualifier": "Retries jobs after verified runner loss and reconciles pull-request metadata mirrors after completed CI attempts; no publication or deployment."
+  },
+  "candidate:.github/workflows/ci.yml/api-image-smoke": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/api-test-durations": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/ci-browser": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/ci-checks-generated": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/ci-checks-policy": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/ci-checks-rest": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/ci-plan": {
+    "kind": "support",
+    "qualifier": "Plans trust, scopes and prerequisites for merge-required checks."
+  },
+  "candidate:.github/workflows/ci.yml/ci-quick-checks": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/ci-result": {
+    "kind": "support",
+    "qualifier": "Aggregates planned check outcomes into the required merge verdict and records its evaluated jobs."
+  },
+  "candidate:.github/workflows/ci.yml/ci-tests": {
+    "kind": "support",
+    "qualifier": "Runs scoped package tests and reports quarantined outcomes for the merge verdict."
+  },
+  "candidate:.github/workflows/ci.yml/code-quality-api": {
+    "kind": "support",
+    "qualifier": "Runs API code-quality checks required by the merge verdict."
+  },
+  "candidate:.github/workflows/ci.yml/code-quality-api-cancel": {
+    "kind": "ordinary",
+    "qualifier": "Cancels same-repository pull-request runs after API code-quality failure; no publication or deployment."
+  },
+  "candidate:.github/workflows/ci.yml/code-quality-web-rest": {
+    "kind": "support",
+    "qualifier": "Runs web and remaining code-quality checks required by the merge verdict."
+  },
+  "candidate:.github/workflows/ci.yml/code-quality-web-rest-cancel": {
+    "kind": "ordinary",
+    "qualifier": "Cancels same-repository pull-request runs after web or remaining code-quality failure; no publication or deployment."
+  },
+  "candidate:.github/workflows/ci.yml/database-migrations-apply-fresh": {
+    "kind": "ordinary",
+    "qualifier": "Applies migrations to disposable databases and verifies schema, history and API startup; no publication or deployment."
+  },
+  "candidate:.github/workflows/ci.yml/database-migrations-check": {
+    "kind": "ordinary",
+    "qualifier": "Checks migration safety rules and coverage; no publication or deployment."
+  },
+  "candidate:.github/workflows/ci.yml/dependency-audit": {
+    "kind": "ordinary",
+    "qualifier": "Audits changed dependency resolutions and lockfile policy; no publication or deployment."
+  },
+  "candidate:.github/workflows/ci.yml/dependency-malware": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/desktop-rust-lint": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/desktop-rust-tests": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/desktop-windows-dry-run": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/docker-checks": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/e2e-landing": {
+    "kind": "support",
+    "qualifier": "Builds and tests affected landing pages at every CI depth, subject to trust and the pull-request heavy gate."
+  },
+  "candidate:.github/workflows/ci.yml/e2e-production-shard": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/e2e-report": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/e2e-vite-canary": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/generated-sources": {
+    "kind": "support",
+    "qualifier": "Produces generated-source artifacts required by merge-gating package checks."
+  },
+  "candidate:.github/workflows/ci.yml/landing-build": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/legal-atlas-image": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/marketing-screenshots": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/marketing-screenshots-cancel": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/migration-upgrade-rehearsal": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/mobile-build": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/postgres-service-suites": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/query-perf": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/release-typecheck": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/route-smoke": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/scan-engine-wasm-drift": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/service-suites": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/stack-redaction-browsers": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/web-build": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/web-image-smoke": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/ci.yml/windows-scripts": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/cla.yml/verify-signatures": {
+    "kind": "priority",
+    "qualifier": "Records contributor licence agreement signatures with a contents-write app token."
+  },
+  "candidate:.github/workflows/codeql.yml/analyze": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/converter-tests.yml/converter-tests": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/dated-waiver-healing.yml/heal": {
+    "kind": "priority",
+    "qualifier": "Publishes dated-waiver fixes with a contents-write app token."
+  },
+  "candidate:.github/workflows/dependency-audit.yml/audit": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/dependency-audit.yml/cargo-advisories": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/dependency-audit.yml/remediate": {
+    "kind": "priority",
+    "qualifier": "Publishes dependency audit remediation as a signed-commit pull request."
+  },
+  "candidate:.github/workflows/dependency-malware-nightly.yml/dependency-malware-scan": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/dependency-malware-nightly.yml/report-failure": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/deploy-landing.yml/build": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-landing.yml/deploy": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-landing.yml/scope": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-outlook-addin.yml/build": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-outlook-addin.yml/deploy-production": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-outlook-addin.yml/deploy-staging": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-outlook-addin.yml/scope": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-staging.yml/build-api": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-staging.yml/build-web": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-staging.yml/mock-model-journeys": {
+    "kind": "support",
+    "qualifier": "Runs the candidate commit application journeys against a local stack with a mock model; promotion records staging verification only after it succeeds."
+  },
+  "candidate:.github/workflows/deploy-staging.yml/promote-staging": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-staging.yml/rc-manifest": {
+    "kind": "priority",
+    "qualifier": "Reads the release candidate's draft manifest for staging promotion; contents write only makes the draft visible and nothing is published."
+  },
+  "candidate:.github/workflows/deploy-staging.yml/staging-health": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/deploy-staging.yml/staging-wake": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/disarm-auto-merge.yml/disarm": {
+    "kind": "priority",
+    "qualifier": "Disarms auto-merge on pull requests; holds contents write."
+  },
+  "candidate:.github/workflows/flaky-test-quarantine.yml/expiry": {
+    "kind": "ordinary",
+    "qualifier": "Checks quarantine expiry on scheduled or manual default-branch runs; no publication or deployment."
+  },
+  "candidate:.github/workflows/flaky-test-quarantine.yml/propose": {
+    "kind": "priority",
+    "qualifier": "Publishes flaky-test quarantine proposals as a signed-commit pull request."
+  },
+  "candidate:.github/workflows/generated-conflicts-publish.yml/publish": {
+    "kind": "priority",
+    "qualifier": "Publishes generated-only conflict resolutions to pull-request branches."
+  },
+  "candidate:.github/workflows/generated-conflicts-resolve.yml/resolve": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/journey-canary.yml/journeys": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/label-sync.yml/label-sync": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/local-run-e2e.yml/local-runs": {
+    "kind": "ordinary",
+    "qualifier": "Runs the browser suite for chats on the member's computer on pull requests and main with read-only repository and package tokens; no registry secret, publication or deployment."
+  },
+  "candidate:.github/workflows/main-heavy.yml/status": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/main-heavy.yml/suites": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/main-heavy.yml/validate": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/main-pr-depth.yml/status": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/main-pr-depth.yml/suites": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/manual-checks.yml/check": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/marketing-screenshots-capture.yml/capture": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/marketing-screenshots-publish.yml/publish": {
+    "kind": "priority",
+    "qualifier": "Publishes refreshed marketing screenshots as signed commits."
+  },
+  "candidate:.github/workflows/marketing-screenshots-update.yml/update": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/marketing-screenshots.yml/check": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/mcp-canary.yml/mcp-canary": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/merge-group-hold.yml/dequeue-held-pull-request": {
+    "kind": "ordinary",
+    "qualifier": "Removes held pull requests from the merge queue on label and reopen events using a pull-request write token."
+  },
+  "candidate:.github/workflows/mirror-ci-service-images.yml/mirror": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/mobile-fingerprint-check.yml/label": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/mobile-release-plan.yml/release-preview": {
+    "kind": "priority",
+    "qualifier": "Starts the preview TestFlight build or signed update on main after a merge; dispatch only, no secrets."
+  },
+  "candidate:.github/workflows/model-catalog-check.yml/model-catalog-check": {
+    "kind": "priority",
+    "qualifier": "Publishes refreshed model catalog snapshots as a signed-commit pull request."
+  },
+  "candidate:.github/workflows/network-baseline-record.yml/build": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/network-baseline-record.yml/record": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/network-baseline-request.yml/request": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-property-test.yml/chat-mutation-matrix": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-property-test.yml/provider-request-combinations": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-property-test.yml/provider-request-three-wise": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-property-test.yml/sanctions-properties": {
+    "kind": "ordinary",
+    "qualifier": "Property tests; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-property-test.yml/tanstack-drift": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-property-test.yml/turn-outcome-combinations": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/full-test": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/full-test-plan": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/marketing-screenshots": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/migration-exact-base-upgrade": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/postgres-suites": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/sanctions-real-editions": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/script-test-declarations": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/smoke-suite": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/valkey-suites": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/web-build-profile": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-test.yml/workspace-replay": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-typecheck.yml/cumulative-type-cost": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-typecheck.yml/fresh-web-sources": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/nightly-typecheck.yml/full-typecheck": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/playbook-clause-eval.yml/playbook-clause-eval": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/playbook-journey.yml/playbook-journey": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/pr-lint.yml/pr-lint": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/provenance-nightly.yml/provenance-update": {
+    "kind": "priority",
+    "qualifier": "Publishes provenance updates through the shared provenance workflow."
+  },
+  "candidate:.github/workflows/provider-request-schemas-check.yml/provider-request-schemas-check": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/publish-mobile-update.yml/publish": {
+    "kind": "priority",
+    "qualifier": "Publication of a signed mobile update from main, dispatched by hand or, for preview, by the release plan after a merge."
+  },
+  "candidate:.github/workflows/publish-npm.yml/cli-native-build": {
+    "kind": "support",
+    "qualifier": "Prepares standalone CLI release artifacts before publication."
+  },
+  "candidate:.github/workflows/publish-npm.yml/cli-native-sign": {
+    "kind": "support",
+    "qualifier": "Applies platform signing and verification to built standalone CLI artifacts before publication."
+  },
+  "candidate:.github/workflows/publish-npm.yml/cli-native-upload": {
+    "kind": "priority",
+    "qualifier": "Publishes signed standalone CLI binaries and checksums on the existing production release after npm publication succeeds."
+  },
+  "candidate:.github/workflows/publish-npm.yml/pack": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-agent-input": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-ai-catalog": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-anonymize-chat": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-auth-model": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-business-registries": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-calculations": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-chat": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-cli": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-conditions": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-country-codes": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-docx-utils": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-fetch": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-html": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-mcp-kit": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-money": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-scan-engine": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-ssr-kit": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-ssr-testkit": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-stable-stringify": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-start-runtime": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-summary": {
+    "kind": "ordinary",
+    "qualifier": "Reports package publishing outcomes with read-only permissions; performs no publishing or release writes."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-template-conditions": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-text-normalize": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-trigger": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-ui": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-workspace-model": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/release-workspace-ui": {
+    "kind": "priority",
+    "qualifier": "Publishes one selected npm package through the pinned reusable release workflow after its selected dependencies succeed."
+  },
+  "candidate:.github/workflows/publish-npm.yml/verify-npm": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/publish-product-media.yml/publish": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/quarantine-prune.yml/prune": {
+    "kind": "priority",
+    "qualifier": "Publishes pruned quarantine exclusions as a signed-commit pull request."
+  },
+  "candidate:.github/workflows/query-perf.yml/query-perf": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/railway-smoke.yml/smoke": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/railway-template-source.yml/drift": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/refresh-cldr-exemplars.yml/refresh-exemplars": {
+    "kind": "ordinary",
+    "qualifier": "Read-only validation and conversion of pinned public CLDR inputs; uploads a CI evidence artifact without publication, deployment, secrets or repository writes."
+  },
+  "candidate:.github/workflows/release-desktop.yml/build": {
+    "kind": "priority",
+    "qualifier": "Builds and publishes desktop installers and updater artifacts with platform signing and Windows signature and timestamp verification."
+  },
+  "candidate:.github/workflows/release-desktop.yml/carry-forward": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/release-desktop.yml/manifest": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/release-desktop.yml/promote-latest": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/release-desktop.yml/release-complete": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/release-desktop.yml/resolve": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/release-desktop.yml/verify-production": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/release-health.yml/window": {
+    "kind": "priority",
+    "qualifier": "Records the release health verdict on the release."
+  },
+  "candidate:.github/workflows/release-mobile-ios.yml/testflight": {
+    "kind": "priority",
+    "qualifier": "Publication to TestFlight from main, dispatched by hand or, for preview, by the release plan after a merge."
+  },
+  "candidate:.github/workflows/release-pr.yml/version": {
+    "kind": "priority",
+    "qualifier": "Publishes the version packages pull request."
+  },
+  "candidate:.github/workflows/release-proof.yml/dispatch": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/release-rehearsal.yml/rehearse": {
+    "kind": "support",
+    "qualifier": "Runs the read-only release gates on trusted main code before release day."
+  },
+  "candidate:.github/workflows/release-tag.yml/finalize": {
+    "kind": "priority",
+    "qualifier": "Tags the final release on the exact release-candidate commit once its proof is green and a person set the production gate status; creates the stable tag."
+  },
+  "candidate:.github/workflows/release-tag.yml/finalize-eligibility": {
+    "kind": "support",
+    "qualifier": "Evidence: decides from the completed proof run and existing tags whether finalization may run; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/release-tag.yml/land-release-pr": {
+    "kind": "priority",
+    "qualifier": "Enables auto-merge for the release pull request at the finalized tag commit using a repository-scoped App token."
+  },
+  "candidate:.github/workflows/release-tag.yml/marketing-freshness": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/release-tag.yml/tag": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/release.yml/alias-manifest": {
+    "kind": "priority",
+    "qualifier": "Points the final release image tags and manifest at the proven release-candidate digests, without rebuilding."
+  },
+  "candidate:.github/workflows/release.yml/build": {
+    "kind": "priority",
+    "qualifier": "Builds, pushes and attests API image digests for the resolved release."
+  },
+  "candidate:.github/workflows/release.yml/dispatch-release-health": {
+    "kind": "support",
+    "qualifier": "Dispatches health evaluation after successful stable production promotion to supply evidence for the next release gate."
+  },
+  "candidate:.github/workflows/release.yml/manifest": {
+    "kind": "priority",
+    "qualifier": "Publishes immutable release image tags and creates the draft GitHub release with its artifacts."
+  },
+  "candidate:.github/workflows/release.yml/prepare-production-web-image": {
+    "kind": "priority",
+    "qualifier": "Builds, publishes and attests the production web image for a release candidate, once, from the candidate commit."
+  },
+  "candidate:.github/workflows/release.yml/prepare-web-image": {
+    "kind": "priority",
+    "qualifier": "Reuses a verified web receipt or builds, publishes and attests the resolved release web image."
+  },
+  "candidate:.github/workflows/release.yml/promote-production": {
+    "kind": "priority",
+    "qualifier": "Dispatches the production promotion of the proven digests at most once and verifies production serves the release commit."
+  },
+  "candidate:.github/workflows/release.yml/promote-staging": {
+    "kind": "priority",
+    "qualifier": "Deploys release-candidate tags to staging and publishes the GitHub prerelease."
+  },
+  "candidate:.github/workflows/release.yml/publish-chrome-extension": {
+    "kind": "priority",
+    "qualifier": "Submits the published stable release's extension package to the Chrome Web Store for review."
+  },
+  "candidate:.github/workflows/release.yml/publish-latest": {
+    "kind": "priority",
+    "qualifier": "Advances the latest image tags to the promoted release digests."
+  },
+  "candidate:.github/workflows/release.yml/publish-release": {
+    "kind": "priority",
+    "qualifier": "Publishes the draft GitHub release after production serves the release commit."
+  },
+  "candidate:.github/workflows/render-census.yml/render-census": {
+    "kind": "ordinary",
+    "qualifier": "Records synthetic render measurements on explicit invocation; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/route-scale-nightly.yml/measure": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/safe-chain-cache.yml/warm": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/scheduled-run-alerts.yml/notify": {
+    "kind": "ordinary",
+    "qualifier": "Notifies failures of watched workflows, including release health and quarantine maintenance; no release publication or deployment."
+  },
+  "candidate:.github/workflows/scorecard.yml/scorecard": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/staging-response-policy.yml/check": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/sync-branch-protection.yml/sync": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/type-cost-measurement.yml/measure": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/type-cost-measurement.yml/prepare": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/typecheck-base.yml/record": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/user-journeys.yml/local-stack": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/user-journeys.yml/scheduled": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/user-journeys.yml/staging": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "candidate:.github/workflows/user-journeys.yml/staging-commit": {
+    "kind": "support",
+    "qualifier": "Prerequisites follow the workflow's execution conditions."
+  },
+  "candidate:.github/workflows/visual-preview.yml/preview": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "supplier13:.github/workflows/audit-branch-protection.yml/audit": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "supplier13:.github/workflows/changeset-release-pr.yml/version": {
+    "kind": "priority",
+    "qualifier": "Publishes the shared changeset release pull request."
+  },
+  "supplier13:.github/workflows/label-sync.yml/sync": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "supplier13:.github/workflows/npm-independent-release.yml/release": {
+    "kind": "priority",
+    "qualifier": "Publication, tag creation, or deployment follows the workflow's execution conditions."
+  },
+  "supplier13:.github/workflows/pr-lint.yml/pr-lint": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
+  "supplier13:.github/workflows/provenance-update.yml/update": {
+    "kind": "priority",
+    "qualifier": "Publishes provenance updates with contents write."
+  }
+}

@@ -1377,8 +1377,10 @@ test("a failed page-host save becomes clean after reverting to freshly confirmed
     await settleLifecycle();
     expect(hasUnsavedWork()).toBe(false);
     expect(
-      mounted.view.getByRole("button", { name: messages.common.save }),
-    ).toHaveProperty("disabled", true);
+      mounted.view
+        .getByRole("button", { name: messages.common.save })
+        .getAttribute("aria-disabled"),
+    ).toBe("true");
     const unload = new Event("beforeunload", { cancelable: true });
     window.dispatchEvent(unload);
     expect(unload.defaultPrevented).toBe(false);

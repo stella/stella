@@ -197,6 +197,7 @@ const MatterMemories = ({ canManage }: MatterMemoriesProps) => {
         {hasNextMatterPage ? (
           <Button
             disabled={isFetchingNextMatterPage}
+            disabledReason={commonT("loading")}
             onClick={() => {
               detached(
                 fetchNextMatterPage(),
@@ -374,6 +375,7 @@ const MemoryListBody = ({
         <Button
           className="self-center"
           disabled={isFetchingNextPage}
+          disabledReason={commonT("loading")}
           onClick={() => {
             detached(fetchNextPage(), "memory-panel.fetch-next-page");
           }}

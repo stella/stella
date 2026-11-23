@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 
+import { DocxAuthoringError } from "@stll/docx-authoring/document";
 import type {
   ApplyFolioAIEditsToBufferResult,
   FolioAIEditOperation,
 } from "@stll/folio-core/server";
 
-import { DocxAuthoringError } from "@/api/lib/docx-authoring/document";
 import { applyFolioAIEditsToScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 

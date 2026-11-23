@@ -1,5 +1,0 @@
-{
-  "metric": "api-lib-top-level-entries",
-  "delta": 1,
-  "reason": "apps/api/src/lib/dictation holds what both the dictation request and the scheduler need about ElevenLabs: reading the deployment, deleting one kept transcript, and the owner-only store of kept transcript ids. The scheduler task cannot import from handlers/dictation, so these leave the handler tree for one lib directory of their own."
-}

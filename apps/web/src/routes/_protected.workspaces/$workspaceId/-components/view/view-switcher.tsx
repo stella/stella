@@ -206,6 +206,7 @@ export const ViewSwitcher = ({
         render={
           <Button
             disabled={createView.isPending}
+            disabledReason={t("common.creating")}
             size="icon-xs"
             variant="ghost"
           />
@@ -274,6 +275,7 @@ export const ViewSwitcher = ({
         addControl={addControl}
         ariaLabel={t("workspaces.views.switcherLabel")}
         direction={direction}
+        overflowLabel={t("common.showMore")}
         editing={
           renamingViewId
             ? {

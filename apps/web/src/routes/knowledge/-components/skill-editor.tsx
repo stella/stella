@@ -115,6 +115,20 @@ type SkillEditorProps = {
   skillId: string;
 };
 
+const resolveSkillMetadataDraft = ({
+  draft,
+  next,
+  previous,
+}: {
+  draft: Parameters<typeof rebaseSkillMetadataDraft>[0]["draft"];
+  next: Parameters<typeof rebaseSkillMetadataDraft>[0]["next"];
+  previous:
+    Parameters<typeof rebaseSkillMetadataDraft>[0]["previous"] | undefined;
+}) =>
+  previous === undefined
+    ? skillMetadataDraft(next)
+    : rebaseSkillMetadataDraft({ draft, next, previous });
+
 export function SkillEditor({ skillId }: SkillEditorProps) {
   const t = useTranslations();
   const tSkills = useTranslations("knowledge.agentSkills");
@@ -195,21 +209,21 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // render: fields the user has not edited follow it, unsaved edits in the
   // others survive. The command defaults to the slugified name, so it reads as
   // /skill-name until the user edits or clears it; it persists on blur.
-  if (detail.data && detail.data !== lastDetailData) {
-    setLastDetailData(detail.data);
-    const rebased =
-      lastDetailData === undefined
-        ? skillMetadataDraft(detail.data)
-        : rebaseSkillMetadataDraft({
-            draft: { command, description, enabled, invocation, name },
-            next: detail.data,
-            previous: lastDetailData,
-          });
-    setName(rebased.name);
-    setDescription(rebased.description);
-    setEnabled(rebased.enabled);
-    setInvocation(rebased.invocation);
-    setCommand(rebased.command);
+  const nextDetailData = detail.data ?? lastDetailData;
+  if (nextDetailData !== lastDetailData) {
+    setLastDetailData(nextDetailData);
+    if (nextDetailData !== undefined) {
+      const rebased = resolveSkillMetadataDraft({
+        draft: { command, description, enabled, invocation, name },
+        next: nextDetailData,
+        previous: lastDetailData,
+      });
+      setName(rebased.name);
+      setDescription(rebased.description);
+      setEnabled(rebased.enabled);
+      setInvocation(rebased.invocation);
+      setCommand(rebased.command);
+    }
   }
 
   const resources: SkillResource[] = detail.data ? detail.data.resources : [];
@@ -735,6 +749,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 <Button
                   aria-label={tSkills("disableSkill")}
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="icon-sm"
                   variant="secondary"
@@ -744,6 +759,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
               ) : (
                 <Button
                   disabled={patchMetadata.isPending}
+                  disabledReason={t("common.saving")}
                   onClick={toggleEnabled}
                   size="sm"
                 >
@@ -1220,6 +1236,7 @@ function FolderCreateActions({
   onCreateFile,
   onCreateFolder,
 }: FolderCreateActionsProps) {
+  const tCommon = useTranslations("common");
   const tSkills = useTranslations("knowledge.agentSkills");
   const [newFileOpen, setNewFileOpen] = useState(false);
   const [filename, setFilename] = useState("");
@@ -1277,6 +1294,9 @@ function FolderCreateActions({
             />
             <Button
               disabled={createPending || filename.trim().length === 0}
+              disabledReason={
+                createPending ? tCommon("creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >
@@ -1313,6 +1333,7 @@ function FileRowActions({
       <Button
         aria-label={tSkills("renameFile")}
         disabled={renamePending}
+        disabledReason={t("common.saving")}
         onClick={() => onStartRename(entry)}
         size="icon-sm"
         variant="ghost"
@@ -1325,6 +1346,7 @@ function FileRowActions({
             <Button
               aria-label={tSkills("deleteFile")}
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               size="icon-sm"
               variant="ghost"
             >
@@ -1347,6 +1369,7 @@ function FileRowActions({
             </Button>
             <Button
               disabled={deletePending}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 setConfirmingDelete(false);
                 onDeleteFile(entry);
@@ -1458,6 +1481,9 @@ function RootAddMenu({
             />
             <Button
               disabled={createPending || path.trim().length === 0}
+              disabledReason={
+                createPending ? t("common.creating") : tSkills("enterFileName")
+              }
               onClick={submitNewFile}
               size="sm"
             >

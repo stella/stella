@@ -40,7 +40,7 @@ export default defineConfig({
     serviceWorkers: "block",
   },
   webServer: {
-    command: `vite --host 127.0.0.1 --port ${PORT} --strictPort`,
+    command: `bun --bun vite --host 127.0.0.1 --port ${PORT} --strictPort`,
     url: BASE_URL,
   },
 });

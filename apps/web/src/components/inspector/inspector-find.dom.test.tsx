@@ -226,6 +226,7 @@ const textDecision = (overrides: { documentAst?: DocumentAst } = {}) => {
     judges: [],
     language: "cs",
     sourceAttributionUrl: null,
+    bodySource: { textSource: "host" },
     ...overrides,
     textFields: {
       abstract: absent,

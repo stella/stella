@@ -290,6 +290,7 @@ const installFixtureNetwork = () => {
     capabilities: {},
     documentProcessingMode: "off",
     matterNumberPattern: "{year}/{number}",
+    documentNamePattern: null,
     matterNumberPadding: 3,
     matterNumberingEnabled: true,
     practiceJurisdictions: [],
@@ -323,6 +324,7 @@ const installFixtureNetwork = () => {
     billingReference: null,
     billingNarrativeLanguage: null,
     color: null,
+    documentNamingEnabled: false,
     status: "active",
     lastActivityAt: "2026-10-01T00:00:00.000Z",
     createdAt: "2026-10-01T00:00:00.000Z",
@@ -348,6 +350,10 @@ const installFixtureNetwork = () => {
       }
       if (pathname === "/api/auth/organization/get-active-member-role") {
         return Response.json({ role: "owner" });
+      }
+      // The settings navigation counts sign-ins waiting for review.
+      if (pathname === "/api/auth/session-sign-ins") {
+        return Response.json({ sessions: [] });
       }
       if (pathname === "/v1/me/professional-use") {
         if (professionalUseState.status === "required") {

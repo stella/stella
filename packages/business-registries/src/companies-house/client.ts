@@ -148,21 +148,28 @@ const isCompaniesHouseRawOfficersResponse = (
   (value["total_results"] === undefined ||
     typeof value["total_results"] === "number");
 
+type UpstreamMessageRead =
+  | { readonly kind: "message"; readonly text: string }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable" };
+
 const readUpstreamMessage = async (
   response: Response,
-): Promise<string | null> => {
+): Promise<UpstreamMessageRead> => {
   if (!response.headers.get("content-type")?.includes("application/json")) {
     try {
       const body = await response.text();
-      return body.length > 0 ? body.slice(0, 200) : null;
+      return body.length > 0
+        ? { kind: "message", text: body.slice(0, 200) }
+        : { kind: "absent" };
     } catch {
-      return null;
+      return { kind: "unreadable" };
     }
   }
   try {
     const body: unknown = await response.json();
     if (!isRecord(body)) {
-      return null;
+      return { kind: "absent" };
     }
     // Companies House error envelope: { errors: [{ error, type }], ... }.
     // Surface the first `error` string if present, else fall back to
@@ -171,18 +178,18 @@ const readUpstreamMessage = async (
     if (Array.isArray(errors)) {
       const first: unknown = errors.at(0);
       if (isRecord(first) && typeof first["error"] === "string") {
-        return first["error"];
+        return { kind: "message", text: first["error"] };
       }
     }
     if (typeof body["error"] === "string") {
-      return body["error"];
+      return { kind: "message", text: body["error"] };
     }
     if (typeof body["message"] === "string") {
-      return body["message"];
+      return { kind: "message", text: body["message"] };
     }
-    return null;
+    return { kind: "absent" };
   } catch {
-    return null;
+    return { kind: "unreadable" };
   }
 };
 
@@ -225,8 +232,11 @@ const companiesHouseGet = async <T>(
         return null;
       }
 
+      const upstream = await readUpstreamMessage(response);
+      const upstreamMessage =
+        upstream.kind === "message" ? upstream.text : null;
+
       if (response.status === 401 || response.status === 403) {
-        const upstreamMessage = await readUpstreamMessage(response);
         throw new CompaniesHouseAuthError(
           `Companies House rejected the API key (${response.status}). Verify COMPANIES_HOUSE_API_KEY is set to a live key from https://developer.company-information.service.gov.uk.${
             upstreamMessage ? ` Upstream: ${upstreamMessage}` : ""
@@ -234,7 +244,6 @@ const companiesHouseGet = async <T>(
         );
       }
 
-      const upstreamMessage = await readUpstreamMessage(response);
       throw new CompaniesHouseAPIError({
         message: `Companies House ${response.status}: ${upstreamMessage ?? response.statusText}`,
         httpStatus: response.status,

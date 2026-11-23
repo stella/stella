@@ -127,6 +127,7 @@ export const OrganizationDataBoxesCard = () => {
                   })}
                   className="min-h-11"
                   disabled={pending}
+                  disabledReason={t("common.saving")}
                   onClick={() => remove.mutate(boxId)}
                   size="sm"
                   tooltip={t("settings.organization.dataBoxes.remove", {
@@ -169,7 +170,11 @@ export const OrganizationDataBoxesCard = () => {
             placeholder={t("contacts.communication.dataBoxPlaceholder")}
             value={draft}
           />
-          <Button disabled={pending} type="submit">
+          <Button
+            disabled={pending}
+            disabledReason={t("common.saving")}
+            type="submit"
+          >
             <PlusIcon />
             {t("common.add")}
           </Button>

@@ -65,6 +65,16 @@ export const OrganizationSlugCard = ({
     },
   });
 
+  const resolveSlugSaveDisabledReason = () => {
+    if (mutation.isPending) {
+      return t("common.saving");
+    }
+    if (value.length === 0) {
+      return t("settings.organization.enterSlug");
+    }
+    return t("common.noChangesToSave");
+  };
+
   return (
     <>
       <IdentifierPanel
@@ -157,6 +167,7 @@ export const OrganizationSlugCard = ({
             <DialogFooter>
               <Button
                 disabled={mutation.isPending}
+                disabledReason={t("common.saving")}
                 onClick={() => {
                   setOpen(false);
                 }}
@@ -171,6 +182,7 @@ export const OrganizationSlugCard = ({
                   (mode === "explicit" &&
                     (value === slug || value.length === 0))
                 }
+                disabledReason={resolveSlugSaveDisabledReason()}
                 loading={mutation.isPending}
                 type="submit"
               >

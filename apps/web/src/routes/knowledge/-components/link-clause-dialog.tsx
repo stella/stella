@@ -75,6 +75,37 @@ const SLOT_VALUE_PREFIX = "slot:";
 
 // ── Component ────────────────────────────────────────
 
+const resolveInitialSlotValue = ({
+  defaultSlotName,
+  discoveredSlots,
+  open,
+  previewLoaded,
+  reservedSlotNames,
+  takenSlots,
+}: {
+  defaultSlotName: string | undefined;
+  discoveredSlots: readonly string[];
+  open: boolean;
+  previewLoaded: boolean;
+  reservedSlotNames: readonly string[];
+  takenSlots: ReadonlySet<string>;
+}): string | null => {
+  if (!open) {
+    return null;
+  }
+  const reserved = new Set(reservedSlotNames);
+  if (defaultSlotName !== undefined && !reserved.has(defaultSlotName)) {
+    return SLOT_VALUE_PREFIX + defaultSlotName;
+  }
+  if (!previewLoaded) {
+    return null;
+  }
+  const firstUnfilled = discoveredSlots.find((slot) => !takenSlots.has(slot));
+  return firstUnfilled === undefined
+    ? SLOT_VALUE_NONE
+    : SLOT_VALUE_PREFIX + firstUnfilled;
+};
+
 export const LinkClauseDialog = ({
   open,
   onOpenChange,
@@ -160,19 +191,20 @@ export const LinkClauseDialog = ({
   // Until the user owns the slot draft, initialize it from the explicit
   // default or from the first async-discovered unclaimed slot. Once non-null,
   // query refetches cannot overwrite the user's selection.
-  if (open && slotValue === null) {
-    const reserved = new Set(reservedSlotNames);
-    if (defaultSlotName !== undefined && !reserved.has(defaultSlotName)) {
-      setSlotValue(SLOT_VALUE_PREFIX + defaultSlotName);
-    } else if (previewData !== undefined) {
-      const firstUnfilled = discoveredSlots.find(
-        (slot) => !takenSlots.has(slot),
-      );
-      setSlotValue(
-        firstUnfilled === undefined
-          ? SLOT_VALUE_NONE
-          : SLOT_VALUE_PREFIX + firstUnfilled,
-      );
+  const initialSlotValue = resolveInitialSlotValue({
+    defaultSlotName,
+    discoveredSlots,
+    open,
+    previewLoaded: previewData !== undefined,
+    reservedSlotNames,
+    takenSlots,
+  });
+  const slotInitKey = `${String(open)}\0${initialSlotValue ?? ""}`;
+  const [prevSlotInitKey, setPrevSlotInitKey] = useState<string | null>(null);
+  if (prevSlotInitKey !== slotInitKey) {
+    setPrevSlotInitKey(slotInitKey);
+    if (slotValue === null && initialSlotValue !== null) {
+      setSlotValue(initialSlotValue);
     }
   }
 
@@ -292,6 +324,26 @@ export const LinkClauseDialog = ({
     setSearch("");
     onOpenChange(false);
     onLinked();
+  };
+
+  const resolveLinkClauseDisabledReason = () => {
+    if (linking) {
+      return t("clauses.linking");
+    }
+    if (!selectedClauseId) {
+      return t("clauses.selectClauseToLink");
+    }
+    if (slotUnavailable) {
+      return t("clauses.chooseUnusedSlot");
+    }
+    if (
+      previewDataView.type === "error" ||
+      linksDataView.type === "error" ||
+      variantsResultView.type === "error"
+    ) {
+      return t("common.loadFailed");
+    }
+    return t("common.loading");
   };
 
   return (
@@ -526,6 +578,7 @@ export const LinkClauseDialog = ({
               !selectedClauseId ||
               slotUnavailable
             }
+            disabledReason={resolveLinkClauseDisabledReason()}
             onClick={() => {
               detached(handleLink(), "link-clause-dialog.link");
             }}

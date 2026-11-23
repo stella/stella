@@ -334,25 +334,25 @@ describe("new-device-login location", () => {
       'alt="Map showing the approximate sign-in location: Prague, Hlavni mesto Praha, Czechia"',
     );
     expect(text).toMatchInlineSnapshot(`
-      "NEW SIGN-IN DETECTED
+      "NEW SIGN-IN TO YOUR ACCOUNT
 
-      Your account was signed in to from a new device or location.
+      Someone just signed in to your account from a new device or location.
 
       Device: Firefox on Linux
 
-      IP address: 198.51.100.7
+      Location: Prague, Hlavni mesto Praha, Czechia (approximate)
 
-      Approximate location: Prague, Hlavni mesto Praha, Czechia
+      IP address: 198.51.100.7
 
       Time: Mar 6, 2026, 2:30 PM UTC
 
-      The location is estimated from the IP address and may be inaccurate.
+      If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.
 
-      Review sessions https://app.stella.test/account/sessions
+      Review signed-in devices https://app.stella.test/account/sessions
+
+      The button opens Settings › Security at this sign-in.
 
       ----------------------------------------
-
-      If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.
 
       stella | open source legal workspace"
     `);
@@ -364,22 +364,19 @@ describe("new-device-login location", () => {
 
     expect(imageSources(html)).toEqual([ICON_URL]);
     expect(text).toContain(
-      "Approximate location: Prague, Hlavni mesto Praha, Czechia",
-    );
-    expect(text).toContain(
-      "The location is estimated from the IP address and may be inaccurate.",
+      "Location: Prague, Hlavni mesto Praha, Czechia (approximate)",
     );
     expectNoIntlErrors();
   });
 
-  test("an unknown location leaves location, map and caveat out", () => {
+  test("an unknown location leaves location and map out", () => {
     const { html, text } = renderNotice({ type: "unknown" });
 
     expect(imageSources(html)).toEqual([ICON_URL]);
     expect(text).toMatchInlineSnapshot(`
-      "NEW SIGN-IN DETECTED
+      "NEW SIGN-IN TO YOUR ACCOUNT
 
-      Your account was signed in to from a new device or location.
+      Someone just signed in to your account from a new device or location.
 
       Device: Firefox on Linux
 
@@ -387,11 +384,13 @@ describe("new-device-login location", () => {
 
       Time: Mar 6, 2026, 2:30 PM UTC
 
-      Review sessions https://app.stella.test/account/sessions
+      If this was you, you don't need to do anything. If you don't recognize this sign-in, sign this device out.
+
+      Review signed-in devices https://app.stella.test/account/sessions
+
+      The button opens Settings › Security at this sign-in.
 
       ----------------------------------------
-
-      If this was you, no action is needed. If you don't recognize this activity, review your active sessions and revoke any you don't recognize.
 
       stella | open source legal workspace"
     `);
@@ -407,7 +406,7 @@ describe("new-device-login location", () => {
       map: null,
     });
 
-    expect(text).toContain("Approximate location: Vienna, Austria");
+    expect(text).toContain("Location: Vienna, Austria (approximate)");
   });
 
   test("a location with only a country names the country", () => {
@@ -419,7 +418,7 @@ describe("new-device-login location", () => {
       map: null,
     });
 
-    expect(text).toContain("Approximate location: Portugal");
+    expect(text).toContain("Location: Portugal (approximate)");
   });
 
   test("Arabic names the country in Arabic and separates with the Arabic comma", () => {

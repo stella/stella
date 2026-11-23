@@ -88,6 +88,7 @@ export const InvoicePdfDownloadButton = ({
     <Button
       aria-busy={download.isPending}
       disabled={download.isPending}
+      disabledReason={t("common.downloading")}
       loading={download.isPending}
       onClick={() => download.mutate()}
       size="sm"

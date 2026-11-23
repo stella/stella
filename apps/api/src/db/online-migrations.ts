@@ -9,6 +9,7 @@ import { BackfillHeldError } from "./backfill-runtime";
 import { DEFAULT_MIGRATION_TIMING, timed } from "./migration-timing";
 import type { MigrationTiming } from "./migration-timing";
 import {
+  analyzeTable,
   createIndexConcurrently,
   createOnlineTableGate,
   declaresOnlineBuild,
@@ -689,6 +690,13 @@ const walkOnlineMigrations = async ({
     const retirements = await retireReplacedIndexAt(connection, mode);
     if (retirements.type === "deferred") {
       return retirements;
+    }
+    const statistics = await analyzeExpressionIndexesWithoutStatistics({
+      connection,
+      mode,
+    });
+    if (statistics.type === "deferred") {
+      return statistics;
     }
   } else {
     await reportOnlineReplacements({
@@ -1478,6 +1486,160 @@ type EnsureOnlineIndexOptions = {
   reserveObserver: () => Promise<OnlineMigrationConnection>;
 };
 
+const READ_INDEX_HAS_EXPRESSIONS_SQL = `
+  SELECT
+    index_state.indexprs IS NOT NULL AS "hasExpressions",
+    pg_catalog.pg_relation_size(table_relation.oid) > 0 AS "hasPages"
+  FROM pg_catalog.pg_class index_relation
+  JOIN pg_catalog.pg_namespace index_namespace
+    ON index_namespace.oid = index_relation.relnamespace
+  JOIN pg_catalog.pg_index index_state
+    ON index_state.indexrelid = index_relation.oid
+  JOIN pg_catalog.pg_class table_relation
+    ON table_relation.oid = index_state.indrelid
+  WHERE index_namespace.nspname = $1
+    AND index_relation.relname = $2
+    AND table_relation.relname = $3
+`;
+
+/**
+ * PostgreSQL keeps statistics for an index expression only after its table
+ * is analyzed, and autovacuum can leave a large table unanalyzed for days.
+ * Until then the planner guesses the expression's selectivity and may scan
+ * the whole table instead of reading the new index, so a build analyzes it.
+ */
+const analyzeExpressionIndexTable = async (
+  session: GatedTableSession,
+  { name, tableName }: Pick<RequiredMigrationIndex, "name" | "tableName">,
+): Promise<void> => {
+  const row = (
+    await session.query(READ_INDEX_HAS_EXPRESSIONS_SQL, [
+      "public",
+      name,
+      tableName,
+    ])
+  ).at(0);
+  // An empty table teaches the planner nothing, and analyzing it would record
+  // it as empty until autovacuum next looks; its rows get analyzed later.
+  if (
+    isRecord(row) &&
+    row["hasExpressions"] === true &&
+    row["hasPages"] === true
+  ) {
+    await session.run(analyzeTable(tableName));
+  }
+};
+
+/**
+ * Smaller indexes are left to autovacuum: a scan of their table is cheap, and
+ * an empty table never gains statistics, so it would be analyzed every run.
+ */
+export const EXPRESSION_STATISTICS_MIN_INDEX_BYTES = 16 * 1024 * 1024;
+
+const READ_EXPRESSION_INDEXES_WITHOUT_STATISTICS_SQL = `
+  SELECT
+    index_relation.relname AS "name",
+    table_relation.relname AS "tableName"
+  FROM pg_catalog.pg_index index_state
+  JOIN pg_catalog.pg_class index_relation
+    ON index_relation.oid = index_state.indexrelid
+  JOIN pg_catalog.pg_class table_relation
+    ON table_relation.oid = index_state.indrelid
+  JOIN pg_catalog.pg_namespace table_namespace
+    ON table_namespace.oid = table_relation.relnamespace
+  WHERE table_namespace.nspname = 'public'
+    AND ($2::text IS NULL OR table_relation.relname = $2::text)
+    AND index_state.indexprs IS NOT NULL
+    AND index_state.indisvalid
+    AND index_state.indisready
+    AND pg_catalog.pg_relation_size(index_relation.oid) >= $1
+    AND NOT EXISTS (
+      SELECT 1
+      FROM pg_catalog.pg_stats expression_statistics
+      WHERE expression_statistics.schemaname = 'public'
+        AND expression_statistics.tablename = index_relation.relname
+    )
+  ORDER BY table_relation.relname, index_relation.relname
+`;
+
+type ExpressionIndexWithoutStatistics = { name: string; tableName: string };
+
+const parseExpressionIndexWithoutStatistics = (
+  row: unknown,
+): ExpressionIndexWithoutStatistics => {
+  if (
+    !isRecord(row) ||
+    typeof row["name"] !== "string" ||
+    typeof row["tableName"] !== "string"
+  ) {
+    return panic("Expression index statistics census has an invalid shape");
+  }
+  return { name: row["name"], tableName: row["tableName"] };
+};
+
+/**
+ * A query on an index expression plans from statistics PostgreSQL gathers
+ * only when the table is analyzed. An index built by any path (a schema
+ * migration, an earlier runner, a manual repair) may still lack them, and a
+ * release that first queries the expression would then scan the table. Each
+ * release's online phase analyzes those tables before its code serves.
+ */
+export const analyzeExpressionIndexesWithoutStatistics = async ({
+  connection,
+  mode,
+  minIndexBytes = EXPRESSION_STATISTICS_MIN_INDEX_BYTES,
+  tableName = null,
+}: {
+  connection: OnlineMigrationConnection;
+  mode: Pick<
+    Extract<OnlineMigrationMode, { operation: "repair" }>,
+    "indexGate" | "reserveObserver" | "timing"
+  >;
+  /** Tests lower the size floor and name their own table. */
+  minIndexBytes?: number;
+  tableName?: string | null;
+}): Promise<OnlineMigrationOutcome> => {
+  const missing = (
+    await connection.query(READ_EXPRESSION_INDEXES_WITHOUT_STATISTICS_SQL, [
+      minIndexBytes,
+      tableName,
+    ])
+  ).map(parseExpressionIndexWithoutStatistics);
+  const analyzed = new Set<string>();
+  for (const index of missing) {
+    // One ANALYZE gathers every expression index on its table.
+    if (analyzed.has(index.tableName)) {
+      continue;
+    }
+    analyzed.add(index.tableName);
+    const step = {
+      event: "migrate.online_step_duration",
+      kind: "index",
+      name: index.name,
+    } as const;
+    const outcome = await timed({
+      timing: mode.timing,
+      work: async () =>
+        await runGatedTableWork({
+          connection,
+          gate: mode.indexGate,
+          reserveObserver: mode.reserveObserver,
+          target: index,
+          kind: "index_repair",
+          work: async (session) => {
+            await session.run(analyzeTable(index.tableName));
+          },
+        }),
+      describe: ({ type }) => ({ ...step, outcome: type }),
+      failure: { ...step, outcome: "failed" },
+    });
+    if (outcome.type === "deferred") {
+      return outcome;
+    }
+  }
+  return COMPLETE;
+};
+
 export const ensureOnlineIndexValid = async ({
   connection,
   index,
@@ -1517,12 +1679,14 @@ export const ensureOnlineIndexValid = async ({
         // only once the copy is valid, so enforcement never lapses; a
         // DROP before CREATE would let a duplicate commit in between.
         await session.run(reindexIndexConcurrently(index));
+        await analyzeExpressionIndexTable(session, index);
         return;
       }
       if (!declaresOnlineBuild(index)) {
         panic(`Required migration index ${index.name} is missing`);
       }
       await session.run(createIndexConcurrently(index));
+      await analyzeExpressionIndexTable(session, index);
     },
   });
   if (outcome.type === "complete") {

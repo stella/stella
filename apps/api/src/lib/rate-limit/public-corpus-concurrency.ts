@@ -1,6 +1,7 @@
 import { env } from "@/api/env";
 import { toResponse } from "@/api/http/respond";
 import type { Middleware } from "@/api/http/route";
+import { SITEMAP_ADMISSION_WAIT_MS } from "@/api/lib/case-law/sitemap-shard-budget";
 import {
   type RateLimitClientAddressOptions,
   resolveRateLimitClientAddress,
@@ -35,14 +36,23 @@ type PublicCorpusConcurrencyOptions = {
 };
 
 // A page fires its search and facets at once; a short wait lets the second
-// follow the first instead of failing. Crawled sitemaps have no user waiting.
+// follow the first instead of failing. A sitemap file waits as long as the
+// web server's wait for it leaves room (`sitemap-shard-budget.ts`).
 const ADMISSION_WAIT_MS = {
   search: 2000,
   aggregate: 2000,
-  sitemap: 500,
+  sitemap: SITEMAP_ADMISSION_WAIT_MS,
 } as const satisfies Record<AdmissionClass, number>;
 
 const MAX_ADMISSION_WAITERS = 64;
+
+// Sitemap files wait seconds for their slot, so they may hold a quarter of
+// the queue at most; the rest stays free for pages' searches and facets.
+const MAX_ADMISSION_WAITERS_PER_CLASS = {
+  search: MAX_ADMISSION_WAITERS,
+  aggregate: MAX_ADMISSION_WAITERS,
+  sitemap: MAX_ADMISSION_WAITERS / 4,
+} as const satisfies Record<AdmissionClass, number>;
 
 // Requests without a resolvable address share one client key, so together
 // they hold at most one slot per class.
@@ -72,6 +82,8 @@ export const publicCorpusConcurrencyLimit = ({
     capacityOf,
     totalCapacity: policyLimits.totalConcurrency,
     maxWaiters: MAX_ADMISSION_WAITERS,
+    classMaxWaitersOf: (routeClass) =>
+      MAX_ADMISSION_WAITERS_PER_CLASS[routeClass],
   });
   // It waits for or refuses a concurrency slot and decides nothing else.
   return asRouteBudget(async (ctx, inner) => {

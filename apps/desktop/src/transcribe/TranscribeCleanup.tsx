@@ -348,6 +348,7 @@ export const CleanedText = ({
                 <p className="flex-1 text-pretty">{t("partFailed")}</p>
                 <Button
                   disabled={cleanup.busy}
+                  disabledReason={t("running")}
                   onClick={() => cleanup.retry(index)}
                   size="xs"
                   variant="ghost"
@@ -430,25 +431,27 @@ type SaveOption = { id: string; label: string; onSave: () => void };
 /** Copy (in the remembered format, with a menu to change it) and Save as,
  *  for one pane. */
 export const PaneActions = ({
-  disabled,
+  disabledReason,
   copyFormat,
   onCopyFormatChange,
   onCopy,
   saveOptions,
 }: {
-  disabled: boolean;
+  disabledReason: string | undefined;
   copyFormat: CopyFormat;
   onCopyFormatChange: (next: CopyFormat) => void;
   onCopy: (format: CopyFormat) => Promise<boolean>;
   saveOptions: readonly SaveOption[];
 }) => {
   const t = useTranslations("transcribe");
+  const disabled = disabledReason !== undefined;
   return (
     <div className="flex items-center gap-1.5">
       <div className="flex items-center">
         <CopyButton
           copiedLabel={t("result.copied")}
           disabled={disabled}
+          disabledReason={disabledReason}
           label={t("result.copy")}
           onCopy={async () => await onCopy(copyFormat)}
           size="xs"
@@ -458,7 +461,13 @@ export const PaneActions = ({
           <MenuTrigger
             aria-label={t("copyMenu.label")}
             disabled={disabled}
-            render={<Button size="icon-xs" variant="ghost" />}
+            render={
+              <Button
+                disabledReason={disabledReason}
+                size="icon-xs"
+                variant="ghost"
+              />
+            }
           >
             <ChevronDownIcon
               aria-hidden="true"
@@ -492,7 +501,13 @@ export const PaneActions = ({
       <Menu>
         <MenuTrigger
           disabled={disabled}
-          render={<Button size="xs" variant="outline" />}
+          render={
+            <Button
+              disabledReason={disabledReason}
+              size="xs"
+              variant="outline"
+            />
+          }
         >
           {t("result.saveAs")}
           <ChevronDownIcon

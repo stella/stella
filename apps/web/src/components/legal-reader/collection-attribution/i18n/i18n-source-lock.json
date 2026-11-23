@@ -1,0 +1,7 @@
+{
+  "readerCollection.partialText": "Published sections are shown; completeness has not been established.",
+  "readerCollection.provenanceOmitted": "Omitted publication records: {omittedCount, number} of {totalCount, number}.",
+  "readerCollection.sourceAttribution": "Collection publication: <link>{source}</link>. Retrieved {date}.",
+  "readerCollection.sourceAttributionUnknownDate": "Collection publication: <link>{source}</link>. Retrieval date unknown.",
+  "readerCollection.unclassifiedText": "The extent of this collection text is unknown."
+}

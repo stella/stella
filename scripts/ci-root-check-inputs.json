@@ -435,6 +435,7 @@
       "scripts/check-workflow-shells*.ts",
       "scripts/workflow-steps.ts"
     ],
+    "Bun runtime guard": ["**"],
     "Patched dependencies apply": [
       "package.json",
       "bun.lock",
@@ -681,7 +682,7 @@
       "apps/web/e2e/helpers/smoke-route-coverage.ts",
       "apps/web/e2e/helpers/smoke-route-defs.ts",
       "apps/web/e2e/shard-count.ts",
-      "apps/web/src/i18n/langs/en.json",
+      "apps/web/src/i18n/namespaces/en/*.json",
       "@stll/sha256",
       "@stll/collation",
       ".github/**",
@@ -858,7 +859,6 @@
       "scripts/**"
     ],
     "SHA-256 migration ledger": ["**"],
-    "Startup bundle ledger": ["**"],
     "Custom lint rule coverage": ["**"],
     "Custom lint test timeout policy": ["**"],
     "Guard rollout scope tests": ["**"],

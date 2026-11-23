@@ -138,6 +138,7 @@ export const ConsentDecisionBar = ({
     >
       <Button
         disabled={isPending}
+        disabledReason={tCommon("saving")}
         onClick={() => {
           onDecide(false);
         }}
@@ -148,6 +149,9 @@ export const ConsentDecisionBar = ({
       </Button>
       <Button
         disabled={isPending || allowDisabled}
+        disabledReason={
+          isPending ? tCommon("saving") : t("clientDetailsRequired")
+        }
         loading={isPending}
         onClick={() => {
           onDecide(true);

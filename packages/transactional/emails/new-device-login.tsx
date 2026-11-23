@@ -86,34 +86,38 @@ export const Email = ({
           </Heading>
           <Text style={sharedStyles.text}>{t("newDeviceLogin.body")}</Text>
           <Section style={styles.detailsSection}>
+            {location.type === "known" ? (
+              <LocationMap lang={lang} location={location} />
+            ) : null}
             <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.device")}:</strong> {deviceName}
             </Text>
+            {place === null ? null : (
+              <Text style={styles.detailRow}>
+                <strong>{t("newDeviceLogin.location")}:</strong>{" "}
+                {t("newDeviceLogin.placeApproximate", { place })}
+              </Text>
+            )}
             <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.ipAddress")}:</strong>{" "}
               {ipAddress.type === "known"
                 ? ipAddress.address
                 : t("newDeviceLogin.ipAddressUnknown")}
             </Text>
-            {place === null ? null : (
-              <Text style={styles.detailRow}>
-                <strong>{t("newDeviceLogin.location")}:</strong> {place}
-              </Text>
-            )}
             <Text style={styles.detailRow}>
               <strong>{t("newDeviceLogin.time")}:</strong> {time}
             </Text>
           </Section>
-          {location.type === "known" ? (
-            <LocationNotes lang={lang} location={location} />
-          ) : null}
+          <Text style={sharedStyles.text}>{t("newDeviceLogin.ignore")}</Text>
           <Section style={styles.buttonSection}>
             <Button href={sessionsUrl} style={styles.button}>
               {t("newDeviceLogin.action")}
             </Button>
           </Section>
+          <Text style={styles.actionNote}>
+            {t("newDeviceLogin.actionNote")}
+          </Text>
           <Hr style={sharedStyles.hr} />
-          <Text style={sharedStyles.footer}>{t("newDeviceLogin.ignore")}</Text>
           <Text style={sharedStyles.brandFooter}>{BRAND_FOOTER_TEXT}</Text>
         </Container>
       </Body>
@@ -123,29 +127,24 @@ export const Email = ({
 
 type KnownLocation = Extract<SignInLocation, { type: "known" }>;
 
-type LocationNotesProps = { location: KnownLocation; lang: SupportedLang };
+type LocationMapProps = { location: KnownLocation; lang: SupportedLang };
 
 /**
- * The map, when there is one, and what the location rests on. The base map is
+ * The map, when there is one, heading the sign-in details. The base map is
  * public domain and needs no credit line.
  */
-const LocationNotes = ({ location, lang }: LocationNotesProps) => {
+const LocationMap = ({ location, lang }: LocationMapProps) => {
   const t = getTranslator(lang);
-  return (
-    <>
-      {location.map === null ? null : (
-        <Img
-          alt={t("newDeviceLogin.mapAlt", {
-            location: placeName(location, lang),
-          })}
-          height={String(LOCATION_MAP_DISPLAY_SIZE.height)}
-          src={`cid:${location.map.contentId}`}
-          style={styles.map}
-          width={String(LOCATION_MAP_DISPLAY_SIZE.width)}
-        />
-      )}
-      <Text style={styles.caption}>{t("newDeviceLogin.locationNote")}</Text>
-    </>
+  return location.map === null ? null : (
+    <Img
+      alt={t("newDeviceLogin.mapAlt", {
+        location: placeName(location, lang),
+      })}
+      height={String(LOCATION_MAP_DISPLAY_SIZE.height)}
+      src={`cid:${location.map.contentId}`}
+      style={styles.map}
+      width={String(LOCATION_MAP_DISPLAY_SIZE.width)}
+    />
   );
 };
 
@@ -217,18 +216,18 @@ const styles = {
     lineHeight: "22px",
   },
   map: {
-    margin: "0 0 8px",
+    margin: "0 0 12px",
     width: "100%",
     maxWidth: `${LOCATION_MAP_DISPLAY_SIZE.width}px`,
     height: "auto",
     borderRadius: "10px",
     border: `1px solid ${brand.border}`,
   },
-  caption: {
-    margin: "0 0 4px",
+  actionNote: {
+    margin: "-8px 0 24px",
     color: brand.textMuted,
-    fontSize: "12px",
-    lineHeight: "18px",
+    fontSize: "13px",
+    lineHeight: "20px",
   },
   buttonSection: {
     margin: "24px 0",

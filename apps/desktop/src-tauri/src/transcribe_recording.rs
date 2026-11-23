@@ -7,9 +7,13 @@
 //! before it are done. Stopping cancels what is still outstanding and keeps
 //! the text so far.
 //!
-//! The file is only read, never copied, and no audio or text is written to
-//! disk here: the text exists in the window until the user copies it, saves
-//! it as a file or saves it to a matter. A file is only ever chosen through
+//! The file is only read, never copied, and no audio is ever written to
+//! disk. The text is written nowhere here either: the window keeps each
+//! finished or stopped transcript in the account's encrypted history on
+//! this computer (`transcribe_history`, 30 days unless the user chose
+//! otherwise, or nothing at all), and the user may copy it, save it as a
+//! file or save it to a matter. The history holds the recording's name,
+//! format and length, never its audio. A file is only ever chosen through
 //! the native picker or dropped on the window, so the webview never names a
 //! path this code reads.
 
@@ -170,7 +174,7 @@ struct PieceText {
   text: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Failure {
   /// The speech model is not on this computer.
@@ -325,12 +329,23 @@ impl TranscribeState {
   }
 }
 
+/// The recording the window holds, while no transcription of it runs: the
+/// file the user chose, never a path the webview names.
+pub(crate) fn chosen_recording(app: &AppHandle) -> Option<PathBuf> {
+  app.state::<TranscribeState>().update(|inner| {
+    if inner.job.is_some() {
+      return None;
+    }
+    inner.file.as_ref().map(|chosen| chosen.path.clone())
+  })
+}
+
 /// Whether this computer offers the window: dictation is on its way here.
 pub(crate) fn available(app: &AppHandle) -> bool {
   dictation::available(app)
 }
 
-fn require_window(window: &Window) -> Result<(), String> {
+pub(crate) fn require_window(window: &Window) -> Result<(), String> {
   if window.label() == TRANSCRIBE_WINDOW_LABEL {
     Ok(())
   } else {
@@ -338,7 +353,7 @@ fn require_window(window: &Window) -> Result<(), String> {
   }
 }
 
-fn require_available(app: &AppHandle) -> Result<(), String> {
+pub(crate) fn require_available(app: &AppHandle) -> Result<(), String> {
   if available(app) {
     Ok(())
   } else {
@@ -346,7 +361,7 @@ fn require_available(app: &AppHandle) -> Result<(), String> {
   }
 }
 
-fn file_name(path: &Path) -> String {
+pub(crate) fn file_name(path: &Path) -> String {
   path
     .file_name()
     .map(|name| {
@@ -359,7 +374,7 @@ fn file_name(path: &Path) -> String {
     .unwrap_or_default()
 }
 
-fn extension(path: &Path) -> Option<String> {
+pub(crate) fn extension(path: &Path) -> Option<String> {
   path
     .extension()
     .and_then(|extension| extension.to_str())
@@ -705,7 +720,7 @@ pub fn transcribe_stop(
   Ok(())
 }
 
-fn valid_id(id: &str) -> Result<(), String> {
+pub(crate) fn valid_id(id: &str) -> Result<(), String> {
   if id.len() <= 200
     && id.chars().all(|character| {
       character.is_ascii_alphanumeric() || character == '-' || character == '_'

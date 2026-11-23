@@ -117,13 +117,6 @@
       "p99Seconds": 51,
       "peakRssMiB": 6569
     },
-    "Startup bundle ledger": {
-      "minutes": 5,
-      "samples": 0,
-      "p95Seconds": 0,
-      "p99Seconds": 0,
-      "peakRssMiB": 4096
-    },
     "Custom lint rule coverage": {
       "minutes": 13,
       "samples": 19,
@@ -722,6 +715,11 @@
       "p95Seconds": 0,
       "p99Seconds": 0,
       "peakRssMiB": 61
+    },
+    "Bun runtime guard": {
+      "minutes": 5,
+      "samples": 0,
+      "peakRssMiB": 128
     },
     "Patched dependencies apply": {
       "minutes": 5,

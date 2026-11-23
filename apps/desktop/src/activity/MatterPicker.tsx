@@ -18,14 +18,15 @@ export const MatterPicker = ({
   candidates,
   onChoose,
   label,
-  disabled = false,
+  disabledReason,
 }: {
   candidates: readonly DesktopTimeEntryMatterCandidate[];
   onChoose: (matter: DesktopMatter) => void;
   label: string;
-  disabled?: boolean;
+  disabledReason?: string | undefined;
 }) => {
   const t = useTranslations("activity");
+  const disabled = disabledReason !== undefined;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<
@@ -84,6 +85,7 @@ export const MatterPicker = ({
             size="sm"
             variant="outline"
             disabled={disabled}
+            disabledReason={disabledReason}
           />
         }
       >
@@ -95,6 +97,7 @@ export const MatterPicker = ({
           clearLabel={t("clearMatterSearch")}
           onValueChange={setQuery}
           disabled={disabled}
+          disabledReason={disabledReason}
           value={query}
           placeholder={t("searchMatters")}
         />
@@ -114,6 +117,7 @@ export const MatterPicker = ({
               <Button
                 className="justify-start"
                 disabled={disabled}
+                disabledReason={disabledReason}
                 variant="ghost"
                 size="row"
                 key={matter.id}

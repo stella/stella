@@ -4,6 +4,7 @@
     "ci.yml/api-test-durations": "main",
     "fetch-public-documents.yml/fetch": "main",
     "visual-preview.yml/preview": "pr-fast",
+    "converter-tests.yml/converter-tests": "pr-fast",
     "mobile-fingerprint-check.yml/fingerprint": "pr-fast",
     "mobile-fingerprint-check.yml/fingerprint-macos": "pr-fast",
     "mobile-fingerprint-check.yml/label": "pr-fast",

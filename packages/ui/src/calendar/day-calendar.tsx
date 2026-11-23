@@ -12,6 +12,7 @@ import { panic } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
 import { Popover, PopoverPopup, PopoverTrigger } from "../components/popover";
+import { Skeleton } from "../components/skeleton";
 import {
   Tooltip,
   TOOLTIP_OPEN_DELAY_MS,
@@ -105,7 +106,9 @@ type DayCalendarColumnHeader = {
 
 /**
  * A `locked` column has no blocks field, so caller data cannot reach it: it
- * paints synthetic placeholder bars behind the caller's `action`.
+ * paints synthetic placeholder bars behind the caller's `action`. A `pending`
+ * column's blocks are not known yet: it shimmers where the caller already
+ * knows something was recorded, and takes no selection meanwhile.
  */
 export type DayCalendarColumn =
   | (DayCalendarColumnHeader & {
@@ -113,7 +116,11 @@ export type DayCalendarColumn =
       rangeSelection: DayCalendarRangeSelection;
       type: "blocks";
     })
-  | (DayCalendarColumnHeader & { action: ReactNode; type: "locked" });
+  | (DayCalendarColumnHeader & { action: ReactNode; type: "locked" })
+  | (DayCalendarColumnHeader & {
+      placeholders: readonly DayCalendarRange[];
+      type: "pending";
+    });
 
 /**
  * The committed range the caller is acting on. `panel` anchors caller content
@@ -172,12 +179,15 @@ const isSameDraftView = (left: DraftView, right: DraftView): boolean =>
  * change, committing it would select a stale range, so it is discarded.
  */
 const useDraftSelection = (view: DraftView) => {
+  const viewKey = `${view.date}:${view.startHour}:${view.endHour}:${view.granularity}:${view.timeZone}`;
+  const [prevViewKey, setPrevViewKey] = useState(viewKey);
   const [stored, setDraft] = useState<DraftSelection | null>(null);
-  const draft =
-    stored !== null && isSameDraftView(stored.view, view) ? stored : null;
-  if (stored !== null && draft === null) {
+  if (prevViewKey !== viewKey) {
+    setPrevViewKey(viewKey);
     setDraft(null);
   }
+  const draft =
+    stored !== null && isSameDraftView(stored.view, view) ? stored : null;
   return [draft, setDraft] as const;
 };
 
@@ -425,21 +435,11 @@ export const DayCalendar = ({
         className="bg-card border-border sticky top-0 z-30 rounded-ss-xl border-b"
       />
       {columns.map((column, index) => (
-        <header
-          className={cn(
-            "bg-card border-border text-muted-foreground sticky top-0 z-30 flex min-w-0 items-center gap-2 border-s border-b px-3 py-2.5 text-xs font-medium",
-            index === columns.length - 1 && "rounded-se-xl",
-          )}
-          data-slot="day-calendar-column-header"
+        <ColumnHeader
+          column={column}
           key={column.id}
-        >
-          <TruncatedText className="shrink-0">{column.label}</TruncatedText>
-          {column.badge === undefined ? null : (
-            <TruncatedText className="bg-muted text-muted-foreground text-2xs rounded-full px-2 py-0.5">
-              {column.badge}
-            </TruncatedText>
-          )}
-        </header>
+          last={index === columns.length - 1}
+        />
       ))}
 
       <div
@@ -479,6 +479,13 @@ export const DayCalendar = ({
           >
             {column.type === "locked" ? (
               <LockedColumnBody action={column.action} />
+            ) : null}
+            {column.type === "pending" ? (
+              <PendingColumnBody
+                grid={grid}
+                placeholders={column.placeholders}
+                slotLinesStyle={slotLinesStyle}
+              />
             ) : null}
             {column.type === "blocks" &&
             column.rangeSelection.type === "enabled" ? (
@@ -530,7 +537,7 @@ export const DayCalendar = ({
                 />
               </div>
             ) : null}
-            {nowVisible && column.type === "blocks" ? (
+            {nowVisible && column.type !== "locked" ? (
               <div
                 aria-hidden="true"
                 className="bg-destructive pointer-events-none absolute inset-x-0 z-20 h-0.5"
@@ -555,6 +562,29 @@ export const DayCalendar = ({
     </section>
   );
 };
+
+const ColumnHeader = ({
+  column,
+  last,
+}: {
+  column: DayCalendarColumnHeader;
+  last: boolean;
+}) => (
+  <header
+    className={cn(
+      "bg-card border-border text-muted-foreground sticky top-0 z-30 flex min-w-0 items-center gap-2 border-s border-b px-3 py-2.5 text-xs font-medium",
+      last && "rounded-se-xl",
+    )}
+    data-slot="day-calendar-column-header"
+  >
+    <TruncatedText className="shrink-0">{column.label}</TruncatedText>
+    {column.badge === undefined ? null : (
+      <TruncatedText className="bg-muted text-muted-foreground text-2xs rounded-full px-2 py-0.5">
+        {column.badge}
+      </TruncatedText>
+    )}
+  </header>
+);
 
 type GridOptions = {
   granularity: DayCalendarGranularity;
@@ -623,6 +653,19 @@ const ENTRY_STATE_CLASSES = {
     "border border-dashed border-current/45 outline-none hover:ring-1 hover:ring-ring/50 focus-visible:ring-2 focus-visible:ring-ring",
 } as const satisfies Record<DayCalendarEntryState, string>;
 
+/** Where a block of `range` is drawn: at least {@link BLOCK_MIN_PX} tall,
+ * unless the grid ends sooner. */
+const blockExtent = (range: DayCalendarRange, grid: GridOptions) => {
+  const top = timeToOffset(range.startMs, grid);
+  return {
+    blockSize: Math.min(
+      Math.max(timeToOffset(range.endMs, grid) - top, BLOCK_MIN_PX),
+      boundsHeight(grid) - top,
+    ),
+    top,
+  };
+};
+
 const DayCalendarBlockView = ({
   block,
   grid,
@@ -634,11 +677,7 @@ const DayCalendarBlockView = ({
   lane: DayCalendarLanePlacement;
   range: DayCalendarRange;
 }) => {
-  const top = timeToOffset(range.startMs, grid);
-  const blockSize = Math.min(
-    Math.max(timeToOffset(range.endMs, grid) - top, BLOCK_MIN_PX),
-    boundsHeight(grid) - top,
-  );
+  const { blockSize, top } = blockExtent(range, grid);
   const placement = {
     blockSize,
     inlineSize: `${String(100 / lane.laneCount)}%`,
@@ -656,32 +695,45 @@ const DayCalendarBlockView = ({
     block.tone.type === "matter" && "border-s-[3px]",
     block.tone.type === "neutral" && "bg-muted",
   );
-  const content =
-    blockSize < DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX ? null : (
+  // The block carries its whole text as its accessible name, so a cut line
+  // adds no hint.
+  const title = (
+    <TruncatedText
+      className={cn("font-medium", oneLine ? "shrink" : "shrink-0")}
+      hint={false}
+    >
+      {block.title}
+    </TruncatedText>
+  );
+  const caption =
+    block.caption === undefined ? null : (
+      <TruncatedText
+        className="text-muted-foreground tabular-nums"
+        hint={false}
+      >
+        {block.caption}
+      </TruncatedText>
+    );
+  let content: ReactNode = null;
+  if (blockSize >= DAY_CALENDAR_ONE_LINE_BLOCK_MIN_PX) {
+    content = oneLine ? (
+      // One line tall and wrapping: a caption that does not fit whole beside
+      // the title wraps out of sight rather than showing a cut fragment, and
+      // the title alone ends in an ellipsis at the block's edge.
+      <div
+        className="flex h-[1lh] min-w-0 flex-1 flex-wrap items-center gap-x-2 overflow-hidden"
+        data-slot="day-calendar-block-line"
+      >
+        {title}
+        {caption}
+      </div>
+    ) : (
       <>
-        {/* On one line the caption gives way first, then the title ends in
-            an ellipsis rather than being cut at the block's edge. The block
-            carries its whole text as its accessible name, so a cut line adds
-            no hint. */}
-        <TruncatedText
-          className={cn("font-medium", oneLine ? "shrink" : "shrink-0")}
-          hint={false}
-        >
-          {block.title}
-        </TruncatedText>
-        {block.caption === undefined ? null : (
-          <TruncatedText
-            className={cn(
-              "text-muted-foreground tabular-nums",
-              oneLine && "shrink-[999]",
-            )}
-            hint={false}
-          >
-            {block.caption}
-          </TruncatedText>
-        )}
+        {title}
+        {caption}
       </>
     );
+  }
   const shared = {
     "aria-label": block.accessibleLabel,
     className,
@@ -924,6 +976,50 @@ const LOCKED_BAR_TONES = {
   (typeof LOCKED_PLACEHOLDER_BARS)[number]["tone"],
   string
 >;
+
+/** Shimmers at each range the caller knows something was recorded in, placed
+ * as a block there would be, until the column's blocks are known. */
+const PendingColumnBody = ({
+  grid,
+  placeholders,
+  slotLinesStyle,
+}: {
+  grid: GridOptions;
+  placeholders: readonly DayCalendarRange[];
+  slotLinesStyle: CSSProperties;
+}) => (
+  <div
+    aria-busy="true"
+    className="absolute inset-0"
+    data-slot="day-calendar-surface"
+    style={slotLinesStyle}
+  >
+    {placeholders.flatMap((placeholder) => {
+      const startMs = Math.max(placeholder.startMs, grid.bounds.startMs);
+      const endMs = Math.min(placeholder.endMs, grid.bounds.endMs);
+      if (endMs <= startMs) {
+        return [];
+      }
+      const { blockSize, top } = blockExtent({ endMs, startMs }, grid);
+      const placement = {
+        blockSize,
+        insetBlockStart: top,
+      } satisfies CSSProperties;
+      return [
+        <div
+          className="absolute inset-x-0 px-1.5 py-px"
+          key={startMs}
+          style={placement}
+        >
+          <Skeleton
+            className="h-full rounded-md"
+            data-slot="day-calendar-pending-block"
+          />
+        </div>,
+      ];
+    })}
+  </div>
+);
 
 const LockedColumnBody = ({ action }: { action: ReactNode }) => (
   <div className="absolute inset-0 overflow-hidden">

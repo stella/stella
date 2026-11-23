@@ -28,6 +28,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { MatterNumberHint } from "@/components/matter-number-hint";
+import { DocumentNamingSection } from "@/components/workspaces/document-naming-section";
 import { LeadSection } from "@/components/workspaces/lead-section";
 import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info-layout";
 import { MembersSection } from "@/components/workspaces/members-section";
@@ -425,6 +426,9 @@ export const MatterMetadataPanel = ({
         {/* Lead */}
         <LeadSection workspaceId={workspaceId} />
 
+        {/* Automatic document naming */}
+        <DocumentNamingSection workspaceId={workspaceId} />
+
         {/* Members */}
         <MembersSection workspaceId={workspaceId} />
 
@@ -467,6 +471,7 @@ export const MatterMetadataPanel = ({
             <Button
               className="block w-full shrink-0"
               disabled={deleteWorkspace.isPending}
+              disabledReason={t("workspaces.deletingWorkspace")}
               onClick={() => setDeleteDialogOpen(true)}
               variant="plain"
             >

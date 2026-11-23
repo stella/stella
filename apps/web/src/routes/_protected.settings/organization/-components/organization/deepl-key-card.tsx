@@ -71,6 +71,7 @@ export const DeepLKeyCard = ({
           <Button
             aria-label={removeLabel}
             disabled={disabled}
+            disabledReason={tCommon("saving")}
             onClick={onRemove}
             size="sm"
             tooltip={removeLabel}
@@ -86,6 +87,7 @@ export const DeepLKeyCard = ({
           <SecretInput
             autoComplete="off"
             disabled={disabled}
+            disabledReason={tCommon("saving")}
             id="deepl-api-key"
             onChange={(e) => onChange(e.target.value)}
             placeholder={t("apiKeyPlaceholder")}

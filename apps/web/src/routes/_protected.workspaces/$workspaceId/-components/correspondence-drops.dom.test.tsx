@@ -85,7 +85,7 @@ for (const [locale, messages] of Object.entries(catalogs)) {
         expect(
           within(alert)
             .getByRole("button", { name: messages.common.retry })
-            .getAttribute("disabled"),
+            .getAttribute("aria-disabled"),
         ).toBeNull();
       } finally {
         cleanup();

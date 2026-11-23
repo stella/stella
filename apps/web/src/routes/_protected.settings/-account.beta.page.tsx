@@ -2,8 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldLabel } from "@stll/ui/field";
-import { FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
 
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { detached } from "@/lib/detached";
@@ -11,7 +10,8 @@ import { useDevStore } from "@/lib/dev-store";
 import { useFeatureEnrolment } from "@/queries/feature-enrolments";
 import {
   BETA_FEATURES,
-  BetaFeaturePanel,
+  BetaFeatureRow,
+  betaFeatureRowId,
   BetaPageShell,
   SelfServeFeaturePanelsPending,
 } from "@/routes/_protected.settings/-account.beta.pending";
@@ -24,7 +24,7 @@ type BetaFeatureToggleProps = {
   onCheckedChange: (next: boolean) => void;
 };
 
-/** A preview's panel with its live checkbox. */
+/** A preview's row with its live checkbox. */
 const BetaFeatureToggle = ({
   checked,
   disabled,
@@ -32,25 +32,28 @@ const BetaFeatureToggle = ({
   onCheckedChange,
 }: BetaFeatureToggleProps) => {
   const t = useTranslations();
-  const { title } = BETA_FEATURES[feature];
+  const ids = settingsRowIds(betaFeatureRowId(feature));
+  const { description, title } = BETA_FEATURES[feature];
   return (
-    <BetaFeaturePanel {...BETA_FEATURES[feature]}>
-      {/* The face (BetaFeaturePanelPending) lays out the same row. */}
-      <Field className="flex-row items-center gap-2">
-        <Checkbox
-          aria-label={t(title)}
-          checked={checked}
-          disabled={disabled}
-          onCheckedChange={(next) => {
-            if (next === checked) {
-              return;
-            }
-            onCheckedChange(next);
-          }}
-        />
-        <FieldLabel>{t(title)}</FieldLabel>
-      </Field>
-    </BetaFeaturePanel>
+    <BetaFeatureRow
+      description={t(description)}
+      feature={feature}
+      title={t(title)}
+    >
+      <Checkbox
+        aria-describedby={ids.description}
+        aria-labelledby={ids.label}
+        id={ids.control}
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(next) => {
+          if (next === checked) {
+            return;
+          }
+          onCheckedChange(next);
+        }}
+      />
+    </BetaFeatureRow>
   );
 };
 
@@ -98,7 +101,7 @@ function SelfServeFeaturePanels() {
   }
   if (view.type === "error") {
     return (
-      <FramePanel>
+      <SettingsPanel>
         <RecoverableErrorStatus
           actions={
             <Button
@@ -115,7 +118,7 @@ function SelfServeFeaturePanels() {
           message={t("errors.actionFailed")}
           messageClassName="text-muted-foreground text-sm"
         />
-      </FramePanel>
+      </SettingsPanel>
     );
   }
   return (

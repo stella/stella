@@ -1,0 +1,9 @@
+{
+  "readerCollection": {
+    "partialText": "Rodomos paskelbtos dalys; išsamumas nepatvirtintas.",
+    "provenanceOmitted": "Praleisti publikacijų įrašai: {omittedCount, number} iš {totalCount, number}.",
+    "sourceAttribution": "Rinkinio publikacija: <link>{source}</link>. Gauta {date}.",
+    "sourceAttributionUnknownDate": "Rinkinio publikacija: <link>{source}</link>. Gavimo data nežinoma.",
+    "unclassifiedText": "Šio rinkinio teksto apimtis nežinoma."
+  }
+}

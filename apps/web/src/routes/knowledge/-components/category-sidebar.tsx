@@ -644,6 +644,7 @@ const CategoryRow = ({
             </AlertDialogClose>
             <Button
               disabled={deleting}
+              disabledReason={t("common.deleting")}
               onClick={() => {
                 detached(handleDelete(), "category-sidebar.delete");
               }}
@@ -789,6 +790,7 @@ const CategoryFormDialogBody = ({
         </DialogClose>
         <Button
           disabled={saving || !name.trim()}
+          disabledReason={saving ? t("common.saving") : t("common.enterName")}
           onClick={() => {
             detached(handleSave(), "category-sidebar.save");
           }}

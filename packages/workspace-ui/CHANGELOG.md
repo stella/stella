@@ -1,5 +1,83 @@
 # @stll/workspace-ui
 
+## 0.24.0
+
+### Minor Changes
+
+- [#9246](https://github.com/stella/stella/pull/9246) [`f292e0a`](https://github.com/stella/stella/commit/f292e0af50fa6912cdced0f28f0b4cfd22c61c01) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `FileConversionRefusal` adds `{ kind: "no_preview", format, cause }`: an image this deployment makes no preview of, because it does not decode the format (`"decoding_off"`) or cannot read the file's pictures (`"unreadable"`). `format` is the file's short tag, such as `"HEIC"`.
+
+## 0.23.3
+
+### Patch Changes
+
+- Updated dependencies [[`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853)]:
+  - @stll/ui@0.84.0
+
+## 0.23.2
+
+### Patch Changes
+
+- Updated dependencies [[`10ef464`](https://github.com/stella/stella/commit/10ef464329c555633c59a8307bbd6bf85e22fe5a)]:
+  - @stll/ui@0.83.0
+
+## 0.23.1
+
+### Patch Changes
+
+- Updated dependencies [[`39eabb8`](https://github.com/stella/stella/commit/39eabb8eee2640bdda32e928239460602aefc23b)]:
+  - @stll/ui@0.82.0
+
+## 0.23.0
+
+### Minor Changes
+
+- [#9193](https://github.com/stella/stella/pull/9193) [`94387e7`](https://github.com/stella/stella/commit/94387e7ca464e5f26cf95913f20b0a4a503b79b9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/inline-overflow` holds the policy that decides which items of a single-line row fit and which move into a trailing "show more" menu (`resolveInlineOverflow`, `splitInlineOverflow`), and `@stll/ui/use-inline-overflow` measures a row for it. `InspectorFacetBar` runs on them. `WorkspaceViewSwitcher` takes a required `overflowLabel` and moves the views that do not fit into a menu after the tabs, keeping the active or renamed view on screen, instead of scrolling the tabs; the strip's add control no longer draws a divider.
+
+### Patch Changes
+
+- Updated dependencies [[`9db6ee1`](https://github.com/stella/stella/commit/9db6ee1cbde7b4e6b85210e46bf93c705034e64b), [`94387e7`](https://github.com/stella/stella/commit/94387e7ca464e5f26cf95913f20b0a4a503b79b9), [`7192259`](https://github.com/stella/stella/commit/7192259afbb8e3e3ffbbb906b9be3129e1ab3882), [`f55e84a`](https://github.com/stella/stella/commit/f55e84a17a4847c2d6722799990f5932fdd7b004), [`62c29aa`](https://github.com/stella/stella/commit/62c29aa31dfa732c9962227ae90b54ccb4bddbd6), [`b0f575f`](https://github.com/stella/stella/commit/b0f575f1ef2b403299e222e2dc21293b916785c7)]:
+  - @stll/ui@0.81.0
+
+## 0.22.0
+
+### Minor Changes
+
+- [#9081](https://github.com/stella/stella/pull/9081) [`d357728`](https://github.com/stella/stella/commit/d357728224fb93f2fda81a1fb619a2f6f7fe5557) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Buttons expose the disabled reason as an accessible description and retain keyboard focus when it changes. A disabled inline text run requires a reason. File, search, and secret inputs accept a localized `disabledReason` for their action buttons. Split buttons use `primaryDisabledReason` for their primary action. Review controls use `disabledReason`, `applyingReason`, or `actionDisabledReason` to explain pending and restricted decisions.
+
+  Condition builder labels now include `noFields` and `groupFull` to explain why a condition or group cannot be added.
+
+### Patch Changes
+
+- Updated dependencies [[`d357728`](https://github.com/stella/stella/commit/d357728224fb93f2fda81a1fb619a2f6f7fe5557)]:
+  - @stll/ui@0.80.0
+
+## 0.21.2
+
+### Patch Changes
+
+- Updated dependencies [[`2d31b6d`](https://github.com/stella/stella/commit/2d31b6d446bf6c1a38c09d27d0b56456dcbed015)]:
+  - @stll/ui@0.79.0
+
+## 0.21.1
+
+### Patch Changes
+
+- Updated dependencies [[`b6194a7`](https://github.com/stella/stella/commit/b6194a73bae3624e7afb0f8a6b21ac9facdb97f8)]:
+  - @stll/ui@0.78.0
+
+## 0.21.0
+
+### Minor Changes
+
+- [#9017](https://github.com/stella/stella/pull/9017) [`25a0c38`](https://github.com/stella/stella/commit/25a0c386561c724d1c7cc0100c7a0a08c2e39b24) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Expose the width every kanban board column takes (`KANBAN_COLUMN_WIDTH_CLASS`) from `@stll/ui/kanban-column-header-shell`, so a loading view can lay its column headers out where the board will. `WorkspaceViewSwitcherFace` takes an optional `renderName` for a tab name the caller draws itself.
+
+- [#9005](https://github.com/stella/stella/pull/9005) [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add loading faces for a select trigger and a segmented icon toggle to `@stll/ui/control-face`, and for the view filter button and chip to `@stll/ui/view-toolbar-shell`, each built from the same classes as the control it stands in for. Add `@stll/workspace-ui/sorts-face`, the sort chips' loading face.
+
+### Patch Changes
+
+- Updated dependencies [[`ebe8ae8`](https://github.com/stella/stella/commit/ebe8ae88a7847490bc6d40153ab3a80a97cebc4e), [`be836e0`](https://github.com/stella/stella/commit/be836e098b22eb7fc70661f150c0dfc11c6a3220), [`e7a4e0c`](https://github.com/stella/stella/commit/e7a4e0c73395c7481f051aefb03a2306bbf1f5ef), [`10a2406`](https://github.com/stella/stella/commit/10a2406e96662f08eb556a0155676732d511cdfc), [`37117f6`](https://github.com/stella/stella/commit/37117f6e007640ac3eeff769935081020d49ad74), [`c3b4e95`](https://github.com/stella/stella/commit/c3b4e95a62d63062c0013dc3d8c8fbb79c6d3cbf), [`25a0c38`](https://github.com/stella/stella/commit/25a0c386561c724d1c7cc0100c7a0a08c2e39b24), [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d), [`4a564f6`](https://github.com/stella/stella/commit/4a564f686b8ee215910fcfa46860fb2e1f06086b), [`846c016`](https://github.com/stella/stella/commit/846c016a47690b5c6c88db2f78881aa68758668a), [`036acf9`](https://github.com/stella/stella/commit/036acf965aae01184cee165c28dd8d7c0a4443b9), [`6d0d7f7`](https://github.com/stella/stella/commit/6d0d7f79e8792da0ef60232ce75cf98b6ee204b0), [`47c898e`](https://github.com/stella/stella/commit/47c898e35450bb16260efaef0bf1144cd59a355d)]:
+  - @stll/ui@0.77.0
+
 ## 0.20.0
 
 ### Minor Changes

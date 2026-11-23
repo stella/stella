@@ -6,6 +6,7 @@ export type ReaderMessageKey =
   | "common.copyLink"
   | "common.copied"
   | "common.back"
+  | "common.loading"
   | "caseLaw.viewer.legalSentence"
   | "caseLaw.viewer.abstract"
   | "folio.comment"

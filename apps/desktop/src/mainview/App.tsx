@@ -1,8 +1,14 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
@@ -19,9 +25,14 @@ import {
   ComboboxPopup,
 } from "@stll/ui/combobox";
 import { BanIcon } from "@stll/ui/icons";
-import { Label } from "@stll/ui/label";
 import { ListItemStatus } from "@stll/ui/list";
 import { ScrollArea } from "@stll/ui/scroll-area";
+import {
+  SettingsPanel,
+  SettingsRow,
+  settingsRowIds,
+  SettingsSection,
+} from "@stll/ui/settings";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { cn } from "@stll/ui/utils";
@@ -49,7 +60,6 @@ import type {
   DocumentRecoverySnapshot,
   RecoveryTarget,
 } from "../shared/rpc";
-import { StellaAppIcon } from "../shared/StellaAppIcon";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
 import { WindowDragRegion } from "../shared/WindowDragRegion";
 import {
@@ -68,41 +78,20 @@ import { KeepAwakeSection } from "./KeepAwakeSection";
 import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
-import {
-  SettingsGroup,
-  SettingsPageHeader,
-  SettingsRow,
-  settingsRowIds,
-  SettingsSectionGroup,
-} from "./settings-layout";
-import {
-  isAgentSettingsFocus,
-  isSettingsPage,
-  SETTINGS_PAGES,
-} from "./settings-pages";
+import { SettingsPageHeader } from "./settings-layout";
+import { SETTINGS_PAGES, settingsView } from "./settings-pages";
 import type { SettingsPage } from "./settings-pages";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { ShortcutSetting } from "./ShortcutSetting";
 import { SigningDriverSection } from "./SigningDriverSection";
+import { AppVersionRow, useUpdateCheck } from "./UpdateCheck";
+import type { UpdateCheck } from "./UpdateCheck";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
   revisionCreated: true,
   syncIssues: true,
 } satisfies DesktopNotificationPreferences;
-const DEFAULT_UPDATE_SNAPSHOT = {
-  baseUrl: null,
-  channel: null,
-  currentHash: null,
-  currentVersion: null,
-  lastCheckedAt: null,
-  latestHash: null,
-  latestVersion: null,
-  status: "disabled",
-  statusMessage: "Update checks are not configured yet.",
-  updateAvailable: false,
-  updateReady: false,
-} satisfies DesktopUpdateSnapshot;
 
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
 
@@ -129,9 +118,10 @@ const reportSubscriptionFailure = () => {
   });
 };
 
-const getInitialPage = (): SettingsPage => {
-  const page = window.location.hash.replace(/^#/u, "");
-  return isSettingsPage(page) ? page : "general";
+/** The view a new window was opened for: `#tab` or `#tab/focus`. */
+const getInitialView = () => {
+  const [tab, focus] = window.location.hash.replace(/^#/u, "").split("/");
+  return settingsView({ tab, focus });
 };
 
 /** The permissions the Permissions page lists; open at login is an app
@@ -139,49 +129,6 @@ const getInitialPage = (): SettingsPage => {
 const PERMISSIONS_PAGE_ROWS = PERMISSIONS.filter(
   (permission) => permission !== "openAtLogin",
 );
-
-type NotificationRowProps = {
-  checked: boolean;
-  description: string;
-  disabled?: boolean;
-  label: string;
-  onCheckedChange: (checked: boolean) => void;
-  preferenceKey: NotificationPreferenceKey;
-};
-
-const NotificationRow = ({
-  checked,
-  description,
-  disabled = false,
-  label,
-  onCheckedChange,
-  preferenceKey,
-}: NotificationRowProps) => {
-  const inputId = `notification-${preferenceKey}`;
-
-  return (
-    <div className={cn("px-4 py-3", disabled && "opacity-64")}>
-      <Label className="items-start gap-3" htmlFor={inputId}>
-        <Checkbox
-          checked={checked}
-          className="mt-0.5"
-          data-disabled={disabled ? "" : undefined}
-          disabled={disabled}
-          id={inputId}
-          onCheckedChange={(nextChecked) => {
-            onCheckedChange(nextChecked);
-          }}
-        />
-        <span className="min-w-0 flex-1">
-          <span className="block text-sm font-medium">{label}</span>
-          <span className="text-muted-foreground mt-1 block text-sm leading-relaxed">
-            {description}
-          </span>
-        </span>
-      </Label>
-    </div>
-  );
-};
 
 const DocumentRecovery = ({
   recovery,
@@ -192,16 +139,19 @@ const DocumentRecovery = ({
 }) => {
   const t = useTranslations("settings");
   const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [recoveryAction, setRecoveryAction] = useState<
+    RecoveryTarget | "retry" | null
+  >(null);
+  const busy = recoveryAction !== null;
   const act = async (target: RecoveryTarget | "retry") => {
-    setBusy(true);
+    setRecoveryAction(target);
     const result = await Result.tryPromise(async () =>
       target === "retry"
         ? invoke<AppSnapshot>("get_state").then(() => onRefresh())
         : invoke("open_recovery_folder", { target }),
     );
     setError(result.isErr() ? t("recoveryError") : null);
-    setBusy(false);
+    setRecoveryAction(null);
   };
   if (
     !recovery.edits.length &&
@@ -212,70 +162,87 @@ const DocumentRecovery = ({
     return null;
   }
   return (
-    <SettingsSectionGroup title={t("recoveryTitle")}>
-      <div className="space-y-3 px-4 py-3 text-sm">
-        {recovery.edits.length ? (
-          <>
-            <p className="text-muted-foreground">{t("recoveryBody")}</p>
-            <ul className="space-y-1">
-              {recovery.edits.map((edit) => (
-                <li key={edit.id} className="wrap-break-word">
-                  <BidiText>{edit.fileName}</BidiText>
-                  {edit.status === "pending"
-                    ? ` (${t("recoveryFilePending")})`
-                    : ""}
-                </li>
-              ))}
-            </ul>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                void act("account");
-              }}
-              variant="outline"
-            >
-              {t("recoveryOpenFolder")}
-            </Button>
-          </>
-        ) : null}
-        {recovery.access === "signInRequired" ? (
-          <p className="text-muted-foreground">{t("recoverySignIn")}</p>
-        ) : null}
-        {recovery.unassigned ? (
-          <>
-            <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                void act("unassigned");
-              }}
-              variant="outline"
-            >
-              {t("recoveryOpenUnassigned")}
-            </Button>
-          </>
-        ) : null}
-        {recovery.pending ? (
-          <>
-            <p className="text-muted-foreground">{t("recoveryPending")}</p>
-            <Button
-              disabled={busy}
-              onClick={() => {
-                void act("retry");
-              }}
-              variant="outline"
-            >
-              {t("tryAgain")}
-            </Button>
-          </>
-        ) : null}
-        {error ? (
-          <p role="alert" className="text-destructive">
-            {error}
-          </p>
-        ) : null}
-      </div>
-    </SettingsSectionGroup>
+    <SettingsSection title={t("recoveryTitle")}>
+      <SettingsPanel inset="flush">
+        <div className="space-y-3 px-4 py-3 text-sm">
+          {recovery.edits.length ? (
+            <>
+              <p className="text-muted-foreground">{t("recoveryBody")}</p>
+              <ul className="space-y-1">
+                {recovery.edits.map((edit) => (
+                  <li key={edit.id} className="wrap-break-word">
+                    <BidiText>{edit.fileName}</BidiText>
+                    {edit.status === "pending"
+                      ? ` (${t("recoveryFilePending")})`
+                      : ""}
+                  </li>
+                ))}
+              </ul>
+              <Button
+                disabled={busy}
+                disabledReason={
+                  recoveryAction === "retry"
+                    ? t("refreshingRecovery")
+                    : t("openingRecoveryFolder")
+                }
+                onClick={() => {
+                  void act("account");
+                }}
+                variant="outline"
+              >
+                {t("recoveryOpenFolder")}
+              </Button>
+            </>
+          ) : null}
+          {recovery.access === "signInRequired" ? (
+            <p className="text-muted-foreground">{t("recoverySignIn")}</p>
+          ) : null}
+          {recovery.unassigned ? (
+            <>
+              <p className="text-muted-foreground">{t("recoveryUnassigned")}</p>
+              <Button
+                disabled={busy}
+                disabledReason={
+                  recoveryAction === "retry"
+                    ? t("refreshingRecovery")
+                    : t("openingRecoveryFolder")
+                }
+                onClick={() => {
+                  void act("unassigned");
+                }}
+                variant="outline"
+              >
+                {t("recoveryOpenUnassigned")}
+              </Button>
+            </>
+          ) : null}
+          {recovery.pending ? (
+            <>
+              <p className="text-muted-foreground">{t("recoveryPending")}</p>
+              <Button
+                disabled={busy}
+                disabledReason={
+                  recoveryAction === "retry"
+                    ? t("refreshingRecovery")
+                    : t("openingRecoveryFolder")
+                }
+                onClick={() => {
+                  void act("retry");
+                }}
+                variant="outline"
+              >
+                {t("tryAgain")}
+              </Button>
+            </>
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-destructive">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      </SettingsPanel>
+    </SettingsSection>
   );
 };
 
@@ -401,10 +368,10 @@ const GeneralPane = ({
   return (
     <>
       <SettingsPageHeader title={t("pages.general")} />
-      <SettingsGroup title={t("account")}>
+      <SettingsSection title={t("account")}>
         <AccountRow accountState={accountState} onAction={onAccountAction} />
-      </SettingsGroup>
-      <SettingsGroup title={t("app")}>
+      </SettingsSection>
+      <SettingsSection title={t("app")}>
         <SettingsRow id="desktop-language-row" title={t("language")}>
           <Combobox<SupportedLanguage>
             autoHighlight
@@ -450,10 +417,10 @@ const GeneralPane = ({
           />
         </li>
         <SetupGuideSetting />
-      </SettingsGroup>
-      <SettingsGroup title={t("privacy")}>
+      </SettingsSection>
+      <SettingsSection title={t("privacy")}>
         <TelemetryToggle />
-      </SettingsGroup>
+      </SettingsSection>
     </>
   );
 };
@@ -509,6 +476,7 @@ const AccountRow = ({
       )}
       <Button
         disabled={presentation.status === "loading"}
+        disabledReason={t("loadingAccount")}
         onClick={onAction}
         variant={presentation.actionVariant}
       >
@@ -582,9 +550,11 @@ const ClipboardPane = () => {
   return (
     <>
       <SettingsPageHeader title={t("pages.clipboard")} />
-      <SettingsSectionGroup>
-        <ShortcutSetting />
-      </SettingsSectionGroup>
+      <SettingsSection>
+        <SettingsPanel inset="flush">
+          <ShortcutSetting />
+        </SettingsPanel>
+      </SettingsSection>
     </>
   );
 };
@@ -608,23 +578,23 @@ const AgentsPane = ({
           focus={agentSettingsFocus}
           onFocusShown={onAgentSettingsShown}
           renderGroup={(content) => (
-            <SettingsSectionGroup title={tSubscriptions("title")}>
-              {content}
-            </SettingsSectionGroup>
+            <SettingsSection title={tSubscriptions("title")}>
+              <SettingsPanel inset="flush">{content}</SettingsPanel>
+            </SettingsSection>
           )}
         />
         <LocalSkillFoldersSection
           renderGroup={(content) => (
-            <SettingsSectionGroup title={tLocalSkills("title")}>
-              {content}
-            </SettingsSectionGroup>
+            <SettingsSection title={tLocalSkills("title")}>
+              <SettingsPanel inset="flush">{content}</SettingsPanel>
+            </SettingsSection>
           )}
         />
         <LocalLinkedFoldersSection
           renderGroup={(content) => (
-            <SettingsSectionGroup title={tLinkedFolders("title")}>
-              {content}
-            </SettingsSectionGroup>
+            <SettingsSection title={tLinkedFolders("title")}>
+              <SettingsPanel inset="flush">{content}</SettingsPanel>
+            </SettingsSection>
           )}
         />
         <KeepAwakeSection />
@@ -642,9 +612,9 @@ const SigningPane = () => {
       <SettingsSections>
         <SigningDriverSection
           renderGroup={(content) => (
-            <SettingsSectionGroup title={tSigningDriver("title")}>
-              {content}
-            </SettingsSectionGroup>
+            <SettingsSection title={tSigningDriver("title")}>
+              <SettingsPanel inset="flush">{content}</SettingsPanel>
+            </SettingsSection>
           )}
         />
       </SettingsSections>
@@ -677,22 +647,32 @@ const NotificationsPane = ({
   return (
     <>
       <SettingsPageHeader title={t("pages.notifications")} />
-      <SettingsGroup>
-        {items.map((item) => (
-          <li key={item.key}>
-            <NotificationRow
-              checked={notificationPreferences[item.key]}
+      <SettingsSection>
+        {items.map((item) => {
+          const ids = settingsRowIds(`notification-${item.key}`);
+          return (
+            <SettingsRow
               description={item.description}
               disabled={!ready}
-              label={item.label}
-              onCheckedChange={(checked) => {
-                onPreferenceChange(item.key, checked);
-              }}
-              preferenceKey={item.key}
-            />
-          </li>
-        ))}
-      </SettingsGroup>
+              id={`notification-${item.key}`}
+              interaction="label"
+              key={item.key}
+              title={item.label}
+            >
+              <Checkbox
+                aria-describedby={ids.description}
+                aria-labelledby={ids.label}
+                checked={notificationPreferences[item.key]}
+                id={ids.control}
+                disabled={!ready}
+                onCheckedChange={(checked) => {
+                  onPreferenceChange(item.key, checked);
+                }}
+              />
+            </SettingsRow>
+          );
+        })}
+      </SettingsSection>
     </>
   );
 };
@@ -707,13 +687,15 @@ const PermissionsPane = () => {
         description={t("permissionsDescription")}
         title={t("pages.permissions")}
       />
-      <SettingsSectionGroup>
-        <PermissionsSection
-          only={PERMISSIONS_PAGE_ROWS}
-          window={DESKTOP_TELEMETRY_WINDOWS.main}
-        />
-      </SettingsSectionGroup>
-      <SettingsGroup title={t("neverRequested")}>
+      <SettingsSection>
+        <SettingsPanel inset="flush">
+          <PermissionsSection
+            only={PERMISSIONS_PAGE_ROWS}
+            window={DESKTOP_TELEMETRY_WINDOWS.main}
+          />
+        </SettingsPanel>
+      </SettingsSection>
+      <SettingsSection title={t("neverRequested")}>
         <li className="flex flex-wrap gap-x-4 gap-y-1.5 px-4 py-3">
           {NEVER_REQUESTED[DESKTOP_PLATFORM].map((claim) => (
             <span
@@ -725,60 +707,53 @@ const PermissionsPane = () => {
             </span>
           ))}
         </li>
-      </SettingsGroup>
+      </SettingsSection>
     </>
   );
 };
 
 const AboutPane = ({
-  accountState,
   onCopyDiagnostics,
   onEmailSupport,
   onRevealSupportRoot,
   update,
+  updateCheck,
 }: {
-  accountState: DesktopAccountState;
   onCopyDiagnostics: () => void;
   onEmailSupport: () => void;
   onRevealSupportRoot: () => void;
-  update: DesktopUpdateSnapshot;
+  /** Null until the native snapshot arrives. */
+  update: DesktopUpdateSnapshot | null;
+  updateCheck: UpdateCheck;
 }) => {
-  const format = useFormatter();
   const t = useTranslations("settings");
 
-  const versionLabel =
-    update.currentVersion ??
-    (import.meta.env.DEV ? t("developmentBuild") : t("previewBuild"));
-  const linkedAccount =
-    accountState.status === "connected" ? accountState.account : null;
+  // Before the native snapshot arrives the version is unknown, not a preview
+  // build; the row waits for it instead of naming the wrong one.
+  const versionLabel = (() => {
+    if (update === null) {
+      return null;
+    }
+    return (
+      update.currentVersion ??
+      (import.meta.env.DEV ? t("developmentBuild") : t("previewBuild"))
+    );
+  })();
 
   return (
     <>
       <SettingsPageHeader title={t("pages.about")} />
-      <SettingsGroup>
-        <SettingsRow
-          description={versionLabel}
-          id="about-app"
-          media={<StellaAppIcon className="size-8 rounded-lg" />}
-          title={t("stellaDesktop")}
+      <SettingsSection>
+        <AppVersionRow
+          onEmailSupport={onEmailSupport}
+          supportEmail={SUPPORT_EMAIL}
+          updateCheck={updateCheck}
+          versionLabel={versionLabel}
         />
-        {linkedAccount ? (
-          <SettingsRow id="about-last-verified" title={t("lastVerified")}>
-            <span className="text-muted-foreground text-sm tabular-nums">
-              {linkedAccount.verifiedAt
-                ? format.dateTime(
-                    Temporal.Instant.from(linkedAccount.verifiedAt)
-                      .epochMilliseconds,
-                    { dateStyle: "medium", timeStyle: "short" },
-                  )
-                : t("notAvailableYet")}
-            </span>
-          </SettingsRow>
-        ) : null}
-      </SettingsGroup>
+      </SettingsSection>
 
-      <SettingsGroup title={t("support")}>
-        <SettingsRow id="about-support-email" title="hello@stll.app">
+      <SettingsSection title={t("support")}>
+        <SettingsRow id="about-support-email" title={SUPPORT_EMAIL}>
           <Button onClick={onEmailSupport} variant="outline">
             {t("email")}
           </Button>
@@ -799,10 +774,13 @@ const AboutPane = ({
             {t("revealAppData")}
           </Button>
         </li>
-      </SettingsGroup>
+      </SettingsSection>
     </>
   );
 };
+
+/** The address `email_support` writes to (`session_manager::SUPPORT_EMAIL`). */
+const SUPPORT_EMAIL = "hello@stll.app";
 
 type ActivityAvailability = "loading" | "enabled" | "disabled";
 
@@ -877,12 +855,23 @@ const App = () => {
   const accountGeneration = useRef(0);
   const snapshotGeneration = useRef(0);
   const snapshotRefresh = useRef<() => void>(() => undefined);
-  const [activePage, setActivePage] = useState<SettingsPage>(getInitialPage);
-  const [agentSettingsFocus, setAgentSettingsFocus] =
-    useState<AgentSettingsFocus | null>(null);
-  const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
-    null,
+  const [initialView] = useState(getInitialView);
+  const [activePage, setActivePage] = useState<SettingsPage>(
+    initialView?.page ?? "general",
   );
+  const [agentSettingsFocus, setAgentSettingsFocus] =
+    useState<AgentSettingsFocus | null>(initialView?.agentFocus ?? null);
+  const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
+    initialView?.dictationFocus ?? null,
+  );
+  const initialUpdateCheck = useRef(initialView?.checkForUpdates ?? false);
+  // The tray's "Check for updates" opens About and runs the check there, so
+  // its answer shows in the window rather than in a notification the system
+  // may not show.
+  const updateCheck = useUpdateCheck();
+  const runRequestedUpdateCheck = useEffectEvent(() => {
+    void updateCheck.run();
+  });
   const activityAvailability = useActivityAvailability();
   const dictationAvailability = useDictationAvailability();
   // A requested page that depends on the account stays shown while its
@@ -936,21 +925,26 @@ const App = () => {
       subscribeDesktopEvent<{ tab: string; focus?: unknown }>({
         event: "activate-tab",
         handler: (event) => {
-          const { tab: nextPage, focus } = event.payload;
-          if (!isSettingsPage(nextPage)) {
+          const view = settingsView(event.payload);
+          if (view === null) {
             return;
           }
-          setActivePage(nextPage);
+          setActivePage(view.page);
           // A focus belongs to the link that sent it; any other opening
           // drops one still waiting for its card.
-          setAgentSettingsFocus(
-            nextPage === "agents" && isAgentSettingsFocus(focus) ? focus : null,
-          );
-          setDictationFocus(
-            nextPage === "dictation" && focus === "microphone" ? focus : null,
-          );
+          setAgentSettingsFocus(view.agentFocus);
+          setDictationFocus(view.dictationFocus);
+          if (view.checkForUpdates) {
+            runRequestedUpdateCheck();
+          }
         },
         onError: reportSubscriptionFailure,
+        onSubscribed: () => {
+          if (initialUpdateCheck.current) {
+            initialUpdateCheck.current = false;
+            runRequestedUpdateCheck();
+          }
+        },
       }),
     [],
   );
@@ -1087,7 +1081,7 @@ const App = () => {
 
   const notificationPreferences =
     state?.notificationPreferences ?? DEFAULT_NOTIFICATION_PREFERENCES;
-  const update = state?.update ?? DEFAULT_UPDATE_SNAPSHOT;
+  const update = state?.update ?? null;
 
   const handlePreferenceChange = async (
     preferenceKey: NotificationPreferenceKey,
@@ -1293,7 +1287,6 @@ const App = () => {
       case "about":
         return (
           <AboutPane
-            accountState={accountState}
             onCopyDiagnostics={() => {
               void handleCopyDiagnostics();
             }}
@@ -1304,6 +1297,7 @@ const App = () => {
               void handleRevealSupportRoot();
             }}
             update={update}
+            updateCheck={updateCheck}
           />
         );
       default:
@@ -1319,6 +1313,8 @@ const App = () => {
         accountState={accountState}
         current={shownPage}
         onSelect={(nextPage) => {
+          // An update check's answer belongs to the visit that asked.
+          updateCheck.dismiss();
           setActivePage(nextPage);
           // Choosing a page by hand is never the link's visit.
           setAgentSettingsFocus(null);

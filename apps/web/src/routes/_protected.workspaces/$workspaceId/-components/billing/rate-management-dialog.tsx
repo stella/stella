@@ -632,6 +632,7 @@ const RateEntriesView = ({
       <Button
         className="self-end"
         disabled={!table}
+        disabledReason={t("billing.rates.rateTableNoLongerAvailable")}
         onClick={() => setShowForm(!showForm)}
         size="sm"
         variant="outline"

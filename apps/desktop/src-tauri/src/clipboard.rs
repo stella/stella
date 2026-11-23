@@ -2347,6 +2347,22 @@ impl ClipboardManager {
     Ok(true)
   }
 
+  /// Whether history, still keeping dictations, holds the dictation kept as
+  /// `id`.
+  fn holds_dictation(&self, id: &str) -> bool {
+    self.capture_status == ClipboardCaptureStatus::Active
+      && self.items.iter().any(|item| {
+        matches!(
+          item,
+          ClipboardItem::Text {
+            id: item_id,
+            origin: ClipboardItemOrigin::Dictation,
+            ..
+          } if item_id == id
+        )
+      })
+  }
+
   fn capture_image(
     &mut self,
     capture: ClipboardImageCapture,
@@ -3995,9 +4011,9 @@ pub fn keeps_dictations(app: &AppHandle) -> bool {
 
 /// Keeps a finished dictation in stella's own clipboard history, labelled
 /// as a dictation and stored with the same local encryption as every clip.
-/// The system clipboard is never written. Returns whether the text is in
-/// history: never while the organization turned history off, the user
-/// paused it, or `app_identifier` is an app the user left out of it.
+/// The system clipboard is never written. Returns the history item the
+/// text is kept as: none while the organization turned history off, the
+/// user paused it, or `app_identifier` is an app the user left out of it.
 #[cfg_attr(
   not(dictation),
   allow(dead_code, reason = "only builds with the speech engine dictate")
@@ -4006,17 +4022,15 @@ pub fn keep_dictation(
   app: &AppHandle,
   text: &str,
   app_identifier: Option<&str>,
-) -> bool {
+) -> Option<String> {
   if crate::managed_policy::current().clipboard_disabled {
-    return false;
+    return None;
   }
-  let Some(state) = app.try_state::<ClipboardAppState>() else {
-    return false;
-  };
-  let revision = {
+  let state = app.try_state::<ClipboardAppState>()?;
+  let (id, revision) = {
     let Ok(mut manager) = state.lock() else {
       tracing::error!("clipboard manager lock is poisoned");
-      return false;
+      return None;
     };
     let previous_ids = manager
       .items
@@ -4024,11 +4038,15 @@ pub fn keep_dictation(
       .map(|item| item.id().to_string())
       .collect::<Vec<_>>();
     match manager.keep_dictation(text, app_identifier, Utc::now()) {
-      Ok(true) => manager.cache_capture_update(&previous_ids),
-      Ok(false) => return false,
+      // A kept dictation goes first.
+      Ok(true) => (
+        manager.items.first()?.id().to_string(),
+        manager.cache_capture_update(&previous_ids),
+      ),
+      Ok(false) => return None,
       Err(error) => {
         tracing::warn!(error = %error, "dictation was not kept in clipboard history");
-        return false;
+        return None;
       }
     }
   };
@@ -4038,7 +4056,23 @@ pub fn keep_dictation(
       "clipboard history change was not announced",
     );
   }
-  true
+  Some(id)
+}
+
+/// Whether clipboard history still holds the dictation kept as `id`: not
+/// once the speaker deleted it, cleared or paused history, or the
+/// organization turned history off.
+#[cfg_attr(
+  not(dictation),
+  allow(dead_code, reason = "only builds with the speech engine dictate")
+)]
+pub fn holds_dictation(app: &AppHandle, id: &str) -> bool {
+  !crate::managed_policy::current().clipboard_disabled
+    && app.try_state::<ClipboardAppState>().is_some_and(|state| {
+      state
+        .lock()
+        .is_ok_and(|manager| manager.holds_dictation(id))
+    })
 }
 
 pub fn initialize_and_watch(
@@ -7733,6 +7767,32 @@ mod tests {
     assert_eq!(manager.items.len(), 2);
     assert_eq!(manager.items[0].id(), id);
     assert_eq!(manager.items[0].origin(), ClipboardItemOrigin::Dictation);
+  }
+
+  #[test]
+  fn history_holds_a_kept_dictation_until_it_is_deleted_paused_or_copied_over() {
+    let mut manager = ready_manager();
+    assert!(manager.keep_dictation("Ano.", None, Utc::now()).unwrap());
+    let id = manager.items[0].id().to_string();
+    assert!(manager.holds_dictation(&id));
+    assert!(!manager.holds_dictation("another"));
+
+    manager
+      .set_capture_status(ClipboardCaptureStatus::Paused)
+      .unwrap();
+    assert!(!manager.holds_dictation(&id));
+    manager
+      .set_capture_status(ClipboardCaptureStatus::Active)
+      .unwrap();
+    assert!(manager.holds_dictation(&id));
+
+    assert!(manager.delete_item(&id).unwrap());
+    assert!(!manager.holds_dictation(&id));
+
+    // A copy of the same text is a clip, not the dictation.
+    assert!(capture(&mut manager, "Ano.", None, Utc::now()));
+    let copied = manager.items[0].id().to_string();
+    assert!(!manager.holds_dictation(&copied));
   }
 
   #[test]

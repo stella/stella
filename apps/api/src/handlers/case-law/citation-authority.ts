@@ -272,6 +272,7 @@ export const recomputeCitationAuthorityBatch = async (
   const afterClause = after === null ? sql`` : sql`WHERE d.id > ${after}::uuid`;
 
   await setCorpusBackfillStatementTimeout(tx);
+  // sql-perf-allow: bounded by batch CTE primary-key keyset page (ORDER BY d.id LIMIT limit) before GROUP BY bw.decision_id
   const result: unknown = await tx.execute(sql`
     WITH batch AS (
       SELECT d.id

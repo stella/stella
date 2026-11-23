@@ -534,6 +534,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
       <Button
         aria-label={t("common.previousMatch")}
         disabled={matchCount === 0}
+        disabledReason={t("workspaces.filters.noMatches")}
         onClick={previousMatch}
         size="icon-xs"
         title={t("folio.findReplace.previousShortcut")}
@@ -544,6 +545,7 @@ export const InspectorFindBar = ({ find }: { find: InspectorFind }) => {
       <Button
         aria-label={t("common.nextMatch")}
         disabled={matchCount === 0}
+        disabledReason={t("workspaces.filters.noMatches")}
         onClick={nextMatch}
         size="icon-xs"
         title={t("folio.findReplace.nextShortcut")}

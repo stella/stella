@@ -30,7 +30,11 @@
   // default changes and a cached pass could replay over the edit. Hashing the
   // patches globally is the honest scope: the blast radius is every dependent
   // package, not one task's declared inputs.
-  "globalDependencies": ["patches/**", "scripts/bun-toolchain.gen.json"],
+  "globalDependencies": [
+    "patches/**",
+    "scripts/bun-toolchain.gen.json",
+    "packages/scripts/src/test-event-loop-watchdog*.ts"
+  ],
   "tasks": {
     "@stll/desktop#test:browser": {
       "inputs": ["$TURBO_DEFAULT$"]
@@ -61,11 +65,28 @@
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
     "@stll/web#generate:messages": {
       "inputs": [
-        "src/i18n/langs/*.json",
+        "src/i18n/namespaces/**/*.json",
+        "src/i18n/namespaces.json",
+        "$TURBO_ROOT$/packages/scripts/src/i18n-namespaces.ts",
         "$TURBO_ROOT$/packages/scripts/src/i18n-typegen.ts",
         "package.json"
       ],
-      "outputs": ["src/i18n/langs/messages.gen.ts"]
+      "outputs": [
+        "src/i18n/langs/messages.gen.ts",
+        "src/i18n/langs/ar.json",
+        "src/i18n/langs/cs.json",
+        "src/i18n/langs/de.json",
+        "src/i18n/langs/en.json",
+        "src/i18n/langs/es.json",
+        "src/i18n/langs/et.json",
+        "src/i18n/langs/fr.json",
+        "src/i18n/langs/hu.json",
+        "src/i18n/langs/lt.json",
+        "src/i18n/langs/lv.json",
+        "src/i18n/langs/pl.json",
+        "src/i18n/langs/pt-BR.json",
+        "src/i18n/langs/sk.json"
+      ]
     },
     "@stll/web#generate:route-tree": {
       "inputs": [
@@ -247,6 +268,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -325,6 +347,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -568,6 +591,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -720,6 +744,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -796,6 +821,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -866,6 +892,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -1045,6 +1072,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -1108,7 +1136,8 @@
         "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
         "!$TURBO_ROOT$/packages/mcp-apps/src/*/generated/**",
         "!$TURBO_ROOT$/packages/mcp-apps/src/generated/**",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/scripts/generated-files.ts",
@@ -1141,7 +1170,8 @@
         "!**/*.tsbuildinfo",
         "$TURBO_ROOT$/apps/api/src/**",
         "$TURBO_ROOT$/apps/api/scripts/generate-mcp-app-contracts.ts",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
@@ -1228,6 +1258,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -1248,7 +1279,8 @@
         "!**/*.tsbuildinfo",
         "$TURBO_ROOT$/apps/api/src/**",
         "$TURBO_ROOT$/apps/api/scripts/generate-mcp-app-contracts.ts",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/**",
@@ -1290,7 +1322,8 @@
       "dependsOn": ["^build", "generate:capability-runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**/*.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
@@ -1351,9 +1384,11 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
+        "$TURBO_ROOT$/packages/heic-decoder/**",
         "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
         "$TURBO_ROOT$/packages/invoicing/**",
@@ -1431,6 +1466,7 @@
         "$TURBO_ROOT$/packages/conditions/**",
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1510,12 +1546,14 @@
         "$TURBO_ROOT$/packages/fetch/**",
         "$TURBO_ROOT$/packages/html/**",
         "$TURBO_ROOT$/packages/infosoud/**",
+        "$TURBO_ROOT$/packages/invoicing/**",
         "$TURBO_ROOT$/packages/legal-ast/**",
         "$TURBO_ROOT$/packages/legal-atlas/**",
         "$TURBO_ROOT$/packages/locales/**",
         "$TURBO_ROOT$/packages/mcp-apps/**",
         "$TURBO_ROOT$/packages/mcp-kit/**",
         "$TURBO_ROOT$/packages/mojibake/**",
+        "$TURBO_ROOT$/packages/money/**",
         "$TURBO_ROOT$/packages/permissions/**",
         "$TURBO_ROOT$/packages/portable-path/**",
         "$TURBO_ROOT$/packages/property-testing/**",
@@ -1585,6 +1623,7 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1672,6 +1711,7 @@
         "$TURBO_ROOT$/packages/country-codes/**",
         "$TURBO_ROOT$/packages/db-load-gate/**",
         "$TURBO_ROOT$/packages/decision-reader/**",
+        "$TURBO_ROOT$/packages/docx-authoring/**",
         "$TURBO_ROOT$/packages/docx-utils/**",
         "$TURBO_ROOT$/packages/errors/**",
         "$TURBO_ROOT$/packages/fetch/**",
@@ -1767,6 +1807,7 @@
       "outputs": []
     },
     "@stll/api#lint": {
+      "env": ["API_LINT_SHARD"],
       "dependsOn": [
         "@stll/cli#codegen:runtime",
         "generate:capability-runtime",
@@ -1835,6 +1876,7 @@
         "$TURBO_ROOT$/scripts/fill-diagnostics-ledger.json",
         "$TURBO_ROOT$/scripts/generated-artifacts.ts",
         "$TURBO_ROOT$/scripts/oxlint-config-scopes.ts",
+        "$TURBO_ROOT$/scripts/parse-memo.ts",
         "$TURBO_ROOT$/scripts/refusal-code-ledger.json",
         "$TURBO_ROOT$/scripts/swallowed-item-error-ledger.json",
         "$TURBO_ROOT$/scripts/tailwind-lint-cache.ts",
@@ -1857,6 +1899,15 @@
       "passThroughEnv": ["API_TEST_TIMINGS_DIR", "API_TEST_DURATIONS_FILE"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/packages/mcp-kit/src/**"],
       "cache": false
+    },
+    // The view switcher's overflow test renders workspace-ui's switcher on the
+    // measuring hook it shares with the inspector facet bar.
+    "@stll/ui#test": {
+      "dependsOn": ["transit"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/packages/workspace-ui/src/view-switcher.tsx"
+      ]
     },
     "@stll/html#test": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/apps/api/src/**"]
@@ -1904,7 +1955,7 @@
         "$TURBO_ROOT$/.oxlint-plugins/**",
         "$TURBO_ROOT$/apps/web/src/components/chat/**",
         "$TURBO_ROOT$/apps/web/src/features/chat/chat-runtime.ts",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/en.json",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/en/chat.json",
         "$TURBO_ROOT$/apps/web/src/fonts.css",
         "$TURBO_ROOT$/apps/web/public/fonts/**",
         "$TURBO_ROOT$/docs/data-export/**",
@@ -1950,7 +2001,7 @@
         "$TURBO_ROOT$/apps/web/src/components/sidebar-user-menu.tsx",
         // The phone draws the web's recorded chats and its step titles.
         "$TURBO_ROOT$/apps/web/src/components/chat/__fixtures__/recorded-conversations/**",
-        "$TURBO_ROOT$/apps/web/src/i18n/langs/**",
+        "$TURBO_ROOT$/apps/web/src/i18n/namespaces/**",
         // And gives each failed turn the reason the web's map names.
         "$TURBO_ROOT$/apps/web/src/lib/errors/ai-failure.ts",
         "$TURBO_ROOT$/packages/ui/src/**"

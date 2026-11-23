@@ -228,10 +228,11 @@ const AIAvailabilityRoot = ({ children }: PropsWithChildren) => {
   // (e.g. keys configured elsewhere and refetched). Adjust-state-during-render on
   // the availability transition rather than in an effect; `open` stays
   // independent user-controlled state the rest of the time.
-  const [prevAvailable, setPrevAvailable] = useState(data?.available);
-  if (data?.available !== prevAvailable) {
-    setPrevAvailable(data?.available);
-    if (data?.available) {
+  const isAvailable = data?.available;
+  const [prevAvailable, setPrevAvailable] = useState(isAvailable);
+  if (isAvailable !== prevAvailable) {
+    setPrevAvailable(isAvailable);
+    if (isAvailable) {
       setOpen(false);
     }
   }
@@ -269,6 +270,27 @@ export const useAIKeyGate = () =>
     scope: PROVIDER_SCOPE.ai,
     missingMessage: "useAIKeyGate must be used within AIAvailabilityProvider",
   });
+
+export const useAISendBlockReason = () => {
+  const t = useTranslations();
+  const gate = use(AIAvailabilityContext);
+  const state = use(AIUnavailableContext);
+  if (gate?.availability === "pending") {
+    return t("common.loading");
+  }
+  if (state === null) {
+    return undefined;
+  }
+  switch (state.type) {
+    case "unavailable":
+      return t("chat.sendErrorProviderUnavailable");
+    case "configurationRequired":
+      return t(aiUnavailableMessageKey(state.availability));
+    default:
+      state satisfies never;
+      return panic("Unhandled AI send availability state");
+  }
+};
 
 export const AIUnavailableDialogTrigger = () => {
   const state = use(AIUnavailableContext);
@@ -407,6 +429,30 @@ const DEFAULT_PROVIDER_DRAFTS: ProviderCredentialDraft[] = [
   createProviderCredentialDraft(),
 ];
 
+type AiConfigDisabledReasonOptions = {
+  configStatus: "pending" | "error" | "success";
+  defaultsStatus: "pending" | "error" | "empty" | "items";
+  tCommon: (key: "loading") => string;
+  t: (key: "ai.keyRequired.configUnreadable") => string;
+  tOrganization: (key: "aiConfig.selectModelForEachRole") => string;
+};
+
+const aiConfigDisabledReason = ({
+  configStatus,
+  defaultsStatus,
+  tCommon,
+  t,
+  tOrganization,
+}: AiConfigDisabledReasonOptions) => {
+  if (configStatus === "pending" || defaultsStatus === "pending") {
+    return tCommon("loading");
+  }
+  if (configStatus === "error" || defaultsStatus === "error") {
+    return t("ai.keyRequired.configUnreadable");
+  }
+  return tOrganization("aiConfig.selectModelForEachRole");
+};
+
 export const AIKeyRequiredDialog = ({
   onOpenChange,
   open,
@@ -458,11 +504,10 @@ export const AIKeyRequiredDialog = ({
   // setState calls loop-safe. A key-based remount cannot replace this
   // because the dialog is rendered in more than one place and remounting
   // would also reset mutation state and re-suspend the config query.
-  const [lastOpen, setLastOpen] = useState(open);
-  const [lastConfigured, setLastConfigured] = useState(config?.configured);
-  if (open !== lastOpen || config?.configured !== lastConfigured) {
-    setLastOpen(open);
-    setLastConfigured(config?.configured);
+  const syncKey = `${String(open)}:${String(config?.configured)}`;
+  const [prevSyncKey, setPrevSyncKey] = useState(syncKey);
+  if (prevSyncKey !== syncKey) {
+    setPrevSyncKey(syncKey);
 
     if (open) {
       if (config?.configured) {
@@ -681,6 +726,13 @@ export const AIKeyRequiredDialog = ({
           </DialogClose>
           <Button
             disabled={!canSave}
+            disabledReason={aiConfigDisabledReason({
+              configStatus: configQuery.status,
+              defaultsStatus: defaultsView.type,
+              tCommon,
+              t,
+              tOrganization,
+            })}
             loading={saveMutation.isPending}
             onClick={() => saveMutation.mutate()}
             title={configRefusalKey === null ? undefined : t(configRefusalKey)}

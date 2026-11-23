@@ -475,7 +475,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           })}
         >
           <OverviewSectionHeader
-            actionDisabled={createTaskOnce.pending}
+            actionDisabledReason={
+              createTaskOnce.pending ? t("common.creating") : undefined
+            }
             actionLabel={t("common.add")}
             icon={<SquareCheckIcon />}
             onAction={() => {
@@ -555,6 +557,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               <Button
                 className="flex flex-1"
                 disabled={createTaskOnce.pending}
+                disabledReason={t("common.creating")}
                 onClick={() => {
                   detached(handleCreateTask(), "overview-view.create-task");
                 }}
@@ -880,7 +883,7 @@ type OverviewSectionHeaderProps = {
   icon: React.ReactNode;
   title: string;
   actionLabel: string;
-  actionDisabled?: boolean;
+  actionDisabledReason?: string | undefined;
   onAction: () => void;
 };
 
@@ -889,7 +892,7 @@ const OverviewSectionHeader = ({
   icon,
   title,
   actionLabel,
-  actionDisabled,
+  actionDisabledReason,
   onAction,
 }: OverviewSectionHeaderProps) => (
   <div className="mb-3 flex h-7 items-center justify-between gap-3">
@@ -899,7 +902,8 @@ const OverviewSectionHeader = ({
     </h2>
     <Button
       className="relative h-7 shrink-0 after:absolute after:-inset-2 md:after:hidden"
-      disabled={actionDisabled}
+      disabled={actionDisabledReason !== undefined}
+      disabledReason={actionDisabledReason}
       onClick={onAction}
       size="sm"
       variant="ghost"

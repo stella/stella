@@ -24,18 +24,16 @@ type Search =
 export const TranscribeMatterPicker = ({
   matter,
   onChange,
-  disabled = false,
 }: {
   matter: DesktopMatter | null;
   onChange: (matter: DesktopMatter | null) => void;
-  disabled?: boolean;
 }) => {
   const t = useTranslations("transcribe.matter");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [search, setSearch] = useState<Search>({ type: "idle" });
   useEffect(() => {
-    if (disabled || !open) {
+    if (!open) {
       return undefined;
     }
     let disposed = false;
@@ -61,7 +59,7 @@ export const TranscribeMatterPicker = ({
       disposed = true;
       clearTimeout(timer);
     };
-  }, [query, open, disabled]);
+  }, [query, open]);
   const answered = search.type !== "idle" && search.query === query;
   const failed = answered && search.type === "failed";
   const matters =
@@ -71,19 +69,11 @@ export const TranscribeMatterPicker = ({
     setOpen(false);
   };
   return (
-    <Popover
-      open={open}
-      onOpenChange={(value) => {
-        if (!disabled || !value) {
-          setOpen(value);
-        }
-      }}
-    >
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
         render={
           <Button
             className="max-w-56 min-w-44 justify-between"
-            disabled={disabled}
             size="sm"
             variant="outline"
           />
@@ -98,7 +88,6 @@ export const TranscribeMatterPicker = ({
         <SearchField
           aria-label={t("search")}
           clearLabel={t("clearSearch")}
-          disabled={disabled}
           onValueChange={setQuery}
           placeholder={t("search")}
           value={query}

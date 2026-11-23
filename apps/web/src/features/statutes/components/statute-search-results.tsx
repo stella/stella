@@ -124,6 +124,7 @@ export const StatuteSearchResults = ({
         hasNextPage && (
           <Button
             disabled={isFetchingNextPage}
+            disabledReason={t("common.loading")}
             onClick={onLoadMore}
             variant="ghost"
           >

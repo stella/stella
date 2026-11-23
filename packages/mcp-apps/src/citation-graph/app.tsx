@@ -28,18 +28,17 @@ import { parseCitationPage } from "./parse";
 import "../shared/generated/style.css";
 
 /**
- * One node's label plate. The plate is narrower than most case names, so an
- * available node gives its label back in full in a tooltip; an unavailable one
- * stays natively disabled, out of the tab order, with no tooltip to focus.
+ * The plate is narrower than most case names, so its tooltip gives the full
+ * label when the node can be opened.
  */
 const CitationGraphNodeButton = ({
-  disabled,
+  disabledReason,
   label,
   nodeId,
   onActivate,
   onFocus,
 }: {
-  disabled: boolean;
+  disabledReason: string | undefined;
   label: string;
   nodeId: string;
   onActivate: () => void;
@@ -48,10 +47,11 @@ const CitationGraphNodeButton = ({
   <Button
     className="flex h-11 w-full"
     data-node-id={nodeId}
-    disabled={disabled}
+    disabled={disabledReason !== undefined}
+    disabledReason={disabledReason}
     onClick={containedEventHandler(onActivate)}
     onFocus={onFocus}
-    tooltip={disabled ? undefined : label}
+    tooltip={label}
     variant="plain"
   >
     <span className="bg-background flex h-full w-full min-w-0 items-center justify-center rounded-md px-2 text-xs">
@@ -78,6 +78,26 @@ const nodeLabel = (node: GraphNode, t: ReturnType<typeof useTranslations>) => {
     default:
       return panic("Unknown citation node", node satisfies never);
   }
+};
+
+const resolveNodeOpenDisabledReason = (
+  node: GraphNode,
+  busy: boolean,
+  t: (key: "loading" | "decisionLinkUnavailable") => string,
+) => {
+  if (node.type !== "resolved") {
+    return undefined;
+  }
+  if (busy) {
+    return t("loading");
+  }
+  if (
+    !bridge.supportsTools() &&
+    parseLegalCitationHttpUrl(node.decision.url) === null
+  ) {
+    return t("decisionLinkUnavailable");
+  }
+  return undefined;
 };
 
 const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
@@ -167,12 +187,7 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
               height="44"
             >
               <CitationGraphNodeButton
-                disabled={
-                  node.type === "resolved" &&
-                  (busy ||
-                    (!bridge.supportsTools() &&
-                      parseLegalCitationHttpUrl(node.decision.url) === null))
-                }
+                disabledReason={resolveNodeOpenDisabledReason(node, busy, t)}
                 label={nodeLabel(node, t)}
                 nodeId={node.id}
                 onActivate={() => {
@@ -215,6 +230,37 @@ const Graph = ({ model, busy }: { model: GraphModel; busy: boolean }) => {
   );
 };
 
+type ExpandDisabledReasonOptions = {
+  busy: boolean;
+  decisionId: string;
+  model: GraphModel;
+  t: (
+    key:
+      | "loading"
+      | "hostToolsUnavailable"
+      | "citationsAlreadyExpanded"
+      | "citationExpansionLimitReached",
+  ) => string;
+};
+
+const expandDisabledReason = ({
+  busy,
+  decisionId,
+  model,
+  t,
+}: ExpandDisabledReasonOptions) => {
+  if (busy) {
+    return t("loading");
+  }
+  if (!bridge.supportsTools()) {
+    return t("hostToolsUnavailable");
+  }
+  if (decisionId === model.subjectId || model.expanded.includes(decisionId)) {
+    return t("citationsAlreadyExpanded");
+  }
+  return t("citationExpansionLimitReached");
+};
+
 const CitationList = ({
   model,
   busy,
@@ -248,6 +294,9 @@ const CitationList = ({
                   variant="link"
                   className="max-w-full min-w-0 shrink"
                   disabled={busy || (!bridge.supportsTools() && url === null)}
+                  disabledReason={t(
+                    busy ? "loading" : "decisionLinkUnavailable",
+                  )}
                   onClick={containedEventHandler(() =>
                     bridge.detached(
                       controller.open(decision.decisionId, url),
@@ -300,6 +349,12 @@ const CitationList = ({
                   !bridge.supportsTools() ||
                   !canExpand(model, decision.decisionId)
                 }
+                disabledReason={expandDisabledReason({
+                  busy,
+                  decisionId: decision.decisionId,
+                  model,
+                  t,
+                })}
                 aria-label={`${t("expandNode")}: ${decision.caseNumber}`}
                 onClick={containedEventHandler(() =>
                   bridge.detached(
@@ -395,6 +450,11 @@ const App = () => {
               key={page.decisionId}
               variant="outline"
               disabled={request.status === "loading" || !bridge.supportsTools()}
+              disabledReason={t(
+                request.status === "loading"
+                  ? "loading"
+                  : "hostToolsUnavailable",
+              )}
               aria-label={`${t("loadMore")}: ${page.decisionId}`}
               onClick={containedEventHandler(() =>
                 bridge.detached(

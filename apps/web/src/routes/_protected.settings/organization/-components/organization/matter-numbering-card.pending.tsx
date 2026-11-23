@@ -7,10 +7,12 @@ import {
   FieldDescriptionFace,
   FieldFace,
   FieldTriggerFace,
+  InputFace,
   LabelFace,
 } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
+import { MatterNumberPreview } from "@/components/matter-number-preview.pending";
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
 
@@ -33,6 +35,8 @@ type MatterNumberingCardFrameProps = {
   padding: ReactNode;
   /** The next number's preview (`MatterNumberPreview`). */
   preview: ReactNode;
+  /** The document name pattern's field and its sample name. */
+  documentNaming: ReactNode;
   /** The save button. */
   save: ReactNode;
 };
@@ -40,45 +44,32 @@ type MatterNumberingCardFrameProps = {
 /** The matter numbering card, in both phases. */
 export const MatterNumberingCardFrame = ({
   customPattern,
+  documentNaming,
   numberingToggle,
   padding,
   pattern,
   preview,
   save,
 }: MatterNumberingCardFrameProps) => (
-  <Frame>
-    <FramePanel>
-      <div className="flex flex-col gap-3 p-1">
+  <SettingsSection>
+    <SettingsPanel>
+      <div className="flex flex-col gap-3">
         {numberingToggle}
         {pattern}
         {customPattern}
         {padding}
         {preview}
+        {documentNaming}
         {save}
       </div>
-    </FramePanel>
-  </Frame>
+    </SettingsPanel>
+  </SettingsSection>
 );
 
 /** The checkbox beside its caption. */
 export const MATTER_NUMBERING_TOGGLE_ROW_CLASS = "flex items-center gap-2";
 
 /** The next number: its caption, then the number in a code chip. */
-export const MatterNumberPreview = ({
-  children,
-  label,
-}: {
-  label: ReactNode;
-  /** The next number, or a bar while it is worked out. */
-  children: ReactNode;
-}) => (
-  <div className="flex items-center gap-2">
-    <span className="text-muted-foreground text-xs">{label}</span>
-    <span className="bg-muted rounded-sm border px-2 py-1 font-mono text-sm">
-      {children}
-    </span>
-  </div>
-);
 
 /** The preview while the next number is worked out: its chip holds a bar. */
 export const MatterNumberPreviewPending = () => (
@@ -151,6 +142,19 @@ export const MatterNumberingCardPending = () => (
     }
     pattern={<PickerFieldPending label="organization.matterNumber.pattern" />}
     preview={<MatterNumberPreviewPending />}
+    documentNaming={
+      <FieldFace>
+        <LabelFace>
+          <PendingText
+            barClassName="w-24"
+            id="organization.documentNaming.pattern"
+          />
+        </LabelFace>
+        <InputFace>
+          <FaceLabelPending className="w-48" />
+        </InputFace>
+      </FieldFace>
+    }
     save={
       <ButtonFace className="self-start" size="sm" variant="default">
         <PendingText barClassName="w-20" id="common.saveChanges" />

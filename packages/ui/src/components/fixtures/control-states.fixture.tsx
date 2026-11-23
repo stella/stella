@@ -42,7 +42,7 @@ const ControlStatesFixture = () => (
     </div>
     <Button className="h-12 w-full justify-start rounded-none px-3" variant="ghost">Original inspector action</Button>
     <Button className="w-full" size="inspector-row" variant="ghost">Duplicate matter</Button>
-    <Button className="w-full" disabled size="inspector-row" variant="ghost">Duplicate content</Button>
+    <Button className="w-full" disabled disabledReason="Select content to duplicate." size="inspector-row" variant="ghost">Duplicate content</Button>
     <Textarea aria-label="Growing note" />
     <Textarea aria-label="One fixed row" fieldSizing="fixed" rows={1} />
     <Textarea aria-label="Two fixed rows" fieldSizing="fixed" rows={2} />

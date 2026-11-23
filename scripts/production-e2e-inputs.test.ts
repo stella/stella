@@ -70,7 +70,7 @@ test("shipped web source changes the production suite; tests, stories and docs d
     "apps/web/src/components/breadcrumbs/chat-switcher.tsx",
     "apps/web/src/routes/_protected.chat/-components/chat-history-link.tsx",
     "apps/web/src/lib/react-query.ts",
-    "apps/web/src/i18n/langs/en.json",
+    "apps/web/src/i18n/namespaces/en/core.json",
     "apps/web/src/fonts.css",
   ]) {
     expect(productionWebSource(file), file).toBe(true);
@@ -295,7 +295,7 @@ for (const [config, message] of [
       path.join(import.meta.dirname, "production-e2e-inputs.mjs"),
     ).href;
     const result = Bun.spawnSync([
-      "node",
+      process.execPath,
       "--input-type=module",
       "--eval",
       `import { productionE2eInputs } from ${JSON.stringify(moduleUrl)}; productionE2eInputs(${JSON.stringify(configPath)});`,

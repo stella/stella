@@ -84,6 +84,7 @@ export const ACTION_KINDS = {
   "case-law.research-answers": MODEL_ACTION,
   "documents.bounding-boxes": MODEL_ACTION,
   "documents.scan-deadlines": MODEL_ACTION,
+  "documents.suggest-name": MODEL_ACTION,
   "document-reviews.parties": MODEL_ACTION,
   "document-reviews.propose-positions": MODEL_ACTION,
   "document-reviews.start": MODEL_ACTION,

@@ -231,6 +231,7 @@ const AskUserOptions = ({
           </span>
           <Button
             disabled={draft.picked.length === options.length}
+            disabledReason={t("chat.askUser.allOptionsSelected")}
             onClick={() =>
               onChange((current) => pickAllAskUserOptions(question, current))
             }
@@ -241,6 +242,7 @@ const AskUserOptions = ({
           </Button>
           <Button
             disabled={draft.picked.length === 0}
+            disabledReason={t("chat.askUser.noOptionsSelected")}
             onClick={() => onChange((current) => ({ ...current, picked: [] }))}
             size="xs"
             variant="ghost"
@@ -379,16 +381,19 @@ export const AskUserCard = ({
   const [drafts, setDrafts] = useState<Record<number, AskUserDraft>>(() =>
     input ? initialAskUserDrafts(input.questions) : {},
   );
-  const [defaultsSeeded, setDefaultsSeeded] = useState(input !== null);
+  const hasInput = input !== null;
+  const [prevHasInput, setPrevHasInput] = useState(hasInput);
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
   // still be null. `drafts` is user-mutated interactive state set in
   // several handlers, so this is a one-shot prop-arrival merge into
   // existing state, not plain derived state. Guarded render-time adjustment
   // applies the transition before children render and avoids an extra commit.
-  if (input !== null && !defaultsSeeded) {
-    setDefaultsSeeded(true);
-    setDrafts({ ...initialAskUserDrafts(input.questions), ...drafts });
+  if (prevHasInput !== hasInput) {
+    setPrevHasInput(hasInput);
+    if (input !== null) {
+      setDrafts({ ...initialAskUserDrafts(input.questions), ...drafts });
+    }
   }
 
   const [submitted, setSubmitted] = useState(false);
@@ -615,7 +620,12 @@ export const AskUserCard = ({
                 </p>
               )}
               <div className="flex items-center gap-2">
-                <Button disabled={answers === null} size="xs" type="submit">
+                <Button
+                  disabled={answers === null}
+                  disabledReason={t("chat.askUser.answerRequired")}
+                  size="xs"
+                  type="submit"
+                >
                   {isEditing
                     ? t("chat.askUser.rerun")
                     : t("chat.askUser.submit")}

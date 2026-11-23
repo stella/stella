@@ -1,10 +1,9 @@
 import { panic } from "better-result";
 
+import { documentToDocx } from "@stll/docx-authoring/document";
 import type { Footnote, ParagraphContent } from "@stll/docx-core/model";
 import { ZipArchive } from "@stll/docx-core/zip";
 import type { Document } from "@stll/folio-core";
-
-import { documentToDocx } from "@/api/lib/docx-authoring/document";
 
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 const DOCUMENT_RELATIONSHIPS_PATH = "word/_rels/document.xml.rels";

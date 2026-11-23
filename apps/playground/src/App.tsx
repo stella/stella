@@ -318,6 +318,7 @@ export const App = () => {
           size="sm"
           onClick={handleZoomOut}
           disabled={zoom <= ZOOM_MIN}
+          disabledReason="Already at minimum zoom."
           title="Zoom out"
           tooltip="Zoom out"
         >
@@ -337,6 +338,7 @@ export const App = () => {
           size="sm"
           onClick={handleZoomIn}
           disabled={zoom >= ZOOM_MAX}
+          disabledReason="Already at maximum zoom."
           title="Zoom in"
           tooltip="Zoom in"
         >

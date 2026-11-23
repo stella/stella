@@ -10,11 +10,9 @@
 //
 // --check blocks on the startup gates (scripts/bundle-startup-gates.ts): the
 // gzip of the initial chunks against the committed `initial` budget, the size
-// of the eager pending views against the `pending` total the base branch
-// commits (with `--base-dir <dir>` holding the base's copies of the baseline
-// and of the pending-component exceptions list, which says how many routes
-// the change converted), page code in the initial chunks, and pages a route
-// loads outside its manifest preloads. Worker-only groups appearing in
+// of the eager pending views against the committed `pending` total, page
+// code in the initial chunks, and pages a route loads outside its manifest
+// preloads. Worker-only groups appearing in
 // the main bundle block too, because their budget is exactly zero. The
 // duplicate-content guard (--check-duplicates) is a separate, blocking check:
 // a chunk that carries the same large block twice is a build defect, not
@@ -28,7 +26,7 @@
 // Modes:
 //   bun scripts/bundle-baseline.ts                    report groups + gzip sizes
 //   bun scripts/bundle-baseline.ts --write-baseline    regenerate the groups, `initial` and `pending`
-//   bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check [--base-dir <dir>]
+//   bun --preload ./scripts/offline-network-preload.ts scripts/bundle-baseline.ts --check
 //                                                     startup gates + worker-only groups (blocking)
 //   bun scripts/bundle-baseline.ts --check-duplicates  duplicate-content guard (blocking)
 //   bun scripts/bundle-baseline.ts --self-test         prove the comparison logic fires
@@ -51,12 +49,9 @@ import { MCP_APPS } from "../packages/mcp-apps/src/manifest";
 import { BASELINE_PATHS } from "./baseline-paths";
 import { readStartupGraph } from "./bundle-startup-build";
 import {
-  convertedRouteCount,
   evaluateStartup,
   initialGzipBytes,
-  type PendingBudget,
   pendingLayer,
-  StartupLedgerSchema,
   startupSummary,
 } from "./bundle-startup-gates";
 import { assertOfflineCheckPreload } from "./offline-check-startup";
@@ -69,11 +64,6 @@ const DIST_REL = "apps/web/dist";
 const DIST_DIR = path.resolve(REPO_ROOT, DIST_REL);
 const ASSETS_REL = `${DIST_REL}/client/assets`;
 const ASSETS_DIR = path.resolve(REPO_ROOT, ASSETS_REL);
-const LEDGER_REL = "scripts/bundle-startup-ledger.json";
-const LEDGER_PATH = path.resolve(REPO_ROOT, LEDGER_REL);
-const PENDING_EXCEPTIONS_REL =
-  ".oxlint-plugins/route-pending-component-exceptions.json";
-const PENDING_EXCEPTIONS_PATH = path.resolve(REPO_ROOT, PENDING_EXCEPTIONS_REL);
 const SCAN_ENGINE_WASM = path.resolve(
   REPO_ROOT,
   "packages/scan-engine/generated/scan_engine_bg.wasm",
@@ -311,67 +301,11 @@ const readInitialBudget = (): number | undefined =>
     readBaselineJson(),
   ).initial;
 
-const PendingTotalSchema = v.object({
-  pending: v.optional(v.pipe(v.number(), v.integer())),
-});
-const ExceptionListSchema = v.array(v.string());
-
 const readPendingTotal = (): number | undefined =>
-  v.parse(PendingTotalSchema, readBaselineJson()).pending;
-
-/**
- * A file as the base branch holds it, from the directory the caller wrote the
- * base's copies into at their repository paths (`git show <base>:<path>`; the
- * check runs offline, so it spawns no git itself). Null when the base did not
- * hold the file, as scripts/ledger-membership.ts reads a missing base ledger.
- */
-const readBaseFile = (baseDir: string, rel: string): string | null => {
-  const file = path.resolve(baseDir, rel);
-  return existsSync(file) ? readFileSync(file, "utf-8") : null;
-};
-
-/** The pending budget: the tree's `pending`, and, with the base's files,
- *  the base's `pending` and how many routes left the exceptions list since. */
-const readPendingBudget = (
-  committed: number,
-  baseDir: string | undefined,
-): PendingBudget => {
-  if (baseDir === undefined) {
-    return { committed, base: null, convertedRoutes: null };
-  }
-  const baseline = readBaseFile(baseDir, BASELINE_REL);
-  const baseExceptions = readBaseFile(baseDir, PENDING_EXCEPTIONS_REL);
-  const exceptions = v.parse(
-    ExceptionListSchema,
-    JSON.parse(readFileSync(PENDING_EXCEPTIONS_PATH, "utf-8")),
-  );
-  return {
-    committed,
-    base:
-      baseline === null
-        ? null
-        : (v.parse(PendingTotalSchema, JSON.parse(baseline)).pending ?? null),
-    convertedRoutes:
-      baseExceptions === null
-        ? null
-        : convertedRouteCount(
-            v.parse(ExceptionListSchema, JSON.parse(baseExceptions)),
-            exceptions,
-          ),
-  };
-};
-
-// The directory scripts/startup-gate-base.sh writes the base's copies into.
-const baseDirArgument = (): string | undefined => {
-  const index = process.argv.indexOf("--base-dir");
-  if (index === -1) {
-    return undefined;
-  }
-  const dir = process.argv[index + 1];
-  return dir === undefined || dir === "" || dir.startsWith("--")
-    ? panic("--base-dir requires a directory")
-    : dir;
-};
+  v.parse(
+    v.object({ pending: v.optional(v.pipe(v.number(), v.integer())) }),
+    readBaselineJson(),
+  ).pending;
 
 // Copies every GROUP_KEYS value onto emptySizes' (alphabetical) literal, so
 // the written file's key set and order come from the one compiler-guarded
@@ -536,15 +470,10 @@ const runCheck = (): number => {
     console.error(startup.error);
     return 1;
   }
-  const ledger = v.parse(
-    StartupLedgerSchema,
-    JSON.parse(readFileSync(LEDGER_PATH, "utf-8")),
-  );
   const workerOnly = checkWorkerOnlyGroups(measured.sizes, console.log);
   const evaluation = evaluateStartup(
     startup.graph,
-    { initial: budget, pending: readPendingBudget(pending, baseDirArgument()) },
-    ledger,
+    { initial: budget, pending },
     WRITE_HINT,
   );
   const summary = startupSummary(evaluation);

@@ -8,6 +8,8 @@
   "sideEffects": false,
   "exports": {
     ".": "./src/transcript.ts",
+    "./spelling": "./src/spelling.ts",
+    "./corrections": "./src/corrections.ts",
     "./timeline": "./src/timeline.ts",
     "./exporters": "./src/exporters.ts",
     "./vocabulary": "./src/vocabulary.ts",

@@ -189,6 +189,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/catalogue/**/*.{ts,tsx}",
   "apps/web/src/components/conditions/**/*.{ts,tsx}",
   "apps/web/src/components/entity-views/**/*.{ts,tsx}",
+  "apps/web/src/components/file-parts/**/*.{ts,tsx}",
   "apps/web/src/components/file-tree/**/*.{ts,tsx}",
   "apps/web/src/components/flows/**/*.{ts,tsx}",
   "apps/web/src/components/inbox/**/*.{ts,tsx}",
@@ -255,6 +256,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/country-codes/src/**/*.ts",
   "packages/db-load-gate/src/**/*.ts",
   "packages/decision-reader/src/**/*.{ts,tsx}",
+  "packages/docx-authoring/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -328,6 +330,13 @@ export const RESULT_BOUNDARY_GLOBS = [
   // Better Auth maps a rejected code exchange to its callback error, so the
   // retry wrapper hands the provider's rejection back unchanged.
   "apps/api/src/lib/auth/social-token-exchange.ts",
+  // Better Auth consumes an SSO endpoint gate's and the session provenance
+  // hook's refusals as rejected APIError values.
+  "apps/api/src/lib/auth/sso-sign-in.ts",
+  // Better Auth consumes the organization endpoints' SSO refusal as a
+  // rejected APIError value.
+  "apps/api/src/lib/auth/sso-organization-guard.ts",
+  "apps/api/src/lib/auth/sso-organization-guard.ts",
 
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
@@ -339,6 +348,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/account-export/organization-audit-archive.ts",
   "apps/api/src/lib/account-export/queue.ts",
   "apps/api/src/lib/bilingual/run-queue.ts",
+  "apps/api/src/lib/uploads/document-naming/worker.ts",
   "apps/api/src/lib/document-processing-queue.ts",
   "apps/api/src/lib/document-review/run-queue.ts",
   "apps/api/src/lib/document-translation/run-queue.ts",
@@ -439,6 +449,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // this adapter converts that runtime contract to a typed Result.
   "packages/scan-engine/src/scan-engine.ts",
   "packages/scan-engine/src/scan-engine.worker.ts",
+  // A trap in the HEIC decoder's module surfaces as a thrown
+  // WebAssembly.RuntimeError; the adapter turns it into a typed outcome.
+  "packages/heic-decoder/src/heic-decoder.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

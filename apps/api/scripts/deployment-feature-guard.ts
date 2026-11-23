@@ -83,16 +83,44 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Court document previews use matter file read permissions on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/e-invoice",
+    "Structured invoice previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/signed-dossier",
+    "Signed container previews use matter file read permissions on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/asic",
     "ASiC previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/zip",
+    "ZIP archive previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/parts",
+    "Listing the files inside a part of a file uses the matter file read permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/cades",
     "Signed document previews use the matter file read permission on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/part",
+    "Saving a part of a file to a matter uses the matter file read and document create permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/email-reading",
+    "Email readings use the matter file read permission on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/data-box",
     "Data-box previews use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/entities/:workspaceId/entity/:entityId/similar",
+    "Listing similar documents in a matter uses the matter read permission on every deployment",
   ],
   [
     "/v1/organization-settings/correspondence/data-boxes",
@@ -133,6 +161,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/dictation/cleanup",
     "Authenticated dictation cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
+  ],
+  [
+    "/v1/dictation/recording-cleanup",
+    "Authenticated recording cleanup is available on every deployment and enforces its dictation kill switch, model availability and usage admission",
   ],
   [
     "/v1/organizations/audit-export",
@@ -282,6 +314,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/transcripts",
     "Filing a transcribed recording enforces the caller's dictation feature decision, matter access and document create permission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/transcripts/audio",
+    "Finalizing a transcribed recording's audio enforces the caller's dictation feature decision, matter access, document create permission and the caller's own upload on every deployment",
   ],
   [
     "/v1/files/:workspaceId/marked",

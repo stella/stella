@@ -1,5 +1,5 @@
 {
   "metric": "lib-to-handler-imports",
   "delta": 1,
-  "reason": "The insolvency register lookup budget reserves its slot through the publisher request gate the corpus walk uses, so lookups and the walk share one Redis-backed pacing mechanism and key namespace for the same host; the gate lives with the ingestion adapters."
+  "reason": "Document naming renames through renameEntityHandler so the rename keeps its permission, read-only and audit checks instead of a second copy of them."
 }

@@ -195,6 +195,7 @@ describe("ButtonTextRun", () => {
       /^<button[^>]*type="button"[^>]*><\/button>rozsudek/u,
     );
     expect(markup).toContain("select-text");
+    expect(markup).not.toContain("data-trigger-disabled");
     expect(markup).not.toContain("role=");
   });
 

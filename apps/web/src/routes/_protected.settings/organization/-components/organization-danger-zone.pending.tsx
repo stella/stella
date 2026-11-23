@@ -1,16 +1,17 @@
 import type { ReactNode } from "react";
 
 import { ButtonFace } from "@stll/ui/control-face";
-import { Frame, FramePanel } from "@stll/ui/frame";
+import { SettingsPanel } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
+import { SettingsSectionPending } from "@/routes/_protected.settings/-components/settings-section.pending";
 
 import { OrganizationAuditArchivePending } from "./organization-audit-archive.pending";
 
 /*
  * The organization's danger zone (`./organization-danger-zone.tsx`): its
- * heading over one card of rows, each a line on what the action does and the
+ * heading over one surface of rows, each a line on what the action does and the
  * action at the end. Every manager can leave; an owner also gets the
  * activity-log archive and deletion. The section renders
  * `OrganizationDangerZoneSection` and `OrganizationDangerZoneRow`; the
@@ -18,22 +19,20 @@ import { OrganizationAuditArchivePending } from "./organization-audit-archive.pe
  * same rows with the actions' faces.
  */
 
-/** The section in both phases: its heading over the card of rows. */
+/** The section in both phases: its heading over the surface of rows. */
 export const OrganizationDangerZoneSection = ({
   children,
 }: {
   children: ReactNode;
 }) => (
-  <section className="flex flex-col gap-3">
-    <h2 className="text-base font-semibold">
-      <PendingText barClassName="w-28" id="settings.account.dangerZone" />
-    </h2>
-    <Frame>
-      <FramePanel>
-        <div className="flex flex-col gap-5">{children}</div>
-      </FramePanel>
-    </Frame>
-  </section>
+  <SettingsSectionPending
+    title="settings.account.dangerZone"
+    tone="destructive"
+  >
+    <SettingsPanel>
+      <div className="flex flex-col gap-5">{children}</div>
+    </SettingsPanel>
+  </SettingsSectionPending>
 );
 
 /** One action's row: its line, then the action. */

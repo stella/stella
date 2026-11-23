@@ -64,6 +64,21 @@ describe("dictation notice", () => {
     });
   });
 
+  test("a withdrawn model leads to the model choice", () => {
+    for (const platform of ["mac", "windows", "other"] as const) {
+      expect(
+        dictationNoticeCopy(
+          { fix: "chooseModel", kind: "modelWithdrawn" },
+          platform,
+        ),
+      ).toEqual({
+        action: "chooseModel",
+        body: "modelBody",
+        title: "modelTitle",
+      });
+    }
+  });
+
   test("only the native side's states are accepted", () => {
     const valid = {
       fix: "request",

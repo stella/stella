@@ -46,21 +46,30 @@ export const useAIConfigDrafts = ({
     status: "idle",
   });
 
-  if (initialization === "awaiting-config" && config !== null) {
-    setInitialization("initialized");
-    setStoredProviders(initial.storedProviders);
-    setProviders(initial.providers);
-    setRoleModels(initial.roles);
-    setSavedRoles(initial.roles);
-    setStoredDecision(initial.decision);
-    setDecisionState({ kind: "untouched" });
-    if (feedback.status !== "saved") {
-      setFeedback({ status: "idle" });
+  const hasConfig = config !== null;
+  const [prevHasConfig, setPrevHasConfig] = useState(hasConfig);
+  if (prevHasConfig !== hasConfig) {
+    setPrevHasConfig(hasConfig);
+    if (initialization === "awaiting-config" && hasConfig) {
+      setInitialization("initialized");
+      setStoredProviders(initial.storedProviders);
+      setProviders(initial.providers);
+      setRoleModels(initial.roles);
+      setSavedRoles(initial.roles);
+      setStoredDecision(initial.decision);
+      setDecisionState({ kind: "untouched" });
+      if (feedback.status !== "saved") {
+        setFeedback({ status: "idle" });
+      }
     }
   }
-  if (isReady && recoveryAction === "remove") {
-    setRecoveryAction("keep");
-    setFeedback({ status: "idle" });
+  const [prevIsReady, setPrevIsReady] = useState(isReady);
+  if (prevIsReady !== isReady) {
+    setPrevIsReady(isReady);
+    if (isReady && recoveryAction === "remove") {
+      setRecoveryAction("keep");
+      setFeedback({ status: "idle" });
+    }
   }
 
   const clearFeedback = () => setFeedback({ status: "idle" });

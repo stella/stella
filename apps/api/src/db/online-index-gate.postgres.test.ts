@@ -20,7 +20,11 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationParam,
 } from "./online-migration-connection";
-import { ensureOnlineIndexValid, retireOnlineIndex } from "./online-migrations";
+import {
+  analyzeExpressionIndexesWithoutStatistics,
+  ensureOnlineIndexValid,
+  retireOnlineIndex,
+} from "./online-migrations";
 import { terminateReserved } from "./sql-close";
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -440,6 +444,62 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           .map((record) => JSON.stringify(record))
           .some((record) => record.includes('"decision":"done"')),
       ).toBe(true);
+    });
+  });
+
+  test("an expression index build analyzes its table, so the planner has the expression's statistics", async () => {
+    await withFixture(async (fixture) => {
+      const definitionBody = `ON public.${fixture.table} USING btree (((id + other)))`;
+      fixture.index = {
+        ...fixture.index,
+        definitionBody,
+        createSql: `CREATE INDEX CONCURRENTLY ${fixture.name} ${definitionBody}`,
+      };
+      const expressionStats = async () =>
+        await fixture.observer<
+          { count: number }[]
+        >`SELECT count(*)::integer AS count FROM pg_stats WHERE schemaname = 'public' AND tablename = ${fixture.name}`;
+      await repair(fixture);
+      expect((await expressionStats()).at(0)?.count).toBe(1);
+    });
+  });
+
+  test("the statistics census analyzes a table whose expression index was built outside the runner", async () => {
+    await withFixture(async (fixture) => {
+      await fixture.owner.unsafe(
+        `CREATE INDEX ${fixture.name} ON public.${fixture.table} USING btree (((id + other)))`,
+      );
+      const expressionStats = async () =>
+        await fixture.observer<
+          { count: number }[]
+        >`SELECT count(*)::integer AS count FROM pg_stats WHERE schemaname = 'public' AND tablename = ${fixture.name}`;
+      expect((await expressionStats()).at(0)?.count).toBe(0);
+      expect(
+        await analyzeExpressionIndexesWithoutStatistics({
+          connection: fixture.connection,
+          mode: {
+            indexGate: fixture.gate,
+            reserveObserver: async () => ({
+              ...fixture.observation,
+              release: () => undefined,
+            }),
+            timing: { clock: () => 0, emit: () => undefined },
+          },
+          minIndexBytes: 0,
+          tableName: fixture.table,
+        }),
+      ).toEqual({ type: "complete" });
+      expect((await expressionStats()).at(0)?.count).toBe(1);
+    });
+  });
+
+  test("a plain column index build leaves its table's statistics to autovacuum", async () => {
+    await withFixture(async (fixture) => {
+      await repair(fixture);
+      const analyzed = await fixture.observer<
+        { analyzed: boolean }[]
+      >`SELECT last_analyze IS NOT NULL AS analyzed FROM pg_stat_user_tables WHERE relid = ${`public.${fixture.table}`}::regclass`;
+      expect(analyzed.at(0)?.analyzed).toBe(false);
     });
   });
 

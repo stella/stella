@@ -146,6 +146,7 @@ export const EvidenceReferencesDialog = ({
                     layout="wrap"
                     className="w-full"
                     disabled={reference.workspaceId !== workspaceId}
+                    disabledReason={t("folio.evidenceInDifferentMatter")}
                     onClick={() => {
                       onOpenChange(false);
                       detached(
@@ -350,6 +351,7 @@ const EvidenceFilePicker = ({
               layout="wrap"
               className="w-full"
               disabled={insert.isPending}
+              disabledReason={t("folio.insertingEvidence")}
               onClick={() => insert.mutate(file)}
               tooltip={t("folio.insertEvidence")}
               variant="ghost"
@@ -366,6 +368,7 @@ const EvidenceFilePicker = ({
       {query.hasNextPage && (
         <Button
           disabled={query.isFetchingNextPage}
+          disabledReason={t("caseLaw.loadingMore")}
           onClick={() => {
             detached(query.fetchNextPage(), "evidence-reference.load-more");
           }}

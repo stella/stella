@@ -287,6 +287,9 @@ export const CopyToMatterDialog = ({
           </Button>
           <Button
             disabled={!target || isSubmitting}
+            disabledReason={
+              isSubmitting ? t("common.copying") : t("common.selectAMatter")
+            }
             onClick={() => {
               detached(handleSubmit(), "copy-to-matter-dialog.submit");
             }}

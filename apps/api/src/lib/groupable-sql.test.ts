@@ -64,13 +64,12 @@ test("accepts an sql.raw-inlined list join", () => {
 });
 
 test("sitemap fragments bind to the supplied published relation without parameters", async () => {
-  const { decisionYearSqlFor, decisionMonthSqlFor, decisionBucketSqlFor } =
+  const { decisionYearSqlFor, decisionMonthSqlFor } =
     await import("@/api/lib/case-law/sitemap-shard-sql");
   const dialect = new PgDialect();
   for (const fragment of [
     decisionYearSqlFor(publishedCaseLawDecisions),
     decisionMonthSqlFor(publishedCaseLawDecisions),
-    decisionBucketSqlFor(publishedCaseLawDecisions),
   ]) {
     const rendered = dialect.sqlToQuery(fragment);
     expect(rendered.params).toEqual([]);

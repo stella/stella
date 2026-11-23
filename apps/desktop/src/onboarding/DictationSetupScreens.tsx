@@ -1,5 +1,4 @@
 import { useId } from "react";
-import type { ReactNode } from "react";
 
 import { panic } from "better-result";
 import { useLocale, useTranslations } from "use-intl";
@@ -8,13 +7,11 @@ import { DESKTOP_DICTATION_CLEANUP_LIMITS } from "@stll/api-contract/desktop-dic
 import { Button } from "@stll/ui/button";
 import { CheckCircle2Icon } from "@stll/ui/icons";
 import { Label } from "@stll/ui/label";
-import { ScrollArea } from "@stll/ui/scroll-area";
-import { Switch } from "@stll/ui/switch";
 
 import { DictationCustomWords } from "../mainview/DictationCustomWords";
 import {
+  ChosenModelNote,
   CloudModelSelect,
-  DictationModelTags,
   RetentionWarning,
   shownCloudModel,
   unavailableMessage,
@@ -36,7 +33,13 @@ import type {
   DictationDestinationChoice,
   DictationSetupScreen,
 } from "./dictation-setup-steps";
-import { namedDictationFailure, needsDownload } from "./use-dictation";
+import {
+  Facts,
+  ScreenContent,
+  ScreenHeader,
+  SwitchCard,
+} from "./SetupScreenParts";
+import { namedDictationFailure } from "./use-dictation";
 import type { DictationControls, DictationSnapshot } from "./use-dictation";
 
 const BYTES_PER_MEGABYTE = 1_000_000;
@@ -81,22 +84,6 @@ export const DictationSetupScreenBody = ({
       return panic("Unknown dictation setup screen.");
   }
 };
-
-const ScreenHeader = ({ body, title }: { body: ReactNode; title: string }) => (
-  <>
-    <h1 className="text-xl font-semibold text-balance">{title}</h1>
-    <p className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty">
-      {body}
-    </p>
-  </>
-);
-
-/** The screen's cards, scrolling inside the window when they outgrow it. */
-const ScreenContent = ({ children }: { children: ReactNode }) => (
-  <ScrollArea axis="vertical" className="mt-4">
-    <div className="flex flex-col gap-3 pb-1">{children}</div>
-  </ScrollArea>
-);
 
 /** The shortcut as this keyboard and platform write it. */
 const useShortcut = (snapshot: DictationSnapshot) => {
@@ -382,7 +369,6 @@ const LocalModel = ({
       {offersDownload ? (
         <Button
           className="shrink-0"
-          disabled={!needsDownload(model)}
           onClick={() => {
             void controls.download();
           }}
@@ -416,7 +402,7 @@ const CloudModel = ({
           <p className="text-sm font-medium" id={labelId}>
             {destinationT("model")}
           </p>
-          {chosen === null ? null : <DictationModelTags model={chosen} />}
+          <ChosenModelNote chosen={chosen} cloudModel={cloudModel} />
         </div>
         <CloudModelSelect
           chosen={chosen}
@@ -434,57 +420,6 @@ const CloudModel = ({
     </div>
   );
 };
-
-/** A switch with its name and what it sends, on a card of its own. */
-const SwitchCard = ({
-  checked,
-  description,
-  onChange,
-  title,
-}: {
-  checked: boolean;
-  description: string;
-  onChange: (enabled: boolean) => void;
-  title: string;
-}) => {
-  const id = useId();
-  return (
-    <div className="bg-card flex items-center justify-between gap-4 rounded-xl border px-4 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium" id={`${id}-title`}>
-          {title}
-        </p>
-        <p
-          className="text-muted-foreground mt-1 text-sm leading-relaxed text-pretty"
-          id={`${id}-description`}
-        >
-          {description}
-        </p>
-      </div>
-      <Switch
-        aria-describedby={`${id}-description`}
-        aria-labelledby={`${id}-title`}
-        checked={checked}
-        onCheckedChange={onChange}
-      />
-    </div>
-  );
-};
-
-/** What a screen sends and keeps, one plain line each. */
-const Facts = ({ facts }: { facts: readonly string[] }) => (
-  <ul className="text-muted-foreground flex flex-col gap-1.5 px-1 text-sm">
-    {facts.map((fact) => (
-      <li className="flex gap-2" key={fact}>
-        <span
-          aria-hidden="true"
-          className="bg-muted-foreground mt-2 size-1 shrink-0 rounded-full"
-        />
-        <span className="min-w-0 text-pretty">{fact}</span>
-      </li>
-    ))}
-  </ul>
-);
 
 /** 3. AI cleanup, which fits the text to the kind of app it goes to. */
 const AppScreen = ({ controls, snapshot }: ScreenProps) => {

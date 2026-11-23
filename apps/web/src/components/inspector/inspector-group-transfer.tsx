@@ -397,7 +397,12 @@ export const useInspectorGroupTransfer = (
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button disabled={isSubmitting} onClick={close} variant="ghost">
+          <Button
+            disabled={isSubmitting}
+            disabledReason={t("common.saving")}
+            onClick={close}
+            variant="ghost"
+          >
             {t("common.cancel")}
           </Button>
           {pending?.type === "chat" ? (
@@ -416,6 +421,7 @@ export const useInspectorGroupTransfer = (
             <>
               <Button
                 disabled={isSubmitting}
+                disabledReason={t("common.saving")}
                 onClick={() => {
                   if (pending) {
                     useInspectorTabsStore
@@ -430,6 +436,7 @@ export const useInspectorGroupTransfer = (
               </Button>
               <Button
                 disabled={isSubmitting}
+                disabledReason={t("common.saving")}
                 onClick={() => {
                   detached(copyAndAssign(), "inspector-group-transfer.copy");
                 }}

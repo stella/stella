@@ -6,6 +6,7 @@ import {
   INSPECTOR_PANE_MAX_WIDTH,
   INSPECTOR_PANE_MIN_WIDTH,
   INSPECTOR_RAIL_WIDTH,
+  inspectorPaneWidthCss,
   resolveInspectorDockWidth,
   resolveInspectorPaneMaxWidth,
   resolveInspectorPaneWidth,
@@ -193,5 +194,70 @@ describe("resolveInspectorDockWidth", () => {
     expect(
       resolveInspectorDockWidth({ paneWidth: 512, showPaneContent: true }),
     ).toBe(512);
+  });
+});
+
+/**
+ * The value of the CSS `inspectorPaneWidthCss` returns at one viewport width:
+ * nested `min()`/`max()` over pixel lengths and `100vw - <n>px` terms.
+ */
+const cssWidthAt = (css: string, viewportWidth: number): number => {
+  let rest = css
+    .replaceAll("100vw", () => String(viewportWidth))
+    .replaceAll("px", "");
+  const term = (): number => {
+    rest = rest.trimStart();
+    const call = /^(min|max)\(/u.exec(rest);
+    if (call !== null) {
+      rest = rest.slice(call[0].length);
+      const args = [expression()];
+      while (rest.trimStart().startsWith(",")) {
+        rest = rest.trimStart().slice(1);
+        args.push(expression());
+      }
+      rest = rest.trimStart().slice(1);
+      return call[1] === "min" ? Math.min(...args) : Math.max(...args);
+    }
+    const number = /^\d+(?:\.\d+)?/u.exec(rest)?.[0] ?? "NaN";
+    rest = rest.slice(number.length);
+    return Number(number);
+  };
+  const expression = (): number => {
+    let value = term();
+    while (rest.trimStart().startsWith("- ")) {
+      rest = rest.trimStart().slice(2);
+      value -= term();
+    }
+    return value;
+  };
+  return expression();
+};
+
+describe("inspectorPaneWidthCss", () => {
+  // A frame drawn before the viewport is known reserves the pane by this
+  // CSS; any viewport it then meets must give the width the measured pane
+  // takes there, or the content column moves when the frame is replaced.
+  test("is the measured pane width at every viewport and dragged width", () => {
+    for (const desiredWidth of [-500, 320, 512, 777, 5000]) {
+      for (const sidebarWidth of [
+        COLLAPSED_SIDEBAR_WIDTH,
+        EXPANDED_SIDEBAR_WIDTH,
+      ]) {
+        const css = inspectorPaneWidthCss({ desiredWidth, sidebarWidth });
+        for (
+          let viewportWidth = 768;
+          viewportWidth <= 3840;
+          viewportWidth += 7
+        ) {
+          expect(cssWidthAt(css, viewportWidth)).toBe(
+            resolveInspectorPaneWidth({
+              desiredWidth,
+              sidebarWidth,
+              viewportWidth,
+            }),
+          );
+        }
+      }
+    }
   });
 });
