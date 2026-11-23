@@ -3247,7 +3247,7 @@ jobs:
         if: >-
           !cancelled()
           && github.event_name == 'pull_request'
-          && matrix.shard == 'rest'
+          && (matrix.shard == 'rest' || (matrix.shard == 'web' && !contains(fromJSON(needs.ci-plan.outputs.ci_tests_matrix).shard, 'rest')))
           && needs.ci-plan.outputs.package_checks_required == 'true'
         # A file, not an environment variable: a large diff exceeds the size
         # limit of one variable and the step cannot start.
