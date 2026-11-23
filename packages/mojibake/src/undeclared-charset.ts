@@ -29,6 +29,7 @@
 import { Result } from "better-result";
 
 import { type Alphabet, alphabetFor } from "./alphabet.js";
+import { decodeDosCodePage, type DosCodePage } from "./dos-code-pages.js";
 
 /** The readings weighed, in the order a tie is settled. */
 const UNDECLARED_CHARSETS = [
@@ -41,6 +42,33 @@ const UNDECLARED_CHARSETS = [
 type UndeclaredCharset = (typeof UNDECLARED_CHARSETS)[number];
 
 type UndeclaredText = { text: string; charset: UndeclaredCharset };
+
+/**
+ * The readings weighed for file names a ZIP archive stores without its UTF-8
+ * flag, in the order a tie is settled. The ZIP specification gives such
+ * names code page 437; Windows writes them in its OEM code page (852 in
+ * Central Europe), and some archivers in its ANSI one.
+ */
+const UNDECLARED_FILE_NAME_CHARSETS = [
+  "ibm437",
+  "ibm852",
+  "windows-1250",
+  "windows-1252",
+] as const;
+
+type FileNameCharset = (typeof UNDECLARED_FILE_NAME_CHARSETS)[number];
+
+/** Reads bytes in a charset; a byte the charset leaves undefined is U+FFFD. */
+const reader = (
+  charset: UndeclaredCharset | FileNameCharset,
+): ((bytes: Uint8Array) => string) => {
+  if (charset === "ibm437" || charset === "ibm852") {
+    const codePage: DosCodePage = charset;
+    return (bytes) => decodeDosCodePage(bytes, codePage);
+  }
+  const decoder = new TextDecoder(charset);
+  return (bytes) => decoder.decode(bytes);
+};
 
 /**
  * Languages whose letters the legacy candidates write: the Central European
@@ -146,13 +174,13 @@ const scoredAlphabets = (): Alphabet[] =>
 
 const score = (
   words: readonly ScoredWord[],
-  decoder: TextDecoder,
+  read: (bytes: Uint8Array) => string,
   alphabets: readonly Alphabet[],
 ): number => {
   const explained = alphabets.map(() => 0);
   let cost = 0;
   for (const { bytes, occurrences } of words) {
-    const word = decoder.decode(bytes);
+    const word = read(bytes);
     if (isBroken(word)) {
       cost += occurrences;
       continue;
@@ -182,14 +210,17 @@ const strictUtf8 = (bytes: Uint8Array): string | null => {
     : `${head.value}${String.fromCodePoint(REPLACEMENT_CHARACTER)}`;
 };
 
-/** The legacy reading of bytes that are not UTF-8 that scores highest. */
-const bestReading = (bytes: Uint8Array): UndeclaredCharset => {
+/** The candidate whose reading of the bytes scores highest; ties go first. */
+const bestReading = <Charset extends UndeclaredCharset | FileNameCharset>(
+  bytes: Uint8Array,
+  candidates: readonly [Charset, ...Charset[]],
+): Charset => {
   const words = nonAsciiWords(bytes);
   const alphabets = scoredAlphabets();
-  let best: UndeclaredCharset = "utf-8";
+  let [best] = candidates;
   let bestScore = Number.NEGATIVE_INFINITY;
-  for (const charset of UNDECLARED_CHARSETS) {
-    const candidate = score(words, new TextDecoder(charset), alphabets);
+  for (const charset of candidates) {
+    const candidate = score(words, reader(charset), alphabets);
     if (candidate > bestScore) {
       best = charset;
       bestScore = candidate;
@@ -207,6 +238,48 @@ export const decodeUndeclared = (bytes: Uint8Array): UndeclaredText => {
   if (utf8 !== null) {
     return { text: utf8, charset: "utf-8" };
   }
-  const charset = bestReading(bytes);
+  const charset = bestReading(bytes, UNDECLARED_CHARSETS);
   return { text: new TextDecoder(charset).decode(bytes), charset };
+};
+
+/** Separates names joined for scoring: an ASCII byte that ends a word. */
+const NAME_SEPARATOR = 0x2f;
+
+/**
+ * The file names one archive stores without a declared charset, in order.
+ *
+ * A name that is valid UTF-8 is UTF-8: archivers that write UTF-8 without
+ * setting the flag are common, and a legacy name of accented letters is
+ * almost never valid UTF-8. The other names were written by one program in
+ * one code page, so they are weighed together and all read in the candidate
+ * that explains them best (`UNDECLARED_FILE_NAME_CHARSETS`); code page 437,
+ * the specification's, wins a tie, as when no name holds a letter that
+ * tells the candidates apart.
+ */
+export const decodeUndeclaredFileNames = (
+  names: readonly Uint8Array[],
+): { names: string[]; charset: FileNameCharset | null } => {
+  const fatalUtf8 = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
+  const utf8 = names.map((name) =>
+    Result.try(() => fatalUtf8.decode(name)).unwrapOr(null),
+  );
+  const legacy = names.filter((_, index) => utf8[index] === null);
+  if (legacy.length === 0) {
+    return { names: utf8.map((name) => name ?? ""), charset: null };
+  }
+  const joined = new Uint8Array(
+    legacy.reduce((length, name) => length + name.byteLength + 1, 0),
+  );
+  let offset = 0;
+  for (const name of legacy) {
+    joined.set(name, offset);
+    joined[offset + name.byteLength] = NAME_SEPARATOR;
+    offset += name.byteLength + 1;
+  }
+  const charset = bestReading(joined, UNDECLARED_FILE_NAME_CHARSETS);
+  const read = reader(charset);
+  return {
+    names: names.map((name, index) => utf8[index] ?? read(name)),
+    charset,
+  };
 };
