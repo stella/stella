@@ -22,6 +22,6 @@ export const cleanedSource = (
   aiMarkdown: string,
   edits: CleanedEdits | null,
 ): CleanedSource =>
-  edits !== null && edits.base === aiMarkdown && edits.markdown !== aiMarkdown
+  edits?.base === aiMarkdown && edits.markdown !== aiMarkdown
     ? { markdown: edits.markdown, edited: true }
     : { markdown: aiMarkdown, edited: false };

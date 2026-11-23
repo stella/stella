@@ -561,7 +561,7 @@ test("the cleaned-up text stays read-only while a part is being cleaned up", asy
   await page.evaluate((global) => {
     const release: unknown = Reflect.get(window, global);
     if (typeof release === "function") {
-      release();
+      Reflect.apply(release, window, []);
     }
   }, RELEASE_CLEANUP);
   await expect(cleanedEditor(page)).toBeVisible();

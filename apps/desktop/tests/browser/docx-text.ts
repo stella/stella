@@ -60,5 +60,5 @@ export const docxBodyText = (bytes: Uint8Array): string => {
     }
     at += 46 + nameLength + extraLength + commentLength;
   }
-  panic("The document has no word/document.xml part");
+  return panic("The document has no word/document.xml part");
 };

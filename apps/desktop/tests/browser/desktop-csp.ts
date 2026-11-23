@@ -21,13 +21,11 @@ const readShippedPolicy = (): string => {
       "utf-8",
     ),
   );
-  const csp =
-    typeof config === "object" && config !== null
-      ? Reflect.get(
-          Reflect.get(Reflect.get(config, "app") ?? {}, "security") ?? {},
-          "csp",
-        )
+  const field = (value: unknown, key: string): unknown =>
+    typeof value === "object" && value !== null
+      ? (Object.getOwnPropertyDescriptor(value, key)?.value as unknown)
       : undefined;
+  const csp = field(field(field(config, "app"), "security"), "csp");
   if (typeof csp !== "string" || !csp.includes("script-src 'self'")) {
     panic("tauri.conf.json ships no script-src 'self' policy");
   }
