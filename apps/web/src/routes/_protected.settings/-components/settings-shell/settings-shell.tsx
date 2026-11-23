@@ -24,6 +24,7 @@ import { env } from "@/env";
 import { useTimeBillingChromeEnabled } from "@/hooks/use-time-billing-preview";
 import { useFormatter } from "@/i18n/formatting-context";
 import { sessionSignInsOptions } from "@/lib/account/session-sign-ins";
+import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -59,6 +60,8 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
   const memoryEnabled = useCallerFeatureEnabled(CALLER_FEATURE.aiMemory);
   const timeBilling = useTimeBillingChromeEnabled();
   const roleQuery = useQuery(roleOptions);
+  const capabilitiesQuery = useQuery(authCapabilitiesOptions);
+  const capabilitiesView = queryView(capabilitiesQuery);
   const roleView = queryView(roleQuery);
   useQueryViewError(roleView, "SettingsShell.role:query");
   const role =
@@ -82,6 +85,9 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
     beta: betaFeaturesAvailable(),
     timeBilling,
     usage: env.VITE_FEATURE_USAGE,
+    enterpriseSso:
+      capabilitiesView.type === "items" &&
+      capabilitiesView.items.enterpriseSso === true,
   });
 
   const activeItem = sections

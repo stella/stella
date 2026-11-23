@@ -1211,6 +1211,10 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
     reason: "Issues request authority for provider credential validation.",
   },
   {
+    path: "apps/api/src/handlers/organization-settings/sso/test-provider.ts",
+    reason: "Issues request authority for OIDC discovery metadata validation.",
+  },
+  {
     path: "apps/api/src/handlers/case-law/public-routes.ts",
     reason: "Direct boundary for public case-law reads.",
   },

@@ -38,6 +38,14 @@ import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
 import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
 import updateSanctionsMonitoring from "@/api/handlers/organization-settings/sanctions-monitoring/update";
+import createOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/create-domain";
+import createOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/create-provider";
+import deleteOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/delete-domain";
+import deleteOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/delete-provider";
+import readOrganizationSso from "@/api/handlers/organization-settings/sso/get";
+import testOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/test-provider";
+import updateOrganizationSsoPolicy from "@/api/handlers/organization-settings/sso/update-policy";
+import verifyOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/verify-domain";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
@@ -80,6 +88,22 @@ export const organizationSettingsRoute = mount(
       {
         prefix: "/verification-decision-model",
         middleware: [deploymentFeatureGate("FEATURE_LEGAL_LISTS")],
+      },
+    ),
+    routes(
+      {
+        "/": { GET: readOrganizationSso },
+        "/policy": { PUT: updateOrganizationSsoPolicy },
+        "/providers": { POST: createOrganizationSsoProvider },
+        "/providers/test": { POST: testOrganizationSsoProvider },
+        "/providers/:providerId": { DELETE: deleteOrganizationSsoProvider },
+        "/domains": { POST: createOrganizationSsoDomain },
+        "/domains/:domainId/verify": { POST: verifyOrganizationSsoDomain },
+        "/domains/:domainId": { DELETE: deleteOrganizationSsoDomain },
+      },
+      {
+        prefix: "/sso",
+        middleware: [deploymentFeatureGate("FEATURE_ENTERPRISE_SSO")],
       },
     ),
     routes({

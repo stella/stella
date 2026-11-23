@@ -430,6 +430,8 @@ export const ssoProvider = pgTable(
     id: text("id").primaryKey(),
     /** The provider id in sign-in and callback paths; see the pattern above. */
     providerId: text("provider_id").notNull(),
+    /** Optional admin-chosen label shown in settings and sign-in prompts. */
+    displayName: text("display_name"),
     /** The organization whose members this provider signs in. */
     organizationId: text("organization_id")
       .notNull()
@@ -507,6 +509,58 @@ export const organizationSsoPolicy = pgTable(
       inArray(table.requirement, ORGANIZATION_SSO_REQUIREMENTS),
     ),
     tableOwnerAccess("organization_sso_policy"),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+const ORGANIZATION_SSO_DOMAIN_PATTERN =
+  "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$";
+
+/**
+ * Verified email domains owned by an organization for SSO sign-in discovery.
+ * Kept separate from `sso_provider` so replacing a provider never requires
+ * re-verifying DNS. Only one organization may hold a verified claim on a
+ * domain at a time.
+ */
+export const organizationSsoDomain = pgTable(
+  "organization_sso_domain",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Normalized lowercase hostname (e.g. `acme.example.com`). */
+    domain: text("domain").notNull(),
+    /** Token expected in the DNS TXT record (`stella-sso-verify=...`). */
+    verificationToken: text("verification_token").notNull(),
+    verifiedAt: timestamptz("verified_at"),
+    lastCheckedAt: timestamptz("last_checked_at"),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("organization_sso_domain_org_domain_uidx").on(
+      table.organizationId,
+      table.domain,
+    ),
+    uniqueIndex("organization_sso_domain_verified_uidx")
+      .on(table.domain)
+      .where(sql`${table.verifiedAt} IS NOT NULL`),
+    index("organization_sso_domain_organization_id_idx").on(
+      table.organizationId,
+    ),
+    index("organization_sso_domain_created_by_idx").on(table.createdBy),
+    check(
+      "organization_sso_domain_domain_check",
+      sql`${table.domain} ~ ${sql.raw(`'${ORGANIZATION_SSO_DOMAIN_PATTERN}'`)}`,
+    ),
+    tableOwnerAccess("organization_sso_domain"),
     ...denyStellaAccessPolicies(),
   ],
 );
