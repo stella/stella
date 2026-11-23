@@ -13,7 +13,7 @@ mod awaited_steps;
 mod client;
 mod harness;
 mod journal;
-mod member_agents;
+pub(crate) mod member_agents;
 mod read_limits;
 mod run_folders;
 mod sidecar_host;

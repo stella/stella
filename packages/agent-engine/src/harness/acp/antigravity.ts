@@ -9,6 +9,7 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
+import * as v from "valibot";
 
 import type {
   AcpAgentDefinition,
@@ -62,12 +63,15 @@ const LOST_THINKING_SIGNATURE =
 const API_ERROR = /Error (\d{3}), Message: (.+?), Status: ([A-Z_]+)/su;
 const STATUS_ERROR = /(?<![A-Z_])([A-Z_]+) \(code (\d{3})\): (\P{Cc}+)/u;
 const QUOTA_EXHAUSTED = /\breason:QUOTA_EXHAUSTED\b/u;
-const RESET_TIMESTAMP = /\bquotaResetTimeStamp:([^\s\]]+)/u;
+const RESET_TIMESTAMP = /\bquotaResetTimeStamp:([^\s\],]+)/u;
 const RESET_DELAY =
   /\bquotaResetDelay:((?:\d+(?:\.\d+)?(?:ns|us|µs|μs|ms|h|m|s))+)(?=[\s\],]|$)/u;
 const RETRY_DELAY =
   /\bretryDelay:((?:\d+(?:\.\d+)?(?:ns|us|µs|μs|ms|h|m|s))+)(?=[\s\],]|$)/u;
-const GO_DURATION_PART = /(\d+(?:\.\d+)?)(ns|us|µs|μs|ms|h|m|s)/gu;
+// The lookbehind starts each amount at its first digit, so a retry never
+// re-walks the digits the previous attempt consumed.
+const GO_DURATION_PART = /(?<![\d.])(\d+(?:\.\d+)?)(ns|us|µs|μs|ms|h|m|s)/gu;
+const DURATION_AMOUNT = v.pipe(v.string(), v.decimal(), v.toNumber());
 const GO_DURATION_UNIT_MS: Readonly<Record<string, number>> = {
   ns: 1e-6,
   us: 1e-3,
@@ -125,10 +129,10 @@ const parseResetAt = (text: string, now: Temporal.Instant): string | null => {
   }
   let delayMs = 0;
   for (const match of delay.matchAll(GO_DURATION_PART)) {
-    const amount = Number(match[1]);
+    const amount = v.safeParse(DURATION_AMOUNT, match[1]);
     const unit = match[2] ?? "";
     const factor = GO_DURATION_UNIT_MS[unit] ?? 0;
-    delayMs += amount * factor;
+    delayMs += amount.success ? amount.output * factor : 0;
   }
   if (delayMs <= 0) {
     return null;
