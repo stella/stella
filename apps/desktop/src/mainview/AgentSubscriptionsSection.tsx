@@ -79,26 +79,43 @@ export const AgentSubscriptionsSection = ({
   );
   const [claudeCodeFailed, setClaudeCodeFailed] = useState(false);
 
+  const antigravityRequestSeq = useRef(0);
+  const antigravityMounted = useRef(true);
+
   useEffect(() => {
-    let alive = true;
+    antigravityMounted.current = true;
+    antigravityRequestSeq.current += 1;
+    const seq = antigravityRequestSeq.current;
     void Result.tryPromise(async () =>
       invoke<unknown>("antigravity_get_status", { refresh: false }),
     ).then((result) => {
-      if (alive && Result.isOk(result) && isAntigravityStatus(result.value)) {
+      if (
+        antigravityMounted.current &&
+        antigravityRequestSeq.current === seq &&
+        Result.isOk(result) &&
+        isAntigravityStatus(result.value)
+      ) {
         setAntigravity(result.value);
       }
       return undefined;
     });
     return () => {
-      alive = false;
+      antigravityMounted.current = false;
     };
   }, []);
 
   const refreshAntigravity = () => {
+    antigravityRequestSeq.current += 1;
+    const seq = antigravityRequestSeq.current;
     void Result.tryPromise(async () =>
       invoke<unknown>("antigravity_get_status", { refresh: true }),
     ).then((result) => {
-      if (Result.isOk(result) && isAntigravityStatus(result.value)) {
+      if (
+        antigravityMounted.current &&
+        antigravityRequestSeq.current === seq &&
+        Result.isOk(result) &&
+        isAntigravityStatus(result.value)
+      ) {
         setAntigravity(result.value);
       }
       return undefined;

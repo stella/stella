@@ -103,8 +103,21 @@ export const runMcpStdioBridge = async ({
   if (!isLoopbackHttpUrl(url)) {
     return Result.err("MCP bridge URL must be a loopback HTTP endpoint.");
   }
+  const REQUEST_TIMEOUT_MS = 120_000;
   const state: { sessionId: string | null } = { sessionId: null };
   let queue: Promise<void> = Promise.resolve();
+  const outOfBand = new Set<Promise<void>>();
+  let oversizedExceeded = false;
+
+  const isCancellationNotification = (trimmed: string): boolean => {
+    const parsed = Result.try((): unknown => JSON.parse(trimmed));
+    return (
+      Result.isOk(parsed) &&
+      typeof parsed.value === "object" &&
+      parsed.value !== null &&
+      Reflect.get(parsed.value, "method") === "notifications/cancelled"
+    );
+  };
 
   const forward = async (line: string) => {
     const trimmed = line.trim();
@@ -120,72 +133,99 @@ export const runMcpStdioBridge = async ({
     if (state.sessionId !== null) {
       headers["mcp-session-id"] = state.sessionId;
     }
-    const response = await Result.tryPromise(() =>
-      fetchImpl(url, {
-        method: "POST",
-        headers,
-        body: trimmed,
-        redirect: "manual",
-      }),
-    );
-    if (Result.isError(response)) {
-      if (id !== null) {
-        output(jsonRpcErrorLine(id, "Could not reach stella's MCP proxy."));
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+    try {
+      const response = await Result.tryPromise(
+        async () =>
+          await fetchImpl(url, {
+            method: "POST",
+            headers,
+            body: trimmed,
+            redirect: "manual",
+            signal: controller.signal,
+          }),
+      );
+      if (Result.isError(response)) {
+        if (id !== null) {
+          output(jsonRpcErrorLine(id, "Could not reach stella's MCP proxy."));
+        }
+        return;
       }
-      return;
-    }
-    const res = response.value;
-    const nextSessionId = res.headers.get("mcp-session-id");
-    if (nextSessionId !== null && nextSessionId !== "") {
-      state.sessionId = nextSessionId;
-    }
-    if (res.status === 202 || res.status === 204) {
-      return;
-    }
-    const body = await Result.tryPromise(() => res.text());
-    if (Result.isError(body)) {
-      if (id !== null) {
-        output(jsonRpcErrorLine(id, "Could not read stella's MCP response."));
+      const res = response.value;
+      const nextSessionId = res.headers.get("mcp-session-id");
+      if (nextSessionId !== null && nextSessionId !== "") {
+        state.sessionId = nextSessionId;
       }
-      return;
-    }
-    if (!res.ok) {
-      if (id !== null) {
+      if (res.status === 202 || res.status === 204) {
+        return;
+      }
+      const body = await Result.tryPromise(async () => await res.text());
+      if (Result.isError(body)) {
+        if (id !== null) {
+          output(jsonRpcErrorLine(id, "Could not read stella's MCP response."));
+        }
+        return;
+      }
+      if (!res.ok) {
+        if (id !== null) {
+          output(
+            jsonRpcErrorLine(
+              id,
+              `stella's MCP proxy answered HTTP ${String(res.status)}.`,
+            ),
+          );
+        }
+        return;
+      }
+      const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
+      if (contentType.includes("text/event-stream")) {
+        writeSsePayloads(body.value, output);
+        return;
+      }
+      const text = body.value.trim();
+      if (text !== "") {
+        const compact = Result.try(() => JSON.stringify(JSON.parse(text)));
         output(
-          jsonRpcErrorLine(
-            id,
-            `stella's MCP proxy answered HTTP ${String(res.status)}.`,
-          ),
+          `${Result.isOk(compact) ? compact.value : text.replace(/\r?\n/gu, " ")}\n`,
         );
       }
-      return;
-    }
-    const contentType = res.headers.get("content-type")?.toLowerCase() ?? "";
-    if (contentType.includes("text/event-stream")) {
-      writeSsePayloads(body.value, output);
-      return;
-    }
-    const text = body.value.trim();
-    if (text !== "") {
-      const compact = Result.try(() => JSON.stringify(JSON.parse(text)));
-      output(
-        `${Result.isOk(compact) ? compact.value : text.replace(/\r?\n/gu, " ")}\n`,
-      );
+    } finally {
+      clearTimeout(timer);
     }
   };
 
   const lines = createLineReader({
     maxLineBytes: MAX_LINE_BYTES,
     line: (line) => {
-      queue = queue.then(() => forward(line));
+      if (isCancellationNotification(line.trim())) {
+        const task = forward(line).finally(() => {
+          outOfBand.delete(task);
+        });
+        outOfBand.add(task);
+        return;
+      }
+      queue = queue.then(async () => {
+        await forward(line);
+        return undefined;
+      });
     },
-    oversized: () => undefined,
+    oversized: () => {
+      oversizedExceeded = true;
+    },
   });
 
   for await (const chunk of input) {
     lines.push(chunk);
+    if (oversizedExceeded) {
+      break;
+    }
   }
   lines.end();
   await queue;
+  await Promise.all(outOfBand);
+  if (oversizedExceeded) {
+    return Result.err("MCP stdio message exceeded the maximum line size.");
+  }
   return Result.ok();
 };

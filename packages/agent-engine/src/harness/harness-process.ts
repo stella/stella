@@ -213,7 +213,6 @@ export const startHarnessProcess = <TId, TError>({
     const stderrStream = child.stderr;
     if (
       !captureStderr ||
-      stderrStream === null ||
       stderrStream === undefined ||
       typeof stderrStream === "number"
     ) {

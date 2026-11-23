@@ -134,7 +134,7 @@ export const isEncryptedHistoryRejection = (
   error: CodexTurnError | null,
 ): boolean =>
   errorCode(error?.codexErrorInfo ?? null) === INVALID_ENCRYPTED_CONTENT ||
-  (error?.message?.includes(INVALID_ENCRYPTED_CONTENT) ?? false);
+  (error?.message.includes(INVALID_ENCRYPTED_CONTENT) ?? false);
 
 export const classifyTurnFailure = ({
   error,

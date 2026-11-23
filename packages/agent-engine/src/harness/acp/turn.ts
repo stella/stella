@@ -297,6 +297,10 @@ export class AcpTurnSession {
   >();
   /** The prompt whose answer ends the turn: the last one sent. */
   private latestPrompt = 0;
+  /** The highest prompt index whose answer has arrived. */
+  private answeredPrompt = 0;
+  /** Length of client stderr when this turn attached, for turn-scoped classification. */
+  private stderrStartLength = 0;
   /** What every answered prompt of the turn used, steered ones included. */
   private readonly promptUsage: PromptUsage[] = [];
 
@@ -343,6 +347,7 @@ export class AcpTurnSession {
   };
 
   attach(client: AcpClient) {
+    this.stderrStartLength = client.stderr().length;
     this.lifecycle.attach(client);
   }
 
@@ -377,6 +382,8 @@ export class AcpTurnSession {
 
   /** A prompt was sent; the last one's answer ends the turn. */
   prompted(answer: Promise<AcpAnswer>) {
+    this.clearBackgroundSettle();
+    this.heldForBackground = false;
     this.promptAnswer = answer;
     this.latestPrompt += 1;
     const prompt = this.latestPrompt;
@@ -421,6 +428,9 @@ export class AcpTurnSession {
         this.latestPrompt = steer.during;
       }
       return;
+    }
+    if (prompt > this.answeredPrompt) {
+      this.answeredPrompt = prompt;
     }
     if (prompt === this.latestPrompt) {
       this.finish(answer);
@@ -756,6 +766,7 @@ export class AcpTurnSession {
     const shown = this.open(call);
     const requestId = `acp-permission-${String(this.nextPermission)}`;
     this.nextPermission += 1;
+    this.clearBackgroundSettle();
     this.permissions.set(requestId, {
       jsonRpcId: id,
       toolCallId: state.id,
@@ -867,11 +878,19 @@ export class AcpTurnSession {
     return false;
   }
 
+  private hasHeldCompletionBlocker() {
+    return (
+      this.hasOutlivingTools() ||
+      this.permissions.size > 0 ||
+      this.answeredPrompt < this.latestPrompt
+    );
+  }
+
   private maybeSettleBackground(usageUpdated: boolean) {
     if (!this.heldForBackground || this.lifecycle.ended) {
       return;
     }
-    if (this.hasOutlivingTools() || this.permissions.size > 0) {
+    if (this.hasHeldCompletionBlocker()) {
       this.clearBackgroundSettle();
       return;
     }
@@ -888,7 +907,11 @@ export class AcpTurnSession {
   }
 
   private completeHeldTurn() {
-    if (!this.heldForBackground || this.lifecycle.ended) {
+    if (
+      !this.heldForBackground ||
+      this.lifecycle.ended ||
+      this.hasHeldCompletionBlocker()
+    ) {
       return;
     }
     this.clearBackgroundSettle();
@@ -910,7 +933,11 @@ export class AcpTurnSession {
     if (classify === undefined) {
       return null;
     }
-    const stderr = this.lifecycle.client?.stderr() ?? "";
+    const fullStderr = this.lifecycle.client?.stderr() ?? "";
+    const stderr =
+      fullStderr.length >= this.stderrStartLength
+        ? fullStderr.slice(this.stderrStartLength)
+        : fullStderr;
     return classify({
       stderr,
       errorMessage,
@@ -984,11 +1011,7 @@ export class AcpTurnSession {
       return;
     }
     const classifiedStop = this.classifyStderr(null, stopReason);
-    if (
-      classifiedStop !== null &&
-      (stopReason === "refusal" ||
-        (!this.reachedModel && this.message === null))
-    ) {
+    if (classifiedStop !== null) {
       if (classifiedStop.brokenSession) {
         this.options.onBrokenSession?.();
       }

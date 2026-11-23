@@ -82,7 +82,7 @@ describe("mcp-stdio-bridge", () => {
       { authorization: "Bearer secret-tok", session: "sess-1" },
       { authorization: "Bearer secret-tok", session: "sess-1" },
     ]);
-    expect(lines.map((line) => JSON.parse(line))).toEqual([
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
       { jsonrpc: "2.0", id: 1, result: { ok: true } },
       { jsonrpc: "2.0", id: 2, result: { tools: [] } },
     ]);
@@ -102,7 +102,7 @@ describe("mcp-stdio-bridge", () => {
       },
       fetchImpl,
     });
-    expect(lines.map((line) => JSON.parse(line))).toEqual([
+    expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
       {
         jsonrpc: "2.0",
         id: "req-9",

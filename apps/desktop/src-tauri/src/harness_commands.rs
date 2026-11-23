@@ -80,7 +80,7 @@ pub async fn antigravity_get_status(
   let refresh = refresh.unwrap_or(false);
   tauri::async_runtime::spawn_blocking(move || member_agents::antigravity_status(refresh))
     .await
-    .map_err(|_| HarnessCommandError::Unavailable)
+    .map_err(|_error| HarnessCommandError::Unavailable)
 }
 
 #[tauri::command]

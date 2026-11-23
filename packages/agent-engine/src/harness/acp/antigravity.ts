@@ -300,34 +300,56 @@ const discardFromAntigravityHome = ({
   ) {
     return;
   }
+  const isRealDirectory = (dirPath: string): boolean => {
+    const stat = Result.try(() => lstatSync(dirPath));
+    return (
+      Result.isOk(stat) &&
+      !stat.value.isSymbolicLink() &&
+      stat.value.isDirectory()
+    );
+  };
   const conversations = path.join(state, "conversations");
   const base = path.join(conversations, sessionId);
-  if (verifyCwd && existsSync(`${base}.meta`)) {
-    const metaRaw = Result.try(() => readFileSync(`${base}.meta`, "utf-8"));
-    if (Result.isError(metaRaw)) {
+  const conversationsSafe = isRealDirectory(conversations);
+  if (verifyCwd) {
+    if (!conversationsSafe) {
       return;
     }
-    const metaParsed = Result.try((): unknown => JSON.parse(metaRaw.value));
-    if (
-      Result.isError(metaParsed) ||
-      typeof metaParsed.value !== "object" ||
-      metaParsed.value === null
-    ) {
-      return;
-    }
-    const metaCwd: unknown = Reflect.get(metaParsed.value, "cwd");
-    if (
-      typeof metaCwd !== "string" ||
-      normalizedPathKey(metaCwd) !== normalizedPathKey(cwd)
-    ) {
-      return;
+    if (existsSync(`${base}.meta`)) {
+      const metaRaw = Result.try(() => readFileSync(`${base}.meta`, "utf-8"));
+      if (Result.isError(metaRaw)) {
+        return;
+      }
+      const metaParsed = Result.try((): unknown => JSON.parse(metaRaw.value));
+      if (
+        Result.isError(metaParsed) ||
+        typeof metaParsed.value !== "object" ||
+        metaParsed.value === null
+      ) {
+        return;
+      }
+      const metaCwd: unknown = Reflect.get(metaParsed.value, "cwd");
+      if (
+        typeof metaCwd !== "string" ||
+        normalizedPathKey(metaCwd) !== normalizedPathKey(cwd)
+      ) {
+        return;
+      }
     }
   }
-  for (const suffix of SESSION_CONVERSATION_SUFFIXES) {
-    removeUnlinkedQuietly(`${base}${suffix}`);
+  if (conversationsSafe) {
+    for (const suffix of SESSION_CONVERSATION_SUFFIXES) {
+      removeUnlinkedQuietly(`${base}${suffix}`);
+    }
   }
-  removeUnlinkedQuietly(path.join(state, "brain", sessionId));
-  removeUnlinkedQuietly(path.join(state, "annotations", `${sessionId}.pbtxt`));
+  const brainDir = path.join(state, "brain");
+  if (isRealDirectory(brainDir)) {
+    removeUnlinkedQuietly(path.join(brainDir, sessionId));
+  }
+  const annotationsDir = path.join(state, "annotations");
+  if (isRealDirectory(annotationsDir)) {
+    removeUnlinkedQuietly(path.join(annotationsDir, `${sessionId}.pbtxt`));
+  }
 };
 
 export const ANTIGRAVITY: AcpAgentDefinition = {
