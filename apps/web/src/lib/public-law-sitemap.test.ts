@@ -869,7 +869,11 @@ describe("public law sitemap", () => {
       "Allow: /sitemap.xml$",
       "Allow: /sitemaps/",
       "Allow: /sitemaps$",
-      ...PUBLIC_CRAWL_ASSETS.map(({ path }) => `Allow: ${path}$`),
+      ...PUBLIC_CRAWL_ASSETS.flatMap(({ path, scope }) =>
+        scope === "subtree"
+          ? [`Allow: ${path}/`, `Allow: ${path}$`]
+          : [`Allow: ${path}$`],
+      ),
     ]);
     // A jurisdiction whose pages are not public stays behind Disallow: /.
     expect(allowLines.some((line) => line.startsWith("Allow: /law/svk"))).toBe(

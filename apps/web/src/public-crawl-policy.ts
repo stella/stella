@@ -94,6 +94,13 @@ export const PUBLIC_CRAWL_ASSETS = [
     scope: "exact",
     permission: "law",
   },
+  // The built scripts and styles: a crawler renders the public pages with
+  // them, so a page it may index must not have its assets blocked.
+  {
+    path: "/assets",
+    scope: "subtree",
+    permission: "law",
+  },
 ] as const satisfies readonly Omit<PublicCrawlRoute, "route" | "format">[];
 
 export type PublicCrawlOptions = {
