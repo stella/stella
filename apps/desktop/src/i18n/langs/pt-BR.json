@@ -10,7 +10,7 @@
     "aiDraftAllow": "Permitir",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Tarefa {task} · Atividade {activity}",
-    "aiDraftConsent": "stella IA pode redigir descrições a partir do caso, da data, da duração e dos nomes de aplicativos de cada lançamento, além dos nomes de documentos e títulos de janela mostrados aqui quando você os registra. Seus lançamentos anteriores no caso a ajudam a seguir seu jeito de escrever. Nada mais sobre o seu dia sai deste computador.",
+    "aiDraftConsent": "Para redigir uma descrição, a stella IA usa: {inputs}. Tudo vai para {provider} só para redigir o rascunho. Nada mais sobre o seu dia sai deste computador.",
     "aiDraftConsentRequired": "Permita stella IA de novo para redigir esta descrição.",
     "aiDraftDisclosure": "As sugestões de IA são propostas que a stella gera a partir do lançamento que você está revisando, dos seus lançamentos anteriores no caso e, quando o escritório as adicionou, das regras de faturamento. Revise cada lançamento antes de criá-lo.",
     "aiDraftEarlierEntries": "{count, plural, one {Segue # lançamento anterior} other {Segue # lançamentos anteriores}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella IA está desativada neste computador. Sua retirada será enviada à stella assim que ela estiver acessível.",
     "browserAnsweredAppNameOnly": "Só o nome do aplicativo é registrado para <bdi>{browser}</bdi>. Você pode mudar isso em Configurações.",
     "browserAnsweredTitles": "Os títulos das abas em <bdi>{browser}</bdi> são registrados. Você pode mudar isso em Configurações.",
-    "browserPrivacyNote": "As janelas privadas também podem ser registradas; pause o registro ou exclua o navegador ao navegar em modo privado.",
+    "browserPrivacyNote": "A stella não reconhece todas as janelas privadas, então pause o registro antes de navegar em modo privado.",
     "browserQuestionAppNameOnly": "Só o nome do aplicativo",
-    "browserQuestionDescription": "Os títulos das abas ajudam a descrever o trabalho. A stella não reconhece todas as janelas privadas, então pause o registro antes de navegar em modo privado.",
+    "browserQuestionDescription": "Os títulos das abas ajudam a descrever o trabalho.",
     "browserQuestionLater": "Decidir depois",
     "browserQuestionRecordTitles": "Registrar títulos",
     "browserQuestionTitle": "Registrar também os títulos das abas em <bdi>{browser}</bdi>?",
@@ -103,7 +103,19 @@
     "detectCalls": "Registrar chamadas",
     "detectCallsDescription": "Enquanto o Teams, o Zoom ou um navegador usa seu microfone, esse tempo conta como a chamada, mesmo que você só esteja ouvindo ou trabalhando em outro app. O áudio nunca é gravado.",
     "disclosure": {
-      "control": "Nada é registrado até você clicar em Começar a registrar na Atividade. Pause, exclua apps ou apague qualquer dia quando quiser.",
+      "aiDraftInputs": {
+        "appNames": "os nomes de aplicativos",
+        "billingFormat": "o formato de faturamento do cliente",
+        "date": "a data",
+        "duration": "a duração",
+        "earlierDescriptions": "suas descrições anteriores no caso",
+        "firmGuidelines": "as eventuais regras de faturamento do escritório",
+        "instructions": "as instruções que você digitar",
+        "matter": "o caso",
+        "titles": "os títulos de janela e nomes de documentos registrados"
+      },
+      "aiDraftProvider": "o provedor de IA que o escritório usa, ou o da stella IA",
+      "control": "Nada é registrado até você clicar em Começar a registrar. Pause, exclua apps ou apague qualquer dia quando quiser.",
       "never": {
         "audio": "Som do microfone",
         "keystrokes": "Teclas digitadas ou texto",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "O que é registrado",
       "sent": {
-        "aiDrafts": "Rascunhos da stella IA que você pede, depois de permitir: caso, data, duração e nomes de aplicativos do lançamento, seus títulos de janela e nomes de documentos quando registrados e as instruções que você digitar. A stella acrescenta suas descrições anteriores no caso, o formato de faturamento do cliente e, quando o escritório as usa, as regras de faturamento. Tudo vai para o provedor de IA que o escritório usa, ou o da stella IA, só para redigir o rascunho; a stella não salva o rascunho nem o que foi enviado para ele.",
+        "aiDrafts": "Rascunhos da stella IA que você pede, depois de permitir. Para cada um, a stella IA usa: {inputs}. Tudo vai para {provider} só para redigir o rascunho; a stella não salva o rascunho nem o que foi enviado para ele.",
         "timeEntries": "Lançamentos de horas que você cria: caso, data, duração, descrição, se é faturável e eventuais códigos de faturamento"
       },
       "sentTitle": "O que sai deste computador",
@@ -866,6 +878,30 @@
   },
   "onboarding": {
     "activityBody": "Veja para onde foi o seu dia de trabalho e transforme-o em rascunhos de lançamentos de horas. Você decide o que é registrado e o que é enviado.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Redigir descrições com a stella IA",
+        "body": "A stella IA pode redigir a descrição de cada lançamento de horas. Permita agora ou quando revisar um dia pela primeira vez.",
+        "withdraw": "Você pode retirar o consentimento a qualquer momento nas Configurações."
+      },
+      "calls": {
+        "body": "Conte o tempo que você passa em chamadas.",
+        "title": "Chamadas"
+      },
+      "details": {
+        "appNamesOnly": "Só os nomes dos apps são registrados.",
+        "body": "Eles ajudam você a distinguir os casos ao revisar o dia.",
+        "browsers": "Os navegadores só registram títulos das abas depois que você permitir. A Atividade pergunta sobre cada navegador na primeira vez que o vê.",
+        "title": "Títulos de janelas e documentos"
+      },
+      "screens": {
+        "aiDrafts": "Sugestões de IA",
+        "calls": "Chamadas",
+        "details": "Detalhes",
+        "recording": "Visão geral"
+      },
+      "starting": "Começando a registrar…"
+    },
     "activityStoryDraft": "Rascunho",
     "activityStoryRecordTitle": "Registrado",
     "activityStoryReviewCaption": "Você confere o dia e escolhe o caso",
@@ -904,7 +940,6 @@
         "choose": "Microfone para ditar",
         "title": "Deixe a stella ouvir você"
       },
-      "progress": "Etapa {current} de {total}",
       "screens": {
         "app": "Revisão",
         "context": "Contexto",
@@ -912,7 +947,6 @@
         "transcription": "Transcrição",
         "words": "Palavras"
       },
-      "skipRest": "Pular o resto",
       "transcription": {
         "body": "Você pode mudar isso depois nas Configurações.",
         "bodyLocal": "O modelo de fala roda aqui, então o ditado também funciona offline.",
@@ -982,6 +1016,7 @@
     "permissionsTitlePc": "Configure este computador",
     "progress": "Etapa {current} de {total}",
     "skip": "Pular",
+    "skipRest": "Pular o resto",
     "staysLocalMac": "Fica neste Mac",
     "staysLocalPc": "Fica neste computador",
     "tryAgain": "Tentar novamente",

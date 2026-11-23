@@ -34,6 +34,7 @@ import {
   SCROLL_AREA_VIEWPORT_SELECTOR,
 } from "@/lib/pdf/consts";
 import type { PDFViewerError } from "@/lib/pdf/pdf-errors";
+import { fittedPageWidth } from "@/lib/pdf/pdf-fit-width.logic";
 import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 import { renderPage } from "@/lib/pdf/pdf-renderer";
@@ -364,7 +365,7 @@ const createPDFStore = ({
         fitToWidth > 0 &&
         origPageWidth !== null &&
         origPageWidth > 0
-          ? fitToWidth / origPageWidth
+          ? fittedPageWidth(fitToWidth) / origPageWidth
           : document.baseScale;
 
       const effectiveScale = baseDocumentScale + get().scaleOffset;
@@ -521,7 +522,8 @@ const createPDFStore = ({
       }
 
       const { scale: currentBaseScale, pages: currentPages } = get();
-      const fitToWidthScale = containerWidth / originalPageWidth;
+      const fitToWidthScale =
+        fittedPageWidth(containerWidth) / originalPageWidth;
 
       if (currentBaseScale === fitToWidthScale) {
         return;

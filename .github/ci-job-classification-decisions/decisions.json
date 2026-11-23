@@ -839,6 +839,10 @@
     "kind": "ordinary",
     "qualifier": "Records synthetic render measurements on explicit invocation; no publication, tag creation, or deployment."
   },
+  "candidate:.github/workflows/route-scale-nightly.yml/measure": {
+    "kind": "ordinary",
+    "qualifier": "Checks; no publication, tag creation, or deployment."
+  },
   "candidate:.github/workflows/safe-chain-cache.yml/warm": {
     "kind": "ordinary",
     "qualifier": "Checks; no publication, tag creation, or deployment."

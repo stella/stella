@@ -479,6 +479,7 @@ const FileTabViewerComponent = ({
                 : undefined
             }
             scaleOffset={scaleOffset}
+            underOverlayBar={isZoomOverlayVisible}
             viewId={peekPdfViewId}
             workspaceId={tab.workspaceId}
           />

@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.84.1
+
+### Patch Changes
+
+- [#9245](https://github.com/stella/stella/pull/9245) [`98abe28`](https://github.com/stella/stella/commit/98abe2841a69b052cdfd34cfd8e42fe5d7a53105) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep a gutter between body columns of a compact table, as its header already has.
+
 ## 0.84.0
 
 ### Minor Changes
