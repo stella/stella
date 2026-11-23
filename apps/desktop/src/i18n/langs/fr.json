@@ -462,6 +462,21 @@
     "welcomeStart": "Commencer à copier",
     "welcomeTitle": "Découvrez votre presse-papiers"
   },
+  "clipboardSettings": {
+    "capture": "Enregistrer les nouveaux extraits",
+    "captureDescription": "Désactivez cette option pour ne plus enregistrer ce que vous copiez.",
+    "errorSave": "La modification n’a pas pu être enregistrée. Réessayez.",
+    "excludedDescription": "Rien de ce que vous copiez dans ces applications n’est enregistré.",
+    "excludedEmpty": "Pour exclure une application, faites un clic droit sur l’un de ses extraits dans le presse-papiers et choisissez de ne plus enregistrer ses nouveaux extraits.",
+    "groupActions": "Actions pour {groupName}",
+    "groupsDescription": "Faites glisser un groupe pour changer sa place dans le presse-papiers.",
+    "groupsEmpty": "Créez un groupe, puis faites-y glisser des extraits dans le presse-papiers.",
+    "history": "Historique",
+    "moveGroupDown": "Déplacer vers le bas",
+    "moveGroupUp": "Déplacer vers le haut",
+    "recordingsDescription": "Autoriser les captures d’écran, les enregistrements et le partage d’écran à montrer le presse-papiers.",
+    "retentionDescription": "Les extraits plus anciens sont supprimés. Ceux d’un groupe sont conservés."
+  },
   "dialog": {
     "accountEmail": "Compte",
     "accountSubtitle": "Connectez stella desktop à ce compte et à cette organisation.",
@@ -1170,6 +1185,8 @@
       "available": "La version {version} est disponible.",
       "checkFailed": "stella desktop n'a pas pu vérifier les mises à jour.",
       "deferred": "La version {version} attend tant que des documents ouverts sont en cours de modification. Une fois terminé, vérifiez à nouveau pour l'installer, sinon elle s'installera lors de la prochaine vérification automatique.",
+      "downloadProgress": "{percent} % téléchargés",
+      "downloading": "Téléchargement de la version {version}. stella desktop redémarrera une fois l'installation terminée.",
       "install": "Installer et redémarrer",
       "installFailed": "stella desktop n'a pas pu installer la mise à jour.",
       "installInProgress": "Une mise à jour est en cours d’installation.",
@@ -1402,7 +1419,6 @@
     "transcriptionProgress": "Transcription en cours : {done} sur {total} min",
     "transcriptionProgressSoFar": "Transcription en cours : {done} min jusqu’ici",
     "transcriptionReady": "Transcription prête",
-    "updateReady": "Mise à jour prête",
     "updatesManaged": "Mises à jour gérées par votre organisation"
   }
 }

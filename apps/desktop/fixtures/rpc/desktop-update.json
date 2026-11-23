@@ -1,13 +1,3 @@
 {
-  "baseUrl": null,
-  "channel": null,
-  "currentHash": null,
-  "currentVersion": "1.4.2",
-  "lastCheckedAt": null,
-  "latestHash": null,
-  "latestVersion": null,
-  "status": "disabled",
-  "statusMessage": "Updates will appear here once configured.",
-  "updateAvailable": false,
-  "updateReady": false
+  "currentVersion": "1.4.2"
 }

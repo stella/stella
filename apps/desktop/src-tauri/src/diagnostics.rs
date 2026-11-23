@@ -24,13 +24,9 @@ pub(crate) enum DiagnosticStoreLoadIssue {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct DiagnosticUpdate<'a> {
-  pub configured: bool,
-  pub channel_configured: bool,
   pub current_version: Option<&'a str>,
-  pub last_checked_at: Option<&'a str>,
-  pub latest_version: Option<&'a str>,
-  pub update_available: bool,
-  pub update_ready: bool,
+  /// What the updater is doing; it names versions, never feeds or paths.
+  pub updater: crate::updater::UpdaterState,
 }
 
 #[derive(Serialize)]

@@ -462,6 +462,21 @@
     "welcomeStart": "Sākt kopēšanu",
     "welcomeTitle": "Iepazīstiet savu starpliktuvi"
   },
+  "clipboardSettings": {
+    "capture": "Saglabāt jaunus izgriezumus",
+    "captureDescription": "Kad šī opcija ir izslēgta, nekas, ko kopējat, netiek saglabāts.",
+    "errorSave": "Izmaiņas neizdevās saglabāt. Mēģiniet vēlreiz.",
+    "excludedDescription": "Nekas, ko kopējat šajās lietotnēs, netiek saglabāts.",
+    "excludedEmpty": "Lai izslēgtu lietotni, starpliktuvē ar peles labo pogu noklikšķiniet uz kāda tās izgriezuma un izvēlieties vairs nesaglabāt no tās jaunus izgriezumus.",
+    "groupActions": "Grupas {groupName} darbības",
+    "groupsDescription": "Velciet grupu, lai mainītu tās vietu starpliktuvē.",
+    "groupsEmpty": "Izveidojiet grupu un starpliktuvē ievelciet tajā izgriezumus.",
+    "history": "Vēsture",
+    "moveGroupDown": "Pārvietot uz leju",
+    "moveGroupUp": "Pārvietot uz augšu",
+    "recordingsDescription": "Ļaut ekrānuzņēmumos, ierakstos un ekrāna kopīgošanā rādīt starpliktuvi.",
+    "retentionDescription": "Vecāki izgriezumi tiek dzēsti. Grupās esošie izgriezumi tiek paturēti."
+  },
   "dialog": {
     "accountEmail": "Konts",
     "accountSubtitle": "Savienojiet stella desktop ar šo kontu un organizāciju.",
@@ -1170,6 +1185,8 @@
       "available": "Pieejama versija {version}.",
       "checkFailed": "stella desktop nevarēja pārbaudīt atjauninājumus.",
       "deferred": "Versija {version} gaida, kamēr tiek rediģēti atvērtie dokumenti. Kad pabeigsiet, pārbaudiet vēlreiz, lai to instalētu, citādi tā tiks instalēta nākamajā automātiskajā pārbaudē.",
+      "downloadProgress": "Lejupielādēti {percent}%",
+      "downloading": "Notiek versijas {version} lejupielāde. Pēc instalēšanas stella desktop tiks restartēta.",
       "install": "Instalēt un restartēt",
       "installFailed": "stella desktop nevarēja instalēt atjauninājumu.",
       "installInProgress": "Notiek atjauninājuma instalēšana.",
@@ -1402,7 +1419,6 @@
     "transcriptionProgress": "Notiek transkribēšana: {done} no {total} min",
     "transcriptionProgressSoFar": "Notiek transkribēšana: līdz šim {done} min",
     "transcriptionReady": "Transkripcija ir gatava",
-    "updateReady": "Atjauninājums gatavs",
     "updatesManaged": "Atjauninājumus pārvalda jūsu organizācija"
   }
 }

@@ -462,6 +462,21 @@
     "welcomeStart": "Zacznij kopiować",
     "welcomeTitle": "Poznaj swój schowek"
   },
+  "clipboardSettings": {
+    "capture": "Zapisuj nowe wycinki",
+    "captureDescription": "Po wyłączeniu nic, co skopiujesz, nie jest zapisywane.",
+    "errorSave": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "excludedDescription": "Nic, co skopiujesz w tych aplikacjach, nie jest zapisywane.",
+    "excludedEmpty": "Aby wykluczyć aplikację, kliknij prawym przyciskiem jeden z jej wycinków w schowku i wybierz, aby nie zapisywać z niej nowych wycinków.",
+    "groupActions": "Działania dla grupy {groupName}",
+    "groupsDescription": "Przeciągnij grupę, aby zmienić jej miejsce w schowku.",
+    "groupsEmpty": "Utwórz grupę, a następnie przeciągnij do niej wycinki w schowku.",
+    "history": "Historia",
+    "moveGroupDown": "Przesuń w dół",
+    "moveGroupUp": "Przesuń w górę",
+    "recordingsDescription": "Zezwala na pokazywanie schowka na zrzutach ekranu, w nagraniach i podczas udostępniania ekranu.",
+    "retentionDescription": "Starsze wycinki są usuwane. Wycinki w grupie są zachowywane."
+  },
   "dialog": {
     "accountEmail": "Konto",
     "accountSubtitle": "Połącz stella desktop z tym kontem i organizacją.",
@@ -1170,6 +1185,8 @@
       "available": "Dostępna jest wersja {version}.",
       "checkFailed": "stella desktop nie mógł sprawdzić aktualizacji.",
       "deferred": "Wersja {version} czeka, dopóki edytujesz otwarte dokumenty. Gdy skończysz, sprawdź ponownie, aby ją zainstalować, w przeciwnym razie zostanie zainstalowana przy następnym automatycznym sprawdzeniu.",
+      "downloadProgress": "Pobrano {percent}%",
+      "downloading": "Pobieranie wersji {version}. Po instalacji stella desktop uruchomi się ponownie.",
       "install": "Zainstaluj i uruchom ponownie",
       "installFailed": "stella desktop nie mógł zainstalować aktualizacji.",
       "installInProgress": "Trwa instalowanie aktualizacji.",
@@ -1402,7 +1419,6 @@
     "transcriptionProgress": "Trwa transkrypcja: {done} z {total} min",
     "transcriptionProgressSoFar": "Trwa transkrypcja: dotąd {done} min",
     "transcriptionReady": "Transkrypcja gotowa",
-    "updateReady": "Aktualizacja gotowa",
     "updatesManaged": "Aktualizacjami zarządza Twoja organizacja"
   }
 }

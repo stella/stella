@@ -462,6 +462,21 @@
     "welcomeStart": "Start copying",
     "welcomeTitle": "Meet your clipboard"
   },
+  "clipboardSettings": {
+    "capture": "Save new clips",
+    "captureDescription": "Turn this off to stop saving what you copy.",
+    "errorSave": "The change could not be saved. Try again.",
+    "excludedDescription": "Nothing you copy in these apps is saved.",
+    "excludedEmpty": "To exclude an app, right-click one of its clips in the clipboard and choose to stop saving new clips from it.",
+    "groupActions": "Actions for {groupName}",
+    "groupsDescription": "Drag a group to change where it appears in the clipboard.",
+    "groupsEmpty": "Create a group, then drag clips into it in the clipboard.",
+    "history": "History",
+    "moveGroupDown": "Move down",
+    "moveGroupUp": "Move up",
+    "recordingsDescription": "Let screenshots, recordings and screen sharing show the clipboard.",
+    "retentionDescription": "Older clips are deleted. Clips in a group are kept."
+  },
   "dialog": {
     "accountEmail": "Account",
     "accountSubtitle": "Connect stella desktop to this account and organization.",
@@ -1170,6 +1185,8 @@
       "available": "Version {version} is available.",
       "checkFailed": "stella desktop could not check for updates.",
       "deferred": "Version {version} waits while documents are open for editing. When you finish, check again to install it, or it installs at the next automatic check.",
+      "downloadProgress": "{percent}% downloaded",
+      "downloading": "Downloading version {version}. stella desktop restarts once it is installed.",
       "install": "Install and restart",
       "installFailed": "stella desktop could not install the update.",
       "installInProgress": "An update is being installed.",
@@ -1402,7 +1419,6 @@
     "transcriptionProgress": "Transcription in progress: {done} of {total} min",
     "transcriptionProgressSoFar": "Transcription in progress: {done} min so far",
     "transcriptionReady": "Transcription ready",
-    "updateReady": "Update ready",
     "updatesManaged": "Updates managed by your organization"
   }
 }

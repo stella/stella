@@ -108,20 +108,30 @@ export const CLIPBOARD_RETENTIONS = ["week", "month", "year"] as const;
 
 export type ClipboardRetention = (typeof CLIPBOARD_RETENTIONS)[number];
 
-const isClipboardRetention = (value: unknown): value is ClipboardRetention =>
+export const isClipboardRetention = (
+  value: unknown,
+): value is ClipboardRetention =>
   CLIPBOARD_RETENTIONS.some((retention) => retention === value);
 
-export type ClipboardSnapshot = {
+/**
+ * How history is kept and how its groups are named and ordered, never a clip
+ * (`clipboard::ClipboardSettingsSnapshot`). The Settings window reads only
+ * this; the settings commands answer every window with it.
+ */
+export type ClipboardSettingsSnapshot = {
   revision: number;
   captureStatus: ClipboardCaptureStatus;
   groupLimit: number;
   groups: ClipboardGroup[];
-  items: ClipboardItem[];
-  persistence: ClipboardPersistence;
   retention: ClipboardRetention;
   screenCapture: ClipboardScreenCapture;
   sourceAppExclusionLimit: number;
   sourceAppExclusions: ClipboardSourceAppExclusion[];
+};
+
+export type ClipboardSnapshot = ClipboardSettingsSnapshot & {
+  items: ClipboardItem[];
+  persistence: ClipboardPersistence;
   sourceAppVisuals: ClipboardSourceAppVisual[];
   welcomeStatus: ClipboardWelcomeStatus;
 };
@@ -326,9 +336,9 @@ export const isClipboardEditorContext = (
     isClipboardSourceAppVisual(value["sourceAppVisual"])) &&
   isClipboardItem(value["item"]);
 
-export const isClipboardSnapshot = (
+export const isClipboardSettingsSnapshot = (
   value: unknown,
-): value is ClipboardSnapshot => {
+): value is ClipboardSettingsSnapshot => {
   if (!isRecord(value)) {
     return false;
   }
@@ -341,18 +351,24 @@ export const isClipboardSnapshot = (
     isGroupLimit(value["groupLimit"]) &&
     Array.isArray(value["groups"]) &&
     value["groups"].every(isClipboardGroup) &&
-    Array.isArray(value["items"]) &&
-    value["items"].every(isClipboardItem) &&
-    isPersistence(value["persistence"]) &&
     isClipboardRetention(value["retention"]) &&
     isClipboardScreenCapture(value["screenCapture"]) &&
     isGroupLimit(sourceAppExclusionLimit) &&
     Array.isArray(sourceAppExclusions) &&
     sourceAppExclusions.length <= sourceAppExclusionLimit &&
-    sourceAppExclusions.every(isClipboardSourceAppExclusion) &&
-    Array.isArray(value["sourceAppVisuals"]) &&
-    value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
-    (value["welcomeStatus"] === "pending" ||
-      value["welcomeStatus"] === "completed")
+    sourceAppExclusions.every(isClipboardSourceAppExclusion)
   );
 };
+
+export const isClipboardSnapshot = (
+  value: unknown,
+): value is ClipboardSnapshot =>
+  isRecord(value) &&
+  Array.isArray(value["items"]) &&
+  value["items"].every(isClipboardItem) &&
+  isPersistence(value["persistence"]) &&
+  Array.isArray(value["sourceAppVisuals"]) &&
+  value["sourceAppVisuals"].every(isClipboardSourceAppVisual) &&
+  (value["welcomeStatus"] === "pending" ||
+    value["welcomeStatus"] === "completed") &&
+  isClipboardSettingsSnapshot(value);

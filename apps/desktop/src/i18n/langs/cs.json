@@ -462,6 +462,21 @@
     "welcomeStart": "Začít kopírovat",
     "welcomeTitle": "Seznamte se se schránkou"
   },
+  "clipboardSettings": {
+    "capture": "Ukládat nové výstřižky",
+    "captureDescription": "Po vypnutí se nic, co zkopírujete, neukládá.",
+    "errorSave": "Změnu se nepodařilo uložit. Zkuste to znovu.",
+    "excludedDescription": "Nic, co v těchto aplikacích zkopírujete, se neukládá.",
+    "excludedEmpty": "Chcete-li aplikaci vyloučit, klikněte ve schránce pravým tlačítkem na některý její výstřižek a zvolte, že se z ní nové výstřižky ukládat nemají.",
+    "groupActions": "Akce pro skupinu {groupName}",
+    "groupsDescription": "Přetažením skupiny změníte její pořadí ve schránce.",
+    "groupsEmpty": "Vytvořte skupinu a ve schránce do ní přetáhněte výstřižky.",
+    "history": "Historie",
+    "moveGroupDown": "Posunout dolů",
+    "moveGroupUp": "Posunout nahoru",
+    "recordingsDescription": "Umožní zobrazit schránku na snímcích obrazovky, v nahrávkách a při sdílení obrazovky.",
+    "retentionDescription": "Starší výstřižky se mažou. Výstřižky ve skupině zůstávají."
+  },
   "dialog": {
     "accountEmail": "Účet",
     "accountSubtitle": "Připojte stella desktop k tomuto účtu a organizaci.",
@@ -1170,6 +1185,8 @@
       "available": "Je k dispozici verze {version}.",
       "checkFailed": "stella desktop nemohl zkontrolovat aktualizace.",
       "deferred": "Verze {version} čeká, dokud upravujete otevřené dokumenty. Až skončíte, zkontrolujte aktualizace znovu a nainstalujte ji, jinak se nainstaluje při příští automatické kontrole.",
+      "downloadProgress": "Staženo {percent} %",
+      "downloading": "Stahuje se verze {version}. Po instalaci se stella desktop restartuje.",
       "install": "Nainstalovat a restartovat",
       "installFailed": "stella desktop nemohl nainstalovat aktualizaci.",
       "installInProgress": "Instaluje se aktualizace.",
@@ -1402,7 +1419,6 @@
     "transcriptionProgress": "Probíhá přepis: {done} z {total} min",
     "transcriptionProgressSoFar": "Probíhá přepis: zatím {done} min",
     "transcriptionReady": "Přepis je hotový",
-    "updateReady": "Aktualizace připravena",
     "updatesManaged": "Aktualizace spravuje vaše organizace"
   }
 }

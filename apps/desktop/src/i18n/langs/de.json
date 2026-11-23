@@ -462,6 +462,21 @@
     "welcomeStart": "Mit dem Kopieren beginnen",
     "welcomeTitle": "Ihre neue Zwischenablage"
   },
+  "clipboardSettings": {
+    "capture": "Neue Ausschnitte speichern",
+    "captureDescription": "Wenn diese Option aus ist, wird nichts gespeichert, was Sie kopieren.",
+    "errorSave": "Die Änderung konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "excludedDescription": "Was Sie in diesen Apps kopieren, wird nicht gespeichert.",
+    "excludedEmpty": "Um eine App auszuschließen, klicken Sie in der Zwischenablage mit der rechten Maustaste auf einen ihrer Ausschnitte und wählen Sie, dass neue Ausschnitte daraus nicht mehr gespeichert werden.",
+    "groupActions": "Aktionen für {groupName}",
+    "groupsDescription": "Ziehen Sie eine Gruppe, um ihre Position in der Zwischenablage zu ändern.",
+    "groupsEmpty": "Erstellen Sie eine Gruppe und ziehen Sie dann in der Zwischenablage Ausschnitte hinein.",
+    "history": "Verlauf",
+    "moveGroupDown": "Nach unten verschieben",
+    "moveGroupUp": "Nach oben verschieben",
+    "recordingsDescription": "Screenshots, Aufnahmen und Bildschirmfreigaben dürfen die Zwischenablage zeigen.",
+    "retentionDescription": "Ältere Ausschnitte werden gelöscht. Ausschnitte in einer Gruppe bleiben erhalten."
+  },
   "dialog": {
     "accountEmail": "Konto",
     "accountSubtitle": "Verbinden Sie stella desktop mit diesem Konto und dieser Organisation.",
@@ -1170,6 +1185,8 @@
       "available": "Version {version} ist verfügbar.",
       "checkFailed": "stella desktop konnte nicht nach Aktualisierungen suchen.",
       "deferred": "Version {version} wartet, solange geöffnete Dokumente bearbeitet werden. Prüfen Sie danach erneut, um sie zu installieren, oder sie wird bei der nächsten automatischen Prüfung installiert.",
+      "downloadProgress": "{percent} % heruntergeladen",
+      "downloading": "Version {version} wird heruntergeladen. stella desktop startet nach der Installation neu.",
       "install": "Installieren und neu starten",
       "installFailed": "stella desktop konnte die Aktualisierung nicht installieren.",
       "installInProgress": "Eine Aktualisierung wird installiert.",
@@ -1402,7 +1419,6 @@
     "transcriptionProgress": "Transkription läuft: {done} von {total} Min.",
     "transcriptionProgressSoFar": "Transkription läuft: bisher {done} Min.",
     "transcriptionReady": "Transkript fertig",
-    "updateReady": "Aktualisierung bereit",
     "updatesManaged": "Aktualisierungen werden von Ihrer Organisation verwaltet"
   }
 }

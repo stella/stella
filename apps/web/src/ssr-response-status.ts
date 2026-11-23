@@ -49,3 +49,41 @@ export const documentStatus = (
   routerStatus: number,
 ): number =>
   ssrStatusFromHeader(headers.get(SSR_STATUS_HEADER)) ?? routerStatus;
+
+const ROUTER_ERROR_STATUS = 500;
+const RETRYABLE_DOCUMENT_STATUS = 503;
+
+/**
+ * How long a client or crawler is told to wait before asking for a document
+ * again after a read that asking again fixes.
+ */
+export const RETRYABLE_DOCUMENT_RETRY_AFTER_SECONDS = 120;
+
+/**
+ * Sends a document the router failed with 500 as 503 with `Retry-After`
+ * when every loader failure was a read that asking again fixes (the API was
+ * busy, slow or unreachable). A 500 tells a crawler the page is broken; a 503
+ * tells it to come back. A status the route already asked for stands.
+ */
+export const markRetryableDocumentFailure = ({
+  errors,
+  headers,
+  isRetryable,
+  routerStatus,
+}: {
+  errors: readonly unknown[];
+  headers: Pick<Headers, "has" | "set">;
+  isRetryable: (error: unknown) => boolean;
+  routerStatus: number;
+}): void => {
+  if (
+    routerStatus !== ROUTER_ERROR_STATUS ||
+    headers.has(SSR_STATUS_HEADER) ||
+    errors.length === 0 ||
+    !errors.every(isRetryable)
+  ) {
+    return;
+  }
+  headers.set(SSR_STATUS_HEADER, String(RETRYABLE_DOCUMENT_STATUS));
+  headers.set("Retry-After", String(RETRYABLE_DOCUMENT_RETRY_AFTER_SECONDS));
+};
