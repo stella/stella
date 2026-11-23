@@ -15,6 +15,8 @@ CREATE TABLE "dictation_learned_fixes" (
   CONSTRAINT "dictation_learned_fixes_generation_check" CHECK ("dictation_learned_fixes"."generation" >= 0),
   CONSTRAINT "dictation_learned_fixes_revision_check" CHECK ("dictation_learned_fixes"."revision" >= 0)
 );--> statement-breakpoint
+-- Account deletion and the user foreign key's cascade find rows by user.
+CREATE INDEX "dictation_learned_fixes_user_idx" ON "dictation_learned_fixes" USING btree ("user_id");--> statement-breakpoint
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE "dictation_learned_fixes" TO stella;--> statement-breakpoint
 ALTER TABLE "dictation_learned_fixes" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "dictation_learned_fixes" FORCE ROW LEVEL SECURITY;--> statement-breakpoint

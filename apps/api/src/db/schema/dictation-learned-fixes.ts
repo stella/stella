@@ -43,6 +43,8 @@ export const dictationLearnedFixes = p.pgTable(
   },
   (table) => [
     p.primaryKey({ columns: [table.organizationId, table.userId] }),
+    // Account deletion and the user foreign key's cascade find rows by user.
+    p.index("dictation_learned_fixes_user_idx").on(table.userId),
     p.check(
       "dictation_learned_fixes_generation_check",
       sql`${table.generation} >= 0`,

@@ -199,7 +199,14 @@ export const changeLearnedFixes = async (
       return null;
     }
     const applied = new Set(current.changeIds);
-    const fresh = changes.filter(({ id }) => !applied.has(id));
+    // A change repeated within one request is applied once, too.
+    const fresh = changes.filter(({ id }) => {
+      if (applied.has(id)) {
+        return false;
+      }
+      applied.add(id);
+      return true;
+    });
     if (fresh.length === 0) {
       return null;
     }

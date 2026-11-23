@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { DictationLearnedFixChange } from "@stll/api-contract/dictation-learned-fixes";
 import { createTestClock } from "@stll/test-kit";
@@ -54,6 +54,8 @@ const ID = {
   second: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a02",
   third: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a03",
   fourth: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a04",
+  fifth: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a05",
+  sixth: "0b8f8f3e-2b1c-4f7a-9a6e-1c2d3e4f5a06",
 } as const;
 
 beforeAll(async () => {
@@ -167,14 +169,50 @@ describe("learned dictation fixes", () => {
     });
   });
 
+  test("a change repeated within one request is applied once", async () => {
+    const member = as(colleagueId, otherOrganizationId);
+    const fixes = await member.run(
+      async (tx) =>
+        await changeLearnedFixes(tx, member.owner, {
+          generation: 0,
+          changes: [
+            corrected(ID.fifth, "Hrubeš", "Hrubesch"),
+            corrected(ID.fifth, "Hrubeš", "Hrubesch"),
+          ],
+        }),
+    );
+    expect(fixes).toEqual({
+      generation: 0,
+      fixes: [{ from: "Hrubeš", to: "Hrubesch", seen: 1, status: "learning" }],
+    });
+  });
+
   test("the account export reads the fixes back", async () => {
-    const [row] = await db.select().from(dictationLearnedFixes);
+    const member = as(colleagueId);
+    await member.run(
+      async (tx) =>
+        await changeLearnedFixes(tx, member.owner, {
+          generation: 0,
+          changes: [
+            { id: ID.sixth, type: "taught", from: "Novacek", to: "Nováček" },
+          ],
+        }),
+    );
+    const [row] = await db
+      .select()
+      .from(dictationLearnedFixes)
+      .where(
+        and(
+          eq(dictationLearnedFixes.organizationId, organizationId),
+          eq(dictationLearnedFixes.userId, colleagueId),
+        ),
+      );
     if (row === undefined) {
       panic("The fixture row is missing");
     }
     expect(await toLearnedFixesAccountExport(organizationId, row)).toEqual({
-      generation: 1,
-      fixes: [{ from: "Lorenc", to: "Lorentz", seen: 1, status: "on" }],
+      generation: 0,
+      fixes: [{ from: "Novacek", to: "Nováček", seen: 1, status: "on" }],
       updatedAt: row.updatedAt.toISOString(),
     });
   });

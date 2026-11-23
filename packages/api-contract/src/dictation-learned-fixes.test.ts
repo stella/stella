@@ -46,6 +46,11 @@ test("changes name themselves and carry short fixes only", () => {
   expect(
     changes({ id: ID, type: "taught", from: "Hrubeš\n", to: "Hrubesch" }),
   ).toBe(false);
+  for (const separator of ["\u2028", "\u2029"]) {
+    expect(
+      changes({ id: ID, type: "kept", from: `Hrubeš${separator}Novák` }),
+    ).toBe(false);
+  }
   expect(
     changes({ id: ID, type: "taught", from: "de la Cruz", to: "De La Cruz" }),
   ).toBe(true);

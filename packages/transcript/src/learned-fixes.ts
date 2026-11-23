@@ -62,15 +62,25 @@ export type LearnedFixChange =
 export const learnedFixKey = (phrase: string): string =>
   phrase.trim().toLowerCase().replaceAll("’", "'").replaceAll(/\s+/gu, " ");
 
-/** `fixes` after `changes`, in order. The most recently changed fix is last. */
+/**
+ * `fixes` after `changes`, in order. The most recently changed fix is last.
+ * The limit holds after every change, so the result is the same however a
+ * device splits the same changes into calls.
+ */
 export const applyLearnedFixChanges = (
   fixes: readonly LearnedFix[],
   changes: readonly LearnedFixChange[],
 ): LearnedFix[] => {
   let next = [...fixes];
   for (const change of changes) {
-    next = applied(next, change);
+    next = withinLimit(applied(next, change));
   }
+  return withinLimit(next);
+};
+
+/** `fixes` without the oldest not in use (else the oldest) beyond the limit. */
+const withinLimit = (fixes: LearnedFix[]): LearnedFix[] => {
+  const next = [...fixes];
   while (next.length > LEARNED_FIX_LIMIT) {
     const unused = next.findIndex(
       ({ status }) => status === "learning" || status === "contradicted",
@@ -97,7 +107,9 @@ const applied = (
       return [...next.filter((fix) => fix !== current), updated];
     }
     case "kept": {
-      return fixes.map((fix) => (fix === known ? contradicted(fix) : fix));
+      return known === undefined
+        ? [...fixes]
+        : movedLast(fixes, known, contradicted(known));
     }
     case "taught": {
       const next = turnedBack(fixes, change);
@@ -111,16 +123,14 @@ const applied = (
       return [...next.filter((fix) => fix !== current), taught];
     }
     case "switched": {
-      return fixes.map((fix) =>
-        fix === known
-          ? {
-              from: fix.from,
-              to: fix.to,
-              seen: fix.seen,
-              status: change.status,
-            }
-          : fix,
-      );
+      return known === undefined
+        ? [...fixes]
+        : movedLast(fixes, known, {
+            from: known.from,
+            to: known.to,
+            seen: known.seen,
+            status: change.status,
+          });
     }
     default: {
       change satisfies never;
@@ -128,6 +138,16 @@ const applied = (
     }
   }
 };
+
+/** `fixes` with `fix` replaced by `updated`, moved last when it changed. */
+const movedLast = (
+  fixes: readonly LearnedFix[],
+  fix: LearnedFix,
+  updated: LearnedFix,
+): LearnedFix[] =>
+  updated.status === fix.status
+    ? [...fixes]
+    : [...fixes.filter((each) => each !== fix), updated];
 
 /**
  * A fix whose words the person turned back to what was dictated was wrong.
@@ -149,8 +169,9 @@ const turnedBack = (
 const caseOnly = ({ from, to }: { from: string; to: string }): boolean =>
   learnedFixKey(from) === learnedFixKey(to);
 
+/** Apostrophes stay as written, so a fix of an apostrophe alone is not its own reversal. */
 const exactPhrase = (phrase: string): string =>
-  phrase.trim().replaceAll("’", "'").replaceAll(/\s+/gu, " ");
+  phrase.trim().replaceAll(/\s+/gu, " ");
 
 const contradicted = (fix: LearnedFix): LearnedFix =>
   fix.status === "off"

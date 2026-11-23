@@ -40,7 +40,7 @@ export const DICTATION_LEARNED_FIX_LIMITS = {
 const isFixText = (text: string): boolean =>
   text.length > 0 &&
   text.trim() === text &&
-  !/\p{Cc}/u.test(text) &&
+  !/[\p{Cc}\u2028\u2029]/u.test(text) &&
   text.split(/\s+/u).length <= DICTATION_LEARNED_FIX_LIMITS.words;
 
 const fixTextSchema = v.pipe(
