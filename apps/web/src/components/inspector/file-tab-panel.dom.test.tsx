@@ -87,6 +87,10 @@ globalThis.fetch = Object.assign(
         { status: 422 },
       );
     }
+    // An `.xml` file is asked for a signature first; these hold none.
+    if (url.includes("/signature/")) {
+      return Response.json({ type: "notSignature" });
+    }
     if (url.includes("/chat/threads/") && url.includes("/messages")) {
       return Response.json({ message: "Thread not found" }, { status: 404 });
     }
@@ -296,6 +300,7 @@ const {
   asicPreviewOptions,
   cadesPreviewOptions,
   mailboxPreviewOptions,
+  signaturePreviewOptions,
   signedDossierPreviewOptions,
   zipArchivePreviewOptions,
 } = await import("@/lib/files/legal-file-queries");
@@ -759,6 +764,119 @@ test("keeps the original available when the signed container cannot be opened", 
     mounted.getByRole("button", { name: "Download original" }),
   ).toBeTruthy();
   expect(pdfEngineCommitCount).toBe(0);
+});
+
+type SignaturePreviewData = InferDataFromTag<
+  unknown,
+  ReturnType<typeof signaturePreviewOptions>["queryKey"]
+>;
+
+test("a detached signature lists its signers and links the signed document", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-signature"),
+    label: "Signature",
+    fileName: "smlouva.pdf.p7s",
+    mimeType: "application/pkcs7-signature",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  // A typed value discriminates the preview union; a literal would not.
+  const preview: SignaturePreviewData = {
+    type: "signature",
+    standard: "cades",
+    packaging: "detached",
+    signers: [
+      {
+        id: "layer-0.signer-0",
+        name: "Example notary office",
+        signedAt: "2026-03-02T09:30:00.000Z",
+      },
+      { id: "layer-0.signer-1", name: null, signedAt: null },
+    ],
+    statedFileNames: ["příloha.pdf"],
+    signedFiles: [
+      {
+        entityId: ENTITY_ID,
+        fieldId: "field-signed",
+        fileName: "smlouva.pdf",
+        binding: "digestMatches",
+      },
+    ],
+    document: null,
+  };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, preview);
+  });
+  expect(
+    await mounted.findByRole("heading", { name: "smlouva.pdf.p7s" }),
+  ).toBeTruthy();
+  expect(mounted.getByText("Example notary office")).toBeTruthy();
+  expect(mounted.getByText("Unknown signer")).toBeTruthy();
+  expect(
+    mounted.getByText("The signatures have not been verified."),
+  ).toBeTruthy();
+  expect(mounted.getByRole("button", { name: "smlouva.pdf" })).toBeTruthy();
+  expect(
+    mounted.getByText(bundledEnglishMessages.signedFile.bindingMatches),
+  ).toBeTruthy();
+  expect(
+    mounted.getByText(bundledEnglishMessages.signedFile.digestNote),
+  ).toBeTruthy();
+  expect(mounted.getByText("příloha.pdf")).toBeTruthy();
+  expect(pdfEngineCommitCount).toBe(0);
+});
+
+test("an .xml signature stored as plain text opens as the signature", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-enveloped-xml"),
+    fileName: "wniosek.xml",
+    mimeType: "text/plain",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const preview: SignaturePreviewData = {
+    type: "signature",
+    standard: "xades",
+    packaging: "enveloped",
+    signers: [
+      {
+        id: "signature-0.signer-0",
+        name: "Example court registry",
+        signedAt: null,
+      },
+    ],
+    statedFileNames: [],
+    signedFiles: [],
+    document: {
+      fileName: "wniosek.xml",
+      mimeType: "application/xml",
+      text: "Wniosek o wpis do rejestru",
+    },
+  };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, preview);
+  });
+  expect(await mounted.findByText("Wniosek o wpis do rejestru")).toBeTruthy();
+  expect(mounted.getByText("Example court registry")).toBeTruthy();
+});
+
+test("an .xml file the server finds no signature in keeps its own viewer", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-xml-text"),
+    fileName: "catalog.xml",
+    mimeType: "text/xml",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, {
+      type: "notSignature",
+    });
+  });
+  expect(await mounted.findByText(/<item>Sample entry<\/item>/u)).toBeTruthy();
+  expect(
+    mounted.queryByText("The signatures have not been verified."),
+  ).toBeNull();
 });
 
 test.each([".asice", ".asics"])(

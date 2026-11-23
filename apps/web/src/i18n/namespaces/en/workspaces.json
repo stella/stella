@@ -371,13 +371,21 @@
     "title": "SharePoint and OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Its contents do not match the digest stated in the signature.",
+    "bindingMatches": "Its contents match the digest stated in the signature.",
+    "bindingNotCompared": "Found by file name. Its contents were not compared.",
     "deliveryReceipt": "Delivery receipt for an electronic dossier",
+    "digestNote": "A matching digest shows these are the signed bytes. It does not verify the signature.",
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
     "noSigners": "No signer details were found.",
     "pdfUnavailable": "The PDF preview is unavailable.",
+    "signedAt": "Stated signing time: {time}",
     "signedDocument": "Signed document",
+    "signedFileMissing": "The signed file is not in this matter.",
     "signers": "Signers",
+    "signs": "Signed file",
+    "statedFilesMissing": "Named in the signature, not found in this matter:",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."

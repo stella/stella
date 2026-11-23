@@ -1,5 +1,6 @@
 import { ASIC_FILE_FORMATS } from "./asic-file-formats";
 import { E_INVOICE_FILE_FORMATS } from "./e-invoice-formats";
+import { SIGNATURE_FILE_FORMATS } from "./signature-file-formats";
 import { SIGNED_DOSSIER_FORMATS } from "./signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "./structured-document-formats";
 
@@ -89,6 +90,13 @@ export const [E_AKTA_FILE_FORMAT, ZEP_FILE_FORMAT, XADES_ZEP_FILE_FORMAT] =
 export const SIGNED_DOSSIER_KINDS = SIGNED_DOSSIER_FORMATS.map(
   ({ kind }) => kind,
 );
+export const [CADES_DETACHED_FILE_FORMAT, XADES_FILE_FORMAT] =
+  SIGNATURE_FILE_FORMATS;
+
+export {
+  SIGNATURE_FILE_KINDS,
+  type SignatureFileFormatKind,
+} from "./signature-file-formats";
 
 /** Recognized legal containers shared by Files, search and chat. */
 export const LEGAL_FILE_FORMATS = [
@@ -96,6 +104,7 @@ export const LEGAL_FILE_FORMATS = [
   CADES_FILE_FORMAT,
   ...ASIC_FILE_FORMATS,
   ...SIGNED_DOSSIER_FORMATS,
+  ...SIGNATURE_FILE_FORMATS,
   ...STRUCTURED_DOCUMENT_FORMATS,
   ...E_INVOICE_FILE_FORMATS,
   ZIP_FILE_FORMAT,

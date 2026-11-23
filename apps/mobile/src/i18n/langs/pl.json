@@ -899,12 +899,20 @@
     "useStella": "Użyj stella"
   },
   "signedFile": {
+    "bindingDiffers": "Jego zawartość nie odpowiada skrótowi podanemu w podpisie.",
+    "bindingMatches": "Jego zawartość odpowiada skrótowi podanemu w podpisie.",
+    "bindingNotCompared": "Znaleziono po nazwie pliku. Zawartości nie porównano.",
     "deliveryReceipt": "Potwierdzenie doręczenia akt elektronicznych",
+    "digestNote": "Zgodny skrót oznacza, że są to podpisane dane. Nie weryfikuje to podpisu.",
     "layer": "Warstwa podpisów {number, number}",
     "noReadableContent": "Brak czytelnej zawartości do wyświetlenia w podglądzie.",
     "noSigners": "Nie znaleziono danych podpisujących.",
+    "signedAt": "Deklarowany czas podpisu: {time}",
     "signedContent": "Podpisany dokument",
+    "signedFileMissing": "Podpisanego pliku nie ma w tej sprawie.",
     "signers": "Podpisujący",
+    "signs": "Podpisany plik",
+    "statedFilesMissing": "Wskazane w podpisie, nie znaleziono w tej sprawie:",
     "unknownSigner": "Nieznany podpisujący",
     "unreadable": "Nie udało się odczytać podpisanego pliku.",
     "unverified": "Podpisy nie zostały zweryfikowane."

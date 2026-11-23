@@ -899,12 +899,20 @@
     "useStella": "Použiť stella"
   },
   "signedFile": {
+    "bindingDiffers": "Jeho obsah nezodpovedá odtlačku uvedenému v podpise.",
+    "bindingMatches": "Jeho obsah zodpovedá odtlačku uvedenému v podpise.",
+    "bindingNotCompared": "Nájdené podľa názvu súboru. Obsah sa neporovnával.",
     "deliveryReceipt": "Doručenka k elektronickému spisu",
+    "digestNote": "Zhodný odtlačok ukazuje, že ide o podpísané údaje. Platnosť podpisu tým overená nie je.",
     "layer": "Vrstva podpisov {number, number}",
     "noReadableContent": "Na náhľad nie je k dispozícii žiadny čitateľný obsah.",
     "noSigners": "Nenašli sa žiadne údaje o podpisovateľoch.",
+    "signedAt": "Uvedený čas podpisu: {time}",
     "signedContent": "Podpísaný dokument",
+    "signedFileMissing": "Podpísaný súbor v tomto spise nie je.",
     "signers": "Podpisovatelia",
+    "signs": "Podpísaný súbor",
+    "statedFilesMissing": "Uvedené v podpise, v spise sa nenašlo:",
     "unknownSigner": "Neznámy podpisovateľ",
     "unreadable": "Podpísaný súbor sa nepodarilo prečítať.",
     "unverified": "Podpisy neboli overené."

@@ -8,6 +8,7 @@ import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
 import {
   documentFormat,
   legalFileFormat,
+  signatureFormatCandidate,
 } from "@stll/api-contract/document-format";
 import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
 import { emailReadingSchema } from "@stll/api-contract/email-reading";
@@ -21,13 +22,17 @@ import {
   type UnscannedContentReason,
 } from "@stll/api-contract/file-scan-warnings";
 import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
+import {
+  type SignaturePreview,
+  signaturePreviewSchema,
+} from "@stll/api-contract/signature";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
 
 import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
-import { requestApi } from "@/state/api-request";
+import { ApiRequestError, requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
 import { entityPath } from "@/state/matter-entities";
 
@@ -160,6 +165,16 @@ type SignedDossierDocumentFile = {
   >;
 };
 
+type SignatureDocumentFile = {
+  readonly viewer: "signature";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    Extract<SignaturePreview, { type: "signature" }>,
+    ApiError
+  >;
+};
+
 type StructuredDocumentFile = {
   readonly viewer: "structured-document";
   readonly fileName: string;
@@ -221,6 +236,7 @@ export type LegalDocumentFile =
   | EInvoiceDocumentFile
   | EmailDocumentFile
   | MailboxDocumentFile
+  | SignatureDocumentFile
   | SignedDossierDocumentFile
   | StructuredDocumentFile
   | ZipArchiveDocumentFile;
@@ -426,6 +442,71 @@ const fallsBackToDownload = (error: ApiError): boolean =>
 export const isOffline = (error: DocumentFileError): boolean =>
   error._tag === "ApiRequestError" && error.status === undefined;
 
+/**
+ * A file named as a signature is always read as one: bytes that hold none
+ * are unreadable, as the server answers for any other refused preview.
+ */
+const namedSignaturePreview = (
+  preview: Result<SignaturePreview, ApiError>,
+): SignatureDocumentFile["preview"] => {
+  if (Result.isError(preview)) {
+    return preview;
+  }
+  return preview.value.type === "signature"
+    ? Result.ok(preview.value)
+    : Result.err(
+        new ApiRequestError({
+          message: "The signature could not be read",
+          status: 422,
+          code: PREVIEW_UNAVAILABLE_ERROR_CODE,
+        }),
+      );
+};
+
+type SignatureRead = {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  readonly fileName: string;
+  readonly mimeType: string;
+};
+
+const requestSignature = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+}: SignatureRead) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `/v1/files/${encodeURIComponent(workspaceId)}/signature/${encodeURIComponent(fieldId)}`,
+    schema: signaturePreviewSchema,
+  });
+
+/**
+ * A `.sig` or `.xml` file read as the signature its bytes hold; null when
+ * they hold none or the server cannot say, so the file opens as it would
+ * have.
+ */
+const probedSignatureFile = async (
+  read: SignatureRead,
+): Promise<SignatureDocumentFile | null> => {
+  if (signatureFormatCandidate(read.mimeType, read.fileName) === undefined) {
+    return null;
+  }
+  const preview = await requestSignature(read);
+  return Result.isOk(preview) && preview.value.type === "signature"
+    ? {
+        viewer: "signature",
+        fileName: read.fileName,
+        fieldId: read.fieldId,
+        preview: Result.ok(preview.value),
+      }
+    : null;
+};
+
 /** The current file of one document in a matter, ready to open. */
 export const readDocumentFile = async ({
   fetch,
@@ -476,6 +557,7 @@ const openVersionFile = async ({
 > =>
   await Result.gen(async function* () {
     const { fieldId, fileName, mimeType } = file;
+    const signatureRead = { ...file, fetch, source, workspaceId };
     const kind = legalFileFormat(mimeType, fileName)?.kind;
     switch (kind) {
       case "asicE":
@@ -571,9 +653,23 @@ const openVersionFile = async ({
           preview,
         } satisfies StructuredDocumentFile);
       }
+      case "cadesDetached":
+      case "xades":
+        return Result.ok({
+          viewer: "signature",
+          fileName,
+          fieldId,
+          preview: namedSignaturePreview(await requestSignature(signatureRead)),
+        } satisfies SignatureDocumentFile);
       case "isdoc":
       case "isdocx":
       case "xml": {
+        // An `.xml` file may be an XAdES signature: the server decides from
+        // its bytes, and any other XML is read as an invoice or as its text.
+        const signature = await probedSignatureFile(signatureRead);
+        if (signature !== null) {
+          return Result.ok(signature);
+        }
         const preview = await requestApi({
           fetch,
           source,
@@ -598,8 +694,16 @@ const openVersionFile = async ({
           preview,
         } satisfies EInvoiceDocumentFile);
       }
-      case undefined:
+      case undefined: {
+        // A `.sig` file is a signature only when the server reads one in its
+        // bytes; otherwise, or when it cannot say, the file opens as it would
+        // have.
+        const signature = await probedSignatureFile(signatureRead);
+        if (signature !== null) {
+          return Result.ok(signature);
+        }
         break;
+      }
       default:
         kind satisfies never;
         return panic("Unsupported legal file viewer");

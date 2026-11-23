@@ -19,6 +19,10 @@ import {
   XML_FILE_FORMAT,
   ZIP_FILE_FORMAT,
 } from "./legal-file-formats";
+import {
+  SIGNATURE_CONTENT_CANDIDATES,
+  SIGNATURE_FILE_FORMATS,
+} from "./signature-file-formats";
 
 /**
  * Media types that only say a file is XML or a ZIP archive. Many formats are
@@ -353,4 +357,30 @@ export const legalFileFormat = (
 ) => {
   const { kind } = documentFormat(mimeType, fileName);
   return LEGAL_FILE_FORMATS.find((format) => format.kind === kind);
+};
+
+/**
+ * The signature format a file is read as only if its bytes are one: a `.sig`
+ * file that holds CMS, an `.xml` file that holds an XAdES signature (which
+ * otherwise reads as XML). Undefined for a file whose type or name names any
+ * other format, and for any other file.
+ */
+export const signatureFormatCandidate = (
+  mimeType?: string | null,
+  fileName?: string | null,
+) => {
+  const family = documentFormat(mimeType, fileName).kind;
+  if (family !== "file" && family !== "text" && family !== "xml") {
+    return undefined;
+  }
+  const media = mimeType?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  const extension = extensionOf(fileName);
+  const candidate = SIGNATURE_CONTENT_CANDIDATES.find(
+    ({ extensions, mimeTypes }) =>
+      mimeTypes.some((type) => type === media) ||
+      extensions.some((value) => value === extension),
+  );
+  return candidate === undefined
+    ? undefined
+    : SIGNATURE_FILE_FORMATS.find(({ kind }) => kind === candidate.kind);
 };

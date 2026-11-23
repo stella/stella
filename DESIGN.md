@@ -367,7 +367,7 @@ it, and add it here in the same change that adds it to `packages/ui`.
 - `DetailsGrid` `variant`: `list`, `sheet`
 - `DetailsItem` `span`: `wide`
 - `DialogContent`, `DialogPopup` `size`: `default`, `lg`, `sm`, `xl`
-- `DocumentMark` `kind`: `asicE`, `asicS`, `bdoc`, `cades`, `csv`, `dataBox`, `eAkta`, `epub`, `et3`, `excel`, `fatturaPA`, `isdoc`, `isdocx`, `markdown`, `mbox`, `numbers`, `ofd`, `openDocumentSheet`, `openDocumentText`, `pages`, `pdf`, `powerpoint`, `pst`, `rtf`, `uyap`, `webArchive`, `word`, `wordPerfect`, `works`, `xadesZep`, `xml`, `zep`, `zip`
+- `DocumentMark` `kind`: `asicE`, `asicS`, `bdoc`, `cades`, `cadesDetached`, `csv`, `dataBox`, `eAkta`, `epub`, `et3`, `excel`, `fatturaPA`, `isdoc`, `isdocx`, `markdown`, `mbox`, `numbers`, `ofd`, `openDocumentSheet`, `openDocumentText`, `pages`, `pdf`, `powerpoint`, `pst`, `rtf`, `uyap`, `webArchive`, `word`, `wordPerfect`, `works`, `xades`, `xadesZep`, `xml`, `zep`, `zip`
 - `DropdownMenuCheckboxItem`, `MenuCheckboxItem` `variant`: `default`, `switch`
 - `DropdownMenuItem`, `MenuItem` `variant`: `default`, `destructive`
 - `DropdownMenuRadioItem`, `MenuRadioItem` `indicator`: `check`, `none`

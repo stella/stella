@@ -398,6 +398,14 @@ export const DOCUMENT_MARKS = {
   }),
   bdoc: taggedFormatMark({ color: "#0f6e7a", lines: [["B", "D", "O", "C"]] }),
   cades: taggedFormatMark({ color: "#6b4c9a", lines: [["P", "7", "M"]] }),
+  cadesDetached: taggedFormatMark({
+    color: "#57418a",
+    lines: [["P", "7", "S"]],
+  }),
+  xades: taggedFormatMark({
+    color: "#4b4f8f",
+    lines: [["X", "A", "D", "E", "S"]],
+  }),
   fatturaPA: taggedFormatMark({ color: "#1d6f42", lines: [["F", "P", "A"]] }),
   isdoc: taggedFormatMark({
     color: "#1f5fa8",

@@ -309,6 +309,12 @@ export const API_OAUTH_ROUTES = {
     exportName: "signedDossierPreviewEndpoint",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/signature/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/signature.ts",
+    exportName: "signaturePreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
   "GET /v1/files/:workspaceId/data-box/:fieldId": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/data-box.ts",

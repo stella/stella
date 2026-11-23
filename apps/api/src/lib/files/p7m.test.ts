@@ -75,6 +75,7 @@ test("matches a subject key identifier to the embedded certificate", async () =>
       issuerName: "Example first signer",
       serialNumber: "01",
       signedAt: null,
+      messageDigest: null,
     },
   ]);
 });

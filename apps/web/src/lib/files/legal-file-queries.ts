@@ -5,6 +5,7 @@ import { asicPreviewSchema } from "@stll/api-contract/asic";
 import { cadesPreviewSchema } from "@stll/api-contract/cades";
 import { xmlDocumentPreviewSchema } from "@stll/api-contract/e-invoice";
 import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
+import { signaturePreviewSchema } from "@stll/api-contract/signature";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
@@ -27,6 +28,12 @@ const legalFileKeys = {
   cades: ({ fieldId, workspaceId }: LegalFileKey) => [
     ...filesKeys.all(),
     "cades",
+    workspaceId,
+    fieldId,
+  ],
+  signature: ({ fieldId, workspaceId }: LegalFileKey) => [
+    ...filesKeys.all(),
+    "signature",
     workspaceId,
     fieldId,
   ],
@@ -185,6 +192,38 @@ export const structuredDocumentPreviewOptions = (props: FileOptionsProps) =>
       scope: { type: "workspace", workspaceId: props.workspaceId },
     },
   );
+/**
+ * A signature file's signers and what it signs, or `notSignature` for a
+ * `.sig` file whose bytes are not a signature.
+ */
+export const signaturePreviewOptions = (props: FileOptionsProps) =>
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: legalFileKeys.signature(props),
+      queryFn: async ({ signal }) => {
+        const fileRoutes = api.files({ workspaceId: props.workspaceId });
+        const response = await fileRoutes
+          .signature({
+            fieldId: props.fieldId,
+          })
+          .get({ fetch: { signal } });
+        return parseSuccessBody(
+          signaturePreviewSchema,
+          unwrapApiResponse(response),
+          "Signature preview must match its response schema",
+        );
+      },
+    }),
+    {
+      resources: [
+        RESOURCE_TYPE.ENTITY,
+        RESOURCE_TYPE.FIELD,
+        RESOURCE_TYPE.USER_FILE,
+      ],
+      scope: { type: "workspace", workspaceId: props.workspaceId },
+    },
+  );
+
 export const cadesPreviewOptions = (props: FileOptionsProps) =>
   resourceQueryOptions(
     queryOptions({

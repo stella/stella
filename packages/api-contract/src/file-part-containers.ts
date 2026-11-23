@@ -36,6 +36,9 @@ export const FILE_PART_KINDS_BY_FORMAT = {
   xml: [attachment],
   uyap: [],
   ofd: [],
+  // A signature file's text is read whole; it has no parts of its own.
+  cadesDetached: [],
+  xades: [],
   zip: [member],
   mbox: [message],
   pst: [message],

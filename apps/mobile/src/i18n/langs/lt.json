@@ -899,12 +899,20 @@
     "useStella": "Naudoti stella"
   },
   "signedFile": {
+    "bindingDiffers": "Jo turinys neatitinka paraše nurodytos maišos reikšmės.",
+    "bindingMatches": "Jo turinys atitinka paraše nurodytą maišos reikšmę.",
+    "bindingNotCompared": "Rasta pagal failo pavadinimą. Turinys nebuvo palygintas.",
     "deliveryReceipt": "Elektroninės bylos įteikimo patvirtinimas",
+    "digestNote": "Sutampanti maišos reikšmė rodo, kad tai pasirašyti duomenys. Parašas taip nepatikrinamas.",
     "layer": "Parašų sluoksnis {number, number}",
     "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
     "noSigners": "Pasirašiusiųjų duomenų nerasta.",
+    "signedAt": "Nurodytas pasirašymo laikas: {time}",
     "signedContent": "Pasirašytas dokumentas",
+    "signedFileMissing": "Pasirašyto failo šioje byloje nėra.",
     "signers": "Pasirašiusieji",
+    "signs": "Pasirašytas failas",
+    "statedFilesMissing": "Nurodyti paraše, bet šioje byloje nerasti:",
     "unknownSigner": "Nežinomas pasirašęs asmuo",
     "unreadable": "Nepavyko perskaityti pasirašyto failo.",
     "unverified": "Parašai nepatikrinti."

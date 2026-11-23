@@ -11,7 +11,10 @@
 
 import { panic, Result } from "better-result";
 
-import { legalFileFormat } from "@stll/api-contract/document-format";
+import {
+  legalFileFormat,
+  signatureFormatCandidate,
+} from "@stll/api-contract/document-format";
 import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import type { PST_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
 import { MBOX_FILE_FORMAT } from "@stll/api-contract/legal-file-formats";
@@ -150,7 +153,11 @@ export const resolveExtractionMimeType = ({
   fileName: string;
   mimeType: string;
 }): string => {
-  const legal = legalFileFormat(mimeType, fileName);
+  // A `.sig` or `.xml` file goes to the signature reader, which finds no
+  // text in one whose bytes are not a signature.
+  const legal =
+    legalFileFormat(mimeType, fileName) ??
+    signatureFormatCandidate(mimeType, fileName);
   if (legal) {
     return legal.mimeType;
   }
@@ -209,8 +216,12 @@ type ExtractFileTextResultOptions = {
   zipNameCodePage: ZipNameCodePage;
 };
 
+// A `.sig` file goes to the signature reader, which finds no text in one
+// whose bytes are not a signature.
 const extractionMimeTypeOf = ({ mimeType, fileName }: ScannedFile) =>
-  legalFileFormat(mimeType, fileName)?.mimeType ?? normalizeMimeType(mimeType);
+  legalFileFormat(mimeType, fileName)?.mimeType ??
+  signatureFormatCandidate(mimeType, fileName)?.mimeType ??
+  normalizeMimeType(mimeType);
 
 export const extractFileTextResult = async (
   file: ScannedFile,

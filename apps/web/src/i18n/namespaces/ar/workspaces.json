@@ -371,13 +371,21 @@
     "title": "SharePoint وOneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "لا يطابق محتواه البصمة المذكورة في التوقيع.",
+    "bindingMatches": "يطابق محتواه البصمة المذكورة في التوقيع.",
+    "bindingNotCompared": "عُثر عليه باسم الملف. لم تتم مقارنة محتواه.",
     "deliveryReceipt": "إيصال تسليم لملف إلكتروني",
+    "digestNote": "تطابق البصمة يعني أن هذه هي البيانات الموقّعة، ولا يعني التحقق من التوقيع.",
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
     "noSigners": "لم يُعثر على بيانات أي موقّع.",
     "pdfUnavailable": "معاينة ملف PDF غير متاحة.",
+    "signedAt": "وقت التوقيع المذكور: {time}",
     "signedDocument": "المستند الموقّع",
+    "signedFileMissing": "الملف الموقّع غير موجود في هذا الملف القانوني.",
     "signers": "الموقّعون",
+    "signs": "الملف الموقّع",
+    "statedFilesMissing": "مذكورة في التوقيع وغير موجودة في هذا الملف القانوني:",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",
     "unverified": "لم يُتحقق من التوقيعات."
