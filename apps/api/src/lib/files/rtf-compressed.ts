@@ -36,14 +36,12 @@ export const COMPRESSED_RTF_PREBUFFER = new TextEncoder().encode(
 
 /**
  * The CRC [MS-OXRTFCP] 2.1.3.2 gives a compressed stream: the IEEE CRC-32,
- * started at zero and not inverted at the end. CRC-32 is affine in its
- * starting value, so it is the standard CRC-32 of the bytes combined with
- * that of as many zero bytes, which cancels the standard start and end.
+ * started at zero and not inverted at the end.
  */
 export const compressedRtfCrc = (bytes: Uint8Array): number =>
-  // oxlint-disable-next-line no-bitwise -- CRC arithmetic over 32-bit words
-  (Bun.hash.crc32(bytes) ^ Bun.hash.crc32(new Uint8Array(bytes.byteLength))) >>>
-  0;
+  // Seeded with all ones, the standard CRC-32 starts the register at zero;
+  // subtracting from all ones undoes its final inversion.
+  0xff_ff_ff_ff - Bun.hash.crc32(bytes, 0xff_ff_ff_ff);
 
 const invalid = (message: string) =>
   Result.err(new CompressedRtfError({ message, reason: "invalid" }));

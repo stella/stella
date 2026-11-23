@@ -147,7 +147,26 @@ type Group = {
 const isLetter = (byte: number) =>
   (byte >= 0x61 && byte <= 0x7a) || (byte >= 0x41 && byte <= 0x5a);
 const isDigit = (byte: number) => byte >= 0x30 && byte <= 0x39;
-const HEX_DIGITS = /^[0-9a-f]{2}$/iu;
+/** The value of one hexadecimal digit byte; null for any other byte. */
+const hexValue = (byte: number | undefined): number | null => {
+  if (byte === undefined) {
+    return null;
+  }
+  if (isDigit(byte)) {
+    return byte - 0x30;
+  }
+  const lower = byte >= 0x41 && byte <= 0x46 ? byte + 0x20 : byte;
+  return lower >= 0x61 && lower <= 0x66 ? lower - 0x61 + 10 : null;
+};
+
+/** A line without the spaces and tabs it ends in. */
+const trimLineEnd = (line: string): string => {
+  let end = line.length;
+  while (end > 0 && (line[end - 1] === " " || line[end - 1] === "\t")) {
+    end -= 1;
+  }
+  return line.slice(0, end);
+};
 const ascii = new TextDecoder("windows-1252");
 
 const ROOT_GROUP: Group = {
@@ -187,9 +206,12 @@ const readControlWord = (rtf: Uint8Array, at: number): ControlWord => {
     paramEnd += 1;
   }
   const hasParameter = paramEnd > digitsStart;
-  const parameter = hasParameter
-    ? Number.parseInt(ascii.decode(rtf.subarray(end, paramEnd)), 10)
-    : null;
+  let magnitude = 0;
+  for (const digit of rtf.subarray(digitsStart, paramEnd)) {
+    magnitude = magnitude * 10 + (digit - 0x30);
+  }
+  const sign = digitsStart > end ? -1 : 1;
+  const parameter = hasParameter ? sign * magnitude : null;
   const after = hasParameter ? paramEnd : end;
   // One space after a control word is its delimiter, not text.
   return { word, parameter, next: rtf[after] === 0x20 ? after + 1 : after };
@@ -305,9 +327,10 @@ class BodyReader {
   symbol(rtf: Uint8Array, at: number): number {
     const symbol = rtf[at + 1];
     if (symbol === 0x27) {
-      const hex = ascii.decode(rtf.subarray(at + 2, at + 4));
-      if (HEX_DIGITS.test(hex)) {
-        this.byte(Number.parseInt(hex, 16));
+      const high = hexValue(rtf[at + 2]);
+      const low = hexValue(rtf[at + 3]);
+      if (high !== null && low !== null) {
+        this.byte(high * 16 + low);
       }
       return at + 4;
     }
@@ -424,7 +447,9 @@ class BodyReader {
       return body.trim() === "" ? null : { type: "html", html: body };
     }
     const text = body
-      .replace(/[ \t]+\n/gu, "\n")
+      .split("\n")
+      .map(trimLineEnd)
+      .join("\n")
       .replace(/\n{3,}/gu, "\n\n")
       .trim();
     return text === "" ? null : { type: "text", text };

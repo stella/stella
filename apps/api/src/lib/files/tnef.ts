@@ -287,20 +287,20 @@ const cleanString = (value: string): string | null => {
   return cleaned === "" ? null : cleaned;
 };
 
-const FILETIME_UNIX_EPOCH_MS = 11_644_473_600_000n;
+const FILETIME_UNIX_EPOCH_MS = 11_644_473_600_000;
 
 const fileTime = (bytes: Uint8Array): string | null => {
   if (bytes.byteLength < 8) {
     return null;
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, 8);
+  // Ticks of 100 ns; a double holds them to well under a millisecond.
   const ticks =
-    BigInt(view.getUint32(4, true)) * 4_294_967_296n +
-    BigInt(view.getUint32(0, true));
-  if (ticks === 0n) {
+    view.getUint32(4, true) * 4_294_967_296 + view.getUint32(0, true);
+  if (ticks === 0) {
     return null;
   }
-  const unixMs = Number(ticks / 10_000n - FILETIME_UNIX_EPOCH_MS);
+  const unixMs = Math.floor(ticks / 10_000) - FILETIME_UNIX_EPOCH_MS;
   const date = new Date(unixMs);
   return Number.isNaN(date.getTime()) ? null : date.toUTCString();
 };
