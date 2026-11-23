@@ -127,7 +127,7 @@ fn secure_text_field(element: &CFType) -> Option<bool> {
     if text.char_len() > MAX_ATTRIBUTE_UTF16_UNITS {
       return None;
     }
-    if text.to_string() == SECURE_TEXT_FIELD {
+    if text == SECURE_TEXT_FIELD {
       return Some(true);
     }
   }
