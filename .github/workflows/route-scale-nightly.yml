@@ -42,7 +42,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
@@ -85,7 +85,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@a6a6cd30646c18321ef71e344bf0af6b8d3634b8
+        uses: stella/.github/actions/setup-bun-cached@2664e46f02aea7164ba71bcdd485a686166993a4
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
