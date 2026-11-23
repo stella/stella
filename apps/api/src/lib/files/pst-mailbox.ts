@@ -8,6 +8,7 @@
  */
 import { panic, Result, TaggedError } from "better-result";
 import { readSync } from "node:fs";
+import type { FileHandle } from "node:fs/promises";
 import { mkdtemp, open, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -131,13 +132,12 @@ export const withPstFile = async <T>(
   read: (open: (deadline: number) => PstHostFile) => Promise<T>,
 ): Promise<Result<T, PstReadError>> => {
   const directory = await mkdtemp(path.join(tmpdir(), "stella-pst-"));
-  const handle = await open(
-    path.join(directory, "mailbox.pst"),
-    "wx+",
-    0o600,
-  ).finally(async () => {
+  let handle: FileHandle;
+  try {
+    handle = await open(path.join(directory, "mailbox.pst"), "wx+", 0o600);
+  } finally {
     await rm(directory, { recursive: true, force: true });
-  });
+  }
   try {
     let size = 0;
     for await (const chunk of chunks) {
