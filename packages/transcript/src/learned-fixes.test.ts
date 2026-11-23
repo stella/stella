@@ -48,11 +48,28 @@ describe("applyLearnedFixChanges", () => {
         [corrected("Hrubesch", "Hrubeš"), corrected("Lorentz", "Lorenc")],
       ).map(({ from, status }) => [from, status]),
     ).toEqual([
-      ["Hrubeš", "contradicted"],
       ["Lorenc", "off"],
+      ["Hrubeš", "contradicted"],
       ["Hrubesch", "learning"],
       ["Lorentz", "learning"],
     ]);
+  });
+
+  test("a fix turned back moves last, so the limit takes an older unused fix first", () => {
+    const others = Array.from({ length: LEARNED_FIX_LIMIT - 2 }, (_, index) =>
+      fix(`slovo${String.fromCodePoint(97 + index)}`, "x", "on"),
+    );
+    const next = applyLearnedFixChanges(
+      [
+        fix("Hrubeš", "Hrubesch"),
+        fix("rozpracovano", "rozpracováno", "learning", 1),
+        ...others,
+      ],
+      [corrected("Hrubesch", "Hrubeš")],
+    );
+    expect(next).toHaveLength(LEARNED_FIX_LIMIT);
+    expect(next.map(({ from }) => from)).not.toContain("rozpracovano");
+    expect(next.at(-2)).toEqual(fix("Hrubeš", "Hrubesch", "contradicted"));
   });
 
   test("a fix of case alone is learned, not taken for its own reversal", () => {
@@ -164,6 +181,23 @@ describe("applyLearnedFixChanges", () => {
       { type: "taught", from: "posledni", to: "poslední" },
     ]);
     expect(allOn.at(0)?.from).toBe("slovob");
+  });
+
+  test("past the limit a fix switched off is unused, and the oldest one goes", () => {
+    const others = Array.from({ length: LEARNED_FIX_LIMIT - 2 }, (_, index) =>
+      fix(`slovo${String.fromCodePoint(97 + index)}`, "x", "on"),
+    );
+    const next = applyLearnedFixChanges(
+      [
+        fix("Lorenc", "Lorentz", "off"),
+        fix("rozpracovano", "rozpracováno", "learning", 1),
+        ...others,
+      ],
+      [{ type: "taught", from: "posledni", to: "poslední" }],
+    );
+    expect(next).toHaveLength(LEARNED_FIX_LIMIT);
+    expect(next.map(({ from }) => from)).not.toContain("Lorenc");
+    expect(next.map(({ from }) => from)).toContain("rozpracovano");
   });
 
   test("the same changes always give the same fixes", () => {

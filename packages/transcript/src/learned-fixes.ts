@@ -82,9 +82,8 @@ export const applyLearnedFixChanges = (
 const withinLimit = (fixes: LearnedFix[]): LearnedFix[] => {
   const next = [...fixes];
   while (next.length > LEARNED_FIX_LIMIT) {
-    const unused = next.findIndex(
-      ({ status }) => status === "learning" || status === "contradicted",
-    );
+    // Only a fix that is on is in use; one switched off is not.
+    const unused = next.findIndex(({ status }) => status !== "on");
     next.splice(Math.max(unused, 0), 1);
   }
   return next;
@@ -150,21 +149,27 @@ const movedLast = (
     : [...fixes.filter((each) => each !== fix), updated];
 
 /**
- * A fix whose words the person turned back to what was dictated was wrong.
- * A fix of case alone compares as written, or its own correction would
- * look like a reversal.
+ * A fix whose words the person turned back to what was dictated was wrong:
+ * it is contradicted and, having just changed, moves last. A fix of case
+ * alone compares as written, or its own correction would look like a
+ * reversal.
  */
 const turnedBack = (
   fixes: readonly LearnedFix[],
   { from, to }: { from: string; to: string },
-): LearnedFix[] =>
-  fixes.map((fix) => {
+): LearnedFix[] => {
+  const unchanged: LearnedFix[] = [];
+  const changed: LearnedFix[] = [];
+  for (const fix of fixes) {
     const compared = caseOnly(fix) ? exactPhrase : learnedFixKey;
-    return compared(fix.from) === compared(to) &&
-      compared(fix.to) === compared(from)
-      ? contradicted(fix)
-      : fix;
-  });
+    const next =
+      compared(fix.from) === compared(to) && compared(fix.to) === compared(from)
+        ? contradicted(fix)
+        : fix;
+    (next.status === fix.status ? unchanged : changed).push(next);
+  }
+  return [...unchanged, ...changed];
+};
 
 const caseOnly = ({ from, to }: { from: string; to: string }): boolean =>
   learnedFixKey(from) === learnedFixKey(to);
