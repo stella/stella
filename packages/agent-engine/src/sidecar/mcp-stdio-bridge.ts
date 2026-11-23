@@ -220,12 +220,17 @@ export const runMcpStdioBridge = async ({
         return;
       }
       if (!res.ok) {
-        await Result.tryPromise(async () => await res.body?.cancel());
+        const released = await Result.tryPromise(
+          async () => await res.body?.cancel(),
+        );
         if (id !== null) {
+          const answered = `stella's MCP proxy answered HTTP ${String(res.status)}.`;
           output(
             jsonRpcErrorLine(
               id,
-              `stella's MCP proxy answered HTTP ${String(res.status)}.`,
+              Result.isOk(released)
+                ? answered
+                : `${answered} Its response could not be closed.`,
             ),
           );
         }
