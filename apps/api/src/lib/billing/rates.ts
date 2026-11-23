@@ -5,7 +5,7 @@ import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 
 import { member } from "@/api/db/auth-schema";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { billingCodes, rateEntries } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -5,7 +5,7 @@ import { and, eq, exists, isNull } from "drizzle-orm";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   correspondence,
   correspondenceAttachments,

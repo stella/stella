@@ -8,7 +8,7 @@ import {
 import { MAX_TRANSCRIPTION_VOCABULARY_TERMS } from "@stll/api-contract/transcription";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { dictationVocabularyTerms } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { boundedAll } from "@/api/lib/db/bounded-all";

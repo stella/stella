@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatThreads } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";

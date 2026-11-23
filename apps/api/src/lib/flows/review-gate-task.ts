@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { flowRunSteps, workspaces } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

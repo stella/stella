@@ -6,7 +6,7 @@ import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate } from "@stll/time";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import {
   BILLING_STATUS,
   expenses,

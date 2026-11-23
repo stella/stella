@@ -31,7 +31,7 @@ import {
   entityContextReference,
 } from "@/api/db/entity-feature-policies";
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   cellMetadata,
   desktopEditSessions,

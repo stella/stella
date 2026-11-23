@@ -5,7 +5,7 @@ import { SKILL_PACKAGE_SKILL_NOT_FOUND_CODE } from "@stll/api-contract";
 import { SKILL_FILE_NAME } from "@stll/skills/format";
 import { parseSkillFile } from "@stll/skills/frontmatter";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
 import type { AgentSkillScope } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";

@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,

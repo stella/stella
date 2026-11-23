@@ -45,6 +45,7 @@ const ALLOWED_LEAF_IMPORTS = new Set([
   "@/api/db/registration-budget-schema",
   "@/api/db/retention",
   "@/api/db/safe-db",
+  "@/api/db/safe-db-types",
   "@/api/db/schema",
   "@/api/db/schema/desktop-device-proof-replay",
   "@/api/db/schema/mcp-web-handoff",

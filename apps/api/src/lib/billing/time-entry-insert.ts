@@ -4,7 +4,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { TIME_ENTRY_SOURCE, timeEntries } from "@/api/db/schema";
 import type { TimeEntrySource } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";

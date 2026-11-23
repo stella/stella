@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   createChatThirdPartyBoundary,
   prepareTextForThirdParty,

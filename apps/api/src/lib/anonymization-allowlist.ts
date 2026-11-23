@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { anonymizationAllowlistEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { boundedAll } from "@/api/lib/db/bounded-all";

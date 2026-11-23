@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { member } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { timeDailyTargets } from "@/api/db/schema";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";

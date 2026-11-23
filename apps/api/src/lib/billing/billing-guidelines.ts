@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, like, or } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   agentSkillResources,
   agentSkills,

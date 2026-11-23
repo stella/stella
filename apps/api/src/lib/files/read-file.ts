@@ -14,7 +14,7 @@ import {
 } from "@stll/api-contract/file-scan-warnings";
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { status } from "@/api/http/status";
