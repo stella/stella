@@ -3,6 +3,8 @@ import { useState } from "react";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/button";
+
 import type { BillingDraftSettingsControl } from "../activity/billing-draft-settings";
 import { PermissionsSection } from "../mainview/PermissionsSection";
 import type { Permission } from "../shared/permissions";
@@ -151,6 +153,7 @@ const AiDraftsScreen = ({
   drafts: BillingDraftSettingsControl;
 }) => {
   const t = useTranslations("onboarding.activitySetup.aiDrafts");
+  const onboardingT = useTranslations("onboarding");
   const activityT = useTranslations("activity");
   const [save, setSave] = useState<ConsentSave>({ type: "idle" });
   const { settings } = drafts;
@@ -180,6 +183,26 @@ const AiDraftsScreen = ({
           <p className="text-destructive-foreground px-1 text-sm" role="alert">
             {activityT("errorUpdate")}
           </p>
+        ) : null}
+        {/* A withdrawal stella has not confirmed is off here already; it is
+            sent again from here, not only when the window next reads. */}
+        {save.type !== "saving" &&
+        settings.type === "ready" &&
+        settings.consent === "pending-withdrawal" ? (
+          <div className="flex items-center justify-between gap-4 px-1">
+            <p className="text-muted-foreground min-w-0 text-sm" role="status">
+              {activityT("billingDraftsWithdrawPending")}
+            </p>
+            <Button
+              className="shrink-0"
+              onClick={() => {
+                void choose(false);
+              }}
+              variant="outline"
+            >
+              {onboardingT("tryAgain")}
+            </Button>
+          </div>
         ) : null}
         <Facts facts={[t("withdraw")]} />
       </ScreenContent>

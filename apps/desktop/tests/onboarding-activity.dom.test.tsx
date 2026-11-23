@@ -198,6 +198,51 @@ test("a grant the server refuses says so and can be tried again", async () => {
   expect(view.queryByText(activity.errorUpdate)).toBeNull();
 });
 
+test("a withdrawal the server has not confirmed shows as pending and is sent again from the screen", async () => {
+  const native = nativeSide({
+    activity: RECORDING,
+    drafts: { ...DRAFTS_OFFERED, consent: "granted" },
+    withdrawRefusals: 1,
+  });
+  const view = await renderSetup(native);
+  for (let screen = 0; screen < 3; screen += 1) {
+    await click(view, onboarding.continue);
+  }
+  await heading(view, activity.billingDraftsTitle);
+
+  const allow = await view.findByRole("switch", {
+    name: setup.aiDrafts.allow,
+  });
+  await waitFor(() => {
+    expect(allow.getAttribute("aria-checked")).toBe("true");
+  });
+  fireEvent.click(allow);
+  await view.findByText(activity.billingDraftsWithdrawPending);
+  expect(native.drafts.consent).toBe("granted");
+
+  await click(view, onboarding.tryAgain);
+  await waitFor(() => {
+    expect(native.drafts.consent).toBe("revoked");
+  });
+  await waitFor(() => {
+    expect(view.queryByText(activity.billingDraftsWithdrawPending)).toBeNull();
+  });
+});
+
+test("the introduction offers to open activity once recording has started, paused or not", async () => {
+  const native = nativeSide({
+    activity: { ...ACTIVITY_OFF, recordingStatus: "paused" },
+    onboarding: ACTIVITY_INTRODUCTION,
+  });
+  const view = await renderSetup(native);
+  for (let screen = 0; screen < 3; screen += 1) {
+    await click(view, onboarding.continue);
+  }
+  await heading(view, activity.billingDraftsTitle);
+  view.getByRole("button", { name: onboarding.openActivity });
+  expect(sentCommands(native)).not.toContain("activity_set_recording_status");
+});
+
 test("without drafting for the firm, calls is the last screen", async () => {
   const native = nativeSide({
     activity: RECORDING,

@@ -32,10 +32,21 @@ export const IntroduceView = ({
       onLeaveForward={onDismiss}
       permissions={activityPermissions}
       recordingBody={t("introduceActivityBody")}
-      renderFooter={({ onBack, primary, secondary }) => (
+      renderFooter={({
+        backDisabledReason,
+        onBack,
+        primary,
+        recording,
+        secondary,
+      }) => (
         <div className="mt-auto flex items-center gap-2 pt-5">
           {onBack === undefined ? null : (
-            <Button onClick={onBack} variant="ghost">
+            <Button
+              disabled={backDisabledReason !== undefined}
+              disabledReason={backDisabledReason}
+              onClick={onBack}
+              variant="ghost"
+            >
               {t("back")}
             </Button>
           )}
@@ -43,7 +54,7 @@ export const IntroduceView = ({
           {/* The last screen has nothing left to skip; the day itself is in
               the Activity window. */}
           {secondary ??
-            (controls.snapshot?.recordingStatus === "recording" ? (
+            (recording ? (
               <Button onClick={onOpenActivity} variant="ghost">
                 {t("openActivity")}
               </Button>

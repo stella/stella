@@ -24,6 +24,10 @@ import type { ActivitySetupControls } from "./use-activity-setup";
 /** The step's own actions, for the footer the step draws them in. */
 type ActivitySetupActions = {
   onBack: (() => void) | undefined;
+  /** Why Back cannot act right now: recording is starting. */
+  backDisabledReason: string | undefined;
+  /** Whether recording has started, paused or not. */
+  recording: boolean;
   primary: ReactNode;
   secondary: ReactNode;
 };
@@ -86,8 +90,10 @@ export const ActivitySetupFlow = ({
           </div>
         ) : null}
         {renderFooter({
+          backDisabledReason: undefined,
           onBack: onLeaveBack,
           primary: null,
+          recording: false,
           secondary: (
             <Button onClick={onLeaveForward} variant="ghost">
               {skipLabel}
@@ -155,10 +161,19 @@ export const ActivitySetupFlow = ({
     return last ? finishLabel : t("continue");
   })();
 
+  // While recording starts, nothing may leave the screen: the start would
+  // land after the step it belongs to.
+  const starting = busy ? t("activitySetup.starting") : undefined;
+
   const secondary = (() => {
     if (!recording) {
       return (
-        <Button onClick={onLeaveForward} variant="ghost">
+        <Button
+          disabled={busy}
+          disabledReason={starting}
+          onClick={onLeaveForward}
+          variant="ghost"
+        >
           {skipLabel}
         </Button>
       );
@@ -208,6 +223,7 @@ export const ActivitySetupFlow = ({
         ) : null}
       </div>
       {renderFooter({
+        backDisabledReason: starting,
         onBack:
           position === 0 && onLeaveBack === undefined
             ? undefined
@@ -217,7 +233,7 @@ export const ActivitySetupFlow = ({
         primary: (
           <Button
             disabled={busy}
-            disabledReason={t("activitySetup.starting")}
+            disabledReason={starting}
             onClick={() => {
               void onContinue();
             }}
@@ -225,6 +241,7 @@ export const ActivitySetupFlow = ({
             {primaryLabel}
           </Button>
         ),
+        recording,
         secondary,
       })}
     </>

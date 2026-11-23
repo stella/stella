@@ -29,6 +29,7 @@ export const ActivityStep = ({ onBack, onContinue, snapshot }: StepProps) => {
       recordingBody={t("activityBody")}
       renderFooter={(actions) => (
         <StepFooter
+          backDisabledReason={actions.backDisabledReason}
           onBack={actions.onBack}
           primary={actions.primary}
           secondary={actions.secondary}

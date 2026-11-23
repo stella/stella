@@ -63,6 +63,8 @@ export type NativeSide = {
   drafts: DesktopBillingDraftSettingsResponse;
   /** How many grants the server still refuses before it accepts one. */
   grantRefusals: number;
+  /** How many withdrawals the server still refuses before it accepts one. */
+  withdrawRefusals: number;
   onboarding: OnboardingSnapshot;
   calls: { args: unknown; command: string }[];
 };
@@ -76,6 +78,7 @@ export const nativeSide = (
   drafts: DRAFTS_OFFERED,
   grantRefusals: 0,
   onboarding: ACTIVITY_STEP,
+  withdrawRefusals: 0,
   ...overrides,
 });
 
@@ -146,6 +149,10 @@ export const installNativeSide = (native: NativeSide) => {
           native.drafts = { ...native.drafts, consent: "granted" };
           return scoped(native.drafts);
         case "billing_draft_withdraw_consent":
+          if (native.withdrawRefusals > 0) {
+            native.withdrawRefusals -= 1;
+            panic("draft time entry is unavailable");
+          }
           native.drafts = { ...native.drafts, consent: "revoked" };
           return scoped(native.drafts);
         default:
