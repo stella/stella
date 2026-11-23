@@ -9,6 +9,7 @@ import {
 } from "@stll/api-contract/data-box";
 import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import type { EmailReading } from "@stll/api-contract/email-reading";
+import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import type { MailboxPreview } from "@stll/api-contract/mailbox";
 import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import type { ZipArchivePreview } from "@stll/api-contract/zip-archive";
@@ -87,7 +88,7 @@ const history = (
       fieldId: string;
       fileName?: string;
       mimeType?: string;
-      unscannedContent?: string[];
+      unscannedContent?: UnscannedContentReason[];
     } | null;
   }[],
 ) => ({
@@ -103,6 +104,7 @@ const history = (
             propertyId: "property-1",
             fileName: "Smlouva.docx",
             mimeType: DOCX,
+            unscannedContent: [],
             ...version.file,
             sizeBytes: 1200,
           },
