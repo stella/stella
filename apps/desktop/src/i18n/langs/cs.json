@@ -10,7 +10,7 @@
     "aiDraftAllow": "Povolit",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Úkon {task} · Činnost {activity}",
-    "aiDraftConsent": "stella AI může navrhovat popisy ze spisu, data, délky a názvů aplikací každého záznamu a z názvů dokumentů a oken, které zde vidíte, pokud je zaznamenáváte. Vaše dřívější záznamy ke spisu jí pomáhají psát vaším stylem. Nic dalšího o vašem dni tento počítač neopustí.",
+    "aiDraftConsent": "K napsání popisu stella AI použije: {inputs}. Vše jde k {provider}, jen kvůli napsání návrhu. Nic dalšího o vašem dni tento počítač neopustí.",
     "aiDraftConsentRequired": "Pro návrh tohoto popisu znovu povolte stella AI.",
     "aiDraftDisclosure": "Návrhy AI jsou doporučení, která stella vytváří z kontrolovaného záznamu, vašich dřívějších záznamů ve spisu a fakturačních pravidel kanceláře, pokud je přidala. Každý záznam před vytvořením zkontrolujte.",
     "aiDraftEarlierEntries": "{count, plural, one {Navazuje na # dřívější záznam} few {Navazuje na # dřívější záznamy} other {Navazuje na # dřívějších záznamů}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI je na tomto počítači vypnutá. Odvolání se aplikaci stella odešle, jakmile bude dostupná.",
     "browserAnsweredAppNameOnly": "U <bdi>{browser}</bdi> se zaznamenává jen název aplikace. Změnit to můžete v Nastavení.",
     "browserAnsweredTitles": "Názvy karet v <bdi>{browser}</bdi> se zaznamenávají. Změnit to můžete v Nastavení.",
-    "browserPrivacyNote": "Mohou se zaznamenat i soukromá okna; při soukromém prohlížení pozastavte záznam nebo prohlížeč vylučte.",
+    "browserPrivacyNote": "stella nepozná každé soukromé okno, proto před soukromým prohlížením záznam pozastavte.",
     "browserQuestionAppNameOnly": "Jen název aplikace",
-    "browserQuestionDescription": "Názvy karet pomáhají s popisy práce. stella nepozná každé soukromé okno, proto před soukromým prohlížením záznam pozastavte.",
+    "browserQuestionDescription": "Názvy karet pomáhají s popisy práce.",
     "browserQuestionLater": "Rozhodnout později",
     "browserQuestionRecordTitles": "Zaznamenávat názvy",
     "browserQuestionTitle": "Zaznamenávat i názvy karet v <bdi>{browser}</bdi>?",
@@ -103,6 +103,18 @@
     "detectCalls": "Zaznamenávat hovory",
     "detectCallsDescription": "Když Teams, Zoom nebo prohlížeč používá mikrofon, počítá se tento čas jako hovor, i když jen posloucháte nebo pracujete v jiné aplikaci. Zvuk se nikdy nenahrává.",
     "disclosure": {
+      "aiDraftInputs": {
+        "appNames": "názvy aplikací",
+        "billingFormat": "fakturační formát klienta",
+        "date": "datum",
+        "duration": "délka",
+        "earlierDescriptions": "vaše dřívější popisy ve spisu",
+        "firmGuidelines": "případná fakturační pravidla vaší kanceláře",
+        "instructions": "vámi napsané pokyny",
+        "matter": "spis",
+        "titles": "zaznamenané názvy oken a dokumentů"
+      },
+      "aiDraftProvider": "poskytovateli AI, kterého používá vaše kancelář, nebo poskytovateli stella AI",
       "control": "Nic se nezaznamenává, dokud nestisknete Začít zaznamenávat. Kdykoli můžete pozastavit, vyloučit aplikace nebo smazat kterýkoli den.",
       "never": {
         "audio": "Zvuk z mikrofonu",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Co se zaznamenává",
       "sent": {
-        "aiDrafts": "Návrhy od stella AI, o které po udělení souhlasu požádáte: spis, datum, délka a názvy aplikací záznamu, názvy jeho oken a dokumentů, pokud se zaznamenávají, a pokyny, které napíšete. stella k nim přidá vaše dřívější popisy ve spisu, fakturační formát klienta a fakturační pravidla kanceláře, pokud je používá. Vše jde k poskytovateli AI, kterého kancelář používá, případně k poskytovateli stella AI, jen kvůli napsání návrhu; stella návrh ani to, co se kvůli němu odeslalo, neukládá.",
+        "aiDrafts": "Návrhy od stella AI, o které po udělení souhlasu požádáte. Ke každému stella AI použije: {inputs}. Vše jde k {provider}, jen kvůli napsání návrhu; stella návrh ani to, co se kvůli němu odeslalo, neukládá.",
         "timeEntries": "Časové záznamy, které vytvoříte: spis, datum, délka, popis, fakturovatelnost a případné fakturační kódy"
       },
       "sentTitle": "Co opouští tento počítač",
