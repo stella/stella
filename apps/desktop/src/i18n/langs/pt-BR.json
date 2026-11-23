@@ -1347,6 +1347,7 @@
       "audioMissing": "A gravação não está mais aberta nesta janela, por isso não foi salva no caso.",
       "audioTooLarge": "A gravação é maior que {size}, por isso não foi salva no caso.",
       "cleanedDocxFileName": "{title} - texto revisado.docx",
+      "cleanedNotFiled": "Não foi possível salvar o texto revisado no caso.",
       "cleanedTitle": "{title} - texto revisado",
       "documents": "Salvando os documentos do Word…",
       "docxFileName": "{title} - transcrição.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "Não foi possível salvar a transcrição no caso. Tente novamente.",
       "saveWithTimestamps": "Texto com marcas de tempo (.txt)",
       "saveWithoutTimestamps": "Texto sem marcas de tempo (.txt)",
-      "savedToMatter": "Salvo em {matter} como {fileName}.",
       "savingToMatter": "Salvando…",
       "thisComputer": "Este computador",
       "transcriptTitle": "Transcrição"

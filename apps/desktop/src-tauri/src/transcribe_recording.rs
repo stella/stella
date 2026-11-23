@@ -1461,58 +1461,6 @@ pub async fn transcribe_search_matters(
   matters
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TranscriptParagraph {
-  start_ms: u64,
-  text: String,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SaveToMatterRequest {
-  matter_id: String,
-  title: String,
-  paragraphs: Vec<TranscriptParagraph>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SavedTranscript {
-  file_name: String,
-}
-
-const SAVE_FAILURE: &str = "the transcript could not be saved to the matter";
-
-/// Files the transcript in the matter as a Word document, through the
-/// linked account.
-#[tauri::command]
-pub async fn transcribe_save_to_matter(
-  app: AppHandle,
-  window: Window,
-  request: SaveToMatterRequest,
-) -> Result<SavedTranscript, String> {
-  require_window(&window)?;
-  require_available(&app)?;
-  valid_id(&request.matter_id)?;
-  let text_bytes = request
-    .paragraphs
-    .iter()
-    .map(|paragraph| paragraph.text.len())
-    .sum::<usize>();
-  if request.paragraphs.is_empty() || text_bytes > MAX_SAVED_TEXT_BYTES {
-    return Err("the transcript is empty or too large to save".to_string());
-  }
-  let title = request
-    .title
-    .chars()
-    .take(MAX_TITLE_CHARS)
-    .collect::<String>();
-  let body = SaveToMatterRequest { title, ..request };
-  let bytes = dictation_cloud::save_transcript(&app, &body, SAVE_FAILURE).await?;
-  serde_json::from_slice(&bytes).map_err(|_error| SAVE_FAILURE.to_string())
-}
-
 /// Opens the window, from the tray or the Settings window.
 #[tauri::command]
 pub fn transcribe_open(app: AppHandle) -> Result<(), String> {

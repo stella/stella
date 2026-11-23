@@ -79,7 +79,6 @@ macro_rules! with_stella_commands {
       transcribe_recording::transcribe_clean_up => "transcribe_clean_up",
       transcribe_recording::transcribe_save_text => "transcribe_save_text",
       transcribe_recording::transcribe_search_matters => "transcribe_search_matters",
-      transcribe_recording::transcribe_save_to_matter => "transcribe_save_to_matter",
       transcribe_save::transcribe_save_to_matter_folder => "transcribe_save_to_matter_folder",
       transcribe_save::transcribe_save_docx => "transcribe_save_docx",
       transcribe_history::transcribe_history_list => "transcribe_history_list",

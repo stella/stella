@@ -1347,6 +1347,7 @@
       "audioMissing": "Die Aufnahme ist in diesem Fenster nicht mehr geöffnet und wurde daher nicht in der Akte gespeichert.",
       "audioTooLarge": "Die Aufnahme ist größer als {size} und wurde daher nicht in der Akte gespeichert.",
       "cleanedDocxFileName": "{title} – überarbeitet.docx",
+      "cleanedNotFiled": "Der bereinigte Text konnte nicht in der Akte gespeichert werden.",
       "cleanedTitle": "{title} – überarbeitet",
       "documents": "Word-Dokumente werden gespeichert…",
       "docxFileName": "{title} – Transkript.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "Das Transkript konnte nicht in der Akte gespeichert werden. Versuchen Sie es erneut.",
       "saveWithTimestamps": "Text mit Zeitangaben (.txt)",
       "saveWithoutTimestamps": "Text ohne Zeitangaben (.txt)",
-      "savedToMatter": "In Akte {matter} als {fileName} gespeichert.",
       "savingToMatter": "Wird gespeichert…",
       "thisComputer": "Dieser Computer",
       "transcriptTitle": "Transkript"

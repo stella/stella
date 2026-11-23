@@ -1347,6 +1347,7 @@
       "audioMissing": "Nahrávka už v tomto okne nie je otvorená, preto sa do spisu neuložila.",
       "audioTooLarge": "Nahrávka je väčšia ako {size}, preto sa do spisu neuložila.",
       "cleanedDocxFileName": "{title} – upravený text.docx",
+      "cleanedNotFiled": "Upravený text sa nepodarilo uložiť do spisu.",
       "cleanedTitle": "{title} – upravený text",
       "documents": "Ukladajú sa dokumenty Word…",
       "docxFileName": "{title} – prepis.docx",
@@ -1389,7 +1390,6 @@
       "saveToMatterFailed": "Prepis sa nepodarilo uložiť do spisu. Skúste to znova.",
       "saveWithTimestamps": "Text s časmi (.txt)",
       "saveWithoutTimestamps": "Text bez časov (.txt)",
-      "savedToMatter": "Uložené do spisu {matter} ako {fileName}.",
       "savingToMatter": "Ukladá sa…",
       "thisComputer": "Tento počítač",
       "transcriptTitle": "Prepis"
