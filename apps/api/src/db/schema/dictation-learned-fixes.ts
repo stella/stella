@@ -31,9 +31,8 @@ export const dictationLearnedFixes = p.pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     /**
-     * How often the record of applied changes started over: the member
-     * deleted everything stella learned, or the record filled up. Changes a
-     * device made in an earlier generation are dropped.
+     * How often the member deleted everything stella learned; changes a
+     * device made before the latest deletion are dropped.
      */
     generation: p.integer("generation").notNull().default(0),
     /** Bumped by every write; a write made from an older read is retried. */

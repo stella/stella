@@ -60,11 +60,9 @@ export const dictationLearnedFixSchema = v.strictObject({
 });
 
 /**
- * A member's learned fixes. `generation` counts how often the list started
- * over its record of changes: when the member deleted everything stella
- * learned, or when the server's record of applied changes filled up. A
- * device sends the generation its changes were made in, and changes made in
- * an earlier one are dropped, so a retried change is never applied twice.
+ * A member's learned fixes. `generation` counts how often they deleted
+ * everything stella learned: a device sends the generation its changes were
+ * made in, and changes made before a deletion are dropped.
  */
 export const dictationLearnedFixesSchema = v.strictObject({
   generation: v.pipe(v.number(), v.safeInteger(), v.minValue(0)),

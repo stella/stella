@@ -11,9 +11,9 @@ The spelling fixes dictation learned from how one member corrects it in one orga
 ```text
 dictation_learned_fixes.organization_id  safeOrganizationId  fk,not null       dictation-learned-fixes.ts:26
 dictation_learned_fixes.user_id          text                fk,not null       dictation-learned-fixes.ts:29
-dictation_learned_fixes.generation       integer             default,not null  dictation-learned-fixes.ts:38  How often the record of applied changes started over: the member deleted everything stella learned, or the record filled up.
-dictation_learned_fixes.revision         integer             default,not null  dictation-learned-fixes.ts:40  Bumped by every write; a write made from an older read is retried.
-dictation_learned_fixes.ciphertext       bytea               not null          dictation-learned-fixes.ts:41
-dictation_learned_fixes.iv               bytea               not null          dictation-learned-fixes.ts:42
-dictation_learned_fixes.updated_at       timestamptz         default,not null  dictation-learned-fixes.ts:43
+dictation_learned_fixes.generation       integer             default,not null  dictation-learned-fixes.ts:37  How often the member deleted everything stella learned; changes a device made before the latest deletion are dropped.
+dictation_learned_fixes.revision         integer             default,not null  dictation-learned-fixes.ts:39  Bumped by every write; a write made from an older read is retried.
+dictation_learned_fixes.ciphertext       bytea               not null          dictation-learned-fixes.ts:40
+dictation_learned_fixes.iv               bytea               not null          dictation-learned-fixes.ts:41
+dictation_learned_fixes.updated_at       timestamptz         default,not null  dictation-learned-fixes.ts:42
 ```
