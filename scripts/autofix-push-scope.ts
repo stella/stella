@@ -33,7 +33,7 @@ import {
 export const AUTOFIX_BOT = "autofix-ci[bot]";
 export const AUTOFIX_COMMIT_SUBJECT = "chore: autofix files";
 
-const PRUNE_SOURCE = /\.(?:[cm]?[jt]sx?|sql)$/u;
+const PRUNE_SOURCE = /\.(?:[cm]?[jt]sx?|sql|rs)$/u;
 // Oxfmt's supported text formats, plus source files handled by oxlint. Paths
 // outside this set can still select a generator or baseline pruner, but are not
 // themselves passed to a fixer.
