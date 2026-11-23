@@ -34,7 +34,7 @@ import {
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { materializeYjsOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
+import { materializeRoomOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
@@ -324,7 +324,7 @@ const checkpointFolioCollabRoomHandler = async function* (
       }),
     );
   }
-  const materialized = await materializeYjsOverScannedDocx({
+  const materialized = await materializeRoomOverScannedDocx({
     source: sourceDocx,
     yjsUpdate: Buffer.from(persisted.snapshot.snapshotBase64, "base64"),
   });

@@ -53,7 +53,10 @@ import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { createOpaqueToken } from "@/api/lib/entities/opaque-tokens";
-import { lockDocxEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
+import {
+  lockDocxEditTarget,
+  readVersionDocxTarget,
+} from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
 import {
@@ -648,9 +651,19 @@ export const touchFolioCollabRoom = async (
   });
 };
 
+type LoadedFolioCollabSnapshot = Extract<
+  FolioCollabSnapshotLoadResponse,
+  { loadOutcome: typeof FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded }
+>;
+
+/** A room's stored state, before the service load adds the room's seed. */
+export type FolioCollabStoredSnapshot =
+  | Exclude<FolioCollabSnapshotLoadResponse, LoadedFolioCollabSnapshot>
+  | Omit<LoadedFolioCollabSnapshot, "seedDocxBase64">;
+
 type FolioCollabSnapshotLoadResult = Result<
   {
-    snapshot: FolioCollabSnapshotLoadResponse;
+    snapshot: FolioCollabStoredSnapshot;
     rawSnapshotSha256Hex: string | null;
   } | null,
   HandlerError
@@ -1004,6 +1017,55 @@ export const loadFolioCollabSnapshot = async (
     }
   };
   return await loadCurrentSnapshot("initial");
+};
+
+/**
+ * The DOCX a room was seeded from, which its authority reads revision 0
+ * from. Every generation of a room keeps its source version; null once that
+ * version or its file is gone.
+ */
+export const readFolioCollabSeedDocx = async (
+  value: FolioCollabSnapshotTarget,
+  readObject = readS3ObjectIfPresent,
+): Promise<Uint8Array | null> => {
+  const source = await value.scopedDb(async (tx) => {
+    const rooms = await tx
+      .select({
+        propertyId: folioCollabRooms.propertyId,
+        sourceVersionId: folioCollabRooms.sourceVersionId,
+      })
+      .from(folioCollabRooms)
+      .where(
+        and(
+          eq(folioCollabRooms.id, value.roomId),
+          eq(folioCollabRooms.workspaceId, value.workspaceId),
+        ),
+      )
+      .limit(1);
+    const room = rooms.at(0);
+    if (!room) {
+      return null;
+    }
+    return await readVersionDocxTarget({
+      entityVersionId: room.sourceVersionId,
+      propertyId: room.propertyId,
+      tx,
+      workspaceId: value.workspaceId,
+    });
+  });
+  if (!source) {
+    return null;
+  }
+  const buffer = await readObject(
+    createFileKey({
+      fileId: source.id,
+      mimeType: DOCX_MIME_TYPE,
+      organizationId: value.organizationId,
+      workspaceId: value.workspaceId,
+    }),
+    AbortSignal.timeout(10_000),
+  );
+  return buffer === null ? null : new Uint8Array(buffer);
 };
 
 export type StoreFolioCollabSnapshotResult =

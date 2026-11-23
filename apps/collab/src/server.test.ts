@@ -10,10 +10,17 @@ import {
 } from "@stll/api-contract/folio-collab";
 import type { FolioCollabSnapshotLoadResponse } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
+import { CANONICAL_YJS_AUTHORITY } from "@stll/folio-core/controller/canonicalYjsRoom";
+import { createDocx, createEmptyDocument } from "@stll/folio-core/server";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { createCollabServer } from "./server";
+
+/** The DOCX every test room is seeded from; its authority reads revision 0 from it. */
+const TEST_SEED_DOCX_BASE64 = Buffer.from(
+  await createDocx(createEmptyDocument({ initialText: "Seed." })),
+).toBase64();
 
 type FakeStellaApiOptions = {
   additionalRoomIds?: string[];
@@ -263,6 +270,7 @@ const createFakeStellaApi = ({
           loadResponse ?? {
             generation: roomGenerations.get(String(body["roomId"])),
             loadOutcome: "loaded",
+            seedDocxBase64: TEST_SEED_DOCX_BASE64,
             snapshotBase64: latestSnapshotBase64,
             snapshotRevision: latestSnapshotRevision,
           },
@@ -1311,6 +1319,7 @@ describe("collaboration server", () => {
       fakeApi.setLoadResponse({
         generation: 1,
         loadOutcome: "loaded",
+        seedDocxBase64: TEST_SEED_DOCX_BASE64,
         snapshotBase64: null,
         snapshotRevision: 0,
       });
@@ -1392,6 +1401,7 @@ describe("collaboration server", () => {
       fakeApi.setLoadResponse({
         generation: 0,
         loadOutcome: "loaded",
+        seedDocxBase64: TEST_SEED_DOCX_BASE64,
         snapshotBase64: Buffer.from(
           encodeStateAsUpdate(replacement),
         ).toBase64(),
@@ -1473,6 +1483,29 @@ describe("collaboration server", () => {
         if (serverConnection === undefined) {
           throw new Error("Loaded room connection is missing.");
         }
+        await waitFor(
+          () => serverDocument.store.clients.has(CANONICAL_YJS_AUTHORITY),
+          "The room authority did not seed the room.",
+        );
+        // The seed's own store, which the server skips, runs before the edit.
+        const storeId = `onStoreDocument-${TEST_ROOM_NAME}`;
+        const { debouncer } = collabServer.hocuspocus;
+        collabServer.hocuspocus.flushPendingStores();
+        await waitFor(
+          () =>
+            !debouncer.isDebounced(storeId) &&
+            !debouncer.isCurrentlyExecuting(storeId),
+          "The seed's store did not settle.",
+        );
+        // A room only its authority wrote has nothing to store. This edit
+        // schedules no store, so the one under test is the only one.
+        const editor = new Doc();
+        editor.getText("body").insert(0, "edit");
+        applyUpdate(serverDocument, encodeStateAsUpdate(editor), {
+          source: "local",
+          skipStoreHooks: true,
+        });
+        editor.destroy();
         const storeResult = rejectionOf(
           collabServer.hocuspocus.hooks("onStoreDocument", {
             clientsCount: 1,

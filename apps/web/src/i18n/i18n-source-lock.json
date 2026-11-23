@@ -3499,6 +3499,7 @@
   "folio.checkingDocxEditDescription": "stella is still checking whether this DOCX can be edited safely. Try again when the document finishes loading.",
   "folio.checkingDocxEditTitle": "Checking document",
   "folio.chooseEvidence": "Choose a file to insert a numbered evidence reference.",
+  "folio.collaborationEditRefused": "The shared document could not take your last edit, so it was undone.",
   "folio.collaborationSnapshotRecovered": "The stored collaboration copy could not be reopened. The room was restored from the last saved document; changes that were not saved may have been lost.",
   "folio.comment": "Comment",
   "folio.comments.addPlaceholder": "Add a comment…",

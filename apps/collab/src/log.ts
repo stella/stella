@@ -55,6 +55,23 @@ type CollabLogEvent =
   | {
       event: "shutdown_drain_timeout";
       level: "error";
+    }
+  | {
+      event: "room_authority_failed";
+      level: "error";
+      reason: string;
+      roomId: string;
+    }
+  | {
+      event: "room_authority_refused_entry";
+      level: "warn";
+      reason: string;
+      roomId: string;
+    }
+  | {
+      event: "room_authority_lease_lost";
+      level: "warn";
+      roomId: string;
     };
 
 /** Closed event shapes prevent credentials, identities, or document data entering logs. */

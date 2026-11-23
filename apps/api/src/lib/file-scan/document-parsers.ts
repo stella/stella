@@ -12,7 +12,12 @@
  * `ScannedFile`: those bytes are the parser's output for scanned input, not
  * new untrusted content.
  */
+import { Result } from "better-result";
+import * as Y from "yjs";
+
 import { compareDocx } from "@stll/folio-core";
+import { canonicalSnapshotId } from "@stll/folio-core/canonical/canonicalRoomBase";
+import { readCanonicalYjsJournal } from "@stll/folio-core/controller/canonicalYjsRoom";
 import {
   applyFolioAIEditsToBuffer,
   compareDocxVersions,
@@ -21,7 +26,6 @@ import {
   extractDocumentStyleSetFromDocx,
   extractDocxText,
   FolioDocxReviewer,
-  materializeYjsDocx,
   parseDocx,
   readBilingualDocx,
 } from "@stll/folio-core/server";
@@ -103,14 +107,34 @@ export const applyFolioAIEditsToScannedDocx = async (
   options?: Parameters<typeof applyFolioAIEditsToBuffer>[2],
 ) => await applyFolioAIEditsToBuffer(file.bytes, operations, options);
 
-/** A collaborative Yjs state materialized over its scanned source document. */
-export const materializeYjsOverScannedDocx = async ({
+/**
+ * A collaboration room saved over the scanned document it was seeded from:
+ * the journal its authority sequenced, read from the stored Yjs state and
+ * replayed over that document as every peer applied it.
+ */
+export const materializeRoomOverScannedDocx = async ({
   source,
   yjsUpdate,
 }: {
   source: ScannedFile;
   yjsUpdate: Uint8Array;
-}) => await materializeYjsDocx({ sourceDocx: source.bytes, yjsUpdate });
+}): Promise<ArrayBuffer> => {
+  const room = new Y.Doc();
+  Y.applyUpdate(room, yjsUpdate);
+  const journal = readCanonicalYjsJournal({
+    doc: room,
+    snapshot: await canonicalSnapshotId(source.bytes),
+  });
+  room.destroy();
+  if (Result.isError(journal)) {
+    throw journal.error;
+  }
+  const reviewer = await FolioDocxReviewer.fromBuffer(source.bytes, {
+    session: "canonical",
+  });
+  reviewer.applyRoomJournal(journal.value);
+  return await reviewer.toBuffer();
+};
 
 export const openScannedDocxReviewer = async (
   file: ScannedFile,

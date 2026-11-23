@@ -1,42 +1,53 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
-import * as yProseMirror from "y-prosemirror";
-import * as yjs from "yjs";
+import * as Y from "yjs";
 
-import { createHiddenEditorState } from "@stll/folio-core/controller/hiddenEditorManager";
-import {
-  extractDocxText,
-  FOLIO_YJS_ATTR_SCHEMA_VERSION,
-  materializeYjsDocx,
-  migrateFolioYjsSnapshot,
-  parseDocx,
-} from "@stll/folio-core/server";
+import { serveCanonicalYjsRoom } from "@stll/folio-core/controller/canonicalYjsRoom";
+import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { materializeRoomOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import {
   decideFolioSnapshotRecoveryState,
   FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME,
   loadPersistedFolioSnapshot,
 } from "@/api/lib/files/folio-collab-snapshot-loader";
-
-const { Doc, XmlElement, XmlText, encodeStateAsUpdate } = yjs;
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 
 const savedVersionId = toSafeId<"entityVersion">("ev_saved");
 
-const snapshotAtVersion = (version: number, unattributedReference = false) => {
-  const doc = new Doc();
-  doc.getMap("folio:document-metadata").set("attrSchemaVersion", version);
-  const paragraph = new XmlElement("paragraph");
-  const text = new XmlText();
-  text.insert(
-    0,
-    "1",
-    unattributedReference ? { footnoteRef: { id: 1 } } : undefined,
+const fixture = (name: string) =>
+  new Uint8Array(
+    readFileSync(
+      new URL(`fixtures/folio-core-0.58.5/${name}`, import.meta.url),
+    ),
   );
+
+/** A room state from before rooms carried a canonical journal. */
+const legacyRoomSnapshot = () => {
+  const doc = new Y.Doc();
+  const paragraph = new Y.XmlElement("paragraph");
+  const text = new Y.XmlText();
+  text.insert(0, "1");
   paragraph.insert(0, [text]);
   doc.getXmlFragment("prosemirror").insert(0, [paragraph]);
-  const update = encodeStateAsUpdate(doc);
+  const update = Y.encodeStateAsUpdate(doc);
+  doc.destroy();
+  return update;
+};
+
+/** A canonical room seeded from `docx` by its authority, with no edits yet. */
+const seededRoomSnapshot = async (docx: Uint8Array) => {
+  const { document, snapshot } = await FolioDocxReviewer.openRoomBase(
+    docx.slice().buffer,
+  );
+  const doc = new Y.Doc();
+  const authority = serveCanonicalYjsRoom({ doc, snapshot, document }).unwrap();
+  authority.stop();
+  const update = Y.encodeStateAsUpdate(doc);
   doc.destroy();
   return update;
 };
@@ -45,35 +56,27 @@ describe("persisted Folio collaboration snapshot loading", () => {
   test("invalid snapshot data returns a typed failure without resetting the room", async () => {
     let recoveryCalls = 0;
     const loaded = await loadPersistedFolioSnapshot({
-      snapshotBytes: new Uint8Array(),
+      snapshotBytes: new Uint8Array([0xff]),
       onRefused: async () => {
         recoveryCalls += 1;
         return { status: "reset", generation: 4, resetGeneration: 3 };
       },
     });
     expect(Result.isError(loaded) && loaded.error.code).toBe("invalid_update");
-    expect(
-      Result.match(loaded, {
-        ok: ({ outcome }) => outcome,
-        err: ({ code }) => code,
-      }),
-    ).toBe("invalid_update");
     expect(recoveryCalls).toBe(0);
   });
 
-  test("refused old-schema state is discarded for DOCX rematerialization", async () => {
-    const refusedSnapshot = snapshotAtVersion(11, true);
+  test("a legacy room state is discarded for DOCX rematerialization", async () => {
     const refusalCodes: string[] = [];
-
     const loaded = await loadPersistedFolioSnapshot({
-      snapshotBytes: refusedSnapshot,
+      snapshotBytes: legacyRoomSnapshot(),
       onRefused: async (error) => {
         refusalCodes.push(error.code);
         return { status: "reset", generation: 4, resetGeneration: 3 };
       },
     });
 
-    expect(refusalCodes).toEqual(["unsupported_version"]);
+    expect(refusalCodes).toEqual(["legacy_room"]);
     expect(loaded.unwrap()).toEqual({
       outcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.rematerializeFromDocx,
       generation: 4,
@@ -82,23 +85,12 @@ describe("persisted Folio collaboration snapshot loading", () => {
     });
   });
 
-  test.each(["clean", "dirty"])(
-    "real 0.58.5 %s snapshots reopen from the saved DOCX after schema refusal",
-    async (state) => {
-      const snapshotBytes = new Uint8Array(
-        readFileSync(
-          new URL(`fixtures/folio-core-0.58.5/${state}.yjs`, import.meta.url),
-        ),
-      );
-      const refusal = migrateFolioYjsSnapshot(snapshotBytes);
-      expect(FOLIO_YJS_ATTR_SCHEMA_VERSION).toBe(14);
-      expect(Result.isError(refusal) && refusal.error.code).toBe(
-        "unsupported_version",
-      );
-
+  test.each(["clean.yjs", "dirty.yjs"])(
+    "real 0.58.5 %s snapshots reopen from the saved DOCX",
+    async (name) => {
       let resetCount = 0;
       const loaded = await loadPersistedFolioSnapshot({
-        snapshotBytes,
+        snapshotBytes: fixture(name),
         onRefused: async () => {
           resetCount += 1;
           return { status: "reset", generation: 4, resetGeneration: 3 };
@@ -111,55 +103,24 @@ describe("persisted Folio collaboration snapshot loading", () => {
         snapshotBytes: null,
       });
       expect(resetCount).toBe(1);
-
-      // Reopening seeds from the saved package, never from refused CRDT content.
-      const savedDocx = new Uint8Array(
-        readFileSync(
-          new URL("fixtures/folio-core-0.58.5/saved.docx", import.meta.url),
-        ),
-      );
-      const reopened = await parseDocx(savedDocx);
-      const reseeded = new Doc();
-      const editorState = createHiddenEditorState({
-        document: reopened,
-        collaboration: {
-          shouldSeed: true,
-          yXmlFragment: reseeded.getXmlFragment("prosemirror"),
-        },
-        collaborationModules: { yjs, yProseMirror },
-      });
-      expect(editorState.doc.textContent).toBe("Saved contract. Článek první.");
-      const materialized = await materializeYjsDocx({
-        sourceDocx: savedDocx,
-        yjsUpdate: encodeStateAsUpdate(reseeded),
-      });
-      reseeded.destroy();
-      expect(await extractDocxText(materialized)).toEqual(
-        await extractDocxText(savedDocx),
-      );
-      expect(
-        (await extractDocxText(materialized)).paragraphs.map(
-          ({ text }) => text,
-        ),
-      ).toEqual(["Saved contract. Článek první."]);
     },
   );
 
   test("a lost recovery CAS requests a reload instead of rematerialization", async () => {
     const loaded = await loadPersistedFolioSnapshot({
-      snapshotBytes: snapshotAtVersion(11, true),
+      snapshotBytes: legacyRoomSnapshot(),
       onRefused: async () => ({ status: "replaced" }),
     });
     expect(loaded.unwrap()).toEqual({ outcome: "reload-current" });
   });
 
-  test("a current snapshot loads byte for byte", async () => {
-    const snapshot = snapshotAtVersion(FOLIO_YJS_ATTR_SCHEMA_VERSION);
+  test("a canonical room loads byte for byte", async () => {
+    const snapshot = await seededRoomSnapshot(fixture("saved.docx"));
 
     const loaded = await loadPersistedFolioSnapshot({
       snapshotBytes: snapshot,
       onRefused: async () => {
-        throw new Error("Current snapshots must not be refused.");
+        throw new Error("Canonical rooms must not be refused.");
       },
     });
 
@@ -167,6 +128,39 @@ describe("persisted Folio collaboration snapshot loading", () => {
       outcome: FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded,
       snapshotBytes: snapshot,
     });
+  });
+});
+
+describe("room materialization", () => {
+  test("a seeded room saves its DOCX, and refuses a DOCX it was not seeded from", async () => {
+    const savedDocx = fixture("saved.docx");
+    const yjsUpdate = await seededRoomSnapshot(savedDocx);
+    const source = testScannedFile({
+      bytes: savedDocx.slice().buffer,
+      mimeType: DOCX_MIME_TYPE,
+    });
+
+    const materialized = await materializeRoomOverScannedDocx({
+      source,
+      yjsUpdate,
+    });
+    expect(
+      (await extractDocxText(materialized)).paragraphs.map(({ text }) => text),
+    ).toEqual(["Saved contract. Článek první."]);
+
+    // Any other bytes name another snapshot.
+    const otherDocx = new Uint8Array([...savedDocx, 0]);
+    expect(
+      await rejectionOf(
+        materializeRoomOverScannedDocx({
+          source: testScannedFile({
+            bytes: otherDocx.buffer,
+            mimeType: DOCX_MIME_TYPE,
+          }),
+          yjsUpdate,
+        }),
+      ),
+    ).toMatchObject({ reason: "snapshotMismatch" });
   });
 });
 

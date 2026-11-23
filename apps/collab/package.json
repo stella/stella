@@ -18,6 +18,7 @@
     "@hocuspocus/server": "^4.8.0",
     "@stll/api-contract": "workspace:*",
     "@stll/errors": "workspace:*",
+    "@stll/folio-core": "catalog:",
     "@stll/redis-config": "workspace:*",
     "@stll/runtime-mode": "workspace:*",
     "@stll/time": "0.4.3",

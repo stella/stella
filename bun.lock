@@ -233,6 +233,7 @@
         "@hocuspocus/server": "^4.8.0",
         "@stll/api-contract": "workspace:*",
         "@stll/errors": "workspace:*",
+        "@stll/folio-core": "catalog:",
         "@stll/redis-config": "workspace:*",
         "@stll/runtime-mode": "workspace:*",
         "@stll/time": "0.4.3",
@@ -1942,7 +1943,7 @@
     "@expo/router-server": "58.0.23",
     "@expo/ui": "58.0.29",
     "@modelcontextprotocol/sdk": "1.32.2",
-    "@stll/folio-core": "0.69.0",
+    "@stll/folio-core": "0.70.0",
     "@tanstack/router-core": {
       "seroval-plugins": "1.8.0",
     },
@@ -1997,11 +1998,11 @@
     "@stll/anonymize": "4.0.0",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "4.0.0",
-    "@stll/docx-core": "0.43.1",
-    "@stll/folio-agents": "0.16.12",
-    "@stll/folio-core": "0.69.0",
+    "@stll/docx-core": "0.44.0",
+    "@stll/folio-agents": "0.17.0",
+    "@stll/folio-core": "0.70.0",
     "@stll/folio-fonts": "0.1.0",
-    "@stll/folio-react": "0.34.1",
+    "@stll/folio-react": "0.35.0",
     "@stll/fuzzy-search": "1.4.2",
     "@stll/regex-set": "1.1.0",
     "@stll/regex-set-wasm": "1.1.0",
@@ -3522,7 +3523,7 @@
 
     "@stll/docx-authoring": ["@stll/docx-authoring@workspace:packages/docx-authoring"],
 
-    "@stll/docx-core": ["@stll/docx-core@0.43.1", "", { "dependencies": { "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "marked": "^18.1.2" } }, "sha512-aOsxIxn/9kFAQhcVrfYEiRef72/aMrLvR87MDfekLKyxusy+TQrEDsU9hjiJ5kMBcSG1GNmn4qy2X8pzrOD/oA=="],
+    "@stll/docx-core": ["@stll/docx-core@0.44.0", "", { "dependencies": { "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "marked": "^18.2.0" } }, "sha512-HO0QZFr1fk7hVdRttke+8cKGdtomMnt897wOiDe0fURCw+lmT9y3cqdv7PG7FkroCLc/govA2vVFd201u6Z9CQ=="],
 
     "@stll/docx-utils": ["@stll/docx-utils@workspace:packages/docx-utils"],
 
@@ -3532,13 +3533,13 @@
 
     "@stll/fetch": ["@stll/fetch@workspace:packages/fetch"],
 
-    "@stll/folio-agents": ["@stll/folio-agents@0.16.12", "", { "dependencies": { "@stll/folio-core": "^0.69.0", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.31" } }, "sha512-XXz1zAuUlf/oTezjkbcnH8Pm8+5Z+dObsUD/dfVw7qB+3DcpCzuT0OVbxU4HnxMGpAOecdD9OfqjDyI5ngL2nA=="],
+    "@stll/folio-agents": ["@stll/folio-agents@0.17.0", "", { "dependencies": { "@stll/folio-core": "^0.70.0", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.0", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.31" } }, "sha512-jicM2jlzXKseTiWk+tW2nbbG5RiOoengF4ru5fqZs4zuEmSBdqyPDCuc74qXGNlq1BydnpwqHU9z5tb/RYNWJQ=="],
 
-    "@stll/folio-core": ["@stll/folio-core@0.69.0", "", { "dependencies": { "@stll/docx-core": "^0.43.1", "@stll/template-conditions": "^0.6.2", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.17", "hyphen": "1.14.1", "utif2": "^4.1.0", "valibot": "1.5.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.2", "prosemirror-dropcursor": "^1.8.4", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.2", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-6R3PmSu9Y9/gjhCXQiWbY87xKe5yESgwEm+sVD7rSOpf08bZIXcwrNANBw0jx0eAYOYgjWX214mEwSZzYDGrfw=="],
+    "@stll/folio-core": ["@stll/folio-core@0.70.0", "", { "dependencies": { "@stll/docx-core": "^0.44.0", "@stll/template-conditions": "^0.6.6", "@stll/utf8-boundaries": "0.2.0", "better-result": "3.0.1", "csstype": "^3.1.3", "dompurify": "^3.4.18", "hyphen": "1.14.1", "utif2": "^4.1.0", "valibot": "1.5.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.2", "prosemirror-dropcursor": "^1.8.4", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.2", "prosemirror-view": "^1.42.6", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-H+62il/c3cnBu2O+QIUytUieuw9Y+pjWSYJQvOXqwG7FFbSFiuwVJvO2bY25dTCROjWC3SMuzYyJihmP0u4tyg=="],
 
     "@stll/folio-fonts": ["@stll/folio-fonts@0.1.0", "", {}, "sha512-5ZlR76tV4qFJXit2nhYdgacIgncyixfDKbL2U9AvI6QbVGEQVbPvuZNPnrdII1niQdxdSiT6Pd1xfcmkTP1UNA=="],
 
-    "@stll/folio-react": ["@stll/folio-react@0.34.1", "", { "dependencies": { "@base-ui/react": "1.9.0", "@stll/folio-core": "^0.69.0", "@stll/folio-fonts": "^0.1.0", "@stll/utf8-boundaries": "0.2.0", "@types/react": "^19.3.0", "@types/react-dom": "^19.3.0", "better-result": "3.0.1", "lucide-react": "1.65.0", "react-compiler-runtime": "^1.0.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "react": "^19.2.0", "react-dom": "^19.2.0", "use-intl": ">=4.0.0", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-6WE92LyzjijswfZlAQwyMd0rLdhWhyNufkgAMA68da4B7sltpylZHryAkYKe7LxdIVwbh/ho2DJHBJfKOH1xxw=="],
+    "@stll/folio-react": ["@stll/folio-react@0.35.0", "", { "dependencies": { "@base-ui/react": "1.9.0", "@stll/folio-core": "^0.70.0", "@stll/folio-fonts": "^0.1.0", "@stll/utf8-boundaries": "0.2.0", "@types/react": "^19.3.0", "@types/react-dom": "^19.3.0", "better-result": "3.0.1", "lucide-react": "1.73.0", "react-compiler-runtime": "^1.0.0" }, "peerDependencies": { "prosemirror-commands": "^1.7.1", "prosemirror-dropcursor": "^1.8.2", "prosemirror-gapcursor": "^1.4.1", "prosemirror-history": "^1.5.1", "prosemirror-inputrules": "^1.5.0", "prosemirror-keymap": "^1.2.3", "prosemirror-model": "^1.25.9", "prosemirror-state": "^1.4.4", "prosemirror-tables": "^1.8.5", "prosemirror-transform": "^1.12.0", "prosemirror-view": "^1.42.6", "react": "^19.2.0", "react-dom": "^19.2.0", "use-intl": ">=4.0.0", "y-prosemirror": "^1.3.7", "y-protocols": "^1.0.6", "yjs": "^13.6.33" } }, "sha512-yy9lhF1eotNXZogKaBiMHUZcCFWyRGSpvAMjotzLR76tL94rmJQE7/gF9IXOkfrorj8k+ddEVL5zWuiRgDCrxg=="],
 
     "@stll/fuzzy-search": ["@stll/fuzzy-search@1.4.2", "", { "optionalDependencies": { "@stll/fuzzy-search-darwin-arm64": "1.4.2", "@stll/fuzzy-search-darwin-x64": "1.4.2", "@stll/fuzzy-search-linux-arm64-gnu": "1.4.2", "@stll/fuzzy-search-linux-x64-gnu": "1.4.2", "@stll/fuzzy-search-wasm32-wasi": "1.4.2", "@stll/fuzzy-search-win32-x64-msvc": "1.4.2" } }, "sha512-nNHnbeUDBcnHsf8lchJdHUxXw/vGls4saKvOrl0xfBSyFncsil6sGd2nV/6LGLGDZChq+F9kLYWOUk/MrFuYNA=="],
 
@@ -6405,6 +6406,8 @@
     "@stll/aho-corasick-wasm32-wasi/@emnapi/core": ["@emnapi/core@2.0.0-beta.2", "", { "dependencies": { "@emnapi/wasi-threads": "2.2.0", "tslib": "^2.4.0" } }, "sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A=="],
 
     "@stll/aho-corasick-wasm32-wasi/@emnapi/runtime": ["@emnapi/runtime@2.0.0-beta.2", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-JcrSPzPvZuNZvJqPTF9Fw25LbOJ8avzFVlaf2grmH4Cku0oGP47tRgqPZadcfj3YoZMHkFVnCYFbQM8I+i5QEw=="],
+
+    "@stll/folio-core/@stll/template-conditions": ["@stll/template-conditions@0.6.6", "", { "dependencies": { "@stll/conditions": "^0.4.1", "better-result": "3.0.1", "temporal-polyfill": "1.0.8" } }, "sha512-v+L83hC0Wj0qV1XqdbKQP5fF3WQfpPXY5Fj5hwtBxBs5GF8veEc5xCESv/1tY6owi2M3AGYCQlPC9QyENtXw2w=="],
 
     "@stll/fuzzy-search-wasm32-wasi/@emnapi/core": ["@emnapi/core@2.0.0-beta.2", "", { "dependencies": { "@emnapi/wasi-threads": "2.2.0", "tslib": "^2.4.0" } }, "sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A=="],
 

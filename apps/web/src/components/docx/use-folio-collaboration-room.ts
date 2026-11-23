@@ -5,7 +5,7 @@ import type * as HocuspocusProviderModule from "@hocuspocus/provider";
 import { panic, Result, TaggedError } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
-import type * as YProseMirror from "y-prosemirror";
+import type { Awareness } from "y-protocols/awareness";
 import type * as Yjs from "yjs";
 
 import {
@@ -19,7 +19,9 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { sleep } from "@stll/concurrency/sleep";
 import { FetchBoundaryError } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
-import type { DocxEditorCollaboration } from "@stll/folio-react";
+import { canonicalSnapshotId } from "@stll/folio-core/canonical/canonicalRoomBase";
+import type { CanonicalRoomCollaboration } from "@stll/folio-core/controller/canonicalRoomEditor";
+import { openCanonicalYjsRoom } from "@stll/folio-core/controller/canonicalYjsRoom";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
@@ -41,12 +43,10 @@ import {
   waitForFolioCollaborationSeed,
 } from "./folio-collaboration-seed-receipt";
 
-type ConnectedDocxEditorCollaboration = DocxEditorCollaboration & {
-  awareness: NonNullable<DocxEditorCollaboration["awareness"]>;
-};
-
 export type FolioCollaborationRoom = {
-  collaboration: ConnectedDocxEditorCollaboration;
+  /** The provider's awareness: who is in the room, as the server vouches. */
+  awareness: Awareness;
+  collaboration: CanonicalRoomCollaboration;
   flushSnapshot: () => Promise<FolioCollaborationFlush>;
   generation: number;
   getDocumentMutationRevision: () => number;
@@ -222,7 +222,6 @@ class CollaborationGenerationRejoinError extends TaggedError(
 
 type CollaborationRuntimeModules = {
   hocuspocus: typeof HocuspocusProviderModule;
-  yProseMirror: typeof YProseMirror;
   yjs: typeof Yjs;
 };
 
@@ -233,12 +232,10 @@ const loadCollaborationRuntimeModules =
   async (): Promise<CollaborationRuntimeModules> => {
     collaborationRuntimeModulesPromise ??= Promise.all([
       import("@hocuspocus/provider"),
-      import("y-prosemirror"),
       import("yjs"),
     ])
-      .then(([hocuspocus, yProseMirror, yjs]) => ({
+      .then(([hocuspocus, yjs]) => ({
         hocuspocus,
-        yProseMirror,
         yjs,
       }))
       .catch((error: unknown) => {
@@ -308,6 +305,9 @@ export const useFolioCollaborationRoom = ({
   );
   const getSnapshotRecoveryMessage = useLatestCallback(() =>
     t("folio.collaborationSnapshotRecovered"),
+  );
+  const getEditRefusedMessage = useLatestCallback(() =>
+    t("folio.collaborationEditRefused"),
   );
   const [connectionAttempt, setConnectionAttempt] = useState(0);
   const pendingGenerationJoin = useRef<{
@@ -435,8 +435,10 @@ export const useFolioCollaborationRoom = ({
           return;
         }
 
-        const { hocuspocus, yProseMirror, yjs } =
-          await loadCollaborationRuntimeModules();
+        const { hocuspocus, yjs } = await loadCollaborationRuntimeModules();
+        // The room was seeded from these bytes; a room seeded from others
+        // refuses the editor.
+        const roomSnapshot = await canonicalSnapshotId(seedDocumentBuffer);
         if (isDisposed()) {
           return;
         }
@@ -585,6 +587,7 @@ export const useFolioCollaborationRoom = ({
                 token = rejoined.token;
                 tokenExpiresAtMs = new Date(rejoined.tokenExpiresAt).getTime();
                 activeRoom = {
+                  awareness: currentRoom.awareness,
                   collaboration: currentRoom.collaboration,
                   flushSnapshot: currentRoom.flushSnapshot,
                   generation: rejoined.generation,
@@ -642,7 +645,30 @@ export const useFolioCollaborationRoom = ({
 
         const ydoc = new yjs.Doc();
         collaborationDocument = ydoc;
-        const yXmlFragment = ydoc.get("prosemirror", yjs.XmlFragment);
+        // The room follows the journal while the provider is synced with the
+        // server; its requests wait in the document's inbox otherwise.
+        let roomConnected = false;
+        const roomConnectionListeners = new Set<(connected: boolean) => void>();
+        const setRoomConnected = (connected: boolean) => {
+          if (roomConnected === connected) {
+            return;
+          }
+          roomConnected = connected;
+          for (const listener of roomConnectionListeners) {
+            listener(connected);
+          }
+        };
+        const roomConnection = {
+          get connected() {
+            return roomConnected;
+          },
+          onChange: (listener: (connected: boolean) => void) => {
+            roomConnectionListeners.add(listener);
+            return () => {
+              roomConnectionListeners.delete(listener);
+            };
+          },
+        };
         provider = new hocuspocus.HocuspocusProvider({
           document: ydoc,
           name: data.roomName,
@@ -671,6 +697,7 @@ export const useFolioCollaborationRoom = ({
             });
           },
           onClose: ({ event }) => {
+            setRoomConnected(false);
             if (event.code === FOLIO_COLLAB_GENERATION_RETRY_CLOSE_CODE) {
               startGenerationRejoin();
               return;
@@ -701,10 +728,12 @@ export const useFolioCollaborationRoom = ({
               status === hocuspocus.WebSocketStatus.Disconnected ||
               (hasConnected && status === hocuspocus.WebSocketStatus.Connecting)
             ) {
+              setRoomConnected(false);
               setConnectedState("reconnecting");
             }
           },
           onSynced: ({ state: isSynced }) => {
+            setRoomConnected(isSynced);
             if (!isSynced) {
               setConnectedState("reconnecting");
               return;
@@ -826,19 +855,93 @@ export const useFolioCollaborationRoom = ({
           );
         };
 
-        const collaboration = {
-          awareness,
-          // Capture before the first editable view or another participant can mutate the seed.
-          onSeeded: () => acknowledgeSeed(yjs.encodeStateAsUpdate(ydoc)),
-          plugins: [
-            yProseMirror.ySyncPlugin(yXmlFragment),
-            yProseMirror.yCursorPlugin(awareness),
-            yProseMirror.yUndoPlugin(),
-          ],
-          shouldSeed: data.shouldSeed,
-          yXmlFragment,
+        // Local batches the room has not sequenced yet. A durable cut waits
+        // for them, so the stored state holds every edit made before it.
+        let unsequencedBatches = 0;
+        const sequencedWaiters = new Map<
+          () => void,
+          ReturnType<typeof setTimeout>
+        >();
+        const whenLocalEditsSequenced = () =>
+          unsequencedBatches === 0
+            ? Promise.resolve()
+            : new Promise<void>((resolve, reject) => {
+                const timer = setTimeout(() => {
+                  sequencedWaiters.delete(resolve);
+                  reject(
+                    new CollaborationFlushError({
+                      message:
+                        "Timed out while the room sequenced this editor's edits.",
+                    }),
+                  );
+                }, COLLAB_FLUSH_TIMEOUT_MS);
+                sequencedWaiters.set(resolve, timer);
+              });
+        let seedAcknowledgementStarted = false;
+        const collaboration: CanonicalRoomCollaboration = {
+          snapshot: roomSnapshot,
+          // A fresh actor per connection; the server vouches for the user part.
+          actor: `${awarenessUser.id}:${createUuid()}`,
+          user: {
+            color: LOCAL_AWARENESS_PLACEHOLDER_COLOR,
+            name: awarenessUser.name,
+          },
+          connect: () =>
+            openCanonicalYjsRoom({
+              awareness,
+              connection: roomConnection,
+              doc: ydoc,
+              snapshot: roomSnapshot,
+            }),
+          onEvent: (event) => {
+            switch (event.type) {
+              case "synced":
+                // The authority seeded the room before it answered this
+                // editor: capture that pristine state as the seed receipt.
+                if (seedReceipt === "pending" && !seedAcknowledgementStarted) {
+                  seedAcknowledgementStarted = true;
+                  acknowledgeSeed(yjs.encodeStateAsUpdate(ydoc));
+                }
+                return;
+              case "pending":
+                unsequencedBatches = event.batches;
+                if (unsequencedBatches === 0) {
+                  for (const [resolve, timer] of sequencedWaiters) {
+                    clearTimeout(timer);
+                    resolve();
+                  }
+                  sequencedWaiters.clear();
+                }
+                return;
+              case "localEditRefused":
+              case "leaseRefused":
+                // The editor took the edit back out of the document.
+                notifyUserProblem(getEditRefusedMessage());
+                return;
+              case "stopped":
+                getAnalytics().captureError(event.error, {
+                  fingerprintKey: "useFolioCollaborationRoom.room:stopped",
+                  scope: {
+                    type: "handler",
+                    handlerId: "useFolioCollaborationRoom.room:stopped",
+                  },
+                });
+                connectedProvider.disconnect();
+                setState({
+                  status: "unavailable",
+                  room: null,
+                  message: getEditOpenFailedMessage(),
+                });
+                return;
+              default: {
+                event satisfies never;
+                return panic("Unhandled collaboration room event");
+              }
+            }
+          },
         };
         const flushSnapshot = async () => {
+          await whenLocalEditsSequenced();
           connectedProvider.flushPendingUpdates();
           const documentMutationRevisionAtRequest = mutationRevision.document;
           const localMutationRevisionAtRequest = mutationRevision.local;
@@ -870,6 +973,7 @@ export const useFolioCollaborationRoom = ({
           };
         };
         activeRoom = {
+          awareness,
           collaboration,
           flushSnapshot,
           generation: data.generation,
@@ -880,6 +984,7 @@ export const useFolioCollaborationRoom = ({
         };
         if (connectedProvider.isSynced) {
           hasSynchronized = true;
+          setRoomConnected(true);
         }
         setConnectedState(
           connectedProvider.isSynced ? synchronizedStatus : "connecting",
@@ -922,6 +1027,7 @@ export const useFolioCollaborationRoom = ({
     getActionFailedMessage,
     getAwarenessUser,
     getEditOpenFailedMessage,
+    getEditRefusedMessage,
     getEditPermissionDeniedMessage,
     getSnapshotRecoveryMessage,
     propertyId,

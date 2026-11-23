@@ -10,7 +10,7 @@ import { isPanic, panic, Result, TaggedError } from "better-result";
 import type { Peer } from "crossws";
 import crossws from "crossws/adapters/bun";
 import * as v from "valibot";
-import { applyUpdate, encodeStateAsUpdate } from "yjs";
+import { applyUpdate, type Doc, encodeStateAsUpdate } from "yjs";
 
 import {
   FOLIO_COLLAB_FLUSH_REQUEST_TYPE,
@@ -23,6 +23,14 @@ import {
   parseFolioCollabRoomName,
 } from "@stll/api-contract/folio-collab";
 import { FetchBoundaryError } from "@stll/errors";
+import {
+  type CanonicalPresenceState,
+  parseCanonicalPresence,
+} from "@stll/folio-core/controller/canonicalPresence";
+import {
+  CANONICAL_YJS_AUTHORITY,
+  CANONICAL_YJS_AWARENESS_FIELD,
+} from "@stll/folio-core/controller/canonicalYjsRoom";
 import type { RedisConnectionSettings } from "@stll/redis-config";
 import type { StorePolicyStatus } from "@stll/redis-config/store-policy";
 import { Temporal } from "@stll/time";
@@ -30,6 +38,7 @@ import { Temporal } from "@stll/time";
 import { isSecureCollabRedisUrl, isSecureStellaApiUrl } from "./env-schema";
 import { logCollabEvent } from "./log";
 import { createCollabRedisClient } from "./redis-client";
+import { createRoomAuthorities } from "./room-authority";
 
 type CollabAuthContext = {
   join: CollabRoomJoin;
@@ -188,6 +197,35 @@ const presenceColorFromUserId = (userId: string) => {
   }
   const color = (hash * 2_654_435_761) % FOLIO_COLLABORATOR_COLOR_SPACE;
   return `#${color.toString(16).padStart(6, "0")}`;
+};
+
+/**
+ * Whether every write to the room came from its authority. The authority
+ * seeds a room and otherwise writes only in answer to a client's request, so
+ * such a room holds nothing its seed DOCX does not.
+ */
+const onlyAuthorityWrote = (document: Doc): boolean =>
+  [...document.store.clients.keys()].every(
+    (client) => client === CANONICAL_YJS_AUTHORITY,
+  );
+
+/**
+ * A peer's room presence as this server vouches for it: its actor must be
+ * one of the caller's editors (`<userId>:<editor>`), and it shows the
+ * caller's name and colour whatever it claimed. Anything else is dropped.
+ */
+const vouchedRoomPresence = (
+  claimed: unknown,
+  { userId, userName }: Pick<CollabAuthContext, "userId" | "userName">,
+): CanonicalPresenceState | null => {
+  const presence = parseCanonicalPresence(claimed);
+  if (presence === undefined || !presence.actor.startsWith(`${userId}:`)) {
+    return null;
+  }
+  return {
+    ...presence,
+    user: { name: userName, color: presenceColorFromUserId(userId) },
+  };
 };
 
 const readPresenceUserId = (state: unknown) => {
@@ -510,6 +548,17 @@ export const createCollabServer = async (
   if (extensionClients.length !== 0) {
     panic("Collaboration extension did not consume its declared Redis clients");
   }
+  const roomAuthorities = createRoomAuthorities({
+    coordination:
+      redisExtension === null
+        ? { type: "single-process" }
+        : {
+            type: "redis",
+            redis: redisExtension.pub,
+            keyPrefix: FOLIO_COLLAB_REDIS_SCOPE,
+            holder: crypto.randomUUID(),
+          },
+  });
 
   const updateRedisReadiness = () => {
     if (redisExtension === null || shuttingDown) {
@@ -1175,6 +1224,7 @@ export const createCollabServer = async (
       }
     },
     async afterUnloadDocument({ documentName }) {
+      await roomAuthorities.stop(documentName);
       cancelRoomCleanup(documentName);
       roomCleanupTimers.set(
         documentName,
@@ -1290,6 +1340,10 @@ export const createCollabServer = async (
           image: null,
           name: context.userName,
         };
+        state[CANONICAL_YJS_AWARENESS_FIELD] = vouchedRoomPresence(
+          state[CANONICAL_YJS_AWARENESS_FIELD],
+          context,
+        );
       }
       await Promise.resolve();
     },
@@ -1331,11 +1385,16 @@ export const createCollabServer = async (
         snapshotRevision: result.snapshotRevision,
       });
 
-      if (!result.snapshotBase64) {
-        return;
+      if (result.snapshotBase64) {
+        applyUpdate(document, Buffer.from(result.snapshotBase64, "base64"));
       }
-
-      applyUpdate(document, Buffer.from(result.snapshotBase64, "base64"));
+      // Peers' requests wait in the room's inbox until the authority runs.
+      void roomAuthorities.start({
+        doc: document,
+        roomId: context.roomId,
+        roomName: documentName,
+        seedDocx: Buffer.from(result.seedDocxBase64, "base64"),
+      });
     },
     async onStateless({ connection, document, payload }) {
       const parsed = v.safeParse(flushRequestSchema, payload);
@@ -1353,6 +1412,10 @@ export const createCollabServer = async (
     },
     async onStoreDocument(payload) {
       const { document } = payload;
+      // Nothing to persist: the room still equals its seed DOCX.
+      if (onlyAuthorityWrote(document)) {
+        return;
+      }
       try {
         await queueRoomSnapshotStore(document);
       } catch (error) {
@@ -1546,6 +1609,7 @@ export const createCollabServer = async (
       });
     }
     pendingSnapshotStores.clear();
+    await roomAuthorities.stopAll();
 
     await hocuspocus.hooks("onDestroy", { instance: hocuspocus });
   };

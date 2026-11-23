@@ -7,6 +7,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
+import type { Awareness } from "y-protocols/awareness";
 
 import { FolioUIProvider, FormattingBar } from "@stll/folio-react";
 import type {
@@ -621,9 +622,7 @@ const DocxCollaborationToolbarControls = ({
         <span>{createVersionLabel}</span>
       </Button>
       <CollaborationStatusIndicator status={collaborationState.status} />
-      <CollaborationPresence
-        awareness={collaborationState.room.collaboration.awareness}
-      />
+      <CollaborationPresence awareness={collaborationState.room.awareness} />
       <Button
         aria-label={t("common.close")}
         className="min-h-11 px-3"
@@ -775,9 +774,7 @@ const readCollaborationPresenceUser = (
   return { id, image, name };
 };
 
-const readCollaborationPresence = (
-  awareness: NonNullable<DocxEditorCollaboration["awareness"]>,
-) => {
+const readCollaborationPresence = (awareness: Awareness) => {
   const users = new Map<string, CollaborationPresenceUser>();
   for (const state of awareness.getStates().values()) {
     const user = readCollaborationPresenceUser(state);
@@ -803,11 +800,7 @@ const hasSameCollaborationPresence = (
     );
   });
 
-const CollaborationPresence = ({
-  awareness,
-}: {
-  awareness: NonNullable<DocxEditorCollaboration["awareness"]>;
-}) => {
+const CollaborationPresence = ({ awareness }: { awareness: Awareness }) => {
   const [users, setUsers] = useState(() =>
     readCollaborationPresence(awareness),
   );

@@ -8,16 +8,14 @@ import {
 } from "bun:test";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
-import * as yProseMirror from "y-prosemirror";
 import * as yjs from "yjs";
 
-import { createHiddenEditorState } from "@stll/folio-core/controller/hiddenEditorManager";
+import { serveCanonicalYjsRoom } from "@stll/folio-core/controller/canonicalYjsRoom";
 import {
   createDocx,
   createEmptyDocument,
   extractDocxText,
-  materializeYjsDocx,
-  parseDocx,
+  FolioDocxReviewer,
 } from "@stll/folio-core/server";
 import { sha256Hex as legacyHex } from "@stll/sha256/node";
 import { createTestClock } from "@stll/test-kit";
@@ -48,6 +46,7 @@ import {
   publishCheckpointInTransaction,
 } from "@/api/lib/entity-versions/publish-folio-collab-checkpoint";
 import { createFileKey } from "@/api/lib/file-key";
+import { materializeRoomOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { decideFolioSnapshotRecoveryState } from "@/api/lib/files/folio-collab-snapshot-loader";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
@@ -74,6 +73,7 @@ import { readSyntheticSessionAuthority } from "@/api/lib/synthetic-principal/ses
 import { createSyntheticSessionStore } from "@/api/lib/synthetic-principal/store";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { testScannedFile } from "@/api/tests/helpers/scanned-file";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -92,6 +92,18 @@ import joinFolioCollabRoom, {
   decideFolioCollabSnapshotRecovery,
   folioCollabSeedClaimPredicate,
 } from "./join-folio-collab-room";
+
+/** A room its authority seeded from `docx`, as the collaboration server stores it. */
+const seededRoom = async (docx: Uint8Array) => {
+  const { document, snapshot } = await FolioDocxReviewer.openRoomBase(
+    docx.slice().buffer,
+  );
+  const room = new yjs.Doc();
+  serveCanonicalYjsRoom({ doc: room, snapshot, document }).unwrap().stop();
+  const update = yjs.encodeStateAsUpdate(room);
+  room.destroy();
+  return update;
+};
 
 let testDb: TestDatabase;
 const testClock = createTestClock();
@@ -372,17 +384,7 @@ test("a dedicated principal joins only while its dedicated session is live", asy
     if (authorization.status !== "authorized") {
       throw new Error("Dedicated room token was not authorized");
     }
-    const seeded = new yjs.Doc();
-    createHiddenEditorState({
-      document: await parseDocx(sourceBytes),
-      collaboration: {
-        shouldSeed: true,
-        yXmlFragment: seeded.getXmlFragment("prosemirror"),
-      },
-      collaborationModules: { yjs, yProseMirror },
-    });
-    const snapshot = yjs.encodeStateAsUpdate(seeded);
-    seeded.destroy();
+    const snapshot = await seededRoom(sourceBytes);
     expect(
       (
         await acknowledgeFolioCollabSeed({
@@ -950,22 +952,13 @@ describe("folio collaboration room seed generation CAS", () => {
         expect(download.status).toBe(200);
         const seedBytes = new Uint8Array(await download.arrayBuffer());
         expect(seedBytes).toEqual(savedDocx);
-        const reseeded = new yjs.Doc();
-        const editorState = createHiddenEditorState({
-          document: await parseDocx(seedBytes),
-          collaboration: {
-            shouldSeed: joined.shouldSeed,
-            yXmlFragment: reseeded.getXmlFragment("prosemirror"),
-          },
-          collaborationModules: { yjs, yProseMirror },
-        });
-        expect(editorState.doc.textContent).toBe(
-          "Saved contract. Článek první.",
-        );
-        const snapshot = yjs.encodeStateAsUpdate(reseeded);
-        reseeded.destroy();
-        const materialized = await materializeYjsDocx({
-          sourceDocx: seedBytes,
+        expect(joined.shouldSeed).toBe(true);
+        const snapshot = await seededRoom(seedBytes);
+        const materialized = await materializeRoomOverScannedDocx({
+          source: testScannedFile({
+            bytes: seedBytes.slice().buffer,
+            mimeType: DOCX_MIME_TYPE,
+          }),
           yjsUpdate: snapshot,
         });
         expect(await extractDocxText(materialized)).toEqual(
