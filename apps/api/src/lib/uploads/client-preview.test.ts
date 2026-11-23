@@ -191,7 +191,7 @@ describe("whether a client preview stands for the photo", () => {
 
   test("holds exactly when the preview has the photo's shape and fits the budget", () => {
     assertProperty(
-      "a client preview holds exactly when its shape and size fit",
+      "holds exactly when the preview has the photo's shape and fits the budget",
       fc.property(
         fc.integer({ min: 64, max: 16_000 }),
         fc.integer({ min: 64, max: 16_000 }),

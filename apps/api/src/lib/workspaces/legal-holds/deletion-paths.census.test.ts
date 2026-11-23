@@ -187,6 +187,10 @@ const EXCEPTIONS = new Map([
     "Failed promotion object cleanup delegates to the guarded organization-file deletion owner.",
   ],
   [
+    "lib/uploads/client-preview.ts",
+    "Deletes only a client preview's staging object beside tmpUploadKey once it is read; the preview PDF is stored under its own final key.",
+  ],
+  [
     "lib/entities/create-from-buffer.ts",
     "Failed document writer cleanup delegates to the guarded organization-file deletion owner.",
   ],
