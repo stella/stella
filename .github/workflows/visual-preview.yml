@@ -18,6 +18,7 @@ on:
       - .github/actions/setup-playwright/**
       - .github/actions/merge-target-base/**
       - .github/actions/flaky-test-quarantine/**
+      - .github/actions/docker-login/**
       - scripts/ci-service-images.ts
       - scripts/ci-service-images.json
       - scripts/retry.sh
