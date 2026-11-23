@@ -1932,6 +1932,9 @@ type ObjectRangeReadOptions = {
   signal: AbortSignal;
 };
 
+/** How long a range read's body may stall before it is given up. */
+const OBJECT_RANGE_READ_IDLE_MS = 30_000;
+
 // `Content-Range: bytes <first>-<last>/<complete-length>`; the complete
 // length may be `*` when the store does not know it (RFC 9110 §14.4).
 const CONTENT_RANGE_PATTERN = /^bytes (?<first>\d+)-(?<last>\d+)\/(?:\d+|\*)$/u;
@@ -1982,7 +1985,9 @@ const readObjectRange = async ({
             {
               headers: { Range: `bytes=${offset}-${last}` },
               signal,
-              timeoutMs: OBJECT_READ_TIMEOUT_MS,
+              // The store must start answering in time; the range then
+              // streams for as long as it keeps moving.
+              timeout: { type: "headers", ms: OBJECT_READ_TIMEOUT_MS },
             },
             async (served) => {
               if (served.status !== 206) {
@@ -2016,7 +2021,13 @@ const readObjectRange = async ({
                   message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
                 });
               }
-              const bytes = meterStorageRead(await served.bytes());
+              const bytes = meterStorageRead(
+                await readBodyWithIdleDeadline(served, {
+                  idleMs: OBJECT_RANGE_READ_IDLE_MS,
+                  maxBytes: length,
+                  signal,
+                }),
+              );
               if (bytes.byteLength !== length) {
                 throw new S3ObjectReadError({
                   message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
