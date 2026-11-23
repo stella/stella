@@ -3653,7 +3653,9 @@ jobs:
         env:
           PLAYWRIGHT_JSON_OUTPUT_FILE: ${{ github.workspace }}/.cache/playwright-timings/test-desktop-browser-interactions.json
           S: ${{ matrix.suite }}
-        run: bun --cwd=apps/desktop run test:browser -- --shard="${S#desktop-}/3"
+        run: |
+          cd apps/desktop
+          bun run test:browser -- --shard="${S#desktop-}/3"
 
       - name: Upload desktop browser failures
         if: startsWith(matrix.suite, 'desktop-') && failure() && steps.desktop-browser-tests.outputs.required == 'true'
