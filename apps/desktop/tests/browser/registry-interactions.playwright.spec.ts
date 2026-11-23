@@ -223,6 +223,7 @@ const installNativeBoundary = async (
           },
           expiresAt: CONNECTED_EXPIRES_AT,
           server: ACCOUNT_SERVER,
+          avatar: null,
         }
       : { status: connection.status, server: ACCOUNT_SERVER }
   ) satisfies DesktopAccountSnapshot;
