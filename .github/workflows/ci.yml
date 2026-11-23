@@ -4255,6 +4255,9 @@ jobs:
           API_TEST_TIMINGS_DIR: ${{ runner.temp }}/postgres-test-timings
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
           REDIS_URL: redis://127.0.0.1:6379
+          # Clusters a suite starts for itself run the image the service
+          # container already pulled.
+          STELLA_ISOLATED_POSTGRES_IMAGE: ${{ needs.ci-plan.outputs.postgres }}
           CI_POSTGRES_TEST_SELECTION_ENCODED: ${{ (github.event_name == 'merge_group' || (github.event_name == 'pull_request' && needs.ci-plan.outputs.postgres_pr_required == 'true')) && needs.ci-plan.outputs.postgres_test_selection_encoded || '' }}
         # The full volume benchmark runs in nightly postgres-suites; this job
         # retains its bounded correctness slice alongside every other suite.
