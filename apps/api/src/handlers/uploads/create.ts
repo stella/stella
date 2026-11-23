@@ -22,6 +22,7 @@ import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import { clientPreviewDeclarationSchema } from "@/api/lib/uploads/client-preview";
 import { validateEntityCreate } from "@/api/lib/uploads/entity-create";
 import {
   documentUploadFileFields,
@@ -46,12 +47,14 @@ const entityCreatePresignBodySchema = v.object({
   propertyId: resourceIdSchema("property"),
   parentId: v.optional(v.nullable(resourceIdSchema("entity"))),
   importOrigin: v.optional(importOriginSchema),
+  preview: v.optional(clientPreviewDeclarationSchema),
   ...documentUploadFileFields,
 });
 
 const entityVersionPresignBodySchema = v.object({
   purpose: v.literal("entity_version"),
   entityId: resourceIdSchema("entity"),
+  preview: v.optional(clientPreviewDeclarationSchema),
   ...documentUploadFileFields,
 });
 
@@ -75,6 +78,9 @@ const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
       type: "entity_create",
       propertyId: purposeBody.propertyId,
       parentId: purposeBody.parentId ?? null,
+      ...(purposeBody.preview === undefined
+        ? {}
+        : { clientPreview: purposeBody.preview }),
       ...(purposeBody.importOrigin === undefined
         ? {}
         : {
@@ -90,6 +96,9 @@ const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
     return {
       type: "entity_version",
       entityId: purposeBody.entityId,
+      ...(purposeBody.preview === undefined
+        ? {}
+        : { clientPreview: purposeBody.preview }),
     };
   }
   return { type: "agent_skill", scope: purposeBody.scope };
@@ -111,6 +120,11 @@ const config = {
     "the bytes to url with those headers verbatim -- the URL is signed " +
     "against the exact size and checksum, so any deviation is rejected. " +
     "Step 3: call uploads.update with the uploadId to commit the record. " +
+    "Apps that decode a HEIC/HEIF photo themselves may also pass preview " +
+    "(mimeType image/jpeg or image/webp, size, sha256Hex, and its upright " +
+    "width and height, at most 8 MP) and PUT that rendering to preview.url " +
+    "with preview.headers before step 3; the server checks it and renders " +
+    "the photo's preview from it. " +
     "Call uploads.delete instead if the PUT fails.",
   // permissions-exempt: the static gate is workspace:read because the
   // resource-appropriate grant depends on the request's purpose, which

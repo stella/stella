@@ -66,10 +66,15 @@ import {
   THUMBNAIL_MIME_TYPE,
 } from "@/api/lib/files/image-derivative";
 import {
+  isHeaderReadableImageMimeType,
+  readImageHeader,
+} from "@/api/lib/files/image-header";
+import {
   FILE_RESERVATION_ABANDON_DELAY_MS,
   OrganizationFileUsageError,
   writeOrganizationFile,
 } from "@/api/lib/files/organization-file-usage";
+import { mediaTypeEssence } from "@/api/lib/files/pdf-derivative-policy";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
@@ -105,6 +110,11 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { processExtraction } from "@/api/lib/search/process-extraction";
+import {
+  acceptsClientPreview,
+  loadClientPreview,
+  type QueuedClientPreview,
+} from "@/api/lib/uploads/client-preview";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -246,9 +256,16 @@ type FileDerivativeJobData = {
   organizationId: string;
   userId: string | null;
   workspaceId: string;
+  /**
+   * A HEIC/HEIF photo's client preview staged at upload. The PDF job checks
+   * it against the photo and renders the preview PDF from it when it holds,
+   * else decodes the photo; see `uploads/client-preview.ts`.
+   */
+  clientPreview?: QueuedClientPreview | undefined;
 };
 
 type EnqueueFileDerivativeArgs = {
+  clientPreview?: QueuedClientPreview | undefined;
   encrypted: boolean;
   entityId: SafeId<"entity">;
   fieldId: SafeId<"field">;
@@ -269,6 +286,7 @@ const getQueue = createLazyBullMqQueue<FileDerivativeJobData>({
 });
 
 const enqueuePdfDerivative = async ({
+  clientPreview,
   encrypted,
   entityId,
   fieldId,
@@ -290,6 +308,7 @@ const enqueuePdfDerivative = async ({
       organizationId,
       userId,
       workspaceId,
+      ...(clientPreview === undefined ? {} : { clientPreview }),
     },
     {
       jobId: createBullMqJobId(workspaceId, fieldId, FILE_DERIVATIVE_KIND.PDF),
@@ -774,12 +793,41 @@ const FAILURE_REASON_FOR_RENDER = {
 >;
 
 /**
+ * What a photo's preview PDF is rendered from: its client preview when one
+ * was staged and holds for the photo, else the photo itself.
+ */
+const pdfSourceOf = async (
+  original: ScannedFile,
+  clientPreview: QueuedClientPreview | undefined,
+): Promise<ScannedFile> => {
+  const mimeType = mediaTypeEssence(original.mimeType);
+  if (clientPreview === undefined || !acceptsClientPreview(mimeType)) {
+    return original;
+  }
+  const loaded = await loadClientPreview({
+    original: isHeaderReadableImageMimeType(mimeType)
+      ? readImageHeader(new Uint8Array(original.bytes), mimeType)
+      : null,
+    queued: clientPreview,
+  });
+  if (loaded.type === "accepted") {
+    return loaded.preview;
+  }
+  // Expected for a preview the client did not finish or that does not hold.
+  logger.info("file_derivative.client_preview_refused", {
+    reason: loaded.reason,
+  });
+  return original;
+};
+
+/**
  * Read an admitted source once and convert it to PDF. The converter makes a
  * single attempt (`retry: "caller"`): the job's attempts are the only retry.
  */
 const buildPdfDerivative = async (
   content: FileFieldContent,
   sourceKey: FileKey,
+  clientPreview: QueuedClientPreview | undefined,
 ): Promise<DerivativeBuild<ArrayBuffer>> => {
   const source = await loadDerivativeSource<ScannedFile>({
     sizeBytes: content.sizeBytes,
@@ -798,9 +846,10 @@ const buildPdfDerivative = async (
   if (source.type === "refused") {
     return source;
   }
-  const conversion = await convertToPdf(source.source, {
-    retry: "caller",
-  });
+  const conversion = await convertToPdf(
+    await pdfSourceOf(source.source, clientPreview),
+    { retry: "caller" },
+  );
   if (Result.isError(conversion)) {
     if (conversion.error instanceof ConversionInputError) {
       const conversionRefusal = displayableConversionRefusal(
@@ -925,7 +974,11 @@ const processPdfDerivativeJob = async (
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const built = await buildPdfDerivative(content, sourceKey);
+  const built = await buildPdfDerivative(
+    content,
+    sourceKey,
+    jobData.clientPreview,
+  );
   if (built.type === "refused") {
     await refuseDerivative({
       fieldId: brandedFieldId,

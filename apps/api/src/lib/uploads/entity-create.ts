@@ -83,6 +83,7 @@ import {
 } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { queuedClientPreview } from "@/api/lib/uploads/client-preview";
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import {
   FINALIZE_CLAIM_TIMEOUT_MS,
@@ -776,6 +777,12 @@ export const finalizeEntityCreate = async function* ({
       detached(
         async () =>
           enqueuePdfDerivativeOrMarkFailed({
+            clientPreview: queuedClientPreview({
+              declaration: purposeData.clientPreview,
+              organizationId,
+              uploadId,
+              workspaceId,
+            }),
             encrypted,
             entityId,
             fieldId,

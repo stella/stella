@@ -1208,6 +1208,17 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_create";
       propertyId: SafeId<"property">;
+      /**
+       * A HEIC/HEIF photo's client preview, declared at reservation and PUT
+       * beside the original; see `lib/uploads/client-preview.ts`.
+       */
+      clientPreview?: {
+        mimeType: "image/jpeg" | "image/webp";
+        size: number;
+        sha256Hex: string;
+        width: number;
+        height: number;
+      };
       /** Set when the upload imports a file from another system. */
       importSource?: ImportDocumentSource;
       /**
@@ -1220,6 +1231,17 @@ export type PendingUploadPurposeData =
   | {
       type: "entity_version";
       entityId: SafeId<"entity">;
+      /**
+       * A HEIC/HEIF photo's client preview, declared at reservation and PUT
+       * beside the original; see `lib/uploads/client-preview.ts`.
+       */
+      clientPreview?: {
+        mimeType: "image/jpeg" | "image/webp";
+        size: number;
+        sha256Hex: string;
+        width: number;
+        height: number;
+      };
       /**
        * Final object id reserved by trusted server-side writers. Persisting it
        * before S3 publication lets the bounded reconciler derive and remove a

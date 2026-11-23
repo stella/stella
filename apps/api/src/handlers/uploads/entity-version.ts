@@ -50,6 +50,7 @@ import {
 } from "@/api/lib/search/process-extraction";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueEntitySearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { queuedClientPreview } from "@/api/lib/uploads/client-preview";
 import type { PromotedUploadObject } from "@/api/lib/uploads/promote-tmp-object";
 import { finalizeErr, finalizeOk } from "@/api/lib/uploads/runtime";
 import type { UploadFinalizeError } from "@/api/lib/uploads/runtime";
@@ -237,7 +238,7 @@ export const finalizeEntityVersion = async function* ({
   declaredMime,
   declaredSize,
   declaredSha256Hex,
-  purposeData: { entityId },
+  purposeData: { clientPreview, entityId },
   scanned,
   scanWarnings,
   uploadId,
@@ -393,6 +394,12 @@ export const finalizeEntityVersion = async function* ({
     );
     const afterPromote = () => {
       startVersionFollowUpWork({
+        clientPreview: queuedClientPreview({
+          declaration: clientPreview,
+          organizationId,
+          uploadId,
+          workspaceId,
+        }),
         encrypted: encryption.encrypted,
         entityId,
         fieldId,

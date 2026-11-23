@@ -20,6 +20,11 @@ export default {
     ],
     allowed: [
       {
+        path: "apps/api/src/lib/uploads/client-preview.ts",
+        reason:
+          "Reads a HEIC photo's staged client preview once, within its declared size, to check and scan it before the PDF derivative is rendered from it.",
+      },
+      {
         path: "apps/api/src/lib/legal-search/sk-document-raw.ts",
         reason:
           "Loads the claimed source envelope under a byte cap and deadline before retaining its deferred document.",

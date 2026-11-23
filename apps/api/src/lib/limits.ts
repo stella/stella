@@ -569,6 +569,10 @@ export const LIMITS = {
    *  (up to 16320 × 12240) within `pdfRenderTimeoutMs`. Admission and the
    *  decoder check it in place of the whole-image pixel budgets. */
   heifTiledCanvasPixelsMax: 200_000_000,
+  /** Bytes of a client's JPEG or WebP preview of a HEIC/HEIF photo (see
+   *  `uploads/client-preview.ts`). An 8 MP JPEG at high quality is 2 to
+   *  5 MB; this leaves room for WebP at its worst. */
+  clientPreviewBytesMax: 16 * 1024 * 1024,
   /** Wall-clock ceiling for one thumbnail plus blur placeholder. */
   imageDerivativeTimeoutMs: 30_000,
   /** Hard timeout for the PDF worker rendering one image, text or CSV

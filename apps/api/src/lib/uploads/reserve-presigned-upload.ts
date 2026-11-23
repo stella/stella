@@ -8,12 +8,17 @@ import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { type PendingUploadPurposeData, pendingUploads } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { mediaTypeEssence } from "@/api/lib/files/pdf-derivative-policy";
 import { resolveUploadMime } from "@/api/lib/files/upload-mime";
 import {
   type PresignedUploadHeaders,
   presignUploadUrl,
 } from "@/api/lib/s3-presign";
 import { sanitizeFilenamePreservingExtension } from "@/api/lib/sanitize-filename";
+import {
+  acceptsClientPreview,
+  clientPreviewTmpKey,
+} from "@/api/lib/uploads/client-preview";
 import {
   checkEntityCreateCapacityForInsert,
   checkEntityCreateTargetForInsert,
@@ -48,7 +53,14 @@ type ReservedUpload = {
   url: string;
   expiresAt: string;
   headers: PresignedUploadHeaders;
+  /** Where to PUT the declared client preview, when one was declared. */
+  preview?: { url: string; headers: PresignedUploadHeaders };
 };
+
+/** The signer's error for the client preview's URL, when signing it failed. */
+const previewSignFailure = (
+  signed: Awaited<ReturnType<typeof presignUploadUrl>> | null,
+) => (signed !== null && Result.isError(signed) ? signed.error : undefined);
 
 type ReservePresignedUploadProps = {
   safeDb: SafeDb;
@@ -103,14 +115,44 @@ export const reservePresignedUpload = async function* ({
     scope: { organizationId, workspaceId },
     tagAsTemporaryUpload: true,
   });
-  if (Result.isError(presign)) {
+  const clientPreview =
+    purposeData.type === "agent_skill" ? undefined : purposeData.clientPreview;
+  if (
+    clientPreview !== undefined &&
+    !acceptsClientPreview(mediaTypeEssence(resolvedMime))
+  ) {
+    return Result.err(
+      new HandlerError({
+        code: "upload_preview_unsupported",
+        status: 400,
+        message: "Only a HEIC or HEIF photo may carry a client preview",
+      }),
+    );
+  }
+  const previewPresign =
+    clientPreview === undefined
+      ? null
+      : await presignUploadUrl({
+          userId,
+          key: clientPreviewTmpKey(tmpKey),
+          expiresIn: PRESIGN_URL_EXPIRY_SECONDS,
+          contentType: clientPreview.mimeType,
+          contentLength: clientPreview.size,
+          sha256Base64: sha256HexToBase64(clientPreview.sha256Hex),
+          scope: { organizationId, workspaceId },
+          tagAsTemporaryUpload: true,
+        });
+  const signFailure = Result.isError(presign)
+    ? presign.error
+    : previewSignFailure(previewPresign);
+  if (Result.isError(presign) || signFailure !== undefined) {
     return Result.err(
       // The signer's own tagged error says what failed.
       classifyFailure(
         new HandlerError({
           status: 500,
           message: "Failed to issue upload URL",
-          cause: presign.error,
+          cause: signFailure,
         }),
         "tagged_failure",
       ),
@@ -186,5 +228,13 @@ export const reservePresignedUpload = async function* ({
     url: presign.value.url,
     expiresAt: urlExpiresAt.toISOString(),
     headers: presign.value.headers,
+    ...(previewPresign !== null && Result.isOk(previewPresign)
+      ? {
+          preview: {
+            url: previewPresign.value.url,
+            headers: previewPresign.value.headers,
+          },
+        }
+      : {}),
   });
 };
