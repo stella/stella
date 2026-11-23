@@ -498,15 +498,19 @@ describe("chat thread compactor", () => {
       captured.push(error);
     });
     modelSpy.mockImplementation(async ({ abortSignal }) => {
-      await new Promise<void>((resolve) => {
-        abortSignal?.addEventListener(
-          "abort",
-          () => {
-            resolve();
-          },
-          { once: true },
-        );
-      });
+      // The budget can end before dispatch on a loaded machine; a listener
+      // added after that would never fire.
+      if (abortSignal?.aborted !== true) {
+        await new Promise<void>((resolve) => {
+          abortSignal?.addEventListener(
+            "abort",
+            () => {
+              resolve();
+            },
+            { once: true },
+          );
+        });
+      }
       abortSignal?.throwIfAborted();
       return SUMMARY_MARKDOWN;
     });
