@@ -1991,7 +1991,7 @@
     "@silurus/ooxml": "0.89.11",
     "@stll/aho-corasick": "2.0.3",
     "@stll/aho-corasick-wasm": "2.0.3",
-    "@stll/anonymize": "3.0.7",
+    "@stll/anonymize": "4.0.0",
     "@stll/anonymize-data": "0.0.10",
     "@stll/anonymize-wasm": "3.0.7",
     "@stll/docx-core": "0.43.1",
@@ -2853,9 +2853,9 @@
 
     "@litko/yara-x-darwin-x64": ["@litko/yara-x-darwin-x64@0.13.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-Q63OOlyplDkpyvBKewU0bEMQbZMY/xFDYecaYPoQnemLYwZQ7X0X01a9lQrmEYGcLfKtXlLJTW7XtTeeKX9/PA=="],
 
-    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.13.0", "", { "os": "linux", "cpu": "arm64", "libc": "glibc" }, "sha512-F35SNKQgdjOhGPogOYQtdfhfTeGtFclacAVmCnsw6JFS60m7Tyfe20TGNAjky2uJzinjxtAgaUpQyJbqcSrgdw=="],
+    "@litko/yara-x-linux-arm64-gnu": ["@litko/yara-x-linux-arm64-gnu@0.13.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-F35SNKQgdjOhGPogOYQtdfhfTeGtFclacAVmCnsw6JFS60m7Tyfe20TGNAjky2uJzinjxtAgaUpQyJbqcSrgdw=="],
 
-    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.13.0", "", { "os": "linux", "cpu": "x64", "libc": "glibc" }, "sha512-6U8u8rU8i5tf9qIfhStbNTXaxBzNOJ3PqbDS+6m1Wgi0wXX1N7OqmHspzfRQ7udwW/U4JjSBX3GRSfZDF9YcXw=="],
+    "@litko/yara-x-linux-x64-gnu": ["@litko/yara-x-linux-x64-gnu@0.13.0", "", { "os": "linux", "cpu": "x64" }, "sha512-6U8u8rU8i5tf9qIfhStbNTXaxBzNOJ3PqbDS+6m1Wgi0wXX1N7OqmHspzfRQ7udwW/U4JjSBX3GRSfZDF9YcXw=="],
 
     "@litko/yara-x-win32-arm64-msvc": ["@litko/yara-x-win32-arm64-msvc@0.13.0", "", { "os": "win32", "cpu": "arm64" }, "sha512-DsGtBjG1yZHZTtbuTaYa6vIoWDDpnkRMTQk/gQyWrmKMAXE2YwiPy9gDYr+79ehMiM911AqR/A4TCGKkm8vxxQ=="],
 
@@ -2959,7 +2959,7 @@
 
     "@oozcitak/util": ["@oozcitak/util@10.0.0", "", {}, "sha512-hAX0pT/73190NLqBPPWSdBVGtbY6VOhWYK3qqHqtXQ1gK7kS2yz4+ivsN07hpJ6I3aeMtKP6J6npsEKOAzuTLA=="],
 
-    "@openrouter/sdk": ["@openrouter/sdk@1.5.103", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" }, "hasInstallScript": true }, "sha512-TfDg7s67+DsqSt4pGH5oIjsVNEwa9FDzigB3C8GJdjO0ebjXb9tHG4pWP5WQjIS8yLYDJK+gmNfBaTgjwgmp/g=="],
+    "@openrouter/sdk": ["@openrouter/sdk@1.5.103", "", { "dependencies": { "zod": "^3.25.0 || ^4.0.0" } }, "sha512-TfDg7s67+DsqSt4pGH5oIjsVNEwa9FDzigB3C8GJdjO0ebjXb9tHG4pWP5WQjIS8yLYDJK+gmNfBaTgjwgmp/g=="],
 
     "@opentelemetry/api": ["@opentelemetry/api@1.10.0", "", {}, "sha512-lMkyes8iHrG+mk6WH7X70MdCLI2RS0FwNBY1PyQ8UemaijE2m5mv5A0Niy3HtbYTFrgkUEQjFMXmSAk2hQDuPQ=="],
 
@@ -3453,23 +3453,23 @@
 
     "@stll/analytics-config": ["@stll/analytics-config@workspace:packages/analytics-config"],
 
-    "@stll/anonymize": ["@stll/anonymize@3.0.7", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "3.0.7", "@stll/anonymize-darwin-x64": "3.0.7", "@stll/anonymize-linux-arm64-gnu": "3.0.7", "@stll/anonymize-linux-x64-gnu": "3.0.7", "@stll/anonymize-win32-x64-msvc": "3.0.7" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-ZBaZi8CRlqATEDuW9YAHC9+GRbqGNuptpQYKuM4r06JKh62i70qPOhZ3KNe2I3g/DIxgJinXh7Fob3z8XV8JUg=="],
+    "@stll/anonymize": ["@stll/anonymize@4.0.0", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "4.0.0", "@stll/anonymize-darwin-x64": "4.0.0", "@stll/anonymize-linux-arm64-gnu": "4.0.0", "@stll/anonymize-linux-x64-gnu": "4.0.0", "@stll/anonymize-win32-x64-msvc": "4.0.0" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-jjyxMbm89X9rqnJ7DEwSop79d6ku9xL1hT8k7D8OvjDZDy9C0AdPcnZZESBP8X6evkxh5S37aAK5/LcJ8iWsOQ=="],
 
     "@stll/anonymize-chat": ["@stll/anonymize-chat@workspace:packages/anonymize-chat"],
 
-    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@3.0.7", "", { "os": "darwin", "cpu": "arm64" }, "sha512-YRRtRA4XpS+D+5t+q5oSXVsSuEKjMiX+WwhQyQfX063NDDuaPfJkPdg3ircm/m28XAGmmOMximnUcNVf1/jVGg=="],
+    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@4.0.0", "", { "os": "darwin", "cpu": "arm64" }, "sha512-pBvkVGqxCqzIkrDTcswZ72FEt3hioVFLcFtzub4mQo2UuexROIR+i/4zi9wTS16fTCrnF46mJAvteKkUBHHkmw=="],
 
-    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@3.0.7", "", { "os": "darwin", "cpu": "x64" }, "sha512-UTMTPN4tIo3dREUUokk192GciDKUmO/D32ivKeTUDx3Dil/MeRPiLNJuO3n+OQQK1WZNd7BxRsD2l6cOXX05JA=="],
+    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@4.0.0", "", { "os": "darwin", "cpu": "x64" }, "sha512-j/qO/NISmHMNL5hwhrA8QKKWZTtsp1G7xVtyoI2mgt7U5HM/0hNGWIWvekqLhSXZn1pyuAkRJmEcD66ncK365w=="],
 
     "@stll/anonymize-data": ["@stll/anonymize-data@0.0.10", "", {}, "sha512-Z6wxTw0dxpSV3htzWu2ROpy5mqdCBVMyyqVm07myA37w+KTk3AVfGaBlfwDDxj0DpSDyqukFxbc5psgroxZm+Q=="],
 
-    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@3.0.7", "", { "os": "linux", "cpu": "arm64" }, "sha512-412yXKzTEOxqvAcf/ns/XT/s4DdXQH736kUrdkRCtI/i3+A+mnoHZ0v/vyI5oVLPZibS/YKD1akCJV93XYvI9g=="],
+    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@4.0.0", "", { "os": "linux", "cpu": "arm64" }, "sha512-EOwvRTa2Bu/NQFYooe2C4yezgkMgM2+6X6rdpv3LpDTkRVw2aIeNz7MwrGs/Zc1umm+HuEjvfydMZkrIkycl+A=="],
 
-    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@3.0.7", "", { "os": "linux", "cpu": "x64" }, "sha512-qNHZC2dtF4JIDwvcBMuUzAtIKXszhEUYQjYgJ+1mVHQS9F+xyH83Rmc6pN69jOWaC4vlLoLwhHEtQppYLImP9g=="],
+    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@4.0.0", "", { "os": "linux", "cpu": "x64" }, "sha512-byjI9cjJBZsMFQjQr/MNvoHb1oDyEhTIEFQXw+ASI0wLR8bK139gfyI0DXdY/CNFAY8GbNZrMaVsCzZQjClIGg=="],
 
     "@stll/anonymize-wasm": ["@stll/anonymize-wasm@3.0.7", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-jHE9OeJIpc9gXngNNj6T15bgVY+h90HCR5ufDdR12QQR1bRM7Ou6yLTu3AC1lLKwgqxsflMrRw1RgDgP0DC/Rg=="],
 
-    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@3.0.7", "", { "os": "win32", "cpu": "x64" }, "sha512-barhpyw/U+8gYOxD6PpsgkfypOVLodmHyNlmkdVAfzB5Ek5hIpz2FU2bfmkGMVysV6+mF14DViWHUH1hOIqr9w=="],
+    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@4.0.0", "", { "os": "win32", "cpu": "x64" }, "sha512-3KHUGhpVvhjV6q0wiynthaMeUCM3H+E7eJGqlqPpnVTq2fv6dlfayB/wU+92SsqrD6XFqb2oXfjgbSR5MWMNBA=="],
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 
