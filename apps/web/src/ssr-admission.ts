@@ -129,7 +129,7 @@ export const createSsrAdmission = (
   };
 };
 
-export const shedSsrResponse = (): Response =>
+const shedSsrResponse = (): Response =>
   new Response("The server is busy. Please retry shortly.\n", {
     status: 503,
     headers: {
