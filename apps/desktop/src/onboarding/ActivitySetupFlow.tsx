@@ -6,13 +6,13 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 
+import { aiDraftsChoice } from "../activity/billing-draft-logic";
 import type { BillingDraftSettingsControl } from "../activity/billing-draft-settings";
 import type { Permission } from "../shared/permissions";
 import { DESKTOP_PLATFORM } from "../shared/use-clipboard-shortcut";
 import {
   ACTIVITY_SETUP_SCREENS,
   activitySetupScreens,
-  aiDraftsChoice,
   detailsScreenPermissions,
 } from "./activity-setup-steps";
 import type { ActivitySetupScreen } from "./activity-setup-steps";

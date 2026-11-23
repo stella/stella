@@ -38,6 +38,7 @@ import {
   decodeFilePartText,
   FILE_PART_PREVIEW_KIND,
   FILE_PART_UNAVAILABLE_LABEL,
+  filePartIsEmail,
   filePartOpensInside,
   type FilePartPreviewKind,
   filePartPreviewKind,
@@ -76,6 +77,13 @@ const OfficeDocumentCanvas = lazy(async () => {
   return { default: m.OfficeDocumentCanvas };
 });
 
+// An email part (a mailbox's message) opens in the email viewer an email
+// file opens in, loaded with the first one opened.
+const EmailHtmlViewer = lazy(async () => {
+  const m = await import("@/components/inspector/email-html-viewer");
+  return { default: m.EmailHtmlViewer };
+});
+
 /** Kinds whose preview zooms with the header's controls. */
 const isZoomablePreviewKind = (kind: FilePartPreviewKind) =>
   isFilePartPdfPreviewKind(kind) || kind === FILE_PART_PREVIEW_KIND.docx;
@@ -96,7 +104,7 @@ const usePartName = () => {
     part.fileName ?? t("emailViewer.unnamedAttachment");
 };
 
-const PartSaveControls = ({
+export const PartSaveControls = ({
   actions,
   compact,
   descriptionId,
@@ -133,7 +141,7 @@ const PartSaveControls = ({
   );
 };
 
-const PartDownloadButton = ({
+export const PartDownloadButton = ({
   actions,
   compact,
   fileName,
@@ -410,6 +418,9 @@ export const FilePartViewer = ({
   const kind = filePartPreviewKind(row.mediaType);
 
   const body = (() => {
+    if (filePartIsEmail(row)) {
+      return <EmailPart onOpen={setInside} row={row} source={source} />;
+    }
     if (filePartOpensInside(row)) {
       return (
         <FilesInside
@@ -577,6 +588,31 @@ const NoPreview = ({
     </div>
   );
 };
+
+/**
+ * An email part (a mailbox's message), shown as an email file is: its
+ * header, its body and its attachments, each opening in place in turn.
+ */
+const EmailPart = ({
+  onOpen,
+  row,
+  source,
+}: {
+  onOpen: (row: FilePartRow) => void;
+  row: FilePartRow;
+  source: FilePartSource;
+}) => (
+  <div className="bg-background flex min-h-0 flex-1 flex-col overflow-hidden rounded-sm">
+    <Suspense fallback={<Skeleton className="size-full rounded-sm" />}>
+      <EmailHtmlViewer
+        fieldId={source.fieldId}
+        onOpenPart={onOpen}
+        part={row.part}
+        workspaceId={source.workspaceId}
+      />
+    </Suspense>
+  </div>
+);
 
 /**
  * The files of a part that is itself a container, listed by the server down
@@ -821,7 +857,7 @@ const FilePartPreview = ({
       <PDFViewport
         buffer={content.data}
         className="document-preview-surface h-full w-full"
-        contentClassName="relative space-y-2 px-2 pt-2"
+        contentClassName="relative space-y-2 pt-2"
         fileId={viewId}
         pageSource="portfolio"
         renderPage={(props) => <PDFPage {...props} />}

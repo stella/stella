@@ -168,11 +168,11 @@ const CASES: Case[] = [
     expected: "text/plain",
   },
   {
-    rule: "single-byte text without a declared charset is opaque",
+    rule: "single-byte text without a declared charset is text in the charset it was saved in",
     bytes: windows1250,
     stated: "text/plain",
     fileName: "zaloba.txt",
-    expected: OPAQUE_EMBEDDED_MIME_TYPE,
+    expected: "text/plain",
   },
   {
     rule: "binary bytes under a declared charset are opaque",

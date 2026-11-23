@@ -39,6 +39,7 @@ const CORRESPONDENCE_LIST_COLUMNS = {
   assigneeId: correspondence.assigneeId,
   channel: correspondence.channel,
   dataBox: correspondence.dataBox,
+  certifiedEmail: correspondence.certifiedEmail,
   source: correspondence.source,
   sourceEntityId: correspondence.sourceEntityId,
   intake: correspondence.intake,
@@ -95,7 +96,7 @@ const cursorCodec = createTimestampIdCursorCodec({
 const config = {
   contract: "patch",
   description:
-    "List correspondence filed in a matter, newest received first; filter by channel (email or data_box). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation.",
+    "List correspondence filed in a matter, newest received first; filter by channel (email, data_box or pec). When intake is not direct, from, to, and the message date (sentAt) are asserted by the forwarder and are not verified; authentication verdicts in authenticatedSender describe the delivery, not the extracted original. A record whose source is upload was read from the file sourceEntityId in the matter (an email file, or a data-box .zfo file); its headers are as stated in that file and are not verified. A data_box record carries its envelope in dataBox (message ID, sender and recipient box IDs, names and reference numbers, delivery and acceptance times); its from and to addresses are box IDs and its subject is the message annotation. A pec record is an uploaded Italian certified email whose certifiedEmail carries the provider's certification data as stated in the file (not verified).",
   permissions: { workspace: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -179,6 +180,7 @@ const listCorrespondence = createSafeHandler(
           cursorTimestamp: _cursorTimestamp,
           channel,
           dataBox,
+          certifiedEmail,
           direction,
           source,
           sourceEntityId,
@@ -193,7 +195,7 @@ const listCorrespondence = createSafeHandler(
         }) => {
           const { direction: _direction, ...channelContent } =
             readCorrespondenceChannel(
-              { channel, dataBox, direction },
+              { channel, dataBox, certifiedEmail, direction },
               organizationBoxIds,
             );
           return {

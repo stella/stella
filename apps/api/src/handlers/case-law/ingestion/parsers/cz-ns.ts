@@ -42,6 +42,7 @@ import type {
 import { hasInlineChildren } from "@stll/legal-ast/inline";
 import { rewriteInlineWhitespace } from "@stll/legal-ast/inline-line";
 
+import { collapseHtmlWhitespace } from "@/api/lib/legal-search/document-builders/html-whitespace";
 import { courtParagraphNumbers } from "@/api/lib/legal-search/parsers/court-paragraph-numbers";
 import { withAttestedLetterSpacing } from "@/api/lib/legal-search/parsers/letter-spacing";
 import {
@@ -84,8 +85,10 @@ export const parseNsDecisionHtml = (
   const { canonical, source, relatedProceedingsTable } = extractNsMetadata($);
   const rawChunks = extractRawChunks($);
   const blocks = courtParagraphNumbers(
-    withAttestedLetterSpacing(
-      classifyBlocks(rawChunks, relatedProceedingsTable),
+    withRenderedWhitespace(
+      withAttestedLetterSpacing(
+        classifyBlocks(rawChunks, relatedProceedingsTable),
+      ),
     ),
     {
       parser: "cz-ns",
@@ -114,6 +117,22 @@ export const parseNsDecisionHtml = (
     fulltext,
   };
 };
+
+/**
+ * The print page indents with tabs and wraps its source lines; a browser
+ * shows every run of that whitespace as one space, and so does the text.
+ * Classification and letter spacing read the source spacing (a page number's
+ * indent, the wider gap after a spaced word), so this runs after both.
+ * Tables keep their tab-joined rows.
+ */
+const withRenderedWhitespace = (blocks: readonly Block[]): Block[] =>
+  blocks.map((block): Block => {
+    if (block.type !== "paragraph" && block.type !== "heading") {
+      return block;
+    }
+    const inlines = collapseHtmlWhitespace(block.inlines);
+    return { ...block, inlines, plainText: inlinesToPlainText(inlines).trim() };
+  });
 
 // ── Metadata extraction ────────────────────────────────────
 

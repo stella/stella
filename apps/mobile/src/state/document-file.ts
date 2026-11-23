@@ -16,6 +16,7 @@ import {
   filePartListSchema,
   isFilePartConvertedMediaType,
 } from "@stll/api-contract/file-parts";
+import { mailboxPreviewSchema } from "@stll/api-contract/mailbox";
 import { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import { structuredDocumentPreviewSchema } from "@stll/api-contract/structured-document";
 import { zipArchivePreviewSchema } from "@stll/api-contract/zip-archive";
@@ -185,6 +186,17 @@ type ZipArchiveDocumentFile = {
   >;
 };
 
+/** A mailbox (.mbox): its messages, each opening as an email. */
+type MailboxDocumentFile = {
+  readonly viewer: "mailbox";
+  readonly fileName: string;
+  readonly fieldId: string;
+  readonly preview: Result<
+    v.InferOutput<typeof mailboxPreviewSchema>,
+    ApiError
+  >;
+};
+
 /** An email file (.eml, .msg), certified (Italian PEC) or not. */
 type EmailDocumentFile = {
   readonly viewer: "email";
@@ -199,6 +211,7 @@ export type LegalDocumentFile =
   | DataBoxDocumentFile
   | EInvoiceDocumentFile
   | EmailDocumentFile
+  | MailboxDocumentFile
   | SignedDossierDocumentFile
   | StructuredDocumentFile
   | ZipArchiveDocumentFile;
@@ -282,6 +295,31 @@ export const readDocumentPartList = async ({
     source,
     path: `/v1/files/${encodeURIComponent(workspaceId)}/parts/${encodeURIComponent(fieldId)}?part=${encodeURIComponent(part)}`,
     schema: filePartListSchema,
+  });
+
+/**
+ * An email that is a part of a document's file, such as a mailbox's message,
+ * read as an email file is: its header, its text and its attachments, each
+ * opening by its path through the part.
+ */
+export const readDocumentEmailPart = async ({
+  fetch,
+  source,
+  workspaceId,
+  fieldId,
+  part,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly workspaceId: string;
+  readonly fieldId: string;
+  readonly part: string;
+}) =>
+  await requestApi({
+    fetch,
+    source,
+    path: `/v1/files/${encodeURIComponent(workspaceId)}/email-reading/${encodeURIComponent(fieldId)}?part=${encodeURIComponent(part)}`,
+    schema: emailReadingSchema,
   });
 
 /** The document has no file: it was created empty, or its file was removed. */
@@ -424,6 +462,20 @@ export const readDocumentFile = async ({
           fieldId,
           preview,
         } satisfies ZipArchiveDocumentFile);
+      }
+      case "mbox": {
+        const preview = await requestApi({
+          fetch,
+          source,
+          path: `/v1/files/${encodeURIComponent(workspaceId)}/mbox/${encodeURIComponent(fieldId)}`,
+          schema: mailboxPreviewSchema,
+        });
+        return Result.ok({
+          viewer: "mailbox",
+          fileName,
+          fieldId,
+          preview,
+        } satisfies MailboxDocumentFile);
       }
       case "ofd":
       case "uyap": {

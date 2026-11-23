@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import { decodeDeclared } from "@stll/mojibake/declared-charset";
+
 import { CompoundFile } from "@/api/lib/files/compound-file";
 import type { CompoundFileParseError } from "@/api/lib/files/compound-file";
 
@@ -44,6 +46,8 @@ const PROPERTY_ID = {
   attachmentShortFilename: "3704",
   attachmentContentId: "3712",
   attachmentMimeTag: "370e",
+  messageCodePage: "3ffd",
+  internetCodePage: "3fde",
 } as const;
 
 type OutlookMsgAttachment = {
@@ -127,7 +131,10 @@ const collectProperties = (
   return properties;
 };
 
-const readRecipients = (compoundFile: CompoundFile): OutlookMsgRecipient[] => {
+const readRecipients = (
+  compoundFile: CompoundFile,
+  readAnsi: AnsiReader,
+): OutlookMsgRecipient[] => {
   const recipientPaths = directStoragePaths(
     compoundFile,
     RECIPIENT_STORAGE_PREFIX,
@@ -138,10 +145,10 @@ const readRecipients = (compoundFile: CompoundFile): OutlookMsgRecipient[] => {
     const properties = collectProperties(compoundFile, path);
 
     recipients.push({
-      name: getString(properties, PROPERTY_ID.displayName),
+      name: getString(properties, PROPERTY_ID.displayName, readAnsi),
       email:
-        getString(properties, PROPERTY_ID.smtpAddress) ??
-        getString(properties, PROPERTY_ID.email),
+        getString(properties, PROPERTY_ID.smtpAddress, readAnsi) ??
+        getString(properties, PROPERTY_ID.email, readAnsi),
       type: getRecipientKind(getInt32(properties, PROPERTY_ID.recipientType)),
     });
   }
@@ -151,6 +158,7 @@ const readRecipients = (compoundFile: CompoundFile): OutlookMsgRecipient[] => {
 
 const readAttachments = (
   compoundFile: CompoundFile,
+  readAnsi: AnsiReader,
 ): OutlookMsgAttachment[] => {
   const attachmentPaths = directStoragePaths(
     compoundFile,
@@ -161,11 +169,15 @@ const readAttachments = (
   for (const path of attachmentPaths) {
     const properties = collectProperties(compoundFile, path);
     attachments.push({
-      contentId: getString(properties, PROPERTY_ID.attachmentContentId),
+      contentId: getString(
+        properties,
+        PROPERTY_ID.attachmentContentId,
+        readAnsi,
+      ),
       fileName:
-        getString(properties, PROPERTY_ID.attachmentFilename) ??
-        getString(properties, PROPERTY_ID.attachmentShortFilename),
-      mimeType: getString(properties, PROPERTY_ID.attachmentMimeTag),
+        getString(properties, PROPERTY_ID.attachmentFilename, readAnsi) ??
+        getString(properties, PROPERTY_ID.attachmentShortFilename, readAnsi),
+      mimeType: getString(properties, PROPERTY_ID.attachmentMimeTag, readAnsi),
       bytes: getBinary(properties, PROPERTY_ID.attachmentData),
     });
   }
@@ -216,9 +228,13 @@ const getRecipientKind = (
   return "to";
 };
 
+/** Reads an 8-bit string property's bytes as text. */
+type AnsiReader = (bytes: Uint8Array) => string;
+
 const getString = (
   properties: Map<string, MsgProperty>,
   propertyId: string,
+  readAnsi: AnsiReader,
 ): string | null => {
   const unicode = getProperty(
     properties,
@@ -231,7 +247,7 @@ const getString = (
 
   const ansi = getProperty(properties, propertyId, PROPERTY_TYPE.ansiString);
   if (ansi) {
-    return normalizeString(decodeAnsi(ansi.bytes));
+    return normalizeString(readAnsi(ansi.bytes));
   }
 
   return null;
@@ -245,7 +261,9 @@ const getBinaryText = (
   if (!property) {
     return null;
   }
-  return normalizeString(new TextDecoder().decode(property.bytes));
+  return normalizeString(
+    decodeDeclared(property.bytes, { contentType: null }).text,
+  );
 };
 
 const getBinary = (
@@ -290,8 +308,43 @@ const getFileTime = (
 const decodeUtf16 = (bytes: Uint8Array): string =>
   Buffer.from(bytes).toString("utf16le");
 
-const decodeAnsi = (bytes: Uint8Array): string =>
-  new TextDecoder("windows-1252").decode(bytes);
+/** Code pages outside the numbered Windows and ISO-8859 ranges. */
+const CODE_PAGE_LABELS: ReadonlyMap<number, string> = new Map([
+  [866, "ibm866"],
+  [932, "shift_jis"],
+  [936, "gbk"],
+  [949, "euc-kr"],
+  [950, "big5"],
+  [20_866, "koi8-r"],
+  [21_866, "koi8-u"],
+  [65_001, "utf-8"],
+]);
+
+/** WHATWG labels of the Windows code page numbers a message can state. */
+const codePageLabel = (codePage: number): string | null => {
+  if (codePage === 874 || (codePage >= 1250 && codePage <= 1258)) {
+    return `windows-${codePage}`;
+  }
+  if (codePage >= 28_591 && codePage <= 28_605) {
+    return `iso-8859-${codePage - 28_590}`;
+  }
+  return CODE_PAGE_LABELS.get(codePage) ?? null;
+};
+
+/**
+ * Reads 8-bit string properties in the code page the message states
+ * (PR_MESSAGE_CODEPAGE, else PR_INTERNET_CPID); a message that states none,
+ * or one the platform cannot decode, is read as the owner reads bytes that
+ * declare no charset.
+ */
+const ansiReader = (rootProperties: Map<string, MsgProperty>): AnsiReader => {
+  const codePage =
+    getInt32(rootProperties, PROPERTY_ID.messageCodePage) ??
+    getInt32(rootProperties, PROPERTY_ID.internetCodePage);
+  const label = codePage === null ? null : codePageLabel(codePage);
+  const contentType = label === null ? null : `text/plain; charset=${label}`;
+  return (bytes) => decodeDeclared(bytes, { contentType }).text;
+};
 
 const normalizeString = (value: string): string | null => {
   const trimmed = value.replaceAll("\u0000", "").trim();
@@ -307,15 +360,18 @@ export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
     CompoundFile.parse(new Uint8Array(fileBuffer)),
   );
   const rootProperties = collectProperties(compoundFile, []);
-  const recipients = readRecipients(compoundFile);
-  const attachments = readAttachments(compoundFile);
+  const readAnsi = ansiReader(rootProperties);
+  const recipients = readRecipients(compoundFile, readAnsi);
+  const attachments = readAttachments(compoundFile, readAnsi);
+  const rootString = (propertyId: string) =>
+    getString(rootProperties, propertyId, readAnsi);
 
   return {
-    subject: getString(rootProperties, PROPERTY_ID.subject),
-    fromName: getString(rootProperties, PROPERTY_ID.senderName),
+    subject: rootString(PROPERTY_ID.subject),
+    fromName: rootString(PROPERTY_ID.senderName),
     fromEmail:
-      getString(rootProperties, PROPERTY_ID.senderSmtpAddress) ??
-      getString(rootProperties, PROPERTY_ID.senderEmail),
+      rootString(PROPERTY_ID.senderSmtpAddress) ??
+      rootString(PROPERTY_ID.senderEmail),
     to: recipients.filter((recipient) => recipient.type === "to"),
     cc: recipients.filter((recipient) => recipient.type === "cc"),
     bcc: recipients.filter((recipient) => recipient.type === "bcc"),
@@ -323,13 +379,13 @@ export const parseOutlookMsg = (fileBuffer: ArrayBuffer): OutlookMsgEmail => {
       getFileTime(rootProperties, PROPERTY_ID.messageDeliveryTime) ??
       getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
     submittedAt: getFileTime(rootProperties, PROPERTY_ID.clientSubmitTime),
-    messageId: getString(rootProperties, PROPERTY_ID.internetMessageId),
-    inReplyTo: getString(rootProperties, PROPERTY_ID.inReplyToId),
-    references: getString(rootProperties, PROPERTY_ID.internetReferences),
+    messageId: rootString(PROPERTY_ID.internetMessageId),
+    inReplyTo: rootString(PROPERTY_ID.inReplyToId),
+    references: rootString(PROPERTY_ID.internetReferences),
     html:
-      getString(rootProperties, PROPERTY_ID.bodyHtml) ??
+      rootString(PROPERTY_ID.bodyHtml) ??
       getBinaryText(rootProperties, PROPERTY_ID.bodyHtml),
-    text: getString(rootProperties, PROPERTY_ID.body),
+    text: rootString(PROPERTY_ID.body),
     attachments,
   };
 };

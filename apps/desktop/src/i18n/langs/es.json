@@ -10,7 +10,7 @@
     "aiDraftAllow": "Permitir",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Tarea {task} · Actividad {activity}",
-    "aiDraftConsent": "stella IA puede redactar descripciones a partir del asunto, la fecha, la duración y los nombres de aplicaciones de cada registro, además de los nombres de documentos y títulos de ventana que se muestran aquí cuando los registras. Tus registros anteriores del asunto le ayudan a seguir tu forma de escribir. Nada más sobre tu día sale de este ordenador.",
+    "aiDraftConsent": "Para redactar una descripción, stella IA usa: {inputs}. Todo va {provider} solo para redactar el borrador. Nada más sobre tu día sale de este ordenador.",
     "aiDraftConsentRequired": "Vuelve a permitir stella IA para redactar esta descripción.",
     "aiDraftDisclosure": "Las propuestas de IA son sugerencias que stella genera a partir del registro que revisas, tus registros anteriores del asunto y, si tu despacho las ha añadido, sus normas de facturación. Revisa cada registro antes de crearlo.",
     "aiDraftEarlierEntries": "{count, plural, one {Sigue # registro anterior} other {Sigue # registros anteriores}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella IA está desactivado en este ordenador. Tu retirada se enviará a stella en cuanto esté disponible.",
     "browserAnsweredAppNameOnly": "De <bdi>{browser}</bdi> solo se registra el nombre de la aplicación. Puede cambiarlo en Ajustes.",
     "browserAnsweredTitles": "Se registran los títulos de las pestañas en <bdi>{browser}</bdi>. Puede cambiarlo en Ajustes.",
-    "browserPrivacyNote": "Las ventanas privadas también pueden registrarse; pause el registro o excluya el navegador mientras navega en privado.",
+    "browserPrivacyNote": "stella no reconoce todas las ventanas privadas, así que pausa el registro antes de navegar en privado.",
     "browserQuestionAppNameOnly": "Solo el nombre de la aplicación",
-    "browserQuestionDescription": "Los títulos de las pestañas ayudan a describir el trabajo. stella no reconoce todas las ventanas privadas, así que pausa el registro antes de navegar en privado.",
+    "browserQuestionDescription": "Los títulos de las pestañas ayudan a describir el trabajo.",
     "browserQuestionLater": "Decidir más tarde",
     "browserQuestionRecordTitles": "Registrar títulos",
     "browserQuestionTitle": "¿Registrar también los títulos de las pestañas en <bdi>{browser}</bdi>?",
@@ -103,6 +103,18 @@
     "detectCalls": "Registrar llamadas",
     "detectCallsDescription": "Mientras Teams, Zoom o un navegador usan tu micrófono, ese tiempo cuenta como la llamada, aunque solo escuches o trabajes en otra aplicación. Nunca se graba audio.",
     "disclosure": {
+      "aiDraftInputs": {
+        "appNames": "los nombres de aplicaciones",
+        "billingFormat": "el formato de facturación del cliente",
+        "date": "la fecha",
+        "duration": "la duración",
+        "earlierDescriptions": "tus descripciones anteriores del asunto",
+        "firmGuidelines": "las posibles normas de facturación de tu despacho",
+        "instructions": "las instrucciones que escribas",
+        "matter": "el asunto",
+        "titles": "los títulos de ventana y nombres de documentos registrados"
+      },
+      "aiDraftProvider": "al proveedor de IA que usa tu despacho, o al de stella IA",
       "control": "No se registra nada hasta que pulses Empezar a registrar. Puedes pausar, excluir aplicaciones o eliminar cualquier día cuando quieras.",
       "never": {
         "audio": "Sonido del micrófono",
@@ -120,7 +132,7 @@
       },
       "recordedTitle": "Qué se registra",
       "sent": {
-        "aiDrafts": "Borradores de stella IA que pidas, una vez permitidos: asunto, fecha, duración y nombres de aplicaciones del registro, sus títulos de ventana y nombres de documentos cuando se registran, y las instrucciones que escribas. stella añade tus descripciones anteriores del asunto, el formato de facturación del cliente y, si tu despacho las usa, sus normas de facturación. Todo va al proveedor de IA que usa tu despacho, o al de stella IA, solo para redactar el borrador; stella no guarda el borrador ni lo que se envió para él.",
+        "aiDrafts": "Borradores de stella IA que pidas, una vez permitidos. Para cada uno, stella IA usa: {inputs}. Todo va {provider} solo para redactar el borrador; stella no guarda el borrador ni lo que se envió para él.",
         "timeEntries": "Registros de tiempo que crees: asunto, fecha, duración, descripción, si es facturable y los códigos de facturación que tenga"
       },
       "sentTitle": "Qué sale de este ordenador",

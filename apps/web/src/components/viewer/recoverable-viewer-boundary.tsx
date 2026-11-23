@@ -40,6 +40,7 @@ export type ViewerSurface =
   | "inspector-data-box"
   | "inspector-e-invoice"
   | "inspector-zip"
+  | "inspector-mbox"
   | "inspector-pdf"
   | "inspector-text"
   | "search-preview-pdf";

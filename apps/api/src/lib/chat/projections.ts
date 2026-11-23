@@ -298,6 +298,8 @@ export const SEARCH_ACROSS_MATTERS_PROJECTION = v.strictObject({
       entityId: chatEntityRef({ from: "sibling", key: "workspaceId" }),
       workspaceId: chatRef("matter"),
       workspaceName: v.string(),
+      // The index title: the entity name, else its file name or the start
+      // of its text, so it is document content like the headline.
       name: contentText(),
       kind: v.picklist(ENTITY_KINDS),
       headline: v.nullable(contentText()),

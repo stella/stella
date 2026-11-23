@@ -87,6 +87,11 @@ const ZipArchiveViewer = lazy(async () => {
   return { default: m.ZipArchiveViewer };
 });
 
+const MailboxViewer = lazy(async () => {
+  const m = await import("@/components/inspector/mailbox-viewer");
+  return { default: m.MailboxViewer };
+});
+
 const StructuredDocumentViewer = lazy(async () => {
   const m = await import("@/components/inspector/structured-document-viewer");
   return { default: m.StructuredDocumentViewer };
@@ -161,7 +166,51 @@ const legalFileViewers = {
     download: "common.downloadOriginal",
     surface: "inspector-zip",
   },
+  mbox: {
+    Viewer: MailboxViewer,
+    unreadable: "inspector.mailbox.unreadable",
+    download: "common.downloadOriginal",
+    surface: "inspector-mbox",
+  },
 } as const satisfies Record<LegalFileFormatKind, LegalFileViewer>;
+
+/**
+ * A legal file in its format's viewer; a file its reader refuses shows why,
+ * with its download.
+ */
+const LegalFileTabViewer = ({
+  kind,
+  onDownload,
+  pdfView,
+  tab,
+}: {
+  kind: LegalFileFormatKind;
+  onDownload: () => void;
+  pdfView: LegalFilePdfView;
+  tab: FileTab;
+}) => {
+  const t = useTranslations();
+  const { Viewer, unreadable, download, surface } = legalFileViewers[kind];
+  return (
+    <RecoverableViewerBoundary
+      finalFallback={(error) =>
+        isPreviewUnavailableError(error) ? (
+          <FilePreviewUnavailable
+            downloadLabel={t(download)}
+            message={t(unreadable)}
+            onDownload={onDownload}
+          />
+        ) : undefined
+      }
+      onDownload={onDownload}
+      surface={surface}
+    >
+      <Suspense fallback={<PeekSuspenseFallback />}>
+        <Viewer onDownload={onDownload} pdfView={pdfView} tab={tab} />
+      </Suspense>
+    </RecoverableViewerBoundary>
+  );
+};
 
 const OfficeFileViewer = lazy(async () => {
   const m = await import("@/components/office/office-file-viewer");
@@ -319,34 +368,17 @@ const FileTabViewerComponent = ({
       case "isdoc":
       case "isdocx":
       case "xml":
-      case "zip": {
-        const { Viewer, unreadable, download, surface } =
-          legalFileViewers[nativePreviewKind];
+      case "zip":
+      case "mbox":
         return (
-          <RecoverableViewerBoundary
-            finalFallback={(error) =>
-              isPreviewUnavailableError(error) ? (
-                <FilePreviewUnavailable
-                  downloadLabel={t(download)}
-                  message={t(unreadable)}
-                  onDownload={handleDownload}
-                />
-              ) : undefined
-            }
+          <LegalFileTabViewer
             key={tab.id}
+            kind={nativePreviewKind}
             onDownload={handleDownload}
-            surface={surface}
-          >
-            <Suspense fallback={<PeekSuspenseFallback />}>
-              <Viewer
-                onDownload={handleDownload}
-                pdfView={legalFilePdfView}
-                tab={tab}
-              />
-            </Suspense>
-          </RecoverableViewerBoundary>
+            pdfView={legalFilePdfView}
+            tab={tab}
+          />
         );
-      }
       case "email":
         if (entity.shouldSurfaceEmailResolutionError) {
           return (
@@ -479,6 +511,7 @@ const FileTabViewerComponent = ({
                 : undefined
             }
             scaleOffset={scaleOffset}
+            underOverlayBar={isZoomOverlayVisible}
             viewId={peekPdfViewId}
             workspaceId={tab.workspaceId}
           />

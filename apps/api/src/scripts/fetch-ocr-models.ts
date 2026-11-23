@@ -40,7 +40,7 @@ const MODEL_SOURCES = {
 const DOWNLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 const DOWNLOAD_MAX_BYTES = 64 * 1024 * 1024;
 const MAX_REDIRECT_HOPS = 4;
-const DOWNLOAD_ATTEMPTS = 3;
+const DOWNLOAD_ATTEMPTS = 5;
 const RETRY_BASE_DELAY_MS = 5000;
 
 const targetDir = path.resolve(process.argv[2] ?? "ocr-models");

@@ -2012,6 +2012,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DEV_INSTANCE",
   "STELLA_DOCKER_KEEPER_LABEL",
   "STELLA_INFRA_OFFSET",
+  // The image a Postgres suite's own throwaway cluster runs: CI's service image.
+  "STELLA_ISOLATED_POSTGRES_IMAGE",
   // Prevents recursive spawning of native file-mode test subprocesses.
   "STELLA_LOCAL_FILE_CHILD",
   "STELLA_PORT_OFFSET",

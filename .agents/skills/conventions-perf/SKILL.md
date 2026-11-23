@@ -95,7 +95,10 @@ census. Do not infer API coverage from source regexes or MCP coverage from name
 prefixes. Every exemption carries a concrete reason in a shrink-only ledger;
 entries can be removed as coverage lands, never added to silence a new failure.
 `pendingWriteHarness` records the current mutating surfaces until their harness
-lands and obeys the same shrink-only rule.
+lands. Existing entries are shrink-only. A write route that the same change
+adds may enter with its reason (`withNewWriteRoutes` in
+`apps/api/src/tests/read-scaling/surface.ts`); its entry leaves once
+`writeScalingScenarios` measures it.
 
 Mutation-check each guard: introduce the excess work or remove a coverage case,
 confirm that the relevant assertion fails, then restore the implementation. Record

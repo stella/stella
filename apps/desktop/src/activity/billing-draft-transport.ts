@@ -5,12 +5,22 @@ import type { DesktopBillingDraftRequest } from "@stll/api-contract/desktop-bill
 
 import { draftFailureKind } from "./billing-draft-logic";
 
+/**
+ * Consent as this window knows it. A grant counts only once the server
+ * confirms it; one it refused, or never answered, leaves `grant-refused`, which
+ * the next read replaces and a retry starts again. A withdrawal counts at
+ * once and stays until the server confirms it: `pending-withdrawal` while it
+ * is sent, `withdrawal-unconfirmed` once a send failed or a restart found it
+ * unsent; only a confirmed withdrawal or a new grant ends it.
+ */
 export type DraftConsentState =
   | { status: "unavailable" }
   | { status: "revoked" }
   | { status: "granted" }
   | { status: "pending-grant" }
-  | { status: "pending-withdrawal" };
+  | { status: "grant-refused" }
+  | { status: "pending-withdrawal" }
+  | { status: "withdrawal-unconfirmed" };
 export type DraftConsentStatus = DraftConsentState["status"];
 const WITHDRAWAL_KEY = "billing-draft-withdrawal:";
 const CONSENT_PROOF = Symbol("current drafting consent");
@@ -70,6 +80,12 @@ export class BillingDraftConsent {
       listener();
     }
   }
+  #withdrawalStored() {
+    return (
+      this.#scopeKey !== null &&
+      localStorage.getItem(WITHDRAWAL_KEY + this.#scopeKey) !== null
+    );
+  }
   configure(scopeKey: string) {
     if (scopeKey === this.#scopeKey) {
       return;
@@ -79,7 +95,7 @@ export class BillingDraftConsent {
     this.#change(
       pending === null
         ? { status: "unavailable" }
-        : { status: "pending-withdrawal" },
+        : { status: "withdrawal-unconfirmed" },
     );
   }
   captureScope() {
@@ -99,10 +115,12 @@ export class BillingDraftConsent {
     switch (this.#state.status) {
       case "pending-grant":
       case "pending-withdrawal":
+      case "withdrawal-unconfirmed":
         return;
       case "unavailable":
       case "revoked":
       case "granted":
+      case "grant-refused":
         this.#change({ status });
         return;
       default:
@@ -139,9 +157,43 @@ export class BillingDraftConsent {
     this.#change({ status: value });
     return true;
   }
+  /** Settles the save begun at `generation` when the server did not confirm
+   * it; a later save or account change has already moved on. */
+  fail(generation: number) {
+    if (this.isCurrent(generation)) {
+      this.#settleUnconfirmed();
+    }
+  }
+  /** No answer will confirm the save on its way, so the choice can be made
+   * again: a grant stops counting as on its way, and a withdrawal stays in
+   * force, unconfirmed, also under a re-grant that did not go through. */
+  #settleUnconfirmed() {
+    switch (this.#state.status) {
+      case "pending-grant":
+        this.#change(
+          this.#withdrawalStored()
+            ? { status: "withdrawal-unconfirmed" }
+            : { status: "grant-refused" },
+        );
+        return;
+      case "pending-withdrawal":
+        this.#change({ status: "withdrawal-unconfirmed" });
+        return;
+      case "unavailable":
+      case "revoked":
+      case "granted":
+      case "grant-refused":
+      case "withdrawal-unconfirmed":
+        return;
+      default:
+        this.#state satisfies never;
+        panic("Unknown billing draft consent state");
+    }
+  }
   invalidate() {
     // Cancel in-flight proofs and acknowledgements without losing durable local intent.
     this.#generation += 1;
+    this.#settleUnconfirmed();
     this.refresh("unavailable");
   }
   async request(request: DesktopBillingDraftRequest) {
