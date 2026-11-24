@@ -33,7 +33,6 @@ import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
 import { acceptProfessionalUse } from "@/api/lib/auth/professional-use";
 import { createSignedSessionCookieValue } from "@/api/lib/auth/signed-session-cookie";
-import { clearAccountProfileLocale } from "@/api/lib/db/account-row";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import { insertOrganizationWithEvaluation } from "@/api/lib/db/organization-creation";
 import { readBounded } from "@/api/lib/db/read-bounded";
@@ -196,13 +195,11 @@ export const mintSmokeSession = async (
   // A real new account has accepted the professional-use statement before it
   // works in the product. The synthetic principal accepts as its operator on
   // every mint, so a principal created before acceptances existed converges.
-  // Every smoke run shares the principal, so a profile language one run left
-  // behind would leak into the next: each mint returns it to a new account's
-  // unset default.
   await withAggregateTransaction(rootDb, async (tx) => {
-    const userId = brandPersistedUserId(record.user.id);
-    await acceptProfessionalUse({ tx, userId });
-    await clearAccountProfileLocale(tx, userId);
+    await acceptProfessionalUse({
+      tx,
+      userId: brandPersistedUserId(record.user.id),
+    });
   });
 
   // No cleanup of prior rows: sessions expire after 15 minutes and
