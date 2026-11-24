@@ -35,6 +35,7 @@ export const LOCAL_ONLY_FEATURES = [
         "src/clipboard/clips-copy-routing.ts",
         "src/registry/RegistrySearch.tsx",
         "src/shared/use-clipboard-shortcut.ts",
+        "src/shared/use-dictation-availability.ts",
       ],
     },
     windows: ["clipboard", "clipboard-editor"],

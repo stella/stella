@@ -53,6 +53,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
     "src/mainview/UpdateCheck.tsx",
     "src/shared/ShortcutRecorder.tsx",
     "src/shared/use-clipboard-shortcut.ts",
+    "src/shared/use-dictation-availability.ts",
   ],
   "src-tauri/capabilities/accessibility-guide.json": [
     "src/onboarding/AccessibilityGuideApp.tsx",

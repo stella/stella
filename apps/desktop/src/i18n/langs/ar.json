@@ -355,6 +355,7 @@
     "encryptedHistory": "السجل مُشفَّر على هذا الجهاز",
     "enterGroupName": "أدخل اسم المجموعة.",
     "errorOpenStella": "تعذّر فتح stella.",
+    "errorOpenTranscribeRecording": "تعذّر فتح نافذة تحويل التسجيل إلى نص.",
     "errorPaste": "تعذّر نسخ هذا العنصر.",
     "errorReadHistory": "تعذّر تحميل سجل الحافظة.",
     "errorUpdateHistory": "تعذّر تحديث سجل الحافظة.",

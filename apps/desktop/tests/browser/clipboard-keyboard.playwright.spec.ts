@@ -10,7 +10,7 @@ import type {
 } from "../../src/clipboard/clipboard-types";
 import arMessages from "../../src/i18n/langs/ar.json" with { type: "json" };
 import enMessages from "../../src/i18n/langs/en.json" with { type: "json" };
-import { installTauriIpc, tauriInvocations } from "./tauri-ipc";
+import { emitTauriEvent, installTauriIpc, tauriInvocations } from "./tauri-ipc";
 
 const CLIPBOARD_ITEMS = Array.from({ length: 14 }, (_, index) => {
   const item = {
@@ -54,10 +54,13 @@ const SNAPSHOT = {
   welcomeStatus: "completed",
 } satisfies ClipboardSnapshot;
 
+type DictationOffer = "available" | "unavailable";
+
 type NativeBoundaryOptions = {
   language: "ar" | "en";
   groups?: ClipboardSnapshot["groups"];
   copyLifecycle?: "keepVisible" | "hideUntilReopened";
+  dictation?: DictationOffer;
 };
 
 const installNativeBoundary = async (
@@ -66,6 +69,7 @@ const installNativeBoundary = async (
     language,
     groups = SNAPSHOT.groups,
     copyLifecycle = "keepVisible",
+    dictation = "unavailable",
   }: NativeBoundaryOptions,
 ) => {
   expect(isClipboardSnapshot(SNAPSHOT)).toBe(true);
@@ -77,6 +81,7 @@ const installNativeBoundary = async (
       nativeLanguage: language,
       nativeBlurEvent: TauriEvent.WINDOW_BLUR,
       nativeCopyLifecycle: copyLifecycle,
+      nativeDictation: dictation,
     },
     handlers: (
       {
@@ -84,10 +89,19 @@ const installNativeBoundary = async (
         nativeLanguage,
         nativeBlurEvent,
         nativeCopyLifecycle,
+        nativeDictation,
       },
       { emit, invocations },
     ) => {
       let session = 1;
+      let dictationOffer = nativeDictation;
+      Reflect.set(
+        window,
+        "__STELLA_TEST_SET_DICTATION__",
+        (next: DictationOffer) => {
+          dictationOffer = next;
+        },
+      );
       let latestCapture: ClipboardCaptureUpdate | null = null;
       Reflect.set(
         window,
@@ -236,6 +250,9 @@ const installNativeBoundary = async (
           ...clipboardSnapshot,
           sourceAppExclusions: [],
         }),
+        dictation_get_snapshot: () => ({
+          available: dictationOffer === "available",
+        }),
         get_desktop_language: () => nativeLanguage,
         registry_get_state: () => ({ status: "disconnected" }),
         is_autostart_enabled: () => false,
@@ -382,6 +399,40 @@ test("captures use a caller-scoped delta and recover a burst revision gap", asyn
         ).length,
     )
     .toBe(snapshotsBeforeBurst + 1);
+});
+
+test("the transcribe button follows dictation availability and opens the Transcribe window", async ({
+  page,
+}) => {
+  await openClipboard(page, { language: "en" });
+  const transcribe = page
+    .locator(".clipboard-controls")
+    .getByRole("button", { name: enMessages.transcribe.title, exact: true });
+  await expect
+    .poll(async () => invocationCount(page, "dictation_get_snapshot"))
+    .toBe(1);
+  await expect(transcribe).toHaveCount(0);
+
+  await page.evaluate((next) => {
+    const setDictation: unknown = Reflect.get(
+      window,
+      "__STELLA_TEST_SET_DICTATION__",
+    );
+    if (typeof setDictation !== "function") {
+      throw new TypeError("Native dictation boundary is missing");
+    }
+    setDictation(next);
+  }, "available" satisfies DictationOffer);
+  await emitTauriEvent(page, "dictation-changed");
+  await expect(transcribe).toBeVisible();
+
+  await transcribe.click();
+  await expect
+    .poll(async () => invocationCount(page, "transcribe_open"))
+    .toBe(1);
+  await expect(
+    page.getByText(enMessages.clipboard.errorOpenTranscribeRecording),
+  ).toHaveCount(0);
 });
 
 const DIRECTIONS = [

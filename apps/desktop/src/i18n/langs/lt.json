@@ -355,6 +355,7 @@
     "encryptedHistory": "Istorija šiame įrenginyje užšifruota",
     "enterGroupName": "Įveskite grupės pavadinimą.",
     "errorOpenStella": "Nepavyko atidaryti programos stella.",
+    "errorOpenTranscribeRecording": "Nepavyko atidaryti transkribavimo lango.",
     "errorPaste": "Šio elemento nukopijuoti nepavyko.",
     "errorReadHistory": "Nepavyko įkelti iškarpinės istorijos.",
     "errorUpdateHistory": "Nepavyko atnaujinti iškarpinės istorijos.",
