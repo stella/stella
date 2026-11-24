@@ -183,8 +183,8 @@ const mount = ({
     id: user.activeOrganizationId,
     invitations: [],
     members: [],
-    name: "Test Org",
-    slug: "test-org",
+    name: "Harbrook Partners",
+    slug: "harbrook-partners",
   });
   const patches: PatchRequest[] = [];
   const boundary = spyOn(globalThis, "fetch").mockImplementation(

@@ -3,6 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract";
+import { classifyFailure } from "@stll/errors";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkillResources } from "@/api/db/schema";
@@ -212,27 +213,44 @@ const suggestSkillImprovements = createSafeRootHandler(
         }),
       catch: (cause) => {
         aiAnalytics.captureError(cause);
-        return new HandlerError({
-          status: 502,
-          code: AI_FAILURE_CODES.providerError,
-          message: "Could not suggest improvements. Please try again.",
-          cause,
-        });
+        return classifyFailure(
+          new HandlerError({
+            status: 502,
+            code: AI_FAILURE_CODES.provider_unavailable,
+            message: "Could not suggest improvements. Please try again.",
+            cause,
+          }),
+          "upstream_unavailable",
+        );
       },
     });
     if (Result.isError(generation)) {
       return Result.err(generation.error);
     }
+    if (Result.isError(generation.value)) {
+      return Result.err(
+        classifyFailure(
+          new HandlerError({
+            status: 502,
+            code: AI_FAILURE_CODES.provider_unavailable,
+            message: "Could not suggest improvements. Please try again.",
+            cause: generation.value.error,
+          }),
+          "upstream_unavailable",
+        ),
+      );
+    }
+    const generated = generation.value.value.value;
 
     const validated = validateSuggestedMarkdown({
       original: source.revision.body,
-      raw: generation.value.value.markdown,
+      raw: generated.markdown,
     });
     if (Result.isError(validated)) {
       return Result.err(validated.error);
     }
     const markdown = validated.value;
-    const summary = buildSummary(generation.value.value.summary);
+    const summary = buildSummary(generated.summary);
 
     const created = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
@@ -279,30 +297,39 @@ const validateSuggestedMarkdown = ({
   const markdown = stripMarkdownFences(raw);
   if (!markdown) {
     return Result.err(
-      new HandlerError({
-        status: 502,
-        code: AI_FAILURE_CODES.providerError,
-        message: "The suggested skill revision was empty. Please try again.",
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 502,
+          code: AI_FAILURE_CODES.empty_completion,
+          message: "The suggested skill revision was empty. Please try again.",
+        }),
+        "model_output_invalid",
+      ),
     );
   }
   if (markdown.length > LIMITS.agentSkillBodyMaxChars) {
     return Result.err(
-      new HandlerError({
-        status: 502,
-        code: AI_FAILURE_CODES.providerError,
-        message: "The suggested skill revision exceeds the maximum size.",
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 502,
+          code: AI_FAILURE_CODES.output_invalid,
+          message: "The suggested skill revision exceeds the maximum size.",
+        }),
+        "model_output_invalid",
+      ),
     );
   }
   if (!preservesFrontmatter({ original, revised: markdown })) {
     return Result.err(
-      new HandlerError({
-        status: 502,
-        code: AI_FAILURE_CODES.providerError,
-        message:
-          "The suggested skill revision dropped or altered its frontmatter. Please try again.",
-      }),
+      classifyFailure(
+        new HandlerError({
+          status: 502,
+          code: AI_FAILURE_CODES.output_invalid,
+          message:
+            "The suggested skill revision dropped or altered its frontmatter. Please try again.",
+        }),
+        "model_output_invalid",
+      ),
     );
   }
   return Result.ok(markdown);

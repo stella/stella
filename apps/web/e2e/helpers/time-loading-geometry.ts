@@ -141,7 +141,6 @@ const skillSurfaces = (skillId: string): readonly LoadingSurface[] => [
     landmarks: {
       heading: "[data-slot=skill-editor-identity]",
       instructions: "[data-slot=skill-editor-instructions]",
-      files: "[data-slot=skill-editor-files]",
     },
   },
 ];
