@@ -16,7 +16,12 @@ export const pickDefined = <
   const result: Partial<Pick<T, K>> = {};
   for (const key of keys) {
     if (obj[key] !== undefined) {
-      result[key] = obj[key];
+      Object.defineProperty(result, key, {
+        value: obj[key],
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
   return result;

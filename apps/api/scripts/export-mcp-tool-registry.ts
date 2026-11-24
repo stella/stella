@@ -167,9 +167,14 @@ await Bun.write(
 );
 process.stderr.write(`Wrote ${fileURLToPath(connectWeightPath)}\n`);
 
-const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> = {};
-const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
-  {};
+const projectedChatPolicyKindEntries = new Map<
+  string,
+  "internal" | "mutation"
+>();
+const projectedChatGrantPolicyEntries = new Map<
+  string,
+  "approve-once" | "grantable"
+>();
 for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
   if (
     tool.access !== "write" ||
@@ -178,14 +183,20 @@ for (const tool of MODEL_VISIBLE_MCP_TOOL_DEFINITIONS) {
     continue;
   }
 
-  projectedChatPolicyKinds[tool.name] = "mutation";
+  projectedChatPolicyKindEntries.set(tool.name, "mutation");
   // Account-control changes need fresh consent even when they are reversible.
-  projectedChatGrantPolicies[tool.name] =
+  projectedChatGrantPolicyEntries.set(
+    tool.name,
     tool.accountAccess === ACCOUNT_ACCESS.accountControl ||
-    tool.annotations.destructiveHint
+      tool.annotations.destructiveHint
       ? "approve-once"
-      : "grantable";
+      : "grantable",
+  );
 }
+const projectedChatPolicyKinds: Record<string, "internal" | "mutation"> =
+  Object.fromEntries(projectedChatPolicyKindEntries);
+const projectedChatGrantPolicies: Record<string, "approve-once" | "grantable"> =
+  Object.fromEntries(projectedChatGrantPolicyEntries);
 
 const generatedChatPolicyPath = new URL(
   "../../../packages/api-contract/src/mcp-chat-tool-policy.gen.ts",

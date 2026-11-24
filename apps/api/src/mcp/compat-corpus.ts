@@ -322,6 +322,7 @@ const searchStatutes = async ({
     },
   });
 
+  const cursorEntries = new Map<string, string | null>();
   const page: CorpusPage = {
     results: [],
     cursors: {},
@@ -329,7 +330,7 @@ const searchStatutes = async ({
   };
   for (const { jurisdiction, result } of outcomes) {
     if (result === null) {
-      page.cursors[jurisdiction] = null;
+      cursorEntries.set(jurisdiction, null);
       continue;
     }
     const refusal = searchRefusalResult(result);
@@ -342,7 +343,7 @@ const searchStatutes = async ({
         result: errorResult("Legislation search failed"),
       };
     }
-    page.cursors[jurisdiction] = result.nextCursor;
+    cursorEntries.set(jurisdiction, result.nextCursor);
     if (result.paginationOutcome.type === "truncated") {
       page.paginationOutcome = result.paginationOutcome;
     }
@@ -374,6 +375,7 @@ const searchStatutes = async ({
       });
     }
   }
+  page.cursors = Object.fromEntries(cursorEntries);
   return { type: "page", page };
 };
 

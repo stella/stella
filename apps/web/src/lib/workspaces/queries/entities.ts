@@ -103,24 +103,30 @@ export const toWorkspaceEntity = (
   entity: RawWorkspaceEntity,
 ): WorkspaceEntity => {
   const { fields: rawFields } = entity;
-  const fields: WorkspaceEntity["fields"] = {};
-  for (const field of rawFields) {
-    const propertyId = toSafeId<"property">(field.propertyId);
-    fields[propertyId] = {
-      id: toSafeId<"field">(field.id),
-      entityId: toSafeId<"entity">(field.entityId),
-      propertyId,
-      content: field.content,
-      ...(field.aiSettlement === undefined
-        ? {}
-        : { aiSettlement: field.aiSettlement }),
-      ocrExportStatus: field.ocrExportStatus ?? "unavailable",
-    };
-  }
-  const cellMetadata: WorkspaceEntity["cellMetadata"] = {};
-  for (const entry of entity.cellMetadata) {
-    cellMetadata[toSafeId<"property">(entry.propertyId)] = entry.metadata;
-  }
+  const fields: WorkspaceEntity["fields"] = Object.fromEntries(
+    rawFields.map((field) => {
+      const propertyId = toSafeId<"property">(field.propertyId);
+      return [
+        propertyId,
+        {
+          id: toSafeId<"field">(field.id),
+          entityId: toSafeId<"entity">(field.entityId),
+          propertyId,
+          content: field.content,
+          ...(field.aiSettlement === undefined
+            ? {}
+            : { aiSettlement: field.aiSettlement }),
+          ocrExportStatus: field.ocrExportStatus ?? "unavailable",
+        },
+      ] as const;
+    }),
+  );
+  const cellMetadata: WorkspaceEntity["cellMetadata"] = Object.fromEntries(
+    entity.cellMetadata.map((entry) => [
+      toSafeId<"property">(entry.propertyId),
+      entry.metadata,
+    ]),
+  );
   return {
     entityId: toSafeId<"entity">(entity.entityId),
     kind: entity.kind,

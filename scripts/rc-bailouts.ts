@@ -398,15 +398,15 @@ const byKey = (
   return left < right ? -1 : 1;
 };
 
-const toBaseline = (bailouts: Map<string, BailoutRecord>): Baseline => {
-  const current: Baseline = {};
-  for (const [key, { memos, reasons }] of [...bailouts.entries()].toSorted(
-    byKey,
-  )) {
-    current[key] = { memos, reasons: [...reasons].toSorted() };
-  }
-  return current;
-};
+const toBaseline = (bailouts: Map<string, BailoutRecord>): Baseline =>
+  Object.fromEntries(
+    [...bailouts.entries()]
+      .toSorted(byKey)
+      .map(([key, { memos, reasons }]) => [
+        key,
+        { memos, reasons: [...reasons].toSorted() },
+      ]),
+  );
 
 type BaselineDiff = {
   added: string[];

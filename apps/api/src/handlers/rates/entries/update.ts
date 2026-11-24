@@ -172,7 +172,7 @@ const updateRateEntry = createSafeHandler(
             ),
           );
 
-        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        const changeEntries = new Map<string, { old: unknown; new: unknown }>();
         for (const field of [
           "effectiveFrom",
           "effectiveTo",
@@ -180,9 +180,11 @@ const updateRateEntry = createSafeHandler(
         ] as const) {
           const next = updates[field];
           if (next !== undefined) {
-            changes[field] = { old: locked[field] ?? null, new: next };
+            changeEntries.set(field, { old: locked[field] ?? null, new: next });
           }
         }
+        const changes: Record<string, { old: unknown; new: unknown }> =
+          Object.fromEntries(changeEntries);
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.UPDATE,

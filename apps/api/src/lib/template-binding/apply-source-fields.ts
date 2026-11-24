@@ -303,6 +303,11 @@ export const applySourceFields = (
     // container object is usually absent; the nested-container writer
     // (`replaceResolvedValue`) would bail on the missing container and leave
     // the binding unwritten.
-    values[field.path] = resolved;
+    Object.defineProperty(values, field.path, {
+      value: resolved,
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
 };

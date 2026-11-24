@@ -2378,7 +2378,7 @@ const readAuthCensus = async (
   database: BetterAuthAuditDatabase,
   baseline: BetterAuthAuditBaseline | null,
 ) => {
-  const entries: BetterAuthAuditBaseline["tables"] = {};
+  const entries = new Map<string, BetterAuthAuditBaseline["tables"][string]>();
   const readModel = async (
     index: number,
   ): Promise<
@@ -2386,7 +2386,7 @@ const readAuthCensus = async (
   > => {
     const model = AUTH_BASELINE_MODEL_NAMES.at(index);
     if (model === undefined) {
-      return Result.ok(entries);
+      return Result.ok(Object.fromEntries(entries));
     }
     if (!isAuthModel(model)) {
       return Result.err(
@@ -2405,7 +2405,7 @@ const readAuthCensus = async (
     if (Result.isError(census)) {
       return census;
     }
-    entries[model] = census.value;
+    entries.set(model, census.value);
     return await readModel(index + 1);
   };
 

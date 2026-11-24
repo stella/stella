@@ -151,13 +151,12 @@ const updateTemplateHandler = async function* ({
           updatedAt: templates.updatedAt,
         });
 
-      const changes: Record<string, { old: unknown; new: unknown }> = {};
-      for (const [key, newValue] of Object.entries(updates)) {
-        if (key === "updatedAt") {
-          continue;
-        }
-        changes[key] = { old: null, new: newValue };
-      }
+      const changes: Record<string, { old: unknown; new: unknown }> =
+        Object.fromEntries(
+          Object.entries(updates)
+            .filter(([key]) => key !== "updatedAt")
+            .map(([key, newValue]) => [key, { old: null, new: newValue }]),
+        );
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,

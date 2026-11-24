@@ -126,11 +126,9 @@ export const PublicLawTable = <
     if (selectedIds === undefined) {
       return NO_SELECTION;
     }
-    const picked: RowSelectionState = {};
-    for (const id of selectedIds) {
-      picked[id] = true;
-    }
-    return picked;
+    return Object.fromEntries(
+      [...selectedIds].map((id) => [id, true] as const),
+    );
   })();
 
   const tableState = useTableState({

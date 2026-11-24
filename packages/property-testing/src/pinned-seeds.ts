@@ -27,7 +27,7 @@ export const parsePinnedSeeds = (
       new PropertyTestConfigError("Property seeds must be an object"),
     );
   }
-  const entries: Record<string, PinnedSeed[]> = {};
+  const entries = new Map<string, PinnedSeed[]>();
   const keys = Object.keys(value).filter((key) => !key.startsWith("$"));
   if (
     keys.some((key, index) => {
@@ -84,9 +84,9 @@ export const parsePinnedSeeds = (
         parsedSeeds.push(base);
       }
     }
-    entries[key] = parsedSeeds;
+    entries.set(key, parsedSeeds);
   }
-  return Result.ok(entries);
+  return Result.ok(Object.fromEntries(entries));
 };
 
 let cachedSeeds: Record<string, PinnedSeed[]> | undefined;

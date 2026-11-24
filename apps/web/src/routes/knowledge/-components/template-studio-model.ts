@@ -117,13 +117,18 @@ const parseValidation = (raw: unknown): FieldValidation | undefined => {
     "minItems",
     "maxItems",
   ] as const;
+  const numericBounds = new Map<(typeof numericKeys)[number], number>();
   for (const key of numericKeys) {
     const bound = parseBound(raw[key]);
     if (bound !== undefined) {
-      validation[key] = bound;
+      numericBounds.set(key, bound);
     }
   }
-  return Object.keys(validation).length > 0 ? validation : undefined;
+  const merged: FieldValidation = {
+    ...validation,
+    ...Object.fromEntries(numericBounds),
+  };
+  return Object.keys(merged).length > 0 ? merged : undefined;
 };
 
 /** Restore a persisted data binding ({@link FieldSource}) from a raw manifest

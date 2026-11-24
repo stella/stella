@@ -348,7 +348,26 @@ export const countClaims = (
     // original state and judged on refs it no longer has.
     const claim = resolveClaimView(rawClaim);
     const state = effectiveState(claim, claim.review);
-    byState[state] += 1;
+    switch (state) {
+      case "supported":
+        byState.supported += 1;
+        break;
+      case "tension":
+        byState.tension += 1;
+        break;
+      case "contradicted":
+        byState.contradicted += 1;
+        break;
+      case "nocover":
+        byState.nocover += 1;
+        break;
+      case "recordconflict":
+        byState.recordconflict += 1;
+        break;
+      case "notverifiable":
+        byState.notverifiable += 1;
+        break;
+    }
     if (claim.review?.status === "needs-evidence") {
       needsEvidence += 1;
     }

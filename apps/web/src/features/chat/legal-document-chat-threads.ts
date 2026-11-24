@@ -102,16 +102,23 @@ export const adoptRestoredLegalDocumentChatThreads = (
     return;
   }
   useLegalDocumentChatThreads.setState((state) => {
-    const next = { ...state.threadIdByDocumentKey };
-    let changed = false;
+    const updates = new Map<LegalDocumentChatKey, ChatThreadId>();
     for (const { documentKey, threadId } of restored) {
-      if (next[documentKey] === threadId) {
+      const current =
+        updates.get(documentKey) ?? state.threadIdByDocumentKey[documentKey];
+      if (current === threadId) {
         continue;
       }
-      next[documentKey] = threadId;
-      changed = true;
+      updates.set(documentKey, threadId);
     }
-    return changed ? { threadIdByDocumentKey: next } : state;
+    return updates.size > 0
+      ? {
+          threadIdByDocumentKey: {
+            ...state.threadIdByDocumentKey,
+            ...Object.fromEntries(updates),
+          },
+        }
+      : state;
   });
 };
 

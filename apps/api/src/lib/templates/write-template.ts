@@ -344,10 +344,13 @@ const writeTemplateAttempt = async function* ({
         ...(mode.type === "new-version"
           ? { currentVersion: { old: locked.currentVersion, new: version } }
           : {}),
+        ...Object.fromEntries(
+          Object.entries(metadata ?? {}).map(([key, value]) => [
+            key,
+            { old: null, new: value },
+          ]),
+        ),
       };
-      for (const [key, value] of Object.entries(metadata ?? {})) {
-        changes[key] = { old: null, new: value };
-      }
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.TEMPLATE,

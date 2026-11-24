@@ -132,7 +132,12 @@ const applyMessageDefaults = (
     }
     const current = target[key];
     if (current === undefined) {
-      target[key] = defaultValue;
+      Object.defineProperty(target, key, {
+        value: defaultValue,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       continue;
     }
     if (typeof current !== "string" && typeof defaultValue !== "string") {

@@ -97,13 +97,14 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
       const start = Math.min(lastSelectedIndex.current, index);
       const end = Math.max(lastSelectedIndex.current, index);
       const rows = table.getRowModel().rows;
-      const patch: RowSelectionState = {};
+      const patchEntries = new Map<string, true>();
       for (let i = start; i <= end; i++) {
         const r = rows[i];
         if (r) {
-          patch[r.id] = true;
+          patchEntries.set(r.id, true);
         }
       }
+      const patch: RowSelectionState = Object.fromEntries(patchEntries);
       table.setRowSelection((prev) => ({
         ...prev,
         ...patch,

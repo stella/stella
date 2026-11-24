@@ -59,15 +59,15 @@ export type CreateStellaIsolateDriverProps = {
 
 const buildRegistryFromBindings = (
   bindings: Record<string, ToolBinding>,
-): SandboxFunctionRegistry => {
-  const registry: SandboxFunctionRegistry = {};
-  for (const [name, binding] of Object.entries(bindings)) {
-    registry[name] = {
-      execute: async ({ input }) => await binding.execute(input),
-    };
-  }
-  return registry;
-};
+): SandboxFunctionRegistry =>
+  Object.fromEntries(
+    Object.entries(bindings).map(([name, binding]) => [
+      name,
+      {
+        execute: async ({ input }) => await binding.execute(input),
+      },
+    ]),
+  );
 
 /**
  * Alias each `external_<tool>` binding as an in-scope local bound to Stella's

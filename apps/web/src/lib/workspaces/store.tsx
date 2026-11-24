@@ -231,7 +231,7 @@ export const useWorkspaceStore = create<State & Actions>()(
       }),
     setPdfViewerState: (pdfViewer) =>
       set((state) => {
-        Object.assign(state.pdfViewer, pdfViewer);
+        state.pdfViewer = { ...state.pdfViewer, ...pdfViewer };
       }),
     resetPdfViewerState: () =>
       set((state) => {

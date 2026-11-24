@@ -192,7 +192,12 @@ const addCounts = <TKey extends string>(
     }
     const value = addCount(total[key], step[key]);
     if (value !== undefined) {
-      sum[key] = value;
+      Object.defineProperty(sum, key, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
   return sum;

@@ -1,4 +1,4 @@
-// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: [cz-ns] replay reads identity from the stored listing row where the envelope keeps one; every row that replayed before builds the same decision.
 // parser-output-unchanged: [cz-ns] the legacy identity fields decide which row a document writes to; the parsed output is unchanged.
@@ -523,19 +523,19 @@ const extractFulltext = (html: string): string | undefined => {
 const parseDetailLabels = (
   html: string,
 ): Record<string, string | undefined> => {
-  const result: Record<string, string | undefined> = {};
+  const result = new Map<string, string | undefined>();
 
   for (const [key, pattern] of Object.entries(LABEL_PATTERNS)) {
     const match = html.match(pattern);
     if (match?.groups?.["value"]) {
       const text = stripHtml(match.groups["value"]).trim();
       if (text) {
-        result[key] = text;
+        result.set(key, text);
       }
     }
   }
 
-  return result;
+  return Object.fromEntries(result);
 };
 
 /**

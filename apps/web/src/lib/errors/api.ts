@@ -593,6 +593,7 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   }
   if (
     code &&
+    Object.hasOwn(CODE_ERROR_KEYS, code) &&
     isKnownErrorCode(code) &&
     !(code === API_VALIDATION_ERROR_CODE && !isClientErrorStatus(status))
   ) {

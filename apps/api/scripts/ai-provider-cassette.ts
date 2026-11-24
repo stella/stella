@@ -140,13 +140,14 @@ const canonicalRequest = async ({
   }
   url.searchParams.sort();
   url.hash = "";
-  const canonicalHeaders: Record<string, string> = {};
+  const canonicalHeaderEntries = new Map<string, string>();
   for (const name of REQUEST_HEADER_NAMES) {
     const value = headers.get(name);
     if (value !== null) {
-      canonicalHeaders[name] = value;
+      canonicalHeaderEntries.set(name, value);
     }
   }
+  const canonicalHeaders = Object.fromEntries(canonicalHeaderEntries);
   const bodySha256 = hashSha256Hex(stableStringify(body));
   const canonical = {
     method: "POST" as const,

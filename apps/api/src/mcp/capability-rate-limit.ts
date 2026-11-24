@@ -145,8 +145,10 @@ const INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY: Readonly<
 const resolveInvokeRateLimitPolicy = (
   capabilityId: string,
 ): InvokeRateLimitPolicy =>
-  INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY[capabilityId] ??
-  DEFAULT_INVOKE_RATE_LIMIT_POLICY;
+  Object.hasOwn(INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY, capabilityId)
+    ? (INVOKE_RATE_LIMIT_POLICY_BY_CAPABILITY[capabilityId] ??
+      DEFAULT_INVOKE_RATE_LIMIT_POLICY)
+    : DEFAULT_INVOKE_RATE_LIMIT_POLICY;
 
 export const resolveInvokeRateLimit = (capabilityId: string): InvokeRateLimit =>
   resolveInvokeRateLimitPolicy(capabilityId).limit;

@@ -1,4 +1,4 @@
-// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks.
 /**
  * Block machinery shared by the CourtListener text formats: a builder that
@@ -545,7 +545,7 @@ export const cdataAsText = (root: ParentNode): void => {
 
 /** The graphic constructs below `root`, by element name. */
 export const graphicsIn = (root: ParentNode): Record<string, number> => {
-  const found: Record<string, number> = {};
+  const found = new Map<string, number>();
   const stack: AnyNode[] = [...root.children];
   while (stack.length > 0) {
     const node = stack.pop();
@@ -554,7 +554,7 @@ export const graphicsIn = (root: ParentNode): Record<string, number> => {
     }
     if (isTag(node) && GRAPHICS.has(nameOf(node))) {
       const name = nameOf(node);
-      found[name] = (found[name] ?? 0) + 1;
+      found.set(name, (found.get(name) ?? 0) + 1);
     }
     if (hasChildren(node)) {
       for (const child of node.children) {
@@ -562,7 +562,7 @@ export const graphicsIn = (root: ParentNode): Record<string, number> => {
       }
     }
   }
-  return found;
+  return Object.fromEntries(found);
 };
 
 /**
@@ -837,7 +837,7 @@ export const walkBody = ({
   readonly vocabulary: BodyVocabulary;
   readonly builder: UnitBuilder;
 }): { readonly unknownConstructs: Record<string, number> } => {
-  const unknownConstructs: Record<string, number> = {};
+  const unknownConstructs = new Map<string, number>();
   const inlineOptions = {
     // Publisher links are provenance, not Stella links: their words stay.
     sanitizeHref: () => undefined,
@@ -890,7 +890,7 @@ export const walkBody = ({
 
   const count = (element: Element) => {
     const name = nameOf(element);
-    unknownConstructs[name] = (unknownConstructs[name] ?? 0) + 1;
+    unknownConstructs.set(name, (unknownConstructs.get(name) ?? 0) + 1);
   };
 
   const preformatted = (nodes: readonly Inline[]): Inline[] =>
@@ -1034,5 +1034,5 @@ export const walkBody = ({
   };
 
   walkContainer(root, "body");
-  return { unknownConstructs };
+  return { unknownConstructs: Object.fromEntries(unknownConstructs) };
 };

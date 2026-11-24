@@ -33,16 +33,27 @@ export const ingestionHealthRecord = ({
   activeCycles,
   stalledAdapters,
 }: IngestionHealthRecordOptions) => {
-  const counts = {
-    sourceUnreachableCount: 0,
-    publisherRefusalCount: 0,
-    adapterStuckCount: 0,
-    deadlineCount: 0,
-    internalErrorCount: 0,
-  } satisfies Record<(typeof STOP_KIND_COUNT_FIELD)[IngestionStopKind], number>;
+  const countMap = new Map<
+    (typeof STOP_KIND_COUNT_FIELD)[IngestionStopKind],
+    number
+  >([
+    ["sourceUnreachableCount", 0],
+    ["publisherRefusalCount", 0],
+    ["adapterStuckCount", 0],
+    ["deadlineCount", 0],
+    ["internalErrorCount", 0],
+  ]);
   for (const stopKind of stalledAdapters.values()) {
-    counts[STOP_KIND_COUNT_FIELD[stopKind]]++;
+    const field = STOP_KIND_COUNT_FIELD[stopKind];
+    countMap.set(field, (countMap.get(field) ?? 0) + 1);
   }
+  const counts = {
+    sourceUnreachableCount: countMap.get("sourceUnreachableCount") ?? 0,
+    publisherRefusalCount: countMap.get("publisherRefusalCount") ?? 0,
+    adapterStuckCount: countMap.get("adapterStuckCount") ?? 0,
+    deadlineCount: countMap.get("deadlineCount") ?? 0,
+    internalErrorCount: countMap.get("internalErrorCount") ?? 0,
+  } satisfies Record<(typeof STOP_KIND_COUNT_FIELD)[IngestionStopKind], number>;
   return {
     message: INGESTION_HEALTH_MESSAGE,
     uptimeSec,

@@ -195,12 +195,6 @@ type UnlistedLargestRow = Exclude<
 >;
 true satisfies UnlistedLargestRow extends never ? true : never;
 
-const LARGEST_ROW_FIELD = {
-  largestDescription: "description",
-  largestInputSchema: "inputSchema",
-  largestOutputSchema: "outputSchema",
-} as const satisfies Record<LargestRow, keyof ToolRow>;
-
 type MeasuredSurface = {
   mode: string;
   measurement: SurfaceMeasurement;
@@ -247,12 +241,18 @@ const deriveSurface = (rows: SurfaceRows, mode: string): SurfaceMeasurement => {
     chars.outputSchema += row.outputSchema;
     chars.annotations += row.annotations;
     toolBytes.push(row.payloadUtf8Bytes);
-    for (const largestRow of LARGEST_ROWS) {
-      largest[largestRow] = larger(largest[largestRow], {
-        tool,
-        chars: row[LARGEST_ROW_FIELD[largestRow]],
-      });
-    }
+    largest.largestDescription = larger(largest.largestDescription, {
+      tool,
+      chars: row.description,
+    });
+    largest.largestInputSchema = larger(largest.largestInputSchema, {
+      tool,
+      chars: row.inputSchema,
+    });
+    largest.largestOutputSchema = larger(largest.largestOutputSchema, {
+      tool,
+      chars: row.outputSchema,
+    });
   }
 
   return {

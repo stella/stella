@@ -365,18 +365,20 @@ const resolveStyleFormatting = (
     current = current.basedOn ? stylesById.get(current.basedOn) : undefined;
   }
 
-  const pPr: ParagraphFormatting = {
-    ...styleSet.styles.docDefaults?.pPr,
-  };
+  const pPrEntries = new Map<string, unknown>(
+    Object.entries(styleSet.styles.docDefaults?.pPr ?? {}),
+  );
   let rPr: TextFormatting = mergeTextFormatting(
     {},
     styleSet.styles.docDefaults?.rPr,
   );
   for (const style of chain) {
-    Object.assign(pPr, style.pPr);
+    for (const [k, v] of Object.entries(style.pPr ?? {})) {
+      pPrEntries.set(k, v);
+    }
     rPr = mergeTextFormatting(rPr, style.rPr);
   }
-  return { pPr, rPr };
+  return { pPr: Object.fromEntries(pPrEntries), rPr };
 };
 
 const mergeTextFormatting = (

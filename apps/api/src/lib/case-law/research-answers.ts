@@ -209,29 +209,32 @@ type ResearchAnswersOutput = Record<string, ResearchAnswerOutput>;
 export const buildResearchAnswersSchema = (
   questions: readonly ResearchQuestion[],
 ) => {
-  const shape: Record<string, v.GenericSchema<ResearchAnswerOutput>> = {};
+  const shapeEntries = new Map<string, v.GenericSchema<ResearchAnswerOutput>>();
   for (const question of questions) {
     const answer = answerSchemaForContent(question.content);
     if (answer === null) {
       continue;
     }
-    shape[question.columnId] = v.strictObject({
-      answer,
-      rationale: v.pipe(
-        v.string(),
-        v.description(
-          "One sentence saying how the cited text answers the question.",
+    shapeEntries.set(
+      question.columnId,
+      v.strictObject({
+        answer,
+        rationale: v.pipe(
+          v.string(),
+          v.description(
+            "One sentence saying how the cited text answers the question.",
+          ),
         ),
-      ),
-      anchorIds: v.pipe(
-        v.array(v.string()),
-        v.description(
-          "The bracketed passage anchors the answer rests on, verbatim.",
+        anchorIds: v.pipe(
+          v.array(v.string()),
+          v.description(
+            "The bracketed passage anchors the answer rests on, verbatim.",
+          ),
         ),
-      ),
-    });
+      }),
+    );
   }
-  return v.strictObject(shape);
+  return v.strictObject(Object.fromEntries(shapeEntries));
 };
 
 /**

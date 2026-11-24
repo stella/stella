@@ -189,9 +189,9 @@ export const enrichRequestContext = (
     >
   >,
 ): void => {
-  const current = requestStore.getStore()?.context;
-  if (current) {
-    Object.assign(current, update);
+  const ambient = requestStore.getStore();
+  if (ambient?.context) {
+    ambient.context = { ...ambient.context, ...update };
   }
 };
 

@@ -66,7 +66,7 @@ const record = () =>
 
 export const courtListenerConformanceFixture = () => {
   const input = record();
-  const rawFieldValues: Record<string, string | string[]> = {};
+  const rawFieldValueEntries = new Map<string, string | string[]>();
   const addRowValues = (
     prefix: string,
     rows: readonly Readonly<Record<string, string>>[],
@@ -76,29 +76,36 @@ export const courtListenerConformanceFixture = () => {
       panic(`Missing CourtListener conformance rows: ${prefix}`);
     }
     for (const column of Object.keys(first)) {
-      rawFieldValues[`${prefix}.${column}`] = rows.map((row) => {
-        const value = row[column];
-        return (
-          value ??
-          panic(`Missing CourtListener conformance column: ${prefix}.${column}`)
-        );
-      });
+      rawFieldValueEntries.set(
+        `${prefix}.${column}`,
+        rows.map((row) => {
+          const value = row[column];
+          return (
+            value ??
+            panic(
+              `Missing CourtListener conformance column: ${prefix}.${column}`,
+            )
+          );
+        }),
+      );
     }
   };
   for (const [column, value] of Object.entries(input.cluster)) {
-    rawFieldValues[`cluster.${column}`] = value;
+    rawFieldValueEntries.set(`cluster.${column}`, value);
   }
   for (const [column, value] of Object.entries(input.docket)) {
-    rawFieldValues[`docket.${column}`] = value;
+    rawFieldValueEntries.set(`docket.${column}`, value);
   }
   for (const [column, value] of Object.entries(input.court)) {
-    rawFieldValues[`court.${column}`] = value;
+    rawFieldValueEntries.set(`court.${column}`, value);
   }
   addRowValues("opinions[]", input.opinions);
   addRowValues("citations[]", input.citations);
   if (input.judgeRelations.status === "complete") {
     addRowValues("people[]", input.judgeRelations.people);
   }
+  const rawFieldValues: Record<string, string | string[]> =
+    Object.fromEntries(rawFieldValueEntries);
   return {
     buildDecision: async () =>
       await Promise.resolve(

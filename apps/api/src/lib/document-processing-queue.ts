@@ -3333,15 +3333,15 @@ export const runDocumentProcessingReconciliationPhases = async ({
     count: 0,
     hasMore: false,
   });
-  const results: ReconciliationResults = {
-    [RECONCILIATION_PHASE.DEADLINE_SCOUT]: drained(),
-    [RECONCILIATION_PHASE.DELIVERY]: drained(),
-    [RECONCILIATION_PHASE.DOCUMENT_NAMING]: drained(),
-    [RECONCILIATION_PHASE.REINDEX]: drained(),
-    [RECONCILIATION_PHASE.REPAIR]: drained(),
-    [RECONCILIATION_PHASE.RETRY]: drained(),
-    [RECONCILIATION_PHASE.STALE_LEASE]: drained(),
-  };
+  const results = new Map<ReconciliationPhaseName, ReconciliationPhaseResult>([
+    [RECONCILIATION_PHASE.DEADLINE_SCOUT, drained()],
+    [RECONCILIATION_PHASE.DELIVERY, drained()],
+    [RECONCILIATION_PHASE.DOCUMENT_NAMING, drained()],
+    [RECONCILIATION_PHASE.REINDEX, drained()],
+    [RECONCILIATION_PHASE.REPAIR, drained()],
+    [RECONCILIATION_PHASE.RETRY, drained()],
+    [RECONCILIATION_PHASE.STALE_LEASE, drained()],
+  ]);
   for (const phase of phases) {
     const result = await Result.tryPromise({
       // Called through an arrow rather than passed by reference: a phase
@@ -3355,12 +3355,27 @@ export const runDocumentProcessingReconciliationPhases = async ({
       onPhaseError(result.error, phase.name);
       // A phase that failed drained nothing it can prove, so its backlog
       // is unknown: report it as work left behind rather than as drained.
-      results[phase.name] = { count: 0, hasMore: true };
+      results.set(phase.name, { count: 0, hasMore: true });
       continue;
     }
-    results[phase.name] = result.value;
+    results.set(phase.name, result.value);
   }
-  return results;
+  return {
+    [RECONCILIATION_PHASE.DEADLINE_SCOUT]:
+      results.get(RECONCILIATION_PHASE.DEADLINE_SCOUT) ?? drained(),
+    [RECONCILIATION_PHASE.DELIVERY]:
+      results.get(RECONCILIATION_PHASE.DELIVERY) ?? drained(),
+    [RECONCILIATION_PHASE.DOCUMENT_NAMING]:
+      results.get(RECONCILIATION_PHASE.DOCUMENT_NAMING) ?? drained(),
+    [RECONCILIATION_PHASE.REINDEX]:
+      results.get(RECONCILIATION_PHASE.REINDEX) ?? drained(),
+    [RECONCILIATION_PHASE.REPAIR]:
+      results.get(RECONCILIATION_PHASE.REPAIR) ?? drained(),
+    [RECONCILIATION_PHASE.RETRY]:
+      results.get(RECONCILIATION_PHASE.RETRY) ?? drained(),
+    [RECONCILIATION_PHASE.STALE_LEASE]:
+      results.get(RECONCILIATION_PHASE.STALE_LEASE) ?? drained(),
+  };
 };
 
 /**
