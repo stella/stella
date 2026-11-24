@@ -64,7 +64,7 @@ export const openPublicLawChat = ({
   });
 };
 
-type AskPublicLawInChatOptions = {
+export type AskPublicLawInChatOptions = {
   /** The tab's title: the question as the reader typed it. */
   label: string;
   question: string;
