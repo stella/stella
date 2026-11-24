@@ -96,6 +96,7 @@ export const seedSkillMonitorScaling = async (
       cleanup,
       email,
       organizationId,
+      recordAuditEvent,
       safeDb,
       scopedDb,
       skillId,
@@ -123,6 +124,7 @@ export const skillMonitorScalingScenarios = [
           createTestHandlerContext<
             Parameters<typeof getSkillMonitor.handler>[0]
           >({
+            audit: fixture.recordAuditEvent,
             params: { skillId: fixture.skillId },
             query: { days: 7 },
             request: new Request(
