@@ -1,6 +1,8 @@
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 
+import { CLASSIFICATION_INPUT_GLOBS } from "./ci-job-classification/inputs";
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
@@ -13,14 +15,17 @@ const assertLightweightPush = (config: unknown) => {
   expect(isRecord(config)).toBe(true);
   const push = isRecord(config) ? config["pre-push"] : undefined;
   expect(isRecord(config) ? config["extends"] : undefined).toBeUndefined();
+  const pushFiles = "git diff --name-only origin/main...HEAD";
   expect(push).toEqual({
-    parallel: false,
+    parallel: true,
     commands: {
       changeset: { run: "bun scripts/changeset-guard.ts --base origin/main" },
       typecheck: {
         run: "bun scripts/pre-push-typecheck.ts --base origin/main",
       },
       "migration-order": {
+        files: pushFiles,
+        glob: "{apps/api/drizzle/**,apps/api/src/lib/db/migration-alias-inventory.json,apps/api/src/lib/db/migration-ledger.ts,scripts/check-migration-order.ts}",
         run: "bun scripts/check-migration-order.ts origin/main",
       },
       secrets: { use_stdin: true, run: "bun run secrets:check:pushed" },
@@ -29,9 +34,15 @@ const assertLightweightPush = (config: unknown) => {
         use_stdin: true,
         run: "bash scripts/check-pushed-signatures.sh",
       },
-      "ai-skills": { run: "bash scripts/check-ai-skill-sources.sh" },
+      "ai-skills": {
+        files: pushFiles,
+        glob: "{.ai/**,.agents/skills/**,.claude/skills/**,.claude/commands/**,.gitmodules,.coderabbit.yaml,scripts/check-ai-skill-sync.sh,scripts/check-ai-skill-sources.sh,AGENTS.md,GEMINI.md,**/AGENTS.md,**/GEMINI.md}",
+        run: "bash scripts/check-ai-skill-sources.sh",
+      },
       lockfiles: { run: "bun run check:standalone-lockfiles" },
       "job-classification": {
+        files: pushFiles,
+        glob: `{${CLASSIFICATION_INPUT_GLOBS.join(",")}}`,
         run: "bun scripts/check-ci-job-classification.ts --pre-push",
       },
     },

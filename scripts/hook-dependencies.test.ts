@@ -41,7 +41,7 @@ const ARGV_PACKAGE_BIN =
   /["'](?:bunx|bun["']\s*,\s*["'](?:--bun|x))["']\s*,\s*["']([^"']+)["']/gu;
 // A hook command or package script may start a command only with these;
 // any other command word must be an executable a root dependency provides.
-const RUNTIME_COMMANDS = new Set(["bash", "bun", "bunx"]);
+const RUNTIME_COMMANDS = new Set(["bash", "bun", "bunx", "git"]);
 const COMMAND_SEPARATOR = /&&|\|\||[;|]/u;
 const ENV_ASSIGNMENT = /^\w+=/u;
 const MODULE_FILE = /\.[cm]?[jt]sx?$/u;
