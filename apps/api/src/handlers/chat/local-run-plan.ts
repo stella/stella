@@ -61,6 +61,11 @@ export type ResolveChatLocalRunOptions = {
   readApprovalCeiling: () => Promise<
     Result<DesktopRunnerApprovalMode, SafeDbError>
   >;
+  /**
+   * The member's website approvals (`browser-site-grants`), read when the
+   * turn starts: the run's browser steps on those websites follow them.
+   */
+  readBrowserSiteGrants: () => Promise<Result<readonly string[], SafeDbError>>;
   /** The thread's queue, for the run's reports on queued messages it steered. */
   steeredQueue: LocalRunSteeredQueue;
   /** The gateway control; the process's own by default. */
@@ -108,6 +113,7 @@ export const resolveChatLocalRun = async ({
   chatThreadId,
   workspaceIds,
   readApprovalCeiling,
+  readBrowserSiteGrants,
   steeredQueue,
   runtime = getDesktopRunnerControl(),
 }: ResolveChatLocalRunOptions): Promise<
@@ -171,8 +177,16 @@ export const resolveChatLocalRun = async ({
       "Your organization does not let a run on your computer do that much without asking.",
     );
   }
+  const browserSiteGrants = await readBrowserSiteGrants();
+  if (browserSiteGrants.isErr()) {
+    return Result.err(browserSiteGrants.error);
+  }
   return Result.ok(
-    createLocalChatRun(context, { type: "start", target: runTarget }),
+    createLocalChatRun(context, {
+      type: "start",
+      target: runTarget,
+      browserSiteGrants: browserSiteGrants.value,
+    }),
   );
 };
 

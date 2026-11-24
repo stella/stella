@@ -250,6 +250,7 @@ fn run_start(model: &str) -> SidecarRunStart {
       network: NetworkPolicy::Open,
       fs: FsPolicy::Workspace,
       approvals: ApprovalMode::FullAuto,
+      browser_site_grants: Vec::new(),
     },
     mcp: McpBinding {
       server_name: "stella".to_owned(),

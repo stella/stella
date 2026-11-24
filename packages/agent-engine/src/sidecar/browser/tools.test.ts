@@ -134,7 +134,7 @@ const found = (): BrowserControlResult => ({
 
 /** A question the member was asked, each kind with its own fields. */
 type AskedStep<Request = BrowserApprovalRequest> = Request extends unknown
-  ? Omit<Request, "signal">
+  ? Omit<Request, "signal" | "site">
   : never;
 
 type Sent = {
@@ -151,6 +151,7 @@ const recorder = (
     saving = 0,
     shownSaving = false,
     shownSaves = new Map(),
+    siteGrants = new Set(),
   }: {
     approvals?: DesktopRunnerApprovalMode;
     decision?: (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
@@ -162,21 +163,28 @@ const recorder = (
     shownSaving?: boolean;
     /** What each shown document's save became, by address, as the inbox knows it. */
     shownSaves?: Map<string, BrowserDownloadOutcome>;
+    /** The websites the member always allows, as the run holds them. */
+    siteGrants?: Set<string>;
   } = {},
 ) => {
   const sent: Sent[] = [];
   /** The address each result asked the inbox about. */
   const shownAddresses: (string | null)[] = [];
   const asked: AskedStep[] = [];
+  /** The website each question offered to always allow. */
+  const offeredSites: (string | null)[] = [];
   const finished: string[] = [];
   const context = {
     acts: true,
     approvals,
+    siteGrants,
     approve: async ({
       signal: _signal,
+      site,
       ...request
     }: BrowserApprovalRequest) => {
       asked.push(request);
+      offeredSites.push(site);
       return {
         decision,
         finish: (status: string) => {
@@ -209,6 +217,7 @@ const recorder = (
     context,
     downloads,
     finished,
+    offeredSites,
     send: context.send,
     sent,
     shownAddresses,
@@ -1617,5 +1626,123 @@ describe("keys, options, history and tabs by the run's approval mode", () => {
     for (const result of results) {
       expect(parsed(result)).toMatchObject({ status: "declined" });
     }
+  });
+});
+
+describe("website approvals on the member's computer", () => {
+  const SITE = "https://fixture-library.test";
+
+  /** The search page with the field's value reported, or withheld. */
+  const fieldPage = (revision: string, valueReported: boolean) =>
+    withPage(formPage(revision), (snapshot) => ({
+      ...snapshot,
+      elements: snapshot.elements.map((element) =>
+        element.id === "E1" && valueReported
+          ? { ...element, value: "" }
+          : element,
+      ),
+    }));
+
+  /** No approval, one for this page's website, one for another subdomain. */
+  const GRANTED = {
+    none: [],
+    this: [SITE],
+    other: ["https://www.fixture-library.test"],
+  } as const;
+
+  type Step = "click" | "type" | "press_key" | "select";
+  const INPUTS = {
+    click: { ref: "L1" },
+    type: { ref: "E1", text: "notice" },
+    press_key: { ref: "E1", key: "Enter" },
+    select: { ref: "E2", option: "Supreme Court" },
+  } as const satisfies Record<Step, unknown>;
+
+  /** Jan's rule per level; a website approval only lifts "ask". */
+  const RULE = {
+    plan: {
+      click: "refuse",
+      type: "refuse",
+      press_key: "refuse",
+      select: "refuse",
+    },
+    ask: { click: "ask", type: "ask", press_key: "ask", select: "ask" },
+    auto: { click: "run", type: "ask", press_key: "run", select: "ask" },
+    full_auto: { click: "run", type: "run", press_key: "run", select: "run" },
+  } as const satisfies Record<
+    DesktopRunnerApprovalMode,
+    Record<Step, "run" | "ask" | "refuse">
+  >;
+
+  const CASES = (["plan", "ask", "auto", "full_auto"] as const).flatMap(
+    (approvals) =>
+      (["click", "type", "press_key", "select"] as const).flatMap((step) =>
+        (["none", "this", "other"] as const).flatMap((granted) =>
+          [true, false].map((valueReported) => ({
+            approvals,
+            granted,
+            step,
+            valueReported,
+          })),
+        ),
+      ),
+  );
+
+  test.each(CASES)(
+    "$approvals: $step with approval for $granted site (value reported: $valueReported)",
+    async ({ approvals, granted, step, valueReported }) => {
+      const session = createLocalBrowserSession();
+      const browser = recorder(
+        [fieldPage("r-1", valueReported), fieldPage("r-2", valueReported)],
+        {
+          approvals,
+          siteGrants: new Set<string>(GRANTED[granted]),
+        },
+      );
+      await session.call("snapshot", {}, browser.context);
+      const result = await session.call(step, INPUTS[step], browser.context);
+      const byLevel = RULE[approvals][step];
+      const covered = granted === "this" && (step !== "type" || valueReported);
+      const gate = byLevel === "ask" && covered ? "run" : byLevel;
+      expect(browser.asked.map(({ action }) => action)).toEqual(
+        gate === "ask" ? [step] : [],
+      );
+      expect(browser.offeredSites).toEqual(gate === "ask" ? [SITE] : []);
+      expect(browser.sent).toHaveLength(gate === "refuse" ? 1 : 2);
+      expect(result.isError).toBe(gate === "refuse");
+    },
+  );
+
+  test("always allowing the website on one step runs the run's later steps there without asking", async () => {
+    const session = createLocalBrowserSession();
+    const siteGrants = new Set<string>();
+    const browser = recorder(
+      [formPage("r-1"), formPage("r-2"), formPage("r-3")],
+      { approvals: "ask", decision: APPROVAL_DECISION.approveSite, siteGrants },
+    );
+    await session.call("snapshot", {}, browser.context);
+    await session.call("click", INPUTS.click, browser.context);
+    await session.call("select", INPUTS.select, browser.context);
+    expect(browser.asked.map(({ action }) => action)).toEqual(["click"]);
+    expect([...siteGrants]).toEqual([SITE]);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+      "click",
+      "select",
+    ]);
+  });
+
+  test("a website approval never lifts a sign-in hand-over", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([formPage("r-1"), NEEDS_MEMBER], {
+      approvals: "ask",
+      siteGrants: new Set([SITE]),
+    });
+    await session.call("snapshot", {}, browser.context);
+    await session.call("click", INPUTS.click, browser.context);
+    const held = await session.call("select", INPUTS.select, browser.context);
+    expect(browser.asked).toEqual([]);
+    expect(parsed(held)).toMatchObject({ status: CHAT_LOCAL_RUN_NEEDS_MEMBER });
+    expect(browser.sent).toHaveLength(2);
   });
 });

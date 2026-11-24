@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { AGENT_HARNESSES } from "@stll/api-contract/agent-harness";
+import { browserSiteGrantOriginsSchema } from "@stll/api-contract/browser-site-grants";
 import { CHAT_LOCAL_RUN_TOOL_LIMITS } from "@stll/api-contract/chat-local-run-tool";
 import { desktopVersionSchema } from "@stll/api-contract/desktop-presence";
 import {
@@ -410,6 +411,8 @@ export const sidecarHostMessageSchema = v.variant("type", [
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
       approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
+      /** The websites the member always allows browser steps on; none when absent. */
+      browserSiteGrants: v.optional(browserSiteGrantOriginsSchema),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),

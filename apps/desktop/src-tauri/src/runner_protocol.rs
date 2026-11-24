@@ -511,6 +511,14 @@ pub(crate) struct RunPolicy {
   pub(crate) network: NetworkPolicy,
   pub(crate) fs: FsPolicy,
   pub(crate) approvals: ApprovalMode,
+  /// The websites the member always allows browser steps on, handed to the
+  /// sidecar as the API sent them; the sidecar's browser gate reads them.
+  #[serde(
+    default,
+    rename = "browserSiteGrants",
+    skip_serializing_if = "Vec::is_empty"
+  )]
+  pub(crate) browser_site_grants: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

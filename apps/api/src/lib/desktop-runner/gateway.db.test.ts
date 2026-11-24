@@ -672,6 +672,7 @@ const startInput = (
   model: MODEL,
   reasoningEffort: null,
   approvals,
+  browserSiteGrants: [],
   session: { type: "fresh" } as const satisfies ChatRunSession,
   instructions: "Summarize the matter.",
   messages: [{ role: "user" as const, content: "Summarize the matter." }],
@@ -2837,6 +2838,7 @@ describe("chat turns on a computer", () => {
   /** A new turn for the member's computer; the run picks which one. */
   const START_PLAN: LocalRunPlan = {
     type: "start",
+    browserSiteGrants: [],
     target: {
       kind: "local",
       harness: "codex",

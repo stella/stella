@@ -18,6 +18,7 @@ export const testChatApprovalContextValue = {
   handleAllowInConversation: ignore,
   handleAlwaysAllow: ignore,
   handleApprove: ignore,
+  handleApproveForRun: ignore,
   handleDeny: ignore,
   continueRequestSecret: async () => await Promise.resolve(),
   continueConnectConnector: async () => await Promise.resolve(),

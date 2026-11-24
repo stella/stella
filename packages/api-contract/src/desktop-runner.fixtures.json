@@ -683,7 +683,8 @@
         "policy": {
           "network": "open",
           "fs": "workspace",
-          "approvals": "ask"
+          "approvals": "ask",
+          "browserSiteGrants": ["https://example.com"]
         },
         "mcp": {
           "serverName": "stella",

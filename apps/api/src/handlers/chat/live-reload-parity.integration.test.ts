@@ -1175,6 +1175,9 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
     "ResolveCards, AnswerOnStaleTab, RaceApprovals",
     ResolveCards.allows,
   ),
+  "allow-website-for-run": notModelled(
+    "Only a run on the member's computer asks it, and the harness runs cloud turns only; tool-approval-card.dom.test.tsx drives it through the card.",
+  ),
   "always-allow": byCommands(
     "ResolveCards (always-allow), AnswerOnStaleTab",
     ResolveCards.allows,

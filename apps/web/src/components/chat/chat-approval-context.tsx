@@ -65,6 +65,8 @@ type ChatApprovalContextValue = {
     options?: ChatSendMessageOptions,
   ) => void | PromiseLike<void>;
   handleDeny: (id: string) => void | PromiseLike<void>;
+  /** Approves a step on the member's computer for the rest of its run. */
+  handleApproveForRun: (id: string) => void | PromiseLike<void>;
   handleRequestSecret: (
     toolCallId: string,
     decision: RequestSecretDecision,

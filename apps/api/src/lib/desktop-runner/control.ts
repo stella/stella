@@ -144,6 +144,11 @@ export type StartLocalRunInput = {
   reasoningEffort: DesktopRunnerReasoningEffort | null;
   /** How much the run asks before it acts; the computer must report it. */
   approvals: DesktopRunnerApprovalMode;
+  /**
+   * The websites the member always allows browser steps on, as stored when
+   * the run starts; the computer's browser gate reads them.
+   */
+  browserSiteGrants: readonly string[];
   /** The harness session the run continues, and how (`readChatRunSession`). */
   session: ChatRunSession;
   instructions: string;
@@ -406,7 +411,12 @@ const startRun = async (
     instructions: input.instructions,
     messages: input.messages,
     attachments: input.attachments.map(({ path, s3Key }) => ({ path, s3Key })),
-    policy: { network: "open", fs: "workspace", approvals: input.approvals },
+    policy: {
+      network: "open",
+      fs: "workspace",
+      approvals: input.approvals,
+      browserSiteGrants: input.browserSiteGrants,
+    },
     mcp: input.mcp,
   } as const;
   // A chat's run tells about a restore of its folder when one is not told yet;

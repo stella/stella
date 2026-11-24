@@ -170,7 +170,12 @@ const runStart = (at: Place): SidecarRunStart => ({
   toolPath: [],
   unreadablePaths: [],
   session: { type: "fresh" },
-  policy: { network: "open", fs: "workspace", approvals: "ask" },
+  policy: {
+    network: "open",
+    fs: "workspace",
+    approvals: "ask",
+    browserSiteGrants: [],
+  },
   mcp: {
     serverName: "stella",
     url: `${at.apiOrigin}/mcp`,

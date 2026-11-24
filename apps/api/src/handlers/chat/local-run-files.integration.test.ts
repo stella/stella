@@ -226,6 +226,7 @@ const localRunFor = ({
     },
     {
       type: "start",
+      browserSiteGrants: [],
       target: {
         kind: "local",
         harness: "codex",

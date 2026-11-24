@@ -237,6 +237,7 @@ const readTurn = async ({
     },
     {
       type: "start",
+      browserSiteGrants: [],
       target: {
         kind: "local",
         harness: "claude-code",

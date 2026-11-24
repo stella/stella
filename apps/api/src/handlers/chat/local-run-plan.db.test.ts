@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -128,6 +129,7 @@ const send = async (
     workspaceIds: [],
     readApprovalCeiling: async () =>
       await readLocalRunApprovalCeiling(safeDb(), ids.orgA),
+    readBrowserSiteGrants: async () => await Promise.resolve(Result.ok([])),
     steeredQueue: unqueuedSteers,
     runtime: { control, runBell: createLocalRunBell() },
   });

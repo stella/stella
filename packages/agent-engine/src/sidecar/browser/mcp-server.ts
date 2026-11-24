@@ -78,6 +78,11 @@ type BrowserMcpRun = {
   threadId: string;
   /** The run's approval mode: which browser steps wait for the member. */
   approvals: DesktopRunnerApprovalMode;
+  /**
+   * The websites the member always allows browser steps on: those stored
+   * when the run started, and those the member allowed in this run since.
+   */
+  siteGrants: Set<string>;
   /** Asks the run's member to allow one browser step. */
   approve: ApproveAction;
   /** Cut when the run is stopped: its browser steps end at once. */
@@ -85,6 +90,13 @@ type BrowserMcpRun = {
   /** The run's folder: a PDF its chat's tab downloads is saved there. */
   workspaceDir: string;
 };
+
+/** What a run's browser steps are held to: its level and approvals, and who answers. */
+const runApprovals = ({ approvals, approve, siteGrants }: BrowserMcpRun) => ({
+  approvals,
+  approve,
+  siteGrants,
+});
 
 /** A run calling through an endpoint. */
 type Serving = {
@@ -423,8 +435,7 @@ export const startLocalBrowserMcp = ({
           async (signal) =>
             await sessionFor(sessions, held.threadId).call(name, input, {
               ...chatBrowser(browser, held.threadId),
-              approvals: held.approvals,
-              approve: held.approve,
+              ...runApprovals(held),
               downloads: async (shownAddress) =>
                 downloads === null
                   ? NOTHING_DOWNLOADED
