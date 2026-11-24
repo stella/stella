@@ -15,6 +15,11 @@ import {
   DATA_EXPORT_MANIFEST_FILE_NAME,
   dataExportObjectKey,
 } from "@/api/lib/data-export/queue";
+import {
+  authorizeStoredDataExportRead,
+  dataExportMatterIdsSql,
+  readableStoredDataExports,
+} from "@/api/lib/data-export/stored-export-access";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { requireCurrentOrganizationMemberPermission } from "@/api/lib/db/member-authority";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -44,7 +49,8 @@ const config = {
     "SHA-256). The link is valid for 15 minutes and supports HTTP range " +
     "requests, so an interrupted download can resume; request a new link " +
     "when it lapses. Each link is recorded in the audit log. Refused once " +
-    "the export has expired. Organization owners and admins only.",
+    "the export has expired. Organization owners and admins only, and only " +
+    "while they can see every matter in the export.",
   permissions: { dataExport: ["read"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   contentDelivery: { type: "audited" },
@@ -83,22 +89,30 @@ const downloadDataExport = createSafeRootHandler(
           userId: user.id,
           permissions: config.permissions,
         });
-        const rows = await tx
-          .select({
-            status: organizationDataExports.status,
-            attempt: organizationDataExports.attempt,
-            parts: organizationDataExports.parts,
-            expiresAt: organizationDataExports.expiresAt,
-          })
-          .from(organizationDataExports)
-          .where(
-            and(
-              eq(organizationDataExports.id, params.exportId),
-              eq(organizationDataExports.organizationId, organizationId),
-            ),
-          )
-          .limit(1);
+        const rows = await readableStoredDataExports({
+          tx,
+          organizationId,
+          userId: user.id,
+          exports: await tx
+            .select({
+              status: organizationDataExports.status,
+              attempt: organizationDataExports.attempt,
+              parts: organizationDataExports.parts,
+              expiresAt: organizationDataExports.expiresAt,
+              matterIds: dataExportMatterIdsSql,
+            })
+            .from(organizationDataExports)
+            .where(
+              and(
+                eq(organizationDataExports.id, params.exportId),
+                eq(organizationDataExports.organizationId, organizationId),
+              ),
+            )
+            .limit(1),
+        });
         const row = rows.at(0);
+        // Refused before the audited link: an export the caller may no longer
+        // read answers as one that is absent and records nothing.
         if (row === undefined) {
           return { type: "not_found" } as const;
         }
@@ -207,8 +221,21 @@ const downloadDataExport = createSafeRootHandler(
     }
   },
   {
-    authorize: async (context) =>
-      await authorizeOrganizationPermissionReplay(context, config.permissions),
+    // Before the request receipt is claimed or replayed: a stored link is
+    // handed out again only to a caller who may read the export now.
+    authorize: async (context) => {
+      const permission = await authorizeOrganizationPermissionReplay(
+        context,
+        config.permissions,
+      );
+      if (permission.isErr()) {
+        return permission;
+      }
+      return await authorizeStoredDataExportRead(
+        context,
+        context.params.exportId,
+      );
+    },
   },
 );
 

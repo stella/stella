@@ -75,7 +75,6 @@ const renderThread = async (followUps: SuggestedFollowupsProps) => {
                     activitySession={{
                       reportedUnknownActivityTypes: new Set<string>(),
                     }}
-                    approvalPendingMessageId={null}
                     followUps={followUps}
                     isGenerating={false}
                     messages={[question, answer]}

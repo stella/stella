@@ -7,6 +7,7 @@ import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { effectiveMatterVisibility } from "@/api/lib/workspaces/matter-visibility";
 
 type ReadWorkspaceHandlerProps = {
   scopedDb: ScopedDb;
@@ -72,7 +73,10 @@ export const readWorkspaceHandler = async ({
   // static product constants it imports from `@stll/api-contract`. Anything
   // genuinely per-org or plan-dependent belongs here as a named subset, never
   // a spread of a table.
-  return result;
+  return {
+    ...result,
+    visibility: effectiveMatterVisibility(result),
+  };
 };
 
 /** `GET /v1/workspaces/:workspaceId`: one matter, archived ones included. */
@@ -81,7 +85,7 @@ const readWorkspace = createSafeHandler(
     contract: "patch",
     description:
       "Read one matter, active or archived: its name, reference, status, " +
-      "colour, lead and client, and stampedVersionCount, how many live " +
+      "colour, lead, client and visibility, and stampedVersionCount, how many live " +
       "document versions carry its reference in a stamp, which a new " +
       "reference cannot rewrite.",
     access: "read",

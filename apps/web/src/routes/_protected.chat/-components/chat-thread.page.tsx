@@ -832,7 +832,6 @@ export const ChatThreadPage = ({
                                 ? "anonymized"
                                 : "available"
                             }
-                            approvalPendingMessageId={approvalPendingMessageId}
                             branchSource={{
                               contextMatterIds: selectedContextMatterIds,
                               threadRef,

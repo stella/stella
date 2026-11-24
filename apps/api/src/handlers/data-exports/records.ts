@@ -104,6 +104,7 @@ export const MATTER_COLUMNS = {
   billingReference: "export",
   color: "export",
   documentNamingEnabled: "export",
+  visibility: "export",
   status: "export",
   lastActivityAt: "export",
   createdAt: "export",

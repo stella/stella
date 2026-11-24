@@ -222,9 +222,11 @@ const subplansOf = (node: PlanNode, position: string) => {
       const childPosition = `${path}/${index}`;
       if (field(child, "Parent Relationship") === "SubPlan") {
         const relations = [child, ...descendants(child)].flatMap((candidate) =>
-          [field(candidate, "Relation Name"), field(candidate, "Alias")].filter(
-            (value): value is string => value !== null,
-          ),
+          [
+            field(candidate, "Relation Name"),
+            field(candidate, "Alias"),
+            field(candidate, "Function Name"),
+          ].filter((value): value is string => value !== null),
         );
         found.push({
           position: childPosition,
@@ -537,11 +539,14 @@ export const heapFetchRiskViolations = (
 export const withoutAuthorizationSubplans = (scan: ScanOccurrence): string => {
   let filter = scan.filter ?? "";
   for (const subplan of scan.subplans) {
+    // The authorization view: its membership branch is the matter access
+    // function (or, in a plan recorded before it, the tables it reads).
     if (
       subplan.name !== null &&
       subplan.relations.includes("aw") &&
-      subplan.relations.includes("workspace_members") &&
-      subplan.relations.includes("workspaces")
+      (subplan.relations.includes("stella_authorized_workspace_ids") ||
+        (subplan.relations.includes("workspace_members") &&
+          subplan.relations.includes("workspaces")))
     ) {
       const escapedName = subplan.name.replaceAll(
         /[.*+?^${}()|[\]\\]/gu,

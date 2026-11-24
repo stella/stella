@@ -39,6 +39,11 @@ const MATTER_ACCESS_RULE_FUNCTION_MIGRATION_PATH = nodePath.join(
   "20261015090000_matter_access_rule_function",
   "migration.sql",
 );
+const MATTER_VISIBILITY_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261124200000_matter_visibility",
+  "migration.sql",
+);
 const CHAT_THREAD_TURN_WORKSPACE_CASCADE_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260803120000_chat_thread_turn_workspace_cascade",
@@ -432,6 +437,17 @@ export const installPgliteWorkspaceAccessObjects = async (
   ];
   for (const migrationPath of migrationPaths) {
     await installPgliteMigration({ db, migrationPath });
+  }
+  // The visibility rule, its creation function and stewardship triggers. The
+  // push already created the visibility column and its check, so the
+  // migration's table changes are left out.
+  for (const statement of readMigrationStatements(
+    MATTER_VISIBILITY_MIGRATION_PATH,
+  )) {
+    const executable = executableSql(statement);
+    if (executable.length > 0 && !executable.startsWith("ALTER TABLE")) {
+      await db.execute(sql.raw(statement));
+    }
   }
   // The replay above rewrites every `workspace_*` policy to the plain matter
   // check, so a table whose policies carry a further predicate in the schema

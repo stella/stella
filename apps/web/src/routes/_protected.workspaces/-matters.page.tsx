@@ -400,42 +400,39 @@ const MattersContentView = ({
         }
         if (groups && groups.length > 0) {
           return (
-            <>
-              <div className={MATTER_CARD_GRID_CLASS} ref={gridRef}>
-                {groups.map((group) => {
-                  const collapsed = collapsedGroups.includes(group.groupId);
-                  const firstWs = group.workspaces.at(0);
-                  const baseIndex = firstWs ? displayed.indexOf(firstWs) : 0;
-                  return (
-                    <ClientGroupSection
-                      collapsed={collapsed}
-                      group={group}
-                      key={group.groupId}
-                      onMatterDrop={
-                        canReassignClient ? matterClientDrop.onMatterDrop : null
-                      }
-                      onToggle={() => toggleGroupCollapsed(group.groupId)}
-                      personalLabel={t("workspaces.parties.personalLabel")}
-                    >
-                      {!collapsed &&
-                        group.workspaces.map((workspace, i) => (
-                          <MatterCard
-                            drag={matterCardDragMode(
-                              workspace.status,
-                              canReassignClient,
-                            )}
-                            focused={focusIndex === baseIndex + i}
-                            hideClientName
-                            key={workspace.id}
-                            workspace={workspace}
-                          />
-                        ))}
-                    </ClientGroupSection>
-                  );
-                })}
-              </div>
-              {matterClientDrop.promotionDialog}
-            </>
+            <div className={MATTER_CARD_GRID_CLASS} ref={gridRef}>
+              {groups.map((group) => {
+                const collapsed = collapsedGroups.includes(group.groupId);
+                const firstWs = group.workspaces.at(0);
+                const baseIndex = firstWs ? displayed.indexOf(firstWs) : 0;
+                return (
+                  <ClientGroupSection
+                    collapsed={collapsed}
+                    group={group}
+                    key={group.groupId}
+                    onMatterDrop={
+                      canReassignClient ? matterClientDrop.onMatterDrop : null
+                    }
+                    onToggle={() => toggleGroupCollapsed(group.groupId)}
+                    personalLabel={t("workspaces.parties.personalLabel")}
+                  >
+                    {!collapsed &&
+                      group.workspaces.map((workspace, i) => (
+                        <MatterCard
+                          drag={matterCardDragMode(
+                            workspace.status,
+                            canReassignClient,
+                          )}
+                          focused={focusIndex === baseIndex + i}
+                          hideClientName
+                          key={workspace.id}
+                          workspace={workspace}
+                        />
+                      ))}
+                  </ClientGroupSection>
+                );
+              })}
+            </div>
           );
         }
         return (

@@ -61,7 +61,6 @@ test("opens the playbook an approved save wrote", async () => {
                   activitySession={{
                     reportedUnknownActivityTypes: new Set<string>(),
                   }}
-                  approvalPendingMessageId={null}
                   messages={[
                     {
                       id: "message-save",
@@ -125,7 +124,6 @@ test("tells the user when an approved save failed", async () => {
                   activitySession={{
                     reportedUnknownActivityTypes: new Set<string>(),
                   }}
-                  approvalPendingMessageId={null}
                   messages={[
                     {
                       id: "message-save",

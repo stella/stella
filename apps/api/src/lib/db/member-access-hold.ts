@@ -1,6 +1,4 @@
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
-
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { workspaces } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
@@ -11,6 +9,7 @@ import {
   lockMemberAccessRow,
 } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { roleReachesMatterSql } from "@/api/lib/workspaces/matter-visibility";
 import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 type HoldMemberAccessOptions = {
@@ -31,8 +30,8 @@ export type MemberAccessHold =
  * Hold a member's current access for the rest of `tx`.
  *
  * Locks the organization member and requested matter assignments `FOR SHARE`.
- * Unassigned client matters hold their matter row for the administrative
- * roles. The final reach decision uses a later statement and only identities
+ * An unassigned matter the member's role reaches through its visibility holds
+ * its matter row. The final reach decision uses a later statement and only identities
  * covered by those locks, so it sees changes committed before acquisition.
  *
  * Reads the rows directly rather than through the RLS access view, so the
@@ -58,21 +57,20 @@ export const holdMemberAccessOnTx = async (
     where: visibleWorkspaceSql(),
   });
   const covered = new Set(assigned.map((row) => row.workspaceId));
-  // This role condition only preserves the lock scope: assigned matters hold
-  // assignment rows, and only unassigned client matters hold matter rows for
-  // these roles. The later database query alone decides reach.
-  const reachesClientMatters = CLIENT_MATTER_ADMIN_ROLES.some(
-    (role) => role === organizationMember.role,
-  );
-  if (reachesClientMatters) {
-    const matterRows = await lockMatterAccessWorkspaceRows({
-      ...scope,
-      workspaceIds: requested.filter((id) => !covered.has(id)),
-      where: and(visibleWorkspaceSql(), isNotNull(workspaces.clientId)),
-    });
-    for (const { id } of matterRows) {
-      covered.add(id);
-    }
+  // The lock scope only: assigned matters hold assignment rows, and an
+  // unassigned matter the member's role reaches holds its matter row, so a
+  // visibility change waits for this transaction. The later database query
+  // alone decides reach.
+  const matterRows = await lockMatterAccessWorkspaceRows({
+    ...scope,
+    workspaceIds: requested.filter((id) => !covered.has(id)),
+    where: and(
+      visibleWorkspaceSql(),
+      roleReachesMatterSql(organizationMember.role),
+    ),
+  });
+  for (const { id } of matterRows) {
+    covered.add(id);
   }
   const candidates = requested.filter((id) => covered.has(id));
   if (candidates.length === 0) {

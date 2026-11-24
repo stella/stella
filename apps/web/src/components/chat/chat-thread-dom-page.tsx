@@ -177,7 +177,6 @@ const ChatThreadDomPage = ({
           {renderComposer?.(session)}
           <ChatThreadMessages
             activitySession={session.activitySession}
-            approvalPendingMessageId={session.approvalPendingMessageId}
             error={session.error}
             hasOlderMessages={session.olderCursor !== null}
             isGenerating={session.isGenerating}

@@ -243,6 +243,8 @@ export const completeRequestReceipt = async ({
 
 type ReplayRequestOptions<T> = ClaimRequestReceiptOptions & {
   authorize?: () => Promise<Result<void, HandlerError>>;
+  /** Checked against the stored body before it is replayed. */
+  authorizeReplay?: (body: unknown) => Promise<Result<void, HandlerError>>;
   checkResponse?: (body: unknown) => Result<void, HandlerError>;
   run: (scopedDb: ScopedDb) => Promise<T>;
   responseStatus: () => number;
@@ -256,6 +258,7 @@ export function runWithRequestReceipt<T>(
 ): Promise<Result<T, HandlerError>>;
 export async function runWithRequestReceipt<T>({
   authorize,
+  authorizeReplay,
   checkResponse,
   run,
   responseStatus,
@@ -273,6 +276,12 @@ export async function runWithRequestReceipt<T>({
       const checked = checkResponse?.(claim.body);
       if (checked?.isErr()) {
         return checked;
+      }
+      if (authorizeReplay !== undefined) {
+        const replayAuthorization = await authorizeReplay(claim.body);
+        if (replayAuthorization.isErr()) {
+          return replayAuthorization;
+        }
       }
       return Result.ok(
         new Response(

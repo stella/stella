@@ -82,7 +82,6 @@ const SentMessage = ({ state }: { state: "collapsed" | "expanded" }) => {
       >
         <ChatThreadMessages
           activitySession={activitySession}
-          approvalPendingMessageId={null}
           messages={[
             {
               id: "visual-lease-message",

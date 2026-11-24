@@ -5,10 +5,15 @@ import { and, eq } from "drizzle-orm";
 import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { searchProjectionRepairQueue, workspaces } from "@/api/db/schema";
+import {
+  searchProjectionRepairQueue,
+  workspaceMembers,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -38,6 +43,10 @@ beforeAll(async () => {
     reference: "REF-STALE-CLIENT-UNDO",
     color: "blue",
   });
+  // The updating member is assigned, so the update reaches the matter.
+  await testDb
+    .insert(workspaceMembers)
+    .values({ workspaceId, userId: ids.userA1 });
 }, 60_000);
 
 afterAll(async () => {
@@ -52,6 +61,7 @@ test("stale client preconditions preserve the latest assignment and skip side ef
   const callUpdate = async (expectedClientId: string | null) =>
     await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: { userId: ids.userA1, authority: sessionMemberRole("member") },
         safeDb,
         organizationId: ids.orgA,
         workspaceId,

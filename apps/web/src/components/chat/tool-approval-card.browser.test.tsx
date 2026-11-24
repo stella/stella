@@ -389,6 +389,43 @@ describe("always allowing a website", () => {
     expect(markup).not.toContain(alwaysAllowSite);
   });
 
+  test("a key press offers the website it names, whatever page was last reported", () => {
+    const pressEnter = {
+      action: "press-key",
+      key: "Enter",
+      page: { revision: "revision-1", url: "https://example.com/search" },
+      target: {
+        context: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+        href: { type: BROWSER_CONTROL_TARGET_METADATA.absent },
+        name: "Search",
+        ref: "e:0:0.4",
+        role: "textbox",
+      },
+    };
+    for (const page of [
+      null,
+      {
+        revision: "revision-2",
+        url: "https://example.com/search",
+        valueRefs: new Set<string>(),
+      },
+    ]) {
+      observeBrowserPage(page);
+      try {
+        const markup = renderCard(
+          browserPart(pressEnter, "approval-requested"),
+          undefined,
+          { user: member },
+        );
+        expect(markup).toContain(messages.chat.approval.allowOnce);
+        expect(markup).toContain(alwaysAllowSite);
+        expect(markup).toContain("https://example.com/search");
+      } finally {
+        observeBrowserPage(null);
+      }
+    }
+  });
+
   test("an answered card no longer offers it", () => {
     const markup = renderCard(
       browserPart(openNews, "complete", { status: "error" }),

@@ -100,40 +100,62 @@ export const toBrowserObservedPage = (
 });
 
 /**
- * The website a command acts on or moves to, by exact origin, or null when
- * it cannot be known before the command runs. A command on the page reads
- * that page's origin from the extension's last report, and only when the
- * command names that very page; a navigation names its destination, which
- * the extension holds it to (`open` refuses to read across a redirect,
- * `switch-tab` needs the tab still on that origin).
+ * The websites a browser command is about, by exact origin, each null when it
+ * cannot be known before the command runs.
+ *
+ * - `shown`: the website its approval card names to the person, and so the
+ *   one an "always allow" offer is for. A navigation names its destination,
+ *   a command on an element names the page the command was written for, and
+ *   a read or going back names the page the extension last reported.
+ * - `proven`: the website the extension's own report shows the command acts
+ *   on or moves to, the only one a website approval may answer it for. A
+ *   command on an element counts only when it names the very page the
+ *   extension last reported (address and revision); a navigation names its
+ *   destination, which the extension holds it to (`open` refuses to read
+ *   across a redirect, `switch-tab` needs the tab still on that origin).
+ *
+ * A known `proven` always equals `shown`; a `shown` website without a
+ * `proven` one may be offered, and the approval then answers commands there
+ * once the extension reports that page.
  */
-export const browserCommandSite = ({
+export type BrowserCommandSites = {
+  shown: string | null;
+  proven: string | null;
+};
+
+export const browserCommandSites = ({
   command,
   observedPage,
 }: {
   command: BrowserControlCommand;
   observedPage: BrowserObservedPage | null;
-}): string | null => {
+}): BrowserCommandSites => {
   const pageOrigin =
     observedPage === null ? null : browserSiteGrantOrigin(observedPage.url);
   switch (command.action) {
     case BROWSER_CONTROL_ACTION.open:
-    case BROWSER_CONTROL_ACTION.switchTab:
-      return browserSiteGrantOrigin(command.url);
+    case BROWSER_CONTROL_ACTION.switchTab: {
+      const destination = browserSiteGrantOrigin(command.url);
+      return { shown: destination, proven: destination };
+    }
     // Where going back leads is checked after it ran.
     case BROWSER_CONTROL_ACTION.goBack:
     case BROWSER_CONTROL_ACTION.snapshot:
     case BROWSER_CONTROL_ACTION.find:
-      return pageOrigin;
+      return { shown: pageOrigin, proven: pageOrigin };
     case BROWSER_CONTROL_ACTION.click:
     case BROWSER_CONTROL_ACTION.fill:
     case BROWSER_CONTROL_ACTION.pressKey:
     case BROWSER_CONTROL_ACTION.select:
-      return observedPage !== null &&
-        command.page.url === observedPage.url &&
-        command.page.revision === observedPage.revision
-        ? pageOrigin
-        : null;
+      return {
+        shown: browserSiteGrantOrigin(command.page.url),
+        proven:
+          observedPage !== null &&
+          command.page.url === observedPage.url &&
+          command.page.revision === observedPage.revision
+            ? pageOrigin
+            : null,
+      };
     default:
       command satisfies never;
       return panic("Unhandled browser command action");
@@ -201,9 +223,9 @@ const ASK: BrowserAutoApproval = { type: "ask" };
  *
  * - a page read (`snapshot`) in the reads mode;
  * - any command on, or navigating to, a website the user allowed, keyed by
- *   exact origin. The site comes from the extension's report of the
- *   controlled tab, or for a navigation from its destination; a fill into a
- *   field that may hold a secret still asks.
+ *   exact origin. The site is the `proven` one (`browserCommandSites`): from
+ *   the extension's report of the controlled tab, or for a navigation from
+ *   its destination; a fill into a field that may hold a secret still asks.
  *
  * Both need the last browser command in this tab session to have succeeded
  * with none still running: a redirect or a result landing on a site nobody
@@ -232,7 +254,7 @@ export const decideBrowserAutoApproval = ({
   ) {
     return { type: "reads-mode" };
   }
-  const site = browserCommandSite({ command, observedPage });
+  const site = browserCommandSites({ command, observedPage }).proven;
   return site !== null &&
     grantedOrigins.has(site) &&
     isCoveredBySiteGrant({ command, observedPage })
@@ -477,7 +499,7 @@ const useBrowserApprovalVersion = (): number =>
     () => 0,
   );
 
-/** The page the extension last reported, for the card's site label. */
+/** The page the extension last reported, for the card's sites. */
 export const useBrowserObservedPage = (): BrowserObservedPage | null => {
   useBrowserApprovalVersion();
   return getStore().getObservedPage();

@@ -1,4 +1,5 @@
 import { useRef, useState, useSyncExternalStore } from "react";
+import type { ReactNode, RefObject } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic, Result } from "better-result";
@@ -53,6 +54,7 @@ import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
   getApprovalToolName,
+  getChatToolIcon,
   getChatToolTitleKey,
   isApprovalOnceChatToolName,
   isExternalInputChatToolName,
@@ -65,6 +67,7 @@ import {
 import type {
   ApprovalToolName,
   ApprovalToolPart,
+  ChatToolIcon,
   ChatUITools,
   PendingApprovalToolPart,
   SuggestChangesApplyOutput,
@@ -94,7 +97,7 @@ import { readerAnnotationKeys } from "@/components/legal-reader/annotations/read
 import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
-  browserCommandSite,
+  browserCommandSites,
   currentBrowserAutoApproval,
   recordBrowserSiteGrantApproval,
   setBrowserApprovalMode,
@@ -108,6 +111,7 @@ import {
 } from "@/features/chat/browser-control/browser-approval-summary";
 import { useBrowserSiteGrants } from "@/features/chat/browser-control/browser-site-grants";
 import { useMountEffect } from "@/hooks/use-effect";
+import { revealTranscriptElement } from "@/hooks/use-stick-to-bottom";
 import { SIGNED_OUT_QUERY_OWNER } from "@/lib/account/queries";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { DocxEditRepresentation } from "@/lib/chat-edit-mode";
@@ -440,13 +444,13 @@ export const PendingToolApprovalCard = ({
 };
 
 /**
- * How a browser card relates to website approvals: the website its command
- * acts on or moves to (by exact origin), whether the reads mode or a website
- * approval may answer it, and the user's stored approvals. Like a stored tool
- * grant, a website approval the API did not confirm (`unconfirmed`) answers
- * nothing. A browser step on the member's computer names its website in its
- * question (`localSite`); always allowing it there approves the step for the
- * rest of the run, whose later steps on the website then follow at once.
+ * How a browser card relates to website approvals: the website the card
+ * names (by exact origin), whether the reads mode or a website approval may
+ * answer it, and the user's stored approvals. Like a stored tool grant, a
+ * website approval the API did not confirm (`unconfirmed`) answers nothing.
+ * A browser step on the member's computer names its website in its question
+ * (`localSite`); always allowing it there approves the step for the rest of
+ * the run, whose later steps on the website then follow at once.
  */
 const useBrowserCardApproval = ({
   browserCommand,
@@ -466,15 +470,17 @@ const useBrowserCardApproval = ({
     grantedOrigins: sites.grantedOrigins,
   });
   const observedPage = useBrowserObservedPage();
-  const site =
+  // The offer follows the website the card names; whether an approval
+  // answers the command is decided on the proven one (`autoApproval`).
+  const shownSite =
     browserCommand === null
       ? null
-      : browserCommandSite({ command: browserCommand, observedPage });
+      : browserCommandSites({ command: browserCommand, observedPage }).shown;
   const siteGrantOrigin =
     autoApproval.type === "site-grant" && !unconfirmed
       ? autoApproval.origin
       : null;
-  const offerable = site ?? localSite;
+  const offerable = shownSite ?? localSite;
   return {
     /** Answers the card when the user always allows its website. */
     approveSite: (approvalId: string, toolName: ApprovalToolName) => {
@@ -513,14 +519,17 @@ const useBrowserCardApproval = ({
       );
     },
     isReadsAutoApproval: autoApproval.type === "reads-mode",
-    /** The site the card offers to always allow: known, and not yet allowed. */
+    /**
+     * The site the card offers to always allow: the one it names, when known
+     * and not yet allowed.
+     */
     offeredSite:
       offerable !== null &&
       sites.canGrant &&
       !sites.grantedOrigins.has(offerable)
         ? offerable
         : null,
-    site,
+    shownSite,
     siteGrantOrigin,
     sites,
   };
@@ -560,6 +569,60 @@ const AlwaysAllowSiteButton = ({
     >
       {t("chat.approval.browser.alwaysAllowSite")}
     </Button>
+  );
+};
+
+/**
+ * Mounted (keyed by the approval) once a card starts waiting on the member:
+ * the card comes fully into view, above the composer, the moment the turn
+ * stops for it. A card answered on its own never mounts this.
+ */
+const RevealAwaitedApproval = ({
+  cardRef,
+}: {
+  cardRef: RefObject<HTMLDivElement | null>;
+}) => {
+  useMountEffect(() => {
+    const card = cardRef.current;
+    if (card !== null) {
+      revealTranscriptElement(card);
+    }
+  });
+
+  return null;
+};
+
+/**
+ * The card's box. While it waits on the member (`revealKey`, the approval's
+ * id), it comes fully into view the moment the turn stops for it, clear of a
+ * pinned user header above and of a floating composer below.
+ */
+const ApprovalCardFrame = ({
+  asksForDecision,
+  children,
+  revealKey,
+}: {
+  asksForDecision: boolean;
+  children: ReactNode;
+  revealKey: string | null;
+}) => {
+  const cardRef = useRef<HTMLDivElement>(null);
+  return (
+    <div
+      className={cn(
+        "my-1 rounded-lg border text-sm",
+        "scroll-mt-20 scroll-mb-[calc(var(--composer-block-h,0px)+1.5rem)]",
+        asksForDecision
+          ? "border-border bg-muted/30"
+          : "bg-muted/40 border-transparent",
+      )}
+      ref={cardRef}
+    >
+      {revealKey !== null && (
+        <RevealAwaitedApproval cardRef={cardRef} key={revealKey} />
+      )}
+      {children}
+    </div>
   );
 };
 
@@ -732,13 +795,13 @@ export const ToolApprovalCard = ({
   };
 
   return (
-    <div
-      className={cn(
-        "my-1 rounded-lg border text-sm",
-        asksForDecision
-          ? "border-border bg-muted/30"
-          : "bg-muted/40 border-transparent",
-      )}
+    <ApprovalCardFrame
+      asksForDecision={asksForDecision}
+      revealKey={
+        isAwaitingDecision && !automaticResponse?.shouldRespond
+          ? approvalId
+          : null
+      }
     >
       {automaticResponse?.shouldRespond && (
         <AutomaticApprovalResponse
@@ -796,7 +859,7 @@ export const ToolApprovalCard = ({
 
       <ToolApprovalSummary
         activeFileName={activeFileName}
-        browserSite={browserApproval.site}
+        browserSite={browserApproval.shownSite}
         externalInput={showsExternalInput ? externalInput : undefined}
         isAwaitingDecision={isAwaitingDecision}
         part={part}
@@ -906,7 +969,7 @@ export const ToolApprovalCard = ({
           </Button>
         </div>
       )}
-    </div>
+    </ApprovalCardFrame>
   );
 };
 
@@ -1489,6 +1552,12 @@ const getExternalMcpConnectorSlug = (
   return connectorSlug ?? null;
 };
 
+const TOOL_ICON_COMPONENTS = {
+  browser: BrowserControlIcon,
+  edit: PencilIcon,
+  web: GlobeIcon,
+} as const satisfies Record<ChatToolIcon, unknown>;
+
 const ToolApprovalLeadingIcon = ({
   iconHref,
   toolName,
@@ -1511,15 +1580,6 @@ const ToolApprovalLeadingIcon = ({
     );
   }
 
-  if (toolName === "web_search" || toolName === "fetch_url") {
-    return <GlobeIcon className="text-muted-foreground size-4 shrink-0" />;
-  }
-
-  if (toolName === BROWSER_CONTROL_TOOL_NAME) {
-    return (
-      <BrowserControlIcon className="text-muted-foreground size-4 shrink-0" />
-    );
-  }
-
-  return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;
+  const Icon = TOOL_ICON_COMPONENTS[getChatToolIcon(toolName ?? "")];
+  return <Icon className="text-muted-foreground size-4 shrink-0" />;
 };

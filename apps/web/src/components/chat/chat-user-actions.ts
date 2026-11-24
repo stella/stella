@@ -42,7 +42,13 @@ type ChatSessionHandler = {
  * recorded conversations (`recorded-conversations.dom.test.tsx`) to the
  * recorded steps that perform it; both fail on an action they do not map.
  */
-export const CHAT_USER_ACTIONS = {
+const defineChatUserActions = <
+  const T extends Record<string, ChatUserActionTarget>,
+>(
+  actions: T,
+): T => actions;
+
+export const CHAT_USER_ACTIONS = defineChatUserActions({
   "allow-in-conversation": {
     handler: "handleAllowInConversation",
     via: "session",
@@ -156,7 +162,7 @@ export const CHAT_USER_ACTIONS = {
   stop: { handler: "stop", via: "session" },
   "toggle-anonymization": { via: "page" },
   "toggle-web-search": { via: "request" },
-} as const satisfies Record<string, ChatUserActionTarget>;
+});
 
 export type ChatUserAction = keyof typeof CHAT_USER_ACTIONS;
 

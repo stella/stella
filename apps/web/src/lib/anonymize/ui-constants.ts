@@ -23,7 +23,24 @@ const FALLBACK_COLOR: EntityColor = {
   text: [0.25, 0.25, 0.25],
 };
 
-const ENTITY_COLORS: Record<string, EntityColor> = {
+type KnownAnonymizeEntityLabel =
+  | "person"
+  | "organization"
+  | "phone number"
+  | "address"
+  | "email address"
+  | "date"
+  | "bank account number"
+  | "iban"
+  | "tax identification number"
+  | "identity card number"
+  | "registration number"
+  | "case number"
+  | "credit card number"
+  | "passport number"
+  | "czech birth number";
+
+const ENTITY_COLORS: Record<KnownAnonymizeEntityLabel, EntityColor> = {
   person: {
     fill: [0.74, 0.83, 0.95],
     border: [0.38, 0.56, 0.83],
@@ -101,6 +118,10 @@ const ENTITY_COLORS: Record<string, EntityColor> = {
   },
 };
 
+const isKnownAnonymizeEntityLabel = (
+  key: string,
+): key is KnownAnonymizeEntityLabel => Object.hasOwn(ENTITY_COLORS, key);
+
 /** Normalized sRGB triple (0–1 per channel) to a CSS `rgb()` color string. */
 const normalizedSrgbTripleToCss = (triple: ColorTriple): string => {
   const [r, g, b] = triple;
@@ -111,7 +132,9 @@ const normalizedSrgbTripleToCss = (triple: ColorTriple): string => {
 const getEntityPDFColors = (
   label: string,
 ): { fill: ColorTriple; border: ColorTriple; text: ColorTriple } => {
-  const c = ENTITY_COLORS[label] ?? FALLBACK_COLOR;
+  const c = isKnownAnonymizeEntityLabel(label)
+    ? ENTITY_COLORS[label]
+    : FALLBACK_COLOR;
   return { fill: c.fill, border: c.border, text: c.text };
 };
 

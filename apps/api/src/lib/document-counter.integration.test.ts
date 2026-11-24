@@ -18,6 +18,7 @@ import {
   documentReferenceCounters,
   entities,
   entityVersions,
+  workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -33,6 +34,7 @@ import {
 import { toDocumentReference } from "@/api/lib/document-reference";
 import { insertEntityVersions } from "@/api/lib/entity-versions/insert-entity-version";
 import { logger } from "@/api/lib/observability/logger";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -64,6 +66,12 @@ const createMatter = async (
     reference,
     status: "active" as const,
   });
+  // The member these tests act as is assigned, so updates reach the matter.
+  if (organizationId === ids.orgA) {
+    await testDb
+      .insert(workspaceMembers)
+      .values({ workspaceId, userId: ids.userA1 });
+  }
   createdWorkspaceIds.push(workspaceId);
   createdReferences.add(reference);
   return workspaceId;
@@ -302,6 +310,7 @@ describe("matter reference change", () => {
     const { safeDb } = scopeFor([workspaceId]);
     return await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: { userId: ids.userA1, authority: sessionMemberRole("member") },
         safeDb,
         organizationId: ids.orgA,
         workspaceId,
@@ -616,7 +625,7 @@ test("later issuance reserves its prefix while moved history keeps its original 
 });
 
 describe("client attachment", () => {
-  test("attaching a client turns a personal matter into a client matter", async () => {
+  test("attaching a client keeps who can see the matter", async () => {
     const workspaceId = await createMatter("PERSONAL/CLIENT");
     const clientId = createSafeId<"contact">();
     await testDb.insert(contacts).values({
@@ -629,6 +638,7 @@ describe("client attachment", () => {
       const { safeDb } = scopeFor([workspaceId]);
       const result = await Result.gen(() =>
         updateWorkspaceHandler({
+          actor: { userId: ids.userA1, authority: sessionMemberRole("member") },
           safeDb,
           organizationId: ids.orgA,
           workspaceId,

@@ -64,6 +64,53 @@ export const menuCommitBenches = {
 } as const;
 
 // Browser tests share the fixture census without importing the app graph.
+type VisualRegistryKey =
+  | "appeal-reviews"
+  | "mcp-reconnect"
+  | "task-metadata"
+  | "overview-stat-cards"
+  | "column-composer"
+  | "handoff-confirmation"
+  | "table-chart"
+  | "oauth-consent"
+  | "outcome-screen"
+  | "page-crop"
+  | "pdf-fit-width"
+  | "upload-rejections"
+  | "document-naming"
+  | "chat-long-paste"
+  | "chat-composer-reference"
+  | "chat-status"
+  | "chat-citation-chips"
+  | "button-label"
+  | "sortable-head"
+  | "menu-commits"
+  | "chat-continuation-error"
+  | "chat-citations"
+  | "chat-statute-citations"
+  | "chat-answer-footer"
+  | "chat-matter-reads"
+  | "chat-answer-typography"
+  | "chat-link-icons"
+  | "chat-follow-ups"
+  | "ask-user"
+  | "case-law-text-availability"
+  | "hungarian-decision"
+  | "reader-answers"
+  | "reader-selection"
+  | "answer-edit"
+  | "ui"
+  | "control-sizes"
+  | "inspector-pane"
+  | "inspector-phone-header"
+  | "playbook-editor"
+  | "provision-header"
+  | "shell-pending"
+  | "workspace-table"
+  | "public-law-toolbar"
+  | "chat-history-decision"
+  | "browser-extension-chip";
+
 export const visualRegistry = {
   "appeal-reviews": {
     label: "Synthetic appeal review evidence",
@@ -136,7 +183,11 @@ export const visualRegistry = {
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
   "public-law-toolbar": { label: "Public law toolbar", layout: "plain" },
   "chat-history-decision": { label: "Chat history decision", layout: "plain" },
-} as const satisfies Record<string, VisualEntry>;
+  "browser-extension-chip": {
+    label: "Browser extension chip",
+    layout: "plain",
+  },
+} as const satisfies Record<VisualRegistryKey, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;
 

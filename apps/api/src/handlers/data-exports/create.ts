@@ -1,10 +1,17 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import { startDataExport } from "@/api/handlers/data-exports/start-export";
+import {
+  DATA_EXPORT_START_OUTCOME,
+  startDataExport,
+} from "@/api/handlers/data-exports/start-export";
 import { toDataExportSummary } from "@/api/handlers/data-exports/summary";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import {
+  authorizeStoredDataExportReplay,
+  canReadStoredDataExport,
+} from "@/api/lib/data-export/stored-export-access";
 import { DATA_EXPORT_VERSION_SCOPE_VALUES } from "@/api/lib/data-export/version-scope";
 import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { requireCurrentOrganizationMemberPermission } from "@/api/lib/db/member-authority";
@@ -26,8 +33,8 @@ const config = {
     "One export runs per organization at a time: while one is queued or " +
     "running, this returns that export instead of starting another. " +
     "Download links are available for 7 days from the start of the export. " +
-    "Personal matters are not included. Organization owners and admins " +
-    "only.",
+    "Matters visible to assigned members only are not included. " +
+    "Organization owners and admins only.",
   permissions: { dataExport: ["create"] },
   accountAccess: ACCOUNT_ACCESS.standard,
   mcp: { type: "internal", reason: "organization_export" },
@@ -58,15 +65,40 @@ const createDataExport = createSafeRootHandler(
           userId: user.id,
           permissions: config.permissions,
         });
-        return await startDataExport({
+        const outcome = await startDataExport({
           tx,
           organizationId,
           userId: user.id,
           versions: body.versions,
           recordAuditEvent,
         });
+        // Someone else's running export is shown only to a caller who may
+        // read it; anyone else learns only that one is running.
+        if (
+          outcome.outcome === DATA_EXPORT_START_OUTCOME.ALREADY_ACTIVE &&
+          outcome.row !== null &&
+          !(await canReadStoredDataExport({
+            tx,
+            organizationId,
+            userId: user.id,
+            exportId: outcome.row.id,
+          }))
+        ) {
+          return { outcome: "hidden_active" as const, row: null };
+        }
+        return outcome;
       }),
     );
+    if (started.outcome === "hidden_active") {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          code: "data_export_already_active",
+          message:
+            "Another export of this organization is running; start a new one when it finishes.",
+        }),
+      );
+    }
     if (started.row === null) {
       // The active export finished between the insert and the read.
       return Result.err(
@@ -87,6 +119,9 @@ const createDataExport = createSafeRootHandler(
   {
     authorize: async (context) =>
       await authorizeOrganizationPermissionReplay(context, config.permissions),
+    // A stored response names an export; replay it only to a caller who may
+    // read that export now.
+    authorizeReplay: authorizeStoredDataExportReplay,
   },
 );
 

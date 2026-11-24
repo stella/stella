@@ -43,6 +43,7 @@ export const readWorkspaceListRows = ({
       color: true,
       status: true,
       leadUserId: true,
+      visibility: true,
       lastActivityAt: true,
       createdAt: true,
     },
