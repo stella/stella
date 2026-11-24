@@ -95,11 +95,13 @@ export const loadExternalMcpToolsForUser = async ({
   userId: SafeId<"user">;
   dependencies?: ExternalMcpDiscoveryDependencies | undefined;
 }): Promise<LoadedExternalMcpTools> => {
-  const rows = await dependencies.loadActiveMcpConnectionsForUser({
+  const loadedConnections = await dependencies.loadActiveMcpConnectionsForUser({
     organizationId,
     safeDb,
     userId,
   });
+  const rows =
+    loadedConnections.status === "loaded" ? loadedConnections.connections : [];
 
   // Connectors are independent per-user integrations — separate client,
   // separate auth, separate tool set — so loading them concurrently is
@@ -320,17 +322,17 @@ const loadConnectorTools = async ({
   // the loser created.
   const discovery =
     (async (): Promise<LoadedExternalMcpConnectorResult | null> => {
-      const createdClient = await dependencies.createMcpClientForConnection({
+      const clientOutcome = await dependencies.createMcpClientForConnection({
         organizationId,
         permit,
         row,
         safeDb,
         userId,
       });
-      if (!createdClient) {
+      if (clientOutcome.status !== "connected") {
         return null;
       }
-      client = createdClient;
+      client = clientOutcome.client;
 
       const tools = await loadMcpConnectorTools({ client, row });
       const normalized = normalizeExternalMcpToolsForChat({

@@ -102,11 +102,15 @@ export const listGatewayExternalMcpTools = async ({
     cachedRows = await loadCachedGatewayToolRows({ context });
   }
 
-  const connections = await dependencies.loadActiveMcpConnectionsForUser({
+  const loadedConnections = await dependencies.loadActiveMcpConnectionsForUser({
     organizationId: context.organizationId,
     safeDb: context.safeDb,
     userId: context.userId,
   });
+  if (loadedConnections.status !== "loaded") {
+    return [];
+  }
+  const { connections } = loadedConnections;
   const connectionsById = new Map(
     connections.map((connection) => [connection.userConnectionId, connection]),
   );

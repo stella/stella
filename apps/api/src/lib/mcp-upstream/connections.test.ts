@@ -354,7 +354,7 @@ test("uses only credentials configured for the connector", async () => {
           expiresAt,
         }),
       });
-      expect(client).toBeNull();
+      expect(client).toEqual({ status: "unavailable" });
     }
   }
   expect(state.transports).toEqual([]);
@@ -378,7 +378,7 @@ test("uses credentials for configured resource paths", async () => {
         expiresAt: null,
       }),
     });
-    expect(client).not.toBeNull();
+    expect(client.status).toBe("connected");
     expect(lastAuthHeader()).toBe("Bearer decrypted-mcp_access_token");
   }
 });
@@ -404,7 +404,7 @@ test("uses a consistent connection snapshot while preparing credentials", async 
       },
     }),
   });
-  expect(client).not.toBeNull();
+  expect(client.status).toBe("connected");
   expect(state.transports.at(0)?.url).toBe("https://mcp.example.com/rpc");
   expect(lastAuthHeader()).toBe("Bearer access");
 });
@@ -418,7 +418,7 @@ describe("MCP upstream connection lifecycle", () => {
       userId,
     });
 
-    expect(client).not.toBeNull();
+    expect(client.status).toBe("connected");
     expect(state.refreshCalls).toBe(0);
     // Header carries the decrypted access token, not a refreshed one.
     expect(lastAuthHeader()).toBe("Bearer decrypted-mcp_access_token");
@@ -435,7 +435,7 @@ describe("MCP upstream connection lifecycle", () => {
       userId,
     });
 
-    expect(client).not.toBeNull();
+    expect(client.status).toBe("connected");
     // Refresh is proactive (driven by `expiresAt`), not a 401-retry: the
     // token is resolved once, up front, before the client is opened.
     expect(state.refreshCalls).toBe(1);
@@ -462,7 +462,7 @@ describe("MCP upstream connection lifecycle", () => {
       userId,
     });
 
-    expect(client).toBeNull();
+    expect(client).toEqual({ status: "unavailable" });
     expect(hasStatusSet("needs_reauth")).toBe(true);
     // An upstream that revoked the grant is an expected state the module
     // normalizes, so nothing is reported as an exception.
@@ -635,7 +635,7 @@ describe("MCP upstream connection lifecycle", () => {
       userId,
     });
 
-    expect(client).not.toBeNull();
+    expect(client.status).toBe("connected");
     expect(observedTimeoutMs).toBe(10_000);
   });
 
@@ -647,7 +647,7 @@ describe("MCP upstream connection lifecycle", () => {
       userId,
     });
 
-    expect(client).toBeNull();
+    expect(client).toEqual({ status: "unavailable" });
     expect(state.refreshCalls).toBe(0);
     expect(hasStatusSet("needs_reauth")).toBe(true);
   });
@@ -730,7 +730,7 @@ describe("MCP upstream connection lifecycle", () => {
         safeDb: makeSafeDb(),
         userId,
       });
-      expect(client).toBeNull();
+      expect(client).toEqual({ status: "unavailable" });
     }
     expect(state.decryptCalls).toBe(0);
     expect(state.refreshCalls).toBe(0);
@@ -745,7 +745,7 @@ describe("MCP upstream connection lifecycle", () => {
       safeDb: makeSafeDb(),
       userId,
     });
-    expect(client).toBeNull();
+    expect(client).toEqual({ status: "unavailable" });
     expect(state.decryptCalls).toBe(0);
     expect(state.refreshCalls).toBe(0);
     // The pending review blocks the connector; the connection keeps its
@@ -779,7 +779,7 @@ describe("MCP upstream connection lifecycle", () => {
           ),
       },
     });
-    expect(client).toBeNull();
+    expect(client).toEqual({ status: "unavailable" });
     expect(state.decryptCalls).toBe(0);
     expect(state.dbSets).toEqual([]);
     expect(state.reviews).toEqual([]);
@@ -805,7 +805,7 @@ describe("MCP upstream connection lifecycle", () => {
           ),
       },
     });
-    expect(client).toBeNull();
+    expect(client).toEqual({ status: "unavailable" });
     expect(state.refreshCalls).toBe(0);
     expect(state.decryptCalls).toBe(0);
     expect(hasStatusSet("needs_approval")).toBe(true);
@@ -821,36 +821,38 @@ describe("MCP upstream connection lifecycle", () => {
     const confirmedEndpointOrigins = ["https://auth.example.com"];
     let observedOrigins: readonly string[] | undefined;
     expect(
-      await createMcpClientForConnectionImpl({
-        organizationId,
-        permit: outboundPermit,
-        row: oauthRow({
-          oauthIssuerBinding: {
-            type: "approved",
-            issuer: "https://auth.example.com",
-            endpointOrigins: confirmedEndpointOrigins,
+      (
+        await createMcpClientForConnectionImpl({
+          organizationId,
+          permit: outboundPermit,
+          row: oauthRow({
+            oauthIssuerBinding: {
+              type: "approved",
+              issuer: "https://auth.example.com",
+              endpointOrigins: confirmedEndpointOrigins,
+            },
+          }),
+          safeDb: makeSafeDb(),
+          userId,
+          outboundFetch,
+          dependencies: {
+            ...connectionDependencies,
+            discoverOAuthMetadata: async ({
+              rawMcpUrl: url,
+              confirmedEndpointOrigins: origins,
+            }) => {
+              observedOrigins = origins;
+              return await connectionDependenciesTestDouble.discoverOAuthMetadata(
+                {
+                  rawMcpUrl: url,
+                  permit: outboundPermit,
+                },
+              );
+            },
           },
-        }),
-        safeDb: makeSafeDb(),
-        userId,
-        outboundFetch,
-        dependencies: {
-          ...connectionDependencies,
-          discoverOAuthMetadata: async ({
-            rawMcpUrl: url,
-            confirmedEndpointOrigins: origins,
-          }) => {
-            observedOrigins = origins;
-            return await connectionDependenciesTestDouble.discoverOAuthMetadata(
-              {
-                rawMcpUrl: url,
-                permit: outboundPermit,
-              },
-            );
-          },
-        },
-      }),
-    ).not.toBeNull();
+        })
+      ).status,
+    ).toBe("connected");
     expect(observedOrigins).toEqual(confirmedEndpointOrigins);
   });
 
@@ -863,7 +865,7 @@ describe("MCP upstream connection lifecycle", () => {
       createMcpClientForConnection({ organizationId, row, safeDb, userId }),
     ]);
     expect(state.refreshCalls).toBe(1);
-    expect(clients.every((client) => client !== null)).toBe(true);
+    expect(clients.every((client) => client.status === "connected")).toBe(true);
   });
 
   test("uses the current token during a coordinated refresh interval", async () => {
@@ -875,7 +877,7 @@ describe("MCP upstream connection lifecycle", () => {
       createMcpClientForConnection({ organizationId, row, safeDb, userId }),
     ]);
     expect(state.refreshCalls).toBe(1);
-    expect(clients.every((client) => client !== null)).toBe(true);
+    expect(clients.every((client) => client.status === "connected")).toBe(true);
     expect(
       state.transports.map((transport) => transport.headers?.["Authorization"]),
     ).toContain("Bearer decrypted-mcp_access_token");
@@ -910,7 +912,7 @@ describe("MCP upstream connection lifecycle", () => {
         },
       },
     });
-    expect(client).toBeNull();
+    expect(client).toEqual({ status: "unavailable" });
     expect(waitedMilliseconds).toBe(2000);
     expect(state.refreshCalls).toBe(0);
   });
@@ -961,7 +963,7 @@ describe("MCP upstream connection lifecycle", () => {
         },
       },
     });
-    expect(client).not.toBeNull();
+    expect(client.status).toBe("connected");
     expect(state.refreshCalls).toBe(0);
     expect(
       state.transports.map((transport) => transport.headers?.["Authorization"]),
@@ -1041,16 +1043,19 @@ describe("MCP upstream connection lifecycle", () => {
         dependencies,
       });
     const concurrent = await Promise.all([create(), create()]);
-    expect(concurrent).toEqual([null, null]);
+    expect(concurrent).toEqual([
+      { status: "unavailable" },
+      { status: "unavailable" },
+    ]);
     expect(metadataFetches).toBe(1);
     expect(failureCode).toBe(MCP_OAUTH_DISCOVERY_TIMEOUT_CODE);
     expect(hasStatusSet("needs_reauth")).toBe(false);
     expect(hasStatusSet("needs_approval")).toBe(false);
-    expect(await create()).toBeNull();
+    expect(await create()).toEqual({ status: "unavailable" });
     expect(metadataFetches).toBe(1);
     state.now = new Date(state.now.getTime() + MCP_REFRESH_BACKOFF_MS + 1);
     stalled = false;
-    expect(await create()).not.toBeNull();
+    expect((await create()).status).toBe("connected");
     expect(state.refreshCalls).toBe(1);
   });
 
@@ -1076,7 +1081,7 @@ describe("MCP upstream connection lifecycle", () => {
       userId,
     });
 
-    expect(client).not.toBeNull();
+    expect(client.status).toBe("connected");
     expect(state.refreshCalls).toBe(0);
     expect(lastAuthHeader()).toBe("Bearer decrypted-mcp_static_token");
   });
@@ -1164,10 +1169,12 @@ describe("loading a user's active MCP connections", () => {
       userId,
     });
 
-    expect(loaded.map((row) => `${row.userConnectionId}:${row.type}`)).toEqual([
-      "conn_1:oauth2",
-      "conn_3:none",
-    ]);
+    expect(loaded.status).toBe("loaded");
+    expect(
+      loaded.status === "loaded"
+        ? loaded.connections.map((row) => `${row.userConnectionId}:${row.type}`)
+        : [],
+    ).toEqual(["conn_1:oauth2", "conn_3:none"]);
     expect(listing.updates()).toBe(1);
     expect(hasStatusSet("needs_reauth")).toBe(true);
   });
@@ -1187,10 +1194,12 @@ describe("loading a user's active MCP connections", () => {
       safeDb: listing.safeDb,
       userId,
     });
-    expect(loaded.map(({ userConnectionId }) => userConnectionId)).toEqual([
-      toSafeId<"mcpUserConnection">("conn_1"),
-    ]);
-    expect(loaded.map(({ description }) => description)).toEqual([
+    expect(loaded.status).toBe("loaded");
+    const connections = loaded.status === "loaded" ? loaded.connections : [];
+    expect(connections.map(({ userConnectionId }) => userConnectionId)).toEqual(
+      [toSafeId<"mcpUserConnection">("conn_1")],
+    );
+    expect(connections.map(({ description }) => description)).toEqual([
       "Registry connector",
     ]);
     expect(listing.updates()).toBe(0);
@@ -1205,7 +1214,10 @@ describe("loading a user's active MCP connections", () => {
       userId,
     });
 
-    expect(loaded).toHaveLength(1);
+    expect(loaded.status).toBe("loaded");
+    expect(loaded.status === "loaded" ? loaded.connections : []).toHaveLength(
+      1,
+    );
     expect(listing.updates()).toBe(0);
   });
 });

@@ -146,7 +146,10 @@ const externalConnection = {
 } satisfies LoadedMcpConnection;
 const externalGatewayDependencies = {
   consumeMcpGatewayRateLimit: async () => true,
-  loadActiveMcpConnectionsForUser: async () => [externalConnection],
+  loadActiveMcpConnectionsForUser: async () => ({
+    status: "loaded",
+    connections: [externalConnection],
+  }),
   proxyMcpToolCall: async () => ({ content: [] }),
   refreshCachedMcpToolsForConnection: async () => undefined,
 } satisfies ExternalGatewayDependencies;
