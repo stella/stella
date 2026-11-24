@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { isCanonicalRoomCollaboration } from "@stll/folio-core/controller/canonicalRoomEditor";
 import type {
   DocxCompatibility,
   DocxEditorCollaboration,
@@ -202,7 +203,7 @@ export type DocxEditorSession = NonNullable<
 export const selectDocxEditorSession = (
   collaboration: DocxEditorCollaboration | undefined,
 ): DocxEditorSession =>
-  collaboration !== undefined && collaboration.connect !== undefined
+  collaboration !== undefined && isCanonicalRoomCollaboration(collaboration)
     ? "canonical"
     : "legacy";
 
