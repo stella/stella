@@ -340,15 +340,18 @@ const lastInvocationArgs = async (page: Page, command: string) =>
     (invocation) => invocation.command === command,
   )?.args ?? null;
 
-/** Runs in the page: the native side hides the window. */
-const hideNatively = (reason: ClipboardHideReason) => {
-  const hide: ((hideReason: ClipboardHideReason) => void) | undefined =
-    Reflect.get(window, "__STELLA_TEST_NATIVE_HIDE__");
-  if (typeof hide !== "function") {
-    throw new TypeError("Native window hide boundary is not installed");
-  }
-  hide(reason);
-};
+/** The native side hides the window. */
+const hideNatively = async (page: Page, reason: ClipboardHideReason) =>
+  await page.evaluate((hideReason) => {
+    const hide: ((nativeReason: string) => void) | undefined = Reflect.get(
+      window,
+      "__STELLA_TEST_NATIVE_HIDE__",
+    );
+    if (typeof hide !== "function") {
+      throw new TypeError("Native window hide boundary is not installed");
+    }
+    hide(hideReason);
+  }, reason);
 
 const reopenNatively = async (page: Page) =>
   await page.evaluate(() => {
@@ -2085,7 +2088,7 @@ test("an outside click copies the selection once, in selection order", async ({
   const cards = await openClipboard(page, { language: "en" });
   await cards.nth(2).click({ modifiers: ["Meta"] });
   await cards.first().click({ modifiers: ["Meta"] });
-  await page.evaluate(hideNatively, "deactivated");
+  await hideNatively(page, "deactivated");
   await expect
     .poll(async () =>
       (await tauriInvocations(page)).filter(
@@ -2102,7 +2105,7 @@ test("an outside click copies the selection once, in selection order", async ({
   expect(await invocationCount(page, "clipboard_copy_items")).toBe(0);
   expect(await invocationCount(page, "clipboard_copy_item")).toBe(0);
   await reopenNatively(page);
-  await page.evaluate(hideNatively, "deactivated");
+  await hideNatively(page, "deactivated");
   expect(
     await invocationCount(page, "clipboard_copy_dismissed_selection"),
   ).toBe(1);
@@ -2112,7 +2115,7 @@ test("an outside click without a selection copies nothing", async ({
   page,
 }) => {
   await openClipboard(page, { language: "en" });
-  await page.evaluate(hideNatively, "deactivated");
+  await hideNatively(page, "deactivated");
   await reopenNatively(page);
   expect(
     await invocationCount(page, "clipboard_copy_dismissed_selection"),
@@ -2132,7 +2135,7 @@ test("Escape clears the selection without copying, then hides", async ({
   expect(await invocationCount(page, "clipboard_hide")).toBe(0);
   await page.keyboard.press("Escape");
   expect(await invocationCount(page, "clipboard_hide")).toBe(1);
-  await page.evaluate(hideNatively, "deactivated");
+  await hideNatively(page, "deactivated");
   expect(
     await invocationCount(page, "clipboard_copy_dismissed_selection"),
   ).toBe(0);
