@@ -157,8 +157,13 @@ final class KeyboardDictationSession {
     }
   }
 
+  /// Closes the session and forgets the text the keyboard has not
+  /// inserted yet: the person turned the microphone off or signed out.
   func end() {
-    queue.sync { endSession() }
+    queue.sync {
+      endSession()
+      store?.remove(KeyboardDictationBridge.resultsKey)
+    }
   }
 
   func startCapture(jobId: String, language: String) -> Bool {
@@ -333,6 +338,12 @@ final class KeyboardDictationSession {
     }
     stopEngine(deactivate: true)
     warmUntil = 0
+    // Text already inserted, or past its offer, is not kept beyond the session.
+    if let store {
+      store.write(
+        keptResults(store: store, now: KeyboardDictationBridge.now()),
+        KeyboardDictationBridge.resultsKey)
+    }
     publish(notify: true)
   }
 
