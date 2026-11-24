@@ -48,6 +48,19 @@ describe("landing layout in one column", () => {
     expect(page).toContain("@2xl:h-full");
     expect(page).not.toContain("h-full");
   });
+
+  // A scroll box's minimum height is zero: a composer grown by a long paste
+  // overflowed the fold and its send row was clipped under the columns.
+  test("never clips the hero: it sits in the page's only scroll area", () => {
+    const viewports = markup.match(/data-slot="scroll-area-viewport"/gu) ?? [];
+    // The page and the one section's rows; nothing wraps the hero.
+    expect(viewports).toHaveLength(2);
+    const hero = classesOf(markup, /<div class="([^"]+)"><p>hero<\/p>/u);
+    expect(hero).toContain("basis-[22rem]");
+    expect(hero.some((name) => /^(?:@2xl:)?(?:min-)?h-/u.test(name))).toBe(
+      false,
+    );
+  });
 });
 
 describe("landing row icon", () => {
