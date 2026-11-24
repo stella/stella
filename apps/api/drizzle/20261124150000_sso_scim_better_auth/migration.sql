@@ -5,7 +5,7 @@ CREATE TABLE "scim_managed_connection" (
   "id" text PRIMARY KEY NOT NULL,
   "creation_request_id" text NOT NULL,
   "connection_id" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL,
+  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "status" text NOT NULL,
   "revision" integer NOT NULL,
   "created_at" timestamp with time zone NOT NULL,
@@ -14,11 +14,13 @@ CREATE TABLE "scim_managed_connection" (
   "decommission_started_by" text,
   "decommissioned_at" timestamp with time zone,
   "decommissioned_by" text,
+  CONSTRAINT "scim_managed_conn_status_check" CHECK ("status" IN ('active', 'decommissioning', 'decommissioned')),
   CONSTRAINT "scim_managed_conn_decomm_state_check" CHECK ("status" <> 'decommissioned' OR "decommissioned_at" IS NOT NULL)
 );--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_managed_conn_creation_req_uidx" ON "scim_managed_connection" ("creation_request_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_managed_conn_connection_id_uidx" ON "scim_managed_connection" ("connection_id");--> statement-breakpoint
 CREATE INDEX "scim_managed_conn_domain_idx" ON "scim_managed_connection" ("provisioning_domain_id");--> statement-breakpoint
+CREATE UNIQUE INDEX "scim_managed_conn_active_domain_uidx" ON "scim_managed_connection" ("provisioning_domain_id") WHERE ("status" = 'active');--> statement-breakpoint
 ALTER TABLE "scim_managed_connection" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "scim_managed_connection" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 CREATE POLICY "scim_managed_connection_owner_access"
@@ -46,6 +48,7 @@ CREATE TABLE "scim_managed_credential" (
   "revoked_at" timestamp with time zone,
   "revoked_by" text,
   "decommissioned_at" timestamp with time zone,
+  CONSTRAINT "scim_managed_cred_status_check" CHECK ("status" IN ('active', 'expired', 'revoked', 'decommissioned')),
   CONSTRAINT "scim_managed_cred_revoked_state_check" CHECK ("status" <> 'revoked' OR "revoked_at" IS NOT NULL)
 );--> statement-breakpoint
 CREATE INDEX "scim_managed_cred_conn_rec_idx" ON "scim_managed_credential" ("connection_record_id");--> statement-breakpoint
@@ -89,7 +92,7 @@ CREATE TABLE "scim_connection_binding" (
   "id" text PRIMARY KEY NOT NULL,
   "connection_id" text NOT NULL,
   "connection_key" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL,
+  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "created_at" timestamp with time zone NOT NULL,
   "decommissioned_at" timestamp with time zone,
   "decommission_status" text DEFAULT 'active' NOT NULL,
@@ -100,6 +103,7 @@ CREATE TABLE "scim_connection_binding" (
   "decommission_completed_at" timestamp with time zone,
   "decommission_lease_id" text,
   "decommission_lease_expires_at" timestamp with time zone,
+  CONSTRAINT "scim_conn_binding_decomm_status_check" CHECK ("decommission_status" IN ('active', 'reconciling', 'complete')),
   CONSTRAINT "scim_conn_binding_decomm_state_check" CHECK ("decommission_status" <> 'complete' OR "decommission_completed_at" IS NOT NULL)
 );--> statement-breakpoint
 CREATE INDEX "scim_conn_binding_conn_id_idx" ON "scim_connection_binding" ("connection_id");--> statement-breakpoint
@@ -118,7 +122,7 @@ REVOKE ALL PRIVILEGES ON TABLE "scim_connection_binding" FROM stella;--> stateme
 CREATE TABLE "scim_identity_tombstone" (
   "id" text PRIMARY KEY NOT NULL,
   "connection_id" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL,
+  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "external_id" text NOT NULL,
   "external_id_key" text NOT NULL,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
@@ -164,7 +168,7 @@ REVOKE ALL PRIVILEGES ON TABLE "scim_subject" FROM stella;--> statement-breakpoi
 CREATE TABLE "scim_user" (
   "id" text PRIMARY KEY NOT NULL,
   "connection_id" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL,
+  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "connection_user_key" text NOT NULL,
   "user_name" text NOT NULL,
@@ -206,7 +210,7 @@ REVOKE ALL PRIVILEGES ON TABLE "scim_user" FROM stella;--> statement-breakpoint
 CREATE TABLE "scim_projection_grant" (
   "id" text PRIMARY KEY NOT NULL,
   "connection_id" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL,
+  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "scim_user_id" text NOT NULL REFERENCES "scim_user"("id") ON DELETE CASCADE,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "source_kind" text NOT NULL,
@@ -236,7 +240,7 @@ REVOKE ALL PRIVILEGES ON TABLE "scim_projection_grant" FROM stella;--> statement
 CREATE TABLE "scim_group" (
   "id" text PRIMARY KEY NOT NULL,
   "connection_id" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL,
+  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
   "revision" integer DEFAULT 0 NOT NULL,
   "display_name" text NOT NULL,
   "display_name_key" text NOT NULL,

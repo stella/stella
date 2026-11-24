@@ -104,22 +104,31 @@ export const createOrganizationScimToken = async ({
   expiresInDays,
 }: CreateOrganizationScimTokenArgs): Promise<
   Result<CreateOrganizationScimTokenResponse, ScimManagementError>
-> =>
-  await Result.tryPromise({
-    try: async () => {
-      const auth = getAuth();
-      const lifetimeDays = expiresInDays ?? DEFAULT_TOKEN_LIFETIME_DAYS;
-      const expiresAt = new Date(
-        Temporal.Now.instant().epochMilliseconds + lifetimeDays * DAY_IN_MS,
-      );
+> => {
+  const auth = getAuth();
+  const lifetimeDays = expiresInDays ?? DEFAULT_TOKEN_LIFETIME_DAYS;
+  const expiresAt = new Date(
+    Temporal.Now.instant().epochMilliseconds + lifetimeDays * DAY_IN_MS,
+  );
 
-      const { connections } = await auth.api.listSCIMManagedConnections({
+  const listed = await Result.tryPromise({
+    try: async () =>
+      await auth.api.listSCIMManagedConnections({
         body: { provisioningDomainId: organizationId },
-      });
-      const activeConnection = connections.find((c) => c.status === "active");
+      }),
+    catch: mapPluginError,
+  });
+  if (listed.isErr()) {
+    return Result.err(listed.error);
+  }
+  const activeConnection = listed.value.connections.find(
+    (c) => c.status === "active",
+  );
 
-      if (!activeConnection) {
-        const created = await auth.api.createSCIMManagedConnection({
+  if (!activeConnection) {
+    const created = await Result.tryPromise({
+      try: async () =>
+        await auth.api.createSCIMManagedConnection({
           body: {
             provisioningDomainId: organizationId,
             actorId,
@@ -127,13 +136,56 @@ export const createOrganizationScimToken = async ({
             scopes: [...SCIM_ALL_SCOPES],
             expiresAt,
           },
+        }),
+      catch: mapPluginError,
+    });
+    if (created.isOk()) {
+      return Result.ok({
+        token: toSummary(created.value.credential),
+        bearerToken: created.value.token,
+      });
+    }
+    // A concurrent first-token request may have won the partial unique index
+    // on (provisioning_domain_id) WHERE status = 'active'; re-read and rotate
+    // on the winning connection instead of failing.
+    const retryList = await Result.tryPromise({
+      try: async () =>
+        await auth.api.listSCIMManagedConnections({
+          body: { provisioningDomainId: organizationId },
+        }),
+      catch: mapPluginError,
+    });
+    if (retryList.isErr()) {
+      return Result.err(created.error);
+    }
+    const winner = retryList.value.connections.find(
+      (c) => c.status === "active",
+    );
+    if (!winner) {
+      return Result.err(created.error);
+    }
+    return await Result.tryPromise({
+      try: async () => {
+        const rotated = await auth.api.rotateSCIMManagedCredential({
+          body: {
+            connectionId: winner.connectionId,
+            provisioningDomainId: organizationId,
+            actorId,
+            scopes: [...SCIM_ALL_SCOPES],
+            expiresAt,
+          },
         });
         return {
-          token: toSummary(created.credential),
-          bearerToken: created.token,
+          token: toSummary(rotated.credential),
+          bearerToken: rotated.token,
         };
-      }
+      },
+      catch: mapPluginError,
+    });
+  }
 
+  return await Result.tryPromise({
+    try: async () => {
       const rotated = await auth.api.rotateSCIMManagedCredential({
         body: {
           connectionId: activeConnection.connectionId,
@@ -150,7 +202,7 @@ export const createOrganizationScimToken = async ({
     },
     catch: mapPluginError,
   });
-
+};
 export type RevokeOrganizationScimTokenArgs = {
   organizationId: SafeId<"organization">;
   credentialId: string;

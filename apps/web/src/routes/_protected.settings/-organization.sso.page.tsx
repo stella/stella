@@ -1161,42 +1161,52 @@ const ScimProvisioningSection = ({
   tokens: OrganizationScimTokenSummary[];
   onChanged: () => void;
 }) => {
-  const { t } = useTranslation();
+  const t = useTranslations();
+  const queryClient = useQueryClient();
   const [createdBearerToken, setCreatedBearerToken] = useState<string | null>(
     null,
   );
-  const scimBaseUrl = `${browserAuthBaseUrl()}/scim/v2`;
+  const scimBaseUrl = `${browserAuthBaseUrl()}/api/auth/scim/v2`;
 
-  const createTokenMutation = resourceMutation(
-    CONTRACT_REGISTRY.createOrganizationScimToken,
-    {
-      mutationFn: async () =>
-        throwOnError(await createOrganizationScimToken({})),
-      onSuccess: (created) => {
-        setCreatedBearerToken(created.bearerToken);
-        stellaToast.success(t("settings.organization.sso.scimTokenCreated"));
-        onChanged();
-      },
-      onError: (err) => {
-        notifyUserError(err, t("settings.organization.sso.saveFailed"));
-      },
+  const createTokenMutation = useMutation({
+    mutationFn: resourceMutation({
+      mutation: "createOrganizationScimToken",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async () => await createOrganizationScimToken({}),
+    }),
+    onSuccess: (created) => {
+      setCreatedBearerToken(created.bearerToken);
+      stellaToast.add({
+        title: t("settings.organization.sso.scimTokenCreated"),
+        type: "success",
+      });
+      onChanged();
     },
-  );
+    onError: (err) => {
+      notifyUserError(err, t("settings.organization.sso.saveFailed"));
+    },
+  });
 
-  const revokeTokenMutation = resourceMutation(
-    CONTRACT_REGISTRY.revokeOrganizationScimToken,
-    {
+  const revokeTokenMutation = useMutation({
+    mutationFn: resourceMutation({
+      mutation: "revokeOrganizationScimToken",
+      queryClient,
+      scope: { type: "organization" },
       mutationFn: async (tokenId: string) =>
-        throwOnError(await revokeOrganizationScimToken(tokenId)),
-      onSuccess: () => {
-        stellaToast.success(t("settings.organization.sso.scimTokenRevoked"));
-        onChanged();
-      },
-      onError: (err) => {
-        notifyUserError(err, t("settings.organization.sso.saveFailed"));
-      },
+        await revokeOrganizationScimToken(tokenId),
+    }),
+    onSuccess: () => {
+      stellaToast.add({
+        title: t("settings.organization.sso.scimTokenRevoked"),
+        type: "success",
+      });
+      onChanged();
     },
-  );
+    onError: (err) => {
+      notifyUserError(err, t("settings.organization.sso.saveFailed"));
+    },
+  });
 
   return (
     <section className="border-border bg-card space-y-4 rounded-xl border p-4">

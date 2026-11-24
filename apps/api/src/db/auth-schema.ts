@@ -1058,15 +1058,36 @@ export const oauthConsent = pgTable(
  * Better Auth `@better-auth/scim` managed provisioning connections, credentials,
  * events, bindings, users, groups, and projection grants.
  */
+export const SCIM_MANAGED_CONNECTION_STATUSES = [
+  "active",
+  "decommissioning",
+  "decommissioned",
+] as const;
+
+export const SCIM_MANAGED_CREDENTIAL_STATUSES = [
+  "active",
+  "expired",
+  "revoked",
+  "decommissioned",
+] as const;
+
+export const SCIM_CONNECTION_DECOMMISSION_STATUSES = [
+  "active",
+  "reconciling",
+  "complete",
+] as const;
+
 export const scimManagedConnection = pgTable(
   "scim_managed_connection",
   {
     id: text("id").primaryKey(),
     creationRequestId: text("creation_request_id").notNull(),
     connectionId: text("connection_id").notNull(),
-    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     status: text("status", {
-      enum: ["active", "decommissioning", "decommissioned"],
+      enum: SCIM_MANAGED_CONNECTION_STATUSES,
     }).notNull(),
     revision: integer("revision").notNull(),
     createdAt: timestamptz("created_at").notNull(),
@@ -1082,6 +1103,13 @@ export const scimManagedConnection = pgTable(
     ),
     uniqueIndex("scim_managed_conn_connection_id_uidx").on(table.connectionId),
     index("scim_managed_conn_domain_idx").on(table.provisioningDomainId),
+    uniqueIndex("scim_managed_conn_active_domain_uidx")
+      .on(table.provisioningDomainId)
+      .where(sql`${table.status} = 'active'`),
+    check(
+      "scim_managed_conn_status_check",
+      inArray(table.status, SCIM_MANAGED_CONNECTION_STATUSES),
+    ),
     check(
       "scim_managed_conn_decomm_state_check",
       sql`${table.status} <> 'decommissioned' OR ${table.decommissionedAt} IS NOT NULL`,
@@ -1103,7 +1131,7 @@ export const scimManagedCredential = pgTable(
     hashVersion: text("hash_version").notNull(),
     activeSlotKey: text("active_slot_key").notNull(),
     status: text("status", {
-      enum: ["active", "expired", "revoked", "decommissioned"],
+      enum: SCIM_MANAGED_CREDENTIAL_STATUSES,
     }).notNull(),
     serializedScopes: text("serialized_scopes").notNull(),
     expiresAt: timestamptz("expires_at").notNull(),
@@ -1118,6 +1146,10 @@ export const scimManagedCredential = pgTable(
     index("scim_managed_cred_conn_rec_idx").on(table.connectionRecordId),
     uniqueIndex("scim_managed_cred_id_uidx").on(table.credentialId),
     uniqueIndex("scim_managed_cred_active_slot_uidx").on(table.activeSlotKey),
+    check(
+      "scim_managed_cred_status_check",
+      inArray(table.status, SCIM_MANAGED_CREDENTIAL_STATUSES),
+    ),
     check(
       "scim_managed_cred_revoked_state_check",
       sql`${table.status} <> 'revoked' OR ${table.revokedAt} IS NOT NULL`,
@@ -1155,11 +1187,13 @@ export const scimConnectionBinding = pgTable(
     id: text("id").primaryKey(),
     connectionId: text("connection_id").notNull(),
     connectionKey: text("connection_key").notNull(),
-    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     createdAt: timestamptz("created_at").notNull(),
     decommissionedAt: timestamptz("decommissioned_at"),
     decommissionStatus: text("decommission_status", {
-      enum: ["active", "reconciling", "complete"],
+      enum: SCIM_CONNECTION_DECOMMISSION_STATUSES,
     })
       .default("active")
       .notNull(),
@@ -1181,6 +1215,10 @@ export const scimConnectionBinding = pgTable(
     index("scim_conn_binding_conn_id_idx").on(table.connectionId),
     uniqueIndex("scim_conn_binding_conn_key_uidx").on(table.connectionKey),
     check(
+      "scim_conn_binding_decomm_status_check",
+      inArray(table.decommissionStatus, SCIM_CONNECTION_DECOMMISSION_STATUSES),
+    ),
+    check(
       "scim_conn_binding_decomm_state_check",
       sql`${table.decommissionStatus} <> 'complete' OR ${table.decommissionCompletedAt} IS NOT NULL`,
     ),
@@ -1194,7 +1232,9 @@ export const scimIdentityTombstone = pgTable(
   {
     id: text("id").primaryKey(),
     connectionId: text("connection_id").notNull(),
-    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     externalId: text("external_id").notNull(),
     externalIdKey: text("external_id_key").notNull(),
     userId: text("user_id")
@@ -1238,7 +1278,9 @@ export const scimUser = pgTable(
   {
     id: text("id").primaryKey(),
     connectionId: text("connection_id").notNull(),
-    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -1279,7 +1321,9 @@ export const scimProjectionGrant = pgTable(
   {
     id: text("id").primaryKey(),
     connectionId: text("connection_id").notNull(),
-    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     scimUserId: text("scim_user_id")
       .notNull()
       .references(() => scimUser.id, { onDelete: "cascade" }),
@@ -1310,7 +1354,9 @@ export const scimGroup = pgTable(
   {
     id: text("id").primaryKey(),
     connectionId: text("connection_id").notNull(),
-    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     revision: integer("revision").default(0).notNull(),
     displayName: text("display_name").notNull(),
     displayNameKey: text("display_name_key").notNull(),

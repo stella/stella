@@ -132,6 +132,14 @@ export const createScimProvisioningPlugin = ({
       if (existingMember) {
         return;
       }
+      // Acquire a row-level lock on the organization inside the SCIM
+      // transaction so concurrent provisioning requests cannot oversubscribe
+      // the configured seat limit.
+      await context.database.update({
+        model: "organization",
+        where: [{ field: "id", value: organizationId }],
+        update: { id: organizationId },
+      });
       const seatLimit = await readOrganizationSeatLimit(organizationId);
       if (seatLimit !== null) {
         const activeCount = await context.database.count({
@@ -161,14 +169,14 @@ export const createScimProvisioningPlugin = ({
         model: "member",
         where: [{ field: "id", value: existingMember.id }],
       });
-      await context.database.deleteMany({
-        model: "session",
-        where: [
-          { field: "userId", value: input.userId },
-          { field: "activeOrganizationId", value: organizationId },
-        ],
-      });
     }
+    await context.database.deleteMany({
+      model: "session",
+      where: [
+        { field: "userId", value: input.userId },
+        { field: "activeOrganizationId", value: organizationId },
+      ],
+    });
   };
 
   const plugin = scim({

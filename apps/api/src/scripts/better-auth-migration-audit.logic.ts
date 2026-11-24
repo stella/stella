@@ -282,12 +282,24 @@ export const AUTH_TABLE_AUDIT_POLICY = {
     tableName: getTableName(authSchema.session),
   },
   scimConnectionBinding: {
-    foreignKeys: [],
+    foreignKeys: [
+      {
+        column: "provisioning_domain_id",
+        referencedColumn: "id",
+        referencedModel: "organization",
+      },
+    ],
     preservedColumns: columnNames(authSchema.scimConnectionBinding),
     tableName: getTableName(authSchema.scimConnectionBinding),
   },
   scimGroup: {
-    foreignKeys: [],
+    foreignKeys: [
+      {
+        column: "provisioning_domain_id",
+        referencedColumn: "id",
+        referencedModel: "organization",
+      },
+    ],
     preservedColumns: columnNames(authSchema.scimGroup),
     tableName: getTableName(authSchema.scimGroup),
   },
@@ -309,13 +321,24 @@ export const AUTH_TABLE_AUDIT_POLICY = {
   },
   scimIdentityTombstone: {
     foreignKeys: [
+      {
+        column: "provisioning_domain_id",
+        referencedColumn: "id",
+        referencedModel: "organization",
+      },
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
     preservedColumns: columnNames(authSchema.scimIdentityTombstone),
     tableName: getTableName(authSchema.scimIdentityTombstone),
   },
   scimManagedConnection: {
-    foreignKeys: [],
+    foreignKeys: [
+      {
+        column: "provisioning_domain_id",
+        referencedColumn: "id",
+        referencedModel: "organization",
+      },
+    ],
     preservedColumns: columnNames(authSchema.scimManagedConnection),
     tableName: getTableName(authSchema.scimManagedConnection),
   },
@@ -344,6 +367,11 @@ export const AUTH_TABLE_AUDIT_POLICY = {
   scimProjectionGrant: {
     foreignKeys: [
       {
+        column: "provisioning_domain_id",
+        referencedColumn: "id",
+        referencedModel: "organization",
+      },
+      {
         column: "scim_user_id",
         referencedColumn: "id",
         referencedModel: "scimUser",
@@ -362,6 +390,11 @@ export const AUTH_TABLE_AUDIT_POLICY = {
   },
   scimUser: {
     foreignKeys: [
+      {
+        column: "provisioning_domain_id",
+        referencedColumn: "id",
+        referencedModel: "organization",
+      },
       { column: "user_id", referencedColumn: "id", referencedModel: "user" },
     ],
     preservedColumns: columnNames(authSchema.scimUser),
