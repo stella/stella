@@ -31,7 +31,7 @@ import { memberReachableMatterIds } from "@/api/lib/workspaces/authorized-worksp
  * census in `stored-export-access.test.ts` keeps it that way.
  */
 
-export const DATA_EXPORT_READ_PERMISSION = {
+const DATA_EXPORT_READ_PERMISSION = {
   dataExport: ["read"],
 } satisfies PermissionInput;
 

@@ -1802,6 +1802,8 @@ const GENERATOR_DECLARATIONS = [
       "apps/api/src/lib/legal-search/morphology/dictionary.ts",
       "apps/api/src/lib/rate-limit/budget-config.ts",
       "apps/api/src/lib/search/pagination-outcome-projection.ts",
+      "apps/api/src/lib/data-export/stored-export-access.ts",
+      "apps/api/src/lib/workspaces/matter-visibility.ts",
       "packages/api-contract/src/case-law-court-year.ts",
       "packages/api-contract/src/document-version-upload.ts",
       "packages/api-contract/src/statute-version.ts",

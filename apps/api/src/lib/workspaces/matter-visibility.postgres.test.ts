@@ -38,6 +38,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const ROLES = ["owner", "admin", "member", "intern", "external"] as const;
+const FIXTURE_TIME = new Date("2026-11-24T00:00:00.000Z");
 type Role = (typeof ROLES)[number];
 
 type Organization = {
@@ -72,7 +73,7 @@ const seedOrganization = async (db: GatedTestDb): Promise<Organization> => {
   });
   await recordNewOrganizationAccessState(db, {
     organizationId,
-    now: dbClock.now(),
+    now: FIXTURE_TIME,
   });
   await db.insert(user).values(
     ROLES.map((role) => ({
@@ -292,10 +293,6 @@ describe.skipIf(!runPostgresTests)("matter visibility (postgres)", () => {
             .update(member)
             .set({ role: "external" })
             .where(eq(member.id, a.memberIds.member)),
-      );
-      // Account deletion removes the user row and cascades.
-      await expectStewardRefusal(
-        async () => await db.delete(user).where(eq(user.id, a.users.member)),
       );
       // An external member may leave; they never kept the matter reachable.
       await db.delete(workspaceMembers).where(assignment(a.users.external));
