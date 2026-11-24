@@ -9,7 +9,7 @@ import {
 import type { DESKTOP_RUNNER_APPROVAL_DECISIONS } from "@stll/api-contract/desktop-runner";
 
 import { createEventQueue } from "../../harness/event-queue";
-import type { HarnessEvent } from "../../harness/events";
+import type { HarnessApprovalOption, HarnessEvent } from "../../harness/events";
 import { HARNESS_TOOL_NAMES, nativeToolCall } from "../../harness/tool-parts";
 import {
   APPROVAL_DECISION,
@@ -26,6 +26,24 @@ type ApprovalDecision = (typeof DESKTOP_RUNNER_APPROVAL_DECISIONS)[number];
  * approval for it, and the run's later steps there follow it at once.
  */
 const SESSION_APPROVAL = "approve_for_session" satisfies ApprovalDecision;
+
+const APPROVE_OPTION = {
+  id: APPROVAL_DECISION.approve,
+  decision: APPROVAL_DECISION.approve,
+} as const;
+const DENY_OPTION = {
+  id: APPROVAL_DECISION.deny,
+  decision: APPROVAL_DECISION.deny,
+} as const;
+const ONCE_OPTIONS: readonly HarnessApprovalOption[] = [
+  APPROVE_OPTION,
+  DENY_OPTION,
+];
+const SITE_OPTIONS: readonly HarnessApprovalOption[] = [
+  APPROVE_OPTION,
+  { id: APPROVAL_DECISION.approveSite, decision: SESSION_APPROVAL },
+  DENY_OPTION,
+];
 
 /**
  * What the member is asked, in the harness's words: the kind of step, the
@@ -131,23 +149,9 @@ export const createActionApprovals = () => {
         kind: "tool",
         toolCall,
         reason: approvalReason(asked),
-        options: [
-          {
-            id: APPROVAL_DECISION.approve,
-            decision: APPROVAL_DECISION.approve,
-          },
-          // Approving for the session always allows the step's website,
-          // which only a page that can hold an approval offers.
-          ...(asked.site === null
-            ? []
-            : [
-                {
-                  id: APPROVAL_DECISION.approveSite,
-                  decision: SESSION_APPROVAL,
-                },
-              ]),
-          { id: APPROVAL_DECISION.deny, decision: APPROVAL_DECISION.deny },
-        ],
+        // Approving for the session always allows the step's website,
+        // which only a page that can hold an approval offers.
+        options: asked.site === null ? ONCE_OPTIONS : SITE_OPTIONS,
       },
     });
     if (asked.signal.aborted) {
