@@ -1,5 +1,13 @@
 # @stll/ui
 
+## 0.89.0
+
+### Minor Changes
+
+- [#9387](https://github.com/stella/stella/pull/9387) [`8560c3c`](https://github.com/stella/stella/commit/8560c3c53934377d434c41270ace8fe175f0190a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add optional `render` prop and portalled context menu to `EntityActions` so table rows can host row actions with valid `<tbody>` markup.
+
+- [#9390](https://github.com/stella/stella/pull/9390) [`1642faf`](https://github.com/stella/stella/commit/1642faf23e5cf48f6cf3c719c9b251ac786c8d5e) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `disabledReason` tooltip support to `Switch` and `SwitchField`.
+
 ## 0.88.0
 
 ### Minor Changes
