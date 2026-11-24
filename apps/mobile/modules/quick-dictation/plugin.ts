@@ -278,7 +278,7 @@ const addQuickDictationFiles = (
 /**
  * Adds each language's `AppShortcuts.strings` to the app target, in the
  * `Supporting/<language>.lproj` group, as Expo adds the app's
- * `InfoPlist.strings`; a project that has one is left as it is.
+ * `InfoPlist.strings`; a group that has one keeps it.
  */
 export const addAppShortcutsStrings = (
   project: XcodeProject,
@@ -287,15 +287,8 @@ export const addAppShortcutsStrings = (
   const [appUuid] = IOSConfig.Target.findFirstNativeTarget(project);
   for (const language of languages) {
     const groupName = `${appGroup}/${SUPPORTING_FOLDER}/${language}.lproj`;
-    const group = IOSConfig.XcodeUtils.ensureGroupRecursively(
-      project,
-      groupName,
-    );
-    if (
-      group?.children.some(({ comment }) => comment === APP_SHORTCUTS_STRINGS)
-    ) {
-      continue;
-    }
+    IOSConfig.XcodeUtils.ensureGroupRecursively(project, groupName);
+    // Skips a file its group already has, so a second prebuild adds none.
     IOSConfig.XcodeUtils.addResourceFileToGroup({
       filepath: `${language}.lproj/${APP_SHORTCUTS_STRINGS}`,
       groupName,
