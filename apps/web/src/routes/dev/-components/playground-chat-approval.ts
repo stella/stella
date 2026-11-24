@@ -26,6 +26,7 @@ export const createPlaygroundChatApproval = (
   handleAlwaysAllow: noop,
   handleApprove: noop,
   handleDeny: noop,
+  handleApproveForRun: noop,
   continueRequestSecret: async () => {
     /* no-op in playground */
   },

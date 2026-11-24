@@ -45,6 +45,7 @@ import {
 } from "@/api/handlers/chat/active-skill-context";
 import { createTurnAnswerQuoteChecker } from "@/api/handlers/chat/answer-quote-checks";
 import type { TurnBrowserExtension } from "@/api/handlers/chat/browser-extension-capability";
+import { loadBrowserSiteGrants } from "@/api/handlers/chat/browser-site-grants/load";
 import {
   type ChatCommand,
   chatCommandOf,
@@ -3017,6 +3018,14 @@ export const createSendMessage = (
                 safeDb,
                 session.activeOrganizationId,
               ),
+            readBrowserSiteGrants: async () =>
+              (
+                await loadBrowserSiteGrants({
+                  organizationId: session.activeOrganizationId,
+                  safeDb,
+                  userId: user.id,
+                })
+              ).map((grants) => grants.map(({ origin }) => origin)),
             steeredQueue: createSteeredQueue({
               organizationId: session.activeOrganizationId,
               recordAuditEvent,

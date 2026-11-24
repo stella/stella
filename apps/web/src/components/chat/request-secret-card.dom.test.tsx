@@ -103,6 +103,7 @@ const mountCard = ({
             handleAllowInConversation: () => {},
             handleAlwaysAllow: () => {},
             handleApprove: () => {},
+            handleApproveForRun: () => {},
             handleDeny: () => {},
             handleRequestSecret,
             continueRequestSecret,

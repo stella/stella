@@ -48,6 +48,11 @@ export const CHAT_USER_ACTIONS = {
     via: "session",
   },
   "allow-once": { handler: "handleApprove", via: "session" },
+  /**
+   * Allows a browser step on the member's computer and always allows its
+   * website: the run's later steps there follow at once.
+   */
+  "allow-website-for-run": { handler: "handleApproveForRun", via: "session" },
   "always-allow": { handler: "handleAlwaysAllow", via: "session" },
   /** Answers, or dismisses, a question a run on the member's computer asks. */
   "answer-local-question": {

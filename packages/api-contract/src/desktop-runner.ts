@@ -6,6 +6,7 @@ import * as v from "valibot";
 import { AGENT_HARNESSES } from "./agent-harness";
 import { API_STORABLE_INSTANT_CHECK } from "./api-date";
 import { STELLA_API_VERSION_PREFIX } from "./api-version";
+import { browserSiteGrantOriginsSchema } from "./browser-site-grants";
 import {
   CHAT_LOCAL_RUN_TOOL_LIMITS,
   chatLocalRunShownText,
@@ -1047,6 +1048,13 @@ export const desktopRunnerServerMessageSchema = v.variant("type", [
       network: v.picklist(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: v.picklist(DESKTOP_RUNNER_FS_POLICIES),
       approvals: v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
+      /**
+       * The websites the member always allows browser steps on, as stored
+       * when the run started: a step the level would ask about runs there
+       * without asking (`decideBrowserStep`). Absent means none, as in a
+       * command queued before the field existed.
+       */
+      browserSiteGrants: v.optional(browserSiteGrantOriginsSchema),
     }),
     mcp: v.object({
       serverName: v.pipe(v.string(), v.regex(/^[a-z][a-z\d_]{0,63}$/u)),

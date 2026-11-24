@@ -1467,6 +1467,7 @@ export class SidecarHost {
       runId: message.runId,
       threadId: message.threadId,
       approvals: message.policy.approvals,
+      siteGrants: new Set(message.policy.browserSiteGrants),
       approve: run.approvals.request,
       stopped: run.browserStop.signal,
       workspaceDir: message.workspaceDir,

@@ -322,6 +322,7 @@ const startOwner = async ({
       { ...computer.context, chatThreadId: seeded.threadId },
       {
         type: "start",
+        browserSiteGrants: [],
         target: {
           kind: "local",
           harness: "codex",
@@ -457,6 +458,7 @@ const uninterrupted = async (chunks: readonly StreamChunk[]) => {
     processor,
     source: createLocalChatRun(computer.context, {
       type: "start",
+      browserSiteGrants: [],
       target: {
         kind: "local",
         harness: "codex",

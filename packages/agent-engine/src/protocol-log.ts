@@ -1108,6 +1108,7 @@ const SIDECAR_HOST_FIELDS: Readonly<
       network: vocabulary(DESKTOP_RUNNER_NETWORK_POLICIES),
       fs: vocabulary(DESKTOP_RUNNER_FS_POLICIES),
       approvals: vocabulary(DESKTOP_RUNNER_APPROVAL_MODES),
+      browserSiteGrants: SIZE,
     }),
     mcp: object({ serverName: OPAQUE, expiresAt: INSTANT, url: SIZE }),
     workspaceDir: SIZE,

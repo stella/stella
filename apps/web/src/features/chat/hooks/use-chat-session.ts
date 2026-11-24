@@ -1608,6 +1608,16 @@ export const useChatSession = ({
     },
     [resolveToolApproval],
   );
+  /**
+   * Approves a step a run on the member's computer asks about, for the rest
+   * of that run: a browser step's website is then always allowed there.
+   */
+  const handleApproveForRun = useCallback(
+    async (id: string) => {
+      await resolveToolApproval({ id, approved: true, scope: "session" });
+    },
+    [resolveToolApproval],
+  );
   const handleAskUserSubmit = useCallback(
     async (toolCallId: string, output: AskUserOutput) => {
       await addToolResult({
@@ -2580,6 +2590,7 @@ export const useChatSession = ({
     holdQueueForMessageEdit,
     editUserMessage,
     handleAlwaysAllow,
+    handleApproveForRun,
     confirmStoredApprovalGrant,
     handleCreateDocumentResolve,
     handleOpenCreateDocumentDraft,
