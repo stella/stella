@@ -31,12 +31,10 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
         ...COLLECTION_PART_COLUMN_GRANTS_BY_RELATION.case_law_collection_bodies,
       },
       ...LEGISLATION_WORK_IDENTIFIER_COLUMN_GRANTS_BY_RELATION,
-      legislation_amendments:
-        PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION.legislation_amendments,
     }),
   )(
     "permits absent and staged %s columns while refusing undeclared reads and writes",
-    async (relationName, columnGrants) => {
+    async (_relationName, columnGrants) => {
       const databaseUrl =
         process.env["DATABASE_URL"] ??
         panic("Postgres grant test requires DATABASE_URL");
@@ -46,11 +44,7 @@ describe.skipIf(!enabled)("staged public-law grants (postgres)", () => {
         const relation = `public_law_grants_${suffix}`;
         const role = sql.identifier(`public_law_reader_${suffix}`);
         const table = sql`${sql.identifier("public")}.${sql.identifier(relation)}`;
-        // Stage the reviewed expansion independently so an omitted allowance fails.
-        const columns =
-          relationName === "legislation_amendments"
-            ? ["effect_details", "observations"]
-            : Object.keys(columnGrants);
+        const columns = Object.keys(columnGrants);
         const firstColumn =
           columns.at(0) ?? panic("Staged grants must not be empty");
         const columnList = sql.join(

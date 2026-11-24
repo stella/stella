@@ -62,7 +62,9 @@ import {
   DOCUMENT_PROCESSING_REQUIRED_STATUS,
 } from "@/api/lib/document-processing-contract";
 import { TEMPLATE_WARNING_CODES } from "@/api/lib/docx/template-warnings";
+import { legislationAmendmentEffectSchema } from "@/api/lib/legal-search/legislation-amendment-effect";
 import { LEGISLATION_AMENDMENT_CHANGE_KINDS } from "@/api/lib/legal-search/legislation-ingestion-types";
+import type { LegislationAmendmentCoverage } from "@/api/lib/legal-search/legislation-ingestion-types";
 import {
   SANCTIONS_CLASSIFICATIONS,
   SANCTIONS_ENTITY_TYPES,
@@ -1939,6 +1941,127 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
 
 export { READ_CASE_LAW_CITATIONS_PROJECTION } from "./case-law-citation-projection";
 
+// These dates have already passed calendar validation at ingestion; the wire
+// declares their shape without embedding a runtime-only admission function.
+const amendmentWireDateProjection = v.pipe(
+  v.string(),
+  v.maxLength(10),
+  v.regex(/^\d{4}-\d{2}-\d{2}$/u),
+);
+const amendmentEffectBranches = [
+  projectionBranch(
+    v.strictObject({
+      ...legislationAmendmentEffectSchema.options[0].entries,
+      on: amendmentWireDateProjection,
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      ...legislationAmendmentEffectSchema.options[1].entries,
+      text: v.nullable(contentText()),
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      ...legislationAmendmentEffectSchema.options[2].entries,
+      condition: v.strictObject({
+        text: contentText(),
+        label: v.nullable(contentText()),
+      }),
+      workingDate: v.nullable(amendmentWireDateProjection),
+      actualDate: v.nullable(amendmentWireDateProjection),
+    }),
+  ),
+] as const;
+const amendmentInputEffectProjection = v.variant(
+  "type",
+  amendmentEffectBranches,
+);
+const amendmentResolvedEffectProjection = v.variant("type", [
+  ...amendmentEffectBranches,
+  projectionBranch(v.strictObject({ type: v.literal("conflicting") })),
+]);
+const amendmentRelationProjection = v.strictObject({
+  publisherId: v.string(),
+  amendingEli: v.string(),
+  amendingTitle: v.nullable(v.string()),
+  amendingAnchor: v.nullable(v.string()),
+  affectedAnchor: v.string(),
+  changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
+  effective: amendmentInputEffectProjection,
+  publisherInstruction: v.nullable(contentText()),
+});
+const amendmentPositiveEvidenceFields = {
+  observedAt: v.string(),
+  relation: amendmentRelationProjection,
+  retainedConditional: v.optional(
+    v.strictObject({
+      observedAt: v.string(),
+      relation: amendmentRelationProjection,
+    }),
+  ),
+};
+const amendmentObservationProjection = v.variant("status", [
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("present"),
+      channel: v.string(),
+      ...amendmentPositiveEvidenceFields,
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("historical"),
+      channel: v.string(),
+      ...amendmentPositiveEvidenceFields,
+    }),
+  ),
+  projectionBranch(
+    v.strictObject({
+      status: v.literal("absent"),
+      channel: v.string(),
+      observedAt: v.string(),
+      lastPositive: v.nullable(v.strictObject(amendmentPositiveEvidenceFields)),
+    }),
+  ),
+]);
+const amendmentCoverageFields = {
+  complete: { type: v.literal("complete") },
+  partial: {
+    type: v.literal("partial"),
+    unlocatedRelations: v.number(),
+    reason: v.string(),
+  },
+  "not-stated": { type: v.literal("not-stated"), reason: v.string() },
+} as const satisfies Record<
+  LegislationAmendmentCoverage["type"],
+  v.ObjectEntries
+>;
+const amendmentCoverageReportProjection = v.variant("type", [
+  projectionBranch(v.strictObject(amendmentCoverageFields.complete)),
+  projectionBranch(v.strictObject(amendmentCoverageFields.partial)),
+  projectionBranch(v.strictObject(amendmentCoverageFields["not-stated"])),
+]);
+const amendmentCoverageAggregationFields = {
+  aggregation: v.optional(
+    v.strictObject({
+      representativeChannel: v.string(),
+      channels: v.array(
+        v.strictObject({
+          channel: v.string(),
+          coverage: amendmentCoverageReportProjection,
+        }),
+      ),
+      distinctUnlocatedTotal: v.variant("type", [
+        projectionBranch(
+          v.strictObject({ type: v.literal("exact"), count: v.number() }),
+        ),
+        projectionBranch(v.strictObject({ type: v.literal("unknown") })),
+      ]),
+    }),
+  ),
+};
+
 /**
  * The window of a Work's consolidated versions a statute read returns.
  * Newest validity window first, bounded by the versions page size: enough to
@@ -1956,22 +2079,28 @@ const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
         changeKind: v.picklist(LEGISLATION_AMENDMENT_CHANGE_KINDS),
         effectiveDate: v.nullable(v.string()),
         effectiveText: v.nullable(v.string()),
+        effective: amendmentResolvedEffectProjection,
+        observations: v.array(amendmentObservationProjection),
       }),
     ),
     observedAt: v.string(),
     coverage: v.variant("type", [
-      projectionBranch(v.strictObject({ type: v.literal("complete") })),
       projectionBranch(
         v.strictObject({
-          type: v.literal("partial"),
-          unlocatedRelations: v.number(),
-          reason: v.string(),
+          ...amendmentCoverageFields.complete,
+          ...amendmentCoverageAggregationFields,
         }),
       ),
       projectionBranch(
         v.strictObject({
-          type: v.literal("not-stated"),
-          reason: v.string(),
+          ...amendmentCoverageFields.partial,
+          ...amendmentCoverageAggregationFields,
+        }),
+      ),
+      projectionBranch(
+        v.strictObject({
+          ...amendmentCoverageFields["not-stated"],
+          ...amendmentCoverageAggregationFields,
         }),
       ),
     ]),

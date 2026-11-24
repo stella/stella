@@ -83,6 +83,7 @@ import {
 import { searchCorpusIndexDecisions } from "@/api/handlers/case-law/decisions/search";
 import * as searchInterpretation from "@/api/handlers/case-law/decisions/search-interpretation";
 import { coverageResponseSchema } from "@/api/handlers/case-law/public-response-schemas";
+import type { StatuteAmendmentPage } from "@/api/handlers/legislation/reader-response";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
@@ -101,6 +102,8 @@ import type { readDecisionReviews } from "@/api/lib/case-law/decision-reviews";
 import { readDecisionTextMetadata } from "@/api/lib/case-law/decision-text";
 import { functionWordsWarning } from "@/api/lib/case-law/search-warnings";
 import { SEARCH_CASE_LAW_PROJECTION } from "@/api/lib/chat/case-law-result-projections";
+import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
+import { READ_STATUTE_PROJECTION } from "@/api/lib/chat/projections";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
@@ -121,6 +124,11 @@ import {
   corpusSearchGroupToken,
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
+import { resolveLegislationAmendmentEffect } from "@/api/lib/legal-search/legislation-amendment-observations";
+import type {
+  LegislationAmendmentChannelObservation,
+  LegislationAmendmentRelation,
+} from "@/api/lib/legal-search/legislation-ingestion-types";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { PUBLIC_READ_TIMEOUT_CODE } from "@/api/lib/legal-search/public-read-timeout";
 import { LIMITS } from "@/api/lib/limits";
@@ -6184,6 +6192,126 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     });
   });
+
+  test.each(["compatible", "contradictory"] as const)(
+    "read_statute preserves conditional evidence and %s channel claims in its serialized response",
+    async (claim) => {
+      const relation = {
+        publisherId: "publisher:condition-1",
+        amendingEli: "https://example.test/acts/2026/101",
+        amendingTitle: null,
+        amendingAnchor: null,
+        affectedAnchor: "section-5",
+        changeKind: "changed",
+        publisherInstruction: null,
+        effective: {
+          type: "conditional",
+          condition: {
+            text: "When the implementing rule takes effect",
+            label: "Implementing rule",
+          },
+          workingDate: "2999-01-01",
+          actualDate: null,
+        },
+      } satisfies LegislationAmendmentRelation;
+      const observations = [
+        {
+          status: "present",
+          channel: "bulk",
+          observedAt: "2026-10-20T10:00:00Z",
+          relation,
+        },
+        {
+          status: "present",
+          channel: "sparql",
+          observedAt: "2026-10-21T10:00:00Z",
+          relation: {
+            ...relation,
+            effective: {
+              type: "date",
+              on: claim === "compatible" ? "2999-01-01" : "2028-01-01",
+            },
+          },
+        },
+      ] satisfies LegislationAmendmentChannelObservation[];
+      const effective = resolveLegislationAmendmentEffect(observations);
+      expect(effective.type).toBe(
+        claim === "compatible" ? "conditional" : "conflicting",
+      );
+      const coverage = {
+        type: "partial",
+        unlocatedRelations: 2,
+        reason: "Unresolved publisher links",
+      } as const;
+      const pendingChanges = {
+        items: [
+          {
+            publisherId: relation.publisherId,
+            duplicatePublisherIds: [],
+            amendingEli: relation.amendingEli,
+            amendingTitle: relation.amendingTitle,
+            affectedAnchor: relation.affectedAnchor,
+            changeKind: relation.changeKind,
+            effectiveDate: null,
+            effectiveText:
+              effective.type === "conditional"
+                ? effective.condition.text
+                : null,
+            effective,
+            observations,
+          },
+        ],
+        observedAt: "2026-10-21T10:00:00Z",
+        truncated: false,
+        coverage: {
+          ...coverage,
+          aggregation: {
+            representativeChannel: "bulk",
+            channels: [
+              { channel: "bulk", coverage },
+              { channel: "sparql", coverage },
+            ],
+            distinctUnlocatedTotal: { type: "unknown" },
+          },
+        },
+      } satisfies StatuteAmendmentPage;
+      resolveStatuteExpressionMock.mockResolvedValue({
+        type: "expression",
+        id: STATUTE_ID,
+      });
+      readPublicLegislationHandlerMock.mockResolvedValue({
+        ...createStatuteReadResult(),
+        pendingChanges,
+      });
+      const versions = createStatuteVersionsPage();
+      listStatuteVersionsHandlerMock.mockResolvedValue({
+        ...versions,
+        items: versions.items.map((version) =>
+          version.id === STATUTE_ID
+            ? { ...version, amendedBy: pendingChanges }
+            : version,
+        ),
+      });
+      const result = await handleMcpToolCall({
+        args: { as_of: "2020-06-01", eli: STATUTE_ELI },
+        context: createContext(),
+        toolName: "read_statute",
+      });
+      expect(result.isError).toBeUndefined();
+      expect(parseToolPayload(result)).toMatchObject({
+        statute: {
+          pendingChanges,
+          versions: [{ amendedBy: pendingChanges }, { amendedBy: null }],
+        },
+      });
+      expect(result.structuredContent).toMatchObject({
+        statute: { pendingChanges },
+      });
+      expect(
+        deriveRefMediationEntry(READ_STATUTE_PROJECTION).passthroughIdPaths,
+      ).toContain("statute.documentId");
+    },
+  );
 
   test("read_statute keeps every annex in a bounded outline, and an annex reads by its number", async () => {
     // A long act: more section headings than the outline holds, then the

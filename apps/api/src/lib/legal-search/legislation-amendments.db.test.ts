@@ -54,6 +54,7 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION } from "@/api/lib/public-law-relations";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -263,6 +264,545 @@ afterAll(async () => {
 });
 
 describe("publisher amendment snapshots", () => {
+  test.each(["bulk", "sparql"] as const)(
+    "%s first ingestion retains conditional evidence in the public reader",
+    async (firstChannel) => {
+      const conditional = {
+        ...relation,
+        effective: {
+          type: "conditional",
+          condition: {
+            text: "When the implementing rule takes effect",
+            label: "Implementing rule",
+          },
+          workingDate: "2999-01-01",
+          actualDate: null,
+        },
+      } satisfies LegislationAmendmentRelation;
+      const input = {
+        sourceId,
+        eli: work.eli,
+        title: "Amendment channel fixture",
+        country: "CZE",
+        language: work.language,
+        version: {
+          type: "consolidation",
+          validFrom: "2027-01-01",
+          end: { type: "open" },
+        },
+        fulltext: "Section 1",
+        rawHash: "channel-fixture",
+      } satisfies LegislationDocumentInput;
+      const contribution = (channel: "bulk" | "sparql", observedAt: string) =>
+        ({
+          channel,
+          observedAt,
+          relations: [
+            channel === "bulk"
+              ? conditional
+              : { ...relation, effective: { type: "date", on: "2999-01-01" } },
+          ],
+          coverage: { type: "complete" },
+        }) satisfies LegislationAmendmentSnapshot;
+      const bulk = await processLegislationDocument(
+        {
+          ...input,
+          amendments: contribution(firstChannel, "2026-10-20T10:00:00Z"),
+        },
+        scopedDb,
+        { corpus },
+      );
+      expect(bulk.type).toBe("stored");
+      const incremental = await processLegislationDocument(
+        {
+          ...input,
+          amendments: contribution(
+            firstChannel === "bulk" ? "sparql" : "bulk",
+            "2026-10-21T10:00:00Z",
+          ),
+        },
+        scopedDb,
+        { corpus },
+      );
+      if (incremental.type !== "stored") {
+        throw new Error("Expected channel fixture ingestion");
+      }
+      const rows = await incoming();
+      expect(rows.items).toHaveLength(1);
+      expect(rows.items.at(0)).toMatchObject({
+        effectiveDate: null,
+        effectDetails: conditional.effective,
+      });
+      expect(
+        rows.items.at(0)?.observations?.map(({ channel }) => channel),
+      ).toEqual(["bulk", "sparql"]);
+      const invalidProjection = await rejectionOf(
+        db
+          .update(legislationAmendments)
+          .set({
+            effectiveType: "date",
+            effectiveDate: "2999-01-01",
+            effectiveText: null,
+          })
+          .where(eq(legislationAmendments.sourceId, sourceId)),
+      );
+      expect(
+        isPgConstraintError(
+          invalidProjection,
+          PG_ERROR.CHECK_VIOLATION,
+          "legislation_amendments_effect_projection",
+        ),
+      ).toBe(true);
+      expect(
+        (
+          await readLegislationAmendments(asTestRaw(db), {
+            work,
+            direction: "incoming",
+            limit: 10,
+            effectiveDates: ["2999-01-01"],
+          })
+        ).items,
+      ).toEqual([]);
+      const legislationDb: LegislationReadDb = async (read) =>
+        await withPublicLawReaderRole(db, async (tx) => read(asTestRaw(tx)));
+      const response = await readPublicLegislationHandler(
+        incremental.id,
+        legislationDb,
+        "pages",
+      );
+      if ("code" in response) {
+        throw new Error("Expected public amendment fixture");
+      }
+      expect(response.pendingChanges?.items.at(0)).toMatchObject({
+        effectiveDate: null,
+        effective: conditional.effective,
+        observations: [
+          { channel: "bulk", relation: { effective: conditional.effective } },
+          {
+            channel: "sparql",
+            relation: { effective: { type: "date", on: "2999-01-01" } },
+          },
+        ],
+      });
+      await sync(
+        sanitizeLegislationAmendments({
+          channel: "bulk",
+          observedAt: "2026-10-22T10:00:00Z",
+          relations: [
+            {
+              ...conditional,
+              effective: { ...conditional.effective, actualDate: "2027-01-01" },
+            },
+          ],
+          coverage: { type: "complete" },
+        }).unwrap(),
+      );
+      expect(
+        (
+          await readLegislationAmendments(asTestRaw(db), {
+            work,
+            direction: "incoming",
+            limit: 10,
+            effectiveDates: ["2027-01-01"],
+          })
+        ).items.at(0),
+      ).toMatchObject({
+        effectiveDate: "2027-01-01",
+        effectDetails: {
+          type: "conditional",
+          actualDate: "2027-01-01",
+          workingDate: "2999-01-01",
+        },
+      });
+    },
+  );
+
+  test("partial and stale channel snapshots cannot retract prior omitted links", async () => {
+    const write = async (input: LegislationAmendmentSnapshot) =>
+      sync(sanitizeLegislationAmendments(input).unwrap());
+    await write({
+      channel: "bulk",
+      observedAt: "2026-10-20T12:00:00+02:00",
+      relations: [relation],
+      coverage: { type: "complete" },
+    });
+    await write({
+      channel: "bulk",
+      observedAt: "2026-10-21T10:00:00Z",
+      relations: [],
+      coverage: {
+        type: "partial",
+        unlocatedRelations: 2,
+        reason: "Unresolved publisher links",
+      },
+    });
+    expect(
+      (await incoming()).items.map(({ publisherId }) => publisherId),
+    ).toEqual([relation.publisherId]);
+    expect(
+      await write({
+        channel: "bulk",
+        observedAt: "2026-10-21T09:59:59Z",
+        relations: [],
+        coverage: { type: "complete" },
+      }),
+    ).toBe("superseded");
+    await write({
+      channel: "sparql",
+      observedAt: "2026-10-22T10:00:00Z",
+      relations: [],
+      coverage: {
+        type: "partial",
+        unlocatedRelations: 2,
+        reason: "Unresolved publisher links",
+      },
+    });
+    const stored = await readLegislationAmendmentSnapshot(asTestRaw(db), work);
+    expect(stored?.coverage).toMatchObject({
+      type: "partial",
+      unlocatedRelations: 2,
+      aggregation: {
+        representativeChannel: "bulk",
+        distinctUnlocatedTotal: { type: "unknown" },
+        channels: [
+          {
+            channel: "bulk",
+            coverage: { type: "partial", unlocatedRelations: 2 },
+          },
+          {
+            channel: "sparql",
+            coverage: { type: "partial", unlocatedRelations: 2 },
+          },
+        ],
+      },
+    });
+    expect((await incoming()).items).toHaveLength(1);
+    await write({
+      channel: "sparql",
+      observedAt: "2026-10-23T10:00:00Z",
+      relations: [],
+      coverage: { type: "complete" },
+    });
+    expect((await incoming()).items).toHaveLength(1);
+    expect(
+      (await readLegislationAmendmentSnapshot(asTestRaw(db), work))?.coverage
+        .type,
+    ).toBe("partial");
+    await write({
+      channel: "bulk",
+      observedAt: "2026-10-24T10:00:00Z",
+      relations: [],
+      coverage: { type: "not-stated", reason: "Channel has no relation model" },
+    });
+    expect((await incoming()).items).toHaveLength(1);
+    await write({
+      channel: "bulk",
+      observedAt: "2026-10-25T10:00:00Z",
+      relations: [],
+      coverage: { type: "complete" },
+    });
+    expect((await incoming()).items).toEqual([]);
+  });
+
+  test("complete channel retraction retains disputed provenance until all channels retract", async () => {
+    const write = async (
+      channel: string,
+      day: number,
+      relations: LegislationAmendmentRelation[],
+    ) =>
+      sync(
+        sanitizeLegislationAmendments({
+          channel,
+          observedAt: `2026-10-${day}T10:00:00Z`,
+          relations,
+          coverage: { type: "complete" },
+        }).unwrap(),
+      );
+    const conditional = {
+      ...relation,
+      effective: {
+        type: "conditional",
+        condition: { text: "When the rule takes effect", label: null },
+        workingDate: "2999-01-01",
+        actualDate: null,
+      },
+    } satisfies LegislationAmendmentRelation;
+    const working = {
+      ...relation,
+      effective: { type: "date", on: "2999-01-01" },
+    } satisfies LegislationAmendmentRelation;
+    await write("bulk", 20, [conditional]);
+    await write("sparql", 21, [working]);
+    await write("bulk", 22, []);
+    expect((await incoming()).items.at(0)).toMatchObject({
+      effectiveDate: null,
+      effectDetails: { type: "conflicting" },
+      observations: [
+        {
+          status: "absent",
+          channel: "bulk",
+          lastPositive: {
+            observedAt: "2026-10-20T10:00:00Z",
+            relation: conditional,
+          },
+        },
+        { status: "present", channel: "sparql", relation: working },
+      ],
+    });
+    await write("bulk", 23, [conditional]);
+    expect((await incoming()).items.at(0)).toMatchObject({
+      effectiveDate: null,
+      effectDetails: conditional.effective,
+      observations: [
+        { status: "present", channel: "bulk" },
+        { status: "present", channel: "sparql" },
+      ],
+    });
+    await write("sparql", 24, []);
+    await write("bulk", 25, []);
+    expect((await incoming()).items).toEqual([]);
+  });
+
+  test("complete named contributions retire unknown legacy presence while retaining its evidence", async () => {
+    await sync(snapshot("2026-10-20T10:00:00Z", [relation]));
+    await sync(
+      sanitizeLegislationAmendments({
+        channel: "bulk",
+        observedAt: "2026-10-21T10:00:00Z",
+        relations: [],
+        coverage: {
+          type: "partial",
+          unlocatedRelations: 1,
+          reason: "Unresolved link",
+        },
+      }).unwrap(),
+    );
+    expect((await incoming()).items.at(0)?.observations?.at(0)?.status).toBe(
+      "present",
+    );
+    await sync(
+      sanitizeLegislationAmendments({
+        channel: "bulk",
+        observedAt: "2026-10-22T10:00:00Z",
+        relations: [relation],
+        coverage: { type: "complete" },
+      }).unwrap(),
+    );
+    expect((await incoming()).items.at(0)?.observations).toMatchObject([
+      { status: "present", channel: "bulk" },
+      { status: "historical", channel: "legacy", relation },
+    ]);
+    await sync(
+      sanitizeLegislationAmendments({
+        channel: "bulk",
+        observedAt: "2026-10-23T10:00:00Z",
+        relations: [],
+        coverage: { type: "complete" },
+      }).unwrap(),
+    );
+    expect((await incoming()).items).toEqual([]);
+    await sync(snapshot("2026-10-24T10:00:00Z", [relation]));
+    expect((await incoming()).items).toEqual([]);
+  });
+
+  test("a legacy snapshot delivered after a complete named one is retired as if it came first", async () => {
+    const excluded = {
+      ...relation,
+      publisherId: "publisher:159-2026-2",
+      affectedAnchor: "https://example.test/2012/89#section-1830b",
+    } satisfies LegislationAmendmentRelation;
+    await sync(
+      sanitizeLegislationAmendments({
+        channel: "bulk",
+        observedAt: "2026-10-22T10:00:00Z",
+        relations: [relation],
+        coverage: { type: "complete" },
+      }).unwrap(),
+    );
+    await sync(snapshot("2026-10-20T10:00:00Z", [relation, excluded]));
+    const items = (await incoming()).items;
+    expect(items.map(({ publisherId }) => publisherId)).toEqual([
+      relation.publisherId,
+    ]);
+    expect(items.at(0)?.observations).toMatchObject([
+      { status: "present", channel: "bulk" },
+      { status: "historical", channel: "legacy", relation },
+    ]);
+  });
+
+  test("same-channel bare dates retain conditional evidence and expose contradictory claims", async () => {
+    const conditional = {
+      ...relation,
+      effective: {
+        type: "conditional",
+        condition: { text: "When the rule takes effect", label: null },
+        workingDate: "2999-01-01",
+        actualDate: null,
+      },
+    } satisfies LegislationAmendmentRelation;
+    const write = async (
+      day: number,
+      effective: LegislationAmendmentRelation["effective"],
+    ) =>
+      sync(
+        sanitizeLegislationAmendments({
+          channel: "bulk",
+          observedAt: `2026-10-${day}T10:00:00Z`,
+          relations: [{ ...relation, effective }],
+          coverage: { type: "complete" },
+        }).unwrap(),
+      );
+    await write(20, conditional.effective);
+    for (const [day, effective] of [
+      [21, { type: "date", on: "2999-01-01" }],
+      [22, { type: "not-stated", text: null }],
+    ] as const) {
+      await write(day, effective);
+      expect((await incoming()).items.at(0)).toMatchObject({
+        effectiveDate: null,
+        effectDetails: conditional.effective,
+        observations: [
+          {
+            relation: { effective },
+            retainedConditional: {
+              observedAt: "2026-10-20T10:00:00Z",
+              relation: conditional,
+            },
+          },
+        ],
+      });
+    }
+    await write(23, {
+      ...conditional.effective,
+      condition: {
+        text: "When the replacement rule takes effect",
+        label: null,
+      },
+      actualDate: "2028-01-01",
+    });
+    expect((await incoming()).items.at(0)).toMatchObject({
+      effectiveDate: "2028-01-01",
+      effectDetails: {
+        type: "conditional",
+        condition: { text: "When the replacement rule takes effect" },
+      },
+    });
+    expect(
+      (await incoming()).items.at(0)?.observations?.at(0),
+    ).not.toHaveProperty("retainedConditional");
+    const changed = {
+      ...conditional.effective,
+      condition: {
+        text: "When the replacement rule takes effect",
+        label: "Retained label",
+      },
+      actualDate: "2028-01-01",
+    };
+    await write(24, changed);
+    const missing = {
+      ...changed,
+      condition: { text: changed.condition.text, label: null },
+      workingDate: null,
+      actualDate: null,
+    };
+    await write(25, missing);
+    expect((await incoming()).items.at(0)).toMatchObject({
+      effectiveDate: "2028-01-01",
+      effectDetails: changed,
+      observations: [
+        {
+          relation: { effective: missing },
+          retainedConditional: {
+            observedAt: "2026-10-24T10:00:00Z",
+            relation: { effective: changed },
+          },
+        },
+      ],
+    });
+    await write(26, { type: "date", on: "2999-01-01" });
+    expect((await incoming()).items.at(0)).toMatchObject({
+      effectiveDate: "2028-01-01",
+      effectDetails: changed,
+      observations: [
+        {
+          relation: { effective: { type: "date", on: "2999-01-01" } },
+          retainedConditional: {
+            observedAt: "2026-10-25T10:00:00Z",
+            relation: { effective: changed },
+          },
+        },
+      ],
+    });
+    await write(27, { type: "date", on: "2028-01-01" });
+    expect((await incoming()).items.at(0)).toMatchObject({
+      effectiveDate: "2028-01-01",
+      effectDetails: { type: "conditional", actualDate: "2028-01-01" },
+    });
+    await write(28, { type: "date", on: "2029-01-01" });
+    expect((await incoming()).items.at(0)).toMatchObject({
+      effectiveDate: null,
+      effectDetails: { type: "conflicting" },
+      observations: [
+        {
+          relation: { effective: { type: "date", on: "2029-01-01" } },
+          retainedConditional: {
+            observedAt: "2026-10-25T10:00:00Z",
+            relation: {
+              effective: { type: "conditional", actualDate: "2028-01-01" },
+            },
+          },
+        },
+      ],
+    });
+    const legislationDb: LegislationReadDb = async (read) =>
+      await withPublicLawReaderRole(db, async (tx) => read(asTestRaw(tx)));
+    const response = await readPublicLegislationHandler(
+      documentId,
+      legislationDb,
+      "pages",
+    );
+    if ("code" in response) {
+      throw new Error("Expected public conditional evidence fixture");
+    }
+    expect(response.pendingChanges?.items.at(0)).toMatchObject({
+      effectiveDate: null,
+      effective: { type: "conflicting" },
+      observations: [
+        {
+          relation: { effective: { type: "date", on: "2029-01-01" } },
+          retainedConditional: {
+            relation: {
+              effective: {
+                type: "conditional",
+                condition: { text: "When the replacement rule takes effect" },
+              },
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  test("incompatible dates remain readable as a conflict rather than an actual date", async () => {
+    for (const [channel, on] of [
+      ["bulk", "2027-01-01"],
+      ["incremental", "2028-01-01"],
+    ] as const) {
+      await sync(
+        sanitizeLegislationAmendments({
+          channel,
+          observedAt: "2026-10-20T10:00:00Z",
+          relations: [{ ...relation, effective: { type: "date", on } }],
+          coverage: { type: "complete" },
+        }).unwrap(),
+      );
+    }
+    expect((await incoming()).items.at(0)).toMatchObject({
+      effectiveDate: null,
+      effectDetails: { type: "conflicting" },
+    });
+  });
+
   test("every rejected observation stores its statute and preserves the previous snapshot", async () => {
     await sync(snapshot("2026-10-16T11:00:00Z", [relation]));
     const beforeRelations = await incoming();
@@ -731,8 +1271,21 @@ describe("publisher amendment snapshots", () => {
     expect(await sync(snapshot("2026-10-16T11:00:00Z", first.relations))).toBe(
       "applied",
     );
+    const refreshed = await incoming();
+    expect(refreshed.items).toEqual(
+      rows.items.map((row) => ({
+        ...row,
+        observations:
+          row.observations === null
+            ? null
+            : row.observations.map((observation) => ({
+                ...observation,
+                observedAt: "2026-10-16T11:00:00Z",
+              })),
+      })),
+    );
     expect(await sync(snapshot("2026-10-16T10:30:00Z", []))).toBe("superseded");
-    expect(await incoming()).toEqual(rows);
+    expect(await incoming()).toEqual(refreshed);
     const pending = await readLegislationAmendments(asTestRaw(db), {
       work,
       direction: "incoming",
@@ -754,7 +1307,7 @@ describe("publisher amendment snapshots", () => {
     ]);
     const firstPage = await incoming(2);
     const secondPage = await incoming(2, firstPage.nextCursor);
-    expect([...firstPage.items, ...secondPage.items]).toEqual(rows.items);
+    expect([...firstPage.items, ...secondPage.items]).toEqual(refreshed.items);
     expect(secondPage.nextCursor).toBeNull();
     expect(
       (

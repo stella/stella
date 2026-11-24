@@ -205,6 +205,10 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "legislation_documents.document_ast",
   "legislation_documents.metadata",
   "legislation_amendment_snapshots.coverage",
+  // Global publisher effects, source evidence and channel clocks contain no member identifiers.
+  "legislation_amendment_snapshots.channel_snapshots",
+  "legislation_amendments.effect_details",
+  "legislation_amendments.observations",
   "legislation_sources.config",
   "legislation_sources.descriptor",
   "mcp_connector_authorization_reviews.observed_endpoint_origins",
