@@ -18,12 +18,13 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { InlineEdit } from "@/components/inline-edit";
+import { Timestamp } from "@/components/timestamp";
 import Tooltip from "@/components/tooltip";
 import { useMatterContextMenu } from "@/components/workspaces/matter-context-menu";
 import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
-import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import { formatFullTimestamp } from "@/lib/relative-time";
 import type { Workspace, WorkspaceGroup } from "@/lib/workspaces/types";
 import { isFilterableColumnId } from "@/lib/workspaces/types";
 import {
@@ -208,12 +209,11 @@ const EntityCountCell = ({ workspace }: CellProps) => {
 };
 
 const LastActivityCell = ({ workspace }: CellProps) => (
-  <Tooltip
-    content={formatFullTimestamp(workspace.lastActivityAt)}
-    render={<span className="text-muted-foreground" />}
-  >
-    {formatRelativeTime(workspace.lastActivityAt)}
-  </Tooltip>
+  <Timestamp
+    className="text-muted-foreground"
+    format="relative"
+    value={workspace.lastActivityAt}
+  />
 );
 
 const TeamCell = ({ workspace }: CellProps) => (

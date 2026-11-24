@@ -8,10 +8,15 @@
 //   <Switch disabled={!canEdit} disabledReason={t("...")} />
 //   <SwitchField disabled={!canEdit} disabledReason={reason} label="Require SSO" />
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
-import { filenameForContext, isAstNode, jsxName } from "./utils.ts";
+import {
+  type AstNode,
+  filenameForContext,
+  isAstNode,
+  jsxName,
+} from "./utils.ts";
 
 const RULE_NAME = "disabled-switch-needs-reason";
 const SWITCH_CONTROLS = new Set(["Switch", "SwitchField"]);
@@ -20,15 +25,9 @@ type LineContext = {
   sourceCode: { getLocFromIndex: (index: number) => { line: number } };
 };
 
-const lineOf = (
-  context: LineContext,
-  node: Record<string, unknown>,
-): number => {
-  const range = node.range;
-  const start = Array.isArray(range) ? range[0] : undefined;
-  return typeof start === "number"
-    ? context.sourceCode.getLocFromIndex(start).line
-    : 1;
+const lineOf = (context: LineContext, node: Ranged): number => {
+  const [start] = node.range;
+  return context.sourceCode.getLocFromIndex(start).line;
 };
 
 const isLiteralFalse = (value: unknown): boolean => {
@@ -64,7 +63,7 @@ export default eslintCompatPlugin({
             if (!Array.isArray(node.attributes)) {
               return;
             }
-            let disabledAttr: Record<string, unknown> | null = null;
+            let disabledAttr: AstNode | null = null;
             for (const attr of node.attributes) {
               if (!isAstNode(attr) || attr.type !== "JSXAttribute") {
                 continue;

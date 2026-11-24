@@ -8,7 +8,7 @@
 //   <TableCell><Timestamp value={item.createdAt} /></TableCell>
 //   <TableCell><Tooltip content={formatFullTimestamp(date)} render={<span />}>{formatter.dateTime(date)}</Tooltip></TableCell>
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import { filenameForContext, isAstNode, jsxName } from "./utils.ts";
@@ -26,18 +26,15 @@ type LineContext = {
   sourceCode: { getLocFromIndex: (index: number) => { line: number } };
 };
 
-const lineOf = (
-  context: LineContext,
-  node: Record<string, unknown>,
-): number => {
-  const range = node.range;
-  const start = Array.isArray(range) ? range[0] : undefined;
-  return typeof start === "number"
-    ? context.sourceCode.getLocFromIndex(start).line
-    : 1;
+const lineOf = (context: LineContext, node: Ranged): number => {
+  const [start] = node.range;
+  return context.sourceCode.getLocFromIndex(start).line;
 };
 
-const isTimestampFormatCall = (node: Record<string, unknown>): boolean => {
+const isTimestampFormatCall = (node: unknown): boolean => {
+  if (!isAstNode(node)) {
+    return false;
+  }
   const callee = node.callee;
   if (!isAstNode(callee)) {
     return false;

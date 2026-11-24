@@ -9,7 +9,7 @@
 //     <TableCell><EntityActionsButton /></TableCell>
 //   </EntityActions>
 
-import { eslintCompatPlugin } from "@oxlint/plugins";
+import { eslintCompatPlugin, type Ranged } from "@oxlint/plugins";
 
 import { guardEnforcesLine } from "../scripts/guard-rollouts.ts";
 import { filenameForContext, isAstNode, jsxName } from "./utils.ts";
@@ -27,15 +27,9 @@ type LineContext = {
   sourceCode: { getLocFromIndex: (index: number) => { line: number } };
 };
 
-const lineOf = (
-  context: LineContext,
-  node: Record<string, unknown>,
-): number => {
-  const range = node.range;
-  const start = Array.isArray(range) ? range[0] : undefined;
-  return typeof start === "number"
-    ? context.sourceCode.getLocFromIndex(start).line
-    : 1;
+const lineOf = (context: LineContext, node: Ranged): number => {
+  const [start] = node.range;
+  return context.sourceCode.getLocFromIndex(start).line;
 };
 
 const hasAncestorTag = (node: unknown, names: ReadonlySet<string>): boolean => {

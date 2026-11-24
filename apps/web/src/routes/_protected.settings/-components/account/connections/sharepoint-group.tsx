@@ -236,9 +236,13 @@ const ConnectionDescription = ({
   if (connection.accountLabel) {
     return <BidiText>{connection.accountLabel}</BidiText>;
   }
-  return t("settings.connections.connectedAgo", {
-    time: <Timestamp format="relative" value={connection.createdAt} />,
-  });
+  return (
+    <Timestamp
+      format="relative"
+      renderLabel={(time) => t("settings.connections.connectedAgo", { time })}
+      value={connection.createdAt}
+    />
+  );
 };
 
 const DisconnectButton = () => {
