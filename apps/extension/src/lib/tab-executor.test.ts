@@ -23,6 +23,7 @@ import { releaseToUser } from "./tab-containment";
 import {
   adoptControlledTab,
   executeBrowserCommand,
+  focusControlledTab,
   forgetControlledTab,
   replaceControlledTab,
 } from "./tab-executor";
@@ -1664,7 +1665,7 @@ describe("chat's tabs", () => {
     expect(installed.front.activeTabId).toBe(CONTROLLER_TAB_ID);
   });
 
-  test("sign-in still brings the controlled tab to the front", async () => {
+  test("sign-in stays in background until focusControlledTab is requested", async () => {
     const installed = installChatTabs();
     installed.front.focusedWindowId = null;
     installed.handlers["snapshot"] = () => [
@@ -1677,6 +1678,10 @@ describe("chat's tabs", () => {
     ).toMatchObject({
       code: BROWSER_CONTROL_ERROR_CODE.needsMember,
     });
+    expect(installed.log).not.toContain(`activate:${RESULTS_TAB_ID}`);
+    expect(installed.log).not.toContain(`focus-window:${WINDOW_ID}`);
+
+    expect(await focusControlledTab(CONTROLLER_ID)).toBe(true);
     expect(installed.log).toContain(`activate:${RESULTS_TAB_ID}`);
     expect(installed.log).toContain(`focus-window:${WINDOW_ID}`);
   });

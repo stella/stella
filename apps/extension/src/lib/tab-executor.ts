@@ -824,14 +824,12 @@ const readPreflight = async (
     );
   }
   if (handsSignInToMember && isIdentityProviderUrl(tab.url)) {
-    await bringTabToFront(tabId);
     return needsMember();
   }
   // Every frame is checked before any is read: a frame without a sign-in
   // is never read for a tab another frame hands to the member. Each frame
   // checks again as it reads, for a sign-in that appears in between.
   if (handsSignInToMember && (await tabAsksForSignIn(tabId))) {
-    await bringTabToFront(tabId);
     return needsMember();
   }
   const frames = await listReaderFrames(tabId);
@@ -909,24 +907,11 @@ const readSnapshot = async ({
   // A sign-in in any frame, or a top document that turned out to be an
   // identity provider's, is the member's: nothing is returned or stored.
   if (outcome.type !== "window") {
-    const failure = readRefusal(outcome, requiredOrigin);
-    if (
-      failure.status === "error" &&
-      failure.code === BROWSER_CONTROL_ERROR_CODE.needsMember
-    ) {
-      await bringTabToFront(tabId);
-    }
-    return failure;
+    return readRefusal(outcome, requiredOrigin);
   }
   const { window } = outcome;
   const refusal = topDocumentRefusal(window.top, signIn, requiredOrigin);
   if (refusal !== null) {
-    if (
-      refusal.status === "error" &&
-      refusal.code === BROWSER_CONTROL_ERROR_CODE.needsMember
-    ) {
-      await bringTabToFront(tabId);
-    }
     return refusal;
   }
   const url = window.top.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars);
@@ -1553,16 +1538,23 @@ const runGoBack = async (
   }
 };
 
-/** Brings a controlled tab to the front only when the member must sign in. */
-const bringTabToFront = async (tabId: number): Promise<void> => {
-  const tab = await chrome.tabs.get(tabId).catch(() => null);
-  if (tab === null) {
-    return;
+/** Brings the controller's tab to the front when the member explicitly asks to sign in. */
+export const focusControlledTab = async (
+  controllerId: string,
+): Promise<boolean> => {
+  const controlled = await readControlledTab(controllerId);
+  if (controlled === null) {
+    return false;
+  }
+  const tabId = controlled.tab.id;
+  if (tabId === undefined) {
+    return false;
   }
   await chrome.tabs.update(tabId, { active: true }).catch(() => undefined);
   await chrome.windows
-    .update(tab.windowId, { focused: true })
+    .update(controlled.tab.windowId, { focused: true })
     .catch(() => undefined);
+  return true;
 };
 
 /** What makes a tab chat's to switch to: who opened it, never a listing. */

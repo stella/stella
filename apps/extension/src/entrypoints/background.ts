@@ -93,6 +93,7 @@ import {
 import {
   adoptControlledTab,
   executeBrowserCommand,
+  focusControlledTab,
   forgetControlledTab,
   readControlledTabId,
   replaceControlledTab,
@@ -448,6 +449,18 @@ const handleWebMessage = (
       .then((controller) => {
         if (controller?.controllerId === message.controllerId) {
           stop();
+        }
+        return undefined;
+      })
+      .catch(() => undefined);
+    return;
+  }
+
+  if (message.type === "focus-tab") {
+    controllerForSender(senderUrl)
+      .then(async (controller) => {
+        if (controller?.controllerId === message.controllerId) {
+          await focusControlledTab(message.controllerId);
         }
         return undefined;
       })

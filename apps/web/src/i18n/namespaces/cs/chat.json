@@ -241,6 +241,13 @@
       },
       "updating": "Čeká se na aktualizaci Chrome pluginu."
     },
+    "browserSignIn": {
+      "continue": "Jsem přihlášen",
+      "description": "Stránka otevřená na pozadí vyžaduje přihlášení. Otevřete kartu, přihlaste se v Chromu a poté pokračujte.",
+      "openTab": "Otevřít kartu pro přihlášení",
+      "title": "Vyžadováno přihlášení",
+      "titleWithHost": "Přihlásit se na {host}"
+    },
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
     "caseLawGreeting": "Zeptejte se na toto rozhodnutí; plný text je k dispozici.",
     "chatAbout": "Vložit do AI chatu",

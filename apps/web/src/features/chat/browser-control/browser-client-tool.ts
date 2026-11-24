@@ -12,6 +12,7 @@ import {
   browserApprovalProvenanceFor,
 } from "./browser-approval-mode";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
+import { waitForBrowserSignIn } from "./browser-sign-in-handoff";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 import { createTurnStopper } from "./browser-turn";
 
@@ -33,6 +34,7 @@ export const createBrowserExtensionTool = ({
     executeBrowserExtensionCommand,
     beginBrowserCommand,
     browserApprovalProvenanceFor,
+    waitForBrowserSignIn,
   );
   const stopper = createTurnStopper();
 

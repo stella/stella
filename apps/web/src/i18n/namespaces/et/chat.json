@@ -241,6 +241,13 @@
       },
       "updating": "Chrome'i plugina uuendus ootel."
     },
+    "browserSignIn": {
+      "continue": "Olen sisse logitud",
+      "description": "Taustal avatud leht nõuab sisselogimist. Avage vahekaart Chrome'is sisselogimiseks ja seejärel jätkake.",
+      "openTab": "Ava sisselogimise vahekaart",
+      "title": "Nõutav sisselogimine",
+      "titleWithHost": "Logi sisse lehel {host}"
+    },
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta; täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",

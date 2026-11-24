@@ -8,6 +8,10 @@ import {
 import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
 
 import type { BrowserApprovalProvenance } from "./browser-approval-mode";
+import {
+  browserCommandHost,
+  type BrowserSignInDecision,
+} from "./browser-sign-in-handoff";
 
 /** How a command runs: the chat turn it belongs to and its stop signal. */
 export type BrowserCommandRun = {
@@ -87,10 +91,18 @@ const withinSiteGrant = (
  * execution (never a coalesced retry, whose outcome is already recorded) is
  * reported to `beginCommand`, which gates auto-approval.
  */
+type WaitForSignIn = (options: {
+  host: string | null;
+  signal: AbortSignal;
+}) => Promise<BrowserSignInDecision>;
+
+const MAX_SIGN_IN_RETRIES = 3;
+
 export const createBrowserToolExecutionCache = (
   execute: BrowserCommandExecutor,
   beginCommand: BeginBrowserCommand,
   approvalProvenanceFor: ApprovalProvenanceFor,
+  waitForSignIn?: WaitForSignIn,
 ) => {
   const executions = new Map<string, Promise<BrowserControlResult>>();
 
@@ -105,10 +117,37 @@ export const createBrowserToolExecutionCache = (
     const provenance = approvalProvenanceFor(toolCallId);
     let succeeded = false;
     try {
-      const result = withinSiteGrant(
+      let result = withinSiteGrant(
         await execute(input, toolCallId, commandRun),
         provenance,
       );
+      if (waitForSignIn !== undefined) {
+        const host = browserCommandHost(input);
+        for (
+          let attempt = 1;
+          attempt <= MAX_SIGN_IN_RETRIES &&
+          result.status === "error" &&
+          result.code === BROWSER_CONTROL_ERROR_CODE.needsMember;
+          attempt += 1
+        ) {
+          const decision = await waitForSignIn({
+            host,
+            signal: commandRun.signal,
+          });
+          if (decision !== "resume") {
+            break;
+          }
+          // After signing in, read the tab as it now stands without navigating away.
+          result = withinSiteGrant(
+            await execute(
+              { action: "snapshot" },
+              `${toolCallId}:sign-in-${attempt}`,
+              commandRun,
+            ),
+            provenance,
+          );
+        }
+      }
       succeeded = resultPageUrl(result) !== null;
       return result;
     } finally {
