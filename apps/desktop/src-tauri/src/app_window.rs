@@ -198,7 +198,8 @@ pub(crate) fn window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) 
   }
 }
 
-/// The Dock icon was clicked: the app window used last comes to the front.
+/// The app window used last comes to the front: the Dock icon was clicked,
+/// or the app just joined the Dock for a window that opened.
 #[cfg(target_os = "macos")]
 pub(crate) fn reopen<R: Runtime>(app: &AppHandle<R>) {
   let Some(label) = app
@@ -237,6 +238,10 @@ fn show_presence<R: Runtime>(app: &AppHandle<R>, presence: Presence) {
       )]
       let joined = handle.set_activation_policy(tauri::ActivationPolicy::Regular);
       crate::logging::best_effort(joined, "app could not join the Dock");
+      // Joining the Dock deactivates the app, which leaves the window that
+      // asked for it behind the app the person was in: bring it forward.
+      crate::logging::best_effort(handle.show(), "app could not be shown");
+      reopen(&handle);
     }
     Presence::MenuBar => {
       // Leaving the Dock can hand activation to another app than the one
