@@ -86,6 +86,7 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
     expectation: { kind: "settles" },
   }),
   staticRoute("/settings/organization/members"),
+  staticRoute("/settings/organization/sso"),
   staticRoute("/settings/organization/usage"),
   staticRoute("/admin", {
     expectation: {
@@ -104,6 +105,9 @@ export const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       kind: "redirectsTo",
       to: "/settings/organization/tools",
     },
+  }),
+  staticRoute("/admin/sso", {
+    expectation: { kind: "redirectsTo", to: "/settings/organization/sso" },
   }),
   staticRoute("/admin/ai", {
     expectation: { kind: "redirectsTo", to: "/settings/organization/ai" },

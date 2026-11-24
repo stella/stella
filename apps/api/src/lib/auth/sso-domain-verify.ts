@@ -1,14 +1,15 @@
 import { Result, TaggedError } from "better-result";
-import { resolveTxt as nodeResolveTxt } from "node:dns/promises";
 
 import {
   SSO_DOMAIN_TXT_HOST_PREFIX,
   SSO_DOMAIN_TXT_VALUE_PREFIX,
 } from "@stll/api-contract/sso";
 
+import { resolveDnsTxtRecords } from "@/api/lib/safe-outbound-fetch";
+
 const DNS_VERIFY_TIMEOUT_MS = 5000;
 
-export type TxtResolver = (hostname: string) => Promise<string[][]>;
+type TxtResolver = (hostname: string) => Promise<string[][]>;
 
 export class SsoDomainDnsError extends TaggedError("sso_domain_dns_error")<{
   message: string;
@@ -36,7 +37,7 @@ const resolveTxtWithTimeout = async (
   timeoutMs: number,
 ): Promise<Result<string[][], SsoDomainDnsError>> => {
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const settled = await Result.tryPromise({
+  const settled = await Result.tryPromise<string[][], unknown>({
     try: async () =>
       await Promise.race([
         resolveTxt(host),
@@ -57,7 +58,7 @@ const resolveTxtWithTimeout = async (
     clearTimeout(timer);
   }
   if (settled.isOk()) {
-    return settled;
+    return Result.ok(settled.value);
   }
   const error = settled.error;
   if (SsoDomainDnsError.is(error)) {
@@ -68,7 +69,7 @@ const resolveTxtWithTimeout = async (
       ? String(error.code)
       : undefined;
   if (code === "ENOTFOUND" || code === "ENODATA" || code === "NXDOMAIN") {
-    return Result.ok([]);
+    return Result.ok<string[][]>([]);
   }
   return Result.err(
     new SsoDomainDnsError({
@@ -93,7 +94,7 @@ type VerifyDomainTxtOptions = {
 export const verifyDomainTxtRecord = async ({
   domain,
   expectedToken,
-  resolveTxt = nodeResolveTxt,
+  resolveTxt = resolveDnsTxtRecords,
   timeoutMs = DNS_VERIFY_TIMEOUT_MS,
 }: VerifyDomainTxtOptions): Promise<
   Result<DomainVerificationOutcome, SsoDomainDnsError>

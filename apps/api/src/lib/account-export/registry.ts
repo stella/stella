@@ -442,6 +442,11 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  // Organization DNS domain verification claim; `created_by` records who added it.
+  organization_sso_domain: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
   style_sets: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,

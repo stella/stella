@@ -14,25 +14,25 @@ import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
-import { SecretInput } from "@stll/ui/secret-input";
 import { Switch } from "@stll/ui/switch";
 import { stellaToast } from "@stll/ui/toast";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
-import { CopyControl, useCopyControl } from "@/components/copy-control";
+import { CopyControl } from "@/components/copy-control";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { SecretInput } from "@/components/secret-input";
+import {
+  addOrgSsoDomain,
+  fetchOrgSsoSettings,
+  probeOidcSsoProvider,
+  registerOidcSsoProvider,
+  removeOrgSsoDomain,
+  removeOrgSsoProvider,
+  saveOrgSsoPolicy,
+  verifyOrgSsoDomain,
+} from "@/features/sso/sso-api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
-import {
-  createOidcSsoProvider,
-  createOrganizationSsoDomain,
-  deleteOrganizationSsoDomain,
-  deleteOrganizationSsoProvider,
-  readOrganizationSsoSettings,
-  testOidcSsoProvider,
-  updateOrganizationSsoPolicy,
-  verifyOrganizationSsoDomain,
-} from "@/lib/sso/sso-client";
 
 import { OrganizationSsoPageShell } from "./-organization.sso.pending";
 
@@ -61,18 +61,15 @@ const IDP_PRESETS = [
   },
 ] as const;
 
-const CopyValueRow = ({ label, value }: { label: string; value: string }) => {
-  const copy = useCopyControl();
-  return (
-    <div className="flex items-center justify-between gap-2 text-xs">
-      <div className="text-muted-foreground min-w-0 flex-1">
-        <span>{label}: </span>
-        <TruncatedText render={<code />}>{value}</TruncatedText>
-      </div>
-      <CopyControl control={copy} text={value} variant="ghost" size="xs" />
+const CopyValueRow = ({ label, value }: { label: string; value: string }) => (
+  <div className="flex items-center justify-between gap-2 text-xs">
+    <div className="text-muted-foreground min-w-0 flex-1">
+      <span>{label}: </span>
+      <TruncatedText render={<code />}>{value}</TruncatedText>
     </div>
-  );
-};
+    <CopyControl size="xs" text={value} variant="ghost" />
+  </div>
+);
 
 const AddOidcProviderForm = ({
   onCreated,
@@ -93,7 +90,7 @@ const AddOidcProviderForm = ({
 
   const testDiscoveryMutation = useMutation({
     mutationFn: async () =>
-      await testOidcSsoProvider({
+      await probeOidcSsoProvider({
         issuer: issuer.trim(),
         ...(discoveryEndpoint.trim() !== ""
           ? { discoveryEndpoint: discoveryEndpoint.trim() }
@@ -118,7 +115,7 @@ const AddOidcProviderForm = ({
         .split(/[,\s]+/u)
         .map((d) => d.trim())
         .filter((d) => d.length > 0);
-      return await createOidcSsoProvider({
+      return await registerOidcSsoProvider({
         displayName: displayName.trim(),
         issuer: issuer.trim(),
         clientId: clientId.trim(),
@@ -290,7 +287,7 @@ const OidcProvidersSection = ({
 
   const deleteProviderMutation = useMutation({
     mutationFn: async (providerId: string) =>
-      await deleteOrganizationSsoProvider(providerId),
+      await removeOrgSsoProvider(providerId),
     onSuccess: async () => {
       await onChanged();
       stellaToast.add({
@@ -328,9 +325,9 @@ const OidcProvidersSection = ({
       {showAddProvider && (
         <AddOidcProviderForm
           onCancel={() => setShowAddProvider(false)}
-          onCreated={async () => {
+          onCreated={() => {
             setShowAddProvider(false);
-            await onChanged();
+            return onChanged();
           }}
         />
       )}
@@ -352,9 +349,7 @@ const OidcProvidersSection = ({
                     <span className="text-foreground text-sm font-medium">
                       {provider.displayName ?? provider.providerId}
                     </span>
-                    <Badge variant="outline">
-                      {provider.protocol.toUpperCase()}
-                    </Badge>
+                    <Badge>{provider.protocol.toUpperCase()}</Badge>
                   </div>
                   <p className="text-muted-foreground text-xs">
                     {provider.issuer}
@@ -406,8 +401,7 @@ const VerifiedDomainsSection = ({
   const [newDomain, setNewDomain] = useState("");
 
   const createDomainMutation = useMutation({
-    mutationFn: async (domain: string) =>
-      await createOrganizationSsoDomain(domain),
+    mutationFn: async (domain: string) => await addOrgSsoDomain(domain),
     onSuccess: async () => {
       await onChanged();
       setNewDomain("");
@@ -422,8 +416,7 @@ const VerifiedDomainsSection = ({
   });
 
   const verifyDomainMutation = useMutation({
-    mutationFn: async (domainId: string) =>
-      await verifyOrganizationSsoDomain(domainId),
+    mutationFn: async (domainId: string) => await verifyOrgSsoDomain(domainId),
     onSuccess: async ({ verified }) => {
       await onChanged();
       stellaToast.add({
@@ -439,8 +432,7 @@ const VerifiedDomainsSection = ({
   });
 
   const deleteDomainMutation = useMutation({
-    mutationFn: async (domainId: string) =>
-      await deleteOrganizationSsoDomain(domainId),
+    mutationFn: async (domainId: string) => await removeOrgSsoDomain(domainId),
     onSuccess: async () => {
       await onChanged();
       stellaToast.add({
@@ -505,11 +497,7 @@ const VerifiedDomainsSection = ({
                   <span className="text-foreground text-sm font-medium">
                     {domain.domain}
                   </span>
-                  <Badge
-                    variant={
-                      domain.status === "verified" ? "default" : "outline"
-                    }
-                  >
+                  <Badge>
                     {domain.status === "verified"
                       ? t("settings.organization.sso.statusVerified")
                       : t("settings.organization.sso.statusPending")}
@@ -565,7 +553,7 @@ export const OrganizationSsoPage = () => {
 
   const settingsQuery = useQuery({
     queryKey: SSO_SETTINGS_QUERY_KEY,
-    queryFn: async ({ signal }) => await readOrganizationSsoSettings(signal),
+    queryFn: async ({ signal }) => await fetchOrgSsoSettings(signal),
   });
 
   const invalidate = async () => {
@@ -574,7 +562,7 @@ export const OrganizationSsoPage = () => {
 
   const policyMutation = useMutation({
     mutationFn: async (requirement: OrganizationSsoPolicyRequirement) =>
-      await updateOrganizationSsoPolicy(requirement),
+      await saveOrgSsoPolicy(requirement),
     onSuccess: async () => {
       await invalidate();
       stellaToast.add({

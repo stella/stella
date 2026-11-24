@@ -1,5 +1,6 @@
-import { Result, TaggedError } from "better-result";
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { panic, Result, TaggedError } from "better-result";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { randomBytes } from "node:crypto";
 
 import {
@@ -18,15 +19,19 @@ import { declareFingerprintFields } from "@stll/errors";
 import { slugify } from "@stll/text-normalize";
 
 import {
+  account,
   member,
   organizationSsoDomain,
   organizationSsoPolicy,
   ssoProvider,
 } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { domainTxtInstruction } from "@/api/lib/auth/sso-domain-verify";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
+import {
+  withAggregateLock,
+  withAggregateTransaction,
+} from "@/api/lib/db/aggregate-lock";
 import { admitSsoOidcConfig } from "@/api/lib/db/sso-provider-config";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -52,8 +57,8 @@ export class SsoManagementError extends TaggedError("sso_management_error")<{
 }
 
 export type SsoManagementDb = Pick<
-  Transaction,
-  "select" | "insert" | "update" | "delete" | "transaction"
+  PgAsyncDatabase<PgQueryResultHKT>,
+  "select" | "insert" | "update" | "delete" | "execute" | "transaction"
 >;
 
 type ProviderUrlBuilders = {
@@ -68,7 +73,12 @@ const splitDomains = (raw: string): string[] =>
     .filter((entry) => entry.length > 0);
 
 const generateProviderId = (displayName: string): string => {
-  const slug = slugify(displayName, { maxLength: 32, fallback: "idp" });
+  const slug = slugify(displayName, {
+    charset: "ascii",
+    separator: "-",
+    maxLength: 32,
+    fallback: "idp",
+  });
   return `sso_${slug}_${randomBytes(4).toString("hex")}`;
 };
 
@@ -216,12 +226,14 @@ export type CreateOrganizationOidcProviderParams = {
   urls: ProviderUrlBuilders;
 };
 
-// audit: skip - caller handler records organization settings audit event
 export const createOrganizationOidcProvider = async (
   db: SsoManagementDb,
   params: CreateOrganizationOidcProviderParams,
 ): Promise<Result<OrganizationSsoProviderSummary, SsoManagementError>> => {
-  const normalizedIssuer = params.issuer.trim().replace(/\/+$/u, "");
+  let normalizedIssuer = params.issuer.trim();
+  while (normalizedIssuer.endsWith("/")) {
+    normalizedIssuer = normalizedIssuer.slice(0, -1);
+  }
   const normalizedDomains = [
     ...new Set(params.domains.map((domain) => normalizeSsoDomain(domain))),
   ].filter((domain) => domain.length > 0);
@@ -256,6 +268,28 @@ export const createOrganizationOidcProvider = async (
     ["overrideUserInfo", false],
     ["allowIdpInitiated", false],
   ]);
+
+  const verifiedDomainRows = await db
+    .select({ domain: organizationSsoDomain.domain })
+    .from(organizationSsoDomain)
+    .where(
+      and(
+        eq(organizationSsoDomain.organizationId, params.organizationId),
+        isNotNull(organizationSsoDomain.verifiedAt),
+        inArray(organizationSsoDomain.domain, normalizedDomains),
+      ),
+    )
+    .limit(normalizedDomains.length);
+  const verifiedSet = new Set(verifiedDomainRows.map((row) => row.domain));
+  const unverified = normalizedDomains.filter((d) => !verifiedSet.has(d));
+  if (unverified.length > 0) {
+    return Result.err(
+      new SsoManagementError({
+        message: `Verify domain ownership via DNS TXT before binding: ${unverified.join(", ")}`,
+        reason: "invalid_config",
+      }),
+    );
+  }
 
   const admitted = admitSsoOidcConfig(oidcConfigJson);
   if (admitted.isErr()) {
@@ -296,64 +330,70 @@ export const createOrganizationOidcProvider = async (
   return Result.ok(toProviderSummary(inserted, params.urls));
 };
 
-// audit: skip - caller handler records organization settings audit event
 export const deleteOrganizationSsoProvider = async (
   db: SsoManagementDb,
   params: {
     organizationId: SafeId<"organization">;
     providerId: string;
   },
-): Promise<Result<{ id: string; providerId: string }, SsoManagementError>> => {
-  const existing = await db
-    .select({ id: ssoProvider.id, providerId: ssoProvider.providerId })
-    .from(ssoProvider)
-    .where(eq(ssoProvider.organizationId, params.organizationId))
-    .limit(MAX_SSO_PROVIDERS_PER_ORG);
+): Promise<Result<{ id: string; providerId: string }, SsoManagementError>> =>
+  await withAggregateTransaction(db, async (tx) => {
+    await withAggregateLock({
+      tx,
+      aggregate: "organization",
+      id: params.organizationId,
+      mode: "update",
+    });
 
-  const target = existing.find(
-    (row) =>
-      row.providerId === params.providerId || row.id === params.providerId,
-  );
-  if (target === undefined) {
-    return Result.err(
-      new SsoManagementError({
-        message: "SSO provider not found",
-        reason: "provider_not_found",
-      }),
+    const existing = await tx
+      .select({ id: ssoProvider.id, providerId: ssoProvider.providerId })
+      .from(ssoProvider)
+      .where(eq(ssoProvider.organizationId, params.organizationId))
+      .limit(MAX_SSO_PROVIDERS_PER_ORG);
+
+    const target = existing.find(
+      (row) =>
+        row.providerId === params.providerId || row.id === params.providerId,
     );
-  }
-
-  if (existing.length === 1) {
-    const policy = await db
-      .select({ requirement: organizationSsoPolicy.requirement })
-      .from(organizationSsoPolicy)
-      .where(eq(organizationSsoPolicy.organizationId, params.organizationId))
-      .limit(1);
-    if (policy.at(0)?.requirement === "required") {
+    if (target === undefined) {
       return Result.err(
         new SsoManagementError({
-          message:
-            "Disable required SSO before removing the organization's last identity provider",
-          reason: "last_provider_while_required",
+          message: "SSO provider not found",
+          reason: "provider_not_found",
         }),
       );
     }
-  }
 
-  // audit: skip - caller handler records organization settings audit event
-  await db
-    .delete(ssoProvider)
-    .where(
-      and(
-        eq(ssoProvider.organizationId, params.organizationId),
-        eq(ssoProvider.id, target.id),
-      ),
-    );
+    if (existing.length === 1) {
+      const policy = await tx
+        .select({ requirement: organizationSsoPolicy.requirement })
+        .from(organizationSsoPolicy)
+        .where(eq(organizationSsoPolicy.organizationId, params.organizationId))
+        .limit(1);
+      if (policy.at(0)?.requirement === "required") {
+        return Result.err(
+          new SsoManagementError({
+            message:
+              "Disable required SSO before removing the organization's last identity provider",
+            reason: "last_provider_while_required",
+          }),
+        );
+      }
+    }
 
-  return Result.ok(target);
-};
+    // audit: skip - caller handler records organization settings audit event
+    await tx
+      .delete(ssoProvider)
+      .where(
+        and(
+          eq(ssoProvider.organizationId, params.organizationId),
+          eq(ssoProvider.id, target.id),
+        ),
+      );
 
-// audit: skip - caller handler records organization settings audit event
+    return Result.ok(target);
+  });
+
 export const updateOrganizationSsoRequirement = async (
   db: SsoManagementDb,
   params: {
@@ -362,63 +402,102 @@ export const updateOrganizationSsoRequirement = async (
   },
 ): Promise<
   Result<{ requirement: OrganizationSsoPolicyRequirement }, SsoManagementError>
-> => {
-  if (params.requirement === "required") {
-    const providers = await db
-      .select({ id: ssoProvider.id })
-      .from(ssoProvider)
-      .where(eq(ssoProvider.organizationId, params.organizationId))
-      .limit(1);
-    if (providers.length === 0) {
-      return Result.err(
-        new SsoManagementError({
-          message:
-            "Configure at least one SSO identity provider before requiring SSO",
-          reason: "provider_required_to_enforce",
-        }),
-      );
-    }
-  }
-
-  const existing = await db
-    .select({ organizationId: organizationSsoPolicy.organizationId })
-    .from(organizationSsoPolicy)
-    .where(eq(organizationSsoPolicy.organizationId, params.organizationId))
-    .limit(1);
-
-  if (existing.length === 0) {
-    // audit: skip - caller handler records organization settings audit event
-    await db.insert(organizationSsoPolicy).values({
-      organizationId: params.organizationId,
-      requirement: params.requirement,
+> =>
+  await withAggregateTransaction(db, async (tx) => {
+    await withAggregateLock({
+      tx,
+      aggregate: "organization",
+      id: params.organizationId,
+      mode: "update",
     });
-  } else {
-    const write = replayWrite(
-      organizationSsoPolicy,
-      { requirement: params.requirement },
-      {
-        modifiedAt: {
-          column: organizationSsoPolicy.updatedAt,
-          value: new Date(),
-        },
-      },
-    );
-    // audit: skip - caller handler records organization settings audit event
-    await db
-      .update(organizationSsoPolicy)
-      .set(write.set)
-      .where(
-        and(
-          eq(organizationSsoPolicy.organizationId, params.organizationId),
-          write.setWhere,
-        ),
+
+    if (params.requirement === "required") {
+      const providers = await tx
+        .select({ id: ssoProvider.id })
+        .from(ssoProvider)
+        .where(eq(ssoProvider.organizationId, params.organizationId))
+        .limit(MAX_SSO_PROVIDERS_PER_ORG);
+      if (providers.length === 0) {
+        return Result.err(
+          new SsoManagementError({
+            message:
+              "Configure at least one SSO identity provider before requiring SSO",
+            reason: "provider_required_to_enforce",
+          }),
+        );
+      }
+      const orgMembers = await tx
+        .select({ userId: member.userId })
+        .from(member)
+        .where(eq(member.organizationId, params.organizationId))
+        .limit(500);
+      if (orgMembers.length > 0) {
+        const providerIds = providers.map((row) => row.id);
+        const boundAccounts = await tx
+          .select({ userId: account.userId })
+          .from(account)
+          .where(
+            and(
+              inArray(account.ssoProviderId, providerIds),
+              inArray(
+                account.userId,
+                orgMembers.map((row) => row.userId),
+              ),
+            ),
+          )
+          .limit(orgMembers.length);
+        const boundUserIds = new Set(boundAccounts.map((row) => row.userId));
+        const unboundCount = orgMembers.filter(
+          (row) => !boundUserIds.has(row.userId),
+        ).length;
+        if (unboundCount > 0) {
+          return Result.err(
+            new SsoManagementError({
+              message:
+                "All existing organization members must have a bound SSO account before requiring SSO",
+              reason: "provider_required_to_enforce",
+            }),
+          );
+        }
+      }
+    }
+
+    const existing = await tx
+      .select({ organizationId: organizationSsoPolicy.organizationId })
+      .from(organizationSsoPolicy)
+      .where(eq(organizationSsoPolicy.organizationId, params.organizationId))
+      .limit(1);
+
+    const now = new Date();
+    if (existing.length === 0) {
+      // audit: skip - caller handler records organization settings audit event
+      await tx.insert(organizationSsoPolicy).values({
+        organizationId: params.organizationId,
+        requirement: params.requirement,
+        createdAt: now,
+        updatedAt: now,
+      });
+    } else {
+      const write = replayWrite(
+        organizationSsoPolicy,
+        { requirement: params.requirement },
+        { modifiedAt: { column: organizationSsoPolicy.updatedAt, value: now } },
       );
-  }
+      // audit: skip - caller handler records organization settings audit event
+      await tx
+        .update(organizationSsoPolicy)
+        .set(write.set)
+        .where(
+          and(
+            eq(organizationSsoPolicy.organizationId, params.organizationId),
+            write.setWhere,
+          ),
+        );
+    }
 
-  return Result.ok({ requirement: params.requirement });
-};
+    return Result.ok({ requirement: params.requirement });
+  });
 
-// audit: skip - caller handler records organization settings audit event
 export const createOrganizationSsoDomain = async (
   db: SsoManagementDb,
   params: {
@@ -457,7 +536,7 @@ export const createOrganizationSsoDomain = async (
         }),
       );
     }
-    throw inserted.error;
+    return panic("Failed to insert SSO domain", { cause: inserted.error });
   }
 
   const row = inserted.value.at(0);
@@ -493,7 +572,6 @@ export const readOrganizationSsoDomain = async (
   return rows.at(0) ?? null;
 };
 
-// audit: skip - caller handler records organization settings audit event
 export const recordOrganizationSsoDomainCheck = async (
   db: SsoManagementDb,
   params: {
@@ -543,7 +621,7 @@ export const recordOrganizationSsoDomainCheck = async (
         }),
       );
     }
-    throw updated.error;
+    return panic("Failed to verify SSO domain", { cause: updated.error });
   }
 
   const row = updated.value.at(0);
@@ -559,7 +637,6 @@ export const recordOrganizationSsoDomainCheck = async (
   return Result.ok(toDomainSummary(row));
 };
 
-// audit: skip - caller handler records organization settings audit event
 export const deleteOrganizationSsoDomain = async (
   db: SsoManagementDb,
   params: {

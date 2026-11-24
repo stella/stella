@@ -3,9 +3,9 @@ import { lazy, Suspense } from "react";
 import { getRouteApi, useLocation } from "@tanstack/react-router";
 
 import { SignInPanel } from "@/components/auth/sign-in-panel";
-import { SsoSignInSection } from "@/components/auth/sso-sign-in-section";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 
+import { SsoSignInSection } from "./-components/sso-sign-in-section";
 import { getOauthPostLoginRedirectTo } from "./-index.logic";
 import { SignInShell } from "./-index.pending";
 

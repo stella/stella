@@ -22,14 +22,14 @@ const config = {
   params: paramsSchema,
 } satisfies HandlerConfig;
 
-const verifyOrganizationSsoDomain = createSafeRootHandler(
+const verifyOrganizationSsoDomainHandler = createSafeRootHandler(
   config,
-  async function* ({ session, params, recordAuditEvent }) {
-    const existing = await readOrgSsoDomain({
+  async function* ({ session, params, safeDb, recordAuditEvent }) {
+    const record = await readOrgSsoDomain({
       organizationId: session.activeOrganizationId,
       domainId: params.domainId,
     });
-    if (existing === null) {
+    if (record === null) {
       return Result.err(
         new HandlerError({
           status: 404,
@@ -39,44 +39,44 @@ const verifyOrganizationSsoDomain = createSafeRootHandler(
       );
     }
 
-    const checkedAt = new Date();
-    const verification = await verifyDomainTxtRecord({
-      domain: existing.domain,
-      expectedToken: existing.verificationToken,
+    const dnsResult = await verifyDomainTxtRecord({
+      domain: record.domain,
+      expectedToken: record.verificationToken,
     });
-    if (verification.isErr()) {
-      return Result.err(mapSsoDomainDnsError(verification.error));
+    if (dnsResult.isErr()) {
+      return Result.err(mapSsoDomainDnsError(dnsResult.error));
     }
 
-    const verified = verification.value.status === "verified";
-    const recorded = await recordOrgSsoDomainCheck({
+    const verified = dnsResult.value.status === "verified";
+    const updated = await recordOrgSsoDomainCheck({
       organizationId: session.activeOrganizationId,
-      domainId: existing.id,
+      domainId: record.id,
       verified,
-      checkedAt,
+      checkedAt: new Date(),
     });
-    if (recorded.isErr()) {
-      return Result.err(mapSsoManagementError(recorded.error));
+    if (updated.isErr()) {
+      return Result.err(mapSsoManagementError(updated.error));
     }
 
     if (verified) {
-      yield* recordAuditEvent({
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-        resourceId: recorded.value.id,
-        details: {
-          setting: "sso_domain",
-          domain: recorded.value.domain,
-          status: "verified",
-        },
-      });
+      yield* Result.await(
+        safeDb(async (tx) => {
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+            resourceId: updated.value.id,
+            metadata: {
+              setting: "sso_domain",
+              domain: updated.value.domain,
+              status: "verified",
+            },
+          });
+        }),
+      );
     }
 
-    return Result.ok({
-      domain: recorded.value,
-      verified,
-    });
+    return Result.ok({ domain: updated.value, verified });
   },
 );
 
-export default verifyOrganizationSsoDomain;
+export default verifyOrganizationSsoDomainHandler;

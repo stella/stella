@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -6,8 +7,13 @@ import {
 } from "@/api/lib/auth/sso-discovery";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 
-const okJsonBytes = (payload: unknown) =>
-  new TextEncoder().encode(JSON.stringify(payload));
+const okJsonBody = (value: unknown): ArrayBuffer => {
+  const encoded = new TextEncoder().encode(JSON.stringify(value));
+  return encoded.buffer.slice(
+    encoded.byteOffset,
+    encoded.byteOffset + encoded.byteLength,
+  );
+};
 
 describe("probeOidcDiscovery", () => {
   test("derives /.well-known/openid-configuration from issuer and rejects non-HTTPS", () => {
@@ -32,17 +38,18 @@ describe("probeOidcDiscovery", () => {
     const result = await probeOidcDiscovery({
       issuer: "https://idp.example.com",
       permit: grantThirdPartyOutboundPermit(),
-      fetchBytes: async () => ({
-        status: 200,
-        headers: new Headers({ "content-type": "application/json" }),
-        bytes: okJsonBytes({
-          issuer: "https://idp.example.com/",
-          authorization_endpoint: "https://idp.example.com/authorize",
-          token_endpoint: "https://idp.example.com/token",
-          jwks_uri: "https://idp.example.com/jwks",
+      fetchBytes: async () =>
+        Result.ok({
+          status: 200,
+          ok: true,
+          headers: new Headers({ "content-type": "application/json" }),
+          body: okJsonBody({
+            issuer: "https://idp.example.com/",
+            authorization_endpoint: "https://idp.example.com/authorize",
+            token_endpoint: "https://idp.example.com/token",
+            jwks_uri: "https://idp.example.com/jwks",
+          }),
         }),
-        finalUrl: "https://idp.example.com/.well-known/openid-configuration",
-      }),
     });
 
     expect(result.isOk()).toBe(true);
@@ -58,17 +65,18 @@ describe("probeOidcDiscovery", () => {
     const result = await probeOidcDiscovery({
       issuer: "https://idp.example.com",
       permit: grantThirdPartyOutboundPermit(),
-      fetchBytes: async () => ({
-        status: 200,
-        headers: new Headers(),
-        bytes: okJsonBytes({
-          issuer: "https://evil.example.com",
-          authorization_endpoint: "https://idp.example.com/authorize",
-          token_endpoint: "https://idp.example.com/token",
-          jwks_uri: "https://idp.example.com/jwks",
+      fetchBytes: async () =>
+        Result.ok({
+          status: 200,
+          ok: true,
+          headers: new Headers(),
+          body: okJsonBody({
+            issuer: "https://evil.example.com",
+            authorization_endpoint: "https://idp.example.com/authorize",
+            token_endpoint: "https://idp.example.com/token",
+            jwks_uri: "https://idp.example.com/jwks",
+          }),
         }),
-        finalUrl: "https://idp.example.com/.well-known/openid-configuration",
-      }),
     });
 
     expect(result.isErr()).toBe(true);

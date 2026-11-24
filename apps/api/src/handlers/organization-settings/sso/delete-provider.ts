@@ -20,9 +20,9 @@ const config = {
   params: paramsSchema,
 } satisfies HandlerConfig;
 
-const deleteOrganizationSsoProvider = createSafeRootHandler(
+const deleteOrganizationSsoProviderHandler = createSafeRootHandler(
   config,
-  async function* ({ session, params, recordAuditEvent }) {
+  async function* ({ session, params, safeDb, recordAuditEvent }) {
     const deleted = await deleteOrgSsoProvider({
       organizationId: session.activeOrganizationId,
       providerId: params.providerId,
@@ -31,18 +31,22 @@ const deleteOrganizationSsoProvider = createSafeRootHandler(
       return Result.err(mapSsoManagementError(deleted.error));
     }
 
-    yield* recordAuditEvent({
-      action: AUDIT_ACTION.DELETE,
-      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-      resourceId: deleted.value.id,
-      details: {
-        setting: "sso_provider",
-        providerId: deleted.value.providerId,
-      },
-    });
+    yield* Result.await(
+      safeDb(async (tx) => {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: deleted.value.id,
+          metadata: {
+            setting: "sso_provider",
+            providerId: deleted.value.providerId,
+          },
+        });
+      }),
+    );
 
     return Result.ok({ deleted: true as const, id: deleted.value.id });
   },
 );
 
-export default deleteOrganizationSsoProvider;
+export default deleteOrganizationSsoProviderHandler;

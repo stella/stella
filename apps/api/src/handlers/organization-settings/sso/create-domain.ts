@@ -19,25 +19,29 @@ const config = {
 
 const createOrganizationSsoDomainHandler = createSafeRootHandler(
   config,
-  async function* ({ session, body, recordAuditEvent }) {
+  async function* ({ session, user, body, safeDb, recordAuditEvent }) {
     const created = await createOrgSsoDomain({
       organizationId: session.activeOrganizationId,
+      createdBy: user.id,
       domain: body.domain,
-      createdBy: session.userId,
     });
     if (created.isErr()) {
       return Result.err(mapSsoManagementError(created.error));
     }
 
-    yield* recordAuditEvent({
-      action: AUDIT_ACTION.CREATE,
-      resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
-      resourceId: created.value.id,
-      details: {
-        setting: "sso_domain",
-        domain: created.value.domain,
-      },
-    });
+    yield* Result.await(
+      safeDb(async (tx) => {
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.CREATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+          resourceId: created.value.id,
+          metadata: {
+            setting: "sso_domain",
+            domain: created.value.domain,
+          },
+        });
+      }),
+    );
 
     return Result.ok(created.value);
   },

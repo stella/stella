@@ -59,7 +59,13 @@ export const SSO_DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u;
 
 export const normalizeSsoDomain = (raw: string): string =>
-  raw.trim().toLowerCase().replace(/\.+$/u, "");
+  (() => {
+    let trimmed = raw.trim().toLowerCase();
+    while (trimmed.endsWith(".")) {
+      trimmed = trimmed.slice(0, -1);
+    }
+    return trimmed;
+  })();
 
 export const ssoDomainNameSchema = v.pipe(
   v.string(),

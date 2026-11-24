@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
+
 import type { OidcDiscoveryError } from "@/api/lib/auth/sso-discovery";
 import type { SsoDomainDnsError } from "@/api/lib/auth/sso-domain-verify";
 import type { SsoManagementError } from "@/api/lib/db/sso-management";
@@ -50,11 +52,14 @@ export const mapOidcDiscoveryError = (
         message: error.message,
       });
     case "fetch_failed":
-      return new HandlerError({
-        status: 502,
-        code: "sso_oidc_fetch_failed",
-        message: error.message,
-      });
+      return classifyFailure(
+        new HandlerError({
+          status: 502,
+          code: "sso_oidc_fetch_failed",
+          message: error.message,
+        }),
+        "upstream_unavailable",
+      );
     default:
       error.reason satisfies never;
       return panic("Unhandled OIDC discovery error reason");
@@ -62,8 +67,11 @@ export const mapOidcDiscoveryError = (
 };
 
 export const mapSsoDomainDnsError = (error: SsoDomainDnsError): HandlerError =>
-  new HandlerError({
-    status: 502,
-    code: "sso_domain_dns_failed",
-    message: error.message,
-  });
+  classifyFailure(
+    new HandlerError({
+      status: 502,
+      code: "sso_domain_dns_failed",
+      message: error.message,
+    }),
+    "upstream_unavailable",
+  );

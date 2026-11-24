@@ -1,15 +1,13 @@
-import { SSO_SIGN_IN_REQUIRED_CODE } from "@stll/api-contract/sso";
+import { Result } from "better-result";
+
 import { stellaToast } from "@stll/ui/toast";
 
 import { getTranslator } from "@/i18n/translator";
 import { detached } from "@/lib/detached";
 import { APIError } from "@/lib/errors/api";
 import { isAuthFlowPathname, normalizeRedirectTo } from "@/lib/redirect";
-import {
-  readMemberOrganizationSsoProviders,
-  requestSsoSignInRedirectUrl,
-} from "@/lib/sso/sso-client";
 
+const SSO_SIGN_IN_REQUIRED_CODE = "sso_sign_in_required";
 const SSO_REQUIRED_TOAST_ID = "sso-sign-in-required";
 
 export const isSsoSignInRequiredError = (error: unknown): boolean =>
@@ -17,37 +15,48 @@ export const isSsoSignInRequiredError = (error: unknown): boolean =>
   error.status === 403 &&
   error.code === SSO_SIGN_IN_REQUIRED_CODE;
 
+const buildSsoFallbackUrl = (redirectPath: string): string =>
+  `/auth?sso=required&redirectTo=${encodeURIComponent(redirectPath)}`;
+
 const startOrganizationSsoReauth = async () => {
   const redirectPath = normalizeRedirectTo(
     window.location.pathname + window.location.search,
   );
   const callbackURL = `${window.location.origin}${redirectPath}`;
-  const errorCallbackURL = `${window.location.origin}/auth?redirectTo=${encodeURIComponent(redirectPath)}`;
+  const errorCallbackURL = `${window.location.origin}${buildSsoFallbackUrl(redirectPath)}`;
 
-  try {
-    const { providers } = await readMemberOrganizationSsoProviders();
-    const first = providers.at(0);
-    if (first === undefined) {
-      window.location.assign(
-        `/auth?redirectTo=${encodeURIComponent(redirectPath)}`,
-      );
-      return;
-    }
-    const redirect = await requestSsoSignInRedirectUrl({
-      providerId: first.providerId,
-      callbackURL,
-      errorCallbackURL,
-    });
-    if (redirect.isOk()) {
-      window.location.assign(redirect.value);
-      return;
-    }
-  } catch {
-    // Fall back to the sign-in screen so the user can still complete SSO.
+  const ssoApi = await Result.tryPromise({
+    try: async () => await import("@/features/sso/sso-api"),
+    catch: () => null,
+  });
+  if (ssoApi.isErr()) {
+    window.location.assign(buildSsoFallbackUrl(redirectPath));
+    return;
   }
-  window.location.assign(
-    `/auth?redirectTo=${encodeURIComponent(redirectPath)}`,
-  );
+
+  const providersResult = await Result.tryPromise({
+    try: async () => await ssoApi.value.fetchMemberOrgSsoProviders(),
+    catch: () => null,
+  });
+  const first = providersResult.isOk()
+    ? providersResult.value.providers.at(0)
+    : undefined;
+  if (first === undefined) {
+    window.location.assign(buildSsoFallbackUrl(redirectPath));
+    return;
+  }
+
+  const redirect = await ssoApi.value.startSsoSignInRedirect({
+    providerId: first.providerId,
+    callbackURL,
+    errorCallbackURL,
+  });
+  if (redirect.isOk()) {
+    window.location.assign(redirect.value);
+    return;
+  }
+
+  window.location.assign(buildSsoFallbackUrl(redirectPath));
 };
 
 /**

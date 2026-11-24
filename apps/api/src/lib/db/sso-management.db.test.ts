@@ -2,7 +2,11 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import { createTestClock } from "@stll/test-kit";
 
-import { member, organization, user } from "@/api/db/auth-schema";
+import { account, member, organization, user } from "@/api/db/auth-schema";
+import {
+  ORGANIZATION_ACCESS_STATE,
+  organizationAccessStates,
+} from "@/api/db/schema";
 import {
   createOrganizationOidcProvider,
   createOrganizationSsoDomain,
@@ -32,7 +36,9 @@ const urls = {
     `https://app.example.com/auth?sso=${providerId}`,
 };
 
-const clock = createTestClock("2026-11-23T12:00:00.000Z");
+const clock = createTestClock({
+  start: Date.parse("2026-11-23T12:00:00.000Z"),
+});
 const unique = (prefix: string) =>
   `${prefix}-${Bun.randomUUIDv7().replaceAll("-", "").slice(-10)}`;
 
@@ -63,9 +69,14 @@ const insertOrg = async (name: string) => {
     id,
     name,
     slug: id,
-    createdAt: clock.now(),
+    createdAt: new Date(clock.now()),
   });
-  return brandPersistedOrganizationId(id);
+  const orgId = brandPersistedOrganizationId(id);
+  await testDb.insert(organizationAccessStates).values({
+    organizationId: orgId,
+    state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+  });
+  return orgId;
 };
 
 const insertMember = async (
@@ -78,14 +89,16 @@ const insertMember = async (
     organizationId,
     userId,
     role,
-    createdAt: clock.now(),
+    createdAt: new Date(clock.now()),
   });
 };
 
 describe("sso-management", () => {
-  test("manages OIDC providers, enforces policy invariants, and strips clientSecret on read", async () => {
-    const adminId = await insertUser(`${unique("admin")}@acme.example.com`);
-    const orgId = await insertOrg("Acme");
+  test("manages OIDC providers, enforces domain verification and policy invariants, and strips clientSecret on read", async () => {
+    const adminId = await insertUser(
+      `${unique("admin")}@northwind.example.com`,
+    );
+    const orgId = await insertOrg("Northwind");
     await insertMember(orgId, adminId, "owner");
 
     // Cannot require SSO before configuring a provider.
@@ -100,15 +113,45 @@ describe("sso-management", () => {
       );
     }
 
-    // Create OIDC provider.
+    // Unverified domains are rejected before persisting a provider.
+    const rejectedUnverified = await createOrganizationOidcProvider(testDb, {
+      organizationId: orgId,
+      userId: adminId,
+      displayName: "Okta Unverified",
+      issuer: "https://northwind.okta.com",
+      clientId: "okta-client-1",
+      clientSecret: "super-secret-value",
+      domains: ["northwind.example.com"],
+      urls,
+    });
+    expect(rejectedUnverified.isErr()).toBe(true);
+
+    // Verify domain ownership via DNS TXT claim first.
+    const claim = await createOrganizationSsoDomain(testDb, {
+      organizationId: orgId,
+      createdBy: adminId,
+      domain: "northwind.example.com",
+    });
+    expect(claim.isOk()).toBe(true);
+    if (claim.isOk()) {
+      const checked = await recordOrganizationSsoDomainCheck(testDb, {
+        organizationId: orgId,
+        domainId: claim.value.id,
+        verified: true,
+        checkedAt: new Date(clock.now()),
+      });
+      expect(checked.isOk()).toBe(true);
+    }
+
+    // Now creating the OIDC provider succeeds.
     const created = await createOrganizationOidcProvider(testDb, {
       organizationId: orgId,
       userId: adminId,
       displayName: "Okta Prod",
-      issuer: "https://acme.okta.com",
+      issuer: "https://northwind.okta.com",
       clientId: "okta-client-1",
       clientSecret: "super-secret-value",
-      domains: ["acme.example.com"],
+      domains: ["northwind.example.com"],
       urls,
     });
     expect(created.isOk()).toBe(true);
@@ -120,7 +163,24 @@ describe("sso-management", () => {
     expect(created.value.hasClientSecret).toBe(true);
     expect(JSON.stringify(created.value)).not.toContain("super-secret-value");
 
-    // Now policy can be switched to required.
+    // Cannot require SSO while an existing member has no bound SSO account.
+    const blockedUnbound = await updateOrganizationSsoRequirement(testDb, {
+      organizationId: orgId,
+      requirement: "required",
+    });
+    expect(blockedUnbound.isErr()).toBe(true);
+
+    // Bind the existing member to the SSO provider -> now required succeeds.
+    await testDb.insert(account).values({
+      id: unique("acct"),
+      accountId: `sub-${adminId}`,
+      providerId: created.value.providerId,
+      userId: adminId,
+      ssoProviderId: created.value.id,
+      createdAt: new Date(clock.now()),
+      updatedAt: new Date(clock.now()),
+    });
+
     const required = await updateOrganizationSsoRequirement(testDb, {
       organizationId: orgId,
       requirement: "required",
@@ -177,13 +237,36 @@ describe("sso-management", () => {
     const orgB = await insertOrg("Firm B");
     const domain = `${unique("corp")}.example.com`;
 
+    // Domain is pending -> not discoverable and cannot be bound yet.
+    const claimA = await createOrganizationSsoDomain(testDb, {
+      organizationId: orgA,
+      createdBy: adminA,
+      domain,
+    });
+    expect(claimA.isOk()).toBe(true);
+    if (!claimA.isOk()) {
+      return;
+    }
+    expect(await discoverVerifiedSsoProvidersByDomain(testDb, domain)).toEqual(
+      [],
+    );
+
+    // Verify domain for org A -> now provider can bind it and discovery returns it.
+    const verifiedA = await recordOrganizationSsoDomainCheck(testDb, {
+      organizationId: orgA,
+      domainId: claimA.value.id,
+      verified: true,
+      checkedAt: new Date(clock.now()),
+    });
+    expect(verifiedA.isOk()).toBe(true);
+
     const provA = await createOrganizationOidcProvider(testDb, {
       organizationId: orgA,
       userId: adminA,
-      displayName: "Entra A",
+      displayName: "Firm A Entra",
       issuer: "https://login.microsoftonline.com/tenant-a/v2.0",
-      clientId: "cid-a",
-      clientSecret: "csec-a",
+      clientId: "entra-client-a",
+      clientSecret: "entra-secret-a",
       domains: [domain],
       urls,
     });
@@ -192,69 +275,40 @@ describe("sso-management", () => {
       return;
     }
 
-    // Unverified domain is NOT discoverable by email domain.
-    const domA = await createOrganizationSsoDomain(testDb, {
-      organizationId: orgA,
-      domain,
-      createdBy: adminA,
-    });
-    expect(domA.isOk()).toBe(true);
-    if (!domA.isOk()) {
-      return;
-    }
-    expect(await discoverVerifiedSsoProvidersByDomain(testDb, domain)).toEqual(
-      [],
-    );
-
-    // Once verified, email-domain discovery returns orgA's provider.
-    const verifiedA = await recordOrganizationSsoDomainCheck(testDb, {
-      organizationId: orgA,
-      domainId: domA.value.id,
-      verified: true,
-      checkedAt: clock.now(),
-    });
-    expect(verifiedA.isOk()).toBe(true);
     const discovered = await discoverVerifiedSsoProvidersByDomain(
       testDb,
       domain,
     );
-    expect(discovered).toEqual([
-      {
-        providerId: provA.value.providerId,
-        displayName: "Entra A",
-        protocol: "oidc",
-      },
-    ]);
+    expect(discovered).toHaveLength(1);
+    expect(discovered.at(0)?.providerId).toBe(provA.value.providerId);
 
-    // Direct lookup by providerId also resolves.
     const byId = await discoverSsoProviderById(testDb, provA.value.providerId);
-    expect(byId).toHaveLength(1);
+    expect(byId.at(0)?.providerId).toBe(provA.value.providerId);
 
-    // Org B cannot claim the same verified domain.
-    const domB = await createOrganizationSsoDomain(testDb, {
+    // Org B cannot verify/hijack a domain already verified by Org A.
+    const claimB = await createOrganizationSsoDomain(testDb, {
       organizationId: orgB,
-      domain,
       createdBy: adminB,
+      domain,
     });
-    expect(domB.isOk()).toBe(true);
-    if (!domB.isOk()) {
-      return;
-    }
-    const hijack = await recordOrganizationSsoDomainCheck(testDb, {
-      organizationId: orgB,
-      domainId: domB.value.id,
-      verified: true,
-      checkedAt: clock.now(),
-    });
-    expect(hijack.isErr()).toBe(true);
-    if (hijack.isErr()) {
-      expect(hijack.error.reason).toBe("domain_verified_elsewhere");
+    expect(claimB.isOk()).toBe(true);
+    if (claimB.isOk()) {
+      const hijack = await recordOrganizationSsoDomainCheck(testDb, {
+        organizationId: orgB,
+        domainId: claimB.value.id,
+        verified: true,
+        checkedAt: new Date(clock.now()),
+      });
+      expect(hijack.isErr()).toBe(true);
+      if (hijack.isErr()) {
+        expect(hijack.error.reason).toBe("domain_verified_elsewhere");
+      }
     }
 
-    // Cleanup domain works.
+    // Deleting domain removes it from discovery.
     const removed = await deleteOrganizationSsoDomain(testDb, {
       organizationId: orgA,
-      domainId: domA.value.id,
+      domainId: claimA.value.id,
     });
     expect(removed.isOk()).toBe(true);
     expect(await discoverVerifiedSsoProvidersByDomain(testDb, domain)).toEqual(

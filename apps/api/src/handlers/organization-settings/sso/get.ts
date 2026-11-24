@@ -13,15 +13,15 @@ const config = {
   mcp: { type: "internal", reason: "provider_secret" },
 } satisfies HandlerConfig;
 
-const readOrganizationSso = createSafeRootHandler(
+const readOrganizationSsoHandler = createSafeRootHandler(
   config,
-  async ({ session }) => {
+  async function* ({ session }) {
     const settings = await readOrgSsoSettings(
       session.activeOrganizationId,
       ssoProviderUrls,
     );
-    return Result.ok(settings);
+    return Result.ok(yield* Result.ok(settings));
   },
 );
 
-export default readOrganizationSso;
+export default readOrganizationSsoHandler;

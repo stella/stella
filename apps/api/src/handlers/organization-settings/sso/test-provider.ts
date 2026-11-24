@@ -17,19 +17,20 @@ const config = {
   body: testOidcSsoProviderBodySchema,
 } satisfies HandlerConfig;
 
-const testOrganizationSsoProvider = createSafeRootHandler(
+const testOrganizationSsoProviderHandler = createSafeRootHandler(
   config,
-  async ({ body }) => {
-    const probed = await probeOidcDiscovery({
-      issuer: body.issuer,
-      discoveryEndpoint: body.discoveryEndpoint,
-      permit: grantThirdPartyOutboundPermit(),
-    });
-    if (probed.isErr()) {
-      return Result.err(mapOidcDiscoveryError(probed.error));
-    }
-    return Result.ok(probed.value);
+  async function* ({ body }) {
+    const value = yield* Result.await(
+      probeOidcDiscovery({
+        issuer: body.issuer,
+        ...(body.discoveryEndpoint !== undefined
+          ? { discoveryEndpoint: body.discoveryEndpoint }
+          : {}),
+        permit: grantThirdPartyOutboundPermit(),
+      }).then((result) => result.mapError(mapOidcDiscoveryError)),
+    );
+    return Result.ok(value);
   },
 );
 
-export default testOrganizationSsoProvider;
+export default testOrganizationSsoProviderHandler;

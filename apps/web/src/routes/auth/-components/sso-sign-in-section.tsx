@@ -1,6 +1,7 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { isSsoCallbackErrorCode } from "@stll/api-contract/sso";
@@ -14,14 +15,14 @@ import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { TextSeparator } from "@stll/ui/separator";
 
+import {
+  lookupSsoProviders,
+  startSsoSignInRedirect,
+} from "@/features/sso/sso-api";
 import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
-import {
-  discoverSsoProviders,
-  requestSsoSignInRedirectUrl,
-} from "@/lib/sso/sso-client";
 
 const SSO_ERROR_KEYS = {
   sso_unavailable: "auth.sso.errors.unavailable",
@@ -53,18 +54,23 @@ export const SsoSignInSection = ({
       capabilitiesView.items.enterpriseSso === true) ||
     ssoProviderId !== undefined;
 
-  const [expanded, setExpanded] = useState(false);
+  const isReauthPrompt = ssoProviderId === "required";
+  const explicitProviderId =
+    ssoProviderId !== undefined && ssoProviderId.length > 0 && !isReauthPrompt
+      ? ssoProviderId
+      : undefined;
+  const [expanded, setExpanded] = useState(isReauthPrompt);
   const [email, setEmail] = useState("");
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [discovered, setDiscovered] = useState<PublicSsoProviderOption[]>([]);
   const [busy, setBusy] = useState(false);
 
   const directProviderQuery = useQuery({
-    queryKey: ["sso-direct-provider", ssoProviderId],
-    enabled: ssoProviderId !== undefined && ssoProviderId.length > 0,
+    queryKey: ["sso-direct-provider", explicitProviderId],
+    enabled: explicitProviderId !== undefined,
     queryFn: async ({ signal }) =>
-      await discoverSsoProviders(
-        { by: "providerId", providerId: ssoProviderId ?? "" },
+      await lookupSsoProviders(
+        { by: "providerId", providerId: explicitProviderId ?? "" },
         signal,
       ),
   });
@@ -81,11 +87,11 @@ export const SsoSignInSection = ({
     const origin = window.location.origin;
     const callbackURL = `${origin}${redirectTo.startsWith("/") ? redirectTo : "/"}`;
     const errorCallbackURL = `${origin}/auth?redirectTo=${encodeURIComponent(redirectTo)}`;
-    const result = await requestSsoSignInRedirectUrl({
+    const result = await startSsoSignInRedirect({
       providerId,
       callbackURL,
       errorCallbackURL,
-      loginHint,
+      ...(loginHint !== undefined ? { loginHint } : {}),
     });
     if (result.isErr()) {
       setBusy(false);
@@ -104,30 +110,34 @@ export const SsoSignInSection = ({
     }
     setBusy(true);
     setLookupError(null);
-    try {
-      const response = await discoverSsoProviders({
-        by: "email",
-        email: trimmed,
-      });
-      if (response.providers.length === 0) {
-        setDiscovered([]);
-        setLookupError(t("auth.sso.noProviderForDomain"));
-        setBusy(false);
+    const response = await Result.tryPromise({
+      try: async () =>
+        await lookupSsoProviders({
+          by: "email",
+          email: trimmed,
+        }),
+      catch: (error: unknown) => error,
+    });
+    if (response.isErr()) {
+      setBusy(false);
+      notifyUserError(response.error, t("auth.sso.errors.signInFailed"));
+      return;
+    }
+    if (response.value.providers.length === 0) {
+      setDiscovered([]);
+      setLookupError(t("auth.sso.noProviderForDomain"));
+      setBusy(false);
+      return;
+    }
+    if (response.value.providers.length === 1) {
+      const only = response.value.providers.at(0);
+      if (only !== undefined) {
+        await launchProvider(only.providerId, trimmed);
         return;
       }
-      if (response.providers.length === 1) {
-        const only = response.providers.at(0);
-        if (only !== undefined) {
-          await launchProvider(only.providerId, trimmed);
-          return;
-        }
-      }
-      setDiscovered(response.providers);
-      setBusy(false);
-    } catch (error) {
-      setBusy(false);
-      notifyUserError(error, t("auth.sso.errors.signInFailed"));
     }
+    setDiscovered(response.value.providers);
+    setBusy(false);
   };
 
   if (!enterpriseSsoEnabled && errorMessage === null) {

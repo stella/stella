@@ -7,6 +7,14 @@ import { declareFingerprintFields } from "@stll/errors";
 import { safeOutboundFetchBytes } from "@/api/lib/auth/authorized-outbound-fetch";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 
+const trimTrailingSlashes = (value: string): string => {
+  let end = value.length;
+  while (end > 0 && value.codePointAt(end - 1) === 47) {
+    end -= 1;
+  }
+  return value.slice(0, end);
+};
+
 const OIDC_DISCOVERY_TIMEOUT_MS = 8000;
 const OIDC_DISCOVERY_MAX_BYTES = 256 * 1024;
 const OIDC_WELL_KNOWN_SUFFIX = "/.well-known/openid-configuration";
@@ -29,7 +37,7 @@ const discoveryDocumentSchema = v.looseObject({
 });
 
 const normalizeIssuer = (value: string): string =>
-  value.trim().replace(/\/+$/u, "");
+  trimTrailingSlashes(value.trim());
 
 export const deriveDiscoveryEndpoint = (
   issuer: string,
@@ -105,23 +113,20 @@ export const probeOidcDiscovery = async ({
     return Result.err(endpointResult.error);
   }
 
-  const response = await Result.tryPromise({
-    try: async () =>
-      await fetchBytes({
-        url: endpointResult.value,
-        permit,
-        maxBytes: OIDC_DISCOVERY_MAX_BYTES,
-        timeoutMs: OIDC_DISCOVERY_TIMEOUT_MS,
-        headers: { accept: "application/json" },
-      }),
-    catch: () =>
+  const response = await fetchBytes({
+    url: endpointResult.value,
+    permit,
+    maxBytes: OIDC_DISCOVERY_MAX_BYTES,
+    timeoutMs: OIDC_DISCOVERY_TIMEOUT_MS,
+    headers: { accept: "application/json" },
+  });
+  if (response.isErr()) {
+    return Result.err(
       new OidcDiscoveryError({
         message: "Could not fetch the OIDC discovery document",
         reason: "fetch_failed",
       }),
-  });
-  if (response.isErr()) {
-    return Result.err(response.error);
+    );
   }
   if (response.value.status < 200 || response.value.status >= 300) {
     return Result.err(
@@ -134,7 +139,9 @@ export const probeOidcDiscovery = async ({
 
   const decoded = Result.try({
     try: (): unknown =>
-      JSON.parse(new TextDecoder().decode(response.value.bytes)),
+      JSON.parse(
+        new TextDecoder("utf-8", { fatal: true }).decode(response.value.body),
+      ),
     catch: () =>
       new OidcDiscoveryError({
         message: "OIDC discovery response is not valid JSON",
