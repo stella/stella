@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { TransactionRollbackError } from "drizzle-orm";
 
 import type {
-  IngestionScopedDb,
   SafeDb,
   SafeDbError,
   SafeDbOrTx,
@@ -16,14 +15,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 export { abortTransaction };
-export type {
-  IngestionScopedDb,
-  SafeDb,
-  SafeDbError,
-  SafeDbOrTx,
-  SafeDbRetryConfig,
-  ScopedDb,
-};
+export type { SafeDb, SafeDbError, SafeDbOrTx, SafeDbRetryConfig, ScopedDb };
 
 export const defaultDatabaseRetry: SafeDbRetryConfig = {
   retry: {
