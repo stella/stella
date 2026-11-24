@@ -41,8 +41,10 @@ const {
   SITEMAP_XML_RESPONSE_HEADERS,
 } = await import("@/lib/public-law-sitemap");
 const {
+  classifySitemapUpstreamFailure,
   createSitemapReadFailureResponse,
-  createSitemapUpstreamBusyError,
+  SitemapNotFoundError,
+  SitemapReadFailedError,
   SitemapUpstreamBusyError,
 } = await import("@/lib/public-sitemap");
 const { isPublicSsrPath } = await import("@/lib/public-ssr-paths");
@@ -373,8 +375,9 @@ describe("public law sitemap", () => {
     ["-1", "60"],
     ["", "60"],
   ])("normalizes retry delay %s to decimal seconds", (header, expected) => {
-    const error = createSitemapUpstreamBusyError({
+    const error = classifySitemapUpstreamFailure({
       action: "readPublicSitemap",
+      addressesShard: true,
       response: new Response("busy", {
         status: 429,
         headers: { "Retry-After": header },
@@ -406,6 +409,72 @@ describe("public law sitemap", () => {
       ).toBe("60");
     },
   );
+
+  test.each([400, 404, 410, 422])(
+    "an upstream %d for a requested shard rejects as a missing sitemap",
+    async (status) => {
+      const fetchImpl = async () =>
+        Response.json(
+          { failure: { reason: "request_validation" } },
+          { status },
+        );
+
+      const error = await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: { bucket: "00", country: "hun", month: "x", year: "undated" },
+        }),
+      );
+
+      expect(SitemapNotFoundError.is(error)).toBe(true);
+      expect(createSitemapReadFailureResponse(error).status).toBe(404);
+    },
+  );
+
+  test("a shard of an unpublished jurisdiction rejects as missing without a request", async () => {
+    let requested = false;
+    const fetchImpl = async () => {
+      requested = true;
+      return new Response();
+    };
+
+    const error = await rejectionOf(
+      fetchPublicSitemapDecisions({
+        fetchImpl,
+        shard: { bucket: "all", country: "xaa", month: "05", year: "2026" },
+      }),
+    );
+
+    expect(requested).toBe(false);
+    expect(SitemapNotFoundError.is(error)).toBe(true);
+  });
+
+  test.each([500, 502])(
+    "an upstream %d for a requested shard rejects as a read failure",
+    async (status) => {
+      const fetchImpl = async () => new Response("fault", { status });
+
+      const error = await rejectionOf(
+        fetchPublicSitemapDecisions({
+          fetchImpl,
+          shard: { bucket: "all", country: "cze", month: "05", year: "2026" },
+        }),
+      );
+
+      expect(SitemapReadFailedError.is(error)).toBe(true);
+      expect(SitemapReadFailedError.is(error) && error.upstreamStatus).toBe(
+        status,
+      );
+    },
+  );
+
+  test("an upstream 422 for the shard list is a read failure, not a missing sitemap", async () => {
+    const fetchImpl = async () => new Response("invalid", { status: 422 });
+
+    const error = await rejectionOf(fetchPublicSitemapShards({ fetchImpl }));
+
+    expect(SitemapReadFailedError.is(error)).toBe(true);
+  });
 
   test("fetches public sitemap shards from the public case-law API only", async () => {
     const requestedUrls: string[] = [];
