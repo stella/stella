@@ -7,6 +7,7 @@ import type {
   ConnectConnectorOutput,
 } from "@stll/api-contract/chat-connector";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import type {
   ApprovalToolName,
@@ -51,6 +52,12 @@ type ChatApprovalContextValue = {
    * only the user's click resumes tool work.
    */
   approvalIdsAwaitedAtOpen: ReadonlySet<string>;
+  /**
+   * The chat's permission level for steps in the member's browser, the one
+   * its next turn carries (`ChatRunTarget.approvals`). Absent on a surface
+   * without a Run on choice, which runs at the default level.
+   */
+  browserLevel?: DesktopRunnerApprovalMode | undefined;
   handleAllowInConversation: (
     id: string,
     toolName: ApprovalToolName,

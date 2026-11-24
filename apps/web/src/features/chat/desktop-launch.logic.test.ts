@@ -306,8 +306,18 @@ describe("whether a turn needs the desktop opened", () => {
       enabled([runner(false), runner(true)]),
       false,
     ],
-    ["the turn runs in the cloud", { kind: "cloud" }, enabled([]), false],
-    ["the member may not run turns there", local, { status: "hidden" }, false],
+    [
+      "the turn runs in the cloud",
+      { kind: "cloud", approvals: "ask" },
+      enabled([]),
+      false,
+    ],
+    [
+      "the member may not run turns there",
+      local,
+      { status: "hidden", maxApprovals: "full_auto" },
+      false,
+    ],
     ["the computers are not read yet", local, undefined, false],
   ] as const)("%s", (_case, target, readiness, expected) => {
     expect(needsDesktopLaunch(target, readiness)).toBe(expected);

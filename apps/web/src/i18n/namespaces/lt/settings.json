@@ -755,9 +755,9 @@
       },
       "enterSlug": "Įveskite organizacijos URL identifikatorių.",
       "localRuns": {
-        "description": "Daugiausia, ką programavimo agentas gali daryti neklausdamas, kai vykdo pokalbį nario kompiuteryje. Žemesnė riba taikoma nuo kito kiekvieno nario pranešimo; jau vykstantis paleidimas išlaiko savo leidimus.",
-        "title": "Programavimo agentai narių kompiuteriuose",
-        "updated": "Programavimo agentų leidimai atnaujinti"
+        "description": "Daugiausia, ką pokalbis gali daryti neklausdamas: programavimo agentas, vykdantis pokalbį nario kompiuteryje, ir veiksmai nario naršyklėje. Žemesnė riba taikoma nuo kito kiekvieno nario pranešimo; jau vykstantis paleidimas išlaiko savo leidimus.",
+        "title": "Pokalbio leidimai",
+        "updated": "Pokalbio leidimai atnaujinti"
       },
       "logoInvalid": "Pasirinkite iki 5 MB dydžio PNG, JPEG arba WebP paveikslėlį.",
       "matterNumbering": "Bylų numeravimas",

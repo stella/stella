@@ -145,7 +145,7 @@ describe("pruneUserStorage", () => {
     session.setItem("legal-reader-guest-annotations:v2", '{"items":[]}');
     session.setItem("case-law-guest-annotations:v1", '{"items":[]}');
     session.setItem(
-      userStorageKey("stella.chat.browserApprovalMode", USER_A),
+      userStorageKey("stella.chat.conversationApprovedTools:thread-1", USER_A),
       "ask",
     );
 
@@ -153,7 +153,7 @@ describe("pruneUserStorage", () => {
     expect(keys(session)).toEqual([
       "case-law-guest-annotations:v1",
       "legal-reader-guest-annotations:v2",
-      "stella.chat.browserApprovalMode:u:user-a",
+      "stella.chat.conversationApprovedTools:thread-1:u:user-a",
       "stella.provision-question:doc:anchor",
       "stella.storage-owner",
     ]);
@@ -186,7 +186,10 @@ describe("signing out", () => {
     local.setItem(userStorageKey("stella:inspector-state:v1:org-1:"), "{}");
     local.setItem(userStorageKey("stella.report-exports.active"), "{}");
     local.setItem(userStorageKey("stella-search-recent-files:org-1:"), "[]");
-    session.setItem(userStorageKey("stella.chat.browserApprovalMode"), "ask");
+    session.setItem(
+      userStorageKey("stella.chat.conversationApprovedTools:thread-1"),
+      "[]",
+    );
     local.setItem("stella:chat-turn-notifications", "dark");
 
     releaseUserStorage(areas());

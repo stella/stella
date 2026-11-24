@@ -13,11 +13,12 @@ export const CHAT_TOOL_GRANT_POLICY_KIND = {
   /** Approved or denied per call; never covered by a stored grant. */
   approveOnce: "approve-once",
   /**
-   * Never covered by a stored grant, like `approveOnce`. The exceptions are
-   * for the client-executed `use-browser` tool, which the user's own browser
-   * applies before running a command: the opt-in page-read allowance, and
-   * per-website approvals (`browser-site-grants`), which the API stores but
-   * never applies to its approval gate.
+   * Never covered by a stored grant, like `approveOnce`. The client-executed
+   * `use-browser` tool is answered instead by the shared browser gate
+   * (`browser-step-gate.ts`), which the user's own browser applies before
+   * running a command: the chat's permission level, and per-website
+   * approvals (`browser-site-grants`), which the API stores but never
+   * applies to its approval gate.
    */
   neverAuto: "never-auto",
 } as const;
@@ -63,8 +64,8 @@ const MANUAL_CHAT_TOOL_GRANT_POLICY = {
   "update-current-skill-body": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-current-skill-resource": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
   "update-entity-fields": CHAT_TOOL_GRANT_POLICY_KIND.grantable,
-  // Every browser command asks every time, except the page-read allowance
-  // and the per-website approvals described on `neverAuto`.
+  // Every browser command is answered by the shared browser gate described
+  // on `neverAuto`, never by a stored tool grant.
   "use-browser": CHAT_TOOL_GRANT_POLICY_KIND.neverAuto,
   web_search: CHAT_TOOL_GRANT_POLICY_KIND.grantable,
 } as const satisfies Record<ManualGrantToolName, ChatToolGrantPolicy>;

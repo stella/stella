@@ -1337,13 +1337,13 @@ const keepThreadRunTarget = async ({
   }
   const runsOn = storedChatRunTarget(runTarget);
   const stored = thread.data.chatLocalRunTarget;
-  if (sameChatRunTarget(chatRunTargetOf(stored), runTarget)) {
+  if (sameChatRunTarget(chatRunTargetOf(thread.data), runTarget)) {
     return Result.ok();
   }
   return await safeDb(async (tx) => {
     await tx
       .update(chatThreads)
-      .set({ chatLocalRunTarget: runsOn })
+      .set(runsOn)
       .where(
         and(
           eq(chatThreads.id, thread.data.id),
@@ -1356,7 +1356,9 @@ const keepThreadRunTarget = async ({
       resourceType: AUDIT_RESOURCE_TYPE.CHAT_THREAD,
       resourceId: thread.data.id,
       workspaceId,
-      changes: { chatLocalRunTarget: { old: stored, new: runsOn } },
+      changes: {
+        chatLocalRunTarget: { old: stored, new: runsOn.chatLocalRunTarget },
+      },
     });
   });
 };

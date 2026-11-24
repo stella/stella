@@ -4,13 +4,16 @@ import {
   BROWSER_CONTROL_CONTENT_TRUST,
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  BROWSER_CONTROL_TARGET_METADATA,
+  type BrowserControlCommand,
   type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
-
 import {
-  type BrowserApprovalProvenance,
-  createBrowserApprovalStore,
-} from "./browser-approval-mode";
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
+
+import { createBrowserApprovalState } from "./browser-approval-state";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 
 const success = {
@@ -45,14 +48,79 @@ const redirected = {
 } satisfies BrowserControlResult;
 
 const untracked = () => () => undefined;
-const answeredByUser = (): BrowserApprovalProvenance => ({ type: "person" });
 
 const RUN = { signal: new AbortController().signal, turnId: "turn-1" };
 
-const sessionStore = () =>
-  createBrowserApprovalStore(() => {
-    throw new DOMException("No storage in tests", "SecurityError");
-  });
+const NO_GRANTS: ReadonlySet<string> = new Set();
+
+/** An executor whose gate decides at `level` on what `state` was told. */
+const cacheAt = (
+  level: DesktopRunnerApprovalMode,
+  execute: Parameters<typeof createBrowserToolExecutionCache>[0],
+  state = createBrowserApprovalState(),
+) => ({
+  cache: createBrowserToolExecutionCache(
+    execute,
+    state.beginCommand,
+    (command) => state.decide({ command, grantedOrigins: NO_GRANTS, level }),
+  ),
+  state,
+});
+
+const ABSENT = { type: BROWSER_CONTROL_TARGET_METADATA.absent } as const;
+const onPage = (role: string) => ({
+  page: { revision: "revision-1", url: "https://example.com/" },
+  target: {
+    context: ABSENT,
+    href: ABSENT,
+    name: "Field",
+    ref: "e:0:0.1",
+    role,
+  },
+});
+
+/** Every element step, and the kind Jan's rule names it by. */
+const ELEMENT_STEPS = [
+  { kind: "click", command: { action: "click", ...onPage("button") } },
+  {
+    kind: "click",
+    command: { action: "press-key", key: "Enter", ...onPage("textbox") },
+  },
+  {
+    kind: "search",
+    command: { action: "press-key", key: "Enter", ...onPage("searchbox") },
+  },
+  {
+    kind: "search",
+    command: { action: "fill", value: "notice", ...onPage("searchbox") },
+  },
+  {
+    kind: "type",
+    command: { action: "fill", value: "Jane", ...onPage("textbox") },
+  },
+  {
+    kind: "type",
+    command: { action: "select", value: "2024", ...onPage("combobox") },
+  },
+] as const satisfies readonly {
+  kind: "click" | "search" | "type";
+  command: BrowserControlCommand;
+}[];
+
+const READS = [
+  { action: "open", url: "https://example.com/" },
+  { action: "snapshot" },
+  { action: "find", search: { query: "notice", type: "text" } },
+  { action: "go-back" },
+  { action: "switch-tab", tabId: 7, url: "https://example.com/" },
+] as const satisfies readonly BrowserControlCommand[];
+
+const signInHandOver = {
+  code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+  message: "The page asks for a sign-in.",
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+  status: "error",
+} satisfies BrowserControlResult;
 
 describe("chat browser tool execution cache", () => {
   test("concurrent and later retries execute one real browser action", async () => {
@@ -64,97 +132,94 @@ describe("chat browser tool execution cache", () => {
         return success;
       },
       untracked,
-      answeredByUser,
+      () => ({ type: "run", by: "level" }),
     );
 
-    const first = cache.executeOnce(
-      "call-1",
-      { action: "click", ref: "e:0" },
-      RUN,
-    );
-    const concurrent = cache.executeOnce(
-      "call-1",
-      {
-        action: "click",
-        ref: "e:0",
-      },
-      RUN,
-    );
+    const first = cache.executeOnce("call-1", { action: "snapshot" }, RUN);
+    const concurrent = cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(await Promise.all([first, concurrent])).toEqual([success, success]);
     expect(
-      await cache.executeOnce("call-1", { action: "click", ref: "e:0" }, RUN),
+      await cache.executeOnce("call-1", { action: "snapshot" }, RUN),
     ).toEqual(success);
     expect(calls).toBe(1);
   });
 
   test("different tool-call ids remain independent", async () => {
     let calls = 0;
-    const cache = createBrowserToolExecutionCache(
-      async () => {
-        calls += 1;
-        return success;
-      },
-      untracked,
-      answeredByUser,
-    );
+    const { cache } = cacheAt("ask", async () => {
+      calls += 1;
+      return success;
+    });
 
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     await cache.executeOnce("call-2", { action: "snapshot" }, RUN);
     expect(calls).toBe(2);
   });
 
-  test("a redirected result stops later reads from auto-approving", async () => {
-    const store = sessionStore();
+  test("a failed result leaves no page reported, and a retry is not a new outcome", async () => {
     const results: BrowserControlResult[] = [success, redirected];
-    const cache = createBrowserToolExecutionCache(
-      async () => results.shift() ?? success,
-      store.beginCommand,
-      answeredByUser,
-    );
+    const { cache, state } = cacheAt("ask", async () => {
+      const result = results.shift() ?? success;
+      state.observeResult(result);
+      return result;
+    });
+    const click = ELEMENT_STEPS[0].command;
+    const granted = new Set(["https://example.com"]);
+    const byGrant = () =>
+      state.decide({ command: click, grantedOrigins: granted, level: "ask" });
 
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
-    expect(store.lastCommandSucceeded()).toBe(true);
+    expect(byGrant()).toEqual({
+      type: "run",
+      by: "site-grant",
+      origin: "https://example.com",
+    });
     await cache.executeOnce(
       "call-2",
-      {
-        action: "open",
-        url: "https://a.test",
-      },
+      { action: "open", url: "https://a.test" },
       RUN,
     );
-    expect(store.lastCommandSucceeded()).toBe(false);
+    expect(byGrant()).toEqual({ type: "ask", site: "https://example.com" });
     // A coalesced retry of the earlier success is not a new outcome.
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
-    expect(store.lastCommandSucceeded()).toBe(false);
+    expect(byGrant()).toMatchObject({ type: "ask" });
   });
 
-  test("a command still running blocks read auto-approval", async () => {
-    const store = sessionStore();
-    store.beginCommand()(true);
+  test("a command still running leaves no page reported", async () => {
+    const state = createBrowserApprovalState();
+    state.observeResult(success);
+    state.beginCommand()(true);
     let answer: (result: BrowserControlResult) => void = () => undefined;
-    const cache = createBrowserToolExecutionCache(
+    const { cache } = cacheAt(
+      "ask",
       async () =>
         await new Promise<BrowserControlResult>((resolve) => {
           answer = resolve;
         }),
-      store.beginCommand,
-      answeredByUser,
+      state,
     );
+    const click = ELEMENT_STEPS[0].command;
+    const granted = new Set(["https://example.com"]);
 
     const pending = cache.executeOnce("call-1", { action: "snapshot" }, RUN);
-    expect(store.lastCommandSucceeded()).toBe(false);
+    expect(
+      state.decide({ command: click, grantedOrigins: granted, level: "ask" }),
+    ).toMatchObject({ type: "ask" });
     answer(success);
     await pending;
-    expect(store.lastCommandSucceeded()).toBe(true);
+    expect(
+      state.decide({ command: click, grantedOrigins: granted, level: "ask" }),
+    ).toMatchObject({ type: "run", by: "site-grant" });
   });
 
   test("an executor failure counts as a failed command", async () => {
-    const store = sessionStore();
-    store.beginCommand()(true);
-    const cache = createBrowserToolExecutionCache(
+    const state = createBrowserApprovalState();
+    state.observeResult(success);
+    state.beginCommand()(true);
+    const { cache } = cacheAt(
+      "ask",
       async () => await Promise.reject(new Error("postMessage failed")),
-      store.beginCommand,
-      answeredByUser,
+      state,
     );
 
     const outcome = await cache
@@ -164,160 +229,85 @@ describe("chat browser tool execution cache", () => {
         (error: unknown) => error,
       );
     expect(outcome).toBeInstanceOf(Error);
-    expect(store.lastCommandSucceeded()).toBe(false);
+    expect(
+      state.decide({
+        command: ELEMENT_STEPS[0].command,
+        grantedOrigins: new Set(["https://example.com"]),
+        level: "ask",
+      }),
+    ).toMatchObject({ type: "ask" });
   });
 });
 
-describe("commands a website approval answered", () => {
-  const landedOn = (url: string): BrowserControlResult => ({
-    ...success,
-    snapshot: { ...success.snapshot, url },
-  });
-  const allowed = (): BrowserApprovalProvenance => ({
-    type: "site-grant",
-    origin: "https://example.com",
-  });
-
-  test("a page on an allowed website is handed back", async () => {
-    const store = sessionStore();
-    const cache = createBrowserToolExecutionCache(
-      async () => landedOn("https://example.com/results"),
-      store.beginCommand,
-      allowed,
-    );
-
-    expect(
-      await cache.executeOnce("call-1", { action: "snapshot" }, RUN),
-    ).toEqual(landedOn("https://example.com/results"));
-    expect(store.lastCommandSucceeded()).toBe(true);
-  });
-
-  test("find results follow the same rule as a page", async () => {
-    const foundOn = (url: string): BrowserControlResult => ({
-      found: {
-        contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
-        matches: [{ cursor: "r1.match", snippet: "notice period" }],
-        tabId: 7,
-        title: "Example",
-        total: 1,
-        totalCapped: false,
-        type: "text",
-        url,
-      },
-      protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
-      status: "found",
-    });
-    const store = sessionStore();
-    const results = [
-      foundOn("https://example.com/doc"),
-      foundOn("https://other.test/doc"),
-    ];
-    const cache = createBrowserToolExecutionCache(
-      async () => results.shift() ?? success,
-      store.beginCommand,
-      allowed,
-    );
-    const find = {
-      action: "find",
-      search: { query: "notice", type: "text" },
-    } as const;
-
-    expect(await cache.executeOnce("call-1", find, RUN)).toEqual(
-      foundOn("https://example.com/doc"),
-    );
-    expect(store.lastCommandSucceeded()).toBe(true);
-    expect(await cache.executeOnce("call-2", find, RUN)).toMatchObject({
-      code: BROWSER_CONTROL_ERROR_CODE.redirected,
-      status: "error",
-    });
-    expect(store.lastCommandSucceeded()).toBe(false);
-  });
-
-  test("a page elsewhere is withheld and the next command asks", async () => {
-    for (const url of [
-      "https://sub.example.com/",
-      "https://example.com:8443/",
-      "https://other.test/",
-    ]) {
-      const store = sessionStore();
-      const cache = createBrowserToolExecutionCache(
-        async () => landedOn(url),
-        store.beginCommand,
-        allowed,
-      );
-
-      const result = await cache.executeOnce(
-        "call-1",
-        { action: "go-back" },
-        RUN,
-      );
-      expect(result).toMatchObject({
-        code: BROWSER_CONTROL_ERROR_CODE.redirected,
-        status: "error",
-      });
-      expect(JSON.stringify(result)).not.toContain("Ready");
-      expect(store.lastCommandSucceeded()).toBe(false);
+describe("steps the level does not run", () => {
+  test("every level and step: only Plan and a sign-in stop a step before the extension", async () => {
+    for (const level of DESKTOP_RUNNER_APPROVAL_MODES) {
+      for (const signIn of [false, true]) {
+        for (const command of [
+          ...READS,
+          ...ELEMENT_STEPS.map((step) => step.command),
+        ]) {
+          const reached: string[] = [];
+          const state = createBrowserApprovalState();
+          state.observeResult(success);
+          if (signIn) {
+            state.observeResult(signInHandOver);
+          }
+          const { cache } = cacheAt(
+            level,
+            async () => {
+              reached.push(command.action);
+              return success;
+            },
+            state,
+          );
+          const result = await cache.executeOnce("call-1", command, RUN);
+          const onElement = "target" in command;
+          const held = onElement && (signIn || level === "plan");
+          expect({ level, signIn, action: command.action, reached }).toEqual({
+            level,
+            signIn,
+            action: command.action,
+            reached: held ? [] : [command.action],
+          });
+          if (!held) {
+            expect(result).toEqual(success);
+          } else if (signIn) {
+            expect(result).toMatchObject({
+              code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+              message: expect.stringContaining("sign in"),
+              status: "error",
+            });
+          } else {
+            expect(result).toMatchObject({
+              code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+              message: expect.stringContaining("Plan mode is read-only"),
+              status: "error",
+            });
+          }
+        }
+      }
     }
   });
 
-  test("who answered is read before the command runs, and unknown withholds the page", async () => {
-    const store = sessionStore();
-    let provenance: BrowserApprovalProvenance = {
-      type: "site-grant",
-      origin: "https://example.com",
-    };
-    const cache = createBrowserToolExecutionCache(
-      async () => {
-        // The record is cleared while the command runs.
-        provenance = { type: "person" };
-        return landedOn("https://other.test/");
-      },
-      store.beginCommand,
-      () => provenance,
-    );
-    expect(
-      await cache.executeOnce("call-1", { action: "go-back" }, RUN),
-    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.redirected });
-
-    const unreadable = createBrowserToolExecutionCache(
-      async () => landedOn("https://example.com/"),
-      store.beginCommand,
-      () => ({ type: "unreadable" }),
-    );
-    const withheld = await unreadable.executeOnce(
-      "call-2",
-      { action: "snapshot" },
-      RUN,
-    );
-    expect(withheld).toMatchObject({ status: "error" });
-    expect(JSON.stringify(withheld)).not.toContain("Ready");
-  });
-
-  test("a command the user answered is not held to the allowed websites", async () => {
-    const store = sessionStore();
-    const cache = createBrowserToolExecutionCache(
-      async () => landedOn("https://other.test/"),
-      store.beginCommand,
-      answeredByUser,
-    );
-
-    expect(
-      await cache.executeOnce("call-1", { action: "snapshot" }, RUN),
-    ).toEqual(landedOn("https://other.test/"));
+  test("a malformed command reaches the extension, which refuses it", async () => {
+    const reached: unknown[] = [];
+    const { cache } = cacheAt("plan", async (input) => {
+      reached.push(input);
+      return success;
+    });
+    await cache.executeOnce("call-1", { action: "click", ref: "e:0" }, RUN);
+    expect(reached).toEqual([{ action: "click", ref: "e:0" }]);
   });
 });
 
 describe("chat browser tool run", () => {
   test("passes the chat turn and stop signal to the executor", async () => {
     const runs: unknown[] = [];
-    const cache = createBrowserToolExecutionCache(
-      async (_input, _id, run) => {
-        runs.push(run);
-        return success;
-      },
-      untracked,
-      answeredByUser,
-    );
+    const { cache } = cacheAt("ask", async (_input, _id, run) => {
+      runs.push(run);
+      return success;
+    });
 
     await cache.executeOnce("call-1", { action: "snapshot" }, RUN);
     expect(runs).toEqual([RUN]);

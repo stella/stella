@@ -54,8 +54,10 @@ export const createBrowserControlTool = () => ({
       "After `no-controlled-tab` (the user closed the active tab), switch to a listed tab or `open` a page. " +
       "Each chat turn and extension connection may " +
       "run a bounded number of actions; after `budget-exceeded`, stop and tell the user what was done. " +
-      "`cancelled` means the user stopped the action. Actions may wait for the user's approval. Passwords, login, " +
-      "and MFA remain manual. Use `go-back` for history. Downloads are blocked in your tabs; file uploads, " +
+      "`cancelled` means the user stopped the action. Opening and reading never wait; by the user's permission " +
+      "level, clicks and typing may wait for the user's approval, and in Plan they return `permission-denied`: " +
+      "read and propose those steps instead. Passwords, login, and MFA remain manual: `needs-member` means the " +
+      "page asks for a sign-in, so ask the user to sign in in that tab, then take a `snapshot`. Use `go-back` for history. Downloads are blocked in your tabs; file uploads, " +
       "cookies, hidden DOM, CAPTCHA solving, and arbitrary JavaScript are unavailable, so never claim them.",
     inputSchema: toTanStackToolSchema(browserControlCommandSchema),
     // Chat keeps an earlier page read as its superseded projection

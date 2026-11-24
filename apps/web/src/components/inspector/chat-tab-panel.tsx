@@ -727,6 +727,7 @@ export const ChatTabPanel = ({
         value={{
           activeOrganizationId,
           approvalIdsAwaitedAtOpen,
+          browserLevel: composerModels.runTarget.approvals,
           alwaysApprovedTools,
           conversationApprovedTools,
           confirmStoredApprovalGrant,

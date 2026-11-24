@@ -45,6 +45,7 @@ import {
   chatTurnSteeringEventSchema,
 } from "@stll/api-contract/chat-send-intent";
 import { createChatTurnTimingObserver } from "@stll/api-contract/chat-turn-duration";
+import { DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE } from "@stll/api-contract/desktop-runner";
 import type { ProviderDiagnostic } from "@stll/api-contract/provider-setup";
 import {
   ChatReconnectError,
@@ -1110,6 +1111,11 @@ export const createChatRuntime = ({
   // persisted user message, so a runtime rebuilt mid-turn charges the same
   // turn.
   const browserTool = createBrowserExtensionTool({
+    // A surface without a Run on choice runs on stella's models at the
+    // default level.
+    levelFor: () =>
+      context?.getRunTarget?.().approvals ??
+      DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
     turnIdFor: (toolCallId) => browserTurnId(snapshot.messages, toolCallId),
   });
 

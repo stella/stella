@@ -37,7 +37,10 @@ import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { sessionOptions } from "@/lib/auth-query-options";
 import { toSafeId } from "@/lib/safe-id";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
-import { APP_FRAME_SCOPE, matchedAppFrameScope } from "@/routes/-app-frame-scope";
+import {
+  APP_FRAME_SCOPE,
+  matchedAppFrameScope,
+} from "@/routes/-app-frame-scope";
 import { isLegacyAdminRouteId } from "@/routes/-organization-settings-route";
 import { withTestServerIsomorphicHalf } from "@/testing/isomorphic-half";
 
@@ -250,10 +253,9 @@ const installFixtureNetwork = () => {
   const requests: string[] = [];
   const state: {
     audience: FixtureAudience;
-    response?: (request: Request) =>
-      | Response
-      | undefined
-      | Promise<Response | undefined>;
+    response?: (
+      request: Request,
+    ) => Response | undefined | Promise<Response | undefined>;
   } = {
     audience: FIXTURE_AUDIENCE.anonymous,
   };
@@ -344,9 +346,7 @@ const installFixtureNetwork = () => {
         return customResponse;
       }
       if (pathname === "/api/auth/get-session") {
-        return Response.json(
-          state.audience === "member" ? authSession : null,
-        );
+        return Response.json(state.audience === "member" ? authSession : null);
       }
       if (pathname === "/api/auth/organization/get-active-member-role") {
         return Response.json({ role: "owner" });
@@ -444,7 +444,7 @@ const installFixtureNetwork = () => {
       }
       // The composer's where chip: this member runs no turns on a computer.
       if (pathname === "/v1/chat/local-runners") {
-        return Response.json({ status: "hidden" });
+        return Response.json({ status: "hidden", maxApprovals: "full_auto" });
       }
       if (pathname === "/v1/chat/skill-availability") {
         return Response.json({
@@ -647,7 +647,8 @@ const loadFixtureRuntime = async (
     const state = useI18nStore.getState();
     await state.loadMessages(state.lang);
   };
-  const { useFormatter, useFormattingLocale } = await import("@/i18n/formatting-context");
+  const { useFormatter, useFormattingLocale } =
+    await import("@/i18n/formatting-context");
   const { useRouteErrorLifecycle } =
     await import("@/lib/analytics/route-error-lifecycle-context");
   const { ApiVersionMismatchReporter } =
@@ -1360,13 +1361,17 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
       expect(
         router.state.matches.find((match) => match.routeId === "/dev")?.status,
       ).toBe("success");
-      expect(queryClient.getQueryState(sessionOptions.queryKey)).toBeUndefined();
       expect(
-        fixture.requests.slice(requestsBeforeLoad).filter(
-          (request) =>
-            request.startsWith("/api/auth/") ||
-            request === "/v1/me/professional-use",
-        ),
+        queryClient.getQueryState(sessionOptions.queryKey),
+      ).toBeUndefined();
+      expect(
+        fixture.requests
+          .slice(requestsBeforeLoad)
+          .filter(
+            (request) =>
+              request.startsWith("/api/auth/") ||
+              request === "/v1/me/professional-use",
+          ),
       ).toEqual([]);
     } finally {
       await queryClient.cancelQueries();
@@ -1392,7 +1397,8 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
     fixture.unexpectedRequests.length = 0;
     caseRoute.update({
       component: CasePage,
-      beforeLoad: () => authFixtureBeforeLoadData(caseRoute.id, fixture.user.email),
+      beforeLoad: () =>
+        authFixtureBeforeLoadData(caseRoute.id, fixture.user.email),
       loader: () => publicFixtureLoaderData(caseRoute.id),
     });
     await fixture.initializeI18n();
@@ -1495,16 +1501,20 @@ const declareProfessionalUseCases = (fixture: FixtureRuntime) => {
         FIXTURE_AUDIENCE.anonymous,
         status,
       );
-      const serverEnvironment = Object.getOwnPropertyDescriptor(import.meta.env, "SSR");
+      const serverEnvironment = Object.getOwnPropertyDescriptor(
+        import.meta.env,
+        "SSR",
+      );
       const requestsBeforeSsr = fixture.requests.length;
       try {
         Object.assign(import.meta.env, { SSR: true });
         await runInRequest(
           async () =>
-            await withRequestI18n(async () =>
-              await withTestServerIsomorphicHalf(async () =>
-                await router.load(),
-              ),
+            await withRequestI18n(
+              async () =>
+                await withTestServerIsomorphicHalf(
+                  async () => await router.load(),
+                ),
             ),
           new Request(new URL(path, window.location.origin)),
         );

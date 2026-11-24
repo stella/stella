@@ -129,6 +129,7 @@ const UNEXPORTED_CHAT_THREAD_COLUMNS = [
   "chatReasoningEffort",
   "chatRunTarget",
   "chatLocalRunTarget",
+  "chatCloudApprovals",
   // Internal processing flag recording that anonymization ran on a turn.
   "usedAnonymization",
   // Disconnect-compensation token for thread creation; internal machinery.

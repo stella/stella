@@ -850,6 +850,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
                 chatModel: null,
                 chatReasoningEffort: null,
                 chatLocalRunTarget: null,
+                chatCloudApprovals: null,
                 messages: [],
                 historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
               },

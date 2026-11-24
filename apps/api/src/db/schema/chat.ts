@@ -10,6 +10,7 @@ import {
 import type { ChatMessageRevisionEdit } from "@stll/api-contract/chat-message-revisions";
 import { CHAT_QUEUE_HOLD_REASONS } from "@stll/api-contract/chat-queue";
 import type { ChatLocalRunTarget } from "@stll/api-contract/chat-run-target";
+import { DESKTOP_RUNNER_APPROVAL_MODES } from "@stll/api-contract/desktop-runner";
 
 import { chatContentJsonb } from "@/api/db/columns";
 import { entityFeaturePolicies } from "@/api/db/entity-feature-policies";
@@ -339,6 +340,14 @@ export const chatThreads = p.pgTable(
       .jsonb("chat_local_run_target")
       .$type<ChatLocalRunTarget>(),
     /**
+     * The permission level of the thread's turns on stella's own models
+     * (`ChatCloudRunTarget.approvals`): what chat may do in the member's
+     * browser without asking. Null is the default level, Ask.
+     */
+    chatCloudApprovals: p.text("chat_cloud_approvals", {
+      enum: DESKTOP_RUNNER_APPROVAL_MODES,
+    }),
+    /**
      * Cached "where you left off" recap, shown as subtle grey text
      * below the last message when the user reopens this thread after
      * a gap (see RECAP_STALENESS_THRESHOLD_MS). Derived from the
@@ -502,6 +511,13 @@ export const chatThreads = p.pgTable(
   AND NOT jsonb_path_exists(${table.generationProvenance}, '$.slots.* ? (@.type == "generated" && (!exists(@.generator) || @.generator.type() != "string" || @.generator == "" || !exists(@.decisionIds) || @.decisionIds.type() != "array" || @.decisionIds.size() > 1024 || !exists(@.coverage) || @.coverage.type() != "string" || (@.coverage != "complete" && @.coverage != "legacy-input")))')
   AND NOT jsonb_path_exists(${table.generationProvenance}, 'strict $.slots.* ? (@.type == "generated").decisionIds[*] ? (@.type() != "string" || !(@ like_regex "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"))', '{}'::jsonb, true),
   false)`,
+    ),
+    p.check(
+      "chat_threads_chat_cloud_approvals_check",
+      sql`${table.chatCloudApprovals} IS NULL OR ${table.chatCloudApprovals} IN (${sql.join(
+        DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => sql`${mode}`),
+        sql`, `,
+      )})`,
     ),
     p.check(
       "chat_threads_reasoning_effort_selection_check",

@@ -6,8 +6,10 @@ import * as v from "valibot";
 
 import { AI_FAILURE_CODES } from "@stll/api-contract/ai-errors";
 import {
+  CHAT_CLOUD_RUN_TARGET,
   CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_REFUSAL,
+  chatCloudRunTarget,
   type ChatRunTarget,
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
@@ -26,6 +28,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   chatRunTargetOf,
+  NO_STORED_CHAT_RUN_TARGET,
   sameChatRunTarget,
   storedChatRunTarget,
   turnRunTarget,
@@ -288,7 +291,7 @@ describe("a turn in a folder linked on the member's computer", () => {
 
 describe("a send for the member's computer, before anything is stored", () => {
   test("a turn without a local target stays on stella's own path", async () => {
-    for (const runTarget of ["none", { kind: "cloud" }] as const) {
+    for (const runTarget of ["none", CHAT_CLOUD_RUN_TARGET] as const) {
       const { resolved, picks } = await resolve({ runTarget, granted: false });
       expect(resolved.isOk() && resolved.value).toBeUndefined();
       expect(picks).toEqual([]);
@@ -339,6 +342,39 @@ describe("a send for the member's computer, before anything is stored", () => {
     expect(resolved.isOk() && resolved.value?.harness).toBe("codex");
     expect(picks).toEqual([]);
     expect(ceilingReads).toBe(0);
+  });
+
+  test("a turn on stella's models is held to the same ceiling", async () => {
+    const CEILINGS = ["ask", "auto", "full_auto"] as const;
+    for (const ceiling of CEILINGS) {
+      for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
+        let ceilingReads = 0;
+        const { resolved, picks } = await resolve({
+          runTarget: chatCloudRunTarget(approvals),
+          granted: false,
+          readApprovalCeiling: async () => {
+            ceilingReads += 1;
+            return await Promise.resolve(Result.ok(ceiling));
+          },
+        });
+        const within =
+          DESKTOP_RUNNER_APPROVAL_MODES.indexOf(approvals) <=
+          DESKTOP_RUNNER_APPROVAL_MODES.indexOf(ceiling);
+        expect({ ceiling, approvals, code: refusalCodeOf(resolved) }).toEqual({
+          ceiling,
+          approvals,
+          code: within ? null : CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+        });
+        expect(resolved.isOk() ? resolved.value : "refused").toBe(
+          within ? undefined : "refused",
+        );
+        // Plan and Ask fit every ceiling, so only a higher level reads it.
+        expect(ceilingReads).toBe(
+          approvals === "plan" || approvals === "ask" ? 0 : 1,
+        );
+        expect(picks).toEqual([]);
+      }
+    }
   });
 
   test("a ceiling that cannot be read fails the send", async () => {
@@ -547,7 +583,7 @@ describe("answering a paused run's approval", () => {
 });
 
 describe("a thread's stored run target", () => {
-  test("a local target survives the thread column and cloud stores nothing", () => {
+  test("a target survives the thread columns, and the default cloud level stores nothing", () => {
     for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
       const target: ChatRunTarget = { ...LOCAL, approvals };
       expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
@@ -556,17 +592,31 @@ describe("a thread's stored run target", () => {
       const target: ChatRunTarget = { ...LOCAL, reasoningEffort };
       expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
     }
-    expect(storedChatRunTarget({ kind: "cloud" })).toBeNull();
-    expect(chatRunTargetOf(null)).toEqual({ kind: "cloud" });
+    for (const approvals of DESKTOP_RUNNER_APPROVAL_MODES) {
+      const target = chatCloudRunTarget(approvals);
+      expect(chatRunTargetOf(storedChatRunTarget(target))).toEqual(target);
+    }
+    expect(storedChatRunTarget(CHAT_CLOUD_RUN_TARGET)).toEqual({
+      chatLocalRunTarget: null,
+      chatCloudApprovals: null,
+    });
+    expect(chatRunTargetOf(NO_STORED_CHAT_RUN_TARGET)).toEqual(
+      CHAT_CLOUD_RUN_TARGET,
+    );
   });
 
   test("a send keeps the stored target only when it runs the same way", () => {
     expect(
       sameChatRunTarget(LOCAL, chatRunTargetOf(storedChatRunTarget(LOCAL))),
     ).toBe(true);
-    expect(sameChatRunTarget({ kind: "cloud" }, { kind: "cloud" })).toBe(true);
+    expect(
+      sameChatRunTarget(CHAT_CLOUD_RUN_TARGET, CHAT_CLOUD_RUN_TARGET),
+    ).toBe(true);
+    expect(
+      sameChatRunTarget(CHAT_CLOUD_RUN_TARGET, chatCloudRunTarget("full_auto")),
+    ).toBe(false);
     for (const other of [
-      { kind: "cloud" },
+      CHAT_CLOUD_RUN_TARGET,
       { ...LOCAL, model: `${MODEL}-mini` },
       { ...LOCAL, approvals: "full_auto" },
       { ...LOCAL, reasoningEffort: "high" },
@@ -577,7 +627,7 @@ describe("a thread's stored run target", () => {
   });
 
   test("a turn runs where its send names, else where its thread runs", () => {
-    const targets = [{ kind: "cloud" }, LOCAL] satisfies ChatRunTarget[];
+    const targets = [CHAT_CLOUD_RUN_TARGET, LOCAL] satisfies ChatRunTarget[];
     for (const thread of targets) {
       for (const requested of targets) {
         for (const agentSandboxRequested of [false, true]) {
@@ -600,7 +650,7 @@ describe("a thread's stored run target", () => {
           requested: undefined,
           thread,
         }),
-      ).toEqual({ kind: "cloud" });
+      ).toEqual(CHAT_CLOUD_RUN_TARGET);
     }
   });
 
@@ -613,7 +663,18 @@ describe("a thread's stored run target", () => {
       "codex::gpt-5-codex",
       {},
     ]) {
-      expect(chatRunTargetOf(stored)).toEqual({ kind: "cloud" });
+      expect(
+        chatRunTargetOf({
+          chatLocalRunTarget: stored,
+          chatCloudApprovals: null,
+        }),
+      ).toEqual(CHAT_CLOUD_RUN_TARGET);
+      expect(
+        chatRunTargetOf({
+          chatLocalRunTarget: null,
+          chatCloudApprovals: stored,
+        }),
+      ).toEqual(CHAT_CLOUD_RUN_TARGET);
     }
   });
 

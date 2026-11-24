@@ -755,9 +755,9 @@
       },
       "enterSlug": "Ievadiet organizācijas URL identifikatoru.",
       "localRuns": {
-        "description": "Visvairāk, ko programmēšanas aģents drīkst darīt, nejautājot, kad tas palaiž tērzēšanu dalībnieka datorā. Zemāks ierobežojums stājas spēkā ar katra dalībnieka nākamo ziņu; jau notiekoša palaišana saglabā savas atļaujas.",
-        "title": "Programmēšanas aģenti dalībnieku datoros",
-        "updated": "Programmēšanas aģentu atļaujas atjauninātas"
+        "description": "Visvairāk, ko tērzēšana drīkst darīt, nejautājot: programmēšanas aģents, kas palaiž tērzēšanu dalībnieka datorā, un darbības dalībnieka pārlūkā. Zemāks ierobežojums stājas spēkā ar katra dalībnieka nākamo ziņu; jau notiekoša palaišana saglabā savas atļaujas.",
+        "title": "Tērzēšanas atļaujas",
+        "updated": "Tērzēšanas atļaujas atjauninātas"
       },
       "logoInvalid": "Izvēlieties PNG, JPEG vai WebP attēlu, kas nepārsniedz 5 MB.",
       "matterNumbering": "Lietu numerācija",

@@ -3,11 +3,14 @@ import { panic } from "better-result";
 import {
   BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
+  type BrowserControlCommand,
   type BrowserControlResult,
+  parseBrowserControlCommand,
 } from "@stll/api-contract/browser-control";
-import { browserSiteGrantOrigin } from "@stll/api-contract/browser-site-grants";
-
-import type { BrowserApprovalProvenance } from "./browser-approval-mode";
+import {
+  BROWSER_STEP_GATE,
+  type BrowserStepDecision,
+} from "@stll/api-contract/browser-step-gate";
 
 /** How a command runs: the chat turn it belongs to and its stop signal. */
 export type BrowserCommandRun = {
@@ -24,60 +27,53 @@ type BrowserCommandExecutor = (
 /** Marks a command as running; the returned callback reports how it ended. */
 type BeginBrowserCommand = () => (succeeded: boolean) => void;
 
-/** Who answered `toolCallId`, as this tab recorded it. */
-type ApprovalProvenanceFor = (toolCallId: string) => BrowserApprovalProvenance;
+/** How the shared browser gate answers a command right before it runs. */
+type DecideBrowserCommand = (
+  command: BrowserControlCommand,
+) => BrowserStepDecision;
 
-const WITHHELD: BrowserControlResult = {
-  code: BROWSER_CONTROL_ERROR_CODE.redirected,
-  message:
-    "The tab is now on a website the user has not allowed, so the page was not read. Take a snapshot; the user is asked first.",
+const refused = (
+  code:
+    | typeof BROWSER_CONTROL_ERROR_CODE.permissionDenied
+    | typeof BROWSER_CONTROL_ERROR_CODE.needsMember,
+  message: string,
+): BrowserControlResult => ({
+  code,
+  message,
   protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
   status: "error",
-};
+});
+
+/** What a step Plan does not run answers, as a chat on a computer says it. */
+const READ_ONLY = refused(
+  BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+  "Plan mode is read-only: clicking, typing, pressing keys and choosing options are not available. Open and read pages to plan; propose those steps in the plan for the member to approve.",
+);
+
+/** What a step on a page waiting for the member's sign-in answers. */
+const SIGN_IN_PENDING = refused(
+  BROWSER_CONTROL_ERROR_CODE.needsMember,
+  "The page in this tab asks for a sign-in, which the member completes themselves. Ask the member to sign in themselves, in the browser window that shows the page, then call snapshot. Do not fill in sign-in or verification fields.",
+);
 
 /**
- * A command a website approval answered may only hand back a page on the
- * website it was allowed for. The extension reports where the tab ended up; a
- * page elsewhere (a link, a redirect, going back, or the user moving the tab
- * before it ran) is withheld from the model, and the command counts as failed
- * so the next one asks. When this tab cannot tell who answered, the page is
- * withheld too.
+ * The answer for a step the gate does not run, without reaching the
+ * extension; null for a step that runs (the member or the level allowed it).
  */
-/** The page a result hands back content from, or null for an error. */
-const resultPageUrl = (result: BrowserControlResult): string | null => {
-  switch (result.status) {
-    case "success":
-      return result.snapshot.url;
-    case "found":
-      return result.found.url;
-    case "error":
+const refusalOf = (
+  decision: BrowserStepDecision,
+): BrowserControlResult | null => {
+  switch (decision.type) {
+    case BROWSER_STEP_GATE.refuse:
+      return READ_ONLY;
+    case BROWSER_STEP_GATE.needsMember:
+      return SIGN_IN_PENDING;
+    case BROWSER_STEP_GATE.run:
+    case BROWSER_STEP_GATE.ask:
       return null;
     default:
-      result satisfies never;
-      return panic("Unhandled browser result status");
-  }
-};
-
-const withinSiteGrant = (
-  result: BrowserControlResult,
-  provenance: BrowserApprovalProvenance,
-): BrowserControlResult => {
-  const pageUrl = resultPageUrl(result);
-  if (pageUrl === null) {
-    return result;
-  }
-  switch (provenance.type) {
-    case "person":
-      return result;
-    case "site-grant":
-      return browserSiteGrantOrigin(pageUrl) === provenance.origin
-        ? result
-        : WITHHELD;
-    case "unreadable":
-      return WITHHELD;
-    default:
-      provenance satisfies never;
-      return panic("Unhandled browser approval provenance");
+      decision satisfies never;
+      return panic("Unhandled browser step decision");
   }
 };
 
@@ -85,12 +81,15 @@ const withinSiteGrant = (
  * Coalesces same-runtime retries. Durable at-most-once enforcement lives in
  * the extension and receives this same tool-call id across reloads. Each real
  * execution (never a coalesced retry, whose outcome is already recorded) is
- * reported to `beginCommand`, which gates auto-approval.
+ * reported to `beginCommand`, which decides when a reported page counts.
+ * A step the gate refuses (Plan) or hands to the member (a sign-in) is
+ * answered here and never reaches the extension; its card let it through so
+ * this answer reaches the model.
  */
 export const createBrowserToolExecutionCache = (
   execute: BrowserCommandExecutor,
   beginCommand: BeginBrowserCommand,
-  approvalProvenanceFor: ApprovalProvenanceFor,
+  decide: DecideBrowserCommand,
 ) => {
   const executions = new Map<string, Promise<BrowserControlResult>>();
 
@@ -98,18 +97,18 @@ export const createBrowserToolExecutionCache = (
     toolCallId: string,
     input: unknown,
     commandRun: BrowserCommandRun,
-  ) => {
+  ): Promise<BrowserControlResult> => {
+    // A malformed command goes to the extension, which refuses it.
+    const command = parseBrowserControlCommand(input);
+    const refusal = command === null ? null : refusalOf(decide(command));
+    if (refusal !== null) {
+      return refusal;
+    }
     const finish = beginCommand();
-    // Read before the command runs: what answered it must not depend on the
-    // record still being there, or readable, once the result comes back.
-    const provenance = approvalProvenanceFor(toolCallId);
     let succeeded = false;
     try {
-      const result = withinSiteGrant(
-        await execute(input, toolCallId, commandRun),
-        provenance,
-      );
-      succeeded = resultPageUrl(result) !== null;
+      const result = await execute(input, toolCallId, commandRun);
+      succeeded = result.status !== "error";
       return result;
     } finally {
       finish(succeeded);

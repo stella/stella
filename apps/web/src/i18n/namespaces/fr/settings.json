@@ -755,9 +755,9 @@
       },
       "enterSlug": "Saisissez l’identifiant de l’organisation dans l’URL.",
       "localRuns": {
-        "description": "Ce qu’un agent de code peut faire au maximum sans demander lorsqu’il exécute une conversation sur l’ordinateur d’un membre. Une limite plus basse s’applique dès le prochain message de chaque membre ; une exécution déjà en cours conserve ses autorisations.",
-        "title": "Agents de code sur les ordinateurs des membres",
-        "updated": "Autorisations des agents de code mises à jour"
+        "description": "Ce que la conversation peut faire au maximum sans demander : un agent de code qui l’exécute sur l’ordinateur d’un membre, et les actions dans le navigateur d’un membre. Une limite plus basse s’applique dès le prochain message de chaque membre ; une exécution déjà en cours conserve ses autorisations.",
+        "title": "Autorisations de la conversation",
+        "updated": "Autorisations de la conversation mises à jour"
       },
       "logoInvalid": "Choisissez une image PNG, JPEG ou WebP de 5 Mo maximum.",
       "matterNumbering": "Numérotation des dossiers",

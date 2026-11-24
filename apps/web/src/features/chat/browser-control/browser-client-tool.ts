@@ -6,11 +6,12 @@ import {
   browserControlCommandJsonSchema,
   browserControlResultJsonSchema,
 } from "@stll/api-contract/browser-control-json-schema";
+import type { DesktopRunnerApprovalMode } from "@stll/api-contract/desktop-runner";
 
 import {
   beginBrowserCommand,
-  browserApprovalProvenanceFor,
-} from "./browser-approval-mode";
+  currentBrowserStepDecision,
+} from "./browser-approval-state";
 import { executeBrowserExtensionCommand } from "./browser-extension-bridge";
 import { createBrowserToolExecutionCache } from "./browser-tool-execution";
 import { createTurnStopper } from "./browser-turn";
@@ -22,9 +23,18 @@ type BrowserExtensionToolOptions = {
    * commands per turn, and Stop ends a turn.
    */
   turnIdFor: (toolCallId?: string) => string | null;
+  /**
+   * The chat's permission level now, the one its cards answer by: a step
+   * the level refuses (Plan) is answered without reaching the extension.
+   */
+  levelFor: () => DesktopRunnerApprovalMode;
 };
 
+/** Website approvals never lift a refusal or a sign-in, so none are read. */
+const NO_GRANTS: ReadonlySet<string> = new Set();
+
 export const createBrowserExtensionTool = ({
+  levelFor,
   turnIdFor,
 }: BrowserExtensionToolOptions) => {
   // The outcome is tracked per web tab, not per chat runtime: every chat in
@@ -32,7 +42,12 @@ export const createBrowserExtensionTool = ({
   const executions = createBrowserToolExecutionCache(
     executeBrowserExtensionCommand,
     beginBrowserCommand,
-    browserApprovalProvenanceFor,
+    (command) =>
+      currentBrowserStepDecision({
+        command,
+        grantedOrigins: NO_GRANTS,
+        level: levelFor(),
+      }),
   );
   const stopper = createTurnStopper();
 

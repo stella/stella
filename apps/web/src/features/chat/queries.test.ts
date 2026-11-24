@@ -857,7 +857,10 @@ describe("buildSendRequestBody", () => {
     expect(bodyFor(local).runTarget).toEqual(local);
     // The server runs a send that names no target where its thread runs, so
     // a member who picked cloud on a thread that ran on a computer must say so.
-    expect(bodyFor({ kind: "cloud" }).runTarget).toEqual({ kind: "cloud" });
+    expect(bodyFor({ kind: "cloud", approvals: "ask" }).runTarget).toEqual({
+      kind: "cloud",
+      approvals: "ask",
+    });
     expect("runTarget" in bodyFor(undefined)).toBe(false);
   });
 

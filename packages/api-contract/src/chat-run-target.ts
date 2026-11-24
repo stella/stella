@@ -116,6 +116,10 @@ export const CHAT_LOCAL_RUN_APPROVAL_CEILINGS = [
 export type ChatLocalRunApprovalCeiling =
   (typeof CHAT_LOCAL_RUN_APPROVAL_CEILINGS)[number];
 
+/** The lowest ceiling: every organization allows this level and below. */
+export const CHAT_LOWEST_APPROVAL_CEILING =
+  "ask" satisfies ChatLocalRunApprovalCeiling;
+
 /**
  * How a harness's own web search runs at a permission level: without
  * asking, after the member approves the search, or not at all.
@@ -207,15 +211,37 @@ export const approvalModeWithin = ({
           (offered === undefined || offered.includes(candidate)),
       ) ?? DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE);
 
+/**
+ * A turn on stella's own models. `approvals` is the same permission level a
+ * computer's run has, held to the same organization ceiling; on stella's
+ * models it decides the steps chat takes in the member's browser
+ * (`browser-step-gate.ts`). Other tools keep their own approvals.
+ */
+export const chatCloudRunTargetSchema = v.strictObject({
+  kind: v.literal(CHAT_RUN_TARGET_KIND.cloud),
+  approvals: v.optional(
+    v.picklist(DESKTOP_RUNNER_APPROVAL_MODES),
+    DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+  ),
+});
+export type ChatCloudRunTarget = v.InferOutput<typeof chatCloudRunTargetSchema>;
+
 export const chatRunTargetSchema = v.variant("kind", [
-  v.strictObject({ kind: v.literal(CHAT_RUN_TARGET_KIND.cloud) }),
+  chatCloudRunTargetSchema,
   chatLocalRunTargetSchema,
 ]);
 export type ChatRunTarget = v.InferOutput<typeof chatRunTargetSchema>;
 
+/** A turn on stella's own models at the default permission level. */
 export const CHAT_CLOUD_RUN_TARGET = {
   kind: CHAT_RUN_TARGET_KIND.cloud,
+  approvals: DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
 } as const satisfies ChatRunTarget;
+
+/** A turn on stella's own models at the permission level `approvals`. */
+export const chatCloudRunTarget = (
+  approvals: DesktopRunnerApprovalMode,
+): ChatCloudRunTarget => ({ kind: CHAT_RUN_TARGET_KIND.cloud, approvals });
 
 /**
  * Why a send bound for a computer was refused before anything of it was
@@ -273,10 +299,11 @@ export type ChatLocalRunnerReadiness = {
 /**
  * What the composer may offer for local runs. `hidden` when the member cannot
  * run chat turns on a computer at all; the composer then shows no option.
- * `maxApprovals` is the most the organization lets a run do without asking.
+ * `maxApprovals` is the most the organization lets a turn do without asking,
+ * on a computer or on stella's models.
  */
 export type ChatLocalRunReadiness =
-  | { status: "hidden" }
+  | { status: "hidden"; maxApprovals: ChatLocalRunApprovalCeiling }
   | {
       status: "enabled";
       runners: ChatLocalRunnerReadiness[];

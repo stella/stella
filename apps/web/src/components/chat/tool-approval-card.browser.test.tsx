@@ -6,11 +6,17 @@ import { IntlProvider } from "use-intl";
 
 import {
   BROWSER_CONTROL_CONTENT_TRUST,
+  BROWSER_CONTROL_ERROR_CODE,
   BROWSER_CONTROL_PROTOCOL_VERSION,
   BROWSER_CONTROL_TARGET_METADATA,
   BROWSER_CONTROL_TOOL_NAME,
+  type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
 import { USE_CONNECTOR_SECRET_TOOL_NAME } from "@stll/api-contract/chat-secret";
+import {
+  DESKTOP_RUNNER_APPROVAL_MODES,
+  type DesktopRunnerApprovalMode,
+} from "@stll/api-contract/desktop-runner";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import {
@@ -19,7 +25,11 @@ import {
 } from "@/components/chat/chat-ui-tools";
 import type { ToolApprovalGrant } from "@/components/chat/chat-ui-tools";
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
-import { observeBrowserPage } from "@/features/chat/browser-control/browser-approval-mode";
+import {
+  beginBrowserCommand,
+  observeBrowserResult,
+  resetBrowserApproval,
+} from "@/features/chat/browser-control/browser-approval-state";
 import { browserSiteGrantsOptions } from "@/features/chat/browser-control/browser-site-grants";
 import messages from "@/i18n/langs/en.json";
 import {
@@ -31,6 +41,7 @@ import { toSafeId } from "@/lib/safe-id";
 const noop = () => undefined;
 
 type RenderOptions = {
+  level?: DesktopRunnerApprovalMode;
   queryClient?: QueryClient;
   user?: AuthenticatedUser | null;
 };
@@ -69,7 +80,7 @@ const withAllowedSites = (origins: readonly string[]) => {
 const renderCard = (
   part: unknown,
   grants: ReadonlySet<ToolApprovalGrant> = new Set(),
-  { queryClient = new QueryClient(), user = null }: RenderOptions = {},
+  { level, queryClient = new QueryClient(), user = null }: RenderOptions = {},
 ) => {
   if (!isApprovalPart(part)) {
     throw new Error("Expected a browser approval part");
@@ -80,6 +91,7 @@ const renderCard = (
         value={{
           activeOrganizationId: "org-1",
           approvalIdsAwaitedAtOpen: new Set(),
+          browserLevel: level,
           alwaysApprovedTools: grants,
           conversationApprovedTools: grants,
           confirmStoredApprovalGrant: async () =>
@@ -139,6 +151,46 @@ const browserPart = (input: unknown, state: string, output?: unknown) => ({
 });
 
 const readPage = { action: "snapshot" };
+const ABSENT = { type: BROWSER_CONTROL_TARGET_METADATA.absent } as const;
+/** A step on an element of `url`, as a read at revision-1 listed it. */
+const CLICK = { action: "click" } as const;
+const stepOn = (
+  url: string,
+  step?: Record<string, unknown>,
+  role = "button",
+) => ({
+  ...(step ?? CLICK),
+  page: { revision: "revision-1", url },
+  target: { context: ABSENT, href: ABSENT, name: "Search", ref: "e:0:1", role },
+});
+const readOf = (url: string): BrowserControlResult => ({
+  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+  snapshot: {
+    contentTrust: BROWSER_CONTROL_CONTENT_TRUST.untrustedWebContent,
+    elements: [],
+    elementsLeftOut: false,
+    facts: { meta: [] },
+    revision: "revision-1",
+    tabId: 7,
+    tabs: [{ active: true, tabId: 7, url }],
+    text: "Ready",
+    title: "Example",
+    url,
+    window: { cursor: "r1.window", fromPercent: 0, toPercent: 100 },
+  },
+  status: "success",
+});
+/** Renders with the extension having reported `result` for the tab. */
+const afterReport = <T,>(result: BrowserControlResult, render: () => T): T => {
+  resetBrowserApproval();
+  observeBrowserResult(result);
+  beginBrowserCommand()(result.status !== "error");
+  try {
+    return render();
+  } finally {
+    resetBrowserApproval();
+  }
+};
 const browserQuestion = messages.chat.approval.browser.question;
 const secretUseInput = {
   secretRef: "00000000-0000-4000-8000-000000000001",
@@ -157,10 +209,91 @@ const secretUsePart = () => ({
 });
 
 describe("browser approval card", () => {
-  test("asks about a pending browser action", () => {
-    expect(renderCard(browserPart(readPage, "approval-requested"))).toContain(
-      browserQuestion,
-    );
+  test("asks about a pending click at Ask", () => {
+    expect(
+      renderCard(
+        browserPart(stepOn("https://example.com/"), "approval-requested"),
+      ),
+    ).toContain(browserQuestion);
+  });
+
+  test("every level and step: the card asks exactly when the level asks", () => {
+    const STEPS = [
+      { name: "read", input: readPage, kind: "free" },
+      {
+        name: "open",
+        input: { action: "open", url: "https://example.com/" },
+        kind: "free",
+      },
+      {
+        name: "click",
+        input: stepOn("https://example.com/"),
+        kind: "click",
+      },
+      {
+        name: "Enter in a search field",
+        input: stepOn(
+          "https://example.com/",
+          { action: "press-key", key: "Enter" },
+          "searchbox",
+        ),
+        kind: "search",
+      },
+      {
+        name: "typing into a search field",
+        input: stepOn(
+          "https://example.com/",
+          { action: "fill", value: "lease" },
+          "searchbox",
+        ),
+        kind: "search",
+      },
+      {
+        name: "typing into another field",
+        input: stepOn(
+          "https://example.com/",
+          { action: "fill", value: "Dana" },
+          "textbox",
+        ),
+        kind: "type",
+      },
+    ] as const;
+    const ASKS = {
+      plan: { click: false, search: false, type: false },
+      ask: { click: true, search: false, type: true },
+      auto: { click: false, search: false, type: true },
+      full_auto: { click: false, search: false, type: false },
+    } as const;
+    for (const level of DESKTOP_RUNNER_APPROVAL_MODES) {
+      for (const signIn of [false, true]) {
+        for (const step of STEPS) {
+          const markup = afterReport(
+            signIn
+              ? {
+                  code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+                  message: "The page asks for a sign-in.",
+                  protocolVersion: BROWSER_CONTROL_PROTOCOL_VERSION,
+                  status: "error",
+                }
+              : readOf("https://example.com/"),
+            () =>
+              renderCard(
+                browserPart(step.input, "approval-requested"),
+                undefined,
+                { level },
+              ),
+          );
+          const asks =
+            step.kind !== "free" && !signIn && ASKS[level][step.kind];
+          expect({
+            level,
+            signIn,
+            step: step.name,
+            asks: markup.includes(browserQuestion),
+          }).toEqual({ level, signIn, step: step.name, asks });
+        }
+      }
+    }
   });
 
   test("says the website receives the real values it shows", () => {
@@ -241,7 +374,8 @@ describe("browser approval card", () => {
     );
     expect(switchTab).toContain(actions.switchTab);
     expect(switchTab).toContain("https://example.com/results");
-    expect(switchTab).toContain(browserQuestion);
+    // Moving between pages never asks.
+    expect(switchTab).not.toContain(browserQuestion);
   });
 
   test("a malformed browser command still shows what the model sent", () => {
@@ -292,25 +426,40 @@ describe("browser approval card", () => {
 
 describe("always allowing a website", () => {
   const alwaysAllowSite = messages.chat.approval.browser.alwaysAllowSite;
-  const openNews = { action: "open", url: "https://example.com/news" };
+  const clickNews = stepOn("https://example.com/news");
 
-  test("a card for an action on a website offers to always allow it", () => {
+  test("a card for a step on a website offers to always allow it", () => {
     const markup = renderCard(
-      browserPart(openNews, "approval-requested"),
+      browserPart(clickNews, "approval-requested"),
       undefined,
-      {
-        user: member,
-      },
+      { user: member },
     );
     expect(markup).toContain(messages.chat.approval.allowOnce);
     expect(markup).toContain(alwaysAllowSite);
     // The site the button covers stays on the card.
-    expect(markup).toContain("https://example.com/news");
+    expect(markup).toContain("example.com");
+  });
+
+  test("the offer names the page the step was written for, reported or not", () => {
+    for (const reported of [
+      null,
+      readOf("https://example.com/news"),
+      readOf("https://other.test/"),
+    ]) {
+      const render = () =>
+        renderCard(browserPart(clickNews, "approval-requested"), undefined, {
+          user: member,
+        });
+      const markup =
+        reported === null ? render() : afterReport(reported, render);
+      expect(markup).toContain(alwaysAllowSite);
+      expect(markup).toContain("example.com");
+    }
   });
 
   test("a website already allowed is not offered again", () => {
     const markup = renderCard(
-      browserPart(openNews, "approval-requested"),
+      browserPart(clickNews, "approval-requested"),
       undefined,
       {
         queryClient: withAllowedSites(["https://example.com"]),
@@ -326,7 +475,7 @@ describe("always allowing a website", () => {
       "https://example.com:8443/",
     ]) {
       const markup = renderCard(
-        browserPart({ action: "open", url }, "approval-requested"),
+        browserPart(stepOn(url), "approval-requested"),
         undefined,
         {
           queryClient: withAllowedSites(["https://example.com"]),
@@ -339,10 +488,7 @@ describe("always allowing a website", () => {
 
   test("a website that is not HTTPS cannot be always allowed", () => {
     const markup = renderCard(
-      browserPart(
-        { action: "open", url: "http://example.com/" },
-        "approval-requested",
-      ),
+      browserPart(stepOn("http://example.com/"), "approval-requested"),
       undefined,
       { user: member },
     );
@@ -352,49 +498,15 @@ describe("always allowing a website", () => {
 
   test("without a signed-in account nothing can be stored", () => {
     expect(
-      renderCard(browserPart(openNews, "approval-requested")),
+      renderCard(browserPart(clickNews, "approval-requested")),
     ).not.toContain(alwaysAllowSite);
-  });
-
-  test("a page read names the website the tab is on, as the extension reported it", () => {
-    observeBrowserPage({
-      revision: "revision-1",
-      url: "https://example.com/search?q=lease",
-      valueRefs: new Set(),
-    });
-    try {
-      const markup = renderCard(
-        browserPart(readPage, "approval-requested"),
-        undefined,
-        {
-          user: member,
-        },
-      );
-      expect(markup).toContain(alwaysAllowSite);
-      expect(markup).toContain("example.com");
-    } finally {
-      observeBrowserPage(null);
-    }
-  });
-
-  test("a page read with no page reported offers no website", () => {
-    const markup = renderCard(
-      browserPart(readPage, "approval-requested"),
-      undefined,
-      {
-        user: member,
-      },
-    );
-    expect(markup).not.toContain(alwaysAllowSite);
   });
 
   test("an answered card no longer offers it", () => {
     const markup = renderCard(
-      browserPart(openNews, "complete", { status: "error" }),
+      browserPart(clickNews, "complete", { status: "error" }),
       undefined,
-      {
-        user: member,
-      },
+      { user: member },
     );
     expect(markup).not.toContain(alwaysAllowSite);
   });

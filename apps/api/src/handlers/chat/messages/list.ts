@@ -45,7 +45,7 @@ import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/chat/artefact-prov
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
 import {
   chatRunTargetOf,
-  localRunTargetField,
+  NO_STORED_CHAT_RUN_TARGET,
   reportedLocalRunContext,
 } from "@/api/lib/chat/run-target";
 import { readChatCopyProjection } from "@/api/lib/chat/withdrawn-copies";
@@ -289,6 +289,7 @@ const getMessages = createSafeRootHandler(
             chatModel: true,
             chatReasoningEffort: true,
             chatLocalRunTarget: true,
+            chatCloudApprovals: true,
             forkedFromMessageId: true,
             parentThreadId: true,
             updatedAt: true,
@@ -464,7 +465,7 @@ const getMessages = createSafeRootHandler(
           webSearchEnabled: false,
           model: null,
           reasoningEffort: null,
-          ...localRunTargetField(chatRunTargetOf(null)),
+          runTarget: chatRunTargetOf(NO_STORED_CHAT_RUN_TARGET),
           // A not-yet-created draft still carries the cache-stable floor its
           // first send will pay. Web search is off (`webSearchEnabled: false`)
           // and the model defaults (`threadChatModel: null`) until the draft
@@ -543,7 +544,7 @@ const getMessages = createSafeRootHandler(
     // A thread whose turns run on the member's computer shows what its
     // harness reported: the harness manages that context, not stella.
     const reported = reportedLocalRunContext({
-      target: chatRunTargetOf(thread.chatLocalRunTarget),
+      target: chatRunTargetOf(thread),
       messages: persistedMessages,
     });
     const context: ThreadContextUsage =
@@ -552,7 +553,7 @@ const getMessages = createSafeRootHandler(
     const activeTurnSteering = await readActiveTurnSteering({
       activeTurnId: page.activeTurnId,
       organizationId: session.activeOrganizationId,
-      runTarget: chatRunTargetOf(thread.chatLocalRunTarget),
+      runTarget: chatRunTargetOf(thread),
       threadId,
       userId: user.id,
     });
@@ -578,8 +579,7 @@ const getMessages = createSafeRootHandler(
       webSearchEnabled: thread.webSearchEnabled,
       model: thread.chatModel,
       reasoningEffort: thread.chatReasoningEffort,
-      // Present only for a thread whose turns run on a computer; absent is cloud.
-      ...localRunTargetField(chatRunTargetOf(thread.chatLocalRunTarget)),
+      runTarget: chatRunTargetOf(thread),
       context,
     });
   },

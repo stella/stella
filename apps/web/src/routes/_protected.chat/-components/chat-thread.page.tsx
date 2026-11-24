@@ -745,6 +745,7 @@ export const ChatThreadPage = ({
           value={{
             activeOrganizationId,
             approvalIdsAwaitedAtOpen,
+            browserLevel: composerModels.runTarget.approvals,
             alwaysApprovedTools,
             conversationApprovedTools,
             confirmStoredApprovalGrant,

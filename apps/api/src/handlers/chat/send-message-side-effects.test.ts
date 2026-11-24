@@ -42,6 +42,7 @@ const threadData: ChatThreadState["data"] = {
   chatModel: null,
   chatReasoningEffort: null,
   chatLocalRunTarget: null,
+  chatCloudApprovals: null,
   contextMatterIds: [],
   dataWorkspaceIds: [workspaceId],
   firstSend: true,

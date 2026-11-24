@@ -5,7 +5,10 @@ import {
   CHAT_CLOUD_RUN_TARGET,
   CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS,
   CHAT_LOCAL_RUN_HARNESSES,
+  CHAT_LOWEST_APPROVAL_CEILING,
   CHAT_RUN_TARGET_KIND,
+  type ChatCloudRunTarget,
+  chatCloudRunTarget,
   type ChatLocalFolderApproval,
   type ChatLocalHarnessReadiness,
   type ChatLocalRunFolder,
@@ -42,6 +45,32 @@ export const LOCAL_RUN_PERMISSION_KEYS = {
   full_auto: {
     label: "chat.localRun.permissionFullAuto",
     description: "chat.localRun.permissionFullAutoDescription",
+  },
+} as const satisfies Record<
+  DesktopRunnerApprovalMode,
+  { label: TranslationKey; description: TranslationKey }
+>;
+
+/**
+ * What each permission level lets chat do in the member's browser on
+ * stella's models, with the same names as a computer's levels.
+ */
+export const CLOUD_PERMISSION_KEYS = {
+  plan: {
+    label: "chat.localRun.permissionPlan",
+    description: "chat.runOn.cloudPermissionPlanDescription",
+  },
+  ask: {
+    label: "common.ask",
+    description: "chat.runOn.cloudPermissionAskDescription",
+  },
+  auto: {
+    label: "chat.modelSelector.autoLabel",
+    description: "chat.runOn.cloudPermissionAutoDescription",
+  },
+  full_auto: {
+    label: "chat.localRun.permissionFullAuto",
+    description: "chat.runOn.cloudPermissionFullAutoDescription",
   },
 } as const satisfies Record<
   DesktopRunnerApprovalMode,
@@ -319,16 +348,14 @@ export const localRunModelLabel = (
 };
 
 /**
- * The most the organization lets a run do without asking, as the member's
- * computers were last read; every mode until they are, since the API holds
- * each turn to the stored ceiling either way.
+ * The most the organization lets a turn do without asking, on a computer or
+ * on stella's models, as last read; every mode until it is, since the API
+ * holds each turn to the stored ceiling either way.
  */
 export const localRunMaxApprovals = (
   readiness: ChatLocalRunReadiness | undefined,
 ): DesktopRunnerApprovalMode =>
-  readiness?.status === "enabled"
-    ? readiness.maxApprovals
-    : CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS;
+  readiness?.maxApprovals ?? CHAT_LOCAL_RUN_DEFAULT_MAX_APPROVALS;
 
 const SEPARATOR = "::";
 
@@ -382,10 +409,10 @@ export const sameRunTarget = (
   right: ChatRunTarget,
 ): boolean =>
   runTargetValue(left) === runTargetValue(right) &&
+  left.approvals === right.approvals &&
   (left.kind !== "local" ||
     right.kind !== "local" ||
-    (left.approvals === right.approvals &&
-      left.reasoningEffort === right.reasoningEffort &&
+    (left.reasoningEffort === right.reasoningEffort &&
       left.folder?.desktopId === right.folder?.desktopId &&
       runFolderValue(left) === runFolderValue(right)));
 
@@ -404,7 +431,8 @@ export const withRunFolder = (
 
 /**
  * The target for a model picked under a ready harness. The permission mode
- * carries over when this harness can run in it, and is Ask otherwise; a mode
+ * carries over, from stella's models too, when this harness can run in it,
+ * and is Ask otherwise; a mode
  * above the organization's ceiling falls to the highest one it allows. The
  * reasoning effort carries over when the picked model offers it, and is the
  * harness's default otherwise.
@@ -436,11 +464,9 @@ export const localRunTargetFor = ({
       ? { folder: selected.folder }
       : {}),
     approvals: approvalModeWithin({
-      mode:
-        selected.kind === "local" &&
-        option.approvalModes.includes(selected.approvals)
-          ? selected.approvals
-          : DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
+      mode: option.approvalModes.includes(selected.approvals)
+        ? selected.approvals
+        : DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE,
       ceiling: maxApprovals,
       offered: option.approvalModes,
     }),
@@ -458,8 +484,8 @@ export type PermissionAvailability = "available" | "computer" | "organization";
  * What the menu shows about permissions for the selected target: a choice of
  * modes, each with whether it can be chosen and why not; the harness's one
  * fixed behaviour when it reports a single mode, so nothing is offered that
- * would run the same way; `null` when the turn runs in the cloud or its
- * harness cannot take a turn.
+ * would run the same way; `null` when its harness cannot take a turn. On
+ * stella's models every mode is offered, held to the organization's ceiling.
  */
 export type PermissionView =
   | {
@@ -489,8 +515,18 @@ export const permissionView = (
   options: readonly ChatLocalHarnessOption[],
   maxApprovals: DesktopRunnerApprovalMode,
 ): PermissionView | null => {
-  if (selected.kind !== "local") {
-    return null;
+  if (selected.kind === CHAT_RUN_TARGET_KIND.cloud) {
+    return {
+      type: "choice",
+      modes: DESKTOP_RUNNER_APPROVAL_MODES.map((mode) => ({
+        mode,
+        availability: availabilityOf(
+          mode,
+          DESKTOP_RUNNER_APPROVAL_MODES,
+          maxApprovals,
+        ),
+      })),
+    };
   }
   const option = options.find(({ harness }) => harness === selected.harness);
   if (option?.state !== "ready") {
@@ -513,15 +549,21 @@ export const permissionView = (
  * offers its model is still sent: the API refuses it with a reason the member
  * can read, rather than the page silently moving the turn to the cloud. A
  * thread whose permission mode is now above the organization's ceiling runs
- * its next turn in the highest mode the ceiling allows and the computer
- * offers.
+ * its next turn in the highest mode the ceiling allows (and the computer
+ * offers), on stella's models as on a computer.
  */
 export const effectiveRunTarget = (
   target: ChatRunTarget | undefined,
   readiness?: ChatLocalRunReadiness,
 ): ChatRunTarget => {
   const chosen = target ?? CHAT_CLOUD_RUN_TARGET;
-  if (chosen.kind !== "local" || readiness?.status !== "enabled") {
+  if (readiness === undefined) {
+    return chosen;
+  }
+  if (chosen.kind === CHAT_RUN_TARGET_KIND.cloud) {
+    return cloudRunTargetWithin(chosen.approvals, readiness.maxApprovals);
+  }
+  if (readiness.status !== "enabled") {
     return chosen;
   }
   const option = chatLocalHarnessOptionsFor(readiness, chosen)?.find(
@@ -534,6 +576,28 @@ export const effectiveRunTarget = (
   });
   return approvals === chosen.approvals ? chosen : { ...chosen, approvals };
 };
+
+/**
+ * stella's models at `approvals`, or at the highest level `ceiling` allows
+ * when it is above it.
+ */
+export const cloudRunTargetWithin = (
+  approvals: DesktopRunnerApprovalMode,
+  ceiling: DesktopRunnerApprovalMode,
+): ChatCloudRunTarget =>
+  chatCloudRunTarget(approvalModeWithin({ mode: approvals, ceiling }));
+
+/**
+ * Whether the thread's stored target needs the organization's ceiling read
+ * before a turn: always on a computer; on stella's models only above the
+ * lowest ceiling, which every organization allows.
+ */
+export const runTargetNeedsCeiling = (
+  target: ChatRunTarget | undefined,
+): boolean =>
+  target !== undefined &&
+  (target.kind === "local" ||
+    !isApprovalModeWithin(target.approvals, CHAT_LOWEST_APPROVAL_CEILING));
 
 /**
  * Why a new chat started in the cloud rather than on the member's last

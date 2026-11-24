@@ -755,9 +755,9 @@
       },
       "enterSlug": "Zadajte identifikátor organizácie pre adresu URL.",
       "localRuns": {
-        "description": "Najviac, čo smie programovací agent urobiť bez pýtania, keď spúšťa chat v počítači člena. Nižší limit platí od ďalšej správy každého člena; beh, ktorý už prebieha, si svoje oprávnenia ponechá.",
-        "title": "Programovací agenti v počítačoch členov",
-        "updated": "Oprávnenia programovacích agentov boli aktualizované"
+        "description": "Najviac, čo smie chat urobiť bez pýtania: programovací agent, ktorý spúšťa chat v počítači člena, a kroky v prehliadači člena. Nižší limit platí od ďalšej správy každého člena; beh, ktorý už prebieha, si svoje oprávnenia ponechá.",
+        "title": "Oprávnenia chatu",
+        "updated": "Oprávnenia chatu boli aktualizované"
       },
       "logoInvalid": "Vyberte obrázok PNG, JPEG alebo WebP s veľkosťou do 5 MB.",
       "matterNumbering": "Číslovanie spisov",

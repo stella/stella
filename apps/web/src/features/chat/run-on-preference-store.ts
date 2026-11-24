@@ -79,7 +79,7 @@ const preferenceOf = (target: ChatRunTarget): RunOnPreference =>
         model: target.model,
         reasoningEffort: target.reasoningEffort,
       }
-    : CHAT_CLOUD_RUN_TARGET;
+    : { kind: CHAT_RUN_TARGET_KIND.cloud };
 
 /**
  * The member's last Run on choice, per organization, which a new chat starts
@@ -128,9 +128,12 @@ export const rememberedRunTarget = (
 ): ChatRunTarget | undefined => {
   const preference =
     useChatRunOnPreferenceStore.getState().byOrganization[organizationId];
-  return preference?.kind === "local"
+  if (preference === undefined) {
+    return undefined;
+  }
+  return preference.kind === CHAT_RUN_TARGET_KIND.local
     ? { ...preference, approvals: DESKTOP_RUNNER_DEFAULT_APPROVAL_MODE }
-    : preference;
+    : CHAT_CLOUD_RUN_TARGET;
 };
 
 /** Remember where `target` runs as the member's last Run on choice. */

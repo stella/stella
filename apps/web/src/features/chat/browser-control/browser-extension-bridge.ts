@@ -24,10 +24,9 @@ import {
 import { createUuid } from "@/lib/uuid";
 
 import {
-  observeBrowserPage,
+  observeBrowserResult,
   resetBrowserApproval,
-  toBrowserObservedPage,
-} from "./browser-approval-mode";
+} from "./browser-approval-state";
 import { latestBrowserExtensionAnnouncement } from "./browser-extension-announcement";
 import type { BrowserCommandRun } from "./browser-tool-execution";
 
@@ -250,10 +249,10 @@ const handleExtensionMessage = (data: unknown): void => {
       controlledTabId: tabId,
       controllerId: runtime.identity?.controllerId ?? runtime.controllerId,
     };
-    // Website approvals judge the next command by this report, never by a
-    // URL the model wrote.
-    observeBrowserPage(toBrowserObservedPage(response.result.snapshot));
   }
+  // The browser gate judges the next command by this report, never by a URL
+  // the model wrote.
+  observeBrowserResult(response.result);
   pending.resolve(response.result);
 };
 
@@ -313,7 +312,7 @@ export const mountBrowserExtensionBridge = (): (() => void) => {
     }
     runtime.pendingRequests.clear();
     bridgeRuntime = null;
-    observeBrowserPage(null);
+    resetBrowserApproval();
     notifyConnectionListeners();
   };
 };

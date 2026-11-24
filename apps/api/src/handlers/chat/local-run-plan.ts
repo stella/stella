@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import {
   CHAT_LOCAL_RUN_REFUSAL,
+  CHAT_LOWEST_APPROVAL_CEILING,
   CHAT_RUN_TARGET_KIND,
   type ChatRunTarget,
   isApprovalModeWithin,
@@ -113,11 +114,29 @@ export const resolveChatLocalRun = async ({
 }: ResolveChatLocalRunOptions): Promise<
   Result<LocalChatRun | undefined, HandlerError | SafeDbError>
 > => {
-  if (
-    runTarget === undefined ||
-    runTarget.kind === CHAT_RUN_TARGET_KIND.cloud
-  ) {
+  if (runTarget === undefined) {
     return Result.ok(undefined);
+  }
+  if (runTarget.kind === CHAT_RUN_TARGET_KIND.cloud) {
+    // On stella's models the level decides what chat does in the member's
+    // browser; the organization's ceiling holds it as it holds a computer's.
+    // Every ceiling allows Ask and below, so only a higher level reads it.
+    if (
+      isApprovalModeWithin(runTarget.approvals, CHAT_LOWEST_APPROVAL_CEILING)
+    ) {
+      return Result.ok(undefined);
+    }
+    const cloudCeiling = await readApprovalCeiling();
+    if (cloudCeiling.isErr()) {
+      return Result.err(cloudCeiling.error);
+    }
+    return isApprovalModeWithin(runTarget.approvals, cloudCeiling.value)
+      ? Result.ok(undefined)
+      : refuse(
+          403,
+          CHAT_LOCAL_RUN_REFUSAL.approvalsAboveLimit,
+          "Your organization does not let chat do that much without asking.",
+        );
   }
   if (agentSandboxRequested) {
     return refuse(

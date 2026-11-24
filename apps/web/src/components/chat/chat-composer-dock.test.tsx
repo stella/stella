@@ -81,7 +81,9 @@ describe("chat composer dock", () => {
     );
 
   test("a chat on the member's computer has no web search switch: its agent always searches", () => {
-    expect(dockFor({ kind: "cloud" })).toContain("lucide-globe");
+    expect(dockFor({ kind: "cloud", approvals: "ask" })).toContain(
+      "lucide-globe",
+    );
     expect(
       dockFor({
         kind: "local",
@@ -104,11 +106,11 @@ describe("chat composer dock", () => {
   } as const satisfies ChatRunTarget;
 
   test("a model chip whose stored choice is not read yet holds a bar, never Auto", () => {
-    const pending = dockFor({ kind: "cloud" }, "loading");
+    const pending = dockFor({ kind: "cloud", approvals: "ask" }, "loading");
     expect(pending).toContain(PENDING_CHIP);
     expect(pending).not.toContain(AUTO_LABEL);
     // Once read, a chat on stella with no model chosen says Auto.
-    const ready = dockFor({ kind: "cloud" });
+    const ready = dockFor({ kind: "cloud", approvals: "ask" });
     expect(ready).toContain(AUTO_LABEL);
     expect(ready).not.toContain(PENDING_CHIP);
   });

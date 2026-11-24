@@ -281,7 +281,11 @@ test("a model chosen just before the computer is kept by the write that follows"
   (await awaitPendingSelection()).unwrap();
 
   expect(server.patches).toEqual([
-    { model: CLOUD_MODEL, reasoningEffort: null, runTarget: { kind: "cloud" } },
+    {
+      model: CLOUD_MODEL,
+      reasoningEffort: null,
+      runTarget: { kind: "cloud", approvals: "ask" },
+    },
     { model: CLOUD_MODEL, reasoningEffort: null, runTarget: CODEX },
   ]);
 });
@@ -339,7 +343,7 @@ test("before its first read, a thread page shows no start of its own", () => {
     Promise.withResolvers<StoredChoice>().promise,
   );
   expect(result.current.models.state).toBe("loading");
-  expect(result.current.runTarget).toEqual({ kind: "cloud" });
+  expect(result.current.runTarget).toEqual({ kind: "cloud", approvals: "ask" });
 });
 
 test("a model picked on a new chat stores the remembered target with it, and the chat keeps it", async () => {
@@ -358,7 +362,7 @@ test("a model picked on a new chat stores the remembered target with it, and the
   (await result.current.awaitPendingSelection()).unwrap();
   // Another chat changes the member's last choice; this one keeps its own.
   act(() => {
-    rememberRunTarget(ORGANIZATION_ID, { kind: "cloud" });
+    rememberRunTarget(ORGANIZATION_ID, { kind: "cloud", approvals: "ask" });
   });
 
   expect(server.patches).toEqual([
@@ -374,8 +378,11 @@ test("a chat the server holds runs where it stored, whatever the member chose la
   const { result } = renderComposer(Promise.resolve(AUTO_ON_STELLA));
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
-  expect(result.current.runTarget).toEqual({ kind: "cloud" });
-  expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
+  expect(result.current.runTarget).toEqual({ kind: "cloud", approvals: "ask" });
+  expect(result.current.getRunTarget()).toEqual({
+    kind: "cloud",
+    approvals: "ask",
+  });
 });
 
 test("a Run on pick is remembered as the member's last choice", async () => {
@@ -472,8 +479,11 @@ test("a new chat whose remembered computer is offline starts in the cloud and sa
   const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
-  expect(result.current.runTarget).toEqual({ kind: "cloud" });
-  expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
+  expect(result.current.runTarget).toEqual({ kind: "cloud", approvals: "ask" });
+  expect(result.current.getRunTarget()).toEqual({
+    kind: "cloud",
+    approvals: "ask",
+  });
   const runOn = result.current.models.runTarget;
   if (runOn.type !== "choice") {
     throw new Error("The composer offers no Run on choice");
@@ -506,7 +516,10 @@ test("a new chat whose computers cannot be read starts in the cloud and says so"
   const { result } = renderNewChat();
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
-  expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
+  expect(result.current.getRunTarget()).toEqual({
+    kind: "cloud",
+    approvals: "ask",
+  });
   const runOn = result.current.models.runTarget;
   expect(runOn.type === "choice" && runOn.startedInCloud).toEqual({
     harness: "codex",
@@ -525,7 +538,7 @@ test("picking a place on a chat that started in the cloud drops the reason", asy
   }
 
   act(() => {
-    runOn.select({ kind: "cloud" });
+    runOn.select({ kind: "cloud", approvals: "ask" });
   });
   await server.releaseNext();
   (await result.current.awaitPendingSelection()).unwrap();
@@ -580,7 +593,10 @@ test("a new chat whose remembered computer is not connected opens nothing, and i
     result.current.openDesktopForSend();
   });
 
-  expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
+  expect(result.current.getRunTarget()).toEqual({
+    kind: "cloud",
+    approvals: "ask",
+  });
   expect(desktop.open).not.toHaveBeenCalled();
 });
 

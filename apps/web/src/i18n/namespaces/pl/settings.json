@@ -755,9 +755,9 @@
       },
       "enterSlug": "Wpisz identyfikator organizacji używany w adresie URL.",
       "localRuns": {
-        "description": "Najwięcej, ile agent programistyczny może zrobić bez pytania, gdy prowadzi czat na komputerze członka. Niższy limit obowiązuje od następnej wiadomości każdego członka; trwające już uruchomienie zachowuje swoje uprawnienia.",
-        "title": "Agenci programistyczni na komputerach członków",
-        "updated": "Uprawnienia agentów programistycznych zostały zaktualizowane"
+        "description": "Najwięcej, ile czat może zrobić bez pytania: agent programistyczny prowadzący czat na komputerze członka oraz kroki w przeglądarce członka. Niższy limit obowiązuje od następnej wiadomości każdego członka; trwające już uruchomienie zachowuje swoje uprawnienia.",
+        "title": "Uprawnienia czatu",
+        "updated": "Uprawnienia czatu zostały zaktualizowane"
       },
       "logoInvalid": "Wybierz obraz PNG, JPEG lub WebP o rozmiarze do 5 MB.",
       "matterNumbering": "Numeracja spraw",

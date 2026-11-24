@@ -312,6 +312,7 @@ describe("the decision a thread is about", () => {
       chatModel: "openai::gpt-5.4",
       chatReasoningEffort: null,
       chatLocalRunTarget: null,
+      chatCloudApprovals: null,
       rollbackToken: null,
       subjectDecisionId: null,
     } satisfies Partial<typeof chatThreads.$inferSelect>;
