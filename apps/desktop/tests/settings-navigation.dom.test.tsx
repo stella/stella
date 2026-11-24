@@ -132,7 +132,9 @@ const renderApp = async ({
   );
   const view = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
-      <DesktopAppearanceProvider appearance="system">
+      <DesktopAppearanceProvider
+        value={{ adopt: () => undefined, appearance: "system" }}
+      >
         <App />
       </DesktopAppearanceProvider>
     </DesktopIntlProvider>,

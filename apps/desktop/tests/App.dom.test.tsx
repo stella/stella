@@ -220,7 +220,9 @@ const startWindow = async (): Promise<RenderResult> => {
     settingsWindow ??
     render(
       <DesktopIntlProvider language="en" messages={defaultMessages}>
-        <DesktopAppearanceProvider appearance="system">
+        <DesktopAppearanceProvider
+          value={{ adopt: () => undefined, appearance: "system" }}
+        >
           <App />
         </DesktopAppearanceProvider>
       </DesktopIntlProvider>,

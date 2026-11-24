@@ -200,7 +200,7 @@ const Root = () => {
     <StrictMode>
       <TooltipProvider>
         <DesktopIntlProvider language={language} messages={messages}>
-          <DesktopAppearanceProvider appearance={appearance}>
+          <DesktopAppearanceProvider value={appearance}>
             {content}
           </DesktopAppearanceProvider>
         </DesktopIntlProvider>

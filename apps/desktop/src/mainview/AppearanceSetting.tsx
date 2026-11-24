@@ -23,12 +23,12 @@ import { commandErrorMessage } from "./command-error";
 
 /**
  * Light, dark or the system's appearance for every window. The native side
- * saves the choice and tells every open window, this one included, so the
- * shown value is always the one in effect.
+ * saves the choice and tells every open window; this one takes the saved
+ * choice from the answer as well, so it never depends on that event.
  */
 export const AppearanceSetting = () => {
   const t = useTranslations("settings");
-  const appearance = useDesktopAppearance();
+  const { adopt, appearance } = useDesktopAppearance();
   const [error, setError] = useState<string | null>(null);
   const ids = settingsRowIds("desktop-appearance");
   const label = (value: DesktopAppearance) => t(`appearance.choices.${value}`);
@@ -37,11 +37,18 @@ export const AppearanceSetting = () => {
     const result = await Result.tryPromise(async () =>
       invoke("set_desktop_appearance", { appearance: next }),
     );
-    setError(
-      Result.isError(result)
-        ? commandErrorMessage(result.error.cause, t("errorUpdateAppearance"))
-        : null,
-    );
+    if (Result.isError(result)) {
+      setError(
+        commandErrorMessage(result.error.cause, t("errorUpdateAppearance")),
+      );
+      return;
+    }
+    if (!isDesktopAppearance(result.value)) {
+      setError(t("errorUpdateAppearance"));
+      return;
+    }
+    adopt(result.value);
+    setError(null);
   };
 
   return (

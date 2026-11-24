@@ -1,4 +1,11 @@
-import { createContext, use, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
@@ -24,35 +31,48 @@ import type {
 } from "./desktop-appearance";
 import { subscribeDesktopEvent } from "./desktop-events";
 
-const DesktopAppearanceContext = createContext<DesktopAppearance | null>(null);
+export type DesktopAppearanceState = {
+  appearance: DesktopAppearance;
+  /** Takes a choice the native side confirmed saving, without waiting for
+   *  its change event. */
+  adopt: (appearance: DesktopAppearance) => void;
+};
+
+const DesktopAppearanceContext = createContext<DesktopAppearanceState | null>(
+  null,
+);
 
 export const DesktopAppearanceProvider = ({
-  appearance,
+  value,
   children,
-}: React.PropsWithChildren<{ appearance: DesktopAppearance }>) => (
-  <DesktopAppearanceContext value={appearance}>
-    {children}
-  </DesktopAppearanceContext>
+}: React.PropsWithChildren<{ value: DesktopAppearanceState }>) => (
+  <DesktopAppearanceContext value={value}>{children}</DesktopAppearanceContext>
 );
 
 /** The appearance the window draws in, as chosen. */
-export const useDesktopAppearance = (): DesktopAppearance =>
+export const useDesktopAppearance = (): DesktopAppearanceState =>
   use(DesktopAppearanceContext) ??
   panic("useDesktopAppearance needs a DesktopAppearanceProvider");
 
 /**
  * Keeps the window in the native appearance: the cached copy first, the
  * native answer once it arrives, and every change another window makes.
- * Returns the appearance for `DesktopAppearanceProvider`.
+ * Returns the state for `DesktopAppearanceProvider`.
  */
 export const useAppliedDesktopAppearance = (
   telemetryWindow: DesktopTelemetryWindow,
-): DesktopAppearance => {
+): DesktopAppearanceState => {
   const [appearance, setAppearance] = useState(readCachedAppearance);
 
   // A change that lands while the start-up read is still awaiting the native
   // side is newer; the read must not roll it back.
   const changes = useRef(0);
+
+  const adopt = useCallback((next: DesktopAppearance) => {
+    changes.current += 1;
+    cacheAppearance(next);
+    setAppearance(next);
+  }, []);
 
   useEffect(() => {
     let disposed = false;
@@ -102,9 +122,7 @@ export const useAppliedDesktopAppearance = (
           });
           return;
         }
-        changes.current += 1;
-        cacheAppearance(payload.appearance);
-        setAppearance(payload.appearance);
+        adopt(payload.appearance);
       },
       onSubscribed: () => {
         void read();
@@ -124,7 +142,7 @@ export const useAppliedDesktopAppearance = (
       disposed = true;
       unsubscribe();
     };
-  }, [telemetryWindow]);
+  }, [adopt, telemetryWindow]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(DARK_SCHEME_QUERY);
@@ -140,7 +158,7 @@ export const useAppliedDesktopAppearance = (
     };
   }, [appearance]);
 
-  return appearance;
+  return { adopt, appearance };
 };
 
 const applyColorScheme = (scheme: DesktopColorScheme) => {

@@ -206,11 +206,16 @@ const openWindow = async (
       desktop_report_timing: () => null,
       get_desktop_appearance: () => data.appearance,
       // Saved, then announced to every window, as the native side does.
-      set_desktop_appearance: (args) => {
-        ipc.emit("desktop-appearance-changed", {
-          appearance: args["appearance"],
-        });
-        return args["appearance"];
+      set_desktop_appearance: async (args) => {
+        const next = args["appearance"];
+        if (next !== "system" && next !== "light" && next !== "dark") {
+          return await Promise.reject(
+            new TypeError(`Unknown appearance ${String(next)}`),
+          );
+        }
+        data.appearance = next;
+        ipc.emit("desktop-appearance-changed", { appearance: next });
+        return next;
       },
       get_desktop_language: () => data.language,
       get_desktop_telemetry_enabled: () => true,
