@@ -20,6 +20,11 @@ import {
   legislationV2NeedsPassages,
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
+  type CorpusIndexProjectionSubject,
+  CorpusIndexProjectionSubjectMissingError,
+  reconcileCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
   type CorpusProjectionAppendEntry,
   planCorpusProjectionAppendRequests,
 } from "@/api/lib/legal-search/corpus-index-projection-engine";
@@ -53,6 +58,10 @@ import type { StoredAstOutcome } from "@/api/lib/legal-search/stored-ast-outcome
 import { logger } from "@/api/lib/observability/logger";
 import type { IngestionTransactionRunner } from "@/api/lib/replay-safe-ingestion";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
+import {
+  brandPersistedCaseLawDecisionId,
+  brandPersistedLegislationDocumentId,
+} from "@/api/lib/safe-id-boundaries";
 
 /**
  * What both delivery paths of a reserved revision share: reading its payload,
@@ -276,7 +285,74 @@ export type CorpusProjectionMaterialRejectionCounts = {
   unread: number;
   retryScheduled: number;
   blocked: number;
+  /**
+   * Canonical mismatches whose desired state still named the reservation
+   * after it was re-derived, so they wait out a retry or are blocked. They
+   * are also counted in `retryScheduled` or `blocked`.
+   */
+  mismatchHeld: number;
 };
+
+/** Re-derive mismatched leases' desired states from their canonical rows. */
+export type CorpusProjectionMismatchRederivation = (
+  runInTransaction: ProjectionTransactionRunner,
+  leases: readonly CorpusProjectionIntentLease[],
+) => Promise<void>;
+
+const subjectOfLease = ({
+  family,
+  entityId,
+}: CorpusProjectionIntentLease): CorpusIndexProjectionSubject => {
+  switch (family) {
+    case "case_law":
+      return { family, entityId: brandPersistedCaseLawDecisionId(entityId) };
+    case "legislation":
+      return {
+        family,
+        entityId: brandPersistedLegislationDocumentId(entityId),
+      };
+    default:
+      family satisfies never;
+      return panic(`Unhandled family: ${String(family)}`);
+  }
+};
+
+/**
+ * Re-derive the desired state of each mismatched entity from its canonical
+ * row, one subject per transaction in the canonical writers' lock order, as
+ * a repair does. A subject whose canonical row is gone, or whose repair is
+ * held to keep a served copy, keeps its desired state; the classification
+ * that follows then schedules it a retry.
+ */
+export const rederiveMismatchedCorpusProjectionDesiredStates: CorpusProjectionMismatchRederivation =
+  async (runInTransaction, leases) => {
+    await mapSequentially(leases, async (lease) => {
+      const subject = subjectOfLease(lease);
+      const reconciled = await Result.tryPromise({
+        try: async () =>
+          await runInTransaction(
+            async (tx) =>
+              await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+          ),
+        catch: (cause) => cause,
+      });
+      if (reconciled.isOk()) {
+        if (reconciled.value.isErr()) {
+          logger.warn("corpus_projection.mismatch_repair_held", {
+            entity: lease.entityId,
+            generation: lease.generation,
+          });
+        }
+        return;
+      }
+      if (
+        reconciled.error instanceof CorpusIndexProjectionSubjectMissingError
+      ) {
+        return;
+      }
+      return await Promise.reject(reconciled.error);
+    });
+  };
 
 type SettleRejectedCorpusProjectionMaterialsOptions = {
   runInTransaction: ProjectionTransactionRunner;
@@ -286,30 +362,64 @@ type SettleRejectedCorpusProjectionMaterialsOptions = {
     "retryDelayMs" | "payloadRetryLimit"
   >;
   testNow?: Date | undefined;
+  /**
+   * Database-test seam: a re-derivation that leaves some states where they
+   * are, standing in for one whose derivation agrees with the desired state
+   * while the material read does not.
+   */
+  rederive?: CorpusProjectionMismatchRederivation | undefined;
 };
 
 /**
- * Settle the reservations a material read refused: a stale one is cancelled,
- * an unreadable one is scheduled for a retry under the payload retry limit,
- * and one whose lease is gone needs nothing.
+ * Settle the reservations a material read refused. No refused reservation
+ * leaves its desired state runnable at the same place with the same inputs,
+ * so the next reservation never takes the same work again unchanged:
+ * - a stale one is cancelled; its desired state already moved on and queues
+ *   the newer work;
+ * - a canonical mismatch has its desired state re-derived from the canonical
+ *   row. Where that moved the state, the reservation is cancelled and the
+ *   moved state is runnable at once. Where the state still names it, the
+ *   state waits out a retry under the payload retry limit and is blocked at
+ *   that limit, until a desired-state change resets it;
+ * - an unreadable one is scheduled for a retry under the same limit;
+ * - one whose lease is gone needs nothing.
  */
 export const settleRejectedCorpusProjectionMaterials = async ({
   runInTransaction,
   rejected,
   policy,
   testNow,
+  rederive = rederiveMismatchedCorpusProjectionDesiredStates,
 }: SettleRejectedCorpusProjectionMaterialsOptions): Promise<CorpusProjectionMaterialRejectionCounts> => {
   const staleLeases = rejected
-    .filter(
-      ({ status }) =>
-        status === "stale" || status === "canonical_input_mismatch",
-    )
+    .filter(({ status }) => status === "stale")
     .map(({ lease }) => lease);
+  const mismatched = rejected.filter(
+    ({ status }) => status === "canonical_input_mismatch",
+  );
   const unreadable = rejected.filter(({ status }) => status === "unreadable");
   const cancellation = await cancelCorpusProjectionReservations({
     runInTransaction,
     leases: staleLeases,
-    errorMessage: "projection material is no longer readable or current",
+    errorMessage: "projection material is no longer current",
+    testNow,
+  });
+  await rederive(
+    runInTransaction,
+    mismatched.map(({ lease }) => lease),
+  );
+  const mismatches = await classifyCorpusProjectionReservationFailures({
+    runInTransaction,
+    failures: mismatched.map(({ lease, reason }) => ({
+      lease,
+      failure: {
+        status: "retry_scheduled",
+        kind: "canonical_input_mismatch",
+        retryDelayMs: policy.retryDelayMs,
+        maxAttempts: policy.payloadRetryLimit,
+        message: reason,
+      },
+    })),
     testNow,
   });
   const retries = await classifyCorpusProjectionReservationFailures({
@@ -327,14 +437,19 @@ export const settleRejectedCorpusProjectionMaterials = async ({
     testNow,
   });
   return {
-    cancelled: cancellation.cancelled + retries.staleCancelled,
+    cancelled:
+      cancellation.cancelled +
+      mismatches.staleCancelled +
+      retries.staleCancelled,
     leaseLost:
       rejected.filter(({ status }) => status === "lease_lost").length +
       cancellation.leaseLost +
+      mismatches.leaseLost +
       retries.leaseLost,
     unread: unreadable.length,
-    retryScheduled: retries.retryScheduled,
-    blocked: retries.blocked,
+    retryScheduled: mismatches.retryScheduled + retries.retryScheduled,
+    blocked: mismatches.blocked + retries.blocked,
+    mismatchHeld: mismatches.retryScheduled + mismatches.blocked,
   };
 };
 

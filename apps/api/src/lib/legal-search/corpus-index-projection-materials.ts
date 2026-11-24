@@ -167,11 +167,14 @@ type ProjectedMaterialRow = {
 };
 
 // Every family sorts its leases the same way: a lease whose reservation moved
-// is lost, one whose desired state moved or canonical input was removed is
-// stale, and a still-current state with a different upsert descriptor is a
-// canonical mismatch. One without a text pointer is unreadable. `project` derives a
-// row's descriptor and material, and runs only for a lease whose reservation
-// and canonical state are still there.
+// is lost, and one whose desired state moved or disappeared is stale, since
+// that newer desired state already queues its own work. A lease whose desired
+// state still names it while its canonical row is gone or derives other
+// content (another upsert, or none) is a canonical mismatch: nothing else
+// moves that state, so settlement re-derives it
+// (`settleRejectedCorpusProjectionMaterials`). One without a text pointer is
+// unreadable. `project` derives a row's descriptor and material, and runs
+// only for a lease whose reservation and desired state are still current.
 //
 // Currency is the generation's own: its desired state still names the
 // lease's epoch, fingerprint and index, and the canonical row still derives
@@ -203,23 +206,32 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
       continue;
     }
     const state = states.get(lease.entityId);
+    if (state === undefined || !stateMatchesLease(state, lease)) {
+      rejected.push(
+        rejection(lease, "stale", "desired state moved past the reservation"),
+      );
+      continue;
+    }
     const row = byEntityId.get(lease.entityId);
-    if (state === undefined || row === undefined) {
-      rejected.push(rejection(lease, "stale", "canonical state disappeared"));
+    if (row === undefined) {
+      rejected.push(
+        rejection(
+          lease,
+          "canonical_input_mismatch",
+          "projection reservation rejected: its canonical row disappeared",
+        ),
+      );
       continue;
     }
     const { descriptor, material } = project(row);
-    const stateCurrent = stateMatchesLease(state, lease);
-    if (!stateCurrent || !descriptorMatchesLease(descriptor, lease)) {
-      rejected.push({
-        lease,
-        status:
-          stateCurrent && descriptor.action === "upsert"
-            ? "canonical_input_mismatch"
-            : "stale",
-        reason:
-          "projection reservation rejected: its desired or canonical input differs",
-      });
+    if (!descriptorMatchesLease(descriptor, lease)) {
+      rejected.push(
+        rejection(
+          lease,
+          "canonical_input_mismatch",
+          "projection reservation rejected: its canonical input differs",
+        ),
+      );
       continue;
     }
     if (row.textS3Key === null) {
@@ -328,7 +340,7 @@ const readCaseLawMaterials = async ({
     rows.map(({ documentId }) => documentId),
   );
   // The rows were read without a lock, so one can disappear between the two
-  // statements; its lease is then stale, like any other vanished row.
+  // statements; its lease is then judged like any other vanished row.
   const signalled = rows.flatMap((row) => {
     const rankingSignals = rankingSignalsByDecision.get(row.documentId);
     return rankingSignals === undefined ? [] : [{ ...row, rankingSignals }];
