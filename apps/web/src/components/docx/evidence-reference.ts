@@ -5,6 +5,10 @@ import * as v from "valibot";
 
 import { readFieldAttrs } from "@stll/folio-core/prosemirror/attrs";
 import type { FieldAttrs } from "@stll/folio-core/prosemirror/schema";
+import type {
+  FolioDerivedFields,
+  FolioFieldInsertion,
+} from "@stll/folio-react";
 
 const EVIDENCE_INSTRUCTION_PREFIX = "ADDIN STELLA_EVIDENCE_V1 ";
 
@@ -19,6 +23,30 @@ const evidenceReferenceSchema = v.object({
 
 export type EvidenceReference = v.InferOutput<typeof evidenceReferenceSchema>;
 
+type EvidenceInstruction =
+  | { type: "other" }
+  | { type: "invalid" }
+  | { type: "reference"; reference: EvidenceReference };
+
+/** What a field instruction says about evidence. */
+const readEvidenceInstruction = (instruction: string): EvidenceInstruction => {
+  if (!instruction.startsWith(EVIDENCE_INSTRUCTION_PREFIX)) {
+    return { type: "other" };
+  }
+  const decoded = Result.try((): unknown =>
+    JSON.parse(
+      decodeURIComponent(instruction.slice(EVIDENCE_INSTRUCTION_PREFIX.length)),
+    ),
+  );
+  if (Result.isError(decoded)) {
+    return { type: "invalid" };
+  }
+  const parsed = v.safeParse(evidenceReferenceSchema, decoded.value);
+  return parsed.success
+    ? { type: "reference", reference: parsed.output }
+    : { type: "invalid" };
+};
+
 type EvidenceField =
   | { type: "other" }
   | { type: "invalid" }
@@ -29,30 +57,17 @@ export const readEvidenceField = (node: ProseMirrorNode): EvidenceField => {
     return { type: "other" };
   }
   const attrs = readFieldAttrs(node);
-  if (
-    !attrs.ok ||
-    !attrs.value.instruction.startsWith(EVIDENCE_INSTRUCTION_PREFIX)
-  ) {
+  if (!attrs.ok) {
     return { type: "other" };
   }
-  const decoded = Result.try((): unknown =>
-    JSON.parse(
-      decodeURIComponent(
-        attrs.value.instruction.slice(EVIDENCE_INSTRUCTION_PREFIX.length),
-      ),
-    ),
-  );
-  if (Result.isError(decoded)) {
-    return { type: "invalid" };
-  }
-  const parsed = v.safeParse(evidenceReferenceSchema, decoded.value);
-  return parsed.success
+  const read = readEvidenceInstruction(attrs.value.instruction);
+  return read.type === "reference"
     ? {
         type: "reference",
-        reference: parsed.output,
+        reference: read.reference,
         displayText: attrs.value.displayText,
       }
-    : { type: "invalid" };
+    : read;
 };
 
 const sourceKey = (reference: EvidenceReference) =>
@@ -60,18 +75,52 @@ const sourceKey = (reference: EvidenceReference) =>
 
 export const evidenceLabel = (number: number) => `Důkaz ${number}`;
 
+/** The locked field that cites `reference`, as the editor inserts it. */
+export const evidenceFieldInsertion = (
+  reference: EvidenceReference,
+): FolioFieldInsertion => ({
+  instruction: `${EVIDENCE_INSTRUCTION_PREFIX}${encodeURIComponent(JSON.stringify(v.parse(evidenceReferenceSchema, reference)))}`,
+  displayText: evidenceLabel(1),
+  locked: true,
+});
+
 export const createEvidenceField = (
   schema: Schema,
   reference: EvidenceReference,
-) =>
-  schema.node("field", {
+) => {
+  const { instruction, displayText } = evidenceFieldInsertion(reference);
+  return schema.node("field", {
     fieldType: "UNKNOWN",
-    instruction: `${EVIDENCE_INSTRUCTION_PREFIX}${encodeURIComponent(JSON.stringify(v.parse(evidenceReferenceSchema, reference)))}`,
-    displayText: evidenceLabel(1),
+    instruction,
+    displayText,
     fieldKind: "simple",
     fldLock: true,
     dirty: false,
   } satisfies FieldAttrs);
+};
+
+/**
+ * Evidence references number their sources by first appearance; every
+ * reference to one source shows its number. A field whose instruction does
+ * not decode is left as it reads.
+ */
+export const EVIDENCE_DERIVED_FIELDS: FolioDerivedFields = {
+  owns: (instruction) =>
+    readEvidenceInstruction(instruction).type === "reference",
+  displayTexts: (instructions) => {
+    const numbers = new Map<string, number>();
+    return instructions.map((instruction) => {
+      const read = readEvidenceInstruction(instruction);
+      if (read.type !== "reference") {
+        return panic("An owned evidence field must decode");
+      }
+      const key = sourceKey(read.reference);
+      const number = numbers.get(key) ?? numbers.size + 1;
+      numbers.set(key, number);
+      return evidenceLabel(number);
+    });
+  },
+};
 
 export const collectEvidenceReferences = (doc: ProseMirrorNode) => {
   const references: {
@@ -82,8 +131,14 @@ export const collectEvidenceReferences = (doc: ProseMirrorNode) => {
   const bySource = new Map<string, (typeof references)[number]>();
   const invalidPositions: number[] = [];
   doc.descendants((node, position) => {
-    // A tracked deletion is absent from the final pleading, including its descendants.
-    if (node.marks.some((mark) => mark.type.name === "deletion")) {
+    // A tracked deletion or move source is absent from the final pleading,
+    // including its descendants; numbering leaves it out alike.
+    if (
+      node.marks.some(
+        (mark) =>
+          mark.type.name === "deletion" || mark.type.name === "moveFrom",
+      )
+    ) {
       return false;
     }
     const field = readEvidenceField(node);
@@ -120,57 +175,20 @@ export const collectEvidenceReferences = (doc: ProseMirrorNode) => {
 
 const evidenceReferencesKey = new PluginKey("stella-evidence-references");
 
-type EvidenceReferencesPluginOptions = {
-  isEditable?: () => boolean;
-  onDocumentChange?: (doc: ProseMirrorNode) => void;
-};
-
-export const createEvidenceReferencesPlugin = ({
-  isEditable = () => true,
-  onDocumentChange,
-}: EvidenceReferencesPluginOptions = {}) =>
+/** Reports the document the editor shows each time it changes. */
+export const createEvidenceReferencesPlugin = (
+  onDocumentChange: (doc: ProseMirrorNode) => void,
+) =>
   new Plugin({
     key: evidenceReferencesKey,
     view(view) {
-      onDocumentChange?.(view.state.doc);
+      onDocumentChange(view.state.doc);
       return {
         update(nextView, previousState) {
           if (nextView.state.doc !== previousState.doc) {
-            onDocumentChange?.(nextView.state.doc);
+            onDocumentChange(nextView.state.doc);
           }
         },
       };
-    },
-    appendTransaction(transactions, _oldState, state) {
-      if (
-        !isEditable() ||
-        !transactions.some((transaction) => transaction.docChanged)
-      ) {
-        return null;
-      }
-      const transaction = state.tr;
-      for (const { number, positions } of collectEvidenceReferences(state.doc)
-        .references) {
-        for (const position of positions) {
-          const node = state.doc.nodeAt(position);
-          if (node === null) {
-            panic(
-              "An evidence position must resolve in the document it was collected from",
-            );
-          }
-          const field = readEvidenceField(node);
-          if (
-            field.type === "reference" &&
-            field.displayText !== evidenceLabel(number)
-          ) {
-            transaction.setNodeAttribute(
-              position,
-              "displayText",
-              evidenceLabel(number),
-            );
-          }
-        }
-      }
-      return transaction.docChanged ? transaction : null;
     },
   });
