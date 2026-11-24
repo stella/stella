@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import { panic } from "better-result";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { GlassView } from "expo-glass-effect";
 import {
   AccessibilityInfo,
   Animated,
@@ -135,7 +135,7 @@ const Banner = ({
   const t = useTranslations("chat");
   const tabs = useTranslations("tabs");
   const insets = useSafeAreaInsets();
-  const glass = Platform.OS === "ios" && isLiquidGlassAvailable();
+  const glass = Platform.OS === "ios";
   const { heading, mark } = bannerContent(bannerType);
   const [progress] = useState(() => new Animated.Value(0));
   const [drag] = useState(() => new Animated.Value(0));

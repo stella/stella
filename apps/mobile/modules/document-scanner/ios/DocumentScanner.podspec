@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description    = 'Presents the VisionKit document camera, keeps each scanned page as an image, and binds the pages into one PDF on request.'
   s.author         = ''
   s.homepage       = 'https://stll.app'
-  s.platforms      = { :ios => '16.4' }
+  s.platforms      = { :ios => '26.0' }
   s.source         = { git: '' }
   s.static_framework = true
 

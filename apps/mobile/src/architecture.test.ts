@@ -28,6 +28,7 @@ import {
   BAR_GLYPHS_FOLDER,
   copyBarGlyphs,
   copyKeyboardExtension,
+  IOS_DEPLOYMENT_TARGET,
   KEYBOARD_BRIDGE,
   KEYBOARD_DICTATE_ROUTE,
   KEYBOARD_EXTENSION_FOLDER,
@@ -161,6 +162,48 @@ describe("the app's builds", () => {
       expect(declared).toEqual([...UI_LOCALES]);
     },
   );
+
+  test("every local iOS podspec matches the app's deployment target", () => {
+    const modulesRoot = path.join(SOURCE_ROOT, "..", "modules");
+    const podspecs = readdirSync(modulesRoot)
+      .toSorted()
+      .flatMap((moduleName) => {
+        const iosDir = path.join(modulesRoot, moduleName, "ios");
+        return existsSync(iosDir)
+          ? readdirSync(iosDir)
+              .filter((file) => file.endsWith(".podspec"))
+              .map((file) => path.join(iosDir, file))
+          : [];
+      });
+    expect(podspecs.length).toBeGreaterThan(0);
+    for (const podspec of podspecs) {
+      expect(readFileSync(podspec, "utf-8")).toContain(
+        `:ios => '${IOS_DEPLOYMENT_TARGET}'`,
+      );
+    }
+  });
+
+  test("every build sets the iOS deployment target in Podfile.properties.json", async () => {
+    for (const { config } of configs) {
+      const podfilePropertiesMod = config.mods?.ios?.podfileProperties;
+      expect(podfilePropertiesMod).toBeDefined();
+      const result = await podfilePropertiesMod?.({
+        ...config,
+        modRawConfig: config,
+        modRequest: {
+          introspect: false,
+          modName: "podfileProperties",
+          platform: "ios",
+          platformProjectRoot: "",
+          projectRoot: "",
+        },
+        modResults: {},
+      });
+      expect(result?.modResults["ios.deploymentTarget"]).toBe(
+        IOS_DEPLOYMENT_TARGET,
+      );
+    }
+  });
 
   test("a signed release leaves out the Live Activity extension it cannot sign yet", () => {
     const signed = appConfigFor({
