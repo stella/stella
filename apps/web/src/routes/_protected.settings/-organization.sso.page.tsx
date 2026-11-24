@@ -40,7 +40,7 @@ import {
   saveOrgSsoPolicy,
   verifyOrgSsoDomain,
 } from "@/features/sso/sso-api";
-import { browserApiBaseUrl } from "@/lib/api-url";
+import { browserAuthBaseUrl } from "@/lib/api-url";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import {
@@ -322,12 +322,12 @@ const AddSamlProviderForm = ({
     ).join("");
     return `sso_saml_${suffix}`;
   });
-  let apiOrigin = browserApiBaseUrl();
-  while (apiOrigin.endsWith("/")) {
-    apiOrigin = apiOrigin.slice(0, -1);
+  let authBaseUrl = browserAuthBaseUrl();
+  while (authBaseUrl.endsWith("/")) {
+    authBaseUrl = authBaseUrl.slice(0, -1);
   }
-  const draftAcsUrl = `${apiOrigin}/api/auth/sso/saml2/sp/acs/${encodeURIComponent(draftProviderId)}`;
-  const draftSpMetadataUrl = `${apiOrigin}/api/auth/sso/saml2/sp/metadata?providerId=${encodeURIComponent(draftProviderId)}`;
+  const draftAcsUrl = `${authBaseUrl}/sso/saml2/sp/acs/${encodeURIComponent(draftProviderId)}`;
+  const draftSpMetadataUrl = `${authBaseUrl}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(draftProviderId)}`;
   const [displayName, setDisplayName] = useState("");
   const [metadataUrl, setMetadataUrl] = useState("");
   const [issuer, setIssuer] = useState("");

@@ -14,7 +14,6 @@ import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 const SAML_METADATA_TIMEOUT_MS = 8000;
 const SAML_HTTP_REDIRECT_BINDING =
   "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect";
-const SAML_HTTP_POST_BINDING = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST";
 
 export class SamlMetadataError extends TaggedError("saml_metadata_error")<{
   message: string;
@@ -131,30 +130,19 @@ const extractSigningCertificate = (idpSection: string): string | undefined => {
 
 const extractEntryPoint = (idpSection: string): string | undefined => {
   const ssoServiceRe = /<(?:[\w-]+:)?SingleSignOnService\b([^>]*?)\/?>/gu;
-  let redirectLocation: string | undefined;
-  let postLocation: string | undefined;
-
   for (const match of idpSection.matchAll(ssoServiceRe)) {
     const attrs = match[1] ?? "";
     const binding = readAttribute(attrs, "Binding");
     const location = readAttribute(attrs, "Location");
-    if (location === undefined || location === "") {
-      continue;
-    }
     if (
       binding === SAML_HTTP_REDIRECT_BINDING &&
-      redirectLocation === undefined
+      location !== undefined &&
+      location !== ""
     ) {
-      redirectLocation = location;
-    } else if (
-      binding === SAML_HTTP_POST_BINDING &&
-      postLocation === undefined
-    ) {
-      postLocation = location;
+      return location;
     }
   }
-
-  return redirectLocation ?? postLocation;
+  return undefined;
 };
 
 /**
@@ -226,7 +214,7 @@ export const parseSamlIdpMetadataXml = (
     return Result.err(
       new SamlMetadataError({
         message:
-          "SAML metadata XML is missing a SingleSignOnService HTTP-Redirect or HTTP-POST endpoint",
+          "SAML metadata XML is missing a SingleSignOnService HTTP-Redirect endpoint",
         reason: "invalid_document",
       }),
     );
@@ -302,7 +290,7 @@ export const resolveSamlIdpMetadata = async ({
         url: urlResult.value,
         permit,
         maxBytes: SAML_METADATA_MAX_BYTES,
-        timeout: { type: "headers", ms: SAML_METADATA_TIMEOUT_MS },
+        timeout: { type: "total", ms: SAML_METADATA_TIMEOUT_MS },
         headers: {
           accept: "application/samlmetadata+xml, application/xml, text/xml",
         },

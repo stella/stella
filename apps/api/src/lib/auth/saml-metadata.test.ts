@@ -48,7 +48,7 @@ describe("parseSamlIdpMetadataXml", () => {
     expect(result.value.cert).toContain("-----END CERTIFICATE-----");
   });
 
-  test("supports namespace-prefixed md: and ds: tags and HTTP-POST fallback", () => {
+  test("supports namespace-prefixed md: and ds: tags with HTTP-Redirect", () => {
     const xml = `<md:EntityDescriptor xmlns:md="urn:oasis:names:tc:SAML:2.0:metadata" entityID="http://www.okta.com/exk123">
       <md:IDPSSODescriptor protocolSupportEnumeration="urn:oasis:names:tc:SAML:2.0:protocol">
         <md:KeyDescriptor>
@@ -56,7 +56,7 @@ describe("parseSamlIdpMetadataXml", () => {
             <ds:X509Data><ds:X509Certificate>${SAMPLE_CERT_BODY}</ds:X509Certificate></ds:X509Data>
           </ds:KeyInfo>
         </md:KeyDescriptor>
-        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST" Location="https://firm.okta.com/app/firm/exk123/sso/saml" />
+        <md:SingleSignOnService Binding="urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect" Location="https://firm.okta.com/app/firm/exk123/sso/saml" />
       </md:IDPSSODescriptor>
     </md:EntityDescriptor>`;
     const result = parseSamlIdpMetadataXml(xml);
@@ -68,6 +68,18 @@ describe("parseSamlIdpMetadataXml", () => {
     expect(result.value.entryPoint).toBe(
       "https://firm.okta.com/app/firm/exk123/sso/saml",
     );
+  });
+
+  test("rejects metadata that only advertises HTTP-POST without HTTP-Redirect", () => {
+    const postOnly = ENTRA_METADATA_XML.replace(
+      /<SingleSignOnService Binding="urn:oasis:names:tc:SAML:2\.0:bindings:HTTP-Redirect"[^>]*\/>/u,
+      "",
+    );
+    const result = parseSamlIdpMetadataXml(postOnly);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.reason).toBe("invalid_document");
+    }
   });
 
   test("rejects XML containing DOCTYPE or ENTITY declarations", () => {
