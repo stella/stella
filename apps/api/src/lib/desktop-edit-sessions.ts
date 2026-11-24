@@ -6,7 +6,7 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 import { member, user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { desktopEditSessions, workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DesktopEditFileType } from "@/api/lib/desktop-edit-file-types";

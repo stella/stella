@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import {
   corpusIndexClusterForGeneration,
   type QuickwitCluster,

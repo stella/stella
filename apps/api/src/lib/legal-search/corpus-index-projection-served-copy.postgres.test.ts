@@ -19,7 +19,10 @@ import {
   claimCorpusProjectionCleanupTx,
   recoverExpiredCorpusProjectionIntentsTx,
 } from "@/api/lib/legal-search/corpus-index-projection-cleanup-store";
-import { advanceCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
+import {
+  advanceCorpusProjectionDesiredStateTx,
+  reconcileCorpusProjectionDesiredStateTx,
+} from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusIndexAppendPublishDelayMs } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { advanceCorpusProjectionErasuresTx } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { isRecord } from "@/api/lib/type-guards";
@@ -37,6 +40,8 @@ const PUBLISH_DELAY = sql.raw(
   `(${corpusIndexAppendPublishDelayMs(CORPUS_INDEX_MANIFESTS.legislation_v3)} * interval '1 millisecond')`,
 );
 const GENERATION = "legislation_v3";
+/** A second active generation of the family, for the tests that need one. */
+const SIBLING = "legislation_v2";
 
 type Fixture = {
   sourceId: string;
@@ -45,45 +50,25 @@ type Fixture = {
   revision: string;
 };
 
-/**
- * One legislation document whose state serves one applied revision, written
- * in the statement shapes of the earlier release's append.
- */
-const seed = async (db: GatedTestDb): Promise<Fixture> => {
-  const suffix = Bun.randomUUIDv7().replaceAll("-", "").slice(-12);
-  const indexId = `legislation_v3_served_${suffix}`;
-  const sourceId = Bun.randomUUIDv7();
-  const entityId = Bun.randomUUIDv7();
-  const revision = Bun.randomUUIDv7();
+type ServedCopy = {
+  generation: string;
+  entityId: string;
+  indexId: string;
+  revision: string;
+};
+
+/** One generation's state of the document, serving one applied revision. */
+const seedServedCopy = async (
+  db: GatedTestDb,
+  { generation, entityId, indexId, revision }: ServedCopy,
+) => {
   const fingerprint = "a".repeat(64);
-  await db.execute(sql`
-    INSERT INTO corpus_index_generations (
-      family, generation, cluster, manifest_digest, status
-    ) VALUES (
-      'legislation', ${GENERATION}, 'q09',
-      ${corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v3)},
-      'building'
-    )
-  `);
-  await db.execute(sql`
-    INSERT INTO legislation_sources (id, adapter_key, name)
-    VALUES (${sourceId}, ${`projection-served-${suffix}`}, 'Projection served copy')
-  `);
-  await db.execute(sql`
-    INSERT INTO legislation_documents (
-      id, source_id, eli, title, country, language, document_type, status,
-      content_hash, projection_epoch
-    ) VALUES (
-      ${entityId}, ${sourceId}, ${`eli/cz/served/${suffix}`}, 'Act', 'CZE',
-      'cs', 'act', 'current', ${"f".repeat(64)}, 1
-    )
-  `);
   await db.execute(sql`
     INSERT INTO corpus_index_projection_states (
       family, generation, entity_id, desired_action, desired_epoch,
       desired_fingerprint, desired_index_id, desired_at
     ) VALUES (
-      'legislation', ${GENERATION}, ${entityId}, 'upsert', 1, ${fingerprint},
+      'legislation', ${generation}, ${entityId}, 'upsert', 1, ${fingerprint},
       ${indexId}, statement_timestamp()
     )
   `);
@@ -92,7 +77,7 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
       id, family, generation, entity_id, epoch, fingerprint, index_id, status,
       lease_token, lease_expires_at
     ) VALUES (
-      ${revision}, 'legislation', ${GENERATION}, ${entityId}, 1, ${fingerprint},
+      ${revision}, 'legislation', ${generation}, ${entityId}, 1, ${fingerprint},
       ${indexId}, 'reserved', ${Bun.randomUUIDv7()},
       clock_timestamp() + interval '5 minutes'
     )
@@ -122,8 +107,48 @@ const seed = async (db: GatedTestDb): Promise<Fixture> => {
     SET applied_action = 'upsert', applied_epoch = 1,
         applied_revision = ${revision}, applied_fingerprint = ${fingerprint},
         applied_index_id = ${indexId}, applied_at = clock_timestamp()
-    WHERE generation = ${GENERATION} AND entity_id = ${entityId}
+    WHERE generation = ${generation} AND entity_id = ${entityId}
   `);
+};
+
+/**
+ * One legislation document whose state serves one applied revision, written
+ * in the statement shapes of the earlier release's append.
+ */
+const seed = async (db: GatedTestDb): Promise<Fixture> => {
+  const suffix = Bun.randomUUIDv7().replaceAll("-", "").slice(-12);
+  const indexId = `legislation_v3_served_${suffix}`;
+  const sourceId = Bun.randomUUIDv7();
+  const entityId = Bun.randomUUIDv7();
+  const revision = Bun.randomUUIDv7();
+  await db.execute(sql`
+    INSERT INTO corpus_index_generations (
+      family, generation, cluster, manifest_digest, status
+    ) VALUES (
+      'legislation', ${GENERATION}, 'q09',
+      ${corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v3)},
+      'building'
+    )
+  `);
+  await db.execute(sql`
+    INSERT INTO legislation_sources (id, adapter_key, name)
+    VALUES (${sourceId}, ${`projection-served-${suffix}`}, 'Projection served copy')
+  `);
+  await db.execute(sql`
+    INSERT INTO legislation_documents (
+      id, source_id, eli, title, country, language, document_type, status,
+      content_hash, projection_epoch
+    ) VALUES (
+      ${entityId}, ${sourceId}, ${`eli/cz/served/${suffix}`}, 'Act', 'CZE',
+      'cs', 'act', 'current', ${"f".repeat(64)}, 1
+    )
+  `);
+  await seedServedCopy(db, {
+    generation: GENERATION,
+    entityId,
+    indexId,
+    revision,
+  });
   return { sourceId, indexId, entityId, revision };
 };
 
@@ -293,33 +318,37 @@ const statusOf = async (db: GatedTestDb, { revision }: Fixture) =>
   ).at(0) ?? panic("No such revision");
 
 /**
- * Removes the suite's rows. Nonterminal projection history is deletable only
+ * Removes one generation's rows. Nonterminal projection history is deletable only
  * while the generation is retiring under the rebuild fence.
  */
-const cleanUp = async (db: GatedTestDb, fixture: Fixture) => {
+const removeGeneration = async (db: GatedTestDb, generation: string) => {
   await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(1937007986, 1)`);
     await tx.execute(sql`
       UPDATE corpus_index_generations SET status = 'retiring'
-      WHERE family = 'legislation' AND generation = ${GENERATION}
+      WHERE family = 'legislation' AND generation = ${generation}
     `);
     await tx.execute(sql`
       DELETE FROM corpus_index_projection_states
-      WHERE family = 'legislation' AND generation = ${GENERATION}
+      WHERE family = 'legislation' AND generation = ${generation}
     `);
     await tx.execute(sql`
       DELETE FROM corpus_index_projection_intents
-      WHERE family = 'legislation' AND generation = ${GENERATION}
+      WHERE family = 'legislation' AND generation = ${generation}
     `);
   });
   await db.execute(sql`
     UPDATE corpus_index_generations SET status = 'retired'
-    WHERE family = 'legislation' AND generation = ${GENERATION}
+    WHERE family = 'legislation' AND generation = ${generation}
   `);
   await db.execute(sql`
     DELETE FROM corpus_index_generations
-    WHERE family = 'legislation' AND generation = ${GENERATION}
+    WHERE family = 'legislation' AND generation = ${generation}
   `);
+};
+
+const cleanUp = async (db: GatedTestDb, fixture: Fixture) => {
+  await removeGeneration(db, GENERATION);
   await db.execute(sql`
     DELETE FROM legislation_documents WHERE id = ${fixture.entityId}
   `);
@@ -327,6 +356,72 @@ const cleanUp = async (db: GatedTestDb, fixture: Fixture) => {
     DELETE FROM legislation_sources WHERE id = ${fixture.sourceId}
   `);
 };
+
+/** Run with the same document served in the sibling generation too. */
+const withSiblingCopy = async (
+  db: GatedTestDb,
+  { entityId }: Fixture,
+  run: (sibling: ServedCopy) => Promise<void>,
+) => {
+  const sibling = {
+    generation: SIBLING,
+    entityId,
+    indexId: "legislation_v2_cze",
+    revision: Bun.randomUUIDv7(),
+  };
+  await db.execute(sql`
+    INSERT INTO corpus_index_generations (
+      family, generation, cluster, manifest_digest, status
+    ) VALUES (
+      'legislation', ${SIBLING}, 'q09',
+      ${corpusIndexManifestDigest(CORPUS_INDEX_MANIFESTS.legislation_v2)},
+      'building'
+    )
+  `);
+  try {
+    await seedServedCopy(db, sibling);
+    await run(sibling);
+  } finally {
+    await removeGeneration(db, SIBLING);
+  }
+};
+
+/** The repair writer, in the caller's transaction. */
+const reconcileIn = async (tx: GatedTransaction, { entityId }: Fixture) =>
+  await reconcileCorpusProjectionDesiredStateTx(tx, {
+    family: "legislation",
+    entityId: toSafeId<"legislationDocument">(entityId),
+  });
+
+const reconcile = async (db: GatedTestDb, fixture: Fixture) =>
+  await db.transaction(async (tx) => await reconcileIn(tx, fixture));
+
+/** Content the desired states do not hold yet, so a reconcile is owed. */
+const driftCanonical = async (db: GatedTestDb, { entityId }: Fixture) => {
+  await db.execute(sql`
+    UPDATE legislation_documents SET content_hash = ${"9".repeat(64)}
+    WHERE id = ${entityId}
+  `);
+};
+
+/** Every column a held repair must leave alone. */
+const snapshotOf = async (db: GatedTestDb, { entityId }: Fixture) => ({
+  states: await db
+    .select()
+    .from(corpusIndexProjectionStates)
+    .where(eq(corpusIndexProjectionStates.entityId, entityId))
+    .orderBy(corpusIndexProjectionStates.generation),
+  revisions: await db
+    .select()
+    .from(corpusIndexProjectionIntents)
+    .where(eq(corpusIndexProjectionIntents.entityId, entityId))
+    .orderBy(corpusIndexProjectionIntents.id),
+  canonical: executedRows(
+    await db.execute(
+      sql`SELECT projection_epoch::text AS epoch FROM legislation_documents WHERE id = ${entityId}`,
+    ),
+  ),
+});
 
 const withTwoConnections = async (
   run: (
@@ -564,6 +659,213 @@ if (!databaseUrl || !runPostgresTests) {
 
         const after = await claim(claimer, fixture);
         expect(after.claimed.unserved).toBe(1);
+      });
+    });
+
+    test("a claim that commits first keeps the copy it took: the repair goes through and takes nothing from it", async () => {
+      await withTwoConnections(async (writer, claimer, fixture, observer) => {
+        await previousPrepare(writer, fixture);
+        // A second change: the claim cannot prove the copy, so it takes it.
+        await writeCanonical(writer, fixture, "d".repeat(64));
+        await driftCanonical(writer, fixture);
+        const claiming = holdOpen(
+          claimer,
+          async (tx) =>
+            await claimCorpusProjectionCleanupTx(tx, {
+              family: "legislation",
+              generation: GENERATION,
+              indexId: fixture.indexId,
+              limit: 16,
+              leaseMs: 60_000,
+            }),
+        );
+        const holder = await claiming.holds;
+        const repair = reconcile(writer, fixture);
+        const claimed = await whileHeld(claiming, async () => {
+          expect(await blockedBehind(observer, holder)).toBe(true);
+        });
+        expect(claimed.claimed.served_unproven).toBe(1);
+
+        const outcome = await repair;
+        expect(outcome.isOk() && outcome.value).toMatchObject({
+          changed: true,
+          servedCopies: [],
+        });
+        expect(await statusOf(observer, fixture)).toEqual({
+          status: "cleanup_started",
+          cleanupAttempts: 1,
+        });
+        expect(await stateOf(observer, fixture)).toMatchObject({
+          appliedRevision: fixture.revision,
+        });
+      });
+    });
+
+    test("a claim that commits after the first guard wins the copy: the repair holds and restores nothing", async () => {
+      await withTwoConnections(async (writer, claimer, fixture, observer) => {
+        await previousPrepare(writer, fixture);
+        await driftCanonical(writer, fixture);
+        // The earlier release's claim takes a revision without its state, so
+        // it can land between the guard and the revision lock. This release's
+        // claim cannot: it skips a state the writer holds, and reaching the
+        // state first it restores the copy.
+        const claiming = holdOpen(
+          claimer,
+          async (tx) =>
+            await tx.execute(sql`
+              UPDATE corpus_index_projection_intents
+              SET status = 'cleanup_started', lease_token = ${Bun.randomUUIDv7()},
+                  lease_expires_at = clock_timestamp() + interval '1 minute',
+                  cleanup_started_at = clock_timestamp(),
+                  cleanup_attempts = cleanup_attempts + 1,
+                  updated_at = clock_timestamp()
+              WHERE id = ${fixture.revision} AND status = 'cleanup_pending'
+            `),
+        );
+        const holder = await claiming.holds;
+        const repair = reconcile(writer, fixture);
+        await whileHeld(claiming, async () => {
+          // The guard read the copy as restorable; its row lock waits.
+          expect(await blockedBehind(observer, holder)).toBe(true);
+        });
+
+        const outcome = await repair;
+        if (outcome.isOk()) {
+          panic("Expected the repair to be held");
+        }
+        expect(outcome.error.copies).toEqual([
+          {
+            generation: GENERATION,
+            entityId: fixture.entityId,
+            outcome: "held",
+            risk: "restorable_cleanup",
+          },
+        ]);
+        expect(await statusOf(observer, fixture)).toEqual({
+          status: "cleanup_started",
+          cleanupAttempts: 1,
+        });
+        // Held for that one race: the next repair finds nothing to protect.
+        expect((await reconcile(writer, fixture)).isOk()).toBe(true);
+      });
+    });
+
+    test("a restoring claim that commits first leaves the repair a current copy", async () => {
+      await withTwoConnections(async (writer, claimer, fixture) => {
+        await previousPrepare(writer, fixture);
+        await driftCanonical(writer, fixture);
+        expect((await claim(claimer, fixture)).restoredIntentIds).toHaveLength(
+          1,
+        );
+        const outcome = await reconcile(writer, fixture);
+        expect(outcome.isOk() && outcome.value.servedCopies).toEqual([
+          {
+            generation: GENERATION,
+            entityId: fixture.entityId,
+            outcome: "already_current",
+          },
+        ]);
+      });
+    });
+
+    test("a repair that commits first restores the copy, and no claim deletes it", async () => {
+      await withTwoConnections(async (writer, claimer, fixture) => {
+        await previousPrepare(writer, fixture);
+        await driftCanonical(writer, fixture);
+        const repair = holdOpen(
+          writer,
+          async (tx) => await reconcileIn(tx, fixture),
+        );
+        await repair.holds;
+        const outcome = await whileHeld(repair, async () => {
+          expect(await neverWaits(claim(claimer, fixture))).toMatchObject({
+            leases: [],
+            restoredIntentIds: [],
+            skippedLocked: 1,
+          });
+        });
+        expect(outcome.isOk() && outcome.value.servedCopies).toEqual([
+          {
+            generation: GENERATION,
+            entityId: fixture.entityId,
+            outcome: "restored",
+          },
+        ]);
+
+        expect(await claim(claimer, fixture)).toMatchObject({
+          leases: [],
+          restoredIntentIds: [],
+          skippedLocked: 0,
+        });
+        expect(await statusOf(claimer, fixture)).toEqual({
+          status: "applied",
+          cleanupAttempts: 0,
+        });
+      });
+    });
+
+    test("a sibling generation at risk only at the second guard rolls the restore back", async () => {
+      await withTwoConnections(async (writer, claimer, fixture, observer) => {
+        await withSiblingCopy(observer, fixture, async (sibling) => {
+          await previousPrepare(writer, fixture);
+          await driftCanonical(writer, fixture);
+          const before = await snapshotOf(observer, fixture);
+          // Holding the queued revision stops the writer past its first
+          // guard, before it restores.
+          const stopped = holdOpen(
+            claimer,
+            async (tx) =>
+              await tx.execute(sql`
+                SELECT id FROM corpus_index_projection_intents
+                WHERE id = ${fixture.revision} FOR UPDATE
+              `),
+          );
+          const holder = await stopped.holds;
+          const repair = reconcile(writer, fixture);
+          await whileHeld(stopped, async () => {
+            expect(await blockedBehind(observer, holder)).toBe(true);
+            expect(
+              await statusOf(observer, { ...fixture, ...sibling }),
+            ).toEqual({ status: "applied", cleanupAttempts: 0 });
+            // The earlier release queues a revision without its state row.
+            await observer.execute(sql`
+              UPDATE corpus_index_projection_intents
+              SET status = 'cleanup_pending',
+                  append_publish_barrier_at = append_committed_at + ${PUBLISH_DELAY},
+                  cleanup_not_before = clock_timestamp(),
+                  last_error = NULL, updated_at = clock_timestamp()
+              WHERE id = ${sibling.revision} AND status = 'applied'
+            `);
+          });
+
+          const outcome = await repair;
+          if (outcome.isOk()) {
+            panic("Expected the repair to be held");
+          }
+          expect(outcome.error.copies).toEqual([
+            {
+              generation: SIBLING,
+              entityId: fixture.entityId,
+              outcome: "held",
+              risk: "restorable_cleanup",
+            },
+            {
+              generation: GENERATION,
+              entityId: fixture.entityId,
+              outcome: "held",
+              risk: "restorable_cleanup",
+            },
+          ]);
+          // Nothing of the repair is left: the restored revision is queued
+          // again, byte for byte, and no state or epoch moved.
+          const after = await snapshotOf(observer, fixture);
+          expect(after.states).toEqual(before.states);
+          expect(after.canonical).toEqual(before.canonical);
+          const queued = ({ id }: { id: string }) => id === fixture.revision;
+          expect(after.revisions.find(queued)).toEqual(
+            before.revisions.find(queued),
+          );
+        });
       });
     });
   });

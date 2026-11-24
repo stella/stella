@@ -7,7 +7,7 @@ import {
   spawnSubagentsOutputSchema,
 } from "@stll/api-contract/spawn-subagents";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { env } from "@/api/env";
 import { createChatTextPart } from "@/api/handlers/chat/chat-message-parts";
 import { runSubagent } from "@/api/handlers/chat/subagent-runner";

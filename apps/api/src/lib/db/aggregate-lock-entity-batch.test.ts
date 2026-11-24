@@ -4,7 +4,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   withAggregateEntityBatch,

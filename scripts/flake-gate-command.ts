@@ -12,7 +12,7 @@ type UnsupportedReason =
   | "missing-flag-value"
   | "runner-controlled-flag";
 type ParsedTestScript =
-  | { type: "supported"; flags: string[] }
+  | { type: "supported"; flags: string[]; filters: string[] }
   | { type: "unsupported"; reason: UnsupportedReason };
 
 const BOOLEAN_FLAGS = new Set([
@@ -95,14 +95,27 @@ export const parseBunTestScript = (script: string): ParsedTestScript => {
   return parseFlags(words.slice(2));
 };
 
+const normalizeFilter = (raw: string): string => {
+  let value = raw.startsWith("./") ? raw.slice(2) : raw;
+  while (value.endsWith("/")) {
+    value = value.slice(0, -1);
+  }
+  return value;
+};
+
 const parseFlags = (words: readonly string[]): ParsedTestScript => {
   const flags: string[] = [];
+  const filters: string[] = [];
   for (let index = 0; index < words.length; index += 1) {
     const word = words.at(index);
     if (word === undefined || word === "--") {
       break;
     }
     if (!word.startsWith("-")) {
+      const normalized = normalizeFilter(word);
+      if (normalized.length > 0) {
+        filters.push(normalized);
+      }
       continue;
     }
     const equals = word.indexOf("=");
@@ -148,5 +161,5 @@ const parseFlags = (words: readonly string[]): ParsedTestScript => {
     flags.push(next);
     index += 1;
   }
-  return { type: "supported", flags };
+  return { type: "supported", flags, filters };
 };

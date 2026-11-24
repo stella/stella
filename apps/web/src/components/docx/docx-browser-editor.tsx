@@ -7,6 +7,7 @@ import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
+import type { Awareness } from "y-protocols/awareness";
 
 import { FolioUIProvider, FormattingBar } from "@stll/folio-react";
 import type {
@@ -61,6 +62,7 @@ import {
   editSessionErrorDescriptionKey,
   getDocxEditorBlockingError,
   selectDocxBrowserEditorBuffer,
+  selectDocxEditorSession,
 } from "./docx-browser-editor.logic";
 import type {
   DocxEditorBlockingError,
@@ -199,11 +201,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
   const editorRef = useRef<DocxEditorRef>(null);
   const attachEditor = useDocxOpenTiming({ editorRef, fieldId, surface });
   const containerRef = useRef<HTMLDivElement>(null);
-  const { editorView, editorProps: editorViewProps } = useDocxEditorView({
-    entityId,
-    fieldId,
-    workspaceId,
-  });
+  const view = useDocxEditorView({ editorRef, entityId, fieldId, workspaceId });
   const pendingEditRequestRef = useRef(false);
   const optimisticPreviewRef = useRef<OptimisticPreviewFile | null>(null);
   const finalizedBufferRef = useRef<ArrayBuffer | null>(null);
@@ -288,6 +286,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     previewFile,
   });
   const { isUnlocked, requestEditMode } = opening;
+  const editorSession = selectDocxEditorSession(activeCollaboration);
   const { editorMode, handleEditorModeChange } = useDocxEditorMode(isUnlocked);
 
   useDocxWheelZoom(containerRef, editorRef);
@@ -300,6 +299,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
     dialogState: evidenceReferencesDialogState,
     editorMode,
     editorRef,
+    editorSession,
     isUnlocked,
     onDialogStateChange: onEvidenceReferencesDialogStateChange,
     requestEditMode,
@@ -430,7 +430,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
         workspaceId={workspaceId}
         entityId={entityId}
         fieldId={fieldId}
-        view={editorView}
+        view={view.editorView}
         {...evidence.dialog}
       />
       {state.status === "released" && (
@@ -483,20 +483,22 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorContentProps) => {
             mode={isUnlocked ? editorMode : "viewing"}
             onModeChange={handleEditorModeChange}
             onCompatibilityChange={handleCompatibilityChange}
-            {...editorViewProps}
+            {...view.editorProps}
             plugins={evidence.plugins}
             showToolbar={showActionBar ? true : isUnlocked}
             toolbarExtra={toolbarExtra}
             {...(activeCollaboration !== undefined
               ? { collaboration: activeCollaboration }
               : {})}
-            {...(isUnlocked ? { onChange: handleChange } : {})}
+            experimentalSession={editorSession}
+            onChange={view.editorChange(isUnlocked ? handleChange : null)}
             onReadonlyEditAttempt={opening.handleLockedEditAttempt}
             {...(initialScrollTop !== undefined ? { initialScrollTop } : {})}
             {...(onScrollTopChange !== undefined ? { onScrollTopChange } : {})}
             loadingIndicator={loadingFallback}
             preserveDocumentWhileLoading
           />
+          {view.citationCheckCard}
         </DocxEditorAiOverlay>
       </div>
     </div>
@@ -620,9 +622,7 @@ const DocxCollaborationToolbarControls = ({
         <span>{createVersionLabel}</span>
       </Button>
       <CollaborationStatusIndicator status={collaborationState.status} />
-      <CollaborationPresence
-        awareness={collaborationState.room.collaboration.awareness}
-      />
+      <CollaborationPresence awareness={collaborationState.room.awareness} />
       <Button
         aria-label={t("common.close")}
         className="min-h-11 px-3"
@@ -774,9 +774,7 @@ const readCollaborationPresenceUser = (
   return { id, image, name };
 };
 
-const readCollaborationPresence = (
-  awareness: NonNullable<DocxEditorCollaboration["awareness"]>,
-) => {
+const readCollaborationPresence = (awareness: Awareness) => {
   const users = new Map<string, CollaborationPresenceUser>();
   for (const state of awareness.getStates().values()) {
     const user = readCollaborationPresenceUser(state);
@@ -802,11 +800,7 @@ const hasSameCollaborationPresence = (
     );
   });
 
-const CollaborationPresence = ({
-  awareness,
-}: {
-  awareness: NonNullable<DocxEditorCollaboration["awareness"]>;
-}) => {
+const CollaborationPresence = ({ awareness }: { awareness: Awareness }) => {
   const [users, setUsers] = useState(() =>
     readCollaborationPresence(awareness),
   );

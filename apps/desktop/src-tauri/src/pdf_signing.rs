@@ -1632,6 +1632,7 @@ fn open_dialog(
     app_handle,
     DIALOG_LABEL,
     format!("pdf-sign-dialog.html#{hash}"),
+    crate::app_window::WindowKind::App,
   )
   .title(crate::i18n::t("dialog.pdfSignWindowTitle"))
   .inner_size(DIALOG_WIDTH, DIALOG_HEIGHT)

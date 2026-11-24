@@ -12,8 +12,8 @@
 
 import { asc, eq, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { usageSeatAssignments } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { searchProvenanceError } from "@/api/handlers/search/provenance-error";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";

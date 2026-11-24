@@ -8,7 +8,7 @@ import {
   requestSecretOutputSchema,
 } from "@stll/api-contract/chat-secret";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatSecrets } from "@/api/db/schema";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 3,
+  "reason": "A member's learned dictation fixes are their own spellings, synced between their devices; the insert and the compare-and-set update in the learned-fix store change no organization record, and account deletion erases the row under the account deletion request's audit like the other personal records."
+}

@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { agentInputNormalizationMetadata } from "@stll/agent-input";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   entities,
   entityVersionAiSummaries,

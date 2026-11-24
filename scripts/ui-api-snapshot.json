@@ -25,6 +25,7 @@
       "AlertDialogTrigger",
       "AlertDialogViewport",
       "AnchoredToastProvider",
+      "AntigravityLogoIcon",
       "ApplicationRail",
       "ApplicationRailButton",
       "ApplicationRailContent",
@@ -59,6 +60,7 @@
       "CalendarHeaderCell",
       "CalendarHeaderRow",
       "Checkbox",
+      "ClaudeLogoIcon",
       "Collapsible",
       "CollapsiblePanel",
       "CollapsibleTrigger",
@@ -159,6 +161,7 @@
       "FrameHeader",
       "FramePanel",
       "FrameTitle",
+      "GeminiLogoIcon",
       "GitHubLogoIcon",
       "HexColorPicker",
       "HighlightedTextarea",
@@ -286,6 +289,7 @@
       "OUTLINE_EMPHASIS",
       "OVERLAY_COLLISION_PADDING",
       "OVERLAY_LAYER_CLASS_NAMES",
+      "OpenAILogoIcon",
       "OutlineRail",
       "PROPERTY_ROW_GRID",
       "Pagination",
@@ -562,7 +566,15 @@
       "stripDirectionalControls",
       "withoutDirectionalControls"
     ],
-    "./brand-icons": ["DiscordLogoIcon", "GitHubLogoIcon", "XLogoIcon"],
+    "./brand-icons": [
+      "AntigravityLogoIcon",
+      "ClaudeLogoIcon",
+      "DiscordLogoIcon",
+      "GeminiLogoIcon",
+      "GitHubLogoIcon",
+      "OpenAILogoIcon",
+      "XLogoIcon"
+    ],
     "./breadcrumb": [
       "Breadcrumb",
       "BreadcrumbEllipsis",
@@ -680,8 +692,12 @@
       "withoutDirectionalControls"
     ],
     "./components/brand-icons": [
+      "AntigravityLogoIcon",
+      "ClaudeLogoIcon",
       "DiscordLogoIcon",
+      "GeminiLogoIcon",
       "GitHubLogoIcon",
+      "OpenAILogoIcon",
       "XLogoIcon"
     ],
     "./components/breadcrumb": [
@@ -1139,7 +1155,11 @@
       "caseNumberIdentityLabels",
       "statuteIdentityLabels"
     ],
-    "./document-mark": ["DocumentMark", "isDocumentMarkKind"],
+    "./document-mark": [
+      "DOCUMENT_MARK_KINDS",
+      "DocumentMark",
+      "isDocumentMarkKind"
+    ],
     "./entity-actions": ["EntityActions", "EntityActionsButton"],
     "./field": [
       "Field",
@@ -1457,6 +1477,7 @@
     "./identity-text": ["IdentityText"],
     "./initials": ["getInitials"],
     "./inline-drop-indicator": ["InlineDropIndicator"],
+    "./inline-overflow": ["resolveInlineOverflow", "splitInlineOverflow"],
     "./inline-rename": ["InlineRenameInput"],
     "./inline-reorder": ["reorderInlineIds", "toInlineDropPosition"],
     "./input": ["Input"],
@@ -1996,6 +2017,11 @@
       "isStructuredInputType",
       "useContentDir"
     ],
+    "./use-inline-overflow": [
+      "INLINE_OVERFLOW_ITEM_ATTRIBUTE",
+      "INLINE_OVERFLOW_TRIGGER_ATTRIBUTE",
+      "useInlineOverflow"
+    ],
     "./use-latest": ["useLatest"],
     "./use-mobile": ["useIsMobile"],
     "./use-prefers-reduced-motion": ["usePrefersReducedMotion"],
@@ -2222,19 +2248,39 @@
     "DocumentMark.kind": [
       "asicE",
       "asicS",
+      "bdoc",
       "cades",
+      "cadesDetached",
       "csv",
       "dataBox",
+      "eAkta",
+      "epub",
+      "et3",
       "excel",
+      "fatturaPA",
+      "isdoc",
+      "isdocx",
       "markdown",
+      "mbox",
+      "numbers",
       "ofd",
       "openDocumentSheet",
       "openDocumentText",
+      "pages",
       "pdf",
       "powerpoint",
+      "pst",
       "rtf",
       "uyap",
-      "word"
+      "webArchive",
+      "word",
+      "wordPerfect",
+      "works",
+      "xades",
+      "xadesZep",
+      "xml",
+      "zep",
+      "zip"
     ],
     "DropdownMenuCheckboxItem.variant": ["default", "switch"],
     "DropdownMenuItem.variant": ["default", "destructive"],

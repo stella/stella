@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 type OrganizationSettings =
   WebApiRoutes["organization-settings"]["get"]["response"][200];

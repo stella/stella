@@ -30,16 +30,16 @@ const matrixShards = (plan: ReturnType<typeof planCiApiTests>) => {
   return plan.matrix.shard;
 };
 
-test("pull requests omit idle API runners and keep the shared rest/web runner", () => {
+test("pull requests omit idle API runners and keep the rest/web runners", () => {
   const plan = planCiApiTests({
     event: "pull_request",
     scopeUnknown: false,
-    testJobs: ["rest-web"],
+    testJobs: ["rest", "web"],
     select: () => {
       throw new Error("selector should not run");
     },
   });
-  expect(matrixShards(plan)).toEqual(["rest-web"]);
+  expect(matrixShards(plan)).toEqual(["rest", "web"]);
   expect(plan.impact.mode).toBe("none");
   expect(
     matrixShards(
@@ -50,7 +50,7 @@ test("pull requests omit idle API runners and keep the shared rest/web runner", 
         select: () => ({ mode: "none", files: [], shards: 0 }),
       }),
     ),
-  ).toEqual(["rest-web"]);
+  ).toEqual(["rest", "web"]);
   expect(
     matrixShards(
       planCiApiTests({
@@ -60,7 +60,7 @@ test("pull requests omit idle API runners and keep the shared rest/web runner", 
         select: selected,
       }),
     ),
-  ).toEqual(["api-1", "api-2", "rest-web"]);
+  ).toEqual(["api-1", "api-2", "rest", "web"]);
 });
 
 test("dispatches and unreadable scopes retain every API shard without invoking the selector", () => {
@@ -71,7 +71,7 @@ test("dispatches and unreadable scopes retain every API shard without invoking t
     const plan = planCiApiTests({
       event,
       scopeUnknown,
-      testJobs: ["rest-web"],
+      testJobs: ["rest"],
       select: () => {
         throw new Error("selector should not run");
       },
@@ -84,7 +84,10 @@ test("dispatches and unreadable scopes retain every API shard without invoking t
       "api-4",
       "api-5",
       "api-6",
-      "rest-web",
+      "api-7",
+      "api-8",
+      "rest",
+      "web",
     ]);
   }
 });
@@ -124,12 +127,12 @@ test("merge groups select the batch union without narrowing API test files", () 
   const options = {
     event: "merge_group",
     scopeUnknown: false,
-    testJobs: ["rest-web"],
+    testJobs: ["rest"],
     select: () => {
       throw new Error("merge groups must retain whole affected API suites");
     },
   } as const;
-  expect(matrixShards(planCiApiTests(options))).toEqual(["rest-web"]);
+  expect(matrixShards(planCiApiTests(options))).toEqual(["rest"]);
   expect(
     planCiApiTests({
       ...options,
@@ -239,9 +242,9 @@ test("matrix admission follows the executable Turbo test plan", () => {
         task: "test",
       })),
     });
-  expect(selectedTestJobs(turboPlan(["@stll/web"]))).toEqual(["rest-web"]);
+  expect(selectedTestJobs(turboPlan(["@stll/web"]))).toEqual(["web"]);
   expect(selectedTestJobs(turboPlan(["@stll/api"]))).toEqual(
-    FULL_TEST_JOB_SHARDS.filter((shard) => shard !== "rest-web"),
+    FULL_TEST_JOB_SHARDS.filter((shard) => shard !== "rest" && shard !== "web"),
   );
   expect(selectedTestJobs(turboPlan([]))).toEqual([]);
 });

@@ -635,7 +635,12 @@ if (!databaseUrl || !runPostgresTests) {
                   await reconcileCorpusProjectionDesiredStateTx(tx, subject),
               )
             ).unwrap(),
-          ).toEqual({ epoch: 1n, changed: false, generationCount: 1 });
+          ).toEqual({
+            epoch: 1n,
+            changed: false,
+            generationCount: 1,
+            servedCopies: [],
+          });
         } finally {
           releaseWriter.resolve(undefined);
           const createdGenerations = targetGenerationCreated

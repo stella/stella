@@ -1,0 +1,16 @@
+{
+  "identifier": "dictation-fix",
+  "description": "Panel that fixes the spelling of dictated words",
+  "windows": ["dictation-fix"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten",
+    "allow-get-desktop-language",
+    "allow-set-desktop-language",
+    "allow-account-record-use",
+    "allow-desktop-report-error",
+    "allow-dictation-fix-get-state",
+    "allow-dictation-fix-save",
+    "allow-dictation-fix-close"
+  ]
+}

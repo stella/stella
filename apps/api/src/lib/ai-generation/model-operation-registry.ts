@@ -50,6 +50,7 @@ export const MODEL_OPERATION_MODULES = [
   "apps/api/src/lib/scouts/document-deadlines.ts",
   "apps/api/src/lib/structured-output-budget-probe.ts",
   "apps/api/src/lib/templates/suggest-template-fields.ts",
+  "apps/api/src/lib/uploads/document-naming/document-naming.ts",
   "apps/api/src/lib/workflow/ai-generate-batch.ts",
   "apps/api/src/lib/workflow/decisions/decide.ts",
   "apps/api/src/lib/workflow/verdict-engine.ts",

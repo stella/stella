@@ -13,6 +13,7 @@ import { KeyboardDictationHost } from "@/components/keyboard-dictation-host";
 import { MattersViewProvider, useMattersView } from "@/components/matters-view";
 import { useNewChat } from "@/components/new-chat";
 import { PushRegistration } from "@/components/push-registration";
+import { QuickDictationSync } from "@/components/quick-dictation-sync";
 import { RoleProvider, useCan } from "@/components/role";
 import { RunBanners } from "@/components/run-banner";
 import { SelectionProvider, useSelection } from "@/components/selection";
@@ -46,6 +47,7 @@ export const ProtectedScreens = () => {
                   <ActiveChatRunsProvider>
                     <KeptDictationsProvider>
                       <TimerActivitySync />
+                      <QuickDictationSync />
                       <PushRegistration />
                       <KeyboardDictationHost />
                       <Screens />
@@ -264,6 +266,15 @@ const Screens = () => {
               }}
             />
             <Stack.Screen
+              name="part/save"
+              options={{
+                ...pushedScreen,
+                presentation: "formSheet",
+                sheetAllowedDetents: [0.75, 1],
+                sheetGrabberVisible: true,
+              }}
+            />
+            <Stack.Screen
               name="share/[shareId]"
               options={{ ...pushedScreen, presentation: "modal" }}
             />
@@ -273,6 +284,10 @@ const Screens = () => {
             />
             <Stack.Screen
               name="keyboard/setup"
+              options={{ ...pushedScreen, presentation: "modal" }}
+            />
+            <Stack.Screen
+              name="dictation"
               options={{ ...pushedScreen, presentation: "modal" }}
             />
             <Stack.Screen name="timers/index" options={pushedScreen} />

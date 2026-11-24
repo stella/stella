@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract";
 
 import { getAnalytics } from "@/lib/analytics/provider";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import { toSafeId } from "@/lib/safe-id";
 import {
   docxSuggestionsOptions,

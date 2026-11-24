@@ -1,0 +1,29 @@
+{
+  "name": "@stll/heic-decoder",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Bounded HEIC/HEIF preview decoder (Rust, WebAssembly) for server-side workers",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/heic-decoder.ts",
+    "./fixtures/*": "./fixtures/*"
+  },
+  "scripts": {
+    "clean": "git clean -xdf target .cache .turbo node_modules",
+    "test": "bun run test:bun && bash ../../scripts/cargo-test.sh",
+    "test:bun": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/heic-decoder",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/heic-decoder",
+    "format:rust": "cargo fmt",
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "build:wasm:container": "bash scripts/build-wasm-container.sh",
+    "check:wasm": "bun --preload ../../scripts/offline-network-preload.ts scripts/check-wasm.ts"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  }
+}

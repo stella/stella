@@ -3,8 +3,8 @@ import { getTableName, sql } from "drizzle-orm";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { billingArrangements, timeEntries } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

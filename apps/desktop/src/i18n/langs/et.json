@@ -10,7 +10,7 @@
     "aiDraftAllow": "Luba",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Ülesanne {task} · Tegevus {activity}",
-    "aiDraftConsent": "stella AI saab koostada selgitusi iga kande toimiku, kuupäeva, kestuse ja rakenduste nimede põhjal ning siin näidatud dokumentide nimede ja akende pealkirjade põhjal, kui te neid salvestate. Teie varasemad kanded selles toimikus aitavad tal kirjutada teie stiilis. Muud teie päeva kohta see arvuti ei väljasta.",
+    "aiDraftConsent": "Selgituse koostamiseks kasutab stella AI: {inputs}. Kõik see läheb {provider} ainult mustandi kirjutamiseks. Muud teie päeva kohta see arvuti ei väljasta.",
     "aiDraftConsentRequired": "Selle selgituse koostamiseks lubage stella AI uuesti.",
     "aiDraftDisclosure": "AI kavandid on soovitused, mille stella loob ülevaadatavast kandest, teie varasematest kannetest selles toimikus ja teie organisatsiooni arveldusjuhistest, kui need on lisatud. Vaadake iga kanne enne loomist üle.",
     "aiDraftEarlierEntries": "{count, plural, one {Järgib # varasemat kannet} other {Järgib # varasemat kannet}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI on selles arvutis välja lülitatud. Tagasivõtmine saadetakse rakendusele stella kohe, kui see on kättesaadav.",
     "browserAnsweredAppNameOnly": "Brauserist <bdi>{browser}</bdi> salvestatakse ainult rakenduse nimi. Seda saad muuta seadetes.",
     "browserAnsweredTitles": "Brauseri <bdi>{browser}</bdi> vahekaartide pealkirjad salvestatakse. Seda saad muuta seadetes.",
-    "browserPrivacyNote": "Salvestuda võivad ka privaatsed aknad; privaatse sirvimise ajal peata salvestamine või välista brauser.",
+    "browserPrivacyNote": "stella ei tunne ära iga privaatset akent, seega peatage salvestamine enne privaatset sirvimist.",
     "browserQuestionAppNameOnly": "Ainult rakenduse nimi",
-    "browserQuestionDescription": "Vahekaartide pealkirjad aitavad tööd kirjeldada. stella ei tunne ära iga privaatset akent, seega peatage salvestamine enne privaatset sirvimist.",
+    "browserQuestionDescription": "Vahekaartide pealkirjad aitavad tööd kirjeldada.",
     "browserQuestionLater": "Otsusta hiljem",
     "browserQuestionRecordTitles": "Salvesta pealkirjad",
     "browserQuestionTitle": "Kas salvestada ka vahekaartide pealkirjad brauseris <bdi>{browser}</bdi>?",
@@ -74,6 +74,7 @@
     "candidatesFailed": "Toimikusoovitusi ei õnnestunud laadida. Proovi uuesti.",
     "captureDetails": "Salvesta ka akende pealkirjad ja avatud dokumendid",
     "captureDetailsDescription": "Väljalülitamine peatab uute üksikasjade salvestamise. Varasemad jäävad alles kuni säilitusaja lõpuni või kustutamiseni.",
+    "captureDetailsOffDescription": "Sisselülitamisel salvestatakse uue tegevuse juurde ka akende pealkirjad ja dokumentide nimed.",
     "captureModeAppOnly": "Ainult nimi",
     "captureModeBrowser": "Brauser",
     "captureModeLabel": "Mida rakendusest {name} salvestada",
@@ -102,7 +103,19 @@
     "detectCalls": "Salvesta kõned",
     "detectCallsDescription": "Kui Teams, Zoom või brauser kasutab mikrofoni, loetakse see aeg kõneks, isegi kui ainult kuulate või töötate teises rakenduses. Heli ei salvestata kunagi.",
     "disclosure": {
-      "control": "Midagi ei salvestata enne, kui vajutate Tegevustes nuppu Alusta salvestamist. Peatage, välistage rakendusi või kustutage mis tahes päev, millal soovite.",
+      "aiDraftInputs": {
+        "appNames": "rakenduste nimed",
+        "billingFormat": "kliendi arveldusvorming",
+        "date": "kuupäev",
+        "duration": "kestus",
+        "earlierDescriptions": "teie varasemad kirjeldused selles toimikus",
+        "firmGuidelines": "teie büroo võimalikud arveldusjuhised",
+        "instructions": "teie sisestatud juhised",
+        "matter": "toimik",
+        "titles": "salvestatud akende pealkirjad ja dokumentide nimed"
+      },
+      "aiDraftProvider": "teie büroo kasutatavale AI-teenuse pakkujale või stella AI pakkujale",
+      "control": "Midagi ei salvestata enne, kui vajutate nuppu Alusta salvestamist. Peatage, välistage rakendusi või kustutage mis tahes päev, millal soovite.",
       "never": {
         "audio": "Mikrofoni heli",
         "keystrokes": "Klahvivajutused või sisestatud tekst",
@@ -119,7 +132,7 @@
       },
       "recordedTitle": "Mida salvestatakse",
       "sent": {
-        "aiDrafts": "stella AI mustandid, mida pärast lubamist küsite: kande toimik, kuupäev, kestus ja rakenduste nimed, selle akende pealkirjad ja dokumentide nimed, kui neid salvestatakse, ning teie sisestatud juhised. stella lisab teie varasemad kirjeldused selles toimikus, kliendi arveldusvormingu ja teie büroo arveldusjuhised, kui büroo neid kasutab. Kõik see läheb teie büroo kasutatavale AI-teenuse pakkujale või stella AI pakkujale ainult mustandi kirjutamiseks; stella ei salvesta mustandit ega selle jaoks saadetut.",
+        "aiDrafts": "stella AI mustandid, mida pärast lubamist küsite. Iga mustandi jaoks kasutab stella AI: {inputs}. Kõik see läheb {provider} ainult mustandi kirjutamiseks; stella ei salvesta mustandit ega selle jaoks saadetut.",
         "timeEntries": "Teie loodud ajakanded: toimik, kuupäev, kestus, kirjeldus, arveldatavus ja võimalikud arvelduskoodid"
       },
       "sentTitle": "Mis sellest arvutist lahkub",
@@ -136,6 +149,8 @@
     "earlierTimeStaysUntitled": "Varasem aeg jääb pealkirjadeta.",
     "earliestDayReached": "Vaatate varaseimat saadaolevat päeva.",
     "empty": "Sel päeval ei salvestatud midagi.",
+    "emptyToday": "Täna pole veel midagi salvestatud. Teie töö ilmub siia jooksvalt.",
+    "emptyTodayPaused": "Salvestamine on peatatud. Tänase töö salvestamiseks valige Jätka.",
     "encrypted": "Krüpteeritud selles seadmes",
     "enterRefinement": "Sisestage juhis kirjelduse muutmiseks.",
     "entryBillable": "Arveldatav",
@@ -156,6 +171,7 @@
     "granularity": "Ruudustik",
     "hours": "{hours} h",
     "incompatibleActivity": "See rakenduse versioon ei saa salvestatud tegevust lugeda. Jätkamiseks uuendage rakendust.",
+    "joinedActivity": "Selle toimiku aja hulka ei arvestata",
     "keepHistory": "Säilita ajalugu",
     "latestDayReached": "Vaatate viimast saadaolevat päeva.",
     "memoryOnly": "Selles versioonis ei salvestata",
@@ -165,6 +181,7 @@
     "moreApps": "+{count} veel",
     "narrativeApps": "Töö rakendustes: {apps}",
     "narrativeEvidence": "Töö: {evidence}",
+    "narrativeTitle": "„{title}“",
     "newEntry": "Uus kanne",
     "nextDay": "Järgmine päev",
     "noMatters": "Toimikuid ei leitud. Proovige teist otsingut.",
@@ -197,8 +214,8 @@
     "selectRange": "Vali ajavahemik",
     "settings": "Seaded",
     "suggestionPieceLabel": "Soovitatud kanne: {matter}, {range}, {duration}, kokku {hours} h",
-    "suggestionPieces": "{count, plural, one {# lõik} other {# lõiku}} · {duration} · {hours} h",
-    "suggestionRange": "{range} · {duration} · {hours} h",
+    "suggestionPieces": "{count, plural, one {# lõik} other {# lõiku}} · {hours} h",
+    "suggestionRange": "{range} · {hours} h",
     "timeEntries": "Ajakanded",
     "title": "Tegevus",
     "titlesNeedAccessibility": "Ilma ligipääsetavuse juurdepääsuta akende pealkirju ei salvestata.",
@@ -216,6 +233,14 @@
     "writeDescription": "Sisestage selle kande kirjeldus."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Kontrolli uuesti",
+      "notInstalled": "Installi Antigravity 1.5 või uuem versioon ja logi selles sisse.",
+      "signedIn": "Sisse logitud Antigravitysse",
+      "signedOut": "Logi sisse Antigravity CLI-s, et seda rakenduses stella kasutada.",
+      "title": "Antigravity",
+      "tooOld": "Uuenda Antigravity versioonile 1.5 või uuemaks ja logi selles sisse."
+    },
     "callbackAccount": "Konto",
     "callbackCloseTab": "Võite selle vahekaardi sulgeda.",
     "callbackConnectedBody": "stella AI-päringud kasutavad nüüd teie ChatGPT paketti.",
@@ -295,6 +320,7 @@
   },
   "clipboard": {
     "allClips": "Kõik lõiked",
+    "allResults": "Kõik tulemused",
     "bold": "Paks kiri",
     "bulletedList": "Täpploend",
     "cancel": "Loobu",
@@ -361,6 +387,7 @@
     "moveToGroup": "Teisalda rühma",
     "newGroupOption": "Uus rühm…",
     "noGroup": "Rühmata",
+    "noGroupMatches": "Selles rühmas vasteid pole",
     "noResults": "Sobivaid lõikeid pole",
     "noResultsSearchRegistries": "Otsi „{query}” registritest",
     "numberedList": "Nummerdatud loend",
@@ -444,6 +471,21 @@
     "welcomeShortcutTitle": "Ava see kõikjal.",
     "welcomeStart": "Alusta kopeerimist",
     "welcomeTitle": "Teie uus lõikelaud"
+  },
+  "clipboardSettings": {
+    "capture": "Salvesta uued lõiked",
+    "captureDescription": "Kui see on välja lülitatud, ei salvestata midagi, mida kopeerid.",
+    "errorSave": "Muudatust ei õnnestunud salvestada. Proovi uuesti.",
+    "excludedDescription": "Nendes rakendustes kopeeritut ei salvestata.",
+    "excludedEmpty": "Rakenduse välistamiseks paremklõpsa lõikelaual mõnel selle lõikel ja vali, et selle uusi lõikeid enam ei salvestataks.",
+    "groupActions": "Rühma {groupName} toimingud",
+    "groupsDescription": "Lohista rühma, et muuta selle asukohta lõikelaual.",
+    "groupsEmpty": "Loo rühm ja lohista sellesse lõikelaual lõikeid.",
+    "history": "Ajalugu",
+    "moveGroupDown": "Liiguta alla",
+    "moveGroupUp": "Liiguta üles",
+    "recordingsDescription": "Luba ekraanipiltidel, salvestistel ja ekraani jagamisel lõikelauda näidata.",
+    "retentionDescription": "Vanemad lõiked kustutatakse. Rühmades olevad lõiked säilivad."
   },
   "dialog": {
     "accountEmail": "Konto",
@@ -570,6 +612,38 @@
       "descriptionCloud": "stella AI parandab ka tuvastusvead ja dikteeritud vormingu, näiteks „uus rida“ või „paks“, ning sobitab teksti rakendusega, näiteks e-postiga.",
       "title": "Paranda tehisintellektiga"
     },
+    "cleanupInstructions": {
+      "description": "Kuidas soovite oma teksti kirjutatuna näha, näiteks õigekirja varianti või sõnu, mida vältida. Parandamine järgib neid seal, kus selle reeglid lubavad, ega muuda kunagi seda, mida ütlesite.",
+      "placeholder": "Näiteks: Kasuta Briti õigekirja. Ära kasuta kunagi emojisid. Jäta mu poolikud laused alles.",
+      "saveFailed": "Juhiseid ei õnnestunud salvestada. Proovige uuesti.",
+      "title": "Teie juhised"
+    },
+    "cleanupModel": {
+      "automatic": "Automaatne",
+      "automaticDescription": "Kasutab teie organisatsiooni kiiret mudelit.",
+      "chosenDescription": "Kui see mudel vajab rohkem kui paar sekundit, sisestatakse tekst parandamata.",
+      "title": "Tehisintellekti mudel",
+      "withdrawn": "Valitud mudel pole enam saadaval, seega kasutab parandamine automaatset valikut."
+    },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Hoiab vaba tooni ja kerget kirjavahemärgistust.",
+        "title": "Vaba"
+      },
+      "notes": {
+        "description": "Lühikesed punktid, igaüks eraldi real, ilma täitesõnadeta.",
+        "title": "Märkmed"
+      },
+      "polished": {
+        "description": "Parandab tuvastusvead ja säilitab teie sõnastuse.",
+        "title": "Viimistletud"
+      },
+      "title": "Stiil",
+      "verbatim": {
+        "description": "Iga sõna nii, nagu see kõlas; lisatakse ainult kirjavahemärgid ja suurtähed.",
+        "title": "Sõnasõnaline"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Kuni {limit, number} märki dokumendist, milles olete, et dikteeritu sobiks kirjutatavaga.",
@@ -601,6 +675,7 @@
       "local": "Seda arvutit",
       "localDescription": "Kõne muudetakse tekstiks selles arvutis ja seda ei salvestata.",
       "model": "Teisendusmudel",
+      "modelWithdrawn": "Valitud mudelit enam ei pakuta. Valige mõni muu; seni transkribeeritakse dikteering selles arvutis.",
       "outsideRegion": "Väljaspool teie piirkonda",
       "retainsData": "Säilitab teie heli",
       "retainsDataTitle": "{provider} säilitab, mida dikteerite",
@@ -627,6 +702,30 @@
       "transcription": "Tekstiks muutmine ebaõnnestus. Proovige uuesti."
     },
     "failureKeptInHistory": "Tekst on lõikelaua ajaloos.",
+    "fix": {
+      "description": "Valige mis tahes rakenduses sõnad, mille dikteerimine valesti kirjutas, ja vajutage {shortcut}, et kirjutada nende õige kuju. stella loeb valikut ainult siis, kui kiirklahvi vajutate.",
+      "taken": "Teine rakendus kasutab kiirklahvi {shortcut}. stella ikooni menüü Dikteerimine pakub sama.",
+      "title": "Kiirklahv dikteerimise parandamiseks"
+    },
+    "fixPanel": {
+      "dictatedAs": "Dikteeritud kujul",
+      "hint": "stella kirjutab need sõnad järgmistes dikteerimistes nii, kõigis teie seadmetes.",
+      "notSaved": "Parandust ei saanud salvestada. Kontrollige, kas stella on teie kontoga ühendatud.",
+      "nothing": "Valige esmalt rakenduses valed sõnad või kirjutage need siia.",
+      "pick": "Valige viimasest dikteerimisest valed sõnad:",
+      "refused": {
+        "empty": "Täitke mõlemad väljad.",
+        "lineBreak": "Parandus on üks tekstirida.",
+        "punctuation": "Valige dikteeritud sõnad ilma kirjavahemärkideta.",
+        "same": "Sõnad on juba nii kirjutatud.",
+        "tooLong": "See on ühe paranduse jaoks liiga pikk.",
+        "tooManyWords": "Paranduses võib olla kõige rohkem kolm sõna."
+      },
+      "save": "Salvesta parandus",
+      "saving": "Paranduse salvestamine…",
+      "title": "Paranda dikteeritud sõna",
+      "writtenAs": "Õige kuju"
+    },
     "groups": {
       "cleanup": "Parandamine",
       "shortcut": "Kiirklahv",
@@ -647,6 +746,17 @@
       "description": "Automaatne kasutab selle arvuti kuva- ja klaviatuurikeeli. Kui neid on mitu, tuntakse iga sõna ära selles keeles, milles te selle ütlete.",
       "noResults": "Keeli ei leitud",
       "title": "Dikteerimise keel"
+    },
+    "learned": {
+      "delete": "Kustuta, mida stella õppis",
+      "description": "Kui parandate dikteeritud sõna kaks korda ühtmoodi või parandate selle kiirklahviga {shortcut}, kirjutab stella selle järgmistes dikteerimistes nii. Sünkroonitakse teie teiste seadmetega; neid näete ainult teie.",
+      "empty": "Veel pole midagi õpitud.",
+      "failed": "Parandust ei õnnestunud muuta.",
+      "fix": "{from} → {to}",
+      "group": "Õpitud parandused",
+      "title": "Teie parandustest õpitud parandused",
+      "unreadable": "Seda, mida stella õppis, ei saanud lugeda.",
+      "working": "Muudatuse salvestamine…"
     },
     "lede": "Hoidke all klahve <key>{shortcut}</key> ja rääkige. Tekst ilmub sinna, kuhu kirjutate.",
     "microphone": {
@@ -672,10 +782,13 @@
       "checkBodyMac": "Kontrollige mikrofoni juurdepääsu süsteemiseadetes ja proovige uuesti.",
       "checkBodyPc": "Kontrollige mikrofoni juurdepääsu Windowsi sätetes ja proovige uuesti.",
       "chooseMicrophone": "Vali mikrofon…",
+      "chooseModel": "Vali mudel…",
       "dismiss": "Sulge",
       "inputDevice": "Sisend: {device}",
       "missingBody": "Dikteerimine kasutab selle asemel seadet {device}.",
       "missingTitle": "{missing} pole ühendatud",
+      "modelBody": "Valige üks jaotises Seaded → Dikteerimine. See dikteering transkribeeriti selles arvutis.",
+      "modelTitle": "Teie transkribeerimismudelit enam ei pakuta",
       "nothingBody": "Rääkige klahvi all hoides või valige heliseadetes muu sisend.",
       "nothingTitle": "stella ei kuulnud kõnet",
       "openSettingsMac": "Ava süsteemiseaded",
@@ -737,6 +850,11 @@
       "failed": "Akent ei õnnestunud avada. Proovige uuesti.",
       "open": "Ava",
       "title": "Salvestise transkribeerimine"
+    },
+    "translateTo": {
+      "description": "Kirjutab puhastatud teksti selles keeles, olenemata sellest, mis keelt te räägite.",
+      "off": "Räägitav keel",
+      "title": "Kirjuta keeles"
     },
     "whileDictating": {
       "choices": {
@@ -833,6 +951,30 @@
   },
   "onboarding": {
     "activityBody": "Vaadake, kuhu tööpäev kulus, ja tehke sellest ajakannete mustandid. Teie otsustate, mida salvestatakse ja mida saadetakse.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Koosta kirjeldused stella AI abil",
+        "body": "stella AI saab koostada iga ajakande kirjelduse. Lubage see kohe või siis, kui vaatate esimest korda päeva üle.",
+        "withdraw": "Nõusoleku saate igal ajal seadetes tagasi võtta."
+      },
+      "calls": {
+        "body": "Arvestage kõnedele kulunud aega.",
+        "title": "Kõned"
+      },
+      "details": {
+        "appNamesOnly": "Salvestatakse ainult rakenduste nimed.",
+        "body": "Need aitavad päeva üle vaadates toimikuid eristada.",
+        "browsers": "Brauserid salvestavad vahekaartide pealkirju alles siis, kui te seda lubate. Tegevused küsivad iga brauseri kohta, kui seda esimest korda näevad.",
+        "title": "Akende pealkirjad ja dokumendid"
+      },
+      "screens": {
+        "aiDrafts": "AI kavandid",
+        "calls": "Kõned",
+        "details": "Üksikasjad",
+        "recording": "Ülevaade"
+      },
+      "starting": "Salvestamise alustamine…"
+    },
     "activityStoryDraft": "Mustand",
     "activityStoryRecordTitle": "Salvestatud",
     "activityStoryReviewCaption": "Vaatate päeva üle ja valite toimiku",
@@ -871,7 +1013,6 @@
         "choose": "Dikteerimise mikrofon",
         "title": "Laske rakendusel stella end kuulda"
       },
-      "progress": "Samm {current}/{total}",
       "screens": {
         "app": "Parandus",
         "context": "Kontekst",
@@ -879,7 +1020,6 @@
         "transcription": "Transkribeerimine",
         "words": "Sõnad"
       },
-      "skipRest": "Jäta ülejäänu vahele",
       "transcription": {
         "body": "Saate seda hiljem seadetes muuta.",
         "bodyLocal": "Kõnemudel töötab siin, nii et dikteerimine töötab ka võrguühenduseta.",
@@ -949,6 +1089,7 @@
     "permissionsTitlePc": "Seadistage see arvuti",
     "progress": "Samm {current}/{total}",
     "skip": "Jäta vahele",
+    "skipRest": "Jäta ülejäänu vahele",
     "staysLocalMac": "Jääb sellesse Maci",
     "staysLocalPc": "Jääb sellesse arvutisse",
     "tryAgain": "Proovi uuesti",
@@ -995,7 +1136,6 @@
     "errorUpdateLanguage": "stella desktop ei saanud kasutajaliidese keelt muuta.",
     "errorUpdatePreferences": "stella desktop ei saanud teavituste seadeid uuendada.",
     "language": "Keel",
-    "lastVerified": "Viimati kontrollitud",
     "loadingAccount": "Teie konto ühenduse kontrollimine…",
     "managedOfficeEditing": "Hallatud Office'i failide muutmine stella jaoks.",
     "neverRequested": "Ei küsita kunagi",
@@ -1068,6 +1208,8 @@
       "available": "Saadaval on versioon {version}.",
       "checkFailed": "stella desktop ei saanud värskendusi kontrollida.",
       "deferred": "Versioon {version} ootab, kuni avatud dokumente muudetakse. Kui olete lõpetanud, kontrollige uuesti, et see installida, muidu installitakse see järgmisel automaatsel kontrollil.",
+      "downloadProgress": "{percent}% alla laaditud",
+      "downloading": "Laaditakse alla versiooni {version}. Pärast installimist taaskäivitub stella desktop.",
       "install": "Installi ja taaskäivita",
       "installFailed": "stella desktop ei saanud värskendust installida.",
       "installInProgress": "Värskendust installitakse.",
@@ -1132,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Loobu minu muudatustest",
+      "editorLabel": "Puhastatud teksti redaktor",
       "failedCount": "{count, plural, one {# osa puhastamata} other {# osa puhastamata}}",
       "fileNameMarkdown": "{title} puhastatud.md",
       "fileNameText": "{title} puhastatud.txt",
@@ -1203,6 +1347,7 @@
       "audioMissing": "Salvestis pole selles aknas enam avatud, seega seda toimikusse ei salvestatud.",
       "audioTooLarge": "Salvestis on suurem kui {size}, seega seda toimikusse ei salvestatud.",
       "cleanedDocxFileName": "{title} – toimetatud tekst.docx",
+      "cleanedNotFiled": "Puhastatud teksti ei õnnestunud toimikusse salvestada.",
       "cleanedTitle": "{title} – toimetatud tekst",
       "documents": "Wordi dokumentide salvestamine…",
       "docxFileName": "{title} – transkriptsioon.docx",
@@ -1245,7 +1390,6 @@
       "saveToMatterFailed": "Transkriptsiooni ei õnnestunud toimikusse salvestada. Proovige uuesti.",
       "saveWithTimestamps": "Tekst ajatemplitega (.txt)",
       "saveWithoutTimestamps": "Tekst ajatempliteta (.txt)",
-      "savedToMatter": "Salvestatud toimikusse {matter} nimega {fileName}.",
       "savingToMatter": "Salvestamine…",
       "thisComputer": "See arvuti",
       "transcriptTitle": "Transkriptsioon"
@@ -1267,6 +1411,7 @@
     "activityResume": "Jätka salvestamist",
     "checkForUpdates": "Kontrolli värskendusi",
     "dictation": "Dikteerimine",
+    "dictationFix": "Paranda viimane dikteerimine…",
     "dictationHint": "Dikteerimiseks hoidke all {key}",
     "dictationRetype": "Sisesta viimane dikteering uuesti",
     "dictationSettings": "Dikteerimise seaded…",
@@ -1289,13 +1434,16 @@
     "sessionOpeningInOffice": "Avamine Office'is",
     "sessionSavingDraft": "Mustandi salvestamine",
     "settings": "Seaded",
+    "showTranscription": "Näita transkriptsiooni",
     "support": "Tugi",
     "supportCopyDiagnostics": "Kopeeri diagnostika",
     "supportEmailSupport": "E-posti tugi",
     "supportRevealAppData": "Kuva rakenduse andmed",
     "temporaryWorkingCopies": "Ajutised töökoopiad",
     "transcribeRecording": "Transkribeeri salvestis…",
-    "updateReady": "Värskendus valmis",
+    "transcriptionProgress": "Transkribeerimine käib: {done} / {total} min",
+    "transcriptionProgressSoFar": "Transkribeerimine käib: seni {done} min",
+    "transcriptionReady": "Transkriptsioon on valmis",
     "updatesManaged": "Värskendusi haldab teie organisatsioon"
   }
 }

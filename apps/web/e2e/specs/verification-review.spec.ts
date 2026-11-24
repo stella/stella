@@ -409,11 +409,13 @@ test("the original PDF draws each claim's box, selects a claim by its box, and b
         await respond(
           route,
           apiJson("v1/files/:workspaceId/url/:fieldId", "get", {
+            kind: "file",
             fileId: "0199a3c4-5b6d-7e8f-9a0b-000000009105",
             fileName: "statement.pdf",
             mimeType: "application/pdf",
             originalMimeType: "application/pdf",
             encrypted: false,
+            unscannedContent: [],
             stampable: false,
             presignedUrl: new URL(pdfPath, route.request().url()).href,
           }),

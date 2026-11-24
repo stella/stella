@@ -5,7 +5,7 @@ import { chatLocalRunFilePartsOf } from "@stll/api-contract/chat-run-target";
 import type {
   ChatClientTools,
   PersistedChatMessage,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 
 type ChatMessagesState = Pick<ChatPersistedState<ChatClientTools>, "messages">;
 

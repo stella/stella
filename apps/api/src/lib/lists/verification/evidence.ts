@@ -14,13 +14,13 @@ import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   legalListFactDetails,
   legalListItems,
   legalListItemSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { VERIFICATION_LIMITS } from "@/api/lib/lists/verification/contract";
 import type {

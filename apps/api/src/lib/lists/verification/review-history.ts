@@ -14,12 +14,12 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, inArray, isNotNull } from "drizzle-orm";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   legalListClaimReviewEvents,
   legalListClaims,
   legalListVerificationRuns,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import type { ParsedPgTimestampCursor } from "@/api/lib/db-pagination";

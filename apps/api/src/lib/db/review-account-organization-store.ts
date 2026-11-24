@@ -2,7 +2,7 @@ import { generateId } from "@better-auth/core/utils/id";
 import { and, eq } from "drizzle-orm";
 
 import { invitation, member, organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import {
   AUDIT_ACTION,

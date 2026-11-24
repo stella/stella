@@ -4,12 +4,12 @@ import type { SQL } from "drizzle-orm";
 
 import { isDocumentAstInAnyBlockOrder } from "@stll/legal-ast/document-ast";
 
-import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import {
   reopenCitationsForKeys,

@@ -12,12 +12,12 @@ import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { member } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { pdfSigningSessions } from "@/api/db/schema";
 import type {
   PdfSigningKeyType,
   PdfSigningSessionCloseReason,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";

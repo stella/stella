@@ -4,7 +4,7 @@ import { sql } from "drizzle-orm";
 import { GLOBAL_SEARCH_CHAT_COVERAGE } from "@stll/api-contract/search";
 import type { GlobalSearchChatCoverage } from "@stll/api-contract/search";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { readWithdrawnCopyProjection } from "@/api/lib/case-law/withdrawn-copy-read";
 import { decodeRawThreadArtefactProvenance } from "@/api/lib/chat/artefact-provenance";
 import { LIMITS } from "@/api/lib/limits";

@@ -2,7 +2,7 @@ import { useTranslations } from "use-intl";
 
 import { chatLocalRunReroutedModel } from "@stll/api-contract/chat-run-target";
 
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage } from "@/components/chat/chat-ui-tools-types";
 
 /**
  * The model an answer on the member's computer ran on, shown only when the

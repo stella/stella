@@ -1,6 +1,11 @@
 import { Result } from "better-result";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
+import {
+  type UnscannedContentReason,
+  unscannedContentReasons,
+} from "@stll/api-contract/file-scan-warnings";
+
 import type { Transaction } from "@/api/db/root";
 import type { SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
@@ -44,25 +49,57 @@ export type ClientMessage = {
   parts: ChatPart[];
 };
 
+/** A file the page holds no row of says nothing of its content. */
+const NO_REASONS: readonly UnscannedContentReason[] = [];
+
+/** What the page serves of a stored file beside a part that references it. */
+export type ServedFileDetails = {
+  /** The blur placeholder, when a thumbnail was generated. */
+  placeholder: string | null;
+  /** Why some of the file's content was not scanned when it was stored. */
+  unscannedContent: UnscannedContentReason[];
+};
+
 /**
- * Attach the stored blur placeholder to image file parts so the client can
- * render a blur-up while the thumbnail loads. The thumbnail URL itself is
- * derived client-side from the user-file id, so only the DB-sourced
- * placeholder needs to travel with the message.
+ * Attach what the referenced file's row holds of it: the stored blur
+ * placeholder, so the client can render a blur-up while the thumbnail loads
+ * (the thumbnail URL itself is derived client-side from the user-file id),
+ * and the reasons part of the file was not scanned, read from its stored scan
+ * warnings. The row is the only source of the reasons: whatever a stored part
+ * says of them is replaced, so a value a client wrote into a part never
+ * reaches the page, and a file that holds none shows none.
  */
-const attachPlaceholders = (
+const attachServedFileDetails = (
   parts: ChatPart[],
-  placeholderById: Map<string, string>,
+  detailsById: ReadonlyMap<string, ServedFileDetails>,
 ): ChatPart[] =>
   parts.map((part) => {
     if (!isChatAttachmentPart(part)) {
       return part;
     }
     const fileId = parseUserFileId(getChatAttachmentUrl(part));
-    const placeholder = fileId ? placeholderById.get(fileId) : undefined;
-    return placeholder
-      ? { ...part, metadata: { ...part.metadata, placeholder } }
-      : part;
+    const details = fileId ? detailsById.get(fileId) : undefined;
+    const placeholder = details?.placeholder ?? null;
+    const unscannedContent =
+      details === undefined ? NO_REASONS : details.unscannedContent;
+    const { unscannedContent: stored, ...metadata } = part.metadata ?? {};
+    if (
+      placeholder === null &&
+      unscannedContent.length === 0 &&
+      stored === undefined
+    ) {
+      return part;
+    }
+    return {
+      ...part,
+      metadata: {
+        ...metadata,
+        ...(placeholder === null ? {} : { placeholder }),
+        ...(unscannedContent.length === 0
+          ? {}
+          : { unscannedContent: [...unscannedContent] }),
+      },
+    };
   });
 
 // The cursor is the boundary message id alone. loadChatMessagePage resolves
@@ -227,12 +264,12 @@ export const projectPageRowsOnTx = async ({
   const masked = rows.map((row) =>
     read.projection.chat(row, read.subjectByThread.get(threadId)),
   );
-  const placeholderById = await loadPlaceholdersOnTx({
+  const detailsById = await loadServedFileDetailsOnTx({
     rows: masked,
     tx,
     userId,
   });
-  return masked.map((row) => clientMessageFromPageRow(row, placeholderById));
+  return masked.map((row) => clientMessageFromPageRow(row, detailsById));
 };
 
 /**
@@ -307,7 +344,7 @@ type ChatMessagePageRow = {
 
 export const clientMessageFromPageRow = (
   row: ChatMessagePageRow,
-  placeholderById: Map<string, string>,
+  detailsById: ReadonlyMap<string, ServedFileDetails>,
 ): ClientMessage => {
   const message = chatMessageFromPersisted(row);
   let metadata = message.metadata;
@@ -324,23 +361,23 @@ export const clientMessageFromPageRow = (
     ...(metadata === undefined ? {} : { metadata }),
     role: message.role,
     revision: row.revision,
-    parts: attachPlaceholders(message.parts, placeholderById).map(
+    parts: attachServedFileDetails(message.parts, detailsById).map(
       clientVisibleChatPart,
     ),
   };
 };
 
-type LoadPlaceholdersOnTxArgs = {
+type LoadServedFileDetailsOnTxArgs = {
   tx: Transaction;
   userId: SafeId<"user">;
   rows: readonly { content: PersistedChatMessageContent }[];
 };
 
-const loadPlaceholdersOnTx = async ({
+const loadServedFileDetailsOnTx = async ({
   tx,
   userId,
   rows,
-}: LoadPlaceholdersOnTxArgs): Promise<Map<string, string>> => {
+}: LoadServedFileDetailsOnTxArgs): Promise<Map<string, ServedFileDetails>> => {
   const referencedFileIds = new Set<SafeId<"userFile">>();
   for (const row of rows) {
     for (const part of normalizePersistedChatMessageContent(row.content)
@@ -355,9 +392,9 @@ const loadPlaceholdersOnTx = async ({
     }
   }
 
-  const placeholderById = new Map<string, string>();
+  const detailsById = new Map<string, ServedFileDetails>();
   if (referencedFileIds.size === 0) {
-    return placeholderById;
+    return detailsById;
   }
 
   const fileRows = await tx.query.userFiles.findMany({
@@ -365,14 +402,15 @@ const loadPlaceholdersOnTx = async ({
       id: { in: [...referencedFileIds] },
       userId: { eq: userId },
     },
-    columns: { id: true, placeholder: true },
+    columns: { id: true, placeholder: true, scanWarnings: true },
     limit: referencedFileIds.size,
   });
   for (const fileRow of fileRows) {
-    if (fileRow.placeholder !== null) {
-      placeholderById.set(fileRow.id, fileRow.placeholder);
-    }
+    detailsById.set(fileRow.id, {
+      placeholder: fileRow.placeholder,
+      unscannedContent: unscannedContentReasons(fileRow.scanWarnings),
+    });
   }
 
-  return placeholderById;
+  return detailsById;
 };

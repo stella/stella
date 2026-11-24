@@ -1,7 +1,7 @@
 import type { ChatClientState } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import { startKeyActionTimer } from "@/lib/analytics/key-action-timing";
 import type { KeyActionTimer } from "@/lib/analytics/key-action-timing";
 import type { Analytics, ChatTimingSurface } from "@/lib/analytics/types";

@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { entityContextId } from "@/api/db/entity-feature-policies";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { entities, fields } from "@/api/db/schema";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";

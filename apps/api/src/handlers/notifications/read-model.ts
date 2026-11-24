@@ -7,7 +7,7 @@ import type {
   NotificationMetadataValue,
 } from "@stll/api-contract/notifications";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { notifications } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { resourceIdSchema } from "@/api/lib/custom-schema";

@@ -40,6 +40,7 @@ import {
   activityBlocks,
   blockDetails,
   calendarHours,
+  contiguousRuns,
   draftedBlocks,
   manualSuggestion,
   matchedSuggestions,
@@ -144,24 +145,19 @@ export type ActivityCalendarPreferences = {
   granularity: DayCalendarGranularity;
 };
 
-/** An Activity block's hover: its range, then each app with its time and the
- * title it spent longest on, then why a browser in it recorded no titles. */
-const ActivityBlockDetails = ({
+/** Each app with its time and the title it spent longest on, then how many
+ * apps past the limit are left out. */
+const BlockDetailRows = ({
   details,
-  range,
   sourceAppVisuals,
-  titlesNotice,
 }: {
   details: ReturnType<typeof blockDetails>;
-  range: string;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
-  titlesNotice: ReactElement | null;
 }) => {
   const t = useTranslations("activity");
   const durationLabel = useDurationLabel();
   return (
-    <div className="flex w-64 flex-col gap-2 py-0.5 text-xs">
-      <p className="text-muted-foreground tabular-nums">{range}</p>
+    <>
       <ul className="flex flex-col gap-1.5">
         {details.rows.map((row) => (
           <li className="flex items-start gap-2" key={row.identifier}>
@@ -195,6 +191,42 @@ const ActivityBlockDetails = ({
           {t("moreApps", { count: details.hiddenCount })}
         </p>
       ) : null}
+    </>
+  );
+};
+
+/** An Activity block's hover: its range, then the apps its stated time was
+ * spent in, then the brief stretches with no matter it took in, then why a
+ * browser in it recorded no titles. */
+const ActivityBlockDetails = ({
+  details,
+  joined,
+  range,
+  sourceAppVisuals,
+  titlesNotice,
+}: {
+  details: ReturnType<typeof blockDetails>;
+  /** `null` when the block took in nothing it does not count. */
+  joined: ReturnType<typeof blockDetails> | null;
+  range: string;
+  sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
+  titlesNotice: ReactElement | null;
+}) => {
+  const t = useTranslations("activity");
+  return (
+    <div className="flex w-64 flex-col gap-2 py-0.5 text-xs">
+      <p className="text-muted-foreground tabular-nums">{range}</p>
+      <BlockDetailRows details={details} sourceAppVisuals={sourceAppVisuals} />
+      {joined === null ? null : (
+        <>
+          <Separator />
+          <p className="text-muted-foreground">{t("joinedActivity")}</p>
+          <BlockDetailRows
+            details={joined}
+            sourceAppVisuals={sourceAppVisuals}
+          />
+        </>
+      )}
       {titlesNotice === null ? null : (
         <>
           <Separator />
@@ -239,16 +271,18 @@ const DayMetrics = ({
       ? t("hours", { hours: format.number(1) })
       : t("durationMinutes", { minutes: value });
   return (
-    <div className="ms-auto flex flex-wrap items-center gap-6 tabular-nums">
-      {[
-        { label: t("activeLabel"), ms: activeMs },
-        { label: t("draftedLabel"), ms: draftedMs },
-      ].map(({ label, ms }) => (
-        <div key={label}>
-          <b className="block text-base font-semibold">{hours(ms)}</b>
-          <span className="text-muted-foreground text-xs">{label}</span>
-        </div>
-      ))}
+    <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 tabular-nums">
+      <div className="flex items-center gap-6">
+        {[
+          { label: t("activeLabel"), ms: activeMs },
+          { label: t("draftedLabel"), ms: draftedMs },
+        ].map(({ label, ms }) => (
+          <div key={label}>
+            <b className="block text-base font-semibold">{hours(ms)}</b>
+            <span className="text-muted-foreground text-xs">{label}</span>
+          </div>
+        ))}
+      </div>
       <div className="flex items-center gap-2">
         <span
           className="text-muted-foreground text-xs"
@@ -515,15 +549,16 @@ export const ActivityDayCalendar = ({
   const summaryLabel = useSummaryLabel();
   // Matters group the day, so its blocks wait for them: drawn before they
   // arrive, every block a matter claims would be drawn again as another one,
-  // under a pointer or focus already on it. The grid shows meanwhile.
-  const matched = candidates.type !== "loading";
+  // under a pointer or focus already on it. The grid shimmers meanwhile where
+  // activity was recorded.
   const columns = useCalendarColumns({
-    segments: matched ? day.segments : [],
+    phase: candidates.type === "loading" ? "pending" : "ready",
+    segments: day.segments,
     granularity: preferences.granularity,
     sourceAppVisuals: snapshot.sourceAppVisuals,
     rangeSelection: editable,
-    draftedEntries: matched ? draftedEntries : [],
-    suggestions: matched ? suggestions : [],
+    draftedEntries,
+    suggestions,
     narrativeFor: (suggestion) => narratives.editFor(suggestion).narrative,
     onActivate: (suggestion) =>
       open({ id: suggestion.id, type: "suggestion" }, suggestion),
@@ -582,7 +617,9 @@ export const ActivityDayCalendar = ({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-5">
+      {/* The totals keep a row of their own, so the header's height does
+          not depend on how long its words are in a language. */}
+      <div className="flex flex-col gap-3">
         {header}
         <DayMetrics
           segments={day.segments}
@@ -593,16 +630,13 @@ export const ActivityDayCalendar = ({
         />
       </div>
       {notice}
+      {day.segments.length === 0 ? (
+        <p className="text-muted-foreground text-sm">
+          {t(emptyDayMessage(snapshot))}
+        </p>
+      ) : null}
       {candidates.type === "failed" ? (
-        <div
-          role="alert"
-          className="text-destructive flex items-center gap-2 text-sm"
-        >
-          {t("candidatesFailed")}
-          <Button size="sm" variant="ghost" onClick={refreshCandidates}>
-            {t("retry")}
-          </Button>
-        </div>
+        <CandidatesFailedAlert onRetry={refreshCandidates} />
       ) : null}
       <SubmissionFeedback
         submission={submission}
@@ -661,23 +695,57 @@ export const ActivityDayCalendar = ({
   );
 };
 
+const CandidatesFailedAlert = ({ onRetry }: { onRetry: () => void }) => {
+  const t = useTranslations("activity");
+  return (
+    <div
+      role="alert"
+      className="text-destructive flex items-center gap-2 text-sm"
+    >
+      {t("candidatesFailed")}
+      <Button size="sm" variant="ghost" onClick={onRetry}>
+        {t("retry")}
+      </Button>
+    </div>
+  );
+};
+
+/** What a day with nothing recorded says: today, what fills it; another day,
+ * only that nothing was recorded. */
+const emptyDayMessage = ({
+  date,
+  recordingStatus,
+  today,
+}: Pick<ActivityDaySnapshot, "date" | "recordingStatus" | "today">) => {
+  if (date !== today) {
+    return "empty";
+  }
+  switch (recordingStatus) {
+    case "recording":
+      return "emptyToday";
+    case "paused":
+    case "off":
+      return "emptyTodayPaused";
+    default:
+      recordingStatus satisfies never;
+      return panic("Unhandled activity recording status");
+  }
+};
+
 /** What a suggestion card's header says about its time: its range or how
- * many pieces it has, the minutes they hold and the hours they bill. */
+ * many pieces it has, and the hours the entry bills. */
 const useSummaryLabel = () => {
   const t = useTranslations("activity");
   const format = useFormatter();
-  const minutesLabel = useMinutesLabel();
   const hours = (tenths: number) =>
     format.number(tenths / 10, {
       minimumFractionDigits: 1,
       maximumFractionDigits: 1,
     });
   return (summary: SuggestionSummary) => {
-    const duration = minutesLabel(summary.minutes);
     switch (summary.type) {
       case "range":
         return t("suggestionRange", {
-          duration,
           hours: hours(summary.tenths),
           range: format.dateTimeRange(summary.startMs, summary.endMs, {
             hour: "numeric",
@@ -687,7 +755,6 @@ const useSummaryLabel = () => {
       case "pieces":
         return t("suggestionPieces", {
           count: summary.count,
-          duration,
           hours: hours(summary.tenths),
         });
       default:
@@ -735,6 +802,8 @@ const cardTimes = ({
     : { type: "recorded" };
 
 type CalendarColumnsOptions = {
+  /** `pending` while the matters that group the day are still read. */
+  phase: "pending" | "ready";
   segments: readonly MatchedSegment[];
   granularity: DayCalendarGranularity;
   sourceAppVisuals: ActivityDaySnapshot["sourceAppVisuals"];
@@ -751,6 +820,7 @@ type CalendarColumnsOptions = {
 /** The Activity column (recorded time) and the Time entries column (created
  * drafts and suggestions). */
 function useCalendarColumns({
+  phase,
   segments,
   granularity,
   sourceAppVisuals,
@@ -775,6 +845,16 @@ function useCalendarColumns({
     });
   const durationLabel = useDurationLabel();
   const minutesLabel = useMinutesLabel();
+  const activityHeader = { id: ACTIVITY_COLUMN_ID, label: t("title") };
+  const entriesHeader = { id: ENTRIES_COLUMN_ID, label: t("timeEntries") };
+  if (phase === "pending") {
+    // Where activity was recorded is known; what each stretch becomes is not.
+    const placeholders = contiguousRuns(segments);
+    return [
+      { ...activityHeader, placeholders, type: "pending" },
+      { ...entriesHeader, placeholders, type: "pending" },
+    ];
+  }
   const titleOf = segmentTitles(segments);
 
   const activity = activityBlocks(segments, granularity).map(
@@ -783,9 +863,18 @@ function useCalendarColumns({
       const titlesNotice = titlesNoticeFor(
         block.apps.map(({ identifier }) => identifier),
       );
+      const joined = new Set(block.joined);
       const details = (
         <ActivityBlockDetails
-          details={blockDetails(block.sources, titleOf)}
+          details={blockDetails(
+            block.sources.filter((segment) => !joined.has(segment)),
+            titleOf,
+          )}
+          joined={
+            block.joined.length === 0
+              ? null
+              : blockDetails(block.joined, titleOf)
+          }
           range={range}
           sourceAppVisuals={sourceAppVisuals}
           titlesNotice={titlesNotice}
@@ -795,12 +884,7 @@ function useCalendarColumns({
         block.apps.map(({ name }) => name),
         { type: "unit" },
       );
-      const duration = durationLabel(
-        block.sources.reduce(
-          (sum, segment) => sum + segment.endMs - segment.startMs,
-          0,
-        ),
-      );
+      const duration = durationLabel(block.durationMs);
       // A block is named by the topic that sets its colour: the app its topic
       // was held in, with its icon, or a call there; time it took in from
       // other apps is listed under it, never named.
@@ -919,17 +1003,15 @@ function useCalendarColumns({
 
   return [
     {
+      ...activityHeader,
       blocks: activity,
-      id: ACTIVITY_COLUMN_ID,
-      label: t("title"),
       // Activity is the record; entries are drawn where they are kept.
       rangeSelection: { type: "disabled" },
       type: "blocks",
     },
     {
+      ...entriesHeader,
       blocks: entries,
-      id: ENTRIES_COLUMN_ID,
-      label: t("timeEntries"),
       rangeSelection: rangeSelection
         ? { label: t("selectRange"), type: "enabled" }
         : { type: "disabled" },
@@ -1168,10 +1250,7 @@ const draftAssistView = ({
     return { type: "needsMatter" };
   }
   if (settings.consent !== "granted") {
-    return {
-      pending: settings.consent === "pending-grant",
-      type: "consent",
-    };
+    return { consent: settings.consent, type: "consent" };
   }
   if (status.type === "failed" && status.matterId === edit.matter.id) {
     return { kind: status.kind, type: "failed" };
@@ -1218,13 +1297,14 @@ function useSuggestionDrafts({
     if (suggestion.matter === null) {
       return "";
     }
-    const titles = matterTitles(suggestion, suggestion.matter.id);
+    // Quoted: titles mix file names, meetings and subjects with their own commas.
+    const titles = [
+      ...new Set(matterTitles(suggestion, suggestion.matter.id)),
+    ].map((title) => t("narrativeTitle", { title }));
     const text =
       titles.length > 0
         ? t("narrativeEvidence", {
-            evidence: format.list([...new Set(titles)], {
-              type: "conjunction",
-            }),
+            evidence: format.list(titles, { type: "conjunction" }),
           })
         : t("narrativeApps", {
             apps: format.list(

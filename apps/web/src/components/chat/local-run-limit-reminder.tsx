@@ -12,10 +12,10 @@ import {
   chatLimitReminderOptions,
   setChatLimitReminder,
 } from "@/features/chat/chat-limit-reminder";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";

@@ -8,7 +8,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, or } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodyToPlainText } from "@/api/lib/clauses/clause-to-patch";

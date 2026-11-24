@@ -1,4 +1,5 @@
 import type { ActivitySettingsSnapshot } from "../../../src/activity/activity-types";
+import type { ClipboardSettingsSnapshot } from "../../../src/clipboard/clipboard-types";
 import type { DictationSnapshot as DictationSettingSnapshot } from "../../../src/mainview/DictationSetting";
 import type { DictationSnapshot } from "../../../src/onboarding/use-dictation";
 import type { SigningDriverStatus } from "../../../src/mainview/signing-driver-status";
@@ -62,8 +63,9 @@ export const DICTATION_READY = {
 } as const satisfies DictationSnapshot;
 
 /** Dictation in Settings at its tallest: stella AI with a model whose
- *  provider keeps the audio, cleanup with both context switches, custom
- *  words, and the speech model still on this computer. */
+ *  provider keeps the audio, cleanup with the speaker's instructions, a
+ *  model choice and both context switches, custom words, and the speech
+ *  model still on this computer. */
 export const SETTINGS_DICTATION = {
   appSettings: [
     {
@@ -74,6 +76,10 @@ export const SETTINGS_DICTATION = {
   ],
   available: true,
   cleanup: true,
+  cleanupInstructions:
+    "Use British spelling.\nNever use emoji.\nKeep defined terms such as “the Purchaser” capitalised.",
+  cleanupModel: null,
+  cleanupStyle: "polished",
   cloudAvailable: true,
   cloudModel: "elevenlabs-direct/scribe-v3",
   customWords: ["Libeňská", "custom terms list", "22 Cdo 120/2026"],
@@ -81,6 +87,9 @@ export const SETTINGS_DICTATION = {
   enabled: true,
   failure: null,
   failureKeptInHistory: false,
+  fixKeys: { code: "KeyT", modifiers: ["alt", "shift"] },
+  fixShortcut: true,
+  fixShortcutTaken: false,
   holdKey: "fn",
   holdKeys: ["fn", "rightOption", "rightCommand", "combination"],
   holdKeyWaiting: false,
@@ -94,9 +103,7 @@ export const SETTINGS_DICTATION = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
-  recentApps: [
-    { identifier: "com.apple.mail", kind: "email", name: "Mail" },
-  ],
+  recentApps: [{ identifier: "com.apple.mail", kind: "email", name: "Mail" }],
   retypeKeys: { code: "KeyV", modifiers: ["alt", "shift"] },
   retypeShortcut: true,
   retypeShortcutTaken: false,
@@ -106,9 +113,26 @@ export const SETTINGS_DICTATION = {
   sounds: true,
   speakersOnly: true,
   textBeforeCursorAvailable: true,
+  translateTo: null,
   whileDictating: "lower",
   whileDictatingOffered: ["nothing", "lower", "pause"],
 } as const satisfies DictationSettingSnapshot;
+
+/** The models the organization offers for cleanup besides automatic. */
+export const CLEANUP_MODELS = {
+  models: [
+    {
+      value: "openrouter::anthropic/claude-haiku-4.5",
+      displayName: "Claude Haiku 4.5",
+      provider: "openrouter",
+    },
+    {
+      value: "openrouter::google/gemini-2.5-flash",
+      displayName: "Gemini 2.5 Flash",
+      provider: "openrouter",
+    },
+  ],
+};
 
 /** The region's stella AI transcription models. */
 export const CLOUD_MODELS = {
@@ -132,6 +156,33 @@ export const CLOUD_MODELS = {
   unavailable: null,
 };
 
+/** The clipboard settings: capture on, two excluded apps and three
+ *  groups, one with a name long enough to test the row's truncation. */
+export const CLIPBOARD_SETTINGS: Omit<ClipboardSettingsSnapshot, "groups"> & {
+  /** Plain colours: the fixture crosses into the page as JSON. */
+  groups: { color: string; id: string; name: string }[];
+} = {
+  captureStatus: "active",
+  groupLimit: 12,
+  groups: [
+    { color: "#3b82f6", id: "group-prompts", name: "Prompts" },
+    {
+      color: "#10b981",
+      id: "group-intake",
+      name: "Client intake for the commercial lease renewal and its annexes",
+    },
+    { color: "#f59e0b", id: "group-clauses", name: "Standard clauses" },
+  ],
+  retention: "month",
+  revision: 3,
+  screenCapture: "hidden",
+  sourceAppExclusionLimit: 64,
+  sourceAppExclusions: [
+    { identifier: "com.example.passwords", name: "Password Manager" },
+    { identifier: "com.example.banking", name: "Online Banking" },
+  ],
+};
+
 /** A chosen smart card driver, as the macOS signing setting reports it. */
 export const SIGNING_DRIVER = {
   path: "/Library/Frameworks/eToken.framework/Versions/A/libeToken.dylib",
@@ -148,6 +199,7 @@ export const ACCOUNT = {
   identity: { organizationId: "organization-1", userId: "user-1" },
   server: "https://app.example.test",
   status: "connected",
+  avatar: null,
 } as const satisfies DesktopAccountSnapshot;
 
 export const APP_STATE = {
@@ -169,17 +221,7 @@ export const APP_STATE = {
   sessions: [],
   trustedSelfHostConnections: [],
   update: {
-    baseUrl: null,
-    channel: null,
-    currentHash: null,
     currentVersion: "0.9.4",
-    lastCheckedAt: null,
-    latestHash: null,
-    latestVersion: null,
-    status: "idle",
-    statusMessage: "",
-    updateAvailable: false,
-    updateReady: false,
   },
 } satisfies AppSnapshot;
 

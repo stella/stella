@@ -4,9 +4,14 @@ import * as v from "valibot";
 import {
   countDictationCodePoints,
   DESKTOP_DICTATION_CLEANUP_LIMITS,
+  DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE,
   desktopDictationCleanupResponseSchema,
 } from "@stll/api-contract/desktop-dictation-cleanup";
-import type { DesktopDictationCleanupResponse } from "@stll/api-contract/desktop-dictation-cleanup";
+import type {
+  DesktopDictationCleanupResponse,
+  DesktopDictationCleanupStyle,
+  DesktopDictationTranslationLanguage,
+} from "@stll/api-contract/desktop-dictation-cleanup";
 import { desktopDictationModelsSchema } from "@stll/api-contract/desktop-dictation-transcription";
 import type { DesktopDictationModels } from "@stll/api-contract/desktop-dictation-transcription";
 import {
@@ -22,6 +27,8 @@ import type { Fetch } from "@/connection/http";
 import type { AccessTokenSource } from "@/connection/session";
 import { requestApi } from "@/state/api-request";
 import type { ApiError } from "@/state/api-request";
+import { sameClassFallback } from "@/state/dictation-fallback";
+import type { ModelClass } from "@/state/dictation-fallback";
 import { partOfType } from "@/state/form-part";
 import type { FormPart } from "@/state/form-part";
 
@@ -119,6 +126,51 @@ export const readDictationModels = async ({
     schema: desktopDictationModelsSchema,
   });
 
+/**
+ * One recording's text, with the model the person picked. When the server
+ * cannot serve it (503), the recording goes once more only to a model of
+ * the same provider, region side and retention (`sameClassFallback`), the
+ * picked model's class read from the list or, once it is withdrawn, from
+ * `modelClass` as kept when it was picked. With none, it goes nowhere else
+ * and the failure stands.
+ */
+export const transcribeWithinClass = async ({
+  fetch,
+  source,
+  audio,
+  choice,
+}: {
+  readonly fetch: Fetch;
+  readonly source: AccessTokenSource;
+  readonly audio: FormPart;
+  readonly choice: TranscriptionChoice & {
+    readonly modelClass: ModelClass | null;
+  };
+}): Promise<Result<string, ApiError>> => {
+  const first = await transcribeRecording({ fetch, source, audio, choice });
+  const picked = choice.modelId;
+  if (
+    picked === undefined ||
+    !first.isErr() ||
+    first.error._tag !== "ApiRequestError" ||
+    first.error.status !== 503
+  ) {
+    return first;
+  }
+  const offered = await readDictationModels({ fetch, source });
+  const fallback = offered.isOk()
+    ? sameClassFallback(picked, choice.modelClass, offered.value)
+    : undefined;
+  return fallback === undefined
+    ? first
+    : await transcribeRecording({
+        fetch,
+        source,
+        audio,
+        choice: { ...choice, modelId: fallback },
+      });
+};
+
 const vocabularySchema = v.object({
   candidates: v.array(v.object({ term: v.string(), weight: v.number() })),
 });
@@ -165,6 +217,9 @@ export const vocabularyTerms = (
     ),
   ].slice(0, MAX_TRANSCRIPTION_VOCABULARY_TERMS);
 
+/** How a server from before a request field refuses it. */
+const UNPROCESSABLE_STATUS = 422;
+
 /** The phone gives up on cleanup sooner than on transcription: the raw text is there. */
 const CLEANUP_TIMEOUT_MS = 10_000;
 
@@ -172,19 +227,26 @@ const CLEANUP_TIMEOUT_MS = 10_000;
  * Has stella AI fix recognition mistakes and turn spoken punctuation and
  * line breaks into typed ones, for a chat message. Only the text goes, never
  * the audio, and nothing is kept. A transcript longer than cleanup takes is
- * returned as it is.
+ * returned as it is. The style and the language to write in go only when
+ * they differ from the defaults; a server from before them refuses them as
+ * invalid, and is then asked again without them.
  */
 export const cleanUpDictation = async ({
   fetch,
   source,
   transcript,
   locale,
+  style,
+  translateTo,
 }: {
   readonly fetch: Fetch;
   readonly source: AccessTokenSource;
   readonly transcript: string;
   /** The app's language, which names the spoken commands to expect. */
   readonly locale: string;
+  readonly style: DesktopDictationCleanupStyle;
+  /** The language to write the text in; null keeps the spoken one. */
+  readonly translateTo: DesktopDictationTranslationLanguage | null;
 }): Promise<Result<string, ApiError>> => {
   if (
     countDictationCodePoints(transcript) >
@@ -192,14 +254,27 @@ export const cleanUpDictation = async ({
   ) {
     return Result.ok(transcript);
   }
-  const cleaned = await requestApi({
-    fetch,
-    source,
-    path: "/v1/dictation/cleanup",
-    body: { transcript, locale, context: { appKind: "chat" } },
-    schema: desktopDictationCleanupResponseSchema,
-    timeoutMs: CLEANUP_TIMEOUT_MS,
-  });
+  const writing = {
+    ...(style === DESKTOP_DICTATION_DEFAULT_CLEANUP_STYLE ? {} : { style }),
+    ...(translateTo === null ? {} : { translateTo }),
+  };
+  const request = async (asked: typeof writing) =>
+    await requestApi({
+      fetch,
+      source,
+      path: "/v1/dictation/cleanup",
+      body: { transcript, locale, context: { appKind: "chat" }, ...asked },
+      schema: desktopDictationCleanupResponseSchema,
+      timeoutMs: CLEANUP_TIMEOUT_MS,
+    });
+  const first = await request(writing);
+  const cleaned =
+    first.isErr() &&
+    first.error._tag === "ApiRequestError" &&
+    first.error.status === UNPROCESSABLE_STATUS &&
+    Object.keys(writing).length > 0
+      ? await request({})
+      : first;
   return cleaned.map(({ segments }) => segmentsText(segments).trim());
 };
 

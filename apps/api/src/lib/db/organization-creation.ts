@@ -8,8 +8,8 @@ import {
 
 import { organization } from "@/api/db/auth-schema";
 import { SETTING_USER_ID } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import { accountAuditLogs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { ORGANIZATION_EVALUATION_STARTED_EVENT_TYPE } from "@/api/lib/audit-log.constants";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";

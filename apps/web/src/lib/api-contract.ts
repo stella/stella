@@ -14,20 +14,36 @@ import type {
 import type { ConditionNode } from "@stll/conditions";
 
 import type {
+  AskManual,
+  CapabilityId,
   ChatAnonRestoration,
   ChatClientTools,
   ChatMessage,
   ChatPart,
   ChatSourceDocument,
   ChatUITools,
-} from "@/generated/api-routes.gen";
-import type {
+  DeterministicCheck,
+  FallbackEntry,
   GlobalSearchHit,
+  GradedPosition,
+  IdealLanguage,
   LegalListSourceLocator,
+  Negotiation,
+  PlaybookScope,
+  PlaybookTrigger,
+  Position,
+  PositionDecisionSummary,
+  PositionSeverity,
+  PositionStandard,
+  ReferencePassage,
+  TierRule,
   ViewLayout,
+  ViewSort,
   ViewTemplateProperty,
-  WebApiRoutes,
-} from "@/lib/api";
+  WebRoutes,
+} from "@/generated/api-routes.gen";
+
+export type WebApiRoutes = WebRoutes["v1"];
 
 type PropertiesResponse =
   WebApiRoutes["properties"][":workspaceId"]["get"]["response"][200];
@@ -50,26 +66,42 @@ export type BoundingBox =
   WebApiRoutes["workspaces"][":workspaceId"]["bounding-boxes"]["post"]["response"][200]["boxes"][number];
 export type {
   ApprovalRequiredBuiltInChatToolName,
+  AskManual,
   BuiltInChatToolPolicyKindByName,
+  CapabilityId,
   ChatAnonRestoration,
   ChatClientTools,
-  ChatMessage,
   ChatMentionCategory,
+  ChatMessage,
   ChatPart,
   ChatSourceDocument,
   ChatUITools,
   ConditionNode,
+  DeterministicCheck,
   EntityKind,
+  FallbackEntry,
   GlobalSearchHit,
   GlobalSearchResultType,
+  GradedPosition,
+  IdealLanguage,
   LegalListSourceLocator,
   McpOAuthScope,
+  Negotiation,
+  PlaybookScope,
+  PlaybookTrigger,
+  Position,
+  PositionDecisionSummary,
+  PositionSeverity,
+  PositionStandard,
   PropertyContentType,
+  ReferencePassage,
   SafeId,
   SavedSearchCriteria,
   TemplateRecipeDefinition,
+  TierRule,
   ViewLayout,
   ViewLayoutType,
+  ViewSort,
   ViewTemplateProperty,
 };
 export { MCP_CHAT_TOOL_GRANT_POLICIES } from "@stll/api-contract";

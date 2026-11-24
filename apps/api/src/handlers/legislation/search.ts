@@ -409,12 +409,12 @@ export const legislationWorkRepresentativesQuery = ({
   works,
   filters,
 }: LegislationWorkRepresentativesQueryOptions): SQL => {
-  const workValues = sql.join(
-    works.map(
-      (work) =>
-        sql`(${work.sourceId}::uuid, ${work.eli}::varchar, ${work.language}::varchar)`,
-    ),
-    sql`, `,
+  const workPayload = JSON.stringify(
+    works.map((work) => ({
+      source_id: work.sourceId,
+      eli: work.eli,
+      language: work.language,
+    })),
   );
   return sql`
     SELECT
@@ -433,7 +433,7 @@ export const legislationWorkRepresentativesQuery = ({
       r.source_url,
       r.citation_authority,
       r.is_current
-    FROM (VALUES ${workValues}) AS work(source_id, eli, language)
+    FROM jsonb_to_recordset(${workPayload}::text::jsonb) AS work(source_id uuid, eli varchar, language varchar)
     CROSS JOIN LATERAL (
       SELECT
         ${legislationDocuments.id} AS id,
@@ -931,32 +931,34 @@ export const readLegislationSearchHits = definePublicLawSharedQuery(
       ? sql`WHERE (works.score, works.key_id) < (${parsedCursor.score}::float8, ${parsedCursor.id}::uuid)`
       : sql``;
 
-    const pinnedValues =
+    const pinnedPayload =
       pinned.length === 0
         ? null
-        : sql.join(
-            pinned.map(
-              (work) =>
-                sql`(${work.sourceId}::uuid, ${work.eli}::varchar, ${work.language}::varchar, ${work.keyId}::uuid, ${work.score}::float8)`,
-            ),
-            sql`, `,
+        : JSON.stringify(
+            pinned.map((work) => ({
+              source_id: work.sourceId,
+              eli: work.eli,
+              language: work.language,
+              key_id: work.keyId,
+              score: work.score,
+            })),
           );
     const pinnedWorks =
-      pinnedValues === null
+      pinnedPayload === null
         ? sql``
         : sql`
       UNION ALL
       SELECT pinned.key_id, pinned.source_id, pinned.eli, pinned.language,
         pinned.score, false AS matched
-      FROM (VALUES ${pinnedValues})
-        AS pinned(source_id, eli, language, key_id, score)`;
+      FROM jsonb_to_recordset(${pinnedPayload}::text::jsonb)
+        AS pinned(source_id uuid, eli varchar, language varchar, key_id uuid, score float8)`;
     const notPinned =
-      pinnedValues === null
+      pinnedPayload === null
         ? sql``
         : sql`WHERE NOT EXISTS (
           SELECT 1
-          FROM (VALUES ${pinnedValues})
-            AS pinned(source_id, eli, language, key_id, score)
+          FROM jsonb_to_recordset(${pinnedPayload}::text::jsonb)
+            AS pinned(source_id uuid, eli varchar, language varchar, key_id uuid, score float8)
           WHERE pinned.source_id = best.source_id
             AND pinned.eli = best.eli
             AND pinned.language = best.language

@@ -540,12 +540,13 @@
       "waitForMatches": "Počkajte na dokončenie kontroly na anonymizáciu.",
       "workspaceTermsHeading": "Výrazy pracovného priestoru ({count})"
     },
-    "attachmentNotPreviewable": "Stiahnite si prílohu, aby ste ju mohli otvoriť.",
     "closeAllTabs": "Zavrieť {count, plural, one {# kartu} few {všetky # karty} many {# karty} other {všetkých # kariet}}",
     "closeOtherTabs": "Zavrieť {count, plural, one {# ďalšiu kartu} few {# ďalšie karty} many {# ďalšej karty} other {# ďalších kariet}}",
     "closeTab": "Zavrieť <bdi>{name}</bdi>",
     "conversionRefusal": {
       "legacyFormat": "Toto je starší súbor {format}. Ak ho chcete konvertovať, znova ho uložte ako {replacementExtension}.",
+      "noPreviewDecodingOff": "Tento server nevytvára náhľady obrázkov {format}. Ak chcete súbor otvoriť, stiahnite si ho.",
+      "noPreviewUnreadable": "Tento obrázok {format} sa nedá načítať na náhľad. Ak chcete súbor otvoriť, stiahnite si ho.",
       "unsupportedEncoding": "Tento dokument používa nepodporované kódovanie {encoding}, preto ho nemožno konvertovať.",
       "unsupportedField": "Tento dokument obsahuje pole {fieldType}, ktoré nemožno konvertovať.",
       "unsupportedReference": "Tento dokument odkazuje na externý prostriedok v {element} {attribute}, preto ho nemožno konvertovať."
@@ -560,6 +561,24 @@
     },
     "facet": {
       "anonymization": "Anonymizácia"
+    },
+    "fileParts": {
+      "archiveUnreadable": "Archív sa nepodarilo prečítať.",
+      "back": "Späť na zoznam",
+      "download": "Stiahnuť {fileName}",
+      "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
+      "noMatches": "Výrazu „{query}“ nezodpovedá žiadny súbor.",
+      "noPreview": "Tento typ súboru nemá náhľad. Stiahnite si ho alebo ho uložte do spisu.",
+      "notConverted": "Tento súbor sa nepodarilo previesť na náhľad. Stiahnite si ho alebo ho uložte do spisu.",
+      "open": "Otvoriť {fileName}",
+      "search": "Nájsť súbor podľa názvu alebo priečinka",
+      "unavailable": {
+        "encrypted": "Chránené heslom, nedá sa otvoriť",
+        "link": "Odkaz na iný súbor, neotvára sa",
+        "tooLarge": "Príliš veľký, nedá sa otvoriť",
+        "unreadable": "Poškodený, nedá sa otvoriť",
+        "unsupported": "Komprimované spôsobom, ktorý sa nedá otvoriť"
+      }
     },
     "firstSourceReached": "Toto je prvý zdroj.",
     "groups": {
@@ -585,6 +604,14 @@
     },
     "hidePane": "Skryť panel",
     "lastSourceReached": "Toto je posledný zdroj.",
+    "mailbox": {
+      "messages": "Správy",
+      "noMatches": "Výrazu „{query}“ nezodpovedá žiadna správa.",
+      "noMessages": "Táto poštová schránka neobsahuje žiadne správy.",
+      "search": "Hľadať v správach",
+      "truncated": "Zobrazuje sa len prvých {count, number} správ.",
+      "unreadable": "Túto poštovú schránku sa nepodarilo prečítať."
+    },
     "matterPicker": {
       "allMatters": "Všetky spisy",
       "description": "Vyberte spisy, z ktorých môže tento chat čerpať.",
@@ -632,6 +659,10 @@
       "lastUpdatedBy": "Naposledy upravil(a)",
       "matterColumnsHeading": "Údaje v spise",
       "noMatterColumns": "K tomuto dokumentu zatiaľ nie sú vyplnené žiadne údaje",
+      "similarDocuments": {
+        "heading": "Podobné dokumenty",
+        "similarity": "zhoda {percent}"
+      },
       "stellaHeading": "Uložené v aplikácii stella",
       "versionCurrent": "v{version} (aktuálna)"
     },
@@ -814,7 +845,6 @@
       "why": "Prečo",
       "whyItMatters": "Prečo je to podstatné:"
     },
-    "selectAttachmentToSave": "Vyberte prílohu na uloženie.",
     "showPane": "Zobraziť panel",
     "swapViews": "Vymeniť hlavné zobrazenie a bočný panel",
     "title": "Inšpektor"

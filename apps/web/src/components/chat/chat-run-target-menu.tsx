@@ -25,6 +25,7 @@ import {
 } from "@stll/ui/menu";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
+import { LocalHarnessIcon } from "@/components/ai-provider-icons";
 import {
   CHAT_LOCAL_HARNESS_NAMES,
   CHAT_OWN_FOLDER_VALUE,
@@ -273,10 +274,12 @@ export const ReadinessRetry = ({
  */
 const OfflineHarnessItem = ({
   activeOrganizationId,
+  harness,
   name,
   hint,
 }: {
   activeOrganizationId: string;
+  harness: ChatLocalRunHarness;
   name: string;
   hint: string;
 }) => {
@@ -293,13 +296,19 @@ const OfflineHarnessItem = ({
     >
       {/* PlaceLabel's layout; the description is a status region that
           stays mounted, so the change to the opening message is announced. */}
-      <span className="flex min-w-0 flex-col py-0.5">
-        <span>{name}</span>
-        <span
-          className="text-muted-foreground text-2xs text-pretty"
-          role="status"
-        >
-          {opening ? t("settings.account.desktopCardOpeningTitle") : hint}
+      <span className="flex min-w-0 items-start gap-2 py-0.5">
+        <LocalHarnessIcon
+          className="mt-0.5 size-4 shrink-0"
+          harness={harness}
+        />
+        <span className="flex min-w-0 flex-col">
+          <span>{name}</span>
+          <span
+            className="text-muted-foreground text-2xs text-pretty"
+            role="status"
+          >
+            {opening ? t("settings.account.desktopCardOpeningTitle") : hint}
+          </span>
         </span>
       </span>
     </MenuItem>
@@ -370,13 +379,19 @@ const DesktopSetupHarnessItem = ({
     >
       {/* PlaceLabel's layout; the description is a status region that
           stays mounted, so the change to the steps is announced. */}
-      <span className="flex min-w-0 flex-col py-0.5">
-        <span>{name}</span>
-        <span
-          className="text-muted-foreground text-2xs text-pretty"
-          role="status"
-        >
-          {opened ? steps(option) : hint}
+      <span className="flex min-w-0 items-start gap-2 py-0.5">
+        <LocalHarnessIcon
+          className="mt-0.5 size-4 shrink-0"
+          harness={option.harness}
+        />
+        <span className="flex min-w-0 flex-col">
+          <span>{name}</span>
+          <span
+            className="text-muted-foreground text-2xs text-pretty"
+            role="status"
+          >
+            {opened ? steps(option) : hint}
+          </span>
         </span>
       </span>
     </MenuItem>
@@ -470,6 +485,7 @@ export const ChatRunTargetMenu = ({
             return (
               <OfflineHarnessItem
                 activeOrganizationId={activeOrganizationId}
+                harness={option.harness}
                 hint={hint(option) ?? ""}
                 key={option.harness}
                 name={name}
@@ -489,7 +505,13 @@ export const ChatRunTargetMenu = ({
               // Set up outside stella desktop: there is nothing to open.
               return (
                 <MenuItem disabled key={harness}>
-                  <PlaceLabel description={hint(option) ?? ""} title={name} />
+                  <span className="flex min-w-0 items-start gap-2">
+                    <LocalHarnessIcon
+                      className="mt-1 size-4 shrink-0"
+                      harness={harness}
+                    />
+                    <PlaceLabel description={hint(option) ?? ""} title={name} />
+                  </span>
                 </MenuItem>
               );
             }
@@ -519,9 +541,15 @@ export const ChatRunTargetMenu = ({
               onClick={() => choose(target)}
               value={runOnPlaceValue(target)}
             >
-              <TruncatedText render={<BidiText as="span" />}>
-                {name}
-              </TruncatedText>
+              <span className="flex min-w-0 items-center gap-2">
+                <LocalHarnessIcon
+                  className="size-4 shrink-0"
+                  harness={option.harness}
+                />
+                <TruncatedText render={<BidiText as="span" />}>
+                  {name}
+                </TruncatedText>
+              </span>
             </MenuRadioItem>
           );
         })}

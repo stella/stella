@@ -145,6 +145,20 @@
       "pt-BR",
       "sk"
     ],
+    "agentSubscriptions.antigravity.title": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "agentSubscriptions.callbackPlan": [
       "es",
       "pl"
@@ -256,6 +270,12 @@
     ],
     "dialog.pdfSignVersion": [
       "de",
+      "fr"
+    ],
+    "dictation.cleanupStyle.notes.title": [
+      "fr"
+    ],
+    "dictation.cleanupStyle.title": [
       "fr"
     ],
     "dictation.destination.cloud": [

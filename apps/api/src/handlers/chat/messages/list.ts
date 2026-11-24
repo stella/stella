@@ -11,7 +11,7 @@ import {
 } from "@stll/api-contract/chat-send-intent";
 import { booleanFromString } from "@stll/api-contract/http-input";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
   estimateChatContextPromptTokens,

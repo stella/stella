@@ -10,7 +10,7 @@ import {
 import type { LocatedQuote } from "@stll/legal-ast/answer-quote";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { ChatMessageMetadata } from "@/components/chat/chat-ui-tools";
+import type { ChatMessageMetadata } from "@/components/chat/chat-ui-tools-types";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
 
 // Markdown elements that start a new line of text. Inline elements

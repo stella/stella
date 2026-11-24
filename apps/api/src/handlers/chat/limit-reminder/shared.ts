@@ -5,8 +5,8 @@ import * as v from "valibot";
 import { API_STORABLE_INSTANT_CHECK } from "@stll/api-contract/api-date";
 import { CHAT_LIMIT_REMINDER_UNAVAILABLE } from "@stll/api-contract/chat-limit-reminder";
 
-import type { Transaction } from "@/api/db/root";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { ChatScope } from "@/api/handlers/chat/chat-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";

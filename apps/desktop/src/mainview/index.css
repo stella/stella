@@ -8,6 +8,7 @@
 /* The design system's components live outside this app's source tree, so
  * their class names have to be scanned explicitly. */
 @source "../../../../packages/ui/src/**/*.{ts,tsx}";
+@source "../../../../packages/markdown-editor/src/**/*.{ts,tsx}";
 /* The folio editor chrome uses Tailwind utilities but ships no utility CSS of
  * its own, and node_modules is outside Tailwind's default source detection. */
 @source "../../../../node_modules/@stll/folio-react/dist/**/*.js";
@@ -61,6 +62,12 @@ body:has(.dictation-notice-window) {
 
 .dictation-notice-window {
   min-height: 100dvh;
+}
+
+/* The dictation fix panel is a borderless transparent panel too. */
+body:has(.dictation-fix-window) {
+  background: transparent;
+  overflow: hidden;
 }
 
 /* The dictation preview is a borderless transparent window that lets clicks

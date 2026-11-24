@@ -224,11 +224,15 @@ const fetchEcsCredentials = async ({
   signal?: AbortSignal;
   fetchImpl?: Fetcher;
   runtimeEnv?: CredentialRuntimeEnv;
-} = {}): Promise<S3Credentials | null> => {
+} = {}): Promise<
+  | { status: "loaded"; credentials: S3Credentials }
+  | { status: "unconfigured" }
+  | { status: "unavailable" }
+> => {
   signal?.throwIfAborted();
   const url = containerCredentialsUrl(runtimeEnv);
   if (!url) {
-    return null;
+    return { status: "unconfigured" };
   }
 
   const headers: Record<string, string> = {};
@@ -260,16 +264,19 @@ const fetchEcsCredentials = async ({
           classifyFailure(token.error, "credentials_token_unreadable"),
         ),
       );
-      return null;
+      return { status: "unavailable" };
     }
     headers["Authorization"] = token.value.trim();
   }
 
-  return await fetchCredentialJson(url, {
+  const credentials = await fetchCredentialJson(url, {
     fetchImpl,
     headers,
     ...(signal === undefined ? {} : { signal }),
   });
+  return credentials === null
+    ? { status: "unavailable" }
+    : { status: "loaded", credentials };
 };
 
 /**
@@ -413,13 +420,13 @@ const resolveAwsRuntimeCredentials = async ({
   signal,
 }: ResolveAwsRuntimeCredentialsOptions): Promise<S3Credentials | null> => {
   signal?.throwIfAborted();
-  const ecsCredentials = await fetchEcsCredentials({
+  const ecsOutcome = await fetchEcsCredentials({
     fetchImpl,
     runtimeEnv,
     ...(signal === undefined ? {} : { signal }),
   });
-  if (ecsCredentials) {
-    return ecsCredentials;
+  if (ecsOutcome.status === "loaded") {
+    return ecsOutcome.credentials;
   }
 
   // A task configured for container credentials does not fall through to the
@@ -1692,20 +1699,28 @@ const readS3ErrorBodyPrefix = async (response: Response): Promise<string> => {
   }
 };
 
+type S3ResponseErrorCodeRead =
+  | { readonly kind: "code"; readonly value: string }
+  | { readonly kind: "absent" }
+  | { readonly kind: "unreadable" };
+
 const readS3ResponseErrorCode = async (
   response: Response,
-): Promise<string | null> => {
+): Promise<S3ResponseErrorCodeRead> => {
   const headerCode = response.headers.get("x-amz-error-code");
   if (headerCode !== null) {
-    return headerCode.trim();
+    return { kind: "code", value: headerCode.trim() };
   }
   const body = await Result.tryPromise(
     async () => await readS3ErrorBodyPrefix(response),
   );
   if (body.isErr()) {
-    return null;
+    return { kind: "unreadable" };
   }
-  return extractS3ErrorCode(body.value);
+  const extracted = extractS3ErrorCode(body.value);
+  return extracted === null
+    ? { kind: "absent" }
+    : { kind: "code", value: extracted };
 };
 
 const throwCorpusObjectResponseError = async ({
@@ -1722,7 +1737,8 @@ const throwCorpusObjectResponseError = async ({
   // `<Code>ExpiredToken</Code>` is the only thing identifying it as an expiry,
   // and the credential guard replays the read on that code alone. Dropping it
   // for non-404 statuses left every fetch-based read outside the retry.
-  const code = await readS3ResponseErrorCode(response);
+  const codeRead = await readS3ResponseErrorCode(response);
+  const code = codeRead.kind === "code" ? codeRead.value : null;
   // Absence stays a 404-only conclusion: `NotFound` on any other status says
   // something about the request, not about the key.
   if (
@@ -1756,6 +1772,8 @@ type FetchObjectOptions<T> = {
   consume: (response: Response) => Promise<T>;
   signal?: AbortSignal | undefined;
   s3Policy?: S3CredentialRefreshOptions | undefined;
+  /** Request headers, such as the `Range` a range read asks for. */
+  headers?: Record<string, string> | undefined;
 };
 
 const fetchObject = async <T>({
@@ -1764,6 +1782,7 @@ const fetchObject = async <T>({
   consume,
   signal,
   s3Policy,
+  headers,
 }: FetchObjectOptions<T>): Promise<T> =>
   await withPublicReadIo(
     "object-storage",
@@ -1775,7 +1794,11 @@ const fetchObject = async <T>({
             store.client().presign(key, {
               expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
             }),
-            { signal, timeoutMs: OBJECT_READ_TIMEOUT_MS },
+            {
+              ...(headers === undefined ? {} : { headers }),
+              signal,
+              timeoutMs: OBJECT_READ_TIMEOUT_MS,
+            },
             async (response) => {
               if (!response.ok) {
                 return await throwCorpusObjectResponseError({
@@ -1913,7 +1936,7 @@ export const readCorpusS3ObjectBounded = async (
     }),
   });
 
-type CorpusRangeReadOptions = {
+type ObjectRangeReadOptions = {
   s3Policy?: S3CredentialRefreshOptions;
   key: string;
   /** First byte of the range, inclusive. */
@@ -1923,13 +1946,17 @@ type CorpusRangeReadOptions = {
   signal: AbortSignal;
 };
 
+/** How long a range read's body may stall before it is given up. */
+const OBJECT_RANGE_READ_IDLE_MS = 30_000;
+
 // `Content-Range: bytes <first>-<last>/<complete-length>`; the complete
 // length may be `*` when the store does not know it (RFC 9110 §14.4).
 const CONTENT_RANGE_PATTERN = /^bytes (?<first>\d+)-(?<last>\d+)\/(?:\d+|\*)$/u;
 
 /**
- * Read `length` bytes of a legal-corpus object starting at `offset` with a
- * range GET, so a member of a pack transfers without the pack around it.
+ * Read `length` bytes of an object starting at `offset` with a range GET, so
+ * a member of a pack, or a message of a mailbox, transfers without the
+ * object around it.
  *
  * The response is accepted only as a 206 whose `Content-Range` names exactly
  * the requested range and whose `Content-Length` equals `length`. A store
@@ -1939,86 +1966,89 @@ const CONTENT_RANGE_PATTERN = /^bytes (?<first>\d+)-(?<last>\d+)\/(?:\d+|\*)$/u;
  * transfer is bounded by `length`, which the caller checks against its
  * ceiling before asking.
  */
-export const readCorpusS3Range = async ({
+const readObjectRange = async ({
+  store,
   key,
   offset,
   length,
   signal,
   s3Policy,
-}: CorpusRangeReadOptions): Promise<Uint8Array> => {
+}: ObjectRangeReadOptions & { store: ObjectStore }): Promise<Uint8Array> => {
   if (!Number.isSafeInteger(offset) || offset < 0) {
     return panic(
-      `Corpus range read offset must be a non-negative integer, got ${offset}`,
+      `Range read offset must be a non-negative integer, got ${offset}`,
     );
   }
   if (!Number.isSafeInteger(length) || length < 1) {
-    return panic(
-      `Corpus range read length must be a positive integer, got ${length}`,
-    );
+    return panic(`Range read length must be a positive integer, got ${length}`);
   }
   const last = offset + length - 1;
-  // The status check runs inside the guard: a refused credential arrives as a
-  // response, not as a thrown request failure, so the retry only sees it once
-  // the response has been turned into an error.
-  return await withPublicReadIo(
-    "object-storage",
-    async (io) =>
-      await corpusCredentials.run(
-        async () =>
-          await io.fetch(
-            getCorpusS3().presign(key, {
-              expiresIn: OBJECT_READ_PRESIGN_TTL_SECONDS,
-            }),
-            {
-              headers: { Range: `bytes=${offset}-${last}` },
-              signal,
-              timeoutMs: OBJECT_READ_TIMEOUT_MS,
-            },
-            async (served) => {
-              if (served.status !== 206) {
-                return await throwCorpusObjectResponseError({
-                  response: served,
-                  key,
-                  message: `Range read for ${key} answered ${served.status}, not 206`,
-                });
-              }
-              const contentRange = CONTENT_RANGE_PATTERN.exec(
-                served.headers.get("content-range") ?? "",
-              );
-              const first = contentRange?.groups?.["first"];
-              const servedLast = contentRange?.groups?.["last"];
-              if (
-                first === undefined ||
-                servedLast === undefined ||
-                Number(first) !== offset ||
-                Number(servedLast) !== last
-              ) {
-                throw new S3ObjectReadError({
-                  message: `Range read for ${key} served a different range than bytes=${offset}-${last}`,
-                });
-              }
-              const contentLength = served.headers.get("content-length");
-              if (
-                contentLength === null ||
-                Number(contentLength.trim()) !== length
-              ) {
-                throw new S3ObjectReadError({
-                  message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
-                });
-              }
-              const bytes = meterStorageRead(await served.bytes());
-              if (bytes.byteLength !== length) {
-                throw new S3ObjectReadError({
-                  message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
-                });
-              }
-              return bytes;
-            },
-          ),
-        s3Policy,
-      ),
-  );
+  return await fetchObject({
+    store,
+    key,
+    signal,
+    s3Policy,
+    headers: { Range: `bytes=${offset}-${last}` },
+    consume: async (served) => {
+      if (served.status !== 206) {
+        return await throwCorpusObjectResponseError({
+          response: served,
+          key,
+          message: `Range read for ${key} answered ${served.status}, not 206`,
+        });
+      }
+      const contentRange = CONTENT_RANGE_PATTERN.exec(
+        served.headers.get("content-range") ?? "",
+      );
+      const first = contentRange?.groups?.["first"];
+      const servedLast = contentRange?.groups?.["last"];
+      if (
+        first === undefined ||
+        servedLast === undefined ||
+        Number(first) !== offset ||
+        Number(servedLast) !== last
+      ) {
+        throw new S3ObjectReadError({
+          message: `Range read for ${key} served a different range than bytes=${offset}-${last}`,
+        });
+      }
+      const contentLength = served.headers.get("content-length");
+      if (contentLength === null || Number(contentLength.trim()) !== length) {
+        throw new S3ObjectReadError({
+          message: `Range read for ${key} declared ${contentLength ?? "no"} bytes, expected ${length}`,
+        });
+      }
+      const bytes = meterStorageRead(
+        await readBodyWithIdleDeadline(served, {
+          idleMs: OBJECT_RANGE_READ_IDLE_MS,
+          maxBytes: length,
+          signal,
+        }),
+      );
+      if (bytes.byteLength !== length) {
+        throw new S3ObjectReadError({
+          message: `Range read for ${key} returned ${bytes.byteLength} bytes, expected ${length}`,
+        });
+      }
+      return bytes;
+    },
+  });
 };
+
+/** A range of a legal-corpus object. See {@link readObjectRange}. */
+export const readCorpusS3Range = async (
+  options: ObjectRangeReadOptions,
+): Promise<Uint8Array> =>
+  await readObjectRange({ ...options, store: corpusStore });
+
+/**
+ * A range of a documents-bucket object, such as one message of a stored
+ * mailbox. See {@link readObjectRange}.
+ */
+export const readDocumentS3Range = async (
+  options: ObjectRangeReadOptions,
+): Promise<Uint8Array> =>
+  await readObjectRange({ ...options, store: documentsStore });
 
 /**
  * Read a documents-bucket object with a hard deadline.

@@ -39,8 +39,8 @@ import {
   writeDocxSuggestionsCache,
 } from "@/components/ai-suggestions/docx-suggestion-cache";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import { api } from "@/lib/api";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { createSubmitIntent } from "@/lib/idempotency/idempotent-submit.logic";
 import { toSafeId } from "@/lib/safe-id";

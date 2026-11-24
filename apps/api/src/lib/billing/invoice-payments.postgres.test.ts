@@ -6,7 +6,6 @@ import { Temporal } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { OnlineMigrationConnection } from "@/api/db/online-migration-connection";
-import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   INVOICE_PAYMENT_ORIGIN,
@@ -17,6 +16,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { INVOICE_LEGACY_PAYMENT_BACKFILL } from "@/api/lib/billing/invoice-payment-backfill";

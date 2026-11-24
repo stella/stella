@@ -3,7 +3,7 @@ import {
   type ChatStepLedger,
 } from "@stll/api-contract/chat-step-ledger";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toSafeId } from "@/lib/safe-id";
 

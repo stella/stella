@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { linkDecisionsToMatter } from "@/api/handlers/case-law/matter-links/link-writes";
 import { status } from "@/api/http/status";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

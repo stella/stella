@@ -22,7 +22,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import { compareByLocale } from "@stll/collation";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { JustificationContent, PropertyRole } from "@/api/db/schema";
 import {
   documentReviewFindings,

@@ -3,8 +3,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, TransactionRollbackError } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

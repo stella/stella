@@ -38,6 +38,33 @@ import {
 export const REPEATS = 5;
 export const MAX_CHANGED_TEST_FILES = 10;
 export const BUDGET_MS = 5 * 60 * 1000;
+/** Digits only: an epoch-millisecond instant handed over by the CI job. */
+const EPOCH_MS = /^\d{1,16}$/u;
+/**
+ * How long after the test job's clock the repeats may still run. The job's
+ * runner step records the clock (`CI_T0`) after setup; 21 minutes from it
+ * stays inside the job's 25-minute timeout with room for the uploads that
+ * follow the repeats.
+ */
+export const JOB_REPEAT_WINDOW_MS = 21 * 60 * 1000;
+/**
+ * The gate's budget: its own cap, or less when the job that runs it must end
+ * sooner. `clock` is the epoch millisecond the test job's clock started
+ * (`CI_T0`); without one the cap applies unchanged.
+ */
+export const gateBudgetMs = (
+  clock: string | undefined,
+  nowEpochMs: number,
+): number => {
+  if (clock === undefined || clock === "") {
+    return BUDGET_MS;
+  }
+  if (!EPOCH_MS.test(clock)) {
+    panic(`CI_T0 is not an epoch millisecond: ${clock}`);
+  }
+  const deadline = Number(clock) + JOB_REPEAT_WINDOW_MS;
+  return Math.min(BUDGET_MS, Math.max(0, deadline - nowEpochMs));
+};
 const root = path.resolve(import.meta.dir, "..");
 const TEST_FILE = /\.(?:test|spec)\.[cm]?[jt]sx?$/u;
 const manifestSchema = v.object({
@@ -75,6 +102,23 @@ const packageTestIgnores = (flags: readonly string[], file: string) => {
       : [];
   });
   return ignored.some((pattern) => new Bun.Glob(pattern).match(file));
+};
+
+const isExcludedByPackageTestScript = (
+  flags: readonly string[],
+  filters: readonly string[],
+  packageRelative: string,
+): boolean => {
+  if (
+    filters.length > 0 &&
+    !filters.some(
+      (filter) =>
+        packageRelative === filter || packageRelative.startsWith(`${filter}/`),
+    )
+  ) {
+    return true;
+  }
+  return packageTestIgnores(flags, packageRelative);
 };
 
 export const selectTargets = ({
@@ -195,7 +239,7 @@ export const selectTargets = ({
     }
     const parsed =
       cwd === repo
-        ? { type: "supported" as const, flags: [] }
+        ? { type: "supported" as const, flags: [], filters: [] }
         : parseBunTestScript(manifest.scripts[script] ?? "");
     if (parsed.type === "unsupported") {
       skipped.push({
@@ -204,7 +248,14 @@ export const selectTargets = ({
       });
       continue;
     }
-    if (packageTestIgnores(parsed.flags, repoRelativePath(cwd, absolute))) {
+    const packageRelative = repoRelativePath(cwd, absolute);
+    if (
+      isExcludedByPackageTestScript(
+        parsed.flags,
+        parsed.filters,
+        packageRelative,
+      )
+    ) {
       skipped.push({
         file,
         reason: "not gated (excluded by package test script)",
@@ -283,6 +334,8 @@ export type Report = {
   skipped: Skipped[];
   errors: string[];
   elapsedMs: number;
+  /** The budget this run had; absent means the default cap. */
+  budgetMs?: number;
 };
 const markdown = (value: string) =>
   value
@@ -304,7 +357,7 @@ export const renderReport = (report: Report) =>
   [
     "## Changed-test flake gate (report only by default)",
     "",
-    `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: ${BUDGET_MS / 60_000} test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
+    `Target: ${REPEATS} runs (Bun: seeded shuffle; Rust: serial order). Budget: ${((report.budgetMs ?? BUDGET_MS) / 60_000).toFixed(2)} test-minutes, including probes. Used: ${(report.elapsedMs / 60_000).toFixed(2)} minutes.`,
     "Failures include persistent failures and runner errors; they require investigation before being called flakes.",
     report.cleanup.note,
     "",
@@ -620,6 +673,7 @@ export const executeGate = async ({
     skipped: [...skipped],
     errors: [],
     elapsedMs: 0,
+    budgetMs,
   };
   const measured: Measured[] = [];
   const reportedFailures = new Set<string>();
@@ -778,7 +832,10 @@ if (import.meta.main) {
         elapsedMs: 0,
       } satisfies Report;
     }
-    return executeGate(selection);
+    return executeGate({
+      ...selection,
+      budgetMs: gateBudgetMs(process.env["CI_T0"], Date.now()),
+    });
   });
   if (outcome.isErr()) {
     report.errors.push(outcome.error.message);

@@ -27,6 +27,7 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
   "apps/api/src/lib/bbox/ai-generate-b-boxes.ts",
   "apps/api/src/lib/bilingual/ai.ts",
   "apps/api/src/lib/case-law/research-answer-runner.ts",
+  "apps/api/src/lib/uploads/document-naming/document-naming.ts",
   "apps/api/src/lib/document-review/parties.ts",
   "apps/api/src/lib/document-review/reference-grade.ts",
   "apps/api/src/lib/document-translation/ai.ts",

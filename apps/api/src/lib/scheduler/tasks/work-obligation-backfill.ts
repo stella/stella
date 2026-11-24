@@ -4,7 +4,6 @@ import { and, eq, gt, inArray } from "drizzle-orm";
 import { compareCodeUnit } from "@stll/collation";
 import { isUuid } from "@stll/uuid-codec";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   schedulerJobs,
@@ -12,6 +11,7 @@ import {
   workObligationEvents,
   workObligations,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";

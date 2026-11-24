@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { SKILL_FILE_NAME, SKILL_PACKAGE_LIMITS } from "@stll/skills/format";
 import { normalizeUnicode } from "@stll/text-normalize";
 
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
 import {

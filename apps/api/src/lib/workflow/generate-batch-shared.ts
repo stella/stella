@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import type { AiCellSettlement } from "@stll/api-contract";
 import { toMajorUnitsText } from "@stll/money";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";

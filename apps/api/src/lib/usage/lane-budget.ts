@@ -13,9 +13,9 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { usageLaneCounters } from "@/api/db/schema";
 import type { UsageLaneCounterKind } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /** UTC midnight of the day containing `asOf`. */

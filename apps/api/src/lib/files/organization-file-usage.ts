@@ -6,12 +6,12 @@ import { declareFingerprintFields } from "@stll/errors";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   organizationFileObjects,
   organizationFileUsage,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

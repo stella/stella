@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 
 import { printError } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import { SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   getAdapter,
   listAdapterKeys,

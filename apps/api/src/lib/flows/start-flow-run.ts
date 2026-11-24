@@ -2,7 +2,7 @@ import { Result, TaggedError } from "better-result";
 
 import { declareFingerprintFields } from "@stll/errors";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { authorizeHandlerRunSize } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";

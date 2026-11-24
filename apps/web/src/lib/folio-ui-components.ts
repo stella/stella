@@ -80,16 +80,15 @@ const FolioOutlineRail = ({
   ...props
 }: ComponentProps<FolioUIComponents["OutlineRail"]>) => {
   const t = useTranslations();
-  const [retained, setRetained] = useState({ source: items, shown: items });
-  if (retained.source !== items) {
-    setRetained({
-      source: items,
-      shown: retainOutlinePageNumbers(retained.shown, items),
-    });
+  const [prevItems, setPrevItems] = useState(items);
+  const [shown, setShown] = useState(items);
+  if (prevItems !== items) {
+    setPrevItems(items);
+    setShown(retainOutlinePageNumbers(shown, items));
   }
   return createElement(OutlineRail, {
     ...props,
-    items: retained.shown,
+    items: shown,
     bottomInset: 0,
     formatMetaLabel: (page) => t("common.page", { page }),
   });

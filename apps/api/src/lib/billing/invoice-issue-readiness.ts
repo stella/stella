@@ -4,7 +4,7 @@ import { INVOICE_ISSUE_BLOCKER } from "@stll/api-contract/billing";
 import type { InvoiceIssueBlocker } from "@stll/api-contract/billing";
 import type { InvoiceDocumentType } from "@stll/invoicing";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { findDefaultNumberSeries } from "@/api/lib/billing/number-series";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

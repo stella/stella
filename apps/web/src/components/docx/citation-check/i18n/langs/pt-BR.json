@@ -1,0 +1,21 @@
+{
+  "docxCitationCheck": {
+    "action": "Verificar a citação",
+    "alternatives": "{count, plural, one {Mais # decisão responde a essa referência} many {Mais # decisões respondem a essa referência} other {Mais # decisões respondem a essa referência}}",
+    "checking": "Verificando {citation} …",
+    "contradicts": "Contraria",
+    "doesNotAddress": "Não trata",
+    "earlier": "Verificações anteriores",
+    "failed": "A verificação da citação não foi concluída. Tente novamente.",
+    "goToParagraph": "Ir para o parágrafo",
+    "noPassage": "Nenhum trecho isolado da decisão sustenta essa leitura.",
+    "notFound": "Nenhuma decisão correspondente a {citation} na base de jurisprudência",
+    "probability": "{probability, number, percent} de probabilidade",
+    "showPassage": "Mostrar o trecho",
+    "supports": "Confirma",
+    "title": "Verificação da citação",
+    "unavailableDerivedAi": "O editor desta decisão não permite a análise do texto dela por IA.",
+    "unavailableNoText": "A decisão foi encontrada, mas o texto dela não está disponível para verificação.",
+    "uncertain": "Incerto"
+  }
+}

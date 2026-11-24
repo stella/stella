@@ -47,6 +47,27 @@ describe("displayable conversion refusals", () => {
         fieldType: oversized,
       }),
     ).toEqual({ kind: "unsupported_field", fieldType: "x".repeat(256) });
+    expect(
+      displayableConversionRefusal({
+        kind: "no_preview",
+        format: oversized,
+        cause: "unreadable",
+      }),
+    ).toEqual({
+      kind: "no_preview",
+      format: "x".repeat(32),
+      cause: "unreadable",
+    });
+  });
+
+  test("shows a photo format without a preview as it was refused", () => {
+    expect(
+      displayableConversionRefusal({
+        kind: "no_preview",
+        format: "HEIC",
+        cause: "decoding_off",
+      }),
+    ).toEqual({ kind: "no_preview", format: "HEIC", cause: "decoding_off" });
   });
 });
 

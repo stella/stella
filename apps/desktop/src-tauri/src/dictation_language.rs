@@ -105,6 +105,50 @@ pub fn speaker_languages(
   }
 }
 
+/// Each model language in its own name, the way a language menu lists it
+/// whatever the interface language.
+pub const fn autonym(language: &str) -> Option<&'static str> {
+  Some(match language.as_bytes() {
+    b"en" => "English",
+    b"de" => "Deutsch",
+    b"fr" => "Français",
+    b"es" => "Español",
+    b"it" => "Italiano",
+    b"pt" => "Português",
+    b"ru" => "Русский",
+    b"uk" => "Українська",
+    b"hr" => "Hrvatski",
+    b"sl" => "Slovenščina",
+    b"lv" => "Latviešu",
+    b"lt" => "Lietuvių",
+    b"et" => "Eesti",
+    b"fi" => "Suomi",
+    b"sv" => "Svenska",
+    b"da" => "Dansk",
+    b"nl" => "Nederlands",
+    b"pl" => "Polski",
+    b"cs" => "Čeština",
+    b"sk" => "Slovenčina",
+    b"hu" => "Magyar",
+    b"ro" => "Română",
+    b"bg" => "Български",
+    b"el" => "Ελληνικά",
+    b"mt" => "Malti",
+    _ => return None,
+  })
+}
+
+/// The choices a quick switch offers: automatic, this computer's languages,
+/// and the chosen language when it is none of them, once each.
+pub fn quick_choices(choice: &Choice, inferred: &[&'static str]) -> Vec<Choice> {
+  let mut choices = vec![Choice::Automatic];
+  choices.extend(inferred.iter().copied().map(Choice::Language));
+  if !choices.contains(choice) {
+    choices.push(choice.clone());
+  }
+  choices
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LanguageSnapshot {
@@ -170,6 +214,43 @@ pub fn inferred(app: &AppHandle) -> Vec<&'static str> {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn every_model_language_has_its_own_name() {
+    for language in MODEL_LANGUAGES {
+      assert!(
+        autonym(language).is_some_and(|name| !name.is_empty()),
+        "{language}"
+      );
+    }
+    assert_eq!(autonym("cs"), Some("Čeština"));
+    assert_eq!(autonym("xx"), None);
+  }
+
+  #[test]
+  fn the_quick_switch_offers_automatic_the_inferred_languages_and_the_choice() {
+    assert_eq!(
+      quick_choices(&Choice::Automatic, &["cs", "en"]),
+      vec![
+        Choice::Automatic,
+        Choice::Language("cs"),
+        Choice::Language("en")
+      ]
+    );
+    assert_eq!(
+      quick_choices(&Choice::Language("de"), &["cs", "en"]),
+      vec![
+        Choice::Automatic,
+        Choice::Language("cs"),
+        Choice::Language("en"),
+        Choice::Language("de"),
+      ]
+    );
+    assert_eq!(
+      quick_choices(&Choice::Language("cs"), &["cs"]),
+      vec![Choice::Automatic, Choice::Language("cs")]
+    );
+  }
 
   fn tags(values: &[&str]) -> Vec<String> {
     values.iter().map(ToString::to_string).collect()

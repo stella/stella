@@ -5,7 +5,7 @@ import * as v from "valibot";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCitations,
   caseLawDecisions,

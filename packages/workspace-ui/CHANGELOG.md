@@ -1,5 +1,76 @@
 # @stll/workspace-ui
 
+## 0.24.4
+
+### Patch Changes
+
+- Updated dependencies [[`1ab906c`](https://github.com/stella/stella/commit/1ab906cc4ad7916de5ef21284416343ea2e2810c)]:
+  - @stll/ui@0.88.0
+
+## 0.24.3
+
+### Patch Changes
+
+- Updated dependencies [[`1798f66`](https://github.com/stella/stella/commit/1798f6615a61ddf02e091d925269ed735bef75fe)]:
+  - @stll/ui@0.87.0
+
+## 0.24.2
+
+### Patch Changes
+
+- Updated dependencies [[`b280d21`](https://github.com/stella/stella/commit/b280d21b8b6bc7149a342a08f2d78036f1099186)]:
+  - @stll/ui@0.86.0
+
+## 0.24.1
+
+### Patch Changes
+
+- Updated dependencies [[`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63), [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b)]:
+  - @stll/ui@0.85.0
+
+## 0.24.0
+
+### Minor Changes
+
+- [#9246](https://github.com/stella/stella/pull/9246) [`f292e0a`](https://github.com/stella/stella/commit/f292e0af50fa6912cdced0f28f0b4cfd22c61c01) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `FileConversionRefusal` adds `{ kind: "no_preview", format, cause }`: an image this deployment makes no preview of, because it does not decode the format (`"decoding_off"`) or cannot read the file's pictures (`"unreadable"`). `format` is the file's short tag, such as `"HEIC"`.
+
+### Patch Changes
+
+- Updated dependencies [[`98abe28`](https://github.com/stella/stella/commit/98abe2841a69b052cdfd34cfd8e42fe5d7a53105)]:
+  - @stll/ui@0.84.1
+
+## 0.23.3
+
+### Patch Changes
+
+- Updated dependencies [[`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853)]:
+  - @stll/ui@0.84.0
+
+## 0.23.2
+
+### Patch Changes
+
+- Updated dependencies [[`10ef464`](https://github.com/stella/stella/commit/10ef464329c555633c59a8307bbd6bf85e22fe5a)]:
+  - @stll/ui@0.83.0
+
+## 0.23.1
+
+### Patch Changes
+
+- Updated dependencies [[`39eabb8`](https://github.com/stella/stella/commit/39eabb8eee2640bdda32e928239460602aefc23b)]:
+  - @stll/ui@0.82.0
+
+## 0.23.0
+
+### Minor Changes
+
+- [#9193](https://github.com/stella/stella/pull/9193) [`94387e7`](https://github.com/stella/stella/commit/94387e7ca464e5f26cf95913f20b0a4a503b79b9) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `@stll/ui/inline-overflow` holds the policy that decides which items of a single-line row fit and which move into a trailing "show more" menu (`resolveInlineOverflow`, `splitInlineOverflow`), and `@stll/ui/use-inline-overflow` measures a row for it. `InspectorFacetBar` runs on them. `WorkspaceViewSwitcher` takes a required `overflowLabel` and moves the views that do not fit into a menu after the tabs, keeping the active or renamed view on screen, instead of scrolling the tabs; the strip's add control no longer draws a divider.
+
+### Patch Changes
+
+- Updated dependencies [[`9db6ee1`](https://github.com/stella/stella/commit/9db6ee1cbde7b4e6b85210e46bf93c705034e64b), [`94387e7`](https://github.com/stella/stella/commit/94387e7ca464e5f26cf95913f20b0a4a503b79b9), [`7192259`](https://github.com/stella/stella/commit/7192259afbb8e3e3ffbbb906b9be3129e1ab3882), [`f55e84a`](https://github.com/stella/stella/commit/f55e84a17a4847c2d6722799990f5932fdd7b004), [`62c29aa`](https://github.com/stella/stella/commit/62c29aa31dfa732c9962227ae90b54ccb4bddbd6), [`b0f575f`](https://github.com/stella/stella/commit/b0f575f1ef2b403299e222e2dc21293b916785c7)]:
+  - @stll/ui@0.81.0
+
 ## 0.22.0
 
 ### Minor Changes

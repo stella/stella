@@ -4,8 +4,8 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { CHAT_THREAD_NOT_FOUND_ERROR_CODE } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { chatThreads, chatTurns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { NEWEST_CHAT_TURN_FIRST } from "@/api/lib/chat/turn-order";
 import type { ChatTurnStatus } from "@/api/lib/chat/turn-status";

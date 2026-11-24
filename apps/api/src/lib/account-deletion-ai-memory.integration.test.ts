@@ -10,8 +10,8 @@ import { inArray, TransactionRollbackError } from "drizzle-orm";
 
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/node";
 
-import type { Transaction } from "@/api/db/root";
 import { aiMemories } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { deletePersonalAiMemories } from "@/api/lib/account-deletion-steps";
 import { createSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";

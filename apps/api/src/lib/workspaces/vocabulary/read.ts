@@ -1,4 +1,4 @@
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { status } from "@/api/http/status";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getKnownInfoSoudCourtName } from "@/api/lib/infosoud/client";

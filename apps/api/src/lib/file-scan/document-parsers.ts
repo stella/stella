@@ -12,6 +12,8 @@
  * `ScannedFile`: those bytes are the parser's output for scanned input, not
  * new untrusted content.
  */
+import { panic, Result } from "better-result";
+
 import { compareDocx } from "@stll/folio-core";
 import {
   applyFolioAIEditsToBuffer,
@@ -21,7 +23,7 @@ import {
   extractDocumentStyleSetFromDocx,
   extractDocxText,
   FolioDocxReviewer,
-  materializeYjsDocx,
+  FolioRoomJournalError,
   parseDocx,
   readBilingualDocx,
 } from "@stll/folio-core/server";
@@ -103,14 +105,35 @@ export const applyFolioAIEditsToScannedDocx = async (
   options?: Parameters<typeof applyFolioAIEditsToBuffer>[2],
 ) => await applyFolioAIEditsToBuffer(file.bytes, operations, options);
 
-/** A collaborative Yjs state materialized over its scanned source document. */
-export const materializeYjsOverScannedDocx = async ({
+/**
+ * A collaboration room's journal replayed over the scanned document the room
+ * was seeded from, as every peer applied it. A journal that does not replay
+ * is refused.
+ */
+export const replayRoomJournalOverScannedDocx = async ({
   source,
-  yjsUpdate,
+  journal,
 }: {
   source: ScannedFile;
-  yjsUpdate: Uint8Array;
-}) => await materializeYjsDocx({ sourceDocx: source.bytes, yjsUpdate });
+  journal: Parameters<FolioDocxReviewer["applyRoomJournal"]>[0];
+}): Promise<Result<ArrayBuffer, FolioRoomJournalError>> => {
+  const reviewer = await FolioDocxReviewer.fromBuffer(source.bytes, {
+    session: "canonical",
+  });
+  const replayed = Result.try({
+    try: () => {
+      reviewer.applyRoomJournal(journal);
+    },
+    catch: (cause) =>
+      cause instanceof FolioRoomJournalError
+        ? cause
+        : panic("applyRoomJournal threw an unexpected error", cause),
+  });
+  if (Result.isError(replayed)) {
+    return Result.err(replayed.error);
+  }
+  return Result.ok(await reviewer.toBuffer());
+};
 
 export const openScannedDocxReviewer = async (
   file: ScannedFile,

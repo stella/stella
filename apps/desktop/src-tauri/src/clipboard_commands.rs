@@ -5,12 +5,10 @@ use tauri::{AppHandle, Emitter, State, WebviewWindow};
 
 use crate::{
   clipboard::{
-    ClipboardAppState, ClipboardCaptureStatus, ClipboardCaptureUpdate,
-    ClipboardCopyFormat, ClipboardEditorNameUpdate, ClipboardGroup,
-    ClipboardGroupColor, ClipboardGroupDeletionMode, ClipboardItem, ClipboardRetention,
-    ClipboardSnapshot, HISTORY_EVENT,
+    ClipboardAppState, ClipboardCaptureUpdate, ClipboardCopyFormat,
+    ClipboardEditorNameUpdate, ClipboardGroup, ClipboardItem, ClipboardSnapshot,
+    HISTORY_EVENT,
   },
-  clipboard_screen_capture::ClipboardScreenCapture,
   clipboard_window::{
     self, ClipboardEditorSessions, ClipboardStartupTrace, EditorRead,
   },
@@ -23,7 +21,6 @@ use crate::{
 
 const STELLA_WEB_APP_URL: &str = "https://my.stll.app";
 const ITEM_NOT_FOUND_ERROR: &str = "clipboard item no longer exists";
-const GROUP_NOT_FOUND_ERROR: &str = "clipboard group no longer exists";
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -42,7 +39,7 @@ pub struct ClipboardEditorText {
   html: Option<String>,
 }
 
-fn lock_error<T>(poisoned: PoisonError<T>) -> String {
+pub(crate) fn lock_error<T>(poisoned: PoisonError<T>) -> String {
   crate::logging::with_cause_logged("clipboard manager is unavailable")(poisoned)
 }
 
@@ -104,25 +101,6 @@ pub fn clipboard_complete_welcome(
 }
 
 #[tauri::command]
-pub fn clipboard_set_capture_status(
-  caller: ClipboardCaller,
-  status: ClipboardCaptureStatus,
-  state: State<'_, ClipboardAppState>,
-  window: WebviewWindow,
-) -> Result<ClipboardSnapshot, String> {
-  let snapshot = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    manager.set_capture_status(status)?;
-    manager.snapshot(&caller)
-  };
-  best_effort(
-    window.emit(HISTORY_EVENT, ()),
-    "clipboard history change was not announced",
-  );
-  Ok(snapshot)
-}
-
-#[tauri::command]
 pub fn clipboard_exclude_item_source_app(
   caller: ClipboardCaller,
   id: String,
@@ -139,75 +117,6 @@ pub fn clipboard_exclude_item_source_app(
     "clipboard history change was not announced",
   );
   Ok(snapshot)
-}
-
-#[tauri::command]
-pub fn clipboard_remove_source_app_exclusion(
-  caller: ClipboardCaller,
-  identifier: String,
-  state: State<'_, ClipboardAppState>,
-  window: WebviewWindow,
-) -> Result<ClipboardSnapshot, String> {
-  let snapshot = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    manager.remove_source_app_exclusion(&identifier)?;
-    manager.snapshot(&caller)
-  };
-  best_effort(
-    window.emit(HISTORY_EVENT, ()),
-    "clipboard history change was not announced",
-  );
-  Ok(snapshot)
-}
-
-#[tauri::command]
-pub fn clipboard_set_retention(
-  caller: ClipboardCaller,
-  retention: ClipboardRetention,
-  state: State<'_, ClipboardAppState>,
-  window: WebviewWindow,
-) -> Result<ClipboardSnapshot, String> {
-  let snapshot = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    manager.set_retention(retention)?;
-    manager.snapshot(&caller)
-  };
-  best_effort(
-    window.emit(HISTORY_EVENT, ()),
-    "clipboard history change was not announced",
-  );
-  Ok(snapshot)
-}
-
-/// The open windows change first, and the preference is recorded only once they
-/// all hold the new protection. A failed transition rolls the windows back, so
-/// the snapshot never reports a visibility that a window does not have and a
-/// window created later never disagrees with the ones already open.
-#[tauri::command]
-pub fn clipboard_set_screen_capture(
-  caller: ClipboardCaller,
-  capture: ClipboardScreenCapture,
-  state: State<'_, ClipboardAppState>,
-  app: AppHandle,
-) -> Result<ClipboardSnapshot, String> {
-  let previous = state.lock().map_err(lock_error)?.screen_capture();
-  let rollback = || {
-    best_effort(
-      clipboard_window::apply_screen_capture(&app, previous),
-      "screen capture setting was not rolled back",
-    );
-  };
-  if let Err(error) = clipboard_window::apply_screen_capture(&app, capture) {
-    rollback();
-    return Err(error);
-  }
-  let stored = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    manager
-      .set_screen_capture(capture)
-      .map(|()| manager.snapshot(&caller))
-  };
-  stored.inspect_err(|_| rollback())
 }
 
 #[tauri::command]
@@ -261,94 +170,6 @@ pub fn clipboard_clear_history(
   let snapshot = {
     let mut manager = state.lock().map_err(lock_error)?;
     manager.clear()?;
-    manager.snapshot(&caller)
-  };
-  best_effort(
-    window.emit(HISTORY_EVENT, ()),
-    "clipboard history change was not announced",
-  );
-  Ok(snapshot)
-}
-
-#[tauri::command]
-pub fn clipboard_create_group(
-  caller: ClipboardCaller,
-  color: ClipboardGroupColor,
-  item_id: Option<String>,
-  name: String,
-  state: State<'_, ClipboardAppState>,
-  window: WebviewWindow,
-) -> Result<ClipboardSnapshot, String> {
-  let snapshot = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    manager.create_group(&name, color, item_id.as_deref())?;
-    manager.snapshot(&caller)
-  };
-  best_effort(
-    window.emit(HISTORY_EVENT, ()),
-    "clipboard history change was not announced",
-  );
-  Ok(snapshot)
-}
-
-#[tauri::command]
-pub fn clipboard_delete_group(
-  caller: ClipboardCaller,
-  id: String,
-  mode: ClipboardGroupDeletionMode,
-  state: State<'_, ClipboardAppState>,
-  window: WebviewWindow,
-) -> Result<ClipboardSnapshot, String> {
-  let snapshot = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    if !manager.delete_group(&id, mode)? {
-      return Err(GROUP_NOT_FOUND_ERROR.to_string());
-    }
-    manager.snapshot(&caller)
-  };
-  best_effort(
-    window.emit(HISTORY_EVENT, ()),
-    "clipboard history change was not announced",
-  );
-  Ok(snapshot)
-}
-
-#[tauri::command]
-pub fn clipboard_update_group(
-  caller: ClipboardCaller,
-  color: ClipboardGroupColor,
-  id: String,
-  name: String,
-  state: State<'_, ClipboardAppState>,
-  window: WebviewWindow,
-) -> Result<ClipboardSnapshot, String> {
-  let snapshot = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    if !manager.update_group(&id, &name, color)? {
-      return Err(GROUP_NOT_FOUND_ERROR.to_string());
-    }
-    manager.snapshot(&caller)
-  };
-  best_effort(
-    window.emit(HISTORY_EVENT, ()),
-    "clipboard history change was not announced",
-  );
-  Ok(snapshot)
-}
-
-#[tauri::command]
-pub fn clipboard_move_group(
-  caller: ClipboardCaller,
-  id: String,
-  index: usize,
-  state: State<'_, ClipboardAppState>,
-  window: WebviewWindow,
-) -> Result<ClipboardSnapshot, String> {
-  let snapshot = {
-    let mut manager = state.lock().map_err(lock_error)?;
-    if !manager.move_group(&id, index)? {
-      return Err(GROUP_NOT_FOUND_ERROR.to_string());
-    }
     manager.snapshot(&caller)
   };
   best_effort(

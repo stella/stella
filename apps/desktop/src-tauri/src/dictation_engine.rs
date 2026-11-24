@@ -502,6 +502,10 @@ fn finish(
     // A hold that heard nothing is told unless it was a tap.
     return heard_nothing(held).map(|()| Delivered::Empty);
   }
+  // The speaker's learned fixes go first, whether cleanup is on or off, so
+  // cleanup and the custom words see the words as the speaker writes them.
+  let learned = crate::dictation_learned::apply(app, text);
+  let text = learned.as_str();
   // Cleanup spells the custom words itself; without it, the words the speech
   // model here missed are spelled on this computer.
   let respelled;
@@ -514,7 +518,15 @@ fn finish(
   let ((cleaned, cleanup), cleanup_took) = dictation_trace::timed(|| {
     if cleanup_enabled {
       let words = crate::dictation_words::words(app);
-      dictation_cleanup::clean_up(app, text, &language.speaker, &words, context)
+      dictation_cleanup::clean_up(
+        app,
+        text,
+        &language.speaker,
+        &words,
+        context,
+        dictation::cleanup_form(app),
+        &dictation::cleanup_preferences(app),
+      )
     } else {
       (None, Cleanup::Off)
     }

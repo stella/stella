@@ -26,6 +26,9 @@ import {
 import { installTauriIpc, tauriInvocations } from "./tauri-ipc";
 import type { TauriInvocation } from "./tauri-ipc";
 
+/** The drafts consent's own text: it names the provider a draft goes to. */
+const AI_DRAFT_CONSENT_TEXT = enMessages.activity.disclosure.aiDraftProvider;
+
 const SNAPSHOT = {
   date: "2026-10-07",
   draftedEntries: [],
@@ -338,6 +341,7 @@ const installNativeBoundary = async ({
         dictation_get_snapshot: () => ({ available: false }),
         chatgpt_auth_get_status: () => null,
         claude_code_auth_get_status: () => null,
+        antigravity_get_status: () => null,
         // No install status either, read the same as the refusal with local agents off.
         harness_get_status: () => null,
         local_skill_folders_get: () => null,
@@ -2083,15 +2087,17 @@ test("accessibility hint opens system settings only after a user request", async
       detailsAccess: "accessibilityRequired",
     },
   });
-  await expect(
-    page.getByText(enMessages.activity.accessibilityRequired, { exact: true }),
-  ).toBeVisible();
+  // Settings show the Activity window's own strip under the titles row.
+  const strip = page.getByRole("region", {
+    name: enMessages.activity.titlesNotRecorded,
+  });
+  await expect(strip).toBeVisible();
   expect(await tauriInvocations(page)).not.toContainEqual(
     expect.objectContaining({
       command: "activity_open_accessibility_settings",
     }),
   );
-  await page
+  await strip
     .getByRole("button", {
       name: enMessages.activity.openAccessibilitySettings,
     })
@@ -2456,9 +2462,7 @@ for (const language of ["en", "ar"] as const) {
       language,
     });
     await expect(
-      page.getByText(messages.activity.disclosure.sent.aiDrafts, {
-        exact: true,
-      }),
+      page.getByText(messages.activity.disclosure.aiDraftProvider),
     ).toBeHidden();
     await expect(page.locator("html")).toHaveAttribute(
       "dir",
@@ -2481,9 +2485,10 @@ for (const language of ["en", "ar"] as const) {
     await disclosure.press("Enter");
     await expect(disclosure).toBeFocused();
     await expect(disclosure).toHaveAttribute("aria-expanded", "true");
-    const details = page.getByText(messages.activity.disclosure.sent.aiDrafts, {
-      exact: true,
-    });
+    // The drafts fact: it names the provider a draft goes to.
+    const details = page.getByText(
+      messages.activity.disclosure.aiDraftProvider,
+    );
     await expect(details).toBeVisible();
     const card = page
       .getByRole("heading", { name: messages.activity.welcomeTitle })
@@ -3019,7 +3024,7 @@ test("suggestions render as dashed blocks and the day is triaged from the keyboa
           entry: expect.objectContaining({
             matterId: "matter-1",
             durationMinutes: 30,
-            narrative: "Work on Lease draft.docx",
+            narrative: "Work on “Lease draft.docx”",
             billable: true,
           }),
           ranges: [
@@ -3315,13 +3320,11 @@ test("a card asks for consent once, then drafts its description and shows the ea
   const card = suggestionCard(page, "Example matter");
   // One line asks; what a draft sends is a click away.
   await expect(card.getByText(enMessages.activity.aiDraftOffer)).toBeVisible();
-  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toBeHidden();
+  await expect(card.getByText(AI_DRAFT_CONSENT_TEXT)).toBeHidden();
   await card
     .getByRole("button", { name: enMessages.activity.aiDraftWhatIsSent })
     .click();
-  await expect(
-    card.getByText(enMessages.activity.aiDraftConsent),
-  ).toBeVisible();
+  await expect(card.getByText(AI_DRAFT_CONSENT_TEXT)).toBeVisible();
   // Nothing is drafted before the user allows it.
   expect(await draftInvocations(page)).toEqual([]);
   await card
@@ -3355,9 +3358,7 @@ test("a card asks for consent once, then drafts its description and shows the ea
       ],
     },
   });
-  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
-    0,
-  );
+  await expect(card.getByText(AI_DRAFT_CONSENT_TEXT)).toHaveCount(0);
   // The English plural for one earlier entry.
   await card.getByRole("button", { name: "Follows 1 earlier entry" }).click();
   await expect(card.getByText(EARLIER_ENTRY.narrative)).toBeVisible();
@@ -3368,9 +3369,7 @@ test("a card asks for consent once, then drafts its description and shows the ea
   await expect(
     next.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
   ).toHaveValue(GENERATED_NARRATIVE);
-  await expect(page.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
-    0,
-  );
+  await expect(page.getByText(AI_DRAFT_CONSENT_TEXT)).toHaveCount(0);
   expect(await draftInvocations(page)).toHaveLength(2);
 });
 
@@ -3812,7 +3811,7 @@ test("dismissing a proposal keeps the draft, and Use original brings back the te
   await card
     .getByRole("button", { name: enMessages.activity.aiUseOriginal })
     .click();
-  await expect(narrative).toHaveValue("Work on Lease draft.docx");
+  await expect(narrative).toHaveValue("Work on “Lease draft.docx”");
 });
 
 test("an instruction remembered while refining becomes the drafting preference", async ({
@@ -3898,7 +3897,7 @@ test("a failed draft keeps the template and offers to try again", async ({
   await expect(card.getByText(enMessages.activity.aiDraftFailed)).toBeVisible();
   await expect(
     card.getByRole("textbox", { name: enMessages.activity.entryNarrative }),
-  ).toHaveValue("Work on Lease draft.docx");
+  ).toHaveValue("Work on “Lease draft.docx”");
   await expect(
     card.getByRole("button", { name: enMessages.activity.aiDraftRetry }),
   ).toBeVisible();
@@ -3919,9 +3918,7 @@ test("with drafting switched off for the firm, a card says so quietly and sends 
   const card = suggestionCard(page, "Example matter");
   await expect(card).toBeFocused();
   await expect(card.getByText(enMessages.activity.aiDraftOff)).toBeVisible();
-  await expect(card.getByText(enMessages.activity.aiDraftConsent)).toHaveCount(
-    0,
-  );
+  await expect(card.getByText(AI_DRAFT_CONSENT_TEXT)).toHaveCount(0);
   await expect(
     card.getByRole("button", { name: enMessages.activity.aiDraftWrite }),
   ).toHaveCount(0);

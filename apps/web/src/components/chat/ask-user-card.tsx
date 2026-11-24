@@ -53,7 +53,7 @@ import type {
   AskUserOutput,
   ChatAnonRestoration,
   RegisteredChatUIToolCallPart,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
@@ -381,16 +381,19 @@ export const AskUserCard = ({
   const [drafts, setDrafts] = useState<Record<number, AskUserDraft>>(() =>
     input ? initialAskUserDrafts(input.questions) : {},
   );
-  const [defaultsSeeded, setDefaultsSeeded] = useState(input !== null);
+  const hasInput = input !== null;
+  const [prevHasInput, setPrevHasInput] = useState(hasInput);
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
   // still be null. `drafts` is user-mutated interactive state set in
   // several handlers, so this is a one-shot prop-arrival merge into
   // existing state, not plain derived state. Guarded render-time adjustment
   // applies the transition before children render and avoids an extra commit.
-  if (input !== null && !defaultsSeeded) {
-    setDefaultsSeeded(true);
-    setDrafts({ ...initialAskUserDrafts(input.questions), ...drafts });
+  if (prevHasInput !== hasInput) {
+    setPrevHasInput(hasInput);
+    if (input !== null) {
+      setDrafts({ ...initialAskUserDrafts(input.questions), ...drafts });
+    }
   }
 
   const [submitted, setSubmitted] = useState(false);

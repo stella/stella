@@ -3,8 +3,7 @@ import { and, count, desc, eq, gte, inArray, lte, max, sql } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCoverageSlices,
   caseLawIngestionEvents,
@@ -15,6 +14,7 @@ import {
 } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import {
   adapterParkOf,
   readAdapterFailureRunsIn,

@@ -1,5 +1,5 @@
 import { withSubagentRunParts } from "@/components/chat/chat-subagent-parts.logic";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 
 /**
  * The chat turn a browser command belongs to: the user message that started

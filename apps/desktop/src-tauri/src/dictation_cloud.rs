@@ -46,6 +46,10 @@ const STOPPED: &str = "dictation no longer goes to stella AI";
 const TIMED_OUT: &str = "stella AI transcription timed out";
 /// stella AI does not take the model a chunk named: the model list changed.
 const MODEL_REFUSED: &str = "stella AI refused the transcription model";
+/// The stored model is no longer offered and no model of its class is:
+/// nothing goes to stella AI until the speaker picks another.
+const MODEL_WITHDRAWN: &str =
+  "the chosen stella AI transcription model is no longer offered";
 /// The code the API answers with when it no longer offers a named model.
 const MODEL_UNAVAILABLE_CODE: &str = "transcription_model_unavailable";
 /// The longest refusal read for its code.
@@ -524,7 +528,8 @@ where
 }
 
 /// The model a dictation uses: the stored one while the region still offers
-/// it, otherwise the region's default, which then replaces the stored one.
+/// it; a model of its class when it was withdrawn; the region's default
+/// when none is stored. A replacement then becomes the stored one.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ModelChoice {
   pub model_id: String,
@@ -532,17 +537,38 @@ pub struct ModelChoice {
   pub replaces_stored: bool,
 }
 
+/// Why a dictation has no stella AI model.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoModel {
+  /// The region offers nothing to choose from.
+  NoneOffered,
+  /// The stored model is no longer offered and none of its class is: the
+  /// speaker picks another, so nothing goes to a provider, place or
+  /// retention they did not choose.
+  Withdrawn,
+}
+
 pub fn choose_model(
   stored: Option<&str>,
+  stored_class: Option<&ModelClass>,
   offered: &CloudModels,
-) -> Option<ModelChoice> {
-  if let Some(stored) = stored.filter(|stored| offered.offers(stored)) {
-    return Some(ModelChoice {
-      model_id: stored.to_string(),
-      replaces_stored: false,
-    });
+) -> Result<ModelChoice, NoModel> {
+  if let Some(stored) = stored {
+    if offered.offers(stored) {
+      return Ok(ModelChoice {
+        model_id: stored.to_string(),
+        replaces_stored: false,
+      });
+    }
+    return stored_class
+      .and_then(|class| same_class_model(class, stored, offered))
+      .map(|model_id| ModelChoice {
+        model_id: model_id.to_string(),
+        replaces_stored: true,
+      })
+      .ok_or(NoModel::Withdrawn);
   }
-  // Never falls back to a model whose provider keeps the audio: that one is
+  // Never starts on a model whose provider keeps the audio: that one is
   // used only once picked where its warning shows.
   let without_warning = |model_id: &str| {
     offered
@@ -564,6 +590,31 @@ pub fn choose_model(
     .map(|model_id| ModelChoice {
       model_id: model_id.to_string(),
       replaces_stored: true,
+    })
+    .ok_or(NoModel::NoneOffered)
+}
+
+/// A model other than `except` of the same provider, on the same side of
+/// the region and keeping the audio exactly when `class` does, the region's
+/// default first.
+fn same_class_model<'a>(
+  class: &ModelClass,
+  except: &str,
+  offered: &'a CloudModels,
+) -> Option<&'a str> {
+  let same_class = |model_id: &str| {
+    model_id != except && offered.class_of(model_id).as_ref() == Some(class)
+  };
+  offered
+    .default_model_id
+    .as_deref()
+    .filter(|default| same_class(default))
+    .or_else(|| {
+      offered
+        .models
+        .iter()
+        .map(|model| model.id.as_str())
+        .find(|model_id| same_class(model_id))
     })
 }
 
@@ -605,11 +656,23 @@ pub struct CloudSession {
   read_again: bool,
 }
 
-/// The model a dictation uses, and whether it reads vocabulary.
+/// The model a dictation uses, whether it reads vocabulary, and where its
+/// audio goes as the list said when it was chosen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct ChosenModel {
   id: String,
   takes_vocabulary: bool,
+  class: Option<ModelClass>,
+}
+
+/// Where a model's audio goes: who runs it, on which side of the
+/// organization's region, and whether its provider keeps the audio.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModelClass {
+  provider: String,
+  outside_region: bool,
+  retains_data: bool,
 }
 
 impl CloudSession {
@@ -679,8 +742,9 @@ impl CloudSession {
     self.list_read.map(|read| (read, self.read_again))
   }
 
-  /// The stored model while the region still offers it, otherwise the
-  /// region's default, which then replaces the stored one.
+  /// The model [`choose_model`] gives. A withdrawn model with none of its
+  /// class offered sends nothing to stella AI: the speaker is told to pick
+  /// another, and this computer transcribes the dictation.
   async fn model(&mut self) -> Result<ChosenModel, String> {
     if let Some(model) = &self.model {
       return Ok(model.clone());
@@ -704,8 +768,13 @@ impl CloudSession {
     )
     .await?;
     self.list_read = Some(read);
-    let choice = choose_model(self.stored_model.as_deref(), &looked.models)
-      .ok_or_else(|| UNAVAILABLE.to_string())?;
+    let stored_class = dictation::cloud_model_class(&self.app);
+    let choice = choose_model(
+      self.stored_model.as_deref(),
+      stored_class.as_ref(),
+      &looked.models,
+    )
+    .map_err(|missing| no_model(&self.app, missing))?;
     self.adopt(&choice, &looked.models)
   }
 
@@ -716,13 +785,20 @@ impl CloudSession {
     choice: &ModelChoice,
     offered: &CloudModels,
   ) -> Result<ChosenModel, String> {
+    // Also for the stored model itself: its class is kept, as for one
+    // stored before classes were; nothing is written when it is.
+    dictation::adopt_cloud_model(
+      &self.app,
+      &choice.model_id,
+      offered.class_of(&choice.model_id),
+    )?;
     if choice.replaces_stored {
-      dictation::adopt_cloud_model(&self.app, &choice.model_id)?;
       self.stored_model = Some(choice.model_id.clone());
     }
     let model = ChosenModel {
       id: choice.model_id.clone(),
       takes_vocabulary: offered.takes_vocabulary(&choice.model_id),
+      class: offered.class_of(&choice.model_id),
     };
     self.model = Some(model.clone());
     Ok(model)
@@ -737,6 +813,7 @@ impl CloudSession {
     let language = self.language;
     let words = &self.vocabulary;
     let stored = self.stored_model.as_deref();
+    let refused_model = model.borrow().clone();
     let text = upload(
       pieces,
       DEADLINE,
@@ -750,7 +827,7 @@ impl CloudSession {
           |piece, model| async move {
             send_piece(app, piece, &model, language, words).await
           },
-          || replacing(app, stored),
+          || replacing(app, stored, &refused_model),
         )
       },
     )
@@ -771,23 +848,53 @@ async fn looked_up(app: &AppHandle) -> Result<Looked, String> {
   dictation_models::look_up(dictation_models::shared(), namespace, || fetch).await
 }
 
-/// After the API refused a model: the model list read again, and the model
-/// it gives, with the choice and the list for [`CloudSession::adopt`].
+/// After the API refused `refused`: the model list read again, and the model
+/// [`replacement_choice`] allows, with the choice and the list for
+/// [`CloudSession::adopt`].
 async fn replacing(
   app: &AppHandle,
   stored: Option<&str>,
+  refused: &ChosenModel,
 ) -> Result<Option<(ChosenModel, (ModelChoice, CloudModels))>, String> {
   let (namespace, fetch) = models_read(cloud_account(app).await?);
   let looked =
     dictation_models::read_again(dictation_models::shared(), namespace, || fetch)
       .await?;
-  Ok(choose_model(stored, &looked.models).map(|choice| {
-    let model = ChosenModel {
-      id: choice.model_id.clone(),
-      takes_vocabulary: looked.models.takes_vocabulary(&choice.model_id),
-    };
-    (model, (choice, looked.models))
-  }))
+  Ok(
+    replacement_choice(stored, refused, &looked.models).map(|choice| {
+      let model = ChosenModel {
+        id: choice.model_id.clone(),
+        takes_vocabulary: looked.models.takes_vocabulary(&choice.model_id),
+        class: looked.models.class_of(&choice.model_id),
+      };
+      (model, (choice, looked.models))
+    }),
+  )
+}
+
+/// The model a piece the API refused may go to once more: the stored one
+/// while the list still offers it, otherwise only one of the same provider,
+/// on the same side of the region and keeping the audio exactly when the
+/// refused one did, the region's default first. The audio then reaches no
+/// party, place or retention the speaker did not choose; without such a
+/// model, or with the refused one's provider unknown, it goes to no other
+/// model.
+fn replacement_choice(
+  stored: Option<&str>,
+  refused: &ChosenModel,
+  offered: &CloudModels,
+) -> Option<ModelChoice> {
+  if let Some(stored) = stored.filter(|stored| offered.offers(stored)) {
+    return Some(ModelChoice {
+      model_id: stored.to_string(),
+      replaces_stored: false,
+    });
+  }
+  let class = refused.class.as_ref()?;
+  same_class_model(class, &refused.id, offered).map(|model_id| ModelChoice {
+    model_id: model_id.to_string(),
+    replaces_stored: true,
+  })
 }
 
 /// Sends `piece` with the model in `model`. When the API refuses that model
@@ -853,6 +960,18 @@ async fn send_piece(
   text
 }
 
+/// The error for a dictation with no model; a withdrawn one tells the
+/// speaker to pick another in Settings → Dictation.
+fn no_model(app: &AppHandle, missing: NoModel) -> String {
+  match missing {
+    NoModel::NoneOffered => UNAVAILABLE.to_string(),
+    NoModel::Withdrawn => {
+      crate::dictation_notice::on_model_withdrawn(app);
+      MODEL_WITHDRAWN.to_string()
+    }
+  }
+}
+
 /// The custom words a chunk carries: none for a model that does not read
 /// vocabulary, or from an API too old to say which models do.
 fn chunk_vocabulary(takes_vocabulary: bool, words: &[String]) -> &[String] {
@@ -860,15 +979,21 @@ fn chunk_vocabulary(takes_vocabulary: bool, words: &[String]) -> &[String] {
 }
 
 /// The model a recording is transcribed with: the one dictation uses, the
-/// region's default where none is stored or the stored one is gone. It
+/// region's default where none is stored, one of its class where the
+/// stored one is gone ([`choose_model`]). It
 /// names the account it was read for, which every piece is sent for.
 pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, String> {
   let (namespace, offered) = namespaced_models(cloud_account(app).await?).await?;
   let (_, stored) = dictation::destination(app);
-  let choice =
-    choose_model(stored.as_deref(), &offered).ok_or_else(|| UNAVAILABLE.to_string())?;
+  let stored_class = dictation::cloud_model_class(app);
+  let choice = choose_model(stored.as_deref(), stored_class.as_ref(), &offered)
+    .map_err(|missing| no_model(app, missing))?;
   if choice.replaces_stored {
-    dictation::adopt_cloud_model(app, &choice.model_id)?;
+    dictation::adopt_cloud_model(
+      app,
+      &choice.model_id,
+      offered.class_of(&choice.model_id),
+    )?;
   }
   let model = offered
     .models
@@ -1092,6 +1217,22 @@ pub struct CloudModels {
 impl CloudModels {
   pub fn offers(&self, model_id: &str) -> bool {
     self.models.iter().any(|model| model.id == model_id)
+  }
+
+  /// Where the model's audio goes; `None` when it is not listed or the list
+  /// names no provider for it.
+  pub fn class_of(&self, model_id: &str) -> Option<ModelClass> {
+    self
+      .models
+      .iter()
+      .find(|model| model.id == model_id)
+      .and_then(|model| {
+        Some(ModelClass {
+          provider: model.provider.clone()?,
+          outside_region: model.outside_region,
+          retains_data: model.retains_data,
+        })
+      })
   }
 
   fn takes_vocabulary(&self, model_id: &str) -> bool {
@@ -1480,33 +1621,83 @@ mod tests {
   fn the_stored_model_is_used_only_while_the_region_offers_it() {
     let offered = models_fixture(Some("openai/whisper-large-v3"));
     assert_eq!(
-      choose_model(Some("mistralai/voxtral-mini-transcribe"), &offered),
-      Some(ModelChoice {
+      choose_model(Some("mistralai/voxtral-mini-transcribe"), None, &offered),
+      Ok(ModelChoice {
         model_id: "mistralai/voxtral-mini-transcribe".to_string(),
         replaces_stored: false,
       })
     );
-    for stale in [Some("retired/model"), None] {
-      assert_eq!(
-        choose_model(stale, &offered),
-        Some(ModelChoice {
-          model_id: "openai/whisper-large-v3".to_string(),
-          replaces_stored: true,
-        }),
-        "{stale:?}"
-      );
-    }
+    // None stored: the region's default.
     assert_eq!(
-      choose_model(Some("retired/model"), &models_fixture(None))
-        .map(|choice| choice.model_id),
-      Some("mistralai/voxtral-mini-transcribe".to_string())
+      choose_model(None, None, &offered),
+      Ok(ModelChoice {
+        model_id: "openai/whisper-large-v3".to_string(),
+        replaces_stored: true,
+      })
+    );
+    // Withdrawn, its class unknown: no other model.
+    assert_eq!(
+      choose_model(Some("retired/model"), None, &offered),
+      Err(NoModel::Withdrawn)
     );
     let none = CloudModels {
       models: Vec::new(),
       default_model_id: None,
       unavailable: Some("region".to_string()),
     };
-    assert_eq!(choose_model(Some("retired/model"), &none), None);
+    assert_eq!(choose_model(None, None, &none), Err(NoModel::NoneOffered));
+  }
+
+  #[test]
+  fn a_withdrawn_model_gives_way_only_to_one_of_its_class() {
+    let class = ModelClass {
+      provider: "A".to_string(),
+      outside_region: false,
+      retains_data: false,
+    };
+    let offered = |models: Vec<CloudModel>, default: Option<&str>| CloudModels {
+      models,
+      default_model_id: default.map(str::to_string),
+      unavailable: None,
+    };
+    let others = offered(
+      vec![
+        listed("other", "B", false, false),
+        listed("outside", "A", true, false),
+        listed("keeps", "A", false, true),
+      ],
+      Some("other"),
+    );
+    assert_eq!(
+      choose_model(Some("retired"), Some(&class), &others),
+      Err(NoModel::Withdrawn)
+    );
+    let siblings = offered(
+      vec![
+        listed("other", "B", false, false),
+        listed("sibling", "A", false, false),
+        listed("default", "A", false, false),
+      ],
+      Some("default"),
+    );
+    assert_eq!(
+      choose_model(Some("retired"), Some(&class), &siblings),
+      Ok(ModelChoice {
+        model_id: "default".to_string(),
+        replaces_stored: true,
+      })
+    );
+  }
+
+  #[test]
+  fn a_model_class_survives_being_stored() {
+    let class = ModelClass {
+      provider: "A".to_string(),
+      outside_region: true,
+      retains_data: false,
+    };
+    let stored = serde_json::to_string(&class).unwrap();
+    assert_eq!(serde_json::from_str::<ModelClass>(&stored).unwrap(), class);
   }
 
   #[test]
@@ -1516,12 +1707,12 @@ mod tests {
       model.retains_data = model.id == "mistralai/voxtral-mini-transcribe";
     }
     assert_eq!(
-      choose_model(None, &offered).map(|choice| choice.model_id),
-      Some("openai/whisper-large-v3".to_string())
+      choose_model(None, None, &offered).map(|choice| choice.model_id),
+      Ok("openai/whisper-large-v3".to_string())
     );
     assert_eq!(
-      choose_model(Some("mistralai/voxtral-mini-transcribe"), &offered),
-      Some(ModelChoice {
+      choose_model(Some("mistralai/voxtral-mini-transcribe"), None, &offered),
+      Ok(ModelChoice {
         model_id: "mistralai/voxtral-mini-transcribe".to_string(),
         replaces_stored: false,
       })
@@ -1529,7 +1720,10 @@ mod tests {
     for model in &mut offered.models {
       model.retains_data = true;
     }
-    assert_eq!(choose_model(Some("retired/model"), &offered), None);
+    assert_eq!(
+      choose_model(None, None, &offered),
+      Err(NoModel::NoneOffered)
+    );
   }
 
   #[tokio::test]
@@ -1656,7 +1850,113 @@ mod tests {
     ChosenModel {
       id: id.to_string(),
       takes_vocabulary: false,
+      class: None,
     }
+  }
+
+  /// A listed model: `provider`, outside the region or not, keeping the
+  /// audio or not.
+  fn listed(
+    id: &str,
+    provider: &str,
+    outside_region: bool,
+    retains_data: bool,
+  ) -> CloudModel {
+    CloudModel {
+      id: id.to_string(),
+      display_name: id.to_string(),
+      provider: Some(provider.to_string()),
+      outside_region,
+      retains_data,
+      takes_vocabulary: false,
+    }
+  }
+
+  fn chosen_from(id: &str, offered: &CloudModels) -> ChosenModel {
+    ChosenModel {
+      id: id.to_string(),
+      takes_vocabulary: false,
+      class: offered.class_of(id),
+    }
+  }
+
+  #[test]
+  fn a_refused_model_is_replaced_only_within_its_provider_region_and_retention() {
+    let before = CloudModels {
+      models: vec![listed("picked", "A", false, false)],
+      default_model_id: None,
+      unavailable: None,
+    };
+    let picked = chosen_from("picked", &before);
+    let replacing_with = |models: Vec<CloudModel>, default: Option<&str>| {
+      replacement_choice(
+        Some("picked"),
+        &picked,
+        &CloudModels {
+          models,
+          default_model_id: default.map(str::to_string),
+          unavailable: None,
+        },
+      )
+      .map(|choice| choice.model_id)
+    };
+    // Another provider, outside the region, or keeping the audio: never.
+    assert_eq!(
+      replacing_with(
+        vec![
+          listed("other", "B", false, false),
+          listed("outside", "A", true, false),
+          listed("keeps", "A", false, true),
+        ],
+        Some("other"),
+      ),
+      None
+    );
+    // The same class, the default first.
+    assert_eq!(
+      replacing_with(
+        vec![
+          listed("first", "A", false, false),
+          listed("default", "A", false, false)
+        ],
+        Some("default"),
+      ),
+      Some("default".to_string())
+    );
+    assert_eq!(
+      replacing_with(
+        vec![
+          listed("other", "B", false, false),
+          listed("sibling", "A", false, false)
+        ],
+        Some("other"),
+      ),
+      Some("sibling".to_string())
+    );
+  }
+
+  #[test]
+  fn a_refused_model_of_unknown_provider_goes_nowhere_else_and_a_listed_stored_one_stays()
+   {
+    let offered = CloudModels {
+      models: vec![
+        listed("picked", "A", false, false),
+        listed("sibling", "A", false, false),
+      ],
+      default_model_id: Some("sibling".to_string()),
+      unavailable: None,
+    };
+    assert_eq!(
+      replacement_choice(Some("gone"), &chosen("gone"), &offered),
+      None
+    );
+    assert_eq!(
+      replacement_choice(Some("picked"), &chosen_from("picked", &offered), &offered),
+      Some(ModelChoice {
+        model_id: "picked".to_string(),
+        replaces_stored: false,
+      })
+    );
   }
 
   /// Sends one piece the way a dictation does: `refusing` names the models

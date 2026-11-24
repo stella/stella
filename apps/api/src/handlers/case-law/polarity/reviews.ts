@@ -1,13 +1,13 @@
 import { and, inArray, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawCitationDoctrineReviews,
   caseLawCitationReviews,
   caseLawDecisions,
 } from "@/api/db/schema";
 import type { caseLawCitations } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { CITATION_REVIEW_ORIGIN } from "@/api/handlers/case-law/polarity/consts";
 import { citationTextRevisionFingerprintSql } from "@/api/lib/case-law/citation-text-revision";
 

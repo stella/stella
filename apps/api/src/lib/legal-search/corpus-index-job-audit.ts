@@ -11,8 +11,8 @@
  * whichever caller happens to make it.
  */
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawIndexJobs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /** The column's own width; a reason is a sentence, not a payload. */

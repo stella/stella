@@ -79,12 +79,11 @@ const generateApproved = (documents: Record<string, string>) => {
   const decisions = Object.fromEntries(
     [...jobs]
       .filter(([, job]) => job.privileged)
-      .map(([key, job]) => [
+      .map(([key]) => [
         key,
         {
           kind: "ordinary" as const,
           qualifier: "fixture",
-          approvedDigests: [job.digest],
         },
       ]),
   );
@@ -470,7 +469,6 @@ test("a decision for a job that is not privileged is stale", () => {
     [CALLEE]: {
       kind: "ordinary",
       qualifier: "fixture",
-      approvedDigests: [digest(jobsFor(documents), CALLEE)],
     },
   });
   if (!stale.isErr() || !(stale.error instanceof ReviewRequiredError)) {
@@ -479,7 +477,7 @@ test("a decision for a job that is not privileged is stale", () => {
   expect(stale.error.staleDecisions).toEqual([CALLEE]);
   expect(stale.error.staleJobs).toEqual([]);
   expect(stale.error.message).toContain(
-    `.github/ci-job-classification-decisions/${encodeURIComponent(CALLEE)}`,
+    ".github/ci-job-classification-decisions/decisions.json",
   );
 });
 

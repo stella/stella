@@ -90,7 +90,7 @@ Project: desktop-tauri
 - const-random 0.1.18 — Apache-2.0 OR MIT
 - const-random-macro 0.1.16 — Apache-2.0 OR MIT
 - constant_time_eq 0.6.1 — Apache-2.0 OR CC0-1.0 OR MIT-0
-- cookie 0.18.2 — Apache-2.0 OR MIT
+- cookie 0.18.3 — Apache-2.0 OR MIT
 - core-foundation 0.10.1 — Apache-2.0 OR MIT
 - core-foundation 0.9.4 — Apache-2.0 OR MIT
 - core-foundation-sys 0.8.7 — Apache-2.0 OR MIT
@@ -173,7 +173,7 @@ Project: desktop-tauri
 - foreign-types 0.5.0 — MIT/Apache-2.0
 - foreign-types-macros 0.2.4 — MIT/Apache-2.0
 - foreign-types-shared 0.3.1 — MIT/Apache-2.0
-- form_urlencoded 1.2.2 — Apache-2.0 OR MIT
+- form_urlencoded 1.2.3 — Apache-2.0 OR MIT
 - fs_extra 1.3.0 — MIT
 - futures-channel 0.3.34 — Apache-2.0 OR MIT
 - futures-core 0.3.34 — Apache-2.0 OR MIT
@@ -396,7 +396,7 @@ Project: desktop-tauri
 - pin-project-lite 0.2.17 — Apache-2.0 OR MIT
 - piper 0.2.5 — Apache-2.0 OR MIT
 - pkg-config 0.3.34 — Apache-2.0 OR MIT
-- plist 1.10.3 — MIT
+- plist 1.10.4 — MIT
 - png 0.18.1 — Apache-2.0 OR MIT
 - polling 3.11.0 — Apache-2.0 OR MIT
 - polyval 0.7.3 — Apache-2.0 OR MIT
@@ -536,10 +536,10 @@ Project: desktop-tauri
 - tao-macros 0.1.4 — Apache-2.0 OR MIT
 - tar 0.4.46 — Apache-2.0 OR MIT
 - target-lexicon 0.12.16 — Apache-2.0 WITH LLVM-exception
-- tauri 2.12.5 — Apache-2.0 OR MIT
-- tauri-build 2.7.4 — Apache-2.0 OR MIT
-- tauri-codegen 2.7.4 — Apache-2.0 OR MIT
-- tauri-macros 2.7.4 — Apache-2.0 OR MIT
+- tauri 2.12.6 — Apache-2.0 OR MIT
+- tauri-build 2.7.6 — Apache-2.0 OR MIT
+- tauri-codegen 2.7.6 — Apache-2.0 OR MIT
+- tauri-macros 2.7.6 — Apache-2.0 OR MIT
 - tauri-plugin 2.7.2 — Apache-2.0 OR MIT
 - tauri-plugin-autostart 2.7.0 — Apache-2.0 OR MIT
 - tauri-plugin-clipboard-manager 2.5.0 — Apache-2.0 OR MIT
@@ -552,9 +552,9 @@ Project: desktop-tauri
 - tauri-plugin-process 2.4.0 — Apache-2.0 OR MIT
 - tauri-plugin-single-instance 2.5.5 — Apache-2.0 OR MIT
 - tauri-plugin-updater 2.14.1 — Apache-2.0 OR MIT
-- tauri-runtime 2.12.2 — Apache-2.0 OR MIT
-- tauri-runtime-wry 2.12.3 — Apache-2.0 OR MIT
-- tauri-utils 2.10.2 — Apache-2.0 OR MIT
+- tauri-runtime 2.12.4 — Apache-2.0 OR MIT
+- tauri-runtime-wry 2.12.5 — Apache-2.0 OR MIT
+- tauri-utils 2.10.4 — Apache-2.0 OR MIT
 - tauri-winres 0.3.7 — MIT
 - tauri-winrt-notification 0.8.1 — Apache-2.0 OR MIT
 - tempfile 3.27.0 — Apache-2.0 OR MIT
@@ -614,11 +614,11 @@ Project: desktop-tauri
 - unicode-segmentation 1.13.3 — Apache-2.0 OR MIT
 - universal-hash 0.6.1 — Apache-2.0 OR MIT
 - untrusted 0.9.0 — ISC
-- url 2.5.8 — Apache-2.0 OR MIT
+- url 2.5.9 — Apache-2.0 OR MIT
 - urlpattern 0.6.0 — MIT
 - utf8_iter 1.1.0 — Apache-2.0 OR MIT
 - utf_types 1.0.0 — Apache-2.0 OR MIT
-- uuid 1.29.2 — Apache-2.0 OR MIT
+- uuid 1.29.3 — Apache-2.0 OR MIT
 - valuable 0.1.1 — MIT
 - version-compare 0.2.1 — MIT
 - version_check 0.9.5 — MIT/Apache-2.0
@@ -740,12 +740,12 @@ Project: desktop-tauri
 - zerocopy-derive 0.8.63 — Apache-2.0 OR BSD-2-Clause OR MIT
 - zerofrom 0.1.8 — Unicode-3.0
 - zerofrom-derive 0.1.8 — Unicode-3.0
-- zeroize 1.9.1 — Apache-2.0 OR MIT
+- zeroize 1.9.2 — Apache-2.0 OR MIT
 - zeroize_derive 1.5.0 — Apache-2.0 OR MIT
 - zerotrie 0.2.5 — Unicode-3.0
 - zerovec 0.11.9 — Unicode-3.0
 - zerovec-derive 0.11.7 — Unicode-3.0
-- zip 9.5.1 — MIT
+- zip 9.7.0 — MIT
 - zlib-rs 0.6.8 — Zlib
 - zmij 1.0.23 — MIT
 - zruntime 0.2.2 — MIT

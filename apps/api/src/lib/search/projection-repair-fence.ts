@@ -1,5 +1,5 @@
-import type { Transaction } from "@/api/db/root";
 import type { SearchProjectionKind } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 
 /** The exact durable dirty mark whose source snapshot a repair may publish. */

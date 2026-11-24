@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
 import { Button } from "@stll/ui/button";
 import { PencilIcon, SaveIcon, XIcon } from "@stll/ui/icons";
 import { ScrollArea } from "@stll/ui/scroll-area";
@@ -10,7 +11,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { MarkdownPreview } from "@/components/markdown-preview";
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import {
   splitFrontmatter,
   toEditorMarkdown,
@@ -24,6 +25,7 @@ import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useSkillLabel } from "@/lib/knowledge/built-in-skills";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { AVAILABLE_EVERYWHERE } from "@/lib/platform/requirements.logic";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -162,11 +164,10 @@ const InstalledSkillResourcePanel = ({
   // Reset the editor when the underlying tab identity or server content
   // changes (a key-reset belongs on the parent panel, outside this batch).
   // Adjusting state during render avoids the extra commit + cascading render.
-  const [lastTabId, setLastTabId] = useState(tab.id);
-  const [lastTabContent, setLastTabContent] = useState(tab.content);
-  if (tab.id !== lastTabId || tab.content !== lastTabContent) {
-    setLastTabId(tab.id);
-    setLastTabContent(tab.content);
+  const tabSyncKey = `${tab.id}\0${tab.content}`;
+  const [prevTabSyncKey, setPrevTabSyncKey] = useState(tabSyncKey);
+  if (prevTabSyncKey !== tabSyncKey) {
+    setPrevTabSyncKey(tabSyncKey);
     setEditing(false);
     setDraft(tab.content);
   }
@@ -296,7 +297,9 @@ const InstalledSkillResourcePanel = ({
     }
     return (
       <MarkdownHybridEditor
-        imagePolicy="data-only"
+        allowsImageSource={isSafeMarkdownPreviewImageSrc}
+        label={t("markdownEditor.rawLabel")}
+        onOpenLink={openIsolatedWindow}
         key={tab.id}
         markdown={toEditorMarkdown(tab.content)}
         onMarkdownChange={persistMarkdown}

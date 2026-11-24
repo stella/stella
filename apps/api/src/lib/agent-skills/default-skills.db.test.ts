@@ -10,8 +10,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import type { Transaction } from "@/api/db/root";
 import { agentSkills, auditLogs } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

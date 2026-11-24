@@ -3,14 +3,14 @@ import { eq } from "drizzle-orm";
 
 import { parsePlainDate, Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   DEFAULT_TIME_EDIT_WINDOW_DAYS,
   DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
   DEFAULT_TIME_NARRATIVE_REQUIRED,
   organizationSettings,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   documentStatus,
+  markRetryableDocumentFailure,
+  RETRYABLE_DOCUMENT_RETRY_AFTER_SECONDS,
   SSR_STATUS_HEADER,
   ssrStatusFromHeader,
   ssrStatusHeaders,
@@ -35,5 +37,65 @@ describe("documentStatus", () => {
     expect(
       documentStatus(new Headers({ [SSR_STATUS_HEADER]: "700" }), 200),
     ).toBe(200);
+  });
+});
+
+describe("markRetryableDocumentFailure", () => {
+  const retryable = new Error("busy");
+  const broken = new Error("broken");
+  const isRetryable = (error: unknown) => error === retryable;
+
+  test("a 500 from reads that asking again fixes is sent as 503", () => {
+    const headers = new Headers();
+    markRetryableDocumentFailure({
+      errors: [retryable],
+      headers,
+      isRetryable,
+      routerStatus: 500,
+    });
+    expect(documentStatus(headers, 500)).toBe(503);
+    expect(headers.get("Retry-After")).toBe(
+      String(RETRYABLE_DOCUMENT_RETRY_AFTER_SECONDS),
+    );
+  });
+
+  test("any other failure keeps the 500", () => {
+    const headers = new Headers();
+    markRetryableDocumentFailure({
+      errors: [retryable, broken],
+      headers,
+      isRetryable,
+      routerStatus: 500,
+    });
+    expect(documentStatus(headers, 500)).toBe(500);
+    expect(headers.has("Retry-After")).toBe(false);
+  });
+
+  test("a document without a router error is left alone", () => {
+    for (const [errors, routerStatus] of [
+      [[], 500],
+      [[retryable], 200],
+      [[retryable], 404],
+    ] as const) {
+      const headers = new Headers();
+      markRetryableDocumentFailure({
+        errors,
+        headers,
+        isRetryable,
+        routerStatus,
+      });
+      expect(documentStatus(headers, routerStatus)).toBe(routerStatus);
+    }
+  });
+
+  test("a status the route asked for stands", () => {
+    const headers = new Headers(ssrStatusHeaders(502));
+    markRetryableDocumentFailure({
+      errors: [retryable],
+      headers,
+      isRetryable,
+      routerStatus: 500,
+    });
+    expect(documentStatus(headers, 500)).toBe(502);
   });
 });

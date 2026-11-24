@@ -57,3 +57,31 @@ test("an envelope without contact matches still renders both parties", () => {
   expect(view.getByText("1234567890")).toBeTruthy();
   expect(view.queryAllByRole("link")).toEqual([]);
 });
+
+test.each([
+  { basis: "organization_sender", label: "Outgoing" },
+  { basis: "organization_recipient", label: null },
+  { basis: "unknown", label: null },
+] as const)(
+  "states the direction only when the boxes tell it ($basis)",
+  ({ basis, label }) => {
+    const view = render(
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <FormattingProvider locale="en" timeZone="UTC">
+          <DataBoxEnvelope
+            contacts={null}
+            envelope={{ ...envelope, directionBasis: basis }}
+          />
+        </FormattingProvider>
+      </IntlProvider>,
+    );
+    const heading = view.getByRole("heading", {
+      name: messages.correspondence.dataBox.statedInFile,
+    });
+    // The heading's block holds the direction line when there is one.
+    const lines = [...(heading.parentElement?.querySelectorAll("p") ?? [])];
+    expect(lines.map((line) => line.textContent)).toEqual(
+      label === null ? [] : [label],
+    );
+  },
+);

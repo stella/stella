@@ -9,47 +9,47 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 812,
+    line: 869,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1052,
+    line: 1046,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1384,
+    line: 1379,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1463,
+    line: 1456,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1562,
+    line: 1561,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1608,
+    line: 1607,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1647,
+    line: 1646,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1682,
+    line: 1681,
     kind: "pending",
   },
   {
     file: "apps/api/src/handlers/case-law/citation-resolution.ts",
-    line: 1732,
+    line: 1731,
     kind: "pending",
   },
   {
@@ -267,47 +267,47 @@ export const REPLAY_WRITER_REGISTRY = [
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 377,
+    line: 397,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 411,
+    line: 428,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 561,
+    line: 572,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 652,
+    line: 663,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1283,
+    line: 1297,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1855,
+    line: 1869,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1929,
+    line: 1943,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 1966,
+    line: 1980,
     kind: "pending",
   },
   {
     file: "apps/api/src/lib/db/transitions.ts",
-    line: 2014,
+    line: 2028,
     kind: "pending",
   },
   {

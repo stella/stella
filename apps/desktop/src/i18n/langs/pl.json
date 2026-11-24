@@ -10,7 +10,7 @@
     "aiDraftAllow": "Zezwól",
     "aiDraftCodeNamed": "{code} ({name})",
     "aiDraftCodes": "Zadanie {task} · Czynność {activity}",
-    "aiDraftConsent": "stella AI może proponować opisy na podstawie sprawy, daty, czasu trwania i nazw aplikacji każdego wpisu oraz widocznych tu nazw dokumentów i tytułów okien, jeśli je rejestrujesz. Twoje wcześniejsze wpisy w sprawie pomagają jej pisać Twoim stylem. Nic więcej o Twoim dniu nie opuszcza tego komputera.",
+    "aiDraftConsent": "Do napisania opisu stella AI używa: {inputs}. Wszystko trafia do {provider} wyłącznie w celu napisania propozycji. Nic więcej o Twoim dniu nie opuszcza tego komputera.",
     "aiDraftConsentRequired": "Zezwól ponownie stella AI, aby zaproponować ten opis.",
     "aiDraftDisclosure": "Propozycje AI to sugestie, które stella tworzy na podstawie sprawdzanego wpisu, Twoich wcześniejszych wpisów w sprawie oraz zasad rozliczeń kancelarii, jeśli je dodała. Sprawdź każdy wpis przed jego utworzeniem.",
     "aiDraftEarlierEntries": "{count, plural, one {Nawiązuje do # wcześniejszego wpisu} few {Nawiązuje do # wcześniejszych wpisów} many {Nawiązuje do # wcześniejszych wpisów} other {Nawiązuje do # wcześniejszego wpisu}}",
@@ -58,9 +58,9 @@
     "billingDraftsWithdrawPending": "stella AI jest wyłączona na tym komputerze. Wycofanie zgody zostanie wysłane do aplikacji stella, gdy tylko będzie dostępna.",
     "browserAnsweredAppNameOnly": "Dla <bdi>{browser}</bdi> rejestrowana jest tylko nazwa aplikacji. Możesz to zmienić w Ustawieniach.",
     "browserAnsweredTitles": "Tytuły kart w <bdi>{browser}</bdi> są rejestrowane. Możesz to zmienić w Ustawieniach.",
-    "browserPrivacyNote": "Okna prywatne też mogą zostać zarejestrowane; wstrzymaj rejestrowanie lub wyklucz przeglądarkę podczas przeglądania prywatnego.",
+    "browserPrivacyNote": "stella nie rozpoznaje każdego okna prywatnego, więc przed prywatnym przeglądaniem wstrzymaj rejestrowanie.",
     "browserQuestionAppNameOnly": "Tylko nazwa aplikacji",
-    "browserQuestionDescription": "Tytuły kart pomagają w opisach pracy. stella nie rozpoznaje każdego okna prywatnego, więc przed prywatnym przeglądaniem wstrzymaj rejestrowanie.",
+    "browserQuestionDescription": "Tytuły kart pomagają w opisach pracy.",
     "browserQuestionLater": "Zdecyduj później",
     "browserQuestionRecordTitles": "Rejestruj tytuły",
     "browserQuestionTitle": "Rejestrować też tytuły kart w <bdi>{browser}</bdi>?",
@@ -74,6 +74,7 @@
     "candidatesFailed": "Nie udało się wczytać propozycji spraw. Spróbuj ponownie.",
     "captureDetails": "Rejestruj też tytuły okien i otwarte dokumenty",
     "captureDetailsDescription": "Wyłączenie zatrzymuje rejestrowanie nowych szczegółów. Wcześniejsze pozostają do końca okresu przechowywania lub usunięcia.",
+    "captureDetailsOffDescription": "Włączenie sprawia, że przy nowej aktywności rejestrowane są też tytuły okien i nazwy dokumentów.",
     "captureModeAppOnly": "Tylko aplikacja",
     "captureModeBrowser": "Przeglądarka",
     "captureModeLabel": "Co rejestrować dla {name}",
@@ -102,7 +103,19 @@
     "detectCalls": "Rejestruj rozmowy",
     "detectCallsDescription": "Gdy Teams, Zoom lub przeglądarka używa mikrofonu, ten czas jest liczony jako rozmowa, nawet jeśli tylko słuchasz lub pracujesz w innej aplikacji. Dźwięk nigdy nie jest nagrywany.",
     "disclosure": {
-      "control": "Nic nie jest zapisywane, dopóki nie klikniesz Rozpocznij zapis w Aktywności. W każdej chwili możesz wstrzymać zapis, wykluczyć aplikacje lub usunąć dowolny dzień.",
+      "aiDraftInputs": {
+        "appNames": "nazwy aplikacji",
+        "billingFormat": "format rozliczeń klienta",
+        "date": "data",
+        "duration": "czas trwania",
+        "earlierDescriptions": "Twoje wcześniejsze opisy w sprawie",
+        "firmGuidelines": "ewentualne zasady rozliczeń kancelarii",
+        "instructions": "wpisane przez Ciebie polecenia",
+        "matter": "sprawa",
+        "titles": "rejestrowane tytuły okien i nazwy dokumentów"
+      },
+      "aiDraftProvider": "dostawcy AI, z którego korzysta kancelaria, albo dostawcy stella AI",
+      "control": "Nic nie jest zapisywane, dopóki nie klikniesz Rozpocznij zapis. W każdej chwili możesz wstrzymać zapis, wykluczyć aplikacje lub usunąć dowolny dzień.",
       "never": {
         "audio": "Dźwięk z mikrofonu",
         "keystrokes": "Naciśnięcia klawiszy ani wpisywany tekst",
@@ -119,7 +132,7 @@
       },
       "recordedTitle": "Co jest zapisywane",
       "sent": {
-        "aiDrafts": "Propozycje stella AI, o które prosisz po wyrażeniu zgody: sprawa, data, czas trwania i nazwy aplikacji wpisu, jego tytuły okien i nazwy dokumentów, jeśli są rejestrowane, oraz polecenia, które wpiszesz. stella dodaje Twoje wcześniejsze opisy w sprawie, format rozliczeń klienta oraz zasady rozliczeń kancelarii, jeśli z nich korzysta. Wszystko trafia do dostawcy AI, z którego korzysta kancelaria, albo do dostawcy stella AI, wyłącznie w celu napisania propozycji; stella nie zapisuje propozycji ani tego, co wysłano w jej celu.",
+        "aiDrafts": "Propozycje stella AI, o które prosisz po wyrażeniu zgody. Do każdej stella AI używa: {inputs}. Wszystko trafia do {provider} wyłącznie w celu napisania propozycji; stella nie zapisuje propozycji ani tego, co wysłano w jej celu.",
         "timeEntries": "Wpisy czasu, które tworzysz: sprawa, data, czas trwania, opis, rozliczalność i ewentualne kody rozliczeniowe"
       },
       "sentTitle": "Co opuszcza ten komputer",
@@ -136,6 +149,8 @@
     "earlierTimeStaysUntitled": "Wcześniejszy czas pozostanie bez tytułów.",
     "earliestDayReached": "Wyświetlasz najwcześniejszy dostępny dzień.",
     "empty": "Tego dnia nic nie zapisano.",
+    "emptyToday": "Dziś nic jeszcze nie zapisano. Twoja praca będzie się tu pojawiać na bieżąco.",
+    "emptyTodayPaused": "Zapisywanie jest wstrzymane. Wybierz Wznów, aby zapisywać dzisiejszą pracę.",
     "encrypted": "Zaszyfrowane na tym urządzeniu",
     "enterRefinement": "Wpisz polecenie zmiany opisu.",
     "entryBillable": "Rozliczalne",
@@ -156,6 +171,7 @@
     "granularity": "Siatka",
     "hours": "{hours} godz.",
     "incompatibleActivity": "Ta wersja aplikacji nie może odczytać zapisanej aktywności. Zaktualizuj aplikację, aby kontynuować.",
+    "joinedActivity": "Nie wliczono do czasu tej sprawy",
     "keepHistory": "Zachowaj historię",
     "latestDayReached": "Wyświetlasz najpóźniejszy dostępny dzień.",
     "memoryOnly": "W tej wersji nie jest zapisywane",
@@ -164,7 +180,8 @@
     "mixedActivityLabel": "Szybkie przełączanie: {apps}, {range}",
     "moreApps": "+{count} więcej",
     "narrativeApps": "Praca w: {apps}",
-    "narrativeEvidence": "Praca nad: {evidence}",
+    "narrativeEvidence": "Praca nad {evidence}",
+    "narrativeTitle": "„{title}”",
     "newEntry": "Nowy wpis",
     "nextDay": "Następny dzień",
     "noMatters": "Nie znaleziono spraw. Spróbuj innego wyszukiwania.",
@@ -197,8 +214,8 @@
     "selectRange": "Wybierz przedział",
     "settings": "Ustawienia",
     "suggestionPieceLabel": "Proponowany wpis: {matter}, {range}, {duration}, łącznie {hours} godz.",
-    "suggestionPieces": "{count, plural, one {# odcinek} few {# odcinki} many {# odcinków} other {# odcinka}} · {duration} · {hours} godz.",
-    "suggestionRange": "{range} · {duration} · {hours} godz.",
+    "suggestionPieces": "{count, plural, one {# odcinek} few {# odcinki} many {# odcinków} other {# odcinka}} · {hours} godz.",
+    "suggestionRange": "{range} · {hours} godz.",
     "timeEntries": "Wpisy czasu",
     "title": "Aktywność",
     "titlesNeedAccessibility": "Bez dostępu w ustawieniach dostępności tytuły okien nie są rejestrowane.",
@@ -216,6 +233,14 @@
     "writeDescription": "Wpisz opis tego wpisu."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Sprawdź ponownie",
+      "notInstalled": "Zainstaluj Antigravity 1.5 lub nowszą wersję, a następnie się w niej zaloguj.",
+      "signedIn": "Zalogowano do Antigravity",
+      "signedOut": "Zaloguj się w CLI Antigravity, aby używać go w aplikacji stella.",
+      "title": "Antigravity",
+      "tooOld": "Zaktualizuj Antigravity do wersji 1.5 lub nowszej, a następnie się w niej zaloguj."
+    },
     "callbackAccount": "Konto",
     "callbackCloseTab": "Możesz zamknąć tę kartę.",
     "callbackConnectedBody": "Zapytania do AI w aplikacji stella korzystają teraz z Twojego planu ChatGPT.",
@@ -295,6 +320,7 @@
   },
   "clipboard": {
     "allClips": "Wszystkie wycinki",
+    "allResults": "Wszystkie wyniki",
     "bold": "Pogrubienie",
     "bulletedList": "Lista punktowana",
     "cancel": "Anuluj",
@@ -361,6 +387,7 @@
     "moveToGroup": "Przenieś do grupy",
     "newGroupOption": "Nowa grupa…",
     "noGroup": "Bez grupy",
+    "noGroupMatches": "Brak wyników w tej grupie",
     "noResults": "Brak pasujących wycinków",
     "noResultsSearchRegistries": "Szukaj „{query}” w rejestrach",
     "numberedList": "Lista numerowana",
@@ -444,6 +471,21 @@
     "welcomeShortcutTitle": "Otwórz go z dowolnego miejsca.",
     "welcomeStart": "Zacznij kopiować",
     "welcomeTitle": "Poznaj swój schowek"
+  },
+  "clipboardSettings": {
+    "capture": "Zapisuj nowe wycinki",
+    "captureDescription": "Po wyłączeniu nic, co skopiujesz, nie jest zapisywane.",
+    "errorSave": "Nie udało się zapisać zmiany. Spróbuj ponownie.",
+    "excludedDescription": "Nic, co skopiujesz w tych aplikacjach, nie jest zapisywane.",
+    "excludedEmpty": "Aby wykluczyć aplikację, kliknij prawym przyciskiem jeden z jej wycinków w schowku i wybierz, aby nie zapisywać z niej nowych wycinków.",
+    "groupActions": "Działania dla grupy {groupName}",
+    "groupsDescription": "Przeciągnij grupę, aby zmienić jej miejsce w schowku.",
+    "groupsEmpty": "Utwórz grupę, a następnie przeciągnij do niej wycinki w schowku.",
+    "history": "Historia",
+    "moveGroupDown": "Przesuń w dół",
+    "moveGroupUp": "Przesuń w górę",
+    "recordingsDescription": "Zezwala na pokazywanie schowka na zrzutach ekranu, w nagraniach i podczas udostępniania ekranu.",
+    "retentionDescription": "Starsze wycinki są usuwane. Wycinki w grupie są zachowywane."
   },
   "dialog": {
     "accountEmail": "Konto",
@@ -570,6 +612,38 @@
       "descriptionCloud": "stella AI dodatkowo poprawia błędy rozpoznawania i podyktowane formatowanie, na przykład „nowa linia” lub „pogrubienie”, oraz dopasowuje tekst do aplikacji, na przykład poczty e-mail.",
       "title": "Popraw za pomocą AI"
     },
+    "cleanupInstructions": {
+      "description": "Jak ma być napisany Twój tekst, np. wariant pisowni lub słowa, których należy unikać. Poprawianie stosuje się do nich tam, gdzie pozwalają na to jego zasady, i nigdy nie zmienia tego, co zostało powiedziane.",
+      "placeholder": "Na przykład: Używaj brytyjskiej pisowni. Nigdy nie używaj emoji. Zachowuj moje urwane zdania.",
+      "saveFailed": "Nie udało się zapisać instrukcji. Spróbuj ponownie.",
+      "title": "Twoje instrukcje"
+    },
+    "cleanupModel": {
+      "automatic": "Automatycznie",
+      "automaticDescription": "Używa szybkiego modelu Twojej organizacji.",
+      "chosenDescription": "Jeśli ten model potrzebuje więcej niż kilku sekund, tekst zostanie wpisany bez poprawiania.",
+      "title": "Model AI",
+      "withdrawn": "Wybrany model nie jest już dostępny, więc poprawianie działa automatycznie."
+    },
+    "cleanupStyle": {
+      "casual": {
+        "description": "Zachowuje swobodny ton i oszczędną interpunkcję.",
+        "title": "Swobodny"
+      },
+      "notes": {
+        "description": "Krótkie punkty, każdy w osobnym wierszu, bez zbędnych słów.",
+        "title": "Notatki"
+      },
+      "polished": {
+        "description": "Poprawia błędy rozpoznawania i zachowuje Twoje sformułowania.",
+        "title": "Dopracowany"
+      },
+      "title": "Styl",
+      "verbatim": {
+        "description": "Każde słowo tak, jak padło; dodawane są tylko interpunkcja i wielkie litery.",
+        "title": "Dosłowny"
+      }
+    },
     "context": {
       "textBeforeCursor": {
         "description": "Do {limit, number} znaków dokumentu, w którym jesteś, aby dyktowany tekst pasował do tego, co piszesz.",
@@ -601,6 +675,7 @@
       "local": "Ten komputer",
       "localDescription": "Mowa jest przetwarzana na tym komputerze i nie jest zapisywana.",
       "model": "Model przetwarzania",
+      "modelWithdrawn": "Wybrany model nie jest już dostępny. Wybierz inny; do tego czasu dyktowanie jest przepisywane na tym komputerze.",
       "outsideRegion": "Poza Twoim regionem",
       "retainsData": "Przechowuje Twój dźwięk",
       "retainsDataTitle": "{provider} przechowuje to, co dyktujesz",
@@ -627,6 +702,30 @@
       "transcription": "Transkrypcja nie powiodła się. Spróbuj ponownie."
     },
     "failureKeptInHistory": "Tekst jest w historii schowka.",
+    "fix": {
+      "description": "Zaznacz w dowolnej aplikacji słowa, które dyktowanie zapisało błędnie, i naciśnij {shortcut}, aby wpisać ich pisownię. stella odczytuje zaznaczenie tylko wtedy, gdy naciśniesz skrót.",
+      "taken": "Inna aplikacja używa skrótu {shortcut}. To samo oferuje menu Dyktowanie przy ikonie aplikacji stella.",
+      "title": "Skrót do poprawiania dyktowania"
+    },
+    "fixPanel": {
+      "dictatedAs": "Podyktowano jako",
+      "hint": "stella zapisze te słowa tak w kolejnych dyktowaniach, na wszystkich Twoich urządzeniach.",
+      "notSaved": "Nie udało się zapisać poprawki. Sprawdź, czy stella jest połączona z Twoim kontem.",
+      "nothing": "Najpierw zaznacz błędne słowa w aplikacji albo wpisz je tutaj.",
+      "pick": "Wybierz błędne słowa z ostatniego dyktowania:",
+      "refused": {
+        "empty": "Wypełnij oba pola.",
+        "lineBreak": "Poprawka to jeden wiersz tekstu.",
+        "punctuation": "Wybierz podyktowane słowa bez znaków interpunkcyjnych.",
+        "same": "Słowa są już tak zapisane.",
+        "tooLong": "To za długie na jedną poprawkę.",
+        "tooManyWords": "Poprawka może mieć najwyżej trzy słowa."
+      },
+      "save": "Zapisz poprawkę",
+      "saving": "Zapisywanie poprawki…",
+      "title": "Popraw podyktowane słowo",
+      "writtenAs": "Poprawna pisownia"
+    },
     "groups": {
       "cleanup": "Poprawianie",
       "shortcut": "Skrót",
@@ -647,6 +746,17 @@
       "description": "Automatycznie używa języków interfejsu i klawiatur tego komputera. Gdy jest ich kilka, każde słowo jest rozpoznawane w języku, w którym je wypowiadasz.",
       "noResults": "Nie znaleziono języków",
       "title": "Język dyktowania"
+    },
+    "learned": {
+      "delete": "Usuń to, czego nauczyła się stella",
+      "description": "Gdy poprawisz podyktowane słowo dwa razy tak samo lub poprawisz je skrótem {shortcut}, stella zapisze je tak w kolejnych dyktowaniach. Synchronizowane z Twoimi innymi urządzeniami; widzisz je tylko Ty.",
+      "empty": "Brak wyuczonych poprawek.",
+      "failed": "Nie udało się zmienić poprawki.",
+      "fix": "{from} → {to}",
+      "group": "Wyuczone poprawki",
+      "title": "Poprawki wyuczone z Twoich zmian",
+      "unreadable": "Nie udało się odczytać tego, czego nauczyła się stella.",
+      "working": "Zapisywanie zmiany…"
     },
     "lede": "Przytrzymaj <key>{shortcut}</key> i mów. Tekst pojawi się tam, gdzie piszesz.",
     "microphone": {
@@ -672,10 +782,13 @@
       "checkBodyMac": "Sprawdź dostęp do mikrofonu w Ustawieniach systemowych i spróbuj ponownie.",
       "checkBodyPc": "Sprawdź dostęp do mikrofonu w Ustawieniach systemu Windows i spróbuj ponownie.",
       "chooseMicrophone": "Wybierz mikrofon…",
+      "chooseModel": "Wybierz model…",
       "dismiss": "Zamknij",
       "inputDevice": "Wejście: {device}",
       "missingBody": "Dyktowanie używa zamiast tego {device}.",
       "missingTitle": "{missing} nie jest podłączone",
+      "modelBody": "Wybierz inny w Ustawieniach → Dyktowanie. To dyktowanie przepisano na tym komputerze.",
+      "modelTitle": "Twój model transkrypcji nie jest już dostępny",
       "nothingBody": "Mów, trzymając klawisz, albo wybierz inne wejście w ustawieniach Dźwięku.",
       "nothingTitle": "stella nie usłyszała mowy",
       "openSettingsMac": "Otwórz Ustawienia systemowe",
@@ -737,6 +850,11 @@
       "failed": "Nie udało się otworzyć okna. Spróbuj ponownie.",
       "open": "Otwórz",
       "title": "Transkrypcja nagrania"
+    },
+    "translateTo": {
+      "description": "Zapisuje poprawiony tekst w tym języku, niezależnie od tego, w jakim języku mówisz.",
+      "off": "Język, w którym mówisz",
+      "title": "Pisz w języku"
     },
     "whileDictating": {
       "choices": {
@@ -833,6 +951,30 @@
   },
   "onboarding": {
     "activityBody": "Zobacz, na co poszedł dzień pracy, i zamień go na robocze wpisy czasu. To Ty decydujesz, co jest zapisywane i co jest wysyłane.",
+    "activitySetup": {
+      "aiDrafts": {
+        "allow": "Proponuj opisy za pomocą stella AI",
+        "body": "stella AI może zaproponować opis każdego wpisu czasu. Zezwól na to teraz albo przy pierwszym przeglądaniu dnia.",
+        "withdraw": "Zgodę możesz w każdej chwili wycofać w Ustawieniach."
+      },
+      "calls": {
+        "body": "Licz czas spędzony na rozmowach.",
+        "title": "Rozmowy"
+      },
+      "details": {
+        "appNamesOnly": "Rejestrowane są tylko nazwy aplikacji.",
+        "body": "Pomagają odróżnić sprawy podczas przeglądania dnia.",
+        "browsers": "Przeglądarki rejestrują tytuły kart dopiero wtedy, gdy na to zezwolisz. Aktywność pyta o każdą przeglądarkę, gdy zobaczy ją po raz pierwszy.",
+        "title": "Tytuły okien i dokumenty"
+      },
+      "screens": {
+        "aiDrafts": "Propozycje AI",
+        "calls": "Rozmowy",
+        "details": "Szczegóły",
+        "recording": "Przegląd"
+      },
+      "starting": "Rozpoczynanie zapisu…"
+    },
     "activityStoryDraft": "Wersja robocza",
     "activityStoryRecordTitle": "Zapisane",
     "activityStoryReviewCaption": "Przeglądasz dzień i wybierasz sprawę",
@@ -871,7 +1013,6 @@
         "choose": "Mikrofon do dyktowania",
         "title": "Niech stella Cię słyszy"
       },
-      "progress": "Krok {current} z {total}",
       "screens": {
         "app": "Poprawki",
         "context": "Kontekst",
@@ -879,7 +1020,6 @@
         "transcription": "Transkrypcja",
         "words": "Słowa"
       },
-      "skipRest": "Pomiń resztę",
       "transcription": {
         "body": "Możesz to później zmienić w Ustawieniach.",
         "bodyLocal": "Model mowy działa tutaj, więc dyktowanie działa też offline.",
@@ -949,6 +1089,7 @@
     "permissionsTitlePc": "Skonfiguruj ten komputer",
     "progress": "Krok {current} z {total}",
     "skip": "Pomiń",
+    "skipRest": "Pomiń resztę",
     "staysLocalMac": "Zostaje na tym Macu",
     "staysLocalPc": "Zostaje na tym komputerze",
     "tryAgain": "Spróbuj ponownie",
@@ -995,7 +1136,6 @@
     "errorUpdateLanguage": "stella desktop nie mógł zmienić języka interfejsu.",
     "errorUpdatePreferences": "stella desktop nie mógł zaktualizować ustawień powiadomień.",
     "language": "Język",
-    "lastVerified": "Ostatnio zweryfikowano",
     "loadingAccount": "Sprawdzanie połączenia z kontem…",
     "managedOfficeEditing": "Zarządzana edycja plików Office dla stella.",
     "neverRequested": "Nigdy niewymagane",
@@ -1068,6 +1208,8 @@
       "available": "Dostępna jest wersja {version}.",
       "checkFailed": "stella desktop nie mógł sprawdzić aktualizacji.",
       "deferred": "Wersja {version} czeka, dopóki edytujesz otwarte dokumenty. Gdy skończysz, sprawdź ponownie, aby ją zainstalować, w przeciwnym razie zostanie zainstalowana przy następnym automatycznym sprawdzeniu.",
+      "downloadProgress": "Pobrano {percent}%",
+      "downloading": "Pobieranie wersji {version}. Po instalacji stella desktop uruchomi się ponownie.",
       "install": "Zainstaluj i uruchom ponownie",
       "installFailed": "stella desktop nie mógł zainstalować aktualizacji.",
       "installInProgress": "Trwa instalowanie aktualizacji.",
@@ -1132,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Odrzuć moje zmiany",
+      "editorLabel": "Edytor tekstu po korekcie",
       "failedCount": "{count, plural, one {# część niepoprawiona} few {# części niepoprawione} many {# części niepoprawionych} other {# części niepoprawionych}}",
       "fileNameMarkdown": "{title} po korekcie.md",
       "fileNameText": "{title} po korekcie.txt",
@@ -1203,6 +1347,7 @@
       "audioMissing": "Nagranie nie jest już otwarte w tym oknie, więc nie zapisano go w sprawie.",
       "audioTooLarge": "Nagranie jest większe niż {size}, więc nie zapisano go w sprawie.",
       "cleanedDocxFileName": "{title} – tekst poprawiony.docx",
+      "cleanedNotFiled": "Nie udało się zapisać tekstu po korekcie w sprawie.",
       "cleanedTitle": "{title} – tekst poprawiony",
       "documents": "Zapisywanie dokumentów Word…",
       "docxFileName": "{title} – transkrypcja.docx",
@@ -1245,7 +1390,6 @@
       "saveToMatterFailed": "Nie udało się zapisać transkrypcji w sprawie. Spróbuj ponownie.",
       "saveWithTimestamps": "Tekst ze znacznikami czasu (.txt)",
       "saveWithoutTimestamps": "Tekst bez znaczników czasu (.txt)",
-      "savedToMatter": "Zapisano w sprawie {matter} jako {fileName}.",
       "savingToMatter": "Zapisywanie…",
       "thisComputer": "Ten komputer",
       "transcriptTitle": "Transkrypcja"
@@ -1267,6 +1411,7 @@
     "activityResume": "Wznów rejestrowanie",
     "checkForUpdates": "Sprawdź aktualizacje",
     "dictation": "Dyktowanie",
+    "dictationFix": "Popraw ostatnie dyktowanie…",
     "dictationHint": "Przytrzymaj {key}, aby dyktować",
     "dictationRetype": "Wpisz ponownie ostatnie dyktowanie",
     "dictationSettings": "Ustawienia dyktowania…",
@@ -1289,13 +1434,16 @@
     "sessionOpeningInOffice": "Otwieranie w Office",
     "sessionSavingDraft": "Zapisywanie wersji roboczej",
     "settings": "Ustawienia",
+    "showTranscription": "Pokaż transkrypcję",
     "support": "Wsparcie",
     "supportCopyDiagnostics": "Kopiuj diagnostykę",
     "supportEmailSupport": "Wsparcie e-mail",
     "supportRevealAppData": "Pokaż dane aplikacji",
     "temporaryWorkingCopies": "Tymczasowe kopie robocze",
     "transcribeRecording": "Transkrybuj nagranie…",
-    "updateReady": "Aktualizacja gotowa",
+    "transcriptionProgress": "Trwa transkrypcja: {done} z {total} min",
+    "transcriptionProgressSoFar": "Trwa transkrypcja: dotąd {done} min",
+    "transcriptionReady": "Transkrypcja gotowa",
     "updatesManaged": "Aktualizacjami zarządza Twoja organizacja"
   }
 }

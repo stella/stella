@@ -141,3 +141,47 @@ test("an unregistered baseline is never prunable", () => {
   ]);
   expect(pruneViolations(".changeset/release.md", "x", "")).not.toEqual([]);
 });
+
+test("test determinism baselines only permit lower counts and deleted files", () => {
+  const before = JSON.stringify({
+    "apps/api/src/example.test.ts": {
+      count: 3,
+      owner: "api",
+      reason: "pre-kit census; migrate to @stll/test-kit",
+    },
+  });
+  const lowered = JSON.stringify({
+    "apps/api/src/example.test.ts": {
+      count: 1,
+      owner: "api",
+      reason: "pre-kit census; migrate to @stll/test-kit",
+    },
+  });
+  const raised = JSON.stringify({
+    "apps/api/src/example.test.ts": {
+      count: 4,
+      owner: "api",
+      reason: "pre-kit census; migrate to @stll/test-kit",
+    },
+  });
+  const reworded = JSON.stringify({
+    "apps/api/src/example.test.ts": {
+      count: 1,
+      owner: "api",
+      reason: "changed reason",
+    },
+  });
+
+  for (const path of [
+    BASELINE_PATHS.testAmbientTime,
+    BASELINE_PATHS.testWallclockAssertion,
+    BASELINE_PATHS.testRealTimers,
+    BASELINE_PATHS.testState,
+    BASELINE_PATHS.rustTestDeterminism,
+  ]) {
+    expect(pruneViolations(path, before, lowered), path).toEqual([]);
+    expect(pruneViolations(path, before, "{}"), path).toEqual([]);
+    expect(pruneViolations(path, before, raised), path).not.toEqual([]);
+    expect(pruneViolations(path, before, reworded), path).not.toEqual([]);
+  }
+});

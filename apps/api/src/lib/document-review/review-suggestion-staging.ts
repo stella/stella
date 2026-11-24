@@ -17,9 +17,9 @@ import { and, eq, inArray, isNotNull } from "drizzle-orm";
 
 import type { FolioAIEditOperation } from "@stll/folio-core/ai-edits";
 
-import type { Transaction } from "@/api/db/root";
 import { documentReviewFindings, docxSuggestions } from "@/api/db/schema";
 import type { DocxSuggestionSeverity } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

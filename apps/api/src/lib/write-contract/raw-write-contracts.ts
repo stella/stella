@@ -10,6 +10,12 @@ import type { WriteContract } from "@/api/lib/write-contract/write-contract";
 export const RAW_WRITE_CONTRACTS: ReadonlyMap<ApiRouteKey, WriteContract> =
   new Map([
     [
+      "POST /v1/auth/sso/discover",
+      {
+        contract: "patch",
+      },
+    ],
+    [
       "DELETE /mcp",
       {
         contract: "patch",

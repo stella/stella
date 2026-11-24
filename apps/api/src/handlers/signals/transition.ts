@@ -4,9 +4,9 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { SignalStatus } from "@stll/api-contract/signals";
 
-import type { Transaction } from "@/api/db/root";
 import { SIGNAL_EVENT_TYPE, signalEvents, signals } from "@/api/db/schema";
 import type { SignalAcceptedResult, SignalEventType } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   AUDIT_ACTION,

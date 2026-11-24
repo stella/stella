@@ -3,14 +3,14 @@ import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawDecisionAliasMovedIdentities,
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
   caseLawRawSweeps,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";

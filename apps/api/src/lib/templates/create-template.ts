@@ -14,7 +14,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   AUTHORED_TEMPLATE_ORIGIN,
   templates,

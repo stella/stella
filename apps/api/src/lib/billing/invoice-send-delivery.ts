@@ -1,9 +1,9 @@
 import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { invoiceSends } from "@/api/db/schema";
 import type { InvoiceSendDeliveryStatus } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

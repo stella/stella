@@ -9,6 +9,7 @@ import {
   ChevronDownIcon,
   ClockIcon,
   CpuIcon,
+  DictateIcon,
   EyeOffIcon,
   FileTextIcon,
   FlaskConicalIcon,
@@ -106,6 +107,12 @@ export const ORGANIZATION_SECTIONS = [
         icon: UsersIcon,
       },
       {
+        to: "/settings/organization/sso",
+        labelKey: "settings.organization.sso.title",
+        icon: ShieldIcon,
+        gate: "enterpriseSso",
+      },
+      {
         to: "/settings/organization/usage",
         labelKey: "admin.planAndUsage",
         icon: GaugeIcon,
@@ -131,6 +138,11 @@ export const ORGANIZATION_SECTIONS = [
         to: "/settings/organization/anonymization",
         labelKey: "settings.organization.anonymization.title",
         icon: EyeOffIcon,
+      },
+      {
+        to: "/settings/organization/dictation",
+        labelKey: "settings.organization.dictation.title",
+        icon: DictateIcon,
       },
       {
         to: "/settings/organization/tools",

@@ -359,6 +359,7 @@
     "checkingDocxEditDescription": "stella prüft noch, ob diese DOCX-Datei sicher bearbeitet werden kann. Versuchen Sie es erneut, sobald das Dokument vollständig geladen ist.",
     "checkingDocxEditTitle": "Dokument wird geprüft",
     "chooseEvidence": "Wählen Sie eine Datei aus, um einen nummerierten Beweisverweis einzufügen.",
+    "collaborationEditRefused": "Das gemeinsame Dokument konnte Ihre letzte Änderung nicht übernehmen, daher wurde sie rückgängig gemacht.",
     "collaborationSnapshotRecovered": "Die gespeicherte Arbeitskopie konnte nicht erneut geöffnet werden. Der Raum wurde aus dem zuletzt gespeicherten Dokument wiederhergestellt; nicht gespeicherte Änderungen sind möglicherweise verloren gegangen.",
     "comment": "Kommentar",
     "comments": {

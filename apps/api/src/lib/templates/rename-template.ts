@@ -11,7 +11,7 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { templates } from "@/api/db/schema";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";

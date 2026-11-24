@@ -25,7 +25,7 @@ import { assistantMessageFallbackText } from "@/components/chat/chat-thread-mess
 import type {
   ChatUITools,
   RegisteredChatUIToolCallPart,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { normalizeCreateDocumentInput } from "@/components/chat/create-document-draft.logic";
 import { DocumentIcon } from "@/components/document-icon";
 import { MarkdownPreview } from "@/components/markdown-preview";

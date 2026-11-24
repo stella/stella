@@ -7,6 +7,7 @@ import type {
 } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { projectionDigest } from "@stll/legal-ast/projection-digest";
+import { rejectionOf } from "@stll/property-testing/rejection";
 
 import {
   readServedDecisionAst,
@@ -14,6 +15,7 @@ import {
 } from "@/api/handlers/case-law/decisions/served-ast";
 import { createSafeId } from "@/api/lib/branded-types";
 import { runWithQueryCounter } from "@/api/lib/db-query-counter";
+import { CorpusPayloadUnavailableError } from "@/api/lib/errors/tagged-errors";
 import { currentReadWork } from "@/api/lib/observability/request-work";
 import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
 
@@ -83,6 +85,34 @@ describe("served decision AST projection", () => {
     expect(served.payload).toEqual(row);
     expect(served.projectionDigest).toBe(await projectionDigest(row));
   });
+
+  test.each([
+    { name: "null", pgAst: null },
+    { name: "placeholder", pgAst: {} },
+    { name: "zero blocks", pgAst: { ...ast(""), blocks: [] } },
+  ])(
+    "an unreadable stored AST with $name in the row remains unavailable",
+    async ({ pgAst }) => {
+      const read = readServedDecisionAst({
+        astS3Key: "ast-key",
+        contentHash: "content-hash",
+        pgAst,
+        decisionId,
+        corpusReadEnabled: true,
+        readStore: async () =>
+          await Promise.reject(
+            new CorpusPayloadUnavailableError({
+              message: "Fixture object unavailable",
+              documentId: decisionId,
+              key: "ast-key",
+            }),
+          ),
+      });
+      expect(await rejectionOf(read)).toBeInstanceOf(
+        CorpusPayloadUnavailableError,
+      );
+    },
+  );
 
   test("promotes legacy section titles before serving outlines and paths", async () => {
     const row = ast("O d ů v o d n ě n í :");

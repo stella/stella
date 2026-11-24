@@ -3,8 +3,8 @@ import {
   INSPECTOR_PANE_INTENT,
 } from "@/components/inspector/inspector-store-types";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import { decisionChatKey } from "@/features/chat/legal-document-chat-key";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import type { SafeId } from "@/lib/safe-id";
 
 /**

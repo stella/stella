@@ -522,15 +522,8 @@ const DayContent = ({
       </>
     );
   }
-  if (snapshot.segments.length === 0 && !reviewVisible) {
-    return (
-      <>
-        {header}
-        {notice}
-        <p className="text-muted-foreground text-sm">{t("empty")}</p>
-      </>
-    );
-  }
+  // A day with nothing recorded still shows its grid: an entry can be drawn
+  // on it, and today's fills in as work is recorded.
   return (
     <ActivityDayCalendar
       key={snapshot.date}

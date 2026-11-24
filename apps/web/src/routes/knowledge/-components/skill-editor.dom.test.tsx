@@ -4,7 +4,7 @@ import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import messages from "@/i18n/langs/en.json";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(import.meta.env, { VITE_API_URL: "http://localhost:3001" });

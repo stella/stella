@@ -51,6 +51,23 @@ export const translateBudget = dedicatedBudget(
   }),
 );
 
+/**
+ * Citation checks: each resolves a reference against the corpus and sends a
+ * decision's passages to the decision model, so it is budgeted well under
+ * the shared API one.
+ */
+export const citationCheckBudget = dedicatedBudget(
+  rateLimit({
+    duration: API_RATE_LIMITS.citationCheck.duration,
+    max: API_RATE_LIMITS.citationCheck.max,
+    budget: { name: "api.citation_check.address", keyKind: "address" },
+    ...createRedisRateLimit({
+      failurePolicy: "fail_open_local",
+      scope: "citation-check",
+    }),
+  }),
+);
+
 /** The folio collaborative-edit endpoints: the editor calls them on every open. */
 export const folioCollabBudget = dedicatedBudget(
   rateLimit({

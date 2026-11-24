@@ -16,6 +16,8 @@ The command recursively reads JSON receipts and writes a sorted, formatted table
 
 Batch composition uses the largest shard baseline plus each file's positive increase above its own shard baseline: `max(baselines) + sum(max(0, peak - fileBaseline))`. Peaks below their baseline are valid process noise. A shared batch's estimate stays within 70% of its class cap; an unmeasured file reserves 40% of that share. Measurements guide composition; runtime memory limits remain authoritative.
 
+Increments do not add up for files that each boot an embedded Postgres: a finished file's database may still be resident when the next one boots, depending on how far the collector got. On hosted runners, one such pair peaked anywhere from 1300 MB to 2571 MB together, 550 MB above the sum of its solo peaks (1248 MB and 773 MB). Forcing a collection after each close released the first database but raised the pair's peak with the collection's own transient. So the planner also keeps the summed solo peaks of a batch's embedded-Postgres files, plus that measured 550 MB overlap allowance (`EMBEDDED_POSTGRES_OVERLAP_ALLOWANCE_MB`), within the class cap.
+
 The runner warns when a shared batch's measured peak passes 80% of its cap: its plan came from a stale or missing measurement, so refresh the table before the batch nears the cap (warned at 90%, failed above 100%).
 
 ## Hung-process diagnostics

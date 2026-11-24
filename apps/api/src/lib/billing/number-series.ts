@@ -4,12 +4,12 @@ import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { renderMatterReference } from "@stll/api-contract";
 import type { InvoiceDocumentType } from "@stll/invoicing";
 
-import type { Transaction } from "@/api/db/root";
 import {
   numberSeries,
   numberSeriesAllocations,
   numberSeriesCounters,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { toNumberPatternScopeKey } from "@/api/lib/billing/number-pattern";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

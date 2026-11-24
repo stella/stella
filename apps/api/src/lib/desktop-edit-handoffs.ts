@@ -5,7 +5,7 @@ import type { DesktopHandoffFailureReason } from "@stll/api-contract/desktop-han
 
 import { member } from "@/api/db/auth-schema";
 import { rlsDb, rootDb } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   desktopEditHandoffs,
   desktopEditSessions,

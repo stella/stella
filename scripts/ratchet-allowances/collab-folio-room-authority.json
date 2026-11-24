@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 15,
+  "reason": "The collaboration server runs each room's canonical authority (serveCanonicalYjsRoom) and opens the room's seed DOCX, so @stll/collab declares @stll/folio-core at the catalog version the API and web apps already use, together with its ProseMirror and Yjs peers at the shared catalog versions every Folio host declares (one resolution of each peer), and @stll/test-kit to drive its lease tests on a test clock."
+}

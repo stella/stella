@@ -8,7 +8,7 @@ import {
   type ChatLocalRunSteerSource,
 } from "@stll/api-contract/chat-run-target";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { readChatTurnView } from "@/api/handlers/chat/chat-turn-persistence";
 import { CHAT_TURN_PERMISSIONS } from "@/api/handlers/chat/chat-turn-state";
 import { lockOwnQueueThreadOnTx } from "@/api/handlers/chat/queue/chat-queue-store";

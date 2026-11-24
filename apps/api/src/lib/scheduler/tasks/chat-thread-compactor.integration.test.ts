@@ -19,6 +19,8 @@ import {
 } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
+import { readFailureBrand } from "@stll/errors";
+
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -30,6 +32,7 @@ import {
 import type { RlsDatabase } from "@/api/db/scoped";
 import { toPersistedChatMessageContentV3 } from "@/api/handlers/chat/chat-message-parts";
 import * as aiConfigLoader from "@/api/lib/ai-config-loader";
+import * as captureModule from "@/api/lib/analytics/capture";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
@@ -485,5 +488,47 @@ describe("chat thread compactor", () => {
         }),
       }),
     );
+  });
+
+  test("a run that outlives its deadline is reported as a deadline", async () => {
+    const threadId = await seedDueThread([ids.wsA1]);
+    const captured: unknown[] = [];
+    const captureSpy = spyOn(captureModule, "captureError");
+    captureSpy.mockImplementation((error) => {
+      captured.push(error);
+    });
+    modelSpy.mockImplementation(async ({ abortSignal }) => {
+      await new Promise<void>((resolve) => {
+        abortSignal?.addEventListener(
+          "abort",
+          () => {
+            resolve();
+          },
+          { once: true },
+        );
+      });
+      abortSignal?.throwIfAborted();
+      return SUMMARY_MARKDOWN;
+    });
+    // Like the dedicated connection, the fence refuses to return once its
+    // signal has fired.
+    const task = createChatThreadCompactor({
+      compactionTimeoutMs: 20,
+      database: asTestRaw<RlsDatabase<Transaction>>(testDb),
+      withStoredContentEgress: async ({ signal, work }) => {
+        const value = await work();
+        signal.throwIfAborted();
+        return value;
+      },
+    });
+
+    await runCompactor(task);
+
+    expect(captured).toHaveLength(1);
+    expect(readFailureBrand(captured[0])?.reason).toBe(
+      "work_deadline_exceeded",
+    );
+    expect(await readCheckpoints(threadId)).toEqual([]);
+    expect((await readThread(threadId))?.compactionScheduledAt).not.toBeNull();
   });
 });

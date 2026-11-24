@@ -1,19 +1,11 @@
 import { useLayoutEffect } from "react";
+import type { RefObject } from "react";
 
-import type { Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 
 import { fetchWithTimeout } from "@stll/fetch";
-import {
-  appendAutocompleteToken,
-  autocompleteSuggestionKey,
-  clearAutocompleteSuggestion,
-  finishAutocompleteSuggestion,
-  getAutocompleteSuggestion,
-  shouldTriggerAutocomplete,
-  startAutocompleteSuggestion,
-} from "@stll/folio-react";
 
+import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { detached } from "@/lib/detached";
@@ -53,6 +45,7 @@ const readStringField = (data: string, field: string): string | null => {
 const extractAutocompleteContext = (
   view: EditorView,
 ): { prefix: string; suffix: string; anchor: number } => {
+  // The editor starts the suggestion at the caret, as read here.
   const { state } = view;
   const anchor = state.selection.from;
   const fullPrefix = state.doc.textBetween(0, anchor, "\n", "\n");
@@ -103,23 +96,23 @@ const consumeAutocompleteStream = async (
 };
 
 /**
- * Wire folio's autocomplete plugin to the backend SSE stream.
+ * Stream the backend's suggestion into folio's inline autocomplete
+ * (`DocxEditorRef.autocomplete`).
  *
- * Subscribes to PM transactions on the given `view`. On a doc
- * change, cancels any in-flight request and (re)schedules a
- * debounced trigger. When the debounce expires, gates via
- * {@link shouldTriggerAutocomplete}, fetches
- * `/v1/ai-autocomplete/stream`, and pumps tokens into the
- * plugin via meta dispatches.
- *
- * Designed for the folio editor where the plugin is already in
- * the editor's plugin array; the host just provides the view
- * handle and the trigger lifecycle.
+ * Subscribes to transactions on the given `view`. A suggestion never
+ * changes the document, so every document change is an edit: it cancels
+ * any in-flight request and (re)schedules a debounced trigger. When the
+ * debounce expires and the caret fits a suggestion (`canTrigger`), it
+ * fetches `/v1/ai-autocomplete/stream` and appends each token.
  */
-export const useAutocompleteStream = (
-  view: EditorView | null,
-  options: UseAutocompleteStreamOptions,
-): void => {
+export const useAutocompleteStream = ({
+  editorRef,
+  view,
+  ...options
+}: UseAutocompleteStreamOptions & {
+  editorRef: RefObject<DocxEditorRef | null>;
+  view: EditorView | null;
+}): void => {
   const {
     debounceMs = DEFAULT_DEBOUNCE_MS,
     enabled,
@@ -151,23 +144,21 @@ export const useAutocompleteStream = (
       }
     };
 
-    const dispatchSafe = (tr: Transaction) => {
-      if (!aliveRef.value || view.isDestroyed) {
-        return false;
-      }
-      view.dispatch(tr);
-      return true;
-    };
+    // The editor's suggestion, while this hook still drives it.
+    const live = () =>
+      aliveRef.value && !view.isDestroyed
+        ? (editorRef.current?.autocomplete ?? null)
+        : null;
 
     const fireRequest = async () => {
-      if (!aliveRef.value) {
+      const autocomplete = live();
+      if (autocomplete === null) {
         return;
       }
-      if (getAutocompleteSuggestion(view.state).status !== "idle") {
+      if (autocomplete.get().status !== "idle") {
         return;
       }
-      const check = shouldTriggerAutocomplete(view.state);
-      if (!check.ok) {
+      if (!autocomplete.canTrigger()) {
         return;
       }
       const { prefix, suffix, anchor } = extractAutocompleteContext(view);
@@ -189,10 +180,7 @@ export const useAutocompleteStream = (
       // slot is released right after it.
       await runAutocompleteRequest({
         controller,
-        dispatchStart: () =>
-          dispatchSafe(
-            startAutocompleteSuggestion(view.state.tr, anchor, requestId),
-          ),
+        dispatchStart: () => live()?.start({ requestId }) === requestId,
         fetchResponse: async () =>
           await fetchWithTimeout(apiUrl("/ai-autocomplete/stream"), {
             method: "POST",
@@ -208,21 +196,16 @@ export const useAutocompleteStream = (
           }),
         consume: async (body) =>
           await consumeAutocompleteStream(body, {
-            onToken: (text) =>
-              dispatchSafe(
-                appendAutocompleteToken(view.state.tr, requestId, text),
-              ),
+            onToken: (text) => live()?.append(requestId, text) ?? false,
             onError: () => {
-              dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
+              live()?.clear();
             },
             onDone: () => {
-              dispatchSafe(
-                finishAutocompleteSuggestion(view.state.tr, requestId),
-              );
+              live()?.finish(requestId);
             },
           }),
         clear: () => {
-          dispatchSafe(clearAutocompleteSuggestion(view.state.tr));
+          live()?.clear();
         },
         reportError: (error) => {
           getAnalytics().captureError(error, {
@@ -251,9 +234,9 @@ export const useAutocompleteStream = (
     };
 
     // PM doesn't expose a public "subscribe to transactions"
-    // hook, so we install a dispatch wrapper. Every user-driven
-    // doc edit (no autocomplete meta) cancels the in-flight
-    // request and (re)schedules a new trigger.
+    // hook, so we install a dispatch wrapper. Every doc edit
+    // cancels the in-flight request and (re)schedules a new
+    // trigger.
     const originalDispatchTransaction = view.props.dispatchTransaction;
     const restoreDispatchTransaction = () => {
       if (view.isDestroyed) {
@@ -275,10 +258,7 @@ export const useAutocompleteStream = (
         } else {
           view.updateState(view.state.apply(tr));
         }
-        if (
-          tr.docChanged &&
-          tr.getMeta(autocompleteSuggestionKey) === undefined
-        ) {
+        if (tr.docChanged) {
           cancelInflight();
           scheduleTrigger();
         }
@@ -293,5 +273,5 @@ export const useAutocompleteStream = (
       }
       restoreDispatchTransaction();
     };
-  }, [view, enabled, debounceMs, language, minPrefixChars]);
+  }, [editorRef, view, enabled, debounceMs, language, minPrefixChars]);
 };

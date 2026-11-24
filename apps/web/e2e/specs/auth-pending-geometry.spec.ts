@@ -188,6 +188,7 @@ for (const locale of ["en", "cs"]) {
                   localPassword: false,
                   reviewPasswordSignIn: false,
                   bootstrap: false,
+                  enterpriseSso: false,
                   transactionalEmail: true,
                   social: {
                     google: offersAll || enabled.has("google"),

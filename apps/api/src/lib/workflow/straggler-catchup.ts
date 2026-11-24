@@ -1,7 +1,7 @@
 import { TaggedError } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { properties } from "@/api/db/schema";
 import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 import { captureError, detached } from "@/api/lib/analytics/capture";

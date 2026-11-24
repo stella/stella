@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 import { and, eq, gt, isNull, lt, lte, ne, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { vatRates } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -105,16 +105,18 @@ export const overlappingVatRatePeriods = async (
   if (periods.length === 0) {
     return new Set();
   }
+  const candidatePayload = JSON.stringify(
+    periods.map((period, position) => ({
+      position,
+      code: period.code,
+      valid_from: period.validFrom,
+      valid_to: period.validTo,
+    })),
+  );
   const rows = await tx
     .select({ position: sql<number>`candidate.position` })
     .from(
-      sql`(VALUES ${sql.join(
-        periods.map(
-          (period, position) =>
-            sql`(${position}::int, ${period.code}::text, ${period.validFrom}::date, ${period.validTo}::date)`,
-        ),
-        sql.raw(","),
-      )}) AS candidate(position, code, valid_from, valid_to)`,
+      sql`jsonb_to_recordset(${candidatePayload}::text::jsonb) AS candidate(position int, code text, valid_from date, valid_to date)`,
     )
     .where(
       sql`EXISTS (SELECT 1 FROM ${vatRates} WHERE ${and(

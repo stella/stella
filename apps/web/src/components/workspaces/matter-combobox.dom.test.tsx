@@ -3,7 +3,7 @@ import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import type { WorkspaceNavigationItem } from "@/lib/memory-api";
 import { toSafeId } from "@/lib/safe-id";
 

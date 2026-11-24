@@ -118,15 +118,17 @@ const prepareTemplate = createSafeRootHandler(
             // misconfiguration, provider outage, timeout) to the documented
             // empty-suggestions fallback — instead of failing the whole
             // prepare request — capturing it first so it isn't silent.
-            suggest: async (documentText) =>
-              await suggestTemplateFieldsOrEmpty({
+            suggest: async (documentText) => {
+              const outcome = await suggestTemplateFieldsOrEmpty({
                 admission: configuredModelAdmission({ modelAdmission }),
                 documentText,
                 orgAIConfig,
                 managedAIResidency,
                 organizationId,
                 aiAnalytics,
-              }),
+              });
+              return outcome.status === "ok" ? outcome.suggestions : [];
+            },
           }),
         catch: (cause) => {
           aiAnalytics.captureError(cause);

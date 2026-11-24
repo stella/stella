@@ -1,8 +1,8 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { actionCostCalls, actionCostRecords } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { MaintenanceDb } from "@/api/lib/db/maintenance-db";
 
 import type { ActionCostObservation, ActionCostRecord } from "./context";

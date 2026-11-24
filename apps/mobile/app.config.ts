@@ -21,9 +21,12 @@ import path from "node:path";
 // exactly the languages the app ships.
 import { UI_LOCALES } from "@stll/locales/languages";
 
+import { withQuickDictation } from "./modules/quick-dictation/plugin.ts";
+
 // Evaluated by Node through Expo's config loader, which cannot follow a
 // workspace package's extensionless TypeScript imports. So this file imports
-// npm packages and only workspace modules that import nothing (as
+// npm packages, the app's own plugins by their full file names (which import
+// npm packages only), and only workspace modules that import nothing (as
 // `@stll/locales/languages`), and `src/architecture.test.ts` pins every value
 // below to `@stll/api-contract/mobile-client`.
 
@@ -879,8 +882,13 @@ export const appConfigFor = ({
   );
   // The native module is autolinked even when the extension is omitted.
   const bundled = withWidgetsBundle(config);
+  // Dictation from outside the app records under a Live Activity, and its
+  // Control Center control lives in the same extension.
+  const dictation = storeCapabilities
+    ? withQuickDictation(bundled, { widgetsTarget: WIDGETS_TARGET })
+    : bundled;
   const signed =
-    signing === undefined ? bundled : withReleaseSigning(bundled, signing);
+    signing === undefined ? dictation : withReleaseSigning(dictation, signing);
   const { identifier, name, scheme } = VARIANT_CONFIG[inputs.variant];
   // Registered after the release signing, so their targets exist by the
   // time the signing's mod runs.

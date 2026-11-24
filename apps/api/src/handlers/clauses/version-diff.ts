@@ -6,7 +6,7 @@
  * bodies live as JSONB in the database instead of DOCX files in S3.
  */
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodyToPlainText } from "@/api/lib/clauses/clause-to-patch";
 

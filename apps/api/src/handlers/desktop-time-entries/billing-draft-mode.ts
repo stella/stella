@@ -7,7 +7,7 @@ import type {
 import { DESKTOP_BILLING_DRAFT_REFUSAL_CODE } from "@stll/api-contract/desktop-billing-drafts";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   AI_BILLING_DRAFTS_MODE,
   billingDraftUserSettings,

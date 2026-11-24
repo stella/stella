@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   auditLogs,
   billingArrangements,
@@ -12,6 +11,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { createSafeId } from "@/api/lib/branded-types";

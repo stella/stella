@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import type { ResourceRef } from "@stll/api-contract";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { entityLinks } from "@/api/db/schema";
 import { taskRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

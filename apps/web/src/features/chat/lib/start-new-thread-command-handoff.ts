@@ -3,10 +3,10 @@ import { Result } from "better-result";
 
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contract";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { buildChatRequestMessage } from "@/features/chat/lib/build-chat-request-message";
 import { chatThreadOptions } from "@/features/chat/queries";
 import { setThreadActiveSkill } from "@/features/chat/thread-active-skill-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 
 type StartNewThreadCommandHandoffArgs = {
   activeOrganizationId: string;

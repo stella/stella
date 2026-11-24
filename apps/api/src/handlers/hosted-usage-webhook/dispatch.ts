@@ -18,7 +18,6 @@ import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
 import { member, organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   CLOSED_USAGE_ENTITLEMENT_STATUSES,
   hostedCheckoutClaims,
@@ -27,6 +26,7 @@ import {
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

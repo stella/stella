@@ -7,7 +7,7 @@ import { API_VERSION_CONFLICT_ERROR_CODE } from "@stll/api-contract";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 import en from "@/i18n/langs/en.json";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/" });
 Object.assign(globalThis, {

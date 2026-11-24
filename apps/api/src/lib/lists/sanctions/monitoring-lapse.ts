@@ -1,7 +1,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { sanctionsContactMatches } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { transitionScopedCount } from "@/api/lib/db/transitions";
 import { MATCH_MEMBERSHIP_TRANSITIONS } from "@/api/lib/lists/sanctions/monitoring-transition-specs";

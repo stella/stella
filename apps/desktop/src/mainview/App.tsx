@@ -1,12 +1,17 @@
-import { startTransition, useEffect, useRef, useState } from "react";
+import {
+  startTransition,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import { invoke } from "@tauri-apps/api/core";
 import { panic, Result } from "better-result";
-import { useFormatter, useLocale, useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { displayLanguageName } from "@stll/locales";
 import { Temporal } from "@stll/time";
-import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
@@ -27,7 +32,6 @@ import {
   settingsRowIds,
   SettingsSection,
 } from "@stll/ui/settings";
-import { StellaMark } from "@stll/ui/stella-mark";
 import { Switch } from "@stll/ui/switch";
 import { cn } from "@stll/ui/utils";
 
@@ -64,8 +68,10 @@ import {
 } from "../telemetry/desktop-telemetry";
 import { accountDisplay, accountStatusTone } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
+import { AccountAvatar } from "./AccountAvatar";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
+import { ClipboardSettingsSections } from "./ClipboardSettings";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting, useDictationAvailability } from "./DictationSetting";
 import { KeepAwakeSection } from "./KeepAwakeSection";
@@ -73,35 +79,19 @@ import { LocalLinkedFoldersSection } from "./LocalLinkedFoldersSection";
 import { LocalSkillFoldersSection } from "./LocalSkillFoldersSection";
 import { PermissionsSection } from "./PermissionsSection";
 import { SettingsPageHeader } from "./settings-layout";
-import {
-  isAgentSettingsFocus,
-  isSettingsPage,
-  SETTINGS_PAGES,
-} from "./settings-pages";
+import { SETTINGS_PAGES, settingsView } from "./settings-pages";
 import type { SettingsPage } from "./settings-pages";
 import { SettingsSidebar } from "./SettingsSidebar";
 import { ShortcutSetting } from "./ShortcutSetting";
 import { SigningDriverSection } from "./SigningDriverSection";
-import { AppVersionRow } from "./UpdateCheck";
+import { AppVersionRow, useUpdateCheck } from "./UpdateCheck";
+import type { UpdateCheck } from "./UpdateCheck";
 
 const DEFAULT_NOTIFICATION_PREFERENCES = {
   documentReady: true,
   revisionCreated: true,
   syncIssues: true,
 } satisfies DesktopNotificationPreferences;
-const DEFAULT_UPDATE_SNAPSHOT = {
-  baseUrl: null,
-  channel: null,
-  currentHash: null,
-  currentVersion: null,
-  lastCheckedAt: null,
-  latestHash: null,
-  latestVersion: null,
-  status: "disabled",
-  statusMessage: "Update checks are not configured yet.",
-  updateAvailable: false,
-  updateReady: false,
-} satisfies DesktopUpdateSnapshot;
 
 type NotificationPreferenceKey = keyof DesktopNotificationPreferences;
 
@@ -128,9 +118,10 @@ const reportSubscriptionFailure = () => {
   });
 };
 
-const getInitialPage = (): SettingsPage => {
-  const page = window.location.hash.replace(/^#/u, "");
-  return isSettingsPage(page) ? page : "general";
+/** The view a new window was opened for: `#tab` or `#tab/focus`. */
+const getInitialView = () => {
+  const [tab, focus] = window.location.hash.replace(/^#/u, "").split("/");
+  return settingsView({ tab, focus });
 };
 
 /** The permissions the Permissions page lists; open at login is an app
@@ -471,13 +462,7 @@ const AccountRow = ({
     <SettingsRow
       description={description}
       id="desktop-account"
-      media={
-        <Avatar className="size-8 border">
-          <AvatarFallback className="text-xs">
-            {display.initials ?? <StellaMark className="size-4" />}
-          </AvatarFallback>
-        </Avatar>
-      }
+      media={<AccountAvatar display={display} />}
       title={display.name ?? t("stellaDesktop")}
     >
       {tone === null ? null : (
@@ -564,6 +549,7 @@ const ClipboardPane = () => {
           <ShortcutSetting />
         </SettingsPanel>
       </SettingsSection>
+      <ClipboardSettingsSections />
     </>
   );
 };
@@ -722,26 +708,32 @@ const PermissionsPane = () => {
 };
 
 const AboutPane = ({
-  accountState,
   onCopyDiagnostics,
   onEmailSupport,
   onRevealSupportRoot,
   update,
+  updateCheck,
 }: {
-  accountState: DesktopAccountState;
   onCopyDiagnostics: () => void;
   onEmailSupport: () => void;
   onRevealSupportRoot: () => void;
-  update: DesktopUpdateSnapshot;
+  /** Null until the native snapshot arrives. */
+  update: DesktopUpdateSnapshot | null;
+  updateCheck: UpdateCheck;
 }) => {
-  const format = useFormatter();
   const t = useTranslations("settings");
 
-  const versionLabel =
-    update.currentVersion ??
-    (import.meta.env.DEV ? t("developmentBuild") : t("previewBuild"));
-  const linkedAccount =
-    accountState.status === "connected" ? accountState.account : null;
+  // Before the native snapshot arrives the version is unknown, not a preview
+  // build; the row waits for it instead of naming the wrong one.
+  const versionLabel = (() => {
+    if (update === null) {
+      return null;
+    }
+    return (
+      update.currentVersion ??
+      (import.meta.env.DEV ? t("developmentBuild") : t("previewBuild"))
+    );
+  })();
 
   return (
     <>
@@ -750,21 +742,9 @@ const AboutPane = ({
         <AppVersionRow
           onEmailSupport={onEmailSupport}
           supportEmail={SUPPORT_EMAIL}
+          updateCheck={updateCheck}
           versionLabel={versionLabel}
         />
-        {linkedAccount ? (
-          <SettingsRow id="about-last-verified" title={t("lastVerified")}>
-            <span className="text-muted-foreground text-sm tabular-nums">
-              {linkedAccount.verifiedAt
-                ? format.dateTime(
-                    Temporal.Instant.from(linkedAccount.verifiedAt)
-                      .epochMilliseconds,
-                    { dateStyle: "medium", timeStyle: "short" },
-                  )
-                : t("notAvailableYet")}
-            </span>
-          </SettingsRow>
-        ) : null}
       </SettingsSection>
 
       <SettingsSection title={t("support")}>
@@ -870,12 +850,23 @@ const App = () => {
   const accountGeneration = useRef(0);
   const snapshotGeneration = useRef(0);
   const snapshotRefresh = useRef<() => void>(() => undefined);
-  const [activePage, setActivePage] = useState<SettingsPage>(getInitialPage);
-  const [agentSettingsFocus, setAgentSettingsFocus] =
-    useState<AgentSettingsFocus | null>(null);
-  const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
-    null,
+  const [initialView] = useState(getInitialView);
+  const [activePage, setActivePage] = useState<SettingsPage>(
+    initialView?.page ?? "general",
   );
+  const [agentSettingsFocus, setAgentSettingsFocus] =
+    useState<AgentSettingsFocus | null>(initialView?.agentFocus ?? null);
+  const [dictationFocus, setDictationFocus] = useState<"microphone" | null>(
+    initialView?.dictationFocus ?? null,
+  );
+  const initialUpdateCheck = useRef(initialView?.checkForUpdates ?? false);
+  // The tray's "Check for updates" opens About and runs the check there, so
+  // its answer shows in the window rather than in a notification the system
+  // may not show.
+  const updateCheck = useUpdateCheck();
+  const runRequestedUpdateCheck = useEffectEvent(() => {
+    void updateCheck.run();
+  });
   const activityAvailability = useActivityAvailability();
   const dictationAvailability = useDictationAvailability();
   // A requested page that depends on the account stays shown while its
@@ -929,21 +920,26 @@ const App = () => {
       subscribeDesktopEvent<{ tab: string; focus?: unknown }>({
         event: "activate-tab",
         handler: (event) => {
-          const { tab: nextPage, focus } = event.payload;
-          if (!isSettingsPage(nextPage)) {
+          const view = settingsView(event.payload);
+          if (view === null) {
             return;
           }
-          setActivePage(nextPage);
+          setActivePage(view.page);
           // A focus belongs to the link that sent it; any other opening
           // drops one still waiting for its card.
-          setAgentSettingsFocus(
-            nextPage === "agents" && isAgentSettingsFocus(focus) ? focus : null,
-          );
-          setDictationFocus(
-            nextPage === "dictation" && focus === "microphone" ? focus : null,
-          );
+          setAgentSettingsFocus(view.agentFocus);
+          setDictationFocus(view.dictationFocus);
+          if (view.checkForUpdates) {
+            runRequestedUpdateCheck();
+          }
         },
         onError: reportSubscriptionFailure,
+        onSubscribed: () => {
+          if (initialUpdateCheck.current) {
+            initialUpdateCheck.current = false;
+            runRequestedUpdateCheck();
+          }
+        },
       }),
     [],
   );
@@ -1080,7 +1076,7 @@ const App = () => {
 
   const notificationPreferences =
     state?.notificationPreferences ?? DEFAULT_NOTIFICATION_PREFERENCES;
-  const update = state?.update ?? DEFAULT_UPDATE_SNAPSHOT;
+  const update = state?.update ?? null;
 
   const handlePreferenceChange = async (
     preferenceKey: NotificationPreferenceKey,
@@ -1286,7 +1282,6 @@ const App = () => {
       case "about":
         return (
           <AboutPane
-            accountState={accountState}
             onCopyDiagnostics={() => {
               void handleCopyDiagnostics();
             }}
@@ -1297,6 +1292,7 @@ const App = () => {
               void handleRevealSupportRoot();
             }}
             update={update}
+            updateCheck={updateCheck}
           />
         );
       default:

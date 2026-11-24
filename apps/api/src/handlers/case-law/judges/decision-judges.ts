@@ -4,12 +4,12 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionJudges,
   caseLawDecisions,
   caseLawJudges,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { matchCzechDeclinedName } from "@/api/handlers/case-law/judges/czech-declined-name";
 import { judgeNameKey } from "@/api/handlers/case-law/judges/judge-name";
 import type { SafeId } from "@/api/lib/branded-types";

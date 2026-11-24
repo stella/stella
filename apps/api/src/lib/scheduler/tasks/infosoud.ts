@@ -3,8 +3,8 @@ import { and, asc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import type { InfoSoudClient } from "@stll/infosoud";
 
-import type { Transaction } from "@/api/db/root";
 import { infoSoudTrackedCases, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { errorTag } from "@/api/lib/errors/utils";
 import {

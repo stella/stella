@@ -359,6 +359,23 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("every role keeps and erases its own learned dictation fixes", () => {
+    for (const role of [
+      "owner",
+      "admin",
+      "member",
+      "intern",
+      "external",
+    ] as const) {
+      expect({
+        role,
+        granted: roles[role].authorize({
+          dictationLearnedFix: ["read", "update", "delete"],
+        }).success,
+      }).toEqual({ role, granted: true });
+    }
+  });
+
   test("time entry and rate permissions separate timekeepers from reviewers", () => {
     expect(roles.external.authorize({ timeEntry: ["read"] }).success).toBe(
       false,

@@ -87,6 +87,7 @@ const UNPUBLISHED_DECISION = {
     name: "Synthetic source",
   },
   sourceAttributionUrl: null,
+  bodySource: { textSource: "host" },
   sourceLanguages: null,
   sourceUrl: null,
   textFields: {

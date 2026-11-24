@@ -3,6 +3,7 @@ import type { ComponentProps, ReactElement } from "react";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, test } from "bun:test";
 
+import { DECISION_BODY_TEXT_SOURCE } from "@stll/api-contract/case-law-body-source";
 import { noDecisionReviewFound } from "@stll/api-contract/case-law-reviews";
 import {
   CHAT_STEP_LEDGER_KEY,
@@ -547,6 +548,7 @@ const DECISION = {
   judges: [],
   metadata: {},
   sections: null,
+  bodySource: { textSource: DECISION_BODY_TEXT_SOURCE.HOST },
   resolution: { type: "direct" },
   source: {
     adapterKey: "synthetic",

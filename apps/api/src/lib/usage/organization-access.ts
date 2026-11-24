@@ -14,8 +14,8 @@
 import { panic, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { ORGANIZATION_ACCESS_STATE, usagePolicies } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";

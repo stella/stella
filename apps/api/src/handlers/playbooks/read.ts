@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { numberFromString } from "@stll/api-contract/http-input";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { playbookDefinitions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";

@@ -69,13 +69,13 @@ import {
   useFocusSearchOnOpen,
 } from "@/components/chat/composer-submenu-search";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import {
   localRunnersOptions,
   modelOptionsOptions,
 } from "@/features/chat/queries";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { type QueryView, queryView } from "@/lib/query-view.logic";
 
 export type ComposerModelsMenuProps = {

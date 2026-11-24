@@ -1463,7 +1463,6 @@ const bunNativeFiles = [
   "apps/api/src/lib/email/inbound/original-signature.test.ts",
   "apps/api/src/lib/email/inbound/upload.db.test.ts",
   "apps/api/src/lib/entities/window-cursor.ts",
-  "apps/api/src/lib/files/email-attachment-token.ts",
   "apps/api/src/lib/files/email-to-html.test.ts",
   "apps/api/src/lib/files/email-to-html.ts",
   "apps/api/src/lib/files/organization-file-usage-reconcile.ts",
@@ -2107,6 +2106,8 @@ const config = defineConfig({
     // wasm-bindgen glue is committed verbatim and checked by rebuilding it;
     // product-code rewrites would be replaced by the next generation.
     "packages/scan-engine/generated/scan_engine.js",
+    "packages/heic-decoder/generated/heic_decoder.js",
+    "packages/pst-reader/generated/pst_reader.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no
@@ -2274,6 +2275,7 @@ const config = defineConfig({
     "./.oxlint-plugins/citation-evidence-text-fence.ts",
     "./.oxlint-plugins/no-source-raw-projection.ts",
     "./.oxlint-plugins/no-unguarded-case-law-replay-write.ts",
+    "./.oxlint-plugins/no-api-env-in-public-reader.ts",
     "./.oxlint-plugins/no-bare-case-law-source-ingestion-lease.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-literal-derived-attribute.ts",
@@ -5500,6 +5502,14 @@ const config = defineConfig({
     },
     {
       files: [
+        ".oxlint-plugins/__fixtures__/no-api-env-in-public-reader.fixture.ts",
+      ],
+      rules: {
+        "no-api-env-in-public-reader/no-api-env-in-public-reader": "error",
+      },
+    },
+    {
+      files: [
         ".oxlint-plugins/__fixtures__/no-direct-ingestion-checkpoint-write.fixture.ts",
       ],
       rules: {
@@ -6137,6 +6147,7 @@ const config = defineConfig({
               "apps/api/src/env-db-load-gate.ts",
               "apps/api/src/env-online-index.ts",
               "apps/api/src/env-db-timeouts.ts",
+              "apps/api/src/env-public-corpus.ts",
               "apps/api/src/env-replay.ts",
               "apps/api/src/env-eu-completion.ts",
               "apps/api/src/env-parsed-input-state-backfill.ts",
@@ -6169,6 +6180,10 @@ const config = defineConfig({
               // validates them on boot.
               "apps/api/src/lib/business-registries/dispatch.ts",
               "apps/api/src/lib/db/assert-migrations-applied.ts",
+              // The extraction worker's one input besides its arguments: the
+              // code page the API hands each run (its child env is PATH plus
+              // the variables `subprocess.ts` declares).
+              "apps/api/src/lib/files/zip-name-code-page.ts",
               "apps/api/src/lib/runtime-worker-path.ts",
               "apps/api/src/lib/s3.ts",
               "apps/api/src/lib/scheduler/runner.ts",
@@ -6450,6 +6465,15 @@ const config = defineConfig({
       rules: {
         "no-unguarded-case-law-replay-write/no-unguarded-case-law-replay-write":
           "error",
+      },
+    },
+    {
+      // The public case-law reader loads without tenant content settings:
+      // nothing its value imports reach may import the full API environment.
+      files: ["apps/api/src/**/*.ts", "packages/**/*.{ts,tsx}"],
+      excludeFiles: ["**/*.test.{ts,tsx}"],
+      rules: {
+        "no-api-env-in-public-reader/no-api-env-in-public-reader": "error",
       },
     },
     {

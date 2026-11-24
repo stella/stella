@@ -4,7 +4,7 @@ import { Result } from "better-result";
 import type { PermissionInput } from "@stll/permissions";
 
 import { rlsDb } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   createMembershipScopedDb,
   TRANSACTION_DEADLINE,

@@ -99,6 +99,7 @@ export const dockedChatPagePayloads = ({
       direction: "in" as const,
       channel: "email" as const,
       dataBox: null,
+      certifiedEmail: null,
       subject: "Docked chat correspondence fixture",
       from: { name: "Fixture sender", address: "sender@example.test" },
       to: [{ name: "Fixture recipient", address: "recipient@example.test" }],

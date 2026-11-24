@@ -61,7 +61,7 @@ import type { ChatTurnBudget } from "@stll/chat-limits";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
@@ -301,6 +301,7 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
+import type { ZipNameCodePage } from "@/api/lib/files/zip-name-code-page";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -920,7 +921,7 @@ export const streamChat = async ({
     };
   }
 
-  const resolvedFallbackModel =
+  const fallbackOutcome =
     turnModelSelection.fallbackPolicy === "automatic"
       ? await resolveFallbackTextModel({
           organizationId,
@@ -930,7 +931,9 @@ export const streamChat = async ({
           primaryModel,
           threadId,
         })
-      : null;
+      : ({ status: "none" } as const);
+  const resolvedFallbackModel =
+    fallbackOutcome.status === "resolved" ? fallbackOutcome.model : null;
   // Drop a fallback that would crash on a document the primary accepted, or
   // that cannot carry this turn's tools; a failover must not resurrect a
   // capability mismatch the primary already cleared.
@@ -1708,6 +1711,11 @@ type ResolveFallbackTextModelProps = {
   threadId: SafeId<"chatThread">;
 };
 
+type FallbackTextModelOutcome =
+  | { status: "resolved"; model: ResolvedTanStackTextModel }
+  | { status: "same-as-primary" }
+  | { status: "failed" };
+
 const resolveFallbackTextModel = async ({
   organizationId,
   modelAdmission,
@@ -1715,7 +1723,7 @@ const resolveFallbackTextModel = async ({
   managedAIResidency,
   primaryModel,
   threadId,
-}: ResolveFallbackTextModelProps): Promise<ResolvedTanStackTextModel | null> => {
+}: ResolveFallbackTextModelProps): Promise<FallbackTextModelOutcome> => {
   try {
     const fallbackModel = await resolveTanStackTextModel({
       userId: modelAdmission.userId,
@@ -1730,9 +1738,9 @@ const resolveFallbackTextModel = async ({
       fallbackModel.provider === primaryModel.provider &&
       fallbackModel.modelId === primaryModel.modelId
     ) {
-      return null;
+      return { status: "same-as-primary" };
     }
-    return fallbackModel;
+    return { status: "resolved", model: fallbackModel };
   } catch (error) {
     captureError(
       error,
@@ -1741,7 +1749,7 @@ const resolveFallbackTextModel = async ({
         threadId,
       }),
     );
-    return null;
+    return { status: "failed" };
   }
 };
 
@@ -5847,6 +5855,8 @@ type HydrateMessagesProps = {
   safeDb: SafeDb;
   sendMode: ChatSendMode;
   userId: SafeId<"user">;
+  /** The organization's, for an archive among the attachments. */
+  zipNameCodePage: ZipNameCodePage;
 };
 
 const localRunFilePath = (file: Pick<StoredUserFile, "fileName" | "id">) =>
@@ -5938,6 +5948,7 @@ export const hydrateMessages = async ({
   safeDb,
   sendMode,
   userId,
+  zipNameCodePage,
 }: HydrateMessagesProps) =>
   await Result.gen(async function* () {
     const userFilesById = yield* Result.await(
@@ -5993,6 +6004,7 @@ export const hydrateMessages = async ({
             mimeType: userFile.mimeType,
             sendMode,
             s3Key: userFile.s3Key,
+            zipNameCodePage,
           }),
         );
 

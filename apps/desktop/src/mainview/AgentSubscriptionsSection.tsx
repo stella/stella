@@ -6,6 +6,9 @@ import { panic, Result } from "better-result";
 import { Separator } from "@stll/ui/separator";
 
 import { subscribeDesktopEvent } from "../shared/desktop-events";
+import { isAntigravityStatus } from "./antigravity-status";
+import type { AntigravityStatus } from "./antigravity-status";
+import { AntigravityCard } from "./AntigravityCard";
 import {
   CHATGPT_AUTH_CHANGED_EVENT,
   chatGptCommandError,
@@ -71,7 +74,53 @@ export const AgentSubscriptionsSection = ({
     isStatus: isHarnessStatusList,
   });
   const [notice, setNotice] = useState<ChatGptNotice | null>(null);
+  const [antigravity, setAntigravity] = useState<AntigravityStatus | null>(
+    null,
+  );
   const [claudeCodeFailed, setClaudeCodeFailed] = useState(false);
+
+  const antigravityRequestSeq = useRef(0);
+  const antigravityMounted = useRef(true);
+
+  useEffect(() => {
+    antigravityMounted.current = true;
+    antigravityRequestSeq.current += 1;
+    const seq = antigravityRequestSeq.current;
+    void Result.tryPromise(async () =>
+      invoke<unknown>("antigravity_get_status", { refresh: false }),
+    ).then((result) => {
+      if (
+        antigravityMounted.current &&
+        antigravityRequestSeq.current === seq &&
+        Result.isOk(result) &&
+        isAntigravityStatus(result.value)
+      ) {
+        setAntigravity(result.value);
+      }
+      return undefined;
+    });
+    return () => {
+      antigravityMounted.current = false;
+    };
+  }, []);
+
+  const refreshAntigravity = () => {
+    antigravityRequestSeq.current += 1;
+    const seq = antigravityRequestSeq.current;
+    void Result.tryPromise(async () =>
+      invoke<unknown>("antigravity_get_status", { refresh: true }),
+    ).then((result) => {
+      if (
+        antigravityMounted.current &&
+        antigravityRequestSeq.current === seq &&
+        Result.isOk(result) &&
+        isAntigravityStatus(result.value)
+      ) {
+        setAntigravity(result.value);
+      }
+      return undefined;
+    });
+  };
   // Set before a start command is sent, so a second click in the same
   // frame cannot send another.
   const starting = useRef(false);
@@ -169,7 +218,7 @@ export const AgentSubscriptionsSection = ({
     },
   });
 
-  if (chatGpt === null && claudeCode === null) {
+  if (chatGpt === null && claudeCode === null && antigravity === null) {
     return null;
   }
 
@@ -295,6 +344,11 @@ export const AgentSubscriptionsSection = ({
       />
     );
 
+  const antigravityCard =
+    antigravity === null ? null : (
+      <AntigravityCard onCheckAgain={refreshAntigravity} status={antigravity} />
+    );
+
   return renderGroup(
     focusTarget(
       "agents",
@@ -302,6 +356,10 @@ export const AgentSubscriptionsSection = ({
         {chatGptCard ? focusTarget("codex", chatGptCard) : null}
         {chatGptCard && claudeCodeCard ? <Separator /> : null}
         {claudeCodeCard ? focusTarget("claude-code", claudeCodeCard) : null}
+        {(chatGptCard || claudeCodeCard) && antigravityCard ? (
+          <Separator />
+        ) : null}
+        {antigravityCard}
       </>,
     ),
   );

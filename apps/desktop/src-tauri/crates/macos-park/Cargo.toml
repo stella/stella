@@ -68,6 +68,7 @@ windows = { version = "0.62", default-features = false, features = [
   "Win32_System_Com",
   "Win32_System_Com_StructuredStorage",
   "Win32_System_Variant",
+  "Win32_UI_Accessibility",
   "std",
 ] }
 windows-sys = { version = "0.61", features = [

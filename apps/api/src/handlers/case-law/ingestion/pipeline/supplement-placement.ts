@@ -3,8 +3,8 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, caseLawDecisionSupplements } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { absorbComposedSupplementRows } from "@/api/handlers/case-law/ingestion/pipeline/composed-supplements";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import {

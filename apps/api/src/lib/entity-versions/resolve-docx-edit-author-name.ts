@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 type ResolveDocxEditAuthorNameOptions = {
@@ -12,7 +12,9 @@ type ResolveDocxEditAuthorNameOptions = {
 export const resolveDocxEditAuthorName = async ({
   safeDb,
   userId,
-}: ResolveDocxEditAuthorNameOptions): Promise<string | null> => {
+}: ResolveDocxEditAuthorNameOptions): Promise<
+  Result<string | null, SafeDbError>
+> => {
   const result = await safeDb((tx) =>
     tx.query.user.findFirst({
       where: { id: { eq: userId } },
@@ -20,14 +22,14 @@ export const resolveDocxEditAuthorName = async ({
     }),
   );
   if (Result.isError(result)) {
-    return null;
+    return result;
   }
 
   const preferredName = result.value?.preferredName?.trim();
   if (preferredName) {
-    return preferredName;
+    return Result.ok(preferredName);
   }
 
   const name = result.value?.name.trim();
-  return name || null;
+  return Result.ok(name || null);
 };

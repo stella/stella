@@ -292,7 +292,8 @@ const createHarness = ({
       }
       return await Promise.resolve(new Uint8Array(stored).buffer);
     },
-    resolveDocxEditAuthorName: async () => await Promise.resolve("Jane Doe"),
+    resolveDocxEditAuthorName: async () =>
+      await Promise.resolve(Result.ok("Jane Doe")),
     scanUpload: async ({ bytes: scannedBytes, declaredMimeType, fileName }) => {
       if (realScan) {
         return await scanUpload({

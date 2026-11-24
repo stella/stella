@@ -65,7 +65,7 @@ import {
   rlsDb,
   rootDb,
 } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   featureEnrolments,
   userProfessionalUseAcceptances,
@@ -144,6 +144,7 @@ import {
   withStaleIfError,
 } from "@/api/lib/auth/cimd-stale-if-error";
 import { sendManageOtp } from "@/api/lib/auth/confirmation-email";
+import type { StellaDatabaseHooks } from "@/api/lib/auth/database-hook-context";
 import {
   checkConfiguredDemoAccountAccess,
   checkDemoAccountOperation,
@@ -2602,7 +2603,7 @@ export const createAuth = (
           after: createUserProjectionUpdateHook(),
         },
       },
-    },
+    } satisfies StellaDatabaseHooks,
     database: membershipAuthAdapter,
     socialProviders: createSocialProviders({
       googleClientId: env.GOOGLE_AUTH_CLIENT_ID,

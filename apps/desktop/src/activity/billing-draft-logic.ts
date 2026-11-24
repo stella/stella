@@ -22,6 +22,8 @@ import type {
 import { Temporal } from "@stll/time";
 
 import { documentName } from "./activity-logic";
+import type { BillingDraftSettings } from "./billing-draft-settings";
+import type { DraftConsentStatus } from "./billing-draft-transport";
 import type { DayReviewGroup } from "./day-review-logic";
 
 /** The one entry a card sends; the review names its draft by this id. */
@@ -559,4 +561,49 @@ export const scopedDraftSettingsFrom = (
 ): ScopedDraftSettings | null => {
   const parsed = v.safeParse(scopedSettingsSchema, value);
   return parsed.success ? parsed.output : null;
+};
+
+/** Whether the account can choose stella AI drafts. */
+export type AiDraftsChoice = "offered" | "notOffered";
+
+/** Whether consent exists, or is still being withdrawn, so withdrawing it
+ * stays possible. */
+const hasConsentToWithdraw = (consent: DraftConsentStatus) => {
+  switch (consent) {
+    case "granted":
+    case "pending-withdrawal":
+    case "withdrawal-unconfirmed":
+      return true;
+    case "unavailable":
+    case "revoked":
+    case "pending-grant":
+    case "grant-refused":
+      return false;
+    default:
+      consent satisfies never;
+      return panic("Unknown stella AI draft consent.");
+  }
+};
+
+/**
+ * Whether the drafts choice applies: where the firm lets this account
+ * draft, or where consent exists and can still be withdrawn. Setup shows its
+ * drafts screen and Settings → Activity its drafts row by this one rule.
+ */
+export const aiDraftsChoice = (
+  settings: BillingDraftSettings,
+): AiDraftsChoice => {
+  switch (settings.type) {
+    case "loading":
+    case "unavailable":
+    case "failed":
+      return "notOffered";
+    case "ready":
+      return settings.mode !== "off" || hasConsentToWithdraw(settings.consent)
+        ? "offered"
+        : "notOffered";
+    default:
+      settings satisfies never;
+      return panic("Unknown stella AI draft settings.");
+  }
 };

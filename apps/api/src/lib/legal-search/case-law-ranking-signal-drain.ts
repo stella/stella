@@ -19,8 +19,8 @@
  */
 import { and, asc, eq, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, caseLawRankingSignalChanges } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE,

@@ -1,0 +1,109 @@
+name: Publish OCR models image
+
+# Packs the pinned local OCR models into a scratch image on GHCR, so image
+# builds copy them from a digest instead of downloading them each time.
+# Run it when apps/api/src/scripts/fetch-ocr-models.ts pins new models, then
+# point apps/api/Dockerfile at the digest it prints.
+
+defaults:
+  run:
+    shell: bash
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-ocr-models
+  cancel-in-progress: false
+
+env:
+  GIT_CONFIG_COUNT: "3"
+  GIT_CONFIG_KEY_0: maintenance.auto
+  GIT_CONFIG_VALUE_0: "false"
+  GIT_CONFIG_KEY_1: gc.auto
+  GIT_CONFIG_VALUE_1: "0"
+  GIT_CONFIG_KEY_2: gc.autoDetach
+  GIT_CONFIG_VALUE_2: "false"
+
+jobs:
+  publish:
+    if: github.repository == 'stella/stella' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    env:
+      MODELS_IMAGE: ghcr.io/stella/ocr-models
+      MODELS_TAG: ppocr-v5-mobile-latin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+          no-cache: true
+
+      - name: Install API dependencies
+        timeout-minutes: 10
+        run: bash scripts/retry.sh bun install --frozen-lockfile --ignore-scripts --filter @stll/api
+
+      # The script checks each file against its pinned SHA-256 before
+      # writing it.
+      - name: Download the pinned models
+        timeout-minutes: 15
+        working-directory: apps/api
+        run: bun src/scripts/fetch-ocr-models.ts "$RUNNER_TEMP/ocr-models"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        with:
+          cleanup: false
+
+      - name: Login to GitHub Container Registry
+        uses: ./.github/actions/docker-login
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull base images
+        timeout-minutes: 5
+        run: bash scripts/pull-base-images.sh --buildx linux/amd64,linux/arm64 docker/ocr-models/Dockerfile
+
+      # The image holds only the two model files, so it builds for both
+      # platforms without emulation.
+      - name: Build and push the models image
+        id: build
+        timeout-minutes: 10
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: docker/ocr-models
+          file: docker/ocr-models/Dockerfile
+          build-contexts: models=${{ runner.temp }}/ocr-models
+          platforms: linux/amd64,linux/arm64
+          provenance: false
+          push: true
+          tags: ${{ env.MODELS_IMAGE }}:${{ env.MODELS_TAG }}
+          labels: org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+          annotations: |
+            index:org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            index:org.opencontainers.image.description=Pinned PP-OCRv5 models for stella's local OCR
+
+      - name: Report the image digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          echo "Published $MODELS_IMAGE:$MODELS_TAG@$DIGEST"
+          echo "Published \`$MODELS_IMAGE:$MODELS_TAG@$DIGEST\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log out of GitHub Container Registry
+        if: always()
+        run: docker logout ghcr.io

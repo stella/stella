@@ -15,7 +15,7 @@ import {
 } from "@stll/skills/frontmatter";
 import type { SkillInvocation, SkillMetadata } from "@stll/skills/frontmatter";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   type AgentSkillOrigin,
   agentSkillResources,

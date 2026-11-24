@@ -129,6 +129,7 @@ test("data-box correspondence lives until its last matter source is deleted", as
     sourceEntityId: firstSource,
     originalSignature: { status: "unverified" },
     dataBox: envelope,
+    certifiedEmail: null,
     direction: null,
     messageId: envelope.messageId,
     contentHash: "c".repeat(64),
@@ -300,6 +301,7 @@ test("uploaded email correspondence is removed with its source entity", async ()
   const parsed = {
     channel: "email",
     dataBox: null,
+    certifiedEmail: null,
     source: "upload",
     sourceEntityId: entityId,
     originalSignature: { status: "unverified" },
@@ -395,6 +397,7 @@ const parsedDataBoxFixture = async ({
     sourceEntityId: entityId,
     originalSignature: { status: "unverified" },
     dataBox: envelope,
+    certifiedEmail: null,
     direction: null,
     messageId: envelope.messageId,
     contentHash: "e".repeat(64),
@@ -1319,6 +1322,7 @@ const sourceStateFixture = async ({
       return {
         channel: "email",
         dataBox: null,
+        certifiedEmail: null,
         source: "upload",
         sourceEntityId: entityId,
         originalSignature: { status: "unverified" },

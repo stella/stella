@@ -127,7 +127,9 @@ import {
 } from "@/api/lib/files/organization-file-usage";
 import { LIMITS } from "@/api/lib/limits";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   isLocalDocumentOcrConfigured,
   recognizePdfTextLocally,
@@ -159,10 +161,25 @@ import {
   requiresDurableNativeExtraction,
 } from "@/api/lib/search/process-extraction";
 import { getSearchMaintenance } from "@/api/lib/search/provider";
+import { dispatchDocumentNaming } from "@/api/lib/uploads/document-naming/dispatch";
+import {
+  enqueueDocumentNaming,
+  recoverDocumentNamingRuns,
+} from "@/api/lib/uploads/document-naming/queue";
+import { recordNearDuplicateSignature } from "@/api/lib/uploads/near-duplicates/record-signature";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const WORKER_CONCURRENCY = 2;
+
+const OCR_NEAR_DUPLICATE_SIGNATURE_SINK = failureSink({
+  event: "document_processing.ocr_near_duplicate_signature_failed",
+  expected: [],
+});
+const DOCUMENT_NAMING_DISPATCH_FAILED_SINK = failureSink({
+  event: "document_processing.document_naming_dispatch_failed",
+  expected: [],
+});
 export const RECONCILE_BATCH_SIZE = 100;
 const OCR_ENQUEUE_VISIBILITY_TIMEOUT_MS = 5 * 60 * 1000;
 export const NATIVE_CONTENT_SEARCH_BOUND_MS = 2 * 60 * 1000;
@@ -964,6 +981,18 @@ const completeDocumentProcessingRun = async ({
       });
     }
   }
+  const named = await Result.tryPromise(async () => {
+    if (await dispatchDocumentNaming(database, run)) {
+      await enqueueDocumentNaming(run.id);
+    }
+  });
+  if (Result.isError(named)) {
+    // A created run left unqueued is woken by the recovery sweep.
+    observeFailure(named.error, {
+      sink: DOCUMENT_NAMING_DISPATCH_FAILED_SINK,
+      ctx: { runId: run.id },
+    });
+  }
   broadcastWorkspaceResourceUpdated(
     run.workspaceId,
     resourceRef({ type: RESOURCE_TYPE.ENTITY, id: run.entityId }),
@@ -1375,6 +1404,26 @@ export const processDocumentProcessingRun = async (
           panic(`Unhandled persistence outcome: ${String(persistenceOutcome)}`);
       }
       attemptSignal.throwIfAborted();
+
+      if (persistenceOutcome === "persisted") {
+        const recorded = await Result.tryPromise({
+          try: async () =>
+            await recordNearDuplicateSignature(database, {
+              entityId: run.entityId,
+              entityVersionId: run.entityVersionId,
+              organizationId: run.organizationId,
+              workspaceId: run.workspaceId,
+              text: result.value.text,
+            }),
+          catch: (cause) => cause,
+        }).then((attempt) => attempt.andThen((written) => written));
+        if (Result.isError(recorded)) {
+          observeFailure(recorded.error, {
+            sink: OCR_NEAR_DUPLICATE_SIGNATURE_SINK,
+            ctx: { entityId: run.entityId, workspaceId: run.workspaceId },
+          });
+        }
+      }
 
       // The derivative is written before indexing: a failed index leaves a
       // retryable run that `recoverFailedSearchIndex` completes without
@@ -1973,6 +2022,8 @@ export type DocumentProcessingReconciliationDependencies = {
   database: typeof rootDb;
   enqueueDocumentProcessingRun: typeof enqueueDocumentProcessingRun;
   enqueueDocumentDeadlineScout: typeof enqueueDocumentDeadlineScout;
+  /** The naming wake-up; the real queue when omitted. */
+  enqueueDocumentNaming?: typeof enqueueDocumentNaming;
   indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
   /** Epoch milliseconds, for the repair sweep's rest between passes. */
   now: () => number;
@@ -2699,7 +2750,7 @@ export const runSearchIndexReplayAttempt = async ({
   onSuccess: () => Promise<boolean>;
   timeoutMs?: number;
   transitionTimeoutMs?: number;
-}): Promise<boolean> => {
+}): Promise<"replayed" | "skipped" | "failed"> => {
   const indexed = await Result.tryPromise({
     try: async () =>
       await withTimeout(indexEntity, {
@@ -2713,12 +2764,13 @@ export const runSearchIndexReplayAttempt = async ({
       label: "document OCR search-index replay failure transition",
       timeoutMs: transitionTimeoutMs,
     });
-    return false;
+    return "failed";
   }
-  return await withTimeout(onSuccess, {
+  const replayed = await withTimeout(onSuccess, {
     label: "document OCR search-index replay success transition",
     timeoutMs: transitionTimeoutMs,
   });
+  return replayed ? "replayed" : "skipped";
 };
 
 const recoverFailedSearchIndex = async (
@@ -2731,7 +2783,7 @@ const recoverFailedSearchIndex = async (
   }: FailedSearchIndexCandidate,
   dependencies: DocumentProcessingReconciliationDependencies,
 ): Promise<boolean> =>
-  await runSearchIndexReplayAttempt({
+  (await runSearchIndexReplayAttempt({
     indexEntity: async () => await dependencies.indexEntity(entityId),
     onFailure: async (error) => {
       captureError(
@@ -2788,7 +2840,7 @@ const recoverFailedSearchIndex = async (
       );
       return true;
     },
-  });
+  })) === "replayed";
 
 /**
  * A replay this phase claimed and did not complete went back to `failed`
@@ -3077,6 +3129,7 @@ export const handleDocumentProcessingFailure = ({
 const RECONCILIATION_PHASE = {
   DEADLINE_SCOUT: "deadline-scout",
   DELIVERY: "delivery",
+  DOCUMENT_NAMING: "document-naming",
   REINDEX: "reindex",
   REPAIR: "repair",
   RETRY: "retry",
@@ -3125,6 +3178,13 @@ const createReconciliationPhaseRunners = (
       await recoverDocumentDeadlineScoutDispatches(dependencies),
     [RECONCILIATION_PHASE.DELIVERY]: async () =>
       await dispatchScheduledDocumentProcessingRetries(dependencies),
+    [RECONCILIATION_PHASE.DOCUMENT_NAMING]: async () =>
+      await recoverDocumentNamingRuns({
+        database: dependencies.database,
+        ...(dependencies.enqueueDocumentNaming === undefined
+          ? {}
+          : { enqueue: dependencies.enqueueDocumentNaming }),
+      }),
     [RECONCILIATION_PHASE.REINDEX]: async () =>
       await recoverFailedOcrSearchIndexes(dependencies),
     [RECONCILIATION_PHASE.REPAIR]: async () =>
@@ -3160,6 +3220,7 @@ const createReconciliationPhaseRunners = (
 export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
   [RECONCILIATION_PHASE.DEADLINE_SCOUT]: [],
   [RECONCILIATION_PHASE.DELIVERY]: [],
+  [RECONCILIATION_PHASE.DOCUMENT_NAMING]: [],
   [RECONCILIATION_PHASE.REINDEX]: [],
   [RECONCILIATION_PHASE.REPAIR]: [
     RECONCILIATION_PHASE.REINDEX,
@@ -3183,6 +3244,7 @@ export const DOCUMENT_PROCESSING_RECONCILIATION_PHASE_FEEDS = {
  */
 const RECONCILIATION_PHASE_ORDER = [
   RECONCILIATION_PHASE.DEADLINE_SCOUT,
+  RECONCILIATION_PHASE.DOCUMENT_NAMING,
   RECONCILIATION_PHASE.REPAIR,
   RECONCILIATION_PHASE.RETRY,
   RECONCILIATION_PHASE.STALE_LEASE,
@@ -3274,6 +3336,7 @@ export const runDocumentProcessingReconciliationPhases = async ({
   const results: ReconciliationResults = {
     [RECONCILIATION_PHASE.DEADLINE_SCOUT]: drained(),
     [RECONCILIATION_PHASE.DELIVERY]: drained(),
+    [RECONCILIATION_PHASE.DOCUMENT_NAMING]: drained(),
     [RECONCILIATION_PHASE.REINDEX]: drained(),
     [RECONCILIATION_PHASE.REPAIR]: drained(),
     [RECONCILIATION_PHASE.RETRY]: drained(),

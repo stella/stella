@@ -5,7 +5,11 @@ import { createDetached } from "@stll/errors";
 import { settledWithin } from "@stll/test-kit";
 
 import { PROTOCOL_LOG_OFF } from "../protocol-log";
-import { startHarnessProcess } from "./harness-process";
+import {
+  decodeStderrTail,
+  startHarnessProcess,
+  stderrTailSince,
+} from "./harness-process";
 
 const backgroundErrors: unknown[] = [];
 afterEach(() => {
@@ -69,5 +73,41 @@ describe.skipIf(process.platform === "win32")("a harness process", () => {
     expect(Result.isError(answer)).toBe(true);
     expect(harness.missedDeadline()).toBe(true);
     expect(await harness.exited).toEqual({ exitCode: null, signal: "SIGTERM" });
+  });
+});
+
+describe("a harness's stderr tail as text", () => {
+  const bytes = (text: string) => new TextEncoder().encode(text);
+
+  test("UTF-8 reads as itself", () => {
+    expect(decodeStderrTail(bytes("chyba: přihlášení vypršelo"))).toBe(
+      "chyba: přihlášení vypršelo",
+    );
+  });
+
+  test("a tail cut inside a character drops the character's remainder", () => {
+    const whole = bytes("č quota exceeded");
+    expect(decodeStderrTail(whole.subarray(1))).toBe(" quota exceeded");
+  });
+
+  test("bytes that are not UTF-8 read as question marks", () => {
+    expect(decodeStderrTail(new Uint8Array([0x6f, 0x6b, 0xff, 0x21]))).toBe(
+      "ok?!",
+    );
+  });
+  test("only what was written from a mark on is read", () => {
+    const tail = bytes("before|during");
+    expect(stderrTailSince(tail, tail.length, "before|".length)).toBe("during");
+  });
+
+  test("a full tail still shows what was written after the mark", () => {
+    // The tail kept the newest 13 bytes of 30 read; the mark was at 24.
+    const tail = bytes("old_____newest");
+    expect(stderrTailSince(tail.subarray(1), 30, 24)).toBe("newest");
+  });
+
+  test("a mark older than the tail reads the whole tail", () => {
+    const tail = bytes("kept");
+    expect(stderrTailSince(tail, 100, 10)).toBe("kept");
   });
 });

@@ -17,12 +17,12 @@ import {
 
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexProjectionDeleteTasks,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   lockCorpusProjectionDeleteTask,
@@ -63,6 +63,7 @@ import {
   type CorpusProjectionScopedWorkOptions,
   entityIdsForCorpusProjectionWorkScope,
 } from "@/api/lib/legal-search/corpus-index-projection-scope";
+import { restoreServedCorpusProjectionRevisionsTx } from "@/api/lib/legal-search/corpus-index-projection-served-copy-restore";
 import {
   type CorpusProjectionCleanupJudgement,
   type CorpusProjectionCleanupPending,
@@ -171,8 +172,9 @@ type ClaimCorpusProjectionCleanupOptions<Family extends CorpusFamily> =
  * earlier release left behind (it queued served revisions for cleanup); no
  * writer in this release creates one, so both only shrink. The desired-state
  * writer keeps that true: a retirement it makes un-names the copy in the same
- * statement group, and it holds any repair that would cost a queued, still
- * restorable copy its proof (`writeRepairedCorpusProjectionDesiredStatesTx`):
+ * statement group, and a repair that would cost a queued, still restorable
+ * copy its proof restores that copy first or is held
+ * (`writeRepairedCorpusProjectionDesiredStatesTx`):
  *
  * - `served_after_delete`: a delete may already have been issued, so the copy
  *   may already be gone and holding the cleanup back would only keep the
@@ -455,49 +457,6 @@ const decideCleanupCandidatesTx = async (
   }));
 };
 
-type RestoreServedRevisionsOptions = {
-  intentIds: readonly ProjectionIntentId[];
-  claimAt: Date | SQL<Date>;
-};
-
-/**
- * Return served revisions no delete reached to `applied`. The columns are
- * the ones the revision held while applied: preparation only queued it, and
- * the publish barrier and every append instant are immutable.
- */
-const restoreServedRevisionsTx = async (
-  tx: Transaction,
-  { intentIds, claimAt }: RestoreServedRevisionsOptions,
-): Promise<void> => {
-  if (intentIds.length === 0) {
-    return;
-  }
-  const restored = await transitionBatch({
-    tx,
-    spec: CORPUS_INDEX_PROJECTION_INTENT_LIFECYCLE,
-    ids: intentIds,
-    options: {
-      to: "applied",
-      from: ["cleanup_pending"],
-      set: {
-        leaseToken: null,
-        leaseExpiresAt: null,
-        cleanupNotBefore: null,
-        lastError: null,
-        updatedAt: claimAt,
-      },
-    },
-    // Bookkeeping on the derived public corpus projection: no tenant data
-    // and no actor; the claim's telemetry reports restores.
-    recordTransitionAuditEvent: () => undefined,
-  });
-  if (restored.length !== intentIds.length) {
-    return panic(
-      `Corpus projection cleanup restored ${restored.length} of ${intentIds.length} revisions`,
-    );
-  }
-};
-
 /**
  * Claim the next cleanup batch of one index. Cleanup never deletes the copy an
  * upsert state serves, except the two kinds `CORPUS_PROJECTION_CLEANUP_CLAIM_KINDS`
@@ -547,7 +506,10 @@ export const claimCorpusProjectionCleanupTx = async <
   const restoredIntentIds = decided
     .filter(({ disposition }) => disposition === CLEANUP_CANDIDATE_RESTORE)
     .map(({ id }) => id);
-  await restoreServedRevisionsTx(tx, { intentIds: restoredIntentIds, claimAt });
+  await restoreServedCorpusProjectionRevisionsTx(tx, {
+    intentIds: restoredIntentIds,
+    transitionAt: claimAt,
+  });
   const toClaim = decided.flatMap(({ id, entityId, disposition }) =>
     disposition === CLEANUP_CANDIDATE_RESTORE
       ? []

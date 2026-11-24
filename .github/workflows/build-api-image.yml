@@ -109,16 +109,9 @@ jobs:
         with:
           cleanup: false
 
-      - name: Login to GHCR
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      # The selected source may predate the pull script, so it runs from the
-      # workflow revision; the copy is removed before it can enter the build
-      # context.
+      # The selected source may predate the pull and login helpers, so both
+      # run from the workflow revision; the copy is removed before it can enter
+      # the build context.
       - name: Checkout workflow tooling
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -126,12 +119,22 @@ jobs:
           path: .workflow-tooling
           persist-credentials: false
           sparse-checkout: |
+            scripts/docker-login-action.ts
             scripts/ci-service-images.ts
             scripts/ci-service-images.json
             packages/scripts/src/child-exit-status.ts
             packages/portable-path/src/index.ts
             scripts/retry.sh
           sparse-checkout-cone-mode: false
+
+      - name: Login to GHCR
+        timeout-minutes: 3
+        env:
+          INPUT_REGISTRY: ${{ env.REGISTRY }}
+          INPUT_USERNAME: ${{ github.actor }}
+          INPUT_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          INPUT_LOGOUT: "false"
+        run: bun .workflow-tooling/scripts/docker-login-action.ts
 
       - name: Resolve API base images
         id: base-contexts

@@ -3,15 +3,26 @@ import { panic } from "better-result";
 import { afterAll, afterEach, expect, jest, test } from "bun:test";
 import fc from "fast-check";
 
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { assertProperty } from "@stll/property-testing";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 import { restoreRealTimers } from "@stll/property-testing/fake-timers";
 
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
+import { fileLinkAnswer } from "@/__fixtures__/file-link-answer";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import englishMessages from "@/i18n/langs/en.json";
 import { browserStorage } from "@/lib/account/browser-storage";
+import type { api } from "@/lib/api";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
+import { toSafeId } from "@/lib/safe-id";
 
 import type { FileTab } from "./inspector-store-types";
+
+// The transport answers stand in for the API's: each is pinned to the answer
+// the typed client reads, so a fixture cannot omit a field the client uses.
+type ApiAnswer<Call extends (...args: never[]) => Promise<{ data: unknown }>> =
+  NonNullable<Awaited<ReturnType<Call>>["data"]>;
+type EntityRoutes = ReturnType<typeof api.entities>;
 
 const localArea = () =>
   browserStorage("local") ?? panic("Test requires local browser storage");
@@ -66,15 +77,19 @@ globalThis.fetch = Object.assign(
       }
       const { name } = JSON.parse(init.body);
       return Response.json({
-        entityId: "entity",
+        entityId: toSafeId<"entity">("entity"),
         name,
-        file: { fieldId: "field", fileName: name },
-      });
+        file: { fieldId: toSafeId<"field">("field"), fileName: name },
+      } satisfies ApiAnswer<EntityRoutes["rename"]["patch"]>);
     }
     if (url.includes("/url/")) {
-      return Response.json({
-        presignedUrl: "https://storage.example.test/markdown",
-      });
+      return Response.json(
+        fileLinkAnswer({
+          fileName: "original.md",
+          mimeType: "text/markdown",
+          presignedUrl: "https://storage.example.test/markdown",
+        }),
+      );
     }
     if (url === "https://storage.example.test/markdown") {
       if (storageFails) {
@@ -90,14 +105,13 @@ globalThis.fetch = Object.assign(
 const { useMarkdownFileDraft } = await import("./use-markdown-file-draft");
 const { MarkdownFileViewer, MarkdownDraftActions } =
   await import("./markdown-file-viewer");
-const { filesKeys } = await import("@/lib/files/queries");
+const { filesKeys, textFileOptions } = await import("@/lib/files/queries");
 const { AuthenticatedUserProvider } =
   await import("@/lib/authenticated-user-context");
 const { useRenameEntity } = await import("@/lib/workspaces/mutations/entities");
 // Load the real browser engine before installing fake timers (lazy loading may
 // otherwise schedule its mount beyond the test's explicit debounce advances).
-const { MarkdownHybridEditor } =
-  await import("@/components/markdown/markdown-hybrid-editor.impl");
+const { MarkdownHybridEditor } = await import("@stll/markdown-editor/impl");
 
 const fileTab: FileTab = {
   type: "pdf",
@@ -242,7 +256,11 @@ const startTransport = async () => {
   await advance(1);
   expect(requests).toHaveLength(1);
 };
-const publish = async () => {
+/**
+ * Answer the pending publication, then wait for the panel the new version
+ * mounts: it has no editor until its text query has loaded the new field.
+ */
+const publish = async (client: InstanceType<typeof QueryClient>) => {
   const request = requests.at(0);
   if (!request) {
     throw new TypeError("Expected a publication request");
@@ -258,10 +276,10 @@ const publish = async () => {
     await act(async () => {
       request.answer.resolve(
         Response.json({
-          fieldId: "next-field",
-          versionId: "version",
+          fieldId: toSafeId<"field">("next-field"),
+          versionId: toSafeId<"entityVersion">("version"),
           versionNumber: 2,
-        }),
+        } satisfies ApiAnswer<EntityRoutes["upload-version"]["post"]>),
       );
       await published.promise;
     });
@@ -269,6 +287,12 @@ const publish = async () => {
     unsubscribe();
   }
   expect(useInspectorTabsStore.getState().tabs.at(0)?.id).toBe("next-field");
+  // Joins the remounted panel's own fetch of the new field's text.
+  await act(async () => {
+    await client.query(
+      textFileOptions({ workspaceId: "matter", fieldId: "next-field" }),
+    );
+  });
 };
 
 afterEach(async () => {
@@ -297,11 +321,12 @@ test("publication captures the displayed source inside the debounce interval", a
   await startTransport();
   restoreRealTimersWithPendingRequest();
   expect(await requests.at(0)?.file.text()).toBe("Draft B");
-  await publish();
-  await waitFor(() => {
-    expect(view.container.textContent).toContain("Draft B");
-    expect(view.queryByRole("button", { name: "Save" }) === null).toBe(true);
-  });
+  // The query client notifies on a zero-delay timer; the fake clock flushes it.
+  jest.useFakeTimers();
+  await publish(view.client);
+  await advance(0);
+  expect(view.container.textContent).toContain("Draft B");
+  expect(view.queryByRole("button", { name: "Save" }) === null).toBe(true);
 });
 
 // Mount an immediate and a default editor on real timers, then install fake
@@ -313,7 +338,9 @@ const mountEmissionEditors = async () => {
     <IntlProvider locale="en" messages={englishMessages}>
       <MarkdownHybridEditor
         markdown="Original instructions"
-        imagePolicy="data-only"
+        allowsImageSource={isSafeMarkdownPreviewImageSrc}
+        label="Markdown source"
+        onOpenLink={openIsolatedWindow}
         changeEmission="immediate"
         onMarkdownChange={(text) => {
           immediateChanges.push(text);
@@ -325,7 +352,9 @@ const mountEmissionEditors = async () => {
     <IntlProvider locale="en" messages={englishMessages}>
       <MarkdownHybridEditor
         markdown="Original instructions"
-        imagePolicy="data-only"
+        allowsImageSource={isSafeMarkdownPreviewImageSrc}
+        label="Markdown source"
+        onOpenLink={openIsolatedWindow}
         onMarkdownChange={(text) => {
           debouncedChanges.push(text);
         }}
@@ -389,7 +418,7 @@ test.each([true, false])(
     edit(view.container, "Draft C");
     expect(view.container.textContent).not.toContain("Draft C");
     if (succeeded) {
-      await publish();
+      await publish(view.client);
       await advance(0);
       expect(view.container.querySelector(".md-editor") === null).toBe(false);
     } else {
@@ -481,7 +510,7 @@ test("rename metadata owns the name used by subsequent publication", async () =>
   fireEvent.click(view.getByRole("button", { name: "Save" }));
   await waitFor(() => expect(requests).toHaveLength(1));
   expect(requests.at(0)?.file.name).toBe("renamed.md");
-  await publish();
+  await publish(view.client);
   expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
     id: "next-field",
     fileName: "renamed.md",
@@ -503,7 +532,7 @@ test("publication settlement preserves metadata confirmed while it was pending",
       fileName: "renamed.md",
     }),
   );
-  await publish();
+  await publish(view.client);
   expect(useInspectorTabsStore.getState().tabs.at(0)).toMatchObject({
     id: "next-field",
     label: "renamed.md",
@@ -522,7 +551,9 @@ test("editor resets are fixed points for source and pending notifications", asyn
           <MarkdownHybridEditor
             ref={handle}
             markdown="Server text"
-            imagePolicy="data-only"
+            allowsImageSource={isSafeMarkdownPreviewImageSrc}
+            label="Markdown source"
+            onOpenLink={openIsolatedWindow}
             onMarkdownChange={(next) => {
               changes.push(next);
             }}

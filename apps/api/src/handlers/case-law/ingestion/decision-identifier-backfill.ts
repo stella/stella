@@ -11,13 +11,13 @@ import type {
 } from "@stll/legal-ast/decision-identifier";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASE,
   CASE_LAW_DECISION_IDENTIFIER_BACKFILL_PHASES,
 } from "@/api/db/schema";
 import type { CaseLawDecisionIdentifierBackfillPhase } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   type CitationGraphTransaction,
   runCitationGraphTransaction,

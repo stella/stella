@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";

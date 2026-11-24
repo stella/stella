@@ -4,7 +4,6 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { stella, WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
   chatThreads,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
@@ -12,6 +11,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
@@ -41,6 +41,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   sso_provider: "Sign-in configuration set by operators, not reviewer content.",
   organization_sso_policy:
     "Sign-in policy set by operators, not reviewer content.",
+  organization_sso_domain:
+    "Sign-in domain verification records set by operators, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
   conflict_checks:
@@ -154,6 +156,8 @@ export const REVIEW_RESET_CLEARED_TABLES = [
   "desktop_runner_runs",
   "desktop_runners",
   "desktop_time_entry_batches",
+  "dictation_learned_fixes",
+  "dictation_vocabulary_terms",
   "document_processing_runs",
   "document_reference_counters",
   "document_review_findings",

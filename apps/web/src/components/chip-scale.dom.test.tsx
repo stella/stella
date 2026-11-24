@@ -15,6 +15,8 @@ const { AttachmentChip } = await import("@/components/chat/attachment-chip");
 const { ChatAttachmentChip, ChatCommandChip } =
   await import("@/components/chat/chat-draft-attachment-chips");
 const { InlinePill } = await import("@/components/inline-pill");
+const { UnscannedContentMark } =
+  await import("@/components/inspector/unscanned-content-notice");
 const {
   CHIP_ACTION_CLASS,
   CHIP_HEIGHT_CLASS,
@@ -79,6 +81,15 @@ const CHIP_KINDS = {
       kind="file"
       open={{ type: "link", href: "https://example.test/rozsudek.pdf" }}
       title="Rozsudek 28 Co 91/2025.pdf"
+    />
+  ),
+  "file part of which was not scanned in a sent message": (
+    <AttachmentChip
+      icon={({ className }) => <LandmarkIcon className={className} />}
+      kind="file"
+      notice={<UnscannedContentMark reasons={["encrypted"]} />}
+      open={{ type: "link", href: "https://example.test/spis.asice" }}
+      title="Spis 28 Co 91/2025.asice"
     />
   ),
   "slash command": <ChatCommandChip label="/new" />,

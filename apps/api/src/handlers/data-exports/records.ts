@@ -103,6 +103,7 @@ export const MATTER_COLUMNS = {
   billingNarrativeLanguage: "export",
   billingReference: "export",
   color: "export",
+  documentNamingEnabled: "export",
   status: "export",
   lastActivityAt: "export",
   createdAt: "export",
