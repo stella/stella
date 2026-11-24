@@ -38,15 +38,6 @@ type OrganizationDangerZoneProps = {
 const SUBSCRIPTION_RENEWS_CODE = "organization_subscription_renews";
 const ONLY_OWNER_LEAVE_CODE =
   "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER";
-const AUDIT_EXPORT_REQUIRED_CODE = "organization_audit_export_required";
-const AUDIT_EXPORT_STALE_CODE = "organization_audit_export_stale";
-const AUDIT_EXPORT_NOT_DOWNLOADED_CODE =
-  "organization_audit_export_not_downloaded";
-const AUDIT_EXPORT_REFUSAL_CODES: readonly (string | undefined)[] = [
-  AUDIT_EXPORT_REQUIRED_CODE,
-  AUDIT_EXPORT_STALE_CODE,
-  AUDIT_EXPORT_NOT_DOWNLOADED_CODE,
-];
 
 export const OrganizationDangerZone = ({
   organizationId,
@@ -62,8 +53,8 @@ export const OrganizationDangerZone = ({
     organizationId,
     userId,
   );
-  // Deleting the organization deletes its audit log, so only an owner holding
-  // a current archive of it can delete.
+  // Deleting the organization deletes its audit log; the confirmation
+  // recommends a current archive of it but does not require one.
   const auditExportView = queryView(
     useQuery({ ...auditExportOptions, enabled: isOwner }),
     { isEmpty: (data) => data === null },
@@ -72,39 +63,13 @@ export const OrganizationDangerZone = ({
   const auditArchive =
     auditExportView.type === "items" ? auditExportView.items : null;
   // A failed refresh leaves the last archive on screen, but its coverage is
-  // no longer confirmed, so deletion waits for a successful read.
+  // no longer confirmed, so the confirmation still recommends taking one.
   const auditArchiveCurrent =
     auditExportView.type === "items" &&
     auditExportView.refetchError === undefined &&
     auditArchive?.status === "ready" &&
     auditArchive.coversCurrentTrail &&
     auditArchive.downloaded;
-  const resolveAuditArchiveDisabledReason = () => {
-    if (auditExportView.type === "pending") {
-      return t("common.loading");
-    }
-    if (
-      auditExportView.type === "error" ||
-      (auditExportView.type === "items" &&
-        auditExportView.refetchError !== undefined)
-    ) {
-      return t("common.loadFailed");
-    }
-    if (
-      auditArchive?.status === "requested" ||
-      auditArchive?.status === "processing"
-    ) {
-      return t("admin.auditArchiveWorking");
-    }
-    if (auditArchive?.status === "ready") {
-      return t(
-        auditArchive.coversCurrentTrail
-          ? "admin.auditArchiveDownloadFirst"
-          : "admin.auditArchiveOutdated",
-      );
-    }
-    return t("admin.deleteRefusedAuditArchive");
-  };
   const requestAuditArchive = useMutation({
     onMutate: async () => {
       await queryClient.cancelQueries({
@@ -161,11 +126,6 @@ export const OrganizationDangerZone = ({
             },
           });
           setOutcome({ status: "refused", code: result.error.code });
-          if (AUDIT_EXPORT_REFUSAL_CODES.includes(result.error.code)) {
-            await queryClient.invalidateQueries({
-              queryKey: auditExportOptions.queryKey,
-            });
-          }
           return "refused" as const;
         }
         setOutcome({ status: "completed", action });
@@ -206,26 +166,10 @@ export const OrganizationDangerZone = ({
         return t("admin.deleteRefusedSubscription");
       case ONLY_OWNER_LEAVE_CODE:
         return t("admin.leaveRefusedOnlyOwner");
-      case AUDIT_EXPORT_REQUIRED_CODE:
-        return t("admin.deleteRefusedAuditArchive");
-      case AUDIT_EXPORT_STALE_CODE:
-        return t("admin.auditArchiveOutdated");
-      case AUDIT_EXPORT_NOT_DOWNLOADED_CODE:
-        return t("admin.auditArchiveDownloadFirst");
       default:
         return t("errors.actionFailed");
     }
   })();
-
-  const resolveOrganizationDeletionDisabledReason = () => {
-    if (mutation.isPending) {
-      return organizationMutationReason;
-    }
-    if (outcome.status === "completed") {
-      return t("admin.organizationChangeCompleted");
-    }
-    return resolveAuditArchiveDisabledReason();
-  };
 
   return (
     <>
@@ -265,12 +209,12 @@ export const OrganizationDangerZone = ({
           <OrganizationDangerZoneRow
             action={
               <Button
-                disabled={
-                  mutation.isPending ||
-                  outcome.status === "completed" ||
-                  !auditArchiveCurrent
+                disabled={mutation.isPending || outcome.status === "completed"}
+                disabledReason={
+                  mutation.isPending
+                    ? organizationMutationReason
+                    : t("admin.organizationChangeCompleted")
                 }
-                disabledReason={resolveOrganizationDeletionDisabledReason()}
                 onClick={() => setDeleteOpen(true)}
                 variant="destructive"
               >
@@ -306,6 +250,11 @@ export const OrganizationDangerZone = ({
           description={
             <>
               {t("admin.deleteDescription")}
+              {!auditArchiveCurrent && (
+                <span className="mt-2 block">
+                  {t("admin.deleteWithoutAuditArchive")}
+                </span>
+              )}
               {outcome.status === "refused" && (
                 <span className="mt-2 block" role="alert">
                   {refusalMessage}

@@ -514,7 +514,7 @@ export const requestOrganizationAuditExport = async ({
 
 /**
  * Lock the owner's ready, unexpired audit archive of the organization, for
- * the deletion that requires it. Account exports precede organizations in the
+ * the deletion that retains it. Account exports precede organizations in the
  * registered lock order, so callers take this before the organization row.
  */
 export const lockReadyOrganizationAuditExport = async (
@@ -998,8 +998,7 @@ const mayDownloadOrganizationAudit = async (
 
 /**
  * Hand a ready archive to its requester: record the download on the account
- * trail and mark the ledger row downloaded, which organization deletion
- * requires of its audit archive.
+ * trail and mark the ledger row downloaded.
  */
 export const recordAccountExportDownload = async ({
   id,

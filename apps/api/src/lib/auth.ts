@@ -83,7 +83,6 @@ import { appendSetCookieHeaders } from "@/api/http/context";
 import type { RequestContext, ResponseHeaders } from "@/api/http/context";
 import { status } from "@/api/http/status";
 import type { HttpStatusResponse } from "@/api/http/status";
-import { ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE } from "@/api/lib/account-export/organization-audit-gate";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { loadOrgSettingsForAuth } from "@/api/lib/ai-config-loader";
 import { captureError, detached } from "@/api/lib/analytics/capture";
@@ -1997,9 +1996,8 @@ export const createAuth = (
         // is the point: instructions committed ahead of a cascade that then
         // failed would name a live organization's documents.
         //
-        // The audit trail cascades with the organization, so the teardown
-        // owner first requires the deleting owner's complete archive of it
-        // and refuses, before writing anything, without one.
+        // The audit trail cascades with the organization; the teardown owner
+        // keeps the deleting owner's archive of it when they hold one.
         //
         // `org.id` is read off the row the plugin already loaded, so this is
         // where it becomes the ownership id. `rootDb` bypasses row-level
@@ -2041,15 +2039,6 @@ export const createAuth = (
             error: ORGANIZATION_DELETION_REFUSAL_CODE.subscriptionRenews,
             message:
               "Cancel the organization's subscription before deleting the organization.",
-          });
-        }
-        if (teardown.value.type === "refused") {
-          // `code` is what the web client reads off an auth error.
-          throw new APIError("CONFLICT", {
-            code: teardown.value.code,
-            error: teardown.value.code,
-            message:
-              ORGANIZATION_AUDIT_EXPORT_REFUSAL_MESSAGE[teardown.value.code],
           });
         }
 

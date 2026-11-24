@@ -79,13 +79,12 @@ describe("organization deletion entry points", () => {
     ]);
   });
 
-  test("the owner requires the audit archive before it writes anything", async () => {
+  test("the owner settles the audit archive and its locks before it writes anything", async () => {
     const source = await Bun.file(
       path.join(apiRoot, "src/lib/organization-storage-teardown.ts"),
     ).text();
     const owner = source.indexOf("export const completeOrganizationDeletion");
-    const gate = source.indexOf("requireOrganizationAuditExport(", owner);
-    const refusal = source.indexOf('auditExport.type === "refused"', gate);
+    const archive = source.indexOf("retainOrganizationAuditArchive(", owner);
     const teardown = source.indexOf(
       "recordOrganizationStorageTeardown(",
       owner,
@@ -93,9 +92,8 @@ describe("organization deletion entry points", () => {
     const rowDelete = source.indexOf("delete(organization)", owner);
 
     expect(owner).toBeGreaterThanOrEqual(0);
-    expect(gate).toBeGreaterThan(owner);
-    expect(refusal).toBeGreaterThan(gate);
-    expect(teardown).toBeGreaterThan(refusal);
+    expect(archive).toBeGreaterThan(owner);
+    expect(teardown).toBeGreaterThan(archive);
     expect(rowDelete).toBeGreaterThan(teardown);
   });
 });
