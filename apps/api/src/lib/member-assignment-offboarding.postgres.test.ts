@@ -1406,7 +1406,21 @@ if (!databaseUrl || !runPostgresTests) {
         await executeFlowStep(
           { runId, stepIndex: 1 },
           new AbortController().signal,
-          { admission: testModelAdmission(organizationId), database: db },
+          {
+            admission: testModelAdmission(organizationId),
+            database: db,
+            makeScopedDb: ({
+              organizationId: scopedOrgId,
+              userId: scopedUserId,
+              workspaceIds: scopedWorkspaceIds,
+            }) =>
+              createScopedDb(
+                markRlsDatabase(db),
+                scopedWorkspaceIds,
+                scopedOrgId,
+                scopedUserId,
+              ),
+          },
         );
         expect(
           await db.$count(entities, eq(entities.workspaceId, workspaceId)),

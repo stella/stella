@@ -33,6 +33,7 @@ import { createTestState } from "@stll/test-state";
 import { parseTimeZoneId } from "@stll/time";
 
 import { member, organization, user } from "@/api/db/auth-schema";
+import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   entities,
@@ -2391,6 +2392,204 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       ).toEqual({ status: "pending" });
     },
   );
+
+  test("a run stops when its requester no longer has access to the matter", async () => {
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Matter revocation flow",
+      steps: [AI_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: userId,
+    });
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
+      safeDb,
+      organizationId,
+      workspaceId,
+      definitionId,
+      triggerSource: { type: "manual", userId },
+      inputEntityIds: [],
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const job = enqueuedSteps.pop();
+    expect(job).toEqual({ runId: started.value.runId, stepIndex: 0 });
+    if (job === undefined) {
+      throw new Error("expected the run's first step to be enqueued");
+    }
+
+    const removedMemberships = await testDb
+      .delete(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.workspaceId, workspaceId),
+          eq(workspaceMembers.userId, userId),
+        ),
+      )
+      .returning();
+
+    let stepError: unknown;
+    try {
+      stepError = await executeFlowStep(job, new AbortController().signal, {
+        generateTextForTask: generateTextForTest,
+        admission: TEST_FLOW_MODEL_ADMISSION,
+        database: flowDatabase,
+        makeScopedDb,
+        makeSafeDb,
+        inputDb: createScopedDb(
+          testDb,
+          {
+            type: WORKSPACE_ACCESS_MODE.membership,
+            serverValidatedWorkspaceIds: [],
+          },
+          organizationId,
+          userId,
+        ),
+        enqueueStep: enqueueFlowStepMock,
+        broadcastUpdate,
+        createEntity,
+        loadAIConfig: async () => Result.ok(null),
+        taskFeatures: { governedWorkflow: true, legalLists: false },
+        flushSearchRepairs,
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+    } finally {
+      if (removedMemberships.length > 0) {
+        await testDb.insert(workspaceMembers).values(removedMemberships);
+      }
+    }
+
+    expect(stepError).toBeInstanceOf(FlowStepError);
+    expect(generateTanStackTextForTaskMock).not.toHaveBeenCalled();
+    expect(
+      await testDb.query.flowRunSteps.findFirst({
+        where: {
+          runId: { eq: toSafeId<"flowRun">(job.runId) },
+          index: { eq: 0 },
+        },
+        columns: { status: true },
+      }),
+    ).toEqual({ status: "pending" });
+  });
+
+  test("a run stops when its requester has left the organization", async () => {
+    const definitionId = createSafeId<"flowDefinition">();
+    await testDb.insert(flowDefinitions).values({
+      id: definitionId,
+      organizationId,
+      name: "Organization revocation flow",
+      steps: [AI_STEP],
+      trigger: MANUAL_TRIGGER,
+      enabled: true,
+      createdByUserId: userId,
+    });
+    const safeDb = asTestRaw<SafeDb>(
+      createSafeDb(testDb, [workspaceId], organizationId, userId),
+    );
+    const started = await startFlowRun({
+      admit: async () =>
+        await authorizeHandlerRunSize({
+          metering: null,
+          orgAIConfig: null,
+          organizationId,
+          workspaceId,
+          userId,
+          safeDb,
+          estimatedUnits: 0,
+          confirmedUnits: undefined,
+        }),
+      safeDb,
+      organizationId,
+      workspaceId,
+      definitionId,
+      triggerSource: { type: "manual", userId },
+      inputEntityIds: [],
+      enqueueStep: enqueueFlowStepMock,
+    });
+    if (Result.isError(started)) {
+      throw started.error;
+    }
+    const job = enqueuedSteps.pop();
+    expect(job).toEqual({ runId: started.value.runId, stepIndex: 0 });
+    if (job === undefined) {
+      throw new Error("expected the run's first step to be enqueued");
+    }
+
+    const removedMembers = await testDb
+      .delete(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.userId, userId),
+        ),
+      )
+      .returning();
+
+    let stepError: unknown;
+    try {
+      stepError = await executeFlowStep(job, new AbortController().signal, {
+        generateTextForTask: generateTextForTest,
+        admission: TEST_FLOW_MODEL_ADMISSION,
+        database: flowDatabase,
+        makeScopedDb,
+        makeSafeDb,
+        inputDb: createScopedDb(
+          testDb,
+          {
+            type: WORKSPACE_ACCESS_MODE.membership,
+            serverValidatedWorkspaceIds: [],
+          },
+          organizationId,
+          userId,
+        ),
+        enqueueStep: enqueueFlowStepMock,
+        broadcastUpdate,
+        createEntity,
+        loadAIConfig: async () => Result.ok(null),
+        taskFeatures: { governedWorkflow: true, legalLists: false },
+        flushSearchRepairs,
+      }).then(
+        () => null,
+        (error: unknown) => error,
+      );
+    } finally {
+      if (removedMembers.length > 0) {
+        await testDb.insert(member).values(removedMembers);
+      }
+    }
+
+    expect(stepError).toBeInstanceOf(FlowStepError);
+    expect(generateTanStackTextForTaskMock).not.toHaveBeenCalled();
+    expect(
+      await testDb.query.flowRunSteps.findFirst({
+        where: {
+          runId: { eq: toSafeId<"flowRun">(job.runId) },
+          index: { eq: 0 },
+        },
+        columns: { status: true },
+      }),
+    ).toEqual({ status: "pending" });
+  });
 
   test.each([
     ["Panic", new Panic({ message: SENTINEL_FOREIGN_TEXT })],

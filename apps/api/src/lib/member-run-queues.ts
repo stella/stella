@@ -15,6 +15,10 @@ export const MEMBER_RUN_QUEUES = [
     module: "apps/api/src/lib/document-review/run-queue.ts",
   },
   {
+    queue: "flow-run",
+    module: "apps/api/src/lib/flows/flow-run-worker.ts",
+  },
+  {
     queue: "document-translation-runs",
     module: "apps/api/src/lib/document-translation/run-queue.ts",
   },
@@ -173,6 +177,8 @@ export const QUEUE_AUTHORITY = {
     authority: "member-run",
     worker: "apps/api/src/lib/flows/flow-run-worker.ts",
     executors: ["apps/api/src/lib/flows/flow-executor.ts"],
+    revocationTest:
+      "apps/api/src/lib/flows/flow-run-worker.integration.test.ts",
     reason:
       "Acts as the member who launched the run, or for an automated run the definition's author.",
   },
