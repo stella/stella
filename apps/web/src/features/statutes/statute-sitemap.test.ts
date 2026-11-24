@@ -132,6 +132,7 @@ describe("public statute sitemap", () => {
         fetchImpl,
         shard: { bucket: "all", country: "cze" },
       });
+      expect(works.isErr()).toBe(true);
       const response = createSitemapReadFailureResponse(
         works.isErr() ? works.error : null,
       );
@@ -150,6 +151,7 @@ describe("public statute sitemap", () => {
         fetchImpl,
         shard: { bucket: "zz", country: "cze" },
       });
+      expect(works.isErr()).toBe(true);
       const response = createSitemapReadFailureResponse(
         works.isErr() ? works.error : null,
       );
@@ -163,6 +165,7 @@ describe("public statute sitemap", () => {
     const fetchImpl = async () => new Response("invalid", { status: 422 });
 
     const shards = await fetchPublicStatuteSitemapShards({ fetchImpl });
+    expect(shards.isErr()).toBe(true);
     const response = createSitemapReadFailureResponse(
       shards.isErr() ? shards.error : null,
     );
@@ -178,6 +181,7 @@ describe("public statute sitemap", () => {
       fetchImpl,
       shard: { bucket: "all", country: "cze" },
     });
+    expect(works.isErr()).toBe(true);
     const response = createSitemapReadFailureResponse(
       works.isErr() ? works.error : null,
     );
@@ -192,6 +196,7 @@ describe("public statute sitemap", () => {
       fetchImpl,
       shard: { bucket: "all", country: "cze" },
     });
+    expect(works.isErr()).toBe(true);
     const response = createSitemapReadFailureResponse(
       works.isErr() ? works.error : null,
     );
