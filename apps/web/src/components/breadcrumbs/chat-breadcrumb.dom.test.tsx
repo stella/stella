@@ -3,7 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 const previousFetch = globalThis.fetch;
@@ -251,7 +251,9 @@ test("typing in the switcher searches the chats, and choosing one opens it", asy
   await testing.act(async () => {
     testing.fireEvent.change(
       ui.getByPlaceholderText(messages.chat.switcher.searchPlaceholder),
-      { target: { value: "lease" } },
+      {
+        target: { value: "lease" },
+      },
     );
   });
   await testing.waitFor(() =>

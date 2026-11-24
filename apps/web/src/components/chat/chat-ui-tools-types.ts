@@ -2,7 +2,6 @@ import type { HarnessChatToolName } from "@stll/api-contract/chat-tool-activity"
 import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import type { FolioAgentToolName } from "@stll/folio-agents";
 
-import type { WebApiRoutes } from "@/lib/api";
 import type {
   BuiltInChatToolPolicyKindByName,
   ChatAnonRestoration,
@@ -10,6 +9,7 @@ import type {
   ChatMessage,
   ChatPart as TanStackChatPart,
   ChatUITools,
+  WebApiRoutes,
 } from "@/lib/api-contract";
 
 export type { ChatAnonRestoration, ChatClientTools, ChatMessage, ChatUITools };

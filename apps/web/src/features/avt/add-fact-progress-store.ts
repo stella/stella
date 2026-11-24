@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 
 /** Where a new fact comes from: a document, a page of it, and the words.

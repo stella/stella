@@ -1,6 +1,6 @@
 import { CAPABILITY_REQUEST_HEADER } from "@stll/api-contract/capability-request";
 
-import type { CapabilityId } from "@/lib/api";
+import type { CapabilityId } from "@/lib/api-contract";
 
 /**
  * API client request options that declare the catalog capability a write
