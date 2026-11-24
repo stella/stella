@@ -557,7 +557,7 @@
     },
     "create": {
       "matterName": "Nazwa sprawy",
-      "personalDescription": "Sprawy osobiste są prywatne i nie wymagają klienta. Możesz je później awansować, aby udostępnić zespołowi."
+      "personalDescription": "Klient jest opcjonalny. Możesz go dodać później; nie zmienia to, kto widzi sprawę."
     },
     "createNewWorkspace": "Utwórz nową sprawę",
     "defaultName": "Bez tytułu",
@@ -1049,11 +1049,10 @@
         "third_party": "Strona trzecia",
         "witness": "Świadek"
       },
-      "personalDescription": "Sprawy osobiste są prywatne. Awansuj je na sprawy klienckie, aby udostępnić zespołowi.",
+      "personalDescription": "Ta sprawa nie ma klienta. Dodanie klienta nie zmienia, kto ją widzi.",
       "personalLabel": "Osobista",
       "promoteCta": "Awansuj na sprawę kliencką",
-      "promoteDescription": "Przypisz klienta, aby udostępnić tę sprawę zespołowi. Działanie jest nieodwracalne: awansowane sprawy nie mogą wrócić do osobistych.",
-      "promoteToClientConfirm": "Sprawa <bdi>{matterName}</bdi> zostanie przypisana do klienta <bdi>{clientName}</bdi> i udostępniona zespołowi. Nie będzie można przywrócić jej jako osobistej.",
+      "promoteDescription": "Przypisz klienta do tej sprawy. To, kto ją widzi, pozostaje bez zmian. Klienta możesz później zmienić, ale nie usunąć.",
       "promotedSuccess": "Sprawa awansowana",
       "recentClients": "Ostatni klienci",
       "removeClient": "Usuń klienta",
@@ -1424,6 +1423,19 @@
       },
       "useTemplate": "Użyj ustawienia wstępnego…",
       "viewSettings": "Ustawienia widoku"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administratorzy i przypisani",
+      "adminsAndAssignedDescription": "Właściciele, administratorzy i osoby przypisane do sprawy",
+      "allMembers": "Cały zespół",
+      "allMembersDescription": "Wszyscy członkowie zespołu oprócz użytkowników zewnętrznych",
+      "assignedOnly": "Tylko przypisani",
+      "assignedOnlyDescription": "Tylko osoby przypisane do sprawy",
+      "label": "Kto widzi",
+      "widenConfirm": "Zmień widoczność",
+      "widenTitle": "Udostępnić sprawę większej liczbie osób?",
+      "widenToAdminsAndAssigned": "Właściciele i administratorzy będą mogli otworzyć tę sprawę i jej dokumenty bez przypisania.",
+      "widenToAllMembers": "Wszyscy członkowie zespołu oprócz użytkowników zewnętrznych będą mogli otworzyć tę sprawę i jej dokumenty bez przypisania."
     },
     "workflow": {
       "largeRunPrompt": {

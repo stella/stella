@@ -557,7 +557,7 @@
     },
     "create": {
       "matterName": "Toimiku nimi",
-      "personalDescription": "Isiklikud toimikud on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
+      "personalDescription": "Klient pole kohustuslik. Saate selle hiljem lisada; see ei muuda, kes toimikut näeb."
     },
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
@@ -1049,11 +1049,10 @@
         "third_party": "Kolmas isik",
         "witness": "Tunnistaja"
       },
-      "personalDescription": "Isiklikud toimikud on ainult teile nähtavad. Edutage kliendile, et meeskonnaga jagada.",
+      "personalDescription": "Sellel toimikul pole klienti. Kliendi lisamine ei muuda, kes toimikut näeb.",
       "personalLabel": "Isiklik",
       "promoteCta": "Eduta kliendile",
-      "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline: edutatud toimikuid ei saa tagasi isiklikuks muuta.",
-      "promoteToClientConfirm": "Toimik <bdi>{matterName}</bdi> määratakse kliendile <bdi>{clientName}</bdi> ja jagatakse meeskonnaga. Seda ei saa enam isiklikuks muuta.",
+      "promoteDescription": "Lisage sellele toimikule klient. See, kes toimikut näeb, jääb samaks. Klienti saate hiljem muuta, kuid mitte eemaldada.",
       "promotedSuccess": "Toimik edutatud",
       "recentClients": "Hiljutised kliendid",
       "removeClient": "Eemalda klient",
@@ -1424,6 +1423,19 @@
       },
       "useTemplate": "Kasuta eelseadet…",
       "viewSettings": "Vaate seaded"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administraatorid ja määratud",
+      "adminsAndAssignedDescription": "Omanikud, administraatorid ja toimikusse määratud inimesed",
+      "allMembers": "Kogu meeskond",
+      "allMembersDescription": "Kõik meeskonnaliikmed peale väliste kasutajate",
+      "assignedOnly": "Ainult määratud",
+      "assignedOnlyDescription": "Ainult toimikusse määratud inimesed",
+      "label": "Kes näeb",
+      "widenConfirm": "Muuda nähtavust",
+      "widenTitle": "Kas teha toimik nähtavaks rohkematele inimestele?",
+      "widenToAdminsAndAssigned": "Omanikud ja administraatorid saavad seda toimikut ja selle dokumente avada ka ilma määramiseta.",
+      "widenToAllMembers": "Kõik meeskonnaliikmed peale väliste kasutajate saavad seda toimikut ja selle dokumente avada ka ilma määramiseta."
     },
     "workflow": {
       "largeRunPrompt": {

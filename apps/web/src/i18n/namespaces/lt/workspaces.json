@@ -557,7 +557,7 @@
     },
     "create": {
       "matterName": "Bylos pavadinimas",
-      "personalDescription": "Asmeninės bylos yra privačios ir nereikalauja kliento. Galite jas vėliau paaukštinti, kad pasidalintumėte su komanda."
+      "personalDescription": "Klientas neprivalomas. Galite jį pridėti vėliau; tai nekeičia, kas mato bylą."
     },
     "createNewWorkspace": "Sukurti naują bylą",
     "defaultName": "Be pavadinimo",
@@ -1049,11 +1049,10 @@
         "third_party": "Trečioji šalis",
         "witness": "Liudytojas"
       },
-      "personalDescription": "Asmeninės bylos yra privačios. Paaukštinkite į klientinę, kad pasidalintumėte su komanda.",
+      "personalDescription": "Ši byla neturi kliento. Pridėjus klientą, nesikeičia, kas ją mato.",
       "personalLabel": "Asmeninė",
       "promoteCta": "Paaukštinti į klientinę",
-      "promoteDescription": "Susiekite klientą, kad pasidalintumėte byla su komanda. Tai negrįžtama: paaukštintos bylos negali tapti asmeninėmis.",
-      "promoteToClientConfirm": "Byla <bdi>{matterName}</bdi> bus priskirta klientui <bdi>{clientName}</bdi> ir bendrinama su komanda. Jos nebebus galima grąžinti į asmeninę.",
+      "promoteDescription": "Priskirkite šiai bylai klientą. Kas ją mato, nesikeičia. Klientą vėliau galėsite pakeisti, bet ne pašalinti.",
       "promotedSuccess": "Byla paaukštinta",
       "recentClients": "Naujausi klientai",
       "removeClient": "Pašalinti klientą",
@@ -1424,6 +1423,19 @@
       },
       "useTemplate": "Naudoti išankstinį nustatymą…",
       "viewSettings": "Rodinio nustatymai"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administratoriai ir priskirtieji",
+      "adminsAndAssignedDescription": "Savininkai, administratoriai ir prie bylos priskirti žmonės",
+      "allMembers": "Visa komanda",
+      "allMembersDescription": "Visi komandos nariai, išskyrus išorinius naudotojus",
+      "assignedOnly": "Tik priskirtieji",
+      "assignedOnlyDescription": "Tik prie bylos priskirti žmonės",
+      "label": "Kas mato",
+      "widenConfirm": "Keisti matomumą",
+      "widenTitle": "Rodyti šią bylą daugiau žmonių?",
+      "widenToAdminsAndAssigned": "Savininkai ir administratoriai galės atidaryti šią bylą ir jos dokumentus, net jei nėra prie jos priskirti.",
+      "widenToAllMembers": "Visi komandos nariai, išskyrus išorinius naudotojus, galės atidaryti šią bylą ir jos dokumentus, net jei nėra prie jos priskirti."
     },
     "workflow": {
       "largeRunPrompt": {

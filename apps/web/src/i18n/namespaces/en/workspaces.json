@@ -557,7 +557,7 @@
     },
     "create": {
       "matterName": "Matter name",
-      "personalDescription": "Personal matters are private to you and don't need a client. You can promote them later to share with the team."
+      "personalDescription": "A client is optional. You can add one later; it does not change who can see the matter."
     },
     "createNewWorkspace": "Create new matter",
     "defaultName": "Untitled",
@@ -1049,11 +1049,10 @@
         "third_party": "Third party",
         "witness": "Witness"
       },
-      "personalDescription": "Personal matters are private to you. Promote to a client to share with the team.",
+      "personalDescription": "This matter has no client. Adding one does not change who can see it.",
       "personalLabel": "Personal",
       "promoteCta": "Promote to client",
-      "promoteDescription": "Attach a client to share this matter with the team. This is one-way: promoted matters cannot return to personal.",
-      "promoteToClientConfirm": "<bdi>{matterName}</bdi> will be assigned to <bdi>{clientName}</bdi> and shared with the team. It cannot return to personal.",
+      "promoteDescription": "Attach a client to this matter. Who can see it stays the same. You can change the client later but not remove it.",
       "promotedSuccess": "Matter promoted",
       "recentClients": "Recent clients",
       "removeClient": "Remove client",
@@ -1424,6 +1423,19 @@
       },
       "useTemplate": "Use preset…",
       "viewSettings": "View settings"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Admins and assigned",
+      "adminsAndAssignedDescription": "Owners, admins and people assigned to the matter",
+      "allMembers": "Whole team",
+      "allMembersDescription": "Every team member except external users",
+      "assignedOnly": "Assigned only",
+      "assignedOnlyDescription": "Only people assigned to the matter",
+      "label": "Who can see it",
+      "widenConfirm": "Change visibility",
+      "widenTitle": "Show this matter to more people?",
+      "widenToAdminsAndAssigned": "Owners and admins will be able to open this matter and its documents without being assigned.",
+      "widenToAllMembers": "Every team member except external users will be able to open this matter and its documents without being assigned."
     },
     "workflow": {
       "largeRunPrompt": {

@@ -557,7 +557,7 @@
     },
     "create": {
       "matterName": "Name der Akte",
-      "personalDescription": "Persönliche Akten sind privat und benötigen keinen Klienten. Sie können später hochgestuft werden, um sie mit dem Team zu teilen."
+      "personalDescription": "Ein Klient ist optional. Sie können ihn später hinzufügen; das ändert nicht, wer die Akte sieht."
     },
     "createNewWorkspace": "Neue Akte erstellen",
     "defaultName": "Ohne Titel",
@@ -1049,11 +1049,10 @@
         "third_party": "Dritte Partei",
         "witness": "Zeuge"
       },
-      "personalDescription": "Persönliche Akten sind nur für Sie sichtbar. Stufen Sie sie auf einen Klienten hoch, um sie mit dem Team zu teilen.",
+      "personalDescription": "Diese Akte hat keinen Klienten. Ein Klient ändert nicht, wer sie sieht.",
       "personalLabel": "Persönlich",
       "promoteCta": "Zu Klient hochstufen",
-      "promoteDescription": "Fügen Sie einen Klienten hinzu, um diese Akte mit dem Team zu teilen. Diese Aktion ist endgültig: hochgestufte Akten können nicht wieder persönlich werden.",
-      "promoteToClientConfirm": "Die Akte <bdi>{matterName}</bdi> wird <bdi>{clientName}</bdi> zugeordnet und mit dem Team geteilt. Sie kann danach nicht wieder persönlich werden.",
+      "promoteDescription": "Ordnen Sie dieser Akte einen Klienten zu. Wer sie sieht, bleibt gleich. Den Klienten können Sie später ändern, aber nicht entfernen.",
       "promotedSuccess": "Akte hochgestuft",
       "recentClients": "Zuletzt verwendete Klienten",
       "removeClient": "Klient entfernen",
@@ -1424,6 +1423,19 @@
       },
       "useTemplate": "Voreinstellung verwenden…",
       "viewSettings": "Ansichtseinstellungen"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Admins und Zugewiesene",
+      "adminsAndAssignedDescription": "Eigentümer, Administratoren und der Akte zugewiesene Personen",
+      "allMembers": "Ganzes Team",
+      "allMembersDescription": "Alle Teammitglieder außer externen Nutzern",
+      "assignedOnly": "Nur Zugewiesene",
+      "assignedOnlyDescription": "Nur der Akte zugewiesene Personen",
+      "label": "Wer die Akte sieht",
+      "widenConfirm": "Sichtbarkeit ändern",
+      "widenTitle": "Akte für mehr Personen sichtbar machen?",
+      "widenToAdminsAndAssigned": "Eigentümer und Administratoren können diese Akte und ihre Dokumente öffnen, ohne zugewiesen zu sein.",
+      "widenToAllMembers": "Alle Teammitglieder außer externen Nutzern können diese Akte und ihre Dokumente öffnen, ohne zugewiesen zu sein."
     },
     "workflow": {
       "largeRunPrompt": {
