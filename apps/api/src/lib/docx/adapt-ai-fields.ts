@@ -42,7 +42,7 @@ type MarkerOccurrence = {
   context: string;
 };
 
-export type AiOccurrenceAdaptation =
+type AiOccurrenceAdaptation =
   { type: "adapted"; renderings: string[] } | { type: "failed" };
 
 export type AiOccurrenceAdapter = (input: {
