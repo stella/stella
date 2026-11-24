@@ -1080,6 +1080,10 @@ export const scimManagedConnection = pgTable(
     ),
     uniqueIndex("scim_managed_conn_connection_id_uidx").on(table.connectionId),
     index("scim_managed_conn_domain_idx").on(table.provisioningDomainId),
+    check(
+      "scim_managed_conn_decomm_state_check",
+      sql`${table.status} <> 'decommissioned' OR ${table.decommissionedAt} IS NOT NULL`,
+    ),
     tableOwnerAccess("scim_managed_connection"),
     ...denyStellaAccessPolicies(),
   ],
@@ -1110,6 +1114,10 @@ export const scimManagedCredential = pgTable(
     index("scim_managed_cred_conn_rec_idx").on(table.connectionRecordId),
     uniqueIndex("scim_managed_cred_id_uidx").on(table.credentialId),
     uniqueIndex("scim_managed_cred_active_slot_uidx").on(table.activeSlotKey),
+    check(
+      "scim_managed_cred_revoked_state_check",
+      sql`${table.status} <> 'revoked' OR ${table.revokedAt} IS NOT NULL`,
+    ),
     tableOwnerAccess("scim_managed_credential"),
     ...denyStellaAccessPolicies(),
   ],
@@ -1164,6 +1172,10 @@ export const scimConnectionBinding = pgTable(
   (table) => [
     index("scim_conn_binding_conn_id_idx").on(table.connectionId),
     uniqueIndex("scim_conn_binding_conn_key_uidx").on(table.connectionKey),
+    check(
+      "scim_conn_binding_decomm_state_check",
+      sql`${table.decommissionStatus} <> 'complete' OR ${table.decommissionCompletedAt} IS NOT NULL`,
+    ),
     tableOwnerAccess("scim_connection_binding"),
     ...denyStellaAccessPolicies(),
   ],

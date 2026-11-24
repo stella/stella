@@ -1,6 +1,11 @@
 import { DESKTOP_TIME_ENTRY_BATCH_STATUSES } from "@stll/api-contract/desktop-time-entries";
 
 import {
+  scimConnectionBinding,
+  scimManagedConnection,
+  scimManagedCredential,
+} from "@/api/db/auth-schema";
+import {
   accountExports,
   caseLawDecisionCitationStatsState,
   caseLawPopulationSeedState,
@@ -485,6 +490,41 @@ type TransitionDecision<TTable extends StatusTable> =
       : never);
 
 /** Existing domain owners remain explicit until their writers migrate. */
+
+const SCIM_CONNECTION_BINDING_TRANSITIONS = defineTransitions({
+  table: scimConnectionBinding,
+  stateColumn: "decommissionStatus",
+  states: ["active", "reconciling", "complete"] as const,
+  transitions: {
+    active: ["reconciling", "complete"],
+    reconciling: ["complete"],
+    complete: [],
+  },
+});
+
+const SCIM_MANAGED_CONNECTION_TRANSITIONS = defineTransitions({
+  table: scimManagedConnection,
+  stateColumn: "status",
+  states: ["active", "decommissioning", "decommissioned"] as const,
+  transitions: {
+    active: ["decommissioning", "decommissioned"],
+    decommissioning: ["decommissioned"],
+    decommissioned: [],
+  },
+});
+
+const SCIM_MANAGED_CREDENTIAL_TRANSITIONS = defineTransitions({
+  table: scimManagedCredential,
+  stateColumn: "status",
+  states: ["active", "expired", "revoked", "decommissioned"] as const,
+  transitions: {
+    active: ["expired", "revoked", "decommissioned"],
+    expired: ["revoked", "decommissioned"],
+    revoked: ["decommissioned"],
+    decommissioned: [],
+  },
+});
+
 export const TRANSITIONS = {
   outboundActions: OUTBOUND_ACTION_TRANSITIONS,
   agentRegistration: { unmanaged: UNMANAGED_REASONS.authCeremony },
@@ -555,9 +595,9 @@ export const TRANSITIONS = {
   hostedCustomerErasures: HOSTED_CUSTOMER_ERASURE_TRANSITIONS,
   hostedUsageWebhookEvents: PROVIDER_WEBHOOK_RESULT_TRANSITIONS,
   invitation: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  scimConnectionBinding: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  scimManagedConnection: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
-  scimManagedCredential: { unmanaged: UNMANAGED_REASONS.delegatedAuth },
+  scimConnectionBinding: SCIM_CONNECTION_BINDING_TRANSITIONS,
+  scimManagedConnection: SCIM_MANAGED_CONNECTION_TRANSITIONS,
+  scimManagedCredential: SCIM_MANAGED_CREDENTIAL_TRANSITIONS,
   invoices: INVOICE_TRANSITIONS,
   invoiceSends: INVOICE_SEND_DELIVERY_TRANSITIONS,
   legalListClaims: { unmanaged: UNMANAGED_REASONS.userWorkflow },

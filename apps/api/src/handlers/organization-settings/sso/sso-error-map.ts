@@ -145,11 +145,14 @@ export const mapScimManagementError = (
         message: error.message,
       });
     case "operation_failed":
-      return new HandlerError({
-        status: 500,
-        code: "scim_operation_failed",
-        message: error.message,
-      });
+      return classifyFailure(
+        new HandlerError({
+          status: 502,
+          code: "scim_operation_failed",
+          message: error.message,
+        }),
+        "upstream_unavailable",
+      );
     default:
       error.reason satisfies never;
       return panic("Unhandled SCIM management error reason");

@@ -351,6 +351,8 @@ export const ROUTE_LATENCY_CLASSES = {
     "crud",
   "POST /v1/organization-settings/sso/pending-members/:pendingId/reject":
     "crud",
+  "POST /v1/organization-settings/sso/scim-tokens": "crud",
+  "DELETE /v1/organization-settings/sso/scim-tokens/:tokenId": "crud",
   "POST /v1/organization-settings/sso/providers/saml": "crud",
   "POST /v1/organization-settings/sso/providers/test": "crud",
   "POST /v1/organization-settings/sso/saml/parse-metadata": "crud",

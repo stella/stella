@@ -15,7 +15,7 @@ import { panic } from "better-result";
 import { isEnterpriseSsoDeployed } from "@/api/lib/db/sso-access";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
 
-export const SCIM_ENDPOINT_PREFIX = "/scim/v2/";
+const SCIM_ENDPOINT_PREFIX = "/scim/v2/";
 
 export const SCIM_ALL_SCOPES: readonly SCIMScope[] = [
   "scim.users.read",

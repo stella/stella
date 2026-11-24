@@ -9,6 +9,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import type {
+  OrganizationScimTokenSummary,
   OrganizationSsoDomainSummary,
   OrganizationSsoPendingMemberSummary,
   OrganizationSsoProviderSummary,
@@ -34,6 +35,7 @@ import { SecretInput } from "@/components/secret-input";
 import {
   addOrgSsoDomain,
   approveOrgSsoPendingMember,
+  createOrganizationScimToken,
   fetchOrgSsoSettings,
   importSamlSsoMetadata,
   probeOidcSsoProvider,
@@ -42,6 +44,7 @@ import {
   rejectOrgSsoPendingMember,
   removeOrgSsoDomain,
   removeOrgSsoProvider,
+  revokeOrganizationScimToken,
   saveOrgSsoPolicy,
   verifyOrgSsoDomain,
 } from "@/features/sso/sso-api";
@@ -1171,7 +1174,7 @@ const ScimProvisioningSection = ({
         throwOnError(await createOrganizationScimToken({})),
       onSuccess: (created) => {
         setCreatedBearerToken(created.bearerToken);
-        toast.success(t("settings.organization.sso.scimTokenCreated"));
+        stellaToast.success(t("settings.organization.sso.scimTokenCreated"));
         onChanged();
       },
       onError: (err) => {
@@ -1186,7 +1189,7 @@ const ScimProvisioningSection = ({
       mutationFn: async (tokenId: string) =>
         throwOnError(await revokeOrganizationScimToken(tokenId)),
       onSuccess: () => {
-        toast.success(t("settings.organization.sso.scimTokenRevoked"));
+        stellaToast.success(t("settings.organization.sso.scimTokenRevoked"));
         onChanged();
       },
       onError: (err) => {

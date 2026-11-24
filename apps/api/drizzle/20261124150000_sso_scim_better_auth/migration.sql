@@ -13,7 +13,8 @@ CREATE TABLE "scim_managed_connection" (
   "decommission_started_at" timestamp with time zone,
   "decommission_started_by" text,
   "decommissioned_at" timestamp with time zone,
-  "decommissioned_by" text
+  "decommissioned_by" text,
+  CONSTRAINT "scim_managed_conn_decomm_state_check" CHECK ("status" <> 'decommissioned' OR "decommissioned_at" IS NOT NULL)
 );--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_managed_conn_creation_req_uidx" ON "scim_managed_connection" ("creation_request_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_managed_conn_connection_id_uidx" ON "scim_managed_connection" ("connection_id");--> statement-breakpoint
@@ -44,7 +45,8 @@ CREATE TABLE "scim_managed_credential" (
   "last_used_at" timestamp with time zone,
   "revoked_at" timestamp with time zone,
   "revoked_by" text,
-  "decommissioned_at" timestamp with time zone
+  "decommissioned_at" timestamp with time zone,
+  CONSTRAINT "scim_managed_cred_revoked_state_check" CHECK ("status" <> 'revoked' OR "revoked_at" IS NOT NULL)
 );--> statement-breakpoint
 CREATE INDEX "scim_managed_cred_conn_rec_idx" ON "scim_managed_credential" ("connection_record_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_managed_cred_id_uidx" ON "scim_managed_credential" ("credential_id");--> statement-breakpoint
@@ -97,7 +99,8 @@ CREATE TABLE "scim_connection_binding" (
   "decommission_revision" integer DEFAULT 0 NOT NULL,
   "decommission_completed_at" timestamp with time zone,
   "decommission_lease_id" text,
-  "decommission_lease_expires_at" timestamp with time zone
+  "decommission_lease_expires_at" timestamp with time zone,
+  CONSTRAINT "scim_conn_binding_decomm_state_check" CHECK ("decommission_status" <> 'complete' OR "decommission_completed_at" IS NOT NULL)
 );--> statement-breakpoint
 CREATE INDEX "scim_conn_binding_conn_id_idx" ON "scim_connection_binding" ("connection_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "scim_conn_binding_conn_key_uidx" ON "scim_connection_binding" ("connection_key");--> statement-breakpoint
