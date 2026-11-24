@@ -21,13 +21,15 @@ type BetaFeatureToggleProps = {
   feature: BetaFeature;
   checked: boolean;
   disabled?: boolean | undefined;
+  disabledReason?: string | undefined;
   onCheckedChange: (next: boolean) => void;
 };
 
-/** A preview's row with its live checkbox. */
+/** A preview's row with its live switch. */
 const BetaFeatureToggle = ({
   checked,
   disabled,
+  disabledReason,
   feature,
   onCheckedChange,
 }: BetaFeatureToggleProps) => {
@@ -46,6 +48,7 @@ const BetaFeatureToggle = ({
         id={ids.control}
         checked={checked}
         disabled={disabled}
+        disabledReason={disabledReason}
         onCheckedChange={(next) => {
           if (next === checked) {
             return;
@@ -70,6 +73,7 @@ function SelfServeFeaturePanel({
   enrolment: { feature, mutation },
   feature: name,
 }: SelfServeFeaturePanelProps) {
+  const t = useTranslations();
   if (!feature) {
     return null;
   }
@@ -77,6 +81,7 @@ function SelfServeFeaturePanel({
     <BetaFeatureToggle
       checked={feature.enrolled}
       disabled={mutation.isPending}
+      disabledReason={t("common.saving")}
       feature={name}
       onCheckedChange={(next) => mutation.mutate(next)}
     />
