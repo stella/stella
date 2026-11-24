@@ -52,13 +52,13 @@ export type CreateScimProvisioningPluginOptions = {
   ) => Promise<number | null>;
 };
 
-const scimDeploymentGate = createAuthMiddleware(() => {
+const scimDeploymentGate = createAuthMiddleware(async () => {
   if (!isEnterpriseSsoDeployed()) {
     throw new APIError("NOT_FOUND", {
       message: "SCIM directory provisioning is not enabled.",
     });
   }
-  return Promise.resolve();
+  await Promise.resolve();
 });
 
 /**

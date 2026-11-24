@@ -1083,9 +1083,7 @@ export const scimManagedConnection = pgTable(
     id: text("id").primaryKey(),
     creationRequestId: text("creation_request_id").notNull(),
     connectionId: text("connection_id").notNull(),
-    provisioningDomainId: text("provisioning_domain_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    provisioningDomainId: text("provisioning_domain_id").notNull(),
     status: text("status", {
       enum: SCIM_MANAGED_CONNECTION_STATUSES,
     }).notNull(),
@@ -1098,6 +1096,11 @@ export const scimManagedConnection = pgTable(
     decommissionedBy: text("decommissioned_by"),
   },
   (table) => [
+    foreignKey({
+      name: "scim_managed_conn_org_fk",
+      columns: [table.provisioningDomainId],
+      foreignColumns: [organization.id],
+    }).onDelete("cascade"),
     uniqueIndex("scim_managed_conn_creation_req_uidx").on(
       table.creationRequestId,
     ),

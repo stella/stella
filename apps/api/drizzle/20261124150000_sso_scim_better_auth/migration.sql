@@ -5,7 +5,7 @@ CREATE TABLE "scim_managed_connection" (
   "id" text PRIMARY KEY NOT NULL,
   "creation_request_id" text NOT NULL,
   "connection_id" text NOT NULL,
-  "provisioning_domain_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+  "provisioning_domain_id" text NOT NULL CONSTRAINT "scim_managed_conn_org_fk" REFERENCES "organization"("id") ON DELETE CASCADE,
   "status" text NOT NULL,
   "revision" integer NOT NULL,
   "created_at" timestamp with time zone NOT NULL,

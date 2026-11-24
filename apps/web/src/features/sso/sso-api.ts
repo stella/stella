@@ -1,6 +1,10 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import {
+  createOrganizationScimTokenResponseSchema,
+  revokeOrganizationScimTokenResponseSchema,
+} from "@stll/api-contract/sso";
 import type {
   CreateOidcSsoProviderBody,
   CreateOrganizationScimTokenBody,

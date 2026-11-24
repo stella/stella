@@ -1,6 +1,5 @@
 {
   "metric": "audit-skip-directives",
-  "file": "apps/api/src/lib/account-deletion-steps.ts",
   "delta": 4,
   "reason": "Purge the 4 user-referenced @better-auth/scim tables inside verifyAndDeleteUser, which records the parent account-deletion audit event in the same transaction."
 }
