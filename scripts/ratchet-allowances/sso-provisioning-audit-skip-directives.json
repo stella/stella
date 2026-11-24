@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 8,
+  "reason": "Owner-DB writes for SSO pending-member provisioning/approval/rejection in apps/api/src/lib/db/sso-provisioning.ts (6) and account-deletion cleanup in apps/api/src/lib/account-deletion-steps.ts (2) run inside rootDb while caller handlers record organization_settings audit events via recordAuditEvent."
+}

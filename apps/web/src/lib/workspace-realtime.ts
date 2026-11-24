@@ -423,6 +423,26 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
+  approveOrganizationSsoPendingMember: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/pending-members/:pendingId/approve",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  rejectOrganizationSsoPendingMember: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/pending-members/:pendingId/reject",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   probeOidcSsoProvider: {
     writes: [
       {

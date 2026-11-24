@@ -8,7 +8,10 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { ORGANIZATION_SSO_PROVISIONING_MODES } from "@stll/api-contract/sso";
+import {
+  ORGANIZATION_SSO_PROVISIONING_MODES,
+  updateOrganizationSsoPolicyBodySchema,
+} from "@stll/api-contract/sso";
 import type {
   OrganizationSsoDomainSummary,
   OrganizationSsoPendingMemberSummary,
@@ -921,6 +924,7 @@ const ProvisioningAndSeatsSection = ({
   onChanged: () => Promise<void>;
 }) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const [selectedMode, setSelectedMode] =
     useState<OrganizationSsoProvisioningMode>(provisioningMode);
   const [seatLimitInput, setSeatLimitInput] = useState(
@@ -928,8 +932,13 @@ const ProvisioningAndSeatsSection = ({
   );
 
   const saveMutation = useMutation({
-    mutationFn: async (body: UpdateOrganizationSsoPolicyBody) =>
-      await saveOrgSsoPolicy(body),
+    mutationFn: resourceMutation({
+      mutation: "saveOrganizationSsoPolicy",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (body: UpdateOrganizationSsoPolicyBody) =>
+        await saveOrgSsoPolicy(body),
+    }),
     onSuccess: async () => {
       await onChanged();
       stellaToast.add({
@@ -943,8 +952,13 @@ const ProvisioningAndSeatsSection = ({
   });
 
   const approveMutation = useMutation({
-    mutationFn: async (pendingId: string) =>
-      await approveOrgSsoPendingMember(pendingId),
+    mutationFn: resourceMutation({
+      mutation: "approveOrganizationSsoPendingMember",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (pendingId: string) =>
+        await approveOrgSsoPendingMember(pendingId),
+    }),
     onSuccess: async () => {
       await onChanged();
       stellaToast.add({
@@ -958,8 +972,13 @@ const ProvisioningAndSeatsSection = ({
   });
 
   const rejectMutation = useMutation({
-    mutationFn: async (pendingId: string) =>
-      await rejectOrgSsoPendingMember(pendingId),
+    mutationFn: resourceMutation({
+      mutation: "rejectOrganizationSsoPendingMember",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (pendingId: string) =>
+        await rejectOrgSsoPendingMember(pendingId),
+    }),
     onSuccess: async () => {
       await onChanged();
       stellaToast.add({
@@ -975,13 +994,19 @@ const ProvisioningAndSeatsSection = ({
   const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const trimmed = seatLimitInput.trim();
-    const parsedSeatLimit =
-      trimmed.length === 0 ? null : Number.parseInt(trimmed, 10);
-    if (
-      parsedSeatLimit !== null &&
-      (!Number.isInteger(parsedSeatLimit) || parsedSeatLimit < 1)
-    ) {
-      return;
+    let parsedSeatLimit: number | null = null;
+    if (trimmed.length > 0) {
+      if (!/^[1-9]\d*$/u.test(trimmed)) {
+        return;
+      }
+      const parsed =
+        updateOrganizationSsoPolicyBodySchema.shape.seatLimit.safeParse(
+          JSON.parse(trimmed),
+        );
+      if (!parsed.success) {
+        return;
+      }
+      parsedSeatLimit = parsed.data ?? null;
     }
     saveMutation.mutate({
       requirement,

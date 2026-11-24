@@ -19,6 +19,7 @@ import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import type { SsoManagementDb } from "@/api/lib/db/sso-management";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
@@ -49,32 +50,38 @@ export const countOrganizationActiveSeats = async (
     .select({ total: count() })
     .from(member)
     .where(eq(member.organizationId, organizationId));
-  return Number(rows.at(0)?.total ?? 0);
+  return rows.at(0)?.total ?? 0;
 };
 
 export const listOrganizationPendingSsoMembers = async (
   db: SsoManagementDb,
   organizationId: SafeId<"organization">,
 ): Promise<OrganizationSsoPendingMemberSummary[]> => {
-  const rows = await db
-    .select({
-      id: organizationSsoPendingMember.id,
-      userId: organizationSsoPendingMember.userId,
-      email: organizationSsoPendingMember.email,
-      name: organizationSsoPendingMember.name,
-      reason: organizationSsoPendingMember.reason,
-      status: organizationSsoPendingMember.status,
-      createdAt: organizationSsoPendingMember.createdAt,
-    })
-    .from(organizationSsoPendingMember)
-    .where(
-      and(
-        eq(organizationSsoPendingMember.organizationId, organizationId),
-        eq(organizationSsoPendingMember.status, "pending"),
-      ),
-    )
-    .orderBy(asc(organizationSsoPendingMember.createdAt))
-    .limit(MAX_PENDING_MEMBERS_PER_ORG);
+  const read = await readBounded(
+    db
+      .select({
+        id: organizationSsoPendingMember.id,
+        userId: organizationSsoPendingMember.userId,
+        email: organizationSsoPendingMember.email,
+        name: organizationSsoPendingMember.name,
+        reason: organizationSsoPendingMember.reason,
+        status: organizationSsoPendingMember.status,
+        createdAt: organizationSsoPendingMember.createdAt,
+      })
+      .from(organizationSsoPendingMember)
+      .where(
+        and(
+          eq(organizationSsoPendingMember.organizationId, organizationId),
+          eq(organizationSsoPendingMember.status, "pending"),
+        ),
+      )
+      .orderBy(asc(organizationSsoPendingMember.createdAt)),
+    MAX_PENDING_MEMBERS_PER_ORG,
+  );
+  const rows =
+    read.type === "complete"
+      ? read.rows
+      : panic("Pending SSO member list exceeded bounded cap");
 
   return rows.map((row) => ({
     id: row.id,
@@ -270,22 +277,18 @@ export const approveOrganizationSsoPendingMember = async (
     return await approveOrganizationSsoPendingMemberLocked(tx, params);
   });
 
-const approveOrganizationSsoPendingMemberLocked = async (
+const loadPendingSsoMember = async (
   db: SsoManagementDb,
-  params: {
-    organizationId: SafeId<"organization">;
-    pendingId: string;
-    reviewedBy: SafeId<"user">;
-    now?: Date;
-  },
-): Promise<Result<{ id: string; userId: string }, SsoProvisioningError>> => {
+  organizationId: SafeId<"organization">,
+  pendingId: string,
+) => {
   const rows = await db
     .select()
     .from(organizationSsoPendingMember)
     .where(
       and(
-        eq(organizationSsoPendingMember.organizationId, params.organizationId),
-        eq(organizationSsoPendingMember.id, params.pendingId),
+        eq(organizationSsoPendingMember.organizationId, organizationId),
+        eq(organizationSsoPendingMember.id, pendingId),
       ),
     )
     .limit(1);
@@ -307,6 +310,27 @@ const approveOrganizationSsoPendingMemberLocked = async (
       }),
     );
   }
+  return Result.ok(target);
+};
+
+const approveOrganizationSsoPendingMemberLocked = async (
+  db: SsoManagementDb,
+  params: {
+    organizationId: SafeId<"organization">;
+    pendingId: string;
+    reviewedBy: SafeId<"user">;
+    now?: Date;
+  },
+): Promise<Result<{ id: string; userId: string }, SsoProvisioningError>> => {
+  const loaded = await loadPendingSsoMember(
+    db,
+    params.organizationId,
+    params.pendingId,
+  );
+  if (loaded.isErr()) {
+    return loaded;
+  }
+  const target = loaded.value;
 
   const policyRows = await db
     .select({ seatLimit: organizationSsoPolicy.seatLimit })
@@ -381,34 +405,15 @@ export const rejectOrganizationSsoPendingMember = async (
     now?: Date;
   },
 ): Promise<Result<{ id: string; userId: string }, SsoProvisioningError>> => {
-  const rows = await db
-    .select()
-    .from(organizationSsoPendingMember)
-    .where(
-      and(
-        eq(organizationSsoPendingMember.organizationId, params.organizationId),
-        eq(organizationSsoPendingMember.id, params.pendingId),
-      ),
-    )
-    .limit(1);
-
-  const target = rows.at(0);
-  if (target === undefined) {
-    return Result.err(
-      new SsoProvisioningError({
-        message: "Pending SSO request not found",
-        reason: "pending_not_found",
-      }),
-    );
+  const loaded = await loadPendingSsoMember(
+    db,
+    params.organizationId,
+    params.pendingId,
+  );
+  if (loaded.isErr()) {
+    return loaded;
   }
-  if (target.status !== "pending") {
-    return Result.err(
-      new SsoProvisioningError({
-        message: "Pending SSO request has already been reviewed",
-        reason: "already_reviewed",
-      }),
-    );
-  }
+  const target = loaded.value;
 
   const now = params.now ?? new Date();
   const write = replayWrite(
