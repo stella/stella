@@ -1,4 +1,5 @@
 import type * as React from "react";
+import { useId } from "react";
 
 type BrandIconProps = React.ComponentProps<"svg">;
 
@@ -13,26 +14,29 @@ export const DiscordLogoIcon = (props: BrandIconProps) => (
   </svg>
 );
 
+// Official mark via @primer/octicons 19.42.0 (MIT), mark-github-16.svg.
 export const GitHubLogoIcon = (props: BrandIconProps) => (
   <svg aria-hidden="true" fill="currentColor" viewBox="0 0 16 16" {...props}>
     <path d="M6.766 11.328c-2.063-.25-3.516-1.734-3.516-3.656 0-.781.281-1.625.75-2.188-.203-.515-.172-1.609.063-2.062.625-.078 1.468.25 1.968.703.594-.187 1.219-.281 1.985-.281.765 0 1.39.094 1.953.265.484-.437 1.344-.765 1.969-.687.218.422.25 1.515.046 2.047.5.593.766 1.39.766 2.203 0 1.922-1.453 3.375-3.547 3.64.531.344.89 1.094.89 1.954v1.625c0 .468.391.734.86.547C13.781 14.359 16 11.53 16 8.03 16 3.61 12.406 0 7.984 0 3.563 0 0 3.61 0 8.031a7.88 7.88 0 0 0 5.172 7.422c.422.156.828-.125.828-.547v-1.25c-.219.094-.5.156-.75.156-1.031 0-1.64-.562-2.078-1.609-.172-.422-.36-.672-.719-.719-.187-.015-.25-.093-.25-.187 0-.188.313-.328.625-.328.453 0 .844.281 1.25.86.313.452.64.655 1.031.655s.641-.14 1-.5c.266-.265.47-.5.657-.656" />
   </svg>
 );
 
+// Official mark via simple-icons 13.21.0 (CC0), icons/x.svg.
 export const XLogoIcon = (props: BrandIconProps) => (
   <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" {...props}>
     <path d="M18.901 1.153h3.68l-8.04 9.19L24 22.846h-7.406l-5.8-7.584-6.64 7.584H.47l8.6-9.835L0 1.153h7.594l5.243 6.932 6.064-6.932Zm-1.29 19.49h2.039L6.486 3.24H4.298l13.313 17.403Z" />
   </svg>
 );
 
+// Official mark via simple-icons 13.21.0 (CC0), icons/openai.svg, rounded to two decimals.
 export const OpenAILogoIcon = (props: BrandIconProps) => (
   <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" {...props}>
     <path d="M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18a5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.51 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zm-9.02 12.61a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.79.79 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.49 4.49zm-9.66-4.13a4.47 4.47 0 0 1-.53-3.01l.14.09 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.49 4.49 0 0 1 2.37-1.97V11.6a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.87zm16.6 3.86L13.1 8.36 15.12 7.2a.08.08 0 0 1 .07 0l4.83 2.79a4.49 4.49 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.41-.68zm2.01-3.02l-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08L8.7 5.46a.79.79 0 0 0-.39.68zm1.1-2.37l2.6-1.5 2.61 1.5v3l-2.6 1.5-2.61-1.5Z" />
   </svg>
 );
 
-// The official Claude mark in its brand colour. The fill sits on the path so a
-// parent's currentColor never repaints it.
+// Official Claude mark in its brand colour, as Anthropic publishes it. The fill
+// sits on the path so a parent's currentColor never repaints it.
 export const ClaudeLogoIcon = (props: BrandIconProps) => (
   <svg aria-hidden="true" fill="none" viewBox="0 0 94 94" {...props}>
     <path
@@ -42,14 +46,330 @@ export const ClaudeLogoIcon = (props: BrandIconProps) => (
   </svg>
 );
 
-export const GeminiLogoIcon = (props: BrandIconProps) => (
-  <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" {...props}>
-    <path d="M11.12 1.09H12.88L12.93 1.95C13.22 6.85 17.15 10.78 22.05 11.07L22.91 11.12V12.88L22.05 12.93C17.15 13.22 13.22 17.15 12.93 22.06L12.88 22.91H11.12L11.07 22.06C10.78 17.15 6.85 13.22 1.95 12.93L1.09 12.88V11.12L1.95 11.07C6.85 10.78 10.78 6.85 11.07 1.95L11.12 1.09ZM12 5.85C10.83 8.62 8.62 10.83 5.85 12C8.62 13.17 10.83 15.38 12 18.15C13.17 15.38 15.38 13.17 18.15 12C15.38 10.83 13.17 8.62 12 5.85Z" />
-  </svg>
-);
+// Official mark via @lobehub/icons-static-svg 1.102.0 (MIT), icons/gemini-color.svg.
+export const GeminiLogoIcon = (props: BrandIconProps) => {
+  const id = useId();
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" {...props}>
+      <path
+        d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
+        fill="#3186FF"
+      />
+      <path
+        d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
+        fill={`url(#${id}-0)`}
+      />
+      <path
+        d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
+        fill={`url(#${id}-1)`}
+      />
+      <path
+        d="M20.616 10.835a14.147 14.147 0 01-4.45-3.001 14.111 14.111 0 01-3.678-6.452.503.503 0 00-.975 0 14.134 14.134 0 01-3.679 6.452 14.155 14.155 0 01-4.45 3.001c-.65.28-1.318.505-2.002.678a.502.502 0 000 .975c.684.172 1.35.397 2.002.677a14.147 14.147 0 014.45 3.001 14.112 14.112 0 013.679 6.453.502.502 0 00.975 0c.172-.685.397-1.351.677-2.003a14.145 14.145 0 013.001-4.45 14.113 14.113 0 016.453-3.678.503.503 0 000-.975 13.245 13.245 0 01-2.003-.678z"
+        fill={`url(#${id}-2)`}
+      />
+      <defs>
+        <linearGradient
+          gradientUnits="userSpaceOnUse"
+          id={`${id}-0`}
+          x1="7"
+          x2="11"
+          y1="15.5"
+          y2="12"
+        >
+          <stop stopColor="#08B962" />
+          <stop offset="1" stopColor="#08B962" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient
+          gradientUnits="userSpaceOnUse"
+          id={`${id}-1`}
+          x1="8"
+          x2="11.5"
+          y1="5.5"
+          y2="11"
+        >
+          <stop stopColor="#F94543" />
+          <stop offset="1" stopColor="#F94543" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient
+          gradientUnits="userSpaceOnUse"
+          id={`${id}-2`}
+          x1="3.5"
+          x2="17.5"
+          y1="13.5"
+          y2="12"
+        >
+          <stop stopColor="#FABC12" />
+          <stop offset=".46" stopColor="#FABC12" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+    </svg>
+  );
+};
 
-export const AntigravityLogoIcon = (props: BrandIconProps) => (
-  <svg aria-hidden="true" fill="currentColor" viewBox="0 0 24 24" {...props}>
-    <path d="M12 2.75C10.6 2.75 9.45 3.6 8.65 5.15L2.95 16.4C2.1 18.08 2.85 20.1 4.55 20.75C5.9 21.25 7.35 20.7 8.15 19.45L10.35 16.05C11.1 14.9 12.9 14.9 13.65 16.05L15.85 19.45C16.65 20.7 18.1 21.25 19.45 20.75C21.15 20.1 21.9 18.08 21.05 16.4L15.35 5.15C14.55 3.6 13.4 2.75 12 2.75Z" />
-  </svg>
-);
+// Official mark via @lobehub/icons-static-svg 1.102.0 (MIT), icons/antigravity-color.svg.
+export const AntigravityLogoIcon = (props: BrandIconProps) => {
+  const id = useId();
+  return (
+    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24" {...props}>
+      <mask
+        height="23"
+        id={`${id}-0`}
+        maskUnits="userSpaceOnUse"
+        width="24"
+        x="0"
+        y="1"
+      >
+        <path
+          d="M21.751 22.607c1.34 1.005 3.35.335 1.508-1.508C17.73 15.74 18.904 1 12.037 1 5.17 1 6.342 15.74.815 21.1c-2.01 2.009.167 2.511 1.507 1.506 5.192-3.517 4.857-9.714 9.715-9.714 4.857 0 4.522 6.197 9.714 9.715z"
+          fill="#fff"
+        />
+      </mask>
+      <g mask={`url(#${id}-0)`}>
+        <g filter={`url(#${id}-1)`}>
+          <path
+            d="M-1.018-3.992c-.408 3.591 2.686 6.89 6.91 7.37 4.225.48 7.98-2.043 8.387-5.633.408-3.59-2.686-6.89-6.91-7.37-4.225-.479-7.98 2.043-8.387 5.633z"
+            fill="#FFE432"
+          />
+        </g>
+        <g filter={`url(#${id}-2)`}>
+          <path
+            d="M15.269 7.747c1.058 4.557 5.691 7.374 10.348 6.293 4.657-1.082 7.575-5.653 6.516-10.21-1.058-4.556-5.691-7.374-10.348-6.292-4.657 1.082-7.575 5.653-6.516 10.21z"
+            fill="#FC413D"
+          />
+        </g>
+        <g filter={`url(#${id}-3)`}>
+          <path
+            d="M-12.443 10.804c1.338 4.703 7.36 7.11 13.453 5.378 6.092-1.733 9.947-6.95 8.61-11.652C8.282-.173 2.26-2.58-3.833-.848-9.925.884-13.78 6.1-12.443 10.804z"
+            fill="#00B95C"
+          />
+        </g>
+        <g filter={`url(#${id}-4)`}>
+          <path
+            d="M-12.443 10.804c1.338 4.703 7.36 7.11 13.453 5.378 6.092-1.733 9.947-6.95 8.61-11.652C8.282-.173 2.26-2.58-3.833-.848-9.925.884-13.78 6.1-12.443 10.804z"
+            fill="#00B95C"
+          />
+        </g>
+        <g filter={`url(#${id}-5)`}>
+          <path
+            d="M-7.608 14.703c3.352 3.424 9.126 3.208 12.896-.483 3.77-3.69 4.108-9.459.756-12.883C2.69-2.087-3.083-1.871-6.853 1.82c-3.77 3.69-4.108 9.458-.755 12.883z"
+            fill="#00B95C"
+          />
+        </g>
+        <g filter={`url(#${id}-6)`}>
+          <path
+            d="M9.932 27.617c1.04 4.482 5.384 7.303 9.7 6.3 4.316-1.002 6.971-5.448 5.93-9.93-1.04-4.483-5.384-7.304-9.7-6.301-4.316 1.002-6.971 5.448-5.93 9.93z"
+            fill="#3186FF"
+          />
+        </g>
+        <g filter={`url(#${id}-7)`}>
+          <path
+            d="M2.572-8.185C.392-3.329 2.778 2.472 7.9 4.771c5.122 2.3 11.042.227 13.222-4.63 2.18-4.855-.205-10.656-5.327-12.955-5.122-2.3-11.042-.227-13.222 4.63z"
+            fill="#FBBC04"
+          />
+        </g>
+        <g filter={`url(#${id}-8)`}>
+          <path
+            d="M-3.267 38.686c-5.277-2.072 3.742-19.117 5.984-24.83 2.243-5.712 8.34-8.664 13.616-6.592 5.278 2.071 11.533 13.482 9.29 19.195-2.242 5.713-23.613 14.298-28.89 12.227z"
+            fill="#3186FF"
+          />
+        </g>
+        <g filter={`url(#${id}-9)`}>
+          <path
+            d="M28.71 17.471c-1.413 1.649-5.1.808-8.236-1.878-3.135-2.687-4.531-6.201-3.118-7.85 1.412-1.649 5.1-.808 8.235 1.878s4.532 6.2 3.119 7.85z"
+            fill="#749BFF"
+          />
+        </g>
+        <g filter={`url(#${id}-10)`}>
+          <path
+            d="M18.163 9.077c5.81 3.93 12.502 4.19 14.946.577 2.443-3.612-.287-9.727-6.098-13.658-5.81-3.931-12.502-4.19-14.946-.577-2.443 3.612.287 9.727 6.098 13.658z"
+            fill="#FC413D"
+          />
+        </g>
+        <g filter={`url(#${id}-11)`}>
+          <path
+            d="M-.915 2.684c-1.44 3.473-.97 6.967 1.05 7.804 2.02.837 4.824-1.3 6.264-4.772 1.44-3.473.97-6.967-1.05-7.804-2.02-.837-4.824 1.3-6.264 4.772z"
+            fill="#FFEE48"
+          />
+        </g>
+      </g>
+      <defs>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="17.587"
+          id={`${id}-1`}
+          width="19.838"
+          x="-3.288"
+          y="-11.917"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="1.117"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="38.565"
+          id={`${id}-2`}
+          width="38.9"
+          x="4.251"
+          y="-13.493"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="5.4"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="36.517"
+          id={`${id}-3`}
+          width="40.955"
+          x="-21.889"
+          y="-10.592"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="4.591"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="36.517"
+          id={`${id}-4`}
+          width="40.955"
+          x="-21.889"
+          y="-10.592"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="4.591"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="36.595"
+          id={`${id}-5`}
+          width="36.632"
+          x="-19.099"
+          y="-10.278"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="4.591"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="34.087"
+          id={`${id}-6`}
+          width="33.533"
+          x=".981"
+          y="8.758"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="4.363"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="35.276"
+          id={`${id}-7`}
+          width="35.978"
+          x="-6.143"
+          y="-21.659"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="3.954"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="46.523"
+          id={`${id}-8`}
+          width="45.114"
+          x="-11.96"
+          y="-.46"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="3.531"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="24.054"
+          id={`${id}-9`}
+          width="25.094"
+          x="10.485"
+          y=".58"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="3.159"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="30.007"
+          id={`${id}-10`}
+          width="33.508"
+          x="5.833"
+          y="-12.467"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="2.669"
+          />
+        </filter>
+        <filter
+          colorInterpolationFilters="sRGB"
+          filterUnits="userSpaceOnUse"
+          height="26.151"
+          id={`${id}-11`}
+          width="22.194"
+          x="-8.355"
+          y="-8.876"
+        >
+          <feFlood floodOpacity="0" result="BackgroundImageFix" />
+          <feBlend in="SourceGraphic" in2="BackgroundImageFix" result="shape" />
+          <feGaussianBlur
+            result="effect1_foregroundBlur_977_115"
+            stdDeviation="3.303"
+          />
+        </filter>
+      </defs>
+    </svg>
+  );
+};

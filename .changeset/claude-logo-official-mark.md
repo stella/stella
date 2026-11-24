@@ -2,4 +2,4 @@
 "@stll/ui": patch
 ---
 
-`ClaudeLogoIcon` draws the official Claude mark in its brand colour.
+`ClaudeLogoIcon`, `GeminiLogoIcon` and `AntigravityLogoIcon` draw the official marks in their brand colours.
