@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
@@ -24,6 +24,7 @@ import { authCapabilitiesOptions } from "@/lib/auth-capabilities";
 import { detached } from "@/lib/detached";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
+import { resourceQueryOptions } from "@/lib/workspace-realtime";
 
 const SSO_ERROR_KEYS = {
   sso_unavailable: "auth.sso.errors.unavailable",
@@ -48,7 +49,12 @@ export const SsoSignInSection = ({
   ssoError,
 }: SsoSignInSectionProps) => {
   const t = useTranslations();
-  const capabilitiesQuery = useQuery(authCapabilitiesOptions);
+  const capabilitiesQuery = useQuery(
+    resourceQueryOptions(
+      { ...authCapabilitiesOptions },
+      { type: "independent" },
+    ),
+  );
   const capabilitiesView = queryView(capabilitiesQuery);
   const enterpriseSsoEnabled =
     (capabilitiesView.type === "items" &&
@@ -66,22 +72,32 @@ export const SsoSignInSection = ({
   const [discovered, setDiscovered] = useState<PublicSsoProviderOption[]>([]);
   const [busy, setBusy] = useState(false);
 
-  const directProviderQuery = useQuery({
-    queryKey: ["sso-direct-provider", explicitProviderId],
-    enabled: explicitProviderId !== undefined,
-    queryFn: async ({ signal }) =>
-      await lookupSsoProviders(
-        { by: "providerId", providerId: explicitProviderId ?? "" },
-        signal,
-      ),
-  });
+  const directProviderQuery = useQuery(
+    resourceQueryOptions(
+      queryOptions({
+        queryKey: ["sso-direct-provider", explicitProviderId],
+        enabled: explicitProviderId !== undefined,
+        queryFn: async ({ signal }) =>
+          await lookupSsoProviders(
+            { by: "providerId", providerId: explicitProviderId ?? "" },
+            signal,
+          ),
+      }),
+      { type: "independent" },
+    ),
+  );
   const directProviderView = queryView(directProviderQuery);
 
-  const memberOrgProvidersQuery = useQuery({
-    queryKey: ["sso-member-org-providers"],
-    enabled: isReauthPrompt,
-    queryFn: async ({ signal }) => await fetchMemberOrgSsoProviders(signal),
-  });
+  const memberOrgProvidersQuery = useQuery(
+    resourceQueryOptions(
+      queryOptions({
+        queryKey: ["sso-member-org-providers"],
+        enabled: isReauthPrompt,
+        queryFn: async ({ signal }) => await fetchMemberOrgSsoProviders(signal),
+      }),
+      { type: "independent" },
+    ),
+  );
   const memberOrgProvidersView = queryView(memberOrgProvidersQuery);
 
   const errorMessage =

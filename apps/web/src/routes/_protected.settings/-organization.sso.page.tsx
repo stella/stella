@@ -1,6 +1,11 @@
 import { useState } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  queryOptions,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import type {
@@ -33,6 +38,10 @@ import {
 } from "@/features/sso/sso-api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
+import {
+  resourceMutation,
+  resourceQueryOptions,
+} from "@/lib/workspace-realtime";
 
 import { OrganizationSsoPageShell } from "./-organization.sso.pending";
 
@@ -79,6 +88,7 @@ const AddOidcProviderForm = ({
   onCancel: () => void;
 }) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const [displayName, setDisplayName] = useState("");
   const [issuer, setIssuer] = useState("");
   const [discoveryEndpoint, setDiscoveryEndpoint] = useState("");
@@ -88,7 +98,10 @@ const AddOidcProviderForm = ({
   const [discoveryProbe, setDiscoveryProbe] =
     useState<TestOidcSsoProviderResponse | null>(null);
 
-  const testDiscoveryMutation = useMutation({
+  const testDiscoveryMutationFn = resourceMutation({
+    mutation: "probeOidcSsoProvider",
+    queryClient,
+    scope: { type: "organization" },
     mutationFn: async () =>
       await probeOidcSsoProvider({
         issuer: issuer.trim(),
@@ -96,6 +109,9 @@ const AddOidcProviderForm = ({
           ? { discoveryEndpoint: discoveryEndpoint.trim() }
           : {}),
       }),
+  });
+  const testDiscoveryMutation = useMutation({
+    mutationFn: testDiscoveryMutationFn,
     onSuccess: (result) => {
       setDiscoveryProbe(result);
       stellaToast.add({
@@ -110,22 +126,27 @@ const AddOidcProviderForm = ({
   });
 
   const createProviderMutation = useMutation({
-    mutationFn: async () => {
-      const domains = domainsInput
-        .split(/[,\s]+/u)
-        .map((d) => d.trim())
-        .filter((d) => d.length > 0);
-      return await registerOidcSsoProvider({
-        displayName: displayName.trim(),
-        issuer: issuer.trim(),
-        clientId: clientId.trim(),
-        clientSecret,
-        ...(discoveryEndpoint.trim() !== ""
-          ? { discoveryEndpoint: discoveryEndpoint.trim() }
-          : {}),
-        domains,
-      });
-    },
+    mutationFn: resourceMutation({
+      mutation: "registerOidcSsoProvider",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async () => {
+        const domains = domainsInput
+          .split(/[,\s]+/u)
+          .map((d) => d.trim())
+          .filter((d) => d.length > 0);
+        return await registerOidcSsoProvider({
+          displayName: displayName.trim(),
+          issuer: issuer.trim(),
+          clientId: clientId.trim(),
+          clientSecret,
+          ...(discoveryEndpoint.trim() !== ""
+            ? { discoveryEndpoint: discoveryEndpoint.trim() }
+            : {}),
+          domains,
+        });
+      },
+    }),
     onSuccess: async () => {
       await onCreated();
       stellaToast.add({
@@ -281,11 +302,17 @@ const OidcProvidersSection = ({
   onChanged: () => Promise<void>;
 }) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const [showAddProvider, setShowAddProvider] = useState(false);
 
   const deleteProviderMutation = useMutation({
-    mutationFn: async (providerId: string) =>
-      await removeOrgSsoProvider(providerId),
+    mutationFn: resourceMutation({
+      mutation: "removeOrganizationSsoProvider",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (providerId: string) =>
+        await removeOrgSsoProvider(providerId),
+    }),
     onSuccess: async () => {
       await onChanged();
       stellaToast.add({
@@ -398,10 +425,16 @@ const VerifiedDomainsSection = ({
   onChanged: () => Promise<void>;
 }) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const [newDomain, setNewDomain] = useState("");
 
   const createDomainMutation = useMutation({
-    mutationFn: async (domain: string) => await addOrgSsoDomain(domain),
+    mutationFn: resourceMutation({
+      mutation: "addOrganizationSsoDomain",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (domain: string) => await addOrgSsoDomain(domain),
+    }),
     onSuccess: async () => {
       await onChanged();
       setNewDomain("");
@@ -415,8 +448,14 @@ const VerifiedDomainsSection = ({
     },
   });
 
-  const verifyDomainMutation = useMutation({
+  const verifyDomainMutationFn = resourceMutation({
+    mutation: "verifyOrganizationSsoDomain",
+    queryClient,
+    scope: { type: "organization" },
     mutationFn: async (domainId: string) => await verifyOrgSsoDomain(domainId),
+  });
+  const verifyDomainMutation = useMutation({
+    mutationFn: verifyDomainMutationFn,
     onSuccess: async ({ verified }) => {
       await onChanged();
       stellaToast.add({
@@ -432,7 +471,13 @@ const VerifiedDomainsSection = ({
   });
 
   const deleteDomainMutation = useMutation({
-    mutationFn: async (domainId: string) => await removeOrgSsoDomain(domainId),
+    mutationFn: resourceMutation({
+      mutation: "removeOrganizationSsoDomain",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (domainId: string) =>
+        await removeOrgSsoDomain(domainId),
+    }),
     onSuccess: async () => {
       await onChanged();
       stellaToast.add({
@@ -551,18 +596,28 @@ export const OrganizationSsoPage = () => {
   const t = useTranslations();
   const queryClient = useQueryClient();
 
-  const settingsQuery = useQuery({
-    queryKey: SSO_SETTINGS_QUERY_KEY,
-    queryFn: async ({ signal }) => await fetchOrgSsoSettings(signal),
-  });
+  const settingsQuery = useQuery(
+    resourceQueryOptions(
+      queryOptions({
+        queryKey: SSO_SETTINGS_QUERY_KEY,
+        queryFn: async ({ signal }) => await fetchOrgSsoSettings(signal),
+      }),
+      { type: "independent" },
+    ),
+  );
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: SSO_SETTINGS_QUERY_KEY });
   };
 
   const policyMutation = useMutation({
-    mutationFn: async (requirement: OrganizationSsoPolicyRequirement) =>
-      await saveOrgSsoPolicy(requirement),
+    mutationFn: resourceMutation({
+      mutation: "saveOrganizationSsoPolicy",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (requirement: OrganizationSsoPolicyRequirement) =>
+        await saveOrgSsoPolicy(requirement),
+    }),
     onSuccess: async () => {
       await invalidate();
       stellaToast.add({

@@ -363,6 +363,76 @@ export const RESOURCE_MUTATION_CONTRACTS = {
   },
   // An administrator turns the decision model on or off for verification
   // verdicts; the organization's AI configuration read shows the switch.
+  saveOrganizationSsoPolicy: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/organization-settings/sso/policy",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  registerOidcSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/providers",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  probeOidcSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/providers/test",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  removeOrganizationSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/sso/providers/:providerId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  addOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/domains",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  verifyOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/domains/:domainId/verify",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  removeOrganizationSsoDomain: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/sso/domains/:domainId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   updateVerificationDecisionModel: {
     writes: [
       {
