@@ -41,8 +41,6 @@ import {
   ListItem,
   ListItemActions,
   ListItemContent,
-  ListItemMedia,
-  ListItemTitle,
 } from "@stll/ui/list";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import {
@@ -59,6 +57,7 @@ import {
   SettingsSection,
 } from "@stll/ui/settings";
 import { Switch } from "@stll/ui/switch";
+import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { CLIPBOARD_GROUP_DRAG_TYPE } from "../clipboard/clipboard-logic";
@@ -656,21 +655,24 @@ const ClipboardGroupRow = ({
         data-clipboard-settings-group-id={group.id}
         ref={rowRef}
       >
-        <ListItemMedia>
+        <GripVerticalIcon
+          aria-hidden="true"
+          className="text-muted-foreground size-4 shrink-0 opacity-50 transition-opacity group-hover/clipboard-group:opacity-100"
+        />
+        <ListItemContent className="items-start">
           <span
-            aria-hidden="true"
-            className="size-2.5 rounded-full bg-(--clipboard-group-accent)"
+            className="clipboard-group-chip text-foreground inline-flex h-8 max-w-full items-center gap-1.5 rounded-full px-3 text-xs font-medium"
+            data-group-chip=""
             style={accent}
-          />
-        </ListItemMedia>
-        <ListItemContent>
-          <ListItemTitle>{group.name}</ListItemTitle>
+          >
+            <span
+              aria-hidden="true"
+              className="clipboard-group-chip-dot size-2 shrink-0 rounded-full"
+            />
+            <TruncatedText>{group.name}</TruncatedText>
+          </span>
         </ListItemContent>
         <ListItemActions>
-          <GripVerticalIcon
-            aria-hidden="true"
-            className="text-muted-foreground size-4 opacity-0 transition-opacity group-hover/clipboard-group:opacity-100"
-          />
           <Menu>
             <MenuTrigger
               render={
