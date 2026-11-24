@@ -3,7 +3,7 @@ import {
   isFailedToolOutput,
 } from "@stll/api-contract/chat-tool-activity";
 
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage } from "@/components/chat/chat-ui-tools-types";
 
 export const getLatestCompletedResearchPartIndex = (
   messages: readonly ChatMessage[],

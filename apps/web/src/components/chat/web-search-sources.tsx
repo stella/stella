@@ -12,7 +12,7 @@ import { DirectionalIcon } from "@stll/ui/directional-icon";
 import { ChevronRightIcon, GlobeIcon } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage } from "@/components/chat/chat-ui-tools-types";
 
 const collectAnswers = (parts: ChatMessage["parts"]): string[] => {
   const answers: string[] = [];

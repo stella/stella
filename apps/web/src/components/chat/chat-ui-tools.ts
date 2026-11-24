@@ -24,7 +24,6 @@ import {
 } from "@stll/api-contract/chat-tool-activity";
 import type {
   ChatToolLabel,
-  HarnessChatToolName,
   RetiredChatToolName,
 } from "@stll/api-contract/chat-tool-activity";
 import {
@@ -32,10 +31,8 @@ import {
   isApprovalGatedBuiltInChatTool,
   isGrantableChatTool,
 } from "@stll/api-contract/chat-tool-grants";
-import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import { isOwnKey } from "@stll/api-contract/own-key";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
-import type { FolioAgentToolName } from "@stll/folio-agents";
 
 import {
   withSubagentRunParts,
@@ -46,136 +43,68 @@ import type {
   SubagentChatPart,
   SubagentChildPart,
 } from "@/components/chat/chat-subagent-parts.logic";
+import type {
+  ApprovalToolName,
+  ApprovalToolPart,
+  AskUserInput,
+  AskUserOutput,
+  BuiltInApprovalToolName,
+  BuiltInChatToolCallPart,
+  BuiltInChatToolName,
+  ChatAnonRestoration,
+  ChatAttachmentPart,
+  ChatClientTools,
+  ChatMessageMetadata,
+  ChatPart,
+  ChatToolCallPart,
+  ChatUIMessage,
+  ChatUIPart,
+  ChatUIToolCallPart,
+  HarnessChatToolCallPart,
+  OpaquePersistedChatToolCallPart,
+  PersistedChatMessage,
+  RegisteredChatUIToolCallPart,
+  RegisteredFolioAgentToolCallPart,
+  SharedChatUITools,
+  ToolApprovalGrant,
+} from "@/components/chat/chat-ui-tools-types";
 import { withLocalRunLimitResetsAt } from "@/features/chat/chat-local-run-limit";
 import type { TranslationKey } from "@/i18n/types";
-import type { WebApiRoutes } from "@/lib/api";
 import type {
   ApprovalRequiredBuiltInChatToolName,
   BuiltInChatToolPolicyKindByName,
   ChatMessage,
-  ChatPart as TanStackChatPart,
   ChatUITools,
 } from "@/lib/api-contract";
 import { toAPIError } from "@/lib/errors/api";
 import { withProviderDiagnostic } from "@/lib/errors/provider-diagnostic";
 
+const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
+
 export type {
+  ApprovalToolName,
+  ApprovalToolPart,
+  AskUserInput,
+  AskUserOutput,
   ChatAnonRestoration,
+  ChatAttachmentPart,
   ChatClientTools,
   ChatMessage,
-  ChatUITools,
-} from "@/lib/api-contract";
-export type ChatPart = TanStackChatPart;
-type AnswerRevision = Partial<
-  Pick<
-    WebApiRoutes["chat"]["threads"][":threadId"]["messages"]["get"]["response"][200]["messages"][number],
-    "revision" | "edited"
-  >
->;
-export type PersistedChatMessage = ChatMessage & AnswerRevision;
-type TanStackChatToolCallPart = Extract<
-  TanStackChatPart,
-  { type: "tool-call" }
->;
-type BuiltInChatToolName = keyof BuiltInChatToolPolicyKindByName;
-type BuiltInChatToolCallPart = {
-  [TName in BuiltInChatToolName]: Omit<
-    Extract<TanStackChatToolCallPart, { name: TName }>,
-    "input" | "output"
-  > & {
-    input?: ChatUITools[TName]["input"];
-    output?: ChatUITools[TName]["output"];
-  };
-}[BuiltInChatToolName];
-type ExternalMcpChatToolCallPart = Extract<
-  TanStackChatToolCallPart,
-  { name: `mcp__${string}` }
->;
-declare const opaquePersistedChatToolCallProof: unique symbol;
-/**
- * Proof assigned after a persisted tool call passes the protocol-shape guard
- * and its name is confirmed absent from both current tool namespaces.
- */
-export type OpaquePersistedChatToolCallPart = TanStackChatToolCallPart & {
-  readonly [opaquePersistedChatToolCallProof]: true;
-};
-
-/**
- * TanStack deliberately leaves JSON-schema tool payloads unknown. At Stella's
- * rendering boundary, built-in payloads retain the types derived from the same
- * Standard Schema tool map; external MCP and opaque historical payloads remain
- * unknown.
- */
-export type RegisteredChatUIToolCallPart =
-  BuiltInChatToolCallPart | ExternalMcpChatToolCallPart;
-type RegisteredFolioAgentToolName = Extract<
-  keyof ChatUITools,
-  FolioAgentToolName
->;
-export type RegisteredFolioAgentToolCallPart<
-  TName extends RegisteredFolioAgentToolName = RegisteredFolioAgentToolName,
-> = {
-  [TCurrentName in TName]: Extract<
-    RegisteredChatUIToolCallPart,
-    { name: TCurrentName }
-  > & {
-    input: ChatUITools[TCurrentName]["input"];
-  };
-}[TName];
-export type ChatUIToolCallPart =
-  RegisteredChatUIToolCallPart | OpaquePersistedChatToolCallPart;
-export type ChatUIPart =
-  Exclude<TanStackChatPart, { type: "tool-call" }> | ChatUIToolCallPart;
-export type ChatUIMessage = Omit<PersistedChatMessage, "parts"> & {
-  parts: ChatUIPart[];
-};
-export type ChatToolCallPart = TanStackChatToolCallPart;
-export type ChatAttachmentPart = Extract<
+  ChatMessageMetadata,
   ChatPart,
-  { type: "document" | "image" }
-> & {
-  metadata?: {
-    filename?: string | undefined;
-    placeholder?: string | undefined;
-    /** Why some of the file's content was not scanned when it was stored. */
-    unscannedContent?: UnscannedContentReason[] | undefined;
-  };
+  ChatToolCallPart,
+  ChatUIMessage,
+  ChatUIPart,
+  ChatUIToolCallPart,
+  ChatUITools,
+  HarnessChatToolCallPart,
+  OpaquePersistedChatToolCallPart,
+  PersistedChatMessage,
+  RegisteredChatUIToolCallPart,
+  RegisteredFolioAgentToolCallPart,
+  SharedChatUITools,
+  ToolApprovalGrant,
 };
-export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
-export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
-export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
-// These tools have dedicated user-input cards or draft UI instead of the
-// approval flow. Keep them out of the approval set so their owning cards
-// handle the interaction.
-type BuiltInApprovalToolName = Exclude<
-  keyof ChatUITools,
-  "ask-user" | "create-document" | "request_secret" | "connect_connector"
->;
-/**
- * A harness-native step of a coding agent on the member's computer. The
- * member approves one like any other call (`isApprovalToolName` accepts its
- * name), and its input is the contract's (`chat-local-run-tool`).
- */
-type HarnessToolName = HarnessChatToolName;
-export type HarnessChatToolCallPart = Omit<TanStackChatToolCallPart, "name"> & {
-  name: HarnessToolName;
-};
-export type ApprovalToolName =
-  BuiltInApprovalToolName | HarnessToolName | `mcp__${string}`;
-const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
-export type ToolApprovalGrant =
-  ApprovalToolName | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-export type ApprovalToolPart = (
-  RegisteredChatUIToolCallPart | HarnessChatToolCallPart
-) & {
-  name: ApprovalToolName;
-  approval: {
-    approved?: boolean | undefined;
-    id: string;
-    needsApproval: boolean;
-  };
-};
-export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 // Built-in tool names whose backend policy kind is `K`, derived from
 // `BuiltInChatToolPolicyKindByName` (the backend's single source of truth
 // for tool classification) instead of hand-listed, so a backend

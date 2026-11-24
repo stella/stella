@@ -5,7 +5,7 @@ import {
   getChatTurnDurationUnits,
 } from "@stll/api-contract/chat-turn-duration";
 
-import type { ChatMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatMessage } from "@/components/chat/chat-ui-tools-types";
 import { useFormatter } from "@/i18n/formatting-context";
 
 type ChatTurnDurationProps = {

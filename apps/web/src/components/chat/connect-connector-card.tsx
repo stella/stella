@@ -17,7 +17,7 @@ import { Loader } from "@stll/ui/loader";
 
 import { CatalogueEntryIcon } from "@/components/catalogue/catalogue-entry-icon";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
-import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
+import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools-types";
 import type { TranslationKey } from "@/i18n/types";
 import { mcpConnectorConnection } from "@/lib/api";
 import { detached } from "@/lib/detached";

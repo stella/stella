@@ -30,7 +30,7 @@ import {
   chatAnswerDecisionTargets,
   chatAnswerMarkdownDocuments,
 } from "@/components/chat/chat-decision-citations.logic";
-import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatUIMessage } from "@/components/chat/chat-ui-tools-types";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { collectSourceChipEntries } from "@/components/chat/source-chips.logic";
 import { CitationChip } from "@/components/references/citation-chip";

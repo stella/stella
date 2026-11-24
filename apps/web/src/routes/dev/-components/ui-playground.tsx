@@ -201,7 +201,7 @@ import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import type {
   ChatToolCallPart,
   PersistedChatMessage,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { DatePickerPopover } from "@/components/date-picker-popover";

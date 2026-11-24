@@ -53,7 +53,7 @@ import type {
   AskUserOutput,
   ChatAnonRestoration,
   RegisteredChatUIToolCallPart,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { rehypeScopeAnswerIds } from "@/components/chat/rehype-scope-answer-ids";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";

@@ -20,7 +20,7 @@ import type {
   RequestSecretDecision,
   SecretTargetResolution,
 } from "@/components/chat/chat-approval-context";
-import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools";
+import type { RegisteredChatUIToolCallPart } from "@/components/chat/chat-ui-tools-types";
 import { SecretInput } from "@/components/secret-input";
 import type { TranslationKey } from "@/i18n/types";
 import { detached } from "@/lib/detached";

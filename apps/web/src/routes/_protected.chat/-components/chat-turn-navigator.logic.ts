@@ -1,5 +1,5 @@
 import { buildMessageTurns } from "@/components/chat/chat-thread-messages.logic";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 
 const PROMPT_PREVIEW_LENGTH = 180;
 const RESPONSE_PREVIEW_LENGTH = 280;
