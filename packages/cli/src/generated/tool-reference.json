@@ -2258,7 +2258,7 @@
   {
     "access": "write",
     "command": ["capability", "matters", "update"],
-    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, automatic document naming, lead (who must already be a member of it) or visibility. Only the fields you pass are written. clientId attaches or replaces the matter's client and never changes who can see it; members are managed separately. Only the matter lead or an organization owner or admin may change the visibility; widening it needs confirmWidening, otherwise returns matter_visibility_widening_unconfirmed. Pass expectedClientId (null when it has no client) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
+    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, automatic document naming, lead (who must already be a member of it) or visibility. Only the fields you pass are written. clientId attaches or replaces the matter's client and never changes who can see it; members are managed separately. Only the matter lead or an organization owner or admin may change the lead or the visibility; widening it needs confirmWidening, otherwise returns matter_visibility_widening_unconfirmed. Pass expectedClientId (null when it has no client) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
     "name": "capability:matters.update",
     "title": "matters.update"
   },
