@@ -48,6 +48,10 @@ public class KeyboardDictationModule: Module {
       KeyboardDictationSession.shared.end()
     }
 
+    Function("claimHandoff") { (jobId: String, language: String) -> Bool in
+      KeyboardDictationSession.shared.claimHandoff(jobId: jobId, language: language)
+    }
+
     Function("startCapture") { (jobId: String, language: String) -> Bool in
       KeyboardDictationSession.shared.startCapture(jobId: jobId, language: language)
     }

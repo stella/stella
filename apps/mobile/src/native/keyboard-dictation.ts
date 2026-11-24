@@ -49,6 +49,7 @@ type KeyboardDictationModule = {
     },
   ) => string;
   end: () => void;
+  claimHandoff: (jobId: string, language: string) => boolean;
   startCapture: (jobId: string, language: string) => boolean;
   stopCapture: (jobId: string) => boolean;
   cancelCapture: (jobId: string) => boolean;
@@ -108,6 +109,15 @@ export const startKeyboardSession = (
 export const endKeyboardSession = (): void => {
   keyboardDictation()?.end();
 };
+
+/**
+ * Whether the keyboard itself left this dictation in the App Group just
+ * before it opened the app; true once, as the claim consumes it.
+ */
+export const claimKeyboardHandoff = (
+  jobId: string,
+  language: KeyboardLanguage,
+): boolean => keyboardDictation()?.claimHandoff(jobId, language) ?? false;
 
 /** Starts the dictation a keyboard link named; false when one is under way already. */
 export const startKeyboardCapture = (

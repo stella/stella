@@ -290,13 +290,18 @@ final class KeyboardViewController: UIInputViewController {
       open(route: \.setupRoute, query: [])
     case .cold:
       // The app starts recording as it opens; the person comes back here
-      // to stop it.
+      // to stop it. The handoff in the App Group is what tells the app this
+      // link came from here.
+      let handoff = KeyboardHandoff(
+        jobId: UUID().uuidString.lowercased(), language: language,
+        sentAt: KeyboardDictationBridge.now())
+      store?.write(handoff, KeyboardDictationBridge.handoffKey)
       open(
         route: \.dictateRoute,
         query: [
-          URLQueryItem(name: "job", value: UUID().uuidString.lowercased()),
-          URLQueryItem(name: "language", value: language),
-          URLQueryItem(name: "at", value: String(KeyboardDictationBridge.now())),
+          URLQueryItem(name: "job", value: handoff.jobId),
+          URLQueryItem(name: "language", value: handoff.language),
+          URLQueryItem(name: "at", value: String(handoff.sentAt)),
         ])
     case .stalled:
       open(route: \.dictateRoute, query: [])

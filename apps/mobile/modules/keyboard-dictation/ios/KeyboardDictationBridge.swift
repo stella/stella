@@ -4,7 +4,8 @@ import Foundation
 // record, so the app records and transcribes; the two share the App Group's
 // defaults and wake each other with Darwin notifications, which carry no
 // data. Every key has one writer: the keyboard writes commands, the language
-// it dictates in, the results it inserted and when it last ran; the app
+// it dictates in, the results it inserted, when it last ran and the handoff
+// it opens the app with (which the app removes once it takes it); the app
 // writes its state, with a heartbeat, and the results. The prebuild copies
 // this file into the keyboard's target, so both sides compile the same one.
 //
@@ -20,6 +21,9 @@ enum KeyboardDictationBridge {
   static let keepWarmKey = "keyboardDictation.keepWarmSeconds"
   /// The letter layout picked in the app's settings; the app writes it.
   static let layoutKey = "keyboardDictation.layout"
+  /// The dictation the keyboard opens the app to record. The app records
+  /// only a link that matches it, so no other app's link starts a recording.
+  static let handoffKey = "keyboardDictation.handoff"
 
   /// The languages the keyboard's language key offers, `auto` first: the
   /// transcription then hears which one is spoken. Pinned to the app's list
@@ -75,6 +79,13 @@ enum KeyboardCommandKind: String, Codable {
   case start
   case stop
   case cancel
+}
+
+/// What the keyboard leaves in the App Group as it opens the app to record.
+struct KeyboardHandoff: Codable, Equatable {
+  let jobId: String
+  let language: String
+  let sentAt: Int64
 }
 
 struct KeyboardCommand: Codable, Equatable {

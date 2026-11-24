@@ -84,12 +84,15 @@ const handoffSchema = v.object({
 
 /**
  * The keyboard's link, read from the route's parameters: a fresh one starts
- * the dictation it names; a stale, partial or foreign one only opens the
- * app with the microphone warm.
+ * the dictation it names, once `claim` confirms the keyboard itself left
+ * that dictation in the App Group (any app can open the link, only the
+ * keyboard can write there); a stale, partial, foreign or unclaimed one
+ * only opens the app with the microphone warm.
  */
 export const readKeyboardHandoff = (
   params: Readonly<Record<string, string | string[] | undefined>>,
   now: number,
+  claim: (jobId: string, language: KeyboardLanguage) => boolean,
 ): KeyboardHandoff => {
   const parsed = v.safeParse(handoffSchema, params);
   if (!parsed.success) {
@@ -97,7 +100,7 @@ export const readKeyboardHandoff = (
   }
   const { at, job, language } = parsed.output;
   const age = now - at;
-  return age >= 0 && age <= KEYBOARD_HANDOFF_WINDOW_MS
+  return age >= 0 && age <= KEYBOARD_HANDOFF_WINDOW_MS && claim(job, language)
     ? { type: "record", jobId: job, language }
     : { type: "warm" };
 };

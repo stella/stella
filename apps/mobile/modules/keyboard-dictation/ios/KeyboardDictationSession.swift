@@ -181,6 +181,22 @@ final class KeyboardDictationSession {
     }
   }
 
+  /// Whether the keyboard left this dictation in the App Group within the
+  /// handoff window; a match is consumed, so it is claimed once.
+  func claimHandoff(jobId: String, language: String) -> Bool {
+    queue.sync {
+      guard let store,
+        let handoff = store.read(KeyboardHandoff.self, KeyboardDictationBridge.handoffKey),
+        handoff.jobId == jobId, handoff.language == language
+      else {
+        return false
+      }
+      store.remove(KeyboardDictationBridge.handoffKey)
+      let age = KeyboardDictationBridge.now() - handoff.sentAt
+      return age >= 0 && age <= KeyboardDictationBridge.handoffWindowMs
+    }
+  }
+
   func startCapture(jobId: String, language: String) -> Bool {
     queue.sync { beginCapture(jobId: jobId, language: language) }
   }

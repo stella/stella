@@ -28,24 +28,55 @@ describe("the keyboard's link", () => {
     at: String(at),
   });
 
+  /** The keyboard left exactly this dictation in the App Group. */
+  const claimed = (jobId: string, language: string) =>
+    jobId === JOB && language === "cs";
+
   test("a fresh link records the dictation it names", () => {
-    expect(readKeyboardHandoff(link(NOW - 2000), NOW)).toEqual({
+    expect(readKeyboardHandoff(link(NOW - 2000), NOW, claimed)).toEqual({
       type: "record",
       jobId: JOB,
       language: "cs",
     });
     expect(
-      readKeyboardHandoff(link(NOW - KEYBOARD_HANDOFF_WINDOW_MS), NOW).type,
+      readKeyboardHandoff(link(NOW - KEYBOARD_HANDOFF_WINDOW_MS), NOW, claimed)
+        .type,
     ).toBe("record");
   });
 
   test("a stale or future link only warms the microphone", () => {
     expect(
-      readKeyboardHandoff(link(NOW - KEYBOARD_HANDOFF_WINDOW_MS - 1), NOW),
+      readKeyboardHandoff(
+        link(NOW - KEYBOARD_HANDOFF_WINDOW_MS - 1),
+        NOW,
+        claimed,
+      ),
     ).toEqual({
       type: "warm",
     });
-    expect(readKeyboardHandoff(link(NOW + 1), NOW)).toEqual({ type: "warm" });
+    expect(readKeyboardHandoff(link(NOW + 1), NOW, claimed)).toEqual({
+      type: "warm",
+    });
+  });
+
+  test("a fresh link the keyboard did not leave in the App Group only warms the microphone", () => {
+    const asked: [string, string][] = [];
+    expect(
+      readKeyboardHandoff(link(NOW - 2000), NOW, (jobId, language) => {
+        asked.push([jobId, language]);
+        return false;
+      }),
+    ).toEqual({ type: "warm" });
+    expect(asked).toEqual([[JOB, "cs"]]);
+  });
+
+  test("a stale link is never claimed, so the keyboard's handoff stays for its own link", () => {
+    let asked = false;
+    readKeyboardHandoff(link(NOW - KEYBOARD_HANDOFF_WINDOW_MS - 1), NOW, () => {
+      asked = true;
+      return true;
+    });
+    expect(asked).toBe(false);
   });
 
   const partial: Readonly<Record<string, string | string[]>>[] = [
@@ -59,7 +90,9 @@ describe("the keyboard's link", () => {
   test.each(partial)(
     "a partial or foreign link only warms the microphone: %o",
     (params) => {
-      expect(readKeyboardHandoff(params, NOW)).toEqual({ type: "warm" });
+      expect(readKeyboardHandoff(params, NOW, () => true)).toEqual({
+        type: "warm",
+      });
     },
   );
 

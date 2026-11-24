@@ -17,6 +17,7 @@ import { epochMilliseconds } from "@/connection/clock";
 import { useSession } from "@/connection/session-provider";
 import {
   cancelKeyboardCapture,
+  claimKeyboardHandoff,
   readKeyboardStatus,
   startKeyboardCapture,
   startKeyboardSession,
@@ -43,9 +44,7 @@ const KeyboardDictateScreen = () => {
       contentInsetAdjustmentBehavior="automatic"
     >
       <Stack.Screen options={{ title: t("title") }} />
-      {state.status === "signed-in" ? (
-        <Handoff handoff={readKeyboardHandoff(params, epochMilliseconds())} />
-      ) : null}
+      {state.status === "signed-in" ? <Handoff params={params} /> : null}
     </ScrollView>
   );
 };
@@ -55,9 +54,19 @@ type HandoffStart =
   | { readonly type: "denied" }
   | { readonly type: "failed" };
 
-const Handoff = ({ handoff }: { handoff: KeyboardHandoff }) => {
-  // Started once, as the screen opens: a later render never records again.
-  const [started] = useState(async () => await begin(handoff));
+const Handoff = ({
+  params,
+}: {
+  params: Readonly<Record<string, string | string[] | undefined>>;
+}) => {
+  // Started once, as the screen opens: a later render never records again,
+  // and the keyboard's handoff is claimed only here.
+  const [started] = useState(
+    async () =>
+      await begin(
+        readKeyboardHandoff(params, epochMilliseconds(), claimKeyboardHandoff),
+      ),
+  );
   return (
     <Suspense fallback={<Loader />}>
       <HandoffStatus started={started} />
