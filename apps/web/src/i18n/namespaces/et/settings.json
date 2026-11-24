@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Arveldusandmete vaatamine",
+      "billingAccessDescription": "Võimaldab vaadata tariife, summasid ja arveid toimikutes, millele sellel liikmel on ligipääs. Omanikel ja administraatoritel on see ligipääs alati.",
+      "billingAccessIncludedInRole": "Rollis sisalduv",
       "changeRole": "Muuda rolli",
       "confirmRoleChangeDescription": "Kasutaja {email} roll muutub: {oldRole, select, owner {omanikust} admin {administraatorist} member {liikmest} intern {praktikandist} external {välisest koostööpartnerist} other {}} saab {newRole, select, owner {omanik} admin {administraator} member {liige} intern {praktikant} external {väline koostööpartner} other {}}.",
       "confirmRoleChangeTitle": "Muuda rolli",

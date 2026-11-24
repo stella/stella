@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Prieiga prie atsiskaitymo duomenų",
+      "billingAccessDescription": "Leidžia peržiūrėti įkainius, sumas ir sąskaitas bylose, prie kurių šis narys turi prieigą. Savininkai ir administratoriai šią prieigą turi visada.",
+      "billingAccessIncludedInRole": "Įtraukta į vaidmenį",
       "changeRole": "Keisti rolę",
       "confirmRoleChangeDescription": "{email} vaidmuo bus pakeistas {oldRole, select, owner {iš savininko vaidmens} admin {iš administratoriaus vaidmens} member {iš nario vaidmens} intern {iš praktikanto vaidmens} external {iš išorinio bendradarbio vaidmens} other {}} {newRole, select, owner {į savininko vaidmenį} admin {į administratoriaus vaidmenį} member {į nario vaidmenį} intern {į praktikanto vaidmenį} external {į išorinio bendradarbio vaidmenį} other {}}.",
       "confirmRoleChangeTitle": "Keisti vaidmenį",

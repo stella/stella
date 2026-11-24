@@ -14,9 +14,11 @@ test("rejects missing and base language locales across number and date formatter
         "date.toLocaleDateString(undefined, options);",
         'date.toLocaleTimeString("ar", options);',
         "number.toLocaleString(lang);",
+        "new Intl.DateTimeFormat(locale ?? useI18nStore.getState().lang);",
+        "date.toLocaleDateString(cond ? locale : 'en-US');",
       ].join("\n"),
     ),
-  ).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  ).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
 });
 
 test("allows full preference locales and central formatting helpers", async () => {

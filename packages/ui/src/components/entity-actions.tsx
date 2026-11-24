@@ -2,7 +2,9 @@
 
 import { createContext, use, useRef, useState } from "react";
 import type { KeyboardEvent, MouseEvent, ReactNode, Ref } from "react";
+import { createPortal } from "react-dom";
 
+import { useRender } from "@base-ui/react/use-render";
 import { panic } from "better-result";
 
 import { EllipsisIcon } from "../icons";
@@ -56,6 +58,12 @@ export type EntityActionsProps = {
   heading?: ReactNode;
   /** The accessible name of the "…" button, e.g. "Actions". */
   label: string;
+  /**
+   * Optional host element to attach the right-click listener to directly
+   * (for example `<TableRow />`, where a wrapping `<div className="contents">`
+   * would be invalid HTML inside `<tbody>`).
+   */
+  render?: useRender.RenderProp<Record<string, unknown>>;
 };
 
 type CursorAnchor = { getBoundingClientRect: () => DOMRect };
@@ -122,8 +130,10 @@ export const EntityActions = ({
   children,
   heading,
   label,
+  render,
 }: EntityActionsProps) => {
   const [open, setOpen] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
   const [anchor, setAnchor] = useState<CursorAnchor | null>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
   const context: EntityActionsContextValue = { actions, heading, label };
@@ -137,6 +147,7 @@ export const EntityActions = ({
     // A hand-written handler further up must not open a second menu either.
     event.stopPropagation();
     returnFocus.current = focusReturnTarget(event.currentTarget, event.target);
+    setHasOpened(true);
     setAnchor(anchorRect);
     setOpen(true);
   };
@@ -185,41 +196,51 @@ export const EntityActions = ({
     });
   };
 
+  const target = useRender({
+    defaultTagName: "div",
+    render,
+    props: {
+      ...(render === undefined
+        ? { className: "contents", role: "presentation" }
+        : {}),
+      // Hand-written handlers further up resolve the object a right-click
+      // belongs to through this marker and leave this one alone.
+      "data-context-menu-target": "",
+      "data-slot": "entity-actions",
+      onContextMenu: handleContextMenu,
+      onKeyDown: handleKeyDown,
+      children,
+    },
+  });
+
+  const contextMenu =
+    hasActions && hasOpened ? (
+      <Menu
+        onOpenChange={(nextOpen) => {
+          setOpen(nextOpen);
+          if (!nextOpen) {
+            setAnchor(null);
+          }
+        }}
+        open={open}
+      >
+        <MenuAnchor />
+        <MenuPopup
+          anchor={anchor ?? undefined}
+          data-slot="entity-actions-context-popup"
+          finalFocus={() => returnFocus.current ?? false}
+        >
+          <EntityActionItems actions={actions} heading={heading} />
+        </MenuPopup>
+      </Menu>
+    ) : null;
+
   return (
     <EntityActionsContext value={context}>
-      {/* `contents` keeps the object's own layout: this element only listens. */}
-      <div
-        className="contents"
-        // Hand-written handlers further up resolve the object a right-click
-        // belongs to through this marker and leave this one alone.
-        data-context-menu-target=""
-        data-slot="entity-actions"
-        onContextMenu={handleContextMenu}
-        onKeyDown={handleKeyDown}
-        role="presentation"
-      >
-        {children}
-      </div>
-      {hasActions && (
-        <Menu
-          onOpenChange={(nextOpen) => {
-            setOpen(nextOpen);
-            if (!nextOpen) {
-              setAnchor(null);
-            }
-          }}
-          open={open}
-        >
-          <MenuAnchor />
-          <MenuPopup
-            anchor={anchor ?? undefined}
-            data-slot="entity-actions-context-popup"
-            finalFocus={() => returnFocus.current ?? false}
-          >
-            <EntityActionItems actions={actions} heading={heading} />
-          </MenuPopup>
-        </Menu>
-      )}
+      {target}
+      {contextMenu !== null &&
+        typeof document !== "undefined" &&
+        createPortal(contextMenu, document.body)}
     </EntityActionsContext>
   );
 };
