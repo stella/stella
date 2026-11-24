@@ -170,7 +170,7 @@ const hydrate = async ({
     return decision;
   }
 
-  const document = await readThroughDeferredDocument({
+  const outcome = await readThroughDeferredDocument({
     adapterKey: decision.source.adapterKey,
     decision: {
       id: decision.id,
@@ -191,9 +191,10 @@ const hydrate = async ({
   // The fetch did not finish inside the read's budget, or the source
   // had nothing: the decision stays readable as metadata and stays
   // queued, and the next read finds it stored.
-  if (!document) {
+  if (outcome.status === "deferred") {
     return decision;
   }
+  const { document } = outcome;
 
   // Match the stored read: serve the fetched text when structure was rejected.
   const projection = isDocumentAst(document.documentAst)

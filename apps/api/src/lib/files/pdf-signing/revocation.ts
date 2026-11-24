@@ -261,7 +261,7 @@ export const createTrackedRevocationProvider = ({
       }
       const request = await ocspRequestFor(certificate, issuer);
       for (const url of urls) {
-        const response = await fetcher({
+        const fetched = await fetcher({
           body: request,
           contentType: "application/ocsp-request",
           maxBytes: OCSP_RESPONSE_MAX_BYTES,
@@ -269,19 +269,21 @@ export const createTrackedRevocationProvider = ({
           permit,
           url,
         });
-        const status =
-          response === null
-            ? null
-            : await ocspStatus(response, certificate, issuer, now());
-        if (
-          response !== null &&
-          (status === OCSP_CERT_GOOD || status === OCSP_CERT_REVOKED)
-        ) {
+        if (fetched.status === "unavailable") {
+          continue;
+        }
+        const status = await ocspStatus(
+          fetched.body,
+          certificate,
+          issuer,
+          now(),
+        );
+        if (status === OCSP_CERT_GOOD || status === OCSP_CERT_REVOKED) {
           record(
             certificateDer,
             status === OCSP_CERT_REVOKED ? "revoked" : "good",
           );
-          return response;
+          return fetched.body;
         }
       }
       return null;
@@ -297,19 +299,24 @@ export const createTrackedRevocationProvider = ({
         return null;
       }
       for (const url of crlDistributionPoints(certificate)) {
-        const crl = await fetcher({
+        const fetched = await fetcher({
           maxBytes: CRL_MAX_BYTES,
           method: "GET",
           permit,
           url,
         });
-        const verdict =
-          crl === null
-            ? null
-            : await crlVerdict(crl, certificate, issuer, now());
-        if (crl !== null && verdict !== null) {
+        if (fetched.status === "unavailable") {
+          continue;
+        }
+        const verdict = await crlVerdict(
+          fetched.body,
+          certificate,
+          issuer,
+          now(),
+        );
+        if (verdict !== null) {
           record(certificateDer, verdict);
-          return crl;
+          return fetched.body;
         }
       }
       return null;

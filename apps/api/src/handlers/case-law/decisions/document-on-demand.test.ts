@@ -180,7 +180,11 @@ describe("deferred document read-through", () => {
 
     expect(fetched).toEqual([decision.id]);
     // Every reader gets the document, not just the one that fetched it.
-    expect(documents).toEqual([parsed, parsed, parsed]);
+    expect(documents).toEqual([
+      { status: "filled", document: parsed },
+      { status: "filled", document: parsed },
+      { status: "filled", document: parsed },
+    ]);
   });
 
   test("readers with a different text revision do not share the transient document", async () => {
@@ -205,8 +209,8 @@ describe("deferred document read-through", () => {
 
     release();
 
-    expect(await first).toEqual(parsed);
-    expect(await second).toBeNull();
+    expect(await first).toEqual({ status: "filled", document: parsed });
+    expect(await second).toEqual({ status: "deferred" });
     expect(fetched).toEqual([decision.id]);
   });
 
@@ -224,7 +228,7 @@ describe("deferred document read-through", () => {
     });
     release();
 
-    expect(await reader).toBeNull();
+    expect(await reader).toEqual({ status: "deferred" });
     expect(requested).toEqual([decision.id]);
   });
 
@@ -244,7 +248,7 @@ describe("deferred document read-through", () => {
 
     // The document is still fetched with a free slot — what it must not
     // do is mint a priority row that steers the crawler.
-    expect(await reader).toEqual(parsed);
+    expect(await reader).toEqual({ status: "filled", document: parsed });
     expect(fetched).toEqual([decision.id]);
     expect(requested).toEqual([]);
   });
@@ -263,7 +267,7 @@ describe("deferred document read-through", () => {
     });
     release();
 
-    expect(await reader).toBeNull();
+    expect(await reader).toEqual({ status: "deferred" });
   });
 
   test("a decision another worker is fetching reads as metadata-only", async () => {
@@ -282,7 +286,7 @@ describe("deferred document read-through", () => {
 
     // The other worker owns its fetch. This reader returns metadata-only
     // instead of sharing a transient AST from a different execution.
-    expect(await reader).toBeNull();
+    expect(await reader).toEqual({ status: "deferred" });
   });
 
   test("a re-read after the fetch finished fetches again and converges", async () => {
@@ -342,7 +346,7 @@ describe("deferred document read-through", () => {
     });
 
     // The third reader is turned away without waiting for the release.
-    expect(await third).toBeNull();
+    expect(await third).toEqual({ status: "deferred" });
 
     release();
     await Promise.all([first, second]);
@@ -431,7 +435,7 @@ describe("deferred document read-through", () => {
           deps: build(),
           recordDemand: true,
         }),
-      ).toBeNull();
+      ).toEqual({ status: "deferred" });
     }, 20_000);
   }
 
@@ -493,7 +497,7 @@ for (const status of ["busy", "lost"] as const) {
         deps,
         recordDemand: true,
       }),
-    ).toBeNull();
+    ).toEqual({ status: "deferred" });
     expect(reasons).toEqual([`ownership-${status}`]);
     expect(requested).toEqual([decision.id]);
   });
@@ -559,7 +563,7 @@ describe("deferral reporting", () => {
         textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       }),
-    ).toBeNull();
+    ).toEqual({ status: "deferred" });
     expect(captured).toEqual([]);
   });
 
@@ -588,7 +592,7 @@ describe("deferral reporting", () => {
         textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       }),
-    ).toBeNull();
+    ).toEqual({ status: "deferred" });
     expect(captured).toEqual([]);
   });
 
@@ -610,7 +614,7 @@ describe("deferral reporting", () => {
         textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
         textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
       }),
-    ).toBeNull();
+    ).toEqual({ status: "deferred" });
     expect(captured).toHaveLength(1);
   });
 });

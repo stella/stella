@@ -97,7 +97,7 @@ test("a read consumes one shared source reservation", async () => {
       deps,
       recordDemand: false,
     }),
-  ).toBeNull();
+  ).toEqual({ status: "deferred" });
   expect(fetched).toEqual([pending.id]);
   expect(reservations()).toBe(1);
 });
@@ -129,7 +129,7 @@ test("a deferred read returns metadata when its request budget is spent", async 
       await Promise.resolve();
     }
     expect(resolved).toBe(true);
-    expect(await read).toBeNull();
+    expect(await read).toEqual({ status: "deferred" });
   } finally {
     fetch.resolve({ status: "claimed" });
     jest.runAllTimers();
@@ -151,7 +151,7 @@ for (const state of [{ tokens: 0 }, { tokens: 1, backoff: true }]) {
         deps,
         recordDemand: false,
       }),
-    ).toBeNull();
+    ).toEqual({ status: "deferred" });
     expect(fetched).toEqual([]);
     expect(deferred).toEqual([pending.id]);
   });
@@ -168,7 +168,7 @@ test("an inline source does not reserve or fetch a document", async () => {
       deps,
       recordDemand: false,
     }),
-  ).toBeNull();
+  ).toEqual({ status: "deferred" });
   expect(fetched).toEqual([]);
   expect(reservations()).toBe(0);
 });
@@ -196,7 +196,7 @@ test("concurrent reads resolve within the shared source budget", async () => {
             });
           }),
         );
-        expect(results).toEqual(turns.map(() => null));
+        expect(results).toEqual(turns.map(() => ({ status: "deferred" })));
         expect(fetched.length).toBeLessThanOrEqual(
           Math.min(tokens, turns.length),
         );
@@ -287,7 +287,7 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
         expect(requests).toBe(0);
         jest.advanceTimersByTime(1);
       }
-      expect(await read).toBeNull();
+      expect(await read).toEqual({ status: "deferred" });
       expect(resolved).toBe(true);
       expect(requests).toBe(0);
       expect(recorded).toEqual(["pacing-unavailable"]);
@@ -315,7 +315,7 @@ test("a pacing capture failure still resolves the read", async () => {
       deps,
       recordDemand: false,
     }),
-  ).toBeNull();
+  ).toEqual({ status: "deferred" });
   expect(fetched).toEqual([]);
 });
 

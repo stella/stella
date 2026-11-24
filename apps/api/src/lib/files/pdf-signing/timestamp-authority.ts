@@ -175,7 +175,7 @@ const requestTimestamp = async ({
     nonce,
     certReq: true,
   });
-  const body = await fetcher({
+  const fetched = await fetcher({
     body: new Uint8Array(request.toSchema().toBER(false)),
     contentType: "application/timestamp-query",
     maxBytes: TIMESTAMP_RESPONSE_MAX_BYTES,
@@ -183,7 +183,7 @@ const requestTimestamp = async ({
     permit,
     url,
   });
-  if (body === null) {
+  if (fetched.status === "unavailable") {
     return Result.err(
       new PdfSigningTimestampInvalidError({
         message: "The timestamp authority did not answer.",
@@ -191,7 +191,7 @@ const requestTimestamp = async ({
     );
   }
   const response = Result.try(() =>
-    pkijs.TimeStampResp.fromBER(new Uint8Array(body)),
+    pkijs.TimeStampResp.fromBER(new Uint8Array(fetched.body)),
   );
   if (Result.isError(response)) {
     return Result.err(unreadableAnswer());

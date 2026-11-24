@@ -52,9 +52,12 @@ const servingFetcher = (
     requested.push(url);
     const entry = served[url];
     if (entry === undefined) {
-      return null;
+      return { status: "unavailable" };
     }
-    return entry instanceof Uint8Array ? entry : entry.der;
+    return {
+      status: "ok",
+      body: entry instanceof Uint8Array ? entry : entry.der,
+    };
   };
   return { fetcher, requested };
 };
@@ -172,7 +175,9 @@ describe("fetching PKI data a certificate points at", () => {
   ])("never reaches %s", async (url) => {
     expect(
       await safePkiFetch({ permit, maxBytes: 1024, method: "GET", url }),
-    ).toBe(null);
+    ).toEqual({
+      status: "unavailable",
+    });
   });
 });
 

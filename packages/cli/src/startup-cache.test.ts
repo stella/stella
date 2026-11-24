@@ -611,7 +611,10 @@ test.skipIf(process.platform === "win32" || process.getuid?.() === 0)(
         );
         expect(stderr).not.toContain("999.0.0");
       }
-      expect((await readCacheFile(filePath))?.cliMinimum).toBe("999.0.0");
+      const read = await readCacheFile(filePath);
+      expect(read.status === "ok" ? read.file.cliMinimum : undefined).toBe(
+        "999.0.0",
+      );
       expect(registryRequests).toBe(1);
       expect(calls).toBe(2);
     } finally {

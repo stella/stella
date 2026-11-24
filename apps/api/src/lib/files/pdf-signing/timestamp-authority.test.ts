@@ -304,7 +304,7 @@ describe("requesting a timestamp over the guarded fetcher", () => {
 
   test("treats an authority that cannot be reached as a failure", async () => {
     const authority = createHttpTimestampAuthority({
-      fetcher: async () => null,
+      fetcher: async () => ({ status: "unavailable" }),
       permit,
       url: "https://tsa.example/",
     });

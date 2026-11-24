@@ -188,10 +188,11 @@ const cachedUnsupportedLine = async ({
   updateCommand: string;
   cacheEnv: { XDG_CACHE_HOME: string | undefined; HOME: string | undefined };
 }): Promise<string | undefined> => {
-  const cached = await readCacheFile(cachePathFor(serverUrl, cacheEnv));
-  if (cached === undefined) {
+  const cachedRead = await readCacheFile(cachePathFor(serverUrl, cacheEnv));
+  if (cachedRead.status === "unavailable") {
     return undefined;
   }
+  const cached = cachedRead.file;
   const policy = buildVersionNudge({
     updateCommand,
     current: CLI_VERSION,

@@ -10,7 +10,7 @@ describe("bounding PKI fetches", () => {
     const fetched: string[] = [];
     const fetcher: PkiFetcher = async ({ url }) => {
       fetched.push(url);
-      return new Uint8Array([1]);
+      return { status: "ok", body: new Uint8Array([1]) };
     };
     const permit = grantThirdPartyOutboundPermit();
     const budgeted = withFetchBudget(fetcher, 500, () => clock);
@@ -22,7 +22,7 @@ describe("bounding PKI fetches", () => {
         method: "GET",
         url: "http://a.example",
       }),
-    ).toEqual(new Uint8Array([1]));
+    ).toEqual({ status: "ok", body: new Uint8Array([1]) });
     clock = 1500;
     expect(
       await budgeted({
@@ -31,7 +31,7 @@ describe("bounding PKI fetches", () => {
         method: "GET",
         url: "http://b.example",
       }),
-    ).toBe(null);
+    ).toEqual({ status: "unavailable" });
     expect(fetched).toEqual(["http://a.example"]);
   });
 });

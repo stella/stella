@@ -618,7 +618,8 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       bakedListings: [listing("list_matters")],
     });
     expect(outcome).toMatchObject({ status: "refreshed", deltaEmpty: true });
-    const written = await readCacheFile(filePath);
+    const writtenRead = await readCacheFile(filePath);
+    const written = writtenRead.status === "ok" ? writtenRead.file : undefined;
     expect(written?.version).toBe(CACHE_SCHEMA_VERSION);
   });
 
@@ -650,7 +651,8 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       bakedListings: [listing("list_matters")],
     });
     expect(outcome).toMatchObject({ status: "refreshed", deltaEmpty: false });
-    const written = await readCacheFile(cachePathFor(ORIGIN, env));
+    const writtenRead = await readCacheFile(cachePathFor(ORIGIN, env));
+    const written = writtenRead.status === "ok" ? writtenRead.file : undefined;
     expect(written?.serverOrigin).toBe(ORIGIN);
     if (outcome.status !== "refreshed") {
       throw new Error("Expected fresh registry");
@@ -692,7 +694,8 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
     });
 
     expect(outcome).toMatchObject({ status: "refreshed", deltaEmpty: true });
-    const written = await readCacheFile(cachePathFor(ORIGIN, env));
+    const writtenRead = await readCacheFile(cachePathFor(ORIGIN, env));
+    const written = writtenRead.status === "ok" ? writtenRead.file : undefined;
     expect(written).not.toHaveProperty("delta");
     expect(written?.featureOmittedTools).toEqual([
       "list_time_entries",
@@ -731,7 +734,8 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
     });
 
     expect(outcome).toMatchObject({ status: "refreshed", deltaEmpty: false });
-    const written = await readCacheFile(cachePathFor(ORIGIN, env));
+    const writtenRead = await readCacheFile(cachePathFor(ORIGIN, env));
+    const written = writtenRead.status === "ok" ? writtenRead.file : undefined;
     if (outcome.status !== "refreshed") {
       throw new Error("Expected fresh registry");
     }
@@ -763,7 +767,9 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       bakedListings: [listing("list_matters")],
     });
     expect(outcome.status).toBe("failed");
-    expect(await readCacheFile(cachePathFor(ORIGIN, env))).toBeUndefined();
+    expect(await readCacheFile(cachePathFor(ORIGIN, env))).toEqual({
+      status: "unavailable",
+    });
   });
 
   test("fail closed: a transport error is rejected and NOT written (rule 6)", async () => {
@@ -777,7 +783,9 @@ describe("refreshRegistryCache (S5.3/S5.5)", () => {
       bakedListings: [listing("list_matters")],
     });
     expect(outcome.status).toBe("failed");
-    expect(await readCacheFile(cachePathFor(ORIGIN, env))).toBeUndefined();
+    expect(await readCacheFile(cachePathFor(ORIGIN, env))).toEqual({
+      status: "unavailable",
+    });
   });
 
   test("unknown fetched tools flow through the SAME generateRouteMap heuristics", async () => {
@@ -855,7 +863,8 @@ describe("CLI update nudge (spec 051 addendum)", () => {
       nudge: "update available: 0.1.0 -> 0.2.0, run npm i -g @stll/cli@latest",
     });
     // The anti-nag key is persisted for the next refresh.
-    const written = await readCacheFile(cachePathFor(ORIGIN, env));
+    const writtenRead = await readCacheFile(cachePathFor(ORIGIN, env));
+    const written = writtenRead.status === "ok" ? writtenRead.file : undefined;
     expect(written?.lastNudgedVersion).toBe("0.2.0");
   });
 

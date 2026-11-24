@@ -274,8 +274,9 @@ test("only a current authenticated response enables feature commands over the ca
   if (outcome.featureAccess === undefined) {
     throw new Error("Expected enabled fixture snapshot");
   }
-  const file = await readCacheFile(cachePathFor(ORIGIN, env));
-  expect(file).toBeDefined();
+  const read = await readCacheFile(cachePathFor(ORIGIN, env));
+  expect(read.status).toBe("ok");
+  const file = read.status === "ok" ? read.file : undefined;
   expect(file).not.toHaveProperty("credentialFingerprint");
   expect(file).not.toHaveProperty("listings");
   expect(file).not.toHaveProperty("delta");
@@ -428,7 +429,7 @@ test("legacy caller projection caches cannot enable feature commands offline", a
       featureAccess: enabled,
     }),
   );
-  expect(await readCacheFile(filePath)).toBeUndefined();
+  expect(await readCacheFile(filePath)).toEqual({ status: "unavailable" });
   const offline = await resolveCommandTree({
     serverOrigin: ORIGIN,
     env,

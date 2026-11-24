@@ -129,7 +129,7 @@ if (!databaseUrl || !enabled) {
             return row ?? panic("read fixture missing");
           },
           followUp: async (metadata) => {
-            const document = await readThroughDeferredDocument({
+            const outcome = await readThroughDeferredDocument({
               textEligibilityFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
               textRevisionFingerprint: TEXT_ELIGIBILITY_FINGERPRINT,
               decision,
@@ -139,8 +139,8 @@ if (!databaseUrl || !enabled) {
             });
             return {
               ...metadata,
-              documentPending: document === null,
-              hasDocument: document !== null,
+              documentPending: outcome.status === "deferred",
+              hasDocument: outcome.status === "filled",
             };
           },
         });

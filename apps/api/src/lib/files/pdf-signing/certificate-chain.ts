@@ -298,14 +298,16 @@ const fetchIssuer = async ({
   fetcher: PkiFetcher;
 }) => {
   for (const url of accessLocations(subject, CA_ISSUERS_ACCESS_METHOD)) {
-    const bytes = await fetcher({
+    const fetched = await fetcher({
       maxBytes: ISSUER_MAX_BYTES,
       method: "GET",
       permit,
       url,
     });
     const issuer =
-      bytes === null ? null : await findIssuer(subject, certificatesIn(bytes));
+      fetched.status === "unavailable"
+        ? null
+        : await findIssuer(subject, certificatesIn(fetched.body));
     if (issuer !== null) {
       return issuer;
     }

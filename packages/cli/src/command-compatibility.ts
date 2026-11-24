@@ -48,7 +48,8 @@ export const checkCommandCompatibility = async ({
   Result<CompatibilityReport, CompatibilityCheckError>
 > => {
   const filePath = cachePathFor(serverUrl, env);
-  const cached = await readCacheFile(filePath);
+  const cachedRead = await readCacheFile(filePath);
+  const cached = cachedRead.status === "ok" ? cachedRead.file : undefined;
   const evidence = cached?.compatibility;
   if (
     cached?.serverOrigin === serverUrl &&

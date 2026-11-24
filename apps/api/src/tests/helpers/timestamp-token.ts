@@ -216,7 +216,7 @@ export const createTestTimestampResponder = async ({
       url,
     });
     if (body === undefined) {
-      return null;
+      return { status: "unavailable" };
     }
     const request = pkijs.TimeStampReq.fromBER(new Uint8Array(body));
     serial += 1;
@@ -229,14 +229,17 @@ export const createTestTimestampResponder = async ({
       serial,
       signer,
     });
-    return new Uint8Array(
-      new pkijs.TimeStampResp({
-        status: new pkijs.PKIStatusInfo({ status: pkijs.PKIStatus.granted }),
-        timeStampToken: pkijs.ContentInfo.fromBER(token),
-      })
-        .toSchema()
-        .toBER(false),
-    );
+    return {
+      status: "ok",
+      body: new Uint8Array(
+        new pkijs.TimeStampResp({
+          status: new pkijs.PKIStatusInfo({ status: pkijs.PKIStatus.granted }),
+          timeStampToken: pkijs.ContentInfo.fromBER(token),
+        })
+          .toSchema()
+          .toBER(false),
+      ),
+    };
   };
   return { fetcher, requests };
 };

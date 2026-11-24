@@ -210,24 +210,27 @@ const parseOptionalNames = (value: unknown): OptionalNames => {
   return { status: "present", names };
 };
 
+type RegistryCacheRead =
+  { status: "ok"; file: RegistryCacheFile } | { status: "unavailable" };
+
 /**
  * Read and shape-validate the cache file for an origin. A missing, corrupt, or
- * wrong-version file returns `undefined` (the caller falls back to baked-in).
+ * wrong-version file returns `unavailable` (the caller falls back to baked-in).
  */
 export const readCacheFile = async (
   filePath: string,
-): Promise<RegistryCacheFile | undefined> => {
+): Promise<RegistryCacheRead> => {
   const parsed = await Result.tryPromise({
     try: async (): Promise<unknown> =>
       JSON.parse(await readFile(filePath, "utf-8")),
     catch: (cause) => cause,
   });
   if (Result.isError(parsed)) {
-    return undefined;
+    return { status: "unavailable" };
   }
   const value = parsed.value;
   if (!isRecord(value) || value["version"] !== CACHE_SCHEMA_VERSION) {
-    return undefined;
+    return { status: "unavailable" };
   }
   const serverOrigin = value["serverOrigin"];
   const fetchedAt = value["fetchedAt"];
@@ -237,7 +240,7 @@ export const readCacheFile = async (
     typeof fetchedAt !== "string" ||
     typeof ttlSeconds !== "number"
   ) {
-    return undefined;
+    return { status: "unavailable" };
   }
   const featureOmittedTools = parseOptionalNames(value["featureOmittedTools"]);
   const featureOmittedCapabilities = parseOptionalNames(
@@ -247,34 +250,37 @@ export const readCacheFile = async (
     featureOmittedTools.status === "invalid" ||
     featureOmittedCapabilities.status === "invalid"
   ) {
-    return undefined;
+    return { status: "unavailable" };
   }
   const lastNudgedVersion = value["lastNudgedVersion"];
   const cliMinimum = value["cliMinimum"];
   const cliLatest = value["cliLatest"];
   return {
-    ...(isRecord(value["compatibility"]) &&
-    typeof value["compatibility"]["checkedAt"] === "number"
-      ? {
-          compatibility: {
-            checkedAt: value["compatibility"]["checkedAt"],
-            metadata: value["compatibility"]["metadata"],
-          },
-        }
-      : {}),
-    version: CACHE_SCHEMA_VERSION,
-    serverOrigin,
-    fetchedAt,
-    ttlSeconds,
-    ...(featureOmittedTools.status === "present"
-      ? { featureOmittedTools: featureOmittedTools.names }
-      : {}),
-    ...(featureOmittedCapabilities.status === "present"
-      ? { featureOmittedCapabilities: featureOmittedCapabilities.names }
-      : {}),
-    ...(typeof lastNudgedVersion === "string" ? { lastNudgedVersion } : {}),
-    ...(typeof cliMinimum === "string" ? { cliMinimum } : {}),
-    ...(typeof cliLatest === "string" ? { cliLatest } : {}),
+    status: "ok",
+    file: {
+      ...(isRecord(value["compatibility"]) &&
+      typeof value["compatibility"]["checkedAt"] === "number"
+        ? {
+            compatibility: {
+              checkedAt: value["compatibility"]["checkedAt"],
+              metadata: value["compatibility"]["metadata"],
+            },
+          }
+        : {}),
+      version: CACHE_SCHEMA_VERSION,
+      serverOrigin,
+      fetchedAt,
+      ttlSeconds,
+      ...(featureOmittedTools.status === "present"
+        ? { featureOmittedTools: featureOmittedTools.names }
+        : {}),
+      ...(featureOmittedCapabilities.status === "present"
+        ? { featureOmittedCapabilities: featureOmittedCapabilities.names }
+        : {}),
+      ...(typeof lastNudgedVersion === "string" ? { lastNudgedVersion } : {}),
+      ...(typeof cliMinimum === "string" ? { cliMinimum } : {}),
+      ...(typeof cliLatest === "string" ? { cliLatest } : {}),
+    },
   };
 };
 

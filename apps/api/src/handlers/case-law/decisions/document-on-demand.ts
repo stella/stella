@@ -104,9 +104,12 @@ const CAPTURE_SOURCE = "case-law-document-on-demand";
  * transient document; a reader with a different eligibility snapshot cannot.
  * One entry per decision also bounds concurrent publisher fetches.
  */
+type DeferredDocumentReadOutcome =
+  { status: "filled"; document: BackfilledDocument } | { status: "deferred" };
+
 type InFlightDocumentRead = {
   textEligibilityFingerprint: string;
-  promise: Promise<BackfilledDocument | null>;
+  promise: Promise<DeferredDocumentReadOutcome>;
 };
 
 const inFlight = new Map<SafeId<"caseLawDecision">, InFlightDocumentRead>();
@@ -258,51 +261,53 @@ const runFetch = async ({
   decision,
   deps,
   adapterKey,
-}: FetchDeferredDocumentOptions): Promise<BackfilledDocument | null> => {
+}: FetchDeferredDocumentOptions): Promise<DeferredDocumentReadOutcome> => {
   // The outcome is read inside the guard, not after it: an unexpected
   // shape from the fetch unit would otherwise throw past the only thing
   // catching for this promise, and this promise is the one the read
   // budget abandons — a rejection landing after that has nothing
   // attached to it at all.
-  const outcome = await Result.tryPromise(async () => {
-    const budgeted = await deps.withFetchBudget(
-      adapterKey,
-      async () => await deps.fetchDocument(decision, adapterKey),
-    );
-    switch (budgeted.status) {
-      case "pacing-deferred":
-      case "pacing-unavailable":
-        deps.recordPacingOutcome(decision.id, budgeted.status);
-        return null;
-      case "failed":
-        recordReadFailure(budgeted.error, decision.id);
-        return null;
-      case "completed":
-        if (
-          budgeted.value.status === "busy" ||
-          budgeted.value.status === "lost"
-        ) {
-          deps.recordPacingOutcome(
-            decision.id,
-            budgeted.value.status === "busy"
-              ? "ownership-busy"
-              : "ownership-lost",
-          );
-          return null;
+  const outcome = await Result.tryPromise(
+    async (): Promise<DeferredDocumentReadOutcome> => {
+      const budgeted = await deps.withFetchBudget(
+        adapterKey,
+        async () => await deps.fetchDocument(decision, adapterKey),
+      );
+      switch (budgeted.status) {
+        case "pacing-deferred":
+        case "pacing-unavailable":
+          deps.recordPacingOutcome(decision.id, budgeted.status);
+          return { status: "deferred" };
+        case "failed":
+          recordReadFailure(budgeted.error, decision.id);
+          return { status: "deferred" };
+        case "completed":
+          if (
+            budgeted.value.status === "busy" ||
+            budgeted.value.status === "lost"
+          ) {
+            deps.recordPacingOutcome(
+              decision.id,
+              budgeted.value.status === "busy"
+                ? "ownership-busy"
+                : "ownership-lost",
+            );
+            return { status: "deferred" };
+          }
+          return budgeted.value.status === "filled"
+            ? { status: "filled", document: budgeted.value.document }
+            : { status: "deferred" };
+        default: {
+          budgeted satisfies never;
+          return panic("Unhandled document fetch budget outcome");
         }
-        return budgeted.value.status === "filled"
-          ? budgeted.value.document
-          : null;
-      default: {
-        budgeted satisfies never;
-        return panic("Unhandled document fetch budget outcome");
       }
-    }
-  });
+    },
+  );
 
   if (Result.isError(outcome)) {
     recordReadFailure(outcome.error, decision.id);
-    return null;
+    return { status: "deferred" };
   }
 
   return outcome.value;
@@ -315,7 +320,7 @@ const startFetch = async ({
   textEligibilityFingerprint,
 }: FetchDeferredDocumentOptions & {
   textEligibilityFingerprint: string;
-}): Promise<BackfilledDocument | null> => {
+}): Promise<DeferredDocumentReadOutcome> => {
   const flight = runFetch({ decision, deps, adapterKey }).finally(() => {
     const current = inFlight.get(decision.id);
     if (current?.promise === flight) {
@@ -361,15 +366,15 @@ export const readThroughDeferredDocument = async ({
   deps,
   recordDemand,
   textEligibilityFingerprint,
-}: ReadThroughDeferredDocumentOptions): Promise<BackfilledDocument | null> => {
+}: ReadThroughDeferredDocumentOptions): Promise<DeferredDocumentReadOutcome> => {
   // The whole read-through — including the request recording — runs
   // inside the read budget: a stalled ingestion pool or a locked row
   // must never hold a public read. The recording write is idempotent
   // (first request wins), so if the budget expires mid-write and the
   // write lands afterwards anyway, the queue still learns of the demand.
-  const attempt = async (): Promise<BackfilledDocument | null> => {
+  const attempt = async (): Promise<DeferredDocumentReadOutcome> => {
     if (!isDeferredDocumentAdapterKey(adapterKey)) {
-      return null;
+      return { status: "deferred" };
     }
     // Recorded before anything can turn the fetch down, so a reader who
     // arrives with the slots full, or whose wait runs out, still moves
@@ -392,10 +397,10 @@ export const readThroughDeferredDocument = async ({
     if (existing !== undefined) {
       return existing.textEligibilityFingerprint === textEligibilityFingerprint
         ? await existing.promise
-        : null;
+        : { status: "deferred" };
     }
     if (inFlight.size >= CONCURRENT_FETCH_LIMIT) {
-      return null;
+      return { status: "deferred" };
     }
 
     return await startFetch({
@@ -431,7 +436,7 @@ export const readThroughDeferredDocument = async ({
   );
   if (Result.isError(outcome)) {
     recordReadFailure(outcome.error, decision.id);
-    return null;
+    return { status: "deferred" };
   }
 
   return outcome.value;
