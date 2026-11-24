@@ -320,6 +320,8 @@
       "disableDescription": "Visu dalībnieku Microsoft savienojums tiks noņemts, un viņu saglabātā pieslēgšanās dzēsta. Jau importētie dokumenti paliks savās lietās. Ja šo funkciju ieslēgsiet atkal, dalībniekiem būs jāpievienojas vēlreiz.",
       "disableInputLabel": "Ievadiet {confirmation}, lai izslēgtu",
       "disableTitle": "Izslēgt SharePoint un OneDrive?",
+      "disabledToast": "SharePoint un OneDrive ir izslēgti jūsu organizācijai.",
+      "enabledToast": "SharePoint un OneDrive ir ieslēgti jūsu organizācijai.",
       "toggleLabel": "Atļaut SharePoint un OneDrive"
     },
     "askAdmin": "Jūsu organizācijai izslēgts. Lūdziet administratoram to ieslēgt.",

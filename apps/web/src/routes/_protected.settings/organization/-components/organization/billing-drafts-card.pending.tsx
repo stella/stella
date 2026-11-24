@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { CheckboxFace, FieldFace, LabelFace } from "@stll/ui/control-face";
+import { FieldFace, LabelFace, SwitchFace } from "@stll/ui/control-face";
 import { SettingsPanel } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
@@ -34,7 +34,7 @@ export const BillingDraftsCardFrame = ({
 export const BillingDraftsCardPending = () => (
   <BillingDraftsCardFrame>
     <FieldFace layout="inline">
-      <CheckboxFace />
+      <SwitchFace />
       <LabelFace>
         <PendingText
           barClassName="w-32"

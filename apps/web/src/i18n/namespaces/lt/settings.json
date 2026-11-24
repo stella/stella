@@ -532,6 +532,7 @@
       "anonymization": {
         "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
         "deleteAction": "Pašalinti terminą",
+        "deleteConfirm": "Pašalinti „{value}“ iš komandos sąrašo? Anonimizavimo sistema jo nebemaskuos automatiškai.",
         "description": "Tvarkykite visos komandos mastu galiojantį draudžiamų terminų sąrašą, kurį anonimizavimo procesas visada užmaskuos, ir importuokite pradinį sąrašą iš CSV, TXT arba JSON failo.",
         "emptyState": "Komandos lygmens terminų dar nėra. Pridėkite aukščiau arba importuokite sąrašą.",
         "entriesHeading": "Komandos terminai ({count})",
@@ -720,6 +721,7 @@
         "importHint": "Įklijuokite po vieną žodį eilutėje arba pasirinkite .txt failą su vienu žodžiu eilutėje ar .csv failą, kurio pirmame stulpelyje yra žodžiai.",
         "importedToast": "{count, plural, one {Pridėtas # žodis.} few {Pridėti # žodžiai.} many {Pridėta # žodžio.} other {Pridėta # žodžių.}}",
         "invalid": "Žodyje negali būti eilučių lūžių ar valdymo simbolių.",
+        "matchingCount": "{count, plural, one {# atitinkantis žodis} few {# atitinkantys žodžiai} many {# atitinkančio žodžio} other {# atitinkančių žodžių}}",
         "noMatch": "Joks žodis neatitinka „{search}“.",
         "pasteLabel": "Pridedami žodžiai",
         "pastePlaceholder": "Po vieną žodį eilutėje",

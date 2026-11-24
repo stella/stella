@@ -532,6 +532,7 @@
       "anonymization": {
         "addPlaceholder": "Mindig maszkolandó kifejezés (pl. csapat neve)",
         "deleteAction": "Kifejezés törlése",
+        "deleteConfirm": "Eltávolítja a(z) „{value}” kifejezést a csapat tiltólistájáról? Az anonimizálás ezután nem fogja mindig elrejteni.",
         "description": "Kezelje a csapatszintű tiltólistát: kifejezések, amelyeket az anonimizáló folyamat mindig maszkol. Importálja a kezdő listát CSV, TXT vagy JSON fájlból.",
         "emptyState": "Még nincsenek csapatszintű kifejezések. Adjon hozzá fent egyet, vagy importáljon listát.",
         "entriesHeading": "Csapatszintű kifejezések ({count})",
@@ -720,6 +721,7 @@
         "importHint": "Illesszen be soronként egy szót, vagy válasszon egy .txt fájlt soronként egy szóval, illetve egy .csv fájlt, amelynek első oszlopában a szavak vannak.",
         "importedToast": "{count, plural, one {# szó hozzáadva.} other {# szó hozzáadva.}}",
         "invalid": "Egy szó nem tartalmazhat sortörést vagy vezérlőkaraktert.",
+        "matchingCount": "{count, plural, one {# egyező szó} other {# egyező szó}}",
         "noMatch": "Egy szó sem felel meg ennek: „{search}”.",
         "pasteLabel": "Hozzáadandó szavak",
         "pastePlaceholder": "Soronként egy szó",

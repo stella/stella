@@ -320,6 +320,8 @@
       "disableDescription": "Die Microsoft-Verbindung aller Mitglieder wird entfernt und ihre gespeicherte Anmeldung gelöscht. Bereits importierte Dokumente bleiben in ihren Akten. Mitglieder müssen sich erneut verbinden, wenn Sie die Funktion wieder einschalten.",
       "disableInputLabel": "Geben Sie {confirmation} ein, um die Funktion auszuschalten",
       "disableTitle": "SharePoint und OneDrive ausschalten?",
+      "disabledToast": "SharePoint und OneDrive wurden für Ihre Organisation ausgeschaltet.",
+      "enabledToast": "SharePoint und OneDrive wurden für Ihre Organisation eingeschaltet.",
       "toggleLabel": "SharePoint und OneDrive zulassen"
     },
     "askAdmin": "Für Ihre Organisation ausgeschaltet. Bitten Sie eine Organisationsadministration, die Funktion einzuschalten.",

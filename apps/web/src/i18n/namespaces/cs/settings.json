@@ -532,6 +532,7 @@
       "anonymization": {
         "addPlaceholder": "Pojem, který se má vždy maskovat (např. název týmu)",
         "deleteAction": "Smazat pojem",
+        "deleteConfirm": "Odebrat pojem „{value}“ z týmového seznamu? Anonymizace jej již nebude vždy skrývat.",
         "description": "Spravujte týmový seznam pojmů, které anonymizační kanál vždy zamaskuje, a importujte výchozí seznam z CSV, TXT nebo JSON",
         "emptyState": "Žádné týmové pojmy. Přidejte je výše nebo importujte seznam.",
         "entriesHeading": "Týmové pojmy ({count})",
@@ -720,6 +721,7 @@
         "importHint": "Vložte jedno slovo na řádek, nebo vyberte soubor .txt s jedním slovem na řádek či soubor .csv se slovy v prvním sloupci.",
         "importedToast": "{count, plural, one {Přidáno # slovo.} few {Přidána # slova.} many {Přidáno # slova.} other {Přidáno # slov.}}",
         "invalid": "Slovo nesmí obsahovat zalomení řádku ani řídicí znaky.",
+        "matchingCount": "{count, plural, one {# odpovídající slovo} few {# odpovídající slova} many {# odpovídajícího slova} other {# odpovídajících slov}}",
         "noMatch": "Hledání „{search}“ neodpovídá žádné slovo.",
         "pasteLabel": "Slova k přidání",
         "pastePlaceholder": "Jedno slovo na řádek",

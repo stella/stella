@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/bidi-text";
+import { Button } from "@stll/ui/button";
 import {
   List,
   ListEmpty,
@@ -97,7 +98,19 @@ export const NativeToolsList = () => {
             <NativeToolRow key={tool.slug} tool={tool} canEdit={canEdit} />
           ))}
           {visible.length === 0 && (
-            <ListEmpty>{t("common.noResults")}</ListEmpty>
+            <ListEmpty>
+              <span>{t("common.noResults")}</span>
+              {search.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setSearch("")}
+                >
+                  {t("common.clearSearch")}
+                </Button>
+              )}
+            </ListEmpty>
           )}
         </List>
       )}

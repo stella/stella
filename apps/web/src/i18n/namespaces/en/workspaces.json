@@ -320,6 +320,8 @@
       "disableDescription": "Every member's Microsoft connection is removed and their stored sign-in is deleted. Documents already imported stay in their matters. Members must connect again if you turn this back on.",
       "disableInputLabel": "Type {confirmation} to turn it off",
       "disableTitle": "Turn off SharePoint and OneDrive?",
+      "disabledToast": "SharePoint and OneDrive turned off for your organization.",
+      "enabledToast": "SharePoint and OneDrive turned on for your organization.",
       "toggleLabel": "Allow SharePoint and OneDrive"
     },
     "askAdmin": "Turned off for your organization. Ask an admin to turn it on.",

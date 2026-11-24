@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -11,14 +12,22 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { Checkbox } from "@stll/ui/checkbox";
 import { Field, FieldLabel } from "@stll/ui/field";
-import { List, ListItem, ListItemContent, ListItemTitle } from "@stll/ui/list";
+import {
+  List,
+  ListEmpty,
+  ListItem,
+  ListItemContent,
+  ListItemTitle,
+} from "@stll/ui/list";
 import { ListItemSkeleton } from "@stll/ui/list-shell";
 import { SearchField } from "@stll/ui/search-field";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
+import { Switch } from "@stll/ui/switch";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { invokeCapability } from "@/lib/capabilities/capability-request";
@@ -62,6 +71,7 @@ type KnowledgeSave = { file: KnowledgeFile; source: string };
 export const BillingDraftsCard = () => {
   const t = useTranslations();
   const { activeOrganizationId, id: userId } = useAuthenticatedUser();
+  const canEdit = usePermissions({ organizationSettings: ["update"] });
   const [client, setClient] = useState<{
     id: NonNullable<BillingConfigurationUpdate["clientId"]>;
     displayName: string;
@@ -187,6 +197,10 @@ export const BillingDraftsCard = () => {
     .map((file) => file.fileId);
 
   const nextCursor = files.data?.nextCursor;
+  const disabledReason = canEdit
+    ? t("common.saving")
+    : t("errors.api.forbidden");
+
   return (
     <BillingDraftsCardFrame>
       {(files.isError || editor.isError) &&
@@ -196,9 +210,10 @@ export const BillingDraftsCard = () => {
           <QueryViewFeedback view={queryView(editor)} />
         ))}
       <Field className="flex-row items-center gap-2">
-        <Checkbox
+        <Switch
           checked={config.data.mode === "enabled"}
-          disabled={mutation.isPending}
+          disabled={!canEdit || mutation.isPending}
+          disabledReason={disabledReason}
           onCheckedChange={(enabled) =>
             mutation.mutate({ mode: enabled ? "enabled" : "disabled" })
           }
@@ -208,7 +223,12 @@ export const BillingDraftsCard = () => {
         </FieldLabel>
       </Field>
       <div className="flex items-center gap-2">
-        <Button variant="outline" onClick={() => setClient(null)}>
+        <Button
+          aria-pressed={client === null}
+          type="button"
+          variant={client === null ? "secondary" : "outline"}
+          onClick={() => setClient(null)}
+        >
           {t("settings.organization.billingDrafts.firm")}
         </Button>
         <ContactPicker
@@ -227,7 +247,7 @@ export const BillingDraftsCard = () => {
       </div>
       {client && (
         <Field className="flex-row items-center gap-2">
-          <Checkbox
+          <Switch
             checked={config.data.timeBillingFormat === "ledes"}
             onCheckedChange={(enabled) =>
               mutation.mutate({
@@ -235,7 +255,8 @@ export const BillingDraftsCard = () => {
                 timeBillingFormat: enabled ? "ledes" : "categories",
               })
             }
-            disabled={mutation.isPending}
+            disabled={!canEdit || mutation.isPending}
+            disabledReason={disabledReason}
           />
           <FieldLabel>
             {t("settings.organization.billingDrafts.ledes")}
@@ -260,72 +281,209 @@ export const BillingDraftsCard = () => {
             <ListItemSkeleton index={index} key={index} />
           ))}
         {files.data?.items.map((file) => (
-          <ListItem key={file.id}>
-            <Checkbox
-              aria-label={file.path}
-              checked={attachedIds.includes(file.id)}
-              disabled={mutation.isPending}
-              onCheckedChange={(attach) => {
-                let resourceIds = attachedIds.filter((id) => id !== file.id);
-                if (attach) {
-                  resourceIds = client ? [...attachedIds, file.id] : [file.id];
-                }
-                mutation.mutate({
-                  ...(client ? { clientId: client.id } : {}),
-                  resourceIds,
-                });
-              }}
-            />
-            <ListItemContent>
-              <ListItemTitle>{file.path}</ListItemTitle>
-              <p className="text-muted-foreground text-xs">{file.skillName}</p>
-            </ListItemContent>
-            <Button
-              variant="ghost"
-              disabled={save.isPending}
-              disabledReason={t("common.saving")}
-              onClick={() => {
-                setEditing(file);
-                setContent(undefined);
-              }}
-            >
-              {t("common.edit")}
-            </Button>
-          </ListItem>
+          <BillingKnowledgeFileRow
+            key={file.id}
+            attached={attachedIds.includes(file.id)}
+            canEdit={canEdit}
+            file={file}
+            mutationPending={mutation.isPending}
+            savePending={save.isPending}
+            onEdit={() => {
+              setEditing(file);
+              setContent(undefined);
+            }}
+            onToggle={(attach) => {
+              let resourceIds = attachedIds.filter((id) => id !== file.id);
+              if (attach) {
+                resourceIds = client ? [...attachedIds, file.id] : [file.id];
+              }
+              mutation.mutate({
+                ...(client ? { clientId: client.id } : {}),
+                resourceIds,
+              });
+            }}
+          />
         ))}
+        {!files.isPending &&
+          !files.isError &&
+          files.data.items.length === 0 && (
+            <ListEmpty>
+              <span>{t("common.noResults")}</span>
+              {search.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setSearch("");
+                    setCursor(undefined);
+                  }}
+                >
+                  {t("common.clearSearch")}
+                </Button>
+              )}
+            </ListEmpty>
+          )}
       </List>
-      {nextCursor && (
-        <Button variant="outline" onClick={() => setCursor(nextCursor)}>
-          {t("common.next")}
-        </Button>
+      {(cursor !== undefined || nextCursor) && (
+        <div className="flex items-center gap-2">
+          {cursor !== undefined && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCursor(undefined)}
+            >
+              {t("common.reset")}
+            </Button>
+          )}
+          {nextCursor && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCursor(nextCursor)}
+            >
+              {t("common.next")}
+            </Button>
+          )}
+        </div>
       )}
       {editing && editor.data && (
-        <>
-          <MarkdownHybridEditor
-            ref={editorHandle}
-            key={`${editing.id}:${editorRevision}`}
-            markdown={content ?? editor.data.content}
-            onMarkdownChange={setContent}
-            allowsImageSource={isSafeMarkdownPreviewImageSrc}
-            label={t("markdownEditor.rawLabel")}
-            onOpenLink={openIsolatedWindow}
-          />
-          <Button
-            disabled={save.isPending}
-            disabledReason={t("common.saving")}
-            onClick={() => {
-              if (!editorHandle.current) {
-                panic("Knowledge editor save requires a mounted editor");
-              }
-              const source = editorHandle.current.captureForSave();
-              setContent(source);
-              save.mutate({ file: editing, source });
-            }}
-          >
-            {t("common.save")}
-          </Button>
-        </>
+        <BillingKnowledgeEditor
+          canEdit={canEdit}
+          content={content ?? editor.data.content}
+          editorHandle={editorHandle}
+          editorRevision={editorRevision}
+          file={editing}
+          saving={save.isPending}
+          onClose={() => {
+            setEditing(null);
+            setContent(undefined);
+          }}
+          onContentChange={setContent}
+          onSave={(source) => {
+            setContent(source);
+            save.mutate({ file: editing, source });
+          }}
+        />
       )}
     </BillingDraftsCardFrame>
+  );
+};
+
+type BillingKnowledgeFileRowProps = {
+  attached: boolean;
+  canEdit: boolean;
+  file: KnowledgeFile;
+  mutationPending: boolean;
+  savePending: boolean;
+  onEdit: () => void;
+  onToggle: (attach: boolean) => void;
+};
+
+const BillingKnowledgeFileRow = ({
+  attached,
+  canEdit,
+  file,
+  mutationPending,
+  savePending,
+  onEdit,
+  onToggle,
+}: BillingKnowledgeFileRowProps) => {
+  const t = useTranslations();
+  const disabledReason = canEdit
+    ? t("common.saving")
+    : t("errors.api.forbidden");
+
+  return (
+    <ListItem>
+      <Checkbox
+        aria-label={file.path}
+        checked={attached}
+        disabled={!canEdit || mutationPending}
+        onCheckedChange={onToggle}
+      />
+      <ListItemContent>
+        <ListItemTitle>
+          <BidiText>{file.path}</BidiText>
+        </ListItemTitle>
+        <p className="text-muted-foreground text-xs">{file.skillName}</p>
+      </ListItemContent>
+      <Button
+        type="button"
+        variant="ghost"
+        disabled={!canEdit || savePending}
+        disabledReason={disabledReason}
+        onClick={onEdit}
+      >
+        {t("common.edit")}
+      </Button>
+    </ListItem>
+  );
+};
+
+type BillingKnowledgeEditorProps = {
+  canEdit: boolean;
+  content: string;
+  editorHandle: RefObject<MarkdownHybridEditorHandle | null>;
+  editorRevision: number;
+  file: KnowledgeFile;
+  saving: boolean;
+  onClose: () => void;
+  onContentChange: (value: string) => void;
+  onSave: (source: string) => void;
+};
+
+const BillingKnowledgeEditor = ({
+  canEdit,
+  content,
+  editorHandle,
+  editorRevision,
+  file,
+  saving,
+  onClose,
+  onContentChange,
+  onSave,
+}: BillingKnowledgeEditorProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex flex-col gap-3 rounded-md border p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-medium">
+          <BidiText>{file.path}</BidiText>
+        </span>
+        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          {t("common.close")}
+        </Button>
+      </div>
+      <MarkdownHybridEditor
+        ref={editorHandle}
+        key={`${file.id}:${editorRevision}`}
+        markdown={content}
+        onMarkdownChange={onContentChange}
+        allowsImageSource={isSafeMarkdownPreviewImageSrc}
+        label={t("markdownEditor.rawLabel")}
+        onOpenLink={openIsolatedWindow}
+      />
+      <div className="flex items-center justify-end gap-2">
+        <Button type="button" variant="ghost" size="sm" onClick={onClose}>
+          {t("common.cancel")}
+        </Button>
+        <Button
+          type="button"
+          disabled={!canEdit || saving}
+          disabledReason={
+            canEdit ? t("common.saving") : t("errors.api.forbidden")
+          }
+          onClick={() => {
+            if (!editorHandle.current) {
+              panic("Knowledge editor save requires a mounted editor");
+            }
+            onSave(editorHandle.current.captureForSave());
+          }}
+        >
+          {t("common.save")}
+        </Button>
+      </div>
+    </div>
   );
 };

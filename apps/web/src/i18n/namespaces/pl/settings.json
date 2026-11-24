@@ -532,6 +532,7 @@
       "anonymization": {
         "addPlaceholder": "Termin, który ma być zawsze maskowany (np. nazwa zespołu)",
         "deleteAction": "Usuń termin",
+        "deleteConfirm": "Usunąć „{value}” z listy zespołu? Anonimizacja nie będzie już zawsze ukrywać tego wyrażenia.",
         "description": "Zarządzaj zespołową listą terminów, które potok anonimizacji zawsze maskuje. Zaimportuj listę startową z pliku CSV, TXT lub JSON.",
         "emptyState": "Brak terminów zespołowych. Dodaj je powyżej lub zaimportuj listę.",
         "entriesHeading": "Terminy zespołowe ({count})",
@@ -720,6 +721,7 @@
         "importHint": "Wklej jedno słowo w każdym wierszu albo wybierz plik .txt z jednym słowem w wierszu lub plik .csv ze słowami w pierwszej kolumnie.",
         "importedToast": "{count, plural, one {Dodano # słowo.} few {Dodano # słowa.} many {Dodano # słów.} other {Dodano # słowa.}}",
         "invalid": "Słowo nie może zawierać podziałów wiersza ani znaków sterujących.",
+        "matchingCount": "{count, plural, one {# pasujące słowo} few {# pasujące słowa} many {# pasujących słów} other {# pasującego słowa}}",
         "noMatch": "Żadne słowo nie pasuje do „{search}”.",
         "pasteLabel": "Słowa do dodania",
         "pastePlaceholder": "Jedno słowo w wierszu",

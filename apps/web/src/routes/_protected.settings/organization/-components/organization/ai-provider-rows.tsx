@@ -273,6 +273,7 @@ function AIProviderRow({
           size="icon"
           variant="ghost"
           aria-label={t("removeProvider")}
+          tooltip={t("removeProvider")}
           disabled={disabled}
           disabledReason={common("saving")}
           onClick={() => {

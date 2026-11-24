@@ -532,6 +532,7 @@
       "anonymization": {
         "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",
+        "deleteConfirm": "„{value}“ aus der teamweiten Sperrliste entfernen? Die Anonymisierung wird den Begriff dann nicht mehr immer unkenntlich machen.",
         "description": "Verwalten Sie die teamweite Sperrliste der Begriffe, die die Anonymisierungs-Pipeline immer maskiert, und importieren Sie eine Startliste aus CSV, TXT oder JSON.",
         "emptyState": "Noch keine teamweiten Begriffe. Fügen Sie oben einen hinzu oder importieren Sie eine Liste.",
         "entriesHeading": "Teamweite Begriffe ({count})",
@@ -720,6 +721,7 @@
         "importHint": "Fügen Sie ein Wort pro Zeile ein, oder wählen Sie eine .txt-Datei mit einem Wort pro Zeile oder eine .csv-Datei mit den Wörtern in der ersten Spalte.",
         "importedToast": "{count, plural, one {# Wort hinzugefügt.} other {# Wörter hinzugefügt.}}",
         "invalid": "Ein Wort darf keine Zeilenumbrüche oder Steuerzeichen enthalten.",
+        "matchingCount": "{count, plural, one {# passendes Wort} other {# passende Wörter}}",
         "noMatch": "Keine Wörter passen zu „{search}“.",
         "pasteLabel": "Hinzuzufügende Wörter",
         "pastePlaceholder": "Ein Wort pro Zeile",

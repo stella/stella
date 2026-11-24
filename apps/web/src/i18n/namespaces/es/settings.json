@@ -532,6 +532,7 @@
       "anonymization": {
         "addPlaceholder": "Término que siempre se enmascarará (p. ej. nombre del equipo)",
         "deleteAction": "Eliminar término",
+        "deleteConfirm": "¿Quitar «{value}» de la lista del equipo? El sistema de anonimización dejará de ocultarlo siempre.",
         "description": "Gestione la lista global del equipo con los términos que el flujo de anonimización siempre enmascara, e importe una lista inicial desde CSV, TXT o JSON.",
         "emptyState": "Aún no hay términos del equipo. Añada uno arriba o importe una lista.",
         "entriesHeading": "Términos del equipo ({count})",
@@ -720,6 +721,7 @@
         "importHint": "Pegue una palabra por línea, o elija un archivo .txt con una palabra por línea o un archivo .csv con las palabras en la primera columna.",
         "importedToast": "{count, plural, one {Se añadió # palabra.} many {Se añadieron # palabras.} other {Se añadieron # palabras.}}",
         "invalid": "Una palabra no puede contener saltos de línea ni caracteres de control.",
+        "matchingCount": "{count, plural, one {# palabra coincidente} many {# palabras coincidentes} other {# palabras coincidentes}}",
         "noMatch": "Ninguna palabra coincide con «{search}».",
         "pasteLabel": "Palabras para añadir",
         "pastePlaceholder": "Una palabra por línea",

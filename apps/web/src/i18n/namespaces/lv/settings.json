@@ -532,6 +532,7 @@
       "anonymization": {
         "addPlaceholder": "Termins, kas vienmēr jāmaskē (piem., komandas nosaukums)",
         "deleteAction": "Dzēst terminu",
+        "deleteConfirm": "Vai noņemt „{value}” no komandas saraksta? Anonimizēšanas sistēma to vairs automātiski neaizklās.",
         "description": "Pārvaldiet komandas mēroga aizlieguma sarakstu ar terminiem, kurus anonimizācijas process vienmēr maskē, un importējiet sākotnējo sarakstu no CSV, TXT vai JSON.",
         "emptyState": "Komandas terminu vēl nav. Pievienojiet vienu augstāk vai importējiet sarakstu.",
         "entriesHeading": "Komandas termini ({count})",
@@ -720,6 +721,7 @@
         "importHint": "Ielīmējiet pa vienam vārdam rindiņā vai izvēlieties .txt failu ar vienu vārdu rindiņā vai .csv failu, kura pirmajā kolonnā ir vārdi.",
         "importedToast": "{count, plural, zero {Pievienoti # vārdi.} one {Pievienots # vārds.} other {Pievienoti # vārdi.}}",
         "invalid": "Vārds nedrīkst saturēt rindiņu pārtraukumus vai vadības rakstzīmes.",
+        "matchingCount": "{count, plural, zero {# atbilstoši vārdi} one {# atbilstošs vārds} other {# atbilstoši vārdi}}",
         "noMatch": "Neviens vārds neatbilst “{search}”.",
         "pasteLabel": "Pievienojamie vārdi",
         "pastePlaceholder": "Viens vārds rindiņā",

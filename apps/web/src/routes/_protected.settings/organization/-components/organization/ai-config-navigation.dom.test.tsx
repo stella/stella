@@ -445,7 +445,7 @@ const mount = async (
     name: messages.translate.settings.title,
   });
   await deeplQueries().findByLabelText(messages.translate.settings.apiKeyLabel);
-  await screen.findByRole("checkbox", {
+  await screen.findByRole("switch", {
     name: messages.settings.organization.promptCaching.title,
   });
   await waitFor(() => {
@@ -482,6 +482,7 @@ const settingsSectionQueries = (title: string) => {
   // An on/off setting is a row named by its title, not a heading.
   const heading =
     screen.queryByRole("heading", { name: title }) ??
+    screen.queryByRole("switch", { name: title }) ??
     screen.getByRole("checkbox", { name: title });
   // A settings section's heading sits in its header, above the surface its
   // controls are on, so the section is the group around both.
@@ -1629,7 +1630,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
   fireEvent.change(search, { target: { value: "fixture-search-key" } });
   fireEvent.change(fetch, { target: { value: "fixture-reader-key" } });
   fireEvent.click(
-    screen.getByRole("checkbox", {
+    screen.getByRole("switch", {
       name: messages.settings.organization.promptCaching.title,
     }),
   );
@@ -1638,7 +1639,7 @@ test("one page Save commits both provider drafts and all auxiliary sections", as
       name: messages.settings.organization.documentProcessing.title,
     }),
   );
-  const memory = screen.queryByRole("checkbox", {
+  const memory = screen.queryByRole("switch", {
     name: messages.settings.organization.memoryExtraction.title,
   });
   if (memory !== null) {
@@ -1736,7 +1737,7 @@ test("a failed auxiliary section retains its draft while successful sections cle
   fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
   fireEvent.change(search, { target: { value: "fixture-search-key" } });
   fireEvent.click(
-    screen.getByRole("checkbox", {
+    screen.getByRole("switch", {
       name: messages.settings.organization.promptCaching.title,
     }),
   );
@@ -1818,7 +1819,7 @@ test.each(Object.values(DIRTY_ONLY_SECTIONS))(
       fireEvent.change(deepl, { target: { value: "fixture-deepl-key" } });
     } else {
       fireEvent.click(
-        screen.getByRole("checkbox", {
+        screen.getByRole("switch", {
           name: messages.settings.organization.promptCaching.title,
         }),
       );

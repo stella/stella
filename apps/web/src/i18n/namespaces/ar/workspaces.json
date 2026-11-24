@@ -320,6 +320,8 @@
       "disableDescription": "ستتم إزالة اتصال Microsoft لجميع الأعضاء وحذف تسجيل الدخول المخزّن لديهم. تبقى المستندات التي تم استيرادها بالفعل في ملفاتها القانونية. سيحتاج الأعضاء إلى الربط مرة أخرى إذا أعدت تشغيل هذه الميزة.",
       "disableInputLabel": "اكتب {confirmation} لإيقاف التشغيل",
       "disableTitle": "هل تريد إيقاف SharePoint وOneDrive؟",
+      "disabledToast": "تم إيقاف SharePoint وOneDrive لمؤسستك.",
+      "enabledToast": "تم تفعيل SharePoint وOneDrive لمؤسستك.",
       "toggleLabel": "السماح باستخدام SharePoint وOneDrive"
     },
     "askAdmin": "متوقف لمؤسستك. اطلب من أحد المسؤولين تشغيله.",

@@ -532,6 +532,7 @@
       "anonymization": {
         "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",
+        "deleteConfirm": "Kas eemaldada „{value}“ meeskonna keelduloendist? Anonümiseerimine ei varja seda enam automaatselt.",
         "description": "Hallake meeskonnaülest keelduloendit, mida anonüümimise konveier alati maskeerib, ja importige algusloend CSV-, TXT- või JSON-failist.",
         "emptyState": "Meeskonnaüleseid termineid pole veel. Lisage üks ülal või importige loend.",
         "entriesHeading": "Meeskonnaülesed terminid ({count})",
@@ -720,6 +721,7 @@
         "importHint": "Kleepige iga sõna eraldi reale või valige .txt-fail, kus on üks sõna real, või .csv-fail, mille esimeses veerus on sõnad.",
         "importedToast": "{count, plural, one {Lisati # sõna.} other {Lisati # sõna.}}",
         "invalid": "Sõna ei tohi sisaldada reavahetusi ega juhtmärke.",
+        "matchingCount": "{count, plural, one {# vastav sõna} other {# vastavat sõna}}",
         "noMatch": "Otsingule „{search}” ei vasta ükski sõna.",
         "pasteLabel": "Lisatavad sõnad",
         "pastePlaceholder": "Üks sõna real",

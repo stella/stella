@@ -7,6 +7,16 @@ import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { DEFAULT_CHAT_ANON_ENTITY_LABELS } from "@stll/anonymize-chat";
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
+import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   Combobox,
@@ -25,6 +35,8 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { matchesComboboxItem } from "@/components/combobox-filter.logic";
 import { SettledQueryViewFeedback } from "@/components/query-view-feedback";
+import { usePermissions } from "@/hooks/use-permissions";
+import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -287,6 +299,7 @@ const dedupeByCanonical = (
 
 export const AnonymizationDenyListCard = () => {
   const t = useTranslations();
+  const canEdit = usePermissions({ organizationSettings: ["update"] });
   const activeOrganizationId = useRouteContext({
     from: "/_protected",
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -324,12 +337,16 @@ export const AnonymizationDenyListCard = () => {
 
   const [pendingCanonical, setPendingCanonical] = useState("");
   const [pendingLabel, setPendingLabel] = useState<LabelOption>(DEFAULT_LABEL);
+  const [pendingDelete, setPendingDelete] = useState<string | null>(null);
 
   const entries =
     blacklistView.type === "items" ? blacklistView.items.entries : undefined;
   const renderedEntries = normalizeOptionalArray(entries);
 
   const submitTerm = async () => {
+    if (!canEdit) {
+      return;
+    }
     const canonical = pendingCanonical.trim();
     if (canonical.length === 0 || entries === undefined) {
       return;
@@ -369,7 +386,7 @@ export const AnonymizationDenyListCard = () => {
   };
 
   const removeEntry = (canonical: string) => {
-    if (entries === undefined) {
+    if (!canEdit || entries === undefined) {
       return;
     }
 
@@ -387,6 +404,9 @@ export const AnonymizationDenyListCard = () => {
     updateMutation.mutate(
       { entries: next },
       {
+        onSuccess: () => {
+          setPendingDelete(null);
+        },
         onError: (error) => {
           notifyUserError(error, t("errors.actionFailed"));
         },
@@ -395,12 +415,19 @@ export const AnonymizationDenyListCard = () => {
   };
 
   const handleImportFile = async (file: File) => {
-    if (entries === undefined) {
+    if (!canEdit || entries === undefined) {
       return;
     }
 
-    const text = await file.text();
-    const parsed = parseImport(text, file.name, pendingLabel);
+    const textResult = await Result.tryPromise({
+      try: async () => await file.text(),
+      catch: (error) => error,
+    });
+    if (Result.isError(textResult)) {
+      notifyUserError(textResult.error, t("errors.actionFailed"));
+      return;
+    }
+    const parsed = parseImport(textResult.value, file.name, pendingLabel);
     if (!parsed || parsed.length === 0) {
       notifyUserProblem(
         t("settings.organization.anonymization.importParseError"),
@@ -441,6 +468,9 @@ export const AnonymizationDenyListCard = () => {
   // While the list loads, the form stands ready (its writes wait on the
   // list) and placeholder rows hold the list's place.
   const resolveAddDenyListTermDisabledReason = () => {
+    if (!canEdit) {
+      return t("errors.api.forbidden");
+    }
     if (updateMutation.isPending) {
       return t("common.saving");
     }
@@ -450,6 +480,16 @@ export const AnonymizationDenyListCard = () => {
     return t("common.enterTerm");
   };
 
+  const resolveImportDisabledReason = () => {
+    if (!canEdit) {
+      return t("errors.api.forbidden");
+    }
+    if (updateMutation.isPending) {
+      return t("common.saving");
+    }
+    return t("common.loading");
+  };
+
   return (
     <AnonymizationDenyListFrame
       feedback={<SettledQueryViewFeedback view={blacklistView} />}
@@ -457,7 +497,7 @@ export const AnonymizationDenyListCard = () => {
         <Form action={submitTerm} density="compact">
           <Input
             autoComplete="off"
-            disabled={updateMutation.isPending}
+            disabled={!canEdit || updateMutation.isPending}
             onChange={(event) => setPendingCanonical(event.target.value)}
             placeholder={t(
               "settings.organization.anonymization.addPlaceholder",
@@ -467,7 +507,7 @@ export const AnonymizationDenyListCard = () => {
           <div className={ANONYMIZATION_FORM_ROW_CLASS}>
             <Combobox<LabelOption>
               autoHighlight
-              disabled={updateMutation.isPending}
+              disabled={!canEdit || updateMutation.isPending}
               filter={matchesComboboxItem}
               items={[...LABEL_OPTIONS]}
               itemToStringLabel={(option) => t(LABEL_TRANSLATION_KEY[option])}
@@ -502,6 +542,7 @@ export const AnonymizationDenyListCard = () => {
             </Combobox>
             <AddTermSubmitButton
               disabled={
+                !canEdit ||
                 pendingCanonical.trim().length === 0 ||
                 entries === undefined ||
                 updateMutation.isPending
@@ -512,12 +553,10 @@ export const AnonymizationDenyListCard = () => {
           </div>
           <div className={ANONYMIZATION_FORM_ROW_CLASS}>
             <Button
-              disabled={entries === undefined || updateMutation.isPending}
-              disabledReason={
-                updateMutation.isPending
-                  ? t("common.saving")
-                  : t("common.loading")
+              disabled={
+                !canEdit || entries === undefined || updateMutation.isPending
               }
+              disabledReason={resolveImportDisabledReason()}
               onClick={() => {
                 openFilePicker({
                   accept:
@@ -547,47 +586,19 @@ export const AnonymizationDenyListCard = () => {
         blacklistView.type === "pending" ? (
           <AnonymizationEntriesPending />
         ) : (
-          <>
-            <AnonymizationEntriesHeading>
-              {t("settings.organization.anonymization.entriesHeading", {
-                count: String(renderedEntries.length),
-              })}
-            </AnonymizationEntriesHeading>
-            {renderedEntries.length === 0 && (
-              <div className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-xs">
-                {t("settings.organization.anonymization.emptyState")}
-              </div>
-            )}
-            {renderedEntries.map((entry) => (
-              <AnonymizationEntryRow
-                action={
-                  <Button
-                    disabled={updateMutation.isPending}
-                    disabledReason={t("common.saving")}
-                    onClick={() => removeEntry(entry.canonical)}
-                    size="icon"
-                    variant="ghost"
-                  >
-                    <Trash2 className="size-4" />
-                    <span className="sr-only">
-                      {t("settings.organization.anonymization.deleteAction")}
-                    </span>
-                  </Button>
-                }
-                canonical={
-                  <TruncatedText className="text-sm font-medium">
-                    {entry.canonical}
-                  </TruncatedText>
-                }
-                key={entry.id}
-                label={
-                  isKnownLabel(entry.label)
-                    ? t(LABEL_TRANSLATION_KEY[entry.label])
-                    : entry.label
-                }
-              />
-            ))}
-          </>
+          <DenyListEntries
+            canEdit={canEdit}
+            entries={renderedEntries}
+            pending={updateMutation.isPending}
+            pendingDelete={pendingDelete}
+            onCancelDelete={() => setPendingDelete(null)}
+            onConfirmDelete={() => {
+              if (pendingDelete !== null) {
+                removeEntry(pendingDelete);
+              }
+            }}
+            onRequestDelete={setPendingDelete}
+          />
         )
       }
     />
@@ -614,5 +625,134 @@ const AddTermSubmitButton = ({
     >
       {label}
     </Button>
+  );
+};
+
+const DeleteDenyListEntryDialog = ({
+  pending,
+  term,
+  onClose,
+  onConfirm,
+}: {
+  pending: boolean;
+  term: string | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <AlertDialog
+      open={term !== null}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("common.confirmAction")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {term === null
+              ? null
+              : t("settings.organization.anonymization.deleteConfirm", {
+                  value: term,
+                })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </AlertDialogClose>
+          <Button
+            loading={pending}
+            onClick={onConfirm}
+            type="button"
+            variant="destructive"
+          >
+            {t("common.delete")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+};
+
+type DenyListEntriesProps = {
+  canEdit: boolean;
+  entries: readonly {
+    id: string;
+    canonical: string;
+    label: string;
+  }[];
+  pending: boolean;
+  pendingDelete: string | null;
+  onCancelDelete: () => void;
+  onConfirmDelete: () => void;
+  onRequestDelete: (canonical: string) => void;
+};
+
+const DenyListEntries = ({
+  canEdit,
+  entries,
+  pending,
+  pendingDelete,
+  onCancelDelete,
+  onConfirmDelete,
+  onRequestDelete,
+}: DenyListEntriesProps) => {
+  const t = useTranslations();
+  const format = useFormatter();
+
+  return (
+    <>
+      <AnonymizationEntriesHeading>
+        {t("settings.organization.anonymization.entriesHeading", {
+          count: format.number(entries.length),
+        })}
+      </AnonymizationEntriesHeading>
+      {entries.length === 0 && (
+        <div className="text-muted-foreground rounded-md border border-dashed py-6 text-center text-xs">
+          {t("settings.organization.anonymization.emptyState")}
+        </div>
+      )}
+      {entries.map((entry) => (
+        <AnonymizationEntryRow
+          action={
+            <Button
+              aria-label={t("settings.organization.anonymization.deleteAction")}
+              disabled={!canEdit || pending}
+              disabledReason={
+                canEdit ? t("common.saving") : t("errors.api.forbidden")
+              }
+              onClick={() => onRequestDelete(entry.canonical)}
+              size="icon"
+              tooltip={t("settings.organization.anonymization.deleteAction")}
+              type="button"
+              variant="ghost"
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          }
+          canonical={
+            <TruncatedText className="text-sm font-medium">
+              <BidiText>{entry.canonical}</BidiText>
+            </TruncatedText>
+          }
+          key={entry.id}
+          label={
+            isKnownLabel(entry.label)
+              ? t(LABEL_TRANSLATION_KEY[entry.label])
+              : entry.label
+          }
+        />
+      ))}
+      <DeleteDenyListEntryDialog
+        pending={pending}
+        term={pendingDelete}
+        onClose={onCancelDelete}
+        onConfirm={onConfirmDelete}
+      />
+    </>
   );
 };

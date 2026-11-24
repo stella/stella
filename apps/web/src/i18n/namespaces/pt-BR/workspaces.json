@@ -320,6 +320,8 @@
       "disableDescription": "A conexão da Microsoft de todos os membros é removida e o login armazenado deles é excluído. Os documentos já importados permanecem em seus casos. Os membros precisarão se conectar novamente se você reativar a função.",
       "disableInputLabel": "Digite {confirmation} para desativar",
       "disableTitle": "Desativar o SharePoint e o OneDrive?",
+      "disabledToast": "O SharePoint e o OneDrive foram desativados para a sua organização.",
+      "enabledToast": "O SharePoint e o OneDrive foram ativados para a sua organização.",
       "toggleLabel": "Permitir o SharePoint e o OneDrive"
     },
     "askAdmin": "Desativada para sua organização. Peça a um administrador para ativá-la.",
