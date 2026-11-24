@@ -300,7 +300,7 @@ export const BillingDraftsCard = () => {
         ))}
         {!files.isPending &&
           !files.isError &&
-          (files.data?.items.length ?? 0) === 0 && (
+          files.data.items.length === 0 && (
             <ListEmpty>
               <span>{t("common.noResults")}</span>
               {search.length > 0 && (
