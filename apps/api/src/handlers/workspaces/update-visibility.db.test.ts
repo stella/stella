@@ -55,20 +55,24 @@ const createMatter = async ({
   leadUserId,
 }: MatterOptions) => {
   const workspaceId = createSafeId<"workspace">();
-  await testDb.insert(workspaces).values({
-    id: workspaceId,
-    organizationId: ids.orgA,
-    clientId: client ? ids.contactA : null,
-    name: "Visibility matter",
-    reference: `VIS-${workspaceId}`,
-    visibility,
-    ...(leadUserId === undefined ? {} : { leadUserId }),
+  // One transaction: an assigned-only matter needs its internal member by
+  // commit.
+  await testDb.transaction(async (tx) => {
+    await tx.insert(workspaces).values({
+      id: workspaceId,
+      organizationId: ids.orgA,
+      clientId: client ? ids.contactA : null,
+      name: "Visibility matter",
+      reference: `VIS-${workspaceId}`,
+      visibility,
+      ...(leadUserId === undefined ? {} : { leadUserId }),
+    });
+    if (assigned.length > 0) {
+      await tx
+        .insert(workspaceMembers)
+        .values(assigned.map((userId) => ({ workspaceId, userId })));
+    }
   });
-  if (assigned.length > 0) {
-    await testDb
-      .insert(workspaceMembers)
-      .values(assigned.map((userId) => ({ workspaceId, userId })));
-  }
   return workspaceId;
 };
 

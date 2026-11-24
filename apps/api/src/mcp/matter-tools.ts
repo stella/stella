@@ -314,7 +314,7 @@ const saveMatterArgsSchema = nullAsAbsent(
   v.pipe(
     v.strictObject({
       matter_id: v.optional(
-        uuidInputSchema("Matter ID to update; omit to create a new matter"),
+        uuidInputSchema("Matter to update; omit to create"),
       ),
       name: v.optional(
         v.pipe(
@@ -323,21 +323,17 @@ const saveMatterArgsSchema = nullAsAbsent(
         ),
       ),
       client_id: v.optional(
-        uuidInputSchema(
-          "Contact ID of the matter's client; attaches or replaces it. Never changes visibility.",
-        ),
+        uuidInputSchema("Client contact ID; never changes visibility."),
       ),
       visibility: v.optional(
         matterVisibilitySchema(
-          "Who sees it unassigned: all_members, admins_and_assigned (owners/admins) or assigned_only. Create default: admins_and_assigned with client_id, else assigned_only. Update: lead or owner/admin only.",
+          "Who sees it unassigned. Default: admins_and_assigned with client_id, else assigned_only.",
         ),
       ),
-      confirm: v.optional(
+      confirm_widening: v.optional(
         v.pipe(
           v.literal(true),
-          v.description(
-            "Required when visibility shows the matter to more people; ask the user first.",
-          ),
+          v.description("Needed to widen visibility; ask the user."),
         ),
       ),
       reference: v.optional(
@@ -357,9 +353,7 @@ const saveMatterArgsSchema = nullAsAbsent(
       status: v.optional(
         v.pipe(
           v.picklist(MATTER_STATUSES),
-          v.description(
-            "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating.",
-          ),
+          v.description("Update only: 'archived' or 'active'."),
         ),
       ),
     }),
@@ -548,7 +542,9 @@ const handleSaveMatterTool: TypedMcpToolHandler<
           ...(input.visibility === undefined
             ? {}
             : { visibility: input.visibility }),
-          ...(input.confirm === undefined ? {} : { confirmWidening: true }),
+          ...(input.confirm_widening === undefined
+            ? {}
+            : { confirmWidening: true }),
         },
       }),
     );
@@ -2774,10 +2770,9 @@ const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: false,
     description:
-      "Create, update, archive, or unarchive a matter. Omit matter_id to " +
-      "create one (name required; client_id and visibility optional). With " +
-      "matter_id, set name, client_id, reference, billing_reference or " +
-      "visibility, and/or status 'archived' or 'active'. Returns the matter ID.",
+      "Create a matter (omit matter_id; name required) or update one: name, " +
+      "client_id, reference, billing_reference, visibility, status " +
+      "('archived'/'active'). Returns the matter ID.",
     inputSchema: saveMatterArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["check", "partial_check"],

@@ -21,6 +21,13 @@ const OWNER_CHECKS = [
 const read = (relative: string) =>
   readFileSync(nodePath.join(API_SRC, relative), "utf-8");
 
+/** Source text with whitespace collapsed, so formatting does not matter. */
+const flat = (relative: string) =>
+  read(relative)
+    .replaceAll(/\s+/gu, " ")
+    .replaceAll("( ", "(")
+    .replaceAll(", )", ")");
+
 /** Route modules mounted by the data export routes table. */
 const mountedRouteModules = () =>
   [
@@ -86,10 +93,10 @@ describe("stored data export access census", () => {
   });
 
   test("download and create check the stored export before a replay", () => {
-    expect(read("handlers/data-exports/download.ts")).toContain(
-      "await authorizeStoredDataExportRead(context, context.params.exportId)",
+    expect(flat("handlers/data-exports/download.ts")).toContain(
+      "await authorizeStoredDataExportRead(context, context.params.exportId",
     );
-    expect(read("handlers/data-exports/create.ts")).toContain(
+    expect(flat("handlers/data-exports/create.ts")).toContain(
       "authorizeReplay: authorizeStoredDataExportReplay",
     );
   });

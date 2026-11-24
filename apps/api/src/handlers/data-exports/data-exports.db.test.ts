@@ -1849,17 +1849,21 @@ describe("stored export access", () => {
     run: (matterId: SafeId<"workspace">) => Promise<void>,
   ) => {
     const matterId = toSafeId<"workspace">(Bun.randomUUIDv7());
-    await testDb.insert(workspaces).values({
-      id: matterId,
-      organizationId: ids.orgA,
-      clientId: ids.contactA,
-      name: "Walled matter",
-      reference: `W-${matterId.slice(0, 8)}`,
-      visibility: "assigned_only",
+    // One transaction: an assigned-only matter needs its internal member by
+    // commit.
+    await testDb.transaction(async (tx) => {
+      await tx.insert(workspaces).values({
+        id: matterId,
+        organizationId: ids.orgA,
+        clientId: ids.contactA,
+        name: "Walled matter",
+        reference: `W-${matterId.slice(0, 8)}`,
+        visibility: "assigned_only",
+      });
+      await tx
+        .insert(workspaceMembers)
+        .values({ workspaceId: matterId, userId: ids.userA1 });
     });
-    await testDb
-      .insert(workspaceMembers)
-      .values({ workspaceId: matterId, userId: ids.userA1 });
     try {
       await run(matterId);
     } finally {

@@ -2,6 +2,8 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import { member } from "@/api/db/auth-schema";
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { organizationDataExports } from "@/api/db/schema";
@@ -31,7 +33,7 @@ import { memberReachableMatterIds } from "@/api/lib/workspaces/authorized-worksp
 
 export const DATA_EXPORT_READ_PERMISSION = {
   dataExport: ["read"],
-} as const;
+} satisfies PermissionInput;
 
 /**
  * Every matter a stored export represents: the matters of its finished parts

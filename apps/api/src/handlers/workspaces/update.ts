@@ -12,8 +12,8 @@ import {
   widensMatterVisibility,
 } from "@stll/api-contract/matter-visibility";
 import type { MatterVisibility } from "@stll/api-contract/matter-visibility";
+import type { PermissionInput } from "@stll/permissions";
 
-import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -38,6 +38,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
 import { databaseConstraintRefusal } from "@/api/lib/db/constraint-refusals";
+import { resolveWorkspaceMemberAuthority } from "@/api/lib/db/member-authority";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
@@ -51,7 +52,6 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
-import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
 import { matterVisibilitySchema } from "@/api/lib/workspaces/matter-visibility";
@@ -205,7 +205,7 @@ export type WorkspaceUpdateActor = {
   authority: AuthorizedMemberRole;
 };
 
-const UPDATE_PERMISSION = { workspace: ["update"] } as const;
+const UPDATE_PERMISSION = { workspace: ["update"] } satisfies PermissionInput;
 
 type CurrentAuthorityOptions = {
   tx: Transaction;
@@ -227,28 +227,18 @@ const readCurrentUpdateAuthority = async ({
   workspaceId,
   actor,
 }: CurrentAuthorityOptions) => {
-  const rows = await tx
-    .select({ role: member.role, billingAccess: member.billingAccess })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, organizationId),
-        eq(member.userId, actor.userId),
-        memberReachesMatterSql(
-          { organizationId, userId: actor.userId },
-          workspaceId,
-        ),
-      ),
-    )
-    .limit(1);
-  const current = rows.at(0);
-  if (current === undefined || !isMemberRole(current.role)) {
+  const current = await resolveWorkspaceMemberAuthority(
+    { organizationId, userId: actor.userId, workspaceId },
+    tx,
+  );
+  if (current === null || !isMemberRole(current.role)) {
     return null;
   }
+  // Billing access grants no matter update or stewardship.
   const authority = withCurrentMemberRole({
     authority: actor.authority,
     role: current.role,
-    billingAccess: current.billingAccess,
+    billingAccess: false,
   });
   return hasMemberPermission(authority, UPDATE_PERMISSION) ? authority : null;
 };
@@ -258,9 +248,9 @@ type VisibilityChangeOptions = {
   authority: AuthorizedMemberRole;
   workspace: { leadUserId: string | null; visibility: MatterVisibility };
   body: {
-    visibility?: MatterVisibility;
-    confirmWidening?: true;
-    leadUserId?: string | null;
+    visibility?: MatterVisibility | undefined;
+    confirmWidening?: true | undefined;
+    leadUserId?: string | null | undefined;
   };
 };
 

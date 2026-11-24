@@ -15,6 +15,7 @@ import { MATTER_STEWARD_CONSTRAINT } from "@/api/lib/db/constraint-refusals";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
+import { recordNewOrganizationAccessState } from "@/api/lib/usage/organization-access-state";
 import { readAuthorizedWorkspaces } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -68,6 +69,10 @@ const seedOrganization = async (db: GatedTestDb): Promise<Organization> => {
     name: "Visibility fixture",
     slug: organizationId,
     createdAt: dbClock.now(),
+  });
+  await recordNewOrganizationAccessState(db, {
+    organizationId,
+    now: dbClock.now(),
   });
   await db.insert(user).values(
     ROLES.map((role) => ({
