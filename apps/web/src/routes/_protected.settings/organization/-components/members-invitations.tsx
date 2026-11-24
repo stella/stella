@@ -15,20 +15,21 @@ import {
 } from "@stll/ui/alert-dialog";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { EllipsisVerticalIcon } from "@stll/ui/icons";
+import { EntityActions, EntityActionsButton } from "@stll/ui/entity-actions";
+import type { EntityAction } from "@stll/ui/entity-actions";
 import { ListGroupCount } from "@stll/ui/list";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
 import { TableCell, TableRow } from "@stll/ui/table";
 
 import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import type { Role } from "@/lib/auth-client";
 import { roleTranslationKeys } from "@/lib/organization/consts";
+import { formatFullTimestamp, MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 
 import {
   INVITATION_COLUMN_COUNT,
+  InvitationRowCells,
   InvitationsTableFrame,
-  InvitationsTableRow,
   PendingInvitationsSection,
 } from "./members-invitations.pending";
 
@@ -119,8 +120,11 @@ function InvitationsTable({
   const [cancelTarget, setCancelTarget] = useState<MemberInvitation | null>(
     null,
   );
-  const formatMemberDate = (date: Date | string) =>
-    formatter.dateTime(new Date(date), { dateStyle: "medium" });
+  const renderDate = (date: Date | string) => (
+    <Tooltip content={formatFullTimestamp(date)} render={<span />}>
+      {formatter.dateTime(new Date(date), MEDIUM_DATE_FORMAT)}
+    </Tooltip>
+  );
   return (
     <InvitationsTableFrame
       label={(id) => t(id)}
@@ -169,55 +173,38 @@ function InvitationsTable({
     >
       {invitations.map((invitation) => {
         const { section, status } = classifyInvitation(invitation, now);
+        const rowActions: readonly EntityAction[] = [
+          {
+            label: t("organization.invitations.resendInvitation"),
+            disabled:
+              !["expired", "rejected"].includes(status) || resendPending,
+            onClick: () => onResend(invitation),
+          },
+          {
+            label: t("organization.invitations.cancelInvitation"),
+            variant: "destructive",
+            disabled: section !== "pending" || cancelPending,
+            onClick: () => setCancelTarget(invitation),
+          },
+        ];
         return (
-          <InvitationsTableRow
-            cells={{
-              email: <BidiText direction="ltr">{invitation.email}</BidiText>,
-              role: t(roleTranslationKeys[invitation.role].labelKey),
-              status: t(`organization.invitations.statuses.${status}`),
-              invited: formatMemberDate(invitation.createdAt),
-              expires: formatMemberDate(invitation.expiresAt),
-              actions: (
-                <Menu>
-                  <Tooltip
-                    content={t("common.actions")}
-                    render={
-                      <MenuTrigger
-                        render={
-                          <Button
-                            aria-label={t("common.actions")}
-                            size="icon-xs"
-                            variant="ghost"
-                          />
-                        }
-                      />
-                    }
-                  >
-                    <EllipsisVerticalIcon />
-                  </Tooltip>
-                  <MenuPopup>
-                    <MenuItem
-                      disabled={
-                        !["expired", "rejected"].includes(status) ||
-                        resendPending
-                      }
-                      onClick={() => onResend(invitation)}
-                    >
-                      {t("organization.invitations.resendInvitation")}
-                    </MenuItem>
-                    <MenuItem
-                      disabled={section !== "pending" || cancelPending}
-                      onClick={() => setCancelTarget(invitation)}
-                      variant="destructive"
-                    >
-                      {t("organization.invitations.cancelInvitation")}
-                    </MenuItem>
-                  </MenuPopup>
-                </Menu>
-              ),
-            }}
+          <EntityActions
+            actions={rowActions}
             key={invitation.id}
-          />
+            label={t("common.actions")}
+            render={<TableRow className="group" />}
+          >
+            <InvitationRowCells
+              cells={{
+                email: <BidiText direction="ltr">{invitation.email}</BidiText>,
+                role: t(roleTranslationKeys[invitation.role].labelKey),
+                status: t(`organization.invitations.statuses.${status}`),
+                invited: renderDate(invitation.createdAt),
+                expires: renderDate(invitation.expiresAt),
+                actions: <EntityActionsButton />,
+              }}
+            />
+          </EntityActions>
         );
       })}
       {invitations.length === 0 && (

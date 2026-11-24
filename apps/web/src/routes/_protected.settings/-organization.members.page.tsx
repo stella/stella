@@ -7,14 +7,15 @@ import { useNow, useTranslations } from "use-intl";
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { compareByLocale } from "@stll/collation";
 import { Button } from "@stll/ui/button";
-import { EllipsisVerticalIcon } from "@stll/ui/icons";
-import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { EntityActions, EntityActionsButton } from "@stll/ui/entity-actions";
+import type { EntityAction } from "@stll/ui/entity-actions";
+import { CircleHelpIcon } from "@stll/ui/icons";
 import { SortableHead, TableCell, TableRow } from "@stll/ui/table";
 import { stellaToast } from "@stll/ui/toast";
 
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
-import { useFormattingLocale } from "@/i18n/formatting-context";
+import { useFormatter, useFormattingLocale } from "@/i18n/formatting-context";
 import { roleOptions } from "@/lib/auth-queries";
 import {
   useCancelInvitation,
@@ -22,7 +23,7 @@ import {
   useRemoveMember,
 } from "@/lib/organization/mutations";
 import { organizationOptions } from "@/lib/organization/queries";
-import { formatMemberDate } from "@/lib/organization/utils";
+import { formatFullTimestamp, MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 import { MembersInvitations } from "@/routes/_protected.settings/organization/-components/members-invitations";
 import { OrganizationListToolbar } from "@/routes/_protected.settings/organization/-components/organization/list-toolbar";
 import { MemberBillingAccessCell } from "@/routes/_protected.settings/organization/-components/organization/member-billing-access-cell";
@@ -32,8 +33,8 @@ import { filterOrganizationLists } from "@/routes/_protected.settings/organizati
 import {
   INITIAL_MEMBERS_SORT,
   MEMBER_COLUMN_COUNT,
+  MemberRowCells,
   MembersShell,
-  MembersTableRow,
 } from "./-organization.members.pending";
 import type { Sort, SortKey } from "./-organization.members.pending";
 
@@ -45,6 +46,7 @@ export const MembersPage = () => {
   // open moves from Pending to Past invitations.
   const now = useNow({ updateInterval: 60_000 });
   const t = useTranslations();
+  const formatter = useFormatter();
   const locale = useFormattingLocale();
   const activeOrganizationId = routeApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -101,6 +103,24 @@ export const MembersPage = () => {
 
   return (
     <MembersShell
+      billingHeaderHelp={
+        <Tooltip
+          content={
+            <span className="block max-w-64 text-wrap">
+              {t("organization.members.billingAccessDescription")}
+            </span>
+          }
+          render={
+            <Button
+              aria-label={t("organization.members.billingAccess")}
+              size="icon-xs"
+              variant="muted"
+            />
+          }
+        >
+          <CircleHelpIcon aria-hidden="true" className="size-3.5" />
+        </Tooltip>
+      }
       invitations={
         <MembersInvitations
           invitations={filteredInvitations}
@@ -137,61 +157,64 @@ export const MembersPage = () => {
     >
       {filteredMembers.map((member) => {
         const isSelf = member.userId === userId;
+        const rowActions: readonly EntityAction[] = isSelf
+          ? []
+          : [
+              {
+                label: t("common.removeMember"),
+                variant: "destructive",
+                disabled: removeMember.isPending,
+                onClick: () => removeMember.mutate(member.id),
+              },
+            ];
         return (
-          <MembersTableRow
-            cells={{
-              user: (
-                <UserIdentity
-                  avatarClassName="size-8 shrink-0 text-3xs"
-                  image={member.user.image}
-                  name={member.user.name}
-                  secondaryText={member.user.email}
-                />
-              ),
-              role: (
-                <RoleCell
-                  currentUserRole={currentUserRole}
-                  isSelf={isSelf}
-                  memberEmail={member.user.email}
-                  memberId={member.id}
-                  memberRole={member.role}
-                />
-              ),
-              billing: (
-                <MemberBillingAccessCell
-                  memberId={member.id}
-                  role={member.role}
-                  billingAccess={member.billingAccess}
-                />
-              ),
-              joined: formatMemberDate(member.createdAt),
-              actions: !isSelf && (
-                <Menu>
-                  <Tooltip
-                    content={t("common.actions")}
-                    render={
-                      <MenuTrigger
-                        className="opacity-0! transition-opacity group-hover:opacity-100! focus-visible:opacity-100! pointer-coarse:opacity-100!"
-                        render={<Button size="icon-xs" variant="ghost" />}
-                      />
-                    }
-                  >
-                    <EllipsisVerticalIcon />
-                  </Tooltip>
-                  <MenuPopup>
-                    <MenuItem
-                      disabled={removeMember.isPending}
-                      onClick={() => removeMember.mutate(member.id)}
-                      variant="destructive"
-                    >
-                      {t("common.removeMember")}
-                    </MenuItem>
-                  </MenuPopup>
-                </Menu>
-              ),
-            }}
+          <EntityActions
+            actions={rowActions}
             key={member.id}
-          />
+            label={t("common.actions")}
+            render={<TableRow className="group" />}
+          >
+            <MemberRowCells
+              cells={{
+                user: (
+                  <UserIdentity
+                    avatarClassName="size-8 shrink-0 text-3xs"
+                    image={member.user.image}
+                    name={member.user.name}
+                    secondaryText={member.user.email}
+                  />
+                ),
+                role: (
+                  <RoleCell
+                    currentUserRole={currentUserRole}
+                    isSelf={isSelf}
+                    memberEmail={member.user.email}
+                    memberId={member.id}
+                    memberRole={member.role}
+                  />
+                ),
+                billing: (
+                  <MemberBillingAccessCell
+                    memberId={member.id}
+                    role={member.role}
+                    billingAccess={member.billingAccess}
+                  />
+                ),
+                joined: (
+                  <Tooltip
+                    content={formatFullTimestamp(member.createdAt)}
+                    render={<span />}
+                  >
+                    {formatter.dateTime(
+                      new Date(member.createdAt),
+                      MEDIUM_DATE_FORMAT,
+                    )}
+                  </Tooltip>
+                ),
+                actions: <EntityActionsButton />,
+              }}
+            />
+          </EntityActions>
         );
       })}
       {filteredMembers.length === 0 && (

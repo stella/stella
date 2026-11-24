@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Dostęp do danych rozliczeniowych",
+      "billingAccessDescription": "Pozwala przeglądać stawki, kwoty i faktury w sprawach, do których ten członek ma dostęp. Właściciele i administratorzy zawsze mają ten dostęp.",
+      "billingAccessIncludedInRole": "Zawarte w roli",
       "changeRole": "Zmień rolę",
       "confirmRoleChangeDescription": "Rola użytkownika {email} zmieni się {oldRole, select, owner {z właściciela} admin {z administratora} member {z członka} intern {z praktykanta} external {ze współpracownika zewnętrznego} other {}} {newRole, select, owner {na właściciela} admin {na administratora} member {na członka} intern {na praktykanta} external {na współpracownika zewnętrznego} other {}}.",
       "confirmRoleChangeTitle": "Zmień rolę",

@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Prístup k fakturačným údajom",
+      "billingAccessDescription": "Umožňuje zobraziť sadzby, sumy a faktúry pri spisoch, ku ktorým má člen prístup. Vlastníci a administrátori majú tento prístup vždy.",
+      "billingAccessIncludedInRole": "Zahrnuté v role",
       "changeRole": "Zmeniť rolu",
       "confirmRoleChangeDescription": "Rola používateľa {email} sa zmení {oldRole, select, owner {z vlastníka} admin {z administrátora} member {z člena} intern {zo stážistu} external {z externého spolupracovníka} other {}} {newRole, select, owner {na vlastníka} admin {na administrátora} member {na člena} intern {na stážistu} external {na externého spolupracovníka} other {}}.",
       "confirmRoleChangeTitle": "Zmeniť rolu",

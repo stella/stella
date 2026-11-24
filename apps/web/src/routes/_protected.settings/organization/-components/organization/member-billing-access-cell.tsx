@@ -6,7 +6,7 @@ import {
   BILLING_MATTER_READ_PERMISSION,
   memberHasPermissions,
 } from "@stll/permissions";
-import { Checkbox } from "@stll/ui/checkbox";
+import { Switch } from "@stll/ui/switch";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
@@ -20,6 +20,7 @@ type MemberBillingAccessCellProps = {
   role: OrganizationRoleName;
   billingAccess: boolean;
 };
+
 export const MemberBillingAccessCell = ({
   memberId,
   role,
@@ -51,12 +52,22 @@ export const MemberBillingAccessCell = ({
     }),
     onError: (error) => notifyUserError(error, t("errors.actionFailed")),
   });
+
+  if (roleGrant) {
+    return (
+      <span className="text-muted-foreground text-xs">
+        {t("organization.members.billingAccessIncludedInRole")}
+      </span>
+    );
+  }
+
   return (
-    <Checkbox
+    <Switch
       aria-label={t("organization.members.billingAccess")}
-      checked={roleGrant || billingAccess}
-      disabled={!canManage || roleGrant || mutation.isPending}
+      checked={billingAccess}
+      disabled={!canManage || mutation.isPending}
       onCheckedChange={(checked) => mutation.mutate(checked)}
+      size="sm"
     />
   );
 };

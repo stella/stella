@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Acesso aos dados de faturamento",
+      "billingAccessDescription": "Permite visualizar taxas, valores e faturas nos casos aos quais este membro tem acesso. Proprietários e administradores sempre têm esse acesso.",
+      "billingAccessIncludedInRole": "Incluído na função",
       "changeRole": "Mudar função",
       "confirmRoleChangeDescription": "A função de {email} mudará {oldRole, select, owner {de proprietário} admin {de administrador} member {de membro} intern {de estagiário} external {de colaborador externo} other {}} {newRole, select, owner {para proprietário} admin {para administrador} member {para membro} intern {para estagiário} external {para colaborador externo} other {}}.",
       "confirmRoleChangeTitle": "Mudar função",

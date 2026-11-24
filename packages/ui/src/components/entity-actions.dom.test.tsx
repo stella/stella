@@ -263,4 +263,36 @@ describe("EntityActions", () => {
       console.error = consoleError;
     }
   });
+
+  test("renders on a table row via render prop without invalid tbody children", async () => {
+    const onRemove = mock(() => undefined);
+    const view = render(
+      <table>
+        <tbody>
+          <EntityActions
+            actions={[
+              { label: "Remove", variant: "destructive", onClick: onRemove },
+            ]}
+            label="Actions"
+            render={<tr data-testid="table-row" />}
+          >
+            <td data-testid="member-name">Lucie</td>
+            <td>
+              <EntityActionsButton />
+            </td>
+          </EntityActions>
+        </tbody>
+      </table>,
+    );
+
+    const tbody = view.container.querySelector("tbody");
+    expect(tbody?.children.length).toBe(1);
+    expect(tbody?.children[0]?.tagName).toBe("TR");
+
+    const event = rightClick(view.getByTestId("member-name"));
+    expect(event.defaultPrevented).toBe(true);
+    await waitFor(() => {
+      expect(openMenuLabels()).toEqual(["Remove"]);
+    });
+  });
 });

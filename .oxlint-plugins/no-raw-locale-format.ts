@@ -43,7 +43,9 @@ const TO_LOCALE_METHODS = new Set([
 ]);
 
 // True when the locale argument provably ignores the user's preferences:
-// absent, `undefined`, a hardcoded string, or the base-language `lang`.
+// absent, `undefined`, a hardcoded string, the base-language `lang` identifier
+// or `.lang` property read (e.g. `useI18nStore.getState().lang`), or a
+// fallback/conditional branch that can evaluate to one of those.
 const isBareLocaleArg = (arg) => {
   if (arg === undefined) {
     return true;
@@ -51,7 +53,24 @@ const isBareLocaleArg = (arg) => {
   if (arg.type === "Identifier") {
     return arg.name === "undefined" || arg.name === "lang";
   }
-  return arg.type === "Literal" && typeof arg.value === "string";
+  if (arg.type === "Literal" && typeof arg.value === "string") {
+    return true;
+  }
+  if (
+    arg.type === "MemberExpression" &&
+    !arg.computed &&
+    arg.property.type === "Identifier" &&
+    arg.property.name === "lang"
+  ) {
+    return true;
+  }
+  if (arg.type === "LogicalExpression") {
+    return isBareLocaleArg(arg.left) || isBareLocaleArg(arg.right);
+  }
+  if (arg.type === "ConditionalExpression") {
+    return isBareLocaleArg(arg.consequent) || isBareLocaleArg(arg.alternate);
+  }
+  return false;
 };
 
 export default eslintCompatPlugin({
