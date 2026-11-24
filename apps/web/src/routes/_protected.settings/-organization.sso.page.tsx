@@ -1158,8 +1158,8 @@ const ScimProvisioningSection = ({
   tokens,
   onChanged,
 }: {
-  tokens: OrganizationScimTokenSummary[];
-  onChanged: () => void;
+  tokens: readonly OrganizationScimTokenSummary[];
+  onChanged: () => Promise<void>;
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -1176,13 +1176,13 @@ const ScimProvisioningSection = ({
   });
   const createTokenMutation = useMutation({
     mutationFn: createTokenMutationFn,
-    onSuccess: (created) => {
+    onSuccess: async (created) => {
       setCreatedBearerToken(created.bearerToken);
       stellaToast.add({
         title: t("settings.organization.sso.scimTokenCreated"),
         type: "success",
       });
-      onChanged();
+      await onChanged();
     },
     onError: (err) => {
       notifyUserError(err, t("errors.actionFailed"));
@@ -1197,12 +1197,12 @@ const ScimProvisioningSection = ({
       mutationFn: async (tokenId: string) =>
         await revokeOrganizationScimToken(tokenId),
     }),
-    onSuccess: () => {
+    onSuccess: async () => {
       stellaToast.add({
         title: t("settings.organization.sso.scimTokenRevoked"),
         type: "success",
       });
-      onChanged();
+      await onChanged();
     },
     onError: (err) => {
       notifyUserError(err, t("errors.actionFailed"));
