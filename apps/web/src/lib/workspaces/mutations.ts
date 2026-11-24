@@ -20,6 +20,7 @@ import {
 } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { useIdempotentMutation } from "@/lib/idempotency/use-idempotent-mutation";
+import type { IdempotentRequest } from "@/lib/idempotency/use-idempotent-submit";
 import { toSafeId } from "@/lib/safe-id";
 import { resourceMutation } from "@/lib/workspace-realtime";
 import { workspacesKeys } from "@/lib/workspaces/queries";
@@ -39,26 +40,34 @@ export const useCreateWorkspace = () => {
   const queryClient = useQueryClient();
 
   return useIdempotentMutation({
-    mutationFn: async (vars: CreateWorkspaceVars, request) => {
-      const id = request.headers["Idempotency-Key"];
-      const response = await api.workspaces.put({
-        id: toSafeId<"workspace">(id),
-        ...(vars.clientId !== undefined && {
-          clientId: toSafeId<"contact">(vars.clientId),
-          ...(vars.memberUserIds && vars.memberUserIds.length > 0
-            ? { memberUserIds: vars.memberUserIds }
-            : {}),
-        }),
-        name: vars.name,
-        filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
-      });
+    mutationFn: resourceMutation({
+      mutation: "createWorkspace",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async (
+        vars: CreateWorkspaceVars,
+        request: IdempotentRequest,
+      ) => {
+        const id = request.headers["Idempotency-Key"];
+        const response = await api.workspaces.put({
+          id: toSafeId<"workspace">(id),
+          ...(vars.clientId !== undefined && {
+            clientId: toSafeId<"contact">(vars.clientId),
+            ...(vars.memberUserIds && vars.memberUserIds.length > 0
+              ? { memberUserIds: vars.memberUserIds }
+              : {}),
+          }),
+          name: vars.name,
+          filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
+        });
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
 
-      return { id: toSafeId<"workspace">(id) };
-    },
+        return { id: toSafeId<"workspace">(id) };
+      },
+    }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({
         queryKey: workspacesKeys.all,
@@ -274,19 +283,27 @@ type DeleteWorkspaceVars = {
 
 export const useDeleteWorkspace = () => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
     retry: shouldRetryAPIRequest,
-    mutationFn: async ({ workspaceId }: DeleteWorkspaceVars) => {
-      const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-        .delete({});
+    // Organization scope: refresh the matter lists, not the deleted matter's
+    // own readers, which would refetch into a 404.
+    mutationFn: resourceMutation({
+      mutation: "deleteWorkspace",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async ({ workspaceId }: DeleteWorkspaceVars) => {
+        const response = await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .delete({});
 
-      if (response.error) {
-        throw toAPIError(response.error);
-      }
-    },
-    onSuccess: (_data, { workspaceId }) => {
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+      },
+    }),
+    onSuccess: (_data, { workspaceId }: DeleteWorkspaceVars) => {
       useTableStore.getState().dropMatter(workspaceId);
     },
     onError: (error) => {

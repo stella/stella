@@ -1234,7 +1234,7 @@
   {
     "access": "write",
     "command": ["capability", "entities", "placements-suggest"],
-    "description": "Propose a folder placement and a tidied file name for up to 100 documents of a matter, given the folders that already exist plus an optional locale and free-text instructions. Returns one suggestion per file (folder path, suggested name, detected date, document type) and the empty folders it suggests removing. Suggestions only: nothing is moved, renamed, or deleted, so apply what you want with entities.move and entities.rename. Per-document summaries are generated and cached where missing, and the call consumes AI usage.",
+    "description": "Propose a folder placement and a tidied file name for up to 100 documents of a matter, given the folders that already exist plus an optional locale and free-text instructions. Returns one suggestion per file (folder path, suggested name, detected date, document type) and the empty folders it suggests removing. Suggestions only: nothing is moved, renamed, or deleted, so apply what you want with entities.move and entities.rename. With suggestMatter it also proposes a matter name and the client's name and type, read from the documents, for turning a personal matter into a client matter. Per-document summaries are generated and cached where missing, and the call consumes AI usage.",
     "name": "capability:entities.placements.suggest",
     "title": "entities.placements.suggest"
   },

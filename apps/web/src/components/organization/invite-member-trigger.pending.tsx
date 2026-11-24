@@ -6,7 +6,7 @@ import { UserPlusIcon } from "@stll/ui/icons";
 import { PendingText } from "@/components/pending-text";
 
 export const INVITE_MEMBER_BUTTON_SIZE = "sm";
-export const INVITE_MEMBER_BUTTON_VARIANT = "outline";
+export const INVITE_MEMBER_BUTTON_VARIANT = "default";
 
 export const InviteMemberTriggerContent = ({
   label,

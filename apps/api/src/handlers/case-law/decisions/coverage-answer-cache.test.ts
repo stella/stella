@@ -61,7 +61,10 @@ const failing = (part: CaseLawCoveragePart): Assembly => {
     case "arrivals":
       return {
         ...readers,
-        load: { ...readers.load, readArrivals: async () => null },
+        load: {
+          ...readers.load,
+          readArrivals: async () => ({ status: "unavailable" as const }),
+        },
       };
     case "publisher-census":
       return {
@@ -191,7 +194,7 @@ describe("coverage summary publication eligibility", () => {
             adapterKey: ADAPTER_KEYS.SK_US,
           },
         ],
-        readArrivals: async () => null,
+        readArrivals: async () => ({ status: "unavailable" as const }),
         readCourts: async () => await Promise.reject(readFailure),
       },
     });

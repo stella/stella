@@ -30,6 +30,11 @@ const CRATES = [
     toolchainFile: "packages/pst-reader/rust-toolchain.toml",
     marker: "packages/pst-reader",
   },
+  {
+    name: "recording-wasm",
+    toolchainFile: "packages/recording-wasm/rust-toolchain.toml",
+    marker: "packages/recording-wasm",
+  },
 ] as const;
 
 const channel = (file: string): string => {

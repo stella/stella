@@ -4,16 +4,14 @@ import type {
   DocxCompatibility,
   DocxEditorRef,
   EditorMode,
+  FolioFieldInsertion,
 } from "@stll/folio-react";
 
 import { useEvidenceReferences } from "@/components/docx/use-evidence-references";
 import { detached } from "@/lib/detached";
 
 import { canInsertEvidenceReference } from "./docx-browser-editor.logic";
-import type {
-  DocxEditModeResult,
-  DocxEditorSession,
-} from "./docx-browser-editor.logic";
+import type { DocxEditModeResult } from "./docx-browser-editor.logic";
 
 export type EvidenceReferencesDialogState = "closed" | "open" | "requested";
 
@@ -25,7 +23,6 @@ type UseEvidenceReferenceInsertionOptions = {
   dialogState: EvidenceReferencesDialogState;
   editorMode: EditorMode;
   editorRef: RefObject<DocxEditorRef | null>;
-  editorSession: DocxEditorSession;
   isUnlocked: boolean;
   onDialogStateChange: (state: EvidenceReferencesDialogState) => void;
   requestEditMode: () => Promise<DocxEditModeResult>;
@@ -43,21 +40,13 @@ export const useEvidenceReferenceInsertion = ({
   dialogState,
   editorMode,
   editorRef,
-  editorSession,
   isUnlocked,
   onDialogStateChange,
   requestEditMode,
 }: UseEvidenceReferenceInsertionOptions) => {
   const editable = isUnlocked && editorMode !== "viewing";
-  // Renumbering stays off where the session would refuse it.
-  const evidence = useEvidenceReferences(
-    editable && editorSession === "legacy",
-  );
-  const canInsert = canInsertEvidenceReference({
-    canUnlock,
-    compatibility,
-    editorSession,
-  });
+  const evidence = useEvidenceReferences();
+  const canInsert = canInsertEvidenceReference(canUnlock, compatibility);
 
   const handleEvidenceReferencesClick = () => {
     if (!canInsert || isUnlocked) {
@@ -87,7 +76,10 @@ export const useEvidenceReferenceInsertion = ({
       onOpenChange: (nextOpen: boolean) => {
         onDialogStateChange(nextOpen ? "open" : "closed");
       },
+      insertField: (field: FolioFieldInsertion) =>
+        editorRef.current?.insertField(field) ?? false,
     },
+    derivedFields: evidence.derivedFields,
     document: evidence.document,
     onClick: handleEvidenceReferencesClick,
     plugins: evidence.plugins,

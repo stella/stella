@@ -2108,6 +2108,7 @@ const config = defineConfig({
     "packages/scan-engine/generated/scan_engine.js",
     "packages/heic-decoder/generated/heic_decoder.js",
     "packages/pst-reader/generated/pst_reader.js",
+    "packages/recording-wasm/generated/recording.js",
     // Snowball stemmers: generated output plus the upstream JS runtime,
     // transcribed verbatim. Product-code rules would rewrite the algorithm
     // (prefer-code-point changes UTF-16 semantics; no-bitwise has no

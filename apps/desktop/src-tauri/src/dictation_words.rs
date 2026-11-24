@@ -8,9 +8,10 @@
 //! other dictation preferences they are the speaker's data: never logged, and
 //! never sent anywhere else.
 //!
-//! A new account's list starts with its organization's name, once: a speaker
-//! who removes it never gets it back, because the seeding is remembered for
-//! the account apart from the list.
+//! A new account's list starts with its organization's name and the
+//! member's own name, each once: a speaker who removes one never gets it
+//! back, because each seeding is remembered for the account apart from the
+//! list.
 
 use tauri::{AppHandle, Manager};
 
@@ -21,10 +22,7 @@ use crate::{
 
 /// One file for each account, named by its local data namespace.
 const FILE_PREFIX: &str = "dictation-custom-words-";
-/// Which seeding an account's list has had, one file for each account.
-const SEEDED_PREFIX: &str = "dictation-custom-words-seeded-";
 /// The only seeding there is: the organization's name.
-const SEEDED_ORGANIZATION_NAME: &str = "organization-name";
 const CONTROL: &str = "a custom word cannot hold a line break or a control character";
 const TOO_LONG: &str = "a custom word is longer than stella AI accepts";
 const TOO_MANY: &str = "there are more custom words than stella AI accepts";
@@ -102,13 +100,38 @@ fn preference(namespace: &str) -> DevicePreference {
   DevicePreference::in_app_data(&format!("{FILE_PREFIX}{namespace}"))
 }
 
-fn seeded_preference(namespace: &str) -> DevicePreference {
-  DevicePreference::in_app_data(&format!("{SEEDED_PREFIX}{namespace}"))
+/// A name an account's list starts with, each seeded once.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Seed {
+  OrganizationName,
+  MemberName,
 }
 
-/// The list with the organization's name first, or none when the list
-/// already has it, has no room, or the name is not a word the list takes.
-fn with_organization_name(
+impl Seed {
+  /// The file recording whether this seeding happened, one for each account.
+  const fn file_prefix(self) -> &'static str {
+    match self {
+      Self::OrganizationName => "dictation-custom-words-seeded-",
+      Self::MemberName => "dictation-custom-words-member-seeded-",
+    }
+  }
+
+  fn preference(self, namespace: &str) -> DevicePreference {
+    DevicePreference::in_app_data(&format!("{}{namespace}", self.file_prefix()))
+  }
+
+  /// What the seeding file holds once the seeding happened.
+  const fn marker(self) -> &'static str {
+    match self {
+      Self::OrganizationName => "organization-name",
+      Self::MemberName => "member-name",
+    }
+  }
+}
+
+/// The list with the name first, or none when the list already has it, has
+/// no room, or the name is not a word the list takes.
+fn with_seeded_name(
   words: &[String],
   name: &str,
   limits: Limits,
@@ -126,16 +149,27 @@ fn with_organization_name(
   (seeded.len() > words.len()).then_some(seeded)
 }
 
-/// Where one account's list and its seeding are kept.
+/// Where one account's list and one of its seedings are kept.
 struct SeedFiles {
+  seed: Seed,
   words: DevicePreference,
   seeded: DevicePreference,
 }
 
-/// Puts the organization's name into an account's list unless that list was
-/// seeded before; a name the list does not take still counts as seeded. The
-/// list is written before the seeding is remembered, so a failure never
-/// marks a list seeded that lacks the name. Says whether the list changed.
+impl SeedFiles {
+  fn for_account(seed: Seed, namespace: &str) -> Self {
+    Self {
+      seed,
+      words: preference(namespace),
+      seeded: seed.preference(namespace),
+    }
+  }
+}
+
+/// Puts a name into an account's list unless that seeding happened before;
+/// a name the list does not take still counts as seeded. The list is written
+/// before the seeding is remembered, so a failure never marks a list seeded
+/// that lacks the name. Says whether the list changed.
 fn seed_once(files: &SeedFiles, name: &str, limits: Limits) -> Result<bool, String> {
   if files.seeded.read_stored()?.is_some() {
     return Ok(false);
@@ -144,21 +178,34 @@ fn seed_once(files: &SeedFiles, name: &str, limits: Limits) -> Result<bool, Stri
     Some(stored) => read_back(&stored, limits),
     None => Vec::new(),
   };
-  let seeded = with_organization_name(&words, name, limits);
+  let seeded = with_seeded_name(&words, name, limits);
   if let Some(seeded) = &seeded {
     let stored =
       serde_json::to_string(seeded).map_err(|_error| TOO_MANY.to_string())?;
     files.words.write(&stored)?;
   }
-  files.seeded.write(SEEDED_ORGANIZATION_NAME)?;
+  files.seeded.write(files.seed.marker())?;
   Ok(seeded.is_some())
 }
 
-/// Seeds the custom words of the linked account with its organization's
-/// name, once per account. The name comes from the account's registry
-/// configuration; an API that does not send it leaves the list as it is,
-/// and the next start tries again.
-pub fn seed_organization_name(app: &AppHandle) {
+/// Seeds one name into the account's list; the error names a limit or a
+/// file, never a word. Says whether the list changed.
+fn seed_logged(files: &SeedFiles, name: &str) -> bool {
+  match seed_once(files, name, crate::dictation_cloud::vocabulary_limits()) {
+    Ok(changed) => changed,
+    Err(error) => {
+      tracing::warn!(error = %error, seed = ?files.seed, "dictation words were not seeded");
+      false
+    }
+  }
+}
+
+/// Seeds the custom words of the linked account with the member's own name
+/// and its organization's name, each once per account. The member's name is
+/// the one the account was linked with; the organization's comes from the
+/// registry configuration, and an API that does not send it leaves that
+/// seeding for the next start.
+pub fn seed_account_names(app: &AppHandle) {
   let Some(state) = app.try_state::<crate::account::AccountState>() else {
     return;
   };
@@ -169,40 +216,37 @@ pub fn seed_organization_name(app: &AppHandle) {
       return;
     };
     let namespace = request.local_data_namespace();
-    if seeded_preference(&namespace).read().is_some() {
-      return;
+    let member = SeedFiles::for_account(Seed::MemberName, &namespace);
+    let mut changed = request
+      .account
+      .name
+      .as_deref()
+      .is_some_and(|name| seed_logged(&member, name));
+    let organization = SeedFiles::for_account(Seed::OrganizationName, &namespace);
+    if organization.seeded.read().is_none() {
+      let config = crate::registry::request(
+        request.request_auth(),
+        serde_json::json!({"type":"config"}),
+      )
+      .await;
+      drop(request);
+      match config {
+        Ok(config) => {
+          if let Some(name) = config
+            .get("organizationName")
+            .and_then(serde_json::Value::as_str)
+          {
+            changed |= seed_logged(&organization, name);
+          }
+        }
+        Err(error) => {
+          tracing::warn!(error = %error, "dictation words were not seeded: configuration unavailable");
+        }
+      }
     }
-    let config = crate::registry::request(
-      request.request_auth(),
-      serde_json::json!({"type":"config"}),
-    )
-    .await;
-    drop(request);
-    let name = match config {
-      Ok(config) => config
-        .get("organizationName")
-        .and_then(serde_json::Value::as_str)
-        .map(str::to_string),
-      Err(error) => {
-        tracing::warn!(error = %error, "dictation words were not seeded: configuration unavailable");
-        return;
-      }
-    };
-    let Some(name) = name else {
-      return;
-    };
-    let files = SeedFiles {
-      words: preference(&namespace),
-      seeded: seeded_preference(&namespace),
-    };
-    // The error names a limit or a file, never a word.
-    match seed_once(&files, &name, crate::dictation_cloud::vocabulary_limits()) {
-      // An open settings or onboarding screen reads the list again.
-      Ok(true) => crate::dictation::publish(&app),
-      Ok(false) => {}
-      Err(error) => {
-        tracing::warn!(error = %error, "dictation words were not seeded");
-      }
+    // An open settings or onboarding screen reads the list again.
+    if changed {
+      crate::dictation::publish(&app);
     }
   });
 }
@@ -293,10 +337,52 @@ mod tests {
     let root = std::env::temp_dir()
       .join(format!("stella-dictation-seed-{}", uuid::Uuid::new_v4()));
     let files = SeedFiles {
+      seed: Seed::OrganizationName,
       words: DevicePreference::at(root.join("words")),
       seeded: DevicePreference::at(root.join("seeded")),
     };
     (root, files)
+  }
+
+  /// The member seeding of the same list `files` seeds.
+  fn member_files(root: &std::path::Path) -> SeedFiles {
+    SeedFiles {
+      seed: Seed::MemberName,
+      words: DevicePreference::at(root.join("words")),
+      seeded: DevicePreference::at(root.join("member-seeded")),
+    }
+  }
+
+  #[test]
+  fn the_member_name_is_seeded_once_even_into_a_list_seeded_before() {
+    let (root, organization) = seed_files();
+    assert!(seed_once(&organization, "Acme Law", LIMITS).unwrap());
+    let member = member_files(&root);
+    assert!(seed_once(&member, " Jan Novák ", LIMITS).unwrap());
+    assert_eq!(stored(&member), list(&["Jan Novák", "Acme Law"]));
+    assert_eq!(
+      member.seeded.read().as_deref(),
+      Some(Seed::MemberName.marker())
+    );
+
+    // The speaker removes it; neither seeding brings it back.
+    member
+      .words
+      .write(&serde_json::to_string(&list(&["Acme Law"])).unwrap())
+      .unwrap();
+    assert!(!seed_once(&member, "Jan Novák", LIMITS).unwrap());
+    assert!(!seed_once(&organization, "Acme Law", LIMITS).unwrap());
+    assert_eq!(stored(&member), list(&["Acme Law"]));
+    std::fs::remove_dir_all(root).unwrap();
+  }
+
+  #[test]
+  fn each_seed_remembers_itself_in_its_own_file() {
+    assert_ne!(
+      Seed::OrganizationName.file_prefix(),
+      Seed::MemberName.file_prefix()
+    );
+    assert_ne!(Seed::OrganizationName.marker(), Seed::MemberName.marker());
   }
 
   fn stored(files: &SeedFiles) -> Vec<String> {
@@ -331,17 +417,17 @@ mod tests {
     std::fs::remove_dir_all(root).unwrap();
 
     assert_eq!(
-      with_organization_name(&list(&["a", "b"]), "Org", LIMITS),
+      with_seeded_name(&list(&["a", "b"]), "Org", LIMITS),
       Some(list(&["Org", "a", "b"]))
     );
     // A full list keeps the speaker's words; the name does not push one out.
     assert_eq!(
-      with_organization_name(&list(&["a", "b", "c"]), "Org", LIMITS),
+      with_seeded_name(&list(&["a", "b", "c"]), "Org", LIMITS),
       None
     );
     // A name the list would refuse is not seeded.
-    assert_eq!(with_organization_name(&[], &"x".repeat(11), LIMITS), None);
-    assert_eq!(with_organization_name(&[], "  ", LIMITS), None);
+    assert_eq!(with_seeded_name(&[], &"x".repeat(11), LIMITS), None);
+    assert_eq!(with_seeded_name(&[], "  ", LIMITS), None);
   }
 
   #[test]
@@ -350,7 +436,7 @@ mod tests {
     assert!(!seed_once(&files, &"x".repeat(11), LIMITS).unwrap());
     assert_eq!(
       files.seeded.read().as_deref(),
-      Some(SEEDED_ORGANIZATION_NAME)
+      Some(Seed::OrganizationName.marker())
     );
     assert!(files.words.read().is_none());
     std::fs::remove_dir_all(root).unwrap();

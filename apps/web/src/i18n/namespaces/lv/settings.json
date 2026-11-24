@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Piekļuve norēķinu datiem",
+      "billingAccessDescription": "Ļauj skatīt likmes, summas un rēķinus lietās, kurām šim dalībniekam ir piekļuve. Īpašniekiem un administratoriem šī piekļuve ir vienmēr.",
+      "billingAccessIncludedInRole": "Iekļauts lomā",
       "changeRole": "Mainīt lomu",
       "confirmRoleChangeDescription": "{email} loma tiks mainīta {oldRole, select, owner {no īpašnieka lomas} admin {no administratora lomas} member {no dalībnieka lomas} intern {no praktikanta lomas} external {no ārējā sadarbības partnera lomas} other {}} {newRole, select, owner {uz īpašnieka lomu} admin {uz administratora lomu} member {uz dalībnieka lomu} intern {uz praktikanta lomu} external {uz ārējā sadarbības partnera lomu} other {}}.",
       "confirmRoleChangeTitle": "Mainīt lomu",
@@ -780,8 +782,10 @@
         "title": "Organizācijas īsais nosaukums"
       },
       "sso": {
+        "acsUrlLabel": "ACS adrese (URL)",
         "addDomain": "Pievienot domēnu",
         "addProvider": "Pievienot OIDC nodrošinātāju",
+        "addSamlProvider": "Pievienot SAML 2.0 nodrošinātāju",
         "callbackUrlLabel": "Atzvanīšanas URL",
         "clientIdLabel": "Klienta ID",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +813,10 @@
         "providersTitle": "Identitātes nodrošinātāji",
         "requireSsoDescription": "Kad ieslēgts, dalībniekiem jāpiesakās ar vienu no šīs organizācijas identitātes nodrošinātājiem.",
         "requireSsoTitle": "Pieprasīt SSO šai organizācijai",
+        "samlCertLabel": "IdP X.509 parakstīšanas sertifikāts (PEM)",
+        "samlEntityIdLabel": "IdP izdevēja URI",
+        "samlEntryPointLabel": "IdP SSO URL (ieejas punkts)",
+        "spMetadataUrlLabel": "SP metadatu adrese (URL)",
         "testDiscovery": "Pārbaudīt discovery",
         "title": "Vienotā pieteikšanās (SSO)",
         "verifyDomain": "Pārbaudīt tagad"

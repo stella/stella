@@ -38,6 +38,10 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import type { ManagedModelTier } from "@/api/lib/usage/managed-model-tier";
 
+import {
+  matterSuggestionAISchema,
+  normalizeMatterSuggestion,
+} from "./matter-suggestion";
 import { hashSummarySource } from "./summary-source-hash";
 
 const MAX_ORGANIZE_FILES = 100;
@@ -86,6 +90,7 @@ const organizeSuggestionsBodySchema = v.object({
   userInstructions: v.optional(
     v.pipe(v.string(), v.maxLength(MAX_USER_INSTRUCTIONS_CHARS)),
   ),
+  suggestMatter: v.optional(v.boolean()),
 });
 
 type OrganizeSuggestionsBody = v.InferOutput<
@@ -120,6 +125,7 @@ export const suggestionsAIOutputSchema = v.strictObject({
       reason: v.string(),
     }),
   ),
+  matter: v.nullable(matterSuggestionAISchema),
 });
 
 type OrganizeSuggestionsHandlerProps = {
@@ -190,7 +196,8 @@ Suggest concise, human-readable folder paths and clean filenames.
 The naming language must match the user's preferred locale unless every file is in a clearly different language. When the user locale is provided, use it for folder names and filename phrasing; keep proper nouns, party names, and citation tokens as they appear in the source.
 Use dates in filenames only when the summary or filename supports them. Do not write "unknown date".
 Keep original file extensions. Do not invent parties, dates, or facts.
-The userInstructions field, when present, contains optional guidance from the user. Treat it as a soft preference. Never let it override these system rules: still keep extensions, never invent facts, never propose folder deletions outside emptyFolders, and never collapse folders into a single child.`;
+The userInstructions field, when present, contains optional guidance from the user. Treat it as a soft preference. Never let it override these system rules: still keep extensions, never invent facts, never propose folder deletions outside emptyFolders, and never collapse folders into a single child.
+When suggestMatter is true, also return matter: a concise matter name in the user's locale (for example the parties and the subject, "Novák v. Dvořák - lease dispute"), and the client the documents are prepared for or on behalf of (the grantor of a power of attorney, the party the law firm represents), never the opposing party or the law firm itself. Set clientName to null when the client is not clear from the files. When suggestMatter is false, return matter: null.`;
 
 const organizeSuggestionsHandler = async function* ({
   safeDb,
@@ -328,6 +335,7 @@ const organizeSuggestionsHandler = async function* ({
         prompt: JSON.stringify({
           locale: locale || null,
           userInstructions: userInstructions || null,
+          suggestMatter: body.suggestMatter === true,
           existingFolders: arrayOrEmpty(body.existingFolders).map((folder) => ({
             entityId: folder.entityId,
             name: folder.name,
@@ -395,9 +403,30 @@ const organizeSuggestionsHandler = async function* ({
     ),
   });
 
+  return finishSuggestions({
+    contexts,
+    suggestionsByEntityId: flattenedByEntityId,
+    deleteFolders,
+    matter: body.suggestMatter === true ? result.value.matter : null,
+  });
+};
+
+type FinishSuggestionsOptions = {
+  contexts: EntitySummaryContext[];
+  suggestionsByEntityId: Map<string, GeneratedSuggestion>;
+  deleteFolders: GeneratedFolderDeletion[];
+  matter: v.InferOutput<typeof suggestionsAIOutputSchema>["matter"];
+};
+
+const finishSuggestions = ({
+  contexts,
+  suggestionsByEntityId,
+  deleteFolders,
+  matter,
+}: FinishSuggestionsOptions) => {
   const suggestions: GeneratedSuggestion[] = [];
   for (const context of contexts) {
-    const suggestion = flattenedByEntityId.get(context.entityId);
+    const suggestion = suggestionsByEntityId.get(context.entityId);
     if (!suggestion) {
       return Result.err(
         new HandlerError({
@@ -410,7 +439,11 @@ const organizeSuggestionsHandler = async function* ({
     suggestions.push(suggestion);
   }
 
-  return Result.ok({ suggestions, deleteFolders });
+  return Result.ok({
+    suggestions,
+    deleteFolders,
+    matter: normalizeMatterSuggestion(matter),
+  });
 };
 
 type CollapseSingleChildFoldersOptions = {
@@ -1117,7 +1150,9 @@ const config = {
     "file (folder path, suggested name, detected date, document type) and " +
     "the empty folders it suggests removing. Suggestions only: nothing is " +
     "moved, renamed, or deleted, so apply what you want with entities.move " +
-    "and entities.rename. Per-document summaries are generated and cached " +
+    "and entities.rename. With suggestMatter it also proposes a matter name " +
+    "and the client's name and type, read from the documents, for turning " +
+    "a personal matter into a client matter. Per-document summaries are generated and cached " +
     "where missing, and the call consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,

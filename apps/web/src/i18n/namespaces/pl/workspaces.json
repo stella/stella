@@ -854,6 +854,8 @@
       "instructionsEmpty": "Brak niestandardowych instrukcji",
       "instructionsPlaceholder": "np. Używaj polskich nazw folderów, grupuj według strony przeciwnej, daty zaczynaj od roku.",
       "instructionsTitle": "Instrukcje AI",
+      "newClientHint": "Po zastosowaniu zostanie utworzony nowy kontakt.",
+      "newMatterFromDocuments": "Nowa sprawa z dokumentów",
       "noChangesToApply": "Nie ma plików ani folderów do uporządkowania.",
       "noFilesToOrganize": "Dodaj pliki do uporządkowania.",
       "organized": "Pliki uporządkowane",

@@ -576,10 +576,12 @@ type CoverageLoad = {
   onPartialFailure: (part: CaseLawCoveragePart) => void;
   now: Date;
   readSources: () => Promise<CaseLawCoverageSourceRow[]>;
-  /** Null when the read failed as a whole, so no source gets a number. */
+  /** Unavailable when the read failed as a whole, so no source gets a number. */
   readArrivals: (
     sourceIds: readonly SafeId<"caseLawSource">[],
-  ) => Promise<ReadonlyMap<string, CaseLawSourceArrivals> | null>;
+  ) => Promise<
+    ReadonlyMap<string, CaseLawSourceArrivals> | { status: "unavailable" }
+  >;
   readCensus: (
     sources: readonly Pick<CaseLawCoverageSourceRow, "id" | "adapterKey">[],
   ) => Promise<ReadonlyMap<string, SourceCensus>>;
@@ -597,14 +599,18 @@ type CoverageLoad = {
   }) => Promise<readonly CaseLawCourtStatusRow[]>;
 };
 
-/** A read whose null means it failed; the failure is reported as it is read. */
-const reportingNull = async <Value>(
-  read: () => Promise<Value | null>,
-  onNull: () => void,
+/** Explicit sentinel when an optional coverage read failed as a whole. */
+const CASE_LAW_ARRIVALS_UNAVAILABLE = { status: "unavailable" } as const;
+
+/** A read whose unavailable sentinel means it failed; reported as it is read. */
+const reportingUnavailable = async <Value extends object>(
+  read: () => Promise<Value | { status: "unavailable" }>,
+  onUnavailable: () => void,
 ): Promise<Value | null> => {
   const value = await read();
-  if (value === null) {
-    onNull();
+  if ("status" in value) {
+    onUnavailable();
+    return null;
   }
   return value;
 };
@@ -739,7 +745,7 @@ export const loadCaseLawCoverage = async ({
     sharedUnread.add(part);
     onPartialFailure(part);
   };
-  const arrivals = await reportingNull(
+  const arrivals = await reportingUnavailable(
     async () => await readArrivals(admitted.map(({ id }) => id)),
     () => unreadEverywhere("arrivals"),
   );
@@ -1226,7 +1232,7 @@ export const computeCaseLawCoverageAnswer = async (
         });
         if (Result.isError(arrivals)) {
           observeFailure(arrivals.error, { sink: arrivalsReadFailure });
-          return null;
+          return CASE_LAW_ARRIVALS_UNAVAILABLE;
         }
         return arrivals.value;
       },

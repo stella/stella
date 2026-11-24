@@ -21,7 +21,10 @@ import {
   authUserPolicies,
   denyStellaAccessPolicies,
 } from "@/api/db/rls";
-import { admitSsoOidcConfig } from "@/api/lib/db/sso-provider-config";
+import {
+  admitSsoOidcConfig,
+  admitSsoSamlConfig,
+} from "@/api/lib/db/sso-provider-config";
 import { ACCOUNT_EMAIL_UNDELIVERABLE_REASONS } from "@/api/lib/email/deliverability-contract";
 import {
   SYNTHETIC_PRINCIPAL,
@@ -448,8 +451,11 @@ export const ssoProvider = pgTable(
       "stella:sealed-text:v1:sso_provider.oidc_config",
       admitSsoOidcConfig,
     )("oidc_config"),
-    /** SAML configuration; always null until SAML sign-in is offered. */
-    samlConfig: text("saml_config"),
+    /** The plugin's SAML 2.0 configuration JSON, IdP certificate included, sealed. */
+    samlConfig: sealedText(
+      "stella:sealed-text:v1:sso_provider.saml_config",
+      admitSsoSamlConfig,
+    )("saml_config"),
     /** The account that registered the provider, as the plugin records it. */
     userId: text("user_id").references(() => user.id, {
       onDelete: "set null",
@@ -469,8 +475,8 @@ export const ssoProvider = pgTable(
       sql`${table.providerId} ~ ${sql.raw(`'${SSO_PROVIDER_ID_PATTERN}'`)}`,
     ),
     check(
-      "sso_provider_oidc_only_check",
-      sql`${table.oidcConfig} IS NOT NULL AND ${table.samlConfig} IS NULL`,
+      "sso_provider_single_protocol_check",
+      sql`(${table.oidcConfig} IS NOT NULL AND ${table.samlConfig} IS NULL) OR (${table.oidcConfig} IS NULL AND ${table.samlConfig} IS NOT NULL)`,
     ),
     ...denyStellaAccessPolicies(),
   ],

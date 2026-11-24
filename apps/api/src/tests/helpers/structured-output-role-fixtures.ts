@@ -243,7 +243,7 @@ export const STRUCTURED_OUTPUT_ROLE_FIXTURES: readonly StructuredOutputRoleFixtu
       outputSchema: "suggestionsAIOutputSchema",
       schema: suggestionsAIOutputSchema,
       answer:
-        '{"suggestions":[{"entityId":"ent_01","folderPath":"Contracts/Leases","suggestedName":"Office lease agreement","detectedDate":"2026-03-01","documentType":"Lease agreement"}],"deleteFolders":[{"entityId":"fld_07","reason":"Empty folder left after reorganisation."}]}',
+        '{"suggestions":[{"entityId":"ent_01","folderPath":"Contracts/Leases","suggestedName":"Office lease agreement","detectedDate":"2026-03-01","documentType":"Lease agreement"}],"deleteFolders":[{"entityId":"fld_07","reason":"Empty folder left after reorganisation."}],"matter":{"name":"Office lease - Acme","clientName":"Acme s.r.o.","clientType":"organization"}}',
     },
     {
       file: "handlers/playbooks/derive-ask.ts",

@@ -1461,7 +1461,8 @@ pub async fn transcribe_search_matters(
   matters
 }
 
-/// Opens the window, from the tray or the Settings window.
+/// Opens the window, from the tray, the Settings window or the clipboard
+/// window.
 #[tauri::command]
 pub fn transcribe_open(app: AppHandle) -> Result<(), String> {
   require_available(&app)?;

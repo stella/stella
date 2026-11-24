@@ -79,6 +79,7 @@ import {
   TagsIcon,
   Trash2Icon,
   VideoIcon,
+  WavesIcon,
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
@@ -128,6 +129,7 @@ import {
   useClipboardShortcut,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { useDictationAvailability } from "../shared/use-dictation-availability";
 import {
   describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -1660,6 +1662,8 @@ const ClipboardWelcomeDialog = ({
 const ClipboardApp = () => {
   const t = useTranslations("clipboard");
   const locale = useLocale();
+  const tTranscribe = useTranslations("transcribe");
+  const dictationAvailability = useDictationAvailability();
   const railDirection = isUiLocale(locale)
     ? getUiLocaleDirection(locale)
     : "ltr";
@@ -3203,6 +3207,32 @@ const ClipboardApp = () => {
                   </TooltipTrigger>
                   <TooltipPopup>Stella</TooltipPopup>
                 </Tooltip>
+                {dictationAvailability === "available" ? (
+                  <Button
+                    aria-label={tTranscribe("title")}
+                    className="size-11 shrink-0 rounded-full"
+                    onClick={() => {
+                      void invoke("transcribe_open").catch((error: unknown) => {
+                        reportDesktopError({
+                          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+                          detail: describeError(error),
+                          operation:
+                            DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
+                          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+                        });
+                        setError({
+                          message: t("errorOpenTranscribeRecording"),
+                          source: "operation",
+                        });
+                      });
+                    }}
+                    size="icon"
+                    tooltip={tTranscribe("title")}
+                    variant="ghost"
+                  >
+                    <WavesIcon aria-hidden="true" className="size-4" />
+                  </Button>
+                ) : null}
                 {snapshot.captureStatus === "paused" ? (
                   <Button
                     aria-label={t("resume")}

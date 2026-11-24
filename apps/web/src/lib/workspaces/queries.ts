@@ -216,17 +216,23 @@ export const workspacesNavigationOptions = (
   });
 
 export const workspaceOptions = (workspaceId: string) =>
-  queryOptions({
-    queryKey: workspacesKeys.byId(workspaceId),
-    queryFn: async ({ signal }) => {
-      const response = await api
-        .workspaces({ workspaceId })
-        .get({ fetch: { signal } });
+  resourceQueryOptions(
+    queryOptions({
+      queryKey: workspacesKeys.byId(workspaceId),
+      queryFn: async ({ signal }) => {
+        const response = await api
+          .workspaces({ workspaceId })
+          .get({ fetch: { signal } });
 
-      return unwrapApiResponse(response);
+        return unwrapApiResponse(response);
+      },
+      staleTime: ROUTE_QUERY_STALE_TIME_MS,
+    }),
+    {
+      resources: [RESOURCE_TYPE.WORKSPACE, RESOURCE_TYPE.CONTACT],
+      scope: { type: "workspace", workspaceId },
     },
-    staleTime: ROUTE_QUERY_STALE_TIME_MS,
-  });
+  );
 
 export const workspaceActivityOptions = ({
   activeOrganizationId,

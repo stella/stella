@@ -854,6 +854,8 @@
       "instructionsEmpty": "Žádné vlastní pokyny",
       "instructionsPlaceholder": "např. Používej české názvy složek, sdružuj podle protistrany, datum uvádět s rokem na začátku.",
       "instructionsTitle": "Pokyny pro AI",
+      "newClientHint": "Při použití se vytvoří nový kontakt.",
+      "newMatterFromDocuments": "Nový spis z dokumentů",
       "noChangesToApply": "Nejsou zde soubory ani složky k uspořádání.",
       "noFilesToOrganize": "Přidejte soubory k uspořádání.",
       "organized": "Soubory uspořádány",

@@ -47,6 +47,7 @@ describe("auth session paths", () => {
       "/sign-in/social",
       "/sign-up/email",
       "/sso/callback/:providerId",
+      "/sso/saml2/sp/acs/:providerId",
     ]);
 
     const enabledPaths = getEnabledAuthEndpointPaths();
