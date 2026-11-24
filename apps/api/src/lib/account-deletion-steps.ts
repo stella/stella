@@ -31,6 +31,10 @@ import {
   organization,
   organizationSsoDomain,
   organizationSsoPendingMember,
+  scimIdentityTombstone,
+  scimProjectionGrant,
+  scimSubject,
+  scimUser,
   session,
   ssoProvider,
   twoFactor,
@@ -263,6 +267,10 @@ const REVOKE_AUTH_CREDENTIALS_TABLES = [
   apikey,
   organizationSsoDomain,
   organizationSsoPendingMember,
+  scimIdentityTombstone,
+  scimProjectionGrant,
+  scimSubject,
+  scimUser,
   ssoProvider,
 ] as const satisfies readonly PgTable[];
 
@@ -319,6 +327,19 @@ export const revokeAuthCredentialsAndInvitations = async ({
     .update(organizationSsoPendingMember)
     .set({ reviewedBy: null })
     .where(eq(organizationSsoPendingMember.reviewedBy, currentUserId));
+  // Remove SCIM directory records for the soft-deleted user (user FK cascade does not fire on soft-delete).
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx
+    .delete(scimProjectionGrant)
+    .where(eq(scimProjectionGrant.userId, currentUserId));
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx.delete(scimUser).where(eq(scimUser.userId, currentUserId));
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx.delete(scimSubject).where(eq(scimSubject.userId, currentUserId));
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx
+    .delete(scimIdentityTombstone)
+    .where(eq(scimIdentityTombstone.userId, currentUserId));
 };
 
 const REVOKE_OAUTH_TOKENS_TABLES = [

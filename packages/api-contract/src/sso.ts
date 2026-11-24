@@ -248,6 +248,59 @@ export type OrganizationSsoPendingMemberSummary = v.InferOutput<
   typeof organizationSsoPendingMemberSummarySchema
 >;
 
+export const ORGANIZATION_SCIM_TOKEN_STATUSES = [
+  "active",
+  "expired",
+  "revoked",
+  "decommissioned",
+] as const;
+
+export type OrganizationScimTokenStatus =
+  (typeof ORGANIZATION_SCIM_TOKEN_STATUSES)[number];
+
+export const organizationScimTokenSummarySchema = /* @__PURE__ */ v.object({
+  id: v.string(),
+  status: v.picklist(ORGANIZATION_SCIM_TOKEN_STATUSES),
+  expiresAt: v.string(),
+  createdAt: v.string(),
+  lastUsedAt: v.nullable(v.string()),
+  revokedAt: v.nullable(v.string()),
+});
+
+export type OrganizationScimTokenSummary = v.InferOutput<
+  typeof organizationScimTokenSummarySchema
+>;
+
+export const createOrganizationScimTokenBodySchema =
+  /* @__PURE__ */ v.strictObject({
+    expiresInDays: v.optional(
+      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(3650)),
+    ),
+  });
+
+export type CreateOrganizationScimTokenBody = v.InferOutput<
+  typeof createOrganizationScimTokenBodySchema
+>;
+
+export const createOrganizationScimTokenResponseSchema =
+  /* @__PURE__ */ v.object({
+    token: organizationScimTokenSummarySchema,
+    bearerToken: v.string(),
+  });
+
+export type CreateOrganizationScimTokenResponse = v.InferOutput<
+  typeof createOrganizationScimTokenResponseSchema
+>;
+
+export const revokeOrganizationScimTokenResponseSchema =
+  /* @__PURE__ */ v.object({
+    revoked: v.literal(true),
+  });
+
+export type RevokeOrganizationScimTokenResponse = v.InferOutput<
+  typeof revokeOrganizationScimTokenResponseSchema
+>;
+
 export const organizationSsoSettingsResponseSchema = v.object({
   requirement: v.picklist(ORGANIZATION_SSO_POLICY_REQUIREMENTS),
   provisioningMode: v.picklist(ORGANIZATION_SSO_PROVISIONING_MODES),
@@ -256,6 +309,7 @@ export const organizationSsoSettingsResponseSchema = v.object({
   providers: v.array(organizationSsoProviderSummarySchema),
   domains: v.array(organizationSsoDomainSummarySchema),
   pendingMembers: v.array(organizationSsoPendingMemberSummarySchema),
+  scimTokens: v.array(organizationScimTokenSummarySchema),
 });
 
 export type OrganizationSsoSettingsResponse = v.InferOutput<

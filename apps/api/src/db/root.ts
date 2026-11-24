@@ -8,7 +8,12 @@ import { createOpaqueOrganizationSlug } from "@stll/auth-model";
 import { classifyFailure, declareFailureClass } from "@stll/errors";
 
 import { agentRegistration } from "@/api/db/agent-auth-schema";
-import { member, organization, user } from "@/api/db/auth-schema";
+import {
+  member,
+  organization,
+  organizationSsoPolicy,
+  user,
+} from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import {
   oauthGrantRevocations,
@@ -919,3 +924,14 @@ export const provisionOrgSsoMemberByProviderRecord = async (params: {
   email: string;
   name?: string | null;
 }) => await provisionSsoMemberByProviderRecord(rootDb, params);
+
+export const readOrgSsoSeatLimit = async (
+  provisioningDomainId: string,
+): Promise<number | null> => {
+  const [policy] = await rootDb
+    .select({ seatLimit: organizationSsoPolicy.seatLimit })
+    .from(organizationSsoPolicy)
+    .where(eq(organizationSsoPolicy.organizationId, provisioningDomainId))
+    .limit(1);
+  return policy?.seatLimit ?? null;
+};

@@ -207,7 +207,7 @@ export const readOrganizationSsoSettings = async (
   db: SsoManagementDb,
   organizationId: SafeId<"organization">,
   urls: ProviderUrlBuilders,
-): Promise<OrganizationSsoSettingsResponse> => {
+): Promise<Omit<OrganizationSsoSettingsResponse, "scimTokens">> => {
   const [
     policyRows,
     providerRead,

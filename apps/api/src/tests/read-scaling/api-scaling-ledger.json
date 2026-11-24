@@ -1267,6 +1267,10 @@
       "reason": "New SSO provider deletion route; pending write scaling harness coverage."
     },
     {
+      "id": "DELETE /v1/organization-settings/sso/scim-tokens/:tokenId",
+      "reason": "New SCIM bearer credential revocation route; pending write scaling harness coverage."
+    },
+    {
       "id": "DELETE /v1/organization-settings/web-search-key",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -2425,6 +2429,10 @@
     {
       "id": "POST /v1/organization-settings/sso/saml/parse-metadata",
       "reason": "Read-only SAML IdP metadata parser and fetch route; no database writes."
+    },
+    {
+      "id": "POST /v1/organization-settings/sso/scim-tokens",
+      "reason": "New SCIM bearer credential issuance route; pending write scaling harness coverage."
     },
     {
       "id": "POST /v1/organization-settings/verification-decision-model",

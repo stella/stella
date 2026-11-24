@@ -51,6 +51,8 @@ const USER_CREATION_ORIGIN = {
    * interactive sign-in.
    */
   ssoRegistration: "sso_registration",
+  /** Directory provisioning via SCIM 2.0; the account accepts on first interactive sign-in. */
+  scimProvisioning: "scim_provisioning",
   /** An agent's verified identity, provisioned without a browser. */
   agentProvisioning: "agent_provisioning",
   /** The operator command that creates the review account. */
@@ -81,6 +83,7 @@ const STATEMENT_AT_CREATION = {
   social_registration: { type: "shown", displayedVersionIn: "oauth_state" },
   bootstrap_registration: { type: "shown", displayedVersionIn: "request_body" },
   sso_registration: { type: "not_shown" },
+  scim_provisioning: { type: "not_shown" },
   agent_provisioning: { type: "not_shown" },
   operator_command: { type: "not_shown" },
 } as const satisfies Record<UserCreationOrigin, StatementAtCreation>;
@@ -102,6 +105,7 @@ const USER_CREATION_PATH_ORIGINS = new Map([
   [REVIEW_ACCOUNT_CREATE_USER_PATH, USER_CREATION_ORIGIN.operatorCommand],
   ["/sso/callback/:providerId", USER_CREATION_ORIGIN.ssoRegistration],
   ["/sso/saml2/sp/acs/:providerId", USER_CREATION_ORIGIN.ssoRegistration],
+  ["/scim/v2/Users", USER_CREATION_ORIGIN.scimProvisioning],
 ]);
 
 // Every social provider calls back on `/callback/:id`, every SSO provider on

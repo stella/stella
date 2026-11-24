@@ -211,6 +211,10 @@ const AUTH_SESSION_PATH_PREFIXES: readonly {
     classification: noSession("SAML service provider metadata"),
   },
   {
+    prefix: "/scim/v2/",
+    classification: noSession("SCIM directory provisioning"),
+  },
+  {
     prefix: "/.well-known/",
     classification: noSession("OAuth server metadata"),
   },

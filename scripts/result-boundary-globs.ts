@@ -337,6 +337,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/auth/social-token-exchange.ts",
   // Better Auth consumes an SSO endpoint gate's and the session provenance
   // hook's refusals as rejected APIError values.
+  "apps/api/src/lib/auth/scim-provisioning.ts",
   "apps/api/src/lib/auth/sso-sign-in.ts",
   // Better Auth consumes the organization endpoints' SSO refusal as a
   // rejected APIError value.
