@@ -179,4 +179,51 @@ describe("planTestRuns", () => {
     expect(missingPaths).toEqual([]);
     expect(runs.map((run) => run.label)).toEqual(["unit", "dom", "e2e-unit"]);
   });
+
+  test("splits the full-suite DOM run across domShards round-robin and schedules them first", () => {
+    const result = planTestRuns({
+      argv: ["--reporter=junit", "--reporter-outfile=reports/web.xml"],
+      pathKind: () => "missing",
+      testFilesIn: (directory) =>
+        directory === "."
+          ? [
+              "src/a.dom.test.tsx",
+              "src/b.dom.test.tsx",
+              "src/c.dom.test.tsx",
+              "src/d.test.ts",
+            ]
+          : [],
+      domShards: 2,
+    });
+    expect(result.missingPaths).toEqual([]);
+    expect(result.runs.map((run) => run.label)).toEqual([
+      "dom-1",
+      "dom-2",
+      "unit",
+      "e2e-unit",
+    ]);
+    expect(result.runs[0]?.args).toEqual([
+      "--isolate",
+      "./src/a.dom.test.tsx",
+      "./src/c.dom.test.tsx",
+      "--reporter=junit",
+      "--reporter-outfile=reports/web.dom-1.xml",
+    ]);
+    expect(result.runs[1]?.args).toEqual([
+      "--isolate",
+      "./src/b.dom.test.tsx",
+      "--reporter=junit",
+      "--reporter-outfile=reports/web.dom-2.xml",
+    ]);
+  });
+
+  test("ignores domShards when explicit paths are passed", () => {
+    const result = planTestRuns({
+      argv: ["src/a.dom.test.tsx"],
+      pathKind: (arg) => (arg === "src/a.dom.test.tsx" ? "file" : "missing"),
+      testFilesIn: () => [],
+      domShards: 2,
+    });
+    expect(result.runs.map((run) => run.label)).toEqual(["dom"]);
+  });
 });
