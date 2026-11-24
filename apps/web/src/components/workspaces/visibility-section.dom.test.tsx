@@ -77,7 +77,7 @@ const pick = async (visibility: MatterVisibility) => {
   });
   const option = screen
     .getAllByRole("option")
-    .find((candidate) => candidate.textContent?.startsWith(LABELS[visibility]));
+    .find((candidate) => candidate.textContent.startsWith(LABELS[visibility]));
   if (!option) {
     throw new Error(`Expected the ${visibility} option`);
   }
