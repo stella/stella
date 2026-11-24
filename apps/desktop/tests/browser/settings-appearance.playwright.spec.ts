@@ -146,3 +146,25 @@ test("the native answer replaces a stale cached choice", async ({ page }) => {
       dark: false,
     });
 });
+
+test("a window listens for changes before it reads the saved choice", async ({
+  page,
+}) => {
+  await openSettingsWindow(page, "general", {
+    language: "en",
+    platform: "mac",
+    scheme: "light",
+  });
+
+  const calls = await tauriInvocations(page);
+  const listening = calls.findIndex(
+    ({ args, command }) =>
+      command === "plugin:event|listen" &&
+      args["event"] === DESKTOP_APPEARANCE_CHANGED_EVENT,
+  );
+  const reading = calls.findIndex(
+    ({ command }) => command === "get_desktop_appearance",
+  );
+  expect(listening).toBeGreaterThanOrEqual(0);
+  expect(reading).toBeGreaterThan(listening);
+});

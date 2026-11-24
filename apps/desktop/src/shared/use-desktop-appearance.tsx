@@ -55,8 +55,16 @@ export const useAppliedDesktopAppearance = (
   const changes = useRef(0);
 
   useEffect(() => {
-    const changesAtStart = changes.current;
+    let disposed = false;
+    let readStarted = false;
+    // Runs once the listener is live: a change emitted before then would be
+    // missed, and a read made before then could return the value it replaced.
     const read = async () => {
+      if (readStarted || disposed) {
+        return;
+      }
+      readStarted = true;
+      const changesAtStart = changes.current;
       const result = await Result.tryPromise(async () =>
         invoke("get_desktop_appearance"),
       );
@@ -77,41 +85,46 @@ export const useAppliedDesktopAppearance = (
         });
         return;
       }
-      if (changes.current === changesAtStart) {
+      if (!disposed && changes.current === changesAtStart) {
         cacheAppearance(result.value);
         setAppearance(result.value);
       }
     };
-    void read();
-  }, [telemetryWindow]);
 
-  useEffect(
-    () =>
-      subscribeDesktopEvent<{ appearance: unknown }>({
-        event: DESKTOP_APPEARANCE_CHANGED_EVENT,
-        handler: ({ payload }) => {
-          if (!isDesktopAppearance(payload.appearance)) {
-            reportDesktopError({
-              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
-              operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
-              window: telemetryWindow,
-            });
-            return;
-          }
-          changes.current += 1;
-          cacheAppearance(payload.appearance);
-          setAppearance(payload.appearance);
-        },
-        onError: () => {
+    const unsubscribe = subscribeDesktopEvent<{ appearance: unknown }>({
+      event: DESKTOP_APPEARANCE_CHANGED_EVENT,
+      handler: ({ payload }) => {
+        if (!isDesktopAppearance(payload.appearance)) {
           reportDesktopError({
-            code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+            code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
             operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
             window: telemetryWindow,
           });
-        },
-      }),
-    [telemetryWindow],
-  );
+          return;
+        }
+        changes.current += 1;
+        cacheAppearance(payload.appearance);
+        setAppearance(payload.appearance);
+      },
+      onSubscribed: () => {
+        void read();
+      },
+      onError: () => {
+        reportDesktopError({
+          code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+          operation: DESKTOP_TELEMETRY_OPERATIONS.runtime,
+          window: telemetryWindow,
+        });
+        // Without live changes the window still takes the saved choice once.
+        void read();
+      },
+    });
+
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [telemetryWindow]);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(DARK_SCHEME_QUERY);
