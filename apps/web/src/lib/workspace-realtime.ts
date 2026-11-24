@@ -194,6 +194,36 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.WORKSPACE],
   },
+  createWorkspace: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/workspaces",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
+  deleteWorkspace: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/workspaces/:workspaceId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.WORKSPACE],
+  },
+  createContact: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "PUT",
+        route: "/contacts",
+      },
+    ],
+    resources: [RESOURCE_TYPE.CONTACT],
+  },
   updateWorkspace: {
     writes: [
       {
@@ -828,11 +858,12 @@ export function resourceMutation<
   TData,
   // A write that takes no variables is invoked with none.
   TVariables = void,
+  TRest extends unknown[] = [],
 >(
-  options: ResourceMutationOptions<TMutation, TVariables, TData> & {
+  options: ResourceMutationOptions<TMutation, TVariables, TData, TRest> & {
     scope: { type: "organization" };
   },
-): (variables: TVariables) => Promise<TData>;
+): (variables: TVariables, ...rest: TRest) => Promise<TData>;
 export function resourceMutation<TData, TVariables>(
   options: ResourceMutationOptions<"updateUser", TVariables, TData> & {
     scope: OrganizationProjectionMutationScope;
