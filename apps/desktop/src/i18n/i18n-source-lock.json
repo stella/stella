@@ -326,6 +326,7 @@
   "clipboard.encryptedHistory": "History is encrypted on this device",
   "clipboard.enterGroupName": "Enter a group name.",
   "clipboard.errorOpenStella": "Stella could not be opened.",
+  "clipboard.errorOpenTranscribeRecording": "The transcription window could not be opened.",
   "clipboard.errorPaste": "This item could not be copied.",
   "clipboard.errorReadHistory": "Clipboard history could not be loaded.",
   "clipboard.errorUpdateHistory": "Clipboard history could not be updated.",

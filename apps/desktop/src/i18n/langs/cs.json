@@ -355,6 +355,7 @@
     "encryptedHistory": "Historie je v tomto zařízení šifrována",
     "enterGroupName": "Zadejte název skupiny.",
     "errorOpenStella": "Aplikaci stella se nepodařilo otevřít.",
+    "errorOpenTranscribeRecording": "Okno přepisu nahrávky se nepodařilo otevřít.",
     "errorPaste": "Tuto položku se nepodařilo zkopírovat.",
     "errorReadHistory": "Historii schránky se nepodařilo načíst.",
     "errorUpdateHistory": "Historii schránky se nepodařilo aktualizovat.",

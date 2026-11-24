@@ -355,6 +355,7 @@
     "encryptedHistory": "Az előzmények titkosítva vannak ezen az eszközön",
     "enterGroupName": "Adjon meg egy csoportnevet.",
     "errorOpenStella": "A stella nem nyitható meg.",
+    "errorOpenTranscribeRecording": "Az átírási ablakot nem sikerült megnyitni.",
     "errorPaste": "Ezt az elemet nem sikerült másolni.",
     "errorReadHistory": "A vágólap előzményeit nem sikerült betölteni.",
     "errorUpdateHistory": "A vágólap előzményeit nem sikerült frissíteni.",

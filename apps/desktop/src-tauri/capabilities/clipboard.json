@@ -47,6 +47,8 @@
     "allow-account-get-state",
     "allow-account-disconnect",
     "allow-open-stella-account",
-    "allow-shortcut-get-snapshot"
+    "allow-shortcut-get-snapshot",
+    "allow-dictation-get-snapshot",
+    "allow-transcribe-open"
   ]
 }

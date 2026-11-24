@@ -355,6 +355,7 @@
     "encryptedHistory": "El historial está cifrado en este dispositivo",
     "enterGroupName": "Introduzca un nombre para el grupo.",
     "errorOpenStella": "No se pudo abrir stella.",
+    "errorOpenTranscribeRecording": "No se pudo abrir la ventana de transcripción.",
     "errorPaste": "No se pudo copiar este elemento.",
     "errorReadHistory": "No se pudo cargar el historial del portapapeles.",
     "errorUpdateHistory": "No se pudo actualizar el historial del portapapeles.",

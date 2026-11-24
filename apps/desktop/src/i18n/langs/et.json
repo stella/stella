@@ -355,6 +355,7 @@
     "encryptedHistory": "Ajalugu on selles seadmes krüpteeritud",
     "enterGroupName": "Sisestage rühma nimi.",
     "errorOpenStella": "Rakendust stella ei saanud avada.",
+    "errorOpenTranscribeRecording": "Transkribeerimise akent ei saanud avada.",
     "errorPaste": "Seda kirjet ei saanud kopeerida.",
     "errorReadHistory": "Lõikelaua ajalugu ei saanud laadida.",
     "errorUpdateHistory": "Lõikelaua ajalugu ei saanud uuendada.",

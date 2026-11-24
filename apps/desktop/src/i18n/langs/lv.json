@@ -355,6 +355,7 @@
     "encryptedHistory": "Vēsture šajā ierīcē ir šifrēta",
     "enterGroupName": "Ievadiet grupas nosaukumu.",
     "errorOpenStella": "Stella nevarēja atvērt.",
+    "errorOpenTranscribeRecording": "Transkribēšanas logu neizdevās atvērt.",
     "errorPaste": "Šo vienumu neizdevās nokopēt.",
     "errorReadHistory": "Starpliktuves vēsturi neizdevās ielādēt.",
     "errorUpdateHistory": "Starpliktuves vēsturi neizdevās atjaunināt.",

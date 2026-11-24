@@ -355,6 +355,7 @@
     "encryptedHistory": "Historia jest zaszyfrowana na tym urządzeniu",
     "enterGroupName": "Wpisz nazwę grupy.",
     "errorOpenStella": "Nie udało się otworzyć aplikacji stella.",
+    "errorOpenTranscribeRecording": "Nie udało się otworzyć okna transkrypcji.",
     "errorPaste": "Nie udało się skopiować tego elementu.",
     "errorReadHistory": "Nie udało się wczytać historii schowka.",
     "errorUpdateHistory": "Nie udało się zaktualizować historii schowka.",
