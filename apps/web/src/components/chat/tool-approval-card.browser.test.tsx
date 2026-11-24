@@ -237,7 +237,7 @@ describe("browser approval card", () => {
           { action: "press-key", key: "Enter" },
           "searchbox",
         ),
-        kind: "search",
+        kind: "click",
       },
       {
         name: "typing into a search field",

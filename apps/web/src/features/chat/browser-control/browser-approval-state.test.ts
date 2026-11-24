@@ -84,7 +84,7 @@ const STEPS = [
     command: { action: "press-key", key: "Enter", ...at("textbox") },
   },
   {
-    kind: "search",
+    kind: "click",
     command: { action: "press-key", key: "Enter", ...at("searchbox") },
   },
   {

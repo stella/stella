@@ -87,7 +87,7 @@ const ELEMENT_STEPS = [
     command: { action: "press-key", key: "Enter", ...onPage("textbox") },
   },
   {
-    kind: "search",
+    kind: "click",
     command: { action: "press-key", key: "Enter", ...onPage("searchbox") },
   },
   {
