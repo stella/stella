@@ -1598,13 +1598,13 @@ describe("offline route build", () => {
     });
     expect(outcome?.progress.proved).toBe(model.entityIds.length);
     // The stretch reported its re-derived leases before any shard delivered.
-    // The first page starts the interval; each later one closes it.
+    // The run's start opens the interval, so the first page closes it too.
     expect(
       progressReports
         .filter(({ shards }) => shards.delivered === 0)
-        .slice(0, pages.length - 1)
+        .slice(0, pages.length)
         .map(({ canonicalInputMismatch }) => canonicalInputMismatch.rederived),
-    ).toEqual([24, 56, 120]);
+    ).toEqual([8, 24, 56, 120]);
   });
 
   test("bounds consecutive pages of mismatches re-deriving cannot move and resumes them once due", async () => {

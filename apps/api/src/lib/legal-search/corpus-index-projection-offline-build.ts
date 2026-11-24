@@ -916,7 +916,10 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   /** Bytes and count of every block built so far: the page size's guide. */
   #builtBytes = 0;
   #builtBlocks = 0;
-  /** Pages reserved since the last report, and when a page last reported. */
+  /**
+   * Pages reserved since the last report, and when the last report's
+   * interval began: the run's start, then each page that reported.
+   */
   #pagesSinceReport = 0;
   #pageReportAtMs: number | null = null;
   /**
@@ -1010,12 +1013,12 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
   async #reportPage(): Promise<void> {
     this.#pagesSinceReport += 1;
     const nowMs = await this.#nowMs();
-    this.#pageReportAtMs ??= nowMs;
+    const intervalStartMs =
+      this.#pageReportAtMs ?? panic("A page reported before its run started");
     if (
       this.#pagesSinceReport >=
         CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_PAGES ||
-      nowMs - this.#pageReportAtMs >=
-        CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_MS
+      nowMs - intervalStartMs >= CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_MS
     ) {
       this.#pageReportAtMs = nowMs;
       this.#report();
@@ -1031,6 +1034,8 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
 
   async run(): Promise<CorpusProjectionOfflineBuildOutcome["status"]> {
     let returned = false;
+    // The first report interval starts with the run, not with its first page.
+    this.#pageReportAtMs = await this.#nowMs();
     try {
       const status = await this.#runPasses();
       returned = true;
