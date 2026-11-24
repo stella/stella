@@ -1,20 +1,17 @@
-import { afterAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
   DESKTOP_DICTATION_RECORDING_CLEANUP_LIMITS,
   desktopDictationRecordingCleanupResponseSchema,
 } from "@stll/api-contract/desktop-dictation-cleanup";
-import { createTestState } from "@stll/test-state";
 
-import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
 import {
   DICTATING_ORGANIZATION_ID,
   DICTATING_USER_ID,
   exerciseDesktopDictationEndpoint,
   exerciseMemberDictationEndpoint,
-  grantDesktopDictation,
   testDesktopDictationGate,
   testMemberDictationGate,
 } from "@/api/tests/helpers/desktop-dictation-endpoint";
@@ -29,15 +26,9 @@ import {
   recordingCleanupModelOutputSchema,
 } from "./recording-cleanup-model";
 
-const testState = createTestState({ file: import.meta.path, config: env });
-
 const servers: TestServer[] = [];
 afterAll(async () => {
   await Promise.all(servers.map(async (server) => await server.stop()));
-});
-
-beforeEach(() => {
-  grantDesktopDictation(testState);
 });
 
 // Synthetic, never a real recording.
@@ -51,7 +42,7 @@ const CLEANED: RecordingCleanupModelOutput = {
 
 type ExerciseOptions = {
   input?: unknown;
-  granted?: boolean;
+  emailVerified?: boolean;
   role?: "member" | "external";
   limited?: boolean;
   answer?: () => RecordingCleanupModelOutput;
@@ -64,14 +55,13 @@ const exercise = async ({
 }: ExerciseOptions = {}) =>
   await exerciseDesktopDictationEndpoint({
     createEndpoint: createRecordingCleanupEndpoint,
-    testState,
     servers,
     input,
     answer,
     ...options,
   });
 
-test("a granted desktop gets the cleaned part from the organization's chat model", async () => {
+test("a linked desktop gets the cleaned part from the organization's chat model", async () => {
   const { response, calls, limit } = await exercise({
     input: {
       transcript: TRANSCRIPT,
@@ -221,7 +211,6 @@ const exerciseMember = async (
 ) =>
   await exerciseMemberDictationEndpoint({
     createEndpoint: createMemberRecordingCleanupEndpoint,
-    testState,
     route: "/v1/dictation/recording-cleanup",
     body: {
       transcript: TRANSCRIPT,

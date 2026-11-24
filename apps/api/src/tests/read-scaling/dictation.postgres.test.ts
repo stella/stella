@@ -543,21 +543,6 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               FEATURE_ORG_ACCESS_STATE: true,
               FEATURE_CONFIGURED_ACCESS: false,
               FEATURE_FREE_TIER: false,
-              API_FEATURE_ACCESS_GRANTS: {
-                ...env.API_FEATURE_ACCESS_GRANTS,
-                "desktop-dictation": [
-                  {
-                    type: "organization",
-                    organizationId: fixture.organizationId,
-                  },
-                ],
-                "desktop-dictation-cloud": [
-                  {
-                    type: "organization",
-                    organizationId: fixture.organizationId,
-                  },
-                ],
-              },
             });
             return await desktopDictationModelsScalingScenario.measure(fixture);
           } finally {
@@ -609,15 +594,6 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
               FEATURE_ORG_ACCESS_STATE: true,
               FEATURE_CONFIGURED_ACCESS: false,
               FEATURE_FREE_TIER: false,
-              API_FEATURE_ACCESS_GRANTS: {
-                ...env.API_FEATURE_ACCESS_GRANTS,
-                "desktop-dictation": [
-                  {
-                    type: "organization",
-                    organizationId: fixture.organizationId,
-                  },
-                ],
-              },
             });
             return await desktopDictationCleanupModelsScalingScenario.measure(
               fixture,

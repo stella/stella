@@ -69,26 +69,9 @@ const OWN_OTHER_PROVIDER = asTestRaw<OrgSettingsForAuth["orgAIConfig"]>({
   providers: [{ provider: "anthropic", apiKey: "own-key" }],
 });
 
-const GRANT = {
-  type: "member",
-  organizationId: ORGANIZATION_ID,
-  email: EMAIL,
-} as const;
-
 beforeEach(() => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [GRANT],
-    "desktop-dictation-cloud": [GRANT],
-  });
   testState.setConfig("DEMO_ACCOUNT_EMAIL", undefined);
 });
-
-/** Dictation stays granted; only the cloud decision is withheld. */
-const withholdCloud = () => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [GRANT],
-  });
-};
 
 const OPENROUTER_ONLY = { openRouter: true, elevenLabs: null } as const;
 const listModels = (
@@ -241,7 +224,7 @@ test("a key without zero retention is listed only to a desktop that warns, marke
   expect(ids(listModels(eu, { deployment, labeled: true }))).not.toContain(
     direct,
   );
-  // A desktop that warns, for a member not granted such models: unlisted.
+  // A desktop that warns, for a caller without the decision: unlisted.
   expect(
     ids(listModels(eu, { deployment, labeled: true, retention: true })),
   ).not.toContain(direct);
@@ -305,32 +288,35 @@ test("a region without a model lists nothing, with the reason, and an own AI pro
   ).toBeNull();
 });
 
-const authorizeAccount = async (request: Request) => {
-  const device = await createDesktopDeviceSigner();
-  const { scopedDb } = createScopedDbMock({});
-  return Result.ok({
-    featureAccessSnapshot: buildFeatureAccessSnapshot({
-      organizationId: ORGANIZATION_ID,
-      userId: USER_ID,
-      identity: { email: EMAIL, emailVerified: true },
-      enrolments: [],
-    }),
-    consumedProof: await claimFixtureDeviceProof({
-      request: await device.signRequest({
-        request,
+/** Every member whose email is verified has the dictation decisions. */
+const authorizeAccountAs =
+  (emailVerified: boolean) => async (request: Request) => {
+    const device = await createDesktopDeviceSigner();
+    const { scopedDb } = createScopedDbMock({});
+    return Result.ok({
+      featureAccessSnapshot: buildFeatureAccessSnapshot({
+        organizationId: ORGANIZATION_ID,
+        userId: USER_ID,
+        identity: { email: EMAIL, emailVerified },
+        enrolments: [],
+      }),
+      consumedProof: await claimFixtureDeviceProof({
+        request: await device.signRequest({
+          request,
+          credential: "desktop-dictation-fixture",
+        }),
+        deviceJkt: device.deviceJkt,
+        keyId: "linked-desktop",
         credential: "desktop-dictation-fixture",
       }),
-      deviceJkt: device.deviceJkt,
+      organizationId: ORGANIZATION_ID,
+      userId: USER_ID,
       keyId: "linked-desktop",
-      credential: "desktop-dictation-fixture",
-    }),
-    organizationId: ORGANIZATION_ID,
-    userId: USER_ID,
-    keyId: "linked-desktop",
-    memberRole: sessionMemberRole("member"),
-    scopedDb,
-  });
-};
+      memberRole: sessionMemberRole("member"),
+      scopedDb,
+    });
+  };
+const authorizeAccount = authorizeAccountAs(true);
 
 const loadSettings = asTestRaw<typeof loadOrgSettingsForAuth>(
   async () =>
@@ -368,7 +354,7 @@ const serveTranscribe = (
     }),
   );
 
-test("a granted desktop reads its region's models", async () => {
+test("a linked desktop reads its region's models", async () => {
   const server = serveModels(
     createDesktopDictationModelsEndpoint({
       authorizeAccount,
@@ -405,7 +391,7 @@ test("a desktop that asks for labels reads the labeled list", async () => {
   );
 });
 
-test("a model whose provider keeps the audio is listed only to a member granted such models", async () => {
+test("a model whose provider keeps the audio is listed, marked, to a member's desktop that warns", async () => {
   const deployment = {
     openRouter: true,
     elevenLabs: {
@@ -421,40 +407,24 @@ test("a model whose provider keeps the audio is listed only to a member granted 
       readDeployment: () => deployment,
     }),
   );
-  const listed = async () => {
-    const response = await server.fetch(
-      new Request(
-        `http://localhost/models?${DESKTOP_DICTATION_MODELS_LABELED_QUERY}=1&${DESKTOP_DICTATION_MODELS_RETENTION_QUERY}=1`,
-      ),
-    );
-    expect(response.status).toBe(200);
-    return v
-      .parse(desktopDictationModelsSchema, await response.json())
-      .models.map(({ id }) => id);
-  };
-  expect(await listed()).not.toContain("elevenlabs-direct/scribe-v3");
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [GRANT],
-    "desktop-dictation-cloud": [GRANT],
-    "desktop-dictation-retaining-models": [GRANT],
-  });
-  expect(await listed()).toContain("elevenlabs-direct/scribe-v3");
+  const response = await server.fetch(
+    new Request(
+      `http://localhost/models?${DESKTOP_DICTATION_MODELS_LABELED_QUERY}=1&${DESKTOP_DICTATION_MODELS_RETENTION_QUERY}=1`,
+    ),
+  );
+  expect(response.status).toBe(200);
+  const listed = v.parse(desktopDictationModelsSchema, await response.json());
+  expect(
+    listed.models.find(({ id }) => id === "elevenlabs-direct/scribe-v3"),
+  ).toMatchObject({ retainsData: true });
+  expect(listed.defaultModelId).not.toBe("elevenlabs-direct/scribe-v3");
 });
 
-test.each([
-  [
-    "without any dictation decision",
-    () => {
-      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-    },
-  ],
-  ["with local dictation only", withholdCloud],
-])("a desktop %s reads no models", async (_case, withhold) => {
-  withhold();
+test("a desktop whose account email is unverified reads no models", async () => {
   const settings = mock(loadSettings);
   const server = serveModels(
     createDesktopDictationModelsEndpoint({
-      authorizeAccount,
+      authorizeAccount: authorizeAccountAs(false),
       loadSettings: settings,
     }),
   );
@@ -465,6 +435,7 @@ test.each([
 
 const exerciseTranscribe = async ({
   withhold = () => undefined,
+  emailVerified = true,
   email = EMAIL,
   text = "Dobrý den.",
   deployment = OPENROUTER_ONLY,
@@ -476,6 +447,7 @@ const exerciseTranscribe = async ({
   audioMs = 1234,
 }: {
   withhold?: () => void;
+  emailVerified?: boolean;
   email?: string | null;
   text?: string;
   deployment?: ReturnType<DictationDependencies["deployment"]>;
@@ -508,7 +480,7 @@ const exerciseTranscribe = async ({
       ),
   );
   const endpoint = createDesktopDictationTranscribeEndpoint({
-    authorizeAccount,
+    authorizeAccount: authorizeAccountAs(emailVerified),
     loadSettings,
     readAccountEmail: async () => await Promise.resolve(email),
     ...(readMatter === undefined ? {} : { readMatter }),
@@ -557,9 +529,10 @@ const exerciseTranscribe = async ({
   return { response, transcribe, settle };
 };
 
-test("a model whose provider keeps the audio transcribes only for a member granted such models", async () => {
-  const scribe = {
-    modelId: "elevenlabs-direct/scribe-v3",
+test("a member's desktop transcribes with a model whose provider keeps the audio", async () => {
+  const modelId = "elevenlabs-direct/scribe-v3";
+  const { response, transcribe } = await exerciseTranscribe({
+    modelId,
     deployment: {
       openRouter: true,
       elevenLabs: {
@@ -568,28 +541,12 @@ test("a model whose provider keeps the audio transcribes only for a member grant
         zeroRetention: false,
       },
     },
-  } as const;
-  const refused = await exerciseTranscribe(scribe);
-  expect(refused.response.status).toBe(503);
-  expect(refused.transcribe).not.toHaveBeenCalled();
-
-  const granted = await exerciseTranscribe({
-    ...scribe,
-    withhold: () => {
-      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-        "desktop-dictation": [GRANT],
-        "desktop-dictation-cloud": [GRANT],
-        "desktop-dictation-retaining-models": [GRANT],
-      });
-    },
   });
-  expect(granted.response.status).toBe(200);
-  expect(granted.transcribe.mock.calls.at(0)?.[0]).toMatchObject({
-    modelId: scribe.modelId,
-  });
+  expect(response.status).toBe(200);
+  expect(transcribe.mock.calls.at(0)?.[0]).toMatchObject({ modelId });
 });
 
-test("a granted desktop's audio is transcribed with the region's default model and its language", async () => {
+test("a linked desktop's audio is transcribed with the region's default model and its language", async () => {
   const { response, transcribe } = await exerciseTranscribe();
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ text: "Dobrý den." });
@@ -647,16 +604,10 @@ test("a transcript longer than its answer allows is refused, not answered", asyn
   expect(JSON.stringify(await response.json())).not.toContain(longest);
 });
 
-test.each([
-  [
-    "without any dictation decision",
-    () => {
-      testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-    },
-  ],
-  ["with local dictation only", withholdCloud],
-])("a desktop %s cannot transcribe", async (_case, withhold) => {
-  const { response, transcribe } = await exerciseTranscribe({ withhold });
+test("a desktop whose account email is unverified cannot transcribe", async () => {
+  const { response, transcribe } = await exerciseTranscribe({
+    emailVerified: false,
+  });
   expect(response.status).toBe(403);
   expect(transcribe).not.toHaveBeenCalled();
 });

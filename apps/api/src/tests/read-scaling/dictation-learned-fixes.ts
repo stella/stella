@@ -202,9 +202,7 @@ export const learnedFixesScalingScenarios = [
                     email: `${userId}@example.test`,
                     emailVerified: true,
                   },
-                  enrolments: [
-                    { featureId: "desktop-dictation", organizationId, userId },
-                  ],
+                  enrolments: [],
                 }),
               }),
             ),

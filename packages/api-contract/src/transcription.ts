@@ -31,8 +31,7 @@ export const MAX_TRANSCRIPTION_MODEL_ID_LENGTH = 128;
  *  transcription when the place it chose the model showed the models list's
  *  `outsideRegion` and `retainsData` labels. Only then may the request name
  *  a model outside the organization's region, or one whose provider keeps
- *  the audio to a member granted such models. Without it a request gets the
- *  region's models only. */
+ *  the audio. Without it a request gets the region's models only. */
 export const TRANSCRIPTION_LABELS_SHOWN_FIELD = "labels" as const;
 
 // A control character or unpaired surrogate takes six bytes in escaped JSON.

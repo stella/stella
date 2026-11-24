@@ -1,11 +1,9 @@
 import { Result } from "better-result";
-import { afterAll, beforeEach, expect, mock, test } from "bun:test";
+import { afterAll, expect, mock, test } from "bun:test";
 
 import { UPLOAD_DOCUMENT_MAX_BYTES } from "@stll/api-contract/limits";
 import { inspectDocxPackage } from "@stll/folio-core/server";
-import { createTestState } from "@stll/test-state";
 
-import { env } from "@/api/env";
 import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -26,8 +24,6 @@ import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { createDesktopDictationTranscriptEndpoint } from "./desktop-transcript";
 
-const testState = createTestState({ file: import.meta.path, config: env });
-
 const servers: TestServer[] = [];
 afterAll(async () => {
   await Promise.all(servers.map(async (server) => await server.stop()));
@@ -37,18 +33,6 @@ const USER_ID = toSafeId<"user">("desktop-transcribing-member");
 const ORGANIZATION_ID = toSafeId<"organization">("desktop-transcribing-firm");
 const EMAIL = "desktop-transcript@example.test";
 const MATTER_ID = "0198c5e2-7c1f-7a6e-9a3b-2f4d5e6f7a8b";
-const GRANT = {
-  type: "member",
-  organizationId: ORGANIZATION_ID,
-  email: EMAIL,
-} as const;
-
-beforeEach(() => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [GRANT],
-  });
-});
-
 type Endpoint = typeof createDesktopDictationTranscriptEndpoint;
 type Options = NonNullable<Parameters<Endpoint>[0]>;
 
@@ -61,7 +45,14 @@ const BODY = {
   ],
 };
 
-const fixtureAccount = async (readOnly: boolean) => {
+const fixtureAccount = async ({
+  readOnly,
+  emailVerified,
+}: {
+  readOnly: boolean;
+  /** Every member whose email is verified has the dictation decision. */
+  emailVerified: boolean;
+}) => {
   const device = await createDesktopDeviceSigner();
   const { scopedDb } = createScopedDbMock({});
   return asTestRaw<NonNullable<Options["authorizeAccount"]>>(
@@ -70,7 +61,7 @@ const fixtureAccount = async (readOnly: boolean) => {
         featureAccessSnapshot: buildFeatureAccessSnapshot({
           organizationId: ORGANIZATION_ID,
           userId: USER_ID,
-          identity: { email: EMAIL, emailVerified: true },
+          identity: { email: EMAIL, emailVerified },
           enrolments: [],
         }),
         consumedProof: await claimFixtureDeviceProof({
@@ -104,6 +95,7 @@ const FOLDER_ID = "0198c5e2-7c1f-7a6e-9a3b-2f4d5e6f7a90";
 const exercise = async ({
   body = BODY,
   readOnly = false,
+  emailVerified = true,
   visible = true,
   status = "active",
   refusedFileName,
@@ -111,6 +103,7 @@ const exercise = async ({
 }: {
   body?: unknown;
   readOnly?: boolean;
+  emailVerified?: boolean;
   visible?: boolean;
   status?: string;
   /** A document the matter does not take. */
@@ -118,7 +111,7 @@ const exercise = async ({
   /** A document whose create rejects instead of answering. */
   rejectedFileName?: string;
 } = {}) => {
-  const authorizeAccount = await fixtureAccount(readOnly);
+  const authorizeAccount = await fixtureAccount({ readOnly, emailVerified });
   const readMatter = mock(
     async () =>
       await Promise.resolve(
@@ -243,13 +236,9 @@ test("a transcript is filed in the matter as a Word document named after the rec
 });
 
 test("filing needs the dictation decision, document create permission and a matter the member sees", async () => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  const ungranted = await exercise();
-  expect(ungranted.response.status).toBe(403);
-  expect(ungranted.readMatter).not.toHaveBeenCalled();
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [GRANT],
-  });
+  const unverified = await exercise({ emailVerified: false });
+  expect(unverified.response.status).toBe(403);
+  expect(unverified.readMatter).not.toHaveBeenCalled();
   const readOnly = await exercise({ readOnly: true });
   expect(readOnly.response.status).toBe(403);
   expect(readOnly.createEntity).not.toHaveBeenCalled();

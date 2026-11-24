@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { expect, mock, test } from "bun:test";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
-import type { env } from "@/api/env";
 import type { consumeDictationLimit } from "@/api/handlers/dictation/limits";
 import type {
   DesktopDictationGate,
@@ -39,27 +38,6 @@ export const DICTATING_USER_ID = toSafeId<"user">("dictating-member");
 export const DICTATING_ORGANIZATION_ID =
   toSafeId<"organization">("dictating-firm");
 const DICTATING_EMAIL = "dictation@example.test";
-
-/** The part of a file's test state these helpers set. */
-type DictationTestState = {
-  setConfig: (
-    key: "API_FEATURE_ACCESS_GRANTS",
-    value: (typeof env)["API_FEATURE_ACCESS_GRANTS"],
-  ) => void;
-};
-
-/** Grants the desktop dictation feature to the test member. */
-export const grantDesktopDictation = (testState: DictationTestState) => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [
-      {
-        type: "member",
-        organizationId: DICTATING_ORGANIZATION_ID,
-        email: DICTATING_EMAIL,
-      },
-    ],
-  });
-};
 
 const admitInline = asTestRaw<typeof withActionAdmission>(
   async ({ run }: Parameters<typeof withActionAdmission>[0]) =>
@@ -124,10 +102,10 @@ type ExerciseOptions = {
   createEndpoint: (
     options: DictationGeneration & DesktopDictationGate,
   ) => RouteEntry["definition"];
-  testState: DictationTestState;
   servers: TestServer[];
   input: unknown;
-  granted?: boolean;
+  /** Every member whose email is verified has the dictation decision. */
+  emailVerified?: boolean;
   role?: "member" | "external";
   limited?: boolean;
   answer: () => unknown;
@@ -141,18 +119,14 @@ type ExerciseOptions = {
  */
 export const exerciseDesktopDictationEndpoint = async ({
   createEndpoint,
-  testState,
   servers,
   input,
-  granted = true,
+  emailVerified = true,
   role = "member",
   limited = false,
   answer,
   orgAIConfig = null,
 }: ExerciseOptions) => {
-  if (!granted) {
-    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  }
   const { calls, generate } = recordingModel(answer);
   const { scopedDb } = createScopedDbMock({});
   const limit = dictationLimit(limited);
@@ -163,7 +137,7 @@ export const exerciseDesktopDictationEndpoint = async ({
         featureAccessSnapshot: buildFeatureAccessSnapshot({
           organizationId: DICTATING_ORGANIZATION_ID,
           userId: DICTATING_USER_ID,
-          identity: { email: DICTATING_EMAIL, emailVerified: true },
+          identity: { email: DICTATING_EMAIL, emailVerified },
           enrolments: [],
         }),
         consumedProof: await claimFixtureDeviceProof({
@@ -216,7 +190,7 @@ export const exerciseDesktopDictationEndpoint = async ({
 
 type GateExercise = (options: {
   input?: unknown;
-  granted?: boolean;
+  emailVerified?: boolean;
   role?: "member" | "external";
   limited?: boolean;
   answer?: () => never;
@@ -241,8 +215,10 @@ export const testDesktopDictationGate = ({
   transcript: string;
   invalidInputs: readonly (readonly [string, unknown])[];
 }) => {
-  test("an account without the dictation decision is refused before any model call", async () => {
-    const { response, generate, limit } = await exercise({ granted: false });
+  test("an account whose email is unverified has no dictation decision and is refused before any model call", async () => {
+    const { response, generate, limit } = await exercise({
+      emailVerified: false,
+    });
     expect(response.status).toBe(403);
     expect(generate).not.toHaveBeenCalled();
     expect(limit).not.toHaveBeenCalled();
@@ -297,7 +273,6 @@ type MemberExerciseOptions<TContext> = {
       limit?: typeof consumeDictationLimit;
     },
   ) => { handler: (ctx: TContext) => Promise<unknown> };
-  testState: DictationTestState;
   route: string;
   body: unknown;
   role?: "member" | "external";
@@ -312,14 +287,12 @@ type MemberExerciseOptions<TContext> = {
  */
 export const exerciseMemberDictationEndpoint = async <TContext>({
   createEndpoint,
-  testState,
   route,
   body,
   role = "member",
   limited = false,
   answer,
 }: MemberExerciseOptions<TContext>) => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
   const { calls, generate } = recordingModel(answer);
   const { scopedDb } = createScopedDbMock({});
   const limit = dictationLimit(limited);

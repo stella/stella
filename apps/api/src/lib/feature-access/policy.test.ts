@@ -139,6 +139,44 @@ test("invitation access requires matching grants, a verified identity, and curre
   }
 });
 
+test("operator grants neither open nor close a generally available feature", () => {
+  const gaRegistry = {
+    "fixture-general-availability": { enrolment: "general-availability" },
+  } as const satisfies FeatureRegistry;
+  const otherOrganizationGrant = {
+    type: "organization",
+    organizationId: "org-b",
+  } as const satisfies FeatureGrant;
+  for (const grant of [
+    null,
+    memberGrant,
+    organizationGrant,
+    otherOrganizationGrant,
+  ]) {
+    const grants = {
+      "fixture-general-availability": grant === null ? [] : [grant],
+    } satisfies FeatureAccessGrants;
+    for (const user of [
+      null,
+      { email: "member@example.test", emailVerified: false },
+      { email: "colleague@example.test", emailVerified: true },
+    ]) {
+      const decision = decideFeatureAccess({
+        userId: "user-a",
+        registry: gaRegistry,
+        grants,
+        featureId: "fixture-general-availability",
+        organizationId: "org-a",
+        user,
+        membership: true,
+      });
+      expect(decision.status).toBe(
+        user?.emailVerified === true ? "enabled" : "hidden",
+      );
+    }
+  }
+});
+
 test("missing identities and grants for another feature remain hidden", () => {
   const grants = { "fixture-self-serve": [memberGrant] };
   for (const user of [

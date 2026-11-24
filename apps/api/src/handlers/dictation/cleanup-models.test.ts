@@ -45,16 +45,7 @@ afterAll(async () => {
 const USER_ID = toSafeId<"user">("cleanup-models-member");
 const ORGANIZATION_ID = toSafeId<"organization">("cleanup-models-firm");
 const EMAIL = "cleanup-models@example.test";
-const GRANT = {
-  type: "member",
-  organizationId: ORGANIZATION_ID,
-  email: EMAIL,
-} as const;
-
 beforeEach(() => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [GRANT],
-  });
   testState.setConfig("DEMO_ACCOUNT_EMAIL", undefined);
 });
 
@@ -143,8 +134,14 @@ test("a model the organization offers is used; any other choice is automatic", (
   }
 });
 
+type Caller = {
+  role?: "member" | "external";
+  /** Every member whose email is verified has the dictation decision. */
+  emailVerified?: boolean;
+};
+
 const authorizeAccount =
-  (role: "member" | "external" = "member") =>
+  ({ role = "member", emailVerified = true }: Caller) =>
   async (request: Request) => {
     const device = await createDesktopDeviceSigner();
     const { scopedDb } = createScopedDbMock({});
@@ -152,7 +149,7 @@ const authorizeAccount =
       featureAccessSnapshot: buildFeatureAccessSnapshot({
         organizationId: ORGANIZATION_ID,
         userId: USER_ID,
-        identity: { email: EMAIL, emailVerified: true },
+        identity: { email: EMAIL, emailVerified },
         enrolments: [],
       }),
       consumedProof: await claimFixtureDeviceProof({
@@ -184,17 +181,17 @@ const loadSettings = asTestRaw<typeof loadOrgSettingsForAuth>(
     }),
 );
 
-const readModels = async (
-  role: "member" | "external" = "member",
-  settings: typeof loadOrgSettingsForAuth = loadSettings,
-) => {
+const readModels = async ({
+  settings = loadSettings,
+  ...caller
+}: Caller & { settings?: typeof loadOrgSettingsForAuth } = {}) => {
   const server = serveForTest(
     createHttpApp({
       middleware: [errorBoundary],
       routes: routes({
         "/cleanup-models": {
           GET: createDesktopDictationCleanupModelsEndpoint({
-            authorizeAccount: authorizeAccount(role),
+            authorizeAccount: authorizeAccount(caller),
             loadSettings: settings,
           }),
         },
@@ -217,15 +214,13 @@ test("a desktop that may dictate reads its organization's cleanup models", async
 });
 
 test("a desktop without dictation, or a role that may not use AI, reads no models", async () => {
-  expect((await readModels("external")).status).toBe(403);
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  expect((await readModels()).status).toBe(403);
+  expect((await readModels({ role: "external" })).status).toBe(403);
+  expect((await readModels({ emailVerified: false })).status).toBe(403);
 });
 
 test("unreadable AI settings are refused rather than listed as no models", async () => {
-  const response = await readModels(
-    "member",
-    asTestRaw<typeof loadOrgSettingsForAuth>(
+  const response = await readModels({
+    settings: asTestRaw<typeof loadOrgSettingsForAuth>(
       async () =>
         await Promise.resolve({
           orgAIConfig: null,
@@ -234,6 +229,6 @@ test("unreadable AI settings are refused rather than listed as no models", async
           managedAIResidency: null,
         }),
     ),
-  );
+  });
   expect(response.status).toBeGreaterThanOrEqual(400);
 });

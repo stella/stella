@@ -84,11 +84,12 @@ const exercise = async ({
   missingMatter,
   picker,
   candidates,
-  dictation = false,
+  emailVerified = true,
   color = "--option-emerald",
 }: {
   hidden?: "activity-timeline" | "time-billing";
-  dictation?: boolean;
+  /** Every member whose email is verified has the dictation decision. */
+  emailVerified?: boolean;
   denied?: boolean;
   extra?: Record<string, unknown>;
   missingMatter?: boolean;
@@ -155,7 +156,7 @@ const exercise = async ({
     },
     {
       featureAccess: {
-        identity: { email: "desktop@example.test", emailVerified: true },
+        identity: { email: "desktop@example.test", emailVerified },
         enrolments:
           hidden === "time-billing"
             ? []
@@ -175,7 +176,7 @@ const exercise = async ({
       featureAccessSnapshot: buildFeatureAccessSnapshot({
         organizationId: toSafeId<"organization">(ORGANIZATION_ID),
         userId: USER_ID,
-        identity: { email: "desktop@example.test", emailVerified: true },
+        identity: { email: "desktop@example.test", emailVerified },
         enrolments:
           hidden === "time-billing"
             ? []
@@ -232,7 +233,6 @@ const exercise = async ({
   } as const;
   testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
     "activity-timeline": hidden === "activity-timeline" ? [] : [member],
-    ...(dictation ? { "desktop-dictation": [member] } : {}),
   });
   let url = `http://localhost/v1/desktop/time-entries/${WORKSPACE_ID}`;
   if (picker) {
@@ -311,11 +311,7 @@ test("unknown activity fields and other session-only fields are rejected", async
 });
 
 test("a member who dictates finds matters to file a recording under, without time entries", async () => {
-  const filing = await exercise({
-    hidden: "activity-timeline",
-    dictation: true,
-    picker: true,
-  });
+  const filing = await exercise({ hidden: "activity-timeline", picker: true });
   expect(filing.status).toBe(200);
   expect(filing.body).toEqual({
     matters: [
@@ -327,21 +323,14 @@ test("a member who dictates finds matters to file a recording under, without tim
       },
     ],
   });
-  expect(
-    (await exercise({ hidden: "activity-timeline", picker: true })).status,
-  ).toBe(403);
+  // Without a verified email the caller has neither decision.
+  expect((await exercise({ emailVerified: false, picker: true })).status).toBe(
+    403,
+  );
   // Dictation opens the search only: time entries still need their feature.
+  expect((await exercise({ hidden: "activity-timeline" })).status).toBe(403);
   expect(
-    (await exercise({ hidden: "activity-timeline", dictation: true })).status,
-  ).toBe(403);
-  expect(
-    (
-      await exercise({
-        hidden: "activity-timeline",
-        dictation: true,
-        candidates: true,
-      })
-    ).status,
+    (await exercise({ hidden: "activity-timeline", candidates: true })).status,
   ).toBe(403);
 });
 
