@@ -2454,14 +2454,16 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         database: flowDatabase,
         makeScopedDb,
         makeSafeDb,
-        inputDb: createScopedDb(
-          testDb,
-          {
-            type: WORKSPACE_ACCESS_MODE.membership,
-            serverValidatedWorkspaceIds: [],
-          },
-          organizationId,
-          userId,
+        inputDb: asTestRaw<ScopedDb>(
+          createScopedDb(
+            testDb,
+            {
+              type: WORKSPACE_ACCESS_MODE.membership,
+              serverValidatedWorkspaceIds: [],
+            },
+            organizationId,
+            userId,
+          ),
         ),
         enqueueStep: enqueueFlowStepMock,
         broadcastUpdate,
@@ -2553,14 +2555,16 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
         database: flowDatabase,
         makeScopedDb,
         makeSafeDb,
-        inputDb: createScopedDb(
-          testDb,
-          {
-            type: WORKSPACE_ACCESS_MODE.membership,
-            serverValidatedWorkspaceIds: [],
-          },
-          organizationId,
-          userId,
+        inputDb: asTestRaw<ScopedDb>(
+          createScopedDb(
+            testDb,
+            {
+              type: WORKSPACE_ACCESS_MODE.membership,
+              serverValidatedWorkspaceIds: [],
+            },
+            organizationId,
+            userId,
+          ),
         ),
         enqueueStep: enqueueFlowStepMock,
         broadcastUpdate,
