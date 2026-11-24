@@ -366,6 +366,7 @@ export const createOrganizationOidcProvider = async (
 export type CreateOrganizationSamlProviderParams = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  providerId?: string;
   displayName: string;
   issuer: string;
   entryPoint: string;

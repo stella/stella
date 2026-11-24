@@ -41,6 +41,7 @@ import {
   verifyOrgSsoDomain,
 } from "@/features/sso/sso-api";
 import { browserAuthBaseUrl } from "@/lib/api-url";
+import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import {
@@ -365,10 +366,8 @@ const AddSamlProviderForm = ({
       return;
     }
     if (file.size > 512 * 1024) {
-      notifyUserError(
-        undefined,
-        t("settings.organization.sso.samlMetadataFileTooLarge"),
-      );
+      const message = t("settings.organization.sso.samlMetadataFileTooLarge");
+      notifyUserError(new APIError({ status: 400, message }), message);
       return;
     }
     const xml = await file.text();
@@ -435,10 +434,7 @@ const AddSamlProviderForm = ({
             <code className="bg-muted rounded-sm px-1.5 py-0.5 break-all">
               {draftSpMetadataUrl}
             </code>
-            <CopyControl
-              label={t("settings.organization.sso.copySpMetadataUrl")}
-              value={draftSpMetadataUrl}
-            />
+            <CopyControl size="xs" text={draftSpMetadataUrl} variant="ghost" />
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-muted-foreground">
@@ -447,10 +443,7 @@ const AddSamlProviderForm = ({
             <code className="bg-muted rounded-sm px-1.5 py-0.5 break-all">
               {draftAcsUrl}
             </code>
-            <CopyControl
-              label={t("settings.organization.sso.copyAcsUrl")}
-              value={draftAcsUrl}
-            />
+            <CopyControl size="xs" text={draftAcsUrl} variant="ghost" />
           </div>
         </div>
         <Field>

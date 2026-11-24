@@ -290,7 +290,8 @@ export const resolveSamlIdpMetadata = async ({
         url: urlResult.value,
         permit,
         maxBytes: SAML_METADATA_MAX_BYTES,
-        timeout: { type: "total", ms: SAML_METADATA_TIMEOUT_MS },
+        timeout: { type: "headers", ms: SAML_METADATA_TIMEOUT_MS },
+        signal: AbortSignal.timeout(SAML_METADATA_TIMEOUT_MS),
         headers: {
           accept: "application/samlmetadata+xml, application/xml, text/xml",
         },
