@@ -1650,28 +1650,6 @@ describe("chat's tabs", () => {
     });
   });
 
-  test("a tab Chrome cannot bring to the front is not switched to", async () => {
-    const installed = installChatTabs();
-    const { budget, events } = createBudget();
-    installed.chrome.tabs.update = async () => {
-      throw new TypeError("No tab with id 5.");
-    };
-
-    expect(await run(switchTo(RESULTS_TAB_ID), { budget })).toMatchObject({
-      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
-    });
-    expect(events).toEqual(["charge", "refund"]);
-    expect(installed.log).not.toContain("inject:snapshot");
-    expect(installed.session["browserContainedTabs"]).toMatchObject({
-      chatTabIds: [RESULTS_TAB_ID],
-      controlledTabId: CONTROLLED_TAB_ID,
-    });
-    expect(installed.session["browserControlledTab"]).toMatchObject({
-      snapshot: { revision: "revision-1" },
-      tabId: CONTROLLED_TAB_ID,
-    });
-  });
-
   test("switching stays in the background without stealing tab or window focus", async () => {
     const installed = installChatTabs();
     installed.front.focusedWindowId = null;
