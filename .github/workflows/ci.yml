@@ -4263,7 +4263,8 @@ jobs:
                   || (needs.ci-plan.outputs.suite_depth == 'fast'
                       && needs.ci-plan.outputs.service_suites_pr_required == 'true')))
       )
-    runs-on: ubuntu-24.04
+    # The corpus engine image is arm64 only (QUICKWIT_V09_RUNTIME).
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 15
     permissions:
       contents: read
@@ -4714,6 +4715,9 @@ jobs:
       - name: Install dependencies
         uses: $/.github/actions/ci-install
         with:
+          # The one writer of the shared Linux x64 store; service-suites
+          # runs on arm64 and writes the arm64 one.
+          cache-write: save
           flags: '["--frozen-lockfile","--ignore-scripts"]'
         env:
           # .npmrc references NPM_TOKEN, but PR installs must not expose

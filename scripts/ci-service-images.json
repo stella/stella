@@ -12,7 +12,7 @@
     "name": "valkey"
   },
   {
-    "source": "docker.io/quickwit/quickwit:0.9.3@sha256:7c3f5061ea7c00921205c295833f152871d057ec1a9e4c9b1d36131dacc420bd",
+    "source": "ghcr.io/stella/quickwit:main-5f83b0bfaf7ed2a67a29de3cd09995ab828e711b@sha256:c87f789f5867360b8958fb38ab74b6dc61afd26c029d5c3b424494091b5917ed",
     "name": "quickwit"
   },
   {
