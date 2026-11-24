@@ -189,7 +189,7 @@ test.each([
   expect(reported).toEqual([]);
 });
 
-test("accepting leaves the page before the session refresh, so the consumed invitation is never read again", async () => {
+test("accepting refreshes the session before the destination loads and never reads the consumed invitation again", async () => {
   const { InvitationPage } = await import("./-accept-invitation.page");
   const calls: string[] = [];
   let accepted = false;
@@ -237,6 +237,9 @@ test("accepting leaves the page before the session refresh, so the consumed invi
   const workspaces = createRoute({
     getParentRoute: () => root,
     path: "/workspaces",
+    loader: () => {
+      calls.push("loader /workspaces");
+    },
   });
   const router = createRouter({
     history: createMemoryHistory({
@@ -269,6 +272,12 @@ test("accepting leaves the page before the session refresh, so the consumed invi
     path.endsWith("/organization/accept-invitation"),
   );
   expect(acceptedAt).toBeGreaterThan(-1);
+  // The destination reads the cached session, so the refresh lands first.
+  const refreshedAt = calls.findIndex(
+    (path, index) => index > acceptedAt && path.endsWith("/get-session"),
+  );
+  expect(refreshedAt).toBeGreaterThan(acceptedAt);
+  expect(calls.indexOf("loader /workspaces")).toBeGreaterThan(refreshedAt);
   expect(
     calls
       .slice(acceptedAt)

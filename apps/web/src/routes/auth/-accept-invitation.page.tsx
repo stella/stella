@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -11,6 +11,7 @@ import { InvitationDeclined } from "@/components/invitation-declined";
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
+import { refreshAuthQueries } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { transformUnknownError } from "@/lib/errors/client";
 import { readQueryResult } from "@/lib/errors/query-result";
@@ -44,6 +45,7 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
   const invitationId = routeApi.useParams({ select: (p) => p.invitationId });
   const analytics = useAnalytics();
   const navigate = routeApi.useNavigate();
+  const queryClient = useQueryClient();
   const invalidateSession = useInvalidateSession();
   const [isDeclined, setIsDeclined] = useState(false);
   const t = useTranslations();
@@ -72,18 +74,27 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
         readQueryResult(Result.err(failure));
       }
 
-      // Accepting consumed the invitation, so this page's loader would now
-      // report it missing: leave the page before the session refresh
-      // re-runs the loaders of the matched routes.
-      await navigate({ to: "/workspaces", replace: true });
+      // The destination's loaders read the cached session, so it is refreshed
+      // first. Accepting consumed the invitation, so this page's loader would
+      // now report it missing: the session owner invalidates the router only
+      // after leaving.
       const refreshed = await Result.tryPromise({
-        try: async () => await invalidateSession.mutateAsync(),
+        try: async () => await refreshAuthQueries(queryClient),
         catch: transformUnknownError,
       });
       if (refreshed.isErr()) {
         notifyUserError(refreshed.error, t("errors.actionFailed"));
       }
       readQueryResult(refreshed);
+      await navigate({ to: "/workspaces", replace: true });
+      const invalidated = await Result.tryPromise({
+        try: async () => await invalidateSession.mutateAsync(),
+        catch: transformUnknownError,
+      });
+      if (invalidated.isErr()) {
+        notifyUserError(invalidated.error, t("errors.actionFailed"));
+      }
+      readQueryResult(invalidated);
     },
     onError: (error) => {
       analytics.captureError(error, {
