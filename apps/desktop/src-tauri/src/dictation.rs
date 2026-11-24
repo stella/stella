@@ -253,6 +253,9 @@ pub struct DictationSnapshot {
   /// not available, whatever the stored preference says.
   destination: Destination,
   cloud_model: Option<String>,
+  /// A model was stored but cannot be read: the window shows none chosen,
+  /// so the speaker picks one, never the region's default as if chosen.
+  cloud_model_unreadable: bool,
   model: ModelState,
   model_bytes: u64,
   phase: Phase,
@@ -491,6 +494,7 @@ impl DictationState {
       cloud_available,
       destination: inner.destination.effective(cloud_available),
       cloud_model: inner.cloud_model.clone(),
+      cloud_model_unreadable: inner.cloud_model_unreadable,
       model: inner.model,
       model_bytes: MODEL_BYTES,
       phase: inner.phase,

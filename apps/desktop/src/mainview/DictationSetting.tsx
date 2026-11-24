@@ -432,6 +432,7 @@ const DictationPage = ({
             {snapshot.cloudAvailable ? (
               <DictationDestination
                 cloudModel={snapshot.cloudModel}
+                cloudModelUnreadable={snapshot.cloudModelUnreadable}
                 destination={snapshot.destination}
                 onDestinationChange={(destination) => {
                   void setDestination(destination);
