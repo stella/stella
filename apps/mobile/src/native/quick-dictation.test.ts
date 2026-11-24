@@ -20,6 +20,7 @@ import {
   QUICK_DICTATION_FILES,
   QUICK_DICTATION_TARGETS,
   WIDGET_BUNDLE_END,
+  writeAppShortcutsStrings,
 } from "../../modules/quick-dictation/plugin.ts";
 import {
   DICTATION_ACTIVITY_CLOCK,
@@ -206,6 +207,36 @@ describe("the native side of a dictation started outside the app", () => {
     expect(files).toEqual({
       en: `"Say \\"hi\\" to ${APP_NAME_TOKEN}" = "a\\\\b\\n\\"c\\" ${APP_NAME_TOKEN}";\n`,
     });
+  });
+
+  test("writes each language's shortcut phrases into its own .lproj folder", () => {
+    const supportingFolder = mkdtempSync(path.join(tmpdir(), "app-shortcuts-"));
+    try {
+      const languages = writeAppShortcutsStrings({
+        projectRoot: APP_ROOT,
+        supportingFolder,
+      });
+      expect(languages.toSorted(byCodeUnit)).toEqual(
+        [...UI_LOCALES].toSorted(byCodeUnit),
+      );
+      const files = appShortcutsStrings(
+        readFileSync(path.join(TARGETS, APP_SHORTCUTS_CATALOG), "utf-8"),
+      );
+      for (const language of languages) {
+        expect(
+          readFileSync(
+            path.join(
+              supportingFolder,
+              `${language}.lproj`,
+              "AppShortcuts.strings",
+            ),
+            "utf-8",
+          ),
+        ).toBe(files[language] ?? "");
+      }
+    } finally {
+      rmSync(supportingFolder, { force: true, recursive: true });
+    }
   });
 
   test("places each target's files and joins the control to the widget bundle once", () => {

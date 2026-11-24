@@ -280,7 +280,7 @@ const addQuickDictationFiles = (
  * `Supporting/<language>.lproj` group, as Expo adds the app's
  * `InfoPlist.strings`; a group that has one keeps it.
  */
-export const addAppShortcutsStrings = (
+const addAppShortcutsStrings = (
   project: XcodeProject,
   { appGroup, languages }: { appGroup: string; languages: readonly string[] },
 ) => {
