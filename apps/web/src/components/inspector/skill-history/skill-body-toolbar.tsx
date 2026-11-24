@@ -69,7 +69,7 @@ export const SkillBodyToolbar = ({
           variant="outline"
         >
           {suggestingImprovements ? (
-            <Loader size="sm" />
+            <Loader size="sm" variant="decorative" />
           ) : (
             <AiActionIcon className="size-3.5" />
           )}

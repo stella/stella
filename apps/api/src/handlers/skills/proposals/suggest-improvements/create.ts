@@ -109,7 +109,7 @@ const suggestSkillImprovements = createSafeRootHandler(
       task: "short-text",
     });
 
-    const source = yield* Result.await(
+    const sourceResult = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         const skill = await loadVisibleSkill(tx, {
           skillId: params.skillId,
@@ -118,7 +118,7 @@ const suggestSkillImprovements = createSafeRootHandler(
 
         const editableOrigin = requireEditableSkillOrigin(skill.origin);
         if (Result.isError(editableOrigin)) {
-          throw editableOrigin.error;
+          return Result.err(editableOrigin.error);
         }
 
         await lockSkillForAnchor(tx, params.skillId);
@@ -149,9 +149,13 @@ const suggestSkillImprovements = createSafeRootHandler(
           .orderBy(asc(agentSkillResources.path))
           .limit(LIMITS.agentSkillResourcesPerSkill);
 
-        return { resources, revision };
+        return Result.ok({ resources, revision });
       }),
     );
+    if (Result.isError(sourceResult)) {
+      return sourceResult;
+    }
+    const source = sourceResult.value;
 
     const packageCheck = checkSkillPackage({
       resources: source.resources.map((entry) => ({
@@ -223,40 +227,14 @@ const suggestSkillImprovements = createSafeRootHandler(
       return Result.err(generation.error);
     }
 
-    const markdown = stripMarkdownFences(generation.value.markdown);
-    if (!markdown) {
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: "The suggested skill revision was empty. Please try again.",
-        }),
-      );
+    const validated = validateSuggestedMarkdown({
+      original: source.revision.body,
+      raw: generation.value.markdown,
+    });
+    if (Result.isError(validated)) {
+      return validated;
     }
-    if (markdown.length > LIMITS.agentSkillBodyMaxChars) {
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message: "The suggested skill revision exceeds the maximum size.",
-        }),
-      );
-    }
-    if (
-      !preservesFrontmatter({
-        original: source.revision.body,
-        revised: markdown,
-      })
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 502,
-          code: "internal_error",
-          message:
-            "The suggested skill revision dropped or altered its frontmatter. Please try again.",
-        }),
-      );
-    }
+    const markdown = validated.value;
 
     const summary = buildSummary(generation.value.summary);
 
@@ -277,10 +255,7 @@ const suggestSkillImprovements = createSafeRootHandler(
 
         const row = rows.at(0);
         if (!row) {
-          throw new HandlerError({
-            status: 500,
-            message: "Could not create proposal",
-          });
+          return panic("insert into agent_skill_proposals returned no row");
         }
 
         await recordAuditEvent(tx, {
@@ -303,6 +278,45 @@ const suggestSkillImprovements = createSafeRootHandler(
     return Result.ok({ id: created.id, summary });
   },
 );
+
+const validateSuggestedMarkdown = ({
+  original,
+  raw,
+}: {
+  original: string;
+  raw: string;
+}): Result<string, HandlerError> => {
+  const markdown = stripMarkdownFences(raw);
+  if (!markdown) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "The suggested skill revision was empty. Please try again.",
+      }),
+    );
+  }
+  if (markdown.length > LIMITS.agentSkillBodyMaxChars) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message: "The suggested skill revision exceeds the maximum size.",
+      }),
+    );
+  }
+  if (!preservesFrontmatter({ original, revised: markdown })) {
+    return Result.err(
+      new HandlerError({
+        status: 502,
+        code: "internal_error",
+        message:
+          "The suggested skill revision dropped or altered its frontmatter. Please try again.",
+      }),
+    );
+  }
+  return Result.ok(markdown);
+};
 
 const buildSummary = (generated: string): string => {
   const prefix = "Suggested improvements: ";

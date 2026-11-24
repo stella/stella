@@ -178,10 +178,10 @@ const mount = ({
       .queryKey,
     { items: [] },
   );
-  client.setQueryData(organizationOptions(user.activeOrganizationId).queryKey, {
-    id: user.activeOrganizationId,
-    members: [],
-  });
+  client.setQueryData(
+    organizationOptions(user.activeOrganizationId).queryKey,
+    null,
+  );
   const patches: PatchRequest[] = [];
   const boundary = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(

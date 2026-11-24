@@ -41,6 +41,7 @@ import {
   mcpConnectionsOptions,
   recentPlaybooksOptions,
   skillDetailOptions,
+  skillMonitorOptions,
   skillsOptions,
 } from "@/lib/knowledge/queries";
 import { catalogueOptions } from "@/lib/knowledge/queries/catalogue";
@@ -791,6 +792,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ["api.skills.get"],
     files: ["lib/knowledge/queries.ts"],
     keys: () => [skillsOptions(ORG, USER).queryKey],
+  },
+  "skills/monitor/get.ts": {
+    kind: "keyed",
+    calls: ["api.skills().monitor.get"],
+    files: ["lib/knowledge/queries.ts"],
+    keys: () => [skillMonitorOptions(ORG, USER, "skill", 7).queryKey],
   },
   "tasks/list.ts": { kind: "no-web-caller", calls: ["api.tasks.get"] },
   "templates/condition-decisions/get.ts": {
