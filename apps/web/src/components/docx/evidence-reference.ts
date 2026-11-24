@@ -52,7 +52,7 @@ type EvidenceField =
   | { type: "invalid" }
   | { type: "reference"; reference: EvidenceReference; displayText: string };
 
-export const readEvidenceField = (node: ProseMirrorNode): EvidenceField => {
+const readEvidenceField = (node: ProseMirrorNode): EvidenceField => {
   if (node.type.name !== "field") {
     return { type: "other" };
   }

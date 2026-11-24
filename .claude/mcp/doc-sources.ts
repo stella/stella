@@ -127,7 +127,6 @@ export const DOC_SOURCES = {
       "@hocuspocus/extension-redis",
       "@hocuspocus/provider",
       "@hocuspocus/server",
-      "y-prosemirror",
     ],
     url: "https://tiptap.dev/docs/llms.txt",
   },
