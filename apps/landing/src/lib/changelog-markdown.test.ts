@@ -82,9 +82,7 @@ describe("changelog inline Markdown", () => {
       { text: "@stll/ui", type: "code" },
       { text: " from ", type: "text" },
       { href: "https://stll.app/", text: "docs", type: "link" },
-      { text: " or ", type: "text" },
-      { text: "bad", type: "text" },
-      { text: ".", type: "text" },
+      { text: " or bad.", type: "text" },
     ]);
   });
 
