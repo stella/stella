@@ -576,16 +576,16 @@ impl AccountOffer {
     host: &impl ConnectionHost,
     state: &crate::account::AccountState,
   ) -> Result<OfferConnection, Failure> {
-    self.connect_at(host, state, monotonic_now()).await
+    self.connect_with_clock(host, state, monotonic_now).await
   }
 
-  async fn connect_at(
+  async fn connect_with_clock(
     &self,
     host: &impl ConnectionHost,
     state: &crate::account::AccountState,
-    now: Duration,
+    clock: impl Fn() -> Duration,
   ) -> Result<OfferConnection, Failure> {
-    let original = match self.pending_at(now) {
+    let original = match self.pending_at(clock()) {
       Resumable::Nothing => return Ok(OfferConnection::NotCurrent),
       Resumable::Expired => return Ok(OfferConnection::Expired),
       Resumable::Ready(parked) => parked,
@@ -615,7 +615,7 @@ impl AccountOffer {
     {
       return Ok(OfferConnection::NotCurrent);
     }
-    if now >= current.expires {
+    if clock() >= current.expires {
       parked.take();
       return Ok(OfferConnection::Expired);
     }
@@ -690,19 +690,26 @@ pub(crate) async fn park_if_unlinked(
   token: &str,
   expires: Duration,
 ) -> Result<AccountWait, String> {
-  park_if_unlinked_at(state, target, api_base_url, token, monotonic_now(), expires)
-    .await
+  park_if_unlinked_with_clock(
+    state,
+    target,
+    api_base_url,
+    token,
+    monotonic_now,
+    expires,
+  )
+  .await
 }
 
-async fn park_if_unlinked_at(
+async fn park_if_unlinked_with_clock(
   state: &crate::account::AccountState,
   target: Target,
   api_base_url: &str,
   token: &str,
-  now: Duration,
+  clock: impl Fn() -> Duration,
   expires: Duration,
 ) -> Result<AccountWait, String> {
-  if now >= expires {
+  if clock() >= expires {
     return Ok(AccountWait::Expired);
   }
   // Linking shares this lease: it either publishes before this check, or
@@ -710,7 +717,7 @@ async fn park_if_unlinked_at(
   let _start = CONNECTION_START.lock().await;
   let _lease = crate::account::lock_requests().await;
   let account = crate::account::current(state).await?;
-  if now >= expires {
+  if clock() >= expires {
     return Ok(AccountWait::Expired);
   }
   if account.is_some_and(|account| account.api_base_url == api_base_url) {
@@ -1472,12 +1479,12 @@ mod tests {
       assert!(matches!(arrived, Err(Stop::AccountRequired)));
       assert_eq!(redeems.load(std::sync::atomic::Ordering::SeqCst), 0);
       assert_eq!(
-        park_if_unlinked_at(
+        park_if_unlinked_with_clock(
           &state,
           target,
           &origin,
           &token,
-          TEST_NOW,
+          || TEST_NOW,
           TEST_NOW + HANDOFF_LIFETIME
         )
         .await
@@ -1531,12 +1538,12 @@ mod tests {
       }
       assert_eq!(take_parked_at(TEST_NOW), Resumable::Nothing);
       assert_eq!(
-        park_if_unlinked_at(
+        park_if_unlinked_with_clock(
           &state,
           target,
           &origin,
           &token,
-          TEST_NOW,
+          || TEST_NOW,
           TEST_NOW + HANDOFF_LIFETIME
         )
         .await
@@ -1697,12 +1704,12 @@ mod tests {
       ] {
         let expires = TEST_NOW + HANDOFF_LIFETIME;
         assert_eq!(
-          park_if_unlinked_at(
+          park_if_unlinked_with_clock(
             &state,
             Target::DesktopEdit,
             &origin,
             "first",
-            TEST_NOW,
+            || TEST_NOW,
             expires
           )
           .await
@@ -1719,7 +1726,7 @@ mod tests {
         };
         {
           let mut connection =
-            std::pin::pin!(first_offer.connect_at(&host, &state, TEST_NOW));
+            std::pin::pin!(first_offer.connect_with_clock(&host, &state, || TEST_NOW));
           assert!(
             std::future::poll_fn(|cx| std::task::Poll::Ready(
               connection.as_mut().poll(cx).is_pending()
@@ -1728,12 +1735,12 @@ mod tests {
             "the regression must reach the selected await"
           );
           assert_eq!(
-            park_if_unlinked_at(
+            park_if_unlinked_with_clock(
               &state,
               Target::PdfSigning,
               replacement_api,
               replacement_token,
-              TEST_NOW,
+              || TEST_NOW,
               expires
             )
             .await
@@ -1759,7 +1766,7 @@ mod tests {
           immediate_connection(crate::account::ConnectionStart::Started);
         assert_eq!(
           second_offer
-            .connect_at(&second_host, &state, TEST_NOW)
+            .connect_with_clock(&second_host, &state, || TEST_NOW)
             .await
             .unwrap(),
           OfferConnection::Started(crate::account::ConnectionStart::Started)
@@ -1838,15 +1845,25 @@ mod tests {
       let before = redeems.load(std::sync::atomic::Ordering::SeqCst);
       let expires = TEST_NOW + HANDOFF_LIFETIME;
       assert_eq!(
-        park_if_unlinked_at(&state, target, &origin, "mismatch", TEST_NOW, expires)
-          .await
-          .unwrap(),
+        park_if_unlinked_with_clock(
+          &state,
+          target,
+          &origin,
+          "mismatch",
+          || TEST_NOW,
+          expires
+        )
+        .await
+        .unwrap(),
         AccountWait::Parked
       );
       let offer = account_offer("mismatch", &origin).await;
       let host = immediate_connection(crate::account::ConnectionStart::Started);
       assert!(matches!(
-        offer.connect_at(&host, &state, TEST_NOW).await.unwrap(),
+        offer
+          .connect_with_clock(&host, &state, || TEST_NOW)
+          .await
+          .unwrap(),
         OfferConnection::AccountMismatch(_)
       ));
       assert!(host.opened.lock().unwrap().is_empty());
@@ -1916,12 +1933,12 @@ mod tests {
       Err(Stop::AccountMismatch(_))
     ));
     assert_eq!(
-      park_if_unlinked_at(
+      park_if_unlinked_with_clock(
         &state,
         Target::PdfSigning,
         other_api,
         "other",
-        TEST_NOW,
+        || TEST_NOW,
         expires
       )
       .await
@@ -1934,7 +1951,7 @@ mod tests {
       immediate_connection(crate::account::ConnectionStart::DifferentOriginPending);
     assert_eq!(
       other_offer
-        .connect_at(&other_host, &state, TEST_NOW)
+        .connect_with_clock(&other_host, &state, || TEST_NOW)
         .await
         .unwrap(),
       OfferConnection::Started(crate::account::ConnectionStart::DifferentOriginPending)
@@ -1959,9 +1976,16 @@ mod tests {
       let arrived = TEST_NOW - Duration::from_secs(115);
       let original_expiry = arrived + HANDOFF_LIFETIME;
       assert_eq!(
-        park_if_unlinked_at(&state, target, &origin, &token, TEST_NOW, original_expiry)
-          .await
-          .unwrap(),
+        park_if_unlinked_with_clock(
+          &state,
+          target,
+          &origin,
+          &token,
+          || TEST_NOW,
+          original_expiry
+        )
+        .await
+        .unwrap(),
         AccountWait::Parked
       );
       let offer = account_offer(&token, &origin).await;
@@ -1978,12 +2002,12 @@ mod tests {
       drop(offer);
       assert_eq!(take_parked_at(TEST_NOW), Resumable::Nothing);
       assert_eq!(
-        park_if_unlinked_at(
+        park_if_unlinked_with_clock(
           &state,
           target,
           &origin,
           &token,
-          TEST_NOW,
+          || TEST_NOW,
           TEST_NOW - Duration::from_nanos(1)
         )
         .await
