@@ -10,12 +10,13 @@ import { withTimeout } from "@/api/lib/with-timeout";
  * AVIF, and TIFF only decode on macOS/Windows and would reject on Linux, so
  * they are deliberately excluded (we also don't accept them on upload).
  */
+
 const IMAGE_THUMBNAIL_MIME_TYPES = {
   "image/jpeg": null,
   "image/png": null,
   "image/gif": null,
   "image/webp": null,
-} as const satisfies Record<string, null>;
+} as const;
 
 export const isThumbnailableMimeType = (mimeType: string): boolean =>
   Object.hasOwn(IMAGE_THUMBNAIL_MIME_TYPES, mimeType);

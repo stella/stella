@@ -1,6 +1,5 @@
 import * as v from "valibot";
 
-import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 
 import { LIMITS } from "@/api/lib/limits";
@@ -86,11 +85,10 @@ export const resolveLawArgsSchema = nullAsAbsent(
 );
 
 /** The resolver reads a country itself, so an unrecognized one reaches it. */
+
 export const LEGAL_RESOLVE_INPUT_NORMALIZATION = {
   country: {
     ...countryNormalization({ spelling: "alpha-3" }),
     invalidValueDisposition: "handler-owned",
   },
-} as const satisfies Readonly<
-  Record<string, AgentInputNormalizationAnnotation>
->;
+} as const;

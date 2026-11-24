@@ -64,12 +64,12 @@ const config = {
  * are a sale side by definition map; everything else leaves the scope
  * perspective unset for an author to choose.
  */
-const SCOPE_PERSPECTIVE_BY_PARTY_ROLE: Record<string, "buyer" | "seller"> = {
-  purchaser: "buyer",
-  buyer: "buyer",
-  seller: "seller",
-  vendor: "seller",
-};
+const SCOPE_PERSPECTIVE_BY_PARTY_ROLE = new Map<string, "buyer" | "seller">([
+  ["purchaser", "buyer"],
+  ["buyer", "buyer"],
+  ["seller", "seller"],
+  ["vendor", "seller"],
+]);
 
 const scopePerspectiveForRun = (
   perspective: ReviewPerspective,
@@ -78,9 +78,9 @@ const scopePerspectiveForRun = (
     case "neutral":
       return "neutral";
     case "party":
-      return SCOPE_PERSPECTIVE_BY_PARTY_ROLE[
-        perspective.role.trim().toLowerCase()
-      ];
+      return SCOPE_PERSPECTIVE_BY_PARTY_ROLE.get(
+        perspective.role.trim().toLowerCase(),
+      );
     default:
       perspective satisfies never;
       return panic(`Unhandled perspective: ${String(perspective)}`);

@@ -59,8 +59,7 @@ const unguardedSelfReferences = (references: readonly SelfReference[]) =>
   references
     .map((reference) => `${reference.table}.${reference.column}`)
     .filter(
-      (key) =>
-        !registered.has(key) && SELF_REFERENCE_EXEMPTIONS[key] === undefined,
+      (key) => !registered.has(key) && !SELF_REFERENCE_EXEMPTIONS.has(key),
     );
 
 const schemaTables = Object.values({
@@ -89,7 +88,7 @@ describe("self-referencing trees", () => {
         (reference) => `${reference.table}.${reference.column}`,
       ),
     );
-    for (const [key, reason] of Object.entries(SELF_REFERENCE_EXEMPTIONS)) {
+    for (const [key, reason] of SELF_REFERENCE_EXEMPTIONS) {
       expect({ key, exists: found.has(key) }).toEqual({ key, exists: true });
       expect(reason.length).toBeGreaterThan(40);
     }

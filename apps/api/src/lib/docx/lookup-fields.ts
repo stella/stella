@@ -1,4 +1,3 @@
-import { ownEntry } from "@stll/api-contract/own-key";
 import { validateIco as validateAresIco } from "@stll/business-registries/ares";
 /**
  * Registry lookup fields.
@@ -218,43 +217,46 @@ export const createDispatchLookupResolver =
 
 // ── Deterministic rendering ──────────────────────────────
 
-const COMPANIES_HOUSE_LEGAL_FORM_NAMES: Readonly<Record<string, string>> = {
-  plc: "public limited company",
-  ltd: "private limited company",
-  "private-limited-guarant-nsc":
+const COMPANIES_HOUSE_LEGAL_FORM_NAMES = new Map<string, string>([
+  ["plc", "public limited company"],
+  ["ltd", "private limited company"],
+  [
+    "private-limited-guarant-nsc",
     "private company limited by guarantee without share capital",
-  "private-limited-guarant-nsc-limited-exemption":
+  ],
+  [
+    "private-limited-guarant-nsc-limited-exemption",
     "private company limited by guarantee without share capital",
-  "private-unlimited": "private unlimited company",
-  "private-unlimited-nsc": "private unlimited company without share capital",
-  llp: "limited liability partnership",
-  "limited-partnership": "limited partnership",
-};
+  ],
+  ["private-unlimited", "private unlimited company"],
+  ["private-unlimited-nsc", "private unlimited company without share capital"],
+  ["llp", "limited liability partnership"],
+  ["limited-partnership", "limited partnership"],
+]);
 
-const COMPANIES_HOUSE_JURISDICTION_NAMES: Readonly<Record<string, string>> = {
-  "england-wales": "England and Wales",
-  england: "England",
-  wales: "Wales",
-  scotland: "Scotland",
-  "northern-ireland": "Northern Ireland",
-  "united-kingdom": "the United Kingdom",
-  "european-union": "the European Union",
-};
+const COMPANIES_HOUSE_JURISDICTION_NAMES = new Map<string, string>([
+  ["england-wales", "England and Wales"],
+  ["england", "England"],
+  ["wales", "Wales"],
+  ["scotland", "Scotland"],
+  ["northern-ireland", "Northern Ireland"],
+  ["united-kingdom", "the United Kingdom"],
+  ["european-union", "the European Union"],
+]);
 
 const wordsFromCode = (value: string): string => value.replaceAll("-", " ");
 
 const companiesHouseLegalFormName = (value: string | null): string | null =>
   value === null
     ? null
-    : (ownEntry(COMPANIES_HOUSE_LEGAL_FORM_NAMES, value) ??
-      wordsFromCode(value));
+    : (COMPANIES_HOUSE_LEGAL_FORM_NAMES.get(value) ?? wordsFromCode(value));
 
 const companiesHouseJurisdictionName = (
   value: string | null | undefined,
 ): string | null =>
   value === null || value === undefined
     ? null
-    : (ownEntry(COMPANIES_HOUSE_JURISDICTION_NAMES, value) ??
+    : (COMPANIES_HOUSE_JURISDICTION_NAMES.get(value) ??
       `${wordsFromCode(value).charAt(0).toUpperCase()}${wordsFromCode(value).slice(1)}`);
 
 const addressText = (hit: BusinessRegistryHit): string | null =>

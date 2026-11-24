@@ -216,24 +216,24 @@ export const FIRST_PARTY_OAUTH_CLIENTS = {
     documentPath: CLI_CLIENT_METADATA_PATH,
     redirect: { type: "loopback", path: LOOPBACK_REDIRECT_PATH },
     brand: "stella_cli",
-  },
+  } satisfies FirstPartyOAuthClientEntry,
   mobile: {
     documentPath: MOBILE_CLIENT_METADATA_PATH,
     redirect: { type: "exact", uris: MOBILE_REDIRECT_URIS },
     brand: "stella_ios",
-  },
+  } satisfies FirstPartyOAuthClientEntry,
   outlook: {
     documentPath: OUTLOOK_CLIENT_METADATA_PATH,
     redirect: { type: "outlook_addin" },
     brand: "stella_outlook",
-  },
+  } satisfies FirstPartyOAuthClientEntry,
   // stella connecting to an MCP server as a client.
   mcp_connector: {
     documentPath: "/v1/mcp/oauth/client-metadata.json",
     redirect: { type: "document_origin", path: "/v1/mcp/oauth/callback" },
     brand: "stella",
-  },
-} as const satisfies Record<string, FirstPartyOAuthClientEntry>;
+  } satisfies FirstPartyOAuthClientEntry,
+} as const;
 
 export type FirstPartyOAuthClient = keyof typeof FIRST_PARTY_OAUTH_CLIENTS;
 

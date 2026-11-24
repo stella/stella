@@ -139,23 +139,23 @@ export const checkReviewAccountAccess = ({
  * they perform. `/organization/set-active` stays open: the account belongs to
  * one organization, and the session rule refuses any other.
  */
-const SESSION_AUTH_PATH_OPERATIONS: Readonly<
-  Record<string, ReviewAccountOperation>
-> = {
-  "/organization/create": REVIEW_ACCOUNT_OPERATION.createOrganization,
-  "/v1/organizations": REVIEW_ACCOUNT_OPERATION.createOrganization,
-  "/organization/invite-member": REVIEW_ACCOUNT_OPERATION.sendInvitation,
-  "/organization/accept-invitation": REVIEW_ACCOUNT_OPERATION.acceptInvitation,
-  "/change-email": REVIEW_ACCOUNT_OPERATION.changeEmail,
-  "/email-otp/request-email-change": REVIEW_ACCOUNT_OPERATION.changeEmail,
-  "/email-otp/change-email": REVIEW_ACCOUNT_OPERATION.changeEmail,
-  "/change-password": REVIEW_ACCOUNT_OPERATION.changePassword,
-  "/link-social": REVIEW_ACCOUNT_OPERATION.linkIdentity,
-  // Unlinking the credential identity would end password sign-in.
-  "/unlink-account": REVIEW_ACCOUNT_OPERATION.linkIdentity,
-  "/delete-user": REVIEW_ACCOUNT_OPERATION.deleteAccount,
-  "/delete-user/callback": REVIEW_ACCOUNT_OPERATION.deleteAccount,
-};
+const SESSION_AUTH_PATH_OPERATIONS = new Map<string, ReviewAccountOperation>([
+  ["/organization/create", REVIEW_ACCOUNT_OPERATION.createOrganization],
+  ["/v1/organizations", REVIEW_ACCOUNT_OPERATION.createOrganization],
+  ["/organization/invite-member", REVIEW_ACCOUNT_OPERATION.sendInvitation],
+  [
+    "/organization/accept-invitation",
+    REVIEW_ACCOUNT_OPERATION.acceptInvitation,
+  ],
+  ["/change-email", REVIEW_ACCOUNT_OPERATION.changeEmail],
+  ["/email-otp/request-email-change", REVIEW_ACCOUNT_OPERATION.changeEmail],
+  ["/email-otp/change-email", REVIEW_ACCOUNT_OPERATION.changeEmail],
+  ["/change-password", REVIEW_ACCOUNT_OPERATION.changePassword],
+  ["/link-social", REVIEW_ACCOUNT_OPERATION.linkIdentity],
+  ["/unlink-account", REVIEW_ACCOUNT_OPERATION.linkIdentity],
+  ["/delete-user", REVIEW_ACCOUNT_OPERATION.deleteAccount],
+  ["/delete-user/callback", REVIEW_ACCOUNT_OPERATION.deleteAccount],
+]);
 
 const SESSION_AUTH_PATH_PREFIX_OPERATIONS: readonly (readonly [
   string,
@@ -175,8 +175,9 @@ export const resolveReviewAccountSessionOperation = ({
   path: string;
   method: string | undefined;
 }): ReviewAccountOperation | null => {
-  if (Object.hasOwn(SESSION_AUTH_PATH_OPERATIONS, path)) {
-    return SESSION_AUTH_PATH_OPERATIONS[path] ?? null;
+  const sessionOperation = SESSION_AUTH_PATH_OPERATIONS.get(path);
+  if (sessionOperation !== undefined) {
+    return sessionOperation;
   }
   const prefixed = SESSION_AUTH_PATH_PREFIX_OPERATIONS.find(([prefix]) =>
     path.startsWith(prefix),
@@ -246,25 +247,27 @@ export const readReviewAccountOrganizationTargets = ({
  * session: password recovery and sign-up would let whoever reads the
  * account's mailbox replace its password.
  */
-const BODY_EMAIL_AUTH_PATH_OPERATIONS: Readonly<
-  Record<string, ReviewAccountOperation>
-> = {
-  "/sign-up/email": REVIEW_ACCOUNT_OPERATION.changePassword,
-  // Email codes redeemed by address: checked, and allowed.
-  "/sign-in/email-otp": REVIEW_ACCOUNT_OPERATION.emailCodeSignIn,
-  "/email-otp/verify-email": REVIEW_ACCOUNT_OPERATION.verifyEmail,
-  "/email-otp/check-verification-otp": REVIEW_ACCOUNT_OPERATION.verifyEmail,
-  "/request-password-reset": REVIEW_ACCOUNT_OPERATION.changePassword,
-  "/email-otp/request-password-reset": REVIEW_ACCOUNT_OPERATION.changePassword,
-  "/forget-password/email-otp": REVIEW_ACCOUNT_OPERATION.changePassword,
-  "/email-otp/reset-password": REVIEW_ACCOUNT_OPERATION.changePassword,
-};
+const BODY_EMAIL_AUTH_PATH_OPERATIONS = new Map<string, ReviewAccountOperation>(
+  [
+    ["/sign-up/email", REVIEW_ACCOUNT_OPERATION.changePassword],
+    ["/sign-in/email-otp", REVIEW_ACCOUNT_OPERATION.emailCodeSignIn],
+    ["/email-otp/verify-email", REVIEW_ACCOUNT_OPERATION.verifyEmail],
+    ["/email-otp/check-verification-otp", REVIEW_ACCOUNT_OPERATION.verifyEmail],
+    ["/request-password-reset", REVIEW_ACCOUNT_OPERATION.changePassword],
+    [
+      "/email-otp/request-password-reset",
+      REVIEW_ACCOUNT_OPERATION.changePassword,
+    ],
+    ["/forget-password/email-otp", REVIEW_ACCOUNT_OPERATION.changePassword],
+    ["/email-otp/reset-password", REVIEW_ACCOUNT_OPERATION.changePassword],
+  ],
+);
 
 const SEND_VERIFICATION_OTP_PATH = "/email-otp/send-verification-otp";
 
 export const isReviewAccountBodyEmailPath = (path: string): boolean =>
   path === SEND_VERIFICATION_OTP_PATH ||
-  Object.hasOwn(BODY_EMAIL_AUTH_PATH_OPERATIONS, path);
+  BODY_EMAIL_AUTH_PATH_OPERATIONS.has(path);
 
 /** A request to email a sign-in code to the address in its body. */
 export const isSignInCodeRequest = ({
@@ -294,9 +297,7 @@ export const resolveReviewAccountBodyEmailOperation = ({
         return null;
     }
   }
-  return Object.hasOwn(BODY_EMAIL_AUTH_PATH_OPERATIONS, path)
-    ? (BODY_EMAIL_AUTH_PATH_OPERATIONS[path] ?? null)
-    : null;
+  return BODY_EMAIL_AUTH_PATH_OPERATIONS.get(path) ?? null;
 };
 
 /** Scopes a token for the review organization never carries. */

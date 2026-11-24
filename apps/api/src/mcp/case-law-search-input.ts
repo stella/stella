@@ -1,6 +1,5 @@
 import * as v from "valibot";
 
-import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
@@ -52,6 +51,7 @@ export const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
 );
 
 /** Kinds the search input reads through the shared agent-input readers. */
+
 export const SEARCH_CASE_LAW_INPUT_NORMALIZATION = {
   country: countryNormalization({
     spelling: "alpha-3",
@@ -65,9 +65,7 @@ export const SEARCH_CASE_LAW_INPUT_NORMALIZATION = {
   language: FILTER_NORMALIZATION,
   preferred_language: FILTER_NORMALIZATION,
   decision_type: FILTER_NORMALIZATION,
-} as const satisfies Readonly<
-  Record<string, AgentInputNormalizationAnnotation>
->;
+} as const;
 
 export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
   nullAsAbsent(

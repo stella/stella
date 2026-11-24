@@ -20,6 +20,7 @@ export type VersionWriteCapability =
 // verification code that must be globally unique, and the insert owner is where
 // a code collision is detected and redrawn; a second insert site would be a
 // second, unretried code generator.
+
 export const REVIEWED_VERSION_MUTATION_OWNERS = {
   "handlers/entities/clip.ts": [VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION],
   "handlers/entities/copy-utils.ts": [
@@ -78,4 +79,4 @@ export const REVIEWED_VERSION_MUTATION_OWNERS = {
     VERSION_WRITE_CAPABILITY.REQUEST_NATIVE_EXTRACTION,
     VERSION_WRITE_CAPABILITY.SET_CURRENT_VERSION,
   ],
-} as const satisfies Record<string, readonly VersionWriteCapability[]>;
+} as const;

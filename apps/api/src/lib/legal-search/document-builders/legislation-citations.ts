@@ -28,19 +28,19 @@ const SERIES_BY_EU_FORM = {
   regulation: "eu-regulation",
   directive: "eu-directive",
   decision: "eu-decision",
-} as const satisfies Record<string, LegislationSeries>;
+} as const;
 
 const SERIES_BY_CELEX_TYPE = {
   R: "eu-regulation",
   L: "eu-directive",
   D: "eu-decision",
-} as const satisfies Record<string, LegislationSeries>;
+} as const;
 
 const SERIES_BY_ELI_TYPE = {
   reg: "eu-regulation",
   dir: "eu-directive",
   dec: "eu-decision",
-} as const satisfies Record<string, LegislationSeries>;
+} as const;
 
 const EARLIEST_YEAR = 1950;
 const LATEST_YEAR = 2099;

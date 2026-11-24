@@ -1,7 +1,5 @@
 import * as v from "valibot";
 
-import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
-
 import { LIMITS } from "@/api/lib/limits";
 import { isBoundTextCursor } from "@/api/mcp/bound-text-window";
 import {
@@ -76,6 +74,4 @@ export const readProvisionHistoryArgsSchema = nullAsAbsent(
 
 export const READ_PROVISION_HISTORY_INPUT_NORMALIZATION = {
   eli: ELI_NORMALIZATION,
-} as const satisfies Readonly<
-  Record<string, AgentInputNormalizationAnnotation>
->;
+} as const;

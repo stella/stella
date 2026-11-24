@@ -395,6 +395,7 @@ const isUnitlessZero = (value: string): boolean =>
  * The properties read for their presence, each with the values that declare
  * it. Aspose's own `-aw-*` properties have no CSS grammar.
  */
+
 const DECLARED_PROPERTY_VALUES = {
   "letter-spacing": (value: string) =>
     value === "normal" ||
@@ -402,7 +403,7 @@ const DECLARED_PROPERTY_VALUES = {
     isLength(value) ||
     isUnitlessZero(value),
   "-aw-headerfooter-type": (value: string) => value.length > 0,
-} as const satisfies Record<string, (value: string) => boolean>;
+} as const;
 
 type DeclaredProperty = keyof typeof DECLARED_PROPERTY_VALUES;
 

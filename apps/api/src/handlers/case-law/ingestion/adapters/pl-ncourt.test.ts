@@ -387,7 +387,7 @@ describe("building a judgment", () => {
     expect(supplement.document.sourceDocumentId).toBe(REASONS);
     expect(
       supplement.document.court ===
-        (PL_NCOURT_COURT_NAMES[row.courtId] ?? panic("court not indexed")),
+        (PL_NCOURT_COURT_NAMES.get(row.courtId) ?? panic("court not indexed")),
     ).toBe(true);
     expect(
       supplement.document.decisionType ===

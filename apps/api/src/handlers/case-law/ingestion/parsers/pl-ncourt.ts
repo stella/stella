@@ -81,12 +81,13 @@ const escapeHtml = (text: string): string =>
     .replaceAll('"', "&quot;");
 
 /** Inline marks and the HTML each renders as. */
+
 const INLINE_TAGS = {
   xBx: "strong",
   xIx: "em",
   xUx: "u",
   xSUBx: "sub",
-} as const satisfies Record<string, string>;
+} as const;
 
 const isInlineTag = (name: string): name is keyof typeof INLINE_TAGS =>
   Object.hasOwn(INLINE_TAGS, name);

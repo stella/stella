@@ -550,35 +550,7 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/me/timer-activity-devices/unregister.ts",
     uncataloged: "native_device",
   },
-} as const satisfies Record<
-  string,
-  {
-    scope: ApiOAuthResourceScope;
-    handler: `apps/api/src/handlers/${string}.ts`;
-    /** The named export serving the route, when it is not the default. */
-    exportName?: string;
-    /**
-     * The one app whose token opens the route, for a route another app
-     * holding the same scope has no business with. Absent: any of them.
-     */
-    client?: ApiTokenClient;
-    /**
-     * Why the handler has no capability: its `mcp.internal` reason, or
-     * `plumbing` for a `defineEndpoint.member` endpoint (`lib/endpoints.ts`),
-     * which has no handler config to carry one.
-     */
-    uncataloged?:
-      | "auth_plumbing"
-      | "realtime_stream"
-      | "upload_mechanics"
-      | "search_ui"
-      | "native_device"
-      | "native_tool_ui"
-      | "session_token_exchange"
-      | "chat_thread_ui"
-      | "plumbing";
-  }
->;
+} as const;
 
 const ROUTE_SCOPES: ReadonlyMap<string, ApiOAuthResourceScope> = new Map(
   Object.entries(API_OAUTH_ROUTES).map(([key, { scope }]) => [key, scope]),

@@ -25,6 +25,7 @@ import {
  * jurisdiction stores: `decision-type-census.test.ts` fails on a stored type
  * missing here. An entry mapped to `other` is a decision, with its reason.
  */
+
 export const STATED_DECISION_TYPE_KINDS = {
   // Czech. The Nejvyšší soud abbreviates in its type field (`usn.`, `rozs.`,
   // `rozs.část.` for částečný rozsudek, `tr.příkaz`).
@@ -183,7 +184,7 @@ export const STATED_DECISION_TYPE_KINDS = {
   decision: "decision",
   // Not a type: eu-ecj's marker for a CDM type it does not know.
   unknown: DECISION_TYPE_KIND_OTHER,
-} as const satisfies Record<string, DecisionTypeKind>;
+} as const;
 
 const KIND_BY_KEY: ReadonlyMap<string, DecisionTypeKind> = new Map(
   Object.entries(STATED_DECISION_TYPE_KINDS),

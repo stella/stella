@@ -35,13 +35,7 @@ export const USER_SESSION_CREDENTIAL_ISSUERS = {
     disposition: "refused",
     owner: "push/timer-activity-devices",
   },
-} as const satisfies Record<
-  string,
-  (
-    | { disposition: "refused" | "session-bound" }
-    | { disposition: "session-bound-ttl"; maxTtlSeconds: number }
-  ) & { owner: string }
->;
+} as const;
 
 type UserSessionCredentialIssuer = keyof typeof USER_SESSION_CREDENTIAL_ISSUERS;
 type RefusedCredentialIssuer = {

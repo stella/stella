@@ -31,6 +31,7 @@ import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
  * by a cascade from one that is.
  * `reset-scope.test.ts` fails when a table is in neither.
  */
+
 export const REVIEW_RESET_KEPT_TABLES = {
   member: "Membership: the review account stays in its organization.",
   invitation: "Membership: invitations belong to the organization's roster.",
@@ -124,7 +125,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Scheduler-maintained screening state; holds no reviewer content.",
   sanctions_monitoring_backfills:
     "Scheduler-maintained screening state; holds no reviewer content.",
-} as const satisfies Record<string, string>;
+} as const;
 
 /**
  * Organization-scoped tables the reset empties for the review organization,

@@ -10,11 +10,6 @@ const IGNORED_EVENT_DISPOSITIONS = {
 export type IgnoredEventDisposition =
   (typeof IGNORED_EVENT_DISPOSITIONS)[keyof typeof IGNORED_EVENT_DISPOSITIONS];
 
-type IgnoredReasonDefinition = {
-  receiptText: string;
-  disposition: IgnoredEventDisposition;
-};
-
 export const IGNORED_EVENT_REASONS = {
   reconciliation_owner_unresolved: {
     receiptText: "cannot resolve reconciliation audit owner",
@@ -106,7 +101,7 @@ export const IGNORED_EVENT_REASONS = {
     receiptText: "policy grants zero add-on units",
     disposition: "needs_operator",
   },
-} as const satisfies Record<string, IgnoredReasonDefinition>;
+} as const;
 
 export type IgnoredEventReason = keyof typeof IGNORED_EVENT_REASONS;
 

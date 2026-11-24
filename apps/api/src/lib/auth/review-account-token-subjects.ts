@@ -13,7 +13,7 @@ import { isRecord } from "@/api/lib/type-guards";
  * account policy before the endpoint takes effect. Email codes are named by
  * the request's email and checked with the other body-email endpoints.
  */
-export type TokenSubject = {
+type TokenSubject = {
   email: string;
   operation: ReviewAccountOperation;
 };
@@ -81,68 +81,80 @@ const verificationLinkSubjects = (
   );
 };
 
-export const REVIEW_ACCOUNT_TOKEN_REDEMPTIONS: Readonly<
-  Record<string, TokenSubjectResolver>
-> = {
+export const REVIEW_ACCOUNT_TOKEN_REDEMPTIONS: ReadonlyMap<
+  string,
+  TokenSubjectResolver
+> = new Map<string, TokenSubjectResolver>([
   // Password reset: `reset-password:<token>` stores the user id.
-  "/reset-password": async (input) => {
-    const token = readParameter(input, "token");
-    return token === undefined
-      ? []
-      : await storedUserSubject(
-          input.internalAdapter,
-          `reset-password:${token}`,
-          REVIEW_ACCOUNT_OPERATION.changePassword,
-        );
-  },
+  [
+    "/reset-password",
+    async (input) => {
+      const token = readParameter(input, "token");
+      return token === undefined
+        ? []
+        : await storedUserSubject(
+            input.internalAdapter,
+            `reset-password:${token}`,
+            REVIEW_ACCOUNT_OPERATION.changePassword,
+          );
+    },
+  ],
   // Account deletion confirmation: `delete-account-<token>` stores the id.
-  "/delete-user/callback": async (input) => {
-    const token = readParameter(input, "token");
-    return token === undefined
-      ? []
-      : await storedUserSubject(
-          input.internalAdapter,
-          `delete-account-${token}`,
-          REVIEW_ACCOUNT_OPERATION.deleteAccount,
-        );
-  },
+  [
+    "/delete-user/callback",
+    async (input) => {
+      const token = readParameter(input, "token");
+      return token === undefined
+        ? []
+        : await storedUserSubject(
+            input.internalAdapter,
+            `delete-account-${token}`,
+            REVIEW_ACCOUNT_OPERATION.deleteAccount,
+          );
+    },
+  ],
   // Email verification and email-change confirmation: a signed token naming
   // the current address and, for a change, the new one. Read without
   // verifying; a forged token is refused by the endpoint anyway.
-  "/verify-email": async (input) =>
-    await Promise.resolve(verificationLinkSubjects(input)),
+  [
+    "/verify-email",
+    async (input) => await Promise.resolve(verificationLinkSubjects(input)),
+  ],
   // Social sign-in callback: a stored OAuth state that links an identity
   // names the account it links to.
-  "/callback/:id": async (input) => {
-    const state = readParameter(input, "state");
-    if (state === undefined) {
-      return [];
-    }
-    const verification =
-      await input.internalAdapter.findVerificationValue(state);
-    if (!verification) {
-      return [];
-    }
-    const parsed = Result.try((): unknown => JSON.parse(verification.value));
-    const link =
-      Result.isOk(parsed) && isRecord(parsed.value)
-        ? parsed.value["link"]
-        : undefined;
-    const userId = readString(link, "userId");
-    if (userId === undefined) {
-      return [];
-    }
-    const owner = await input.internalAdapter.findUserById(userId);
-    return owner
-      ? [
-          {
-            email: owner.email,
-            operation: REVIEW_ACCOUNT_OPERATION.linkIdentity,
-          },
-        ]
-      : [];
-  },
-};
+  [
+    "/callback/:id",
+    async (input) => {
+      const state = readParameter(input, "state");
+      if (state === undefined) {
+        return [];
+      }
+      const verification =
+        await input.internalAdapter.findVerificationValue(state);
+      if (!verification) {
+        return [];
+      }
+      const parsed = Result.try((): unknown => JSON.parse(verification.value));
+      const link =
+        Result.isOk(parsed) && isRecord(parsed.value)
+          ? parsed.value["link"]
+          : undefined;
+      const userId = readString(link, "userId");
+      if (userId === undefined) {
+        return [];
+      }
+      const owner = await input.internalAdapter.findUserById(userId);
+      return owner
+        ? [
+            {
+              email: owner.email,
+              operation: REVIEW_ACCOUNT_OPERATION.linkIdentity,
+            },
+          ]
+        : [];
+    },
+  ],
+]);
 
 /**
  * Whether an auth path matches a route template: segment by segment, with a
@@ -169,7 +181,7 @@ export const matchesAuthPathTemplate = (
 export const findReviewAccountTokenRedemption = (
   path: string,
 ): TokenSubjectResolver | undefined =>
-  Object.entries(REVIEW_ACCOUNT_TOKEN_REDEMPTIONS).find(([template]) =>
+  [...REVIEW_ACCOUNT_TOKEN_REDEMPTIONS.entries()].find(([template]) =>
     matchesAuthPathTemplate(template, path),
   )?.[1];
 

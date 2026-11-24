@@ -798,6 +798,7 @@ export const TWO_FACTOR_SESSION_PATHS = {
  * includes server-only endpoints: an upstream endpoint cannot start trusting
  * a browser session without an explicit decision here.
  */
+
 export const OAUTH_PROVIDER_SESSION_PATHS = {
   "/.well-known/oauth-authorization-server": "no-browser-session",
   "/.well-known/openid-configuration": "no-browser-session",
@@ -830,7 +831,7 @@ export const OAUTH_PROVIDER_SESSION_PATHS = {
   "/oauth2/update-client": "browser-session",
   "/oauth2/update-consent": "browser-session",
   "/oauth2/userinfo": "no-browser-session",
-} as const satisfies Record<string, "browser-session" | "no-browser-session">;
+} as const;
 
 const isOAuthProviderSessionPath = (
   path: string,

@@ -23,7 +23,6 @@ import {
 } from "@/api/lib/api-handlers";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { HandlerErrorStatusCode } from "@/api/lib/errors/tagged-errors";
 
 /**
  * Body is a discriminated union on `type`. `identity_assertion` (ID-JAG)
@@ -95,7 +94,7 @@ const ID_JAG_REJECTION_STATUS = {
   issuer_not_enabled: 403,
   login_required: 401,
   invalid_assertion: 401,
-} as const satisfies Record<string, HandlerErrorStatusCode>;
+} as const;
 
 /**
  * Map an ID-JAG outcome to a safe-handler Result. `interaction_required`

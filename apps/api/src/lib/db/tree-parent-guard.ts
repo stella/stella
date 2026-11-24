@@ -82,7 +82,7 @@ export const TREE_PARENT_GUARDS = {
     lock: { kind: "organization-catalog" },
     constraint: "template_categories_parent_acyclic",
   },
-} as const satisfies Record<string, TreeParentGuard>;
+} as const;
 
 export type TreeName = keyof typeof TREE_PARENT_GUARDS;
 
@@ -90,16 +90,24 @@ export type TreeName = keyof typeof TREE_PARENT_GUARDS;
  * Self-referencing foreign keys that are not trees a writer reparents, keyed
  * `table.column[,column]`. Each needs a reason; the list only shrinks.
  */
-export const SELF_REFERENCE_EXEMPTIONS: Readonly<Record<string, string>> = {
-  "chat_threads.parent_thread_id":
+export const SELF_REFERENCE_EXEMPTIONS: ReadonlyMap<string, string> = new Map([
+  [
+    "chat_threads.parent_thread_id",
     "Written once, when a fork is inserted, to the thread it was forked from; a new row has no descendants and no writer changes it later.",
-  "ai_memories.superseded_by_id":
+  ],
+  [
+    "ai_memories.superseded_by_id",
     "No writer sets it; the column only goes null when the superseding memory is deleted.",
-  "invoices.original_invoice_id,workspace_id":
+  ],
+  [
+    "invoices.original_invoice_id,workspace_id",
     "A credit note may only reference a finalized invoice that is not itself a credit note (lib/billing/invoice-document-type.ts, under that row's lock), so the link is one level deep.",
-  "invoices.original_invoice_id,organization_id":
+  ],
+  [
+    "invoices.original_invoice_id,organization_id",
     "A credit note may only reference a finalized invoice that is not itself a credit note (lib/billing/invoice-document-type.ts, under that row's lock), so the link is one level deep.",
-};
+  ],
+]);
 
 /** The `guard_tree_parent` arguments the tree's trigger must be installed with. */
 export const treeParentTriggerArguments = (

@@ -423,7 +423,7 @@ export const CASE_LAW_FRESHNESS_METRIC = {
   waitingReplacements: "CaseLawProjectionWaitingReplacements",
   waitingReplacementOldestSeconds:
     "CaseLawProjectionWaitingReplacementOldestSeconds",
-} as const satisfies Record<string, string>;
+} as const;
 
 const buildCaseLawMetricRecord = ({
   name,

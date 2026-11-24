@@ -40,6 +40,7 @@ const isRefusalReason = (value: unknown): value is OAuthTokenRefusalReason =>
   OAUTH_TOKEN_REFUSAL_REASONS.some((reason) => reason === value);
 
 /** Shared provider validators refuse by protocol code, before/after grant lookup. */
+
 export const OAUTH_PROTOCOL_REFUSAL_REASONS = {
   invalid_request: "request_invalid",
   invalid_client: "client_authentication_failed",
@@ -52,7 +53,7 @@ export const OAUTH_PROTOCOL_REFUSAL_REASONS = {
   unsupported_grant_type: "unsupported_grant",
   validation_error: "request_invalid",
   too_many_requests: "rate_limited",
-} as const satisfies Record<string, OAuthTokenRefusalReason>;
+} as const;
 
 const refusalReason = (
   errorCode: string,

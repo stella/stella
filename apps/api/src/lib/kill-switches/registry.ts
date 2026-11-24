@@ -13,18 +13,6 @@ export const KILL_SWITCH_STATE = {
 export type KillSwitchState =
   (typeof KILL_SWITCH_STATE)[keyof typeof KILL_SWITCH_STATE];
 
-type KillSwitchDefinition = {
-  /** The state when the `KILL_SWITCHES` override does not name the switch. */
-  default: KillSwitchState;
-  /** Repo-relative path of the code that owns the switched feature. */
-  owner: string;
-  /**
-   * The refusal hint callers receive while the switch is off, naming what is
-   * off. The message stays the code's canonical, localized sentence.
-   */
-  offHint: string;
-};
-
 /**
  * Operator kill switches for AI and service-consuming features. A switch turned
  * off refuses new work of every action kind it covers with the typed
@@ -36,6 +24,7 @@ type KillSwitchDefinition = {
  * needed. Unknown ids and states refuse startup, so drop an override before
  * removing its switch here.
  */
+
 export const KILL_SWITCHES = {
   dictation: {
     default: KILL_SWITCH_STATE.on,
@@ -192,7 +181,7 @@ export const KILL_SWITCHES = {
     offHint:
       "Tool calls are turned off. Do not retry until they are turned back on.",
   },
-} as const satisfies Record<string, KillSwitchDefinition>;
+} as const;
 
 export type KillSwitchId = keyof typeof KILL_SWITCHES;
 

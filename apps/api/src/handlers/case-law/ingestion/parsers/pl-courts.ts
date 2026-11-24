@@ -1,4 +1,4 @@
-// parser-output-unchanged: pushHeading now takes named options; call values, evaluation order, parameter bindings, and emitted heading logic are unchanged.
+// parser-output-unchanged: Map and narrow-union lookup refactor preserves identical runtime output
 // parser-output-unchanged: [pl-kio] only adds the common-court reader with its paragraph numbering, which the procurement chamber's reader does not call.
 // parser-output-unchanged: [pl-kis] only adds the common-court reader with its paragraph numbering, which the tax-ruling reader does not call.
 // parser-output-unchanged: [pl-sn] only adds the common-court reader with its paragraph numbering, which the Supreme Court's reader does not call.
@@ -640,19 +640,19 @@ const counterText = (type: OrderedListType, ordinal: number): string => {
  * CSS `list-style-type` keywords: the `type` each counts in, or null for a
  * keyword that prints no number (`none`, and the bullets).
  */
-const CSS_LIST_STYLE_TYPES: Readonly<Record<string, OrderedListType | null>> = {
-  none: null,
-  disc: null,
-  circle: null,
-  square: null,
-  decimal: "1",
-  "lower-alpha": "a",
-  "lower-latin": "a",
-  "upper-alpha": "A",
-  "upper-latin": "A",
-  "lower-roman": "i",
-  "upper-roman": "I",
-};
+const CSS_LIST_STYLE_TYPES = new Map<string, OrderedListType | null>([
+  ["none", null],
+  ["disc", null],
+  ["circle", null],
+  ["square", null],
+  ["decimal", "1"],
+  ["lower-alpha", "a"],
+  ["lower-latin", "a"],
+  ["upper-alpha", "A"],
+  ["upper-latin", "A"],
+  ["lower-roman", "i"],
+  ["upper-roman", "I"],
+]);
 
 /** `list-style` shorthand parts that name no counter style. */
 const LIST_STYLE_OTHER_PART = /^(?:inside|outside|url\(.*\))$/u;
@@ -666,19 +666,17 @@ const LIST_STYLE_OTHER_PART = /^(?:inside|outside|url\(.*\))$/u;
 const cssListStyleOf = (element: Element): OrderedListType | null | undefined =>
   inlineStyleValue<OrderedListType | null>(element, (property, value) => {
     if (property === "list-style-type") {
-      return Object.hasOwn(CSS_LIST_STYLE_TYPES, value)
-        ? { value: CSS_LIST_STYLE_TYPES[value] ?? null }
+      return CSS_LIST_STYLE_TYPES.has(value)
+        ? { value: CSS_LIST_STYLE_TYPES.get(value) ?? null }
         : undefined;
     }
     if (property !== "list-style") {
       return undefined;
     }
     const parts = value.split(/\s+/u);
-    const counter = parts.find((part) =>
-      Object.hasOwn(CSS_LIST_STYLE_TYPES, part),
-    );
+    const counter = parts.find((part) => CSS_LIST_STYLE_TYPES.has(part));
     if (counter !== undefined) {
-      return { value: CSS_LIST_STYLE_TYPES[counter] ?? null };
+      return { value: CSS_LIST_STYLE_TYPES.get(counter) ?? null };
     }
     return parts.every((part) => LIST_STYLE_OTHER_PART.test(part))
       ? { value: null }

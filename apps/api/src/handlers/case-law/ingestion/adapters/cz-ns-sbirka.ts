@@ -1,3 +1,4 @@
+// parser-output-unchanged: dot-notation property access on LANGUAGE_STOPWORDS preserves identical runtime output
 /**
  * The Supreme Court's official collection, the Sbírka soudních rozhodnutí a
  * stanovisek, from sbirka.nsoud.cz.
@@ -422,8 +423,8 @@ export const czNsSbirkaDockets = (stated: string): Dockets => {
   };
 };
 
-const CS_STOPWORDS = new Set(LANGUAGE_STOPWORDS["cs"]);
-const SK_STOPWORDS = new Set(LANGUAGE_STOPWORDS["sk"]);
+const CS_STOPWORDS = new Set(LANGUAGE_STOPWORDS.cs);
+const SK_STOPWORDS = new Set(LANGUAGE_STOPWORDS.sk);
 
 /**
  * The entry's language, read from its own words. The collection prints the

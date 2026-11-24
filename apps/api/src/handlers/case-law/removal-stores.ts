@@ -19,23 +19,14 @@ import { invalidateRemovedCitationAuthorityTx } from "@/api/handlers/case-law/ci
 import type { SafeId } from "@/api/lib/branded-types";
 
 /** Retained records refer to the fenced identity; they cannot republish it. */
-type RemovalStore =
-  | { type: "tombstone"; owner: string }
-  | { type: "removed-by-owner"; owner: string }
-  | {
-      type: "remove";
-      erase: (
-        tx: Transaction,
-        id: SafeId<"caseLawDecision">,
-      ) => Promise<unknown>;
-    };
 
 /** The erasure owner executes every removable entry under its decision fence. */
+
 export const CASE_LAW_REMOVAL_STORES = {
   case_law_decisions: { type: "tombstone", owner: "erasure" },
   case_law_decision_identifiers: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawDecisionIdentifiers)
@@ -44,7 +35,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   // Anchor ids are derived from the erased document's text.
   case_law_decision_anchor_redirects: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawDecisionAnchorRedirects)
@@ -52,7 +43,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   },
   case_law_decision_judges: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawDecisionJudges)
@@ -64,7 +55,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   },
   case_law_citations: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawCitations)
@@ -79,7 +70,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   // decision keeps that decision's evidence but no longer links the erased one.
   case_law_decision_reviews: {
     type: "remove",
-    erase: async (tx, id) => {
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) => {
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawDecisionReviews)
@@ -93,7 +84,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   },
   case_law_provision_citations: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawProvisionCitations)
@@ -101,7 +92,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   },
   case_law_statute_citation_memberships: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawStatuteCitationMemberships)
@@ -109,7 +100,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   },
   case_law_citation_reviews: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawCitationReviews)
@@ -117,7 +108,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   },
   case_law_citation_doctrine_reviews: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawCitationDoctrineReviews)
@@ -129,7 +120,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   },
   case_law_decision_citation_stats: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawDecisionCitationStats)
@@ -137,7 +128,7 @@ export const CASE_LAW_REMOVAL_STORES = {
   },
   case_law_decision_citation_stats_state: {
     type: "remove",
-    erase: async (tx, id) =>
+    erase: async (tx: Transaction, id: SafeId<"caseLawDecision">) =>
       // audit: skip — derived rows belong to the canonical redaction audit.
       await tx
         .delete(caseLawDecisionCitationStatsState)
@@ -247,7 +238,7 @@ export const CASE_LAW_REMOVAL_STORES = {
     type: "removed-by-owner",
     owner: "statute membership delete triggers",
   },
-} as const satisfies Record<string, RemovalStore>;
+} as const;
 
 export const removeCaseLawDerivedRowsTx = async (
   tx: Transaction,

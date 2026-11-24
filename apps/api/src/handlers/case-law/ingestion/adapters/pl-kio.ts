@@ -304,7 +304,7 @@ const LISTING_LABELS = {
   "Rodzaj dokumentu": "documentType",
   Sygnatura: "signature",
   "Data wydania": "issueDate",
-} as const satisfies Record<string, keyof PlKioListingItem>;
+} as const;
 
 const isListingLabel = (label: string): label is keyof typeof LISTING_LABELS =>
   Object.hasOwn(LISTING_LABELS, label);

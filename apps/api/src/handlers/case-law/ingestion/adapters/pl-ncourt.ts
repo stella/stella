@@ -1,4 +1,4 @@
-// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
+// parser-output-unchanged: ReadonlyMap court-name lookup preserves identical runtime output
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 import { panic, Result } from "better-result";
@@ -804,7 +804,7 @@ const courtNameOf = (courtId: string | undefined): CourtName | undefined => {
   if (courtId === undefined || !COURT_ID.test(courtId)) {
     return undefined;
   }
-  const name = PL_NCOURT_COURT_NAMES[courtId];
+  const name = PL_NCOURT_COURT_NAMES.get(courtId);
   if (name !== undefined) {
     return { name, known: true };
   }
@@ -2667,7 +2667,7 @@ export const plNcourtCensus = async (
   }
   const { total } = unfiltered.value;
   const courts: PlNcourtCourtCount[] = [];
-  for (const courtId of Object.keys(PL_NCOURT_COURT_NAMES)) {
+  for (const courtId of PL_NCOURT_COURT_NAMES.keys()) {
     const counted = await plNcourtCourtCount({
       courtId,
       signal,

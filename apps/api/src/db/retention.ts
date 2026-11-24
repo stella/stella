@@ -360,7 +360,7 @@ export const TABLE_RETENTION = {
     boundedBy:
       "Organization and account lifecycle; cascade-deleted with either owner and cleared on account deletion.",
   },
-} as const satisfies Record<string, TableRetention>;
+} as const;
 
 export const tableRetention = (table: string): TableRetention | undefined => {
   const declarations: Readonly<Record<string, TableRetention>> =

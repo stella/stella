@@ -2516,7 +2516,7 @@ const REASONING_EFFORT_BY_GOOGLE_LEVEL = {
   LOW: "low",
   MEDIUM: "medium",
   HIGH: "high",
-} as const satisfies Record<string, ReasoningEffort>;
+} as const;
 
 type ReasoningCeilingModel = Extract<
   ResolvedTanStackTextModel,

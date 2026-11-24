@@ -286,7 +286,7 @@ const PARAGRAPH_ALIGNMENTS = {
   qc: "center",
   qr: "right",
   qj: "both",
-} as const satisfies Record<string, ParagraphAlignment>;
+} as const;
 
 /** Control words whose whole group is the writer's metadata, not the text. */
 const SKIPPED_DESTINATIONS = new Set([

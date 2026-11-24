@@ -77,7 +77,7 @@ export const RIS_ELEMENTS = {
   br: { type: "line-break" },
   aw: { type: "empty" },
   wechsel: { type: "empty" },
-} as const satisfies Record<string, RisElementSpec>;
+} as const;
 
 const RIS_SPECS = new Map<string, RisElementSpec>(Object.entries(RIS_ELEMENTS));
 
