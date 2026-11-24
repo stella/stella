@@ -371,7 +371,7 @@ export const countOrganizationAuditRows = async (
 };
 
 /** Whether a ready organization audit archive still holds every audit row. */
-export const coversCurrentAuditTrail = (
+const coversCurrentAuditTrail = (
   row: Pick<AccountExportRow, "auditRowCount">,
   liveRowCount: number,
 ): boolean => row.auditRowCount === liveRowCount;

@@ -23,7 +23,7 @@
     "deleteOrganization": "Delete organization",
     "deleteRefusedSubscription": "This organization has a subscription that renews. Cancel it in Plan and usage first, then delete the organization.",
     "deleteTypeToConfirm": "Type {name} to confirm.",
-    "deleteWithoutAuditArchive": "The organization's activity log is deleted with it, and you have no current archive of it. We recommend downloading the archive first.",
+    "deleteWithoutAuditArchive": "Its activity log is deleted too. Download the archive first (recommended).",
     "firmSetup": "Firm setup",
     "general": "General",
     "leaveDescription": "You will lose access to this organization's matters and data.",

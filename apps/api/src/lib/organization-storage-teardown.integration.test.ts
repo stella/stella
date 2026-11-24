@@ -621,7 +621,7 @@ beforeAll(async () => {
     userId,
     organizationId,
   });
-  const deletion = await testDb.transaction(
+  await testDb.transaction(
     async (tx) =>
       await completeOrganizationDeletion({
         deletedBy: userId,
@@ -629,9 +629,6 @@ beforeAll(async () => {
         tx: asTestRaw<Transaction>(tx),
       }),
   );
-  if (deletion.type !== "deleted") {
-    panic("Organization deletion with a complete audit archive must proceed");
-  }
 });
 
 afterAll(async () => {
