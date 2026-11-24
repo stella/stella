@@ -355,7 +355,7 @@ const hideNatively = async (page: Page, reason: ClipboardHideReason) =>
 
 const reopenNatively = async (page: Page) =>
   await page.evaluate(() => {
-    const reopen: unknown = Reflect.get(
+    const reopen: (() => unknown) | undefined = Reflect.get(
       window,
       "__STELLA_TEST_REOPEN_CLIPBOARD__",
     );
