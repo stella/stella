@@ -448,6 +448,22 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
   // Pending SSO membership requests awaiting admin review.
+  scim_identity_tombstone: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  scim_subject: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  scim_user: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
+  scim_projection_grant: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
   organization_sso_pending_member: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,

@@ -288,6 +288,14 @@ const RETAINED_MEMBER_COLUMNS = {
     "Who added the organization's SSO domain verification record; the domain belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
   "organization_sso_pending_member.user_id":
     "Pending SSO access request isolated from organization membership; holds no workspace authority and cascades on user deletion.",
+  "scim_identity_tombstone.user_id":
+    "SCIM directory deprovisioning tombstone managed by @better-auth/scim; grants no organization membership and cascades on user deletion.",
+  "scim_subject.user_id":
+    "SCIM subject lifecycle pointer managed by @better-auth/scim; grants no organization membership and cascades on user deletion.",
+  "scim_user.user_id":
+    "SCIM directory user link managed by @better-auth/scim; membership is projected separately and rows cascade on user deletion.",
+  "scim_projection_grant.user_id":
+    "SCIM role projection record managed by @better-auth/scim; grants no direct workspace access and cascades on user deletion.",
   "organization_sso_pending_member.reviewed_by":
     "Who approved or rejected a pending SSO membership request; retained audit attribution granting no membership or authority.",
   "account_exports.attempt_object_keys":

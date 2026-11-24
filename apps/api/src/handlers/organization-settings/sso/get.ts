@@ -3,7 +3,9 @@ import { Result } from "better-result";
 import { readOrgSsoSettings } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { listOrganizationScimTokens } from "@/api/lib/auth/scim-management";
 
+import { mapScimManagementError } from "./sso-error-map";
 import { ssoProviderUrls } from "./sso-urls";
 
 const config = {
@@ -16,11 +18,19 @@ const config = {
 const readOrganizationSsoHandler = createSafeRootHandler(
   config,
   async function* ({ session }) {
-    const settings = await readOrgSsoSettings(
-      session.activeOrganizationId,
-      ssoProviderUrls,
+    const [settings, scimTokens] = await Promise.all([
+      readOrgSsoSettings(session.activeOrganizationId, ssoProviderUrls),
+      listOrganizationScimTokens(session.activeOrganizationId),
+    ]);
+    if (scimTokens.isErr()) {
+      return Result.err(mapScimManagementError(scimTokens.error));
+    }
+    return Result.ok(
+      yield* Result.ok({
+        ...settings,
+        scimTokens: scimTokens.value,
+      }),
     );
-    return Result.ok(yield* Result.ok(settings));
   },
 );
 

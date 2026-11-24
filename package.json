@@ -246,6 +246,7 @@
     "@better-auth/cimd": "1.7.25",
     "@better-auth/core": "1.7.25",
     "@better-auth/oauth-provider": "1.7.25",
+    "@better-auth/scim": "1.7.25",
     "@better-auth/sso": "1.7.25",
     "@libpdf/core": "0.5.3",
     "@mcp-ui/client": "7.1.1",

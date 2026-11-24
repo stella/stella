@@ -433,6 +433,26 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
+  createOrganizationScimToken: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/scim-tokens",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
+  revokeOrganizationScimToken: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "DELETE",
+        route: "/organization-settings/sso/scim-tokens/:tokenId",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   rejectOrganizationSsoPendingMember: {
     writes: [
       {

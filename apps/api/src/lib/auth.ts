@@ -55,6 +55,7 @@ import { isUuid } from "@stll/uuid-codec";
 
 import {
   member,
+  organizationSsoPolicy,
   session as authSession,
   user as authUser,
 } from "@/api/db/auth-schema";
@@ -239,6 +240,7 @@ import {
   REVIEW_ACCOUNT_SIGN_IN_BUDGET,
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
+import { createScimProvisioningPlugin } from "@/api/lib/auth/scim-provisioning";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import {
   carriesSessionCredential,
@@ -2805,6 +2807,19 @@ export const createAuth = (
       organizationPlugin,
       // Mounted always, answering 404 until FEATURE_ENTERPRISE_SSO is on.
       createSsoSignInPlugin(),
+      createScimProvisioningPlugin({
+        secret: env.BETTER_AUTH_SECRET,
+        readOrganizationSeatLimit: async (provisioningDomainId) => {
+          const [policy] = await rootDb
+            .select({ seatLimit: organizationSsoPolicy.seatLimit })
+            .from(organizationSsoPolicy)
+            .where(
+              eq(organizationSsoPolicy.organizationId, provisioningDomainId),
+            )
+            .limit(1);
+          return policy?.seatLimit ?? null;
+        },
+      }),
       // Holds the organization endpoints to the same SSO decision.
       createSsoOrganizationGuardPlugin(),
       createMemberInvitationSectionsPlugin(

@@ -3246,5 +3246,13 @@
       "id": "PUT /v1/workspaces/:workspaceId/members",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     }
-  ]
+  ],
+  "POST /v1/organization-settings/sso/scim-tokens": {
+    "status": "exempt",
+    "reason": "Admin-only SCIM bearer credential issuance delegated to @better-auth/scim."
+  },
+  "DELETE /v1/organization-settings/sso/scim-tokens/:tokenId": {
+    "status": "exempt",
+    "reason": "Admin-only SCIM bearer credential revocation delegated to @better-auth/scim."
+  }
 }

@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import type {
   CreateOidcSsoProviderBody,
+  CreateOrganizationScimTokenBody,
   CreateSamlSsoProviderBody,
   DiscoverSsoBody,
   ParseSamlMetadataBody,
@@ -78,6 +79,28 @@ export const probeOidcSsoProvider = async (body: TestOidcSsoProviderBody) =>
     async () =>
       unwrapApiResponse(
         await api["organization-settings"].sso.providers.test.post(body),
+      ),
+  );
+
+export const createOrganizationScimToken = async (
+  body: CreateOrganizationScimTokenBody = {},
+) =>
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.scim-tokens.post",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso["scim-tokens"].post(body),
+      ),
+  );
+
+export const revokeOrganizationScimToken = async (tokenId: string) =>
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.scim-tokens.delete",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso["scim-tokens"]({
+          tokenId,
+        }).delete(),
       ),
   );
 

@@ -5469,6 +5469,7 @@
   "settings.organization.documentTypes.addPlaceholder": "Add a document type (e.g. Employment Agreement)",
   "settings.organization.documentTypes.deleteFailed": "Couldn't delete document type",
   "settings.organization.documentTypes.description": "Define the document types your organization reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+  "settings.organization.documentTypes.empty": "No document types yet",
   "settings.organization.documentTypes.labelAria": "Document type name",
   "settings.organization.documentTypes.reorder": "Reorder document type",
   "settings.organization.documentTypes.title": "Document types",
@@ -5550,6 +5551,15 @@
   "settings.organization.sso.samlMetadataImported": "SAML metadata imported",
   "settings.organization.sso.samlMetadataUploadXml": "Upload .xml",
   "settings.organization.sso.saveProvisioning": "Save provisioning",
+  "settings.organization.sso.scimBaseUrl": "SCIM Base URL",
+  "settings.organization.sso.scimDescription": "Connect Okta, Microsoft Entra ID, or Ping to automatically provision and deprovision members.",
+  "settings.organization.sso.scimGenerateToken": "Generate token",
+  "settings.organization.sso.scimRevokeToken": "Revoke",
+  "settings.organization.sso.scimStatusRevoked": "Revoked",
+  "settings.organization.sso.scimTitle": "SCIM 2.0 directory sync",
+  "settings.organization.sso.scimTokenCreated": "SCIM token created",
+  "settings.organization.sso.scimTokenOnceNotice": "Copy this bearer token now. For security, it will not be shown again.",
+  "settings.organization.sso.scimTokenRevoked": "SCIM token revoked",
   "settings.organization.sso.seatLimitLabel": "Optional seat limit",
   "settings.organization.sso.seatLimitPlaceholder": "No seat limit",
   "settings.organization.sso.seatsCount": "{active} / {limit} seats",
@@ -7220,6 +7230,5 @@
   "workspaces.workflow.serviceTierPrompt.flex": "Use reduced credits",
   "workspaces.workflow.serviceTierPrompt.standard": "Start now",
   "workspaces.workflow.serviceTierPrompt.title": "Use reduced credits?",
-  "workspaces.workflow.startedSuccessfully": "Workflow started successfully",
-  "settings.organization.documentTypes.empty": "No document types yet"
+  "workspaces.workflow.startedSuccessfully": "Workflow started successfully"
 }

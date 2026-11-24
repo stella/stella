@@ -1151,6 +1151,141 @@ const ProvisioningAndSeatsSection = ({
   );
 };
 
+const ScimProvisioningSection = ({
+  tokens,
+  onChanged,
+}: {
+  tokens: OrganizationScimTokenSummary[];
+  onChanged: () => void;
+}) => {
+  const { t } = useTranslation();
+  const [createdBearerToken, setCreatedBearerToken] = useState<string | null>(
+    null,
+  );
+  const scimBaseUrl = `${browserAuthBaseUrl()}/scim/v2`;
+
+  const createTokenMutation = resourceMutation(
+    CONTRACT_REGISTRY.createOrganizationScimToken,
+    {
+      mutationFn: async () =>
+        throwOnError(await createOrganizationScimToken({})),
+      onSuccess: (created) => {
+        setCreatedBearerToken(created.bearerToken);
+        toast.success(t("settings.organization.sso.scimTokenCreated"));
+        onChanged();
+      },
+      onError: (err) => {
+        notifyUserError(err, t("settings.organization.sso.saveFailed"));
+      },
+    },
+  );
+
+  const revokeTokenMutation = resourceMutation(
+    CONTRACT_REGISTRY.revokeOrganizationScimToken,
+    {
+      mutationFn: async (tokenId: string) =>
+        throwOnError(await revokeOrganizationScimToken(tokenId)),
+      onSuccess: () => {
+        toast.success(t("settings.organization.sso.scimTokenRevoked"));
+        onChanged();
+      },
+      onError: (err) => {
+        notifyUserError(err, t("settings.organization.sso.saveFailed"));
+      },
+    },
+  );
+
+  return (
+    <section className="border-border bg-card space-y-4 rounded-xl border p-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="text-foreground text-sm font-medium">
+            {t("settings.organization.sso.scimTitle")}
+          </h2>
+          <p className="text-muted-foreground text-xs">
+            {t("settings.organization.sso.scimDescription")}
+          </p>
+        </div>
+        <Button
+          disabled={createTokenMutation.isPending}
+          disabledReason={t("common.loading")}
+          onClick={() => createTokenMutation.mutate()}
+          size="sm"
+          type="button"
+          variant="outline"
+        >
+          {t("settings.organization.sso.scimGenerateToken")}
+        </Button>
+      </div>
+
+      <div className="border-border bg-muted/30 flex items-center justify-between gap-2 rounded-lg border px-3 py-2 text-xs">
+        <div className="min-w-0 space-y-0.5">
+          <div className="text-muted-foreground font-medium">
+            {t("settings.organization.sso.scimBaseUrl")}
+          </div>
+          <code className="text-foreground block font-mono break-all">
+            {scimBaseUrl}
+          </code>
+        </div>
+        <CopyControl size="xs" text={scimBaseUrl} variant="ghost" />
+      </div>
+
+      {createdBearerToken !== null && (
+        <div className="border-border bg-muted/40 space-y-2 rounded-lg border p-3 text-xs">
+          <p className="text-foreground font-medium">
+            {t("settings.organization.sso.scimTokenOnceNotice")}
+          </p>
+          <div className="flex items-center justify-between gap-2">
+            <code className="text-foreground block min-w-0 flex-1 font-mono break-all">
+              {createdBearerToken}
+            </code>
+            <CopyControl size="xs" text={createdBearerToken} variant="ghost" />
+          </div>
+        </div>
+      )}
+
+      {tokens.length > 0 && (
+        <div className="divide-border divide-y rounded-lg border">
+          {tokens.map((token) => (
+            <div
+              className="flex items-center justify-between gap-3 px-3 py-2 text-xs"
+              key={token.id}
+            >
+              <div className="min-w-0 space-y-0.5">
+                <div className="flex items-center gap-2">
+                  <code className="text-foreground font-mono break-all">
+                    {token.id}
+                  </code>
+                  {token.status !== "active" && (
+                    <Badge variant="outline">
+                      {t("settings.organization.sso.scimStatusRevoked")}
+                    </Badge>
+                  )}
+                </div>
+                <div className="text-muted-foreground">
+                  {token.expiresAt.slice(0, 10)}
+                </div>
+              </div>
+              {token.status === "active" && (
+                <Button
+                  disabled={revokeTokenMutation.isPending}
+                  disabledReason={t("common.loading")}
+                  onClick={() => revokeTokenMutation.mutate(token.id)}
+                  size="sm"
+                  type="button"
+                  variant="ghost"
+                >
+                  {t("settings.organization.sso.scimRevokeToken")}
+                </Button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+};
+
 export const OrganizationSsoPage = () => {
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -1248,6 +1383,10 @@ export const OrganizationSsoPage = () => {
         provisioningMode={settings.provisioningMode}
         requirement={settings.requirement}
         seatLimit={settings.seatLimit}
+      />
+      <ScimProvisioningSection
+        onChanged={invalidate}
+        tokens={settings.scimTokens}
       />
       <VerifiedDomainsSection
         domains={settings.domains}
