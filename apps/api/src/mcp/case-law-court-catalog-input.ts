@@ -1,6 +1,5 @@
 import * as v from "valibot";
 
-import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 
 import { LIMITS } from "@/api/lib/limits";
@@ -55,9 +54,4 @@ export const LIST_CASE_LAW_COURTS_INPUT_NORMALIZATION = {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     tool: LIST_CASE_LAW_COURTS_TOOL,
   }),
-} as const satisfies Readonly<
-  Record<
-    ListCaseLawCourtsInputNormalizationKey,
-    AgentInputNormalizationAnnotation
-  >
->;
+} as const;

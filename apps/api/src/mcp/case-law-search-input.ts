@@ -1,6 +1,5 @@
 import * as v from "valibot";
 
-import type { AgentInputNormalizationAnnotation } from "@stll/agent-input";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { PUBLIC_CASE_LAW_COUNTRIES } from "@stll/api-contract/case-law-launch-readiness";
 import {
@@ -66,9 +65,7 @@ export const SEARCH_CASE_LAW_INPUT_NORMALIZATION = {
   language: FILTER_NORMALIZATION,
   preferred_language: FILTER_NORMALIZATION,
   decision_type: FILTER_NORMALIZATION,
-} as const satisfies Readonly<
-  Record<SearchCaseLawInputNormalizationKey, AgentInputNormalizationAnnotation>
->;
+} as const;
 
 export const searchCaseLawArgsSchema = (texts: SearchCaseLawTexts) =>
   nullAsAbsent(
