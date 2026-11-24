@@ -14,6 +14,8 @@ import path from "node:path";
 import { UI_LOCALES } from "@stll/locales";
 
 import {
+  APP_SHORTCUTS_CATALOG,
+  appShortcutsStrings,
   placeQuickDictation,
   QUICK_DICTATION_FILES,
   QUICK_DICTATION_TARGETS,
@@ -144,7 +146,7 @@ describe("the native side of a dictation started outside the app", () => {
       (match[1] ?? "").replace("\\(.applicationName)", () => APP_NAME_TOKEN),
     );
     expect(phrases.length).toBeGreaterThan(0);
-    const shortcuts = catalog("app/AppShortcuts.xcstrings");
+    const shortcuts = catalog(APP_SHORTCUTS_CATALOG);
     expect(Object.keys(shortcuts).toSorted(byCodeUnit)).toEqual(
       phrases.toSorted(byCodeUnit),
     );
@@ -162,6 +164,48 @@ describe("the native side of a dictation started outside the app", () => {
         }
       }
     }
+  });
+
+  test("the app carries the shortcut phrases as strings files, which build below iOS 17", () => {
+    // A string catalog of App Shortcut phrases fails the archive for a
+    // deployment target before iOS 17.
+    expect(
+      QUICK_DICTATION_FILES.app.some(
+        (file) => file.endsWith(".xcstrings") && file.includes("AppShortcuts"),
+      ),
+    ).toBe(false);
+    const phrases = catalog(APP_SHORTCUTS_CATALOG);
+    const files = appShortcutsStrings(
+      readFileSync(path.join(TARGETS, APP_SHORTCUTS_CATALOG), "utf-8"),
+    );
+    expect(Object.keys(files).toSorted(byCodeUnit)).toEqual(
+      [...UI_LOCALES].toSorted(byCodeUnit),
+    );
+    for (const [language, contents] of Object.entries(files)) {
+      expect(contents.trimEnd().split("\n")).toEqual(
+        Object.entries(phrases).map(
+          ([phrase, { localizations }]) =>
+            `"${phrase}" = "${localizations[language]?.stringUnit.value ?? ""}";`,
+        ),
+      );
+    }
+  });
+
+  test("a phrase's quotes, backslashes and line breaks are escaped in its strings file", () => {
+    const files = appShortcutsStrings(
+      JSON.stringify({
+        strings: {
+          [`Say "hi" to ${APP_NAME_TOKEN}`]: {
+            localizations: {
+              en: { stringUnit: { value: `a\\b\n"c" ${APP_NAME_TOKEN}` } },
+            },
+          },
+        },
+      }),
+    );
+    expect(files).toEqual({
+      en: `"Say \\"hi\\" to ${APP_NAME_TOKEN}" = "a\\\\b\\n\\"c\\" ${APP_NAME_TOKEN}";\n`,
+    });
   });
 
   test("places each target's files and joins the control to the widget bundle once", () => {
