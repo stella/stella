@@ -1290,6 +1290,7 @@ const RECORDED_ACTIONS: Record<string, RecordedCoverage> = {
   ),
   "remove-queued-message": QUEUE_ACTION,
   "rename-thread": OUTSIDE_THE_CONVERSATION,
+  "route-send": OUTSIDE_THE_CONVERSATION,
   "replace-with-queued-message": QUEUE_ACTION,
   "resend-without-anonymization": notRecorded(
     "Offered only after the anonymization boundary refuses a turn, which the recorder's raw boundary never does.",

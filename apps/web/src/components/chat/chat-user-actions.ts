@@ -117,6 +117,10 @@ export const CHAT_USER_ACTIONS = {
   "refresh-edited-answer": { handler: "refreshAnswers", via: "session" },
   "remove-queued-message": { handler: "removeQueuedMessage", via: "session" },
   "rename-thread": { via: "request" },
+  /** Reads where a message sent now goes (`chatSendIntent`), inside the
+   *  member's gesture, so only a send that starts a turn may open stella
+   *  desktop. */
+  "route-send": { handler: "sendIntentOf", via: "session" },
   /** Send now over a turn that waits on the member, once confirmed: it
    *  ends what the turn waits on. */
   "replace-with-queued-message": {

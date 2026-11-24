@@ -1233,6 +1233,7 @@ const ACTION_COVERAGE: Record<string, ActionCoverage> = {
   "refresh-edited-answer": READS_ONLY,
   "remove-queued-message": QUEUE_ACTION,
   "rename-thread": notModelled("It changes the title only."),
+  "route-send": READS_ONLY,
   "replace-with-queued-message": QUEUE_ACTION,
   "resend-without-anonymization": notModelled(
     "Offered only after the anonymization boundary refuses a turn, which the harness's raw boundary never does.",
