@@ -1019,15 +1019,25 @@ export const loadFolioCollabSnapshot = async (
   return await loadCurrentSnapshot("initial");
 };
 
+/** The DOCX a room's generation was seeded from, or why there is none. */
+export type FolioCollabSeedDocxRead =
+  | { status: "read"; docx: Uint8Array }
+  /** The room moved to another generation, or is gone. */
+  | { status: "generationChanged" }
+  /** The source version, or its file, is gone. */
+  | { status: "unavailable" };
+
 /**
  * The DOCX a room was seeded from, which its authority reads revision 0
- * from. Every generation of a room keeps its source version; null once that
- * version or its file is gone.
+ * from. Every generation of a room keeps its source version, and only a new
+ * generation changes it, so the seed is read only while the room still holds
+ * `generation`: a seed and a snapshot are then of the same generation.
  */
 export const readFolioCollabSeedDocx = async (
   value: FolioCollabSnapshotTarget,
+  generation: number,
   readObject = readS3ObjectIfPresent,
-): Promise<Uint8Array | null> => {
+): Promise<FolioCollabSeedDocxRead> => {
   const source = await value.scopedDb(async (tx) => {
     const rooms = await tx
       .select({
@@ -1039,33 +1049,39 @@ export const readFolioCollabSeedDocx = async (
         and(
           eq(folioCollabRooms.id, value.roomId),
           eq(folioCollabRooms.workspaceId, value.workspaceId),
+          eq(folioCollabRooms.generation, generation),
         ),
       )
       .limit(1);
     const room = rooms.at(0);
     if (!room) {
-      return null;
+      return { status: "generationChanged" } as const;
     }
-    return await readVersionDocxTarget({
+    const file = await readVersionDocxTarget({
       entityVersionId: room.sourceVersionId,
       propertyId: room.propertyId,
       tx,
       workspaceId: value.workspaceId,
     });
+    return file === null
+      ? ({ status: "unavailable" } as const)
+      : ({ status: "found", file } as const);
   });
-  if (!source) {
-    return null;
+  if (source.status !== "found") {
+    return source;
   }
   const buffer = await readObject(
     createFileKey({
-      fileId: source.id,
+      fileId: source.file.id,
       mimeType: DOCX_MIME_TYPE,
       organizationId: value.organizationId,
       workspaceId: value.workspaceId,
     }),
     AbortSignal.timeout(10_000),
   );
-  return buffer === null ? null : new Uint8Array(buffer);
+  return buffer === null
+    ? { status: "unavailable" }
+    : { status: "read", docx: new Uint8Array(buffer) };
 };
 
 export type StoreFolioCollabSnapshotResult =

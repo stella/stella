@@ -69,7 +69,7 @@ type CollabLogEvent =
       roomId: string;
     }
   | {
-      event: "room_authority_lease_lost";
+      event: "room_authority_lease_expired" | "room_authority_lease_lost";
       level: "warn";
       roomId: string;
     }

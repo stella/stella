@@ -58,6 +58,7 @@ import {
   folioCollabSeedClaimLeaseOnHeartbeat,
   issueFolioCollabToken,
   loadFolioCollabSnapshot,
+  readFolioCollabSeedDocx,
   storeFolioCollabSnapshot,
 } from "@/api/lib/folio-collab-rooms";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
@@ -1058,6 +1059,53 @@ describe("folio collaboration room seed generation CAS", () => {
       }
     },
   );
+});
+
+test("a room's seed DOCX is read only at the generation its snapshot was loaded at", async () => {
+  const roomId = await insertRoom({ generation: 4, seedState: "seeded" });
+  const target = {
+    organizationId: ids.orgA,
+    roomId,
+    scopedDb: asTestRaw<
+      Parameters<typeof readFolioCollabSeedDocx>[0]["scopedDb"]
+    >(
+      async <T>(run: (tx: TestDatabaseTransaction) => Promise<T>) =>
+        await scopedQuery([ids.wsA1], ids.orgA, run, ids.userA1),
+    ),
+    workspaceId: ids.wsA1,
+  };
+  const seedDocx = new Uint8Array([1, 2, 3]);
+  const readKeys: string[] = [];
+  const readObject = async (key: string, _signal: AbortSignal) => {
+    readKeys.push(key);
+    return seedDocx.slice().buffer;
+  };
+
+  expect(await readFolioCollabSeedDocx(target, 4, readObject)).toEqual({
+    status: "read",
+    docx: seedDocx,
+  });
+  expect(readKeys).toEqual([
+    createFileKey({
+      fileId: ids.fileObjectA1,
+      mimeType: DOCX_MIME_TYPE,
+      organizationId: ids.orgA,
+      workspaceId: ids.wsA1,
+    }),
+  ]);
+
+  // A reset between the snapshot read and the seed read moves the room on.
+  await testDb
+    .update(folioCollabRooms)
+    .set({ generation: 5 })
+    .where(eq(folioCollabRooms.id, roomId));
+  expect(await readFolioCollabSeedDocx(target, 4, readObject)).toEqual({
+    status: "generationChanged",
+  });
+  expect(readKeys).toHaveLength(1);
+  expect(await readFolioCollabSeedDocx(target, 5, async () => null)).toEqual({
+    status: "unavailable",
+  });
 });
 
 test("edits in the first durable snapshot remain unsaved after the pristine seed receipt", async () => {

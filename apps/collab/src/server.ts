@@ -1389,12 +1389,17 @@ export const createCollabServer = async (
         applyUpdate(document, Buffer.from(result.snapshotBase64, "base64"));
       }
       // Peers' requests wait in the room's inbox until the authority runs.
-      void roomAuthorities.start({
+      // A room whose authority cannot run is refused: its peers' edits
+      // would never be sequenced.
+      const authority = await roomAuthorities.start({
         doc: document,
         roomId: context.roomId,
         roomName: documentName,
         seedDocx: Buffer.from(result.seedDocxBase64, "base64"),
       });
+      if (Result.isError(authority)) {
+        throw authority.error;
+      }
     },
     async onStateless({ connection, document, payload }) {
       const parsed = v.safeParse(flushRequestSchema, payload);

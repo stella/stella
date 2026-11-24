@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -33,21 +33,40 @@ const config = {
   }),
 } satisfies TokenHandlerConfig;
 
-/** The DOCX the room's authority reads revision 0 from, as base64. */
+/**
+ * The DOCX the room's authority reads revision 0 from, as base64, of the
+ * generation the snapshot was loaded at. A room that moved on in between
+ * answers a conflict the collaboration service retries.
+ */
 const readSeedDocxBase64 = async (
   room: FolioCollabSnapshotTarget,
+  generation: number,
 ): Promise<Result<string, HandlerError>> => {
-  const seedDocx = await readFolioCollabSeedDocx(room);
-  if (seedDocx === null) {
-    return Result.err(
-      new HandlerError({
-        code: "folio_collab_seed_unavailable",
-        status: 409,
-        message: "Collaborative room source file is no longer available.",
-      }),
-    );
+  const seed = await readFolioCollabSeedDocx(room, generation);
+  switch (seed.status) {
+    case "read":
+      return Result.ok(Buffer.from(seed.docx).toBase64());
+    case "generationChanged":
+      return Result.err(
+        new HandlerError({
+          code: "folio_collab_generation_changed",
+          status: 409,
+          message: "Collaborative room changed while it was loading.",
+        }),
+      );
+    case "unavailable":
+      return Result.err(
+        new HandlerError({
+          code: "folio_collab_seed_unavailable",
+          status: 409,
+          message: "Collaborative room source file is no longer available.",
+        }),
+      );
+    default: {
+      seed satisfies never;
+      return panic("Unhandled collaboration seed read");
+    }
   }
-  return Result.ok(Buffer.from(seedDocx).toBase64());
 };
 
 const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
@@ -73,7 +92,9 @@ const loadFolioCollabSnapshotHandler = createSafeTokenHandler(
         ? {
             loadOutcome: snapshot.loadOutcome,
             generation: snapshot.generation,
-            seedDocxBase64: yield* Result.await(readSeedDocxBase64(value)),
+            seedDocxBase64: yield* Result.await(
+              readSeedDocxBase64(value, snapshot.generation),
+            ),
             snapshotBase64: snapshot.snapshotBase64,
             snapshotRevision: snapshot.snapshotRevision,
           }
