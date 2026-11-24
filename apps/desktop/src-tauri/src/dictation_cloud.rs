@@ -647,6 +647,10 @@ async fn spend<T>(
 pub struct CloudSession {
   app: AppHandle,
   stored_model: Option<String>,
+  /// The stored model could not be read at the press, so `stored_model`
+  /// says nothing about the speaker's choice: this dictation sends nothing
+  /// to stella AI, even if a model is picked while it records.
+  stored_model_unreadable: bool,
   language: Option<&'static str>,
   /// The speaker's custom words, sent only if the chosen model reads them.
   vocabulary: Vec<String>,
@@ -680,15 +684,17 @@ pub struct ModelClass {
 }
 
 impl CloudSession {
-  pub const fn new(
+  pub fn new(
     app: AppHandle,
     stored_model: Option<String>,
     language: Option<&'static str>,
     vocabulary: Vec<String>,
   ) -> Self {
+    let stored_model_unreadable = dictation::cloud_model_unreadable(&app);
     Self {
       app,
       stored_model,
+      stored_model_unreadable,
       language,
       vocabulary,
       model: None,
@@ -772,7 +778,7 @@ impl CloudSession {
     )
     .await?;
     self.list_read = Some(read);
-    if dictation::cloud_model_unreadable(&self.app) {
+    if self.stored_model_unreadable || dictation::cloud_model_unreadable(&self.app) {
       return Err(MODEL_UNREADABLE.to_string());
     }
     let stored_class = dictation::cloud_model_class(&self.app);
