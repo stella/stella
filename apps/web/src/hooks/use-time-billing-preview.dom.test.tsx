@@ -336,10 +336,10 @@ describe("time billing access follows the caller's server decision", () => {
         view.getAllByText(messages.common.timeBilling).length,
       ).toBeGreaterThan(0),
     );
-    const billingCheckbox = view.getByRole("checkbox", {
+    const billingSwitch = view.getByRole("switch", {
       name: messages.common.timeBilling,
     });
-    fireEvent.click(billingCheckbox);
+    fireEvent.click(billingSwitch);
     await waitFor(() =>
       expect(view.getByTestId("offer").textContent).toBe("true"),
     );
@@ -350,16 +350,16 @@ describe("time billing access follows the caller's server decision", () => {
       ).toBeGreaterThan(1),
     );
     await waitFor(() =>
-      expect(billingCheckbox.hasAttribute("disabled")).toBe(false),
+      expect(billingSwitch.hasAttribute("disabled")).toBe(false),
     );
-    fireEvent.click(billingCheckbox);
+    fireEvent.click(billingSwitch);
     await waitFor(() =>
       expect(view.getByTestId("offer").textContent).toBe("false"),
     );
     expectNoDeploymentFeaturesRequest(paths);
   });
 
-  test("a failed enrolment rolls the optimistic checkbox back", async () => {
+  test("a failed enrolment rolls the optimistic switch back", async () => {
     const writeResponse = Promise.withResolvers();
     const paths = serve({
       failWrite: true,
@@ -371,20 +371,20 @@ describe("time billing access follows the caller's server decision", () => {
         view.getAllByText(messages.common.timeBilling).length,
       ).toBeGreaterThan(0),
     );
-    const billingCheckbox = view.getByRole("checkbox", {
+    const billingSwitch = view.getByRole("switch", {
       name: messages.common.timeBilling,
     });
-    fireEvent.click(billingCheckbox);
+    fireEvent.click(billingSwitch);
     await waitFor(() =>
       expect(paths).toContain(`${FEATURE_ENROLMENTS_PATH}/time-billing`),
     );
     await waitFor(() =>
-      expect(billingCheckbox.getAttribute("aria-checked")).toBe("true"),
+      expect(billingSwitch.getAttribute("aria-checked")).toBe("true"),
     );
     expect(view.getByTestId("offer").textContent).toBe("false");
     writeResponse.resolve(undefined);
     await waitFor(() =>
-      expect(billingCheckbox.getAttribute("aria-checked")).toBe("false"),
+      expect(billingSwitch.getAttribute("aria-checked")).toBe("false"),
     );
     expect(view.getByTestId("offer").textContent).toBe("false");
     expectNoDeploymentFeaturesRequest(paths);
