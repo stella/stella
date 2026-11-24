@@ -153,7 +153,7 @@ export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
       return { reference: update.value };
     case "visibility":
       return update.confirmWidening
-        ? { visibility: update.value, confirmWidening: true }
+        ? { visibility: update.value, confirmWidening: true as const }
         : { visibility: update.value };
     default: {
       update satisfies never;

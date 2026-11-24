@@ -86,11 +86,14 @@ describe("classifying a visibility change", () => {
       for (const to of MATTER_VISIBILITIES) {
         const change = matterVisibilityChange({ from, to });
         if (from === to) {
-          expect(change).toEqual({ type: "unchanged" });
-        } else if (widensMatterVisibility(from, to)) {
-          expect(change).toEqual({ type: "widen", visibility: to });
+          expect(change.type).toBe("unchanged");
         } else {
-          expect(change).toEqual({ type: "narrow", visibility: to });
+          expect(change.type).toBe(
+            widensMatterVisibility(from, to) ? "widen" : "narrow",
+          );
+        }
+        if (change.type !== "unchanged") {
+          expect(change.visibility).toBe(to);
         }
       }
     }

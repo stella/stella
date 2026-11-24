@@ -325,6 +325,7 @@ const installFixtureNetwork = () => {
     billingNarrativeLanguage: null,
     color: null,
     documentNamingEnabled: false,
+    visibility: "assigned_only",
     status: "active",
     lastActivityAt: "2026-10-01T00:00:00.000Z",
     createdAt: "2026-10-01T00:00:00.000Z",
