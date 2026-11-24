@@ -347,8 +347,10 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/organization-settings/sso/domains": "crud",
   "POST /v1/organization-settings/sso/domains/:domainId/verify": "crud",
   "POST /v1/organization-settings/sso/providers": "crud",
-  "POST /v1/organization-settings/sso/pending-members/:pendingId/approve": "crud",
-  "POST /v1/organization-settings/sso/pending-members/:pendingId/reject": "crud",
+  "POST /v1/organization-settings/sso/pending-members/:pendingId/approve":
+    "crud",
+  "POST /v1/organization-settings/sso/pending-members/:pendingId/reject":
+    "crud",
   "POST /v1/organization-settings/sso/providers/saml": "crud",
   "POST /v1/organization-settings/sso/providers/test": "crud",
   "POST /v1/organization-settings/sso/saml/parse-metadata": "crud",

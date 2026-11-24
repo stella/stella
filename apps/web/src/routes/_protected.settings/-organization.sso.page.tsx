@@ -8,10 +8,7 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import {
-  ORGANIZATION_SSO_PROVISIONING_MODES,
-  updateOrganizationSsoPolicyBodySchema,
-} from "@stll/api-contract/sso";
+import { ORGANIZATION_SSO_PROVISIONING_MODES } from "@stll/api-contract/sso";
 import type {
   OrganizationSsoDomainSummary,
   OrganizationSsoPendingMemberSummary,
@@ -991,22 +988,22 @@ const ProvisioningAndSeatsSection = ({
     },
   });
 
-  const handleSave = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleSave = () => {
     const trimmed = seatLimitInput.trim();
     let parsedSeatLimit: number | null = null;
     if (trimmed.length > 0) {
       if (!/^[1-9]\d*$/u.test(trimmed)) {
         return;
       }
-      const parsed =
-        updateOrganizationSsoPolicyBodySchema.shape.seatLimit.safeParse(
-          JSON.parse(trimmed),
-        );
-      if (!parsed.success) {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (
+        typeof parsed !== "number" ||
+        !Number.isInteger(parsed) ||
+        parsed < 1
+      ) {
         return;
       }
-      parsedSeatLimit = parsed.data ?? null;
+      parsedSeatLimit = parsed;
     }
     saveMutation.mutate({
       requirement,
@@ -1038,7 +1035,12 @@ const ProvisioningAndSeatsSection = ({
         </span>
       </div>
 
-      <Form onSubmit={handleSave}>
+      <Form
+        onSubmit={(event) => {
+          event.preventDefault();
+          handleSave();
+        }}
+      >
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
             {ORGANIZATION_SSO_PROVISIONING_MODES.map((mode) => (

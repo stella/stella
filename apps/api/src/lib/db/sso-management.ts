@@ -11,8 +11,8 @@ import {
 import type {
   OrganizationSsoDomainSummary,
   OrganizationSsoPolicyRequirement,
-  OrganizationSsoProvisioningMode,
   OrganizationSsoProviderSummary,
+  OrganizationSsoProvisioningMode,
   OrganizationSsoSettingsResponse,
   PublicSsoProviderOption,
   SsoProtocol,

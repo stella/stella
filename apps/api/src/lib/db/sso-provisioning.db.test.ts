@@ -26,7 +26,9 @@ import {
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const clock = createTestClock({ start: Date.parse("2026-11-23T14:00:00.000Z") });
+const clock = createTestClock({
+  start: Date.parse("2026-11-23T14:00:00.000Z"),
+});
 const unique = (prefix: string) =>
   `${prefix}-${Bun.randomUUIDv7().replaceAll("-", "").slice(-10)}`;
 

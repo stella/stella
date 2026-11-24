@@ -17,17 +17,19 @@ ALTER TABLE "organization_sso_policy"
 -- until an administrator explicitly approves them.
 CREATE TABLE "organization_sso_pending_member" (
   "id" text PRIMARY KEY NOT NULL,
-  "organization_id" text NOT NULL REFERENCES "organization"("id") ON DELETE CASCADE,
+  "organization_id" text NOT NULL,
   "user_id" text NOT NULL REFERENCES "user"("id") ON DELETE CASCADE,
   "email" text NOT NULL,
   "name" text,
-  "sso_provider_id" text REFERENCES "sso_provider"("id") ON DELETE SET NULL,
+  "sso_provider_id" text,
   "reason" text NOT NULL,
   "status" text DEFAULT 'pending' NOT NULL,
   "reviewed_by" text REFERENCES "user"("id") ON DELETE SET NULL,
   "reviewed_at" timestamp with time zone,
   "created_at" timestamp with time zone DEFAULT now() NOT NULL,
   "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+  CONSTRAINT "org_sso_pending_member_org_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE,
+  CONSTRAINT "org_sso_pending_member_provider_fk" FOREIGN KEY ("sso_provider_id") REFERENCES "sso_provider"("id") ON DELETE SET NULL,
   CONSTRAINT "organization_sso_pending_member_reason_check"
     CHECK ("reason" IN ('admin_approval', 'seat_limit_reached')),
   CONSTRAINT "organization_sso_pending_member_status_check"

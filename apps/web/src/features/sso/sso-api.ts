@@ -6,9 +6,9 @@ import type {
   CreateSamlSsoProviderBody,
   DiscoverSsoBody,
   ParseSamlMetadataBody,
-  UpdateOrganizationSsoPolicyBody,
   SsoProtocol,
   TestOidcSsoProviderBody,
+  UpdateOrganizationSsoPolicyBody,
 } from "@stll/api-contract/sso";
 
 import { api } from "@/lib/api";
@@ -25,9 +25,7 @@ export const fetchOrgSsoSettings = async (signal?: AbortSignal) =>
 
 export const saveOrgSsoPolicy = async (body: UpdateOrganizationSsoPolicyBody) =>
   await invokeAppOnlyWrite("organization-settings.sso.policy.put", async () =>
-    unwrapApiResponse(
-      await api["organization-settings"].sso.policy.put(body),
-    ),
+    unwrapApiResponse(await api["organization-settings"].sso.policy.put(body)),
   );
 
 export const approveOrgSsoPendingMember = async (pendingId: string) =>

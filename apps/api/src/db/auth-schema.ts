@@ -3,6 +3,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgPolicy,
@@ -534,6 +535,14 @@ export const organizationSsoPolicy = pgTable(
       "organization_sso_policy_requirement_check",
       inArray(table.requirement, ORGANIZATION_SSO_REQUIREMENTS),
     ),
+    check(
+      "organization_sso_policy_provisioning_mode_check",
+      inArray(table.provisioningMode, ORGANIZATION_SSO_PROVISIONING_MODES),
+    ),
+    check(
+      "organization_sso_policy_seat_limit_check",
+      sql`${table.seatLimit} IS NULL OR ${table.seatLimit} >= 1`,
+    ),
     tableOwnerAccess("organization_sso_policy"),
     ...denyStellaAccessPolicies(),
   ],
@@ -600,17 +609,13 @@ export const organizationSsoPendingMember = pgTable(
   "organization_sso_pending_member",
   {
     id: text("id").primaryKey(),
-    organizationId: text("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    organizationId: text("organization_id").notNull(),
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     email: text("email").notNull(),
     name: text("name"),
-    ssoProviderId: text("sso_provider_id").references(() => ssoProvider.id, {
-      onDelete: "set null",
-    }),
+    ssoProviderId: text("sso_provider_id"),
     reason: text("reason", {
       enum: ORGANIZATION_SSO_PENDING_REASONS,
     }).notNull(),
@@ -630,6 +635,16 @@ export const organizationSsoPendingMember = pgTable(
       .notNull(),
   },
   (table) => [
+    foreignKey({
+      name: "org_sso_pending_member_org_fk",
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "org_sso_pending_member_provider_fk",
+      columns: [table.ssoProviderId],
+      foreignColumns: [ssoProvider.id],
+    }).onDelete("set null"),
     uniqueIndex("organization_sso_pending_member_org_user_uidx").on(
       table.organizationId,
       table.userId,
