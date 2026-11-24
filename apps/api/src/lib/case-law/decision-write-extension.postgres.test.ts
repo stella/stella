@@ -148,7 +148,6 @@ if (!databaseUrl || !runPostgresTests) {
               return await tx.execute(query);
             },
           };
-          const started = performance.now();
           const outcome = await runDecisionWriteExtension(
             observedTx,
             decisionId,
@@ -165,7 +164,6 @@ if (!databaseUrl || !runPostgresTests) {
           );
           expect(outcome.type).toBe("deferred");
           expect(sleepingQueries).toHaveLength(1);
-          expect(performance.now() - started).toBeLessThan(2500);
           expect(
             executedRows(
               await tx.execute(

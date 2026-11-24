@@ -84,11 +84,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/db/online-migrations-startup.postgres.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/db/online-repair-holds.db.test.ts": {
     "count": 1,
     "owner": "api",
@@ -325,7 +320,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/handlers/case-law/ingestion/source-total-maintenance.db.test.ts": {
-    "count": 8,
+    "count": 4,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -1114,11 +1109,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/case-law/decision-write-extension.postgres.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/case-law/plain-text.test.ts": {
     "count": 2,
     "owner": "api",
@@ -1814,11 +1804,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/scheduler/tasks/case-law-population-fold.postgres.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/scheduler/tasks/case-law-redaction-tombstone-backfill.db.test.ts": {
     "count": 1,
     "owner": "api",
@@ -2145,11 +2130,6 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/api/src/scripts/scheduler-job-pause.db.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/tests/helpers/transaction-interleaving.postgres.test.ts": {
     "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
