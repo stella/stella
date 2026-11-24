@@ -75,7 +75,9 @@ export const generateThreadRecapText = async ({
   promptCachingEnabled,
   threadId,
   workspaceId,
-}: GenerateThreadRecapTextArgs): Promise<string | null> => {
+}: GenerateThreadRecapTextArgs): Promise<
+  { status: "ok"; recap: string | null } | { status: "failed" }
+> => {
   const transcript = buildRecapTranscript(messages);
   if (!transcript) {
     return null;
@@ -116,7 +118,7 @@ export const generateThreadRecapText = async ({
       systemPromptOrigin: "server-built",
     });
 
-    return cleanRecapText(text);
+    return { status: "ok", recap: cleanRecapText(text) };
   } catch (error) {
     aiAnalytics.captureError(error);
     if (isUnanticipatedAIFailure(error)) {
@@ -128,6 +130,6 @@ export const generateThreadRecapText = async ({
         }),
       );
     }
-    return null;
+    return { status: "failed" };
   }
 };

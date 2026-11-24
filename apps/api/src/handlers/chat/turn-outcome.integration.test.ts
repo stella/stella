@@ -737,7 +737,7 @@ const SURFACE_SHOWS = {
       threadId: await seedThread(),
       workspaceId: null,
     });
-    return recap === null ? [] : [recap];
+    return recap.status === "ok" && recap.recap !== null ? [recap.recap] : [];
   },
   "follow-up-suggestions": async (orgAIConfig) => {
     const answer: unknown = await getSuggestedPrompts.handler(

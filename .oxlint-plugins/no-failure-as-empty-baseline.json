@@ -5,7 +5,6 @@
     "apps/api/src/handlers/case-law/decisions/document-on-demand.ts::runFetch::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/case-law/decisions/search.ts::readCaseLawSearchFacets::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/case-law/decisions/search.ts::readCaseLawSearchFacets::result-error-returns-empty#2": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/handlers/chat/thread-recap.ts::generateThreadRecapText::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/chat/tools/execute/sandbox/run-sandbox.ts::runHostCall::promise-catch-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/chat/tools/template-ai-boundary.ts::adaptAiValue::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/handlers/chat/tools/template-ai-boundary.ts::decideAiCondition::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",

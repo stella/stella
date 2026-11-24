@@ -214,7 +214,9 @@ const getThreadRecap = createSafeRootHandler(config, async function* (ctx) {
               promptCachingEnabled,
               threadId,
               workspaceId: persistedWorkspaceId,
-            }).then((text) => Result.ok(text)),
+            }).then((outcome) =>
+              Result.ok(outcome.status === "ok" ? outcome.recap : null),
+            ),
           );
           return Result.ok({ recap: generated });
         },
