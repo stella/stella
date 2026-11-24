@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -34,12 +34,12 @@ export const readOnlineIndexesReady = async (
         ON index_state.indexrelid = index_relation.oid
       JOIN pg_catalog.pg_class table_relation
         ON table_relation.oid = index_state.indrelid
-      JOIN (VALUES ${sql.join(
-        indexes.map(
-          ({ name, tableName }) => sql`(${name}::text, ${tableName}::text)`,
-        ),
-        sql`, `,
-      )}) AS required(index_name, table_name)
+      JOIN jsonb_to_recordset(${JSON.stringify(
+        indexes.map(({ name, tableName }) => ({
+          index_name: name,
+          table_name: tableName,
+        })),
+      )}::text::jsonb) AS required(index_name text, table_name text)
         ON required.index_name = index_relation.relname
         AND required.table_name = table_relation.relname
       WHERE index_namespace.nspname = 'public'

@@ -4,7 +4,7 @@ import { and, asc, eq, sql } from "drizzle-orm";
 import type { LEGISLATION_WINDOW_DISPOSITION_BASES } from "@stll/api-contract/legislation-expression";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments } from "@/api/db/schema";
 import { declareWriterContract } from "@/api/handlers/legislation/ingestion";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -10,7 +10,7 @@ import type {
   ChatAttachmentPart,
   ChatPart,
   PersistedChatMessage,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { CHAT_REQUEST_ERROR_TRANSLATION_KEYS } from "@/features/chat/chat-request-error";
 import type { ChatRequestError } from "@/features/chat/chat-request-error";
 import type { ChatUserMessageInput } from "@/features/chat/chat-runtime";

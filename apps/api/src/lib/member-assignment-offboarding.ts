@@ -16,7 +16,6 @@ import {
   session,
 } from "@/api/db/auth-schema";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
@@ -32,6 +31,7 @@ import {
   desktopRunnerFolderRestores,
   desktopRunnerRuns,
   desktopRunners,
+  dictationLearnedFixes,
   entities,
   flowDefinitions,
   flowRuns,
@@ -60,6 +60,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { ACTIVE_TASK_REASSIGNMENT_STATUSES } from "@/api/lib/account-deletion-reassignment";
 import {
   AUDIT_ACTION,
@@ -1831,6 +1832,15 @@ export const removeOrganizationMemberInTransaction = async (
         eq(searchHistoryEntries.userId, userId),
       ),
     );
+  // The spellings dictation learned from the member; they can name clients.
+  await tx
+    .delete(dictationLearnedFixes)
+    .where(
+      and(
+        eq(dictationLearnedFixes.organizationId, organizationId),
+        eq(dictationLearnedFixes.userId, userId),
+      ),
+    );
   await clearMemberConnectorAuthorization({
     tx,
     organizationId,
@@ -1912,6 +1922,7 @@ export const ORGANIZATION_MEMBER_CLEANUP_COLUMNS: readonly (readonly [
   [searchHistoryEntries.userId, "cleared"],
   [searchHistoryCountryClears.userId, "cleared"],
   [searchHistoryOwners.userId, "cleared"],
+  [dictationLearnedFixes.userId, "cleared"],
   [searchHistoryTombstones.userId, "cleared"],
   [workspaceMembers.userId, "cleared"],
   [taskAssignees.userId, "reassigned"],

@@ -5,10 +5,10 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";

@@ -2,7 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { SKILL_REF_HREF_PREFIX } from "@stll/api-contract";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { agentSkills } from "@/api/db/schema";
 import { extractSkillRefSlugs } from "@/api/lib/agent-skills/skill-refs";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";

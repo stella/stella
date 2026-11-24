@@ -23,8 +23,8 @@ import { and, desc, eq, gt, inArray, isNull, min, or, sql } from "drizzle-orm";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const HOUR_IN_MS = 60 * 60 * 1000;

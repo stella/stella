@@ -3,8 +3,8 @@ import { eq, sql } from "drizzle-orm";
 
 import { createSha256, sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**

@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
 import { withLongRunningConnection } from "@/api/db/long-running-connection";
-import type { Transaction } from "@/api/db/root";
 import { chatThreads, workspaceMembers, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   withAggregateLock,

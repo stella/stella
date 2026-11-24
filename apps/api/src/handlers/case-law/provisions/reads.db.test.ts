@@ -28,6 +28,7 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
+import { COURT_REGISTRY_UNAVAILABLE } from "@/api/lib/case-law/court-presentation";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -389,7 +390,7 @@ test("citing decisions group mentions and order by decision date, newest first",
 test("an unavailable court registry preserves citing decisions without court badges", async () => {
   const page = await listCitingDecisionsHandler(
     { jurisdiction: JURISDICTION, work: WORK, limit: 10 },
-    { caseLawDb, courtRegistry: null },
+    { caseLawDb, courtRegistry: COURT_REGISTRY_UNAVAILABLE },
   );
   if (!("items" in page)) {
     panic("Expected citing decisions when the court registry is unavailable");

@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { View } from "react-native";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import type {
   E_INVOICE_DOCUMENT_TYPES,
@@ -10,11 +11,15 @@ import type {
   EInvoice,
   EInvoicePreview,
 } from "@stll/api-contract/e-invoice";
-import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
-import { formatFileSize } from "@stll/ui/file-size";
+import {
+  eInvoiceIdentifierScheme,
+  eInvoiceQuantityCount,
+  eInvoiceUnit,
+  type EInvoiceUnitName,
+} from "@stll/api-contract/e-invoice-codes";
 import { Text } from "@stll/ui/text";
 
-import { OpenFilePart } from "@/components/file-part-opener";
+import { FilePartList } from "@/components/file-part-list";
 
 type Syntax = (typeof E_INVOICE_SYNTAXES)[number];
 
@@ -55,7 +60,58 @@ const TOTAL_LABELS = [
   ["payableAmount", "payableAmount"],
 ] as const satisfies readonly (readonly [keyof EInvoice["totals"], string])[];
 
+const UNIT_LABELS = {
+  unit: "units.unit",
+  hour: "units.hour",
+  day: "units.day",
+  week: "units.week",
+  month: "units.month",
+  year: "units.year",
+} as const satisfies Record<EInvoiceUnitName, string>;
+
 type Row = { readonly label: string; readonly value: string | null };
+
+/**
+ * Quantities with their units, and identifiers with their labels, as the web
+ * preview writes them: common units in words, measures as symbols, known
+ * identifier schemes by name.
+ */
+const useInvoiceWording = () => {
+  const t = useTranslations("eInvoice");
+  const quantity = (value: string, unitCode: string | null) => {
+    if (unitCode === null) {
+      return value;
+    }
+    const unit = eInvoiceUnit(unitCode);
+    const count = eInvoiceQuantityCount(value);
+    return unit.type === "named" && count !== null
+      ? t(UNIT_LABELS[unit.name], { count, quantity: value })
+      : t("quantityWithUnit", {
+          quantity: value,
+          unit: unit.type === "symbol" ? unit.symbol : unitCode,
+        });
+  };
+  const identifierLabel = (
+    identifier: EInvoice["seller"]["identifiers"][number],
+  ) => {
+    const kind = t(IDENTIFIER_KIND_LABELS[identifier.kind]);
+    const scheme = eInvoiceIdentifierScheme(identifier);
+    switch (scheme.type) {
+      case "none":
+        return kind;
+      case "named":
+        return identifier.kind === "other"
+          ? scheme.name
+          : t("identifierWithScheme", { kind, scheme: scheme.name });
+      case "code":
+        return t("identifierWithScheme", { kind, scheme: scheme.code });
+      default:
+        scheme satisfies never;
+        return panic("Unhandled identifier scheme");
+    }
+  };
+  return { identifierLabel, quantity };
+};
 
 /**
  * What the file lists without ids (lines, notes, a batch's invoices) is keyed
@@ -131,7 +187,7 @@ const PartyDetails = ({
   party: EInvoice["seller"];
   title: string;
 }) => {
-  const t = useTranslations("eInvoice");
+  const { identifierLabel } = useInvoiceWording();
   if (
     party.name === null &&
     party.identifiers.length === 0 &&
@@ -148,16 +204,10 @@ const PartyDetails = ({
       )}
       {party.identifiers.length > 0 && (
         <Rows
-          rows={party.identifiers.map(({ kind, scheme, value }) => {
-            const label = t(IDENTIFIER_KIND_LABELS[kind]);
-            return {
-              label:
-                scheme === null
-                  ? label
-                  : t("identifierWithScheme", { kind: label, scheme }),
-              value,
-            };
-          })}
+          rows={party.identifiers.map((identifier) => ({
+            label: identifierLabel(identifier),
+            value: identifier.value,
+          }))}
         />
       )}
       {party.address.length > 0 && (
@@ -180,6 +230,7 @@ const InvoiceDetails = ({
 }) => {
   const t = useTranslations("eInvoice");
   const { amount, rate } = useAmounts(invoice.currency);
+  const { quantity } = useInvoiceWording();
   const documentType = DOCUMENT_TYPES[invoice.documentType];
   const totals = TOTAL_LABELS.map(([total, label]) => ({
     label: t(label),
@@ -241,9 +292,9 @@ const InvoiceDetails = ({
                   {
                     label: t("quantity"),
                     value:
-                      line.quantity === null || line.unitCode === null
-                        ? line.quantity
-                        : `${line.quantity} ${line.unitCode}`,
+                      line.quantity === null
+                        ? null
+                        : quantity(line.quantity, line.unitCode),
                   },
                   {
                     label: t("unitPrice"),
@@ -251,7 +302,10 @@ const InvoiceDetails = ({
                     value:
                       line.unitPrice === null || line.priceBasis === null
                         ? amount(line.unitPrice)
-                        : `${amount(line.unitPrice) ?? ""} / ${line.priceBasis}`,
+                        : `${amount(line.unitPrice) ?? ""} / ${quantity(
+                            line.priceBasis.quantity,
+                            line.priceBasis.unitCode,
+                          )}`,
                   },
                   {
                     label: t("vat"),
@@ -314,11 +368,11 @@ const InvoiceDetails = ({
 
 /**
  * A structured invoice as its file states it: every value verbatim, nothing
- * recomputed. Each attachment opens like a document where the phone can.
+ * recomputed. Its attached files are listed as every container lists its
+ * parts.
  */
 export const EInvoiceDetails = ({ preview }: { preview: EInvoicePreview }) => {
   const t = useTranslations("eInvoice");
-  const format = useFormatter();
   const syntax = SYNTAX_LABELS[preview.syntax];
   return (
     <View className="gap-6">
@@ -339,32 +393,12 @@ export const EInvoiceDetails = ({ preview }: { preview: EInvoicePreview }) => {
           position={index + 1}
         />
       ))}
-      {preview.attachments.length > 0 && (
-        <Section title={t("attachments")}>
-          {preview.attachments.map((attachment) => (
-            <View className="gap-0.5" key={attachment.index}>
-              <Text selectable variant="label">
-                {attachment.fileName}
-              </Text>
-              {attachment.description !== null && (
-                <Text selectable variant="caption">
-                  {attachment.description}
-                </Text>
-              )}
-              <Text variant="caption">
-                {formatFileSize(attachment.sizeBytes, format)}
-              </Text>
-              <OpenFilePart
-                fileName={attachment.fileName}
-                part={filePartId({
-                  kind: FILE_PART_KINDS.attachment,
-                  index: attachment.index,
-                })}
-              />
-            </View>
-          ))}
-        </Section>
-      )}
+      <FilePartList
+        items={preview.attachments.map(({ description, ...attachment }) => ({
+          ...attachment,
+          detail: description,
+        }))}
+      />
     </View>
   );
 };

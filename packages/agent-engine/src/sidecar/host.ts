@@ -1,5 +1,6 @@
 import { EventType } from "@tanstack/ai";
 import { panic, Result } from "better-result";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { Temporal } from "temporal-polyfill/full";
 import * as v from "valibot";
@@ -417,6 +418,9 @@ const ADAPTERS = {
       startupRequestTimeoutMs: HARNESS_STARTUP_REQUEST_TIMEOUT_MS,
       onBackgroundError: options.onBackgroundError,
       protocolLog: options.protocolLog,
+      stdioMcpBridge: existsSync(Bun.main)
+        ? [process.execPath, Bun.main]
+        : [process.execPath],
       platform: process.platform,
       ...(options.onProcess === null ? {} : { onProcess: options.onProcess }),
     });

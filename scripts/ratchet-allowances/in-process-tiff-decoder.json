@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 1,
+  "reason": "The API's PDF worker renders TIFF previews itself. Bun's image pipeline reads TIFF only through an operating-system codec that the Linux build lacks, so the API declares utif2 (MIT), the TIFF decoder already in the lockfile through @stll/folio-core, at the same resolved version."
+}

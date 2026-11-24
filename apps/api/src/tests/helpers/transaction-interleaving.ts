@@ -5,8 +5,8 @@ import { withTimeout } from "@stll/concurrency/with-timeout";
 import { waitForExternalState } from "@stll/property-testing/external-state";
 import { type Clock, systemClock } from "@stll/test-kit";
 
-import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 

@@ -159,7 +159,10 @@ describe("table version cell", () => {
       "a file the inspector cannot display",
       entity({
         kind: "document",
-        file: { fileName: "bundle.zip", mimeType: "application/zip" },
+        file: {
+          fileName: "bundle.7z",
+          mimeType: "application/x-7z-compressed",
+        },
       }),
     ],
   ])("stays inert for %s", (_label, row) => {

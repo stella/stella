@@ -1,6 +1,5 @@
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   taskAssignees,
@@ -16,6 +15,7 @@ import type {
   WorkObligationSource,
   WorkObligationStatus,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";

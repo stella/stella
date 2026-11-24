@@ -59,6 +59,7 @@ type NativeSide = {
   harnesses: () => unknown;
   chatGpt?: () => unknown;
   claudeCode?: () => unknown;
+  antigravity?: () => unknown;
   /** Runs when a sign-in is started. */
   onStart?: (command: string) => void;
 };
@@ -83,6 +84,7 @@ const renderSection = (
     harnesses,
     chatGpt = () => SIGNED_OUT_CHATGPT,
     claudeCode = () => ({ state: "not_installed" }),
+    antigravity = () => null,
     onStart,
   } = typeof native === "function" ? { harnesses: native } : native;
   const shown: AgentSettingsFocus[] = [];
@@ -96,6 +98,9 @@ const renderSection = (
         }
         case "claude_code_auth_get_status": {
           return claudeCode();
+        }
+        case "antigravity_get_status": {
+          return antigravity();
         }
         case "harness_get_status": {
           const value = harnesses();
@@ -468,3 +473,50 @@ test.each([
     );
   },
 );
+
+test("shows the Antigravity card with its installed version and refreshes on Check again", async () => {
+  let state: unknown = { state: "signed_out", version: "1.5.11" };
+  const { calls, getByRole, getByText } = renderSection({
+    harnesses: () => [],
+    antigravity: () => state,
+  });
+
+  await waitFor(() => {
+    expect(
+      getByText(defaultMessages.agentSubscriptions.antigravity.title),
+    ).toBeTruthy();
+    expect(
+      getByText(defaultMessages.agentSubscriptions.antigravity.signedOut),
+    ).toBeTruthy();
+    expect(
+      getByText(
+        message(install.ready, {
+          name: defaultMessages.agentSubscriptions.antigravity.title,
+          version: "1.5.11",
+        }),
+      ),
+    ).toBeTruthy();
+  });
+
+  state = { state: "signed_in", version: "1.5.11" };
+  fireEvent.click(
+    getByRole("button", {
+      name: defaultMessages.agentSubscriptions.antigravity.checkAgain,
+    }),
+  );
+
+  await waitFor(() => {
+    expect(
+      getByText(defaultMessages.agentSubscriptions.antigravity.signedIn),
+    ).toBeTruthy();
+  });
+  expect(
+    calls.some(
+      (c) =>
+        c.command === "antigravity_get_status" &&
+        typeof c.args === "object" &&
+        c.args !== null &&
+        Reflect.get(c.args, "refresh") === true,
+    ),
+  ).toBe(true);
+});

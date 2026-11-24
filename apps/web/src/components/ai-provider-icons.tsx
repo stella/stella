@@ -2,6 +2,13 @@ import type { ComponentProps, ComponentType } from "react";
 
 import { panic } from "better-result";
 
+import type { ChatLocalRunHarness } from "@stll/api-contract/chat-run-target";
+import {
+  AntigravityLogoIcon,
+  ClaudeLogoIcon,
+  GeminiLogoIcon,
+  OpenAILogoIcon,
+} from "@stll/ui/brand-icons";
 import { BlocksIcon, SparklesIcon, WindIcon } from "@stll/ui/icons";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
@@ -9,49 +16,10 @@ import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 type IconProps = ComponentProps<"svg">;
 type IconComponent = ComponentType<IconProps>;
 
-const baseSvgProps = {
-  fill: "currentColor",
-  height: "1em",
-  stroke: "currentColor",
-  strokeWidth: "0",
-  viewBox: "0 0 24 24",
-  width: "1em",
-  xmlns: "http://www.w3.org/2000/svg",
-} as const;
-
-const GeminiIcon = (props: IconProps) => (
-  <svg {...baseSvgProps} {...props}>
-    <title>Google AI</title>
-    <path d="M11.12 1.09H12.88L12.93 1.95C13.22 6.85 17.15 10.78 22.05 11.07L22.91 11.12V12.88L22.05 12.93C17.15 13.22 13.22 17.15 12.93 22.06L12.88 22.91H11.12L11.07 22.06C10.78 17.15 6.85 13.22 1.95 12.93L1.09 12.88V11.12L1.95 11.07C6.85 10.78 10.78 6.85 11.07 1.95L11.12 1.09ZM12 5.85C10.83 8.62 8.62 10.83 5.85 12C8.62 13.17 10.83 15.38 12 18.15C13.17 15.38 15.38 13.17 18.15 12C15.38 10.83 13.17 8.62 12 5.85Z" />
-  </svg>
-);
-
-const ClaudeIcon = (props: IconProps) => (
-  <svg
-    aria-hidden="true"
-    fill="none"
-    viewBox="0 0 94 94"
-    xmlns="http://www.w3.org/2000/svg"
-    {...props}
-  >
-    <path
-      d="M18.7657 62.4437L37.1822 52.1167L37.4857 51.2122L37.1822 50.7085H36.2715L33.1852 50.5208L22.6615 50.2391L13.5545 49.8636L4.70044 49.3942L2.47428 48.9248L0.399902 46.1553L0.602281 44.794L2.47428 43.5266L5.15579 43.7613L11.0754 44.1837L19.98 44.794L26.4055 45.1695L35.9679 46.1553H37.4857L37.6881 45.545L37.1822 45.1695L36.7774 44.794L27.5692 38.5508L17.6021 31.9791L12.3908 28.1769L9.60812 26.2524L8.19147 24.4686L7.58433 20.5256L10.1141 17.7091L13.5545 17.9438L14.4146 18.1785L17.9056 20.8542L25.343 26.6279L35.0572 33.7629L36.4739 34.9364L37.0443 34.5514L37.1316 34.2792L36.4739 33.1996L31.212 23.6706L25.596 13.9539L23.0663 9.91695L22.4086 7.52296C22.1538 6.51831 22.0038 5.68714 22.0038 4.65957L24.8877 0.716544L26.5067 0.200195L30.4025 0.716544L32.0215 2.12477L34.4501 7.66379L38.3458 16.3478L44.4172 28.1769L46.188 31.6975L47.1493 34.9364L47.5035 35.9222H48.1106V35.3589L48.6166 28.6933L49.5273 20.5256L50.438 10.0108L50.7415 7.05356L52.2088 3.48605L55.1433 1.56148L57.42 2.64112L59.292 5.31674L59.039 7.05356L57.926 14.2824L55.7504 25.5952L54.3337 33.1996H55.1433L56.1046 32.2138L59.9497 27.1442L66.3752 19.0704L69.2085 15.8784L72.5478 12.3579L74.6728 10.668H78.7203L81.6548 15.0804L80.3394 19.6337L76.1906 24.8911L72.7502 29.3504L67.8172 35.9595L64.7562 41.2734L65.0307 41.7118L65.7681 41.6489L76.8989 39.255L82.9197 38.1753L90.1041 36.9549L93.3422 38.457L93.6963 40.006L92.4315 43.151L84.7411 45.0287L75.7353 46.8594L62.3244 50.0164L62.1759 50.1358L62.3512 50.3958L68.399 50.9432L70.9794 51.084H77.3037L89.0922 51.9759L92.1785 53.9944L93.9999 56.4822L93.6963 58.4068L88.9404 60.8008L82.5655 59.2987L67.6401 55.7312L62.5301 54.4638H61.8217V54.8862L66.0717 59.064L73.9139 66.1051L83.6786 75.2116L84.1845 77.4648L82.9197 79.2485L81.6042 79.0608L73.0032 72.5829L69.6639 69.6726L62.1759 63.3356H61.67V63.9928L63.3902 66.5276L72.5478 80.2812L73.0032 84.5059L72.3454 85.8672L69.9675 86.7121L67.3871 86.2427L61.9735 78.6852L56.4587 70.2359L52.0064 62.6315L51.4687 62.971L48.8189 91.2654L47.6047 92.7206L44.7714 93.8002L42.3934 92.0164L41.1286 89.1061L42.3934 83.3324L43.9113 75.8219L45.1255 69.8604L46.2386 62.4437L46.9184 59.9661L46.8583 59.8003L46.3153 59.8916L40.7238 67.5603L32.2239 79.0608L25.4948 86.2427L23.8758 86.8999L21.0931 85.4447L21.3461 82.863L22.9145 80.5629L32.2239 68.7338L37.8399 61.3641L41.4594 57.1337L41.4242 56.5218L41.2244 56.5048L16.489 72.6299L12.0873 73.1932L10.1647 71.4094L10.4176 68.4991L11.3283 67.5603L18.7657 62.4437Z"
-      fill="#D97757"
-    />
-  </svg>
-);
-
-const OpenAIIcon = (props: IconProps) => (
-  <svg {...baseSvgProps} role="img" {...props}>
-    <title>OpenAI</title>
-    <path d="M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18a5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.51 2.9A5.98 5.98 0 0 0 13.26 24a6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zm-9.02 12.61a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.79.79 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.49 4.49zm-9.66-4.13a4.47 4.47 0 0 1-.53-3.01l.14.09 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.49 4.49 0 0 1 2.37-1.97V11.6a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.87zm16.6 3.86L13.1 8.36 15.12 7.2a.08.08 0 0 1 .07 0l4.83 2.79a4.49 4.49 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.41-.68zm2.01-3.02l-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.07a4.5 4.5 0 0 1 7.38-3.45l-.14.08L8.7 5.46a.79.79 0 0 0-.39.68zm1.1-2.37l2.6-1.5 2.61 1.5v3l-2.6 1.5-2.61-1.5Z" />
-  </svg>
-);
-
 const PROVIDER_ICONS = {
-  google: GeminiIcon,
-  anthropic: ClaudeIcon,
-  openai: OpenAIIcon,
+  google: GeminiLogoIcon,
+  anthropic: ClaudeLogoIcon,
+  openai: OpenAILogoIcon,
   openrouter: SparklesIcon,
   mistral: WindIcon,
   bedrock: BlocksIcon,
@@ -66,11 +34,11 @@ export const AIProviderIcon = ({
 }: IconProps & { provider: ProviderValue }) => {
   switch (provider) {
     case "google":
-      return <GeminiIcon {...props} />;
+      return <GeminiLogoIcon {...props} />;
     case "anthropic":
-      return <ClaudeIcon {...props} />;
+      return <ClaudeLogoIcon {...props} />;
     case "openai":
-      return <OpenAIIcon {...props} />;
+      return <OpenAILogoIcon {...props} />;
     case "openrouter":
       return <SparklesIcon {...props} />;
     case "mistral":
@@ -80,5 +48,22 @@ export const AIProviderIcon = ({
     default:
       provider satisfies never;
       return panic(`Unhandled provider: ${String(provider)}`);
+  }
+};
+
+export const LocalHarnessIcon = ({
+  harness,
+  ...props
+}: IconProps & { harness: ChatLocalRunHarness }) => {
+  switch (harness) {
+    case "codex":
+      return <OpenAILogoIcon {...props} />;
+    case "claude-code":
+      return <ClaudeLogoIcon {...props} />;
+    case "antigravity":
+      return <AntigravityLogoIcon {...props} />;
+    default:
+      harness satisfies never;
+      return panic(`Unhandled local harness: ${String(harness)}`);
   }
 };

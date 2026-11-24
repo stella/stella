@@ -52,6 +52,7 @@ const capabilities = {
   reviewPasswordSignIn: false,
   bootstrap: false,
   social: { apple: false, google: true, microsoft: false },
+  enterpriseSso: false,
   transactionalEmail: true,
 };
 

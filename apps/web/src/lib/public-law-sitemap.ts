@@ -29,7 +29,6 @@ import {
   type CaseLawLanguageAlternateLink,
   createCaseLawLanguageAlternateLinks,
 } from "@/lib/case-law-language-alternates";
-import { ClientOperationError } from "@/lib/errors/client";
 import { isPublicKnowledgeCrawlAllowed } from "@/lib/knowledge/public-knowledge-launch";
 import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import {
@@ -39,9 +38,11 @@ import {
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 import {
   assertSitemapXmlWithinProtocolLimits,
-  createSitemapUpstreamBusyError,
+  classifySitemapUpstreamFailure,
   escapeSitemapXml,
   SITEMAP_XML_RESPONSE_HEADERS,
+  SitemapNotFoundError,
+  SitemapReadFailedError,
   TOOLS_SITEMAP_PATH,
 } from "@/lib/public-sitemap";
 import {
@@ -212,15 +213,11 @@ export const fetchPublicSitemapShards = async ({
 }: FetchSitemapShardsOptions = {}): Promise<SitemapShard[]> => {
   const response = await fetchImpl(apiUrl("/case/sitemap/shards"), { signal });
   if (!response.ok) {
-    throw response.status === 429 || response.status === 503
-      ? createSitemapUpstreamBusyError({
-          action: "fetchPublicCaseLawSitemapShards",
-          response,
-        })
-      : new ClientOperationError({
-          action: "fetchPublicCaseLawSitemapShards",
-          message: `Failed to fetch public case-law sitemap shards: ${response.status}`,
-        });
+    throw classifySitemapUpstreamFailure({
+      action: "fetchPublicCaseLawSitemapShards",
+      addressesShard: false,
+      response,
+    });
   }
 
   const parseResult = v.safeParse(
@@ -228,10 +225,12 @@ export const fetchPublicSitemapShards = async ({
     await response.json(),
   );
   if (!parseResult.success) {
-    throw new ClientOperationError({
+    throw new SitemapReadFailedError({
       action: "parsePublicCaseLawSitemapShards",
       cause: parseResult.issues,
       message: "Public case-law sitemap shards had an unexpected shape.",
+      reason: "unexpected_payload",
+      upstreamStatus: response.status,
     });
   }
 
@@ -256,17 +255,15 @@ export const fetchPublicSitemapDecisions = async ({
       ? null
       : await fetchImpl(url, { signal });
   if (response === null || !response.ok) {
-    throw response?.status === 429 || response?.status === 503
-      ? createSitemapUpstreamBusyError({
+    throw response === null
+      ? new SitemapNotFoundError({
           action: "fetchPublicCaseLawSitemap",
-          response,
+          message: "The case-law sitemap shard is not published.",
         })
-      : new ClientOperationError({
+      : classifySitemapUpstreamFailure({
           action: "fetchPublicCaseLawSitemap",
-          message:
-            response === null
-              ? "The case-law sitemap shard is not published."
-              : `Failed to fetch public case-law sitemap data: ${response.status}`,
+          addressesShard: true,
+          response,
         });
   }
 
@@ -275,10 +272,12 @@ export const fetchPublicSitemapDecisions = async ({
     await response.json(),
   );
   if (!parseResult.success) {
-    throw new ClientOperationError({
+    throw new SitemapReadFailedError({
       action: "parsePublicCaseLawSitemap",
       cause: parseResult.issues,
       message: "Public case-law sitemap data had an unexpected shape.",
+      reason: "unexpected_payload",
+      upstreamStatus: response.status,
     });
   }
 

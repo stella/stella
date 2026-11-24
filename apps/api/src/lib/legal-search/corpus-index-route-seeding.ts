@@ -55,13 +55,13 @@ import { and, eq, sql } from "drizzle-orm";
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
 import { compareCodeUnit } from "@stll/collation";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexGenerationSeedingPasses,
   corpusIndexRouteSeedings,
   legislationDocuments,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   lockCorpusIndexGenerationSeedingPass,
   lockCorpusIndexGenerationShared,

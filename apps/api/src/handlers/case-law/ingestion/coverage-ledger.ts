@@ -13,7 +13,7 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
  * describes the latest attempt.
  */
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawCoverageSlices } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 import { DAY_IN_MS } from "@stll/time";
 
 import { AGENT_AUTH_ID_JAG_CLOCK_SKEW_SECONDS } from "@/api/agent-auth/id-jag-policy";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import { recordSystemAudit } from "@/api/lib/system-audit/record";

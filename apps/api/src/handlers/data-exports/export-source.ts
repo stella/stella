@@ -24,7 +24,7 @@ import * as v from "valibot";
 
 import { compareCodeUnit } from "@stll/collation";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   clauseCategories,
   clauses,

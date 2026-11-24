@@ -95,12 +95,32 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "ASiC previews use matter file read permissions on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/zip",
+    "ZIP archive previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/mbox",
+    "Mailbox previews use matter file read permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/parts",
+    "Listing the files inside a part of a file uses the matter file read permission on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/cades",
     "Signed document previews use the matter file read permission on every deployment",
   ],
   [
-    "/v1/files/:workspaceId/certified-email",
-    "Certified email previews use the matter file read permission on every deployment",
+    "/v1/files/:workspaceId/part",
+    "Saving a part of a file to a matter uses the matter file read and document create permissions on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/email-reading",
+    "Email readings use the matter file read permission on every deployment",
+  ],
+  [
+    "/v1/files/:workspaceId/signature",
+    "Signature file previews use the matter file read permission on every deployment",
   ],
   [
     "/v1/files/:workspaceId/data-box",
@@ -145,6 +165,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/dictation/models",
     "Authenticated dictation lists the region's transcription models on every deployment, and a model whose provider keeps the audio only to a member whose feature decision grants it",
+  ],
+  [
+    "/v1/dictation/learned-fixes",
+    "A member's learned dictation fixes are their own spellings, mounted on every deployment; nothing reaches a model",
   ],
   [
     "/v1/dictation/cleanup",
@@ -227,6 +251,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "A chat limit reminder is mounted on every deployment; it can be set only for a turn the member's local-agents feature let run",
   ],
   [
+    "/v1/organization-settings/dictation-vocabulary",
+    "The organization's dictation words are managed on every deployment; dictation itself stays behind the members' dictation feature decisions",
+  ],
+  [
     "/v1/organization-settings/local-runs",
     "An administrator's limit on local run permissions is settable on every deployment; it only narrows turns the member's local-agents feature lets start",
   ],
@@ -286,6 +314,14 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/cleanup",
     "Desktop dictation cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/cleanup-models",
+    "Desktop dictation lists the cleanup models only for a caller whose dictation feature decision is enabled and whose role may use AI, on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/learned-fixes",
+    "A desktop member's learned dictation fixes enforce the caller's dictation feature decision on every deployment; nothing reaches a model",
   ],
   [
     "/v1/desktop/dictation/models",

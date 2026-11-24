@@ -9,7 +9,10 @@ import { repoRelativePath } from "@stll/portable-path";
 import { rejectionOf } from "./rejection";
 
 const ROOT = path.join(import.meta.dir, "../../..");
-const OWNER = "apps/api/src/lib/files/folio-collab-snapshot-loader.ts";
+// The room store hands every persisted snapshot to the loader, which refuses
+// a room the canonical engine cannot open.
+const OWNER = "apps/api/src/lib/folio-collab-rooms.ts";
+const LOAD = "loadPersistedFolioSnapshot(";
 
 const git = (root: string, args: readonly string[]): string => {
   const result = Bun.spawnSync(["git", ...args], { cwd: root });
@@ -44,7 +47,7 @@ const expectSnapshotOwner = async (root: string) => {
   const rawLoadSites: string[] = [];
   for (const sourcePath of sourceFiles(root)) {
     const source = await Bun.file(sourcePath).text();
-    if (source.includes("migrateFolioYjsSnapshot")) {
+    if (source.includes(LOAD)) {
       rawLoadSites.push(repoRelativePath(root, sourcePath));
     }
   }
@@ -53,11 +56,6 @@ const expectSnapshotOwner = async (root: string) => {
 
 test("persisted Folio snapshots can only enter through the load owner", async () => {
   await expectSnapshotOwner(ROOT);
-
-  const roomStore = await Bun.file(
-    path.join(ROOT, "apps/api/src/lib/folio-collab-rooms.ts"),
-  ).text();
-  expect(roomStore).toContain("loadPersistedFolioSnapshot({");
 });
 
 test("the load-owner scan ignores temporary trees but rejects real extra owners and unreadable sources", async () => {
@@ -65,10 +63,7 @@ test("the load-owner scan ignores temporary trees but rejects real extra owners 
   try {
     git(root, ["init", "--quiet"]);
     await mkdir(path.dirname(path.join(root, OWNER)), { recursive: true });
-    await Bun.write(
-      path.join(root, OWNER),
-      "migrateFolioYjsSnapshot(snapshot);\n",
-    );
+    await Bun.write(path.join(root, OWNER), `${LOAD}{ snapshotBytes });\n`);
     git(root, ["add", "--", OWNER]);
     await Bun.write(
       path.join(root, ".gitignore"),
@@ -78,7 +73,7 @@ test("the load-owner scan ignores temporary trees but rejects real extra owners 
     await mkdir(path.join(temporaryTree, "src"), { recursive: true });
     await Bun.write(
       path.join(temporaryTree, "src/copied-owner.ts"),
-      "migrateFolioYjsSnapshot(snapshot);\n",
+      `${LOAD}{ snapshotBytes });\n`,
     );
 
     // An ignored checkout may disappear while another package's tests run.
@@ -90,7 +85,7 @@ test("the load-owner scan ignores temporary trees but rejects real extra owners 
     await mkdir(path.dirname(path.join(root, extraOwner)), { recursive: true });
     await Bun.write(
       path.join(root, extraOwner),
-      "migrateFolioYjsSnapshot(snapshot);\n",
+      `${LOAD}{ snapshotBytes });\n`,
     );
     expect(await rejectionOf(expectSnapshotOwner(root))).toMatchObject({
       message: expect.stringContaining(extraOwner),

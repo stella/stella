@@ -7,7 +7,7 @@ import {
 } from "@stll/api-contract";
 import type { AuthoredDocumentPropertyKey } from "@stll/api-contract";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";

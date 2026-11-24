@@ -453,6 +453,11 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `organization-settings.correspondence.data-boxes.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-delete` |
 | `organization-settings.correspondence.data-boxes.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings correspondence-data-boxes-get` |
 | `organization-settings.deepl-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings deepl-availability-get` |
+| `organization-settings.dictation-vocabulary.add` | write | stella:admin_write | — | generic invoke → `stella capability organization-settings dictation-vocabulary-add` |
+| `organization-settings.dictation-vocabulary.check` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings dictation-vocabulary-check` |
+| `organization-settings.dictation-vocabulary.delete` | write, destructive | stella:admin_write | — | generic invoke → `stella capability organization-settings dictation-vocabulary-delete` |
+| `organization-settings.dictation-vocabulary.export` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings dictation-vocabulary-export` |
+| `organization-settings.dictation-vocabulary.list` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings dictation-vocabulary-list` |
 | `organization-settings.document-ocr-availability.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings document-ocr-availability-get` |
 | `organization-settings.get` | read | stella:admin_read | — | generic invoke → `stella capability organization-settings get` |
 | `organization-settings.members.billing-access.update` | write | stella:admin_write | FEATURE_TIME_BILLING | generic invoke → `stella capability organization-settings members-billing-access-update` |
@@ -828,24 +833,24 @@ mechanics, and similar), not gaps in coverage.
 | account_lifecycle | 6 |
 | agent_autonomy_ceiling | 1 |
 | assistant_chat | 28 |
-| auth_plumbing | 46 |
+| auth_plumbing | 50 |
 | billing_ui | 1 |
 | chat_thread_ui | 31 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
-| document_processing | 28 |
+| document_processing | 27 |
 | health_infra | 2 |
 | hosted_billing | 7 |
 | human_confirmation | 3 |
 | mcp_transport | 12 |
 | native_device | 5 |
-| native_tool_ui | 14 |
+| native_tool_ui | 17 |
 | organization_export | 2 |
-| provider_secret | 35 |
+| provider_secret | 43 |
 | public_indexing | 13 |
 | realtime_stream | 10 |
 | search_ui | 23 |
 | session_token_exchange | 23 |
 | ui_navigation_state | 14 |
-| upload_mechanics | 35 |
+| upload_mechanics | 36 |
 | url_preview | 2 |

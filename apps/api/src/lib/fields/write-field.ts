@@ -7,8 +7,7 @@ import { apiDateSchema } from "@stll/api-contract/api-date";
 import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   cellMetadata,
   entities,
@@ -21,6 +20,7 @@ import type {
   FieldContent,
   MachineCellValue,
 } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

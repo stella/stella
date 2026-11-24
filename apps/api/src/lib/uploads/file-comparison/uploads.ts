@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { FILE_READ_URL_EXPIRY_SECONDS } from "@/api/lib/files/read-file";
 

@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatQueuedMessages } from "@/api/db/schema";
 import { isChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import {

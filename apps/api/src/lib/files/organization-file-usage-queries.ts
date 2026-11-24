@@ -1,10 +1,10 @@
 import { and, asc, eq, isNotNull, lte, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   FILE_USAGE_RECONCILIATION_STATE,
   organizationFileObjects,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type OrganizationFileLedgerCursor = {

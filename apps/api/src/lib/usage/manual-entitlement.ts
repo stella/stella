@@ -10,8 +10,8 @@
 import { panic, Result, TaggedError } from "better-result";
 import { eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { usageEntitlements, usagePolicies } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

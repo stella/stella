@@ -12,6 +12,7 @@ import { createHttpApp } from "@/api/http/app";
 import { routes } from "@/api/http/route";
 import type { RouteEntry } from "@/api/http/route";
 import { HttpStatusResponse } from "@/api/http/status";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -92,6 +93,8 @@ type RecordedModelCall = {
   prompt: string;
   schema: unknown;
   task: string;
+  /** The model asked for; undefined: the organization's for the task. */
+  modelId: string | undefined;
   deadlineMs: number | undefined;
   outputTokenBudget: number | undefined;
 };
@@ -107,6 +110,7 @@ const recordingModel = (answer: () => unknown) => {
         prompt: options.prompt ?? "",
         schema: options.outputSchema,
         task: options.task,
+        modelId: options.modelId,
         deadlineMs: options.deadlineMs,
         outputTokenBudget: options.outputTokenBudget,
       });
@@ -127,6 +131,8 @@ type ExerciseOptions = {
   role?: "member" | "external";
   limited?: boolean;
   answer: () => unknown;
+  /** The organization's own AI providers; none by default. */
+  orgAIConfig?: OrgAIConfig | null;
 };
 
 /**
@@ -142,6 +148,7 @@ export const exerciseDesktopDictationEndpoint = async ({
   role = "member",
   limited = false,
   answer,
+  orgAIConfig = null,
 }: ExerciseOptions) => {
   if (!granted) {
     testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
@@ -179,7 +186,7 @@ export const exerciseDesktopDictationEndpoint = async ({
       async () =>
         await Promise.resolve(
           Result.ok({
-            orgAIConfig: null,
+            orgAIConfig,
             promptCachingEnabled: false,
             managedAIResidency: "eu",
           }),

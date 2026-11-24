@@ -9,7 +9,7 @@ import {
 import { getChatTurnDurationMs } from "@stll/api-contract/chat-turn-duration";
 
 import { withSubagentRunParts } from "@/components/chat/chat-subagent-parts.logic";
-import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import type { ChatPart } from "@/components/chat/chat-ui-tools-types";
 
 export type TurnActivePhase =
   | { type: "thinking" }

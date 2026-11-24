@@ -186,7 +186,7 @@ if (import.meta.main) {
     });
   }
   const matrix =
-    plan.type === "run" ? plan.matrix : { shard: ["rest-web"] as const };
+    plan.type === "run" ? plan.matrix : { shard: ["rest"] as const };
   const encodedFiles = serializeApiTestFilesOutput(plan.impact.files);
   writeFileSync(
     path.join(

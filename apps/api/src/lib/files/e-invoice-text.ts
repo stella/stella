@@ -1,4 +1,16 @@
-import type { EInvoice, EInvoicePreview } from "@stll/api-contract/e-invoice";
+import { panic } from "better-result";
+
+import type {
+  EInvoice,
+  EInvoicePreview,
+  XmlDocumentPreview,
+} from "@stll/api-contract/e-invoice";
+import {
+  eInvoiceIdentifierScheme,
+  eInvoiceQuantityCount,
+  eInvoiceUnit,
+  type EInvoiceUnitName,
+} from "@stll/api-contract/e-invoice-codes";
 
 /**
  * The invoice as text for search and AI reads: the same fields, in the same
@@ -35,11 +47,62 @@ const fields = (...parts: [string, string | null][]) =>
     value === null ? [] : [`${label} ${value}`],
   );
 
+const UNIT_NAMES = {
+  unit: ["unit", "units"],
+  hour: ["hour", "hours"],
+  day: ["day", "days"],
+  week: ["week", "weeks"],
+  month: ["month", "months"],
+  year: ["year", "years"],
+} as const satisfies Record<EInvoiceUnitName, readonly [string, string]>;
+
+/** A quantity with its unit in words or symbol, the code kept beside it. */
+const quantityText = (quantity: string, unitCode: string | null) => {
+  if (unitCode === null) {
+    return quantity;
+  }
+  const unit = eInvoiceUnit(unitCode);
+  switch (unit.type) {
+    case "named": {
+      const [one, other] = UNIT_NAMES[unit.name];
+      const count = eInvoiceQuantityCount(quantity);
+      return count === null
+        ? `${quantity} ${unitCode}`
+        : `${quantity} ${Math.abs(count) === 1 ? one : other} (${unitCode})`;
+    }
+    case "symbol":
+      return `${quantity} ${unit.symbol} (${unitCode})`;
+    case "code":
+      return `${quantity} ${unitCode}`;
+    default:
+      unit satisfies never;
+      return panic("Unhandled invoice unit");
+  }
+};
+
+const identifierLabel = (
+  identifier: EInvoice["seller"]["identifiers"][number],
+) => {
+  const scheme = eInvoiceIdentifierScheme(identifier);
+  switch (scheme.type) {
+    case "none":
+      return IDENTIFIER_NAMES[identifier.kind];
+    case "named":
+      return identifier.kind === "other"
+        ? scheme.name
+        : `${IDENTIFIER_NAMES[identifier.kind]} (${scheme.name})`;
+    case "code":
+      return `${IDENTIFIER_NAMES[identifier.kind]} (${scheme.code})`;
+    default:
+      scheme satisfies never;
+      return panic("Unhandled identifier scheme");
+  }
+};
+
 const partyText = (role: string, party: EInvoice["seller"]) => [
   `${role}: ${party.name ?? "Name not stated"}`,
   ...party.identifiers.map(
-    ({ kind, scheme, value }) =>
-      `  ${IDENTIFIER_NAMES[kind]}${scheme === null ? "" : ` (${scheme})`}: ${value}`,
+    (identifier) => `  ${identifierLabel(identifier)}: ${identifier.value}`,
   ),
   ...party.address.map((line) => `  ${line}`),
 ];
@@ -77,15 +140,16 @@ const invoiceText = (invoice: EInvoice): string[] => {
                   "quantity",
                   line.quantity === null
                     ? null
-                    : [line.quantity, line.unitCode]
-                        .filter((part) => part !== null)
-                        .join(" "),
+                    : quantityText(line.quantity, line.unitCode),
                 ],
                 [
                   "unit price",
                   line.unitPrice === null || line.priceBasis === null
                     ? line.unitPrice
-                    : `${line.unitPrice} per ${line.priceBasis}`,
+                    : `${line.unitPrice} per ${quantityText(
+                        line.priceBasis.quantity,
+                        line.priceBasis.unitCode,
+                      )}`,
                 ],
                 [
                   "VAT",
@@ -165,3 +229,19 @@ export const eInvoiceDocumentText = (preview: EInvoicePreview): string =>
           ),
         ]),
   ].join("\n");
+
+const XML_DOCUMENT_HEADING = "XML document.\n\n";
+const XML_DOCUMENT_TRUNCATED = "\nDocument text was truncated.";
+
+/**
+ * What `xmlDocumentPreviewText` adds around an XML file's own text: a reader
+ * budgets it so the text and its truncation notice fit together.
+ */
+export const XML_DOCUMENT_TEXT_OVERHEAD =
+  XML_DOCUMENT_HEADING.length + XML_DOCUMENT_TRUNCATED.length;
+
+/** The text search and AI read for what an invoice reader shows. */
+export const xmlDocumentPreviewText = (preview: XmlDocumentPreview): string =>
+  preview.type === "invoice"
+    ? eInvoiceDocumentText(preview.invoice)
+    : `${XML_DOCUMENT_HEADING}${preview.text}${preview.truncated ? XML_DOCUMENT_TRUNCATED : ""}`;

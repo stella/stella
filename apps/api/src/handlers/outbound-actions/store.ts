@@ -9,8 +9,8 @@ import {
 } from "@stll/api-contract/outbound-action";
 import { classifyFailure } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import { outboundActions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { outboundPreviewHash } from "@/api/handlers/outbound-actions/preview";
 import {
   AUDIT_ACTION,

@@ -2985,7 +2985,7 @@ const jobSteps = (job: unknown) =>
     job,
   ).steps;
 
-const MATRIX_SHARD_ENV = `\${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}`;
+const MATRIX_SHARD_ENV = `\${{ matrix.shard }}`;
 
 const missingFullTestShards = (source: string) => {
   const steps = jobSteps(workflowJobs(source)["full-test"]);
@@ -3002,10 +3002,8 @@ const missingFullTestShards = (source: string) => {
             return false;
           }
           const configuredShard = step.env?.["SHARD"];
-          let actualShard = configuredShard;
-          if (configuredShard === MATRIX_SHARD_ENV) {
-            actualShard = jobShard === "rest-web" ? "rest" : jobShard;
-          }
+          const actualShard =
+            configuredShard === MATRIX_SHARD_ENV ? jobShard : configuredShard;
           if (actualShard !== suite) {
             return false;
           }
@@ -5776,6 +5774,11 @@ test("every browser suite runs on its required matrix legs, the playground on ev
         `bun run test:e2e:ui-playground "\${specs[@]}"`,
       );
       expect(suite.run, suite.name).not.toContain("--shard");
+    } else if (suite.name === "Test desktop browser interactions") {
+      expect(suite.if, suite.name).toContain(
+        "startsWith(matrix.suite, 'desktop-')",
+      );
+      expect(suite.run, suite.name).toContain("--shard=");
     } else {
       expect(suite.if, suite.name).toContain("matrix.suite ==");
     }
@@ -7324,19 +7327,22 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   const web = planCiApiTests({
     event: "pull_request",
     scopeUnknown: false,
-    testJobs: ["rest-web"],
+    testJobs: ["rest", "web"],
     select: () => selectApiTestImpact({ changed: ["apps/web/src/page.tsx"] }),
   });
   expect(web.type).toBe("run");
-  expect(web.type === "run" ? web.matrix.shard : []).toEqual(["rest-web"]);
+  expect(web.type === "run" ? web.matrix.shard : []).toEqual(["rest", "web"]);
   const queue = planCiApiTests({
     event: "merge_group",
     scopeUnknown: false,
-    testJobs: ["rest-web"],
+    testJobs: ["rest", "web"],
     select: () => ({ mode: "none", files: [], shards: 0 }),
   });
   expect(queue.type).toBe("run");
-  expect(queue.type === "run" ? queue.matrix.shard : []).toEqual(["rest-web"]);
+  expect(queue.type === "run" ? queue.matrix.shard : []).toEqual([
+    "rest",
+    "web",
+  ]);
   expect(
     (() => {
       const plan = planCiApiTests({
@@ -7349,7 +7355,18 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
       });
       return plan.type === "run" ? plan.matrix.shard : [];
     })(),
-  ).toEqual(["api-1", "api-2", "api-3", "api-4", "api-5", "api-6", "rest-web"]);
+  ).toEqual([
+    "api-1",
+    "api-2",
+    "api-3",
+    "api-4",
+    "api-5",
+    "api-6",
+    "api-7",
+    "api-8",
+    "rest",
+    "web",
+  ]);
   expect(workflow).toContain(
     `matrix: \${{ fromJSON(needs.ci-plan.outputs.ci_tests_matrix) }}`,
   );
@@ -7359,7 +7376,7 @@ test("API test matrix omits unaffected API shards and keeps whole affected merge
   expect(planner?.run).toContain(
     "! timeout --kill-after=10s 120s bun scripts/ci-api-test-plan.ts; then",
   );
-  expect(planner?.run).toContain("api_test_shards=6");
+  expect(planner?.run).toContain("api_test_shards=8");
   expect(planner?.env?.["COMPARISON_BASE"]).toBe(
     `\${{ steps.changed-files.outputs.comparison_base }}`,
   );
@@ -7428,9 +7445,9 @@ test("a crashed API planner widens the real workflow outputs", () => {
     );
     const values = readFileSync(output, "utf-8");
     expect(values).toContain(
-      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}',
+      'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","api-7","api-8","rest","web"]}',
     );
-    expect(values).toContain("api_test_shards=6");
+    expect(values).toContain("api_test_shards=8");
     expect(values).toContain("api_test_files_encoded=\n");
   } finally {
     rmSync(directory, { recursive: true, force: true });
@@ -7732,12 +7749,9 @@ test("the nightly shard census rejects a planted missing web suite", () => {
     new URL("../.github/workflows/nightly-test.yml", import.meta.url),
     "utf-8",
   );
-  const planted = nightly.replace(
-    /\n {6}- name: Full web test suite\n[\s\S]*?(?=\n\n {2}# The production client build)/u,
-    "",
-  );
+  const planted = nightly.replace(`SHARD: ${MATRIX_SHARD_ENV}`, "SHARD: rest");
   expect(planted).not.toBe(nightly);
-  expect(missingFullTestShards(planted)).toEqual(["rest-web/web"]);
+  expect(missingFullTestShards(planted)).toContain("web/web");
 });
 
 test("API planning only loads dependencies after installation and emits install-free fallbacks", () => {
@@ -7765,18 +7779,18 @@ test("API planning only loads dependencies after installation and emits install-
       expected,
     ] of [
       ["pull_request", "false", "false", "", "", "", "0"],
-      ["pull_request", "true", "false", "", "", "", "6"],
+      ["pull_request", "true", "false", "", "", "", "8"],
       // Without package checks no API test runs, even when the API scope is
       // unknown: ci_tests_required is the one gate of ci-tests.
       ["pull_request", "false", "true", "", "", "", "0"],
-      ["merge_group", "true", "false", "", "", "", "6"],
-      ["workflow_dispatch", "true", "false", "", "", "", "6"],
+      ["merge_group", "true", "false", "", "", "", "8"],
+      ["workflow_dispatch", "true", "false", "", "", "", "8"],
       [
         "pull_request",
         "true",
         "false",
         "true",
-        '{"shard":["api-1","rest-web"]}',
+        '{"shard":["api-1","rest","web"]}',
         "1",
         "1",
       ],
@@ -7785,9 +7799,9 @@ test("API planning only loads dependencies after installation and emits install-
         "true",
         "false",
         "",
-        '{"shard":["api-1","rest-web"]}',
+        '{"shard":["api-1","rest","web"]}',
         "1",
-        "6",
+        "8",
       ],
     ]) {
       writeFileSync(output, "");
@@ -7825,11 +7839,11 @@ test("API planning only loads dependencies after installation and emits install-
         );
       } else if (packages !== "true") {
         expect(values).toContain("ci_tests_required=false\n");
-        expect(values).toContain('ci_tests_matrix={"shard":["rest-web"]}\n');
+        expect(values).toContain('ci_tests_matrix={"shard":["rest"]}\n');
       } else if (selected) {
         expect(values).toContain("ci_tests_required=true\n");
         expect(values).toContain(
-          'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","rest-web"]}\n',
+          'ci_tests_matrix={"shard":["api-1","api-2","api-3","api-4","api-5","api-6","api-7","api-8","rest","web"]}\n',
         );
       }
     }

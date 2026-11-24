@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Mellékletek",
     "certifiedAt": "Hitelesítés ideje",
     "deliveredTo": "Kézbesítve ide",
     "error": "Jelentett hiba",
@@ -468,6 +467,10 @@
     "retry": "Újra",
     "title": "Dokumentum",
     "unrendered": "Ez a dokumentum itt nem jeleníthető meg, de a rendszer előnézete talán meg tudja nyitni.",
+    "unscannedContent": {
+      "encrypted": "Néhány benne lévő fájl jelszóval védett, ezért nem ellenőriztük őket fenyegetések szempontjából.",
+      "unsupportedCompression": "Néhány benne lévő fájl olyan formátumban van tömörítve, amelyet a stella nem tud beolvasni, ezért nem ellenőriztük őket fenyegetések szempontjából."
+    },
     "zoomFit": "Szélességhez igazítás",
     "zoomIn": "Nagyítás",
     "zoomOut": "Kicsinyítés"
@@ -475,7 +478,6 @@
   "eInvoice": {
     "accountNumber": "Bankszámlaszám",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Csatolt fájlok",
     "bankCode": "Bankkód",
     "batchPosition": "{position, number}. bizonylat ({count, number} közül)",
     "bic": "BIC-kód",
@@ -494,7 +496,6 @@
     "linesShown": "{count, plural, one {# tételből} other {# tételből}} {shown, number} látható",
     "netAmount": "Nettó érték",
     "netTotal": "Nettó végösszeg",
-    "notRecognized": "Ez az XML-fájl nem felismert strukturált számla.",
     "notes": "Számla megjegyzései",
     "otherIdentifier": "Egyéb azonosító",
     "payableAmount": "Fizetendő összeg",
@@ -505,6 +506,7 @@
     "paymentReference": "Közlemény",
     "prepaidAmount": "Előlegként fizetve",
     "quantity": "Mennyiség és egység",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "Cégjegyzékszám",
@@ -516,16 +518,53 @@
     "taxableAmount": "Adóalap",
     "totals": "Összesítés",
     "unitPrice": "Egységár",
+    "units": {
+      "day": "{count, plural, one {{quantity} nap} other {{quantity} nap}}",
+      "hour": "{count, plural, one {{quantity} óra} other {{quantity} óra}}",
+      "month": "{count, plural, one {{quantity} hónap} other {{quantity} hónap}}",
+      "unit": "{count, plural, one {{quantity} db} other {{quantity} db}}",
+      "week": "{count, plural, one {{quantity} hét} other {{quantity} hét}}",
+      "year": "{count, plural, one {{quantity} év} other {{quantity} év}}"
+    },
     "unreadable": "A számlát nem sikerült beolvasni.",
     "vat": "ÁFA",
     "vatBreakdown": "ÁFA-összesítő",
-    "vatId": "Áfaazonosító"
+    "vatId": "Áfaazonosító",
+    "xmlUnreadable": "Ezt az XML-fájlt nem sikerült beolvasni."
+  },
+  "email": {
+    "cc": "Másolat",
+    "date": "Dátum",
+    "from": "Feladó",
+    "noSubject": "(Nincs tárgy)",
+    "subject": "Tárgy",
+    "to": "Címzettek"
   },
   "entity": {
     "currentVersion": "Aktuális verzió",
     "loadFailed": "Az elemet nem sikerült betölteni.",
     "reference": "Ügyszám",
     "type": "Típus"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Az archívumot nem sikerült beolvasni.",
+    "attachments": "Mellékletek",
+    "files": "Fájlok",
+    "insideFailed": "A benne lévő fájlokat nem sikerült betölteni. Koppintson az újrapróbáláshoz.",
+    "noFilesInside": "Nincsenek benne fájlok.",
+    "noMatches": "Egyetlen fájl sem felel meg ennek: „{query}”.",
+    "open": "{fileName} ({details}) megnyitása",
+    "saveFailed": "A fájlt nem sikerült az ügybe menteni. Próbálja újra.",
+    "saveNamed": "{fileName} mentése egy ügybe",
+    "search": "Fájl keresése név vagy mappa alapján",
+    "unavailable": {
+      "encrypted": "Jelszóval védett, nem nyitható meg",
+      "link": "Hivatkozás egy másik fájlra, nem nyitjuk meg",
+      "tooLarge": "Túl nagy a megnyitáshoz",
+      "unreadable": "Sérült, nem nyitható meg",
+      "unsupported": "Olyan módon tömörített, amely nem nyitható meg"
+    },
+    "unnamed": "Névtelen fájl"
   },
   "header": {
     "search": "Keresés"
@@ -555,6 +594,16 @@
     "refused": "A szerver elutasította a kérést (hibakód: {status}).",
     "server": "Hiba történt a szerveren (hibakód: {status}). Próbálja újra egy kis idő múlva.",
     "session": "A bejelentkezése lejárt. Jelentkezzen be újra."
+  },
+  "mailbox": {
+    "back": "Vissza az üzenetekhez",
+    "messages": "Üzenetek",
+    "noMatches": "Egyetlen üzenet sem felel meg ennek: „{query}”.",
+    "noMessages": "Ez a postafiók nem tartalmaz üzeneteket.",
+    "openFailed": "Az üzenetet nem sikerült megnyitni. Koppintson az újrapróbálkozáshoz.",
+    "search": "Keresés az üzenetekben",
+    "truncated": "Csak az első {count, number} üzenet látható.",
+    "unreadable": "Ezt a postafiókot nem sikerült beolvasni."
   },
   "matter": {
     "add": "Hozzáadás",
@@ -782,7 +831,7 @@
     "dictationLearnedDelete": "A stella által tanultak törlése",
     "dictationLearnedEmpty": "Még nincs tanult javítás.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Ha egy diktált szó vagy név írásmódját kétszer ugyanúgy javítja, a stella a későbbi diktálásokban úgy írja. Csak ezen a telefonon marad.",
+    "dictationLearnedHint": "Ha egy diktált szó vagy név írásmódját kétszer ugyanúgy javítja, a stella a későbbi diktálásokban úgy írja. Szinkronizálódik a többi eszközével; csak Ön láthatja.",
     "dictationLearnedTitle": "A javításaiból tanult javítások",
     "dictationLearnedUnreadable": "A stella által tanultakat nem sikerült beolvasni.",
     "dictationModelDefault": "Alapértelmezett",
@@ -850,11 +899,20 @@
     "useStella": "A stella használata"
   },
   "signedFile": {
+    "bindingDiffers": "Tartalma nem egyezik az aláírásban megadott lenyomattal.",
+    "bindingMatches": "Tartalma megegyezik az aláírásban megadott lenyomattal.",
+    "bindingNotCompared": "Fájlnév alapján található. A tartalmát nem hasonlítottuk össze.",
     "deliveryReceipt": "Elektronikus akta átvételi elismervénye",
+    "digestNote": "Az egyező lenyomat azt mutatja, hogy ezek az aláírt adatok. Az aláírást ez nem ellenőrzi.",
     "layer": "{number, number}. aláírási réteg",
     "noReadableContent": "Nincs megjeleníthető olvasható tartalom.",
     "noSigners": "Nem találhatók adatok az aláírókról.",
+    "signedAt": "Megadott aláírási idő: {time}",
+    "signedContent": "Aláírt dokumentum",
+    "signedFileMissing": "Az aláírt fájl nincs ebben az ügyben.",
     "signers": "Aláírók",
+    "signs": "Aláírt fájl",
+    "statedFilesMissing": "Az aláírásban szerepel, de ebben az ügyben nem található:",
     "unknownSigner": "Ismeretlen aláíró",
     "unreadable": "Az aláírt fájl nem olvasható.",
     "unverified": "Az aláírásokat nem ellenőriztük."

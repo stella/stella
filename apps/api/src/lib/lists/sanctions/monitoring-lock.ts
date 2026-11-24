@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 // A missing settings row means enabled. Row locks alone cannot fence insertion

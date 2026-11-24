@@ -4,9 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { pendingUploads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   captureError,
   createErrorCapture,
@@ -239,7 +239,9 @@ export const createEntityVersionFromBuffer = async ({
   });
   let written: Extract<WriteFileVersionResult, { status: "ok" }>;
   try {
-    const cleanupObject = async (): Promise<boolean> => {
+    const cleanupObject = async (): Promise<
+      { status: "deleted" } | { status: "failed" }
+    > => {
       const cleanup = Result.flatten(
         await Result.tryPromise({
           try: async () =>
@@ -262,9 +264,9 @@ export const createEntityVersionFromBuffer = async ({
             objectKey,
           }),
         );
-        return false;
+        return { status: "failed" };
       }
-      return true;
+      return { status: "deleted" };
     };
 
     try {
@@ -396,7 +398,7 @@ export const createEntityVersionFromBuffer = async ({
     if (Result.isError(writeResult)) {
       if (
         !transactionState.durableReferencePrepared &&
-        (await cleanupObject())
+        (await cleanupObject()).status === "deleted"
       ) {
         await abandonBufferIntent({
           safeDb,
@@ -410,7 +412,7 @@ export const createEntityVersionFromBuffer = async ({
     const writeOutcome = writeResult.value;
 
     if (writeOutcome.status !== "ok") {
-      if (await cleanupObject()) {
+      if ((await cleanupObject()).status === "deleted") {
         await abandonBufferIntent({
           safeDb,
           intent,

@@ -2,10 +2,10 @@ import { panic, Result } from "better-result";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError, SafeDbOrTx } from "@/api/db/safe-db";
 import { withScopedTx } from "@/api/db/safe-db";
 import { chatMessages } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { ChatThreadCompactionCheckpoint } from "@/api/handlers/chat/persistent-compaction";
 import {
   decodeChatCompactionDeltaCursor,

@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type {
   PendingUploadFinalizedResult,
   PendingUploadPurposeData,

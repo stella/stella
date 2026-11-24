@@ -2,7 +2,7 @@ import { panic } from "better-result";
 
 import type { LegalResolveResponse } from "@stll/api-contract/legal-resolve";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import {
   AUDIT_ACTION,
   AUDIT_RESOURCE_TYPE,

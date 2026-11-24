@@ -4,9 +4,14 @@ import {
   applyLearnedFixes,
   editsOf,
   LEARNED_FIX_LIMIT,
-  learnFrom,
+  learnedFixChangesOf,
 } from "./corrections";
-import type { DictatedSpan, LearnedFix } from "./corrections";
+import type { DictatedSpan, DictationEdits, LearnedFix } from "./corrections";
+import { applyLearnedFixChanges } from "./learned-fixes";
+
+/** `fixes` after what the person did to one dictation, as every device learns it. */
+const learnFrom = (fixes: readonly LearnedFix[], edits: DictationEdits) =>
+  applyLearnedFixChanges(fixes, learnedFixChangesOf(fixes, edits));
 
 /** A field holding `before`, then the dictated `dictated`, then `after`. */
 const span = (before: string, dictated: string, after = ""): DictatedSpan => ({
@@ -163,6 +168,34 @@ describe("learning a fix", () => {
   });
 });
 
+describe("the changes another device learns from", () => {
+  test("a dictation teaches its corrections, then the fixes kept as dictated", () => {
+    const edits = {
+      corrections: [
+        { from: "Novakovi", to: "Novákovi" },
+        { from: "Novakovi", to: "Novákovi" },
+      ],
+      kept: [["stela", "poslala", "Novakovi"]],
+    };
+    expect(
+      learnedFixChangesOf([fix("stela", "stella", "learning", 1)], edits),
+    ).toEqual([
+      { type: "corrected", from: "Novakovi", to: "Novákovi" },
+      { type: "kept", from: "stela" },
+      { type: "kept", from: "Novakovi" },
+    ]);
+  });
+
+  test("nothing kept and nothing corrected teaches nothing", () => {
+    expect(
+      learnedFixChangesOf([fix("stela", "stella")], {
+        corrections: [],
+        kept: [],
+      }),
+    ).toEqual([]);
+  });
+});
+
 describe("learning a fix of case or of a repeated word", () => {
   test("a fix of the case inside a word is learned, not taken for a reversal", () => {
     const corrected = {
@@ -215,6 +248,12 @@ describe("applying what was learned", () => {
         fix("stela", "stella"),
       ]),
     ).toBe("Volal Baker McKenzie a Stelana.");
+  });
+
+  test("a fix whose dictated words hold punctuation never matches their words alone", () => {
+    expect(applyLearnedFixes("Use C and C++.", [fix("C++", "Rust")])).toBe(
+      "Use C and C++.",
+    );
   });
 
   test("fixes still learning, off or contradicted change nothing", () => {

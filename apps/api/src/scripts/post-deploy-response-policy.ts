@@ -716,28 +716,38 @@ const discoverPublicIds = async (
 };
 
 /** The build commit an origin reports; null when it reports none. */
+type BuildCommitOutcome =
+  { status: "ok"; commit: string | null } | { status: "unreachable" };
+
 const readBuildCommit = async (
   config: Config,
   url: string,
-): Promise<string | null> => {
+): Promise<BuildCommitOutcome> => {
   try {
     const response = await deploymentFetch(url, {
       method: "GET",
       headers: { ...config.edgeHeaders, accept: "application/json" },
     });
-    return buildCommit(parseJson(await response.text()));
+    return {
+      status: "ok",
+      commit: buildCommit(parseJson(await response.text())),
+    };
   } catch {
     // Outages surface in the checks themselves.
-    return null;
+    return { status: "unreachable" };
   }
 };
 
 const main = async (): Promise<boolean> => {
   const config = readConfig();
-  const [apiCommit, webCommit] = await Promise.all([
+  const [apiCommitOutcome, webCommitOutcome] = await Promise.all([
     readBuildCommit(config, `${config.apiUrl}${API_BUILD_PATH}`),
     readBuildCommit(config, `${config.webUrl}${WEB_BUILD_PATH}`),
   ]);
+  const apiCommit =
+    apiCommitOutcome.status === "ok" ? apiCommitOutcome.commit : null;
+  const webCommit =
+    webCommitOutcome.status === "ok" ? webCommitOutcome.commit : null;
   const mismatch = buildCommitMismatch({ api: apiCommit, web: webCommit });
   if (mismatch !== null) {
     throw new ResponsePolicyError({ message: mismatch });

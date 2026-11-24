@@ -3,12 +3,12 @@ import { type SQL, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
   corpusIndexProjectionStates,
   legislationDocuments,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { lockCorpusProjectionStatesByEntity } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";

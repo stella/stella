@@ -11,26 +11,34 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocale, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
-import { FILE_PART_KINDS, filePartId } from "@stll/api-contract/file-parts";
+import type { FilePartDescriptor } from "@stll/api-contract/file-parts";
+import type {
+  SignaturePreview,
+  SignedFileBinding,
+} from "@stll/api-contract/signature";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
 
-import { CertifiedEmailReading } from "@/components/certified-email-envelope";
 import DocumentView from "@/components/document-viewer/document-view.dom";
 import { FIT_ZOOM, pageAppearance } from "@/components/document-viewer/zoom";
 import type { ViewerAppearance } from "@/components/document-viewer/zoom";
 import { EInvoiceDetails } from "@/components/e-invoice-details";
+import { EmailReading } from "@/components/email-reading";
 import { EmptyCard, screenStyles } from "@/components/empty-state-screen";
 import {
+  ContainedFileList,
+  FilePartList,
   FilePartOpenerProvider,
-  OpenFilePart,
-} from "@/components/file-part-opener";
+  FilePartRow,
+} from "@/components/file-part-list";
 import { LegalFilePreviewText } from "@/components/legal-file-preview-text";
+import { MailboxMessages } from "@/components/mailbox-messages";
 import { LucideGlyphs } from "@/components/ui/lucide-glyphs";
+import { UnscannedContentNotice } from "@/components/unscanned-content-notice";
 import { useDocumentEditing } from "@/components/use-document-editing";
 import { useOpenDeliveredFile } from "@/components/use-open-delivered-file";
 import {
@@ -49,12 +57,17 @@ import {
 import type { OpenedFile } from "@/native/document-files";
 import {
   isOffline,
-  PDF_MIME_TYPE,
+  readDocumentEmailPart,
   readDocumentFile,
   readDocumentPart,
+  readDocumentPartList,
   readOriginalDocumentFile,
 } from "@/state/document-file";
-import type { DocumentFile, LegalDocumentFile } from "@/state/document-file";
+import type {
+  DocumentFile,
+  LegalDocumentFile,
+  UnscannedContent,
+} from "@/state/document-file";
 import { useAppColors } from "@/theme";
 
 /** The key the original's control is busy under; part addresses are others. */
@@ -62,12 +75,18 @@ const ORIGINAL = "original";
 
 type Failure = "offline" | "noFile" | "failed" | "unsupported" | "android";
 
+const SIGNED_FILE_BINDING_KEYS = {
+  digestMatches: "bindingMatches",
+  digestDiffers: "bindingDiffers",
+  notCompared: "bindingNotCompared",
+} as const satisfies Record<SignedFileBinding, string>;
+
 type Phase =
   | { readonly status: "opening" }
   | { readonly status: "failed"; readonly failure: Failure }
   | {
       readonly status: "legalPreview";
-      readonly file: LegalDocumentFile;
+      readonly file: LegalDocumentFile & UnscannedContent;
     }
   | {
       readonly status: "open";
@@ -101,10 +120,13 @@ const openDocument = async ({
     file.value.viewer === "asic" ||
     file.value.viewer === "signed-dossier" ||
     file.value.viewer === "cades" ||
-    file.value.viewer === "certifiedEmail" ||
+    file.value.viewer === "email" ||
     file.value.viewer === "dataBox" ||
     file.value.viewer === "e-invoice" ||
-    file.value.viewer === "structured-document"
+    file.value.viewer === "signature" ||
+    file.value.viewer === "structured-document" ||
+    file.value.viewer === "zip" ||
+    file.value.viewer === "mailbox"
   ) {
     return { status: "legalPreview", file: file.value };
   }
@@ -270,6 +292,11 @@ const OpenedDocument = ({
     phase.status === "open" || phase.status === "legalPreview"
       ? phase.file.fileName
       : (name ?? t("title"));
+  // Content the upload scan could not read is named above the file itself.
+  const unscannedContent =
+    phase.status === "open" || phase.status === "legalPreview"
+      ? phase.file.unscannedContent
+      : [];
 
   const body = (() => {
     if (source === null || phase.status === "opening") {
@@ -430,8 +457,130 @@ const OpenedDocument = ({
           title,
         }}
       />
+      <UnscannedContentNotice reasons={unscannedContent} />
       {body}
     </View>
+  );
+};
+
+/**
+ * Opens the sheet that saves one part of the file into a matter. Saving a part
+ * only names it to the server, so it needs no native viewer.
+ */
+const usePartSave = ({
+  workspaceId,
+  fieldId,
+}: {
+  workspaceId: string;
+  fieldId: string;
+}) => {
+  const router = useRouter();
+  return ({ part, fileName, sizeBytes }: FilePartDescriptor) => {
+    router.push({
+      pathname: "/part/save",
+      params: {
+        workspaceId,
+        fieldId,
+        part,
+        name: fileName ?? "",
+        size: String(sizeBytes),
+      },
+    });
+  };
+};
+
+/** A signature file: who signed (unverified) and what it signs or carries. */
+const SignaturePreviewBody = ({
+  file,
+  signature,
+}: {
+  file: LegalDocumentFile;
+  signature: Extract<SignaturePreview, { type: "signature" }>;
+}) => {
+  const { workspaceId } = useLocalSearchParams<{ workspaceId: string }>();
+  const signedFile = useTranslations("signedFile");
+  const format = useFormatter();
+  const router = useRouter();
+  const { document, packaging, signedFiles, signers, statedFileNames } =
+    signature;
+  const listed = new Set(signedFiles.map(({ fileName }) => fileName));
+  const unlisted = statedFileNames.filter((name) => !listed.has(name));
+  return (
+    <>
+      <Text accessibilityRole="header" selectable variant="headline">
+        {document?.fileName ?? file.fileName}
+      </Text>
+      <Text variant="caption">{signedFile("unverified")}</Text>
+      <View>
+        <Text accessibilityRole="header" variant="label">
+          {signedFile("signers")}
+        </Text>
+        {signers.map((signer) => (
+          <View key={signer.id}>
+            <Text selectable>{signer.name ?? signedFile("unknownSigner")}</Text>
+            {signer.signedAt !== null && (
+              <Text variant="caption">
+                {signedFile("signedAt", {
+                  time: format.dateTime(new Date(signer.signedAt), {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }),
+                })}
+              </Text>
+            )}
+          </View>
+        ))}
+      </View>
+      {packaging === "detached" && (
+        <View>
+          <Text accessibilityRole="header" variant="label">
+            {signedFile("signs")}
+          </Text>
+          {signedFiles.length === 0 && (
+            <Text variant="caption">{signedFile("signedFileMissing")}</Text>
+          )}
+          {signedFiles.map(({ entityId, fileName, binding }) => (
+            <View key={entityId}>
+              <Button
+                hitSlop={8}
+                onPress={() => {
+                  router.push({
+                    pathname: "/document/[workspaceId]/[entityId]",
+                    params: { workspaceId, entityId },
+                  });
+                }}
+                size="inline"
+                variant="link"
+              >
+                <Text variant="label">{fileName}</Text>
+              </Button>
+              <Text variant="caption">
+                {signedFile(SIGNED_FILE_BINDING_KEYS[binding])}
+              </Text>
+            </View>
+          ))}
+          {unlisted.length > 0 && (
+            <>
+              <Text variant="caption">{signedFile("statedFilesMissing")}</Text>
+              {unlisted.map((fileName) => (
+                <Text key={fileName} selectable>
+                  {fileName}
+                </Text>
+              ))}
+            </>
+          )}
+          {signedFiles.some(({ binding }) => binding !== "notCompared") && (
+            <Text variant="caption">{signedFile("digestNote")}</Text>
+          )}
+        </View>
+      )}
+      {packaging !== "detached" &&
+        (document?.text.trim() ? (
+          <Text selectable>{document.text}</Text>
+        ) : (
+          <Text variant="caption">{signedFile("noReadableContent")}</Text>
+        ))}
+    </>
   );
 };
 
@@ -453,6 +602,8 @@ const LegalFilePreview = ({
   const signedFile = useTranslations("signedFile");
   const structuredDocument = useTranslations("structuredDocument");
   const eInvoice = useTranslations("eInvoice");
+  const fileParts = useTranslations("fileParts");
+  const mailbox = useTranslations("mailbox");
   const { fieldId, preview, viewer } = file;
   const { opening, open: openDelivered } = useOpenDeliveredFile(showPreview);
   const openOriginal = async () => {
@@ -465,7 +616,7 @@ const LegalFilePreview = ({
   const partOpener = canOpenFiles()
     ? {
         opening,
-        open: (part: string) => {
+        open: (part: string, mediaType: string) => {
           void openDelivered(
             part,
             async () =>
@@ -475,25 +626,36 @@ const LegalFilePreview = ({
                 workspaceId,
                 fieldId,
                 part,
+                mediaType,
               }),
           );
         },
+        list: async (part: string) =>
+          await readDocumentPartList({
+            fetch,
+            source,
+            workspaceId,
+            fieldId,
+            part,
+          }),
       }
     : null;
+  const savePart = usePartSave({ workspaceId, fieldId });
 
   const previewBody = (() => {
     if (viewer === "cades" && Result.isOk(preview)) {
-      const { fileName, invoice, layers, mimeType, text, textFormat } =
+      const { content, fileName, invoice, layers, text, textFormat } =
         preview.value;
       return (
         <>
-          <Text accessibilityRole="header" selectable variant="headline">
-            {fileName}
-          </Text>
-          {mimeType === PDF_MIME_TYPE && (
-            <OpenFilePart
-              fileName={fileName}
-              part={filePartId({ kind: FILE_PART_KINDS.content, index: 0 })}
+          {content === null ? (
+            <Text accessibilityRole="header" selectable variant="headline">
+              {fileName}
+            </Text>
+          ) : (
+            <FilePartList
+              items={[content]}
+              title={signedFile("signedContent")}
             />
           )}
           <Text variant="caption">{signedFile("unverified")}</Text>
@@ -519,24 +681,21 @@ const LegalFilePreview = ({
         </>
       );
     }
+    if (viewer === "signature" && Result.isOk(preview)) {
+      return <SignaturePreviewBody file={file} signature={preview.value} />;
+    }
     if (preview.status === "ok") {
-      if (viewer === "certifiedEmail") {
-        return <CertifiedEmailReading read={preview.value} />;
+      if (viewer === "email") {
+        return <EmailReading read={preview.value} />;
       }
       if (viewer === "asic") {
         return (
           <>
             <Text variant="caption">{signedFile("unverified")}</Text>
             {preview.value.members.map(
-              ({ fileName, status, text, textFormat }, index) => (
-                <View key={fileName}>
-                  <Text accessibilityRole="header" selectable variant="label">
-                    {fileName}
-                  </Text>
-                  <OpenFilePart
-                    fileName={fileName}
-                    part={filePartId({ kind: FILE_PART_KINDS.member, index })}
-                  />
+              ({ status, text, textFormat, ...member }) => (
+                <View key={member.part}>
+                  <FilePartRow item={member} />
                   {status !== "unavailable" && text.trim() ? (
                     <LegalFilePreviewText format={textFormat} text={text} />
                   ) : null}
@@ -555,7 +714,43 @@ const LegalFilePreview = ({
         );
       }
       if (viewer === "e-invoice") {
-        return <EInvoiceDetails preview={preview.value} />;
+        if (preview.value.type === "invoice") {
+          return <EInvoiceDetails preview={preview.value.invoice} />;
+        }
+        // XML that holds no invoice shows its own indented text.
+        return (
+          <>
+            <LegalFilePreviewText format="plain" text={preview.value.text} />
+            {preview.value.truncated && (
+              <Text variant="caption">{common("previewTruncated")}</Text>
+            )}
+          </>
+        );
+      }
+      if (viewer === "zip") {
+        return (
+          <ContainedFileList
+            files={preview.value.files}
+            searchable
+            title={fileParts("files")}
+          />
+        );
+      }
+      if (viewer === "mailbox") {
+        return (
+          <MailboxMessages
+            preview={preview.value}
+            readMessage={async (part) =>
+              await readDocumentEmailPart({
+                fetch,
+                source,
+                workspaceId,
+                fieldId,
+                part,
+              })
+            }
+          />
+        );
       }
       if (viewer === "signed-dossier") {
         const { documents, signers } = preview.value;
@@ -582,19 +777,14 @@ const LegalFilePreview = ({
               )}
             </View>
             {documents.map(
-              ({ id, fileName, pdf, status, text, textFormat }, index) => (
+              ({ id, fileName, part, status, text, textFormat }) => (
                 <View key={id}>
-                  <Text accessibilityRole="header" selectable variant="label">
-                    {fileName}
-                  </Text>
-                  {pdf && (
-                    <OpenFilePart
-                      fileName={fileName}
-                      part={filePartId({
-                        kind: FILE_PART_KINDS.document,
-                        index,
-                      })}
-                    />
+                  {part === null ? (
+                    <Text accessibilityRole="header" selectable variant="label">
+                      {fileName}
+                    </Text>
+                  ) : (
+                    <FilePartRow item={{ ...part, fileName }} />
                   )}
                   {status !== "unavailable" && text.trim() ? (
                     <LegalFilePreviewText format={textFormat} text={text} />
@@ -624,23 +814,16 @@ const LegalFilePreview = ({
           </>
         );
       }
+      if (!("text" in preview.value)) {
+        return null;
+      }
       if (viewer !== "dataBox") {
         return <Text selectable>{preview.value.text}</Text>;
       }
       return (
         <>
           <Text selectable>{preview.value.text}</Text>
-          {preview.value.files.map(({ fileName }, index) => (
-            <View key={`${fileName}#${String(index)}`}>
-              <Text selectable variant="label">
-                {fileName}
-              </Text>
-              <OpenFilePart
-                fileName={fileName}
-                part={filePartId({ kind: FILE_PART_KINDS.attachment, index })}
-              />
-            </View>
-          ))}
+          <FilePartList items={preview.value.files} />
         </>
       );
     }
@@ -654,16 +837,19 @@ const LegalFilePreview = ({
     const unreadableMessages = {
       dataBox: t("failure.dataBoxUnreadable"),
       "structured-document": structuredDocument("noReadableContent"),
-      // Any XML file is offered to the invoice reader; refused, it is not one.
+      // Any XML file is offered to the invoice reader; refused, it is not text.
       "e-invoice": eInvoice(
         file.viewer === "e-invoice" && file.format === "xml"
-          ? "notRecognized"
+          ? "xmlUnreadable"
           : "unreadable",
       ),
       asic: signedFile("unreadable"),
+      zip: fileParts("archiveUnreadable"),
+      mailbox: mailbox("unreadable"),
       cades: signedFile("unreadable"),
-      certifiedEmail: t(requestFailure),
+      email: t(requestFailure),
       "signed-dossier": signedFile("unreadable"),
+      signature: signedFile("unreadable"),
     } satisfies Record<typeof viewer, string>;
     const unreadableMessage = unreadableMessages[viewer];
     return (
@@ -696,7 +882,7 @@ const LegalFilePreview = ({
           {t("openOriginal")}
         </Button>
       ) : null}
-      <FilePartOpenerProvider opener={partOpener}>
+      <FilePartOpenerProvider opener={partOpener} save={savePart}>
         {previewBody}
       </FilePartOpenerProvider>
     </ScrollView>

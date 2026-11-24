@@ -7,7 +7,7 @@ import type { ApiFileSecurityRejectionDetails } from "@stll/api-contract";
 import { sha256Base64ToHex } from "@stll/sha256";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { pendingUploads } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";

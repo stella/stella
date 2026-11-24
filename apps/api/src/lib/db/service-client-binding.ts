@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 
 import { oauthClient } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { serviceOAuthClients } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 
 export const readOAuthClientBinding = async (
   db: Pick<Transaction, "select">,

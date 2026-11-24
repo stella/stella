@@ -12,6 +12,7 @@ import { readDocumentProperties } from "@/api/handlers/files/document-properties
 import {
   printPdfHandler,
   readEmailHtmlPreviewHandler,
+  readEmailPartHtmlPreview,
   STAMPED_DOWNLOAD_METADATA,
   stampedDownloadHandler,
 } from "@/api/handlers/files/get";
@@ -27,6 +28,7 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { ownerSyntheticSessionAuthorityReader } from "@/api/lib/auth";
 import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { resourceIdSchema, workspaceParams } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   readFileHandler,
   readFilePartUrlHandler,
@@ -99,15 +101,46 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
     accountAccess: ACCOUNT_ACCESS.sandbox,
     access: "read",
     mcp: { type: "internal", reason: "upload_mechanics" },
+    query: v.object({
+      /** An email that is a part of the file, such as `message:3`. */
+      part: v.optional(filePartIdSchema),
+    }),
     params: workspaceParams({ fieldId: resourceIdSchema("field") }),
   } satisfies WorkspaceHandlerConfig,
   async function* ({
     params: { fieldId },
+    query: { part: partId },
     scopedDb,
     session,
     workspaceId,
     recordAuditEvent,
   }) {
+    if (partId !== undefined) {
+      const part = parseFilePartId(partId);
+      if (part === null) {
+        return Result.err(
+          new HandlerError({
+            status: 404,
+            code: "not_found",
+            message: "The file has no such part",
+          }),
+        );
+      }
+      const preview = yield* Result.await(
+        Result.tryPromise(
+          async () =>
+            await readEmailPartHtmlPreview({
+              fieldId,
+              organizationId: session.activeOrganizationId,
+              workspaceId,
+              scopedDb,
+              recordAuditEvent,
+              part,
+            }),
+        ),
+      );
+      return Result.ok(yield* preview);
+    }
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>

@@ -4,10 +4,17 @@ import {
   buildVersionedApiUrl,
   PREVIEW_UNAVAILABLE_ERROR_CODE,
 } from "@stll/api-contract";
-import type { FilePart } from "@stll/api-contract/file-parts";
+import {
+  type FilePart,
+  filePartInlineBytes,
+} from "@stll/api-contract/file-parts";
+import {
+  type UnscannedContentReason,
+  unscannedContentReasons,
+} from "@stll/api-contract/file-scan-warnings";
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { entities, entityVersions, fields } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { status } from "@/api/http/status";
@@ -25,7 +32,11 @@ import {
   createFileContentGrant,
   type FileContentPurpose,
 } from "@/api/lib/files/file-content-grant";
-import { readFilePart } from "@/api/lib/files/file-part";
+import { type FilePartRead, readFilePart } from "@/api/lib/files/file-part";
+import {
+  filePartDisplayIdentity,
+  filePartForDisplay,
+} from "@/api/lib/files/file-part-rendition";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/gotenberg";
 import { lockLiveVersionField } from "@/api/lib/files/live-version-field";
 import { openWithinDeadline } from "@/api/lib/files/storage-open-deadline";
@@ -103,6 +114,8 @@ export const displayedPdfFileId = (
 type FileDelivery = {
   disposition: ContentDisposition;
   encrypted: boolean;
+  /** Why some of the stored file's content was not scanned; empty when all was. */
+  unscannedContent: UnscannedContentReason[];
   entityId: SafeId<"entity">;
   fileId: string;
   fileName: string;
@@ -136,6 +149,7 @@ const resolveFileDelivery = ({
   }
 
   const content = row.content;
+  const unscannedContent = unscannedContentReasons(content.scanWarnings);
   const originalKey = createFileKey({
     organizationId,
     workspaceId,
@@ -148,6 +162,7 @@ const resolveFileDelivery = ({
       delivery: {
         disposition: "attachment",
         encrypted: content.encrypted,
+        unscannedContent,
         entityId: row.entityId,
         fileId: content.id,
         fileName: content.fileName,
@@ -179,6 +194,7 @@ const resolveFileDelivery = ({
       delivery: {
         disposition: "inline",
         encrypted: content.encrypted,
+        unscannedContent,
         entityId: row.entityId,
         fileId: content.id,
         fileName: content.fileName,
@@ -200,6 +216,7 @@ const resolveFileDelivery = ({
     delivery: {
       disposition: "inline",
       encrypted: content.encrypted,
+      unscannedContent,
       entityId: row.entityId,
       fileId: displayFileId,
       fileName: content.fileName,
@@ -311,6 +328,7 @@ export const readFileHandler = async ({
       originalMimeType: delivery.originalMimeType,
       fileName: delivery.fileName,
       encrypted: delivery.encrypted,
+      unscannedContent: delivery.unscannedContent,
       // Kept for client compatibility; this is now a Stella grant URL whose
       // redemption rechecks version liveness, rather than a direct S3 URL.
       presignedUrl: fileContentGrantUrl(grant),
@@ -389,10 +407,15 @@ export const readFilePartUrlHandler = async ({
     workspaceId,
   });
   markContentDeliveryIntent();
+  // A display names what the grant delivers: a converted type's PDF.
+  const delivered =
+    partDisposition(purpose) === "inline"
+      ? filePartDisplayIdentity(read.value)
+      : read.value;
   return Result.ok({
     kind: "part",
-    fileName: read.value.fileName,
-    mimeType: read.value.mimeType,
+    fileName: delivered.fileName,
+    mimeType: delivered.mimeType,
     originalMimeType: read.value.mimeType,
     presignedUrl: fileContentGrantUrl(grant),
     stampable: false,
@@ -425,13 +448,25 @@ export const readFilePartContentHandler = async ({
   if (read.isErr()) {
     return Result.err(read.error);
   }
-  const { bytes, fileName, mimeType } = read.value;
+  const disposition = partDisposition(purpose);
+  // A display shows a converted document as its PDF and a text part's head
+  // only; a download is always the whole part.
+  const shown =
+    disposition === "inline"
+      ? await filePartForDisplay(read.value)
+      : Result.ok<FilePartRead, HandlerError>(read.value);
+  if (shown.isErr()) {
+    return Result.err(shown.error);
+  }
+  const { bytes, fileName, mimeType } = shown.value;
+  const body =
+    disposition === "inline" ? filePartInlineBytes(bytes, mimeType) : bytes;
   return Result.ok(
     secureDocumentResponse({
-      body: bytes,
-      contentLength: bytes.byteLength,
+      body,
+      contentLength: body.byteLength,
       contentType: mimeType,
-      disposition: partDisposition(purpose),
+      disposition,
       fileName: sanitizeFilename(fileName),
     }),
   );

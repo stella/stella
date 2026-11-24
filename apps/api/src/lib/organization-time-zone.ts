@@ -4,9 +4,9 @@ import { eq } from "drizzle-orm";
 import { parseTimeZoneId } from "@stll/time";
 import type { TimeZoneId } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { organizationSettings, workspaces } from "@/api/db/schema";
 import type { PracticeJurisdiction } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 

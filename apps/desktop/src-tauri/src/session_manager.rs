@@ -2726,13 +2726,8 @@ impl SessionManager {
         sync_issues: self.notification_preferences.sync_issues,
       },
       update: DiagnosticUpdate {
-        configured: self.update.base_url.is_some(),
-        channel_configured: self.update.channel.is_some(),
         current_version: self.update.current_version.as_deref(),
-        last_checked_at: self.update.last_checked_at.as_deref(),
-        latest_version: self.update.latest_version.as_deref(),
-        update_available: self.update.update_available,
-        update_ready: self.update.update_ready,
+        updater: crate::updater::current().state,
       },
       sessions: self
         .sessions
@@ -3266,6 +3261,7 @@ async fn show_takeover_dialog(
     handle,
     "takeover-dialog",
     format!("takeover-dialog.html#{hash}"),
+    crate::app_window::WindowKind::App,
   )
   .title(crate::i18n::t("dialog.takeoverWindowTitle"))
   .inner_size(400.0, 260.0)
@@ -4992,13 +4988,6 @@ mod tests {
       verified_at: "private-verification-time".to_string(),
     });
     manager.store_load_issue = Some(StoreLoadIssue::InvalidStore);
-    manager.update.base_url = Some("https://private-api.example.com".to_string());
-    manager.update.channel = Some("secret-channel".to_string());
-    manager.update.current_hash = Some("private-current-hash".to_string());
-    manager.update.latest_hash = Some("private-latest-hash".to_string());
-    manager.update.latest_version = Some("9.9.9".to_string());
-    manager.update.status_message = "private status details".to_string();
-    manager.update.update_available = true;
 
     let mut persisted = persisted_session_for_test("private-session-id");
     persisted.file_name = "Client Matter.docx".to_string();
@@ -5026,11 +5015,6 @@ mod tests {
       "attorney@example.com",
       "Private Attorney",
       "private-verification-time",
-      "private-api.example.com",
-      "secret-channel",
-      "private-current-hash",
-      "private-latest-hash",
-      "private status details",
       "private-session-id",
       "private-session-token",
       "private-checkpoint-time",
@@ -5042,11 +5026,6 @@ mod tests {
     assert!(parsed.get("linkedAccount").is_none());
     assert!(parsed["app"].get("supportRoot").is_none());
     assert!(parsed["app"].get("temporaryWorkingCopiesRoot").is_none());
-    assert!(parsed["update"].get("baseUrl").is_none());
-    assert!(parsed["update"].get("channel").is_none());
-    assert!(parsed["update"].get("currentHash").is_none());
-    assert!(parsed["update"].get("latestHash").is_none());
-    assert!(parsed["update"].get("statusMessage").is_none());
     assert_eq!(parsed["linkedAccountPresent"], true);
     assert_eq!(parsed["storeLoadIssue"], "invalidStore");
     assert_eq!(
@@ -5057,9 +5036,7 @@ mod tests {
         "syncIssues": true,
       })
     );
-    assert_eq!(parsed["update"]["configured"], true);
-    assert_eq!(parsed["update"]["channelConfigured"], true);
-    assert_eq!(parsed["update"]["latestVersion"], "9.9.9");
+    assert!(parsed["update"]["updater"]["status"].is_string());
     assert_eq!(parsed["sessions"]["total"], 1);
     assert_eq!(parsed["sessions"]["byStatus"]["error"], 1);
     assert_eq!(parsed["sessions"]["withLastCheckpoint"], 1);

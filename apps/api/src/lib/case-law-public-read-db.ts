@@ -6,7 +6,7 @@ import {
   CorpusSchemaLaneUnavailableError,
   runUnderCorpusSchemaLane,
 } from "@/api/db/corpus-schema-lane";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { publicLawReadDb } from "@/api/lib/public-law-read-db";
 import type { PublicLawReadOptions } from "@/api/lib/public-law-read-db";

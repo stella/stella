@@ -3,7 +3,6 @@ import type {
   InferDataFromTag,
   QueryClient as QueryClientInstance,
 } from "@tanstack/react-query";
-import { panic } from "better-result";
 import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { DATA_BOX_DOCUMENT_KINDS } from "@stll/api-contract/data-box";
@@ -22,30 +21,55 @@ GlobalRegistrator.register({
 });
 
 const originalFetch = globalThis.fetch;
-const cadesPdfRequests: (RequestCredentials | undefined)[] = [];
-const signedDossierPdfRequests: (string | null)[] = [];
+/** Parts asked for through the file's part link, as `field/part`. */
+const partLinkRequests: string[] = [];
+/** What a part's grant answers with; any other part is a one-line PDF. */
+const PART_BYTES: Readonly<Record<string, string>> = {
+  "field-asic/member:2": "# První strana\nDruhý řádek",
+};
+/** Parts whose display the server could not convert to a PDF. */
+const PARTS_NOT_CONVERTED: ReadonlySet<string> = new Set([
+  "field-asic-converted/member:1",
+]);
+const PART_LINK = /\/files\/[^/]+\/url\/([^/?]+)\?(.*)$/u;
 globalThis.fetch = Object.assign(
-  async (input: string | URL | Request, init?: RequestInit) => {
+  async (input: string | URL | Request) => {
     const url = input instanceof Request ? input.url : String(input);
-    if (url.includes("/cades/field-cades/content")) {
-      cadesPdfRequests.push(
-        init?.credentials ??
-          (input instanceof Request ? input.credentials : undefined),
-      );
-      return new Response("%PDF-1.7", {
-        headers: { "content-type": "application/pdf" },
+    const partLink = PART_LINK.exec(url);
+    const part = new URLSearchParams(partLink?.[2] ?? "").get("part");
+    if (partLink !== null && part !== null) {
+      const key = `${partLink[1] ?? ""}/${part}`;
+      partLinkRequests.push(key);
+      return Response.json({
+        kind: "part",
+        fileName: "part",
+        mimeType: "application/octet-stream",
+        originalMimeType: "application/octet-stream",
+        presignedUrl: `http://localhost:3001/v1/files/content/grant?part=${encodeURIComponent(key)}`,
+        stampable: false,
       });
     }
+    if (url.includes("/files/content/grant?part=")) {
+      const key = new URL(url).searchParams.get("part") ?? "";
+      if (PARTS_NOT_CONVERTED.has(key)) {
+        return Response.json(
+          { message: "The file could not be converted for preview" },
+          { status: 422 },
+        );
+      }
+      return new Response(PART_BYTES[key] ?? "%PDF-1.7");
+    }
     if (url.includes("/e-invoice/field-e-invoice-single")) {
-      return Response.json(singleInvoicePreview);
+      return Response.json({ type: "invoice", invoice: singleInvoicePreview });
     }
     if (url.includes("/e-invoice/field-e-invoice-batch")) {
-      return Response.json(invoiceBatchPreview);
+      return Response.json({ type: "invoice", invoice: invoiceBatchPreview });
     }
-    if (url.includes("/signed-dossier/field-dossier/content?document=")) {
-      signedDossierPdfRequests.push(new URL(url).searchParams.get("document"));
-      return new Response("%PDF-1.7", {
-        headers: { "content-type": "application/pdf" },
+    if (url.includes("/e-invoice/field-xml-text")) {
+      return Response.json({
+        type: "xml",
+        text: "<catalog>\n  <item>Sample entry</item>\n</catalog>",
+        truncated: true,
       });
     }
     if (url.includes("/structured-document/field-structured")) {
@@ -62,6 +86,10 @@ globalThis.fetch = Object.assign(
         { message: "Preview unavailable", code: "preview_unavailable" },
         { status: 422 },
       );
+    }
+    // An `.xml` file is asked for a signature first; these hold none.
+    if (url.includes("/signature/")) {
+      return Response.json({ type: "notSignature" });
     }
     if (url.includes("/chat/threads/") && url.includes("/messages")) {
       return Response.json({ message: "Thread not found" }, { status: 404 });
@@ -108,7 +136,7 @@ const sampleInvoice = {
       quantity: "10.000",
       unitCode: "HUR",
       unitPrice: "100.00",
-      priceBasis: "1 HUR",
+      priceBasis: { quantity: "1", unitCode: "HUR" },
       vatRate: "21",
       vatCategory: "S",
       netAmount: "1000.00",
@@ -152,9 +180,10 @@ const singleInvoicePreview = {
   invoices: [sampleInvoice],
   attachments: [
     {
-      index: 0,
-      fileName: "sample-timesheet.pdf",
-      description: "Sample timesheet",
+      part: "attachment:0",
+      fileName: "vykaz-prace-rijen-2026.pdf",
+      description: "Výkaz práce za říjen 2026",
+      mediaType: "application/pdf",
       sizeBytes: 2048,
     },
   ],
@@ -265,14 +294,18 @@ const { AuthenticatedUserProvider } =
 const { useDocxEditorHostStore } =
   await import("@/components/docx/docx-editor-host-store");
 const { FileTabPanel } = await import("./file-tab-panel");
-const { dataBoxPreviewOptions, fileOptions } =
+const { dataBoxPreviewOptions, emailHtmlPreviewOptions, fileOptions } =
   await import("@/lib/files/queries");
 const {
   asicPreviewOptions,
-  cadesPdfOptions,
   cadesPreviewOptions,
+  mailboxPreviewOptions,
+  signaturePreviewOptions,
   signedDossierPreviewOptions,
+  zipArchivePreviewOptions,
 } = await import("@/lib/files/legal-file-queries");
+const { filePartContentOptions } =
+  await import("@/lib/files/file-part-queries");
 const { fileChatThreadOptions } = await import("@/features/chat/queries");
 const { mcpConnectorsOptions } = await import("@/lib/knowledge/queries");
 const { entityOptions } = await import("@/lib/workspaces/queries/entities");
@@ -342,8 +375,7 @@ afterEach(async () => {
   });
   docxEngineCommitCount = 0;
   pdfEngineCommitCount = 0;
-  cadesPdfRequests.length = 0;
-  signedDossierPdfRequests.length = 0;
+  partLinkRequests.length = 0;
 });
 
 afterAll(async () => {
@@ -417,22 +449,26 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
     const tab = {
       ...pdfTab,
       id: toSafeId<"field">("field-data-box"),
-      label: "Data export",
-      fileName: "export.ZFO",
+      label: "Usnesení o nařízení jednání",
+      fileName: "usneseni.ZFO",
       mimeType: "application/octet-stream",
     };
     const party = {
-      boxId: "abc2def",
-      name: "Sender office",
+      boxId: "qv7m3kd",
+      name: "Okresní soud v Mladé Boleslavi",
       address: null,
       referenceNumber: null,
       fileMark: null,
     };
     const envelope = {
-      messageId: "1234567890",
+      messageId: "1183520467",
       messageType: "V",
       sender: party,
-      recipient: { ...party, boxId: "xyz9876", name: "District court" },
+      recipient: {
+        ...party,
+        boxId: "h4tq9wz",
+        name: "Advokátní kancelář Hrubeš & Šafránek s.r.o.",
+      },
       toHands: null,
       personalDelivery: null,
       substituteDelivery: null,
@@ -454,9 +490,9 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
         workspaceId: tab.workspaceId,
       }).queryKey;
       const common = {
-        annotation: "Court notice",
+        annotation: "Usnesení – 9 C 214/2026",
         envelope,
-        text: "Court notice",
+        text: "Usnesení – 9 C 214/2026",
       };
       // A literal passed straight to setQueryData meets its NoInfer'd data
       // union and fails to discriminate; a typed value does not.
@@ -466,8 +502,21 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
               ...common,
               kind,
               files: [
-                { fileName: "Order.pdf", entityId: ENTITY_ID },
-                { fileName: "Exhibit.pdf", entityId: null },
+                {
+                  part: "attachment:0",
+                  fileName: "Usneseni_9C214-2026.pdf",
+                  mediaType: "application/pdf",
+                  sizeBytes: 48_213,
+                  entityId: ENTITY_ID,
+                },
+                {
+                  part: "attachment:1",
+                  fileName: "Priloha_c1.docx",
+                  mediaType:
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                  sizeBytes: 17_402,
+                  entityId: null,
+                },
               ],
             }
           : {
@@ -482,19 +531,23 @@ test.each(DATA_BOX_DOCUMENT_KINDS)(
             };
       client.setQueryData(queryKey, preview);
     });
-    expect(await mounted.findByText("Court notice")).toBeTruthy();
-    expect(mounted.getByText("District court")).toBeTruthy();
+    expect(await mounted.findByText("Usnesení – 9 C 214/2026")).toBeTruthy();
+    expect(
+      mounted.getByText("Advokátní kancelář Hrubeš & Šafránek s.r.o."),
+    ).toBeTruthy();
     expect(
       mounted.getByRole("button", { name: "Download original" }),
     ).toBeTruthy();
     if (kind === "message") {
-      expect(mounted.getByRole("button", { name: "Order.pdf" })).toBeTruthy();
-      expect(mounted.getByText("Exhibit.pdf")).toBeTruthy();
-      expect(
-        mounted.getByText(
-          bundledEnglishMessages.correspondence.dataBox.unlinkedFiles,
-        ),
-      ).toBeTruthy();
+      // Every file of the message opens in place, filed as a document or not.
+      for (const fileName of ["Usneseni_9C214-2026.pdf", "Priloha_c1.docx"]) {
+        expect(
+          mounted.getByRole("button", { name: `Open ${fileName}` }),
+        ).toBeTruthy();
+        expect(
+          mounted.getByRole("button", { name: `Download ${fileName}` }),
+        ).toBeTruthy();
+      }
     } else {
       expect(
         mounted.getByRole("heading", { name: "Delivery receipt" }),
@@ -538,6 +591,12 @@ test.each([
     const mounted = renderFileTab(tab, (client) => {
       client.setQueryData(cadesPreviewOptions(key).queryKey, {
         ...embedded,
+        content: {
+          part: "content:0",
+          fileName: embedded.fileName,
+          mediaType: embedded.mimeType,
+          sizeBytes: 4096,
+        },
         layers: [
           {
             id: "layer-0",
@@ -572,11 +631,14 @@ test.each([
     expect(
       mounted.getByRole("button", { name: "Download original" }),
     ).toBeTruthy();
+    expect(
+      mounted.getByRole("button", { name: `Open ${embedded.fileName}` }),
+    ).toBeTruthy();
     if (embedded.mimeType === "application/pdf") {
       expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
-      expect(cadesPdfRequests).toEqual(["include"]);
+      expect(partLinkRequests).toEqual(["field-cades/content:0"]);
     } else {
-      expect(cadesPdfRequests).toHaveLength(0);
+      expect(partLinkRequests).toHaveLength(0);
       expect(pdfEngineCommitCount).toBe(0);
       expect(
         mounted.getByText(
@@ -606,6 +668,12 @@ const seedSignedPdf = (client: QueryClientInstance) => {
       mimeType: "application/pdf",
       text: "",
       textFormat: "markdown",
+      content: {
+        part: "content:0",
+        fileName: "submission.pdf",
+        mediaType: "application/pdf",
+        sizeBytes: 4096,
+      },
       layers: [],
       invoice: null,
     },
@@ -648,7 +716,7 @@ test("draws a signed file's PDF as a PDF tab draws its own", async () => {
 test("reopens a signed file's PDF from the cache without fetching it again", async () => {
   const mounted = renderFileTab(signedPdfTab, seedSignedPdf);
   expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
-  expect(cadesPdfRequests).toHaveLength(1);
+  expect(partLinkRequests).toHaveLength(1);
 
   await act(async () => {
     fireEvent.click(mounted.getByTestId("toggle-panel"));
@@ -658,9 +726,10 @@ test("reopens a signed file's PDF from the cache without fetching it again", asy
   // not until the next tick.
   const cache = mounted.queryClient.getQueryCache();
   const signedBytes = cache.find({
-    queryKey: cadesPdfOptions({
+    queryKey: filePartContentOptions({
       fieldId: signedPdfTab.id,
       workspaceId: signedPdfTab.workspaceId,
+      part: "content:0",
     }).queryKey,
   });
   const fileBytes = cache.find({
@@ -678,7 +747,7 @@ test("reopens a signed file's PDF from the cache without fetching it again", asy
 
   // Present in the same commit as the reopen: no loading state in between.
   expect(mounted.getByTestId("pdf-engine")).toBeTruthy();
-  expect(cadesPdfRequests).toHaveLength(1);
+  expect(partLinkRequests).toHaveLength(1);
 });
 
 test("keeps the original available when the signed container cannot be opened", async () => {
@@ -697,13 +766,126 @@ test("keeps the original available when the signed container cannot be opened", 
   expect(pdfEngineCommitCount).toBe(0);
 });
 
+type SignaturePreviewData = InferDataFromTag<
+  unknown,
+  ReturnType<typeof signaturePreviewOptions>["queryKey"]
+>;
+
+test("a detached signature lists its signers and links the signed document", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-signature"),
+    label: "Signature",
+    fileName: "smlouva.pdf.p7s",
+    mimeType: "application/pkcs7-signature",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  // A typed value discriminates the preview union; a literal would not.
+  const preview: SignaturePreviewData = {
+    type: "signature",
+    standard: "cades",
+    packaging: "detached",
+    signers: [
+      {
+        id: "layer-0.signer-0",
+        name: "Example notary office",
+        signedAt: "2026-03-02T09:30:00.000Z",
+      },
+      { id: "layer-0.signer-1", name: null, signedAt: null },
+    ],
+    statedFileNames: ["příloha.pdf"],
+    signedFiles: [
+      {
+        entityId: ENTITY_ID,
+        fieldId: "field-signed",
+        fileName: "smlouva.pdf",
+        binding: "digestMatches",
+      },
+    ],
+    document: null,
+  };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, preview);
+  });
+  expect(
+    await mounted.findByRole("heading", { name: "smlouva.pdf.p7s" }),
+  ).toBeTruthy();
+  expect(mounted.getByText("Example notary office")).toBeTruthy();
+  expect(mounted.getByText("Unknown signer")).toBeTruthy();
+  expect(
+    mounted.getByText("The signatures have not been verified."),
+  ).toBeTruthy();
+  expect(mounted.getByRole("button", { name: "smlouva.pdf" })).toBeTruthy();
+  expect(
+    mounted.getByText(bundledEnglishMessages.signedFile.bindingMatches),
+  ).toBeTruthy();
+  expect(
+    mounted.getByText(bundledEnglishMessages.signedFile.digestNote),
+  ).toBeTruthy();
+  expect(mounted.getByText("příloha.pdf")).toBeTruthy();
+  expect(pdfEngineCommitCount).toBe(0);
+});
+
+test("an .xml signature stored as plain text opens as the signature", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-enveloped-xml"),
+    fileName: "wniosek.xml",
+    mimeType: "text/plain",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const preview: SignaturePreviewData = {
+    type: "signature",
+    standard: "xades",
+    packaging: "enveloped",
+    signers: [
+      {
+        id: "signature-0.signer-0",
+        name: "Example court registry",
+        signedAt: null,
+      },
+    ],
+    statedFileNames: [],
+    signedFiles: [],
+    document: {
+      fileName: "wniosek.xml",
+      mimeType: "application/xml",
+      text: "Wniosek o wpis do rejestru",
+    },
+  };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, preview);
+  });
+  expect(await mounted.findByText("Wniosek o wpis do rejestru")).toBeTruthy();
+  expect(mounted.getByText("Example court registry")).toBeTruthy();
+});
+
+test("an .xml file the server finds no signature in keeps its own viewer", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-xml-text"),
+    fileName: "catalog.xml",
+    mimeType: "text/xml",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(signaturePreviewOptions(key).queryKey, {
+      type: "notSignature",
+    });
+  });
+  expect(await mounted.findByText(/<item>Sample entry<\/item>/u)).toBeTruthy();
+  expect(
+    mounted.queryByText("The signatures have not been verified."),
+  ).toBeNull();
+});
+
 test.each([".asice", ".asics"])(
-  "lists and previews contained files in a signed %s archive",
+  "lists the files of a signed %s archive and opens each in place",
   async (extension) => {
     const tab = {
       ...pdfTab,
       id: toSafeId<"field">("field-asic"),
-      fileName: `submission${extension}`,
+      fileName: `toovotuleping${extension}`,
       mimeType: "application/octet-stream",
     };
     const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
@@ -711,52 +893,44 @@ test.each([".asice", ".asics"])(
       client.setQueryData(asicPreviewOptions(key).queryKey, {
         members: [
           {
-            fileName: "submission.pdf",
+            part: "member:0",
+            fileName: "leping.html",
+            mediaType: "text/html",
+            sizeBytes: 21_504,
             status: "readable",
-            text: "# Share purchase agreement\n\n**2. Purchase price**\n\nThe enclosed submission",
+            text: "# Töövõtuleping\n\n**2. Tasu**\n\nTöövõtja saab tasu",
             textFormat: "markdown",
           },
           {
-            fileName: "attachment.bin",
-            status: "unavailable",
-            text: "",
-            textFormat: "plain",
+            part: "member:1",
+            fileName: "lisa.pdf",
+            mediaType: "application/pdf",
+            sizeBytes: 88_310,
+            status: "readable",
+            text: "Lisa 1",
+            textFormat: "markdown",
           },
           {
-            fileName: "notes.txt",
-            status: "truncated",
-            text: "# The first page\nSecond line",
+            part: "member:2",
+            fileName: "markused.txt",
+            mediaType: "text/plain",
+            sizeBytes: 31,
+            status: "readable",
+            text: "# První strana",
             textFormat: "plain",
           },
         ],
       });
     });
 
-    expect(
-      await mounted.findByRole("heading", { name: "submission.pdf" }),
-    ).toBeTruthy();
-    expect(
-      mounted.getByRole("heading", { name: "attachment.bin" }),
-    ).toBeTruthy();
-    // A converted document reads as formatted text, never as its Markdown
-    // source; a text file keeps its characters and line breaks as written.
-    // The Markdown renderer loads on first use, so the heading may follow
-    // the member list by a render.
-    expect(
-      await mounted.findByRole("heading", { name: "Share purchase agreement" }),
-    ).toBeTruthy();
-    expect(mounted.getByText("2. Purchase price")).toBeTruthy();
-    expect(mounted.getByText("The enclosed submission")).toBeTruthy();
-    expect(mounted.queryByText(/\*\*|^# Share/u)).toBeNull();
-    const plain = mounted.getByText(/^# The first page/u);
-    expect(plain.tagName).toBe("PRE");
-    expect(plain.textContent).toBe("# The first page\nSecond line");
-    expect(
-      mounted.getByText("The full text is unavailable in this preview."),
-    ).toBeTruthy();
-    expect(
-      mounted.getByText("No readable content is available for preview."),
-    ).toBeTruthy();
+    for (const fileName of ["leping.html", "lisa.pdf", "markused.txt"]) {
+      expect(
+        await mounted.findByRole("button", { name: `Open ${fileName}` }),
+      ).toBeTruthy();
+      expect(
+        mounted.getByRole("button", { name: `Download ${fileName}` }),
+      ).toBeTruthy();
+    }
     expect(
       mounted.getByText("The signatures have not been verified."),
     ).toBeTruthy();
@@ -764,8 +938,426 @@ test.each([".asice", ".asics"])(
       mounted.getByRole("button", { name: "Download original" }),
     ).toBeTruthy();
     expect(pdfEngineCommitCount).toBe(0);
+    expect(partLinkRequests).toHaveLength(0);
+
+    // A document without a preview of its own shows what it is and the text
+    // the server read from it, formatted, never as Markdown source.
+    fireEvent.click(mounted.getByRole("button", { name: "Open leping.html" }));
+    expect(
+      await mounted.findByRole("heading", { name: "Töövõtuleping" }),
+    ).toBeTruthy();
+    expect(mounted.getByText("2. Tasu")).toBeTruthy();
+    expect(mounted.queryByText(/\*\*|^# Töö/u)).toBeNull();
+    expect(partLinkRequests).toHaveLength(0);
+    fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+
+    // A PDF opens in the PDF viewer, a text file as its own characters.
+    fireEvent.click(mounted.getByRole("button", { name: "Open lisa.pdf" }));
+    expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+    fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+    fireEvent.click(mounted.getByRole("button", { name: "Open markused.txt" }));
+    const plain = await mounted.findByText(/^# První strana/u);
+    expect(plain.tagName).toBe("PRE");
+    expect(plain.textContent).toBe("# První strana\nDruhý řádek");
+    expect(partLinkRequests).toEqual([
+      "field-asic/member:1",
+      "field-asic/member:2",
+    ]);
   },
 );
+
+test("lists a ZIP archive's files with their folders and opens an email inside it in place", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-zip"),
+    fileName: "podklady-ke-sporu.zip",
+    mimeType: "application/zip",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const unread = {
+    text: "",
+    textFormat: "plain",
+    status: "unavailable",
+  } as const;
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(zipArchivePreviewOptions(key).queryKey, {
+      files: [
+        {
+          fileName: "žaloba.pdf",
+          folder: "podání/2026",
+          sizeBytes: 88_310,
+          part: {
+            part: "member:0",
+            fileName: "žaloba.pdf",
+            mediaType: "application/pdf",
+            sizeBytes: 88_310,
+          },
+          unavailable: null,
+          text: "Žaloba",
+          textFormat: "markdown",
+          status: "readable",
+        },
+        {
+          fileName: "posudek.pdf",
+          folder: null,
+          sizeBytes: 120_400,
+          part: null,
+          unavailable: "encrypted",
+          ...unread,
+        },
+        {
+          fileName: "podklady.eml",
+          folder: "korespondence",
+          sizeBytes: 9120,
+          part: {
+            part: "member:2",
+            fileName: "podklady.eml",
+            mediaType: "message/rfc822",
+            sizeBytes: 9120,
+          },
+          unavailable: null,
+          ...unread,
+        },
+      ],
+    });
+    client.setQueryData(
+      emailHtmlPreviewOptions({ ...key, part: "member:2" }).queryKey,
+      {
+        attachments: [
+          {
+            charset: null,
+            part: "member:2/attachment:0",
+            fileName: "usneseni.pdf",
+            mediaType: "application/pdf",
+            sizeBytes: 4210,
+          },
+        ],
+        bcc: [],
+        bodyFolds: [],
+        bodyHtml: "<p>Dobrý den, v příloze posílám usnesení.</p>",
+        certified: null,
+        citationBlocks: [],
+        cc: [],
+        date: "Tue, 17 Nov 2026 09:30:00 +0100",
+        from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+        source: {
+          entityId: toSafeId<"entity">("entity-zip"),
+          entityName: "Podklady ke sporu",
+          fieldId: toSafeId<"field">("field-zip"),
+          fileName: "podklady-ke-sporu.zip",
+          mimeType: "application/zip",
+          pdfFileId: null,
+          propertyId: toSafeId<"property">("property-zip"),
+        },
+        subject: "Podklady k jednání",
+        to: ["Jitka Skořepová <skorepova@stavby-hradec.cz>"],
+      },
+    );
+  });
+
+  expect(
+    await mounted.findByRole("button", { name: "Open žaloba.pdf" }),
+  ).toBeTruthy();
+  expect(mounted.getByText("podání/2026")).toBeTruthy();
+  // A locked file is listed with the reason, and nothing opens it.
+  expect(mounted.getByText("Password-protected, can’t be opened")).toBeTruthy();
+  expect(
+    mounted.queryByRole("button", { name: "Open posudek.pdf" }),
+  ).toBeNull();
+  expect(
+    mounted.queryByRole("button", { name: "Download posudek.pdf" }),
+  ).toBeNull();
+
+  // An email in the archive opens as an email, its attachments in turn.
+  fireEvent.click(mounted.getByRole("button", { name: "Open podklady.eml" }));
+  expect(
+    await mounted.findByRole("heading", { name: "Podklady k jednání" }),
+  ).toBeTruthy();
+  fireEvent.click(
+    await mounted.findByRole("button", { name: /usneseni\.pdf/u }),
+  );
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(partLinkRequests).toContain("field-zip/member:2/attachment:0");
+  fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+  expect(
+    await mounted.findByRole("heading", { name: "Podklady k jednání" }),
+  ).toBeTruthy();
+  fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+  expect(
+    await mounted.findByRole("button", { name: "Open žaloba.pdf" }),
+  ).toBeTruthy();
+  expect(partLinkRequests).not.toContain("field-zip/member:2");
+});
+
+test("finds a mailbox's messages by subject, sender or folder", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-mbox-search"),
+    fileName: "korespondence.mbox",
+    mimeType: "application/mbox",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const subjects = [
+    "Výzva k zaplacení",
+    "Plná moc",
+    "Termín jednání 3. 12.",
+    "Návrh smíru",
+    "Vyjádření k žalobě",
+    "Faktura za říjen",
+  ];
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(mailboxPreviewOptions(key).queryKey, {
+      truncated: false,
+      messages: subjects.map((subject, index) => ({
+        fileName: `${subject}.eml`,
+        folder: index === 5 ? "Účetnictví" : "korespondence",
+        sizeBytes: 2048,
+        subject,
+        from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+        date: null,
+        part: {
+          part: `message:${String(index)}`,
+          fileName: `${subject}.eml`,
+          mediaType: "message/rfc822",
+          sizeBytes: 2048,
+        },
+        unavailable: null,
+      })),
+    });
+  });
+
+  const search = await mounted.findByRole("searchbox", {
+    name: "Search messages",
+  });
+  // Accents and case do not matter.
+  fireEvent.change(search, { target: { value: "VYJADRENI" } });
+  expect(
+    mounted.getByRole("button", { name: "Open Vyjádření k žalobě" }),
+  ).toBeTruthy();
+  expect(mounted.queryByRole("button", { name: "Open Plná moc" })).toBeNull();
+  fireEvent.change(search, { target: { value: "ucetnictvi" } });
+  expect(
+    mounted.getByRole("button", { name: "Open Faktura za říjen" }),
+  ).toBeTruthy();
+  fireEvent.change(search, { target: { value: "rozsudek" } });
+  expect(mounted.getByText("No message matches “rozsudek”.")).toBeTruthy();
+});
+
+test("lists an Outlook mailbox's messages with their folders in the mailbox viewer", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-pst"),
+    fileName: "korespondence.pst",
+    // Browsers hold no type for a PST; its name says what it is.
+    mimeType: "application/octet-stream",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const message = (index: number, subject: string | null, folder: string) => ({
+    fileName: `${subject ?? `korespondence-${String(index + 1)}`}.eml`,
+    folder,
+    sizeBytes: 4096,
+    subject,
+    from: "Petra Vlková",
+    date: "Mon, 04 Mar 2024 09:00:00 +0000",
+    part: {
+      part: `message:${String(index)}`,
+      fileName: `${subject ?? `korespondence-${String(index + 1)}`}.eml`,
+      mediaType: "message/rfc822",
+      sizeBytes: 4096,
+    },
+    unavailable: null,
+  });
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(mailboxPreviewOptions(key).queryKey, {
+      truncated: false,
+      messages: [
+        message(0, "Smlouva o převodu podílu", "Doručená pošta"),
+        message(
+          1,
+          "Fwd: Výzva k úhradě",
+          "Doručená pošta/Klienti/Fiktivní stavby",
+        ),
+        {
+          ...message(
+            2,
+            "Spis ve skenech",
+            "Doručená pošta/Klienti/Fiktivní stavby",
+          ),
+          sizeBytes: 48 * 1024 * 1024,
+          part: null,
+          unavailable: "tooLarge",
+        },
+      ],
+    });
+  });
+
+  expect(
+    await mounted.findByRole("button", {
+      name: "Open Smlouva o převodu podílu",
+    }),
+  ).toBeTruthy();
+  expect(
+    mounted.getAllByText(/Doručená pošta\/Klienti\/Fiktivní stavby/u),
+  ).toHaveLength(2);
+  expect(
+    mounted.queryByRole("button", { name: "Open Spis ve skenech" }),
+  ).toBeNull();
+});
+
+test("lists a mailbox's messages and opens one in place as an email", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-mbox"),
+    fileName: "spis-23-C-118-2026.mbox",
+    mimeType: "application/octet-stream",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(mailboxPreviewOptions(key).queryKey, {
+      truncated: false,
+      messages: [
+        {
+          fileName: "Plná moc a výzva.eml",
+          folder: "Spisy/Stavby Hradec",
+          sizeBytes: 9120,
+          subject: "Plná moc a výzva",
+          from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+          date: "not a date",
+          part: {
+            part: "message:0",
+            fileName: "Plná moc a výzva.eml",
+            mediaType: "message/rfc822",
+            sizeBytes: 9120,
+          },
+          unavailable: null,
+        },
+        {
+          fileName: "spis-23-C-118-2026-2.eml",
+          folder: null,
+          sizeBytes: 40_000_000,
+          subject: null,
+          from: null,
+          date: null,
+          part: null,
+          unavailable: "tooLarge",
+        },
+      ],
+    });
+    client.setQueryData(
+      emailHtmlPreviewOptions({ ...key, part: "message:0" }).queryKey,
+      {
+        attachments: [
+          {
+            charset: null,
+            part: "message:0/attachment:0",
+            fileName: "plna-moc.pdf",
+            mediaType: "application/pdf",
+            sizeBytes: 4210,
+          },
+        ],
+        bcc: [],
+        bodyFolds: [],
+        bodyHtml: "<p>Dobrý den, v příloze posílám plnou moc.</p>",
+        certified: null,
+        citationBlocks: [],
+        cc: [],
+        date: "Thu, 19 Nov 2026 10:15:00 +0100",
+        from: "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz>",
+        source: {
+          entityId: toSafeId<"entity">("entity-mbox"),
+          entityName: "Korespondence",
+          fieldId: toSafeId<"field">("field-mbox"),
+          fileName: "spis-23-C-118-2026.mbox",
+          mimeType: "application/octet-stream",
+          pdfFileId: null,
+          propertyId: toSafeId<"property">("property-mbox"),
+        },
+        subject: "Plná moc a výzva",
+        to: ["Jitka Skořepová <skorepova@stavby-hradec.cz>"],
+      },
+    );
+  });
+
+  // Each message shows who sent it, when (as stated) and where it was filed.
+  expect(
+    await mounted.findByText(
+      "Mgr. Ondřej Kalina <kalina@ak-kalina-vesela.cz> · not a date · Spisy/Stavby Hradec",
+    ),
+  ).toBeTruthy();
+  // One too large to open is listed with why, and nothing opens it.
+  expect(mounted.getByText("(No subject)")).toBeTruthy();
+  expect(mounted.getByText("Too large to open")).toBeTruthy();
+  expect(
+    mounted.queryByRole("button", { name: "Open (No subject)" }),
+  ).toBeNull();
+
+  fireEvent.click(
+    mounted.getByRole("button", { name: "Open Plná moc a výzva" }),
+  );
+  expect(
+    await mounted.findByRole("heading", { name: "Plná moc a výzva" }),
+  ).toBeTruthy();
+  fireEvent.click(
+    await mounted.findByRole("button", { name: /plna-moc\.pdf/u }),
+  );
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(partLinkRequests).toContain("field-mbox/message:0/attachment:0");
+  // Opening a message reads nothing more than its preview.
+  expect(partLinkRequests).not.toContain("field-mbox/message:0");
+});
+
+test("opens a document member no viewer draws as the PDF the server converts it to", async () => {
+  const tab = {
+    ...pdfTab,
+    id: toSafeId<"field">("field-asic-converted"),
+    fileName: "toovotuleping.asice",
+    mimeType: "application/octet-stream",
+  };
+  const key = { fieldId: tab.id, workspaceId: tab.workspaceId };
+  const mounted = renderFileTab(tab, (client) => {
+    client.setQueryData(asicPreviewOptions(key).queryKey, {
+      members: [
+        {
+          part: "member:0",
+          fileName: "leping.odt",
+          mediaType: "application/vnd.oasis.opendocument.text",
+          sizeBytes: 18_944,
+          status: "readable",
+          text: "Töövõtuleping",
+          textFormat: "plain",
+        },
+        {
+          part: "member:1",
+          fileName: "lisa.doc",
+          mediaType: "application/msword",
+          sizeBytes: 26_112,
+          status: "readable",
+          text: "Lisa 1",
+          textFormat: "plain",
+        },
+      ],
+    });
+  });
+
+  // The OpenDocument text opens in the PDF viewer, as its stored kind does.
+  fireEvent.click(
+    await mounted.findByRole("button", { name: "Open leping.odt" }),
+  );
+  expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+  expect(partLinkRequests).toEqual(["field-asic-converted/member:0"]);
+  fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
+
+  // A document the server could not convert says so and stays downloadable.
+  fireEvent.click(mounted.getByRole("button", { name: "Open lisa.doc" }));
+  expect(
+    await mounted.findByText(
+      "This file couldn't be converted for preview. Download it or save it to a matter.",
+    ),
+  ).toBeTruthy();
+  expect(
+    mounted.getAllByRole("button", { name: "Download lisa.doc" }).length,
+  ).toBeGreaterThan(0);
+});
 
 test("keeps the original ASiC archive available when preview is unavailable", async () => {
   const mounted = renderFileTab({
@@ -797,7 +1389,10 @@ test("isolates member names in the Arabic ASiC preview", async () => {
       client.setQueryData(asicPreviewOptions(key).queryKey, {
         members: [
           {
+            part: "member:0",
             fileName,
+            mediaType: "application/pdf",
+            sizeBytes: 1024,
             status: "truncated",
             text: "جزء من المستند",
             textFormat: "plain",
@@ -807,12 +1402,9 @@ test("isolates member names in the Arabic ASiC preview", async () => {
     },
     "ar",
   );
-  const member = await mounted.findByRole("heading", { name: fileName });
-  expect(member.querySelector("bdi")?.textContent).toBe(fileName);
-  expect(member.closest('[dir="rtl"]')).toBeTruthy();
-  expect(
-    mounted.getByText(arabicMessages.common.previewTruncated),
-  ).toBeTruthy();
+  const name = await mounted.findByText(fileName);
+  expect(name.getAttribute("dir")).toBe("auto");
+  expect(name.closest('[dir="rtl"]')).toBeTruthy();
 });
 
 test.each([".es3", ".et3", ".dosszie", ".zep", ".xzep"])(
@@ -829,7 +1421,7 @@ test.each([".es3", ".et3", ".dosszie", ".zep", ".xzep"])(
       client.setQueryData(signedDossierPreviewOptions(key).queryKey, {
         receipt: extension === ".et3",
         signers: [
-          { id: "signature-0", name: "Example signer" },
+          { id: "signature-0", name: "Fekete Zsófia" },
           { id: "signature-1", name: null },
         ],
         documents: [
@@ -839,7 +1431,12 @@ test.each([".es3", ".et3", ".dosszie", ".zep", ".xzep"])(
             status: "readable",
             text: "Kérelem szövege",
             textFormat: "plain",
-            pdf: false,
+            part: {
+              part: "document:0",
+              fileName: "kérelem.txt",
+              mediaType: "text/plain",
+              sizeBytes: 15,
+            },
           },
           {
             id: "document-1",
@@ -847,7 +1444,12 @@ test.each([".es3", ".et3", ".dosszie", ".zep", ".xzep"])(
             status: "readable",
             text: "Végzés",
             textFormat: "markdown",
-            pdf: true,
+            part: {
+              part: "document:1",
+              fileName: "végzés.pdf",
+              mediaType: "application/pdf",
+              sizeBytes: 52_118,
+            },
           },
           {
             id: "document-2",
@@ -855,7 +1457,7 @@ test.each([".es3", ".et3", ".dosszie", ".zep", ".xzep"])(
             status: "unavailable",
             text: "",
             textFormat: "plain",
-            pdf: false,
+            part: null,
           },
           {
             id: "document-3",
@@ -863,17 +1465,21 @@ test.each([".es3", ".et3", ".dosszie", ".zep", ".xzep"])(
             status: "unavailable",
             text: "",
             textFormat: "markdown",
-            pdf: true,
+            part: {
+              part: "document:3",
+              fileName: "melléklet.pdf",
+              mediaType: "application/pdf",
+              sizeBytes: 9870,
+            },
           },
         ],
       });
     });
 
     expect(
-      await mounted.findByRole("heading", { name: "kérelem.txt" }),
+      await mounted.findByRole("button", { name: "Open kérelem.txt" }),
     ).toBeTruthy();
-    expect(mounted.getByText("Kérelem szövege")).toBeTruthy();
-    expect(mounted.getByText("Example signer")).toBeTruthy();
+    expect(mounted.getByText("Fekete Zsófia")).toBeTruthy();
     expect(
       mounted.queryByRole("heading", {
         name: "Delivery receipt for an electronic dossier",
@@ -883,19 +1489,23 @@ test.each([".es3", ".et3", ".dosszie", ".zep", ".xzep"])(
     expect(
       mounted.getByText("The signatures have not been verified."),
     ).toBeTruthy();
+    // A document the container keeps unreadable is named, not offered.
+    expect(mounted.getByText("csomag.zip")).toBeTruthy();
     expect(
-      mounted.getAllByText("No readable content is available for preview."),
-    ).toHaveLength(1);
-    // The first PDF opens at once; another is one press away.
+      mounted.queryByRole("button", { name: "Open csomag.zip" }),
+    ).toBeNull();
+    // The first PDF opens at once; any document opens in place from the list.
     expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
-    const previews = mounted.getAllByRole("button", { name: "Preview" });
-    expect(
-      previews.map((button) => button.getAttribute("aria-pressed")),
-    ).toEqual(["true", "false"]);
-    fireEvent.click(previews[1] ?? panic("Expected a second PDF"));
+    fireEvent.click(
+      mounted.getByRole("button", { name: "Open melléklet.pdf" }),
+    );
     await waitFor(() => {
-      expect(signedDossierPdfRequests).toEqual(["1", "3"]);
+      expect(partLinkRequests).toEqual([
+        "field-dossier/document:1",
+        "field-dossier/document:3",
+      ]);
     });
+    fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
     expect(
       mounted.getByRole("button", { name: "Download original" }),
     ).toBeTruthy();
@@ -989,9 +1599,11 @@ test.each([
     expect(mounted.getByText("Sample Supplier Test")).toBeTruthy();
     expect(mounted.getByText("Sample Customer Test")).toBeTruthy();
     expect(mounted.getByText("XX0000000001")).toBeTruthy();
-    expect(mounted.getByText("Registration number (0088)")).toBeTruthy();
+    expect(mounted.getByText("Registration number (GLN)")).toBeTruthy();
     expect(mounted.getByText("Sample consulting hours")).toBeTruthy();
-    expect(mounted.getByText("10.000 HUR")).toBeTruthy();
+    // Common units are named in words, with the plural their count takes.
+    expect(mounted.getByText("10.000 hours")).toBeTruthy();
+    expect(mounted.getByText("1 hour")).toBeTruthy();
     expect(mounted.getByText("Showing 1 of 3 lines")).toBeTruthy();
     expect(mounted.getAllByText("21% (S)")).toHaveLength(2);
     expect(mounted.getByText("Total with VAT")).toBeTruthy();
@@ -1000,14 +1612,23 @@ test.each([
     expect(mounted.getByText("Sample note")).toBeTruthy();
     // A total the file does not state is left out, not shown as empty.
     expect(mounted.queryByText("Paid in advance")).toBeNull();
-    expect(mounted.getByText("sample-timesheet.pdf")).toBeTruthy();
+    expect(mounted.getByText("vykaz-prace-rijen-2026.pdf")).toBeTruthy();
+    expect(mounted.getByText("Výkaz práce za říjen 2026")).toBeTruthy();
     expect(
-      mounted.getByRole("button", { name: "Download sample-timesheet.pdf" }),
+      mounted.getByRole("button", {
+        name: "Download vykaz-prace-rijen-2026.pdf",
+      }),
     ).toBeTruthy();
+    // The attachment opens in place, through the invoice file's part link.
+    fireEvent.click(
+      mounted.getByRole("button", { name: "Open vykaz-prace-rijen-2026.pdf" }),
+    );
+    expect(await mounted.findByTestId("pdf-engine")).toBeTruthy();
+    expect(partLinkRequests).toEqual(["field-e-invoice-single/attachment:0"]);
+    fireEvent.click(mounted.getByRole("button", { name: "Back to the list" }));
     expect(
       mounted.getByRole("button", { name: "Download original" }),
     ).toBeTruthy();
-    expect(pdfEngineCommitCount).toBe(0);
   },
 );
 
@@ -1037,7 +1658,7 @@ test("shows each invoice of an Italian batch under its own heading", async () =>
 test.each([
   {
     extension: ".xml",
-    message: "This XML file is not a recognized structured invoice.",
+    message: "This XML file could not be read.",
   },
   { extension: ".isdoc", message: "The invoice could not be read." },
   { extension: ".isdocx", message: "The invoice could not be read." },
@@ -1058,6 +1679,23 @@ test.each([
   },
 );
 
+test("shows XML that holds no invoice as its text", async () => {
+  const mounted = renderFileTab({
+    ...pdfTab,
+    id: toSafeId<"field">("field-xml-text"),
+    fileName: "catalog.xml",
+    mimeType: "application/xml",
+  });
+  expect(await mounted.findByText(/<item>Sample entry<\/item>/u)).toBeTruthy();
+  expect(
+    mounted.getByText("The full text is unavailable in this preview."),
+  ).toBeTruthy();
+  expect(
+    mounted.getByRole("button", { name: "Download original" }),
+  ).toBeTruthy();
+  expect(pdfEngineCommitCount).toBe(0);
+});
+
 test("reads the invoice inside a signed FatturaPA file", async () => {
   const tab = {
     ...pdfTab,
@@ -1073,6 +1711,12 @@ test("reads the invoice inside a signed FatturaPA file", async () => {
       mimeType: "application/xml",
       text: "<FatturaElettronica>raw source</FatturaElettronica>",
       textFormat: "plain",
+      content: {
+        part: "content:0",
+        fileName: "IT00000000000_TEST1.xml",
+        mediaType: "application/xml",
+        sizeBytes: 8192,
+      },
       layers: [
         {
           id: "layer-0",
@@ -1095,7 +1739,7 @@ test("reads the invoice inside a signed FatturaPA file", async () => {
   expect(
     mounted.queryByText("<FatturaElettronica>raw source</FatturaElettronica>"),
   ).toBeNull();
-  expect(cadesPdfRequests).toHaveLength(0);
+  expect(partLinkRequests).toHaveLength(0);
 });
 
 function renderFileTab(

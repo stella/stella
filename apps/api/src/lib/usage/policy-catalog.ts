@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { usagePolicies } from "@/api/db/schema";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";

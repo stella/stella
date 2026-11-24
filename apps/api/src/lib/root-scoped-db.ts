@@ -5,7 +5,7 @@ import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 import { WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
 import { rlsDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import { workspaces } from "@/api/db/schema";
 import {
   createMembershipSafeDb,

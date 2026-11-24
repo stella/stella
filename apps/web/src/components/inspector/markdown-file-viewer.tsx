@@ -1,11 +1,13 @@
 import { useTranslations } from "use-intl";
 
+import { MarkdownHybridEditor } from "@stll/markdown-editor";
 import { Button } from "@stll/ui/button";
 import { CheckIcon, XIcon } from "@stll/ui/icons";
 
 import type { MarkdownFileDraft } from "@/components/inspector/use-markdown-file-draft";
-import { MarkdownHybridEditor } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 import { detached } from "@/lib/detached";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 
 type MarkdownFileViewerProps = {
   draft: MarkdownFileDraft;
@@ -49,7 +51,9 @@ export const MarkdownFileViewer = ({
   return (
     <div className="contents" data-print-root="">
       <MarkdownHybridEditor
-        imagePolicy="data-only"
+        allowsImageSource={isSafeMarkdownPreviewImageSrc}
+        label={t("markdownEditor.rawLabel")}
+        onOpenLink={openIsolatedWindow}
         key={tabId}
         markdown={text}
         onMarkdownChange={setDraft}

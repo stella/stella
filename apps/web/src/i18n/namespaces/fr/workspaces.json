@@ -31,7 +31,6 @@
       "sent": "Envoyé",
       "statedInFile": "Message de boîte de données (selon le fichier)",
       "toHands": "À l’attention de {name}",
-      "unlinkedFiles": "Pour ouvrir les pièces jointes sans lien, téléchargez le fichier ZFO d’origine.",
       "unreadable": "Ce fichier n’a pu être lu ni comme message de boîte de données ni comme accusé de réception.",
       "uploaded": "Message de boîte de données importé"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Note de débit",
       "other": "Autre document"
     },
-    "downloadAttachment": "Télécharger {fileName}",
     "exemptionReason": "Motif d’exonération",
     "formatVersion": "{format} (version {version})",
     "grossTotal": "Total TTC",
@@ -101,7 +99,6 @@
     "linesShown": "Affichage de {shown, number} sur {count, plural, one {# ligne} many {# lignes} other {# lignes}}",
     "netAmount": "Montant HT",
     "netTotal": "Total HT",
-    "notRecognized": "Ce fichier XML n’est pas une facture structurée reconnue.",
     "otherIdentifier": "Autre identifiant",
     "payableAmount": "Montant à payer",
     "paymentAmount": "Montant du paiement",
@@ -111,6 +108,7 @@
     "paymentReference": "Référence de paiement",
     "prepaidAmount": "Acompte versé",
     "quantity": "Quantité et unité",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Fournisseur",
@@ -120,9 +118,18 @@
     "taxableAmount": "Base d’imposition",
     "totals": "Totaux",
     "unitPrice": "Prix unitaire",
+    "units": {
+      "day": "{count, plural, one {{quantity} jour} many {{quantity} jours} other {{quantity} jours}}",
+      "hour": "{count, plural, one {{quantity} heure} many {{quantity} heures} other {{quantity} heures}}",
+      "month": "{count, plural, one {{quantity} mois} many {{quantity} mois} other {{quantity} mois}}",
+      "unit": "{count, plural, one {{quantity} unité} many {{quantity} unités} other {{quantity} unités}}",
+      "week": "{count, plural, one {{quantity} semaine} many {{quantity} semaines} other {{quantity} semaines}}",
+      "year": "{count, plural, one {{quantity} an} many {{quantity} ans} other {{quantity} ans}}"
+    },
     "unreadable": "Impossible de lire la facture.",
     "vat": "TVA",
-    "vatBreakdown": "Ventilation de la TVA"
+    "vatBreakdown": "Ventilation de la TVA",
+    "xmlUnreadable": "Impossible de lire ce fichier XML."
   },
   "emailViewer": {
     "attachments": "Pièces jointes",
@@ -364,12 +371,21 @@
     "title": "SharePoint et OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Son contenu ne correspond pas à l’empreinte indiquée dans la signature.",
+    "bindingMatches": "Son contenu correspond à l’empreinte indiquée dans la signature.",
+    "bindingNotCompared": "Trouvé par son nom de fichier. Son contenu n’a pas été comparé.",
     "deliveryReceipt": "Accusé de réception d’un dossier électronique",
+    "digestNote": "Une empreinte identique montre qu’il s’agit des données signées. Elle ne vérifie pas la signature.",
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
     "noSigners": "Aucune information sur les signataires n’a été trouvée.",
     "pdfUnavailable": "L’aperçu PDF est indisponible.",
+    "signedAt": "Heure de signature indiquée : {time}",
+    "signedDocument": "Document signé",
+    "signedFileMissing": "Le fichier signé n’est pas dans ce dossier.",
     "signers": "Signataires",
+    "signs": "Fichier signé",
+    "statedFilesMissing": "Cités dans la signature, absents de ce dossier :",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",
     "unverified": "Les signatures n’ont pas été vérifiées."
@@ -553,6 +569,10 @@
     "deleteWorkspaceConfirmDescription": "Voulez-vous vraiment supprimer ce dossier ? Cette action est irréversible.",
     "deletedItem": "Supprimé : {name}",
     "deletingWorkspace": "Suppression du dossier",
+    "documentNaming": {
+      "description": "Les nouveaux documents reçoivent le modèle de nom de l'organisation : {pattern}",
+      "label": "Renommer les nouveaux fichiers"
+    },
     "documentSwitcher": {
       "download": "Télécharger ce fichier",
       "renditionsFailed": "Rechargez le document et réessayez de le télécharger.",
@@ -730,6 +750,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# fichier renommé pour éviter les conflits} many {# fichiers renommés pour éviter les conflits} other {# fichiers renommés pour éviter les conflits}}",
       "retryFailed": "Réessayer {count, plural, one {# fichier} other {# fichiers} many {# fichiers}}",
       "scrubFailed": "Les métadonnées de ce fichier n’ont pas pu être supprimées, rien n’a donc été téléchargé",
+      "unscannedContent": {
+        "encrypted": "Certains fichiers qu’il contient sont protégés par un mot de passe : ils n’ont donc pas été analysés pour détecter des menaces.",
+        "unsupportedCompression": "Certains fichiers qu’il contient sont compressés dans un format que stella ne sait pas lire : ils n’ont donc pas été analysés pour détecter des menaces."
+      },
       "uploadBlockedByWorkflow": "Attendez la fin du processus avant d’importer des fichiers.",
       "uploadedPartially": "{failed, plural, one {# fichier échoué} other {# fichiers échoués} many {# fichiers échoués}} sur {total, number}",
       "uploadedSuccessfully": "Fichiers importés avec succès",

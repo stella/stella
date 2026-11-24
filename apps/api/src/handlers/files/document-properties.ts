@@ -4,7 +4,7 @@ import {
 } from "@stll/api-contract";
 import type { DocumentPropertiesResult } from "@stll/api-contract";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { envBase } from "@/api/env-base";
 import { status } from "@/api/http/status";
 import type { AuditRecorder } from "@/api/lib/audit-log";

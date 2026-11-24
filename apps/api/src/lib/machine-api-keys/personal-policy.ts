@@ -46,6 +46,8 @@ const PERSONAL_WRITE_SCOPES = {
   legalReaderAnnotation: ["stella:knowledge_write"],
   savedSearch: null,
   searchHistory: ["stella:knowledge_write"],
+  // Learned dictation fixes are read and changed by stella's own apps only.
+  dictationLearnedFix: null,
   integration: null,
   // A conflict check probes matters the key's holder cannot open; it stays a
   // signed-in action until a personal key can carry that decision.

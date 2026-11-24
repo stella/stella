@@ -2,12 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 
-import {
-  createFileKey,
-  createUserFileKey,
-  getFileExtension,
-  resolveUploadMime,
-} from "./utils";
+import { resolveUploadMime } from "./upload-mime";
+import { createFileKey, createUserFileKey, getFileExtension } from "./utils";
 
 describe("resolveUploadMime", () => {
   test("recovers .msg reported as octet-stream", () => {

@@ -1,0 +1,11 @@
+{
+  "manualRedaction": {
+    "hint": "Velciet pāri lapai, lai aizklātu visu, ko noteikšana nepamanīja. Anonimizētajā PDF katrs atzīmētais apgabals tiek aizkrāsots melnā krāsā.",
+    "markingSurface": "Velciet, lai atzīmētu aizkrāsojamu apgabalu",
+    "pageArea": "Apgabals {page}. lapā",
+    "removeArea": "Noņemt atzīmēto apgabalu {page}. lapā",
+    "startMarking": "Atzīmēt apgabalus",
+    "stopMarking": "Beigt atzīmēšanu",
+    "title": "Atzīmētie apgabali"
+  }
+}

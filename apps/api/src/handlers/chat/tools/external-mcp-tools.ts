@@ -6,7 +6,7 @@ import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-con
 import { LIST_CONNECTABLE_CONNECTORS_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import { mapWithConcurrency } from "@stll/concurrency";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import type {
   ChatToolExecutionAuditContext,
@@ -137,10 +137,11 @@ export const loadExternalMcpToolsForUser = async ({
   // above — keeps connector order and any tool-name collision resolution
   // deterministic (row order) regardless of which connector's promise
   // resolves first.
-  for (const result of results) {
-    if (result === null) {
+  for (const outcome of results) {
+    if (outcome.status !== "loaded") {
       continue;
     }
+    const { value: result } = outcome;
     clients.push(result.client);
     connectors.push(result.connector);
     for (const [name, tool] of Object.entries(result.tools)) {
@@ -297,7 +298,11 @@ const loadConnectorTools = async ({
   safeDb: SafeDb;
   userId: SafeId<"user">;
   dependencies: ExternalMcpDiscoveryDependencies;
-}): Promise<LoadedExternalMcpConnectorResult | null> => {
+}): Promise<
+  | { status: "loaded"; value: LoadedExternalMcpConnectorResult }
+  | { status: "skipped" }
+  | { status: "failed" }
+> => {
   // Tracks the client for the whole life of this discovery attempt, from
   // the moment `createMcpClientForConnection` resolves, so every failure
   // path below — a synchronous throw or a discovery timeout — has a
@@ -360,10 +365,13 @@ const loadConnectorTools = async ({
     })();
 
   try {
-    return await dependencies.withTimeout(async () => await discovery, {
+    const loaded = await dependencies.withTimeout(async () => await discovery, {
       label: "external-mcp-tools-discovery",
       timeoutMs: EXTERNAL_MCP_DISCOVERY_TIMEOUT_MS,
     });
+    return loaded === null
+      ? { status: "skipped" }
+      : { status: "loaded", value: loaded };
   } catch (error) {
     if (error instanceof TimeoutError) {
       // Close whatever client discovery has already produced right away,
@@ -405,7 +413,7 @@ const loadConnectorTools = async ({
         connectorSlug: row.slug,
       }),
     );
-    return null;
+    return { status: "failed" };
   }
 };
 

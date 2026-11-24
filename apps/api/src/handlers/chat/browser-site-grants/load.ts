@@ -3,7 +3,7 @@ import { and, asc, eq } from "drizzle-orm";
 
 import { BROWSER_SITE_GRANTS_MAX } from "@stll/api-contract/browser-site-grants";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { chatBrowserSiteGrants } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";

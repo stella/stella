@@ -8,7 +8,7 @@ import type { ReadableInputRow } from "@stll/api-contract/chat-tool-input-rows";
 import { READER_ANNOTATION_KINDS } from "@stll/api-contract/legal-reader-annotations";
 import type { ReaderAnnotationKind } from "@stll/api-contract/legal-reader-annotations";
 
-import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
+import type { ApprovalToolName } from "@/components/chat/chat-ui-tools-types";
 
 /**
  * Pure (no-React) helpers that turn a chat tool's approval input into readable

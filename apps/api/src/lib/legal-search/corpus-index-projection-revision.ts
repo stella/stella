@@ -3,12 +3,12 @@ import { and, asc, desc, eq, inArray, or, sql } from "drizzle-orm";
 
 import { declareFingerprintFields } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionRevisions,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";

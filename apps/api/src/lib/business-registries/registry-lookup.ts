@@ -3,7 +3,7 @@ import { Result } from "better-result";
 import type { BusinessRegistryLookupDetail } from "@stll/api-contract";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/credentials";

@@ -238,6 +238,7 @@ const ChatMessageEdit = ({
               key={attachment.key}
               mimeType={attachment.mimeType}
               name={attachment.name}
+              unscannedContent={attachment.unscannedContent}
               onRemove={
                 sending
                   ? undefined

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { FILE_PART_KINDS } from "@stll/api-contract/file-parts";
 import {
   CADES_FILE_FORMAT,
   ISDOC_FILE_FORMAT,
@@ -8,11 +9,12 @@ import {
 } from "@stll/api-contract/legal-file-formats";
 
 import { readCadesPreview } from "@/api/lib/files/cades-preview";
+import { readEInvoicePreview } from "@/api/lib/files/e-invoice-preview";
 import {
-  readEInvoiceAttachment,
-  readEInvoicePreview,
-} from "@/api/lib/files/e-invoice-preview";
-import { eInvoiceDocumentText } from "@/api/lib/files/e-invoice-text";
+  eInvoiceDocumentText,
+  xmlDocumentPreviewText,
+} from "@/api/lib/files/e-invoice-text";
+import { readPartOfFile } from "@/api/lib/files/file-part";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import {
   fatturaPaXml,
@@ -33,6 +35,11 @@ const storedFile = (bytes: Uint8Array, mimeType: string, fileName: string) =>
     mimeType,
     path: `org/matter/${fileName}`,
   });
+
+const attachment = (index: number) => ({
+  kind: FILE_PART_KINDS.attachment,
+  index,
+});
 
 describe("structured invoice files", () => {
   test.each([
@@ -71,38 +78,52 @@ describe("structured invoice files", () => {
       const preview = (
         await readEInvoicePreview(storedFile(source, mimeType, file))
       ).unwrap();
-      expect(preview.invoices.length).toBeGreaterThan(0);
+      expect(
+        preview.type === "invoice" && preview.invoice.invoices.length,
+      ).toBeGreaterThan(0);
       const extracted = await extractFileTextResult(
         storedFile(source, declared, file),
+        { zipNameCodePage: "ibm437" },
       );
-      expect(extracted.unwrap()).toBe(eInvoiceDocumentText(preview));
+      expect(extracted.unwrap()).toBe(xmlDocumentPreviewText(preview));
     },
   );
 
   test.each([
-    ["plain XML", plainXml()],
-    ["an XAdES signature", xadesSignatureXml()],
+    ["plain XML", plainXml(), "<item>Not an invoice</item>"],
+    ["an XAdES signature", xadesSignatureXml(), "<SignatureValue>AAAA"],
   ])(
-    "leaves %s unclaimed: no preview and no extracted text",
-    async (_, xml) => {
-      const preview = await readEInvoicePreview(
-        storedFile(xmlBytes(xml), XML_FILE_FORMAT.mimeType, "data.xml"),
-      );
-      expect(preview.isErr() && preview.error).toMatchObject({
-        status: 422,
-        code: "preview_unavailable",
-        message: "The file is not a recognised structured invoice",
-      });
+    "shows %s as its indented text, never as an invoice",
+    async (_, xml, expected) => {
+      const preview = (
+        await readEInvoicePreview(
+          storedFile(xmlBytes(xml), XML_FILE_FORMAT.mimeType, "data.xml"),
+        )
+      ).unwrap();
+      expect(preview).toMatchObject({ type: "xml", truncated: false });
+      expect(preview.type === "xml" && preview.text).toContain(expected);
       const extracted = await extractFileTextResult(
         storedFile(xmlBytes(xml), "text/xml", "data.xml"),
+        { zipNameCodePage: "ibm437" },
       );
-      expect(extracted.unwrap()).toBeNull();
+      expect(extracted.unwrap()).toBe(xmlDocumentPreviewText(preview));
     },
   );
 
-  test("an unreadable ISDOC file is refused as unreadable", async () => {
+  test("shows XML the bounded parser refuses as the text it holds", async () => {
+    const xml =
+      '<?xml version="1.0"?><!DOCTYPE note SYSTEM "note.dtd"><note>Kept as text</note>';
+    const preview = (
+      await readEInvoicePreview(
+        storedFile(xmlBytes(xml), XML_FILE_FORMAT.mimeType, "note.xml"),
+      )
+    ).unwrap();
+    expect(preview).toEqual({ type: "xml", text: xml, truncated: false });
+  });
+
+  test("an ISDOC file that is not text is refused as unreadable", async () => {
     const file = storedFile(
-      xmlBytes("ordinary text"),
+      new Uint8Array([0xff, 0xfe, 0xfd, 0x00, 0xc3, 0x28]),
       ISDOC_FILE_FORMAT.mimeType,
       "broken.isdoc",
     );
@@ -112,7 +133,11 @@ describe("structured invoice files", () => {
       code: "preview_unavailable",
       message: "The invoice file could not be read",
     });
-    expect((await extractFileTextResult(file)).isErr()).toBe(true);
+    expect(
+      (
+        await extractFileTextResult(file, { zipNameCodePage: "ibm437" })
+      ).isErr(),
+    ).toBe(true);
   });
 
   test("opens an attachment after scanning it, with its type from its bytes", async () => {
@@ -121,15 +146,13 @@ describe("structured invoice files", () => {
       XML_FILE_FORMAT.mimeType,
       "IT00000000001_00001.xml",
     );
-    const attachment = (await readEInvoiceAttachment(0)(file)).unwrap();
-    expect(attachment).toMatchObject({
+    const read = (await readPartOfFile(file, attachment(0), "ibm437")).unwrap();
+    expect(read).toMatchObject({
       fileName: "bolla.txt",
       mimeType: "text/plain",
     });
-    expect(new TextDecoder().decode(attachment.bytes)).toBe(
-      SAMPLE_ATTACHMENT_TEXT,
-    );
-    const missing = await readEInvoiceAttachment(1)(file);
+    expect(new TextDecoder().decode(read.bytes)).toBe(SAMPLE_ATTACHMENT_TEXT);
+    const missing = await readPartOfFile(file, attachment(1), "ibm437");
     expect(missing.isErr() && missing.error.status).toBe(404);
   });
 
@@ -140,7 +163,12 @@ describe("structured invoice files", () => {
       CADES_FILE_FORMAT.mimeType,
       name,
     );
-    const preview = (await readCadesPreview(file, name)).unwrap();
+    const preview = (
+      await readCadesPreview(file, {
+        zipNameCodePage: "ibm437",
+        fileName: name,
+      })
+    ).unwrap();
     expect(preview.fileName).toBe("IT00000000001_00002.xml");
     expect(preview.layers).toHaveLength(1);
     expect(preview.invoice?.syntax).toBe("fatturaPA");
@@ -149,14 +177,14 @@ describe("structured invoice files", () => {
       throw new Error("Expected the signed invoice");
     }
     expect(preview.text).toBe(eInvoiceDocumentText(preview.invoice));
-    expect((await extractFileTextResult(file)).unwrap()).toContain(
-      eInvoiceDocumentText(preview.invoice),
-    );
+    expect(
+      (
+        await extractFileTextResult(file, { zipNameCodePage: "ibm437" })
+      ).unwrap(),
+    ).toContain(eInvoiceDocumentText(preview.invoice));
 
-    const attachment = (await readEInvoiceAttachment(0)(file)).unwrap();
-    expect(new TextDecoder().decode(attachment.bytes)).toBe(
-      SAMPLE_ATTACHMENT_TEXT,
-    );
+    const read = (await readPartOfFile(file, attachment(0), "ibm437")).unwrap();
+    expect(new TextDecoder().decode(read.bytes)).toBe(SAMPLE_ATTACHMENT_TEXT);
   });
 
   test.each([
@@ -185,14 +213,22 @@ describe("structured invoice files", () => {
       CADES_FILE_FORMAT.mimeType,
       name,
     );
-    const preview = (await readCadesPreview(file, name)).unwrap();
+    const preview = (
+      await readCadesPreview(file, {
+        zipNameCodePage: "ibm437",
+        fileName: name,
+      })
+    ).unwrap();
     expect(preview.invoice?.invoices[0]?.number).toBe("2026/1");
     const unsigned = (
       await readEInvoicePreview(
         storedFile(bytes, XML_FILE_FORMAT.mimeType, "IT00000000001_00003.xml"),
       )
     ).unwrap();
-    expect(preview.invoice).toEqual(unsigned);
+    if (preview.invoice === null) {
+      throw new Error("The signed invoice did not preview");
+    }
+    expect(unsigned).toEqual({ type: "invoice", invoice: preview.invoice });
   });
 
   test("a signed invoice too large to list in full still previews with its signers", async () => {
@@ -206,7 +242,12 @@ describe("structured invoice files", () => {
       CADES_FILE_FORMAT.mimeType,
       name,
     );
-    const preview = (await readCadesPreview(file, name)).unwrap();
+    const preview = (
+      await readCadesPreview(file, {
+        zipNameCodePage: "ibm437",
+        fileName: name,
+      })
+    ).unwrap();
     expect(preview.layers).toHaveLength(1);
     expect(preview.invoice?.invoices[0]?.lineCount).toBe(1000);
     expect(preview.invoice?.invoices[0]?.lines.length).toBeLessThan(1000);
@@ -219,7 +260,12 @@ describe("structured invoice files", () => {
       CADES_FILE_FORMAT.mimeType,
       name,
     );
-    const preview = (await readCadesPreview(file, name)).unwrap();
+    const preview = (
+      await readCadesPreview(file, {
+        zipNameCodePage: "ibm437",
+        fileName: name,
+      })
+    ).unwrap();
     expect(preview).toMatchObject({ invoice: null, text: "Signed plain note" });
   });
 });

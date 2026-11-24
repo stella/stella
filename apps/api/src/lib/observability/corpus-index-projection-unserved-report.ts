@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import type { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import {
   CORPUS_FAMILIES,
   type CorpusFamily,

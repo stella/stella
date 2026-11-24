@@ -96,7 +96,7 @@ describe("measured scaling scenario membership", () => {
       scenarioMembershipViolations({
         base: readApi(apiSource),
         current,
-        handlerExists: (file) => file === owner.file,
+        handlerExists: ({ file }) => file === owner.file,
       }),
     ).toEqual([removed]);
     // Deleted with its handler module: nothing is left to measure.
@@ -104,7 +104,16 @@ describe("measured scaling scenario membership", () => {
       scenarioMembershipViolations({
         base: readApi(apiSource),
         current,
-        handlerExists: (file) => file !== owner.file,
+        handlerExists: ({ file }) => file !== owner.file,
+      }),
+    ).toEqual([]);
+    // Its export deleted from a module that stays: nothing is left either.
+    expect(
+      scenarioMembershipViolations({
+        base: readApi(apiSource),
+        current,
+        handlerExists: ({ file, exportName }) =>
+          file !== owner.file || exportName !== owner.exportName,
       }),
     ).toEqual([]);
   });
@@ -125,7 +134,7 @@ describe("measured scaling scenario membership", () => {
     const violations = scenarioMembershipViolations({
       base,
       current: readApi(moved),
-      handlerExists: (file) => file !== owner.file,
+      handlerExists: ({ file }) => file !== owner.file,
     });
     expect(violations).toContain(
       `previously measured scenario removed: ${JSON.stringify(["api", "filtered rows", owner.file, owner.exportName])}`,

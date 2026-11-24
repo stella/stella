@@ -1,6 +1,6 @@
 import * as v from "valibot";
 
-import type { ChatUIMessage } from "@/components/chat/chat-ui-tools";
+import type { ChatUIMessage } from "@/components/chat/chat-ui-tools-types";
 import { mapMarkdownSelection } from "@/components/chat/markdown-selection.logic";
 
 import type { AnswerEditAnchor } from "./answer-edit-api";

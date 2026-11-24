@@ -3,11 +3,11 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { DecisionIdentifierType } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionIdentifiers,
   caseLawHeldDecisionAttachments,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sameStoredCaseNumberKeySql } from "@/api/lib/case-law/case-number-match-key";

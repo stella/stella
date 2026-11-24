@@ -1,8 +1,8 @@
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { USAGE_ENTITLEMENT_STATUSES, usageEntitlements } from "@/api/db/schema";
 import type { UsageEntitlementStatus } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const ORGANIZATION_DELETION_REFUSAL_CODE = {

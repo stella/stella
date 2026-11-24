@@ -31,7 +31,6 @@
       "sent": "Gesendet",
       "statedInFile": "Databox-Nachricht (laut Datei)",
       "toHands": "Zu Händen von {name}",
-      "unlinkedFiles": "Laden Sie die ursprüngliche ZFO-Datei herunter, um Anhänge ohne Link zu öffnen.",
       "unreadable": "Die Datei konnte weder als Databox-Nachricht noch als Zustellnachweis gelesen werden.",
       "uploaded": "Hochgeladene Databox-Nachricht"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Belastungsanzeige",
       "other": "Sonstiger Beleg"
     },
-    "downloadAttachment": "{fileName} herunterladen",
     "exemptionReason": "Befreiungsgrund",
     "formatVersion": "{format}, Version {version}",
     "grossTotal": "Gesamtbetrag inkl. USt.",
@@ -101,7 +99,6 @@
     "linesShown": "{shown, number} von {count, plural, one {# Position} other {# Positionen}} angezeigt",
     "netAmount": "Nettobetrag",
     "netTotal": "Gesamtbetrag ohne USt.",
-    "notRecognized": "Diese XML-Datei ist keine erkannte strukturierte Rechnung.",
     "otherIdentifier": "Andere Kennung",
     "payableAmount": "Zahlbetrag",
     "paymentAmount": "Zahlungsbetrag",
@@ -111,6 +108,7 @@
     "paymentReference": "Verwendungszweck",
     "prepaidAmount": "Bereits gezahlt",
     "quantity": "Menge und Einheit",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Lieferant",
@@ -120,9 +118,18 @@
     "taxableAmount": "Bemessungsgrundlage",
     "totals": "Summen",
     "unitPrice": "Einzelpreis",
+    "units": {
+      "day": "{count, plural, one {{quantity} Tag} other {{quantity} Tage}}",
+      "hour": "{count, plural, one {{quantity} Stunde} other {{quantity} Stunden}}",
+      "month": "{count, plural, one {{quantity} Monat} other {{quantity} Monate}}",
+      "unit": "{count, plural, one {{quantity} Stk.} other {{quantity} Stk.}}",
+      "week": "{count, plural, one {{quantity} Woche} other {{quantity} Wochen}}",
+      "year": "{count, plural, one {{quantity} Jahr} other {{quantity} Jahre}}"
+    },
     "unreadable": "Die Rechnung konnte nicht gelesen werden.",
     "vat": "USt.",
-    "vatBreakdown": "USt.-Aufschlüsselung"
+    "vatBreakdown": "USt.-Aufschlüsselung",
+    "xmlUnreadable": "Diese XML-Datei konnte nicht gelesen werden."
   },
   "emailViewer": {
     "attachments": "Anhänge",
@@ -364,12 +371,21 @@
     "title": "SharePoint und OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Ihr Inhalt entspricht nicht dem in der Signatur angegebenen Hashwert.",
+    "bindingMatches": "Ihr Inhalt entspricht dem in der Signatur angegebenen Hashwert.",
+    "bindingNotCompared": "Über den Dateinamen gefunden. Der Inhalt wurde nicht verglichen.",
     "deliveryReceipt": "Zustellnachweis für eine elektronische Akte",
+    "digestNote": "Ein übereinstimmender Hashwert zeigt, dass dies die signierten Daten sind. Die Signatur ist damit nicht geprüft.",
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
     "noSigners": "Es wurden keine Angaben zu Unterzeichnern gefunden.",
     "pdfUnavailable": "Die PDF-Vorschau ist nicht verfügbar.",
+    "signedAt": "Angegebener Signaturzeitpunkt: {time}",
+    "signedDocument": "Signiertes Dokument",
+    "signedFileMissing": "Die signierte Datei liegt nicht in dieser Akte.",
     "signers": "Unterzeichner",
+    "signs": "Signierte Datei",
+    "statedFilesMissing": "In der Signatur genannt, aber nicht in dieser Akte:",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
     "unverified": "Die Signaturen wurden nicht geprüft."
@@ -553,6 +569,10 @@
     "deleteWorkspaceConfirmDescription": "Möchten Sie diese Akte wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deletedItem": "Gelöscht: {name}",
     "deletingWorkspace": "Akte wird gelöscht",
+    "documentNaming": {
+      "description": "Neue Dokumente erhalten das Namensmuster der Organisation: {pattern}",
+      "label": "Neue Uploads umbenennen"
+    },
     "documentSwitcher": {
       "download": "Diese Datei herunterladen",
       "renditionsFailed": "Laden Sie das Dokument neu und versuchen Sie den Download erneut.",
@@ -730,6 +750,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# Datei umbenannt, um Konflikte zu vermeiden} other {# Dateien umbenannt, um Konflikte zu vermeiden}}",
       "retryFailed": "{count, plural, one {# Datei} other {# Dateien}} erneut versuchen",
       "scrubFailed": "Die Metadaten dieser Datei konnten nicht entfernt werden, daher wurde nichts heruntergeladen",
+      "unscannedContent": {
+        "encrypted": "Einige enthaltene Dateien sind passwortgeschützt und wurden daher nicht auf Bedrohungen geprüft.",
+        "unsupportedCompression": "Einige enthaltene Dateien sind in einem Format komprimiert, das stella nicht lesen kann, und wurden daher nicht auf Bedrohungen geprüft."
+      },
       "uploadBlockedByWorkflow": "Warten Sie, bis der Workflow abgeschlossen ist, bevor Sie Dateien hochladen.",
       "uploadedPartially": "{failed, plural, one {# Datei} other {# Dateien}} von {total, number} fehlgeschlagen",
       "uploadedSuccessfully": "Dateien erfolgreich hochgeladen",

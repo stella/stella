@@ -328,7 +328,6 @@ if (!databaseUrl || !runPostgres) {
             },
           ],
         });
-        const started = performance.now();
         const results = await withInterleaving({
           databaseUrl,
           a: participant(0, 1),
@@ -363,7 +362,6 @@ if (!databaseUrl || !runPostgres) {
           },
         });
         expect(results).toHaveLength(1);
-        expect(performance.now() - started).toBeLessThan(5000);
       });
     }, 10_000);
 

@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import { PLAYBOOK_DOCUMENT_TYPE_CONSTRAINT } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

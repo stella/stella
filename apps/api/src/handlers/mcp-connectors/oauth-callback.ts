@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   MCP_RESPONSE_DISPOSITION,
   mcpOAuthState,

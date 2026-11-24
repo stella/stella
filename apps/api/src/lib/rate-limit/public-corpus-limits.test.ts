@@ -1,37 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { envBaseServerSchema } from "@/api/env-base-schema";
+import { envPublicCorpusServerSchema } from "@/api/env-public-corpus-schema";
 import {
   API_RATE_LIMITS,
   getPublicCorpusLimits,
   type PublicCorpusLimitsConfiguration,
 } from "@/api/lib/limits";
 
-const configurationSchema = v.object({
-  PUBLIC_LAW_DATABASE_URL: envBaseServerSchema.PUBLIC_LAW_DATABASE_URL,
-  DATABASE_ROOT_POOL_MAX: envBaseServerSchema.DATABASE_ROOT_POOL_MAX,
-  PUBLIC_CORPUS_RESERVED_CONNECTIONS:
-    envBaseServerSchema.PUBLIC_CORPUS_RESERVED_CONNECTIONS,
-  PUBLIC_LAW_DATABASE_POOL_MAX:
-    envBaseServerSchema.PUBLIC_LAW_DATABASE_POOL_MAX,
-  PUBLIC_CORPUS_ASSUMED_REPLICAS:
-    envBaseServerSchema.PUBLIC_CORPUS_ASSUMED_REPLICAS,
-  PUBLIC_CORPUS_SEARCH_P95_SECONDS:
-    envBaseServerSchema.PUBLIC_CORPUS_SEARCH_P95_SECONDS,
-  PUBLIC_CORPUS_AGGREGATE_P95_SECONDS:
-    envBaseServerSchema.PUBLIC_CORPUS_AGGREGATE_P95_SECONDS,
-  PUBLIC_CORPUS_SITEMAP_P95_SECONDS:
-    envBaseServerSchema.PUBLIC_CORPUS_SITEMAP_P95_SECONDS,
-  PUBLIC_CORPUS_SEARCH_ADDRESS_MAX:
-    envBaseServerSchema.PUBLIC_CORPUS_SEARCH_ADDRESS_MAX,
-  PUBLIC_CORPUS_SEARCH_GLOBAL_MAX:
-    envBaseServerSchema.PUBLIC_CORPUS_SEARCH_GLOBAL_MAX,
-  PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX:
-    envBaseServerSchema.PUBLIC_CORPUS_AGGREGATE_GLOBAL_MAX,
-  PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX:
-    envBaseServerSchema.PUBLIC_CORPUS_SITEMAP_GLOBAL_MAX,
-});
+const configurationSchema = v.object(envPublicCorpusServerSchema);
 
 const defaults = () =>
   ({

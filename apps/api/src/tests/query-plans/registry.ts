@@ -10,7 +10,7 @@ import {
 } from "@stll/api-contract/search";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import { CITATION_DIGEST_TOP_CITING } from "@/api/handlers/case-law/decisions/citation-digest";
 import {
   decisionCitationPageQuery,

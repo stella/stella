@@ -1,8 +1,8 @@
 import { inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisions, publishedCaseLawDecisions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   type CaseLawRankingSignals,

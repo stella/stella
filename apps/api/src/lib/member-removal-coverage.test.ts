@@ -127,6 +127,8 @@ const JSON_COLUMNS_WITHOUT_MEMBER_REFERENCES = [
   "contacts.bank_accounts",
   "contacts.billing_address",
   "correspondence.data_box_envelope",
+  // A PEC provider's certification data: addresses as stated in the file.
+  "correspondence.certified_email_envelope",
   "correspondence.original_signature",
   "correspondence.sender",
   "correspondence.recipients_to",
@@ -278,6 +280,8 @@ const RETAINED_MEMBER_COLUMNS = {
     "User-owned account audit history; matter and organization removal do not erase the user account or grant membership.",
   "sso_provider.user_id":
     "Who registered the organization's SSO provider; the provider belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
+  "organization_sso_domain.created_by":
+    "Who added the organization's SSO domain verification record; the domain belongs to the organization, the attribution grants no membership or authority, and account deletion clears it.",
   "account_exports.attempt_object_keys":
     "Storage keys of the account's own archives, named by account id; reclamation and account deletion own them, not membership removal.",
   "account_exports.user_id":
@@ -342,6 +346,8 @@ const RETAINED_MEMBER_COLUMNS = {
   "bilingual_translation_runs.requested_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "case_law_matter_links.linked_by":
+    "Retained attribution or request history; this column grants no matter membership.",
+  "dictation_vocabulary_terms.created_by":
     "Retained attribution or request history; this column grants no matter membership.",
   "legislation_matter_links.linked_by":
     "Retained attribution or request history; this column grants no matter membership.",
@@ -619,6 +625,8 @@ const MATTER_REMOVAL_RETAINED_COLUMNS = {
     "Organization-scoped history ordering state outlives a matter removal.",
   "search_history_tombstones.user_id":
     "Organization-scoped deletion identities outlive a matter removal.",
+  "dictation_learned_fixes.user_id":
+    "The person's own organization-scoped dictation spellings; they stay an organization member.",
   "member.user_id": "Organization membership outlives a matter removal.",
   "contacts.originating_attorney_id":
     "Organization-level attorney; the person stays an organization member.",

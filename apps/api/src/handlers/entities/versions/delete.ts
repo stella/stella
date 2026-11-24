@@ -3,7 +3,7 @@ import { and, asc, desc, eq, isNull, ne, or } from "drizzle-orm";
 
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   desktopEditSessions,
   documentProcessingRuns,

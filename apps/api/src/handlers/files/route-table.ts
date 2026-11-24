@@ -1,17 +1,12 @@
 import asicPreviewEndpoint from "@/api/handlers/files/asic";
-import {
-  cadesContentEndpoint,
-  cadesPreviewEndpoint,
-} from "@/api/handlers/files/cades";
-import certifiedEmailEndpoint from "@/api/handlers/files/certified-email";
+import { cadesPreviewEndpoint } from "@/api/handlers/files/cades";
 import dataBoxEndpoint from "@/api/handlers/files/data-box";
-import {
-  eInvoiceAttachmentEndpoint,
-  eInvoicePreviewEndpoint,
-} from "@/api/handlers/files/e-invoice";
-import emailAttachmentEndpoint from "@/api/handlers/files/email-attachment";
-import saveEmailAttachmentEndpoint from "@/api/handlers/files/email-attachment/create";
+import { eInvoicePreviewEndpoint } from "@/api/handlers/files/e-invoice";
+import emailReadingEndpoint from "@/api/handlers/files/email-reading";
+import { mailboxPreviewEndpoint } from "@/api/handlers/files/mailbox";
 import officeCitationEndpoint from "@/api/handlers/files/office-citation";
+import { readFilePartListEndpoint } from "@/api/handlers/files/part-list";
+import saveFilePartEndpoint from "@/api/handlers/files/part-save";
 import { readFileContentEndpoint } from "@/api/handlers/files/read-content";
 import {
   markedDownloadEndpoint,
@@ -24,12 +19,11 @@ import {
   stampedDownloadEndpoint,
   updateDocumentPropertiesEndpoint,
 } from "@/api/handlers/files/routes";
-import {
-  signedDossierContentEndpoint,
-  signedDossierPreviewEndpoint,
-} from "@/api/handlers/files/signed-dossier";
+import { signaturePreviewEndpoint } from "@/api/handlers/files/signature";
+import { signedDossierPreviewEndpoint } from "@/api/handlers/files/signed-dossier";
 import structuredDocumentPreviewEndpoint from "@/api/handlers/files/structured-document";
 import readFileThumbnailEndpoint from "@/api/handlers/files/thumbnail";
+import { zipArchivePreviewEndpoint } from "@/api/handlers/files/zip-archive";
 import { routes } from "@/api/http/route";
 
 export const filesRoute = routes(
@@ -37,16 +31,14 @@ export const filesRoute = routes(
     "/url/:fieldId": { GET: readFileEndpoint },
     "/structured-document/:fieldId": { GET: structuredDocumentPreviewEndpoint },
     "/e-invoice/:fieldId": { GET: eInvoicePreviewEndpoint },
-    "/e-invoice/:fieldId/attachments/:index": {
-      GET: eInvoiceAttachmentEndpoint,
-    },
     "/asic/:fieldId": { GET: asicPreviewEndpoint },
+    "/zip/:fieldId": { GET: zipArchivePreviewEndpoint },
+    "/mbox/:fieldId": { GET: mailboxPreviewEndpoint },
     "/cades/:fieldId": { GET: cadesPreviewEndpoint },
-    "/cades/:fieldId/content": { GET: cadesContentEndpoint },
     "/signed-dossier/:fieldId": { GET: signedDossierPreviewEndpoint },
-    "/signed-dossier/:fieldId/content": { GET: signedDossierContentEndpoint },
+    "/signature/:fieldId": { GET: signaturePreviewEndpoint },
     "/data-box/:fieldId": { GET: dataBoxEndpoint },
-    "/certified-email/:fieldId": { GET: certifiedEmailEndpoint },
+    "/email-reading/:fieldId": { GET: emailReadingEndpoint },
     "/email-html/:fieldId": { GET: readEmailHtmlPreviewEndpoint },
     "/office-citation/:entityId/:fieldId/:blockId": {
       GET: officeCitationEndpoint,
@@ -61,12 +53,8 @@ export const filesRoute = routes(
     "/scrubbed/:fieldId": { GET: scrubbedDownloadEndpoint },
     "/marked/:fieldId": { GET: markedDownloadEndpoint },
     "/thumbnail/:fieldId": { GET: readFileThumbnailEndpoint },
-    "/email-attachment/:fieldId/:attachmentId": {
-      GET: emailAttachmentEndpoint,
-    },
-    "/email-attachment/:fieldId/:attachmentId/save": {
-      POST: saveEmailAttachmentEndpoint,
-    },
+    "/part/:fieldId/save": { POST: saveFilePartEndpoint },
+    "/parts/:fieldId": { GET: readFilePartListEndpoint },
   },
   { prefix: "/files/:workspaceId" },
 );

@@ -22,8 +22,8 @@
 //   Composite steps cannot declare a timeout, so the calling step owns it.
 //
 // Actions such as actions/cache, actions/setup-*, oven-sh/setup-bun and
-// docker/login-action are cache-first or retry internally and are not
-// commands this guard parses. scripts/ci-network-steps-allowlist.json lists
+// ./.github/actions/docker-login are cache-first or retry internally and are
+// not commands this guard parses. scripts/ci-network-steps-allowlist.json lists
 // the steps that cannot comply yet, one reason each. It only shrinks: an
 // entry that no longer matches a violation fails, and `--base <ref>` rejects
 // entries the base revision does not have.

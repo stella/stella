@@ -30,7 +30,7 @@ import { isoToRegconfig } from "@/api/lib/search/detect-language";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
 import {
   buildSearchPreviewPassages,
-  buildSearchPreviewPassageValueRows,
+  buildSearchPreviewPassageSelect,
 } from "@/api/lib/search/preview-passages";
 import { lockCurrentSearchProjectionRepair } from "@/api/lib/search/projection-repair-fence";
 import type { SearchProjectionRepairFence } from "@/api/lib/search/projection-repair-fence";
@@ -502,7 +502,7 @@ export const upsertSearchDocument = async (
       INSERT INTO search_document_preview_passages (
         entity_id, organization_id, workspace_id,
         generation, ordinal, content, tsv
-      ) VALUES ${buildSearchPreviewPassageValueRows({
+      ) ${buildSearchPreviewPassageSelect({
         generation: previewGeneration,
         leadingValues: [
           sql`${doc.entityId}`,

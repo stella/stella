@@ -2,8 +2,8 @@ import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { organization, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { anonymizationBlacklistEntries, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   normalizeAnonymizationBlacklistEntry,
   replaceOrganizationAnonymizationBlacklist,

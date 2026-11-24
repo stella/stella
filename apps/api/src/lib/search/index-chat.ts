@@ -202,23 +202,31 @@ const upsertChatMessageSearchDocuments = async ({
     return;
   }
 
-  const values = messages.map((message) => {
-    const searchableText = extractMessageSearchText(message.content);
-    return sql`(
-      ${message.id},
-      ${threadId},
-      ${message.role},
-      ${searchableText},
-      ${chatSearchVectorSql(sql`${searchableText}`)},
-      ${message.createdAtToken}::timestamptz,
-      ${threadUpdatedAtToken}::timestamptz
-    )`;
-  });
+  const payload = messages.map((message) => ({
+    message_id: message.id,
+    role: message.role,
+    searchable_text: extractMessageSearchText(message.content),
+    created_at: message.createdAtToken,
+  }));
 
   await database.execute(sql`
     INSERT INTO chat_message_search_documents (
       message_id, thread_id, role, searchable_text, tsv, created_at, updated_at
-    ) VALUES ${sql.join(values, sql`, `)}
+    )
+    SELECT
+      v.message_id,
+      ${threadId}::uuid,
+      v.role,
+      v.searchable_text,
+      ${chatSearchVectorSql(sql`v.searchable_text`)},
+      v.created_at,
+      ${threadUpdatedAtToken}::timestamptz
+    FROM jsonb_to_recordset(${JSON.stringify(payload)}::text::jsonb) AS v(
+      message_id uuid,
+      role text,
+      searchable_text text,
+      created_at timestamptz
+    )
     ON CONFLICT (message_id) DO UPDATE SET
       thread_id = EXCLUDED.thread_id,
       role = EXCLUDED.role,

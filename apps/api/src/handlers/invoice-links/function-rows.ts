@@ -4,7 +4,6 @@ import * as v from "valibot";
 
 import { apiDateSchema } from "@stll/api-contract/api-date";
 
-import type { Transaction } from "@/api/db/root";
 import {
   expenses,
   invoiceLines,
@@ -13,6 +12,7 @@ import {
   timeEntries,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type {
   INVOICE_DOCUMENT_COLUMNS,
   INVOICE_SELLER_COLUMNS,

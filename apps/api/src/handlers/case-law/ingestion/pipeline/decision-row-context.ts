@@ -2,11 +2,11 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { isCaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
 
-import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { reopenCitationsForDecisionIdentifiers } from "@/api/handlers/case-law/citation-resolution";
 import type { ReopenedCitations } from "@/api/handlers/case-law/citation-resolution";

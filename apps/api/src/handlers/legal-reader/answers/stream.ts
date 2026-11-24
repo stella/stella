@@ -13,8 +13,8 @@ import {
 } from "@stll/api-contract/reader-answers";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import { legalReaderAnswerMessages, legalReaderAnswers } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { runReaderAnswerModel } from "@/api/handlers/legal-reader/answers/model";
 import type { ReaderAnswerModelRunner } from "@/api/handlers/legal-reader/answers/model";
 import { answerOwnerPredicate } from "@/api/handlers/legal-reader/answers/operation";

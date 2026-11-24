@@ -4,14 +4,14 @@ import { and, asc, eq, inArray, lte, or, sql } from "drizzle-orm";
 import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS,
   caseLawCorpusPackRefs,
   caseLawCorpusUploadIntents,
   caseLawDecisions,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";

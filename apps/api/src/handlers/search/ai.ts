@@ -11,7 +11,7 @@ import {
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 import { classifyFailure } from "@stll/errors";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import {
   chatMessages,
   chatThreads,

@@ -2,9 +2,9 @@ import { Result, TaggedError } from "better-result";
 import { and, eq, notInArray, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { Transaction } from "@/api/db/root";
 import { hostedUsageWebhookEvents, usageEntitlements } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { dispatchEvent } from "@/api/handlers/hosted-usage-webhook/dispatch";
 import { renderIgnoredEventReason } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";

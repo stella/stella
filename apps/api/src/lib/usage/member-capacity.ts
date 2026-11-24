@@ -20,13 +20,13 @@ import { panic, Result } from "better-result";
 import { and, count, eq, gt, sql } from "drizzle-orm";
 
 import { invitation, member, organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   ORGANIZATION_ACCESS_STATE,
   organizationAccessStates,
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { USAGE_POLICY_PRICE_BASES } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

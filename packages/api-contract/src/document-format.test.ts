@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
-import { documentFormat } from "./document-format";
+import {
+  documentFormat,
+  RECOGNISED_DOCUMENT_FORMATS,
+  signatureFormatCandidate,
+} from "./document-format";
 import type { DocumentFormatKind } from "./document-format";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
 import {
@@ -23,6 +27,56 @@ describe("documentFormat", () => {
     "a generic XML type %s yields to the format %s names",
     (mimeType, fileName, kind) => {
       expect(documentFormat(mimeType, fileName).kind).toBe(kind);
+    },
+  );
+
+  test.each([
+    // Every ZIP-based format its name names keeps its own reader.
+    ["application/zip", "smlouva-o-dilo.asice", "asicE"],
+    ["application/zip", "rozhodnuti.asics", "asicS"],
+    ["application/x-zip-compressed", "leping.bdoc", "asicE"],
+    ["application/zip", "FV-2026-0042.isdocx", "isdocx"],
+    ["application/zip", "podanie.zep", "zep"],
+    ["application/zip", "dava.udf", "uyap"],
+    ["application/zip", "fapiao.ofd", "ofd"],
+    ["application/zip", "smlouva.docx", "word"],
+    ["application/x-zip-compressed", "vykaz.xlsx", "excel"],
+    ["application/zip", "kniha.epub", "epub"],
+    ["application/zip", "podklady.pages", "pages"],
+    // A plain archive, or one whose name names nothing, is an archive.
+    ["application/zip", "spis-23-C-118-2026.zip", "zip"],
+    ["application/x-zip-compressed", "spis", "zip"],
+    [null, "prilohy.ZIP", "zip"],
+  ] as const)("a ZIP type %s named %s is %s", (mimeType, fileName, kind) => {
+    expect(documentFormat(mimeType, fileName).kind).toBe(kind);
+  });
+
+  test.each([
+    ["application/mbox", "korespondence.mbox"],
+    ["application/mbox", null],
+    ["application/octet-stream", "Doručená pošta.mbox"],
+    ["application/octet-stream", "spis.MBX"],
+  ] as const)("a mailbox stored as %s named %s is an mbox", (type, name) => {
+    expect(documentFormat(type, name)).toEqual({
+      kind: "mbox",
+      mark: "mbox",
+      label: "MBOX",
+    });
+  });
+
+  test.each([
+    ["application/vnd.ms-outlook-pst", "korespondence.pst"],
+    ["application/vnd.ms-outlook-pst", null],
+    ["application/octet-stream", "Archiv 2023.PST"],
+    ["application/octet-stream", "mailbox.ost"],
+  ] as const)(
+    "an Outlook mailbox stored as %s named %s is a PST",
+    (type, name) => {
+      expect(documentFormat(type, name)).toEqual({
+        kind: "pst",
+        mark: "pst",
+        label: "PST",
+      });
     },
   );
 
@@ -60,10 +114,13 @@ describe("documentFormat", () => {
       ["message.eml", "email"],
       ["datová zpráva.ZFO", "dataBox"],
       ["contratto.pdf.P7M.P7M", "cades"],
-      ["firma.p7s", "file"],
+      ["firma.p7s", "cadesDetached"],
+      ["podanie.pdf.XADES", "xades"],
+      ["release.sig", "file"],
       ["readme.md", "markdown"],
       ["notes.txt", "text"],
-      ["archive.zip", "file"],
+      ["archive.zip", "zip"],
+      ["archive.7z", "file"],
     ] as const satisfies readonly (readonly [string, DocumentFormatKind])[];
 
     for (const [fileName, kind] of files) {
@@ -71,15 +128,33 @@ describe("documentFormat", () => {
     }
   });
 
+  test("names HEIC and HEIF photos and their sequences", () => {
+    for (const [mimeType, fileName, label] of [
+      ["image/heic", "IMG_0042.HEIC", "HEIC"],
+      ["image/heic-sequence", "IMG_0043.heics", "HEIC"],
+      ["image/heif", "photo.heif", "HEIF"],
+      ["image/heif-sequence", "burst.heifs", "HEIF"],
+      // Stored without a usable type, the extension names it.
+      ["application/octet-stream", "IMG_0044.heic", "HEIC"],
+      [null, "DSC0001.HIF", "HEIF"],
+    ] as const) {
+      expect(documentFormat(mimeType, fileName)).toEqual({
+        kind: "image",
+        mark: "image",
+        label,
+      });
+    }
+  });
+
   test("names an unlisted image or text type by its family", () => {
-    expect(documentFormat("image/heic", "IMG_0042.HEIC")).toEqual({
+    expect(documentFormat("image/avif", "picture.avif")).toEqual({
       kind: "image",
       mark: "image",
-      label: "HEIC",
+      label: "AVIF",
     });
     expect(kindOf("image/tiff")).toBe("image");
     expect(kindOf("text/html")).toBe("text");
-    expect(kindOf("application/zip", "bundle")).toBe("file");
+    expect(kindOf("application/x-7z-compressed", "bundle")).toBe("file");
   });
 
   // text/csv also starts with text/, so it must win over the text fallback.
@@ -123,44 +198,60 @@ describe("documentFormat", () => {
     expect(labelOf("__proto__")).toBeUndefined();
   });
 
-  test("tags converted formats by any declared type or extension, under the generic mark", () => {
+  test("tags and marks converted formats by any declared type or extension", () => {
     const formatOf = (mimeType: string | null, fileName?: string) =>
       documentFormat(mimeType, fileName);
     expect(formatOf("application/x-iwork-pages-sffpages")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "pages",
+      mark: "pages",
       label: "PAGES",
     });
     expect(formatOf("application/vnd.apple.numbers")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "numbers",
+      mark: "numbers",
       label: "NUMBERS",
     });
     expect(formatOf("application/vnd.wordperfect")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "wordPerfect",
+      mark: "wordPerfect",
       label: "WPD",
     });
     expect(formatOf("application/octet-stream", "smlouva.wp5")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "wordPerfect",
+      mark: "wordPerfect",
       label: "WPD",
     });
     expect(formatOf("application/octet-stream", "vestnik.mhtml")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "webArchive",
+      mark: "webArchive",
       label: "MHT",
     });
     expect(formatOf("application/epub+zip")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "epub",
+      mark: "epub",
       label: "EPUB",
     });
     expect(formatOf("application/vnd.ms-works", "dopis")).toEqual({
-      kind: "file",
-      mark: "file",
+      kind: "works",
+      mark: "works",
       label: "WPS",
     });
+    // A name naming another converted format does not override the type.
+    expect(formatOf("application/vnd.wordperfect", "dopis.pages").label).toBe(
+      "WPD",
+    );
+  });
+
+  test("gives no recognised format the unknown-file kind", () => {
+    for (const format of RECOGNISED_DOCUMENT_FORMATS) {
+      expect(format.kind).not.toBe("file");
+      for (const mimeType of format.mimeTypes) {
+        expect(documentFormat(mimeType).kind).not.toBe("file");
+      }
+      for (const extension of format.extensions) {
+        expect(documentFormat(null, `a${extension}`).kind).not.toBe("file");
+      }
+    }
   });
 
   test("keeps a profile's tag and mark under its format's media type", () => {
@@ -197,5 +288,30 @@ describe("documentFormat", () => {
         expect(profile.mark).not.toBe(format.kind);
       }
     }
+  });
+});
+
+describe("signatureFormatCandidate", () => {
+  test("names a signature reader only for names the bytes must settle", () => {
+    const candidateOf = (mimeType: string | null, fileName: string) =>
+      signatureFormatCandidate(mimeType, fileName)?.kind;
+    expect(candidateOf(null, "contract.pdf.sig")).toBe("cadesDetached");
+    expect(candidateOf("application/pgp-signature", "release.SIG")).toBe(
+      "cadesDetached",
+    );
+    expect(candidateOf("text/xml", "podanie.xml")).toBe("xades");
+    expect(candidateOf("application/xml", "export")).toBe("xades");
+    expect(candidateOf("application/octet-stream", "podanie.XML")).toBe(
+      "xades",
+    );
+  });
+
+  test("leaves files recognised by name to their own reader", () => {
+    expect(signatureFormatCandidate(null, "contract.pdf.p7s")).toBeUndefined();
+    expect(signatureFormatCandidate(null, "podanie.xades")).toBeUndefined();
+    expect(
+      signatureFormatCandidate("application/pdf", "x.xml"),
+    ).toBeUndefined();
+    expect(signatureFormatCandidate(null, "notes.txt")).toBeUndefined();
   });
 });

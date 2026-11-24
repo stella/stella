@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Pièces jointes",
     "certifiedAt": "Certifié le",
     "deliveredTo": "Remis à",
     "error": "Erreur signalée",
@@ -468,6 +467,10 @@
     "retry": "Réessayer",
     "title": "Document",
     "unrendered": "Ce document ne peut pas être affiché ici, mais l’aperçu du système pourra peut-être l’ouvrir.",
+    "unscannedContent": {
+      "encrypted": "Certains fichiers qu’il contient sont protégés par un mot de passe : ils n’ont donc pas été analysés pour détecter des menaces.",
+      "unsupportedCompression": "Certains fichiers qu’il contient sont compressés dans un format que stella ne sait pas lire : ils n’ont donc pas été analysés pour détecter des menaces."
+    },
     "zoomFit": "Ajuster à la largeur",
     "zoomIn": "Zoom avant",
     "zoomOut": "Zoom arrière"
@@ -475,7 +478,6 @@
   "eInvoice": {
     "accountNumber": "Numéro de compte bancaire",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Fichiers joints",
     "bankCode": "Code banque",
     "batchPosition": "Document {position, number} sur {count, number}",
     "bic": "Code BIC",
@@ -494,7 +496,6 @@
     "linesShown": "Affichage de {shown, number} sur {count, plural, one {# ligne} many {# lignes} other {# lignes}}",
     "netAmount": "Montant HT",
     "netTotal": "Total HT",
-    "notRecognized": "Ce fichier XML n’est pas une facture structurée reconnue.",
     "notes": "Remarques sur la facture",
     "otherIdentifier": "Autre identifiant",
     "payableAmount": "Montant à payer",
@@ -505,6 +506,7 @@
     "paymentReference": "Référence de paiement",
     "prepaidAmount": "Acompte versé",
     "quantity": "Quantité et unité",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "registrationNumber": "Numéro d’enregistrement",
@@ -516,16 +518,53 @@
     "taxableAmount": "Base d’imposition",
     "totals": "Totaux",
     "unitPrice": "Prix unitaire",
+    "units": {
+      "day": "{count, plural, one {{quantity} jour} many {{quantity} jours} other {{quantity} jours}}",
+      "hour": "{count, plural, one {{quantity} heure} many {{quantity} heures} other {{quantity} heures}}",
+      "month": "{count, plural, one {{quantity} mois} many {{quantity} mois} other {{quantity} mois}}",
+      "unit": "{count, plural, one {{quantity} unité} many {{quantity} unités} other {{quantity} unités}}",
+      "week": "{count, plural, one {{quantity} semaine} many {{quantity} semaines} other {{quantity} semaines}}",
+      "year": "{count, plural, one {{quantity} an} many {{quantity} ans} other {{quantity} ans}}"
+    },
     "unreadable": "Impossible de lire la facture.",
     "vat": "TVA",
     "vatBreakdown": "Ventilation de la TVA",
-    "vatId": "Numéro de TVA"
+    "vatId": "Numéro de TVA",
+    "xmlUnreadable": "Impossible de lire ce fichier XML."
+  },
+  "email": {
+    "cc": "Copie",
+    "date": "Date d’envoi",
+    "from": "Expéditeur",
+    "noSubject": "(Sans objet)",
+    "subject": "Objet",
+    "to": "Destinataires"
   },
   "entity": {
     "currentVersion": "Version actuelle",
     "loadFailed": "Cet élément n’a pas pu être chargé.",
     "reference": "Référence",
     "type": "Type"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Impossible de lire l’archive.",
+    "attachments": "Pièces jointes",
+    "files": "Fichiers",
+    "insideFailed": "Impossible de charger les fichiers qu’il contient. Touchez pour réessayer.",
+    "noFilesInside": "Aucun fichier à l’intérieur.",
+    "noMatches": "Aucun fichier ne correspond à « {query} ».",
+    "open": "Ouvrir {fileName} ({details})",
+    "saveFailed": "Impossible d’enregistrer le fichier dans le dossier. Réessayez.",
+    "saveNamed": "Enregistrer {fileName} dans un dossier",
+    "search": "Rechercher un fichier par nom ou dossier",
+    "unavailable": {
+      "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
+      "link": "Lien vers un autre fichier, non ouvert",
+      "tooLarge": "Trop volumineux pour être ouvert",
+      "unreadable": "Endommagé, impossible à ouvrir",
+      "unsupported": "Compressé d’une manière impossible à ouvrir"
+    },
+    "unnamed": "Fichier sans nom"
   },
   "header": {
     "search": "Rechercher"
@@ -555,6 +594,16 @@
     "refused": "Votre serveur a refusé la requête (erreur {status}).",
     "server": "Votre serveur a rencontré un problème (erreur {status}). Réessayez dans un instant.",
     "session": "Votre session a expiré. Reconnectez-vous."
+  },
+  "mailbox": {
+    "back": "Retour aux messages",
+    "messages": "Courriels",
+    "noMatches": "Aucun courriel ne correspond à « {query} ».",
+    "noMessages": "Cette boîte aux lettres ne contient aucun message.",
+    "openFailed": "Impossible d’ouvrir ce message. Touchez pour réessayer.",
+    "search": "Rechercher dans les courriels",
+    "truncated": "Seuls les {count, number} premiers messages sont affichés.",
+    "unreadable": "Impossible de lire cette boîte aux lettres."
   },
   "matter": {
     "add": "Ajouter",
@@ -782,7 +831,7 @@
     "dictationLearnedDelete": "Supprimer ce que stella a appris",
     "dictationLearnedEmpty": "Aucune correction apprise pour l’instant.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Quand vous corrigez deux fois de la même façon l’orthographe d’un mot ou d’un nom dicté, stella l’écrit ainsi dans les dictées suivantes. Conservé uniquement sur ce téléphone.",
+    "dictationLearnedHint": "Quand vous corrigez deux fois de la même façon l’orthographe d’un mot ou d’un nom dicté, stella l’écrit ainsi dans les dictées suivantes. Synchronisé avec vos autres appareils ; vous seul pouvez le voir.",
     "dictationLearnedTitle": "Corrections apprises de vos modifications",
     "dictationLearnedUnreadable": "Ce que stella a appris n’a pas pu être lu.",
     "dictationModelDefault": "Par défaut",
@@ -850,11 +899,20 @@
     "useStella": "Utiliser stella"
   },
   "signedFile": {
+    "bindingDiffers": "Son contenu ne correspond pas à l’empreinte indiquée dans la signature.",
+    "bindingMatches": "Son contenu correspond à l’empreinte indiquée dans la signature.",
+    "bindingNotCompared": "Trouvé par son nom de fichier. Son contenu n’a pas été comparé.",
     "deliveryReceipt": "Accusé de réception d’un dossier électronique",
+    "digestNote": "Une empreinte identique montre qu’il s’agit des données signées. Elle ne vérifie pas la signature.",
     "layer": "Couche de signatures {number, number}",
     "noReadableContent": "Aucun contenu lisible ne peut être prévisualisé.",
     "noSigners": "Aucune information sur les signataires n’a été trouvée.",
+    "signedAt": "Heure de signature indiquée : {time}",
+    "signedContent": "Document signé",
+    "signedFileMissing": "Le fichier signé n’est pas dans ce dossier.",
     "signers": "Signataires",
+    "signs": "Fichier signé",
+    "statedFilesMissing": "Cités dans la signature, absents de ce dossier :",
     "unknownSigner": "Signataire inconnu",
     "unreadable": "Impossible de lire le fichier signé.",
     "unverified": "Les signatures n’ont pas été vérifiées."

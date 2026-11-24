@@ -83,6 +83,20 @@ import {
   ssoRefusesSessionInAny,
 } from "@/api/lib/db/sso-access";
 import type { SsoRequestLookup } from "@/api/lib/db/sso-access";
+import {
+  createOrganizationOidcProvider,
+  createOrganizationSsoDomain,
+  deleteOrganizationSsoDomain,
+  deleteOrganizationSsoProvider,
+  discoverSsoProviderById,
+  discoverVerifiedSsoProvidersByDomain,
+  listOrganizationSsoProvidersForMember,
+  readOrganizationSsoDomain,
+  readOrganizationSsoSettings,
+  recordOrganizationSsoDomainCheck,
+  updateOrganizationSsoRequirement,
+} from "@/api/lib/db/sso-management";
+import type { CreateOrganizationOidcProviderParams } from "@/api/lib/db/sso-management";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
@@ -247,7 +261,7 @@ export const bindOwnerSyntheticSessionAuthorizer =
   async (current: Parameters<typeof authorizeSyntheticSession>[1]) =>
     await authorize(rootDb, current);
 
-export type RootDatabase = typeof rootDb;
+type RootDatabase = typeof rootDb;
 export type Transaction = TransactionOf<RootDatabase>;
 
 /** The deployment operator receives only audited activity aggregates. */
@@ -379,6 +393,49 @@ export const readConsentSsoAccess = async (
 export const readSignedAccessTokenSsoAccess = async (
   lookup: Omit<Parameters<typeof readSessionSsoAccess>[1], "session">,
 ) => await readSessionSsoAccess(rootDb, { ...lookup, session: "recorded" });
+
+export const readOrgSsoSettings = async (
+  organizationId: Parameters<typeof readOrganizationSsoSettings>[1],
+  urls: Parameters<typeof readOrganizationSsoSettings>[2],
+) => await readOrganizationSsoSettings(rootDb, organizationId, urls);
+
+export const createOrgOidcProvider = async (
+  params: CreateOrganizationOidcProviderParams,
+) => await createOrganizationOidcProvider(rootDb, params);
+
+export const deleteOrgSsoProvider = async (
+  params: Parameters<typeof deleteOrganizationSsoProvider>[1],
+) => await deleteOrganizationSsoProvider(rootDb, params);
+
+export const updateOrgSsoRequirement = async (
+  params: Parameters<typeof updateOrganizationSsoRequirement>[1],
+) => await updateOrganizationSsoRequirement(rootDb, params);
+
+export const createOrgSsoDomain = async (
+  params: Parameters<typeof createOrganizationSsoDomain>[1],
+) => await createOrganizationSsoDomain(rootDb, params);
+
+export const readOrgSsoDomain = async (
+  params: Parameters<typeof readOrganizationSsoDomain>[1],
+) => await readOrganizationSsoDomain(rootDb, params);
+
+export const recordOrgSsoDomainCheck = async (
+  params: Parameters<typeof recordOrganizationSsoDomainCheck>[1],
+) => await recordOrganizationSsoDomainCheck(rootDb, params);
+
+export const deleteOrgSsoDomain = async (
+  params: Parameters<typeof deleteOrganizationSsoDomain>[1],
+) => await deleteOrganizationSsoDomain(rootDb, params);
+
+export const discoverSsoByEmailDomain = async (domain: string) =>
+  await discoverVerifiedSsoProvidersByDomain(rootDb, domain);
+
+export const discoverSsoByProviderId = async (providerId: string) =>
+  await discoverSsoProviderById(rootDb, providerId);
+
+export const listOrgSsoProvidersForMember = async (
+  params: Parameters<typeof listOrganizationSsoProvidersForMember>[1],
+) => await listOrganizationSsoProvidersForMember(rootDb, params);
 
 type ReadOAuthGrantAdmissionOptions = {
   clientId: string;

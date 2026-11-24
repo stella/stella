@@ -42,6 +42,7 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
     "src/mainview/DictationInputFix.tsx",
+    "src/mainview/DictationLearnedFixes.tsx",
     "src/mainview/DictationMicrophone.tsx",
     "src/mainview/AgentSubscriptionsSection.tsx",
     "src/mainview/KeepAwakeSection.tsx",
@@ -63,6 +64,9 @@ const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   ],
   "src-tauri/capabilities/dictation-notice.json": [
     "src/mainview/DictationNoticeApp.tsx",
+  ],
+  "src-tauri/capabilities/dictation-fix.json": [
+    "src/dictation/DictationFixApp.tsx",
   ],
   "src-tauri/capabilities/dictation-preview.json": [
     "src/dictation/DictationPreviewApp.tsx",

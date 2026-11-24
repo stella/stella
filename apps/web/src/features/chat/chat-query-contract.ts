@@ -4,12 +4,12 @@ import type { ChatThreadPinState } from "@stll/api-contract/chat";
 import type { DocxSuggestionSurface } from "@stll/api-contract/chat-docx-suggestions";
 import type { ChatRunTarget } from "@stll/api-contract/chat-run-target";
 
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import type { ChatUserContext } from "@/features/chat/hooks/use-chat-user-context";
 import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type ActiveFileContext = {

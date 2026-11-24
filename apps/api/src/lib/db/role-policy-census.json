@@ -5561,6 +5561,106 @@
   },
   {
     "schema": "public",
+    "table": "dictation_learned_fixes",
+    "policy": "dictation_learned_fixes_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('dictation_learned_fixes'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('dictation_learned_fixes'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "dictation_learned_fixes",
+    "policy": "user_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "dictation_learned_fixes",
+    "policy": "user_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "dictation_learned_fixes",
+    "policy": "user_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "dictation_learned_fixes",
+    "policy": "user_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
+    "withCheck": "((user_id = ( SELECT current_setting('app.user_id'::text, true) AS current_setting)) AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "dictation_vocabulary_terms",
+    "policy": "dictation_vocabulary_terms_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('dictation_vocabulary_terms'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('dictation_vocabulary_terms'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "dictation_vocabulary_terms",
+    "policy": "organization_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "dictation_vocabulary_terms",
+    "policy": "organization_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))"
+  },
+  {
+    "schema": "public",
+    "table": "dictation_vocabulary_terms",
+    "policy": "organization_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "dictation_vocabulary_terms",
+    "policy": "organization_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
     "table": "document_counters",
     "policy": "workspace_delete",
     "command": "DELETE",
@@ -5598,6 +5698,76 @@
     "permissive": "PERMISSIVE",
     "using": "\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND",
     "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "document_naming_runs",
+    "policy": "document_naming_runs_owner",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('document_naming_runs'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('document_naming_runs'::regclass)::oid)))"
+  },
+  {
+    "schema": "public",
+    "table": "document_naming_runs",
+    "policy": "document_naming_runs_workspace_delete",
+    "command": "DELETE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "document_naming_runs",
+    "policy": "document_naming_runs_workspace_insert",
+    "command": "INSERT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": null,
+    "withCheck": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))"
+  },
+  {
+    "schema": "public",
+    "table": "document_naming_runs",
+    "policy": "document_naming_runs_workspace_select",
+    "command": "SELECT",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "document_naming_runs",
+    "policy": "document_naming_runs_workspace_update",
+    "command": "UPDATE",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "(\nCASE\n    WHEN (workspace_id = ANY (COALESCE((NULLIF(( SELECT current_setting('app.workspace_ids'::text, true) AS current_setting), ''::text))::uuid[], ARRAY[]::uuid[]))) THEN true\n    ELSE (workspace_id IN ( SELECT aw.authorized_workspace_id\n       FROM stella_authorized_workspaces aw))\nEND AND ((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting)))",
+    "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "document_naming_runs",
+    "policy": "entity_feature_gate_maintenance",
+    "command": "ALL",
+    "roles": ["stella_entity_gate"],
+    "permissive": "PERMISSIVE",
+    "using": "true",
+    "withCheck": "true"
+  },
+  {
+    "schema": "public",
+    "table": "document_naming_runs",
+    "policy": "workspace_entity_feature",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "RESTRICTIVE",
+    "using": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))",
+    "withCheck": "((entity_feature_gate = 'open'::text) OR ((entity_feature_gate = 'legal-lists'::text) AND ( SELECT ((COALESCE(NULLIF(current_setting('app.enabled_features'::text, true), ''::text), '[]'::text))::jsonb ? 'legal-lists'::text))))"
   },
   {
     "schema": "public",
@@ -10888,6 +11058,26 @@
     "permissive": "PERMISSIVE",
     "using": "((organization_id)::text = ( SELECT current_setting('app.organization_id'::text, true) AS current_setting))",
     "withCheck": null
+  },
+  {
+    "schema": "public",
+    "table": "organization_sso_domain",
+    "policy": "auth_no_stella_access",
+    "command": "ALL",
+    "roles": ["stella"],
+    "permissive": "PERMISSIVE",
+    "using": "false",
+    "withCheck": "false"
+  },
+  {
+    "schema": "public",
+    "table": "organization_sso_domain",
+    "policy": "organization_sso_domain_owner_access",
+    "command": "ALL",
+    "roles": ["public"],
+    "permissive": "PERMISSIVE",
+    "using": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_sso_domain'::regclass)::oid)))",
+    "withCheck": "(CURRENT_USER = ( SELECT pg_get_userbyid(pg_class.relowner) AS pg_get_userbyid\n   FROM pg_class\n  WHERE (pg_class.oid = ('organization_sso_domain'::regclass)::oid)))"
   },
   {
     "schema": "public",

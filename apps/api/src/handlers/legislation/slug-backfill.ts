@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -71,9 +71,8 @@ const writePage = async (
   db: ScopedDb,
   assignments: readonly SlugAssignment[],
 ): Promise<number> => {
-  const values = sql.join(
-    assignments.map(({ id, slug }) => sql`(${id}::uuid, ${slug}::varchar)`),
-    sql`, `,
+  const valuesPayload = JSON.stringify(
+    assignments.map(({ id, slug }) => ({ id, slug })),
   );
 
   const result = await db((tx) =>
@@ -81,7 +80,7 @@ const writePage = async (
     tx.execute(sql`
       UPDATE ${legislationDocuments} AS d
       SET slug = v.slug
-      FROM (VALUES ${values}) AS v(id, slug)
+      FROM jsonb_to_recordset(${valuesPayload}::text::jsonb) AS v(id uuid, slug varchar)
       WHERE d.id = v.id AND d.slug IS NULL
       RETURNING d.id
     `),

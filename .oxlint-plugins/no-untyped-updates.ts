@@ -596,7 +596,10 @@ export default eslintCompatPlugin({
                 }
               }
             }
-            if (node.source.value === "@/api/db/root") {
+            if (
+              node.source.value === "@/api/db/root" ||
+              node.source.value === "@/api/db/types"
+            ) {
               for (const specifier of node.specifiers) {
                 if (
                   specifier.type !== "ImportSpecifier" ||

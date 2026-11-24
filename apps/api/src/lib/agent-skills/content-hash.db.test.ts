@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import {
   agentSkillProposals,
@@ -10,6 +9,7 @@ import {
   agentSkills,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { createSkillPackageTools } from "@/api/handlers/chat/tools/skill-package-tools";
 import createSkill from "@/api/handlers/skills/create";
 import createSkillFromBlueprint from "@/api/handlers/skills/from-blueprint/create";

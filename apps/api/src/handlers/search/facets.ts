@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   hasSearchQueryOrSelectiveFilter,
   resolveSelectedWorkspaceIds,

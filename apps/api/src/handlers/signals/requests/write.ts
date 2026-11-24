@@ -2,7 +2,7 @@ import type { Named } from "@gdp-ts/core";
 
 import type { SIGNAL_KIND } from "@stll/api-contract/signals";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { emitSignals } from "@/api/lib/signals/emit";
 import type { NewSignal } from "@/api/lib/signals/emit";

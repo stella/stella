@@ -1,4 +1,4 @@
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 
 // One Czech labour-law turn citing Zákoník práce provisions. The tool output is
 // read_statute_provisions as the corpus answered it on 2026-10-23, kept

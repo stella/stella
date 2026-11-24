@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 
-import type { Transaction } from "@/api/db/root";
 import type { RlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { readReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import type { ReviewOrganizationConfig } from "@/api/lib/review-organization/config";
 import {

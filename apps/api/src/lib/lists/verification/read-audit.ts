@@ -1,7 +1,7 @@
 import { lt, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { legalListVerificationReadReceipts } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";

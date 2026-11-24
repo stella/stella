@@ -19,7 +19,12 @@ export const editor = {
     {
       type: "source",
       path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-$viewId.document.page.tsx",
-      contains: ["DocxBrowserEditor", "app-docx-editor"],
+      contains: ["DocxBrowserEditor", "ReadOnlyDocxDocument"],
+    },
+    {
+      type: "source",
+      path: "apps/web/src/components/docx/read-only-docx-document.tsx",
+      contains: ["app-docx-editor", "readOnly"],
     },
     {
       type: "source",

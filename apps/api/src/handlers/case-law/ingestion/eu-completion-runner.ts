@@ -6,14 +6,14 @@ import { TransformStream } from "node:stream/web";
 import { createSha256 } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawDecisionJudges,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import {
   ECJ_LANGUAGES,
   euEcjAdapter,

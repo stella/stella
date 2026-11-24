@@ -1,0 +1,4 @@
+{
+  "add-column": "The certification data column is nullable and default-free, so adding it rewrites no correspondence rows; lock_timeout is 1s and statement_timeout is 5s.",
+  "add-constraint": "The replaced channel and direction CHECKs and the new certification data CHECK are added NOT VALID, with no existing-row scan; each drop and its replacement are atomic. Canonical gated online repairs validate them after commit; lock_timeout is 1s and statement_timeout is 5s."
+}

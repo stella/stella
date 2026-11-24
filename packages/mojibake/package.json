@@ -18,6 +18,14 @@
     "./detect": {
       "types": "./src/detect.ts",
       "import": "./src/detect.ts"
+    },
+    "./dos-code-pages": {
+      "types": "./src/dos-code-pages.ts",
+      "import": "./src/dos-code-pages.ts"
+    },
+    "./undeclared-charset": {
+      "types": "./src/undeclared-charset.ts",
+      "import": "./src/undeclared-charset.ts"
     }
   },
   "scripts": {

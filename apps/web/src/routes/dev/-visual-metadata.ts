@@ -84,7 +84,9 @@ export const visualRegistry = {
   "oauth-consent": { label: "OAuth consent", layout: "plain" },
   "outcome-screen": { label: "Outcome screens", layout: "plain" },
   "page-crop": { label: "PDF page crop", layout: "plain" },
+  "pdf-fit-width": { label: "PDF pages fitted to width", layout: "plain" },
   "upload-rejections": { label: "Upload rejection reasons", layout: "plain" },
+  "document-naming": { label: "Document name pattern field", layout: "plain" },
   "chat-long-paste": { label: "Chat long paste", layout: "plain" },
   "chat-composer-reference": {
     label: "Chat composer references",
@@ -121,7 +123,6 @@ export const visualRegistry = {
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "reader-selection": { label: "Reader selection toolbar", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
-  autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },
   "control-sizes": { label: "Control sizes", layout: "control-sizes" },
   "inspector-pane": { label: "Inspector pane", layout: "inspector-pane" },

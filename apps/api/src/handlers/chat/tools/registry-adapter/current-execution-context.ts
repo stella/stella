@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import { intersectAccessibleWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { ChatRegistryContextDeps } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";

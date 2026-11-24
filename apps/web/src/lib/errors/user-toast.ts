@@ -24,6 +24,8 @@ import { providerSetupGuidance } from "@/lib/errors/provider-setup-guidance";
 import { notifySessionExpired } from "@/lib/errors/session-expired";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
+import { notifySsoSignInRequired } from "./sso-sign-in-required";
+
 type UserErrorToastOptions = Omit<
   Parameters<typeof stellaToast.add>[0],
   "title" | "type"
@@ -176,6 +178,12 @@ export const notifyUserError = <Cause>(
     return false;
   }
   if (notifyStepUp(error)) {
+    return false;
+  }
+  if (notifySsoSignInRequired(error)) {
+    if (toastId !== undefined) {
+      stellaToast.close(toastId);
+    }
     return false;
   }
   if (notifySessionExpired(error)) {

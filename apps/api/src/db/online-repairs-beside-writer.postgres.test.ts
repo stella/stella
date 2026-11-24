@@ -55,6 +55,8 @@ const EMAIL_VALUES = `'${ID}', 'org', '${WORKSPACE_ID}', 'in', 'email', 'direct'
 const CORRESPONDENCE_EMAIL = `INSERT INTO correspondence (${EMAIL_COLUMNS}) VALUES (${EMAIL_VALUES})`;
 /** An uploaded data-box message; its source entity is the fixture entity. */
 const CORRESPONDENCE_DATA_BOX = `INSERT INTO correspondence (id, organization_id, workspace_id, channel, source, source_entity_id, message_id, original_signature, data_box_envelope, content_hash, dedup_key, sender, recipients_to, recipients_cc, subject, received_at, "references", body_text, entity_feature_gate) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'data_box', 'upload', '${ENTITY_ID}', 'message', '{"status":"unverified"}', '{"messageId":"message"}', repeat('a', 64), repeat('b', 64), '{}', '[]', '[]', 'Subject', now(), '[]', 'Body', 'open')`;
+/** An uploaded certified email; its source entity is the fixture entity. */
+const CORRESPONDENCE_PEC = `INSERT INTO correspondence (id, organization_id, workspace_id, direction, channel, source, source_entity_id, original_signature, certified_email_envelope, content_hash, dedup_key, sender, recipients_to, recipients_cc, subject, received_at, "references", body_text, entity_feature_gate) VALUES ('${ID}', 'org', '${WORKSPACE_ID}', 'in', 'pec', 'upload', '${ENTITY_ID}', '{"status":"unverified"}', '{"system":"pec"}', repeat('a', 64), repeat('b', 64), '{}', '[]', '[]', 'Subject', now(), '[]', 'Body', 'open')`;
 /** A chat turn its owner handed over, waiting for another task to adopt it. */
 const HANDED_OVER_CHAT_TURN = `INSERT INTO chat_turns (id, organization_id, user_id, thread_id, user_message_id, status, assistant_message_id, lease_expires_at) VALUES ('${ID}', 'org', 'user', '${ID_2}', '${ID_3}', 'handed-over', '${ENTITY_ID}', now() + interval '90 seconds')`;
 const EXTERNAL_REF_COLUMNS =
@@ -1208,6 +1210,10 @@ const SEEDS = {
   correspondence_data_box_check: correspondenceSeed(
     "correspondence_data_box_check",
     CORRESPONDENCE_DATA_BOX,
+  ),
+  correspondence_certified_email_check: correspondenceSeed(
+    "correspondence_certified_email_check",
+    CORRESPONDENCE_PEC,
   ),
   organization_settings_data_box_ids_check: noRowSeed(
     "organization_settings",

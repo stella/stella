@@ -144,6 +144,10 @@ const EXCLUDED_AUTOFIX = {
     "Cargo test requires native platform dependencies and toolchain state",
   "scan-engine-wasm":
     "Requires canonical Linux Rust host and external WASM toolchain",
+  "heic-decoder-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
+  "pst-reader-wasm":
+    "Requires canonical Linux Rust host and external WASM toolchain",
   "chat-transcripts": "Runs service-backed chat recording suites",
   "case-law-publication-migration":
     "Migration SQL requires review rather than automatic rewriting",

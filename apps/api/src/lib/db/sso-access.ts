@@ -10,7 +10,7 @@ import {
   session,
   ssoProvider,
 } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { MemberAuthentication } from "@/api/lib/auth/member-authorization";
 import type { SafeId } from "@/api/lib/branded-types";
 import { liveSessionPredicate } from "@/api/lib/db/session-liveness";

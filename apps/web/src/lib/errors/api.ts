@@ -52,6 +52,7 @@ import {
   SHAREPOINT_REFUSAL_CODE,
   type SharepointRefusalCode,
 } from "@stll/api-contract/sharepoint";
+import { SSO_SIGN_IN_REQUIRED_CODE } from "@stll/api-contract/sso";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
@@ -394,6 +395,7 @@ const CODE_ERROR_KEYS = {
   [SKILL_FROM_CHAT_REFUSAL_CODE.withdrawn]:
     "errors.apiCodes.skillFromChatWithdrawn",
   [SKILL_SOURCE_UNREACHABLE_CODE]: "errors.apiCodes.skillSourceUnreachable",
+  [SSO_SIGN_IN_REQUIRED_CODE]: "auth.sso.signInRequiredDescription",
   third_party_boundary_refusal: "errors.apiCodes.thirdPartyBoundaryRefusal",
   usage_limit_exceeded: "errors.apiCodes.usageLimitExceeded",
   validation: STATUS_ERROR_KEYS.validation,

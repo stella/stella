@@ -571,7 +571,7 @@ describe("a copy the claim kept", () => {
 
 describe("the restore guard", () => {
   const RESTORE_MIGRATION =
-    "20261122130000_corpus_projection_superseded_copy_restore";
+    "20261124143000_corpus_projection_superseded_copy_restore";
 
   const installBefore = async (before: string) => {
     for (const ddl of await corpusProjectionMigrationDdl({ before })) {

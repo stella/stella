@@ -10,7 +10,7 @@ import type {
 import { runChatAnonPipeline } from "@stll/anonymize-chat";
 import type { ChatAnonRuntime } from "@stll/anonymize-chat";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { AnonymizationGazetteerScope } from "@/api/lib/anonymization-blacklist";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";

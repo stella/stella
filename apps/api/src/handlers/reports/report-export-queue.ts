@@ -16,9 +16,9 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { reportExports } from "@/api/db/schema";
 import type { ReportExportFormat, ReportTemplateRef } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import type { AssembledReport } from "@/api/handlers/reports/build-report-data";
 import { buildReportData } from "@/api/handlers/reports/build-report-data";

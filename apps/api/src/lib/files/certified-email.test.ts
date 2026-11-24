@@ -26,6 +26,7 @@ import {
 } from "./certified-email";
 import {
   buildEmailPreview,
+  describeEmailAttachments,
   parsedEmailToText,
   parseEmail,
 } from "./email-to-html";
@@ -214,7 +215,8 @@ describe("a PEC transport envelope", () => {
     const parsed = await parse(await pecMessage());
     const preview = buildEmailPreview(parsed);
     expect(preview.certified).toEqual(parsed.certified);
-    expect(preview.attachments.map(({ fileName }) => fileName)).toEqual(
+    const listed = await describeEmailAttachments(parsed, preview.attachments);
+    expect(listed.map(({ fileName }) => fileName)).toEqual(
       attachmentNames(parsed),
     );
   });

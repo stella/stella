@@ -20,7 +20,7 @@ import {
 import { numberFromString } from "@stll/api-contract/http-input";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { chatThreads } from "@/api/db/schema";
 import {
   deleteUploadedChatFiles,

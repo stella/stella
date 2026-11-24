@@ -13,8 +13,7 @@ import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { DAY_IN_MS } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   ORGANIZATION_ACCESS_STATE,
   ORGANIZATION_ACCESS_STATE_ORIGIN,
@@ -22,6 +21,7 @@ import {
   organizationSettings,
 } from "@/api/db/schema";
 import type { AnyDrizzle } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { env } from "@/api/env";
 import {
   AUDIT_ACTION,

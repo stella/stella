@@ -16,14 +16,14 @@ import {
   type ChatLocalRunStepTextKind,
 } from "@stll/api-contract/chat-local-run-step-content";
 
-import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   chatLocalRunStepContents,
   chatThreads,
   desktopRunnerRuns,
   userFiles,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";

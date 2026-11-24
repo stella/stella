@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Attachments",
     "certifiedAt": "Certified at",
     "deliveredTo": "Delivered to",
     "error": "Reported error",
@@ -468,6 +467,10 @@
     "retry": "Try again",
     "title": "Document",
     "unrendered": "This document cannot be shown here, but the system preview may open it.",
+    "unscannedContent": {
+      "encrypted": "Some files inside are password-protected, so they weren’t checked for threats.",
+      "unsupportedCompression": "Some files inside are compressed in a format stella can’t read, so they weren’t checked for threats."
+    },
     "zoomFit": "Fit to width",
     "zoomIn": "Zoom in",
     "zoomOut": "Zoom out"
@@ -475,7 +478,6 @@
   "eInvoice": {
     "accountNumber": "Bank account number",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Attached files",
     "bankCode": "Bank code",
     "batchPosition": "Document {position, number} of {count, number}",
     "bic": "BIC code",
@@ -494,7 +496,6 @@
     "linesShown": "Showing {shown, number} of {count, plural, one {# line} other {# lines}}",
     "netAmount": "Net amount",
     "netTotal": "Total without VAT",
-    "notRecognized": "This XML file is not a recognized structured invoice.",
     "notes": "Invoice notes",
     "otherIdentifier": "Other identifier",
     "payableAmount": "Amount due",
@@ -505,6 +506,7 @@
     "paymentReference": "Payment reference",
     "prepaidAmount": "Paid in advance",
     "quantity": "Quantity and unit",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "Registration number",
@@ -516,16 +518,53 @@
     "taxableAmount": "Tax base",
     "totals": "Totals",
     "unitPrice": "Unit price",
+    "units": {
+      "day": "{count, plural, one {{quantity} day} other {{quantity} days}}",
+      "hour": "{count, plural, one {{quantity} hour} other {{quantity} hours}}",
+      "month": "{count, plural, one {{quantity} month} other {{quantity} months}}",
+      "unit": "{count, plural, one {{quantity} unit} other {{quantity} units}}",
+      "week": "{count, plural, one {{quantity} week} other {{quantity} weeks}}",
+      "year": "{count, plural, one {{quantity} year} other {{quantity} years}}"
+    },
     "unreadable": "The invoice could not be read.",
     "vat": "VAT",
     "vatBreakdown": "VAT breakdown",
-    "vatId": "VAT ID"
+    "vatId": "VAT ID",
+    "xmlUnreadable": "This XML file could not be read."
+  },
+  "email": {
+    "cc": "Cc",
+    "date": "Date",
+    "from": "Sender",
+    "noSubject": "(No subject)",
+    "subject": "Subject",
+    "to": "Recipients"
   },
   "entity": {
     "currentVersion": "Current version",
     "loadFailed": "This item could not be loaded.",
     "reference": "Reference",
     "type": "Type"
+  },
+  "fileParts": {
+    "archiveUnreadable": "This archive couldn’t be read.",
+    "attachments": "Attachments",
+    "files": "Files",
+    "insideFailed": "Couldn’t list the files inside. Tap to try again.",
+    "noFilesInside": "There are no files inside.",
+    "noMatches": "No file matches “{query}”.",
+    "open": "Open {fileName} ({details})",
+    "saveFailed": "The file could not be saved to the matter. Try again.",
+    "saveNamed": "Save {fileName} to a matter",
+    "search": "Find a file by name or folder",
+    "unavailable": {
+      "encrypted": "Password-protected, can’t be opened",
+      "link": "A link to another file, not followed",
+      "tooLarge": "Too large to open",
+      "unreadable": "Damaged, can’t be opened",
+      "unsupported": "Compressed in a way that can’t be opened"
+    },
+    "unnamed": "Unnamed file"
   },
   "header": {
     "search": "Search"
@@ -555,6 +594,16 @@
     "refused": "Your server refused the request (error {status}).",
     "server": "Your server ran into a problem (error {status}). Try again in a moment.",
     "session": "Your sign-in has expired. Sign in again."
+  },
+  "mailbox": {
+    "back": "Back to messages",
+    "messages": "Messages",
+    "noMatches": "No message matches “{query}”.",
+    "noMessages": "This mailbox holds no messages.",
+    "openFailed": "Couldn’t open this message. Tap to try again.",
+    "search": "Search messages",
+    "truncated": "Only the first {count, number} messages are listed.",
+    "unreadable": "This mailbox couldn’t be read."
   },
   "matter": {
     "add": "Add",
@@ -782,7 +831,7 @@
     "dictationLearnedDelete": "Delete what stella learned",
     "dictationLearnedEmpty": "No fixes learned yet.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "When you correct the spelling of a dictated word or name the same way twice, stella spells it that way in later dictations. Kept only on this phone.",
+    "dictationLearnedHint": "When you correct the spelling of a dictated word or name the same way twice, stella spells it that way in later dictations. Synced to your other devices; only you can see them.",
     "dictationLearnedTitle": "Fixes learned from your corrections",
     "dictationLearnedUnreadable": "What stella learned could not be read.",
     "dictationModelDefault": "Default",
@@ -850,11 +899,20 @@
     "useStella": "Use stella"
   },
   "signedFile": {
+    "bindingDiffers": "Its contents do not match the digest stated in the signature.",
+    "bindingMatches": "Its contents match the digest stated in the signature.",
+    "bindingNotCompared": "Found by file name. Its contents were not compared.",
     "deliveryReceipt": "Delivery receipt for an electronic dossier",
+    "digestNote": "A matching digest shows these are the signed bytes. It does not verify the signature.",
     "layer": "Signature layer {number, number}",
     "noReadableContent": "No readable content is available for preview.",
     "noSigners": "No signer details were found.",
+    "signedAt": "Stated signing time: {time}",
+    "signedContent": "Signed document",
+    "signedFileMissing": "The signed file is not in this matter.",
     "signers": "Signers",
+    "signs": "Signed file",
+    "statedFilesMissing": "Named in the signature, not found in this matter:",
     "unknownSigner": "Unknown signer",
     "unreadable": "The signed file could not be read.",
     "unverified": "The signatures have not been verified."

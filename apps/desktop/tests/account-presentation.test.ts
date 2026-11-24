@@ -24,6 +24,7 @@ describe("desktop account presentation", () => {
         account: LINKED_ACCOUNT,
         expiresAt: "2026-09-19T20:00:00Z",
         server: SERVER,
+        avatar: null,
       }),
     ).toEqual({
       actionKey: "disconnect",
@@ -90,6 +91,7 @@ describe("desktop account presentation", () => {
       account: LINKED_ACCOUNT,
       expiresAt: "2026-09-19T20:00:00Z",
       server: SERVER,
+      avatar: null,
     } as const;
     expect(accountDisplay(connected)).toMatchObject({
       email: "user@example.com",

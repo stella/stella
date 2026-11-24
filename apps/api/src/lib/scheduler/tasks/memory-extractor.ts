@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { Transaction } from "@/api/db/root";
 import {
   aiMemories,
   chatThreadCompactions,
@@ -10,6 +9,7 @@ import {
   organizationSettings,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";

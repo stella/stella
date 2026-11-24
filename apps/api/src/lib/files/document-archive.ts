@@ -7,6 +7,8 @@ import { createZipBombGuard } from "@/api/lib/file-scan/scanner";
 import {
   hasZipMagic,
   readZipIndex,
+  unreadableZipEntry,
+  ZIP_METHOD_STORED,
   type ZipEntry,
 } from "@/api/lib/file-scan/zip";
 import { archivePathKey } from "@/api/lib/files/archive-path-key";
@@ -17,10 +19,6 @@ const MAX_PATH_DEPTH = 32;
 const ZIP_EXTRA_LANGUAGE_ENCODING = 0x00_08;
 const ZIP_EXTRA_UNICODE_PATH = 0x70_75;
 const ZIP_FLAG_UTF8 = 0x08_00;
-const ZIP_METHOD_STORED = 0;
-const ZIP_METHOD_DEFLATE = 8;
-const ZIP_FLAG_ENCRYPTED = 0x00_01;
-const ZIP_FLAG_STRONG_ENCRYPTION = 0x00_40;
 // The high nibble of the ZIP external attributes holds the POSIX file type.
 const UNIX_FILE_TYPE_PLACE = 0x10_00_00_00;
 const UNIX_DIRECTORY_TYPE = 4;
@@ -144,14 +142,22 @@ const indexPath = (
   return true;
 };
 
+/**
+ * Whether an archive keeps to the bounds every archive reader holds it to:
+ * its size, its entry count, its total uncompressed size and each entry's
+ * compression ratio, all read from its index before anything is inflated.
+ */
+export const isWithinArchiveLimits = async (
+  bytes: Uint8Array,
+): Promise<boolean> =>
+  bytes.length <= DOCUMENT_ARCHIVE_MAX_BYTES &&
+  (await archiveGuard.scan(bytes)).length === 0;
+
 export const openDocumentArchive = async (bytes: Uint8Array) => {
   if (!hasZipMagic(bytes)) {
     return invalid("The container is not a ZIP archive");
   }
-  if (
-    bytes.length > DOCUMENT_ARCHIVE_MAX_BYTES ||
-    (await archiveGuard.scan(bytes)).length !== 0
-  ) {
+  if (!(await isWithinArchiveLimits(bytes))) {
     return Result.err(
       new DocumentPackageError({
         message: "The container exceeds the supported ZIP limits",
@@ -170,10 +176,7 @@ export const openDocumentArchive = async (bytes: Uint8Array) => {
       entry.externalAttributes / UNIX_FILE_TYPE_PLACE,
     );
     if (
-      hasZipFlag(entry.flags, ZIP_FLAG_ENCRYPTED) ||
-      hasZipFlag(entry.flags, ZIP_FLAG_STRONG_ENCRYPTION) ||
-      (entry.method !== ZIP_METHOD_STORED &&
-        entry.method !== ZIP_METHOD_DEFLATE) ||
+      unreadableZipEntry(entry) !== null ||
       (entry.method === ZIP_METHOD_STORED &&
         entry.data.length !== entry.uncompressedSize) ||
       (unixType !== 0 &&

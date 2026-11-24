@@ -1,12 +1,15 @@
 import { Result, UnhandledException } from "better-result";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
-import { legalFileFormat } from "@stll/api-contract/document-format";
+import {
+  legalFileFormat,
+  signatureFormatCandidate,
+} from "@stll/api-contract/document-format";
 import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
+import type { Transaction } from "@/api/db/types";
 import { HTTP_FAILURE } from "@/api/http/errors";
 import { AUDIT_RESOURCE_TYPE, type AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
@@ -21,6 +24,7 @@ import {
   fileFieldQuery,
   lockLiveVersionField,
 } from "@/api/lib/files/live-version-field";
+import { zipNameCodePageSource } from "@/api/lib/files/organization-zip-name-code-page";
 import { createFileKey } from "@/api/lib/files/utils";
 import { S3ObjectBudgetError } from "@/api/lib/s3";
 
@@ -79,12 +83,22 @@ type StoredFileContent = {
 const legalSourceFormat =
   (acceptedKinds: readonly LegalFileFormatKind[]) =>
   (content: StoredFileContent) => {
-    const format = legalFileFormat(content.mimeType, content.fileName);
+    // A `.sig` or `.xml` file reaches a signature reader as a candidate: its
+    // reader decides from the bytes, and only a reader that accepts the kind.
+    // A reader of the registered kind (`.xml` as XML) reads it as that.
+    const registered = legalFileFormat(content.mimeType, content.fileName);
+    const candidate =
+      registered !== undefined && acceptedKinds.includes(registered.kind)
+        ? undefined
+        : signatureFormatCandidate(content.mimeType, content.fileName);
+    const format = candidate ?? registered;
     if (!format || !acceptedKinds.includes(format.kind)) {
       return null;
     }
     return {
       kind: format.kind,
+      /** The name alone does not make the file this format. */
+      sniffed: candidate !== undefined,
       mimeType: format.mimeType,
       auditFormat: format.auditFormat,
       ...(isDocumentArchiveMimeType(format.mimeType)
@@ -93,17 +107,25 @@ const legalSourceFormat =
     };
   };
 
+/** A legal file of one of `acceptedKinds`, found but not read; see below. */
+export const openLegalFileSource = async (
+  options: LegalFileReadOptions,
+  acceptedKinds: readonly LegalFileFormatKind[],
+) => await openFileSource(options, legalSourceFormat(acceptedKinds));
+
 export const loadLegalFileSource = async (
   options: LegalFileReadOptions,
   acceptedKinds: readonly LegalFileFormatKind[],
 ) => await loadFileSource(options, legalSourceFormat(acceptedKinds));
 
 /**
- * Reads a stored file that `accept` recognizes, outside any lock, and hands
- * back `deliver`, which releases a result only while the same live version is
- * share-locked and after its delivery has been recorded.
+ * Finds a stored file that `accept` recognizes without reading it, and hands
+ * back its key, `load`, which reads it whole within its format's budget, and
+ * `deliver`, which releases a result only while the same live version is
+ * share-locked and after its delivery has been recorded. A file read another
+ * way (a mailbox streamed one message at a time) never calls `load`.
  */
-export const loadFileSource = async <TFormat extends FileSourceFormat>(
+export const openFileSource = async <TFormat extends FileSourceFormat>(
   {
     scopedDb,
     workspaceId,
@@ -141,32 +163,30 @@ export const loadFileSource = async <TFormat extends FileSourceFormat>(
     fileId: content.id,
     mimeType: content.mimeType,
   });
-  const source = await readStoredFile({
-    key,
-    mimeType: content.mimeType,
-    fileName: content.fileName,
-    ...(maxBytes === undefined ? {} : { maxBytes }),
-  }).then(
-    (file) => Result.ok(file),
-    async (error: unknown) => {
-      // Only an archive's own read budget becomes a preview refusal.
-      if (
-        isArchive &&
-        (S3ObjectBudgetError.is(error) || BodyByteLimitError.is(error))
-      ) {
-        return archiveTooLarge();
-      }
-      // Other read failures keep their rejection path and Error identity.
-      return await Promise.reject(
-        error instanceof Error
-          ? error
-          : new UnhandledException({ cause: error }),
-      );
-    },
-  );
-  if (source.isErr()) {
-    return Result.err(source.error);
-  }
+  const load = async () =>
+    await readStoredFile({
+      key,
+      mimeType: content.mimeType,
+      fileName: content.fileName,
+      ...(maxBytes === undefined ? {} : { maxBytes }),
+    }).then(
+      (file) => Result.ok(file),
+      async (error: unknown) => {
+        // Only an archive's own read budget becomes a preview refusal.
+        if (
+          isArchive &&
+          (S3ObjectBudgetError.is(error) || BodyByteLimitError.is(error))
+        ) {
+          return archiveTooLarge();
+        }
+        // Other read failures keep their rejection path and Error identity.
+        return await Promise.reject(
+          error instanceof Error
+            ? error
+            : new UnhandledException({ cause: error }),
+        );
+      },
+    );
 
   // Parse outside the transaction. Only release a result while the same live
   // source is share-locked, after its delivery has been recorded.
@@ -219,10 +239,34 @@ export const loadFileSource = async <TFormat extends FileSourceFormat>(
       return prepared;
     });
   return Result.ok({
-    source: source.value,
+    key,
+    fileName: content.fileName,
     mimeType: format.mimeType,
     format,
     entityId,
+    load,
     deliver,
+    /** The code page the reading organization's ZIP names tie in. */
+    zipNameCodePage: zipNameCodePageSource(scopedDb, organizationId),
   });
+};
+
+/**
+ * Reads a stored file that `accept` recognizes, outside any lock, and hands
+ * back `deliver`, which releases a result only while the same live version is
+ * share-locked and after its delivery has been recorded.
+ */
+const loadFileSource = async <TFormat extends FileSourceFormat>(
+  options: LegalFileReadOptions,
+  accept: (content: StoredFileContent) => TFormat | null,
+) => {
+  const opened = await openFileSource(options, accept);
+  if (opened.isErr()) {
+    return Result.err(opened.error);
+  }
+  const { load, ...file } = opened.value;
+  const source = await load();
+  return source.isErr()
+    ? Result.err(source.error)
+    : Result.ok({ ...file, source: source.value });
 };

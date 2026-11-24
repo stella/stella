@@ -22,7 +22,7 @@ import {
 } from "@stll/api-contract/browser-control";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { UsageEventLane } from "@/api/db/schema";
 import {
   type AnonymizationRefusal,

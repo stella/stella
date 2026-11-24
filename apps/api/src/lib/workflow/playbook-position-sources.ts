@@ -13,7 +13,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { entities, workspaces } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";

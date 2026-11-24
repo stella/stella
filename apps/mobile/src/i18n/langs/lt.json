@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Priedai",
     "certifiedAt": "Sertifikavimo laikas",
     "deliveredTo": "Įteikta adresu",
     "error": "Pranešta klaida",
@@ -468,6 +467,10 @@
     "retry": "Bandyti dar kartą",
     "title": "Dokumentas",
     "unrendered": "Šio dokumento čia parodyti negalima, bet sistemos peržiūra gali jį atidaryti.",
+    "unscannedContent": {
+      "encrypted": "Kai kurie viduje esantys failai apsaugoti slaptažodžiu, todėl jie nebuvo patikrinti dėl grėsmių.",
+      "unsupportedCompression": "Kai kurie viduje esantys failai suglaudinti formatu, kurio stella negali perskaityti, todėl jie nebuvo patikrinti dėl grėsmių."
+    },
     "zoomFit": "Pritaikyti pločiui",
     "zoomIn": "Didinti",
     "zoomOut": "Mažinti"
@@ -475,7 +478,6 @@
   "eInvoice": {
     "accountNumber": "Banko sąskaitos numeris",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Pridėti failai",
     "bankCode": "Banko kodas",
     "batchPosition": "Dokumentas {position, number} iš {count, number}",
     "bic": "BIC kodas",
@@ -494,7 +496,6 @@
     "linesShown": "Rodoma {shown, number} iš {count, plural, one {# eilutės} few {# eilučių} many {# eilutės} other {# eilučių}}",
     "netAmount": "Suma be PVM",
     "netTotal": "Iš viso be PVM",
-    "notRecognized": "Šis XML failas nėra atpažinta struktūrizuota sąskaita faktūra.",
     "notes": "Sąskaitos pastabos",
     "otherIdentifier": "Kitas identifikatorius",
     "payableAmount": "Mokėtina suma",
@@ -505,6 +506,7 @@
     "paymentReference": "Mokėjimo paskirtis",
     "prepaidAmount": "Sumokėta avansu",
     "quantity": "Kiekis ir matavimo vienetas",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "registrationNumber": "Įmonės kodas",
@@ -516,16 +518,53 @@
     "taxableAmount": "Apmokestinamoji vertė",
     "totals": "Sumos",
     "unitPrice": "Vieneto kaina",
+    "units": {
+      "day": "{count, plural, one {{quantity} diena} few {{quantity} dienos} many {{quantity} dienos} other {{quantity} dienų}}",
+      "hour": "{count, plural, one {{quantity} valanda} few {{quantity} valandos} many {{quantity} valandos} other {{quantity} valandų}}",
+      "month": "{count, plural, one {{quantity} mėnuo} few {{quantity} mėnesiai} many {{quantity} mėnesio} other {{quantity} mėnesių}}",
+      "unit": "{count, plural, one {{quantity} vnt.} few {{quantity} vnt.} many {{quantity} vnt.} other {{quantity} vnt.}}",
+      "week": "{count, plural, one {{quantity} savaitė} few {{quantity} savaitės} many {{quantity} savaitės} other {{quantity} savaičių}}",
+      "year": "{count, plural, one {{quantity} metai} few {{quantity} metai} many {{quantity} metų} other {{quantity} metų}}"
+    },
     "unreadable": "Nepavyko perskaityti sąskaitos faktūros.",
     "vat": "PVM",
     "vatBreakdown": "PVM suvestinė",
-    "vatId": "PVM mokėtojo kodas"
+    "vatId": "PVM mokėtojo kodas",
+    "xmlUnreadable": "Šio XML failo nepavyko perskaityti."
+  },
+  "email": {
+    "cc": "Kopija",
+    "date": "Data",
+    "from": "Siuntėjas",
+    "noSubject": "(Nėra temos)",
+    "subject": "Tema",
+    "to": "Gavėjai"
   },
   "entity": {
     "currentVersion": "Dabartinė versija",
     "loadFailed": "Nepavyko įkelti šio įrašo.",
     "reference": "Numeris",
     "type": "Tipas"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Archyvo nepavyko perskaityti.",
+    "attachments": "Priedai",
+    "files": "Failai",
+    "insideFailed": "Nepavyko įkelti viduje esančių failų. Bakstelėkite, kad bandytumėte dar kartą.",
+    "noFilesInside": "Viduje nėra jokių failų.",
+    "noMatches": "Užklausą „{query}“ atitinkančių failų nėra.",
+    "open": "Atidaryti {fileName} ({details})",
+    "saveFailed": "Nepavyko išsaugoti failo byloje. Bandykite dar kartą.",
+    "saveNamed": "Išsaugoti {fileName} byloje",
+    "search": "Rasti failą pagal pavadinimą ar aplanką",
+    "unavailable": {
+      "encrypted": "Apsaugotas slaptažodžiu, negalima atidaryti",
+      "link": "Nuoroda į kitą failą, jis neatidaromas",
+      "tooLarge": "Per didelis, kad būtų galima atidaryti",
+      "unreadable": "Sugadintas, negalima atidaryti",
+      "unsupported": "Suglaudintas būdu, kurio negalima atidaryti"
+    },
+    "unnamed": "Failas be pavadinimo"
   },
   "header": {
     "search": "Ieškoti"
@@ -555,6 +594,16 @@
     "refused": "Serveris atmetė užklausą (klaidos kodas {status}).",
     "server": "Serveryje įvyko klaida (klaidos kodas {status}). Netrukus bandykite dar kartą.",
     "session": "Jūsų prisijungimas baigėsi. Prisijunkite iš naujo."
+  },
+  "mailbox": {
+    "back": "Grįžti į laiškus",
+    "messages": "Laiškai",
+    "noMatches": "Užklausą „{query}“ atitinkančių laiškų nėra.",
+    "noMessages": "Šioje pašto dėžutėje nėra laiškų.",
+    "openFailed": "Nepavyko atidaryti šio laiško. Palieskite ir bandykite dar kartą.",
+    "search": "Ieškoti laiškų",
+    "truncated": "Rodomi tik pirmieji {count, number} laiškų.",
+    "unreadable": "Nepavyko perskaityti šios pašto dėžutės."
   },
   "matter": {
     "add": "Pridėti",
@@ -782,7 +831,7 @@
     "dictationLearnedDelete": "Ištrinti, ką išmoko stella",
     "dictationLearnedEmpty": "Kol kas nieko neišmokta.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Kai padiktuoto žodžio ar vardo rašybą du kartus pataisote vienodai, stella kituose diktavimuose jį rašys taip. Saugoma tik šiame telefone.",
+    "dictationLearnedHint": "Kai padiktuoto žodžio ar vardo rašybą du kartus pataisote vienodai, stella kituose diktavimuose jį rašys taip. Sinchronizuojama su kitais jūsų įrenginiais; matote tik jūs.",
     "dictationLearnedTitle": "Iš jūsų pataisymų išmokti pataisymai",
     "dictationLearnedUnreadable": "Nepavyko nuskaityti to, ką išmoko stella.",
     "dictationModelDefault": "Numatytasis",
@@ -850,11 +899,20 @@
     "useStella": "Naudoti stella"
   },
   "signedFile": {
+    "bindingDiffers": "Jo turinys neatitinka paraše nurodytos maišos reikšmės.",
+    "bindingMatches": "Jo turinys atitinka paraše nurodytą maišos reikšmę.",
+    "bindingNotCompared": "Rasta pagal failo pavadinimą. Turinys nebuvo palygintas.",
     "deliveryReceipt": "Elektroninės bylos įteikimo patvirtinimas",
+    "digestNote": "Sutampanti maišos reikšmė rodo, kad tai pasirašyti duomenys. Parašas taip nepatikrinamas.",
     "layer": "Parašų sluoksnis {number, number}",
     "noReadableContent": "Nėra skaitomo turinio, kurį būtų galima peržiūrėti.",
     "noSigners": "Pasirašiusiųjų duomenų nerasta.",
+    "signedAt": "Nurodytas pasirašymo laikas: {time}",
+    "signedContent": "Pasirašytas dokumentas",
+    "signedFileMissing": "Pasirašyto failo šioje byloje nėra.",
     "signers": "Pasirašiusieji",
+    "signs": "Pasirašytas failas",
+    "statedFilesMissing": "Nurodyti paraše, bet šioje byloje nerasti:",
     "unknownSigner": "Nežinomas pasirašęs asmuo",
     "unreadable": "Nepavyko perskaityti pasirašyto failo.",
     "unverified": "Parašai nepatikrinti."

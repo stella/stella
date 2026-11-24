@@ -75,6 +75,26 @@ export const API_OAUTH_ROUTES = {
     uncataloged: "native_tool_ui",
     client: "mobile",
   },
+  // The phone's learned dictation fixes: the member's own spellings, synced
+  // between their devices; nothing is sent to a model.
+  "GET /v1/dictation/learned-fixes": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/dictation/learned-fixes/list.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
+  "POST /v1/dictation/learned-fixes": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/learned-fixes/change.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
+  "DELETE /v1/dictation/learned-fixes": {
+    scope: "stella:chat",
+    handler: "apps/api/src/handlers/dictation/learned-fixes/clear.ts",
+    uncataloged: "native_tool_ui",
+    client: "mobile",
+  },
   "POST /v1/dictation/recording-cleanup": {
     scope: "stella:chat",
     handler: "apps/api/src/handlers/dictation/member-recording-cleanup.ts",
@@ -257,16 +277,30 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/files/asic.ts",
     uncataloged: "upload_mechanics",
   },
+  "GET /v1/files/:workspaceId/zip/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/zip-archive.ts",
+    exportName: "zipArchivePreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  "GET /v1/files/:workspaceId/mbox/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/mailbox.ts",
+    exportName: "mailboxPreviewEndpoint",
+    uncataloged: "upload_mechanics",
+  },
+  // The files of a part that is itself a container, such as an email in an
+  // archive; each opens through the part link above.
+  "GET /v1/files/:workspaceId/parts/:fieldId": {
+    scope: "stella:read",
+    handler: "apps/api/src/handlers/files/part-list.ts",
+    exportName: "readFilePartListEndpoint",
+    uncataloged: "upload_mechanics",
+  },
   "GET /v1/files/:workspaceId/cades/:fieldId": {
     scope: "stella:read",
     handler: "apps/api/src/handlers/files/cades.ts",
     exportName: "cadesPreviewEndpoint",
-    uncataloged: "upload_mechanics",
-  },
-  "GET /v1/files/:workspaceId/cades/:fieldId/content": {
-    scope: "stella:read",
-    handler: "apps/api/src/handlers/files/cades.ts",
-    exportName: "cadesContentEndpoint",
     uncataloged: "upload_mechanics",
   },
   "GET /v1/files/:workspaceId/signed-dossier/:fieldId": {
@@ -275,10 +309,10 @@ export const API_OAUTH_ROUTES = {
     exportName: "signedDossierPreviewEndpoint",
     uncataloged: "upload_mechanics",
   },
-  "GET /v1/files/:workspaceId/signed-dossier/:fieldId/content": {
+  "GET /v1/files/:workspaceId/signature/:fieldId": {
     scope: "stella:read",
-    handler: "apps/api/src/handlers/files/signed-dossier.ts",
-    exportName: "signedDossierContentEndpoint",
+    handler: "apps/api/src/handlers/files/signature.ts",
+    exportName: "signaturePreviewEndpoint",
     uncataloged: "upload_mechanics",
   },
   "GET /v1/files/:workspaceId/data-box/:fieldId": {
@@ -286,9 +320,9 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/files/data-box.ts",
     uncataloged: "upload_mechanics",
   },
-  "GET /v1/files/:workspaceId/certified-email/:fieldId": {
+  "GET /v1/files/:workspaceId/email-reading/:fieldId": {
     scope: "stella:read",
-    handler: "apps/api/src/handlers/files/certified-email.ts",
+    handler: "apps/api/src/handlers/files/email-reading.ts",
     uncataloged: "upload_mechanics",
   },
   "POST /v1/entities/:workspaceId/upload-version": {

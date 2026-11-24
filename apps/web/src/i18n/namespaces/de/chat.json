@@ -975,7 +975,6 @@
       "waitingForInput": "Warten auf Eingabe",
       "writing": "Antwort wird verfasst"
     },
-    "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
     "usageFallbackNotice": "Tägliches KI-Kontingent aufgebraucht; Antworten laufen weiter über das Standardmodell.",
     "videoContent": "Generiertes Video",

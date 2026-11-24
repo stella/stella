@@ -159,6 +159,7 @@ import {
   settleRouteHandoff,
   showStoredChatThread,
 } from "@/features/chat/chat-runtime-registry";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import {
   chatToolGrantsOptions,
   projectChatToolGrants,
@@ -204,7 +205,6 @@ import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { DOCX_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import {

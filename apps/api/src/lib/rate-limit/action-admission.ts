@@ -3,7 +3,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { env } from "@/api/env";
 import type {
   AdmissionRedisClient,

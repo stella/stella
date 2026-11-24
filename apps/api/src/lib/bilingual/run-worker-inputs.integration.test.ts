@@ -21,13 +21,13 @@ import {
 import { eq } from "drizzle-orm";
 
 import { member } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   bilingualTranslationRows,
   bilingualTranslationRuns,
   workspaceMembers,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import {
   DD_REPORT_KEY,
   getBuiltinReportTemplate,

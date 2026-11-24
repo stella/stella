@@ -1,5 +1,59 @@
 # @stll/cli
 
+## 8.2.2
+
+### Patch Changes
+
+- [#9187](https://github.com/stella/stella/pull/9187) [`1ab906c`](https://github.com/stella/stella/commit/1ab906cc4ad7916de5ef21284416343ea2e2810c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read detached CAdES and XAdES signature files through document content commands: their unverified signers, the document they carry, and the matter documents they sign.
+
+## 8.2.1
+
+### Patch Changes
+
+- [#9294](https://github.com/stella/stella/pull/9294) [`1798f66`](https://github.com/stella/stella/commit/1798f6615a61ddf02e091d925269ed735bef75fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read Outlook mailboxes (`.pst`) through document content commands: each message's folder, sender, recipients, date, subject, text and attachments' names.
+
+## 8.2.0
+
+### Minor Changes
+
+- [#9069](https://github.com/stella/stella/pull/9069) [`4932387`](https://github.com/stella/stella/commit/4932387e20c4c0fd8c3ec7a7af623ae55261aeee) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Manage the organization's dictation words: list and search them, check and add words in batches, delete words, and export the whole list.
+
+### Patch Changes
+
+- [#9209](https://github.com/stella/stella/pull/9209) [`54dbe8c`](https://github.com/stella/stella/commit/54dbe8c85eea53a1fbc2b0aba01a406f4dd60e29) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read an XML file that holds no structured invoice as its indented text through document content commands.
+
+## 8.1.4
+
+### Patch Changes
+
+- [#9211](https://github.com/stella/stella/pull/9211) [`b5b04e6`](https://github.com/stella/stella/commit/b5b04e6e95a0defd44bd24d13a102ab7e5295e90) Thanks [@jan-kubica](https://github.com/jan-kubica)! - The `matters.correspondence.get` and `matters.correspondence.list` references describe `pec` records: uploaded Italian certified emails whose `certifiedEmail` carries the provider's certification data as stated in the file.
+
+- [#9275](https://github.com/stella/stella/pull/9275) [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read mailboxes (`.mbox`) through document content commands: each message's sender, recipients, date, subject, text and attachments' names.
+
+## 8.1.3
+
+### Patch Changes
+
+- [#9254](https://github.com/stella/stella/pull/9254) [`fcf4215`](https://github.com/stella/stella/commit/fcf421569917f12d081fec6faed0188b0003b8a6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read Outlook TNEF messages (`winmail.dat`), alone or attached to an email, through document content commands.
+
+## 8.1.2
+
+### Patch Changes
+
+- [#9246](https://github.com/stella/stella/pull/9246) [`f292e0a`](https://github.com/stella/stella/commit/f292e0af50fa6912cdced0f28f0b4cfd22c61c01) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Uploads of `.heic` and `.heif` photos declare `image/heic` and `image/heif`.
+
+## 8.1.1
+
+### Patch Changes
+
+- [#9242](https://github.com/stella/stella/pull/9242) [`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read the files of ZIP archives, with their folders, through document content commands.
+
+## 8.1.0
+
+### Minor Changes
+
+- [#9227](https://github.com/stella/stella/pull/9227) [`b1101fe`](https://github.com/stella/stella/commit/b1101fe79d727bb86a8335dddb85bca2b9ceeb76) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - Turn on automatic document naming for a matter, and read and set the organization's document name pattern.
+
 ## 8.0.1
 
 ### Patch Changes

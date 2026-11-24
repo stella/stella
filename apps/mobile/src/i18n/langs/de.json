@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "Anhänge",
     "certifiedAt": "Zertifiziert am",
     "deliveredTo": "Zugestellt an",
     "error": "Gemeldeter Fehler",
@@ -468,6 +467,10 @@
     "retry": "Erneut versuchen",
     "title": "Dokument",
     "unrendered": "Dieses Dokument kann hier nicht angezeigt werden, die Systemvorschau kann es aber eventuell öffnen.",
+    "unscannedContent": {
+      "encrypted": "Einige enthaltene Dateien sind passwortgeschützt und wurden daher nicht auf Bedrohungen geprüft.",
+      "unsupportedCompression": "Einige enthaltene Dateien sind in einem Format komprimiert, das stella nicht lesen kann, und wurden daher nicht auf Bedrohungen geprüft."
+    },
     "zoomFit": "An Breite anpassen",
     "zoomIn": "Vergrößern",
     "zoomOut": "Verkleinern"
@@ -475,7 +478,6 @@
   "eInvoice": {
     "accountNumber": "Bankkontonummer",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "Angehängte Dateien",
     "bankCode": "Bankleitzahl",
     "batchPosition": "Beleg {position, number} von {count, number}",
     "bic": "BIC-Code",
@@ -494,7 +496,6 @@
     "linesShown": "{shown, number} von {count, plural, one {# Position} other {# Positionen}} angezeigt",
     "netAmount": "Nettobetrag",
     "netTotal": "Gesamtbetrag ohne USt.",
-    "notRecognized": "Diese XML-Datei ist keine erkannte strukturierte Rechnung.",
     "notes": "Rechnungshinweise",
     "otherIdentifier": "Andere Kennung",
     "payableAmount": "Zahlbetrag",
@@ -505,6 +506,7 @@
     "paymentReference": "Verwendungszweck",
     "prepaidAmount": "Bereits gezahlt",
     "quantity": "Menge und Einheit",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "registrationNumber": "Registernummer",
@@ -516,16 +518,53 @@
     "taxableAmount": "Bemessungsgrundlage",
     "totals": "Summen",
     "unitPrice": "Einzelpreis",
+    "units": {
+      "day": "{count, plural, one {{quantity} Tag} other {{quantity} Tage}}",
+      "hour": "{count, plural, one {{quantity} Stunde} other {{quantity} Stunden}}",
+      "month": "{count, plural, one {{quantity} Monat} other {{quantity} Monate}}",
+      "unit": "{count, plural, one {{quantity} Stk.} other {{quantity} Stk.}}",
+      "week": "{count, plural, one {{quantity} Woche} other {{quantity} Wochen}}",
+      "year": "{count, plural, one {{quantity} Jahr} other {{quantity} Jahre}}"
+    },
     "unreadable": "Die Rechnung konnte nicht gelesen werden.",
     "vat": "USt.",
     "vatBreakdown": "USt.-Aufschlüsselung",
-    "vatId": "Umsatzsteuer-ID"
+    "vatId": "Umsatzsteuer-ID",
+    "xmlUnreadable": "Diese XML-Datei konnte nicht gelesen werden."
+  },
+  "email": {
+    "cc": "Kopie",
+    "date": "Datum",
+    "from": "Absender",
+    "noSubject": "(Kein Betreff)",
+    "subject": "Betreff",
+    "to": "Empfänger"
   },
   "entity": {
     "currentVersion": "Aktuelle Version",
     "loadFailed": "Dieser Eintrag konnte nicht geladen werden.",
     "reference": "Aktenzeichen",
     "type": "Typ"
+  },
+  "fileParts": {
+    "archiveUnreadable": "Das Archiv konnte nicht gelesen werden.",
+    "attachments": "Anhänge",
+    "files": "Dateien",
+    "insideFailed": "Die Dateien darin konnten nicht geladen werden. Zum erneuten Versuch tippen.",
+    "noFilesInside": "Darin sind keine Dateien.",
+    "noMatches": "Keine Datei entspricht „{query}“.",
+    "open": "{fileName} ({details}) öffnen",
+    "saveFailed": "Die Datei konnte nicht in der Akte gespeichert werden. Versuchen Sie es erneut.",
+    "saveNamed": "{fileName} in einer Akte speichern",
+    "search": "Datei nach Name oder Ordner suchen",
+    "unavailable": {
+      "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",
+      "link": "Verweis auf eine andere Datei, wird nicht geöffnet",
+      "tooLarge": "Zu groß zum Öffnen",
+      "unreadable": "Beschädigt, lässt sich nicht öffnen",
+      "unsupported": "Mit einem Verfahren komprimiert, das sich nicht öffnen lässt"
+    },
+    "unnamed": "Unbenannte Datei"
   },
   "header": {
     "search": "Suchen"
@@ -555,6 +594,16 @@
     "refused": "Ihr Server hat die Anfrage abgelehnt (Fehler {status}).",
     "server": "Auf Ihrem Server ist ein Fehler aufgetreten (Fehler {status}). Versuchen Sie es gleich noch einmal.",
     "session": "Ihre Anmeldung ist abgelaufen. Melden Sie sich erneut an."
+  },
+  "mailbox": {
+    "back": "Zurück zu den Nachrichten",
+    "messages": "Nachrichten",
+    "noMatches": "Keine Nachricht entspricht „{query}“.",
+    "noMessages": "Dieses Postfach enthält keine Nachrichten.",
+    "openFailed": "Die Nachricht konnte nicht geöffnet werden. Zum erneuten Versuchen tippen.",
+    "search": "Nachrichten durchsuchen",
+    "truncated": "Nur die ersten {count, number} Nachrichten werden angezeigt.",
+    "unreadable": "Dieses Postfach konnte nicht gelesen werden."
   },
   "matter": {
     "add": "Hinzufügen",
@@ -782,7 +831,7 @@
     "dictationLearnedDelete": "Gelerntes löschen",
     "dictationLearnedEmpty": "Noch nichts gelernt.",
     "dictationLearnedFix": "{from} → {to}",
-    "dictationLearnedHint": "Wenn Sie die Schreibweise eines diktierten Worts oder Namens zweimal gleich korrigieren, schreibt stella es in späteren Diktaten so. Bleibt nur auf diesem Telefon.",
+    "dictationLearnedHint": "Wenn Sie die Schreibweise eines diktierten Worts oder Namens zweimal gleich korrigieren, schreibt stella es in späteren Diktaten so. Wird mit Ihren anderen Geräten synchronisiert; nur Sie sehen es.",
     "dictationLearnedTitle": "Aus Ihren Korrekturen gelernt",
     "dictationLearnedUnreadable": "Was stella gelernt hat, konnte nicht gelesen werden.",
     "dictationModelDefault": "Standard",
@@ -850,11 +899,20 @@
     "useStella": "stella verwenden"
   },
   "signedFile": {
+    "bindingDiffers": "Ihr Inhalt entspricht nicht dem in der Signatur angegebenen Hashwert.",
+    "bindingMatches": "Ihr Inhalt entspricht dem in der Signatur angegebenen Hashwert.",
+    "bindingNotCompared": "Über den Dateinamen gefunden. Der Inhalt wurde nicht verglichen.",
     "deliveryReceipt": "Zustellnachweis für eine elektronische Akte",
+    "digestNote": "Ein übereinstimmender Hashwert zeigt, dass dies die signierten Daten sind. Die Signatur ist damit nicht geprüft.",
     "layer": "Signaturebene {number, number}",
     "noReadableContent": "Für die Vorschau sind keine lesbaren Inhalte verfügbar.",
     "noSigners": "Es wurden keine Angaben zu Unterzeichnern gefunden.",
+    "signedAt": "Angegebener Signaturzeitpunkt: {time}",
+    "signedContent": "Signiertes Dokument",
+    "signedFileMissing": "Die signierte Datei liegt nicht in dieser Akte.",
     "signers": "Unterzeichner",
+    "signs": "Signierte Datei",
+    "statedFilesMissing": "In der Signatur genannt, aber nicht in dieser Akte:",
     "unknownSigner": "Unbekannte unterzeichnende Person",
     "unreadable": "Die signierte Datei konnte nicht gelesen werden.",
     "unverified": "Die Signaturen wurden nicht geprüft."

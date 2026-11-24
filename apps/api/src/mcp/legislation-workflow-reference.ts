@@ -4,7 +4,7 @@ import {
   type LegislationExpressionKind,
 } from "@stll/api-contract/legislation-expression";
 
-import type { McpToolName } from "@/api/lib/api-handlers";
+import type { McpToolName } from "@/api/http/handler-config-types";
 import { PROVISION_READ_STATUSES } from "@/api/lib/legal-search/legislation-provision-vocabulary";
 import { LIMITS } from "@/api/lib/limits";
 import type { McpMode } from "@/api/mcp/constants";

@@ -250,6 +250,7 @@ const createHarness = ({
         originalMimeType: DOCX_MIME_TYPE,
         fileName: "Agreement redline.docx",
         encrypted: false,
+        unscannedContent: [],
         presignedUrl: "https://files.example/redline.docx",
         stampable: false,
       };
@@ -271,7 +272,7 @@ const createHarness = ({
     deliverTemporaryRedline: deliverTemporaryRedlineMock,
     readEntityVersionFile: readEntityVersionFileMock,
     readFileHandler: readFileHandlerMock,
-    resolveDocxEditAuthorName: async () => "Ada Lovelace",
+    resolveDocxEditAuthorName: async () => Result.ok("Ada Lovelace"),
     withTimeout: withTimeoutMock,
   });
   const readSessionAuthority: SyntheticSessionAuthorityReader = async () =>

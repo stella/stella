@@ -1,6 +1,5 @@
 {
   "certifiedEmail": {
-    "attachments": "المرفقات",
     "certifiedAt": "وقت الاعتماد",
     "deliveredTo": "سُلّم إلى",
     "error": "الخطأ المُبلّغ عنه",
@@ -468,6 +467,10 @@
     "retry": "إعادة المحاولة",
     "title": "مستند",
     "unrendered": "لا يمكن عرض هذا المستند هنا، لكن قد تتمكن معاينة النظام من فتحه.",
+    "unscannedContent": {
+      "encrypted": "بعض الملفات الموجودة بداخله محمية بكلمة مرور، لذا لم يتم فحصها بحثًا عن تهديدات.",
+      "unsupportedCompression": "بعض الملفات الموجودة بداخله مضغوطة بتنسيق لا تستطيع stella قراءته، لذا لم يتم فحصها بحثًا عن تهديدات."
+    },
     "zoomFit": "ملاءمة العرض",
     "zoomIn": "تكبير",
     "zoomOut": "تصغير"
@@ -475,7 +478,6 @@
   "eInvoice": {
     "accountNumber": "رقم الحساب المصرفي",
     "amountWithCurrency": "{amount} {currency}",
-    "attachments": "الملفات المرفقة",
     "bankCode": "رمز البنك",
     "batchPosition": "المستند {position, number} من {count, number}",
     "bic": "رمز BIC",
@@ -494,7 +496,6 @@
     "linesShown": "عرض {shown, number} من {count, plural, zero {# بند} one {بند واحد} two {بندين} few {# بنود} many {# بندًا} other {# بند}}",
     "netAmount": "المبلغ الصافي",
     "netTotal": "الإجمالي غير شامل ضريبة القيمة المضافة",
-    "notRecognized": "ملف XML هذا ليس فاتورة منظمة معروفة.",
     "notes": "ملاحظات الفاتورة",
     "otherIdentifier": "معرّف آخر",
     "payableAmount": "المبلغ المستحق",
@@ -505,6 +506,7 @@
     "paymentReference": "مرجع الدفع",
     "prepaidAmount": "المدفوع مقدمًا",
     "quantity": "الكمية والوحدة",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "registrationNumber": "رقم التسجيل",
@@ -516,16 +518,53 @@
     "taxableAmount": "المبلغ الخاضع للضريبة",
     "totals": "الإجماليات",
     "unitPrice": "سعر الوحدة",
+    "units": {
+      "day": "{count, plural, zero {{quantity} يوم} one {{quantity} يوم} two {{quantity} يوم} few {{quantity} أيام} many {{quantity} يومًا} other {{quantity} يوم}}",
+      "hour": "{count, plural, zero {{quantity} ساعة} one {{quantity} ساعة} two {{quantity} ساعة} few {{quantity} ساعات} many {{quantity} ساعة} other {{quantity} ساعة}}",
+      "month": "{count, plural, zero {{quantity} شهر} one {{quantity} شهر} two {{quantity} شهر} few {{quantity} أشهر} many {{quantity} شهرًا} other {{quantity} شهر}}",
+      "unit": "{count, plural, zero {{quantity} وحدة} one {{quantity} وحدة} two {{quantity} وحدة} few {{quantity} وحدات} many {{quantity} وحدة} other {{quantity} وحدة}}",
+      "week": "{count, plural, zero {{quantity} أسبوع} one {{quantity} أسبوع} two {{quantity} أسبوع} few {{quantity} أسابيع} many {{quantity} أسبوعًا} other {{quantity} أسبوع}}",
+      "year": "{count, plural, zero {{quantity} سنة} one {{quantity} سنة} two {{quantity} سنة} few {{quantity} سنوات} many {{quantity} سنة} other {{quantity} سنة}}"
+    },
     "unreadable": "تعذّرت قراءة الفاتورة.",
     "vat": "ضريبة القيمة المضافة",
     "vatBreakdown": "تفصيل ضريبة القيمة المضافة",
-    "vatId": "رقم ضريبة القيمة المضافة"
+    "vatId": "رقم ضريبة القيمة المضافة",
+    "xmlUnreadable": "تعذّرت قراءة ملف XML هذا."
+  },
+  "email": {
+    "cc": "نسخة",
+    "date": "التاريخ",
+    "from": "المرسل",
+    "noSubject": "(بلا موضوع)",
+    "subject": "الموضوع",
+    "to": "المستلمون"
   },
   "entity": {
     "currentVersion": "الإصدار الحالي",
     "loadFailed": "تعذّر تحميل هذا العنصر.",
     "reference": "المرجع",
     "type": "النوع"
+  },
+  "fileParts": {
+    "archiveUnreadable": "تعذّرت قراءة الأرشيف.",
+    "attachments": "المرفقات",
+    "files": "الملفات",
+    "insideFailed": "تعذّر تحميل الملفات الموجودة بداخله. اضغط للمحاولة مرة أخرى.",
+    "noFilesInside": "لا توجد ملفات بداخله.",
+    "noMatches": "لا يوجد ملف يطابق «{query}».",
+    "open": "فتح {fileName} ({details})",
+    "saveFailed": "تعذّر حفظ الملف في الملف القانوني. حاول مرة أخرى.",
+    "saveNamed": "حفظ {fileName} في ملف قانوني",
+    "search": "البحث عن ملف بالاسم أو المجلد",
+    "unavailable": {
+      "encrypted": "محمي بكلمة مرور، لا يمكن فتحه",
+      "link": "رابط إلى ملف آخر، لا يُفتح",
+      "tooLarge": "كبير جدًا بحيث لا يمكن فتحه",
+      "unreadable": "تالف، لا يمكن فتحه",
+      "unsupported": "مضغوط بطريقة لا يمكن فتحها"
+    },
+    "unnamed": "ملف بلا اسم"
   },
   "header": {
     "search": "بحث"
@@ -555,6 +594,16 @@
     "refused": "رفض خادمك الطلب (رمز الخطأ {status}).",
     "server": "واجه خادمك مشكلة (رمز الخطأ {status}). حاول مجددًا بعد قليل.",
     "session": "انتهت صلاحية تسجيل دخولك. سجّل الدخول مجددًا."
+  },
+  "mailbox": {
+    "back": "العودة إلى الرسائل",
+    "messages": "الرسائل",
+    "noMatches": "لا توجد رسالة تطابق «{query}».",
+    "noMessages": "لا يحتوي صندوق البريد هذا على أي رسائل.",
+    "openFailed": "تعذّر فتح هذه الرسالة. انقر للمحاولة مرة أخرى.",
+    "search": "البحث في الرسائل",
+    "truncated": "تُعرض أول {count, number} رسالة فقط.",
+    "unreadable": "تعذّرت قراءة صندوق البريد هذا."
   },
   "matter": {
     "add": "إضافة",
@@ -782,7 +831,7 @@
     "dictationLearnedDelete": "حذف ما تعلّمته stella",
     "dictationLearnedEmpty": "لم تُتعلَّم أي تصحيحات بعد.",
     "dictationLearnedFix": "{from} ← {to}",
-    "dictationLearnedHint": "عندما تصحّح تهجئة كلمة أو اسم مُملى بالطريقة نفسها مرتين، تكتبه stella هكذا في الإملاءات التالية. يُحفظ على هذا الهاتف فقط.",
+    "dictationLearnedHint": "عندما تصحّح تهجئة كلمة أو اسم مُملى بالطريقة نفسها مرتين، تكتبه stella هكذا في الإملاءات التالية. تُزامَن مع أجهزتك الأخرى، ولا يراها أحد سواك.",
     "dictationLearnedTitle": "تصحيحات تعلّمتها stella من تعديلاتك",
     "dictationLearnedUnreadable": "تعذّرت قراءة ما تعلّمته stella.",
     "dictationModelDefault": "الافتراضي",
@@ -850,11 +899,20 @@
     "useStella": "استخدام stella"
   },
   "signedFile": {
+    "bindingDiffers": "لا يطابق محتواه البصمة المذكورة في التوقيع.",
+    "bindingMatches": "يطابق محتواه البصمة المذكورة في التوقيع.",
+    "bindingNotCompared": "عُثر عليه باسم الملف. لم تتم مقارنة محتواه.",
     "deliveryReceipt": "إيصال تسليم لملف إلكتروني",
+    "digestNote": "تطابق البصمة يعني أن هذه هي البيانات الموقّعة، ولا يعني التحقق من التوقيع.",
     "layer": "طبقة التوقيعات {number, number}",
     "noReadableContent": "لا يتوفر محتوى قابل للقراءة للمعاينة.",
     "noSigners": "لم يُعثر على بيانات أي موقّع.",
+    "signedAt": "وقت التوقيع المذكور: {time}",
+    "signedContent": "المستند الموقّع",
+    "signedFileMissing": "الملف الموقّع غير موجود في هذا الملف القانوني.",
     "signers": "الموقّعون",
+    "signs": "الملف الموقّع",
+    "statedFilesMissing": "مذكورة في التوقيع وغير موجودة في هذا الملف القانوني:",
     "unknownSigner": "موقّع مجهول",
     "unreadable": "تعذّرت قراءة الملف الموقّع.",
     "unverified": "لم يُتحقق من التوقيعات."

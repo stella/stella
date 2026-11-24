@@ -31,7 +31,6 @@
       "sent": "Nosūtīta",
       "statedInFile": "Datu pastkastes ziņa (saskaņā ar failu)",
       "toHands": "Personīgi: {name}",
-      "unlinkedFiles": "Lai atvērtu pielikumus, kuriem nav saites, lejupielādējiet sākotnējo ZFO failu.",
       "unreadable": "Failu neizdevās nolasīt ne kā datu pastkastes ziņojumu, ne kā piegādes apliecinājumu.",
       "uploaded": "Augšupielādēta datu pastkastes ziņa"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Debetrēķins",
       "other": "Cits dokuments"
     },
-    "downloadAttachment": "Lejupielādēt {fileName}",
     "exemptionReason": "Atbrīvojuma iemesls",
     "formatVersion": "{format}, versija {version}",
     "grossTotal": "Kopā ar PVN",
@@ -101,7 +99,6 @@
     "linesShown": "Rāda {shown, number} no {count, plural, zero {# pozīcijām} one {# pozīcijas} other {# pozīcijām}}",
     "netAmount": "Summa bez PVN",
     "netTotal": "Kopā bez PVN",
-    "notRecognized": "Šī XML datne nav atpazīts strukturēts rēķins.",
     "otherIdentifier": "Cits identifikators",
     "payableAmount": "Summa apmaksai",
     "paymentAmount": "Maksājuma summa",
@@ -111,6 +108,7 @@
     "paymentReference": "Maksājuma mērķis",
     "prepaidAmount": "Samaksāts avansā",
     "quantity": "Daudzums un mērvienība",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate}%",
     "ratePercentWithCategory": "{rate}% ({category})",
     "supplier": "Pārdevējs",
@@ -120,9 +118,18 @@
     "taxableAmount": "Ar nodokli apliekamā vērtība",
     "totals": "Kopsummas",
     "unitPrice": "Vienības cena",
+    "units": {
+      "day": "{count, plural, zero {{quantity} dienu} one {{quantity} diena} other {{quantity} dienas}}",
+      "hour": "{count, plural, zero {{quantity} stundu} one {{quantity} stunda} other {{quantity} stundas}}",
+      "month": "{count, plural, zero {{quantity} mēnešu} one {{quantity} mēnesis} other {{quantity} mēneši}}",
+      "unit": "{count, plural, zero {{quantity} gab.} one {{quantity} gab.} other {{quantity} gab.}}",
+      "week": "{count, plural, zero {{quantity} nedēļu} one {{quantity} nedēļa} other {{quantity} nedēļas}}",
+      "year": "{count, plural, zero {{quantity} gadu} one {{quantity} gads} other {{quantity} gadi}}"
+    },
     "unreadable": "Rēķinu neizdevās nolasīt.",
     "vat": "PVN",
-    "vatBreakdown": "PVN sadalījums"
+    "vatBreakdown": "PVN sadalījums",
+    "xmlUnreadable": "Šo XML failu neizdevās nolasīt."
   },
   "emailViewer": {
     "attachments": "Pielikumi",
@@ -364,12 +371,21 @@
     "title": "SharePoint un OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Tā saturs neatbilst parakstā norādītajai jaucējvērtībai.",
+    "bindingMatches": "Tā saturs atbilst parakstā norādītajai jaucējvērtībai.",
+    "bindingNotCompared": "Atrasts pēc faila nosaukuma. Saturs netika salīdzināts.",
     "deliveryReceipt": "Elektroniskās lietas saņemšanas apstiprinājums",
+    "digestNote": "Sakrītoša jaucējvērtība parāda, ka tie ir parakstītie dati. Parakstu tā nepārbauda.",
     "layer": "Parakstu slānis {number, number}",
     "noReadableContent": "Priekšskatījumam nav pieejams lasāms saturs.",
     "noSigners": "Dati par parakstītājiem netika atrasti.",
     "pdfUnavailable": "PDF priekšskatījums nav pieejams.",
+    "signedAt": "Norādītais parakstīšanas laiks: {time}",
+    "signedDocument": "Parakstīts dokuments",
+    "signedFileMissing": "Parakstītā faila šajā lietā nav.",
     "signers": "Parakstītāji",
+    "signs": "Parakstītais fails",
+    "statedFilesMissing": "Norādīti parakstā, bet šajā lietā nav atrasti:",
     "unknownSigner": "Nezināms parakstītājs",
     "unreadable": "Parakstīto failu neizdevās nolasīt.",
     "unverified": "Paraksti nav pārbaudīti."
@@ -553,6 +569,10 @@
     "deleteWorkspaceConfirmDescription": "Vai tiešām vēlaties dzēst šo lietu? Šo darbību nevar atsaukt.",
     "deletedItem": "Izdzēsts: {name}",
     "deletingWorkspace": "Dzēš lietu",
+    "documentNaming": {
+      "description": "Jaunie dokumenti saņem organizācijas nosaukuma veidni: {pattern}",
+      "label": "Pārdēvēt jaunās augšupielādes"
+    },
     "documentSwitcher": {
       "download": "Lejupielādēt šo failu",
       "renditionsFailed": "Pārlādējiet dokumentu un mēģiniet to lejupielādēt vēlreiz.",
@@ -730,6 +750,10 @@
       "renamedToAvoidConflicts": "{count, plural, zero {# failu pārdēvēti, lai izvairītos no konfliktiem} one {# fails pārdēvēts, lai izvairītos no konfliktiem} other {# faili pārdēvēti, lai izvairītos no konfliktiem}}",
       "retryFailed": "Mēģināt vēlreiz {count, plural, zero {# failu} one {# failu} other {# failus}}",
       "scrubFailed": "Neizdevās noņemt šī faila metadatus, tāpēc nekas netika lejupielādēts",
+      "unscannedContent": {
+        "encrypted": "Daži iekšā esošie faili ir aizsargāti ar paroli, tāpēc tie netika pārbaudīti, vai tajos nav apdraudējumu.",
+        "unsupportedCompression": "Daži iekšā esošie faili ir saspiesti formātā, ko stella nevar nolasīt, tāpēc tie netika pārbaudīti, vai tajos nav apdraudējumu."
+      },
       "uploadBlockedByWorkflow": "Pirms failu augšupielādes uzgaidiet, līdz darbplūsma ir pabeigta.",
       "uploadedPartially": "{failed, plural, zero {# failu neizdevās augšupielādēt} one {# fails neizdevās augšupielādēt} other {# faili neizdevās augšupielādēt}} no {total, number}",
       "uploadedSuccessfully": "Faili veiksmīgi augšupielādēti",

@@ -36,7 +36,6 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
-import type { Transaction } from "@/api/db/root";
 import type { caseLawDecisions, InvoiceStatus } from "@/api/db/schema";
 import {
   billingArrangements,
@@ -72,6 +71,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { withSharedTransactionTimeoutRestoration } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { invoiceInMatter } from "@/api/lib/billing/invoice-scope";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
@@ -250,6 +250,8 @@ const LEGAL_HOLD_ORGANIZATION_LOCK_NAMESPACE = 19_054;
 const BILLING_DRAFT_SETTINGS_LOCK_NAMESPACE = 0x0f_10_cc_b6;
 // The corpus projection offline request aggregate's namespace.
 const OFFLINE_REQUEST = 0x0f_10_cc_b7;
+// The dictation words capacity aggregate's namespace.
+const DICT_NS = 0x0f_10_cc_b8;
 
 const chatOwnerStoredContentEgressKey = ({
   organizationId,
@@ -1538,6 +1540,8 @@ const advisoryResource = (options: AdvisoryIdentityOptions) => {
         first: sql`hashtext('contact_capacity')`,
         ...organizationKeyed(options),
       };
+    case "dictationVocabularyCapacity":
+      return { first: sql`${DICT_NS}::integer`, ...organizationKeyed(options) };
     case "chatToolGrants":
       return {
         first: sql`hashtext('chat.tool-grants')`,

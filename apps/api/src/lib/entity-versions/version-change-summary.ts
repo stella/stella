@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";

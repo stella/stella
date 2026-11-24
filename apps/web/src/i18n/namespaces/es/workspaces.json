@@ -31,7 +31,6 @@
       "sent": "Enviado",
       "statedInFile": "Mensaje de buzón de datos (según el archivo)",
       "toHands": "A la atención de {name}",
-      "unlinkedFiles": "Para abrir los archivos adjuntos que aparecen sin enlace, descargue el archivo ZFO original.",
       "unreadable": "No se ha podido leer este archivo como mensaje del buzón de datos ni como acuse de recibo.",
       "uploaded": "Mensaje de buzón de datos subido"
     },
@@ -90,7 +89,6 @@
       "debitNote": "Nota de débito",
       "other": "Otro documento"
     },
-    "downloadAttachment": "Descargar {fileName}",
     "exemptionReason": "Motivo de exención",
     "formatVersion": "{format}, versión {version}",
     "grossTotal": "Total con IVA",
@@ -101,7 +99,6 @@
     "linesShown": "Se muestran {shown, number} de {count, plural, one {# línea} many {# líneas} other {# líneas}}",
     "netAmount": "Importe neto",
     "netTotal": "Total sin IVA",
-    "notRecognized": "Este archivo XML no es una factura estructurada reconocida.",
     "otherIdentifier": "Otro identificador",
     "payableAmount": "Importe a pagar",
     "paymentAmount": "Importe del pago",
@@ -111,6 +108,7 @@
     "paymentReference": "Referencia de pago",
     "prepaidAmount": "Pagado por adelantado",
     "quantity": "Cantidad y unidad",
+    "quantityWithUnit": "{quantity} {unit}",
     "ratePercent": "{rate} %",
     "ratePercentWithCategory": "{rate} % ({category})",
     "supplier": "Proveedor",
@@ -120,9 +118,18 @@
     "taxableAmount": "Base imponible",
     "totals": "Totales",
     "unitPrice": "Precio unitario",
+    "units": {
+      "day": "{count, plural, one {{quantity} día} many {{quantity} días} other {{quantity} días}}",
+      "hour": "{count, plural, one {{quantity} hora} many {{quantity} horas} other {{quantity} horas}}",
+      "month": "{count, plural, one {{quantity} mes} many {{quantity} meses} other {{quantity} meses}}",
+      "unit": "{count, plural, one {{quantity} unidad} many {{quantity} unidades} other {{quantity} unidades}}",
+      "week": "{count, plural, one {{quantity} semana} many {{quantity} semanas} other {{quantity} semanas}}",
+      "year": "{count, plural, one {{quantity} año} many {{quantity} años} other {{quantity} años}}"
+    },
     "unreadable": "No se pudo leer la factura.",
     "vat": "IVA",
-    "vatBreakdown": "Desglose del IVA"
+    "vatBreakdown": "Desglose del IVA",
+    "xmlUnreadable": "No se pudo leer este archivo XML."
   },
   "emailViewer": {
     "attachments": "Archivos adjuntos",
@@ -364,12 +371,21 @@
     "title": "SharePoint y OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "Su contenido no coincide con el hash indicado en la firma.",
+    "bindingMatches": "Su contenido coincide con el hash indicado en la firma.",
+    "bindingNotCompared": "Encontrado por el nombre del archivo. No se comparó su contenido.",
     "deliveryReceipt": "Acuse de entrega de un expediente electrónico",
+    "digestNote": "Un hash coincidente muestra que estos son los datos firmados. No verifica la firma.",
     "layer": "Capa de firmas {number, number}",
     "noReadableContent": "No hay contenido legible para la vista previa.",
     "noSigners": "No se encontraron datos de los firmantes.",
     "pdfUnavailable": "La vista previa del PDF no está disponible.",
+    "signedAt": "Hora de firma indicada: {time}",
+    "signedDocument": "Documento firmado",
+    "signedFileMissing": "El archivo firmado no está en este asunto.",
     "signers": "Firmantes",
+    "signs": "Archivo firmado",
+    "statedFilesMissing": "Indicados en la firma, no encontrados en este asunto:",
     "unknownSigner": "Firmante desconocido",
     "unreadable": "No se ha podido leer el archivo firmado.",
     "unverified": "Las firmas no se han verificado."
@@ -553,6 +569,10 @@
     "deleteWorkspaceConfirmDescription": "¿Está seguro de que desea eliminar este asunto? Esta acción no se puede deshacer.",
     "deletedItem": "Eliminado: {name}",
     "deletingWorkspace": "Eliminando asunto",
+    "documentNaming": {
+      "description": "Los documentos nuevos reciben el patrón de nombre de la organización: {pattern}",
+      "label": "Renombrar las nuevas subidas"
+    },
     "documentSwitcher": {
       "download": "Descargar este archivo",
       "renditionsFailed": "Vuelva a cargar el documento e intente descargarlo de nuevo.",
@@ -730,6 +750,10 @@
       "renamedToAvoidConflicts": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos} many {# archivos renombrados para evitar conflictos}}",
       "retryFailed": "Reintentar {count, plural, one {# archivo} other {# archivos} many {# archivos}}",
       "scrubFailed": "No se pudieron eliminar los metadatos de este archivo, por lo que no se descargó nada",
+      "unscannedContent": {
+        "encrypted": "Algunos archivos que contiene están protegidos con contraseña, por lo que no se han analizado en busca de amenazas.",
+        "unsupportedCompression": "Algunos archivos que contiene están comprimidos en un formato que stella no puede leer, por lo que no se han analizado en busca de amenazas."
+      },
       "uploadBlockedByWorkflow": "Espere a que termine el flujo de trabajo antes de cargar archivos.",
       "uploadedPartially": "{failed, plural, one {# archivo falló} other {# archivos fallaron} many {# archivos fallaron}} de {total, number}",
       "uploadedSuccessfully": "Archivos subidos correctamente",

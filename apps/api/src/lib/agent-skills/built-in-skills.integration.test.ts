@@ -4,9 +4,9 @@ import { eq } from "drizzle-orm";
 
 import { listSkillMetadata, loadSkill } from "@stll/skills";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import { offerSkillsToModel } from "@/api/lib/agent-skills/invocation";
 import { resolveRequestedSkills } from "@/api/lib/agent-skills/requested-skills";

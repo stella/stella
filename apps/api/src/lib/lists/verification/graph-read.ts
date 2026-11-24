@@ -18,13 +18,13 @@ import { panic } from "better-result";
 import { and, asc, desc, eq, gt, inArray, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { Transaction } from "@/api/db/root";
 import {
   legalListClaims,
   legalListItems,
   legalLists,
   legalListVerificationRuns,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
   VerificationEvidence,

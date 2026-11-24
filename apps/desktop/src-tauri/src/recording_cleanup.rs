@@ -79,6 +79,10 @@ struct CleanupRequest<'a> {
   languages: &'a [&'a str],
   #[serde(skip_serializing_if = "<[_]>::is_empty")]
   vocabulary: &'a [String],
+  /// What the speaker wrote for cleanup to follow, the same as for a
+  /// dictation; absent when there is nothing.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  custom_instructions: Option<&'a str>,
 }
 
 /// One part, cleaned up. Fields a newer API adds are ignored.
@@ -163,6 +167,7 @@ pub async fn clean_up(
   }
   let words = crate::dictation_words::stored_for(recording_account);
   let language = crate::dictation::language(app);
+  let preferences = crate::dictation::cleanup_preferences(app);
   let previous = previous_text
     .map(str::trim)
     .filter(|text| !text.is_empty())
@@ -179,6 +184,7 @@ pub async fn clean_up(
     locale: crate::dictation_cleanup::locale_hint(crate::i18n::active_locale()),
     languages: &language.speaker,
     vocabulary: &words,
+    custom_instructions: preferences.custom_instructions.as_deref(),
   };
   let mut response = crate::dictation_cleanup::send_recording_cleanup(
     &account,
@@ -221,6 +227,26 @@ mod tests {
     }
     let older: Contract = serde_json::from_str("{}").unwrap();
     assert!(older.recording_cleanup.is_none());
+  }
+
+  #[test]
+  fn the_speakers_instructions_go_as_their_own_field_only_when_set() {
+    let body = |custom_instructions| {
+      serde_json::to_value(CleanupRequest {
+        transcript: "pošli to Petrovi",
+        previous_text: None,
+        locale: None,
+        languages: &[],
+        vocabulary: &[],
+        custom_instructions,
+      })
+      .unwrap()
+    };
+    assert!(body(None).get("customInstructions").is_none());
+    assert_eq!(
+      body(Some("Piš spisovně."))["customInstructions"],
+      "Piš spisovně."
+    );
   }
 
   #[test]

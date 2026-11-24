@@ -3,7 +3,7 @@ import { expect, test } from "bun:test";
 
 import { aiAvailableResponse } from "@/__fixtures__/ai-availability";
 import { groupedChatThreadsOptions } from "@/features/chat/queries";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import { rootKeys } from "@/lib/auth-queries";
 import { aiAvailabilityOptions } from "@/lib/organization/ai-config-queries";
 import { createAppQueryClient } from "@/lib/react-query";

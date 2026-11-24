@@ -9,13 +9,13 @@ import {
   FALLBACK_DECISION_UNIQUE_INDEXES,
   onlineUniqueIndexTarget,
 } from "@/api/db/online-unique-indexes";
-import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawDecisionFallbackIdentities,
   caseLawDecisionIdentifiers,
   caseLawDecisions,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { runCitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { settleReopenedCitations } from "@/api/handlers/case-law/citation-resolution";

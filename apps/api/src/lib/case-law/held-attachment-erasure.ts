@@ -1,6 +1,5 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionAliases,
   caseLawDecisions,
@@ -8,6 +7,7 @@ import {
   caseLawHeldDecisionAttachments,
   caseLawIngestionFailureEvidence,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 

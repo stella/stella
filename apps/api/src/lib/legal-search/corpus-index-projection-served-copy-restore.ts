@@ -1,11 +1,11 @@
 import { panic } from "better-result";
 import { and, asc, eq, or, type SQL, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockCorpusProjectionRevisionsAfterStates } from "@/api/lib/db/aggregate-lock";
 import { transitionBatch } from "@/api/lib/db/transitions";

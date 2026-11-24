@@ -82,6 +82,7 @@ export const SettingsShell = ({ children }: SettingsShellProps) => {
     beta: betaFeaturesAvailable(),
     timeBilling,
     usage: env.VITE_FEATURE_USAGE,
+    enterpriseSso: true,
   });
 
   const activeItem = sections

@@ -1,7 +1,6 @@
-import { useState } from "react";
 import type { ReactNode } from "react";
 
-import { Result } from "better-result";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type {
@@ -11,12 +10,15 @@ import type {
   EInvoice,
   EInvoicePreview,
 } from "@stll/api-contract/e-invoice";
+import {
+  eInvoiceIdentifierScheme,
+  eInvoiceQuantityCount,
+  eInvoiceUnit,
+  type EInvoiceUnitName,
+} from "@stll/api-contract/e-invoice-codes";
 import { BidiText } from "@stll/ui/bidi-text";
-import { Button } from "@stll/ui/button";
 import { DetailsGrid, DetailsItem } from "@stll/ui/details-grid";
 import { DocumentMark, type DocumentMarkKind } from "@stll/ui/document-mark";
-import { formatFileSize } from "@stll/ui/file-size";
-import { DownloadIcon } from "@stll/ui/icons";
 import {
   Table,
   TableBody,
@@ -26,13 +28,9 @@ import {
   TableRow,
 } from "@stll/ui/table";
 
-import { DocumentIcon } from "@/components/document-icon";
-import { useFormatter } from "@/i18n/formatting-context";
+import { FilePartList } from "@/components/file-parts/file-parts";
+import type { FilePartActions } from "@/components/file-parts/use-file-part-actions";
 import type { TranslationKey } from "@/i18n/types";
-import { detached } from "@/lib/detached";
-import { notifyUserError } from "@/lib/errors/user-toast";
-import { fetchEInvoiceAttachment } from "@/lib/files/legal-file-queries";
-import { downloadFile } from "@/lib/utils";
 
 type Syntax = (typeof E_INVOICE_SYNTAXES)[number];
 
@@ -84,8 +82,38 @@ const DOCUMENT_TYPE_LABELS = {
   TranslationKey
 >;
 
-type Attachment = EInvoicePreview["attachments"][number];
 type Party = EInvoice["seller"];
+
+type Identifier = Party["identifiers"][number];
+
+/**
+ * An identifier's label: its kind, with the scheme when it says more than
+ * the kind ("Registration number (KvK)"); a known scheme alone names an
+ * otherwise unnamed identifier ("GLN").
+ */
+const useIdentifierLabel = () => {
+  const t = useTranslations();
+  return (identifier: Identifier) => {
+    const kind = t(IDENTIFIER_KIND_LABELS[identifier.kind]);
+    const scheme = eInvoiceIdentifierScheme(identifier);
+    switch (scheme.type) {
+      case "none":
+        return kind;
+      case "named":
+        return identifier.kind === "other"
+          ? scheme.name
+          : t("eInvoice.identifierWithScheme", { kind, scheme: scheme.name });
+      case "code":
+        return t("eInvoice.identifierWithScheme", {
+          kind,
+          scheme: scheme.code,
+        });
+      default:
+        scheme satisfies never;
+        return panic("Unhandled identifier scheme");
+    }
+  };
+};
 
 /**
  * What the file lists without ids (lines, notes, a batch's invoices) is keyed
@@ -142,8 +170,56 @@ const Rate = ({
   );
 };
 
-/** The quantity a price is for, as the file writes it ("100 C62"). */
-const PricedPer = ({ basis }: { basis: string }) => <bdi>{` / ${basis}`}</bdi>;
+const UNIT_LABELS = {
+  unit: "eInvoice.units.unit",
+  hour: "eInvoice.units.hour",
+  day: "eInvoice.units.day",
+  week: "eInvoice.units.week",
+  month: "eInvoice.units.month",
+  year: "eInvoice.units.year",
+} as const satisfies Record<EInvoiceUnitName, TranslationKey>;
+
+/**
+ * A quantity with its unit: in words for common units ("14 units", "32
+ * hours"), as a symbol for measures ("240 m"), else as the file's code.
+ */
+const Quantity = ({
+  stated,
+  unitCode,
+}: {
+  /** The quantity as the file writes it. */
+  stated: string;
+  unitCode: string | null;
+}) => {
+  const t = useTranslations();
+  if (unitCode === null) {
+    return <bdi className="tabular-nums">{stated}</bdi>;
+  }
+  const unit = eInvoiceUnit(unitCode);
+  const count = eInvoiceQuantityCount(stated);
+  return (
+    <bdi className="tabular-nums">
+      {unit.type === "named" && count !== null
+        ? t(UNIT_LABELS[unit.name], { count, quantity: stated })
+        : t("eInvoice.quantityWithUnit", {
+            quantity: stated,
+            unit: unit.type === "symbol" ? unit.symbol : unitCode,
+          })}
+    </bdi>
+  );
+};
+
+/** The quantity a price is for ("/ 100 units"). */
+const PricedPer = ({
+  basis,
+}: {
+  basis: NonNullable<EInvoice["lines"][number]["priceBasis"]>;
+}) => (
+  <>
+    {" / "}
+    <Quantity stated={basis.quantity} unitCode={basis.unitCode} />
+  </>
+);
 
 const Section = ({
   children,
@@ -159,7 +235,7 @@ const Section = ({
 );
 
 const PartyDetails = ({ party, title }: { party: Party; title: string }) => {
-  const t = useTranslations();
+  const identifierLabel = useIdentifierLabel();
   if (
     party.name === null &&
     party.identifiers.length === 0 &&
@@ -176,26 +252,11 @@ const PartyDetails = ({ party, title }: { party: Party; title: string }) => {
       )}
       {party.identifiers.length > 0 && (
         <DetailsGrid variant="list">
-          {keyed(party.identifiers).map(({ item: identifier, key }) => {
-            const kind = t(IDENTIFIER_KIND_LABELS[identifier.kind]);
-            return (
-              <DetailsItem
-                key={key}
-                label={
-                  identifier.scheme === null
-                    ? kind
-                    : t("eInvoice.identifierWithScheme", {
-                        kind,
-                        scheme: identifier.scheme,
-                      })
-                }
-              >
-                <BidiText as="span" className="wrap-break-word">
-                  {identifier.value}
-                </BidiText>
-              </DetailsItem>
-            );
-          })}
+          {keyed(party.identifiers).map(({ item: identifier, key }) => (
+            <DetailsItem key={key} label={identifierLabel(identifier)}>
+              <BidiText as="span">{identifier.value}</BidiText>
+            </DetailsItem>
+          ))}
         </DetailsGrid>
       )}
       {party.address.length > 0 && (
@@ -241,11 +302,7 @@ const LineItems = ({ invoice }: { invoice: EInvoice }) => {
               </TableCell>
               <TableCell numeric>
                 {line.quantity !== null && (
-                  <bdi>
-                    {line.unitCode === null
-                      ? line.quantity
-                      : `${line.quantity} ${line.unitCode}`}
-                  </bdi>
+                  <Quantity stated={line.quantity} unitCode={line.unitCode} />
                 )}
               </TableCell>
               <TableCell numeric>
@@ -495,117 +552,32 @@ const InvoiceDetails = ({
   );
 };
 
-const Attachments = ({
-  attachments,
-  fieldId,
-  workspaceId,
-}: {
-  attachments: readonly Attachment[];
-  fieldId: string;
-  workspaceId: string;
-}) => {
-  const t = useTranslations();
-  const format = useFormatter();
-  const [downloading, setDownloading] = useState<ReadonlySet<number>>(
-    () => new Set(),
-  );
-  if (attachments.length === 0) {
-    return null;
-  }
-
-  const download = async ({ fileName, index }: Attachment) => {
-    setDownloading((current) => new Set(current).add(index));
-    const fetched = await Result.tryPromise(
-      async () =>
-        await fetchEInvoiceAttachment({ fieldId, index, workspaceId }),
-    );
-    setDownloading((current) => {
-      const next = new Set(current);
-      next.delete(index);
-      return next;
-    });
-    if (Result.isError(fetched)) {
-      notifyUserError(fetched.error, t("workspaces.files.downloadFailed"));
-      return;
-    }
-    downloadFile(fetched.value, fileName);
-  };
-
-  return (
-    <Section title={t("eInvoice.attachments")}>
-      <ul className="divide-y rounded-lg border">
-        {attachments.map((attachment) => (
-          <li
-            className="flex items-center gap-3 px-3 py-2"
-            key={attachment.index}
-          >
-            <DocumentIcon
-              className="size-5 shrink-0"
-              fileName={attachment.fileName}
-            />
-            <div className="min-w-0 flex-1 text-sm">
-              <BidiText as="p" className="font-medium wrap-break-word">
-                {attachment.fileName}
-              </BidiText>
-              {attachment.description !== null && (
-                <BidiText
-                  as="p"
-                  className="text-muted-foreground wrap-break-word"
-                >
-                  {attachment.description}
-                </BidiText>
-              )}
-              <p className="text-muted-foreground text-xs tabular-nums">
-                {formatFileSize(attachment.sizeBytes, format)}
-              </p>
-            </div>
-            <Button
-              aria-label={t("eInvoice.downloadAttachment", {
-                fileName: attachment.fileName,
-              })}
-              loading={downloading.has(attachment.index)}
-              onClick={() => {
-                detached(download(attachment), "e-invoice-details.attachment");
-              }}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              <DownloadIcon />
-              {t("common.download")}
-            </Button>
-          </li>
-        ))}
-      </ul>
-    </Section>
-  );
-};
-
 /**
  * A structured invoice as its file states it: every value verbatim, nothing
- * recomputed. `fieldId` is the stored file the attachments are opened from,
- * the invoice itself or the signed envelope around it.
+ * recomputed. Its attachments are parts of the stored file (the invoice, or
+ * the signed envelope around it), listed and opened like any other part.
  */
 export const EInvoiceDetails = ({
-  fieldId,
+  actions,
+  onOpenAttachment,
   preview,
-  workspaceId,
 }: {
-  fieldId: string;
+  actions: FilePartActions;
+  onOpenAttachment: (part: string) => void;
   preview: EInvoicePreview;
-  workspaceId: string;
 }) => {
   const t = useTranslations();
   const format = SYNTAX_LABELS[preview.syntax];
   return (
     <div className="@container space-y-6">
-      <p className="text-muted-foreground flex items-center gap-2 text-sm">
+      <p className="text-muted-foreground flex items-start gap-2 text-sm">
         <DocumentMark
           aria-hidden="true"
-          className="size-4 shrink-0"
+          className="mt-0.5 size-4 shrink-0"
           kind={SYNTAX_MARKS[preview.syntax]}
         />
-        <bdi>
+        {/* A UBL customization id is one long URN; it wraps anywhere. */}
+        <bdi className="min-w-0 wrap-anywhere">
           {preview.version === null
             ? format
             : t("eInvoice.formatVersion", {
@@ -626,10 +598,14 @@ export const EInvoiceDetails = ({
           position={index + 1}
         />
       ))}
-      <Attachments
-        attachments={preview.attachments}
-        fieldId={fieldId}
-        workspaceId={workspaceId}
+      <FilePartList
+        actions={actions}
+        onOpen={onOpenAttachment}
+        parts={preview.attachments.map((attachment) => ({
+          ...attachment,
+          detail: attachment.description,
+        }))}
+        title={t("eInvoice.attachments")}
       />
     </div>
   );

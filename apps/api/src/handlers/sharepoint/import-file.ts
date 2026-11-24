@@ -19,7 +19,7 @@ import {
 } from "@stll/api-contract/sharepoint";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import { entities, entityVersions } from "@/api/db/schema";
 import {
   downloadSharepointFile,

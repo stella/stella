@@ -6,7 +6,7 @@ import { union } from "drizzle-orm/pg-core";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS,
   caseLawDecisionIdentifiers,
@@ -41,7 +41,7 @@ import {
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 import {
   buildSearchPreviewPassages,
-  buildSearchPreviewPassageValueRows,
+  buildSearchPreviewPassageSelect,
 } from "@/api/lib/search/preview-passages";
 
 const SEARCH_INDEX_CONCURRENCY = 4;
@@ -381,7 +381,7 @@ export const indexDecision = async (
       await tx.execute(sql`
       INSERT INTO case_law_search_document_preview_passages (
         decision_id, generation, ordinal, content, tsv
-      ) VALUES ${buildSearchPreviewPassageValueRows({
+      ) ${buildSearchPreviewPassageSelect({
         generation: previewGeneration,
         leadingValues: [sql`${decision.id}`],
         passages: previewPassages,

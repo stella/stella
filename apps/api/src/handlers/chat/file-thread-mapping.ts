@@ -2,8 +2,8 @@ import { and, eq } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 
-import type { Transaction } from "@/api/db/root";
 import { chatThreads, fileChatThreads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export type FileThreadLookupInput = {

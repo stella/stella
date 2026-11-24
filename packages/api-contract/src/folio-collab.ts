@@ -20,6 +20,8 @@ export const folioCollabSnapshotLoadResponseSchema = v.variant("loadOutcome", [
   v.strictObject({
     loadOutcome: v.literal(FOLIO_COLLAB_SNAPSHOT_LOAD_OUTCOME.loaded),
     generation: snapshotGenerationSchema,
+    /** The DOCX the room was seeded from: its authority reads revision 0 from it. */
+    seedDocxBase64: v.pipe(v.string(), v.minLength(1)),
     snapshotBase64: v.nullable(v.string()),
     snapshotRevision: snapshotGenerationSchema,
   }),

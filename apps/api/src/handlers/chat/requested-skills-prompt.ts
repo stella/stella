@@ -1,6 +1,6 @@
 import type { Result } from "better-result";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import type { ActiveChatSkillContext } from "@/api/handlers/chat/active-skill-context";
 import { chatPartText } from "@/api/handlers/chat/chat-message-parts";
 import { buildRequestedSkillsSection } from "@/api/handlers/chat/chat-prompt";

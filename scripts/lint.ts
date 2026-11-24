@@ -40,6 +40,71 @@ import {
 } from "./lint-command";
 
 const FORWARDED_SIGNALS = ["SIGINT", "SIGTERM", "SIGHUP"] as const;
+const CRASH_SIGNALS = new Set<string>(["SIGSEGV", "SIGBUS", "SIGABRT"]);
+// 128 + SIGABRT(6), SIGBUS(7), SIGSEGV(11): wrapper exit codes when the child dies by crash signal.
+const CRASH_EXIT_CODES = new Set<number>([134, 135, 139]);
+
+export type LintRunOutcome = {
+  exitCode: number | null;
+  signalCode: NodeJS.Signals | number | null;
+};
+
+/** True only for fatal native runtime crashes, never for normal lint findings (exit 1). */
+export const isRuntimeCrashOutcome = (outcome: LintRunOutcome): boolean =>
+  (typeof outcome.signalCode === "string" &&
+    CRASH_SIGNALS.has(outcome.signalCode)) ||
+  (outcome.exitCode !== null && CRASH_EXIT_CODES.has(outcome.exitCode));
+
+const describeCrash = (outcome: LintRunOutcome): string =>
+  outcome.signalCode !== null
+    ? `signal ${outcome.signalCode}`
+    : `exit ${String(outcome.exitCode)}`;
+
+/**
+ * Runs the linter once, retrying a single time if the runtime itself crashes
+ * (SIGSEGV/SIGBUS/SIGABRT). Normal lint failures (exit 1) never retry.
+ */
+export const runWithCrashRetry = async (
+  execute: () => Promise<LintRunOutcome>,
+  warn: (message: string) => void = (message) => {
+    console.error(message);
+  },
+): Promise<LintRunOutcome> => {
+  const first = await execute();
+  if (!isRuntimeCrashOutcome(first)) {
+    return first;
+  }
+  warn(
+    `::warning::lint: linter terminated by runtime crash (${describeCrash(first)}); retrying once (attempt 2/2)`,
+  );
+  return await execute();
+};
+
+const spawnLintOnce = async (
+  command: readonly string[],
+): Promise<LintRunOutcome> => {
+  const child = Bun.spawn([...command], {
+    stdio: ["inherit", "inherit", "inherit"],
+  });
+  const handlers = FORWARDED_SIGNALS.map((signal) => {
+    const handler = () => {
+      child.kill(signal);
+    };
+    process.on(signal, handler);
+    return [signal, handler] as const;
+  });
+  try {
+    await child.exited;
+    return {
+      exitCode: child.exitCode,
+      signalCode: child.signalCode,
+    };
+  } finally {
+    for (const [signal, handler] of handlers) {
+      process.removeListener(signal, handler);
+    }
+  }
+};
 
 if (import.meta.main) {
   const parsed = parseLintArguments(process.argv.slice(2));
@@ -52,21 +117,12 @@ if (import.meta.main) {
     console.log(formatLintCommand(command));
     process.exit(0);
   }
-  const child = Bun.spawn(command, {
-    stdio: ["inherit", "inherit", "inherit"],
-  });
-  for (const signal of FORWARDED_SIGNALS) {
-    process.on(signal, () => {
-      child.kill(signal);
-    });
-  }
-  await child.exited;
-  if (child.signalCode !== null) {
+  const outcome = await runWithCrashRetry(
+    async () => await spawnLintOnce(command),
+  );
+  if (outcome.signalCode !== null) {
     // Die the way the linter did, so a caller sees the same termination.
-    for (const signal of FORWARDED_SIGNALS) {
-      process.removeAllListeners(signal);
-    }
-    process.kill(process.pid, child.signalCode);
+    process.kill(process.pid, outcome.signalCode);
   }
-  process.exit(childExitStatus(child));
+  process.exit(childExitStatus(outcome));
 }

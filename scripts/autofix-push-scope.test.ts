@@ -231,3 +231,13 @@ describe("settled ancestor", () => {
     expect(asked).toEqual(["a", "b"]);
   });
 });
+
+test("a Rust source change enables stale-baseline pruning", () => {
+  const plan = planAutofix({
+    pullRequestFiles: ["apps/desktop/src-tauri/src/account.rs"],
+    pushFiles: ["apps/desktop/src-tauri/src/account.rs"],
+  });
+
+  expect(plan.prune).toBe(true);
+  expect(plan.needed).toBe(true);
+});

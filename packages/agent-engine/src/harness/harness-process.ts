@@ -23,6 +23,42 @@ import type { Detached, HarnessExit } from "./turn-lifecycle";
 
 /** A line longer than this is refused rather than buffered without bound. */
 const MAX_LINE_BYTES = 16 * 1024 * 1024;
+/** Maximum stderr tail kept in memory when `captureStderr` is on. */
+const MAX_STDERR_BYTES = 16 * 1024;
+
+const STRICT_UTF8 = new TextDecoder("utf-8", { fatal: true });
+
+/**
+ * A harness's stderr tail as text, for classifying its errors. The tail can
+ * start inside a character, so leading continuation bytes are skipped; bytes
+ * that still are not UTF-8 read as "?" rather than failing the read.
+ */
+export const decodeStderrTail = (bytes: Uint8Array): string => {
+  // UTF-8 continuation bytes are 0x80 to 0xBF.
+  const isContinuation = (byte: number) => byte >= 0x80 && byte <= 0xbf;
+  let start = 0;
+  while (start < bytes.length && isContinuation(bytes[start] ?? 0)) {
+    start += 1;
+  }
+  const body = bytes.subarray(start);
+  return Result.try(() => STRICT_UTF8.decode(body)).unwrapOr(
+    Array.from(body, (byte) =>
+      String.fromCodePoint(byte < 0x80 ? byte : 0x3f),
+    ).join(""),
+  );
+};
+
+/**
+ * The part of a stderr tail written from byte `start` of the stream on, as
+ * text. `seen` counts every byte read; the tail holds the newest of them, so
+ * bytes before its start that were dropped are simply absent.
+ */
+export const stderrTailSince = (
+  tail: Uint8Array,
+  seen: number,
+  start: number,
+): string =>
+  decodeStderrTail(tail.subarray(Math.max(0, start - (seen - tail.length))));
 
 export type HarnessProcessDeadlines = {
   /** How long a request waits for its answer before the process is ended. */
@@ -54,6 +90,8 @@ type StartHarnessProcessOptions<TError> = {
   unanswered: (reason: "closed" | "timed_out", message: string) => TError;
   /** One JSON value the harness wrote. */
   message: (value: unknown) => void;
+  /** Pipe stderr into a bounded in-memory tail buffer for failure classification. */
+  captureStderr?: boolean | undefined;
   /** The harness wrote something that is not a protocol message. */
   violation: (message: string) => void;
   exit: (exit: HarnessExit) => void;
@@ -81,6 +119,13 @@ type HarnessProcess<TId, TError> = {
   exited: Promise<HarnessExit>;
   /** A request went unanswered past its deadline, which ended the process. */
   missedDeadline: () => boolean;
+  /** Bytes of stderr read so far (0 unless `captureStderr` was enabled). */
+  stderrBytesSeen: () => number;
+  /**
+   * Stderr written from byte `start` on, as far as the in-memory tail still
+   * holds it (empty unless `captureStderr` was enabled).
+   */
+  stderrSince: (start: number) => string;
   /** Ends stdin, which asks the harness to finish and exit. */
   closeInput: () => void;
   /**
@@ -100,6 +145,7 @@ export const startHarnessProcess = <TId, TError>({
   name,
   protocol,
   unanswered,
+  captureStderr = false,
   message,
   violation,
   exit,
@@ -112,6 +158,7 @@ export const startHarnessProcess = <TId, TError>({
     cwd,
     env,
     terminateMs: deadlines.terminateMs,
+    captureStderr,
   });
   if (Result.isError(spawned)) {
     return spawned;
@@ -200,7 +247,31 @@ export const startHarnessProcess = <TId, TError>({
     lines.end();
   };
 
-  const reading = Promise.allSettled([readStdout()]);
+  // The newest bytes of stderr, decoded only when they are read. The tail
+  // holds bytes [stderrSeen - stderrTail.length, stderrSeen) of the stream.
+  let stderrTail: Uint8Array = new Uint8Array(0);
+  let stderrSeen = 0;
+  const readStderr = async () => {
+    const stderrStream = child.stderr;
+    if (
+      !captureStderr ||
+      stderrStream === undefined ||
+      typeof stderrStream === "number"
+    ) {
+      return;
+    }
+    for await (const bytes of stderrStream) {
+      stderrSeen += bytes.length;
+      const joined = new Uint8Array(stderrTail.length + bytes.length);
+      joined.set(stderrTail);
+      joined.set(bytes, stderrTail.length);
+      stderrTail =
+        joined.length > MAX_STDERR_BYTES
+          ? joined.slice(-MAX_STDERR_BYTES)
+          : joined;
+    }
+  };
+  const reading = Promise.allSettled([readStdout(), readStderr()]);
   const exited = (async (): Promise<HarnessExit> => {
     await child.exited;
     // What it started goes with it, however it exited: a turn's end, a stop
@@ -267,6 +338,8 @@ export const startHarnessProcess = <TId, TError>({
     },
     exited,
     missedDeadline: () => state.missedDeadline,
+    stderrBytesSeen: () => stderrSeen,
+    stderrSince: (start) => stderrTailSince(stderrTail, stderrSeen, start),
     closeInput: () => {
       if (!state.closed) {
         onInput(() => {

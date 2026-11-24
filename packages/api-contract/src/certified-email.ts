@@ -10,7 +10,6 @@
 import * as v from "valibot";
 
 import { apiDateTimeSchema } from "./api-date";
-import { filePartIdSchema } from "./file-parts";
 
 export const CERTIFIED_EMAIL_SYSTEMS = ["pec"] as const;
 
@@ -101,19 +100,3 @@ export const certifiedEmailEnvelopeSchema = v.object({
 export type CertifiedEmailEnvelope = v.InferOutput<
   typeof certifiedEmailEnvelopeSchema
 >;
-
-/** A certified email's text reading, for readers that do not render email. */
-export const certifiedEmailReadSchema = v.object({
-  envelope: certifiedEmailEnvelopeSchema,
-  /** The original message (or the provider's notice): headers and body. */
-  text: v.string(),
-  attachments: v.array(
-    v.object({
-      /** Opens the attachment through the file's link (`?part=`). */
-      part: filePartIdSchema,
-      fileName: v.nullable(v.string()),
-      sizeBytes: v.pipe(v.number(), v.integer(), v.minValue(0)),
-    }),
-  ),
-});
-export type CertifiedEmailRead = v.InferOutput<typeof certifiedEmailReadSchema>;

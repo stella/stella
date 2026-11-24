@@ -1,5 +1,67 @@
 # @stll/ui
 
+## 0.88.0
+
+### Minor Changes
+
+- [#9187](https://github.com/stella/stella/pull/9187) [`1ab906c`](https://github.com/stella/stella/commit/1ab906cc4ad7916de5ef21284416343ea2e2810c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add P7S and XAdES document marks shared by web and native renderers.
+
+## 0.87.0
+
+### Minor Changes
+
+- [#9294](https://github.com/stella/stella/pull/9294) [`1798f66`](https://github.com/stella/stella/commit/1798f6615a61ddf02e091d925269ed735bef75fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for Outlook mailboxes (`.pst`).
+
+## 0.86.0
+
+### Minor Changes
+
+- [#9226](https://github.com/stella/stella/pull/9226) [`b280d21`](https://github.com/stella/stella/commit/b280d21b8b6bc7149a342a08f2d78036f1099186) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export OpenAI, Claude, Gemini, and Antigravity brand icons from `@stll/ui/brand-icons`.
+
+## 0.85.0
+
+### Minor Changes
+
+- [#9275](https://github.com/stella/stella/pull/9275) [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for mailboxes (`.mbox`).
+
+### Patch Changes
+
+- [#9265](https://github.com/stella/stella/pull/9265) [`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `@ag-ui/core` to `1.0.5`.
+  Update `tldts` to `7.5.4`.
+  Update `lucide-react` to `1.74.0`.
+
+## 0.84.1
+
+### Patch Changes
+
+- [#9245](https://github.com/stella/stella/pull/9245) [`98abe28`](https://github.com/stella/stella/commit/98abe2841a69b052cdfd34cfd8e42fe5d7a53105) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Keep a gutter between body columns of a compact table, as its header already has.
+
+## 0.84.0
+
+### Minor Changes
+
+- [#9242](https://github.com/stella/stella/pull/9242) [`06795f2`](https://github.com/stella/stella/commit/06795f299fc300e130bd3c92a749e01ecf4c0853) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for ZIP archives.
+
+## 0.83.0
+
+### Minor Changes
+
+- [#9240](https://github.com/stella/stella/pull/9240) [`10ef464`](https://github.com/stella/stella/commit/10ef464329c555633c59a8307bbd6bf85e22fe5a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add shared web and native document marks for WordPerfect, Works, Pages, Numbers, web archive and EPUB files, and export `DOCUMENT_MARK_KINDS`.
+
+## 0.82.0
+
+### Minor Changes
+
+- [#9231](https://github.com/stella/stella/pull/9231) [`39eabb8`](https://github.com/stella/stella/commit/39eabb8eee2640bdda32e928239460602aefc23b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `formatFileSize` writes sizes under 1 kB with the long, plural-aware unit ("333 bytes", "333 bajtů") instead of the short English unit, which has no plural ("333 byte"). Larger sizes keep the short units.
+
+  The `format` argument now receives `unitDisplay: "long"` for bytes, so a formatter passed in must accept `"long" | "short"`.
+
+## 0.81.1
+
+### Patch Changes
+
+- [#9232](https://github.com/stella/stella/pull/9232) [`76bd78b`](https://github.com/stella/stella/commit/76bd78b75de4b4179f90bc3a89d4187ead4bd174) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Count which inline-overflow items fit in the same commit that renders the row, so the first paint never shows items past its edge.
+
 ## 0.81.0
 
 ### Minor Changes

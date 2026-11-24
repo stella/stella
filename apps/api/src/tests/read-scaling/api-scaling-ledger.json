@@ -357,10 +357,6 @@
       "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
-      "id": "GET /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId",
-      "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
-    },
-    {
       "id": "GET /v1/files/:workspaceId/email-html/:fieldId",
       "reason": "Requires a files fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -1171,6 +1167,14 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "DELETE /v1/desktop/dictation/learned-fixes",
+      "reason": "Rewrites one member's single row of at most 30 short fixes, with at most 50 changes per request; a scaling fixture for this bounded row is pending."
+    },
+    {
+      "id": "DELETE /v1/dictation/learned-fixes",
+      "reason": "Rewrites one member's single row of at most 30 short fixes, with at most 50 changes per request; a scaling fixture for this bounded row is pending."
+    },
+    {
       "id": "DELETE /v1/document-types/:documentTypeId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1253,6 +1257,14 @@
     {
       "id": "DELETE /v1/organization-settings/feature-enrolments/:featureId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/sso/domains/:domainId",
+      "reason": "New SSO domain deletion route; pending write scaling harness coverage."
+    },
+    {
+      "id": "DELETE /v1/organization-settings/sso/providers/:providerId",
+      "reason": "New SSO provider deletion route; pending write scaling harness coverage."
     },
     {
       "id": "DELETE /v1/organization-settings/web-search-key",
@@ -1663,6 +1675,10 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/auth/sso/discover",
+      "reason": "New public SSO provider discovery route; pending write scaling harness coverage."
+    },
+    {
       "id": "POST /v1/case/decisions/search",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1747,6 +1763,10 @@
       "reason": "Runs one bounded read an app asks for through the MCP read path; awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
+      "id": "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
       "id": "POST /v1/chat/threads/:threadId/messages/:messageId/revisions",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
@@ -1788,10 +1808,6 @@
     },
     {
       "id": "POST /v1/chat/threads/:threadId/turns/:turnId/cancel",
-      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
-    },
-    {
-      "id": "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -1927,6 +1943,10 @@
       "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
     {
+      "id": "POST /v1/desktop/dictation/learned-fixes",
+      "reason": "Rewrites one member's single row of at most 30 short fixes, with at most 50 changes per request; a scaling fixture for this bounded row is pending."
+    },
+    {
       "id": "POST /v1/desktop/dictation/recording-cleanup",
       "reason": "Returns transient formatted text for one bounded part of a recording transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
     },
@@ -1973,6 +1993,10 @@
     {
       "id": "POST /v1/dictation/cleanup",
       "reason": "Returns transient typed text for one bounded transcript and stores nothing; model admission owns usage accounting. A provider-backed scaling fixture for that admission lifecycle is pending."
+    },
+    {
+      "id": "POST /v1/dictation/learned-fixes",
+      "reason": "Rewrites one member's single row of at most 30 short fixes, with at most 50 changes per request; a scaling fixture for this bounded row is pending."
     },
     {
       "id": "POST /v1/dictation/recording-cleanup",
@@ -2119,7 +2143,7 @@
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
-      "id": "POST /v1/files/:workspaceId/email-attachment/:fieldId/:attachmentId/save",
+      "id": "POST /v1/files/:workspaceId/part/:fieldId/save",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {
@@ -2369,6 +2393,22 @@
     {
       "id": "POST /v1/organization-settings/sanctions-monitoring",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/organization-settings/sso/domains",
+      "reason": "New SSO domain registration route; pending write scaling harness coverage."
+    },
+    {
+      "id": "POST /v1/organization-settings/sso/domains/:domainId/verify",
+      "reason": "New SSO domain verification route; pending write scaling harness coverage."
+    },
+    {
+      "id": "POST /v1/organization-settings/sso/providers",
+      "reason": "New SSO OIDC provider registration route; pending write scaling harness coverage."
+    },
+    {
+      "id": "POST /v1/organization-settings/sso/providers/test",
+      "reason": "New SSO OIDC discovery test route; pending write scaling harness coverage."
     },
     {
       "id": "POST /v1/organization-settings/verification-decision-model",
@@ -3077,6 +3117,10 @@
     {
       "id": "PUT /v1/organization-settings/feature-enrolments/:featureId",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "PUT /v1/organization-settings/sso/policy",
+      "reason": "New SSO policy update route; pending write scaling harness coverage."
     },
     {
       "id": "PUT /v1/playbooks/:playbookId",

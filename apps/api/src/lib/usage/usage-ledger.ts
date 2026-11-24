@@ -38,7 +38,6 @@ import {
   onlineUniqueIndexTarget,
   USAGE_EVENTS_ORG_IDEMPOTENCY_KEY_UIDX,
 } from "@/api/db/online-unique-indexes";
-import type { Transaction } from "@/api/db/root";
 import {
   USAGE_ENTITLEMENT_STATUSES,
   usageAllocations,
@@ -54,6 +53,7 @@ import type {
   UsageEventLane,
   UsageServiceTier,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { UsageLimitExceededError } from "@/api/lib/errors/tagged-errors";

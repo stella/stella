@@ -62,7 +62,7 @@ const tableCellClassName = ({
     "align-middle leading-none whitespace-nowrap has-[[role=checkbox]]:pe-0",
     flush
       ? "p-0"
-      : "p-2.5 in-data-[density=compact]:px-0 in-data-[density=compact]:py-1.5 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
+      : "p-2.5 in-data-[density=compact]:px-0 in-data-[density=compact]:py-1.5 in-data-[density=compact]:pe-3 in-data-[inset=card]:px-4 in-data-[slot=frame]:first:p-[calc(--spacing(2.5)-1px)] in-data-[slot=frame]:last:p-[calc(--spacing(2.5)-1px)]",
     "in-data-[density=compact]:leading-6 in-data-[density=compact]:whitespace-normal",
     PROSE_CELL_CLASS,
     "in-data-[density=prose]:[tr:last-child>&]:border-b-0",

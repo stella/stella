@@ -1,6 +1,5 @@
 import { useTranslations } from "use-intl";
 
-import { Avatar, AvatarFallback } from "@stll/ui/avatar";
 import { Button } from "@stll/ui/button";
 import {
   ActivityIcon,
@@ -15,12 +14,12 @@ import {
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
 import { ListItemStatus } from "@stll/ui/list";
-import { StellaMark } from "@stll/ui/stella-mark";
 import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { accountDisplay, accountStatusTone } from "./account-presentation";
 import type { DesktopAccountState } from "./account-presentation";
+import { AccountAvatar } from "./AccountAvatar";
 import { SETTINGS_PAGES_AFTER_DIVIDER } from "./settings-pages";
 import type { SettingsPage } from "./settings-pages";
 
@@ -137,11 +136,7 @@ const SidebarIdentity = ({
     // No end padding: the status line gets the room to name the usual host
     // whole, and the avatar stays in line with the page icons below.
     <div className="flex min-w-0 items-center gap-2 py-1.5 ps-2">
-      <Avatar className="size-8 border">
-        <AvatarFallback className="text-xs">
-          {display.initials ?? <StellaMark className="size-4" />}
-        </AvatarFallback>
-      </Avatar>
+      <AccountAvatar display={display} />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <TruncatedText className="text-sm font-semibold" render={<p />}>
           {display.name ?? t("stellaDesktop")}

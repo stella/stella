@@ -1,9 +1,11 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, expect, test } from "bun:test";
 
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
+import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
+import { openIsolatedWindow } from "@/lib/open-isolated-window";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/law" });
 // Happy DOM omits the legacy editing API that the EditContext polyfill wraps.
@@ -83,8 +85,7 @@ test("clicking retry recovers a selected read and replaces the error with conten
 
 test("revision transitions retain the live editor and its local source", async () => {
   const { createRef } = await import("react");
-  const { MarkdownHybridEditor } =
-    await import("@/components/markdown/markdown-hybrid-editor");
+  const { MarkdownHybridEditor } = await import("@stll/markdown-editor");
   const client = new QueryClient();
   const observer = new QueryObserver(client, {
     queryKey: ["skill-revision-comparison", "transitions"],
@@ -102,7 +103,9 @@ test("revision transitions retain the live editor and its local source", async (
         {(baseline) => (
           <MarkdownHybridEditor
             ref={editor}
-            imagePolicy="data-only"
+            allowsImageSource={isSafeMarkdownPreviewImageSrc}
+            label="Markdown source"
+            onOpenLink={openIsolatedWindow}
             markdown="Stored source"
             baseline={baseline}
             onMarkdownChange={(text) => {

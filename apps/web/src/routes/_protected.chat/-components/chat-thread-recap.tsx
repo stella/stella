@@ -7,7 +7,7 @@ import { Temporal } from "@stll/time";
 import { ClockIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import { chatThreadRecapOptions } from "@/features/chat/queries";
 import { useMountEffect } from "@/hooks/use-effect";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";

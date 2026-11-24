@@ -548,6 +548,7 @@ describe("policy coverage", () => {
     // the auth deny policy asserted below, so no tenant policy applies.
     "sso_provider",
     "organization_sso_policy",
+    "organization_sso_domain",
     // Filed feedback reports: organization_id/user_id record who filed a
     // report for the maintainers' private view and are never a tenant scope.
     // The table has no read surface at all: RLS is enabled with no policy and
@@ -1665,6 +1666,7 @@ describe("policy coverage", () => {
       "oauth_consent",
       "oauth_refresh_token",
       "organization_sso_policy",
+      "organization_sso_domain",
       "session",
       "sso_provider",
       "two_factor",

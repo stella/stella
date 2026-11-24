@@ -359,6 +359,7 @@
     "checkingDocxEditDescription": "stella ainda está verificando se este DOCX pode ser editado com segurança. Tente novamente quando o documento terminar de carregar.",
     "checkingDocxEditTitle": "Verificando documento",
     "chooseEvidence": "Escolha um arquivo para inserir uma referência numerada de prova.",
+    "collaborationEditRefused": "O documento compartilhado não pôde aceitar sua última edição, por isso ela foi desfeita.",
     "collaborationSnapshotRecovered": "Não foi possível reabrir a cópia de colaboração armazenada. A sala foi restaurada com base no último documento salvo; alterações não salvas podem ter sido perdidas.",
     "comment": "Comentário",
     "comments": {

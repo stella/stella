@@ -108,7 +108,7 @@ export const PARSER_VERSIONS = {
 
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: 2,
 
-  [ADAPTER_KEYS.CZ_NS]: 34,
+  [ADAPTER_KEYS.CZ_NS]: 35,
 
   [ADAPTER_KEYS.CZ_NSS]: 42,
 
@@ -252,7 +252,7 @@ export const PARSER_VERSION_SCOPES = {
 
   [ADAPTER_KEYS.CZ_NS_SBIRKA]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS_SBIRKA], scope: {"type":"all","reason":"Recognize split and complete report editions from their stored detail HTML; earlier rows do not store the edition layout."} },
 
-  [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Recompute procedural review links from the stored opening and holding text; parsed document output is otherwise unchanged."} },
+  [ADAPTER_KEYS.CZ_NS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NS], scope: {"type":"all","reason":"Read the print page's tabs, source line breaks and space runs as one space, as a browser shows them, so no paragraph or heading keeps the page's raw indentation."} },
 
   [ADAPTER_KEYS.CZ_NSS]: { version: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS], scope: {"type":"all","reason":"Recompute procedural review links from the publisher's review table on every held detail page and from the stored opening and holding text; document-only legacy raw retains its existing metadata. A running footer or header that counts its pages after its words (`… 2/13`, `… 2 z 13`) is compared without the count, so it is read as one repeated line and leaves the body, and a paragraph the page break crossed joins again; the AST has no separate feature storage."} },
 
