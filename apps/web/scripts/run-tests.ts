@@ -154,17 +154,16 @@ const executeRun = async (
       process.stderr.write(`${message}\n`);
     },
   });
-  const stdoutStream =
+  const stdoutReader =
     buffered && child.stdout instanceof ReadableStream
-      ? child.stdout
+      ? child.stdout.getReader()
       : undefined;
   const stdoutDrain =
-    stdoutStream === undefined
+    stdoutReader === undefined
       ? Promise.resolve()
       : (async () => {
-          const reader = stdoutStream.getReader();
           for (;;) {
-            const { done, value } = await reader.read();
+            const { done, value } = await stdoutReader.read();
             if (done) {
               return;
             }
@@ -195,7 +194,29 @@ const executeRun = async (
         }
       },
     });
-    await stdoutDrain;
+    if (stdoutReader !== undefined) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const timedOut = await Promise.race([
+        stdoutDrain.then(() => false),
+        new Promise<boolean>((resolve) => {
+          timer = setTimeout(() => {
+            resolve(true);
+          }, 1000);
+        }),
+      ]);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
+      if (timedOut) {
+        const ignoreCancel = (error: unknown) => {
+          process.stderr.write(
+            `Could not cancel stdout for ${run.label}: ${String(error)}\n`,
+          );
+        };
+        await stdoutReader.cancel().catch(ignoreCancel);
+        await stdoutDrain.catch(ignoreCancel);
+      }
+    }
     if (output.isErr()) {
       outputFailure = output.error.message;
       process.stderr.write(`${outputFailure}\n`);
