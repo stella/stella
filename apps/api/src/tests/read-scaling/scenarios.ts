@@ -194,15 +194,21 @@ export const readScalingScenarios = [
         .update(token)
         .digest("base64");
       const cookie = `better-auth.session_token=${encodeURIComponent(`${token}.${sig}`)}`;
+      const reqUrl = "https://example.test/v1/auth/sso/organization-providers";
+      const req = new Request(reqUrl, { headers: { cookie } });
       return await runWithMeasuredQueryCounter(async (counter) => {
         const response = await readMemberOrganizationSsoProviders.run(
           asTestRaw<
             Parameters<typeof readMemberOrganizationSsoProviders.run>[0]
           >({
-            request: new Request(
-              "https://example.test/v1/auth/sso/organization-providers",
-              { headers: { cookie } },
-            ),
+            ctx: {
+              request: req,
+              url: new URL(reqUrl),
+              params: {},
+              set: { headers: {}, status: 200 },
+            },
+            route: "/v1/auth/sso/organization-providers",
+            readBody: async () => undefined,
           }),
         );
         const body =
