@@ -8385,7 +8385,7 @@
       "scope": "matters_write"
     },
     "name": "save_matter",
-    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
+    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create one (name required; client_id and visibility optional). With matter_id, set name, client_id, reference, billing_reference or visibility, and/or status 'archived' or 'active'. Returns the matter ID.",
     "inputSchema": {
       "type": "object",
       "required": [],
@@ -8405,7 +8405,17 @@
         "client_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client."
+          "description": "Contact ID of the matter's client; attaches or replaces it. Never changes visibility."
+        },
+        "visibility": {
+          "enum": ["all_members", "admins_and_assigned", "assigned_only"],
+          "type": "string",
+          "description": "Who sees it unassigned: all_members, admins_and_assigned (owners/admins) or assigned_only. Create default: admins_and_assigned with client_id, else assigned_only. Update: lead or owner/admin only."
+        },
+        "confirm": {
+          "enum": [true],
+          "description": "Required when visibility shows the matter to more people; ask the user first.",
+          "type": "boolean"
         },
         "reference": {
           "type": "string",

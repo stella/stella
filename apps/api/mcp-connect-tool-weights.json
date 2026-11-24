@@ -520,10 +520,10 @@
     {
       "name": "save_matter",
       "nameChars": 11,
-      "descriptionChars": 328,
-      "inputSchemaChars": 908,
-      "totalChars": 1247,
-      "estimatedTokens": 492
+      "descriptionChars": 270,
+      "inputSchemaChars": 1289,
+      "totalChars": 1570,
+      "estimatedTokens": 631
     },
     {
       "name": "save_playbook",
@@ -663,7 +663,7 @@
     }
   ],
   "totals": {
-    "characters": 140778,
-    "estimatedTokens": 55909
+    "characters": 141101,
+    "estimatedTokens": 56048
   }
 }

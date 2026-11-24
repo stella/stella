@@ -9,7 +9,7 @@
   {
     "access": "destructive",
     "command": ["matter", "save"],
-    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
+    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create one (name required; client_id and visibility optional). With matter_id, set name, client_id, reference, billing_reference or visibility, and/or status 'archived' or 'active'. Returns the matter ID.",
     "name": "save_matter",
     "title": "Save matter"
   },
@@ -1010,14 +1010,14 @@
   {
     "access": "read",
     "command": ["capability", "data-exports", "get"],
-    "description": "Read one data export: status (queued, running, ready, failed or expired), progress in matters and bytes, the finished parts with size and SHA-256, how many files could not be included, and when the files expire. Organization owners and admins only.",
+    "description": "Read one data export: status (queued, running, ready, failed or expired), progress in matters and bytes, the finished parts with size and SHA-256, how many files could not be included, and when the files expire. Organization owners and admins only, and only while they can see every matter in the export.",
     "name": "capability:data-exports.get",
     "title": "data-exports.get"
   },
   {
     "access": "read",
     "command": ["capability", "data-exports", "list"],
-    "description": "List the organization's data exports, newest first, with status, progress, part count and expiry; data-exports.get lists the parts. Paginate with limit and cursor. Organization owners and admins only.",
+    "description": "List the organization's data exports, newest first, with status, progress, part count and expiry; data-exports.get lists the parts. Paginate with limit and cursor; a page leaves out exports of matters the caller cannot see. Organization owners and admins only.",
     "name": "capability:data-exports.list",
     "title": "data-exports.list"
   },
@@ -2153,7 +2153,7 @@
   {
     "access": "write",
     "command": ["capability", "matters", "create"],
-    "description": "Create a new matter (name required; pass clientId to attach a client contact). Returns the matter ID.",
+    "description": "Create a new matter (name required; pass clientId to attach a client contact, memberUserIds to assign members and visibility to choose who can open it). Returns the matter ID.",
     "name": "capability:matters.create",
     "title": "matters.create"
   },
@@ -2174,7 +2174,7 @@
   {
     "access": "read",
     "command": ["capability", "matters", "get"],
-    "description": "Read one matter, active or archived: its name, reference, status, colour, lead and client, and stampedVersionCount, how many live document versions carry its reference in a stamp, which a new reference cannot rewrite.",
+    "description": "Read one matter, active or archived: its name, reference, status, colour, lead, client and visibility, and stampedVersionCount, how many live document versions carry its reference in a stamp, which a new reference cannot rewrite.",
     "name": "capability:matters.get",
     "title": "matters.get"
   },
@@ -2258,7 +2258,7 @@
   {
     "access": "write",
     "command": ["capability", "matters", "update"],
-    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, automatic document naming, or lead (who must already be a member of it). Only the fields you pass are written. clientId attaches a client to a personal matter or replaces the client of a client matter; members are managed separately. Pass expectedClientId (null for a personal matter) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
+    "description": "Change a matter: its name, client, reference, billing reference, the language its billing narratives are written in, colour, automatic document naming, lead (who must already be a member of it) or visibility. Only the fields you pass are written. clientId attaches or replaces the matter's client and never changes who can see it; members are managed separately. Only the matter lead or an organization owner or admin may change the visibility; widening it needs confirmWidening, otherwise returns matter_visibility_widening_unconfirmed. Pass expectedClientId (null when it has no client) to change the client only if its current assignment still matches; otherwise returns version_conflict.",
     "name": "capability:matters.update",
     "title": "matters.update"
   },
