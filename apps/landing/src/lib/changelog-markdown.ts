@@ -48,7 +48,7 @@ export const parseChangelogInline = (
   let cursor = 0;
 
   for (const match of text.matchAll(INLINE_MARKDOWN_PATTERN)) {
-    const index = match.index ?? 0;
+    const { index } = match;
     if (index > cursor) {
       segments.push({ text: text.slice(cursor, index), type: "text" });
     }
