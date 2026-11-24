@@ -6,7 +6,14 @@ import {
   API_VERSION_CONFLICT_ERROR_CODE,
   MATTER_REFERENCE_RETIRED_CODE,
 } from "@stll/api-contract";
+import {
+  effectiveMatterVisibility,
+  MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE,
+  widensMatterVisibility,
+} from "@stll/api-contract/matter-visibility";
+import type { MatterVisibility } from "@stll/api-contract/matter-visibility";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import { abortTransaction, transactionAbortError } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
@@ -30,14 +37,24 @@ import {
   userIdSchema,
 } from "@/api/lib/custom-schema";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";
+import { databaseConstraintRefusal } from "@/api/lib/db/constraint-refusals";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isMemberRole } from "@/api/lib/member-roles";
 import { handlerErrorContext } from "@/api/lib/observability/exception-context";
+import {
+  hasManagementPermission,
+  hasMemberPermission,
+  withCurrentMemberRole,
+} from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { pickDefined } from "@/api/lib/pick-defined";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
+import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
 import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
 import { legalHoldRefusal } from "@/api/lib/workspaces/legal-holds/refusal";
+import { matterVisibilitySchema } from "@/api/lib/workspaces/matter-visibility";
 
 const updateWorkspaceBodySchema = v.object({
   billingNarrativeLanguage: v.optional(narrativeLanguageSchema),
@@ -58,6 +75,16 @@ const updateWorkspaceBodySchema = v.object({
     ),
   ),
   leadUserId: v.optional(v.nullable(userIdSchema)),
+  visibility: v.optional(matterVisibilitySchema()),
+  confirmWidening: v.optional(
+    v.pipe(
+      v.literal(true),
+      v.description(
+        "Required with a visibility that shows the matter to people who " +
+          "cannot see it now; confirm with the user first.",
+      ),
+    ),
+  ),
 });
 
 const config = {
@@ -65,11 +92,13 @@ const config = {
   description:
     "Change a matter: its name, client, reference, billing reference, the " +
     "language its billing narratives are written in, colour, automatic " +
-    "document naming, or lead (who " +
-    "must already be a member of it). Only the fields you pass " +
-    "are written. clientId attaches a client to a personal matter or replaces " +
-    "the client of a client matter; members are managed separately. " +
-    "Pass expectedClientId (null for a personal matter) to change the client " +
+    "document naming, lead (who must already be a member of it) or " +
+    "visibility. Only the fields you pass are written. clientId attaches or " +
+    "replaces the matter's client and never changes who can see it; members " +
+    "are managed separately. Only the matter lead or an organization owner " +
+    "or admin may change the visibility; widening it needs confirmWidening, " +
+    `otherwise returns ${MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE}. ` +
+    "Pass expectedClientId (null when it has no client) to change the client " +
     `only if its current assignment still matches; otherwise returns ${API_VERSION_CONFLICT_ERROR_CODE}.`,
   permissions: { workspace: ["update"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
@@ -170,7 +199,155 @@ const checkReferenceNotRetired = async ({
   };
 };
 
+/** Who is changing the matter: the person and the request's authority. */
+export type WorkspaceUpdateActor = {
+  userId: SafeId<"user">;
+  authority: AuthorizedMemberRole;
+};
+
+const UPDATE_PERMISSION = { workspace: ["update"] } as const;
+
+type CurrentAuthorityOptions = {
+  tx: Transaction;
+  organizationId: SafeId<"organization">;
+  workspaceId: SafeId<"workspace">;
+  actor: WorkspaceUpdateActor;
+};
+
+/**
+ * The actor's authority now: the request's credential over the member's
+ * current role, read after the matter lock and only while the member still
+ * reaches the matter and may still update it. A request admitted before a
+ * visibility narrowing or a role change committed keeps no write access
+ * through that earlier admission.
+ */
+const readCurrentUpdateAuthority = async ({
+  tx,
+  organizationId,
+  workspaceId,
+  actor,
+}: CurrentAuthorityOptions) => {
+  const rows = await tx
+    .select({ role: member.role, billingAccess: member.billingAccess })
+    .from(member)
+    .where(
+      and(
+        eq(member.organizationId, organizationId),
+        eq(member.userId, actor.userId),
+        memberReachesMatterSql(
+          { organizationId, userId: actor.userId },
+          workspaceId,
+        ),
+      ),
+    )
+    .limit(1);
+  const current = rows.at(0);
+  if (current === undefined || !isMemberRole(current.role)) {
+    return null;
+  }
+  const authority = withCurrentMemberRole({
+    authority: actor.authority,
+    role: current.role,
+    billingAccess: current.billingAccess,
+  });
+  return hasMemberPermission(authority, UPDATE_PERMISSION) ? authority : null;
+};
+
+type VisibilityChangeOptions = {
+  actor: WorkspaceUpdateActor;
+  authority: AuthorizedMemberRole;
+  workspace: { leadUserId: string | null; visibility: MatterVisibility };
+  body: { visibility?: MatterVisibility; confirmWidening?: true };
+};
+
+/**
+ * Who sees the matter is its stewardship: only its current lead (as stored
+ * before this request) or an organization owner or admin may change it, and
+ * showing it to more people needs an explicit confirmation. Narrowing to
+ * assigned_only also needs an assigned internal member; the database refuses
+ * the write otherwise (`workspaces_assigned_only_steward`).
+ */
+const checkVisibilityChange = ({
+  actor,
+  authority,
+  workspace,
+  body,
+}: VisibilityChangeOptions) => {
+  if (
+    body.visibility === undefined ||
+    body.visibility === workspace.visibility
+  ) {
+    return null;
+  }
+  if (
+    !hasManagementPermission(authority, UPDATE_PERMISSION) &&
+    workspace.leadUserId !== actor.userId
+  ) {
+    return {
+      ok: false as const,
+      status: 403 as const,
+      message:
+        "Only the matter lead or an organization owner or admin can change who can see this matter",
+    };
+  }
+  if (
+    widensMatterVisibility(workspace.visibility, body.visibility) &&
+    body.confirmWidening !== true
+  ) {
+    return {
+      ok: false as const,
+      status: 409 as const,
+      code: MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE,
+      message:
+        "This shows the matter to people who cannot see it now. Confirm the change to apply it.",
+    };
+  }
+  return null;
+};
+
+/** The locked matter as stored, with its effective visibility. */
+const readLockedWorkspace = async (options: CurrentAuthorityOptions) => {
+  const { tx, organizationId, workspaceId } = options;
+  const rows = await tx
+    .select({
+      id: workspaces.id,
+      name: workspaces.name,
+      clientId: workspaces.clientId,
+      reference: workspaces.reference,
+      billingReference: workspaces.billingReference,
+      billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
+      color: workspaces.color,
+      documentNamingEnabled: workspaces.documentNamingEnabled,
+      leadUserId: workspaces.leadUserId,
+      storedVisibility: workspaces.visibility,
+    })
+    .from(workspaces)
+    .where(
+      and(
+        eq(workspaces.id, workspaceId),
+        eq(workspaces.organizationId, organizationId),
+      ),
+    );
+  const row = rows.at(0);
+  const authority =
+    row === undefined ? null : await readCurrentUpdateAuthority(options);
+  return row === undefined || authority === null
+    ? null
+    : {
+        row,
+        authority,
+        workspace: {
+          ...row,
+          visibility: effectiveMatterVisibility({
+            visibility: row.storedVisibility,
+            clientId: row.clientId,
+          }),
+        },
+      };
+};
+
 export type UpdateWorkspaceHandlerProps = {
+  actor: WorkspaceUpdateActor;
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
@@ -297,6 +474,7 @@ const workspaceAuditChanges = (
 // `save_matter` MCP tool, so both emit identical audit events and
 // search-index writes.
 export const updateWorkspaceHandler = async function* ({
+  actor,
   safeDb,
   organizationId,
   workspaceId,
@@ -310,33 +488,29 @@ export const updateWorkspaceHandler = async function* ({
       tx,
       mode: "update",
     });
-    const workspaceRows = await tx
-      .select({
-        id: workspaces.id,
-        name: workspaces.name,
-        clientId: workspaces.clientId,
-        reference: workspaces.reference,
-        billingReference: workspaces.billingReference,
-        billingNarrativeLanguage: workspaces.billingNarrativeLanguage,
-        color: workspaces.color,
-        documentNamingEnabled: workspaces.documentNamingEnabled,
-        leadUserId: workspaces.leadUserId,
-      })
-      .from(workspaces)
-      .where(
-        and(
-          eq(workspaces.id, workspaceId),
-          eq(workspaces.organizationId, organizationId),
-        ),
-      );
-    const workspace = workspaceRows.at(0);
-
-    if (!workspace) {
+    const locked = await readLockedWorkspace({
+      tx,
+      organizationId,
+      workspaceId,
+      actor,
+    });
+    if (!locked) {
       return {
         ok: false as const,
         status: 404 as const,
         message: "Workspace not found",
       };
+    }
+    const { row, workspace, authority } = locked;
+
+    const visibilityRefusal = checkVisibilityChange({
+      actor,
+      authority,
+      workspace,
+      body,
+    });
+    if (visibilityRefusal) {
+      return visibilityRefusal;
     }
 
     const held = await heldClient({ tx, organizationId, body, workspace });
@@ -400,6 +574,14 @@ export const updateWorkspaceHandler = async function* ({
       conditions.push(eq(workspaces.clientId, body.expectedClientId));
     }
 
+    // A matter saved before visibility was stored follows its client. A
+    // client change stores the visibility it has now, so attaching or
+    // removing a client never changes who can see it.
+    const visibility =
+      body.visibility ??
+      (body.clientId !== undefined && row.storedVisibility === null
+        ? workspace.visibility
+        : undefined);
     const updated = await tx
       .update(workspaces)
       .set({
@@ -413,6 +595,7 @@ export const updateWorkspaceHandler = async function* ({
           "documentNamingEnabled",
           "leadUserId",
         ]),
+        ...(visibility === undefined ? {} : { visibility }),
       })
       .where(and(...conditions))
       .returning({ id: workspaces.id });
@@ -429,12 +612,33 @@ export const updateWorkspaceHandler = async function* ({
     }
 
     const changes = workspaceAuditChanges(body, workspace);
+    const visibilityChange =
+      body.visibility === undefined || body.visibility === workspace.visibility
+        ? null
+        : { old: workspace.visibility, new: body.visibility };
+    if (visibilityChange) {
+      changes["visibility"] = visibilityChange;
+    }
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.UPDATE,
       resourceType: AUDIT_RESOURCE_TYPE.WORKSPACE,
       resourceId: workspaceId,
       changes,
+      // Widening shows the matter's contents to people who could not see
+      // them before; the marker lets the audit log filter those changes.
+      ...(visibilityChange
+        ? {
+            metadata: {
+              visibilityChange: widensMatterVisibility(
+                visibilityChange.old,
+                visibilityChange.new,
+              )
+                ? "widened"
+                : "narrowed",
+            },
+          }
+        : {}),
     });
 
     await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
@@ -444,6 +648,11 @@ export const updateWorkspaceHandler = async function* ({
 
   if (Result.isError(txResult)) {
     const error = transactionAbortError(txResult.error);
+    // The stewardship refusal answers MCP callers too, not only HTTP.
+    const refusal = databaseConstraintRefusal(error);
+    if (refusal) {
+      return yield* Result.err(refusal);
+    }
     if (DatabaseError.is(error) && error.code === PG_ERROR.UNIQUE_VIOLATION) {
       return yield* Result.err(
         new HandlerError({ status: 409, message: "Duplicate value" }),
@@ -472,8 +681,17 @@ export const updateWorkspaceHandler = async function* ({
 
 const updateWorkspace = createSafeHandler(
   config,
-  async function* ({ safeDb, session, workspaceId, body, recordAuditEvent }) {
+  async function* ({
+    safeDb,
+    session,
+    user,
+    memberRole,
+    workspaceId,
+    body,
+    recordAuditEvent,
+  }) {
     return yield* updateWorkspaceHandler({
+      actor: { userId: user.id, authority: memberRole },
       safeDb,
       organizationId: session.activeOrganizationId,
       workspaceId,

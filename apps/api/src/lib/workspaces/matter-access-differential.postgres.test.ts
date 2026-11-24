@@ -1,10 +1,13 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 import fc from "fast-check";
 
+import { MATTER_VISIBILITIES } from "@stll/api-contract/matter-visibility";
+import type { MatterVisibility } from "@stll/api-contract/matter-visibility";
 import { roles } from "@stll/permissions";
 import { assertProperty, propertyConfig } from "@stll/property-testing";
+import { dbClock } from "@stll/test-kit/db";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -22,6 +25,7 @@ import {
   memberReachesMatterSql,
   readAuthorizedWorkspaces,
 } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { roleReachesMatterSql } from "@/api/lib/workspaces/matter-visibility";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
@@ -35,10 +39,12 @@ import { insertOwnerContacts } from "@/api/tests/helpers/owner-contacts";
  * Differential test: every app-side matter access decision agrees with the
  * database's own rule (the authorization view the row policies consult) on
  * randomly generated organizations. A world has members in every organization
- * role plus a removed member (no `member` row), client and personal matters,
- * matters being deleted and random matter assignments. For each (user,
- * matter) the view decides; each app helper is fed the live rows exactly as
- * its callers read them.
+ * role plus a removed member (no `member` row), matters with and without a
+ * client at every visibility (and without a stored one), matters being
+ * deleted and random matter assignments. For each (user, matter) the view
+ * decides; each app helper is fed the live rows exactly as its callers read
+ * them. The view itself must equal the rule stated independently here:
+ * an assignment, or the member's role at the matter's visibility.
  */
 
 const databaseUrl = process.env["DATABASE_URL"];
@@ -66,6 +72,7 @@ const worldArbitrary = fc.record({
     fc.record({
       client: fc.boolean(),
       deleting: fc.boolean(),
+      visibility: fc.constantFrom(null, ...MATTER_VISIBILITIES),
     }),
     { minLength: MATTERS, maxLength: MATTERS },
   ),
@@ -80,6 +87,9 @@ type SeededWorld = {
   organizationId: SafeId<"organization">;
   userIds: SafeId<"user">[];
   matterIds: SafeId<"workspace">[];
+  /** An internal member assigned to every matter, never checked: an
+   *  assigned-only matter must keep an assigned internal member. */
+  stewardId: SafeId<"user">;
 };
 
 const insertOrganization = async (
@@ -113,10 +123,11 @@ const seedWorld = async (tx: Transaction, world: World) => {
     organizationId: mintAuthProviderId<"organization">(),
     userIds: world.roles.map(() => mintAuthProviderId<"user">()),
     matterIds: world.matters.map(() => createSafeId<"workspace">()),
+    stewardId: mintAuthProviderId<"user">(),
   };
   const clientId = await insertOrganization(tx, seeded.organizationId);
   await tx.insert(user).values(
-    seeded.userIds.map((id) => ({
+    [...seeded.userIds, seeded.stewardId].map((id) => ({
       id,
       name: "Matter access differential",
       email: `${id}@example.test`,
@@ -136,9 +147,16 @@ const seedWorld = async (tx: Transaction, world: World) => {
           },
         ];
   });
-  if (members.length > 0) {
-    await tx.insert(member).values(members);
-  }
+  await tx.insert(member).values([
+    ...members,
+    {
+      id: mintAuthProviderIdValue(),
+      organizationId: seeded.organizationId,
+      userId: seeded.stewardId,
+      role: "member",
+      createdAt: dbClock.now(),
+    },
+  ]);
   await tx.insert(workspaces).values(
     world.matters.map((matter, index) => ({
       id: seeded.matterIds[index] ?? panic("matter id"),
@@ -147,6 +165,7 @@ const seedWorld = async (tx: Transaction, world: World) => {
       name: `Matter ${String(index)}`,
       reference: `DIFF-${String(index)}`,
       status: matter.deleting ? ("deleting" as const) : ("active" as const),
+      visibility: matter.visibility,
     })),
   );
   // Matter membership requires organization membership (a trigger enforces
@@ -160,9 +179,13 @@ const seedWorld = async (tx: Transaction, world: World) => {
             : [],
         ),
   );
-  if (assignments.length > 0) {
-    await tx.insert(workspaceMembers).values(assignments);
-  }
+  await tx.insert(workspaceMembers).values([
+    ...assignments,
+    ...seeded.matterIds.map((workspaceId) => ({
+      workspaceId,
+      userId: seeded.stewardId,
+    })),
+  ]);
   return seeded;
 };
 
@@ -171,6 +194,8 @@ type LiveRow = {
   status: string;
   /** The database access function's answer for this member. */
   reachesMatter: boolean;
+  /** The role half of the rule, as the lock scopes ask it. */
+  roleReachesMatter: boolean | null;
 };
 
 const readLiveRows = async (
@@ -185,6 +210,9 @@ const readLiveRows = async (
       reachesMatter: memberReachesMatterSql(
         { organizationId: seeded.organizationId, userId },
         workspaces.id,
+      ),
+      roleReachesMatter: roleReachesMatterSql(
+        sql`(SELECT m.role FROM ${member} m WHERE m.organization_id = ${seeded.organizationId} AND m.user_id = ${userId})`,
       ),
     })
     .from(workspaces)
@@ -220,6 +248,40 @@ const readViewSet = async (
 
 const roleOf = (role: RoleChoice) => (role === "removed" ? null : role);
 
+/**
+ * The visibility rule stated independently of the database: without an
+ * assignment, owners and admins reach admins_and_assigned and all_members
+ * matters, other internal members reach all_members matters, and external
+ * members reach nothing. A matter without a stored visibility follows its
+ * client: admins_and_assigned with one, assigned_only without.
+ */
+const stateRuleReachesByRole = (
+  role: string | null,
+  {
+    visibility,
+    hasClient,
+  }: { visibility: MatterVisibility | null; hasClient: boolean },
+): boolean => {
+  const effective =
+    visibility ?? (hasClient ? "admins_and_assigned" : "assigned_only");
+  switch (effective) {
+    case "all_members":
+      return (
+        role === "owner" ||
+        role === "admin" ||
+        role === "member" ||
+        role === "intern"
+      );
+    case "admins_and_assigned":
+      return role === "owner" || role === "admin";
+    case "assigned_only":
+      return false;
+    default:
+      effective satisfies never;
+      return panic("Unhandled matter visibility");
+  }
+};
+
 const updatesEntities = (role: string | null) =>
   role !== null &&
   isMemberRole(role) &&
@@ -241,7 +303,9 @@ const withWorld = async (
       await check({ db, seeded });
     } finally {
       await deleteOrganizationsForTest(db, [seeded.organizationId]);
-      await db.delete(user).where(inArray(user.id, seeded.userIds));
+      await db
+        .delete(user)
+        .where(inArray(user.id, [...seeded.userIds, seeded.stewardId]));
     }
   });
 };
@@ -281,9 +345,27 @@ describe.skipIf(!runPostgresTests)(
                   (row) => row.status === "active" && view.has(row.workspaceId),
                 )
                 .map((row) => row.workspaceId);
-              for (const [matterIndex, row] of facts.rows.entries()) {
+              for (const row of facts.rows) {
+                const matterIndex = seeded.matterIds.indexOf(row.workspaceId);
+                const matter = world.matters[matterIndex] ?? panic("matter");
                 const label = `${String(role)} on matter ${String(matterIndex)}`;
                 const reaches = view.has(row.workspaceId);
+                const assigned =
+                  role !== null &&
+                  world.assigned[index * MATTERS + matterIndex] === true;
+                expect(reaches, label).toBe(
+                  assigned ||
+                    stateRuleReachesByRole(role, {
+                      visibility: matter.visibility,
+                      hasClient: matter.client,
+                    }),
+                );
+                expect(row.roleReachesMatter === true, label).toBe(
+                  stateRuleReachesByRole(role, {
+                    visibility: matter.visibility,
+                    hasClient: matter.client,
+                  }),
+                );
                 expect(row.reachesMatter, label).toBe(reaches);
                 const input = {
                   organizationRole: role,

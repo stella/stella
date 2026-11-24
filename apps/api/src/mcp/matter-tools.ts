@@ -126,10 +126,14 @@ import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
 } from "@/api/lib/usage/action-costs/context";
+import { matterVisibilitySchema } from "@/api/lib/workspaces/matter-visibility";
 import { CONTACT_NESTED_INPUT_SCHEMAS } from "@/api/mcp/contact-input";
 import { providerFromMcpWebSearchAvailability } from "@/api/mcp/context";
 import type { McpRequestResources } from "@/api/mcp/context";
-import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import {
+  hasEffectiveAuthority,
+  mcpMemberAuthority,
+} from "@/api/mcp/effective-authority";
 import {
   countryInputSchema,
   countryNormalization,
@@ -320,7 +324,20 @@ const saveMatterArgsSchema = nullAsAbsent(
       ),
       client_id: v.optional(
         uuidInputSchema(
-          "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client.",
+          "Contact ID of the matter's client; attaches or replaces it. Never changes visibility.",
+        ),
+      ),
+      visibility: v.optional(
+        matterVisibilitySchema(
+          "Who sees it unassigned: all_members, admins_and_assigned (owners/admins) or assigned_only. Create default: admins_and_assigned with client_id, else assigned_only. Update: lead or owner/admin only.",
+        ),
+      ),
+      confirm: v.optional(
+        v.pipe(
+          v.literal(true),
+          v.description(
+            "Required when visibility shows the matter to more people; ask the user first.",
+          ),
         ),
       ),
       reference: v.optional(
@@ -371,15 +388,25 @@ const saveMatterArgsSchema = nullAsAbsent(
         ["reference"],
         ["billing_reference"],
         ["status"],
+        ["visibility"],
       ],
-      ({ matter_id, name, client_id, reference, billing_reference, status }) =>
+      ({
+        matter_id,
+        name,
+        client_id,
+        reference,
+        billing_reference,
+        status,
+        visibility,
+      }) =>
         matter_id === undefined ||
         name !== undefined ||
         client_id !== undefined ||
         reference !== undefined ||
         billing_reference !== undefined ||
-        status !== undefined,
-      "Provide at least one change: name, client_id, reference, billing_reference, or status",
+        status !== undefined ||
+        visibility !== undefined,
+      "Provide at least one change: name, client_id, reference, billing_reference, status, or visibility",
     ),
   ),
 );
@@ -438,6 +465,9 @@ const handleSaveMatterTool: TypedMcpToolHandler<
           ...(input.billing_reference === undefined
             ? {}
             : { billingReference: input.billing_reference }),
+          ...(input.visibility === undefined
+            ? {}
+            : { visibility: input.visibility }),
         },
       }),
     );
@@ -475,7 +505,8 @@ const handleSaveMatterTool: TypedMcpToolHandler<
       input.name === undefined &&
       input.client_id === undefined &&
       input.reference === undefined &&
-      input.billing_reference === undefined;
+      input.billing_reference === undefined &&
+      input.visibility === undefined;
     if (!isPureUnarchive) {
       if (input.status === WORKSPACE_STATUS.archived) {
         return errorResult("Matter is already archived");
@@ -490,10 +521,15 @@ const handleSaveMatterTool: TypedMcpToolHandler<
     input.name !== undefined ||
     input.client_id !== undefined ||
     input.reference !== undefined ||
-    input.billing_reference !== undefined
+    input.billing_reference !== undefined ||
+    input.visibility !== undefined
   ) {
     const updated = await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: {
+          userId: context.userId,
+          authority: mcpMemberAuthority(context),
+        },
         safeDb: context.safeDb,
         organizationId: context.organizationId,
         workspaceId,
@@ -509,6 +545,10 @@ const handleSaveMatterTool: TypedMcpToolHandler<
           ...(input.billing_reference === undefined
             ? {}
             : { billingReference: input.billing_reference }),
+          ...(input.visibility === undefined
+            ? {}
+            : { visibility: input.visibility }),
+          ...(input.confirm === undefined ? {} : { confirmWidening: true }),
         },
       }),
     );
@@ -2735,10 +2775,9 @@ const MATTER_TOOL_DEFINITIONS = [
     consumesServices: false,
     description:
       "Create, update, archive, or unarchive a matter. Omit matter_id to " +
-      "create a new matter (name required; pass client_id to attach a client " +
-      "contact). Pass matter_id to update an existing matter: set name, " +
-      "reference, or billing_reference, and/or set status to 'archived' or " +
-      "'active' to archive or unarchive it. Returns the matter ID.",
+      "create one (name required; client_id and visibility optional). With " +
+      "matter_id, set name, client_id, reference, billing_reference or " +
+      "visibility, and/or status 'archived' or 'active'. Returns the matter ID.",
     inputSchema: saveMatterArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["check", "partial_check"],

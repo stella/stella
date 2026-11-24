@@ -3551,9 +3551,10 @@ export const holdLiveSourceWorkspaces = async ({
   return live.length === workspaceIds.length;
 };
 
+/** How a timer reaches its matter: an assignment, or the member's role. */
 export const TIMER_MATTER_LOCK_SCOPE = {
   assignment: "assignment",
-  client: "client",
+  role: "role",
 } as const;
 
 type TimerMatterAccessRowsLockOptions = Omit<
@@ -3600,7 +3601,7 @@ export const lockTimerMatterAccessRows = async ({
   const scope = row["lockScope"];
   switch (scope) {
     case TIMER_MATTER_LOCK_SCOPE.assignment:
-    case TIMER_MATTER_LOCK_SCOPE.client:
+    case TIMER_MATTER_LOCK_SCOPE.role:
       return scope;
     default:
       return panic("Invalid timer matter lock scope");

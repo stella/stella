@@ -391,10 +391,10 @@ describe("matter access census self-test", () => {
     const findings = classifyMatterAccessModule(
       "apps/api/src/lib/example-rule.ts",
       `
-      import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
+      import { MATTER_ADMIN_ROLES } from "@stll/permissions";
       import { workspaceMembers } from "@/api/db/schema";
       export const reaches = (role: string, memberRow: unknown) =>
-        memberRow !== null || CLIENT_MATTER_ADMIN_ROLES.some((r) => r === role);
+        memberRow !== null || MATTER_ADMIN_ROLES.some((r) => r === role);
       export const table = workspaceMembers;
     `,
     );

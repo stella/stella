@@ -21,18 +21,21 @@ handling, or external APIs. Stella handles privileged legal data
   leak to another.
   [test: apps/api/src/tests/security/cross-tenant-handlers.test.ts]
 - **Ethical walls** — workspace (matter) boundaries enforce
-  information barriers for the `member` role at the RLS layer (not
-  just the UI): a member has zero visibility into workspaces they
-  are not assigned to via `workspace_members` — no names, no
-  members, no metadata. **Known limitation:** org `owner`/`admin`
-  roles carry a deliberate firm-admin override granting access to
-  every client matter (`client_id IS NOT NULL`) regardless of
-  assignment, and there is no per-matter screening to wall a
-  specific admin out of a specific matter. Do not describe admin
-  access as "absolute confidentiality." Screening a matter from an
-  admin requires a matter-level exclusion consulted by the RLS
-  view (`stella_authorized_workspaces`), which is not yet built.
-  [test: apps/api/src/tests/security/rls-negative.test.ts]
+  information barriers at the RLS layer (not just the UI). Each
+  matter's `visibility` decides who reaches it without a
+  `workspace_members` assignment: `all_members` (every internal
+  member), `admins_and_assigned` (org owners and admins) or
+  `assigned_only` (nobody, owners and admins included). External
+  members reach a matter only through an assignment. Anyone not
+  reached has zero visibility: no names, no members, no metadata.
+  The rule lives once in `stella_authorized_workspace_ids`, which
+  the RLS view (`stella_authorized_workspaces`) calls; a matter
+  without a stored visibility follows its client (admins with a
+  client, assigned members without). An assigned-only matter
+  always keeps an assigned internal member (database triggers
+  refuse every change that would lose the last one). Organization
+  roles still decide what a member may do inside a matter.
+  [test: apps/api/src/lib/workspaces/matter-visibility.postgres.test.ts]
 - **Access control** — every endpoint enforces auth and
   authorisation. No "internal-only" endpoints without guards.
   [test: apps/api/src/tests/security/route-auth-invariants.test.ts]

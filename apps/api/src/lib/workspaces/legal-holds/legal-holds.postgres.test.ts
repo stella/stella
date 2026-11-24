@@ -41,6 +41,7 @@ import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import { createFileKey } from "@/api/lib/files/utils";
 import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-mime";
 import { completeWorkspaceDeletion } from "@/api/lib/organization-storage-teardown";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
@@ -987,6 +988,7 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
 
           const clientChange = await Result.gen(() =>
             updateWorkspaceHandler({
+              actor: { userId, authority: sessionMemberRole("owner") },
               safeDb,
               organizationId,
               workspaceId,

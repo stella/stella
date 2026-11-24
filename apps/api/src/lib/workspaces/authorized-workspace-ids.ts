@@ -1,14 +1,17 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
+import { isUuid } from "@stll/uuid-codec";
 
 import { stellaAuthorizedWorkspaces } from "@/api/db/rls";
 import { workspaces } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
+import { executedRows } from "@/api/lib/db/executed-rows";
+import { isRecord } from "@/api/lib/type-guards";
 import { visibleWorkspaceSql } from "@/api/lib/workspaces/visible-workspace-sql";
 
 /**
@@ -212,3 +215,40 @@ export const memberReachesMatterSql = (
   workspaceId: SqlValue,
 ): SQL<boolean> =>
   sql<boolean>`stella_workspace_access(${organizationId}, ${userId}, ${workspaceId}::uuid)`;
+
+type MemberMatterSetLookup = MemberScope & {
+  workspaceIds: readonly string[];
+};
+
+/**
+ * The requested matters one organization member reaches now and that are not
+ * being deleted, asked of the database rule once for the whole set
+ * (`stella_authorized_workspace_ids`). Like `memberReachesMatterSql`, it names
+ * the member explicitly, so a stored artifact can be checked against its
+ * reader's current reach.
+ */
+export const memberReachableMatterIds = async (
+  tx: Pick<Transaction, "execute">,
+  { organizationId, userId, workspaceIds }: MemberMatterSetLookup,
+): Promise<ReadonlySet<string>> => {
+  // A value that is not a matter id reaches nothing.
+  const candidates = [...new Set(workspaceIds)].filter((id) => isUuid(id));
+  if (candidates.length === 0) {
+    return new Set();
+  }
+  const rows = executedRows(
+    await tx.execute(sql`
+      SELECT a.workspace_id::text AS id
+      FROM stella_authorized_workspace_ids(${organizationId}, ${userId}) a
+      WHERE a.workspace_id = ANY(${`{${candidates.join(",")}}`}::uuid[])
+        AND a.workspace_status <> ${WORKSPACE_STATUS.deleting}
+    `),
+  );
+  return new Set(
+    rows.map((row) =>
+      isRecord(row) && typeof row["id"] === "string"
+        ? row["id"]
+        : panic("Invalid authorized matter row"),
+    ),
+  );
+};

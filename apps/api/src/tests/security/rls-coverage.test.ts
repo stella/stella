@@ -3,7 +3,8 @@ import { is, sql } from "drizzle-orm";
 import { getTableConfig, PgDialect, PgTable } from "drizzle-orm/pg-core";
 
 import {
-  CLIENT_MATTER_ADMIN_ROLES,
+  INTERNAL_MEMBER_ROLES,
+  MATTER_ADMIN_ROLES,
   ORGANIZATION_MANAGEMENT_ROLES,
 } from "@stll/permissions";
 
@@ -743,7 +744,7 @@ describe("policy coverage", () => {
     });
   });
 
-  test("workspace access view grants client matters to CLIENT_MATTER_ADMIN_ROLES", async () => {
+  test("workspace access view asks the matter access rule instead of repeating it", async () => {
     const result = await testDb.execute<{ definition: string }>(sql`
       SELECT pg_catalog.pg_get_viewdef(
         ${`public.${WORKSPACE_ACCESS_VIEW_NAME}`}::regclass
@@ -751,15 +752,47 @@ describe("policy coverage", () => {
     `);
     const definition = result.rows.at(0)?.definition ?? "";
 
-    expect(roleListsIn(definition)).toEqual([
-      new Set(CLIENT_MATTER_ADMIN_ROLES),
+    expect(roleListsIn(definition)).toEqual([]);
+    expect(definition).toContain("stella_authorized_workspace_ids");
+  });
+
+  test("the matter access rule reaches matters by role only through MATTER_ADMIN_ROLES and INTERNAL_MEMBER_ROLES", async () => {
+    const result = await testDb.execute<{ name: string; source: string }>(sql`
+      SELECT p.proname AS name, p.prosrc AS source
+      FROM pg_catalog.pg_proc p
+      JOIN pg_catalog.pg_namespace n ON n.oid = p.pronamespace
+      WHERE n.nspname = 'public'
+        AND p.proname IN (
+          'stella_authorized_workspace_ids',
+          'stella_role_reaches_matter'
+        )
+      ORDER BY p.proname
+    `);
+    const roleSets = (source: string) =>
+      [...source.matchAll(/role IN \(([^)]*)\)/gu)].map(
+        ([, list = ""]) =>
+          new Set(
+            [...list.matchAll(/'([^']*)'/gu)].map(([, role = ""]) => role),
+          ),
+      );
+    expect(
+      result.rows.map(({ name, source }) => [name, roleSets(source)]),
+    ).toEqual([
+      [
+        "stella_authorized_workspace_ids",
+        [new Set(MATTER_ADMIN_ROLES), new Set(INTERNAL_MEMBER_ROLES)],
+      ],
+      [
+        "stella_role_reaches_matter",
+        [new Set(INTERNAL_MEMBER_ROLES), new Set(MATTER_ADMIN_ROLES)],
+      ],
     ]);
   });
 
   test("every policy role list is a named role set", async () => {
     const namedSets = [
       new Set(ORGANIZATION_MANAGEMENT_ROLES),
-      new Set(CLIENT_MATTER_ADMIN_ROLES),
+      new Set(MATTER_ADMIN_ROLES),
     ];
     const policies = await fetchStellaPolicies(testDb);
     const roleLists = policies.flatMap((policy) =>

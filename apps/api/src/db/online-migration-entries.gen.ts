@@ -38,6 +38,7 @@ export { default as constraints_list_verification_constraints } from "./online-m
 export { default as constraints_list_verification_scope_constraints } from "./online-migration-entries/constraints-list-verification-scope-constraints";
 export { default as constraints_local_run_approval_ceiling_constraints } from "./online-migration-entries/constraints-local-run-approval-ceiling-constraints";
 export { default as constraints_matter_time_expense_retention_constraints } from "./online-migration-entries/constraints-matter-time-expense-retention-constraints";
+export { default as constraints_matter_visibility_constraint } from "./online-migration-entries/constraints-matter-visibility-constraint";
 export { default as constraints_notification_task_assigned_constraints } from "./online-migration-entries/constraints-notification-task-assigned-constraints";
 export { default as constraints_organization_access_state_constraints } from "./online-migration-entries/constraints-organization-access-state-constraints";
 export { default as constraints_organization_ai_instructions_constraints } from "./online-migration-entries/constraints-organization-ai-instructions-constraints";
@@ -172,6 +173,7 @@ export { default as indexes_time_timers_legacy_entry_uidx } from "./online-migra
 export { default as indexes_time_timers_running_org_id_idx } from "./online-migration-entries/indexes-time-timers-running-org-id-idx";
 export { default as indexes_workspace_views_correspondence_uidx } from "./online-migration-entries/indexes-workspace-views-correspondence-uidx";
 export { default as indexes_workspaces_id_org_unq } from "./online-migration-entries/indexes-workspaces-id-org-unq";
+export { default as indexes_workspaces_org_all_members_idx } from "./online-migration-entries/indexes-workspaces-org-all-members-idx";
 export { default as repairs_account_audit_constraint_validation } from "./online-migration-entries/repairs-account-audit-constraint-validation";
 export { default as repairs_agent_skill_binding_constraint_validations } from "./online-migration-entries/repairs-agent-skill-binding-constraint-validations";
 export { default as repairs_better_auth_oauth_resource_repair } from "./online-migration-entries/repairs-better-auth-oauth-resource-repair";
@@ -231,6 +233,7 @@ export { default as repairs_list_verification_constraint_validation } from "./on
 export { default as repairs_list_verification_scope_constraint_validation } from "./online-migration-entries/repairs-list-verification-scope-constraint-validation";
 export { default as repairs_local_run_approval_ceiling_constraint_validations } from "./online-migration-entries/repairs-local-run-approval-ceiling-constraint-validations";
 export { default as repairs_matter_time_expense_retention_validations } from "./online-migration-entries/repairs-matter-time-expense-retention-validations";
+export { default as repairs_matter_visibility_constraint_validation } from "./online-migration-entries/repairs-matter-visibility-constraint-validation";
 export { default as repairs_notification_task_assigned_constraint_validations } from "./online-migration-entries/repairs-notification-task-assigned-constraint-validations";
 export { default as repairs_organization_access_state_constraint_validations } from "./online-migration-entries/repairs-organization-access-state-constraint-validations";
 export { default as repairs_organization_ai_instructions_constraint_validations } from "./online-migration-entries/repairs-organization-ai-instructions-constraint-validations";

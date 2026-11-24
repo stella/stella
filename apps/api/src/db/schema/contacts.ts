@@ -5,6 +5,7 @@ import {
   INVOICE_LANGUAGES,
   WORKSPACE_CONTACT_ROLES,
 } from "@stll/api-contract";
+import { MATTER_VISIBILITIES } from "@stll/api-contract/matter-visibility";
 import {
   WORKSPACE_STATUS,
   WORKSPACE_STATUSES,
@@ -388,10 +389,9 @@ export const workspaces = p.pgTable(
     ...importProvenanceColumns(),
     name: p.varchar({ length: 256 }).notNull(),
     reference: p.varchar({ length: 64 }).notNull(),
-    // Nullable: a null client_id encodes a personal matter (visible
-    // only to the creator via workspace_members). A non-null client_id
-    // is a normal client matter. Setting clientId on update turns a
-    // personal matter into a client matter; members are added apart.
+    // The matter's client, if it has one. Who can see the matter is
+    // `visibility`, not the client; a matter without a stored visibility
+    // falls back to the client rule (see `visibility`).
     clientId: safeUuid<"contact">("client_id").references(() => contacts.id, {
       onDelete: "restrict",
     }),
@@ -409,6 +409,16 @@ export const workspaces = p.pgTable(
       length: 128,
     }),
     color: p.varchar({ length: 32 }),
+    /**
+     * Who can see the matter without an assignment: `all_members` (every
+     * internal member), `admins_and_assigned` (owners and admins) or
+     * `assigned_only` (nobody). Null for a matter saved before the setting
+     * existed, which keeps the client rule: `admins_and_assigned` with a
+     * client, `assigned_only` without. Read it through
+     * `effectiveMatterVisibility`; the database rule is
+     * `stella_authorized_workspace_ids`.
+     */
+    visibility: p.text("visibility", { enum: MATTER_VISIBILITIES }),
     /** Rename new uploads to the organization's document name pattern. */
     documentNamingEnabled: p
       .boolean("document_naming_enabled")
@@ -433,6 +443,18 @@ export const workspaces = p.pgTable(
       )})`,
     ),
     ...importProvenanceConstraints("workspaces", table),
+    p.check(
+      "workspaces_visibility_check",
+      sql`${table.visibility} IN (${sql.join(
+        MATTER_VISIBILITIES.map((visibility) => sql.raw(`'${visibility}'`)),
+        sql`, `,
+      )})`,
+    ),
+    // Members and interns reach all_members matters through their role.
+    p
+      .index("workspaces_org_all_members_idx")
+      .on(table.organizationId)
+      .where(sql`${table.visibility} = 'all_members'`),
     p
       .unique("workspaces_org_reference_uidx")
       .on(table.organizationId, table.reference),
