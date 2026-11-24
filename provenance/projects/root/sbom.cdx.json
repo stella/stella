@@ -7,7 +7,7 @@
           "name": "Markus Ecker <markus.ecker@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@ag-ui/core@1.0.4",
+      "bom-ref": "pkg:npm/@ag-ui/core@1.0.5",
       "evidence": {
         "identity": [
           {
@@ -71,10 +71,10 @@
           "value": "apps/api/node_modules/@ag-ui/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ag-ui/core@1.0.4",
+      "purl": "pkg:npm/%40ag-ui/core@1.0.5",
       "scope": "required",
       "type": "library",
-      "version": "1.0.4"
+      "version": "1.0.5"
     },
     {
       "authors": [
@@ -82,7 +82,7 @@
           "name": "Anthropic <support@anthropic.com>"
         }
       ],
-      "bom-ref": "pkg:npm/@anthropic-ai/sdk@1.8.0",
+      "bom-ref": "pkg:npm/@anthropic-ai/sdk@1.10.0",
       "description": "The official TypeScript library for the Anthropic API",
       "evidence": {
         "identity": [
@@ -128,10 +128,10 @@
           "value": "apps/api/node_modules/@anthropic-ai/sdk/package.json"
         }
       ],
-      "purl": "pkg:npm/%40anthropic-ai/sdk@1.8.0",
+      "purl": "pkg:npm/%40anthropic-ai/sdk@1.10.0",
       "scope": "required",
       "type": "library",
-      "version": "1.8.0"
+      "version": "1.10.0"
     },
     {
       "authors": [
@@ -165,6 +165,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/use-activity-setup.ts#1"
           },
           {
             "location": "apps/desktop/src/onboarding/use-dictation.ts#1"
@@ -953,10 +956,10 @@
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#9"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#17"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#18"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#11"
@@ -966,6 +969,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardImagePreview.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/dictation/DictationFixApp.tsx#1"
           },
           {
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#1"
@@ -980,7 +986,16 @@
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/mainview/DictationAppSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCustomWords.tsx#1"
@@ -990,6 +1005,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationInputFix.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationLearnedFixes.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationMicrophone.tsx#1"
@@ -1040,6 +1058,12 @@
             "location": "apps/desktop/src/onboarding/ActivityExplainer.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
           },
           {
@@ -1052,13 +1076,16 @@
             "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#1"
           },
           {
-            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#2"
-          },
-          {
             "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#2"
           },
           {
             "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
@@ -1137,6 +1164,9 @@
           },
           {
             "location": "apps/mobile/src/app/palette.tsx#2"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#1"
@@ -1232,7 +1262,7 @@
             "location": "apps/mobile/src/components/dictate-button.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#1"
+            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#8"
           },
           {
             "location": "apps/mobile/src/components/dictation-setting.tsx#1"
@@ -1281,6 +1311,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/markdown-view.tsx#1"
@@ -1662,6 +1695,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-local-run-question-context.tsx#1"
@@ -2084,7 +2120,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -2132,6 +2168,9 @@
             "location": "apps/web/src/components/inspector/inspector-title.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/mailbox-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#1"
           },
           {
@@ -2159,6 +2198,9 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/signature-file-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
@@ -2172,6 +2214,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/unscanned-content-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -2193,6 +2238,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
@@ -2265,15 +2313,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -3662,6 +3701,9 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.billing.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.dictation.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.document-types.pending.tsx#1"
           },
           {
@@ -3750,6 +3792,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.pending.tsx#1"
@@ -4040,6 +4088,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#7"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate.tsx#1"
           },
           {
@@ -4049,7 +4103,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -4116,6 +4170,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-workflows.pending.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.pending.tsx#1"
@@ -4299,6 +4356,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/page-crop-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/pdf-fit-width-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/playbook-editor-playground.tsx#1"
@@ -4782,6 +4842,18 @@
           },
           {
             "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#2"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#2"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -5631,7 +5703,10 @@
             "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#4"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#20"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#21"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#4"
           },
           {
             "location": "apps/web/src/components/pdf/page-organizer.tsx#4"
@@ -5646,7 +5721,10 @@
             "location": "apps/web/src/components/workspaces/kanban/use-kanban-drop-targets.ts#5"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#21"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#22"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#5"
           },
           {
             "location": "apps/web/src/components/pdf/page-organizer.tsx#5"
@@ -5810,7 +5888,10 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#5"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#26"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#27"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#10"
           },
           {
             "location": "apps/web/src/components/app-sidebar.tsx#11"
@@ -5864,7 +5945,10 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#3"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#25"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#26"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#9"
           },
           {
             "location": "apps/web/src/components/drag-and-drop-live-region.tsx#7"
@@ -5891,7 +5975,7 @@
             "location": "packages/ui/src/kanban/drag-interactions.ts#6"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#28"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#29"
           },
           {
             "location": "apps/web/src/components/pdf/page-organizer.tsx#8"
@@ -5912,7 +5996,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/entity-row-cells.tsx#4"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#27"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#28"
           },
           {
             "location": "apps/web/src/components/pdf/page-organizer.tsx#7"
@@ -5977,7 +6061,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-bedrock-runtime@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-bedrock-runtime@3.1171.0",
       "description": "AWS SDK for JavaScript Bedrock Runtime Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -6030,13 +6114,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-bedrock-runtime/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-bedrock-runtime@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/client-bedrock-runtime@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6044,7 +6128,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-cloudwatch@3.1171.0",
       "description": "AWS SDK for JavaScript Cloudwatch Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -6097,13 +6181,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-cloudwatch/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/client-cloudwatch@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6111,7 +6195,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-lambda@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-lambda@3.1171.0",
       "description": "AWS SDK for JavaScript Lambda Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -6164,13 +6248,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-lambda/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-lambda@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/client-lambda@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6178,7 +6262,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1171.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -6237,13 +6321,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6251,7 +6335,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1171.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -6304,13 +6388,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6318,7 +6402,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sqs@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sqs@3.1171.0",
       "description": "AWS SDK for JavaScript Sqs Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -6377,13 +6461,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sqs/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sqs@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sqs@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6391,7 +6475,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-ssm@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-ssm@3.1171.0",
       "description": "AWS SDK for JavaScript Ssm Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -6444,13 +6528,13 @@
           "value": "node_modules/@aws-sdk/client-ssm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-ssm@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/client-ssm@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6458,7 +6542,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1171.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -6514,13 +6598,13 @@
           "value": "apps/api/node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6528,7 +6612,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1169.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1171.0",
       "evidence": {
         "identity": [
           {
@@ -6580,13 +6664,13 @@
           "value": "apps/api/node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1169.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1171.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1169.0"
+      "version": "3.1171.0"
     },
     {
       "authors": [
@@ -6620,6 +6704,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/use-activity-setup.ts#1"
           },
           {
             "location": "apps/desktop/src/onboarding/use-dictation.ts#1"
@@ -7408,10 +7495,10 @@
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#9"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#17"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#18"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#11"
@@ -7421,6 +7508,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardImagePreview.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/dictation/DictationFixApp.tsx#1"
           },
           {
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#1"
@@ -7435,7 +7525,16 @@
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/mainview/DictationAppSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCustomWords.tsx#1"
@@ -7445,6 +7544,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationInputFix.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationLearnedFixes.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationMicrophone.tsx#1"
@@ -7495,6 +7597,12 @@
             "location": "apps/desktop/src/onboarding/ActivityExplainer.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
           },
           {
@@ -7507,13 +7615,16 @@
             "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#1"
           },
           {
-            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#2"
-          },
-          {
             "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#2"
           },
           {
             "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
@@ -7592,6 +7703,9 @@
           },
           {
             "location": "apps/mobile/src/app/palette.tsx#2"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#1"
@@ -7687,7 +7801,7 @@
             "location": "apps/mobile/src/components/dictate-button.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#1"
+            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#8"
           },
           {
             "location": "apps/mobile/src/components/dictation-setting.tsx#1"
@@ -7736,6 +7850,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/markdown-view.tsx#1"
@@ -8117,6 +8234,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-local-run-question-context.tsx#1"
@@ -8539,7 +8659,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -8587,6 +8707,9 @@
             "location": "apps/web/src/components/inspector/inspector-title.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/mailbox-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#1"
           },
           {
@@ -8614,6 +8737,9 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/signature-file-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
@@ -8627,6 +8753,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/unscanned-content-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -8648,6 +8777,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
@@ -8720,15 +8852,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -10117,6 +10240,9 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.billing.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.dictation.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.document-types.pending.tsx#1"
           },
           {
@@ -10205,6 +10331,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.pending.tsx#1"
@@ -10495,6 +10627,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#7"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate.tsx#1"
           },
           {
@@ -10504,7 +10642,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -10571,6 +10709,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-workflows.pending.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.pending.tsx#1"
@@ -10754,6 +10895,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/page-crop-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/pdf-fit-width-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/playbook-editor-playground.tsx#1"
@@ -11237,6 +11381,18 @@
           },
           {
             "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#2"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#2"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -12708,7 +12864,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/@expo/ui@58.0.28",
+      "bom-ref": "pkg:npm/@expo/ui@58.0.29",
       "description": "A collection of UI components",
       "evidence": {
         "identity": [
@@ -12785,10 +12941,10 @@
           "value": "apps/mobile/node_modules/@expo/ui/package.json"
         }
       ],
-      "purl": "pkg:npm/%40expo/ui@58.0.28",
+      "purl": "pkg:npm/%40expo/ui@58.0.29",
       "scope": "required",
       "type": "library",
-      "version": "58.0.28"
+      "version": "58.0.29"
     },
     {
       "authors": [
@@ -12950,7 +13106,7 @@
             "location": "packages/ui/scripts/generate-outcome-page.ts#17"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#18"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#19"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#2"
@@ -13427,7 +13583,7 @@
       "version": "0.1.0"
     },
     {
-      "bom-ref": "pkg:npm/@google/genai@3.3.0",
+      "bom-ref": "pkg:npm/@google/genai@3.4.0",
       "evidence": {
         "identity": [
           {
@@ -13485,10 +13641,10 @@
           "value": "apps/api/node_modules/@google/genai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40google/genai@3.3.0",
+      "purl": "pkg:npm/%40google/genai@3.4.0",
       "scope": "required",
       "type": "library",
-      "version": "3.3.0"
+      "version": "3.4.0"
     },
     {
       "authors": [
@@ -13557,6 +13713,10 @@
         {
           "name": "SrcFile",
           "value": "packages/mcp-apps/node_modules/@happy-dom/global-registrator/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/markdown-editor/node_modules/@happy-dom/global-registrator/package.json"
         },
         {
           "name": "SrcFile",
@@ -13970,6 +14130,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/page-crop-playground.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/pdf-fit-width-playground.tsx#3"
           }
         ]
       },
@@ -14491,21 +14654,21 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/web/node_modules/@neftaly/editcontext-polyfill/package.json",
+            "concludedValue": "node_modules/@neftaly/editcontext-polyfill/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/web/node_modules/@neftaly/editcontext-polyfill/package.json"
+                "value": "node_modules/@neftaly/editcontext-polyfill/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#20"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#20"
           }
         ]
       },
@@ -14532,11 +14695,11 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@neftaly/editcontext-polyfill/package.json"
+          "value": "packages/markdown-editor/node_modules/@neftaly/editcontext-polyfill/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/web/node_modules/@neftaly/editcontext-polyfill/package.json"
+          "value": "node_modules/@neftaly/editcontext-polyfill/package.json"
         }
       ],
       "purl": "pkg:npm/%40neftaly/editcontext-polyfill@0.1.1",
@@ -14624,7 +14787,7 @@
           "name": "OpenRouter"
         }
       ],
-      "bom-ref": "pkg:npm/@openrouter/sdk@1.5.103",
+      "bom-ref": "pkg:npm/@openrouter/sdk@1.5.111",
       "description": "The OpenRouter TypeScript SDK is a type-safe toolkit for building AI applications with access to 400+ language models through a unified API.",
       "evidence": {
         "identity": [
@@ -14676,14 +14839,14 @@
           "value": "apps/api/node_modules/@openrouter/sdk/package.json"
         }
       ],
-      "purl": "pkg:npm/%40openrouter/sdk@1.5.103",
+      "purl": "pkg:npm/%40openrouter/sdk@1.5.111",
       "scope": "required",
       "tags": [
         "ai",
         "api"
       ],
       "type": "library",
-      "version": "1.5.103"
+      "version": "1.5.111"
     },
     {
       "authors": [
@@ -17521,7 +17684,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.107.1",
+      "bom-ref": "pkg:npm/@tanstack/react-query-devtools@5.108.0",
       "description": "Developer tools to interact with and visualize the TanStack/react-query cache",
       "evidence": {
         "identity": [
@@ -17574,13 +17737,13 @@
           "value": "apps/web/node_modules/@tanstack/react-query-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.107.1",
+      "purl": "pkg:npm/%40tanstack/react-query-devtools@5.108.0",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "5.107.1"
+      "version": "5.108.0"
     },
     {
       "authors": [
@@ -17588,7 +17751,7 @@
           "name": "tannerlinsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-query@5.107.1",
+      "bom-ref": "pkg:npm/@tanstack/react-query@5.108.0",
       "description": "Hooks for managing, caching and syncing asynchronous and remote data in React",
       "evidence": {
         "identity": [
@@ -18546,6 +18709,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-queries/audit-logs.ts#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-queries/dictation-vocabulary.ts#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-queries/organization-data-boxes.ts#1"
           },
           {
@@ -18885,10 +19051,16 @@
             "location": "apps/web/src/components/inspector/inspector-tab-presentation.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/mailbox-viewer.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/plain-text-file-viewer.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/inspector/signature-file-viewer.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#1"
@@ -18912,7 +19084,7 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#3"
           },
           {
-            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#3"
           },
           {
             "location": "apps/web/src/components/language-picker.tsx#1"
@@ -19473,6 +19645,12 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/deepl-key-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#7"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-processing-card.tsx#1"
           },
           {
@@ -19677,7 +19855,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-workflows.page.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#1"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/-invoice-detail.page.tsx#8"
@@ -19867,10 +20045,10 @@
           "value": "apps/web/node_modules/@tanstack/react-query/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-query@5.107.1",
+      "purl": "pkg:npm/%40tanstack/react-query@5.108.0",
       "scope": "required",
       "type": "library",
-      "version": "5.107.1"
+      "version": "5.108.0"
     },
     {
       "authors": [
@@ -20304,6 +20482,9 @@
             "location": "apps/web/src/components/inspector/playbook-facet.tsx#11"
           },
           {
+            "location": "apps/web/src/components/inspector/signature-file-viewer.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/similar-documents-section.tsx#4"
           },
           {
@@ -20568,6 +20749,9 @@
             "location": "apps/web/src/routes/_protected.admin/catalogue.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.admin/dictation.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.admin/document-types.tsx#1"
           },
           {
@@ -20769,6 +20953,9 @@
             "location": "apps/web/src/routes/_protected.settings/organization.catalogue.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization.dictation.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization.document-types.tsx#1"
           },
           {
@@ -20925,7 +21112,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/$correspondenceId.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#2"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.pending.tsx#3"
@@ -21858,7 +22045,7 @@
       "version": "1.168.0"
     },
     {
-      "bom-ref": "pkg:npm/@tauri-apps/api@2.12.4",
+      "bom-ref": "pkg:npm/@tauri-apps/api@2.12.5",
       "description": "Tauri API definitions",
       "evidence": {
         "identity": [
@@ -21883,7 +22070,13 @@
             "location": "apps/desktop/src/activity/billing-draft-transport.ts#1"
           },
           {
+            "location": "apps/desktop/src/clipboard/clipboard-settings.ts#1"
+          },
+          {
             "location": "apps/desktop/src/clipboard/clips-copy-routing.ts#3"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/use-activity-setup.ts#3"
           },
           {
             "location": "apps/desktop/src/onboarding/use-dictation.ts#3"
@@ -21898,6 +22091,9 @@
             "location": "apps/desktop/src/transcribe/transcript-docx.ts#8"
           },
           {
+            "location": "apps/desktop/src/transcribe/use-transcript-save-options.ts#1"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivityApp.tsx#3"
           },
           {
@@ -21910,13 +22106,16 @@
             "location": "apps/desktop/src/activity/MatterPicker.tsx#3"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#29"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#30"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#13"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardImagePreview.tsx#3"
+          },
+          {
+            "location": "apps/desktop/src/dictation/DictationFixApp.tsx#3"
           },
           {
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#3"
@@ -21928,10 +22127,19 @@
             "location": "apps/desktop/src/mainview/App.tsx#9"
           },
           {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#11"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#3"
+          },
+          {
             "location": "apps/desktop/src/mainview/DictationDestination.tsx#3"
           },
           {
             "location": "apps/desktop/src/mainview/DictationInputFix.tsx#3"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationLearnedFixes.tsx#3"
           },
           {
             "location": "apps/desktop/src/mainview/DictationMicrophone.tsx#4"
@@ -22000,10 +22208,10 @@
             "location": "apps/desktop/src/shared/desktop-events.ts#2"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#30"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#31"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#31"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#32"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#6"
@@ -22040,13 +22248,13 @@
           "value": "apps/desktop/node_modules/@tauri-apps/api/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tauri-apps/api@2.12.4",
+      "purl": "pkg:npm/%40tauri-apps/api@2.12.5",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "2.12.4"
+      "version": "2.12.5"
     },
     {
       "authors": [
@@ -22080,6 +22288,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/use-activity-setup.ts#1"
           },
           {
             "location": "apps/desktop/src/onboarding/use-dictation.ts#1"
@@ -22868,10 +23079,10 @@
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#9"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#17"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#18"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#11"
@@ -22881,6 +23092,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardImagePreview.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/dictation/DictationFixApp.tsx#1"
           },
           {
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#1"
@@ -22895,7 +23109,16 @@
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/mainview/DictationAppSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCustomWords.tsx#1"
@@ -22905,6 +23128,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationInputFix.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationLearnedFixes.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationMicrophone.tsx#1"
@@ -22955,6 +23181,12 @@
             "location": "apps/desktop/src/onboarding/ActivityExplainer.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
           },
           {
@@ -22967,13 +23199,16 @@
             "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#1"
           },
           {
-            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#2"
-          },
-          {
             "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#2"
           },
           {
             "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
@@ -23052,6 +23287,9 @@
           },
           {
             "location": "apps/mobile/src/app/palette.tsx#2"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#1"
@@ -23147,7 +23385,7 @@
             "location": "apps/mobile/src/components/dictate-button.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#1"
+            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#8"
           },
           {
             "location": "apps/mobile/src/components/dictation-setting.tsx#1"
@@ -23196,6 +23434,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/markdown-view.tsx#1"
@@ -23577,6 +23818,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-local-run-question-context.tsx#1"
@@ -23999,7 +24243,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -24047,6 +24291,9 @@
             "location": "apps/web/src/components/inspector/inspector-title.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/mailbox-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#1"
           },
           {
@@ -24074,6 +24321,9 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/signature-file-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
@@ -24087,6 +24337,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/unscanned-content-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -24108,6 +24361,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
@@ -24180,15 +24436,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -25577,6 +25824,9 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.billing.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.dictation.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.document-types.pending.tsx#1"
           },
           {
@@ -25665,6 +25915,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.pending.tsx#1"
@@ -25955,6 +26211,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#7"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate.tsx#1"
           },
           {
@@ -25964,7 +26226,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -26031,6 +26293,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-workflows.pending.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.pending.tsx#1"
@@ -26214,6 +26479,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/page-crop-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/pdf-fit-width-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/playbook-editor-playground.tsx#1"
@@ -26697,6 +26965,18 @@
           },
           {
             "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#2"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#2"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -28332,6 +28612,9 @@
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/use-activity-setup.ts#1"
+          },
+          {
             "location": "apps/desktop/src/onboarding/use-dictation.ts#1"
           },
           {
@@ -29118,10 +29401,10 @@
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#9"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#17"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#18"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#11"
@@ -29131,6 +29414,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardImagePreview.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/dictation/DictationFixApp.tsx#1"
           },
           {
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#1"
@@ -29145,7 +29431,16 @@
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/mainview/DictationAppSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCustomWords.tsx#1"
@@ -29155,6 +29450,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationInputFix.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationLearnedFixes.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationMicrophone.tsx#1"
@@ -29205,6 +29503,12 @@
             "location": "apps/desktop/src/onboarding/ActivityExplainer.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
           },
           {
@@ -29217,13 +29521,16 @@
             "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#1"
           },
           {
-            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#2"
-          },
-          {
             "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#2"
           },
           {
             "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
@@ -29302,6 +29609,9 @@
           },
           {
             "location": "apps/mobile/src/app/palette.tsx#2"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#1"
@@ -29397,7 +29707,7 @@
             "location": "apps/mobile/src/components/dictate-button.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#1"
+            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#8"
           },
           {
             "location": "apps/mobile/src/components/dictation-setting.tsx#1"
@@ -29446,6 +29756,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/markdown-view.tsx#1"
@@ -29827,6 +30140,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-local-run-question-context.tsx#1"
@@ -30249,7 +30565,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -30297,6 +30613,9 @@
             "location": "apps/web/src/components/inspector/inspector-title.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/mailbox-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#1"
           },
           {
@@ -30324,6 +30643,9 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/signature-file-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
@@ -30337,6 +30659,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/unscanned-content-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -30358,6 +30683,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
@@ -30430,15 +30758,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -31827,6 +32146,9 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.billing.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.dictation.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.document-types.pending.tsx#1"
           },
           {
@@ -31915,6 +32237,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.pending.tsx#1"
@@ -32205,6 +32533,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#7"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate.tsx#1"
           },
           {
@@ -32214,7 +32548,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -32281,6 +32615,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-workflows.pending.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.pending.tsx#1"
@@ -32464,6 +32801,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/page-crop-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/pdf-fit-width-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/playbook-editor-playground.tsx#1"
@@ -32947,6 +33287,18 @@
           },
           {
             "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#2"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#2"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -33811,33 +34163,33 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/web/node_modules/@vscode/markdown-editor/package.json",
+            "concludedValue": "node_modules/@vscode/markdown-editor/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/web/node_modules/@vscode/markdown-editor/package.json"
+                "value": "node_modules/@vscode/markdown-editor/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#14"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#14"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#26"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#26"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#27"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#27"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#28"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#28"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#29"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#29"
           }
         ]
       },
@@ -33864,11 +34216,11 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@vscode/markdown-editor/package.json"
+          "value": "packages/markdown-editor/node_modules/@vscode/markdown-editor/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/web/node_modules/@vscode/markdown-editor/package.json"
+          "value": "node_modules/@vscode/markdown-editor/package.json"
         }
       ],
       "purl": "pkg:npm/%40vscode/markdown-editor@0.0.2-184",
@@ -33887,21 +34239,21 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/web/node_modules/@vscode/observables/package.json",
+            "concludedValue": "node_modules/@vscode/observables/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/web/node_modules/@vscode/observables/package.json"
+                "value": "node_modules/@vscode/observables/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#15"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#15"
           }
         ]
       },
@@ -33928,11 +34280,11 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/@vscode/observables/package.json"
+          "value": "packages/markdown-editor/node_modules/@vscode/observables/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/web/node_modules/@vscode/observables/package.json"
+          "value": "node_modules/@vscode/observables/package.json"
         }
       ],
       "purl": "pkg:npm/%40vscode/observables@0.1.1-0",
@@ -35293,10 +35645,10 @@
             "location": "apps/api/src/db/root.ts#3"
           },
           {
-            "location": "apps/api/src/db/safe-db.ts#1"
+            "location": "apps/api/src/db/safe-db-types.ts#1"
           },
           {
-            "location": "apps/api/src/db/safe-db.ts#2"
+            "location": "apps/api/src/db/safe-db.ts#1"
           },
           {
             "location": "apps/api/src/db/schema/lists.ts#1"
@@ -35552,6 +35904,9 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/coverage.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/dev-reparse.ts#1"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/document-on-demand.ts#37"
@@ -37114,6 +37469,9 @@
             "location": "apps/api/src/handlers/dictation/cleanup-model.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/dictation/cleanup-models.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/dictation/cleanup.ts#1"
           },
           {
@@ -37127,6 +37485,18 @@
           },
           {
             "location": "apps/api/src/handlers/dictation/elevenlabs-provider.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/dictation/learned-fixes/change.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/dictation/learned-fixes/clear.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/dictation/learned-fixes/desktop.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/dictation/learned-fixes/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/dictation/limits.ts#1"
@@ -37525,6 +37895,9 @@
             "location": "apps/api/src/handlers/files/get.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/files/mailbox.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/files/marked-download.ts#14"
           },
           {
@@ -37544,6 +37917,9 @@
           },
           {
             "location": "apps/api/src/handlers/files/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/files/signature.ts#1"
           },
           {
             "location": "apps/api/src/handlers/files/signed-dossier.ts#1"
@@ -38228,6 +38604,21 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/delete-web-search-key.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/add.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/check.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/delete.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/export.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/document-ocr-availability/get.ts#1"
@@ -40453,6 +40844,15 @@
             "location": "apps/api/src/lib/dictation/kept-transcript-delete.ts#1"
           },
           {
+            "location": "apps/api/src/lib/dictation/learned-fixes.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/dictation/organization-vocabulary.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/dictation/vocabulary-index.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/document-counter.ts#1"
           },
           {
@@ -40906,7 +41306,7 @@
             "location": "apps/api/src/lib/files/file-part-rendition.ts#9"
           },
           {
-            "location": "apps/api/src/lib/files/file-part.ts#10"
+            "location": "apps/api/src/lib/files/file-part.ts#12"
           },
           {
             "location": "apps/api/src/lib/files/folio-collab-snapshot-loader.ts#1"
@@ -40927,7 +41327,19 @@
             "location": "apps/api/src/lib/files/legal-file-source.ts#1"
           },
           {
+            "location": "apps/api/src/lib/files/mailbox-file.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/files/mailbox-stream-text.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/mailbox-text.ts#7"
+          },
+          {
             "location": "apps/api/src/lib/files/marked-pdf.ts#31"
+          },
+          {
+            "location": "apps/api/src/lib/files/mbox.ts#21"
           },
           {
             "location": "apps/api/src/lib/files/mhtml-document.ts#7"
@@ -41041,6 +41453,18 @@
             "location": "apps/api/src/lib/files/png-pixels.ts#8"
           },
           {
+            "location": "apps/api/src/lib/files/pst-file.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/files/pst-mailbox.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/files/pst-message-mime.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/files/pst-worker.ts#7"
+          },
+          {
             "location": "apps/api/src/lib/files/read-data-box-file.ts#1"
           },
           {
@@ -41050,6 +41474,9 @@
             "location": "apps/api/src/lib/files/read-email-file.ts#1"
           },
           {
+            "location": "apps/api/src/lib/files/read-email-part.ts#7"
+          },
+          {
             "location": "apps/api/src/lib/files/read-file.ts#1"
           },
           {
@@ -41057,6 +41484,30 @@
           },
           {
             "location": "apps/api/src/lib/files/read-legal-file.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/read-mailbox-file.ts#8"
+          },
+          {
+            "location": "apps/api/src/lib/files/read-signature-file.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/rtf-body.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/files/rtf-compressed.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/files/signature-file.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/signature-pairing.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/signature-preview-worker.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/signature-preview.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/signed-dossier-text.ts#1"
@@ -41080,6 +41531,9 @@
             "location": "apps/api/src/lib/files/tiff-pages.ts#15"
           },
           {
+            "location": "apps/api/src/lib/files/tnef.ts#17"
+          },
+          {
             "location": "apps/api/src/lib/files/utils.ts#1"
           },
           {
@@ -41092,10 +41546,16 @@
             "location": "apps/api/src/lib/files/xades-zep-envelope.ts#1"
           },
           {
+            "location": "apps/api/src/lib/files/xades.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/files/xlsx-preprocess.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/xml-document-package.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/xml-document-text.ts#1"
           },
           {
             "location": "apps/api/src/lib/files/xml-scan.ts#1"
@@ -41110,7 +41570,10 @@
             "location": "apps/api/src/lib/files/zip-archive-text.ts#1"
           },
           {
-            "location": "apps/api/src/lib/files/zip-archive.ts#14"
+            "location": "apps/api/src/lib/files/zip-archive.ts#19"
+          },
+          {
+            "location": "apps/api/src/lib/files/zip-name-code-page.ts#21"
           },
           {
             "location": "apps/api/src/lib/flows/flow-executor.ts#1"
@@ -43399,6 +43862,9 @@
             "location": "apps/desktop/src/clipboard/clipboard-selection.ts#1"
           },
           {
+            "location": "apps/desktop/src/clipboard/clipboard-settings.ts#2"
+          },
+          {
             "location": "apps/desktop/src/clipboard/clipboard-style.ts#1"
           },
           {
@@ -43414,7 +43880,16 @@
             "location": "apps/desktop/src/mainview/dictation-microphone.ts#7"
           },
           {
+            "location": "apps/desktop/src/onboarding/activity-setup-steps.ts#8"
+          },
+          {
             "location": "apps/desktop/src/onboarding/dictation-setup-steps.ts#9"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/setup-screens.ts#8"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/use-activity-setup.ts#4"
           },
           {
             "location": "apps/desktop/src/onboarding/use-dictation.ts#4"
@@ -43426,7 +43901,13 @@
             "location": "apps/desktop/src/shared/use-clipboard-shortcut.ts#4"
           },
           {
+            "location": "apps/desktop/src/transcribe/matter-folder-save.ts#1"
+          },
+          {
             "location": "apps/desktop/src/transcribe/transcript-docx.ts#9"
+          },
+          {
+            "location": "apps/desktop/src/transcribe/use-transcript-save-options.ts#2"
           },
           {
             "location": "apps/extension/scripts/assert-manifest.ts#1"
@@ -43694,6 +44175,9 @@
           },
           {
             "location": "apps/mobile/src/state/dictation-kept.ts#1"
+          },
+          {
+            "location": "apps/mobile/src/state/dictation-learned.ts#1"
           },
           {
             "location": "apps/mobile/src/state/dictation.ts#1"
@@ -45244,6 +45728,9 @@
             "location": "apps/web/src/security/content-security-policy.server.ts#1"
           },
           {
+            "location": "apps/web/src/ssr-admission.ts#1"
+          },
+          {
             "location": "apps/web/src/ssr-error-reporter.ts#1"
           },
           {
@@ -45478,6 +45965,9 @@
             "location": "packages/agent-engine/src/sidecar/mcp-proxy.ts#1"
           },
           {
+            "location": "packages/agent-engine/src/sidecar/mcp-stdio-bridge.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/sidecar/outputs.ts#2"
           },
           {
@@ -45611,6 +46101,9 @@
           },
           {
             "location": "packages/api-contract/src/desktop-runner.ts#3"
+          },
+          {
+            "location": "packages/api-contract/src/dictation-vocabulary.ts#1"
           },
           {
             "location": "packages/api-contract/src/document-name.ts#1"
@@ -46315,7 +46808,10 @@
             "location": "packages/mojibake/src/charsets.ts#1"
           },
           {
-            "location": "packages/mojibake/src/declared-charset.ts#13"
+            "location": "packages/mojibake/src/declared-charset.ts#15"
+          },
+          {
+            "location": "packages/mojibake/src/undeclared-charset.ts#30"
           },
           {
             "location": "packages/money/src/cents.ts#9"
@@ -46688,6 +47184,9 @@
           },
           {
             "location": "packages/transcript/src/exporters.ts#1"
+          },
+          {
+            "location": "packages/transcript/src/learned-fixes.ts#8"
           },
           {
             "location": "packages/transcript/src/timeline.ts#1"
@@ -47359,19 +47858,28 @@
             "location": "apps/desktop/src/activity/ActivityDayCalendar.tsx#5"
           },
           {
+            "location": "apps/desktop/src/activity/ActivityDisclosure.tsx#4"
+          },
+          {
             "location": "apps/desktop/src/activity/ActivitySettings.tsx#5"
           },
           {
             "location": "apps/desktop/src/activity/ActivitySuggestionCard.tsx#3"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#32"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#33"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#14"
           },
           {
+            "location": "apps/desktop/src/clipboard/ClipboardGroupDialog.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/clipboard/ClipboardGroupFields.tsx#3"
+          },
+          {
+            "location": "apps/desktop/src/dictation/DictationFixApp.tsx#4"
           },
           {
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#4"
@@ -47383,6 +47891,9 @@
             "location": "apps/desktop/src/mainview/App.tsx#10"
           },
           {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#4"
+          },
+          {
             "location": "apps/desktop/src/mainview/DictationCustomWords.tsx#3"
           },
           {
@@ -47390,6 +47901,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationInputFix.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationLearnedFixes.tsx#4"
           },
           {
             "location": "apps/desktop/src/mainview/DictationMicrophone.tsx#5"
@@ -47431,13 +47945,19 @@
             "location": "apps/desktop/src/onboarding/AccessibilityGuideApp.tsx#4"
           },
           {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#4"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#1"
+          },
+          {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#4"
           },
           {
             "location": "apps/desktop/src/onboarding/DictationSetupFlow.tsx#4"
           },
           {
-            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#4"
+            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#3"
           },
           {
             "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#4"
@@ -47477,6 +47997,9 @@
           },
           {
             "location": "apps/mobile/src/app/matter/new.tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#3"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#3"
@@ -47582,6 +48105,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-matters.tsx#3"
+          },
+          {
+            "location": "apps/mobile/src/components/mailbox-messages.tsx#3"
           },
           {
             "location": "apps/mobile/src/components/matter-entities.tsx#3"
@@ -47935,7 +48461,7 @@
             "location": "apps/web/src/components/inspector/file-tab-facet-content.tsx#4"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#3"
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#9"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-group-controls.tsx#5"
@@ -47999,9 +48525,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#16"
           },
           {
             "location": "apps/web/src/components/matter-target-picker.tsx#5"
@@ -48472,6 +48995,12 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/billing-drafts-card.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#8"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/jurisdictions-card.tsx#4"
           },
           {
@@ -48610,6 +49139,9 @@
             "location": "apps/web/src/routes/dev/-components/page-crop-playground.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/dev/-components/pdf-fit-width-playground.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/dev/-components/reader-selection-playground.tsx#3"
           },
           {
@@ -48728,6 +49260,9 @@
           },
           {
             "location": "packages/decision-reader/src/reference-peek.tsx#4"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#16"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/app.tsx#3"
@@ -48985,6 +49520,10 @@
         },
         {
           "name": "SrcFile",
+          "value": "packages/markdown-editor/node_modules/better-result/package.json"
+        },
+        {
+          "name": "SrcFile",
           "value": "packages/legal-atlas/node_modules/better-result/package.json"
         },
         {
@@ -49151,7 +49690,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@6.7.6",
+      "bom-ref": "pkg:npm/bullmq@6.7.7",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -49237,10 +49776,10 @@
           "value": "apps/api/node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@6.7.6",
+      "purl": "pkg:npm/bullmq@6.7.7",
       "scope": "required",
       "type": "library",
-      "version": "6.7.6"
+      "version": "6.7.7"
     },
     {
       "authors": [
@@ -49806,7 +50345,8 @@
           "name": "Yuta Mizui <mziyut.dev@gmail.com>"
         }
       ],
-      "bom-ref": "pkg:npm/disposable-email-domains-js@2.0.0",
+      "bom-ref": "pkg:npm/disposable-email-domains-js@2.2.0",
+      "description": "Determine whether an email address or domain is disposable.",
       "evidence": {
         "identity": [
           {
@@ -49858,10 +50398,10 @@
           "value": "apps/api/node_modules/disposable-email-domains-js/package.json"
         }
       ],
-      "purl": "pkg:npm/disposable-email-domains-js@2.0.0",
+      "purl": "pkg:npm/disposable-email-domains-js@2.2.0",
       "scope": "required",
       "type": "library",
-      "version": "2.0.0"
+      "version": "2.2.0"
     },
     {
       "authors": [
@@ -50354,7 +50894,7 @@
             "location": "apps/api/src/db/root.ts#4"
           },
           {
-            "location": "apps/api/src/db/safe-db.ts#3"
+            "location": "apps/api/src/db/safe-db.ts#2"
           },
           {
             "location": "apps/api/src/db/schema/account-exports.ts#1"
@@ -51971,6 +52511,18 @@
             "location": "apps/api/src/handlers/organization-settings/delete-web-search-key.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/delete.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/export.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/list.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/terms.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/organization-settings/feature-enrolments/get.ts#2"
           },
           {
@@ -53387,9 +53939,6 @@
             "location": "apps/api/src/lib/db/column-storage.ts#2"
           },
           {
-            "location": "apps/api/src/lib/db/column-storage.ts#3"
-          },
-          {
             "location": "apps/api/src/lib/db/feedback-report-store.ts#17"
           },
           {
@@ -53535,6 +54084,12 @@
           },
           {
             "location": "apps/api/src/lib/dictation/kept-transcript-store.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/dictation/learned-fixes.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/dictation/organization-vocabulary.ts#2"
           },
           {
             "location": "apps/api/src/lib/document-content-provenance.ts#1"
@@ -53844,6 +54399,9 @@
           },
           {
             "location": "apps/api/src/lib/files/read-data-box-file.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/files/signature-pairing.ts#2"
           },
           {
             "location": "apps/api/src/lib/flows/automated-run-cap.ts#1"
@@ -54866,9 +55424,6 @@
             "location": "apps/api/src/lib/template-clause-links.ts#2"
           },
           {
-            "location": "apps/api/src/lib/template-clause-links.ts#3"
-          },
-          {
             "location": "apps/api/src/lib/templates/create-template.ts#15"
           },
           {
@@ -55586,7 +56141,7 @@
             "location": "apps/api/src/lib/db/audit-recording.ts#8"
           },
           {
-            "location": "apps/api/src/lib/db/column-storage.ts#3"
+            "location": "apps/api/src/lib/db/column-storage.ts#2"
           },
           {
             "location": "apps/api/src/lib/db/operator-activity/read.ts#3"
@@ -56052,6 +56607,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/mobile/src/components/learned-fixes-sync.ts#1"
+          },
+          {
             "location": "apps/mobile/src/components/new-chat.ts#1"
           },
           {
@@ -56059,6 +56617,9 @@
           },
           {
             "location": "apps/mobile/src/components/use-chat-turn.ts#4"
+          },
+          {
+            "location": "apps/mobile/src/components/use-dictation-field.ts#3"
           },
           {
             "location": "apps/mobile/src/components/use-dictation.ts#24"
@@ -56089,6 +56650,9 @@
           },
           {
             "location": "apps/mobile/src/components/contact-picker.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#10"
           },
           {
             "location": "apps/mobile/src/components/kept-dictations.tsx#4"
@@ -56215,7 +56779,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-file-system@58.0.13",
+      "bom-ref": "pkg:npm/expo-file-system@58.0.14",
       "description": "Provides access to the local file system on the device.",
       "evidence": {
         "identity": [
@@ -56283,10 +56847,10 @@
           "value": "apps/mobile/node_modules/expo-file-system/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-file-system@58.0.13",
+      "purl": "pkg:npm/expo-file-system@58.0.14",
       "scope": "required",
       "type": "library",
-      "version": "58.0.13"
+      "version": "58.0.14"
     },
     {
       "authors": [
@@ -56516,7 +57080,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-router@58.0.31",
+      "bom-ref": "pkg:npm/expo-router@58.0.32",
       "description": "Expo Router is a file-based router for React Native and web applications.",
       "evidence": {
         "identity": [
@@ -56608,6 +57172,9 @@
           },
           {
             "location": "apps/mobile/src/app/palette.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#10"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#11"
@@ -56722,13 +57289,13 @@
           "value": "apps/mobile/node_modules/expo-router/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-router@58.0.31",
+      "purl": "pkg:npm/expo-router@58.0.32",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "58.0.31"
+      "version": "58.0.32"
     },
     {
       "authors": [
@@ -56876,7 +57443,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-web-browser@58.0.8",
+      "bom-ref": "pkg:npm/expo-web-browser@58.1.0",
       "description": "Provides access to the system's web browser and supports handling redirects. On iOS, it uses SFSafariViewController or ASWebAuthenticationSession, depending on the method you call, and on Android it uses ChromeCustomTabs. As of iOS 11, SFSafariViewController no longer shares cookies with Safari, so if you are using WebBrowser for authentication you will want to use WebBrowser.openAuthSessionAsync, and if you just want to open a webpage (such as your app privacy policy), then use WebBrowser.openBrowserAsync.",
       "evidence": {
         "identity": [
@@ -56935,13 +57502,13 @@
           "value": "apps/mobile/node_modules/expo-web-browser/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-web-browser@58.0.8",
+      "purl": "pkg:npm/expo-web-browser@58.1.0",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "58.0.8"
+      "version": "58.1.0"
     },
     {
       "authors": [
@@ -56952,7 +57519,7 @@
           "name": " Inc."
         }
       ],
-      "bom-ref": "pkg:npm/expo-widgets@58.0.28",
+      "bom-ref": "pkg:npm/expo-widgets@58.0.29",
       "description": "Widgets.",
       "evidence": {
         "identity": [
@@ -57032,10 +57599,10 @@
           "value": "apps/mobile/node_modules/expo-widgets/package.json"
         }
       ],
-      "purl": "pkg:npm/expo-widgets@58.0.28",
+      "purl": "pkg:npm/expo-widgets@58.0.29",
       "scope": "required",
       "type": "library",
-      "version": "58.0.28"
+      "version": "58.0.29"
     },
     {
       "authors": [
@@ -57043,7 +57610,7 @@
           "name": "Expo"
         }
       ],
-      "bom-ref": "pkg:npm/expo@58.0.25",
+      "bom-ref": "pkg:npm/expo@58.0.26",
       "description": "The Expo SDK",
       "evidence": {
         "identity": [
@@ -57162,10 +57729,10 @@
           "value": "apps/mobile/node_modules/expo/package.json"
         }
       ],
-      "purl": "pkg:npm/expo@58.0.25",
+      "purl": "pkg:npm/expo@58.0.26",
       "scope": "required",
       "type": "library",
-      "version": "58.0.25"
+      "version": "58.0.26"
     },
     {
       "authors": [
@@ -57519,7 +58086,7 @@
           "name": "Hyperparam"
         }
       ],
-      "bom-ref": "pkg:npm/hyparquet@1.33.0",
+      "bom-ref": "pkg:npm/hyparquet@1.33.1",
       "description": "Parquet file parser for JavaScript",
       "evidence": {
         "identity": [
@@ -57575,10 +58142,10 @@
           "value": "apps/api/node_modules/hyparquet/package.json"
         }
       ],
-      "purl": "pkg:npm/hyparquet@1.33.0",
+      "purl": "pkg:npm/hyparquet@1.33.1",
       "scope": "required",
       "type": "library",
-      "version": "1.33.0"
+      "version": "1.33.1"
     },
     {
       "authors": [
@@ -58050,24 +58617,24 @@
       "evidence": {
         "identity": [
           {
-            "concludedValue": "apps/web/node_modules/katex/package.json",
+            "concludedValue": "node_modules/katex/package.json",
             "confidence": 0.7,
             "field": "purl",
             "methods": [
               {
                 "confidence": 0.7,
                 "technique": "manifest-analysis",
-                "value": "apps/web/node_modules/katex/package.json"
+                "value": "node_modules/katex/package.json"
               }
             ]
           }
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#30"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#30"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#30"
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#30"
           }
         ]
       },
@@ -58094,11 +58661,11 @@
       "properties": [
         {
           "name": "SrcFile",
-          "value": "node_modules/katex/package.json"
+          "value": "packages/markdown-editor/node_modules/katex/package.json"
         },
         {
           "name": "SrcFile",
-          "value": "apps/web/node_modules/katex/package.json"
+          "value": "node_modules/katex/package.json"
         }
       ],
       "purl": "pkg:npm/katex@0.16.47",
@@ -58290,7 +58857,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react-native@1.73.0",
+      "bom-ref": "pkg:npm/lucide-react-native@1.74.0",
       "description": "A Lucide icon library package for React Native applications.",
       "evidence": {
         "identity": [
@@ -58402,13 +58969,13 @@
           "value": "apps/mobile/node_modules/lucide-react-native/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react-native@1.73.0",
+      "purl": "pkg:npm/lucide-react-native@1.74.0",
       "scope": "required",
       "tags": [
         "native"
       ],
       "type": "library",
-      "version": "1.73.0"
+      "version": "1.74.0"
     },
     {
       "authors": [
@@ -58416,7 +58983,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react@1.73.0",
+      "bom-ref": "pkg:npm/lucide-react@1.74.0",
       "description": "A Lucide icon library package for React applications.",
       "evidence": {
         "identity": [
@@ -58525,13 +59092,13 @@
           "value": "apps/web/node_modules/lucide-react/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.73.0",
+      "purl": "pkg:npm/lucide-react@1.74.0",
       "scope": "required",
       "tags": [
         "cloud"
       ],
       "type": "library",
-      "version": "1.73.0"
+      "version": "1.74.0"
     },
     {
       "bom-ref": "pkg:npm/lucide-static@1.70.0",
@@ -58662,7 +59229,7 @@
           "name": "Postal Systems OÜ"
         }
       ],
-      "bom-ref": "pkg:npm/mailauth@8.0.6",
+      "bom-ref": "pkg:npm/mailauth@8.1.0",
       "description": "Email authentication library for Node.js",
       "evidence": {
         "identity": [
@@ -58715,10 +59282,10 @@
           "value": "apps/api/node_modules/mailauth/package.json"
         }
       ],
-      "purl": "pkg:npm/mailauth@8.0.6",
+      "purl": "pkg:npm/mailauth@8.1.0",
       "scope": "required",
       "type": "library",
-      "version": "8.0.6"
+      "version": "8.1.0"
     },
     {
       "authors": [
@@ -59033,7 +59600,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/nodemailer@10.5.0",
+      "bom-ref": "pkg:npm/nodemailer@10.6.0",
       "description": "Easy as cake e-mail sending from your Node.js applications",
       "evidence": {
         "identity": [
@@ -59086,10 +59653,10 @@
           "value": "apps/api/node_modules/nodemailer/package.json"
         }
       ],
-      "purl": "pkg:npm/nodemailer@10.5.0",
+      "purl": "pkg:npm/nodemailer@10.6.0",
       "scope": "required",
       "type": "library",
-      "version": "10.5.0"
+      "version": "10.6.0"
     },
     {
       "authors": [
@@ -59157,7 +59724,7 @@
           "name": "OpenAI <support@openai.com>"
         }
       ],
-      "bom-ref": "pkg:npm/openai@7.57.0",
+      "bom-ref": "pkg:npm/openai@7.59.0",
       "description": "The official TypeScript library for the OpenAI API",
       "evidence": {
         "identity": [
@@ -59206,13 +59773,13 @@
           "value": "apps/api/node_modules/openai/package.json"
         }
       ],
-      "purl": "pkg:npm/openai@7.57.0",
+      "purl": "pkg:npm/openai@7.59.0",
       "scope": "required",
       "tags": [
         "ml"
       ],
       "type": "library",
-      "version": "7.57.0"
+      "version": "7.59.0"
     },
     {
       "authors": [
@@ -59220,7 +59787,7 @@
           "name": "Boshen and oxc contributors"
         }
       ],
-      "bom-ref": "pkg:npm/oxc-parser@0.158.0",
+      "bom-ref": "pkg:npm/oxc-parser@0.159.0",
       "description": "Oxc Parser Node API",
       "evidence": {
         "identity": [
@@ -59296,13 +59863,13 @@
           "value": "node_modules/oxc-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/oxc-parser@0.158.0",
+      "purl": "pkg:npm/oxc-parser@0.159.0",
       "scope": "required",
       "tags": [
         "parse"
       ],
       "type": "library",
-      "version": "0.158.0"
+      "version": "0.159.0"
     },
     {
       "authors": [
@@ -59387,7 +59954,7 @@
           "name": "Sergio Azocar"
         }
       ],
-      "bom-ref": "pkg:npm/oxlint-tailwindcss@1.17.1",
+      "bom-ref": "pkg:npm/oxlint-tailwindcss@1.17.2",
       "description": "Tailwind CSS v4 lint rules for oxlint that read your design system: unknown, conflicting and deprecated classes, theme colors, class order — with autofixes.",
       "evidence": {
         "identity": [
@@ -59436,13 +60003,13 @@
           "value": "node_modules/oxlint-tailwindcss/package.json"
         }
       ],
-      "purl": "pkg:npm/oxlint-tailwindcss@1.17.1",
+      "purl": "pkg:npm/oxlint-tailwindcss@1.17.2",
       "scope": "required",
       "tags": [
         "lint"
       ],
       "type": "library",
-      "version": "1.17.1"
+      "version": "1.17.2"
     },
     {
       "authors": [
@@ -60023,6 +60590,9 @@
             "location": "apps/api/src/lib/files/email-to-html.ts#15"
           },
           {
+            "location": "apps/api/src/lib/files/mailbox-messages.ts#6"
+          },
+          {
             "location": "apps/api/src/lib/files/mhtml-document.ts#8"
           }
         ]
@@ -60128,7 +60698,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.449.2",
+      "bom-ref": "pkg:npm/posthog-js@1.450.1",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -60190,10 +60760,10 @@
           "value": "apps/web/node_modules/posthog-js/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.449.2",
+      "purl": "pkg:npm/posthog-js@1.450.1",
       "scope": "required",
       "type": "library",
-      "version": "1.449.2"
+      "version": "1.450.1"
     },
     {
       "bom-ref": "pkg:npm/prism-react-renderer@2.4.1",
@@ -60399,7 +60969,7 @@
             "location": "packages/ui/scripts/generate-outcome-page.ts#17"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#18"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#19"
           },
           {
             "location": "apps/desktop/src/mainview/main.tsx#2"
@@ -61065,7 +61635,7 @@
             "location": "apps/mobile/src/components/use-chat-turn.ts#6"
           },
           {
-            "location": "apps/mobile/src/components/use-dictation-field.ts#3"
+            "location": "apps/mobile/src/components/use-dictation-field.ts#4"
           },
           {
             "location": "apps/mobile/src/components/use-document-editing.ts#6"
@@ -61123,6 +61693,9 @@
           },
           {
             "location": "apps/mobile/src/app/palette.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#11"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#12"
@@ -61215,7 +61788,7 @@
             "location": "apps/mobile/src/components/dictate-button.tsx#5"
           },
           {
-            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#3"
+            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#11"
           },
           {
             "location": "apps/mobile/src/components/dictation-setting.tsx#4"
@@ -61252,6 +61825,9 @@
           },
           {
             "location": "apps/mobile/src/components/loading-screen.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/mailbox-messages.tsx#4"
           },
           {
             "location": "apps/mobile/src/components/markdown-view.tsx#3"
@@ -61321,6 +61897,9 @@
           },
           {
             "location": "apps/mobile/src/components/timer-card.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/components/unscanned-content-notice.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/viewer-controls.tsx#4"
@@ -61460,6 +62039,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/use-rail-viewport.ts#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/use-activity-setup.ts#1"
           },
           {
             "location": "apps/desktop/src/onboarding/use-dictation.ts#1"
@@ -62248,10 +62830,10 @@
             "location": "apps/desktop/src/activity/MatterPicker.tsx#1"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#9"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#10"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#17"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#18"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#11"
@@ -62261,6 +62843,9 @@
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardImagePreview.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/dictation/DictationFixApp.tsx#1"
           },
           {
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#1"
@@ -62275,7 +62860,16 @@
             "location": "apps/desktop/src/mainview/ChatGptPasteCallback.tsx#1"
           },
           {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/mainview/DictationAppSettings.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCustomWords.tsx#1"
@@ -62285,6 +62879,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationInputFix.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationLearnedFixes.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/DictationMicrophone.tsx#1"
@@ -62335,6 +62932,12 @@
             "location": "apps/desktop/src/onboarding/ActivityExplainer.tsx#1"
           },
           {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/onboarding/ConnectStep.tsx#1"
           },
           {
@@ -62347,13 +62950,16 @@
             "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#1"
           },
           {
-            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#2"
-          },
-          {
             "location": "apps/desktop/src/onboarding/FeatureRow.tsx#1"
           },
           {
             "location": "apps/desktop/src/onboarding/OnboardingApp.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#2"
           },
           {
             "location": "apps/desktop/src/onboarding/StepFooter.tsx#1"
@@ -62432,6 +63038,9 @@
           },
           {
             "location": "apps/mobile/src/app/palette.tsx#2"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#1"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#1"
@@ -62527,7 +63136,7 @@
             "location": "apps/mobile/src/components/dictate-button.tsx#1"
           },
           {
-            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#1"
+            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#8"
           },
           {
             "location": "apps/mobile/src/components/dictation-setting.tsx#1"
@@ -62576,6 +63185,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#1"
+          },
+          {
+            "location": "apps/mobile/src/components/mailbox-messages.tsx#1"
           },
           {
             "location": "apps/mobile/src/components/markdown-view.tsx#1"
@@ -62957,6 +63569,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-image-attachment.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#2"
           },
           {
             "location": "apps/web/src/components/chat/chat-local-run-question-context.tsx#1"
@@ -63379,7 +63994,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#9"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#1"
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#7"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-find.tsx#1"
@@ -63427,6 +64042,9 @@
             "location": "apps/web/src/components/inspector/inspector-title.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/mailbox-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#1"
           },
           {
@@ -63454,6 +64072,9 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/signature-file-viewer.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/inspector/similar-documents-section.tsx#1"
           },
           {
@@ -63467,6 +64088,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/unscanned-content-notice.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
@@ -63488,6 +64112,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/viewer-overlay-bar.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#1"
@@ -63560,15 +64187,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-provider.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/markdown-preview.tsx#1"
@@ -64957,6 +65575,9 @@
             "location": "apps/web/src/routes/_protected.settings/-organization.billing.pending.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/-organization.dictation.pending.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/-organization.document-types.pending.tsx#1"
           },
           {
@@ -65045,6 +65666,12 @@
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/data-boxes-card.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.pending.tsx#1"
@@ -65335,6 +65962,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#7"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-cell-engagement.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate.tsx#1"
           },
           {
@@ -65344,7 +65977,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#6"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/version-or-new-file-dialog.tsx#1"
@@ -65411,6 +66044,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-workflows.pending.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.pending.tsx#1"
@@ -65594,6 +66230,9 @@
           },
           {
             "location": "apps/web/src/routes/dev/-components/page-crop-playground.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/dev/-components/pdf-fit-width-playground.tsx#1"
           },
           {
             "location": "apps/web/src/routes/dev/-components/playbook-editor-playground.tsx#1"
@@ -66077,6 +66716,18 @@
           },
           {
             "location": "packages/decision-reader/src/unresolved-citation.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#2"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#1"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.tsx#2"
           },
           {
             "location": "packages/mcp-apps/src/case-law-results/view.tsx#1"
@@ -66705,6 +67356,10 @@
         {
           "name": "SrcFile",
           "value": "packages/mcp-apps/node_modules/react/package.json"
+        },
+        {
+          "name": "SrcFile",
+          "value": "packages/markdown-editor/node_modules/react/package.json"
         },
         {
           "name": "SrcFile",
@@ -67574,7 +68229,16 @@
             "location": "packages/agent-engine/src/harness/acp/adapter.ts#4"
           },
           {
+            "location": "packages/agent-engine/src/harness/acp/antigravity.ts#11"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/acp/definition.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/harness/acp/state-dir.ts#12"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/acp/turn.ts#4"
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/adapter.ts#4"
@@ -67616,7 +68280,7 @@
             "location": "packages/agent-engine/src/sidecar/holder.ts#4"
           },
           {
-            "location": "packages/agent-engine/src/sidecar/host.ts#4"
+            "location": "packages/agent-engine/src/sidecar/host.ts#5"
           },
           {
             "location": "packages/agent-engine/src/sidecar/mcp-proxy.ts#3"
@@ -67745,7 +68409,16 @@
             "location": "packages/agent-engine/src/harness/acp/adapter.ts#4"
           },
           {
+            "location": "packages/agent-engine/src/harness/acp/antigravity.ts#11"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/acp/definition.ts#1"
+          },
+          {
             "location": "packages/agent-engine/src/harness/acp/state-dir.ts#12"
+          },
+          {
+            "location": "packages/agent-engine/src/harness/acp/turn.ts#4"
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/adapter.ts#4"
@@ -67787,7 +68460,7 @@
             "location": "packages/agent-engine/src/sidecar/holder.ts#4"
           },
           {
-            "location": "packages/agent-engine/src/sidecar/host.ts#4"
+            "location": "packages/agent-engine/src/sidecar/host.ts#5"
           },
           {
             "location": "packages/agent-engine/src/sidecar/mcp-proxy.ts#3"
@@ -67958,7 +68631,7 @@
           "name": "Rémi Berson"
         }
       ],
-      "bom-ref": "pkg:npm/tldts@7.5.3",
+      "bom-ref": "pkg:npm/tldts@7.5.4",
       "description": "Library to work against complex domain names, subdomains and URIs.",
       "evidence": {
         "identity": [
@@ -68024,10 +68697,10 @@
           "value": "apps/api/node_modules/tldts/package.json"
         }
       ],
-      "purl": "pkg:npm/tldts@7.5.3",
+      "purl": "pkg:npm/tldts@7.5.4",
       "scope": "required",
       "type": "library",
-      "version": "7.5.3"
+      "version": "7.5.4"
     },
     {
       "bom-ref": "pkg:npm/tsrs@0.23.0-ts7.1.0-beta",
@@ -68397,7 +69070,7 @@
           "name": "Unistack"
         }
       ],
-      "bom-ref": "pkg:npm/uniwind@1.13.2",
+      "bom-ref": "pkg:npm/uniwind@1.14.0",
       "description": "The fastest Tailwind bindings for React Native",
       "evidence": {
         "identity": [
@@ -68468,10 +69141,10 @@
           "value": "apps/mobile/node_modules/uniwind/package.json"
         }
       ],
-      "purl": "pkg:npm/uniwind@1.13.2",
+      "purl": "pkg:npm/uniwind@1.14.0",
       "scope": "required",
       "type": "library",
-      "version": "1.13.2"
+      "version": "1.14.0"
     },
     {
       "authors": [
@@ -68629,9 +69302,6 @@
             "location": "apps/web/src/components/docx/evidence-references.tsx#7"
           },
           {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#21"
-          },
-          {
             "location": "apps/web/src/components/search-dialog-facets.tsx#4"
           },
           {
@@ -68668,6 +69338,9 @@
             "location": "apps/web/src/routes/_protected.contacts/-import-review.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#9"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/list-toolbar.tsx#4"
           },
           {
@@ -68696,6 +69369,9 @@
           },
           {
             "location": "apps/web/src/routes/law/cases/-case-law-index.page.tsx#10"
+          },
+          {
+            "location": "packages/markdown-editor/src/markdown-hybrid-editor.impl.tsx#21"
           }
         ]
       },
@@ -68720,6 +69396,10 @@
       ],
       "name": "use-debounce",
       "properties": [
+        {
+          "name": "SrcFile",
+          "value": "packages/markdown-editor/node_modules/use-debounce/package.json"
+        },
         {
           "name": "SrcFile",
           "value": "node_modules/use-debounce/package.json"
@@ -68766,6 +69446,9 @@
             "location": "apps/desktop/src/activity/use-duration-label.ts#1"
           },
           {
+            "location": "apps/desktop/src/transcribe/use-transcript-save-options.ts#3"
+          },
+          {
             "location": "apps/mobile/src/components/local-run-subtitle.ts#1"
           },
           {
@@ -68778,7 +69461,7 @@
             "location": "apps/mobile/src/components/use-chat-attachments.ts#6"
           },
           {
-            "location": "apps/mobile/src/components/use-dictation-field.ts#4"
+            "location": "apps/mobile/src/components/use-dictation-field.ts#5"
           },
           {
             "location": "apps/mobile/src/components/use-dictation.ts#25"
@@ -69039,7 +69722,7 @@
             "location": "apps/desktop/src/activity/ActivityDayCalendar.tsx#6"
           },
           {
-            "location": "apps/desktop/src/activity/ActivityDisclosure.tsx#4"
+            "location": "apps/desktop/src/activity/ActivityDisclosure.tsx#5"
           },
           {
             "location": "apps/desktop/src/activity/ActivitySettings.tsx#6"
@@ -69054,7 +69737,7 @@
             "location": "apps/desktop/src/activity/MatterPicker.tsx#4"
           },
           {
-            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#33"
+            "location": "apps/desktop/src/clipboard/ClipboardApp.tsx#34"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardCardPreview.tsx#1"
@@ -69063,13 +69746,25 @@
             "location": "apps/desktop/src/clipboard/ClipboardEditor.tsx#15"
           },
           {
+            "location": "apps/desktop/src/clipboard/ClipboardGroupDialog.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/clipboard/ClipboardGroupFields.tsx#4"
           },
           {
             "location": "apps/desktop/src/clipboard/ClipboardImagePreview.tsx#4"
           },
           {
+            "location": "apps/desktop/src/clipboard/ClipboardRailDivider.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/dictation/DictationFixApp.tsx#5"
+          },
+          {
             "location": "apps/desktop/src/dictation/DictationPreviewApp.tsx#5"
+          },
+          {
+            "location": "apps/desktop/src/mainview/AntigravityCard.tsx#1"
           },
           {
             "location": "apps/desktop/src/mainview/App.tsx#11"
@@ -69084,7 +69779,13 @@
             "location": "apps/desktop/src/mainview/ClaudeCodeCard.tsx#1"
           },
           {
+            "location": "apps/desktop/src/mainview/ClipboardSettings.tsx#12"
+          },
+          {
             "location": "apps/desktop/src/mainview/DictationAppSettings.tsx#3"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#5"
           },
           {
             "location": "apps/desktop/src/mainview/DictationCustomWords.tsx#4"
@@ -69094,6 +69795,9 @@
           },
           {
             "location": "apps/desktop/src/mainview/DictationInputFix.tsx#5"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationLearnedFixes.tsx#5"
           },
           {
             "location": "apps/desktop/src/mainview/DictationMicrophone.tsx#6"
@@ -69144,6 +69848,12 @@
             "location": "apps/desktop/src/onboarding/ActivityExplainer.tsx#3"
           },
           {
+            "location": "apps/desktop/src/onboarding/ActivitySetupFlow.tsx#5"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/ActivitySetupScreens.tsx#2"
+          },
+          {
             "location": "apps/desktop/src/onboarding/ActivityStep.tsx#1"
           },
           {
@@ -69153,7 +69863,7 @@
             "location": "apps/desktop/src/onboarding/DictationSetupFlow.tsx#5"
           },
           {
-            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#5"
+            "location": "apps/desktop/src/onboarding/DictationSetupScreens.tsx#4"
           },
           {
             "location": "apps/desktop/src/onboarding/DictationStep.tsx#1"
@@ -69178,6 +69888,9 @@
           },
           {
             "location": "apps/desktop/src/onboarding/PermissionsStep.tsx#1"
+          },
+          {
+            "location": "apps/desktop/src/onboarding/SetupScreenParts.tsx#4"
           },
           {
             "location": "apps/desktop/src/onboarding/StepFooter.tsx#3"
@@ -69256,6 +69969,9 @@
           },
           {
             "location": "apps/mobile/src/app/palette.tsx#6"
+          },
+          {
+            "location": "apps/mobile/src/app/part/save.tsx#12"
           },
           {
             "location": "apps/mobile/src/app/scan/index.tsx#14"
@@ -69345,7 +70061,7 @@
             "location": "apps/mobile/src/components/dictate-button.tsx#6"
           },
           {
-            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#4"
+            "location": "apps/mobile/src/components/dictation-learned-setting.tsx#12"
           },
           {
             "location": "apps/mobile/src/components/dictation-setting.tsx#5"
@@ -69385,6 +70101,9 @@
           },
           {
             "location": "apps/mobile/src/components/loaded-tasks.tsx#4"
+          },
+          {
+            "location": "apps/mobile/src/components/mailbox-messages.tsx#5"
           },
           {
             "location": "apps/mobile/src/components/matter-entities.tsx#6"
@@ -69448,6 +70167,9 @@
           },
           {
             "location": "apps/mobile/src/components/timer-card.tsx#5"
+          },
+          {
+            "location": "apps/mobile/src/components/unscanned-content-notice.tsx#2"
           },
           {
             "location": "apps/mobile/src/components/viewer-controls.tsx#6"
@@ -69663,7 +70385,7 @@
             "location": "apps/web/src/components/chat/chat-edit-mode-menu.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#3"
+            "location": "apps/web/src/components/chat/chat-image-attachment.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#6"
@@ -69975,7 +70697,7 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#11"
           },
           {
-            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#4"
+            "location": "apps/web/src/components/inspector/file-tab-viewer.tsx#10"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
@@ -70014,6 +70736,9 @@
             "location": "apps/web/src/components/inspector/inspector-tab-switcher.tsx#1"
           },
           {
+            "location": "apps/web/src/components/inspector/mailbox-viewer.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/markdown-file-viewer.tsx#1"
           },
           {
@@ -70038,6 +70763,9 @@
             "location": "apps/web/src/components/inspector/review-export-menu.tsx#4"
           },
           {
+            "location": "apps/web/src/components/inspector/signature-file-viewer.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/inspector/signed-dossier-viewer.tsx#2"
           },
           {
@@ -70045,6 +70773,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/comment-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/inspector/skill-history/proposal-body-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/inspector/skill-history/proposal-panel.tsx#3"
@@ -70068,6 +70799,9 @@
             "location": "apps/web/src/components/inspector/structured-document-viewer.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/unscanned-content-notice.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/use-desktop-file-open.tsx#3"
           },
           {
@@ -70083,7 +70817,7 @@
             "location": "apps/web/src/components/inspector/versions-facet.tsx#16"
           },
           {
-            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#2"
+            "location": "apps/web/src/components/inspector/zip-archive-viewer.tsx#4"
           },
           {
             "location": "apps/web/src/components/inspector/zoom-controls.tsx#3"
@@ -70123,9 +70857,6 @@
           },
           {
             "location": "apps/web/src/components/legal-reader/web-reader-messages.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-hybrid-editor.impl.tsx#22"
           },
           {
             "location": "apps/web/src/components/matter-number-hint.tsx#3"
@@ -71307,6 +72038,12 @@
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/deepl-key-card.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-import-sheet.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/dictation-vocabulary-card.tsx#10"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization/-components/organization/document-types-card.tsx#16"
           },
           {
@@ -71565,7 +72302,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#8"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column-cells.tsx#9"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/uploaded-mail-source.tsx#2"
@@ -71622,7 +72359,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-timesheets.page.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/correspondence/-correspondence-detail.page.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/-invoice-detail.page.tsx#10"
@@ -73507,6 +74244,9 @@
             "location": "apps/api/src/handlers/fields/upsert.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/files/email-reading.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/files/office-citation.ts#2"
           },
           {
@@ -73970,6 +74710,15 @@
           },
           {
             "location": "apps/api/src/handlers/organization-settings/delete-web-search-key.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/delete.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/list.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/organization-settings/dictation-vocabulary/terms.ts#2"
           },
           {
             "location": "apps/api/src/handlers/organization-settings/feature-enrolments/enrol.ts#2"
@@ -75085,6 +75834,12 @@
             "location": "apps/api/src/lib/desktop-runner/store.ts#21"
           },
           {
+            "location": "apps/api/src/lib/dictation/learned-fixes-sync.ts#8"
+          },
+          {
+            "location": "apps/api/src/lib/dictation/learned-fixes.ts#11"
+          },
+          {
             "location": "apps/api/src/lib/document-processing-readiness.ts#2"
           },
           {
@@ -75214,7 +75969,7 @@
             "location": "apps/api/src/lib/files/file-object-ids.ts#1"
           },
           {
-            "location": "apps/api/src/lib/files/file-part.ts#11"
+            "location": "apps/api/src/lib/files/file-part.ts#13"
           },
           {
             "location": "apps/api/src/lib/files/office-evidence-types.ts#1"
@@ -75233,6 +75988,15 @@
           },
           {
             "location": "apps/api/src/lib/files/pdf-worker.ts#24"
+          },
+          {
+            "location": "apps/api/src/lib/files/pst-file.ts#8"
+          },
+          {
+            "location": "apps/api/src/lib/files/signature-preview-protocol.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/files/signature-preview.ts#2"
           },
           {
             "location": "apps/api/src/lib/files/signed-dossier-text.ts#2"
@@ -75481,7 +76245,7 @@
             "location": "apps/api/src/lib/template-binding/binding-sources.ts#15"
           },
           {
-            "location": "apps/api/src/lib/template-clause-links.ts#5"
+            "location": "apps/api/src/lib/template-clause-links.ts#4"
           },
           {
             "location": "apps/api/src/lib/templates/suggest-template-fields.ts#1"
@@ -75925,7 +76689,7 @@
             "location": "apps/mobile/src/state/dictation-kept.ts#2"
           },
           {
-            "location": "apps/mobile/src/state/dictation-learned.ts#1"
+            "location": "apps/mobile/src/state/dictation-learned.ts#2"
           },
           {
             "location": "apps/mobile/src/state/dictation-preferences.ts#1"
@@ -76315,6 +77079,9 @@
             "location": "apps/web/src/routes/onboarding/-search.ts#1"
           },
           {
+            "location": "apps/web/src/ssr-admission.ts#2"
+          },
+          {
             "location": "packages/agent-engine/scripts/build-sidecar.ts#4"
           },
           {
@@ -76339,6 +77106,9 @@
             "location": "packages/agent-engine/src/harness/acp/adapter.ts#5"
           },
           {
+            "location": "packages/agent-engine/src/harness/acp/antigravity.ts#12"
+          },
+          {
             "location": "packages/agent-engine/src/harness/acp/client.ts#2"
           },
           {
@@ -76348,7 +77118,7 @@
             "location": "packages/agent-engine/src/harness/acp/state-dir.ts#13"
           },
           {
-            "location": "packages/agent-engine/src/harness/acp/turn.ts#4"
+            "location": "packages/agent-engine/src/harness/acp/turn.ts#5"
           },
           {
             "location": "packages/agent-engine/src/harness/claude-code/adapter.ts#5"
@@ -76420,7 +77190,7 @@
             "location": "packages/agent-engine/src/sidecar/checkpoints.ts#21"
           },
           {
-            "location": "packages/agent-engine/src/sidecar/host.ts#5"
+            "location": "packages/agent-engine/src/sidecar/host.ts#6"
           },
           {
             "location": "packages/agent-engine/src/sidecar/outputs.ts#6"
@@ -76579,6 +77349,9 @@
             "location": "packages/api-contract/src/desktop-time-entries.ts#1"
           },
           {
+            "location": "packages/api-contract/src/dictation-learned-fixes.ts#1"
+          },
+          {
             "location": "packages/api-contract/src/display-name.ts#1"
           },
           {
@@ -76597,7 +77370,7 @@
             "location": "packages/api-contract/src/entity-reference.ts#1"
           },
           {
-            "location": "packages/api-contract/src/file-parts.ts#12"
+            "location": "packages/api-contract/src/file-parts.ts#13"
           },
           {
             "location": "packages/api-contract/src/folio-collab.ts#1"
@@ -76616,6 +77389,9 @@
           },
           {
             "location": "packages/api-contract/src/legal-resolve.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/mailbox.ts#1"
           },
           {
             "location": "packages/api-contract/src/mcp-app-failure.ts#1"
@@ -76676,6 +77452,9 @@
           },
           {
             "location": "packages/api-contract/src/session-sign-ins.ts#1"
+          },
+          {
+            "location": "packages/api-contract/src/signature.ts#1"
           },
           {
             "location": "packages/api-contract/src/signed-dossier.ts#1"
@@ -77090,6 +77869,9 @@
           },
           {
             "location": "apps/api/src/lib/email/email.tsx#2"
+          },
+          {
+            "location": "apps/desktop/src/mainview/DictationCleanupPreferences.tsx#6"
           },
           {
             "location": "apps/mobile/src/components/load-failure.tsx#4"
