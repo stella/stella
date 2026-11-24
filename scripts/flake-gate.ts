@@ -104,6 +104,23 @@ const packageTestIgnores = (flags: readonly string[], file: string) => {
   return ignored.some((pattern) => new Bun.Glob(pattern).match(file));
 };
 
+const isExcludedByPackageTestScript = (
+  flags: readonly string[],
+  filters: readonly string[],
+  packageRelative: string,
+): boolean => {
+  if (
+    filters.length > 0 &&
+    !filters.some(
+      (filter) =>
+        packageRelative === filter || packageRelative.startsWith(`${filter}/`),
+    )
+  ) {
+    return true;
+  }
+  return packageTestIgnores(flags, packageRelative);
+};
+
 export const selectTargets = ({
   root: repo,
   changed,
@@ -222,7 +239,7 @@ export const selectTargets = ({
     }
     const parsed =
       cwd === repo
-        ? { type: "supported" as const, flags: [] }
+        ? { type: "supported" as const, flags: [], filters: [] }
         : parseBunTestScript(manifest.scripts[script] ?? "");
     if (parsed.type === "unsupported") {
       skipped.push({
@@ -231,7 +248,14 @@ export const selectTargets = ({
       });
       continue;
     }
-    if (packageTestIgnores(parsed.flags, repoRelativePath(cwd, absolute))) {
+    const packageRelative = repoRelativePath(cwd, absolute);
+    if (
+      isExcludedByPackageTestScript(
+        parsed.flags,
+        parsed.filters,
+        packageRelative,
+      )
+    ) {
       skipped.push({
         file,
         reason: "not gated (excluded by package test script)",
