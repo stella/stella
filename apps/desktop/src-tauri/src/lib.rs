@@ -799,6 +799,10 @@ pub(crate) fn show_settings(handle: &tauri::AppHandle, view: SettingsView) {
     crate::app_window::WindowKind::App,
   )
   .title("stella desktop")
+  // Tauri's native drag-drop handler consumes HTML5 drops on macOS and
+  // Windows, preventing in-page drag-and-drop (such as reordering clipboard
+  // groups). Settings accepts no OS file drops.
+  .disable_drag_drop_handler()
   .inner_size(SETTINGS_WINDOW_WIDTH, SETTINGS_WINDOW_HEIGHT)
   .min_inner_size(SETTINGS_WINDOW_MIN_WIDTH, SETTINGS_WINDOW_MIN_HEIGHT)
   .resizable(true);
