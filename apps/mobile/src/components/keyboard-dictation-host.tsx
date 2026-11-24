@@ -25,7 +25,6 @@ import { transcribeWithinClass } from "@/state/dictation";
 import { readLearnedFixes } from "@/state/dictation-learned";
 import {
   chosenModelId,
-  DEFAULT_DICTATION_PREFERENCES,
   readDictationPreferences,
 } from "@/state/dictation-preferences";
 import type { DictationPreferences } from "@/state/dictation-preferences";
@@ -71,12 +70,14 @@ export const KeyboardDictationHost = () => {
       prepare: async () => await readSetup(source),
       transcribe: async (piece, setup) => await pieceText(source, piece, setup),
       finish: async (joined, setup) =>
-        await keyboardText({
-          source,
-          joined,
-          setup,
-          locale: cleanupLocale.current,
-        }),
+        setup === null
+          ? joined
+          : await keyboardText({
+              source,
+              joined,
+              setup,
+              locale: cleanupLocale.current,
+            }),
       deliver: (jobId, outcome) => {
         deliverKeyboardOutcome(jobId, outcome);
       },
@@ -100,19 +101,29 @@ type KeyboardSetup = {
   readonly learned: readonly LearnedFix[];
 };
 
-/** The person's dictation choices on this phone; a choice it cannot read is the default. */
-const readSetup = async (source: AccessTokenSource): Promise<KeyboardSetup> => {
+/**
+ * The person's dictation choices on this phone; null when they cannot be
+ * read. The default in their place could send the audio to a model of
+ * another provider, region or retention than the one picked, so such a
+ * dictation goes nowhere and fails. Learned fixes only tidy the text, so
+ * fixes it cannot read are none.
+ */
+const readSetup = async (
+  source: AccessTokenSource,
+): Promise<KeyboardSetup | null> => {
   const session = source.session();
   if (session === undefined) {
-    return { preferences: DEFAULT_DICTATION_PREFERENCES, learned: [] };
+    return null;
   }
   const [preferences, learned] = await Promise.all([
-    readDictationPreferences(deviceAccountStore, session).catch(
-      () => DEFAULT_DICTATION_PREFERENCES,
+    Result.tryPromise(
+      async () => await readDictationPreferences(deviceAccountStore, session),
     ),
     readLearnedFixes(deviceAccountStore, session).catch(() => []),
   ]);
-  return { preferences, learned };
+  return preferences.isOk()
+    ? { preferences: preferences.value, learned }
+    : null;
 };
 
 /**
@@ -128,8 +139,13 @@ const pieceText = async (
     language,
     uri,
   }: { readonly language: KeyboardLanguage; readonly uri: string },
-  { preferences }: KeyboardSetup,
+  setup: KeyboardSetup | null,
 ): Promise<string | null> => {
+  if (setup === null) {
+    discardRecording(uri);
+    return null;
+  }
+  const { preferences } = setup;
   const transcribed = await Result.tryPromise(async () => {
     const audio = new File(uri);
     return await transcribeWithinClass({
