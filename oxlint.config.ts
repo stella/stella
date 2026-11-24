@@ -680,6 +680,18 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("plain-button-placement-only.fixture.tsx", [
     "plain-button-placement-only/plain-button-placement-only",
   ]),
+  fixtureRuleOverride("disabled-switch-needs-reason.fixture.tsx", [
+    "disabled-switch-needs-reason/disabled-switch-needs-reason",
+  ]),
+  fixtureRuleOverride("no-checkbox-in-settings-row.fixture.tsx", [
+    "no-checkbox-in-settings-row/no-checkbox-in-settings-row",
+  ]),
+  fixtureRuleOverride("require-entity-actions-row.fixture.tsx", [
+    "require-entity-actions-row/require-entity-actions-row",
+  ]),
+  fixtureRuleOverride("require-timestamp-tooltip.fixture.tsx", [
+    "require-timestamp-tooltip/require-timestamp-tooltip",
+  ]),
   fixtureRuleOverride("no-person-select.fixture.tsx", [
     "no-person-select/no-person-select",
   ]),
@@ -2151,6 +2163,10 @@ const config = defineConfig({
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-native-ui.ts",
     "./.oxlint-plugins/plain-button-placement-only.ts",
+    "./.oxlint-plugins/disabled-switch-needs-reason.ts",
+    "./.oxlint-plugins/no-checkbox-in-settings-row.ts",
+    "./.oxlint-plugins/require-entity-actions-row.ts",
+    "./.oxlint-plugins/require-timestamp-tooltip.ts",
     "./.oxlint-plugins/no-raw-date-parsing.ts",
     "./.oxlint-plugins/prefer-temporal.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
@@ -8148,6 +8164,30 @@ const config = defineConfig({
       ],
       rules: {
         "plain-button-placement-only/plain-button-placement-only": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: {
+        "disabled-switch-needs-reason/disabled-switch-needs-reason": "error",
+        "require-entity-actions-row/require-entity-actions-row": "error",
+        "require-timestamp-tooltip/require-timestamp-tooltip": "error",
+      },
+    },
+    {
+      files: ["apps/web/src/routes/_protected.settings/**/*.{ts,tsx}"],
+      excludeFiles: [
+        "**/*.{test,spec}.{ts,tsx}",
+        "**/__tests__/**",
+        "**/__fixtures__/**",
+      ],
+      rules: {
+        "no-checkbox-in-settings-row/no-checkbox-in-settings-row": "error",
       },
     },
     {
