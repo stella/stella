@@ -489,7 +489,6 @@
       "browseIntegrations": "Dienst hinzufügen",
       "browserExtensionConnectHint": "Öffnen Sie die Erweiterung nach der Installation in diesem stella-Tab, erlauben Sie den Zugriff auf Websites und verbinden Sie den Tab.",
       "browserExtensionDescription": "Der stella-Chat kann Websites in einem Chrome-Tab Ihrer Wahl lesen und bedienen. Jede Aktion wartet auf Ihre Freigabe.",
-      "browserExtensionInstall": "Zu Chrome hinzufügen",
       "browserExtensionTitle": "Browsererweiterung",
       "browserSiteRemove": "{site} entfernen",
       "browserSitesDescription": "Browseraktionen des Chats auf diesen Websites laufen ohne Rückfrage. Entfernen Sie eine Website, um wieder gefragt zu werden.",

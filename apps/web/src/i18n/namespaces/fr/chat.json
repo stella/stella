@@ -208,16 +208,38 @@
     "attachment": "Pièce jointe",
     "audioContent": "Audio généré",
     "browserExtension": {
-      "connect": "Connecter l’extension",
-      "connectDescription": "Cliquez sur l’icône de l’extension stella dans la barre du navigateur, autorisez l’accès aux sites si cela vous est demandé, puis connectez stella. Une seule connexion suffit pour tous vos onglets stella.",
-      "connected": "Extension connectée",
-      "description": "À votre demande, stella peut ouvrir et lire des sites web dans un autre onglet.",
-      "install": "Installer l’extension",
-      "installDescription": "L’extension stella permet d’ouvrir et de lire des sites web dans un autre onglet à votre demande. Elle s’installe depuis le Chrome Web Store. Déjà installée ? Rechargez cet onglet.",
-      "reload": "Recharger cet onglet",
-      "reloadDescription": "Votre extension stella est plus récente que cet onglet. Rechargez l’onglet pour continuer à l’utiliser.",
-      "updating": "Mise à jour de l’extension en attente",
-      "updatingDescription": "Votre extension stella est une version antérieure. Chrome la met à jour automatiquement, généralement en quelques heures ; stella pourra ensuite de nouveau ouvrir et lire des sites web pour vous."
+      "alreadyInstalledReload": "Déjà installé ? Recharger",
+      "connect": "Connecter le plugin Chrome",
+      "connectDescription": "Cliquez sur l'icône stella dans la barre d'outils de Chrome et connectez cet onglet.",
+      "connected": "Plugin Chrome connecté",
+      "connectedDescription": "stella lit les sites auxquels vous êtes connecté, toujours avec votre accord.",
+      "install": "Installer le plugin Chrome",
+      "installDescription": "Permet à stella de lire les sites auxquels vous êtes connecté, toujours avec votre accord.",
+      "manageSites": "Sites autorisés",
+      "name": "Plugin Chrome",
+      "reload": "Recharger l'onglet",
+      "reloadDescription": "Le plugin a été mis à jour après l'ouverture de cet onglet.",
+      "siteAccessDescription": "Cliquez sur l’icône stella dans la barre d’outils de Chrome et autorisez l’accès aux sites web.",
+      "statusNotInstalled": "Non installé",
+      "statusReload": "Rechargement requis",
+      "statusUpdating": "Mise à jour",
+      "updating": "Mise à jour en attente",
+      "updatingDescription": "Chrome le met à jour automatiquement en quelques heures."
+    },
+    "browserExtensionPreview": {
+      "answer": "Selon le <cite>§ 2001</cite>, vous devez notifier la résiliation à l'autre partie par écrit.",
+      "connected": "Le plugin Chrome est connecté : stella peut lire les sites auxquels vous êtes connecté.",
+      "notConnected": "Le plugin Chrome est installé, mais pas encore connecté.",
+      "notInstalled": "Le plugin Chrome n'est pas encore installé.",
+      "page": "§ 2000 Chaque partie peut résilier avant l'exécution. <passage>§ 2001 La résiliation exige une notification écrite à l'autre partie.</passage>",
+      "prompt": "Que dit mon portail sur la résiliation ?",
+      "reload": "Le plugin Chrome a été mis à jour : rechargez cet onglet.",
+      "steps": {
+        "ask": "Vous demandez",
+        "cited": "stella répond",
+        "read": "stella lit votre portail"
+      },
+      "updating": "Mise à jour du plugin Chrome en attente."
     },
     "browserSignIn": {
       "continue": "Je suis connecté",

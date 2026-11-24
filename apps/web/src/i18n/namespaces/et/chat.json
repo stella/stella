@@ -208,16 +208,38 @@
     "attachment": "Manus",
     "audioContent": "Loodud heli",
     "browserExtension": {
-      "connect": "Ühenda laiendus",
-      "connectDescription": "Klõpsake brauseri tööriistaribal stella laienduse ikooni, lubage küsimisel juurdepääs veebisaitidele ja ühendage stella. Üks ühendus kehtib kõigil teie stella vahekaartidel.",
-      "connected": "Laiendus on ühendatud",
-      "description": "stella saab teie palvel veebilehti eraldi vahekaardil avada ja lugeda.",
-      "install": "Paigalda laiendus",
-      "installDescription": "stella laiendus võimaldab rakendusel stella teie palvel veebilehti eraldi vahekaardil avada ja lugeda. Paigaldage see Chrome’i veebipoest. Juba paigaldatud? Laadige see vahekaart uuesti.",
-      "reload": "Laadi vahekaart uuesti",
-      "reloadDescription": "Teie stella laiendus on uuem kui see vahekaart. Laadige vahekaart uuesti, et laiendust edasi kasutada.",
-      "updating": "Laienduse uuendus ootel",
-      "updatingDescription": "Teie stella laiendus on vanem versioon. Chrome uuendab selle automaatselt, tavaliselt mõne tunni jooksul; siis saab stella teie eest jälle veebilehti avada ja lugeda."
+      "alreadyInstalledReload": "Juba olemas? Laadi uuesti",
+      "connect": "Ühenda Chrome'i plugin",
+      "connectDescription": "Klõpsake Chrome'i tööriistaribal stella ikoonil ja ühendage see kaart.",
+      "connected": "Chrome'i plugin ühendatud",
+      "connectedDescription": "stella loeb saite, kuhu olete sisse logitud, alati teie loal.",
+      "install": "Installi Chrome'i plugin",
+      "installDescription": "Laseb rakendusel stella lugeda saite, kuhu olete sisse logitud, alati teie loal.",
+      "manageSites": "Lubatud saidid",
+      "name": "Chrome'i plugin",
+      "reload": "Laadi kaart uuesti",
+      "reloadDescription": "Plugin uuenes pärast selle kaardi avamist.",
+      "siteAccessDescription": "Klõpsake Chrome’i tööriistaribal stella ikoonil ja lubage juurdepääs veebisaitidele.",
+      "statusNotInstalled": "Installimata",
+      "statusReload": "Vajab laadimist",
+      "statusUpdating": "Uuendamine",
+      "updating": "Uuendus ootel",
+      "updatingDescription": "Chrome uuendab seda automaatselt mõne tunni jooksul."
+    },
+    "browserExtensionPreview": {
+      "answer": "<cite>§ 2001</cite> kohaselt peate taganemisest teisele poolele kirjalikult teatama.",
+      "connected": "Chrome'i plugin on ühendatud: stella saab lugeda saite, kuhu olete sisse logitud.",
+      "notConnected": "Chrome'i plugin on installitud, kuid pole veel ühendatud.",
+      "notInstalled": "Chrome'i plugin pole veel installitud.",
+      "page": "§ 2000 Kumbki pool võib enne täitmist lepingust taganeda. <passage>§ 2001 Taganemiseks tuleb teisele poolele saata kirjalik teade.</passage>",
+      "prompt": "Mida mu portaal taganemise kohta ütleb?",
+      "reload": "Chrome'i plugin uuenes: laadige see kaart uuesti.",
+      "steps": {
+        "ask": "Küsite",
+        "cited": "stella vastab",
+        "read": "stella loeb teie portaali"
+      },
+      "updating": "Chrome'i plugina uuendus ootel."
     },
     "browserSignIn": {
       "continue": "Olen sisse logitud",

@@ -208,16 +208,38 @@
     "attachment": "Pielikums",
     "audioContent": "Ģenerēts audio",
     "browserExtension": {
-      "connect": "Savienot paplašinājumu",
-      "connectDescription": "Noklikšķiniet uz stella paplašinājuma ikonas pārlūka rīkjoslā, ja tiek prasīts, atļaujiet piekļuvi vietnēm un savienojiet stella. Viens savienojums der visām jūsu stella cilnēm.",
-      "connected": "Paplašinājums savienots",
-      "description": "Pēc jūsu lūguma stella var atvērt un lasīt vietnes atsevišķā cilnē.",
-      "install": "Instalēt paplašinājumu",
-      "installDescription": "Ar stella paplašinājumu stella pēc jūsu lūguma var atvērt un lasīt vietnes atsevišķā cilnē. Instalējiet to no Chrome interneta veikala. Jau instalējāt? Pārlādējiet šo cilni.",
+      "alreadyInstalledReload": "Jau instalēts? Pārlādēt",
+      "connect": "Savienot Chrome spraudni",
+      "connectDescription": "Noklikšķiniet uz stella ikonas Chrome rīkjoslā un savienojiet šo cilni.",
+      "connected": "Chrome spraudnis savienots",
+      "connectedDescription": "stella lasa vietnes, kurās esat pierakstījies, vienmēr ar jūsu atļauju.",
+      "install": "Instalēt Chrome spraudni",
+      "installDescription": "Ļauj lietotnei stella lasīt vietnes, kurās esat pierakstījies, vienmēr ar jūsu atļauju.",
+      "manageSites": "Atļautās vietnes",
+      "name": "Chrome spraudnis",
       "reload": "Pārlādēt cilni",
-      "reloadDescription": "Jūsu stella paplašinājums ir jaunāks par šo cilni. Pārlādējiet cilni, lai to turpinātu izmantot.",
-      "updating": "Gaida paplašinājuma atjauninājumu",
-      "updatingDescription": "Jūsu stella paplašinājums ir vecāka versija. Chrome to atjaunina automātiski, parasti dažu stundu laikā; pēc tam stella atkal varēs jums atvērt un lasīt vietnes."
+      "reloadDescription": "Spraudnis tika atjaunināts pēc šīs cilnes atvēršanas.",
+      "siteAccessDescription": "Noklikšķiniet uz stella ikonas Chrome rīkjoslā un atļaujiet piekļuvi vietnēm.",
+      "statusNotInstalled": "Nav instalēts",
+      "statusReload": "Nepieciešama pārlāde",
+      "statusUpdating": "Atjaunina",
+      "updating": "Gaida atjauninājumu",
+      "updatingDescription": "Chrome to automātiski atjaunina dažu stundu laikā."
+    },
+    "browserExtensionPreview": {
+      "answer": "Saskaņā ar <cite>§ 2001</cite> jums par atkāpšanos rakstiski jāpaziņo otrai pusei.",
+      "connected": "Chrome spraudnis ir savienots: stella var lasīt vietnes, kurās esat pierakstījies.",
+      "notConnected": "Chrome spraudnis ir instalēts, bet vēl nav savienots.",
+      "notInstalled": "Chrome spraudnis vēl nav instalēts.",
+      "page": "§ 2000 Jebkura puse var atkāpties pirms izpildes. <passage>§ 2001 Atkāpšanai nepieciešams rakstisks paziņojums otrai pusei.</passage>",
+      "prompt": "Ko mans portāls saka par atkāpšanos?",
+      "reload": "Chrome spraudnis tika atjaunināts: pārlādējiet šo cilni.",
+      "steps": {
+        "ask": "Jautājat",
+        "cited": "stella atbild",
+        "read": "stella lasa jūsu portālu"
+      },
+      "updating": "Gaida Chrome spraudņa atjauninājumu."
     },
     "browserSignIn": {
       "continue": "Esmu pieteicies",

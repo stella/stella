@@ -329,7 +329,10 @@ test("chat composer sends a message and renders the assistant reply", async ({
     if (!(viewport instanceof HTMLElement) || !(turn instanceof HTMLElement)) {
       throw new TypeError("Sticky chat turn is missing its scroll boundary");
     }
-    const sentinel = turn.querySelector<HTMLElement>('[aria-hidden="true"]');
+    // The point where the header pins, below its natural top.
+    const sentinel = turn.querySelector<HTMLElement>(
+      "[data-sticky-user-header-pin]",
+    );
     if (!sentinel) {
       throw new Error("Sticky chat turn is missing its sentinel");
     }

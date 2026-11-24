@@ -208,16 +208,38 @@
     "attachment": "Anhang",
     "audioContent": "Generiertes Audio",
     "browserExtension": {
-      "connect": "Erweiterung verbinden",
-      "connectDescription": "Klicken Sie auf das stella-Symbol in der Browserleiste, erlauben Sie bei Nachfrage den Zugriff auf Websites und verbinden Sie stella. Eine Verbindung gilt für alle Ihre stella-Tabs.",
-      "connected": "Erweiterung verbunden",
-      "description": "stella kann auf Ihren Wunsch Websites in einem separaten Tab öffnen und lesen.",
-      "install": "Erweiterung installieren",
-      "installDescription": "Mit der stella-Erweiterung kann stella auf Ihren Wunsch Websites in einem separaten Tab öffnen und lesen. Sie erhalten die Erweiterung im Chrome Web Store. Bereits installiert? Laden Sie diesen Tab neu.",
+      "alreadyInstalledReload": "Schon installiert? Neu laden",
+      "connect": "Chrome-Plugin verbinden",
+      "connectDescription": "Klicken Sie in der Chrome-Symbolleiste auf das stella-Symbol und verbinden Sie diesen Tab.",
+      "connected": "Chrome-Plugin verbunden",
+      "connectedDescription": "stella liest Websites, bei denen Sie angemeldet sind, immer mit Ihrer Zustimmung.",
+      "install": "Chrome-Plugin installieren",
+      "installDescription": "Lässt stella Websites lesen, bei denen Sie angemeldet sind, immer mit Ihrer Zustimmung.",
+      "manageSites": "Erlaubte Websites",
+      "name": "Chrome-Plugin",
       "reload": "Tab neu laden",
-      "reloadDescription": "Ihre stella-Erweiterung ist neuer als dieser Tab. Laden Sie den Tab neu, um sie weiter zu nutzen.",
-      "updating": "Erweiterungs-Update ausstehend",
-      "updatingDescription": "Ihre stella-Erweiterung ist eine ältere Version. Chrome aktualisiert sie automatisch, meist innerhalb weniger Stunden; danach kann stella wieder Websites für Sie öffnen und lesen."
+      "reloadDescription": "Das Plugin wurde aktualisiert, nachdem dieser Tab geöffnet wurde.",
+      "siteAccessDescription": "Klicken Sie auf das stella-Symbol in der Chrome-Symbolleiste und erlauben Sie den Websitezugriff.",
+      "statusNotInstalled": "Nicht installiert",
+      "statusReload": "Neu laden nötig",
+      "statusUpdating": "Aktualisierung",
+      "updating": "Update ausstehend",
+      "updatingDescription": "Chrome aktualisiert es automatisch innerhalb weniger Stunden."
+    },
+    "browserExtensionPreview": {
+      "answer": "Nach <cite>§ 2001</cite> müssen Sie den Rücktritt der anderen Partei schriftlich erklären.",
+      "connected": "Chrome-Plugin ist verbunden: stella kann Websites lesen, bei denen Sie angemeldet sind.",
+      "notConnected": "Chrome-Plugin ist installiert, aber noch nicht verbunden.",
+      "notInstalled": "Chrome-Plugin ist noch nicht installiert.",
+      "page": "§ 2000 Jede Partei kann vor der Leistung zurücktreten. <passage>§ 2001 Der Rücktritt erfordert eine schriftliche Erklärung gegenüber der anderen Partei.</passage>",
+      "prompt": "Was sagt mein Portal zum Rücktritt?",
+      "reload": "Chrome-Plugin wurde aktualisiert: Laden Sie diesen Tab neu.",
+      "steps": {
+        "ask": "Sie fragen",
+        "cited": "stella antwortet",
+        "read": "stella liest Ihr Portal"
+      },
+      "updating": "Chrome-Plugin-Update ausstehend."
     },
     "browserSignIn": {
       "continue": "Ich bin angemeldet",

@@ -208,16 +208,38 @@
     "attachment": "Melléklet",
     "audioContent": "Generált hang",
     "browserExtension": {
-      "connect": "Bővítmény csatlakoztatása",
-      "connectDescription": "Kattintson a stella bővítmény ikonjára a böngésző eszköztárán, engedélyezze kérésre a webhelyekhez való hozzáférést, majd csatlakoztassa a stella alkalmazást. Egy csatlakozás az összes stella-lapjára érvényes.",
-      "connected": "Bővítmény csatlakoztatva",
-      "description": "A stella kérésére külön lapon nyithat meg és olvashat el weboldalakat.",
-      "install": "Bővítmény telepítése",
-      "installDescription": "A stella bővítménnyel a stella kérésére külön lapon nyithat meg és olvashat el weboldalakat. A Chrome Webáruházból telepítheti. Már telepítette? Töltse újra ezt a lapot.",
+      "alreadyInstalledReload": "Már telepítve? Újratöltés",
+      "connect": "Chrome bővítmény csatlakoztatása",
+      "connectDescription": "Kattintson a stella ikonra a Chrome eszköztárán, és csatlakoztassa ezt a lapot.",
+      "connected": "Chrome bővítmény csatlakoztatva",
+      "connectedDescription": "A stella olvassa azokat az oldalakat, ahová be van jelentkezve, mindig az Ön jóváhagyásával.",
+      "install": "Chrome bővítmény telepítése",
+      "installDescription": "Lehetővé teszi, hogy a stella olvassa azokat az oldalakat, ahová be van jelentkezve, mindig az Ön jóváhagyásával.",
+      "manageSites": "Engedélyezett oldalak",
+      "name": "Chrome bővítmény",
       "reload": "Lap újratöltése",
-      "reloadDescription": "A stella bővítménye újabb, mint ez a lap. Töltse újra a lapot, hogy továbbra is használhassa.",
-      "updating": "A bővítmény frissítésre vár",
-      "updatingDescription": "A stella bővítménye régebbi verzió. A Chrome automatikusan frissíti, általában néhány órán belül; utána a stella ismét megnyithat és elolvashat weboldalakat Önnek."
+      "reloadDescription": "A bővítmény a lap megnyitása után frissült.",
+      "siteAccessDescription": "Kattintson a stella ikonra a Chrome eszköztárán, és engedélyezze a webhelyhozzáférést.",
+      "statusNotInstalled": "Nincs telepítve",
+      "statusReload": "Újratöltés szükséges",
+      "statusUpdating": "Frissítés",
+      "updating": "Frissítés függőben",
+      "updatingDescription": "A Chrome néhány órán belül automatikusan frissíti."
+    },
+    "browserExtensionPreview": {
+      "answer": "A <cite>§ 2001</cite> szerint a másik felet írásban kell értesítenie az elállásról.",
+      "connected": "A Chrome bővítmény csatlakoztatva: a stella olvashatja azokat az oldalakat, ahová be van jelentkezve.",
+      "notConnected": "A Chrome bővítmény telepítve van, de még nincs csatlakoztatva.",
+      "notInstalled": "A Chrome bővítmény még nincs telepítve.",
+      "page": "§ 2000 Bármelyik fél elállhat a teljesítés előtt. <passage>§ 2001 Az elálláshoz írásbeli értesítés szükséges a másik félnek.</passage>",
+      "prompt": "Mit ír a portálom az elállásról?",
+      "reload": "A Chrome bővítmény frissült: töltse újra ezt a lapot.",
+      "steps": {
+        "ask": "Kérdez",
+        "cited": "A stella válaszol",
+        "read": "A stella olvassa a portálját"
+      },
+      "updating": "Chrome bővítmény frissítés függőben."
     },
     "browserSignIn": {
       "continue": "Bejelentkeztem",
