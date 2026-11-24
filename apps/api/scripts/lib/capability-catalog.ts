@@ -33,6 +33,7 @@ import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
 import type { RouteGate } from "../../src/lib/route-gates";
 import type { HandlerKind } from "../../src/lib/safe-handler-factories";
 import { isRecord } from "../../src/lib/type-guards";
+import { relativePathWithin } from "./repo-relative-path";
 
 type ReviewedInvoiceManagementOptions<TEndpoint> = {
   routes: readonly RouteEntry[];
@@ -100,8 +101,8 @@ export const reviewedInvoiceManagementEndpoints = <
     return endpoint;
   });
 
-/** Handler-tree prefix stripped to turn a file path into a capability id. */
-const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";
+/** Handler-tree root a file path is made relative to for a capability id. */
+const HANDLERS_ROOT = "apps/api/src/handlers";
 
 /**
  * Internal handler-tree words and the public word each becomes in a capability
@@ -141,13 +142,13 @@ export const deriveCapabilityId = ({
   file: string;
   exportName: string | undefined;
 }): string => {
-  if (!file.startsWith(HANDLERS_ROOT_PREFIX)) {
+  const withinHandlers = relativePathWithin({ root: HANDLERS_ROOT, file });
+  if (withinHandlers === undefined) {
     return panic(
-      `capability-catalog: handler path is outside ${HANDLERS_ROOT_PREFIX}: ${file}`,
+      `capability-catalog: handler path is outside ${HANDLERS_ROOT}/: ${file}`,
     );
   }
-  const withoutPrefix = file.slice(HANDLERS_ROOT_PREFIX.length);
-  const withoutExt = withoutPrefix.replace(/\.ts$/u, "");
+  const withoutExt = withinHandlers.replace(/\.ts$/u, "");
   const base = withoutExt.split("/").join(".");
   return toPublicId(exportName === undefined ? base : `${base}.${exportName}`);
 };
@@ -599,13 +600,14 @@ export const findInlineCapabilityMismatches = ({
 
 /** Module-alias import specifier for a handler file: `apps/api/src/handlers/time-entries/create.ts` -> `@/api/handlers/time-entries/create`. */
 export const deriveHandlerImportPath = (file: string): string => {
-  const SRC_PREFIX = "apps/api/src/";
-  if (!file.startsWith(SRC_PREFIX)) {
+  const SRC_ROOT = "apps/api/src";
+  const withinSrc = relativePathWithin({ root: SRC_ROOT, file });
+  if (withinSrc === undefined) {
     return panic(
-      `capability-catalog: handler path is outside ${SRC_PREFIX}: ${file}`,
+      `capability-catalog: handler path is outside ${SRC_ROOT}/: ${file}`,
     );
   }
-  return `@/api/${file.slice(SRC_PREFIX.length).replace(/\.ts$/u, "")}`;
+  return `@/api/${withinSrc.replace(/\.ts$/u, "")}`;
 };
 
 /** One dispatch record: capability id, the module it lives in, and (for a named export) which export. */

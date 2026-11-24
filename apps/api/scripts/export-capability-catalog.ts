@@ -124,6 +124,7 @@ import {
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
 import { assertFeatureAccessDeclarations } from "./lib/feature-access-declarations";
+import { relativePathWithin, toPosixPath } from "./lib/repo-relative-path";
 import { writeCapabilityRuntime } from "./lib/write-capability-runtime";
 
 const CATALOG_PATH = path.resolve(REPO_ROOT, "packages/cli/capabilities");
@@ -1104,10 +1105,17 @@ const readFeatureDeclarationSources = async () => {
   for (const file of new Bun.Glob(
     "apps/api/{src,scripts}/**/*.{ts,tsx}",
   ).scanSync({ cwd: REPO_ROOT, onlyFiles: true })) {
-    if (/\.(?:test|spec)\.tsx?$/u.test(file) || file.includes("/tests/")) {
+    const repoFile = toPosixPath(file);
+    if (
+      /\.(?:test|spec)\.tsx?$/u.test(repoFile) ||
+      repoFile.includes("/tests/")
+    ) {
       continue;
     }
-    featureSources.set(file, await Bun.file(path.join(REPO_ROOT, file)).text());
+    featureSources.set(
+      repoFile,
+      await Bun.file(path.join(REPO_ROOT, repoFile)).text(),
+    );
   }
   return featureSources;
 };
@@ -1129,7 +1137,12 @@ const validateGeneratedFeatureDeclarations = ({
 }: GeneratedFeatureDeclarationOptions): void => {
   const sources = new Map(sourceModules);
   for (const file of sources.keys()) {
-    if (file.startsWith("apps/api/src/mcp/generated/capability-dispatch/")) {
+    if (
+      relativePathWithin({
+        root: "apps/api/src/mcp/generated/capability-dispatch",
+        file,
+      }) !== undefined
+    ) {
       sources.delete(file);
     }
   }

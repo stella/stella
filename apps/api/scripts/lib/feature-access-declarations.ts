@@ -15,6 +15,7 @@ import {
 
 import { featurePrerequisiteClosure } from "../../src/lib/feature-access/prerequisites";
 import type { FeatureRegistry } from "../../src/lib/feature-access/registry";
+import { relativePathWithin } from "./repo-relative-path";
 
 type DeclarationSource = {
   readonly fileName: string;
@@ -898,8 +899,8 @@ const validateOwnership = (
     }
     for (const directory of ownership.handlerDirectories) {
       if (
-        ![...graph.sources.keys()].some((file) =>
-          file.startsWith(`${directory.replace(/\/$/u, "")}/`),
+        ![...graph.sources.keys()].some(
+          (file) => relativePathWithin({ root: directory, file }) !== undefined,
         )
       ) {
         violations.push({
@@ -1035,8 +1036,9 @@ const moduleRequirements = (registry: FeatureRegistry, module: string) => {
     ) {
       required.set(id, "conditional");
     } else if (
-      ownership?.handlerDirectories.some((directory) =>
-        module.startsWith(`${directory.replace(/\/$/u, "")}/`),
+      ownership?.handlerDirectories.some(
+        (directory) =>
+          relativePathWithin({ root: directory, file: module }) !== undefined,
       ) ||
       ownership?.coreModules.includes(module) ||
       ownership?.tableSchemaFiles.includes(module) ||
@@ -1151,8 +1153,9 @@ const inspectEndpoint = ({
   };
   for (const [id, { ownership }] of Object.entries(registry)) {
     if (
-      ownership?.handlerDirectories.some((directory) =>
-        file.startsWith(`${directory.replace(/\/$/u, "")}/`),
+      ownership?.handlerDirectories.some(
+        (directory) =>
+          relativePathWithin({ root: directory, file }) !== undefined,
       )
     ) {
       add(id, "required");
