@@ -8,7 +8,7 @@ import { stellaToast } from "@stll/ui/toast";
 import { useSingleFlight } from "@/hooks/use-single-flight";
 import { api } from "@/lib/api";
 import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";

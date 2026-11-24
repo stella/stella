@@ -9,7 +9,7 @@ import {
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { detached } from "@/lib/detached";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";

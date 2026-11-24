@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 
 import { chatDraftMetaOptions } from "@/features/chat/queries";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { queryView } from "@/lib/query-view.logic";
 import { useQueryViewError } from "@/lib/use-query-view";
 

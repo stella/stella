@@ -34,7 +34,7 @@ import {
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 /**

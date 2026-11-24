@@ -4,7 +4,7 @@ import type { ChatThreadOptionsContext } from "@/features/chat/chat-query-contra
 import type { ChatRuntime } from "@/features/chat/chat-runtime";
 import { acquireChatRuntime } from "@/features/chat/chat-runtime-registry";
 import type { ChatThreadFetched } from "@/features/chat/queries";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 
 type UseChatThreadRuntimeArgs = {
   activeOrganizationId: string;

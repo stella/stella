@@ -75,7 +75,7 @@ import {
 } from "@/features/chat/queries";
 import type { ChatModelBenchmarkOption } from "@/features/chat/queries";
 import { useFormatter } from "@/i18n/formatting-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { type QueryView, queryView } from "@/lib/query-view.logic";
 
 export type ComposerModelsMenuProps = {

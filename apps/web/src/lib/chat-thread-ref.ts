@@ -1,21 +1,12 @@
-import type { SafeId } from "@/lib/safe-id";
+import type {
+  ChatThreadId,
+  ChatThreadRef,
+  ChatThreadRoute,
+} from "@/lib/chat-thread-ref-types";
 import { toSafeId } from "@/lib/safe-id";
 import { createUuid } from "@/lib/uuid";
 
-export type ChatThreadId = SafeId<"chatThread">;
-
-type GlobalChatThreadRef = {
-  scope: "global";
-  threadId: ChatThreadId;
-};
-
-type WorkspaceChatThreadRef = {
-  scope: "workspace";
-  threadId: ChatThreadId;
-  workspaceId: string;
-};
-
-export type ChatThreadRef = GlobalChatThreadRef | WorkspaceChatThreadRef;
+export type { ChatThreadId, ChatThreadRef, ChatThreadRoute };
 
 export const getChatThreadKey = (threadRef: ChatThreadRef) =>
   threadRef.scope === "workspace"
@@ -38,22 +29,6 @@ export const toChatThreadId = (value: string): ChatThreadId =>
 
 export const createChatThreadId = (): ChatThreadId =>
   toChatThreadId(createUuid());
-
-/**
- * Route target for opening a chat thread: matter-scoped threads live under
- * their matter, global ones at the top level. One helper so every surface that
- * links to or navigates at a thread (search hits, fork provenance, the fork
- * action itself) picks the same pair, instead of each restating the two paths.
- */
-export type ChatThreadRoute =
-  | {
-      to: "/chat/$threadId";
-      params: { threadId: string };
-    }
-  | {
-      to: "/chat/workspaces/$workspaceId/$threadId";
-      params: { workspaceId: string; threadId: string };
-    };
 
 export const chatThreadRoute = ({
   threadId,

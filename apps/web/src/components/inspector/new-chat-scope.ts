@@ -15,7 +15,7 @@
  */
 
 import type { ChatTab } from "@/components/inspector/inspector-store-types";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
 
 type NewChatMatterScope = {
   contextMatterIds?: string[];

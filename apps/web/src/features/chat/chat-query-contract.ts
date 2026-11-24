@@ -9,7 +9,7 @@ import type {
   ChatEditApplyMode,
   DocxEditRepresentation,
 } from "@/lib/chat-edit-mode";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type ActiveFileContext = {

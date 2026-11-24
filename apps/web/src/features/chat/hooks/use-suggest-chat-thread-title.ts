@@ -5,7 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { unwrapApiResponse } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { toSafeId } from "@/lib/safe-id";

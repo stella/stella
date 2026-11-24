@@ -34,7 +34,7 @@ import {
   useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { detached } from "@/lib/detached";
 
 type LocalRunQuestionCardProps = {

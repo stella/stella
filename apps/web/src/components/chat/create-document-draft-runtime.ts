@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
 import { detached } from "@/lib/detached";
 
 type CreateDocumentDraftSaver = () => Promise<ArrayBuffer | null>;

@@ -40,7 +40,7 @@ import {
 } from "@/components/ai-suggestions/docx-suggestion-cache";
 import type { ReviewSuggestion } from "@/components/ai-suggestions/review-store";
 import { api } from "@/lib/api";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
 import { createSubmitIntent } from "@/lib/idempotency/idempotent-submit.logic";
 import { toSafeId } from "@/lib/safe-id";

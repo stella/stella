@@ -229,7 +229,7 @@ import { useFormatter } from "@/i18n/formatting-context";
 import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { openDesktopUrl } from "@/lib/desktop-bridge";
 import { detached } from "@/lib/detached";

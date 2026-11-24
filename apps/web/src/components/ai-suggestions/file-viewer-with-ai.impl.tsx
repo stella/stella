@@ -34,7 +34,7 @@ import type { DocxEditModeResult } from "@/components/docx/docx-browser-editor.l
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { DocxEditSafety } from "@/lib/chat-edit-mode";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
+import type { ChatThreadId } from "@/lib/chat-thread-ref-types";
 
 import type { ActiveLegalDocument } from "./active-legal-document";
 import { FileChatOverlay } from "./file-chat-overlay";

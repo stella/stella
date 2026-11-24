@@ -12,7 +12,7 @@ import {
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
 import { setThreadActiveSkill } from "@/features/chat/thread-active-skill-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import type { ChatThreadRef } from "@/lib/chat-thread-ref-types";
 import { detached } from "@/lib/detached";
 
 type MaximizeContext = {
