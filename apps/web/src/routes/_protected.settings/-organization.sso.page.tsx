@@ -304,6 +304,7 @@ const AddSamlProviderForm = ({
   onCancel: () => void;
 }) => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const [displayName, setDisplayName] = useState("");
   const [issuer, setIssuer] = useState("");
   const [entryPoint, setEntryPoint] = useState("");
@@ -311,19 +312,24 @@ const AddSamlProviderForm = ({
   const [domainsInput, setDomainsInput] = useState("");
 
   const createProviderMutation = useMutation({
-    mutationFn: async () => {
-      const domains = domainsInput
-        .split(/[,\s]+/u)
-        .map((d) => d.trim())
-        .filter((d) => d.length > 0);
-      return await registerSamlSsoProvider({
-        displayName: displayName.trim(),
-        issuer: issuer.trim(),
-        entryPoint: entryPoint.trim(),
-        cert: cert.trim(),
-        domains,
-      });
-    },
+    mutationFn: resourceMutation({
+      mutation: "registerSamlSsoProvider",
+      queryClient,
+      scope: { type: "organization" },
+      mutationFn: async () => {
+        const domains = domainsInput
+          .split(/[,\s]+/u)
+          .map((d) => d.trim())
+          .filter((d) => d.length > 0);
+        return await registerSamlSsoProvider({
+          displayName: displayName.trim(),
+          issuer: issuer.trim(),
+          entryPoint: entryPoint.trim(),
+          cert: cert.trim(),
+          domains,
+        });
+      },
+    }),
     onSuccess: async () => {
       await onCreated();
       stellaToast.add({

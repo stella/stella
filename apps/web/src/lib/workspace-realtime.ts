@@ -383,6 +383,16 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
+  registerSamlSsoProvider: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/providers/saml",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   probeOidcSsoProvider: {
     writes: [
       {

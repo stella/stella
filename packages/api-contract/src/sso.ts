@@ -102,7 +102,7 @@ export type CreateOidcSsoProviderBody = v.InferOutput<
 >;
 
 export const createSamlSsoProviderBodySchema = v.strictObject({
-  displayName: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80)),
+  displayName: displayNameSchema({ maxLength: 80 }),
   issuer: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(512)),
   entryPoint: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
   cert: v.pipe(v.string(), v.trim(), v.minLength(32), v.maxLength(16_384)),
