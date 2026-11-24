@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.2.2
+
+### Patch Changes
+
+- [#9187](https://github.com/stella/stella/pull/9187) [`1ab906c`](https://github.com/stella/stella/commit/1ab906cc4ad7916de5ef21284416343ea2e2810c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Read detached CAdES and XAdES signature files through document content commands: their unverified signers, the document they carry, and the matter documents they sign.
+
 ## 8.2.1
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.88.0
+
+### Minor Changes
+
+- [#9187](https://github.com/stella/stella/pull/9187) [`1ab906c`](https://github.com/stella/stella/commit/1ab906cc4ad7916de5ef21284416343ea2e2810c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add P7S and XAdES document marks shared by web and native renderers.
+
 ## 0.87.0
 
 ### Minor Changes
