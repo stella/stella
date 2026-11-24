@@ -21,6 +21,11 @@ import {
   type BrowserObservedTab,
 } from "@stll/api-contract/browser-control";
 import {
+  BROWSER_STEP_GATE,
+  type BrowserReportedPage,
+  decideBrowserStep,
+} from "@stll/api-contract/browser-step-gate";
+import {
   CHAT_LOCAL_RUN_BROWSER_ACTIONS,
   CHAT_LOCAL_RUN_NEEDS_MEMBER,
   type ChatLocalRunBrowserAction,
@@ -581,9 +586,6 @@ const backRefused = (
     true,
   );
 
-/** The role the extension gives a search field, or a field in a search form. */
-const SEARCH_FIELD_ROLE = "searchbox";
-
 export const APPROVAL_DECISION = {
   approve: "approve",
   deny: "deny",
@@ -630,137 +632,71 @@ export type ApproveAction = (
   request: BrowserApprovalRequest,
 ) => Promise<ApprovalTicket>;
 
-const BROWSER_GATE = {
-  /** The step runs. */
-  run: "run",
-  /** The member is asked first. */
-  ask: "ask",
-  /** The step does not run, and nobody is asked. */
-  refuse: "refuse",
-} as const;
-
-type BrowserGate = (typeof BROWSER_GATE)[keyof typeof BROWSER_GATE];
-
-type StepGates = Record<"click" | "search" | "type", BrowserGate>;
-
-/**
- * When a click or a typing step asks the member, or is refused, by the
- * run's approval mode. Plan is read-only: it opens and reads, and refuses
- * every click and typing step without asking. Opening, reading and typing
- * into a search field never ask; a sign-in page still goes to the member
- * at every level. One gate for every harness: the server asks, whatever
- * the harness itself was told to allow. A mode added to the contract fails
- * here until its rule is set.
- */
-const stepGates = (approvals: DesktopRunnerApprovalMode): StepGates => {
-  switch (approvals) {
-    case "plan":
-      return {
-        click: BROWSER_GATE.refuse,
-        search: BROWSER_GATE.refuse,
-        type: BROWSER_GATE.refuse,
-      };
-    case "ask":
-      return {
-        click: BROWSER_GATE.ask,
-        search: BROWSER_GATE.run,
-        type: BROWSER_GATE.ask,
-      };
-    case "auto":
-      return {
-        click: BROWSER_GATE.run,
-        search: BROWSER_GATE.run,
-        type: BROWSER_GATE.ask,
-      };
-    case "full_auto":
-      return {
-        click: BROWSER_GATE.run,
-        search: BROWSER_GATE.run,
-        type: BROWSER_GATE.run,
-      };
-    default:
-      approvals satisfies never;
-      return panic("Unhandled approval mode");
-  }
-};
-
-/** What happens to a step before it reaches the browser. */
-type StepDecision =
-  | { type: typeof BROWSER_GATE.run }
-  | { type: typeof BROWSER_GATE.refuse }
-  | { type: typeof BROWSER_GATE.ask; question: BrowserApprovalQuestion };
-
-const RUNS: StepDecision = { type: BROWSER_GATE.run };
-
-/** A step on an element under `gate`: asking names the step, element and page. */
-const elementStepDecision = (
-  gate: BrowserGate,
+/** What the member is asked about `command`: the step, the element and the page. */
+const approvalQuestion = (
   command: BrowserControlElementCommand,
-  step: BrowserApprovalStep,
-): StepDecision => {
-  switch (gate) {
-    case BROWSER_GATE.run:
-      return RUNS;
-    case BROWSER_GATE.refuse:
-      return { type: BROWSER_GATE.refuse };
-    case BROWSER_GATE.ask:
-      return {
-        type: BROWSER_GATE.ask,
-        question: {
-          ...step,
-          name: command.target.name,
-          role: command.target.role,
-          url: command.page.url,
-        },
-      };
-    default:
-      gate satisfies never;
-      return panic("Unhandled browser gate");
-  }
-};
-
-/**
- * Whether `command` runs, waits for the member or is refused under
- * `approvals`. A key press can submit a form, so it is held like a click;
- * choosing an option can change what a page does, so it is held like typing
- * outside a search field. Going back and switching to another of the chat's
- * tabs move between pages, as opening one does, and never ask: going back
- * reaches only a page the chat read in that tab (`PageSeen.trails`), and
- * switching only a tab its latest read listed.
- */
-const browserStepDecision = (
-  approvals: DesktopRunnerApprovalMode,
-  command: BrowserControlCommand,
-): StepDecision => {
-  const gates = stepGates(approvals);
+): BrowserApprovalQuestion => {
+  const about = {
+    name: command.target.name,
+    role: command.target.role,
+    url: command.page.url,
+  };
   switch (command.action) {
     case BROWSER_CONTROL_ACTION.click:
-      return elementStepDecision(gates.click, command, { action: "click" });
+      return { ...about, action: "click" };
     case BROWSER_CONTROL_ACTION.fill:
-      return elementStepDecision(
-        gates[command.target.role === SEARCH_FIELD_ROLE ? "search" : "type"],
-        command,
-        { action: "type" },
-      );
+      return { ...about, action: "type" };
     case BROWSER_CONTROL_ACTION.pressKey:
-      return elementStepDecision(gates.click, command, {
-        action: "press_key",
-        key: command.key,
-      });
+      return { ...about, action: "press_key", key: command.key };
     case BROWSER_CONTROL_ACTION.select:
-      return elementStepDecision(gates.type, command, {
-        action: "select",
-        option: command.value,
-      });
-    case BROWSER_CONTROL_ACTION.open:
-    case BROWSER_CONTROL_ACTION.snapshot:
-    case BROWSER_CONTROL_ACTION.find:
-    case BROWSER_CONTROL_ACTION.goBack:
-    case BROWSER_CONTROL_ACTION.switchTab:
-      return RUNS;
+      return { ...about, action: "select", option: command.value };
     default:
       command satisfies never;
-      return panic("Unhandled browser command");
+      return panic("Unhandled browser element command");
+  }
+};
+
+/** Whether a command acts on an element of the page the chat last read. */
+const isElementCommand = (
+  command: BrowserControlCommand,
+): command is BrowserControlElementCommand => "target" in command;
+
+/** The page the chat last read, as the browser reported it, for the gate. */
+const reportedPage = (seen: PageSeen | null): BrowserReportedPage | null =>
+  seen === null
+    ? null
+    : {
+        ...seen.page,
+        valueRefs: new Set(
+          [...seen.elements.values()]
+            .filter((element) => element.value !== undefined)
+            .map((element) => element.ref),
+        ),
+      };
+
+/** The chat's website approvals on this computer; none so far. */
+const NO_SITE_GRANTS: ReadonlySet<string> = new Set();
+
+/**
+ * Whether the tab's page waits for the member's sign-in after `result`: a
+ * hand-over says so, a read of a page says it no longer does, and any other
+ * answer leaves it as it was.
+ */
+const signInAfter = (
+  before: boolean,
+  result: BrowserControlResult,
+): boolean => {
+  switch (result.status) {
+    case "success":
+    case "found":
+      return false;
+    case "error":
+      return result.code === BROWSER_CONTROL_ERROR_CODE.needsMember
+        ? true
+        : before;
+    default:
+      result satisfies never;
+      return panic("Unhandled browser result");
   }
 };
 
@@ -878,6 +814,22 @@ const declinedResult = (): LocalBrowserToolResult =>
       code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
       message: "The member declined this step.",
       hint: "Ask the member how to go on, or go on without this step.",
+    },
+    true,
+  );
+
+/**
+ * A step on a page the browser handed to the member for a sign-in: it does
+ * not run, at any level, until a read shows the page again.
+ */
+const signInPendingResult = (): LocalBrowserToolResult =>
+  textResult(
+    {
+      status: CHAT_LOCAL_RUN_NEEDS_MEMBER,
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+      message:
+        "The page in this tab asks for a sign-in, which the member completes themselves.",
+      hint: SIGN_IN_HINT,
     },
     true,
   );
@@ -1055,6 +1007,9 @@ const COMMAND_BUILDERS = {
 /** One chat's browser tools. */
 export const createLocalBrowserSession = () => {
   let seen: PageSeen | null = null;
+  // The browser's latest answer handed the tab's page to the member for a
+  // sign-in, and no page was read since: steps on it go to the member.
+  let signIn = false;
 
   const command = (
     tool: ChatLocalRunBrowserAction,
@@ -1084,16 +1039,34 @@ export const createLocalBrowserSession = () => {
       if (!acts && CHANGES_PAGE[step.action]) {
         return notAvailableResult();
       }
-      const decision = browserStepDecision(approvals, step);
-      if (decision.type === BROWSER_GATE.refuse) {
-        return readOnlyResult();
-      }
       let ticket: ApprovalTicket | null = null;
-      if (decision.type === BROWSER_GATE.ask) {
-        ticket = await approve({ ...decision.question, signal });
-        if (ticket.decision === APPROVAL_DECISION.deny) {
-          return declinedResult();
+      const decision = decideBrowserStep({
+        command: step,
+        grantedOrigins: NO_SITE_GRANTS,
+        level: approvals,
+        reportedPage: reportedPage(seen),
+        signIn,
+      });
+      switch (decision.type) {
+        case BROWSER_STEP_GATE.run:
+          break;
+        case BROWSER_STEP_GATE.refuse:
+          return readOnlyResult();
+        case BROWSER_STEP_GATE.needsMember:
+          return signInPendingResult();
+        case BROWSER_STEP_GATE.ask: {
+          if (!isElementCommand(step)) {
+            return panic("Only a step on an element asks the member");
+          }
+          ticket = await approve({ ...approvalQuestion(step), signal });
+          if (ticket.decision === APPROVAL_DECISION.deny) {
+            return declinedResult();
+          }
+          break;
         }
+        default:
+          decision satisfies never;
+          return panic("Unhandled browser step decision");
       }
       const movesBefore = browserMoves();
       // The tabs the chat knew before this step: any other is one it opened.
@@ -1107,6 +1080,7 @@ export const createLocalBrowserSession = () => {
       if (moved) {
         seen = null;
       }
+      signIn = signInAfter(moved ? false : signIn, result);
       const knownTabs = moved ? null : knewTabs;
       ticket?.finish(result.status === "success" ? "completed" : "failed");
       const wentBack = step.action === BROWSER_CONTROL_ACTION.goBack;

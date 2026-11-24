@@ -844,6 +844,59 @@ describe("browser steps by the run's approval mode", () => {
     });
   }
 
+  // Enter can submit a form, so it is held like a click in every field: the
+  // search role is the page's own word, never a reason to skip asking.
+  const ENTER_CASES = [
+    { approvals: "ask", field: "search", asked: ["press_key"] },
+    { approvals: "ask", field: "other", asked: ["press_key"] },
+    { approvals: "auto", field: "search", asked: [] },
+    { approvals: "auto", field: "other", asked: [] },
+    { approvals: "full_auto", field: "search", asked: [] },
+    { approvals: "full_auto", field: "other", asked: [] },
+  ] as const satisfies readonly {
+    approvals: DesktopRunnerApprovalMode;
+    field: "search" | "other";
+    asked: readonly "press_key"[];
+  }[];
+
+  for (const { approvals, asked, field } of ENTER_CASES) {
+    test(`${approvals}: Enter in a ${field} field asks ${asked.length === 0 ? "nothing" : "first"}`, async () => {
+      const read = field === "search" ? searchPage : page;
+      const session = createLocalBrowserSession();
+      const browser = recorder([read("r-1"), read("r-2")], { approvals });
+      await session.call("snapshot", {}, browser.context);
+      const result = await session.call(
+        "press_key",
+        { ref: "E1", key: "Enter" },
+        browser.context,
+      );
+      expect(result.isError).toBe(false);
+      expect(browser.asked.map(({ action }) => action)).toEqual([...asked]);
+      expect(browser.sent.map(({ command }) => command.action)).toEqual([
+        "snapshot",
+        "press-key",
+      ]);
+    });
+  }
+
+  test("plan refuses Enter even in a search field", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([searchPage("r-1")], { approvals: "plan" });
+    await session.call("snapshot", {}, browser.context);
+    const result = await session.call(
+      "press_key",
+      { ref: "E1", key: "Enter" },
+      browser.context,
+    );
+    expect(browser.asked).toEqual([]);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+    ]);
+    expect(parsed(result)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+    });
+  });
+
   test("the member sees the element's role and name and the page address", async () => {
     const browser = await steps("ask", "other");
     expect(browser.asked).toEqual([
@@ -1361,6 +1414,62 @@ describe("keys, options, history and tabs", () => {
           true,
         ),
       ).toBe(JSON.stringify({ status: CHAT_LOCAL_RUN_NEEDS_MEMBER }));
+    }
+  });
+
+  test("after a sign-in hand-over, steps on the page wait for a read at every level, without asking", async () => {
+    const INPUTS_AFTER_SIGN_IN = {
+      press_key: { ref: "E1", key: "Enter" },
+      select: { ref: "E2", option: "Supreme Court" },
+    } as const;
+    for (const approvals of ["ask", "auto", "full_auto"] as const) {
+      const session = createLocalBrowserSession();
+      const browser = recorder(
+        [formPage("r-1"), NEEDS_MEMBER, formPage("r-2"), formPage("r-3")],
+        { approvals: "full_auto" },
+      );
+      const asking = recorder([], { approvals });
+      await session.call("snapshot", {}, browser.context);
+      // The click led to a sign-in: the action ran, the page is the member's.
+      await session.call("click", { ref: "E1" }, browser.context);
+      const held = [
+        await session.call("press_key", INPUTS_AFTER_SIGN_IN.press_key, {
+          ...browser.context,
+          approvals,
+          approve: asking.context.approve,
+        }),
+        await session.call("select", INPUTS_AFTER_SIGN_IN.select, {
+          ...browser.context,
+          approvals,
+          approve: asking.context.approve,
+        }),
+      ];
+      expect(asking.asked).toEqual([]);
+      expect(browser.sent.map(({ command }) => command.action)).toEqual([
+        "snapshot",
+        "click",
+      ]);
+      for (const result of held) {
+        expect(parsed(result)).toMatchObject({
+          code: BROWSER_CONTROL_ERROR_CODE.needsMember,
+          hint: expect.stringContaining("sign in"),
+          status: CHAT_LOCAL_RUN_NEEDS_MEMBER,
+        });
+      }
+      // The member signed in; a read shows the page, and steps go on.
+      await session.call("snapshot", {}, browser.context);
+      const after = await session.call(
+        "press_key",
+        INPUTS_AFTER_SIGN_IN.press_key,
+        browser.context,
+      );
+      expect(after.isError).toBe(false);
+      expect(browser.sent.map(({ command }) => command.action)).toEqual([
+        "snapshot",
+        "click",
+        "snapshot",
+        "press-key",
+      ]);
     }
   });
 });
