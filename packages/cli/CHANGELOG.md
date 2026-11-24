@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.3.1
+
+### Patch Changes
+
+- [#9416](https://github.com/stella/stella/pull/9416) [`b5f41b1`](https://github.com/stella/stella/commit/b5f41b12652e58d0094a4c1ec049fe4110a0dbb2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Bound remaining API request schema fields in the generated capability catalog.
+
 ## 8.3.0
 
 ### Minor Changes
