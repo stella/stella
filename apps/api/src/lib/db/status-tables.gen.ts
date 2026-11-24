@@ -592,4 +592,5 @@ export const ENUM_COLUMNS = {
   work_obligation_events: ["entity_feature_gate", "type"],
   work_obligations: ["entity_feature_gate", "source_type", "type"],
   workspace_contacts: ["role"],
+  workspaces: ["visibility"],
 } as const;
