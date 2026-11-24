@@ -5,14 +5,14 @@ import {
   readDesktopLinkState,
 } from "./desktop-link";
 
-export const DEFAULT_ACTION_ICONS = {
+const DEFAULT_ACTION_ICONS = {
   16: "icon/16.png",
   32: "icon/32.png",
   48: "icon/48.png",
   128: "icon/128.png",
 } as const;
 
-export const ACTIVE_ACTION_ICONS = {
+const ACTIVE_ACTION_ICONS = {
   16: "icon/16-active.png",
   32: "icon/32-active.png",
   48: "icon/48-active.png",
