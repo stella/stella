@@ -14,7 +14,12 @@ import "@/api/tests/setup-env";
 
 import { apiRoutes } from "@/api/api-routes";
 import type { SafeDb } from "@/api/db/safe-db";
-import { contacts, workspaces, workspaceViews } from "@/api/db/schema";
+import {
+  contacts,
+  workspaceMembers,
+  workspaces,
+  workspaceViews,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { updateContactHandler } from "@/api/handlers/contacts/update";
 import type { UpdateContactHandlerProps } from "@/api/handlers/contacts/update";
@@ -78,6 +83,10 @@ beforeAll(async () => {
     name: "Lease review",
     reference: "REF-NAME-FORMATTING",
   });
+  // The renaming member is assigned, so the update reaches the matter.
+  await testDb
+    .insert(workspaceMembers)
+    .values({ workspaceId, userId: ids.userA1 });
 }, 60_000);
 
 afterAll(async () => {
@@ -91,6 +100,7 @@ describe("names saved with directional controls", () => {
     });
     const result = await Result.gen(() =>
       updateWorkspaceHandler({
+        actor: { userId: ids.userA1, authority: sessionMemberRole("member") },
         safeDb: safeDb(),
         organizationId: ids.orgA,
         workspaceId,

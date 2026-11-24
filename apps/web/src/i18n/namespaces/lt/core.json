@@ -499,6 +499,8 @@
       "localRunAnonymizedRefusal": "Programavimo agentas jūsų kompiuteryje skaito jūsų dokumentus tokius, kokie jie yra, todėl jam skirtos žinutės negalima anonimizuoti. Siųskite ją be anonimizavimo.",
       "matterContactCapacityExceeded": "Šioje byloje yra daugiau kontaktų, nei galima parodyti. Pašalinkite matomus kontaktų susiejimus, kad būtų parodyti likę kontaktai.",
       "matterContactCapacityReached": "Ši byla pasiekė kontaktų skaičiaus ribą. Prieš pridėdami kitą kontaktą, pašalinkite vieną kontaktų susiejimą.",
+      "matterStewardHandoverRequired": "Kai bylą mato tik priskirti žmonės, prie jos turi likti priskirtas bent vienas komandos narys. Pirmiausia ką nors priskirkite.",
+      "matterVisibilityWideningUnconfirmed": "Šis pakeitimas parodys bylą daugiau žmonių. Patvirtinkite jį ir bandykite dar kartą.",
       "mcpAuthorizationApprovalRequired": "Kad galėtumėte prisijungti, administratorius turi patvirtinti šią jungtį.",
       "notOrganizationMember": "Nesate šios organizacijos narys.",
       "organizationDataBoxLimitReached": "Ši organizacija pasiekė duomenų dėžučių ribą. Prieš pridėdami kitą, pašalinkite vieną duomenų dėžutę.",

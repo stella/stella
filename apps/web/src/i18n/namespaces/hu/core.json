@@ -499,6 +499,8 @@
       "localRunAnonymizedRefusal": "A számítógépén futó kódoló ügynök a dokumentumait eredeti formájukban olvassa, ezért a neki szóló üzenet nem anonimizálható. Küldje el anonimizálás nélkül.",
       "matterContactCapacityExceeded": "Ez az ügy több kapcsolatot tartalmaz, mint amennyi megjeleníthető. A többi kapcsolat megjelenítéséhez szüntesse meg néhány látható kapcsolat ügyhöz rendelését.",
       "matterContactCapacityReached": "Ez az ügy elérte a kapcsolatok számának felső határát. Új kapcsolat hozzáadása előtt szüntesse meg az egyik kapcsolat ügyhöz rendelését.",
+      "matterStewardHandoverRequired": "Ha egy ügyet csak a hozzárendelt személyek látnak, legalább egy csapattagnak hozzárendelve kell maradnia. Előbb rendeljen hozzá valakit.",
+      "matterVisibilityWideningUnconfirmed": "Ez a módosítás több személy számára teszi láthatóvá az ügyet. Erősítse meg, majd próbálja újra.",
       "mcpAuthorizationApprovalRequired": "A csatlakozás előtt egy rendszergazdának jóvá kell hagynia ezt a csatlakozót.",
       "notOrganizationMember": "Ön nem tagja ennek a szervezetnek.",
       "organizationDataBoxLimitReached": "Ez a szervezet elérte az adatfiókok maximális számát. Új adatfiók hozzáadása előtt távolítson el egyet.",

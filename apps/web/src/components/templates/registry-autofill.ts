@@ -39,7 +39,32 @@ type CanonicalKey =
  * jurisdictions: PL (KRS/NIP/REGON), CZ (IČO/DIČ), GB (company number),
  * EU (VAT). Extend as adapters surface more identifiers.
  */
-const SUFFIX_MAP: Record<string, CanonicalKey> = {
+type RegistryAutofillSuffix =
+  | "name"
+  | "company_name"
+  | "legal_form"
+  | "legalform"
+  | "form"
+  | "krs"
+  | "ico"
+  | "crn"
+  | "company_number"
+  | "reg_no"
+  | "registration_number"
+  | "nip"
+  | "vat"
+  | "vat_id"
+  | "dic"
+  | "tax_id"
+  | "regon"
+  | "stat_id"
+  | "address"
+  | "seat"
+  | "registered_office"
+  | "share_capital"
+  | "capital";
+
+const SUFFIX_MAP: Record<RegistryAutofillSuffix, CanonicalKey> = {
   name: "name",
   company_name: "name",
   legal_form: "legalForm",
@@ -64,6 +89,9 @@ const SUFFIX_MAP: Record<string, CanonicalKey> = {
   share_capital: "shareCapital",
   capital: "shareCapital",
 };
+
+const isRegistryAutofillSuffix = (key: string): key is RegistryAutofillSuffix =>
+  Object.hasOwn(SUFFIX_MAP, key);
 
 /** Share capital is surfaced verbatim by the adapter; pair it with the
  *  ISO currency for display (e.g. `99910510,00 PLN`). */
@@ -137,7 +165,7 @@ export const groupSupportsRegistryAutofill = (
 ): boolean =>
   groupFields.some((field) => {
     const suffix = suffixOf(field.path);
-    return suffix !== undefined && suffix in SUFFIX_MAP;
+    return suffix !== undefined && isRegistryAutofillSuffix(suffix);
   });
 
 /** Resolve which field paths to set, and to what, from a hit. */
@@ -153,7 +181,9 @@ export const buildAutofillUpdates = (
     if (suffix === undefined) {
       continue;
     }
-    const key = SUFFIX_MAP[suffix];
+    const key = isRegistryAutofillSuffix(suffix)
+      ? SUFFIX_MAP[suffix]
+      : undefined;
     if (key === undefined) {
       continue;
     }

@@ -7,10 +7,19 @@ import {
   dataExportSummaryColumns,
   toDataExportSummary,
 } from "@/api/handlers/data-exports/summary";
+import type { UNPROJECTED_DATA_EXPORT_COLUMNS } from "@/api/handlers/data-exports/summary";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
+import {
+  dataExportMatterIdsSql,
+  readableStoredDataExports,
+} from "@/api/lib/data-export/stored-export-access";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 const config = {
   contract: "patch",
@@ -18,7 +27,8 @@ const config = {
     "Read one data export: status (queued, running, ready, failed or " +
     "expired), progress in matters and bytes, the finished parts with size " +
     "and SHA-256, how many files could not be included, and when the files " +
-    "expire. Organization owners and admins only.",
+    "expire. Organization owners and admins only, and only while they can " +
+    "see every matter in the export.",
   permissions: { dataExport: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -33,25 +43,52 @@ const config = {
 
 const readDataExport = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params }) {
+  async function* ({ safeDb, session, params, user }) {
     const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select(dataExportSummaryColumns)
-          .from(organizationDataExports)
-          .where(
-            and(
-              eq(organizationDataExports.id, params.exportId),
-              eq(
-                organizationDataExports.organizationId,
-                session.activeOrganizationId,
-              ),
-            ),
-          )
-          .limit(1),
+      safeDb(
+        async (tx) =>
+          await readableStoredDataExports({
+            tx,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+            exports: await tx
+              .select({
+                ...dataExportSummaryColumns,
+                matterIds: dataExportMatterIdsSql,
+              })
+              .from(organizationDataExports)
+              .where(
+                and(
+                  eq(organizationDataExports.id, params.exportId),
+                  eq(
+                    organizationDataExports.organizationId,
+                    session.activeOrganizationId,
+                  ),
+                ),
+              )
+              .limit(1),
+          }),
       ),
     );
+    // The summary columns are the projection summary.ts checks for totality;
+    // the matter ids only feed the access check and are not returned.
+    type SelectedDataExportRow = Omit<(typeof rows)[number], "matterIds">;
+    true satisfies UnprojectedColumns<
+      typeof organizationDataExports.$inferSelect,
+      SelectedDataExportRow,
+      (typeof UNPROJECTED_DATA_EXPORT_COLUMNS)[number]
+    > extends never
+      ? true
+      : never;
+    true satisfies UnbackedProjectionKeys<
+      typeof organizationDataExports.$inferSelect,
+      SelectedDataExportRow,
+      (typeof UNPROJECTED_DATA_EXPORT_COLUMNS)[number]
+    > extends never
+      ? true
+      : never;
     const row = rows.at(0);
+    // An export the caller may no longer read answers as one that is absent.
     if (row === undefined) {
       return Result.err(
         new HandlerError({

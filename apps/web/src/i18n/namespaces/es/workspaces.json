@@ -559,7 +559,7 @@
     },
     "create": {
       "matterName": "Nombre del asunto",
-      "personalDescription": "Los asuntos personales son privados y no requieren cliente. Puede promocionarlos más tarde para compartir con el equipo."
+      "personalDescription": "El cliente es opcional. Puede añadirlo más tarde; eso no cambia quién ve el asunto."
     },
     "createNewWorkspace": "Crear nuevo asunto",
     "defaultName": "Sin título",
@@ -1051,11 +1051,10 @@
         "third_party": "Tercero",
         "witness": "Testigo"
       },
-      "personalDescription": "Los asuntos personales son privados. Promocione a un cliente para compartir con el equipo.",
+      "personalDescription": "Este asunto no tiene cliente. Añadir uno no cambia quién lo ve.",
       "personalLabel": "Personal",
       "promoteCta": "Promocionar a cliente",
-      "promoteDescription": "Asigne un cliente para compartir este asunto con el equipo. Es irreversible: los asuntos promocionados no pueden volver a ser personales.",
-      "promoteToClientConfirm": "El asunto <bdi>{matterName}</bdi> se asignará a <bdi>{clientName}</bdi> y se compartirá con el equipo. No podrá volver a ser personal.",
+      "promoteDescription": "Asigne un cliente a este asunto. Quién lo ve no cambia. Puede cambiar el cliente más adelante, pero no quitarlo.",
       "promotedSuccess": "Asunto promocionado",
       "recentClients": "Clientes recientes",
       "removeClient": "Eliminar cliente",
@@ -1426,6 +1425,19 @@
       },
       "useTemplate": "Usar preajuste…",
       "viewSettings": "Configuración de vista"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administradores y asignados",
+      "adminsAndAssignedDescription": "Propietarios, administradores y personas asignadas al asunto",
+      "allMembers": "Todo el equipo",
+      "allMembersDescription": "Todos los miembros del equipo excepto los usuarios externos",
+      "assignedOnly": "Solo asignados",
+      "assignedOnlyDescription": "Solo las personas asignadas al asunto",
+      "label": "Quién puede verlo",
+      "widenConfirm": "Cambiar visibilidad",
+      "widenTitle": "¿Mostrar este asunto a más personas?",
+      "widenToAdminsAndAssigned": "Los propietarios y administradores podrán abrir este asunto y sus documentos sin estar asignados.",
+      "widenToAllMembers": "Todos los miembros del equipo excepto los usuarios externos podrán abrir este asunto y sus documentos sin estar asignados."
     },
     "workflow": {
       "largeRunPrompt": {

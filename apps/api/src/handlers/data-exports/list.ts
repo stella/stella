@@ -16,6 +16,10 @@ import {
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { paginationCursorSchema } from "@/api/lib/custom-schema";
+import {
+  dataExportMatterIdsSql,
+  readableStoredDataExports,
+} from "@/api/lib/data-export/stored-export-access";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import type {
@@ -29,8 +33,8 @@ const config = {
   description:
     "List the organization's data exports, newest first, with status, " +
     "progress, part count and expiry; data-exports.get lists the parts. " +
-    "Paginate with limit and cursor. " +
-    "Organization owners and admins only.",
+    "Paginate with limit and cursor; a page leaves out exports of matters " +
+    "the caller cannot see. Organization owners and admins only.",
   permissions: { dataExport: ["read"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: {
@@ -57,7 +61,7 @@ const config = {
 
 const listDataExports = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, query }) {
+  async function* ({ safeDb, session, query, user }) {
     const limit = normalizeTenantPageLimit(
       query.limit ?? DATA_EXPORT_PAGE_SIZE_DEFAULT,
     );
@@ -74,13 +78,14 @@ const listDataExports = createSafeRootHandler(
         }),
       );
     }
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const read = yield* Result.await(
+      safeDb(async (tx) => {
+        const pageRows = await tx
           .select({
             ...dataExportListColumns,
             createdAtCursor:
               dataExportCreatedAtCursor.cursorValue.as("created_at_cursor"),
+            matterIds: dataExportMatterIdsSql,
           })
           .from(organizationDataExports)
           .where(
@@ -102,14 +107,31 @@ const listDataExports = createSafeRootHandler(
             desc(organizationDataExports.createdAt),
             desc(organizationDataExports.id),
           )
-          .limit(limit + 1),
-      ),
+          .limit(limit + 1);
+        return {
+          rows: pageRows,
+          readable: new Set(
+            (
+              await readableStoredDataExports({
+                tx,
+                organizationId: session.activeOrganizationId,
+                userId: user.id,
+                exports: pageRows,
+              })
+            ).map(({ id }) => id),
+          ),
+        };
+      }),
     );
+    const { rows, readable } = read;
     // Finished part metadata is available on the detail endpoint, keeping
     // list pages bounded independently of the number of export parts.
     type UnselectedDataExportColumn =
       (typeof UNPROJECTED_DATA_EXPORT_COLUMNS)[number] | "parts";
-    type SelectedDataExportRow = Omit<(typeof rows)[number], "createdAtCursor">;
+    type SelectedDataExportRow = Omit<
+      (typeof rows)[number],
+      "createdAtCursor" | "matterIds"
+    >;
     true satisfies UnprojectedColumns<
       typeof organizationDataExports.$inferSelect,
       SelectedDataExportRow,
@@ -131,11 +153,15 @@ const listDataExports = createSafeRootHandler(
       cursorForItem: (item) =>
         dataExportCreatedAtCursor.encode(item.createdAtCursor, item.id),
     });
+    // The cursor follows the stored order; an export the caller may not read
+    // is left out of its page, so a page can hold fewer items than its limit.
     return Result.ok({
       ...page,
-      items: page.items.map(({ createdAtCursor: _cursor, ...row }) =>
-        toDataExportListItem(row),
-      ),
+      items: page.items
+        .filter(({ id }) => readable.has(id))
+        .map(({ createdAtCursor: _cursor, matterIds: _matterIds, ...row }) =>
+          toDataExportListItem(row),
+        ),
     });
   },
 );

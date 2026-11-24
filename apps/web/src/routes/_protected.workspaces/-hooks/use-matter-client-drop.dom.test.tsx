@@ -10,7 +10,7 @@ import type { AcceptedMatterClientDrop } from "@/routes/_protected.workspaces/-c
 
 GlobalRegistrator.register();
 const { act } = await import("react");
-const { cleanup, fireEvent, render, renderHook, waitFor } =
+const { cleanup, fireEvent, renderHook, waitFor } =
   await import("@testing-library/react");
 const { QueryClient } = await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
@@ -50,7 +50,6 @@ const mount = () => {
   const { result } = renderHook(
     () =>
       useMatterClientDropState({
-        isPending: false,
         mutate: (variables, callbacks) => {
           calls.push({ variables, callbacks });
         },
@@ -190,7 +189,7 @@ test("a failed forward move shows an error without offering Undo", async () => {
   );
 });
 
-test("promoting a personal matter waits for confirmation and offers no Undo", async () => {
+test("promoting a personal matter applies at once and offers no Undo", async () => {
   const harness = mount();
   act(() => {
     harness.result.current.onMatterDrop({
@@ -201,15 +200,16 @@ test("promoting a personal matter waits for confirmation and offers no Undo", as
       clientName: MOVE.clientName,
     });
   });
-  expect(harness.calls).toHaveLength(0);
-  const dialog = render(harness.result.current.promotionDialog, { wrapper });
-  await act(async () => {
-    fireEvent.click(
-      dialog.getByRole("button", {
-        name: messages.workspaces.parties.promoteCta,
-      }),
-    );
-  });
+  expect(harness.calls.map(({ variables }) => variables)).toEqual([
+    {
+      workspaceId: MOVE.matterId,
+      update: {
+        type: "clientId",
+        value: MOVE.clientId,
+        expectedClientId: null,
+      },
+    },
+  ]);
   await harness.succeed(harness.calls.at(0));
   expect(document.querySelector('[data-slot="toast-action"]')).toBeNull();
   expect(

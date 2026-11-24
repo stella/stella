@@ -499,6 +499,8 @@
       "localRunAnonymizedRefusal": "Programmēšanas aģents jūsu datorā lasa jūsu dokumentus tādus, kādi tie ir, tāpēc tam adresētu ziņu nevar anonimizēt. Nosūtiet to bez anonimizācijas.",
       "matterContactCapacityExceeded": "Šajā lietā ir vairāk kontaktu, nekā iespējams parādīt. Noņemiet redzamās kontaktu piesaistes, lai parādītu pārējos kontaktus.",
       "matterContactCapacityReached": "Šī lieta ir sasniegusi kontaktu skaita ierobežojumu. Pirms pievienojat vēl vienu kontaktu, noņemiet vienu kontakta piesaisti.",
+      "matterStewardHandoverRequired": "Ja lietu redz tikai piešķirtie cilvēki, tai jāpaliek piešķirtam vismaz vienam komandas dalībniekam. Vispirms kādu piešķiriet.",
+      "matterVisibilityWideningUnconfirmed": "Šīs izmaiņas padarīs lietu redzamu vairāk cilvēkiem. Apstipriniet tās un mēģiniet vēlreiz.",
       "mcpAuthorizationApprovalRequired": "Lai varētu izveidot savienojumu, administratoram šis savienotājs ir jāapstiprina.",
       "notOrganizationMember": "Jūs neesat šīs organizācijas dalībnieks.",
       "organizationDataBoxLimitReached": "Šī organizācija ir sasniegusi datu pastkastu limitu. Pirms jaunas pievienošanas noņemiet vienu datu pastkasti.",

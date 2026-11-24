@@ -442,6 +442,35 @@ export const getChatToolTitleKey = (toolName: string): ChatToolTitleKey => {
     : toolTitleKey(label);
 };
 
+/** The glyph a card leads with for a step of a tool. */
+export type ChatToolIcon = "browser" | "edit" | "web";
+
+/**
+ * Keyed by title, not tool name: tools that share a title (the web chat's
+ * browser step and a coding agent's step in the member's Chrome) are one
+ * thing to the reader, so they share the glyph too. Every other title leads
+ * with the edit glyph.
+ */
+const CHAT_TOOL_ICON_BY_LABEL = {
+  fetch_url: "web",
+  harness_web_search: "web",
+  "use-browser": "browser",
+  web_search: "web",
+} as const satisfies Record<
+  Extract<
+    ChatToolLabel,
+    "fetch_url" | "harness_web_search" | "use-browser" | "web_search"
+  >,
+  ChatToolIcon
+>;
+
+export const getChatToolIcon = (toolName: string): ChatToolIcon => {
+  const label = chatToolLabel(toolName);
+  return isOwnKey(CHAT_TOOL_ICON_BY_LABEL, label)
+    ? CHAT_TOOL_ICON_BY_LABEL[label]
+    : "edit";
+};
+
 const getToolNameFromPart = (part: unknown): string | null => {
   if (
     typeof part !== "object" ||

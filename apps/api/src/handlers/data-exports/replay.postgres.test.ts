@@ -165,6 +165,20 @@ describe.skipIf(!enabled)("organization export replay (postgres)", () => {
                   params,
                   query: {},
                 });
+                // A stored link replays only while its export exists and
+                // the caller may read it.
+                await scopedDb(
+                  async (tx) =>
+                    await tx.insert(organizationDataExports).values({
+                      id: exportId,
+                      organizationId,
+                      requestedBy: userId,
+                      versionScope: "all",
+                      status: "ready",
+                      completedAt: dbClock.now(),
+                      expiresAt: new Date("2099-01-01T00:00:00.000Z"),
+                    }),
+                );
                 await scopedDb(
                   async (tx) =>
                     await tx.insert(requestIdempotencyReceipts).values({

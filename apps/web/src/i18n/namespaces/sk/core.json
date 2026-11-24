@@ -499,6 +499,8 @@
       "localRunAnonymizedRefusal": "Programovací agent vo vašom počítači číta vaše dokumenty tak, ako sú, takže správu preň nemožno anonymizovať. Odošlite ju bez anonymizácie.",
       "matterContactCapacityExceeded": "Tento spis obsahuje viac kontaktov, než možno zobraziť. Odstránením viditeľných prepojení s kontaktmi zobrazíte zostávajúce kontakty.",
       "matterContactCapacityReached": "Tento spis dosiahol limit kontaktov. Pred pridaním ďalšieho kontaktu odstráňte jedno prepojenie s kontaktom.",
+      "matterStewardHandoverRequired": "Keď spis vidia iba priradení ľudia, musí k nemu zostať priradený aspoň jeden člen tímu. Najprv niekoho priraďte.",
+      "matterVisibilityWideningUnconfirmed": "Táto zmena sprístupní spis viacerým ľuďom. Potvrďte ju a skúste to znova.",
       "mcpAuthorizationApprovalRequired": "Skôr než sa budete môcť pripojiť, musí správca tento konektor schváliť.",
       "notOrganizationMember": "Nie ste členom tejto organizácie.",
       "organizationDataBoxLimitReached": "Táto organizácia dosiahla limit dátových schránok. Skôr než pridáte ďalšiu, jednu odstráňte.",

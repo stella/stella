@@ -50,6 +50,10 @@ const MODEL_REFUSED: &str = "stella AI refused the transcription model";
 /// nothing goes to stella AI until the speaker picks another.
 const MODEL_WITHDRAWN: &str =
   "the chosen stella AI transcription model is no longer offered";
+/// The stored model could not be read: nothing goes to stella AI, never the
+/// region's default in its place, until the speaker picks a model.
+const MODEL_UNREADABLE: &str =
+  "the chosen stella AI transcription model could not be read";
 /// The code the API answers with when it no longer offers a named model.
 const MODEL_UNAVAILABLE_CODE: &str = "transcription_model_unavailable";
 /// The longest refusal read for its code.
@@ -643,6 +647,10 @@ async fn spend<T>(
 pub struct CloudSession {
   app: AppHandle,
   stored_model: Option<String>,
+  /// The stored model could not be read at the press, so `stored_model`
+  /// says nothing about the speaker's choice: this dictation sends nothing
+  /// to stella AI, even if a model is picked while it records.
+  stored_model_unreadable: bool,
   language: Option<&'static str>,
   /// The speaker's custom words, sent only if the chosen model reads them.
   vocabulary: Vec<String>,
@@ -676,15 +684,17 @@ pub struct ModelClass {
 }
 
 impl CloudSession {
-  pub const fn new(
+  pub fn new(
     app: AppHandle,
     stored_model: Option<String>,
     language: Option<&'static str>,
     vocabulary: Vec<String>,
   ) -> Self {
+    let stored_model_unreadable = dictation::cloud_model_unreadable(&app);
     Self {
       app,
       stored_model,
+      stored_model_unreadable,
       language,
       vocabulary,
       model: None,
@@ -768,6 +778,9 @@ impl CloudSession {
     )
     .await?;
     self.list_read = Some(read);
+    if self.stored_model_unreadable || dictation::cloud_model_unreadable(&self.app) {
+      return Err(MODEL_UNREADABLE.to_string());
+    }
     let stored_class = dictation::cloud_model_class(&self.app);
     let choice = choose_model(
       self.stored_model.as_deref(),
@@ -983,6 +996,9 @@ fn chunk_vocabulary(takes_vocabulary: bool, words: &[String]) -> &[String] {
 /// stored one is gone ([`choose_model`]). It
 /// names the account it was read for, which every piece is sent for.
 pub(crate) async fn recording_model(app: &AppHandle) -> Result<RecordingModel, String> {
+  if dictation::cloud_model_unreadable(app) {
+    return Err(MODEL_UNREADABLE.to_string());
+  }
   let (namespace, offered) = namespaced_models(cloud_account(app).await?).await?;
   let (_, stored) = dictation::destination(app);
   let stored_class = dictation::cloud_model_class(app);

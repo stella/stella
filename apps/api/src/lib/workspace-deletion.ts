@@ -5,7 +5,6 @@ import {
   WORKSPACE_STATUS,
   workspaceAcceptsWrites,
 } from "@stll/api-contract/workspace-status";
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
@@ -41,6 +40,7 @@ import {
   lockLegalHoldOrganization,
   requireNoHold,
 } from "@/api/lib/workspaces/legal-holds/holds";
+import { roleReachesMatterSql } from "@/api/lib/workspaces/matter-visibility";
 
 const WORKSPACE_DELETION_DEADLOCK_RETRIES = 2;
 
@@ -113,24 +113,20 @@ const lockAuthorizedActorRole = async ({
 };
 
 const actorCanAccessWorkspace = async ({
-  actorRole,
   actorUserId,
   organizationId,
   tx,
   workspace,
 }: {
-  actorRole: MemberRole;
   actorUserId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   tx: Transaction;
-  workspace: { clientId: string | null; id: SafeId<"workspace"> };
+  workspace: { reachesByRole: boolean; id: SafeId<"workspace"> };
 }): Promise<boolean> => {
-  // This condition only preserves the assignment-lock scope. The database
-  // rule in the later statement alone decides matter reach.
-  if (!(
-    workspace.clientId !== null &&
-    CLIENT_MATTER_ADMIN_ROLES.some((role) => role === actorRole)
-  )) {
+  // This condition only preserves the assignment-lock scope: a matter the
+  // actor's role reaches through its visibility needs no assignment lock. The
+  // database rule in the later statement alone decides matter reach.
+  if (!workspace.reachesByRole) {
     await lockMatterAccessAssignments({
       tx,
       organizationId,
@@ -204,6 +200,7 @@ export const executeAuthorizedWorkspaceDeletion = async (
             name: workspaces.name,
             reference: workspaces.reference,
             status: workspaces.status,
+            reachesByRole: roleReachesMatterSql(actorRole),
           })
           .from(workspaces)
           .where(
@@ -219,7 +216,6 @@ export const executeAuthorizedWorkspaceDeletion = async (
         }
 
         const authorized = await actorCanAccessWorkspace({
-          actorRole,
           actorUserId,
           organizationId,
           tx,

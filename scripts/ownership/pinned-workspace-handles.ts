@@ -56,11 +56,6 @@ export default {
         reason: "Scopes a signing session to its stored workspace.",
       },
       {
-        path: "apps/api/src/lib/flows/flow-executor.ts",
-        reason:
-          "Flow steps, a member run not yet on the run actor (scripts/queue-authority-baseline.json).",
-      },
-      {
         path: "apps/api/src/lib/uploads/document-naming/document-naming.ts",
         reason:
           "Organization automation renaming an upload as a matter member.",

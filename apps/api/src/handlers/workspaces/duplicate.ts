@@ -105,6 +105,7 @@ import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { portableLayout } from "@/api/lib/views/utils";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
+import { effectiveMatterVisibility } from "@/api/lib/workspaces/matter-visibility";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -582,6 +583,7 @@ export const createDuplicateWorkspace = (
               billingReference: true,
               color: true,
               leadUserId: true,
+              visibility: true,
             },
           });
 
@@ -831,6 +833,8 @@ export const createDuplicateWorkspace = (
           leadUserId: snapshot.workspace.leadUserId,
           name: newName,
           reference,
+          // The copy is visible to the same people as the original.
+          visibility: effectiveMatterVisibility(snapshot.workspace),
         });
 
         if (snapshot.members.length > 0) {

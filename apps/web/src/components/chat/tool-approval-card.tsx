@@ -53,6 +53,7 @@ import { AuthorNameRequiredDialog } from "@/components/chat/author-name-required
 import { useChatApproval } from "@/components/chat/chat-approval-context";
 import {
   getApprovalToolName,
+  getChatToolIcon,
   getChatToolTitleKey,
   isApprovalOnceChatToolName,
   isExternalInputChatToolName,
@@ -65,6 +66,7 @@ import {
 import type {
   ApprovalToolName,
   ApprovalToolPart,
+  ChatToolIcon,
   ChatUITools,
   PendingApprovalToolPart,
   SuggestChangesApplyOutput,
@@ -1466,6 +1468,12 @@ const getExternalMcpConnectorSlug = (
   return connectorSlug ?? null;
 };
 
+const TOOL_ICON_COMPONENTS = {
+  browser: BrowserControlIcon,
+  edit: PencilIcon,
+  web: GlobeIcon,
+} as const satisfies Record<ChatToolIcon, unknown>;
+
 const ToolApprovalLeadingIcon = ({
   iconHref,
   toolName,
@@ -1488,15 +1496,6 @@ const ToolApprovalLeadingIcon = ({
     );
   }
 
-  if (toolName === "web_search" || toolName === "fetch_url") {
-    return <GlobeIcon className="text-muted-foreground size-4 shrink-0" />;
-  }
-
-  if (toolName === BROWSER_CONTROL_TOOL_NAME) {
-    return (
-      <BrowserControlIcon className="text-muted-foreground size-4 shrink-0" />
-    );
-  }
-
-  return <PencilIcon className="text-muted-foreground size-4 shrink-0" />;
+  const Icon = TOOL_ICON_COMPONENTS[getChatToolIcon(toolName ?? "")];
+  return <Icon className="text-muted-foreground size-4 shrink-0" />;
 };

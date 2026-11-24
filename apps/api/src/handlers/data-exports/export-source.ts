@@ -2,13 +2,15 @@
 //
 // Every read runs through the requester's membership-scoped handle: for an
 // organisation owner or admin, RLS (`stella_authorized_workspaces`) admits
-// every client matter of the organisation plus the requester's own personal
+// every matter visible to admins plus the requester's own assigned-only
 // matters, and nothing of another organisation. The export therefore never
 // needs a row-level-security bypass.
 //
-// Personal matters (no client) are never exported: an organisation export
-// is visible to every owner and admin, and a personal matter belongs to one
-// member. `isOrganizationMatter` is applied to every matter read.
+// Matters visible to assigned members only are never exported: they are not
+// open to the organisation's admins, while an organisation export is meant
+// for them. `isOrganizationMatter` is applied to every matter read. A stored
+// export is still readable only by someone who can see every matter in it
+// (`lib/data-export/stored-export-access.ts`).
 //
 // The export is low-priority work, so it reads gently: every query is one
 // keyset page (by id, on an indexed tenant column) in its own short
@@ -17,11 +19,12 @@
 // File bytes are streamed, never read whole.
 
 import { panic } from "better-result";
-import { and, asc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { AnyColumn, SQL } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import * as v from "valibot";
 
+import { MATTER_VISIBILITY } from "@stll/api-contract/matter-visibility";
 import { compareCodeUnit } from "@stll/collation";
 
 import type { ScopedDb } from "@/api/db/safe-db-types";
@@ -100,6 +103,7 @@ import {
   brandPersistedEntityVersionId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { effectiveMatterVisibilitySql } from "@/api/lib/workspaces/matter-visibility";
 
 const dataExportReadFileFailed = failureSink({
   event: "data_export.read_file",
@@ -144,8 +148,11 @@ const chunk = <T>(items: readonly T[], size: number): T[][] => {
   return chunks;
 };
 
-/** Client matters only: personal matters stay out of organisation exports. */
-const isOrganizationMatter = isNotNull(workspaces.clientId);
+/** Matters open to admins: assigned-only matters stay out of organisation exports. */
+const isOrganizationMatter = ne(
+  effectiveMatterVisibilitySql(),
+  MATTER_VISIBILITY.assignedOnly,
+);
 
 // Keyset condition on a uuid id column; the cursor is the last id read.
 const after = (column: AnyColumn, afterId: string | null) =>
