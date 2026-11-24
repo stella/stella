@@ -175,8 +175,12 @@ const replaceText = async (entityId: string) => {
   `);
 };
 
-const RESTORE_REFUSAL =
-  "only a queued copy its upsert state keeps serving can be restored";
+/** The restore guard's refusals: this migration's, and the guard it replaces. */
+const RESTORE_REFUSALS = [
+  "only a queued copy its upsert state keeps serving can be restored",
+  "only a never-deleted revision can be restored",
+  "only a revision its unchanged upsert state still names can be restored",
+];
 
 /** Every message of a failed statement, down its chain of causes. */
 const messagesOf = (error: unknown): string =>
@@ -209,7 +213,8 @@ const guardAdmitsRestore = async (revision: string): Promise<boolean> => {
   if (attempted.error.cause instanceof TransactionRollbackError) {
     return true;
   }
-  if (messagesOf(attempted.error).includes(RESTORE_REFUSAL)) {
+  const messages = messagesOf(attempted.error);
+  if (RESTORE_REFUSALS.some((refusal) => messages.includes(refusal))) {
     return false;
   }
   return panic("The restore failed for another reason", attempted.error);
