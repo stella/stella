@@ -134,7 +134,13 @@ export const unavailableMessage = (
 export const shownCloudModel = (
   offered: CloudModels,
   cloudModel: string | null,
+  cloudModelUnreadable = false,
 ): CloudModel | null => {
+  // A stored choice that cannot be read is no choice to show: the speaker
+  // picks one, and the default is not presented as if chosen.
+  if (cloudModelUnreadable) {
+    return null;
+  }
   if (cloudModel !== null) {
     return offered.models.find(({ id }) => id === cloudModel) ?? null;
   }
@@ -154,11 +160,13 @@ export const shownCloudModel = (
  *  the Transcription group. */
 export const DictationDestination = ({
   cloudModel,
+  cloudModelUnreadable = false,
   destination,
   onDestinationChange,
   onModelChange,
 }: {
   cloudModel: string | null;
+  cloudModelUnreadable?: boolean | undefined;
   destination: DictationDestinationValue;
   onDestinationChange: (destination: DictationDestinationValue) => void;
   onModelChange: (modelId: string) => void;
@@ -169,7 +177,7 @@ export const DictationDestination = ({
     value === "local" ? t("local") : t("cloud");
   const chosen =
     destination === "cloud" && offered !== null
-      ? shownCloudModel(offered, cloudModel)
+      ? shownCloudModel(offered, cloudModel, cloudModelUnreadable)
       : null;
   const destinationIds = settingsRowIds("dictation-destination");
   const modelIds = settingsRowIds("dictation-cloud-model");

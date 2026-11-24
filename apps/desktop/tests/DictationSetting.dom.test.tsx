@@ -981,6 +981,59 @@ test("a stored model no longer offered stays the choice until another is picked"
   ).toContain("Voxtral Mini Transcribe");
 });
 
+test("a stored model that cannot be read shows none chosen, never the default, until one is picked", async () => {
+  const stored: unknown[] = [];
+  const snapshot = {
+    ...ENABLED_SNAPSHOT,
+    cloudAvailable: true,
+    cloudModel: null,
+    cloudModelUnreadable: true,
+    destination: "cloud",
+  };
+  const view = await renderSetting(snapshot, (command, payload) => {
+    if (command === "dictation_get_cloud_models") {
+      return CLOUD_MODELS;
+    }
+    if (command === "dictation_set_cloud_model") {
+      stored.push(payload);
+      return {
+        ...snapshot,
+        cloudModel: "mistralai/voxtral-mini-transcribe",
+        cloudModelUnreadable: false,
+      };
+    }
+    return undefined;
+  });
+  // The region's default is offered but not shown as chosen.
+  await waitFor(() => {
+    expect(
+      view.getByRole("combobox", {
+        name: defaultMessages.dictation.destination.model,
+      }).textContent,
+    ).toContain(defaultMessages.dictation.destination.chooseModel);
+  });
+  expect(stored).toEqual([]);
+  const listbox = await openSelect(
+    view,
+    defaultMessages.dictation.destination.model,
+  );
+  const shown = within(listbox).getByRole("option", {
+    name: "Voxtral Mini Transcribe",
+  });
+  await act(async () => {
+    fireEvent.pointerDown(shown, { pointerType: "mouse" });
+    fireEvent.click(shown);
+  });
+  await waitFor(() => {
+    expect(stored).toEqual([{ modelId: "mistralai/voxtral-mini-transcribe" }]);
+  });
+  expect(
+    view.getByRole("combobox", {
+      name: defaultMessages.dictation.destination.model,
+    }).textContent,
+  ).toContain("Voxtral Mini Transcribe");
+});
+
 test("a model outside the organization's region is named with its provider and says so", async () => {
   const view = await renderSetting(
     {
