@@ -433,6 +433,16 @@ export const RESOURCE_MUTATION_CONTRACTS = {
     ],
     resources: [RESOURCE_TYPE.ORGANIZATION],
   },
+  importSamlSsoMetadata: {
+    writes: [
+      {
+        type: "handler-route",
+        method: "POST",
+        route: "/organization-settings/sso/saml/parse-metadata",
+      },
+    ],
+    resources: [RESOURCE_TYPE.ORGANIZATION],
+  },
   removeOrganizationSsoProvider: {
     writes: [
       {

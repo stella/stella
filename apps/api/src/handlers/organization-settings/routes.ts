@@ -44,6 +44,7 @@ import createOrganizationSamlSsoProvider from "@/api/handlers/organization-setti
 import deleteOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/delete-domain";
 import deleteOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/delete-provider";
 import readOrganizationSso from "@/api/handlers/organization-settings/sso/get";
+import parseOrganizationSamlMetadata from "@/api/handlers/organization-settings/sso/parse-saml-metadata";
 import testOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/test-provider";
 import updateOrganizationSsoPolicy from "@/api/handlers/organization-settings/sso/update-policy";
 import verifyOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/verify-domain";
@@ -98,6 +99,7 @@ export const organizationSettingsRoute = mount(
         "/providers": { POST: createOrganizationSsoProvider },
         "/providers/saml": { POST: createOrganizationSamlSsoProvider },
         "/providers/test": { POST: testOrganizationSsoProvider },
+        "/saml/parse-metadata": { POST: parseOrganizationSamlMetadata },
         "/providers/:providerId": { DELETE: deleteOrganizationSsoProvider },
         "/domains": { POST: createOrganizationSsoDomain },
         "/domains/:domainId/verify": { POST: verifyOrganizationSsoDomain },

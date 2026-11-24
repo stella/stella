@@ -6,6 +6,7 @@ import type {
   CreateSamlSsoProviderBody,
   DiscoverSsoBody,
   OrganizationSsoPolicyRequirement,
+  ParseSamlMetadataBody,
   SsoProtocol,
   TestOidcSsoProviderBody,
 } from "@stll/api-contract/sso";
@@ -59,6 +60,17 @@ export const probeOidcSsoProvider = async (body: TestOidcSsoProviderBody) =>
     async () =>
       unwrapApiResponse(
         await api["organization-settings"].sso.providers.test.post(body),
+      ),
+  );
+
+export const importSamlSsoMetadata = async (body: ParseSamlMetadataBody) =>
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.saml.parse-metadata.post",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso.saml["parse-metadata"].post(
+          body,
+        ),
       ),
   );
 

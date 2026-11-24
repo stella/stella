@@ -605,6 +605,7 @@ export const FAILURE_TAGS = [
   "publisher_target_refused",
   "robots_disallowed",
   "robots_unavailable",
+  "saml_metadata_error",
   "sso_domain_dns_error",
   "sso_management_error",
 ] as const;

@@ -17,6 +17,7 @@ import type {
 import { Badge } from "@stll/ui/badge";
 import { Button } from "@stll/ui/button";
 import { Field, FieldLabel } from "@stll/ui/field";
+import { openFilePicker } from "@stll/ui/file-picker";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
 import { Switch } from "@stll/ui/switch";
@@ -30,6 +31,7 @@ import { SecretInput } from "@/components/secret-input";
 import {
   addOrgSsoDomain,
   fetchOrgSsoSettings,
+  importSamlSsoMetadata,
   probeOidcSsoProvider,
   registerOidcSsoProvider,
   registerSamlSsoProvider,
@@ -38,6 +40,8 @@ import {
   saveOrgSsoPolicy,
   verifyOrgSsoDomain,
 } from "@/features/sso/sso-api";
+import { browserAuthBaseUrl } from "@/lib/api-url";
+import { APIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
 import {
@@ -311,11 +315,75 @@ const AddSamlProviderForm = ({
 }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
+  const [draftProviderId] = useState(() => {
+    const bytes = new Uint8Array(6);
+    crypto.getRandomValues(bytes);
+    const suffix = Array.from(bytes, (b) =>
+      b.toString(16).padStart(2, "0"),
+    ).join("");
+    return `sso_saml_${suffix}`;
+  });
+  let authBaseUrl = browserAuthBaseUrl();
+  while (authBaseUrl.endsWith("/")) {
+    authBaseUrl = authBaseUrl.slice(0, -1);
+  }
+  const draftAcsUrl = `${authBaseUrl}/sso/saml2/sp/acs/${encodeURIComponent(draftProviderId)}`;
+  const draftSpMetadataUrl = `${authBaseUrl}/sso/saml2/sp/metadata?providerId=${encodeURIComponent(draftProviderId)}`;
   const [displayName, setDisplayName] = useState("");
+  const [metadataUrl, setMetadataUrl] = useState("");
   const [issuer, setIssuer] = useState("");
   const [entryPoint, setEntryPoint] = useState("");
   const [cert, setCert] = useState("");
   const [domainsInput, setDomainsInput] = useState("");
+
+  const importMetadataMutationFn = resourceMutation({
+    mutation: "importSamlSsoMetadata",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: async (
+      input:
+        { source: "url"; metadataUrl: string } | { source: "xml"; xml: string },
+    ) => await importSamlSsoMetadata(input),
+  });
+  const importMetadataMutation = useMutation({
+    mutationFn: importMetadataMutationFn,
+    onSuccess: (parsed) => {
+      setIssuer(parsed.issuer);
+      setEntryPoint(parsed.entryPoint);
+      setCert(parsed.cert);
+      stellaToast.add({
+        title: t("settings.organization.sso.samlMetadataImported"),
+        type: "success",
+      });
+    },
+    onError: (error) => {
+      notifyUserError(error, t("errors.actionFailed"));
+    },
+  });
+
+  const handleMetadataFile = async (file: File | undefined) => {
+    if (file === undefined) {
+      return;
+    }
+    if (file.size > 512 * 1024) {
+      const message = t("settings.organization.sso.samlMetadataFileTooLarge");
+      notifyUserError(new APIError({ status: 400, message }), message);
+      return;
+    }
+    const xml = await file.text();
+    importMetadataMutation.mutate({ source: "xml", xml });
+  };
+
+  const handleOpenMetadataPicker = () => {
+    openFilePicker({
+      accept: ".xml,application/xml,text/xml",
+      onPick: ([file]) => {
+        handleMetadataFile(file).catch((error: unknown) => {
+          notifyUserError(error, t("errors.actionFailed"));
+        });
+      },
+    });
+  };
 
   const createProviderMutation = useMutation({
     mutationFn: resourceMutation({
@@ -328,6 +396,7 @@ const AddSamlProviderForm = ({
           .map((d) => d.trim())
           .filter((d) => d.length > 0);
         return await registerSamlSsoProvider({
+          providerId: draftProviderId,
           displayName: displayName.trim(),
           issuer: issuer.trim(),
           entryPoint: entryPoint.trim(),
@@ -357,6 +426,26 @@ const AddSamlProviderForm = ({
           createProviderMutation.mutate();
         }}
       >
+        <div className="border-border/60 bg-background/60 space-y-2 rounded-md border p-2.5 text-xs">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">
+              {t("settings.organization.sso.spMetadataUrlLabel")}:
+            </span>
+            <code className="bg-muted rounded-sm px-1.5 py-0.5 break-all">
+              {draftSpMetadataUrl}
+            </code>
+            <CopyControl size="xs" text={draftSpMetadataUrl} variant="ghost" />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-muted-foreground">
+              {t("settings.organization.sso.acsUrlLabel")}:
+            </span>
+            <code className="bg-muted rounded-sm px-1.5 py-0.5 break-all">
+              {draftAcsUrl}
+            </code>
+            <CopyControl size="xs" text={draftAcsUrl} variant="ghost" />
+          </div>
+        </div>
         <Field>
           <FieldLabel>{t("common.displayName")}</FieldLabel>
           <Input
@@ -365,6 +454,47 @@ const AddSamlProviderForm = ({
             required
             value={displayName}
           />
+        </Field>
+        <Field>
+          <FieldLabel>
+            {t("settings.organization.sso.samlMetadataImportLabel")}
+          </FieldLabel>
+          <div className="flex flex-wrap gap-2">
+            <Input
+              className="min-w-48 flex-1"
+              onChange={(e) => setMetadataUrl(e.target.value)}
+              placeholder="https://.../federationmetadata.xml"
+              type="url"
+              value={metadataUrl}
+            />
+            <Button
+              disabled={
+                importMetadataMutation.isPending || metadataUrl.trim() === ""
+              }
+              disabledReason={t(
+                "settings.organization.sso.samlMetadataImportLabel",
+              )}
+              onClick={() =>
+                importMetadataMutation.mutate({
+                  source: "url",
+                  metadataUrl: metadataUrl.trim(),
+                })
+              }
+              type="button"
+              variant="outline"
+            >
+              {t("settings.organization.sso.samlMetadataImportUrl")}
+            </Button>
+            <Button
+              disabled={importMetadataMutation.isPending}
+              disabledReason={t("common.loading")}
+              onClick={handleOpenMetadataPicker}
+              type="button"
+              variant="outline"
+            >
+              {t("settings.organization.sso.samlMetadataUploadXml")}
+            </Button>
+          </div>
         </Field>
         <Field>
           <FieldLabel>

@@ -1210,6 +1210,10 @@ export const OUTBOUND_PERMIT_GRANT_OWNERS = [
       "Issues request authority for OIDC discovery metadata validation before persisting a provider.",
   },
   {
+    path: "apps/api/src/handlers/organization-settings/sso/parse-saml-metadata.ts",
+    reason: "Issues request authority for SAML IdP metadata XML retrieval.",
+  },
+  {
     path: "apps/api/src/handlers/organization-settings/sso/test-provider.ts",
     reason: "Issues request authority for OIDC discovery metadata validation.",
   },
