@@ -20,7 +20,7 @@ const ORGANIZATION_AUDIT_EXPORT_ENQUEUE_FAILED = failureSink({
 const config = {
   contract: "patch",
   description:
-    "Request an archive of the active organization's whole audit log for yourself, which deleting the organization requires. An archive still building, or ready and holding every entry, is returned as it is. Owners only.",
+    "Request an archive of the active organization's whole audit log for yourself, recommended before deleting the organization. An archive still building, or ready and holding every entry, is returned as it is. Owners only.",
   permissions: { organization: ["delete"] },
   accountAccess: ACCOUNT_ACCESS.accountControl,
   realtime: noResourceSetUpdates(

@@ -230,7 +230,16 @@ test("successful leave remains completed when destination refresh fails", async 
   expect(requests).toBe(1);
 });
 
-test("deletion waits for a current activity log archive the owner can request", async () => {
+const deleteButton = () =>
+  screen.getByRole("button", { name: messages.admin.deleteOrganization });
+
+/** Opens the deletion confirmation and returns its dialog. */
+const openDeletion = async () => {
+  fireEvent.click(deleteButton());
+  return await screen.findByRole("alertdialog");
+};
+
+test("deletion stays open without an archive, and the owner can still request one", async () => {
   const requests: { method: string; path: string }[] = [];
   globalThis.fetch = Object.assign(
     async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -243,11 +252,7 @@ test("deletion waits for a current activity log archive the owner can request", 
     },
   );
   mount(true, undefined, null);
-  expect(
-    screen
-      .getByRole("button", { name: messages.admin.deleteOrganization })
-      .getAttribute("aria-disabled"),
-  ).toBe("true");
+  expect(deleteButton().getAttribute("aria-disabled")).toBeNull();
 
   fireEvent.click(
     screen.getByRole("button", { name: messages.admin.auditArchiveRequest }),
@@ -262,14 +267,27 @@ test("deletion waits for a current activity log archive the owner can request", 
     method: "POST",
     path: "/v1/organizations/audit-export",
   });
-  expect(
-    screen
-      .getByRole("button", { name: messages.admin.deleteOrganization })
-      .getAttribute("aria-disabled"),
-  ).toBe("true");
+  expect(deleteButton().getAttribute("aria-disabled")).toBeNull();
 });
 
-test("an outdated archive offers a new export and keeps deletion closed", () => {
+test("the confirmation recommends the archive only while none is current", async () => {
+  mount();
+  expect(
+    within(await openDeletion()).queryByText(
+      messages.admin.deleteWithoutAuditArchive,
+    ),
+  ).toBeNull();
+  cleanup();
+
+  mount(true, undefined, null);
+  expect(
+    within(await openDeletion()).getByText(
+      messages.admin.deleteWithoutAuditArchive,
+    ),
+  ).toBeDefined();
+});
+
+test("an outdated archive offers a new export and the confirmation recommends it", async () => {
   mount(true, undefined, { ...CURRENT_ARCHIVE, coversCurrentTrail: false });
   expect(screen.getByRole("status").textContent).toBe(
     messages.admin.auditArchiveOutdated,
@@ -277,20 +295,37 @@ test("an outdated archive offers a new export and keeps deletion closed", () => 
   expect(
     screen.getByRole("button", { name: messages.admin.auditArchiveRequestNew }),
   ).toBeDefined();
+  expect(deleteButton().getAttribute("aria-disabled")).toBeNull();
   expect(
-    screen
-      .getByRole("button", { name: messages.admin.deleteOrganization })
-      .getAttribute("aria-disabled"),
-  ).toBe("true");
+    within(await openDeletion()).getByText(
+      messages.admin.deleteWithoutAuditArchive,
+    ),
+  ).toBeDefined();
 });
 
-test("a deletion refused for an outdated archive says to export again", async () => {
-  refuse("organization_audit_export_stale", "Export the activity log again.");
-  mount();
-  fireEvent.click(
-    screen.getByRole("button", { name: messages.admin.deleteOrganization }),
+test("an archive the owner has not downloaded is recommended, not required", async () => {
+  const requests: { path: string; body: unknown }[] = [];
+  const completed = mount(true, undefined, {
+    ...CURRENT_ARCHIVE,
+    downloaded: false,
+  });
+  expect(screen.getByRole("status").textContent).toBe(
+    messages.admin.auditArchiveDownloadFirst,
   );
-  const dialog = await screen.findByRole("alertdialog");
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push({
+        path: new URL(request.url).pathname,
+        body: await request.json(),
+      });
+      return Response.json({ id: "organization-fixture" });
+    },
+  );
+  const dialog = await openDeletion();
+  expect(
+    within(dialog).getByText(messages.admin.deleteWithoutAuditArchive),
+  ).toBeDefined();
   fireEvent.change(within(dialog).getByRole("textbox"), {
     target: { value: "Novak Legal" },
   });
@@ -299,23 +334,14 @@ test("a deletion refused for an outdated archive says to export again", async ()
       name: messages.admin.deleteOrganization,
     }),
   );
-  await waitFor(() =>
-    expect(within(dialog).getByRole("alert").textContent).toContain(
-      messages.admin.auditArchiveOutdated,
-    ),
-  );
-});
 
-test("a ready archive the owner has not downloaded keeps deletion closed", () => {
-  mount(true, undefined, { ...CURRENT_ARCHIVE, downloaded: false });
-  expect(screen.getByRole("status").textContent).toBe(
-    messages.admin.auditArchiveDownloadFirst,
-  );
-  expect(
-    screen
-      .getByRole("button", { name: messages.admin.deleteOrganization })
-      .getAttribute("aria-disabled"),
-  ).toBe("true");
+  await waitFor(() => expect(completed()).toBe(1));
+  expect(requests).toEqual([
+    {
+      path: "/api/auth/organization/delete",
+      body: { organizationId: "organization-fixture" },
+    },
+  ]);
 });
 
 test("returning to the page rereads a failed archive another session replaced", async () => {
@@ -323,19 +349,20 @@ test("returning to the page rereads a failed archive another session replaced", 
     Response.json({ latest: CURRENT_ARCHIVE }),
   );
   mount(true, undefined, { id: CURRENT_ARCHIVE.id, status: "failed" });
-  const deleteButton = () =>
-    screen.getByRole("button", { name: messages.admin.deleteOrganization });
-  expect(deleteButton().getAttribute("aria-disabled")).toBe("true");
 
   returnToPage();
 
   await waitFor(() =>
-    expect(deleteButton().getAttribute("aria-disabled")).toBeNull(),
+    expect(reads).toEqual(["GET /v1/organizations/audit-export"]),
   );
-  expect(reads).toEqual(["GET /v1/organizations/audit-export"]);
+  expect(
+    within(await openDeletion()).queryByText(
+      messages.admin.deleteWithoutAuditArchive,
+    ),
+  ).toBeNull();
 });
 
-test("a failed archive refresh says so and keeps deletion closed", async () => {
+test("a failed archive refresh says so and the confirmation recommends a new archive", async () => {
   const reads = serveLatestArchive(() =>
     Response.json(
       { code: "internal_error", message: "Unavailable" },
@@ -343,9 +370,6 @@ test("a failed archive refresh says so and keeps deletion closed", async () => {
     ),
   );
   mount();
-  const deleteButton = () =>
-    screen.getByRole("button", { name: messages.admin.deleteOrganization });
-  expect(deleteButton().getAttribute("aria-disabled")).toBeNull();
 
   returnToPage();
 
@@ -354,6 +378,11 @@ test("a failed archive refresh says so and keeps deletion closed", async () => {
       messages.common.somethingWentWrong,
     ),
   );
-  expect(deleteButton().getAttribute("aria-disabled")).toBe("true");
   expect(reads).toEqual(["GET /v1/organizations/audit-export"]);
+  expect(deleteButton().getAttribute("aria-disabled")).toBeNull();
+  expect(
+    within(await openDeletion()).getByText(
+      messages.admin.deleteWithoutAuditArchive,
+    ),
+  ).toBeDefined();
 });

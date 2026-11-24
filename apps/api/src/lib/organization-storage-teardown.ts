@@ -35,8 +35,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
-import { requireOrganizationAuditExport } from "@/api/lib/account-export/organization-audit-gate";
-import type { OrganizationAuditExportRefusalCode } from "@/api/lib/account-export/organization-audit-gate";
+import { retainOrganizationAuditArchive } from "@/api/lib/account-export/organization-audit-retention";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import {
@@ -1176,14 +1175,10 @@ export const completeWorkspaceDeletion = async ({
   return teardown;
 };
 
-export type OrganizationDeletionOutcome =
-  | {
-      type: "deleted";
-      requestIds: SafeId<"entityDeletionCleanupRequest">[];
-      /** The owner's archive of the audit trail this deletion removes. */
-      auditExportId: string;
-    }
-  | { type: "refused"; code: OrganizationAuditExportRefusalCode };
+export type OrganizationDeletionOutcome = {
+  type: "deleted";
+  requestIds: SafeId<"entityDeletionCleanupRequest">[];
+};
 
 type CompleteOrganizationDeletionOptions = OrganizationTeardownOptions & {
   /** The owner deleting the organization. */
@@ -1191,17 +1186,17 @@ type CompleteOrganizationDeletionOptions = OrganizationTeardownOptions & {
 };
 
 /**
- * Complete one organization's deletion: require the deleting owner's archive
- * of the audit trail, record every storage-erasure instruction, remove the
- * chat rows that own storage, and delete the organization, all inside the
- * caller's single transaction. This is the only place an organization row is
- * deleted, so no entry point reaches the cascade without the archive.
+ * Complete one organization's deletion: keep the deleting owner's archive of
+ * the audit trail when they hold one, record every storage-erasure
+ * instruction, remove the chat rows that own storage, and delete the
+ * organization, all inside the caller's single transaction. This is the only
+ * place an organization row is deleted.
  *
- * The audit trail cascades with the organization, so the deletion first
- * requires the owner's ready archive of it and refuses, before writing
- * anything, when there is none or when the trail has grown past it. The check
- * runs under the organization row lock, which every audit insert waits for,
- * so no audit row can land between the check and the cascade.
+ * The audit trail cascades with the organization. An owner's ready archive of
+ * it is retained past the deletion; without one the trail goes with the
+ * organization, which the owner confirmed. The archive and organization row
+ * locks are taken first, in the registered order, and every audit insert
+ * waits for the organization lock, so no audit row lands during the cascade.
  *
  * The organization row is deleted here rather than left to the caller so that
  * the instructions and the cascade that strands the objects commit together.
@@ -1224,16 +1219,13 @@ export const completeOrganizationDeletion = async ({
   pagesMax,
   tx,
 }: CompleteOrganizationDeletionOptions): Promise<OrganizationDeletionOutcome> => {
-  const auditExport = await requireOrganizationAuditExport({
+  await retainOrganizationAuditArchive({
     tx,
     organizationId,
     userId: deletedBy,
     lockOrganization: async () =>
       await lockOrganizationForLifecycle(tx, organizationId),
   });
-  if (auditExport.type === "refused") {
-    return auditExport;
-  }
 
   // Every deletion records the intent: a checkout can create the provider
   // record before any entitlement exists, and a missing record erases as done.
@@ -1269,9 +1261,5 @@ export const completeOrganizationDeletion = async ({
   );
   await tx.delete(organization).where(eq(organization.id, organizationId));
 
-  return {
-    type: "deleted",
-    requestIds: teardown.requestIds,
-    auditExportId: auditExport.exportId,
-  };
+  return { type: "deleted", requestIds: teardown.requestIds };
 };

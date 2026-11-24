@@ -26,7 +26,6 @@ import { toAuditLogConditions } from "@/api/handlers/audit-logs/query";
 import { organizationsRoute } from "@/api/handlers/organizations/routes";
 import { routes } from "@/api/http/route";
 import { ACCOUNT_EXPORT_LIMITS } from "@/api/lib/account-export/constants";
-import { ORGANIZATION_AUDIT_EXPORT_REFUSAL_CODE } from "@/api/lib/account-export/organization-audit-gate";
 import {
   countOrganizationAuditRows,
   readAccountExport,
@@ -252,58 +251,54 @@ const recordAuditEntry = async (
   );
 };
 
-describe("organization deletion requires an audit log archive", () => {
-  test("deletion is refused while the owner holds no archive", async () => {
+describe("organization deletion and its audit log archive", () => {
+  test("an owner without an archive deletes the organization and its trail", async () => {
     const created = await createOrganization();
-    const before = await auditRowCount(created.organizationId);
+    await recordAuditEntry(created, null, created.organizationId);
+    expect(await auditRowCount(created.organizationId)).toBeGreaterThan(0);
 
     const deletion = await deleteOrganization(
       created.owner,
       created.organizationId,
     );
 
-    expect(deletion.status).toBe(409);
-    expect(await deletion.json()).toMatchObject({
-      code: ORGANIZATION_AUDIT_EXPORT_REFUSAL_CODE.required,
-    });
-    expect(await organizationExists(created.organizationId)).toBe(true);
-    expect(await auditRowCount(created.organizationId)).toBe(before);
+    expect(deletion.status, await deletion.clone().text()).toBe(200);
+    expect(await organizationExists(created.organizationId)).toBe(false);
+    expect(await auditRowCount(created.organizationId)).toBe(0);
   });
 
-  test("deletion is refused once the trail has entries the archive does not hold", async () => {
+  test("an archive the trail has outgrown is still kept past the deletion", async () => {
     const created = await createOrganization();
     const archived = await exportAndDownload(created);
     await recordAuditEntry(created, null, created.organizationId);
+    const readExport = async () =>
+      (
+        await rootDb
+          .select()
+          .from(accountExports)
+          .where(eq(accountExports.id, archived.exportId))
+      ).at(0);
+    const before = await readExport();
 
     const deletion = await deleteOrganization(
       created.owner,
       created.organizationId,
     );
 
-    expect(deletion.status).toBe(409);
-    expect(await deletion.json()).toMatchObject({
-      code: ORGANIZATION_AUDIT_EXPORT_REFUSAL_CODE.stale,
+    expect(deletion.status, await deletion.clone().text()).toBe(200);
+    expect(await organizationExists(created.organizationId)).toBe(false);
+    const retained = await readExport();
+    expect(retained).toMatchObject({
+      status: "ready",
+      auditRowCount: archived.coverage.rowCount,
     });
-    expect(await organizationExists(created.organizationId)).toBe(true);
-    expect(await auditRowCount(created.organizationId)).toBe(
-      archived.coverage.rowCount + 1,
+    // The deletion restarts the retention window from its own instant.
+    expect(retained?.expiresAt?.getTime() ?? 0).toBeGreaterThan(
+      before?.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY,
     );
-
-    // A new request replaces the outgrown archive, and the replacement holds
-    // the newer entry, so the deletion then proceeds.
-    const replacement = await exportAndDownload(created);
-    expect(replacement.exportId).not.toBe(archived.exportId);
-    expect(replacement.coverage.rowCount).toBe(
-      await auditRowCount(created.organizationId),
-    );
-    const retried = await deleteOrganization(
-      created.owner,
-      created.organizationId,
-    );
-    expect(retried.status, await retried.clone().text()).toBe(200);
   });
 
-  test("a complete archive admits the deletion and stays downloadable by its owner", async () => {
+  test("a complete archive outlives the deletion and stays downloadable by its owner", async () => {
     const created = await createOrganization();
     const archived = await exportAuditTrail(created);
     const latest = await auditExportRequest(created.owner, "GET");
@@ -322,16 +317,6 @@ describe("organization deletion requires an audit log archive", () => {
     expect(contents).toContain(AUDIT_LOG_EXPORT_CSV_HEADER);
     expect(contents).toContain(`"auditRowCount":${String(liveRows)}`);
 
-    // The archive is complete, but the owner has not taken it yet.
-    const undownloaded = await deleteOrganization(
-      created.owner,
-      created.organizationId,
-    );
-    expect(undownloaded.status).toBe(409);
-    expect(await undownloaded.json()).toMatchObject({
-      code: ORGANIZATION_AUDIT_EXPORT_REFUSAL_CODE.notDownloaded,
-    });
-    expect(await organizationExists(created.organizationId)).toBe(true);
     const taken = await downloadArchive(created.owner, archived.exportId);
     expect(taken.status, await taken.clone().text()).toBe(200);
     expect(
@@ -479,26 +464,33 @@ describe("organization deletion requires an audit log archive", () => {
     expect((await downloadArchive(admin, archived.exportId)).status).toBe(404);
   });
 
-  test("an archive of one organization never admits deleting another", async () => {
+  test("deleting another organization leaves an archive of the first untouched", async () => {
     const first = await createOrganization();
     const second = await createOrganization(first.owner);
     const archived = await exportAndDownload(first);
+    const [before] = await rootDb
+      .select({ expiresAt: accountExports.expiresAt })
+      .from(accountExports)
+      .where(eq(accountExports.id, archived.exportId));
 
     const deletion = await deleteOrganization(
       first.owner,
       second.organizationId,
     );
 
-    expect(deletion.status).toBe(409);
-    expect(await deletion.json()).toMatchObject({
-      code: ORGANIZATION_AUDIT_EXPORT_REFUSAL_CODE.required,
-    });
-    expect(await organizationExists(second.organizationId)).toBe(true);
+    expect(deletion.status, await deletion.clone().text()).toBe(200);
+    expect(await organizationExists(second.organizationId)).toBe(false);
     const [untouched] = await rootDb
-      .select({ status: accountExports.status })
+      .select({
+        status: accountExports.status,
+        expiresAt: accountExports.expiresAt,
+      })
       .from(accountExports)
       .where(eq(accountExports.id, archived.exportId));
-    expect(untouched).toEqual({ status: "ready" });
+    expect(untouched).toEqual({
+      status: "ready",
+      expiresAt: before?.expiresAt ?? null,
+    });
 
     await first.owner.setActiveOrganization(first.organizationId);
     const ownDeletion = await deleteOrganization(
