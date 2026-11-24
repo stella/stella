@@ -309,6 +309,7 @@ const MattersPageContextMenu = ({
 }: MattersPageContextMenuProps): ReactNode => {
   const t = useTranslations();
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
+  const openerRef = useRef<HTMLElement | null>(null);
 
   if (!canCreateMatter) {
     return children;
@@ -321,12 +322,22 @@ const MattersPageContextMenu = ({
           label: t("workspaces.createNewWorkspace"),
           icon: <PlusIcon />,
           onClick: () => {
-            const opener = captureDialogReturnFocus().current;
+            const opener = openerRef.current;
             openCreateMatter(opener === null ? {} : { opener });
           },
         },
       ]}
       label={t("workspaces.createNewWorkspace")}
+      render={
+        <div
+          className="contents"
+          onPointerDownCapture={(event) => {
+            if (event.button === 2 || (event.button === 0 && event.ctrlKey)) {
+              openerRef.current = captureDialogReturnFocus().current;
+            }
+          }}
+        />
+      }
     >
       {children}
     </EntityActions>

@@ -1008,15 +1008,17 @@ const NavContextMenu = ({
           },
         ]
       : []),
-    ...(config.recents ?? []).map((item, idx) => ({
-      label: item.label,
-      icon: item.icon,
-      ...(item.variant ? { variant: item.variant } : {}),
-      ...(idx === 0 && config.primaryAction !== undefined
-        ? { separatorBefore: true }
-        : {}),
-      onClick: () => item.onClick(undefined),
-    })),
+    ...(config.recents
+      ? config.recents.map((item, idx) => ({
+          label: item.label,
+          icon: item.icon,
+          ...(item.variant ? { variant: item.variant } : {}),
+          ...(idx === 0 && config.primaryAction !== undefined
+            ? { separatorBefore: true }
+            : {}),
+          onClick: () => item.onClick(undefined),
+        }))
+      : []),
   ];
 
   return (

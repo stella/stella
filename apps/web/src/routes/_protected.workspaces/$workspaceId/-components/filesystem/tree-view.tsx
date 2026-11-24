@@ -509,6 +509,13 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   };
 
   const handleBgContextMenu = (e: React.MouseEvent) => {
+    // An object that owns this right-click, such as a column header, keeps it.
+    if (
+      e.target instanceof Element &&
+      e.target.closest("[data-context-menu-target]") !== null
+    ) {
+      return;
+    }
     e.preventDefault();
     const x = e.clientX;
     const y = e.clientY;
