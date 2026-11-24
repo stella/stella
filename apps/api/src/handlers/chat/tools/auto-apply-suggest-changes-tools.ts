@@ -349,7 +349,20 @@ export const createAutoApplySuggestChangesTools = ({
         }
         const { workspaceId, entityId } = authorized.value.operation;
 
-        const authorName = await resolveDocxEditAuthorName({ safeDb, userId });
+        const authorResult = await resolveDocxEditAuthorName({
+          safeDb,
+          userId,
+        });
+        if (Result.isError(authorResult)) {
+          return Result.err(
+            new ChatToolError({
+              kind: "server-defect",
+              message: "Could not read your profile name for document edits",
+              cause: authorResult.error,
+            }),
+          );
+        }
+        const authorName = authorResult.value;
         if (
           !authorName &&
           requiresAuthor(input, docxEditRepresentation, suggestChanges)

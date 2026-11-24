@@ -873,10 +873,22 @@ export const runFileComparison = async (
     };
   }
 
-  const author = await dependencies.resolveDocxEditAuthorName({
+  const authorResult = await dependencies.resolveDocxEditAuthorName({
     safeDb: context.safeDb,
     userId: context.userId,
   });
+  if (Result.isError(authorResult)) {
+    return {
+      status: "error",
+      response: structuredErrorResult({
+        code: "internal_error",
+        message: "Failed to load user profile for document comparison",
+        hint: "Retry the comparison.",
+        retryable: true,
+      }),
+    };
+  }
+  const author = authorResult.value;
   if (author === null) {
     return {
       status: "error",
