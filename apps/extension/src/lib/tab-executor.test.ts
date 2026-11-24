@@ -1545,7 +1545,7 @@ describe("chat's tabs", () => {
   });
 
   test("switches to a tab chat's page opened and reads it", async () => {
-    const { handlers, log, probe, session, tabs } = installChatTabs({
+    const { handlers, probe, session, tabs } = installChatTabs({
       opened: [RESULTS_TAB_ID, 6],
     });
     // The document Chrome's frame list names, and the one the read runs in.
@@ -1585,7 +1585,6 @@ describe("chat's tabs", () => {
       { active: false, tabId: CONTROLLED_TAB_ID, url: PAGE_URL },
     ]);
     expect(events).toEqual(["charge"]);
-    expect(log).toContain(`activate:${RESULTS_TAB_ID}`);
     expect(session["browserContainedTabs"]).toMatchObject({
       controlledTabId: RESULTS_TAB_ID,
       openedTabIds: [6, CONTROLLED_TAB_ID],
@@ -1673,7 +1672,7 @@ describe("chat's tabs", () => {
     });
   });
 
-  test("switching shows the tab in a focused window, or switches nothing", async () => {
+  test("switching stays in the background without stealing tab or window focus", async () => {
     const installed = installChatTabs();
     installed.front.focusedWindowId = null;
     installed.handlers["snapshot"] = () => [
@@ -1682,82 +1681,26 @@ describe("chat's tabs", () => {
     expect(await run(switchTo(RESULTS_TAB_ID))).toMatchObject({
       status: "success",
     });
-    expect(installed.log.slice(0, 2)).toEqual([
-      `activate:${RESULTS_TAB_ID}`,
-      `focus-window:${WINDOW_ID}`,
-    ]);
-
-    // A window Chrome cannot focus fails the switch before anything moves.
-    const failing = installChatTabs();
-    const { budget, events } = createBudget();
-    failing.chrome.windows.update = async () => {
-      throw new TypeError("No window with id 1.");
-    };
-    expect(await run(switchTo(RESULTS_TAB_ID), { budget })).toMatchObject({
-      code: BROWSER_CONTROL_ERROR_CODE.executionFailed,
-    });
-    expect(events).toEqual(["charge", "refund"]);
-    expect(failing.session["browserContainedTabs"]).toMatchObject({
-      controlledTabId: CONTROLLED_TAB_ID,
-    });
-  });
-
-  /** Stops the command once the switch has focused the tab's window. */
-  const stopOnceShown = (installed: ReturnType<typeof installChatTabs>) => {
-    const stop = new AbortController();
-    const { update } = installed.chrome.windows;
-    installed.chrome.windows.update = async (
-      windowId: number,
-      properties: { focused: boolean },
-    ) => {
-      const updated = await update(windowId, properties);
-      stop.abort();
-      return updated;
-    };
-    return stop.signal;
-  };
-
-  test("a stop after the tab was shown puts the user's tab back in front", async () => {
-    const installed = installChatTabs();
-    const { budget, events } = createBudget();
-    const signal = stopOnceShown(installed);
-
-    expect(
-      await run(switchTo(RESULTS_TAB_ID), { budget, signal }),
-    ).toMatchObject({ code: BROWSER_CONTROL_ERROR_CODE.cancelled });
+    expect(installed.log).not.toContain(`activate:${RESULTS_TAB_ID}`);
+    expect(installed.log).not.toContain(`focus-window:${WINDOW_ID}`);
     expect(installed.front.activeTabId).toBe(CONTROLLER_TAB_ID);
-    expect(installed.log).toEqual([
-      `activate:${RESULTS_TAB_ID}`,
-      `focus-window:${WINDOW_ID}`,
-      `activate:${CONTROLLER_TAB_ID}`,
-      `focus-window:${WINDOW_ID}`,
-    ]);
-    expect(events).toEqual(["charge", "refund"]);
-    expect(installed.session["browserContainedTabs"]).toMatchObject({
-      controlledTabId: CONTROLLED_TAB_ID,
-    });
   });
 
-  test("a stop whose tab cannot be put back has an unknown outcome", async () => {
+  test("sign-in still brings the controlled tab to the front", async () => {
     const installed = installChatTabs();
-    const signal = stopOnceShown(installed);
-    const { update } = installed.chrome.tabs;
-    installed.chrome.tabs.update = async (
-      tabId: number,
-      properties: { url?: string },
-    ) => {
-      if (tabId === CONTROLLER_TAB_ID) {
-        throw new TypeError("No tab with id 1.");
-      }
-      return await update(tabId, properties);
-    };
-
-    expect(await run(switchTo(RESULTS_TAB_ID), { signal })).toMatchObject({
-      code: BROWSER_CONTROL_ERROR_CODE.outcomeUnknown,
+    installed.front.focusedWindowId = null;
+    installed.handlers["snapshot"] = () => [
+      { frameId: 0, result: { refused: "sign-in" } },
+    ];
+    expect(
+      await run(switchTo(RESULTS_TAB_ID), {
+        signIn: SIGN_IN_POLICY.handToMember,
+      }),
+    ).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.needsMember,
     });
-    expect(installed.session["browserContainedTabs"]).toMatchObject({
-      controlledTabId: CONTROLLED_TAB_ID,
-    });
+    expect(installed.log).toContain(`activate:${RESULTS_TAB_ID}`);
+    expect(installed.log).toContain(`focus-window:${WINDOW_ID}`);
   });
 
   test("the injected script refuses another top origin before reading the page", async () => {
