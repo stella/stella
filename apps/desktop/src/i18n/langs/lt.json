@@ -1113,6 +1113,14 @@
     "account": "Paskyra",
     "accountLinked": "Susieta",
     "app": "Programa",
+    "appearance": {
+      "choices": {
+        "dark": "Tamsi",
+        "light": "Šviesi",
+        "system": "Pagal sistemą"
+      },
+      "title": "Išvaizda"
+    },
     "connectToHost": "Prisijungti prie {host}",
     "connectToHostDescription": "Naršyklėje atidaro {host}, kur galite patvirtinti šį kompiuterį.",
     "connectToStella": "Prisijungti prie stella web",
@@ -1135,6 +1143,7 @@
     "errorRevealAppData": "stella desktop nepavyko parodyti programos duomenų.",
     "errorSaveTelemetry": "Nepavyko išsaugoti ataskaitų siuntimo nuostatos. Bandykite dar kartą.",
     "errorSetupGuide": "stella desktop nepavyko atidaryti sąrankos.",
+    "errorUpdateAppearance": "stella desktop nepavyko pakeisti išvaizdos.",
     "errorUpdateAutostart": "stella desktop nepavyko atnaujinti paleidimo prisijungiant.",
     "errorUpdateLanguage": "stella desktop nepavyko pakeisti sąsajos kalbos.",
     "errorUpdatePreferences": "stella desktop nepavyko atnaujinti pranešimų nustatymų.",

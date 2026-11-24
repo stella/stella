@@ -6,6 +6,7 @@ import type { MicrophonesSnapshot } from "../../src/mainview/dictation-microphon
 import { ONBOARDING_STEPS } from "../../src/onboarding/onboarding-types";
 import type { OnboardingSnapshot } from "../../src/onboarding/onboarding-types";
 import type { ActivitySetupSnapshot } from "../../src/onboarding/use-activity-setup";
+import type { DesktopAppearance } from "../../src/shared/desktop-appearance";
 import type {
   PermissionsSnapshot,
   PermissionStatus,
@@ -130,6 +131,8 @@ export const ONBOARDING_SCREENS = [
 ] as const satisfies readonly { name: string; snapshot: OnboardingSnapshot }[];
 
 type WindowFixture = {
+  /** The saved appearance. */
+  appearance: DesktopAppearance;
   /** The activity settings, or null while the feature is off. */
   activity: ActivitySettingsSnapshot | null;
   /** The linked account, or null when reading it fails. */
@@ -184,7 +187,7 @@ const openWindow = async (
     windowLabel,
     unhandled: "rejectAsUnexpected",
     arg: fixture,
-    handlers: (data) => ({
+    handlers: (data, ipc) => ({
       account_get_state: async () =>
         data.account ??
         Promise.reject(new TypeError("The account could not be read.")),
@@ -201,6 +204,19 @@ const openWindow = async (
       local_linked_folders_get: () => null,
       desktop_report_error: () => null,
       desktop_report_timing: () => null,
+      get_desktop_appearance: () => data.appearance,
+      // Saved, then announced to every window, as the native side does.
+      set_desktop_appearance: async (args) => {
+        const next = args["appearance"];
+        if (next !== "system" && next !== "light" && next !== "dark") {
+          return await Promise.reject(
+            new TypeError(`Unknown appearance ${String(next)}`),
+          );
+        }
+        data.appearance = next;
+        ipc.emit("desktop-appearance-changed", { appearance: next });
+        return next;
+      },
       get_desktop_language: () => data.language,
       get_desktop_telemetry_enabled: () => true,
       get_state: () => data.appState,
@@ -328,6 +344,7 @@ export const openOnboardingWindow = async (
 ) => {
   await openWindow(page, {
     fixture: {
+      appearance: "system",
       account: { server: ACCOUNT.server, status: "disconnected" },
       activity: null,
       appState: APP_STATE,
@@ -365,6 +382,7 @@ export const openDictationNoticeWindow = async (
 ) => {
   await openWindow(page, {
     fixture: {
+      appearance: "system",
       account: ACCOUNT,
       activity: null,
       appState: APP_STATE,
@@ -415,6 +433,8 @@ export const openSettingsWindow = async (
   options: WindowVariant & {
     /** Another account state than the linked fixture account. */
     account?: DesktopAccountSnapshot | null;
+    /** The saved appearance; the system's by default. */
+    appearance?: DesktopAppearance;
     /** Another inner width, such as the window's smallest. */
     width?: number;
   },
@@ -422,6 +442,7 @@ export const openSettingsWindow = async (
   await openWindow(page, {
     fixture: {
       account: options.account === undefined ? ACCOUNT : options.account,
+      appearance: options.appearance ?? "system",
       // On for every page, so each one is checked with the Activity and
       // Dictation pages in the sidebar.
       activity: ACTIVITY_SETTINGS,

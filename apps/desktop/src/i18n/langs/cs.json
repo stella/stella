@@ -1113,6 +1113,14 @@
     "account": "Účet",
     "accountLinked": "Propojeno",
     "app": "Aplikace",
+    "appearance": {
+      "choices": {
+        "dark": "Tmavý",
+        "light": "Světlý",
+        "system": "Podle systému"
+      },
+      "title": "Vzhled"
+    },
     "connectToHost": "Připojit k {host}",
     "connectToHostDescription": "Otevře {host} v prohlížeči, kde tento počítač schválíte.",
     "connectToStella": "Připojit ke stella web",
@@ -1135,6 +1143,7 @@
     "errorRevealAppData": "stella desktop nemohl zobrazit data aplikace.",
     "errorSaveTelemetry": "Nastavení hlášení se nepodařilo uložit. Zkuste to znovu.",
     "errorSetupGuide": "stella desktop nemohl otevřít nastavení.",
+    "errorUpdateAppearance": "stella desktop nemohl změnit vzhled.",
     "errorUpdateAutostart": "Aplikaci stella desktop se nepodařilo nastavit spouštění při přihlášení.",
     "errorUpdateLanguage": "stella desktop nemohl změnit jazyk rozhraní.",
     "errorUpdatePreferences": "stella desktop nemohl aktualizovat nastavení oznámení.",

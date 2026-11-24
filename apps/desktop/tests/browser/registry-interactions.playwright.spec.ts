@@ -306,6 +306,7 @@ const installNativeBoundary = async (
           telemetryEnabled = args["enabled"];
           return telemetryEnabled;
         },
+        get_desktop_appearance: () => "system",
         get_desktop_language: () => (navigator.language === "ar" ? "ar" : "en"),
         clipboard_get_snapshot: () => clipboardSnapshot,
         clipboard_complete_welcome: () => ({

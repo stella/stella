@@ -12,6 +12,7 @@ mod activity_store;
 mod activity_window;
 mod app_lifecycle;
 mod app_window;
+mod appearance;
 mod autostart;
 mod billing_draft_commands;
 mod billing_draft_settings;
@@ -276,6 +277,8 @@ pub fn run() {
     .manage(desktop_telemetry.clone())
     .setup(move |app| {
       let handle = app.handle().clone();
+      // Before any window exists, so none opens in the wrong scheme first.
+      appearance::apply(&handle, appearance::saved());
       // Sound a dictation lowered or paused before a crash comes back.
       dictation_media::restore();
       #[cfg(target_os = "macos")]

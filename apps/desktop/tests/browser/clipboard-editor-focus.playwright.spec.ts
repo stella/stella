@@ -30,6 +30,7 @@ const openEditor = async (page: Page) => {
     arg: { editorContext: EDITOR_CONTEXT },
     handlers: ({ editorContext }) => ({
       clipboard_get_editor_context: () => structuredClone(editorContext),
+      get_desktop_appearance: () => "system",
       get_desktop_language: () => "en",
       registry_get_state: () => ({ status: "disconnected" }),
     }),

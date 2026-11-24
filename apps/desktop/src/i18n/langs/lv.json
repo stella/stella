@@ -1113,6 +1113,14 @@
     "account": "Konts",
     "accountLinked": "Saistīts",
     "app": "Lietotne",
+    "appearance": {
+      "choices": {
+        "dark": "Tumšs",
+        "light": "Gaišs",
+        "system": "Atbilstoši sistēmai"
+      },
+      "title": "Izskats"
+    },
     "connectToHost": "Savienot ar {host}",
     "connectToHostDescription": "Atver {host} pārlūkā, lai jūs varētu apstiprināt šo datoru.",
     "connectToStella": "Savienot ar stella web",
@@ -1135,6 +1143,7 @@
     "errorRevealAppData": "stella desktop nevarēja rādīt lietotnes datus.",
     "errorSaveTelemetry": "Neizdevās saglabāt ziņojumu sūtīšanas iestatījumu. Mēģiniet vēlreiz.",
     "errorSetupGuide": "stella desktop nevarēja atvērt iestatīšanu.",
+    "errorUpdateAppearance": "stella desktop neizdevās mainīt izskatu.",
     "errorUpdateAutostart": "stella desktop neizdevās atjaunināt palaišanu piesakoties.",
     "errorUpdateLanguage": "stella desktop nevarēja mainīt saskarnes valodu.",
     "errorUpdatePreferences": "stella desktop nevarēja atjaunināt paziņojumu iestatījumus.",

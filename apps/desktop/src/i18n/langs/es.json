@@ -1113,6 +1113,14 @@
     "account": "Cuenta",
     "accountLinked": "Vinculada",
     "app": "Aplicación",
+    "appearance": {
+      "choices": {
+        "dark": "Oscuro",
+        "light": "Claro",
+        "system": "Según el sistema"
+      },
+      "title": "Apariencia"
+    },
     "connectToHost": "Conectar con {host}",
     "connectToHostDescription": "Abre {host} en el navegador para que apruebes este equipo.",
     "connectToStella": "Conectar con stella web",
@@ -1135,6 +1143,7 @@
     "errorRevealAppData": "stella desktop no pudo mostrar los datos de la app.",
     "errorSaveTelemetry": "No se pudo guardar la preferencia de envío de informes. Inténtalo de nuevo.",
     "errorSetupGuide": "stella desktop no pudo abrir la configuración.",
+    "errorUpdateAppearance": "stella desktop no pudo cambiar la apariencia.",
     "errorUpdateAutostart": "stella desktop no pudo actualizar el inicio de la aplicación al iniciar sesión.",
     "errorUpdateLanguage": "stella desktop no pudo cambiar el idioma de la interfaz.",
     "errorUpdatePreferences": "stella desktop no pudo actualizar la configuración de notificaciones.",

@@ -1113,6 +1113,14 @@
     "account": "Compte",
     "accountLinked": "Associé",
     "app": "Application",
+    "appearance": {
+      "choices": {
+        "dark": "Sombre",
+        "light": "Clair",
+        "system": "Selon le système"
+      },
+      "title": "Apparence"
+    },
     "connectToHost": "Se connecter à {host}",
     "connectToHostDescription": "Ouvre {host} dans votre navigateur pour approuver cet ordinateur.",
     "connectToStella": "Se connecter à stella web",
@@ -1135,6 +1143,7 @@
     "errorRevealAppData": "stella desktop n'a pas pu afficher les données de l'app.",
     "errorSaveTelemetry": "Impossible d’enregistrer le réglage d’envoi des rapports. Réessayez.",
     "errorSetupGuide": "stella desktop n'a pas pu ouvrir la configuration.",
+    "errorUpdateAppearance": "stella desktop n’a pas pu modifier l’apparence.",
     "errorUpdateAutostart": "stella desktop n’a pas pu modifier le démarrage à la connexion.",
     "errorUpdateLanguage": "stella desktop n'a pas pu changer la langue de l’interface.",
     "errorUpdatePreferences": "stella desktop n'a pas pu mettre à jour les paramètres de notification.",

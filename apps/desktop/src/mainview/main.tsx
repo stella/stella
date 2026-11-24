@@ -24,7 +24,10 @@ import type { DesktopMessages } from "../i18n";
 import { installAccountActivity } from "../shared/account-activity";
 import { subscribeDesktopEvent } from "../shared/desktop-events";
 import { installNativeContextMenuPolicy } from "../shared/native-context-menu";
-import { useSystemTheme } from "../shared/use-system-theme";
+import {
+  DesktopAppearanceProvider,
+  useAppliedDesktopAppearance,
+} from "../shared/use-desktop-appearance";
 import {
   describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -67,7 +70,7 @@ const initialLanguage = getPreferredLanguage();
 applyDocumentLanguage(initialLanguage);
 
 const Root = () => {
-  useSystemTheme();
+  const appearance = useAppliedDesktopAppearance(telemetryWindow);
 
   const [language, setLanguage] = useState(initialLanguage);
   const [messages, setMessages] = useState<DesktopMessages>(defaultMessages);
@@ -197,7 +200,9 @@ const Root = () => {
     <StrictMode>
       <TooltipProvider>
         <DesktopIntlProvider language={language} messages={messages}>
-          {content}
+          <DesktopAppearanceProvider value={appearance}>
+            {content}
+          </DesktopAppearanceProvider>
         </DesktopIntlProvider>
       </TooltipProvider>
     </StrictMode>

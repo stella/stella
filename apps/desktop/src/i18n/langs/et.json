@@ -1113,6 +1113,14 @@
     "account": "Konto",
     "accountLinked": "Lingitud",
     "app": "Rakendus",
+    "appearance": {
+      "choices": {
+        "dark": "Tume",
+        "light": "Hele",
+        "system": "Süsteemi järgi"
+      },
+      "title": "Välimus"
+    },
     "connectToHost": "Ühenda: {host}",
     "connectToHostDescription": "Avab brauseris {host}, kus saate selle arvuti kinnitada.",
     "connectToStella": "Ühenda stella webiga",
@@ -1135,6 +1143,7 @@
     "errorRevealAppData": "stella desktop ei saanud rakenduse andmeid kuvada.",
     "errorSaveTelemetry": "Aruannete saatmise eelistust ei saanud salvestada. Proovige uuesti.",
     "errorSetupGuide": "stella desktop ei saanud seadistust avada.",
+    "errorUpdateAppearance": "stella desktop ei saanud välimust muuta.",
     "errorUpdateAutostart": "stella desktop ei saanud sisselogimisel käivitamist uuendada.",
     "errorUpdateLanguage": "stella desktop ei saanud kasutajaliidese keelt muuta.",
     "errorUpdatePreferences": "stella desktop ei saanud teavituste seadeid uuendada.",

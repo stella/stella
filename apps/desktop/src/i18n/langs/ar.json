@@ -1113,6 +1113,14 @@
     "account": "الحساب",
     "accountLinked": "مرتبط",
     "app": "التطبيق",
+    "appearance": {
+      "choices": {
+        "dark": "داكن",
+        "light": "فاتح",
+        "system": "حسب النظام"
+      },
+      "title": "المظهر"
+    },
     "connectToHost": "الاتصال بـ {host}",
     "connectToHostDescription": "يفتح {host} في المتصفح لتوافق على هذا الكمبيوتر.",
     "connectToStella": "الاتصال بـ stella على الويب",
@@ -1135,6 +1143,7 @@
     "errorRevealAppData": "تعذّر على stella desktop إظهار بيانات التطبيق.",
     "errorSaveTelemetry": "تعذر حفظ إعداد إرسال التقارير. حاول مرة أخرى.",
     "errorSetupGuide": "تعذّر على stella desktop فتح الإعداد.",
+    "errorUpdateAppearance": "تعذّر على stella desktop تغيير المظهر.",
     "errorUpdateAutostart": "تعذّر على stella desktop تحديث البدء عند تسجيل الدخول.",
     "errorUpdateLanguage": "تعذّر على stella desktop تحديث لغة الواجهة.",
     "errorUpdatePreferences": "تعذّر على stella desktop تحديث إعدادات الإشعارات.",

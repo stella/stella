@@ -685,6 +685,7 @@ const installNativeBoundary = async ({
             markerSaved,
           };
         },
+        get_desktop_appearance: () => "system",
         get_desktop_language: () => desktopLanguage,
       };
     },

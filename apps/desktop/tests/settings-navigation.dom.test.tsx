@@ -16,6 +16,8 @@ const { clearMocks, mockIPC, mockWindows } =
   await import("@tauri-apps/api/mocks");
 const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
+const { DesktopAppearanceProvider } =
+  await import("../src/shared/use-desktop-appearance");
 const { default: App } = await import("../src/mainview/App");
 const { SETTINGS_PAGES } = await import("../src/mainview/settings-pages");
 
@@ -130,7 +132,11 @@ const renderApp = async ({
   );
   const view = render(
     <DesktopIntlProvider language="en" messages={defaultMessages}>
-      <App />
+      <DesktopAppearanceProvider
+        value={{ adopt: () => undefined, appearance: "system" }}
+      >
+        <App />
+      </DesktopAppearanceProvider>
     </DesktopIntlProvider>,
   );
   await act(async () => {

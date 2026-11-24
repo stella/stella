@@ -72,6 +72,7 @@ import type { DesktopAccountState } from "./account-presentation";
 import { AccountAvatar } from "./AccountAvatar";
 import { AgentSubscriptionsSection } from "./AgentSubscriptionsSection";
 import type { AgentSettingsFocus } from "./AgentSubscriptionsSection";
+import { AppearanceSetting } from "./AppearanceSetting";
 import { ClipboardSettingsSections } from "./ClipboardSettings";
 import { commandErrorMessage } from "./command-error";
 import { DictationSetting } from "./DictationSetting";
@@ -408,6 +409,7 @@ const GeneralPane = ({
             </ComboboxPopup>
           </Combobox>
         </SettingsRow>
+        <AppearanceSetting />
         {/* Start on login is the app's own permission row, without its
             tile among the other app settings. */}
         <li className="block empty:hidden">
