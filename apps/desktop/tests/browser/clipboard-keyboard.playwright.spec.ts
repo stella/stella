@@ -414,11 +414,9 @@ test("the transcribe button follows dictation availability and opens the Transcr
   await expect(transcribe).toHaveCount(0);
 
   await page.evaluate((next) => {
-    const setDictation: unknown = Reflect.get(
-      window,
-      "__STELLA_TEST_SET_DICTATION__",
-    );
-    if (typeof setDictation !== "function") {
+    const setDictation: ((offer: typeof next) => void) | undefined =
+      Reflect.get(window, "__STELLA_TEST_SET_DICTATION__");
+    if (setDictation === undefined) {
       throw new TypeError("Native dictation boundary is missing");
     }
     setDictation(next);
