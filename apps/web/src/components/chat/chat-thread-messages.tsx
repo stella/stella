@@ -991,6 +991,7 @@ const StickyUserTurn = ({
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 top-(--sticky-user-header-stick-at,0px) h-px"
+        data-sticky-user-header-pin=""
         ref={stickSentinelRef}
       />
       <div
