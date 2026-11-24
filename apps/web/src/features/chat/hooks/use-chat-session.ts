@@ -121,8 +121,10 @@ import { entityReferenceHref } from "@/components/references/reference.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
 import {
   type ChatQueue,
+  type ChatQueueItem,
   chatQueueOptions,
   type ChatQueueView,
+  enqueueAndCacheChatMessage,
   enqueueChatMessage,
   moveQueuedChatMessage,
   pauseChatQueue,
@@ -1000,35 +1002,36 @@ export const useChatSession = ({
   /**
    * Queue `message` at the end of the chat's queue, as it would be sent now
    * (its mode and document preferences snapshotted). `kept` when the server
-   * did not take it: the composer gets it back.
+   * did not take it: the composer gets it back. `sent` carries the item as
+   * the server stored it, which a steer hands to the turn as is
+   * (`enqueueAndCacheChatMessage`).
    */
   const enqueueMessage = useCallback(
     async (
       message: ChatUserMessageInput,
       options?: ChatSendMessageOptions,
-    ): Promise<ChatSendOutcome> => {
+    ): Promise<
+      typeof CHAT_SEND_KEPT | (typeof CHAT_SEND_SENT & { item: ChatQueueItem })
+    > => {
       const send = queuedChatSendOf(
         chat,
         message,
         withRequestSnapshots(options),
       );
       const queued = await Result.tryPromise(
-        async () => await enqueueChatMessage(threadRef.threadId, send),
+        async () =>
+          await enqueueAndCacheChatMessage({
+            enqueue: async () =>
+              await enqueueChatMessage(threadRef.threadId, send),
+            queryClient,
+            thread: queueThread,
+          }),
       );
       if (Result.isError(queued)) {
         notifyUserError(queued.error, t("chat.sendError"));
         return CHAT_SEND_KEPT;
       }
-      const { item } = queued.value;
-      updateCachedChatQueue({
-        queryClient,
-        thread: queueThread,
-        update: (current) =>
-          current.items.some(({ id }) => id === item.id)
-            ? current
-            : { hold: current.hold, items: [...current.items, item] },
-      });
-      return CHAT_SEND_SENT;
+      return { ...CHAT_SEND_SENT, item: queued.value };
     },
     [
       chat,
@@ -1159,17 +1162,10 @@ export const useChatSession = ({
             );
             // As queued just now: an edit before the turn resumes keeps it
             // queued rather than remove what the turn was not handed.
-            const queuedItem = readQueue().items.find(
-              ({ id }) => id === message.id,
-            );
-            if (
-              queued.kind === "sent" &&
-              approvalIds.length > 0 &&
-              queuedItem !== undefined
-            ) {
+            if (queued.kind === "sent" && approvalIds.length > 0) {
               steerOnResumeRef.current = {
-                id: message.id,
-                revision: queuedItem.revision,
+                id: queued.item.id,
+                revision: queued.item.revision,
                 text,
               };
               for (const approvalId of approvalIds) {
@@ -1186,15 +1182,15 @@ export const useChatSession = ({
           // its place in the queue for the turn's end, so messages go in
           // the order they were sent.
           const queued = await enqueueMessage(message, options);
-          const queuedItem = readQueue().items.find(
-            ({ id }) => id === message.id,
-          );
-          if (queued.kind === "sent" && queuedItem !== undefined) {
+          if (queued.kind === "sent") {
+            const { item } = queued;
             detached(
               (async () => {
+                // The message as this send queued it, never the cached
+                // queue's read of it (`enqueueAndCacheChatMessage`).
                 const outcome = await steerQueuedMessage({
-                  id: message.id,
-                  revision: queuedItem.revision,
+                  id: item.id,
+                  revision: item.revision,
                   text,
                 });
                 if (outcome.type === "refused") {
@@ -1245,7 +1241,6 @@ export const useChatSession = ({
       enqueueMessage,
       notifySendRefused,
       notifySteerRefused,
-      readQueue,
       resolveToolApproval,
       steerQueuedMessage,
       t,

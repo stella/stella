@@ -87,6 +87,37 @@ export const enqueueChatMessage = async (
     unwrapApiResponse(await queueRoutes(threadId).post({ send })),
   );
 
+/**
+ * Queue `send` and show it in the cached queue at once, answering the item
+ * as this write stored it. Whatever later hands the message to a running
+ * turn steers exactly this id and revision, never a read of the cached
+ * queue: that cache may not be loaded yet (the message would never be
+ * handed over), or a realtime read may already hold a revision edited since
+ * in another tab (the turn would be handed the text written here under the
+ * edited revision, and the edit would leave the queue unsent).
+ */
+export const enqueueAndCacheChatMessage = async ({
+  enqueue,
+  queryClient,
+  thread,
+}: {
+  /** The queue write, `enqueueChatMessage` of this thread's send. */
+  enqueue: () => Promise<{ item: ChatQueueItem }>;
+  queryClient: QueryClient;
+  thread: ChatQueueThread;
+}): Promise<ChatQueueItem> => {
+  const { item } = await enqueue();
+  updateCachedChatQueue({
+    queryClient,
+    thread,
+    update: (current) =>
+      current.items.some(({ id }) => id === item.id)
+        ? current
+        : { hold: current.hold, items: [...current.items, item] },
+  });
+  return item;
+};
+
 /** A queued message whole, as it was queued (the queue's read shows only
  *  its beginning). */
 export const readQueuedChatMessage = async (
