@@ -162,12 +162,14 @@ export const adjustStampBox = ({
   );
 };
 
+type StampArrowKey = "ArrowDown" | "ArrowLeft" | "ArrowRight" | "ArrowUp";
+
 const KEY_DIRECTIONS = {
   ArrowDown: { x: 0, y: 1 },
   ArrowLeft: { x: -1, y: 0 },
   ArrowRight: { x: 1, y: 0 },
   ArrowUp: { x: 0, y: -1 },
-} as const satisfies Record<string, Vector>;
+} as const satisfies Record<StampArrowKey, Vector>;
 
 const isArrowKey = (key: string): key is keyof typeof KEY_DIRECTIONS =>
   Object.hasOwn(KEY_DIRECTIONS, key);

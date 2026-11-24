@@ -8,6 +8,17 @@ import type { CaseLawIndexSearch } from "./-case-law-search-schema";
  * does; any other keeps it, because the filters it names stay absent and the
  * reader has not dismissed it.
  */
+export type CaseLawSearchChange =
+  | "page-size"
+  | "strict"
+  | "filter"
+  | "date-range"
+  | "clear-filters"
+  | "refine"
+  | "sort"
+  | "auto-refine"
+  | "original-words";
+
 export const SEARCH_CHANGE_RETIRES_FILTER_NOTICE = {
   "page-size": false,
   strict: false,
@@ -18,10 +29,7 @@ export const SEARCH_CHANGE_RETIRES_FILTER_NOTICE = {
   sort: false,
   "auto-refine": false,
   "original-words": false,
-} as const satisfies Record<string, boolean>;
-
-export type CaseLawSearchChange =
-  keyof typeof SEARCH_CHANGE_RETIRES_FILTER_NOTICE;
+} as const satisfies Record<CaseLawSearchChange, boolean>;
 
 type NextCaseLawIndexSearchOptions = {
   previous: CaseLawIndexSearch;

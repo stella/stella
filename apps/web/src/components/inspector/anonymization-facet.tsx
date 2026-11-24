@@ -139,6 +139,28 @@ const DEFAULT_LABEL: LabelOption = "misc";
 // Detector output not in this map falls back to the raw label
 // string so unfamiliar categories still render something
 // readable.
+type KnownAnonymizationLabel =
+  | "organization"
+  | "person"
+  | "address"
+  | "country"
+  | "phone number"
+  | "email address"
+  | "date"
+  | "date of birth"
+  | "bank account number"
+  | "iban"
+  | "tax identification number"
+  | "identity card number"
+  | "registration number"
+  | "case number"
+  | "credit card number"
+  | "passport number"
+  | "monetary amount"
+  | "land parcel"
+  | "misc"
+  | "other";
+
 const LABEL_TRANSLATION_KEYS = {
   organization: "common.anonymizationLabels.organization",
   person: "common.anonymizationLabels.person",
@@ -166,7 +188,7 @@ const LABEL_TRANSLATION_KEYS = {
   // proper translated label instead of falling back to the
   // raw string.
   other: "common.anonymizationLabels.miscellaneous",
-} as const satisfies Record<string, TranslationKey>;
+} as const satisfies Record<KnownAnonymizationLabel, TranslationKey>;
 
 type LabelTranslationKey = keyof typeof LABEL_TRANSLATION_KEYS;
 
