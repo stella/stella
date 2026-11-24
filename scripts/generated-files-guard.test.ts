@@ -556,6 +556,7 @@ const DELEGABLE = [
   "scan-engine-wasm",
   "heic-decoder-wasm",
   "pst-reader-wasm",
+  "recording-wasm",
   "api-typecheck-projects",
 ] as const;
 
@@ -730,6 +731,7 @@ const UNCHANGED_SCOPES = new Map<string, ScopeOutput>([
   ["scan-engine-wasm", "scan_engine_wasm_required"],
   ["heic-decoder-wasm", "scan_engine_wasm_required"],
   ["pst-reader-wasm", "scan_engine_wasm_required"],
+  ["recording-wasm", "scan_engine_wasm_required"],
 ]);
 
 test("Guard B skips a family as unchanged only when the plan proves it untouched", () => {

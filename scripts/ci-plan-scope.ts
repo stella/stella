@@ -1107,6 +1107,8 @@ export const OUTPUT_RULES = {
           "packages/scan-engine/*",
           "packages/heic-decoder/*",
           "packages/pst-reader/*",
+          "packages/recording-wasm/*",
+          "apps/desktop/src-tauri/crates/recording/*",
           ".github/actions/cargo-deny/*",
           "bun.lock",
           ".github/workflows/ci.yml",

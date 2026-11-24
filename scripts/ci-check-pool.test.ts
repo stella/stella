@@ -1680,19 +1680,19 @@ test("the generated manifest guard defers the scan engine outside PR depth runs 
       ? planned.env["GENERATED_CHECKS_IN_OTHER_JOBS"]
       : undefined;
   };
-  expect(deferred({ pr_depth_only: true })).toBe('["","","",""]');
+  expect(deferred({ pr_depth_only: true })).toBe('["","","","",""]');
   expect(deferred({ pr_depth_only: false })).toBe(
-    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm",""]',
+    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm","recording-wasm",""]',
   );
   // Push and merge-group runs have no inputs: GitHub renders them as null.
   expect(deferred(null)).toBe(
-    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm",""]',
+    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm","recording-wasm",""]',
   );
   // code-quality-web-rest runs the full typecheck coverage in this run.
   expect(
     deferred(null, { package_checks_required: "true", trusted: "true" }),
   ).toBe(
-    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm","api-typecheck-projects"]',
+    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm","recording-wasm","api-typecheck-projects"]',
   );
 });
 
