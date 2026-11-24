@@ -45,8 +45,12 @@ export const registerOidcSsoProvider = async (
 export const registerSamlSsoProvider = async (
   body: CreateSamlSsoProviderBody,
 ) =>
-  unwrapApiResponse(
-    await api["organization-settings"].sso.providers.saml.post(body),
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.providers.saml.post",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso.providers.saml.post(body),
+      ),
   );
 
 export const probeOidcSsoProvider = async (body: TestOidcSsoProviderBody) =>

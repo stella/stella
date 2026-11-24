@@ -780,8 +780,10 @@
         "title": "Nom court de l’organisation"
       },
       "sso": {
+        "acsUrlLabel": "URL ACS",
         "addDomain": "Ajouter un domaine",
         "addProvider": "Ajouter un fournisseur OIDC",
+        "addSamlProvider": "Ajouter un fournisseur SAML 2.0",
         "callbackUrlLabel": "URL de rappel (Callback)",
         "clientIdLabel": "Identifiant client (Client ID)",
         "clientSecretLabel": "Secret client (Client Secret)",
@@ -809,6 +811,10 @@
         "providersTitle": "Fournisseurs d'identité",
         "requireSsoDescription": "Lorsqu'il est activé, les membres doivent se connecter via l'un des fournisseurs d'identité de cette organisation.",
         "requireSsoTitle": "Exiger le SSO pour cette organisation",
+        "samlCertLabel": "Certificat de signature X.509 de l'IdP (PEM)",
+        "samlEntityIdLabel": "URI de l'émetteur IdP",
+        "samlEntryPointLabel": "URL SSO de l'IdP (point d'entrée)",
+        "spMetadataUrlLabel": "URL des métadonnées SP",
         "testDiscovery": "Tester la découverte",
         "title": "Authentification unique (SSO)",
         "verifyDomain": "Vérifier maintenant"

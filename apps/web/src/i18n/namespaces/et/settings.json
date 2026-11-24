@@ -780,8 +780,10 @@
         "title": "Organisatsiooni lühinimi"
       },
       "sso": {
+        "acsUrlLabel": "ACS-i URL",
         "addDomain": "Lisa domeen",
         "addProvider": "Lisa OIDC pakkuja",
+        "addSamlProvider": "Lisa SAML 2.0 pakkuja",
         "callbackUrlLabel": "Tagasihelistuse URL",
         "clientIdLabel": "Kliendi ID",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +811,10 @@
         "providersTitle": "Identiteedipakkujad",
         "requireSsoDescription": "Kui see on sisse lülitatud, peavad liikmed sisse logima selle organisatsiooni identiteedipakkuja kaudu.",
         "requireSsoTitle": "Nõua selles organisatsioonis SSO-d",
+        "samlCertLabel": "IdP X.509 allkirjasertifikaat (PEM)",
+        "samlEntityIdLabel": "IdP väljaandja URI",
+        "samlEntryPointLabel": "IdP SSO URL (sisenemispunkt)",
+        "spMetadataUrlLabel": "SP metaandmete URL",
         "testDiscovery": "Testi discovery-t",
         "title": "Ühekordne sisselogimine (SSO)",
         "verifyDomain": "Kinnita kohe"

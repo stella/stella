@@ -780,8 +780,10 @@
         "title": "الاسم المختصر للمؤسسة"
       },
       "sso": {
+        "acsUrlLabel": "عنوان URL لخدمة ACS",
         "addDomain": "إضافة نطاق",
         "addProvider": "إضافة مزود OIDC",
+        "addSamlProvider": "إضافة مزود SAML 2.0",
         "callbackUrlLabel": "رابط الاستدعاء (Callback URL)",
         "clientIdLabel": "معرف العميل (Client ID)",
         "clientSecretLabel": "سر العميل (Client Secret)",
@@ -809,6 +811,10 @@
         "providersTitle": "مزودو الهوية",
         "requireSsoDescription": "عند التفعيل، يجب على الأعضاء تسجيل الدخول عبر أحد مزودي الهوية التابعين لهذه المؤسسة.",
         "requireSsoTitle": "فرض SSO لهذه المؤسسة",
+        "samlCertLabel": "شهادة توقيع X.509 لمزود الهوية (PEM)",
+        "samlEntityIdLabel": "معرّف مُصدر مزود الهوية (URI)",
+        "samlEntryPointLabel": "عنوان URL لتسجيل الدخول الموحد (نقطة الدخول)",
+        "spMetadataUrlLabel": "عنوان URL لبيانات تعريف مزود الخدمة",
         "testDiscovery": "اختبار الاستكشاف",
         "title": "تسجيل الدخول الموحد (SSO)",
         "verifyDomain": "تحقق الآن"

@@ -38,6 +38,7 @@ export type AppOnlyWriteId =
   | "organization-settings.sso.policy.put"
   | "organization-settings.sso.providers.delete"
   | "organization-settings.sso.providers.post"
+  | "organization-settings.sso.providers.saml.post"
   | "organization-settings.sso.providers.test.post"
   | "case-law.citations.check"
   | "chat.browser-site-grants.create"

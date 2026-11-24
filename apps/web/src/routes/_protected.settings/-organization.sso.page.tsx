@@ -346,9 +346,7 @@ const AddSamlProviderForm = ({
         }}
       >
         <Field>
-          <FieldLabel>
-            {t("settings.organization.sso.displayNameLabel")}
-          </FieldLabel>
+          <FieldLabel>{t("common.displayName")}</FieldLabel>
           <Input
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Okta SAML"

@@ -6,6 +6,7 @@ import { createOrgSamlProvider } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapSsoManagementError } from "./sso-error-map";
 import { ssoProviderUrls } from "./sso-urls";
@@ -55,5 +56,10 @@ const createOrganizationSamlSsoProvider = createSafeRootHandler(
     return Result.ok(created.value);
   },
 );
+
+declareAggregateMutation(createOrganizationSamlSsoProvider, {
+  type: "independent",
+  reason: "Provider uniqueness is enforced by unique indexes on sso_provider.",
+});
 
 export default createOrganizationSamlSsoProvider;

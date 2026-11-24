@@ -780,8 +780,10 @@
         "title": "Krátký název organizace"
       },
       "sso": {
+        "acsUrlLabel": "Adresa URL služby ACS",
         "addDomain": "Přidat doménu",
         "addProvider": "Přidat poskytovatele OIDC",
+        "addSamlProvider": "Přidat poskytovatele SAML 2.0",
         "callbackUrlLabel": "Adresa URL pro zpětné volání",
         "clientIdLabel": "ID klienta",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +811,10 @@
         "providersTitle": "Poskytovatelé identity",
         "requireSsoDescription": "Po zapnutí se členové musí pro přístup ke spisům a nastavením přihlásit přes poskytovatele identity této organizace.",
         "requireSsoTitle": "Vyžadovat SSO pro tuto organizaci",
+        "samlCertLabel": "Podpisový certifikát X.509 poskytovatele (PEM)",
+        "samlEntityIdLabel": "URI vydavatele IdP",
+        "samlEntryPointLabel": "URL jednotného přihlášení IdP (vstupní bod)",
+        "spMetadataUrlLabel": "Adresa URL metadat SP",
         "testDiscovery": "Otestovat discovery",
         "title": "Jednotné přihlášení (SSO)",
         "verifyDomain": "Ověřit nyní"

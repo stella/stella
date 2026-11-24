@@ -202,10 +202,7 @@ export const SsoSignInSection = ({
               disabled={busy}
               disabledReason={busyReason}
               onClick={() => {
-                detached(
-                  launchProvider(provider.providerId),
-                  "sso-sign-in.launch-reauth",
-                );
+                detached(launchProvider(provider), "sso-sign-in.launch-reauth");
               }}
               type="button"
               variant="outline"
