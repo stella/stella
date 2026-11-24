@@ -139,6 +139,8 @@ rebuild_paths=(
   "packages/api-contract/src/api-date.ts"
   "packages/api-contract/src/api-version.ts"
   "packages/api-contract/src/browser-control.ts"
+  "packages/api-contract/src/browser-site-grants.ts"
+  "packages/api-contract/src/browser-step-gate.ts"
   "packages/api-contract/src/chat-local-run-question.ts"
   "packages/api-contract/src/chat-local-run-step-content.ts"
   "packages/api-contract/src/chat-local-run-step-output.ts"
