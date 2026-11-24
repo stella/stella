@@ -96,7 +96,7 @@ const config = {
     "visibility. Only the fields you pass are written. clientId attaches or " +
     "replaces the matter's client and never changes who can see it; members " +
     "are managed separately. Only the matter lead or an organization owner " +
-    "or admin may change the visibility; widening it needs confirmWidening, " +
+    "or admin may change the lead or the visibility; widening it needs confirmWidening, " +
     `otherwise returns ${MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE}. ` +
     "Pass expectedClientId (null when it has no client) to change the client " +
     `only if its current assignment still matches; otherwise returns ${API_VERSION_CONFLICT_ERROR_CODE}.`,
@@ -257,26 +257,32 @@ type VisibilityChangeOptions = {
   actor: WorkspaceUpdateActor;
   authority: AuthorizedMemberRole;
   workspace: { leadUserId: string | null; visibility: MatterVisibility };
-  body: { visibility?: MatterVisibility; confirmWidening?: true };
+  body: {
+    visibility?: MatterVisibility;
+    confirmWidening?: true;
+    leadUserId?: string | null;
+  };
 };
 
 /**
- * Who sees the matter is its stewardship: only its current lead (as stored
- * before this request) or an organization owner or admin may change it, and
- * showing it to more people needs an explicit confirmation. Narrowing to
- * assigned_only also needs an assigned internal member; the database refuses
- * the write otherwise (`workspaces_assigned_only_steward`).
+ * Who sees and who leads the matter are its stewardship: only its current
+ * lead (as stored before this request) or an organization owner or admin may
+ * change either, so nobody can name themselves lead and then widen the
+ * matter. Showing it to more people needs an explicit confirmation.
+ * Narrowing to assigned_only also needs an assigned internal member; the
+ * database refuses the write otherwise (`workspaces_assigned_only_steward`).
  */
-const checkVisibilityChange = ({
+const checkStewardshipChange = ({
   actor,
   authority,
   workspace,
   body,
 }: VisibilityChangeOptions) => {
-  if (
-    body.visibility === undefined ||
-    body.visibility === workspace.visibility
-  ) {
+  const visibilityChanges =
+    body.visibility !== undefined && body.visibility !== workspace.visibility;
+  const leadChanges =
+    body.leadUserId !== undefined && body.leadUserId !== workspace.leadUserId;
+  if (!visibilityChanges && !leadChanges) {
     return null;
   }
   if (
@@ -287,10 +293,11 @@ const checkVisibilityChange = ({
       ok: false as const,
       status: 403 as const,
       message:
-        "Only the matter lead or an organization owner or admin can change who can see this matter",
+        "Only the matter lead or an organization owner or admin can change who leads or can see this matter",
     };
   }
   if (
+    body.visibility !== undefined &&
     widensMatterVisibility(workspace.visibility, body.visibility) &&
     body.confirmWidening !== true
   ) {
@@ -503,7 +510,7 @@ export const updateWorkspaceHandler = async function* ({
     }
     const { row, workspace, authority } = locked;
 
-    const visibilityRefusal = checkVisibilityChange({
+    const visibilityRefusal = checkStewardshipChange({
       actor,
       authority,
       workspace,

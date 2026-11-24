@@ -241,6 +241,40 @@ describe("matter visibility changes", () => {
     );
   });
 
+  test("a member cannot name themselves lead to take over who can see the matter", async () => {
+    const workspaceId = await createMatter({
+      visibility: "admins_and_assigned",
+      client: true,
+      assigned: [ids.userA1],
+    });
+    const selfAppointed = await update({
+      workspaceId,
+      userId: ids.userA1,
+      credentialRole: "member",
+      body: { leadUserId: ids.userA1 },
+    });
+    expect(refusalOf(selfAppointed.result)).toMatchObject({ status: 403 });
+    const widened = await update({
+      workspaceId,
+      userId: ids.userA1,
+      credentialRole: "member",
+      body: { visibility: "all_members", confirmWidening: true },
+    });
+    expect(refusalOf(widened.result)).toMatchObject({ status: 403 });
+    expect((await storedVisibility(workspaceId)).visibility).toBe(
+      "admins_and_assigned",
+    );
+
+    // An owner may appoint the lead, who may then change the visibility.
+    const appointed = await update({
+      workspaceId,
+      userId: ids.userAdmin,
+      credentialRole: "owner",
+      body: { leadUserId: ids.userA1 },
+    });
+    expect(appointed.result.isOk()).toBe(true);
+  });
+
   test("a member who no longer reaches the matter cannot update it through an earlier admission", async () => {
     const workspaceId = await createMatter({
       visibility: "assigned_only",
