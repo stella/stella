@@ -3,7 +3,7 @@ import { and, eq, inArray, lt, or, sql } from "drizzle-orm";
 
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   documentProcessingRuns,
   entities,

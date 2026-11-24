@@ -55,7 +55,7 @@ import type { ReaderTextQuoteSelector } from "@stll/legal-ast/reader-text-quote"
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   caseLawSources,
   entities,

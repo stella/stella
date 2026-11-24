@@ -4,7 +4,7 @@ import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawDecisionAliasMovedIdentities,
   caseLawDecisions,

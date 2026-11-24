@@ -22,7 +22,7 @@ import {
 
 import { CHAT_TURNS_ORG_RUN_ID_UIDX } from "@/api/db/online-unique-indexes";
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import {
   attachTerminalTurnOutcome,

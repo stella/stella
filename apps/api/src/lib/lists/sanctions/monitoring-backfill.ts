@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { and, asc, eq, gt, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   contacts,
   sanctionsMonitoringBackfills,

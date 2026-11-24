@@ -12,7 +12,7 @@ import {
   type IngestionStopKind,
 } from "@stll/legal-atlas/ingestion-cycle";
 
-import type { IngestionScopedDb } from "@/api/db/safe-db";
+import type { IngestionScopedDb } from "@/api/db/safe-db-types";
 import type { caseLawSources } from "@/api/db/schema";
 import {
   ADAPTER_TIMEOUT,

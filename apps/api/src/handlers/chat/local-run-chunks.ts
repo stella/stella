@@ -83,7 +83,7 @@ import type {
 import { sha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import {
   type ChatTurnRunCut,
   chatTurnRunCutOf,

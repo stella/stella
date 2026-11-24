@@ -16,7 +16,7 @@ import { panic } from "better-result";
 
 import type { ContactType } from "@stll/api-contract";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type {
   BankAccount,
   BillingAddress,

@@ -6,7 +6,7 @@ import { union } from "drizzle-orm/pg-core";
 import { mapWithConcurrency } from "@stll/concurrency";
 
 import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_SEARCH_BACKFILL_FAILURE_STATUS,
   caseLawDecisionIdentifiers,

@@ -5,7 +5,7 @@ import type { PublicCountrySurface } from "@stll/api-contract/public-country-cap
 import { mapWithConcurrency } from "@stll/concurrency";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import type { SafeId } from "@/api/lib/branded-types";

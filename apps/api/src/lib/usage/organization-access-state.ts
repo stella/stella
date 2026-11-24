@@ -14,7 +14,7 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   ORGANIZATION_ACCESS_STATE,
   ORGANIZATION_ACCESS_STATE_ORIGIN,

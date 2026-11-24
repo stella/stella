@@ -41,7 +41,7 @@ import * as v from "valibot";
 import { apiDateTimeSchema } from "@stll/api-contract/api-date";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawSources, SOURCE_TOTAL_ORIGIN } from "@/api/db/schema";
 import { floorSliceWalk } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
 import {

@@ -10,7 +10,7 @@ import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { Temporal } from "@stll/time";
 
 import { jsonField } from "@/api/db/json-utils";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   cellMetadata,
   entityVersions,

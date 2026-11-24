@@ -19,7 +19,7 @@ import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import type {
   ContactAddress,

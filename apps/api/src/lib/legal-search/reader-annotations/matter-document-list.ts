@@ -15,7 +15,7 @@ import { READER_ANNOTATION_MAX_SPANS } from "@stll/api-contract/legal-reader-ann
 
 import { member, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   entityVersions,
   fields,

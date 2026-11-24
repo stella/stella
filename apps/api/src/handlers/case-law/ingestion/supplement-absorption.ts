@@ -30,7 +30,7 @@ import { panic, Result } from "better-result";
  */
 import { and, eq, isNull, ne } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawCitations,
   caseLawDecisionIdentifiers,
