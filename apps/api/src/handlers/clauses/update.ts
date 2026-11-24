@@ -47,7 +47,9 @@ const updateClauseBodySchema = v.object({
   usageNotes: v.exactOptional(
     v.nullable(v.pipe(v.string(), v.maxLength(2000))),
   ),
-  metadata: v.exactOptional(v.nullable(v.record(v.string(), v.unknown()))),
+  metadata: v.exactOptional(
+    v.nullable(v.pipe(v.record(v.string(), v.unknown()), v.maxEntries(64))),
+  ),
 });
 
 const updateClauseParamsSchema = v.object({

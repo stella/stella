@@ -40,7 +40,9 @@ const createClauseBodySchema = v.object({
   ),
   description: v.exactOptional(v.pipe(v.string(), v.maxLength(2000))),
   usageNotes: v.exactOptional(v.pipe(v.string(), v.maxLength(2000))),
-  metadata: v.exactOptional(v.record(v.string(), v.unknown())),
+  metadata: v.exactOptional(
+    v.pipe(v.record(v.string(), v.unknown()), v.maxEntries(64)),
+  ),
 });
 
 type CreateClauseProps = {

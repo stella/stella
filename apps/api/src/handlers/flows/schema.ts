@@ -84,9 +84,15 @@ const tFlowTrigger = v.union([
   }),
   v.object({
     type: v.literal("file-upload"),
-    workspaceIds: v.union([v.array(resourceIdSchema("workspace")), v.null()]),
+    workspaceIds: v.union([
+      v.pipe(v.array(resourceIdSchema("workspace")), v.maxLength(100)),
+      v.null(),
+    ]),
     fileExtensions: v.union([
-      v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+      v.pipe(
+        v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(32))),
+        v.maxLength(100),
+      ),
       v.null(),
     ]),
   }),

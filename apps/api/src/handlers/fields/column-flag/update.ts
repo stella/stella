@@ -84,10 +84,12 @@ const config = {
       v.maxLength(LIMITS.viewFiltersCount),
     ),
     set: v.optional(v.boolean()),
-    onlyAddedAt: v.optional(v.string()),
+    onlyAddedAt: v.optional(v.pipe(v.string(), v.maxLength(64))),
     groupByPropertyId: v.optional(tGroupByPropertyId),
     groupValue: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(1000)))),
-    optionValues: v.optional(v.array(v.pipe(v.string(), v.maxLength(1000)))),
+    optionValues: v.optional(
+      v.pipe(v.array(v.pipe(v.string(), v.maxLength(1000))), v.maxLength(500)),
+    ),
   }),
 } satisfies WorkspaceHandlerConfig;
 

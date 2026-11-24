@@ -16,8 +16,8 @@ export const createAgentUserPlugin = () =>
         {
           method: "POST",
           body: v.object({
-            email: v.pipe(v.string(), v.email()),
-            name: v.string(),
+            email: v.pipe(v.string(), v.maxLength(320), v.email()),
+            name: v.pipe(v.string(), v.maxLength(256)),
             emailVerified: v.boolean(),
           }),
           metadata: { SERVER_ONLY: true },

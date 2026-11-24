@@ -233,7 +233,7 @@ const createRevokeSessionByIdEndpoint = (
     {
       method: "POST",
       body: v.strictObject({
-        sessionId: v.pipe(v.string(), v.minLength(1)),
+        sessionId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
       }),
       use: [sensitiveSessionMiddleware],
       requireHeaders: true,

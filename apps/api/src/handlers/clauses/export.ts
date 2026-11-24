@@ -31,7 +31,9 @@ import { normalizeClauseMetadata } from "./metadata";
 const CLAUSE_LIBRARY_AUDIT_RESOURCE_ID = "clause-library";
 
 const exportQuerySchema = v.object({
-  ids: v.optional(v.string()),
+  ids: v.optional(
+    v.pipe(v.string(), v.maxLength(LIMITS.clauseExportLimit * 40)),
+  ),
   format: v.optional(v.picklist(["csv", "json"])),
 });
 

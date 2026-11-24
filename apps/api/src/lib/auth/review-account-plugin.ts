@@ -198,7 +198,9 @@ export const createReviewAccountUserPlugin = (config: ReviewAccountConfig) =>
         REVIEW_ACCOUNT_CREATE_USER_PATH,
         {
           method: "POST",
-          body: v.object({ email: v.pipe(v.string(), v.email()) }),
+          body: v.object({
+            email: v.pipe(v.string(), v.maxLength(320), v.email()),
+          }),
           metadata: { SERVER_ONLY: true },
         },
         async ({ body, context }) => {

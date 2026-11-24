@@ -18,7 +18,7 @@ const BEARER_PREFIX = "Bearer ";
 const SESSION_TOKEN_PATTERN = /^[a-f0-9]{64}$/u;
 
 export const statusDesktopEditSessionHeadersSchema = v.object({
-  authorization: v.optional(v.string()),
+  authorization: v.optional(v.pipe(v.string(), v.maxLength(4096))),
 });
 
 type StatusDesktopEditSessionHandlerProps = {

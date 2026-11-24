@@ -74,7 +74,7 @@ const contextSchema = v.strictObject({
   client: v.optional(v.picklist(FEEDBACK_CLIENTS)),
   clientVersion: optionalCapped(FEEDBACK_LIMITS.contextField),
   requestId: v.optional(
-    v.pipe(v.string(), v.regex(FEEDBACK_REQUEST_ID_PATTERN)),
+    v.pipe(v.string(), v.maxLength(128), v.regex(FEEDBACK_REQUEST_ID_PATTERN)),
   ),
   route: optionalCapped(FEEDBACK_LIMITS.contextField),
   errorReference: optionalCapped(FEEDBACK_LIMITS.contextField),

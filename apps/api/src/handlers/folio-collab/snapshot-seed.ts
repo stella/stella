@@ -18,7 +18,11 @@ const config = {
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: v.object({
     ...folioCollabRoomCredentialsSchema.entries,
-    snapshotSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+    snapshotSha256Hex: v.pipe(
+      v.string(),
+      v.length(64),
+      v.regex(/^[0-9a-f]{64}$/u),
+    ),
   }),
 } satisfies TokenHandlerConfig;
 

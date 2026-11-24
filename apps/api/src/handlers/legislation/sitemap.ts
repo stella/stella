@@ -53,10 +53,15 @@ const capacityExceeded = (message: string) =>
 export const sitemapShardStatutesQuerySchema = v.object({
   country: v.pipe(
     v.string(),
+    v.maxLength(8),
     v.regex(new RegExp(SITEMAP_COUNTRY_PATTERN, "u")),
   ),
   bucket: v.optional(
-    v.pipe(v.string(), v.regex(new RegExp(SITEMAP_BUCKET_PATTERN, "u"))),
+    v.pipe(
+      v.string(),
+      v.maxLength(16),
+      v.regex(new RegExp(SITEMAP_BUCKET_PATTERN, "u")),
+    ),
   ),
 });
 

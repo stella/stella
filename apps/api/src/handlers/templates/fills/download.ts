@@ -11,7 +11,9 @@ import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const fillByIdBodySchema = v.object({
   values: jsonObjectSchema,
-  clauseOverrides: v.exactOptional(v.record(v.string(), clauseBodySchema)),
+  clauseOverrides: v.exactOptional(
+    v.pipe(v.record(v.string(), clauseBodySchema), v.maxEntries(200)),
+  ),
 });
 
 const fillByIdQuerySchema = v.object({

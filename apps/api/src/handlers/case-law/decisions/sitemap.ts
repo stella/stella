@@ -83,12 +83,25 @@ const capacityExceeded = (message: string) =>
 export const sitemapShardDecisionsQuerySchema = v.object({
   country: v.pipe(
     v.string(),
+    v.maxLength(8),
     v.regex(new RegExp(SITEMAP_COUNTRY_PATTERN, "u")),
   ),
-  year: v.pipe(v.string(), v.regex(new RegExp(SITEMAP_YEAR_PATTERN, "u"))),
-  month: v.pipe(v.string(), v.regex(new RegExp(SITEMAP_MONTH_PATTERN, "u"))),
+  year: v.pipe(
+    v.string(),
+    v.maxLength(7),
+    v.regex(new RegExp(SITEMAP_YEAR_PATTERN, "u")),
+  ),
+  month: v.pipe(
+    v.string(),
+    v.length(2),
+    v.regex(new RegExp(SITEMAP_MONTH_PATTERN, "u")),
+  ),
   bucket: v.optional(
-    v.pipe(v.string(), v.regex(new RegExp(SITEMAP_BUCKET_PATTERN, "u"))),
+    v.pipe(
+      v.string(),
+      v.maxLength(16),
+      v.regex(new RegExp(SITEMAP_BUCKET_PATTERN, "u")),
+    ),
   ),
 });
 

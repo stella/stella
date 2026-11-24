@@ -61,7 +61,9 @@ const readKanbanGroupBodySchema = v.object({
   ),
   groupByPropertyId: tGroupByPropertyId,
   groupValue: v.nullable(v.pipe(v.string(), v.maxLength(1000))),
-  optionValues: v.optional(v.array(v.pipe(v.string(), v.maxLength(1000)))),
+  optionValues: v.optional(
+    v.pipe(v.array(v.pipe(v.string(), v.maxLength(1000))), v.maxLength(500)),
+  ),
 });
 
 const config = {

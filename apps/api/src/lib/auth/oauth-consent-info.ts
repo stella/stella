@@ -453,7 +453,7 @@ export const createOAuthConsentInfoPlugin = (
         {
           method: "GET",
           use: [sessionMiddleware],
-          query: v.object({ client_id: v.string() }),
+          query: v.object({ client_id: v.pipe(v.string(), v.maxLength(256)) }),
         },
         async (ctx) => {
           const client = await ctx.context.adapter.findOne<SchemaClient>({

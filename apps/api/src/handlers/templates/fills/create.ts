@@ -63,7 +63,9 @@ const fillToWorkspaceParamsSchema = workspaceParams({
 
 const fillToWorkspaceBodySchema = v.object({
   values: jsonObjectSchema,
-  clauseOverrides: v.optional(v.record(v.string(), clauseBodySchema)),
+  clauseOverrides: v.optional(
+    v.pipe(v.record(v.string(), clauseBodySchema), v.maxEntries(200)),
+  ),
   name: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(255))),
   parentId: v.optional(resourceIdSchema("entity")),
 });

@@ -21,10 +21,11 @@ export class SnippetCompareFileError extends TaggedError(
 )<{ message: string }> {}
 
 const snippetCompareQuerySchema = v.strictObject({
-  id: v.pipe(v.string(), v.nonEmpty()),
-  text: v.pipe(v.string(), v.nonEmpty()),
+  id: v.pipe(v.string(), v.nonEmpty(), v.maxLength(4096)),
+  text: v.pipe(v.string(), v.nonEmpty(), v.maxLength(4096)),
   country: v.pipe(
     v.string(),
+    v.maxLength(16),
     v.check(isCorpusIndexJurisdiction, "must be a 2-8 letter country code"),
   ),
 });
@@ -32,6 +33,7 @@ const snippetCompareQuerySchema = v.strictObject({
 const snippetCompareQueryFileSchema = v.pipe(
   v.array(snippetCompareQuerySchema),
   v.minLength(1, "query file must hold at least one query"),
+  v.maxLength(10_000),
   v.check(
     (queries) =>
       new Set(queries.map((query) => query.id)).size === queries.length,

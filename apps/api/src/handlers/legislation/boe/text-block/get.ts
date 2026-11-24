@@ -7,7 +7,7 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
 const paramsSchema = v.object({
-  lawId: v.pipe(v.string(), v.regex(/^BOE-[A-Z]-\d{4}-\d+$/u)),
+  lawId: v.pipe(v.string(), v.maxLength(64), v.regex(/^BOE-[A-Z]-\d{4}-\d+$/u)),
   blockId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
 });
 

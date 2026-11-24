@@ -36,7 +36,7 @@ export const desktopEditSessionEventsParamsSchema = v.object({
 });
 
 export const desktopEditSessionEventsHeadersSchema = v.object({
-  authorization: v.optional(v.string()),
+  authorization: v.optional(v.pipe(v.string(), v.maxLength(4096))),
 });
 
 type SessionEventConnection = {

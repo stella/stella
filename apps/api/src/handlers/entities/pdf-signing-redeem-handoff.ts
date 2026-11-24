@@ -27,7 +27,11 @@ const config = {
   accountAccess: ACCOUNT_ACCESS.sandbox,
   mcp: { type: "internal", reason: "session_token_exchange" },
   body: v.object({
-    handoffToken: v.pipe(v.string(), v.check(isOpaqueTokenShape)),
+    handoffToken: v.pipe(
+      v.string(),
+      v.maxLength(512),
+      v.check(isOpaqueTokenShape),
+    ),
   }),
 } satisfies TokenHandlerConfig;
 

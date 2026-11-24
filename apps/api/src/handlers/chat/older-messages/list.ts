@@ -33,7 +33,7 @@ const config = {
   },
   params: v.object({ threadId: resourceIdSchema("chatThread") }),
   query: v.object({
-    before: v.string(),
+    before: v.pipe(v.string(), v.maxLength(128)),
     workspaceId: v.optional(resourceIdSchema("workspace")),
   }),
 } satisfies HandlerConfig;

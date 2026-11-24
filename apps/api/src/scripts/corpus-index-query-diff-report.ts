@@ -26,12 +26,14 @@ export class GoldenQueryFileError extends TaggedError("GoldenQueryFileError")<{
 
 const goldenQueryFiltersSchema = v.pipe(
   v.strictObject({
-    court: v.optional(v.pipe(v.string(), v.nonEmpty())),
+    court: v.optional(v.pipe(v.string(), v.nonEmpty(), v.maxLength(4096))),
     dateFrom: v.optional(apiDateSchema),
     dateTo: v.optional(apiDateSchema),
-    documentType: v.optional(v.pipe(v.string(), v.nonEmpty())),
-    language: v.optional(v.pipe(v.string(), v.nonEmpty())),
-    source: v.optional(v.pipe(v.string(), v.nonEmpty())),
+    documentType: v.optional(
+      v.pipe(v.string(), v.nonEmpty(), v.maxLength(4096)),
+    ),
+    language: v.optional(v.pipe(v.string(), v.nonEmpty(), v.maxLength(4096))),
+    source: v.optional(v.pipe(v.string(), v.nonEmpty(), v.maxLength(4096))),
   }),
   // A reversed range matches nothing in either generation, so the query
   // would pass the gate while testing neither index.
@@ -47,21 +49,23 @@ const goldenQueryFiltersSchema = v.pipe(
 );
 
 const goldenQuerySchema = v.strictObject({
-  id: v.pipe(v.string(), v.nonEmpty()),
+  id: v.pipe(v.string(), v.nonEmpty(), v.maxLength(4096)),
   jurisdiction: v.pipe(
     v.string(),
+    v.maxLength(16),
     v.check(
       isCorpusIndexJurisdiction,
       "must be a 2-8 letter jurisdiction code",
     ),
   ),
-  text: v.pipe(v.string(), v.nonEmpty()),
+  text: v.pipe(v.string(), v.nonEmpty(), v.maxLength(4096)),
   filters: v.optional(goldenQueryFiltersSchema),
 });
 
 const goldenQueryFileSchema = v.pipe(
   v.array(goldenQuerySchema),
   v.minLength(1, "query file must hold at least one query"),
+  v.maxLength(10_000),
   v.check(
     (queries) =>
       new Set(queries.map((query) => query.id)).size === queries.length,

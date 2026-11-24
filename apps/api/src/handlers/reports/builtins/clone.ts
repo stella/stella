@@ -51,7 +51,7 @@ const config = {
     consumesServices: false,
   },
   params: workspaceParams({}),
-  body: v.object({ key: v.pipe(v.string(), v.minLength(1)) }),
+  body: v.object({ key: v.pipe(v.string(), v.minLength(1), v.maxLength(128)) }),
 } satisfies WorkspaceHandlerConfig;
 
 export type CloneBuiltinReportTemplateDependencies = {
