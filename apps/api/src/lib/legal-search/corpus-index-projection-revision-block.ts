@@ -1,4 +1,4 @@
-import { type InferOk, panic, Result } from "better-result";
+import { type InferOk, panic, Result, UnhandledException } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
@@ -326,32 +326,37 @@ const subjectOfLease = ({
  */
 export const rederiveMismatchedCorpusProjectionDesiredStates: CorpusProjectionMismatchRederivation =
   async (runInTransaction, leases) => {
-    await mapSequentially(leases, async (lease) => {
-      const subject = subjectOfLease(lease);
-      const reconciled = await Result.tryPromise({
-        try: async () =>
-          await runInTransaction(
-            async (tx) =>
-              await reconcileCorpusProjectionDesiredStateTx(tx, subject),
-          ),
-        catch: (cause) => cause,
-      });
-      if (reconciled.isOk()) {
-        if (reconciled.value.isErr()) {
+    await mapSequentially(
+      leases,
+      async (lease): Promise<"reconciled" | "held" | "missing"> => {
+        const subject = subjectOfLease(lease);
+        const reconciled = await Result.tryPromise({
+          try: async () =>
+            await runInTransaction(
+              async (tx) =>
+                await reconcileCorpusProjectionDesiredStateTx(tx, subject),
+            ),
+          catch: (cause) =>
+            cause instanceof Error ? cause : new UnhandledException({ cause }),
+        });
+        if (reconciled.isOk()) {
+          if (reconciled.value.isOk()) {
+            return "reconciled";
+          }
           logger.warn("corpus_projection.mismatch_repair_held", {
             entity: lease.entityId,
             generation: lease.generation,
           });
+          return "held";
         }
-        return;
-      }
-      if (
-        reconciled.error instanceof CorpusIndexProjectionSubjectMissingError
-      ) {
-        return;
-      }
-      return await Promise.reject(reconciled.error);
-    });
+        if (
+          reconciled.error instanceof CorpusIndexProjectionSubjectMissingError
+        ) {
+          return "missing";
+        }
+        return await Promise.reject(reconciled.error);
+      },
+    );
   };
 
 type SettleRejectedCorpusProjectionMaterialsOptions = {

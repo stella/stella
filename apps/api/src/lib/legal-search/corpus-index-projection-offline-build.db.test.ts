@@ -1401,7 +1401,7 @@ describe("offline route build", () => {
       );
     const [moved, gone] = model.entityIds;
     if (moved === undefined || gone === undefined) {
-      return panic("Expected two canonical inputs");
+      panic("Expected two canonical inputs");
     }
     // The store's re-derivation for one input; for the other a derivation
     // that agrees with its desired state while the material read does not.

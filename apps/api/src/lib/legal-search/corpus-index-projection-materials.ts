@@ -197,52 +197,56 @@ const sortLeasesByReadiness = <Row extends MaterialRow>(
   const byEntityId = new Map<string, Row>(
     rows.map((row) => [row.documentId, row]),
   );
-  const ready: CorpusProjectionMaterial[] = [];
-  const rejected: CorpusProjectionMaterialRejection[] = [];
-  for (const lease of leases) {
+  // Every lease gets exactly one typed outcome: its material, or the
+  // rejection that says why not.
+  const judge = (
+    lease: CorpusProjectionIntentLease,
+  ):
+    | { type: "ready"; material: CorpusProjectionMaterial }
+    | { type: "rejected"; rejection: CorpusProjectionMaterialRejection } => {
+    const rejected = (
+      status: CorpusProjectionMaterialRejection["status"],
+      reason: string,
+    ) => ({
+      type: "rejected" as const,
+      rejection: rejection(lease, status, reason),
+    });
     const intent = intents.get(lease.intentId);
     if (intent === undefined || !intentMatchesLease(intent, lease)) {
-      rejected.push(rejection(lease, "lease_lost", "reservation changed"));
-      continue;
+      return rejected("lease_lost", "reservation changed");
     }
     const state = states.get(lease.entityId);
     if (state === undefined || !stateMatchesLease(state, lease)) {
-      rejected.push(
-        rejection(lease, "stale", "desired state moved past the reservation"),
-      );
-      continue;
+      return rejected("stale", "desired state moved past the reservation");
     }
     const row = byEntityId.get(lease.entityId);
     if (row === undefined) {
-      rejected.push(
-        rejection(
-          lease,
-          "canonical_input_mismatch",
-          "projection reservation rejected: its canonical row disappeared",
-        ),
+      return rejected(
+        "canonical_input_mismatch",
+        "projection reservation rejected: its canonical row disappeared",
       );
-      continue;
     }
     const { descriptor, material } = project(row);
     if (!descriptorMatchesLease(descriptor, lease)) {
-      rejected.push(
-        rejection(
-          lease,
-          "canonical_input_mismatch",
-          "projection reservation rejected: its canonical input differs",
-        ),
+      return rejected(
+        "canonical_input_mismatch",
+        "projection reservation rejected: its canonical input differs",
       );
-      continue;
     }
     if (row.textS3Key === null) {
-      rejected.push(
-        rejection(lease, "unreadable", "canonical text pointer is absent"),
-      );
-      continue;
+      return rejected("unreadable", "canonical text pointer is absent");
     }
-    ready.push(material(lease, row.textS3Key));
-  }
-  return { ready, rejected };
+    return { type: "ready", material: material(lease, row.textS3Key) };
+  };
+  const judged = leases.map(judge);
+  return {
+    ready: judged.flatMap((outcome) =>
+      outcome.type === "ready" ? [outcome.material] : [],
+    ),
+    rejected: judged.flatMap((outcome) =>
+      outcome.type === "rejected" ? [outcome.rejection] : [],
+    ),
+  };
 };
 
 type ReadCaseLawMaterialsOptions = {
