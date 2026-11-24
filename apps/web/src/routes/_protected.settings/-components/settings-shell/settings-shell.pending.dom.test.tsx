@@ -166,6 +166,8 @@ describe("the account pages' pending views", () => {
     expect(titles).toEqual([
       messages.common.displayName,
       messages.settings.account.timezone,
+      messages.settings.account.wordEditIdentity,
+      messages.settings.account.localePreferences,
       messages.navigation.chat,
       messages.settings.account.dangerZone,
     ]);
