@@ -4,11 +4,7 @@ import type { ReactElement } from "react";
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 
-import {
-  CALLER_FEATURE,
-  DEFAULT_CURRENCY,
-  type SELLER_PROFILE_TEXT_FIELDS,
-} from "@stll/api-contract";
+import type { SELLER_PROFILE_TEXT_FIELDS } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DialogFooter, DialogPanel } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
@@ -19,9 +15,11 @@ import { SwitchField } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
+import { DEFAULT_CURRENCY } from "@/components/billing/format-currency";
 import { detached } from "@/lib/detached";
-import { CallerFeatureGate } from "@/lib/feature-gate";
-import type { FeatureAdmission } from "@/lib/feature-gate";
+import { CallerFeatureGate } from "@/lib/organization/feature-access/access";
+import type { FeatureAdmission } from "@/lib/organization/feature-access/access";
+import { CALLER_FEATURE } from "@/lib/organization/feature-access/surfaces";
 import type {
   SellerProfile,
   SellerProfileInput,
