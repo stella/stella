@@ -2209,11 +2209,6 @@
     "owner": "desktop",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/visual-preview/browser/render.test.ts": {
-    "count": 4,
-    "owner": "visual-preview",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/web/e2e/collab/folio-collaboration.spec.ts": {
     "count": 5,
     "owner": "web",
@@ -2236,11 +2231,6 @@
   },
   "apps/web/e2e/specs/law-authenticated-sidebar.spec.ts": {
     "count": 1,
-    "owner": "web",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/web/e2e/specs/network-collector.spec.ts": {
-    "count": 2,
     "owner": "web",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2354,11 +2344,6 @@
     "owner": "cli",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/cli/src/auth/loopback-listener.test.ts": {
-    "count": 2,
-    "owner": "cli",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/cli/src/auth/machine-api-key-precedence.test.ts": {
     "count": 2,
     "owner": "cli",
@@ -2427,11 +2412,6 @@
   "packages/sanctions/src/screening.test.ts": {
     "count": 4,
     "owner": "sanctions",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/ui/src/components/animated-preview.dom.test.tsx": {
-    "count": 2,
-    "owner": "ui",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/ui/src/kanban/sortable-interactions.playwright.spec.ts": {

@@ -358,7 +358,10 @@ test.each(["api", "web"] as const)(
       const target = { ...targetFor(root), runner };
       expect(
         await runOnce({ target, seed: 11, timeoutMs: 10_000 }),
-      ).toMatchObject({ passed: true, ranTests: true });
+      ).toMatchObject({
+        passed: true,
+        ranTests: true,
+      });
       write(root, "empty.ts", 'console.log("0 pass");');
       expect(
         await runOnce({
@@ -391,7 +394,11 @@ test("a Bun file whose every test is skipped on this runner is not gated", async
     );
     expect(
       await runOnce({ target: targetFor(root), seed: 11, timeoutMs: 10_000 }),
-    ).toMatchObject({ type: "executed", passed: true, ranTests: true });
+    ).toMatchObject({
+      type: "executed",
+      passed: true,
+      ranTests: true,
+    });
   });
 });
 
@@ -461,6 +468,46 @@ test("the gate reports bounded output only for the first failed trial of each fi
   expect(reportExitCode(report, true)).toBe(1);
 });
 
+test("files outside a package test script directory filter are skipped", async () => {
+  await withFixture((root) => {
+    write(
+      root,
+      "apps/visual-preview/package.json",
+      JSON.stringify({
+        name: "@stll/visual-preview",
+        scripts: { test: "bun test src", "test:browser": "bun test browser" },
+      }),
+    );
+    write(
+      root,
+      "apps/visual-preview/browser/render.test.ts",
+      'import { test } from "bun:test";\ntest("browser", () => {});\n',
+    );
+    write(
+      root,
+      "apps/visual-preview/src/unit.test.ts",
+      'import { test } from "bun:test";\ntest("unit", () => {});\n',
+    );
+    const { targets, skipped } = selectTargets({
+      root,
+      changed: [
+        "apps/visual-preview/browser/render.test.ts",
+        "apps/visual-preview/src/unit.test.ts",
+      ],
+      hasDb: false,
+    });
+    expect(targets.map(({ file }) => file)).toEqual([
+      "apps/visual-preview/src/unit.test.ts",
+    ]);
+    expect(skipped).toEqual([
+      {
+        file: "apps/visual-preview/browser/render.test.ts",
+        reason: "not gated (excluded by package test script)",
+      },
+    ]);
+  });
+});
+
 test("fixture strings and comments do not classify a Bun test as Playwright", async () => {
   await withFixture((root) => {
     write(
@@ -515,7 +562,10 @@ test("mixed runtime packages select their Bun-only command", async () => {
       "./unit.test.ts",
     ]);
     expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
-      { type: "executed", passed: true },
+      {
+        type: "executed",
+        passed: true,
+      },
     );
   });
 });
@@ -546,7 +596,10 @@ test("selected files replace package directory filters and exclude failing sibli
       throw new TypeError("Expected selected target");
     }
     expect(await runOnce({ target, seed: 1, timeoutMs: 10_000 })).toMatchObject(
-      { type: "executed", passed: true },
+      {
+        type: "executed",
+        passed: true,
+      },
     );
   });
 });
