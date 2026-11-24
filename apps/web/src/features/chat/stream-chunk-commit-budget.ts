@@ -37,7 +37,7 @@ const STREAMING_UNCHANGED_PROPS_RENDERS_PER_COMMIT = 2;
 type ComposerControls = {
   ComposerPlusMenu: { name: string };
   ChatPromptImproveButton: { name: string };
-  ChatComposerActionButton: { name: string };
+  ChatComposerDictateButton: { name: string };
 };
 
 // Resolve names from the real imports after the DOM probe is installed. This
@@ -45,11 +45,11 @@ type ComposerControls = {
 const untouchedComposerControls = ({
   ComposerPlusMenu,
   ChatPromptImproveButton,
-  ChatComposerActionButton,
+  ChatComposerDictateButton,
 }: ComposerControls) => [
   ComposerPlusMenu.name,
   ChatPromptImproveButton.name,
-  ChatComposerActionButton.name,
+  ChatComposerDictateButton.name,
 ];
 
 type StreamChunkBudget = {
