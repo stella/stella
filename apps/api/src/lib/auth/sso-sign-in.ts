@@ -209,33 +209,36 @@ const resolveSsoUser = async (
     return reject(SSO_REJECTION_CODE.unavailable);
   }
   let email: string | undefined;
-  if (input.protocol === "oidc") {
-    // The signed ID token decides verification. With a user-info endpoint the
-    // plugin reads the profile, and its `email_verified`, from that unsigned
-    // response, which may omit the claim; only its address must match.
-    email = verifiedIdTokenEmail(input.verifiedIdTokenClaims);
-    if (
-      email === undefined ||
-      normalizeEmail(input.providerUser.email) !== email
-    ) {
-      return reject(SSO_REJECTION_CODE.emailUnverified);
+  switch (input.protocol) {
+    case "oidc": {
+      // The signed ID token decides verification. With a user-info endpoint the
+      // plugin reads the profile, and its `email_verified`, from that unsigned
+      // response, which may omit the claim; only its address must match.
+      email = verifiedIdTokenEmail(input.verifiedIdTokenClaims);
+      if (
+        email === undefined ||
+        normalizeEmail(input.providerUser.email) !== email
+      ) {
+        return reject(SSO_REJECTION_CODE.emailUnverified);
+      }
+      if (!carriesStateNonce(input.verifiedIdTokenClaims)) {
+        return reject(SSO_REJECTION_CODE.nonceMismatch);
+      }
+      break;
     }
-    if (!carriesStateNonce(input.verifiedIdTokenClaims)) {
-      return reject(SSO_REJECTION_CODE.nonceMismatch);
+    case "saml": {
+      // SAML assertions are signature-verified, timestamp-checked, and
+      // InResponseTo-validated by the plugin before reaching resolveUser.
+      const rawEmail = input.providerUser.email;
+      email =
+        typeof rawEmail === "string" && rawEmail.includes("@")
+          ? normalizeEmail(rawEmail)
+          : undefined;
+      if (email === undefined) {
+        return reject(SSO_REJECTION_CODE.emailUnverified);
+      }
+      break;
     }
-  } else if (input.protocol === "saml") {
-    // SAML assertions are signature-verified, timestamp-checked, and
-    // InResponseTo-validated by the plugin before reaching resolveUser.
-    const rawEmail = input.providerUser.email;
-    email =
-      typeof rawEmail === "string" && rawEmail.includes("@")
-        ? normalizeEmail(rawEmail)
-        : undefined;
-    if (email === undefined) {
-      return reject(SSO_REJECTION_CODE.emailUnverified);
-    }
-  } else {
-    return reject(SSO_REJECTION_CODE.protocolUnavailable);
   }
 
   const bound = await database.findOne<{
