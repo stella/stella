@@ -1726,7 +1726,7 @@ const ClipboardApp = () => {
     clipboardHistory,
     {
       snapshot: EMPTY_SNAPSHOT,
-      selection: { ids: [], session: 0 },
+      selection: { ids: [], session: 0, copy: "idle" },
     },
   );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -2241,9 +2241,11 @@ const ClipboardApp = () => {
    *  already hid. */
   const trackCopy = (copying: Promise<unknown>, session: number) => {
     setError((current) => (current?.source === "operation" ? null : current));
+    dispatchClipboard({ type: "copyStarted", session });
     void copying
       .then(() => dispatchClipboard({ type: "copySucceeded", session }))
       .catch((error: unknown) => {
+        dispatchClipboard({ type: "copyFailed", session });
         // An unrecognised rejection means the clip never left the window.
         const kind = isClipboardCopyError(error) ? error.kind : "copy";
         const feedback = COPY_FAILURE_FEEDBACK[kind];
@@ -2284,7 +2286,8 @@ const ClipboardApp = () => {
     if (!focusInBar) {
       return;
     }
-    if (activeItemId) {
+    // The registry scope has no rail to reveal a card in.
+    if (activeItemId && timelineRailRef.current) {
       revealCard({
         rail: timelineRailRef.current,
         id: activeItemId,

@@ -3,6 +3,7 @@ import * as fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
+import type { ClipboardSelectionState } from "../src/clipboard/clipboard-selection";
 import { clipboardHistory } from "../src/clipboard/clipboard-selection";
 import {
   canCreateClipboardGroup,
@@ -106,7 +107,11 @@ describe("settings answers in the Clips window", () => {
 
   test("the history reducer applies an answer without dropping the selection", () => {
     const state = {
-      selection: { ids: ["clip-1"], session: 2 },
+      selection: {
+        ids: ["clip-1"],
+        session: 2,
+        copy: "idle",
+      } satisfies ClipboardSelectionState,
       snapshot: snapshot(),
     };
     const next = clipboardHistory(state, {

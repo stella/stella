@@ -8,9 +8,14 @@ import type {
   ClipboardSnapshot,
 } from "./clipboard-types";
 
+/** `pending` while a copy the user started has not answered yet: a dismissal
+ *  then must not write the clipboard over it. */
+type ClipboardSelectionCopy = "idle" | "pending";
+
 export type ClipboardSelectionState = {
   ids: string[];
   session: number;
+  copy: ClipboardSelectionCopy;
 };
 
 export type ClipboardSelectionAction =
@@ -18,6 +23,8 @@ export type ClipboardSelectionAction =
   | { type: "historyChanged"; ids: readonly string[] }
   | { type: "clear" }
   | { type: "sessionStarted" }
+  | { type: "copyStarted"; session: number }
+  | { type: "copyFailed"; session: number }
   | { type: "copySucceeded"; session: number };
 
 /** Owns selection order and lifetime, including completions from an older session. */
@@ -31,23 +38,39 @@ export const clipboardSelection = (
       return {
         ids: selection.ids.filter((id) => existingIds.has(id)),
         session: selection.session,
+        copy: selection.copy,
       };
     }
     case "sessionStarted":
-      return { ids: [], session: selection.session + 1 };
+      return { ids: [], session: selection.session + 1, copy: "idle" };
+    case "copyStarted":
+      if (action.session !== selection.session) {
+        return selection;
+      }
+      return {
+        ids: selection.ids,
+        session: selection.session,
+        copy: "pending",
+      };
+    case "copyFailed":
+      if (action.session !== selection.session) {
+        return selection;
+      }
+      return { ids: selection.ids, session: selection.session, copy: "idle" };
     case "copySucceeded":
       if (action.session !== selection.session) {
         return selection;
       }
-      return { ids: [], session: selection.session };
+      return { ids: [], session: selection.session, copy: "idle" };
     case "clear":
-      return { ids: [], session: selection.session };
+      return { ids: [], session: selection.session, copy: selection.copy };
     case "toggle":
       return {
         ids: selection.ids.includes(action.id)
           ? selection.ids.filter((id) => id !== action.id)
           : [...selection.ids, action.id],
         session: selection.session,
+        copy: selection.copy,
       };
     default: {
       action satisfies never;
@@ -60,7 +83,8 @@ type ClipboardDismissalCopy =
   { type: "none" } | { type: "copySelection"; ids: string[]; session: number };
 
 /** An outside click commits the selection it leaves behind, in selection
- *  order; any other close (Escape, a copy, the shortcut) copies nothing. */
+ *  order, unless a copy the user started is still answering; any other close
+ *  (Escape, a copy, the shortcut) copies nothing. */
 export const clipboardDismissalCopy = (
   selection: ClipboardSelectionState,
   reason: ClipboardHideReason,
@@ -69,7 +93,7 @@ export const clipboardDismissalCopy = (
     case "requested":
       return { type: "none" };
     case "deactivated":
-      return selection.ids.length === 0
+      return selection.ids.length === 0 || selection.copy === "pending"
         ? { type: "none" }
         : {
             type: "copySelection",
