@@ -3,7 +3,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useSearch } from "@tanstack/react-router";
 
 import { InputFace } from "@stll/ui/control-face";
-import { CircleHelpIcon, SearchIcon } from "@stll/ui/icons";
+import { SearchIcon } from "@stll/ui/icons";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
@@ -126,14 +126,7 @@ const MembersTableHeader = ({
             <TableHead className={className} key={column.id}>
               <span className="inline-flex items-center gap-1">
                 {text}
-                {column.id === "billing"
-                  ? (billingHeaderHelp ?? (
-                      <CircleHelpIcon
-                        aria-hidden="true"
-                        className="text-muted-foreground size-3.5"
-                      />
-                    ))
-                  : null}
+                {billingHeaderHelp}
               </span>
             </TableHead>
           );

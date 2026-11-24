@@ -63,7 +63,7 @@ export type EntityActionsProps = {
    * (for example `<TableRow />`, where a wrapping `<div className="contents">`
    * would be invalid HTML inside `<tbody>`).
    */
-  render?: useRender.RenderProp<Record<string, unknown>>;
+  render?: useRender.RenderProp;
 };
 
 type CursorAnchor = { getBoundingClientRect: () => DOMRect };
