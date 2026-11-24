@@ -25,6 +25,7 @@ import type {
   ChatSend,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
+import { ChatComposerDictateButton } from "@/components/chat/chat-composer-dictate-button";
 import { ChatComposerQueueButton } from "@/components/chat/chat-composer-queue-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import type { ComposerModelsMenuProps } from "@/components/chat/chat-model-options-menu";
@@ -445,20 +446,29 @@ export const ChatInputSurface = ({
                   sendDisabledReason={sendDisabledReason}
                   submitDraft={submitDraft}
                 />
-                <ChatComposerActionButton
-                  canSend={canSend}
-                  disabledReason={sendDisabledReason}
+                <ChatComposerDictateButton
+                  blank={isBlank}
+                  context={context}
+                  controller={controller}
+                  disabled={inputDisabled}
                   guideAnchorsEnabled={guideAnchorsEnabled}
                   isGenerating={isGenerating}
-                  onSend={() => {
-                    detached(
-                      submitDraft(CHAT_MEMBER_SEND_ACTION.send),
-                      "chat-input-surface.submit-draft",
-                    );
-                  }}
-                  onStop={onStop}
-                  stopping={stopping}
-                />
+                >
+                  <ChatComposerActionButton
+                    canSend={canSend}
+                    disabledReason={sendDisabledReason}
+                    guideAnchorsEnabled={guideAnchorsEnabled}
+                    isGenerating={isGenerating}
+                    onSend={() => {
+                      detached(
+                        submitDraft(CHAT_MEMBER_SEND_ACTION.send),
+                        "chat-input-surface.submit-draft",
+                      );
+                    }}
+                    onStop={onStop}
+                    stopping={stopping}
+                  />
+                </ChatComposerDictateButton>
               </ControlGroup>
             </div>
           </div>

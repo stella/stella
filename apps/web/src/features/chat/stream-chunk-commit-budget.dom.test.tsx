@@ -80,8 +80,8 @@ const { ComposerPlusMenu } =
   await import("@/components/chat/composer-plus-menu");
 const { ChatPromptImproveButton } =
   await import("@/components/chat/chat-prompt-improve-button");
-const { ChatComposerActionButton } =
-  await import("@/components/chat/chat-composer-action-button");
+const { ChatComposerDictateButton } =
+  await import("@/components/chat/chat-composer-dictate-button");
 const { __resetChatRequestStateForTests } =
   await import("@/features/chat/chat-runtime-registry");
 const { toSafeId } = await import("@/lib/safe-id");
@@ -89,7 +89,7 @@ const { toSafeId } = await import("@/lib/safe-id");
 const UNTOUCHED_COMPONENTS = {
   ComposerPlusMenu,
   ChatPromptImproveButton,
-  ChatComposerActionButton,
+  ChatComposerDictateButton,
 } satisfies Parameters<
   (typeof STREAM_CHUNK_COMMIT_BUDGET)[StreamChunkKind]["untouched"]
 >[0];
@@ -593,7 +593,7 @@ const commitRateWhileStreaming = async (kind: StreamChunkKind) => {
     expect(
       testing
         .within(page.view.container)
-        .queryByRole("button", { name: translations.chat.sendPrompt }) === null,
+        .queryByRole("button", { name: translations.chat.dictate }) === null,
     ).toBe(false);
   });
   const { firstAt, lastAt } = server.burst;
