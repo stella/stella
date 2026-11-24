@@ -9,19 +9,6 @@
 // parser-output-unchanged: the Slovak ÚOOÚ gate entry is new; existing adapters read only their own keys, so their parsed output is unchanged.
 import { DAY_IN_MS } from "@stll/time";
 
-type PublisherGate = {
-  /** Named in gate errors and logs; the publisher, not the adapter. */
-  readonly publisher: string;
-  /** Minimum gap between two requests to this publisher, in milliseconds. */
-  readonly intervalMs: number;
-  /**
-   * The hosts this publisher serves from, as a request names them. A URL the
-   * publisher hands back is only followed onto one of these; see
-   * `publisher-target.ts`.
-   */
-  readonly hosts: readonly string[];
-};
-
 /**
  * A politeness floor, not a publisher statement.
  *
@@ -47,43 +34,6 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  * waiting. Several adapters may name the same gate: one publisher serving ten
  * Austrian tribunals is one budget, not ten.
  */
-type PublisherGatesKey =
-  | "uoou-cz"
-  | "uoou-sk"
-  | "suip-cz"
-  | "financnisprava-cz"
-  | "mv-cz"
-  | "bfdi-de"
-  | "uohs-cz"
-  | "tjdft-jus-br"
-  | "tst-jus-br"
-  | "edpb-eu"
-  | "commission-eu"
-  | "nalus-usoud"
-  | "ris-bka"
-  | "findok-bmf"
-  | "sn-pl"
-  | "uzp-pl"
-  | "trybunal-pl"
-  | "ms-gov-pl"
-  | "nsoud-cz"
-  | "nsoud-sbirka-cz"
-  | "isir-justice-cz"
-  | "nssoud-cz"
-  | "justice-cz"
-  | "justice-sk"
-  | "nsud-sk"
-  | "nssud-sk"
-  | "usoud-cz"
-  | "ustavnysud-sk"
-  | "saos-pl"
-  | "huggingface-datasets"
-  | "uodo-gov-pl"
-  | "uokik-gov-pl"
-  | "fcl-uk"
-  | "birosag-hu"
-  | "eureka-mf"
-  | "cellar-eu";
 
 export const PUBLISHER_GATES = {
   /**
@@ -346,6 +296,6 @@ export const PUBLISHER_GATES = {
     intervalMs: 1000,
     hosts: ["publications.europa.eu"],
   },
-} as const satisfies Record<PublisherGatesKey, PublisherGate>;
+} as const;
 
 export type PublisherGateId = keyof typeof PUBLISHER_GATES;

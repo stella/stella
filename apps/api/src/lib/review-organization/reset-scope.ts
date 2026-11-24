@@ -31,56 +31,6 @@ import { requireNoHold } from "@/api/lib/workspaces/legal-holds/holds";
  * by a cascade from one that is.
  * `reset-scope.test.ts` fails when a table is in neither.
  */
-type ReviewResetKeptTablesKey =
-  | "member"
-  | "invitation"
-  | "audit_logs"
-  | "account_exports"
-  | "organization_settings"
-  | "sso_provider"
-  | "organization_sso_policy"
-  | "organization_sso_domain"
-  | "organization_sso_pending_member"
-  | "billing_draft_user_settings"
-  | "conflict_checks"
-  | "organization_access_states"
-  | "organization_configured_access"
-  | "feature_enrolments"
-  | "usage_allocations"
-  | "push_devices"
-  | "timer_activity_devices"
-  | "usage_entitlements"
-  | "usage_events"
-  | "usage_lane_counters"
-  | "usage_seat_assignments"
-  | "action_cost_calls"
-  | "action_cost_records"
-  | "hosted_checkout_claims"
-  | "organization_creation_requests"
-  | "organization_professional_use_acceptances"
-  | "model_run_budgets"
-  | "organization_file_objects"
-  | "organization_file_usage"
-  | "buffer_object_cleanup_intents"
-  | "entity_deletion_cleanup_requests"
-  | "agent_skill_original_cleanup_requests"
-  | "template_deletion_cleanup_requests"
-  | "mcp_web_handoff"
-  | "mcp_oauth_clients"
-  | "mcp_oauth_state"
-  | "mcp_user_connections"
-  | "service_oauth_clients"
-  | "oauth_grant_revocations"
-  | "mcp_connectors"
-  | "mcp_connector_authorization_reviews"
-  | "sharepoint_connections"
-  | "sharepoint_oauth_state"
-  | "business_registry_credentials"
-  | "feedback_reports"
-  | "legal_holds"
-  | "chat_content_v3_backfill_receipts"
-  | "sanctions_organization_marks"
-  | "sanctions_monitoring_backfills";
 
 export const REVIEW_RESET_KEPT_TABLES = {
   member: "Membership: the review account stays in its organization.",
@@ -155,7 +105,7 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Scheduler-maintained screening state; holds no reviewer content.",
   sanctions_monitoring_backfills:
     "Scheduler-maintained screening state; holds no reviewer content.",
-} as const satisfies Record<ReviewResetKeptTablesKey, string>;
+} as const;
 
 /**
  * Organization-scoped tables the reset empties for the review organization,

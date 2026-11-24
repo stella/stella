@@ -86,7 +86,6 @@ export const resolveLawArgsSchema = nullAsAbsent(
 );
 
 /** The resolver reads a country itself, so an unrecognized one reaches it. */
-type LegalResolveInputNormalizationKey = "country";
 
 export const LEGAL_RESOLVE_INPUT_NORMALIZATION = {
   country: {

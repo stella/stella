@@ -75,7 +75,6 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
-import type { UnpersistableDecisionField } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { restrictCzRegionalFinaldocUrl } from "@/api/lib/legal-search/cz-regional-finaldoc-url";
@@ -1043,16 +1042,12 @@ const publisherCitedCasesOf = (affectedDocs: unknown): string[] => {
 };
 
 /** The field each document metadata key a row is built from is refused as. */
-type CheckedMetadataFieldsKey = "solver" | "courtCode" | "affectedDocs";
 
 const CHECKED_METADATA_FIELDS = {
   solver: UNPERSISTABLE_DECISION_FIELDS.JUDGE_NAME,
   courtCode: UNPERSISTABLE_DECISION_FIELDS.COURT_CODE,
   affectedDocs: UNPERSISTABLE_DECISION_FIELDS.PUBLISHER_CITATIONS,
-} as const satisfies Record<
-  CheckedMetadataFieldsKey,
-  UnpersistableDecisionField
->;
+} as const;
 
 /**
  * Refuse a document metadata key the row is built from. The one throw site

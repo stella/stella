@@ -49,8 +49,6 @@ export const listCaseLawCourtsArgsSchema = nullAsAbsent(
   }),
 );
 
-type ListCaseLawCourtsInputNormalizationKey = "country";
-
 export const LIST_CASE_LAW_COURTS_INPUT_NORMALIZATION = {
   country: countryNormalization({
     spelling: "alpha-3",

@@ -46,38 +46,6 @@ type RisElementSpec =
   /** An empty marker (a section change, a docket-sheet placeholder). */
   | { type: "empty" };
 
-type RisElementsKey =
-  | "abschnitt"
-  | "liste"
-  | "ziffernliste"
-  | "strichliste"
-  | "kzinhalt"
-  | "fzinhalt"
-  | "ueberschrift"
-  | "absatz"
-  | "schluss"
-  | "listelem"
-  | "abstand"
-  | "symbol"
-  | "b"
-  | "i"
-  | "u"
-  | "super"
-  | "sup"
-  | "sub"
-  | "link"
-  | "span"
-  | "feld"
-  | "gs"
-  | "gdash"
-  | "amp"
-  | "lt"
-  | "gt"
-  | "tab"
-  | "br"
-  | "aw"
-  | "wechsel";
-
 export const RIS_ELEMENTS = {
   abschnitt: { type: "container" },
   liste: { type: "container" },
@@ -109,7 +77,7 @@ export const RIS_ELEMENTS = {
   br: { type: "line-break" },
   aw: { type: "empty" },
   wechsel: { type: "empty" },
-} as const satisfies Record<RisElementsKey, RisElementSpec>;
+} as const;
 
 const RIS_SPECS = new Map<string, RisElementSpec>(Object.entries(RIS_ELEMENTS));
 

@@ -2511,14 +2511,12 @@ const REASONING_RESERVATION_BY_EFFORT = {
   max: 32_768,
 } as const satisfies Record<ReasoningEffort, number>;
 
-type ReasoningEffortByGoogleLevelKey = "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
-
 const REASONING_EFFORT_BY_GOOGLE_LEVEL = {
   MINIMAL: "minimal",
   LOW: "low",
   MEDIUM: "medium",
   HIGH: "high",
-} as const satisfies Record<ReasoningEffortByGoogleLevelKey, ReasoningEffort>;
+} as const;
 
 type ReasoningCeilingModel = Extract<
   ResolvedTanStackTextModel,

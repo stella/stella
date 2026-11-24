@@ -11,35 +11,6 @@
 //
 // Only a type import: the lint rule loads this file.
 
-import type { SystemRunActor } from "./actors";
-
-type SystemAuditModulesKey =
-  | "apps/api/src/lib/scheduler/tasks/case-law-coverage-refresh.ts"
-  | "apps/api/src/lib/db/operator-activity/read.ts"
-  | "apps/api/src/lib/lists/sanctions/monitoring-fanout.ts"
-  | "apps/api/src/lib/db/operator-registrations/read.ts"
-  | "apps/api/src/lib/lists/sanctions/refresh.ts"
-  | "apps/api/src/lib/case-law/sitemap-shard-refresh.ts"
-  | "apps/api/src/lib/legal-search/statute-sitemap-shard-refresh.ts"
-  | "apps/api/src/lib/scheduler/tasks/case-law-population-fold.ts"
-  | "apps/api/src/lib/scheduler/tasks/case-law-population-seed.ts"
-  | "apps/api/src/lib/legal-search/legislation-facet-refresh.ts"
-  | "apps/api/src/lib/case-law/source-arrivals-refresh.ts"
-  | "apps/api/src/lib/scheduler/tasks/case-law-raw-storage.ts"
-  | "apps/api/src/lib/scheduler/tasks/registration-retention.ts"
-  | "apps/api/src/lib/hosted-usage-provider/webhook-retention.ts"
-  | "apps/api/src/lib/scheduler/tasks/hosted-customer-erasure.ts"
-  | "apps/api/src/lib/uploads/file-comparison/sweep.ts"
-  | "apps/api/src/lib/scheduler/tasks/corpus-index-job-detail-backfill.ts"
-  | "apps/api/src/lib/scheduler/tasks/case-law-parsed-input-state-backfill.ts"
-  | "apps/api/src/lib/scheduler/tasks/legislation-expression-id-backfill.ts"
-  | "apps/api/src/db/search-history-country-repair.ts"
-  | "apps/api/src/lib/scheduler/tasks/system-audit-retention.ts"
-  | "apps/api/src/handlers/case-law/polarity/form-repair.ts"
-  | "apps/api/src/handlers/case-law/ingestion/background-replay-store.ts"
-  | "apps/api/src/lib/legal-search/case-law-replay-audit.ts"
-  | "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts";
-
 export const SYSTEM_AUDIT_MODULES = {
   "apps/api/src/lib/scheduler/tasks/case-law-coverage-refresh.ts":
     "system:case-law-coverage-refresh",
@@ -89,7 +60,7 @@ export const SYSTEM_AUDIT_MODULES = {
     "system:case-law-background-replay",
   "apps/api/src/handlers/case-law/ingestion/eu-completion-store.ts":
     "system:eu-corpus-completion",
-} as const satisfies Record<SystemAuditModulesKey, SystemRunActor>;
+} as const;
 
 export type SystemAuditModule = keyof typeof SYSTEM_AUDIT_MODULES;
 

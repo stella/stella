@@ -796,37 +796,6 @@ export const TWO_FACTOR_SESSION_PATHS = {
  * includes server-only endpoints: an upstream endpoint cannot start trusting
  * a browser session without an explicit decision here.
  */
-type OauthProviderSessionPathsKey =
-  | "/.well-known/oauth-authorization-server"
-  | "/.well-known/openid-configuration"
-  | "/admin/oauth2/create-client"
-  | "/admin/oauth2/resources"
-  | "/admin/oauth2/resources/:identifier"
-  | "/admin/oauth2/resources/:identifier/clients/:client_id"
-  | "/admin/oauth2/update-client"
-  | "/oauth2/authorize"
-  | "/oauth2/client/rotate-keys"
-  | "/oauth2/client/rotate-secret"
-  | "/oauth2/consent"
-  | "/oauth2/continue"
-  | "/oauth2/create-client"
-  | "/oauth2/delete-client"
-  | "/oauth2/delete-consent"
-  | "/oauth2/end-session"
-  | "/oauth2/end-session/confirm"
-  | "/oauth2/get-client"
-  | "/oauth2/get-clients"
-  | "/oauth2/get-consent"
-  | "/oauth2/get-consents"
-  | "/oauth2/introspect"
-  | "/oauth2/public-client"
-  | "/oauth2/public-client-prelogin"
-  | "/oauth2/register"
-  | "/oauth2/revoke"
-  | "/oauth2/token"
-  | "/oauth2/update-client"
-  | "/oauth2/update-consent"
-  | "/oauth2/userinfo";
 
 export const OAUTH_PROVIDER_SESSION_PATHS = {
   "/.well-known/oauth-authorization-server": "no-browser-session",
@@ -860,10 +829,7 @@ export const OAUTH_PROVIDER_SESSION_PATHS = {
   "/oauth2/update-client": "browser-session",
   "/oauth2/update-consent": "browser-session",
   "/oauth2/userinfo": "no-browser-session",
-} as const satisfies Record<
-  OauthProviderSessionPathsKey,
-  "browser-session" | "no-browser-session"
->;
+} as const;
 
 const isOAuthProviderSessionPath = (
   path: string,

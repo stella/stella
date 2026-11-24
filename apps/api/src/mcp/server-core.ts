@@ -111,7 +111,6 @@ import {
   createMcpPreflightHeaders,
   getMcpServerIcons,
   getMcpWwwAuthenticateHeader,
-  type McpChallengeError,
 } from "@/api/mcp/metadata";
 import { classifyMcpMetricToolName } from "@/api/mcp/metric-tool-name";
 import { observeMcpToolCall } from "@/api/mcp/observe-tool-call";
@@ -416,8 +415,6 @@ const withMcpCors = async (
  * §3.1: only a presented-and-rejected token carries an `error` code, so a probe
  * that sent nothing is not told its credentials were refused.
  */
-type McpAccessDenialsKey =
-  "missing_credentials" | "invalid_token" | "organization_forbidden";
 
 const MCP_ACCESS_DENIALS = {
   missing_credentials: {
@@ -437,10 +434,7 @@ const MCP_ACCESS_DENIALS = {
     message: "Forbidden",
     status: 403,
   },
-} as const satisfies Record<
-  McpAccessDenialsKey,
-  { challengeError: McpChallengeError; message: string; status: 401 | 403 }
->;
+} as const;
 
 type McpAccessDenial = keyof typeof MCP_ACCESS_DENIALS;
 

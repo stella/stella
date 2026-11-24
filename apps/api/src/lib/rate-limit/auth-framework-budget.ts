@@ -2,36 +2,9 @@ import { panic } from "better-result";
 
 import { AUTH_RATE_LIMITS } from "@/api/lib/limits";
 import type { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
-import {
-  type BudgetName,
-  recordBudgetRejection,
-} from "@/api/lib/rate-limit/budget-observability";
+import { recordBudgetRejection } from "@/api/lib/rate-limit/budget-observability";
 
 // Exact rules precede wildcard rules; the framework chooses the first match.
-type AuthFrameworkBudgetsKey =
-  | "/sign-in-methods/send-otp"
-  | "/sign-up/email"
-  | "/email-otp/verify-email"
-  | "/email-otp/check-verification-otp"
-  | "/email-otp/reset-password"
-  | "/email-otp/request-email-change"
-  | "/email-otp/change-email"
-  | "/forget-password"
-  | "/reset-password"
-  | "/two-factor/verify-totp"
-  | "/two-factor/verify-backup-code"
-  | "/two-factor/enable"
-  | "/two-factor/disable"
-  | "/two-factor/*"
-  | "/sign-in/*"
-  | "/sign-up/*"
-  | "/change-password*"
-  | "/change-email*"
-  | "/request-password-reset"
-  | "/send-verification-email"
-  | "/forget-password*"
-  | "/email-otp/request-password-reset"
-  | "*";
 
 export const AUTH_FRAMEWORK_BUDGETS = {
   "/sign-in-methods/send-otp": {
@@ -123,10 +96,7 @@ export const AUTH_FRAMEWORK_BUDGETS = {
     rule: AUTH_RATE_LIMITS.defaultEmail,
   },
   "*": { name: "auth.framework.address", rule: AUTH_RATE_LIMITS.global },
-} as const satisfies Record<
-  AuthFrameworkBudgetsKey,
-  { name: BudgetName; rule: { max: number; window: number } }
->;
+} as const;
 
 export const AUTH_FRAMEWORK_BUDGET_RULES = Object.fromEntries(
   Object.entries(AUTH_FRAMEWORK_BUDGETS).map(([path, { rule }]) => [

@@ -10,35 +10,6 @@ const IGNORED_EVENT_DISPOSITIONS = {
 export type IgnoredEventDisposition =
   (typeof IGNORED_EVENT_DISPOSITIONS)[keyof typeof IGNORED_EVENT_DISPOSITIONS];
 
-type IgnoredReasonDefinition = {
-  receiptText: string;
-  disposition: IgnoredEventDisposition;
-};
-
-type IgnoredEventReasonsKey =
-  | "reconciliation_owner_unresolved"
-  | "reconciliation_organization_not_found"
-  | "provider_migration"
-  | "unrecognized_status"
-  | "missing_organization_metadata"
-  | "invalid_organization_metadata"
-  | "organization_not_found"
-  | "account_reference_conflict"
-  | "invalid_period_dates"
-  | "subscription_policy_not_found"
-  | "matching_entitlement_manual"
-  | "stale_provider_event"
-  | "organization_mapping_conflict"
-  | "organization_manual_entitlement"
-  | "account_organization_mapping_conflict"
-  | "superseded_terminal_event"
-  | "entitlement_manual"
-  | "non_addon_allocation"
-  | "addon_policy_not_found"
-  | "addon_without_entitlement"
-  | "entitlement_row_vanished"
-  | "zero_addon_units";
-
 export const IGNORED_EVENT_REASONS = {
   reconciliation_owner_unresolved: {
     receiptText: "cannot resolve reconciliation audit owner",
@@ -130,7 +101,7 @@ export const IGNORED_EVENT_REASONS = {
     receiptText: "policy grants zero add-on units",
     disposition: "needs_operator",
   },
-} as const satisfies Record<IgnoredEventReasonsKey, IgnoredReasonDefinition>;
+} as const;
 
 export type IgnoredEventReason = keyof typeof IGNORED_EVENT_REASONS;
 

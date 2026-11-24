@@ -613,9 +613,7 @@ describe("restricted review account password sign-in", () => {
         return typeof path === "string" ? [path] : [];
       }),
     );
-    const redemptions = Object.keys(
-      REVIEW_ACCOUNT_TOKEN_REDEMPTIONS,
-    ).toSorted();
+    const redemptions = [...REVIEW_ACCOUNT_TOKEN_REDEMPTIONS.keys()].toSorted();
     expect(redemptions).toEqual([
       "/callback/:id",
       "/delete-user/callback",
@@ -638,7 +636,7 @@ describe("restricted review account password sign-in", () => {
         concrete: expect.any(String),
       });
       expect(findReviewAccountTokenRedemption(concrete ?? "")).toBe(
-        REVIEW_ACCOUNT_TOKEN_REDEMPTIONS[path],
+        REVIEW_ACCOUNT_TOKEN_REDEMPTIONS.get(path),
       );
     }
     expect(matchesAuthPathTemplate("/callback/:id", "/callback/")).toBe(false);

@@ -152,16 +152,6 @@ export const REDIS_ERROR_CODE_REASON = {
  * them tells an outage from a wrong address or a missing deadline, so only a
  * boundary that knows its destination may declare otherwise.
  */
-type NetworkErrorCodeReasonKey =
-  | "ECONNRESET"
-  | "EPIPE"
-  | "ConnectionClosed"
-  | "UND_ERR_SOCKET"
-  | "ETIMEDOUT"
-  | "UND_ERR_CONNECT_TIMEOUT"
-  | "EAI_AGAIN"
-  | "ECONNREFUSED"
-  | "FailedToOpenSocket";
 
 export const NETWORK_ERROR_CODE_REASON = {
   ECONNRESET: "network_reset",
@@ -173,7 +163,7 @@ export const NETWORK_ERROR_CODE_REASON = {
   EAI_AGAIN: "dns_unavailable",
   ECONNREFUSED: "connection_refused",
   FailedToOpenSocket: "socket_open_failed",
-} as const satisfies Record<NetworkErrorCodeReasonKey, FailureReason>;
+} as const;
 
 const TIMEOUT_CLASS_NAME = "TimeoutError";
 

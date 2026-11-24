@@ -7,28 +7,6 @@
  * cannot be added without deciding where its worker runs, and a host cannot
  * start without it.
  */
-type BullmqQueueHostsKey =
-  | "account-deletion-cleanup"
-  | "account-exports"
-  | "bilingual-translation-runs"
-  | "document-deadline-scouts"
-  | "document-naming"
-  | "document-processing"
-  | "document-review-runs-v2"
-  | "document-translation-runs"
-  | "entity-deletion-cleanup"
-  | "file-derivatives"
-  | "flow-run"
-  | "legal-list-generation-runs"
-  | "legal-list-verification-runs"
-  | "organization-data-exports"
-  | "push-notifications"
-  | "report-exports"
-  | "style-set-package-cleanup"
-  | "timer-activity-updates"
-  | "uploaded-mail-correspondence"
-  | "workflow"
-  | "workflow-flex";
 
 export const BULLMQ_QUEUE_HOSTS = {
   "account-deletion-cleanup": "api",
@@ -52,7 +30,7 @@ export const BULLMQ_QUEUE_HOSTS = {
   "uploaded-mail-correspondence": "api",
   workflow: "api",
   "workflow-flex": "api",
-} as const satisfies Record<BullmqQueueHostsKey, BullMqWorkerHost>;
+} as const;
 
 export type BullMqWorkerHost =
   "api" | "document-processing-worker" | "file-derivative-worker";

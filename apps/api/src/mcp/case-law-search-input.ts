@@ -52,15 +52,6 @@ export const CASE_LAW_SEARCH_CURSOR_MAX_LENGTH = Math.ceil(
 );
 
 /** Kinds the search input reads through the shared agent-input readers. */
-type SearchCaseLawInputNormalizationKey =
-  | "country"
-  | "court"
-  | "courts"
-  | "category"
-  | "docket_registers"
-  | "language"
-  | "preferred_language"
-  | "decision_type";
 
 export const SEARCH_CASE_LAW_INPUT_NORMALIZATION = {
   country: countryNormalization({

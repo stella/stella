@@ -4,16 +4,6 @@ import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 // parser-output-unchanged: imports byte-identical canonical ID ordering from its pure parser module.
 import { compareCanonicalIds } from "@/api/handlers/case-law/ingestion/parsers/courtlistener/canonical-id-order";
 
-type OpinionTypeDeclaration = {
-  /** The documented numeric prefix, which orders rows within a cluster. */
-  readonly rank: number;
-  /**
-   * The role its author and joiners sit in. Only an explicit dissent is
-   * `dissenting`; a concurrence, in part or whole, never is.
-   */
-  readonly judgeRole: DecisionJudgeRole;
-};
-
 const PANEL = "panel-member" satisfies DecisionJudgeRole;
 const DISSENTING = "dissenting" satisfies DecisionJudgeRole;
 
@@ -21,20 +11,6 @@ const DISSENTING = "dissenting" satisfies DecisionJudgeRole;
  * Every opinion type the snapshot's opinion rows use, spelled as upstream
  * spells them (`015unamimous` included). Any other value is schema drift.
  */
-type OpinionTypesKey =
-  | "010combined"
-  | "015unamimous"
-  | "020lead"
-  | "025plurality"
-  | "030concurrence"
-  | "035concurrenceinpart"
-  | "040dissent"
-  | "050addendum"
-  | "060remittitur"
-  | "070rehearing"
-  | "080onthemerits"
-  | "090onmotiontostrike"
-  | "100trialcourt";
 
 export const OPINION_TYPES = {
   "010combined": { rank: 10, judgeRole: PANEL },
@@ -53,7 +29,7 @@ export const OPINION_TYPES = {
   "080onthemerits": { rank: 80, judgeRole: PANEL },
   "090onmotiontostrike": { rank: 90, judgeRole: PANEL },
   "100trialcourt": { rank: 100, judgeRole: PANEL },
-} as const satisfies Record<OpinionTypesKey, OpinionTypeDeclaration>;
+} as const;
 
 export type OpinionType = keyof typeof OPINION_TYPES;
 

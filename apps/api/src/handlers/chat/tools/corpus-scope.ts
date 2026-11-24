@@ -128,15 +128,6 @@ const CORPUS_READ_TOOLS = {
  * names that corpus for that country: InfoSoud stays beside a Czech case-law
  * chip, and Spain's BOE and BORME go under any chip, since none names Spain.
  */
-type PublicSourceJurisdictionsKey =
-  | "boe_search_legislation"
-  | "boe_get_law"
-  | "boe_get_law_structure"
-  | "boe_get_law_block"
-  | "boe_find_related_laws"
-  | "borme_get_summary"
-  | "search_boe_legislation"
-  | "infosoud_lookup_case";
 
 export const PUBLIC_SOURCE_JURISDICTIONS = {
   boe_search_legislation: { corpus: "legislation", country: "ESP" },
@@ -147,10 +138,7 @@ export const PUBLIC_SOURCE_JURISDICTIONS = {
   borme_get_summary: { corpus: "legislation", country: "ESP" },
   search_boe_legislation: { corpus: "legislation", country: "ESP" },
   infosoud_lookup_case: { corpus: "case_law", country: "CZE" },
-} as const satisfies Record<
-  PublicSourceJurisdictionsKey,
-  { corpus: ChatCorpus; country: string }
->;
+} as const;
 
 const isPublicSourceName = (
   name: string,

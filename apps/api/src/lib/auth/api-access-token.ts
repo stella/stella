@@ -54,96 +54,6 @@ import { McpAuthenticationError } from "@/api/mcp/errors";
 /** An app of stella's own that a route can be bound to. */
 export type ApiTokenClient = "mobile";
 
-type ApiOauthRoutesKey =
-  | "POST /v1/dictation/transcribe"
-  | "GET /v1/dictation/models"
-  | "POST /v1/dictation/cleanup"
-  | "GET /v1/dictation/learned-fixes"
-  | "POST /v1/dictation/learned-fixes"
-  | "DELETE /v1/dictation/learned-fixes"
-  | "POST /v1/dictation/recording-cleanup"
-  | "POST /v1/ai/summarize"
-  | "POST /v1/ai/draft-email"
-  | "POST /v1/ai/ask-email"
-  | "GET /v1/workspaces/:workspaceId/vocabulary"
-  | "GET /v1/workspaces"
-  | "POST /v1/entities/:workspaceId/query"
-  | "GET /v1/entities/:workspaceId/entity/:entityId"
-  | "GET /v1/tasks"
-  | "PUT /v1/workspaces"
-  | "GET /v1/contacts/search"
-  | "PUT /v1/contacts"
-  | "GET /v1/workspaces/member-candidates"
-  | "GET /v1/workspaces/matter-numbering"
-  | "GET /v1/me/role"
-  | "GET /v1/workspaces/:workspaceId"
-  | "POST /v1/workspaces/:workspaceId"
-  | "DELETE /v1/workspaces/:workspaceId"
-  | "POST /v1/workspaces/:workspaceId/archive"
-  | "POST /v1/workspaces/:workspaceId/unarchive"
-  | "POST /v1/workspaces/:workspaceId/duplicate"
-  | "PUT /v1/workspaces/:workspaceId/members"
-  | "DELETE /v1/workspaces/:workspaceId/members/:userId"
-  | "GET /v1/workspaces/:workspaceId/contacts"
-  | "PUT /v1/workspaces/:workspaceId/contacts"
-  | "DELETE /v1/workspaces/:workspaceId/contacts/:workspaceContactId"
-  | "PUT /v1/tasks/:workspaceId"
-  | "GET /v1/tasks/:workspaceId/:taskId"
-  | "PATCH /v1/tasks/:workspaceId"
-  | "DELETE /v1/tasks/:workspaceId/:taskId"
-  | "GET /v1/workspaces/:workspaceId/members"
-  | "POST /v1/tasks/:workspaceId/assignees"
-  | "DELETE /v1/tasks/:workspaceId/assignees"
-  | "GET /v1/entities/:workspaceId/entity/:entityId/versions"
-  | "GET /v1/files/:workspaceId/url/:fieldId"
-  | "GET /v1/files/:workspaceId/asic/:fieldId"
-  | "GET /v1/files/:workspaceId/zip/:fieldId"
-  | "GET /v1/files/:workspaceId/mbox/:fieldId"
-  | "GET /v1/files/:workspaceId/parts/:fieldId"
-  | "GET /v1/files/:workspaceId/cades/:fieldId"
-  | "GET /v1/files/:workspaceId/signed-dossier/:fieldId"
-  | "GET /v1/files/:workspaceId/signature/:fieldId"
-  | "GET /v1/files/:workspaceId/data-box/:fieldId"
-  | "GET /v1/files/:workspaceId/email-reading/:fieldId"
-  | "POST /v1/entities/:workspaceId/upload-version"
-  | "POST /v1/entities/:workspaceId/desktop-edit-sessions/open"
-  | "POST /v1/entities/:workspaceId/desktop-edit-sessions/release"
-  | "GET /v1/properties/:workspaceId"
-  | "POST /v1/uploads/:workspaceId/presign"
-  | "POST /v1/uploads/:workspaceId/:uploadId/finalize"
-  | "POST /v1/uploads/:workspaceId/:uploadId/abort"
-  | "GET /v1/chat/threads"
-  | "PATCH /v1/chat/threads/:threadId/read-state"
-  | "PATCH /v1/chat/threads/:threadId/pin-state"
-  | "GET /v1/chat/threads/:threadId/messages"
-  | "GET /v1/chat/threads/:threadId/messages/older"
-  | "GET /v1/chat/threads/:threadId/local-run-steps/:callId/content"
-  | "GET /v1/user-files/:fileId/content"
-  | "POST /v1/chat"
-  | "GET /v1/chat/threads/:threadId/turns/:turnId/resume"
-  | "GET /v1/chat/threads/:threadId/turns/:turnId/join"
-  | "POST /v1/chat/threads/:threadId/turns/:turnId/cancel"
-  | "POST /v1/chat/threads/:threadId/turns/:turnId/steer"
-  | "GET /v1/chat/threads/:threadId/messages/:messageId/local-files/undo"
-  | "POST /v1/chat/threads/:threadId/messages/:messageId/local-files/undo"
-  | "GET /v1/chat/runs/active"
-  | "POST /v1/chat/tool-grants"
-  | "GET /v1/notifications/events"
-  | "GET /v1/time-timers"
-  | "POST /v1/time-timers/start"
-  | "POST /v1/time-timers/:id/pause"
-  | "POST /v1/time-timers/:id/resume"
-  | "PATCH /v1/time-timers/:id"
-  | "POST /v1/time-timers/:id/confirm"
-  | "DELETE /v1/time-timers/:id"
-  | "POST /v1/search"
-  | "POST /v1/search/facets"
-  | "GET /v1/search-history"
-  | "PUT /v1/me/push-devices"
-  | "DELETE /v1/me/push-devices/:token"
-  | "PUT /v1/me/timer-activity-devices/:deviceId"
-  | "DELETE /v1/me/timer-activity-devices/:deviceId";
-
 export const API_OAUTH_ROUTES = {
   "POST /v1/dictation/transcribe": {
     scope: "stella:chat",
@@ -640,35 +550,7 @@ export const API_OAUTH_ROUTES = {
     handler: "apps/api/src/handlers/me/timer-activity-devices/unregister.ts",
     uncataloged: "native_device",
   },
-} as const satisfies Record<
-  ApiOauthRoutesKey,
-  {
-    scope: ApiOAuthResourceScope;
-    handler: `apps/api/src/handlers/${string}.ts`;
-    /** The named export serving the route, when it is not the default. */
-    exportName?: string;
-    /**
-     * The one app whose token opens the route, for a route another app
-     * holding the same scope has no business with. Absent: any of them.
-     */
-    client?: ApiTokenClient;
-    /**
-     * Why the handler has no capability: its `mcp.internal` reason, or
-     * `plumbing` for a `defineEndpoint.member` endpoint (`lib/endpoints.ts`),
-     * which has no handler config to carry one.
-     */
-    uncataloged?:
-      | "auth_plumbing"
-      | "realtime_stream"
-      | "upload_mechanics"
-      | "search_ui"
-      | "native_device"
-      | "native_tool_ui"
-      | "session_token_exchange"
-      | "chat_thread_ui"
-      | "plumbing";
-  }
->;
+} as const;
 
 const ROUTE_SCOPES: ReadonlyMap<string, ApiOAuthResourceScope> = new Map(
   Object.entries(API_OAUTH_ROUTES).map(([key, { scope }]) => [key, scope]),

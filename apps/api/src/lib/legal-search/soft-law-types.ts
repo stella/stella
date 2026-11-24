@@ -80,77 +80,6 @@ export const SOFT_LAW_ATTEMPT_STATES = [
   "rejected",
   "retryable",
 ] as const;
-type SoftLawAuthorityDefinition = {
-  domain:
-    "data-protection" | "competition" | "labour" | "tax" | "administrative";
-  jurisdiction: string;
-  name: string;
-};
-
-type SoftLawAuthoritiesKey =
-  | "cz-uoou"
-  | "cz-suip"
-  | "cz-gfr"
-  | "cz-mf"
-  | "cz-mv-psmv"
-  | "eu-edpb"
-  | "eu-wp29"
-  | "at-dsb"
-  | "be-apd"
-  | "bg-cpdp"
-  | "hr-azop"
-  | "cy-dpa"
-  | "dk-datatilsynet"
-  | "ee-aki"
-  | "fi-ombudsman"
-  | "fr-cnil"
-  | "de-bfdi"
-  | "el-hdpa"
-  | "hu-naih"
-  | "is-personuvernd"
-  | "ie-dpc"
-  | "it-garante"
-  | "lv-dvi"
-  | "li-dss"
-  | "lt-vdai"
-  | "lu-cnpd"
-  | "mt-idpc"
-  | "nl-ap"
-  | "no-datatilsynet"
-  | "pl-uodo"
-  | "pt-cnpd"
-  | "ro-anspdcp"
-  | "sk-uoou"
-  | "si-ip"
-  | "es-aepd"
-  | "se-imy"
-  | "eu-edps"
-  | "de-dsk"
-  | "de-bw"
-  | "de-by-baylfd"
-  | "de-by-baylda"
-  | "de-be"
-  | "de-bb"
-  | "de-hb"
-  | "de-hh"
-  | "de-he"
-  | "de-mv"
-  | "de-ni"
-  | "de-nw"
-  | "de-rp"
-  | "de-sl"
-  | "de-sn"
-  | "de-st"
-  | "de-sh"
-  | "de-th"
-  | "es-apdcat"
-  | "es-avpd"
-  | "es-ctpd"
-  | "at-pdk"
-  | "be-vtc"
-  | "be-coc"
-  | "be-comitei"
-  | "be-comitep";
 
 export const SOFT_LAW_AUTHORITIES = {
   "cz-uoou": {
@@ -464,7 +393,7 @@ export const SOFT_LAW_AUTHORITIES = {
     jurisdiction: "BEL",
     name: "Belgian Permanent P",
   },
-} as const satisfies Record<SoftLawAuthoritiesKey, SoftLawAuthorityDefinition>;
+} as const;
 export type SoftLawAuthority = keyof typeof SOFT_LAW_AUTHORITIES;
 export type SoftLawStated<T> =
   { state: "stated"; value: T } | { state: "not_stated" };

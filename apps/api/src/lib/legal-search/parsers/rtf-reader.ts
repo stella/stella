@@ -280,14 +280,12 @@ const HANDLED_CONTROL_WORDS = new Set([
   "lastrow",
 ]);
 
-type ParagraphAlignmentsKey = "ql" | "qc" | "qr" | "qj";
-
 const PARAGRAPH_ALIGNMENTS = {
   ql: "left",
   qc: "center",
   qr: "right",
   qj: "both",
-} as const satisfies Record<ParagraphAlignmentsKey, ParagraphAlignment>;
+} as const;
 
 /** Control words whose whole group is the writer's metadata, not the text. */
 const SKIPPED_DESTINATIONS = new Set([

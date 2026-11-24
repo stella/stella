@@ -296,7 +296,7 @@ const SUPREME_COURT = "Sąd Najwyższy";
  * the Supreme Court: a phrase naming neither is not a court this reader knows.
  */
 const KNOWN_COURTS: readonly string[] = [
-  ...new Set([...Object.values(PL_NCOURT_COURT_NAMES), SUPREME_COURT]),
+  ...new Set([...PL_NCOURT_COURT_NAMES.values(), SUPREME_COURT]),
 ].toSorted((left, right) => right.length - left.length);
 
 const collapse = (text: string): string => text.replace(/\s+/gu, " ").trim();

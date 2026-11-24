@@ -10,44 +10,6 @@ export type PublicCorpusClass = keyof ReturnType<
   typeof getPublicCorpusClassPolicy
 >["classes"];
 
-type PublicCorpusRoutePolicyKey =
-  | "GET /law/statutes"
-  | "GET /law/statutes/search"
-  | "GET /law/statutes/shelf"
-  | "GET /law/statutes/facets"
-  | "GET /law/statutes/by-eli"
-  | "POST /law/statutes/resolve"
-  | "GET /law/statutes/by-slug/:slug"
-  | "GET /law/statutes/:documentId"
-  | "GET /law/statutes/:documentId/versions"
-  | "GET /law/statutes/:documentId/provisions/:anchor/preview"
-  | "GET /law/statutes/:documentId/provisions/:anchor/history"
-  | "GET /law/sitemap/shards"
-  | "GET /law/sitemap/statutes/shard"
-  | "GET /case/coverage"
-  | "GET /case/browse/courts"
-  | "GET /case/browse/calendar"
-  | "GET /case/decisions"
-  | "GET /case/decisions/facets"
-  | "GET /case/decisions/filter-validation"
-  | "GET /case/decisions/status"
-  | "GET /case/decisions/latest"
-  | "GET /case/decisions/by-slug/:slug"
-  | "GET /case/decisions/:decisionId/summary"
-  | "GET /case/decisions/:decisionId"
-  | "GET /case/decisions/:decisionId/anchor-redirects"
-  | "GET /case/decisions/:decisionId/citations"
-  | "GET /case/decisions/:decisionId/citations/summary"
-  | "GET /case/decisions/:decisionId/citations/leading"
-  | "GET /case/decisions/:decisionId/provisions"
-  | "GET /case/judges/:judgeId/portrait"
-  | "GET /case/provisions/citing-decisions"
-  | "GET /case/provisions/citation-counts"
-  | "POST /case/decisions/search"
-  | "POST /case/decisions/quotes/verify"
-  | "GET /case/sitemap/shards"
-  | "GET /case/sitemap/decisions/shard";
-
 export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "GET /law/statutes": "browse",
   "GET /law/statutes/search": "search",
@@ -87,7 +49,7 @@ export const PUBLIC_CORPUS_ROUTE_POLICY = {
   "POST /case/decisions/quotes/verify": "search",
   "GET /case/sitemap/shards": "sitemap",
   "GET /case/sitemap/decisions/shard": "sitemap",
-} as const satisfies Record<PublicCorpusRoutePolicyKey, PublicCorpusClass>;
+} as const;
 
 const ROUTE_POLICY: ReadonlyMap<string, PublicCorpusClass> = new Map(
   Object.entries(PUBLIC_CORPUS_ROUTE_POLICY),

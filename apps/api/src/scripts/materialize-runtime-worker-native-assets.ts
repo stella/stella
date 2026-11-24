@@ -4,12 +4,10 @@ import path from "node:path";
 
 import { runtimeWorkerNativeLookups } from "@/api/lib/runtime-worker-path";
 
-type DockerToNodeArchitectureKey = "amd64" | "arm64";
-
 const DOCKER_TO_NODE_ARCHITECTURE = {
   amd64: "x64",
   arm64: "arm64",
-} as const satisfies Record<DockerToNodeArchitectureKey, NodeJS.Architecture>;
+} as const;
 
 type DockerArchitecture = keyof typeof DOCKER_TO_NODE_ARCHITECTURE;
 

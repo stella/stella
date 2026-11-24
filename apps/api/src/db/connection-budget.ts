@@ -28,24 +28,6 @@ type ProcessAssumption = {
 
 // Reference envelope, including overlapping replacements. Validate the actual
 // deployment and other clients before using this envelope to change capacity.
-type DatabaseProcessAssumptionsKey =
-  | "api"
-  | "documentWorker"
-  | "backgroundWorker"
-  | "utilityWorker"
-  | "operator"
-  | "migrator"
-  | "analysis"
-  | "census"
-  | "identityMap"
-  | "authBackfill"
-  | "chatContentBackfill"
-  | "onlinePendingDrain"
-  | "signInReplay"
-  | "authAudit"
-  | "rehearsal"
-  | "seedReset"
-  | "postgresTestRunner";
 
 const DATABASE_PROCESS_ASSUMPTIONS = {
   api: {
@@ -133,7 +115,7 @@ const DATABASE_PROCESS_ASSUMPTIONS = {
     pools: DATABASE_POOL_DEFAULTS,
     publicPool: "shared",
   },
-} as const satisfies Record<DatabaseProcessAssumptionsKey, ProcessAssumption>;
+} as const;
 
 type ProcessName = keyof typeof DATABASE_PROCESS_ASSUMPTIONS;
 const SHARED_POOL_PROCESSES = [

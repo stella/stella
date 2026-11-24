@@ -82,13 +82,12 @@ const MAX_DATE_EPOCH_MS = 8_640_000_000_000_000;
  * workflow, where a 401/403/429 on any request means the source refuses the
  * crawl).
  */
-type StopStatusesKey = "return-response" | "stop-rate-limit" | "stop-refusal";
 
 const STOP_STATUSES = {
   "return-response": [],
   "stop-rate-limit": [429],
   "stop-refusal": [401, 403, 429],
-} as const satisfies Record<StopStatusesKey, readonly number[]>;
+} as const;
 
 type PublisherRefusalMode = keyof typeof STOP_STATUSES;
 

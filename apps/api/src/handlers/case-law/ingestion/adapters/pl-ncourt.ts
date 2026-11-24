@@ -804,7 +804,7 @@ const courtNameOf = (courtId: string | undefined): CourtName | undefined => {
   if (courtId === undefined || !COURT_ID.test(courtId)) {
     return undefined;
   }
-  const name = PL_NCOURT_COURT_NAMES[courtId];
+  const name = PL_NCOURT_COURT_NAMES.get(courtId);
   if (name !== undefined) {
     return { name, known: true };
   }
@@ -2666,7 +2666,7 @@ export const plNcourtCensus = async (
   }
   const { total } = unfiltered.value;
   const courts: PlNcourtCourtCount[] = [];
-  for (const courtId of Object.keys(PL_NCOURT_COURT_NAMES)) {
+  for (const courtId of PL_NCOURT_COURT_NAMES.keys()) {
     const counted = await plNcourtCourtCount({
       courtId,
       signal,

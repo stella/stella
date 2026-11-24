@@ -58,14 +58,6 @@ export type ArchiveInspectionBudget = {
   timeBudgetMs: number;
 };
 
-type ArchiveRefusalKey =
-  | "inflatedLimit"
-  | "nestedGuard"
-  | "nestedTooDeep"
-  | "corrupt"
-  | "failed"
-  | "budget";
-
 const ARCHIVE_REFUSAL = {
   inflatedLimit: {
     rule: "archive-inflation-limit",
@@ -106,7 +98,7 @@ const ARCHIVE_REFUSAL = {
         "so the file cannot be inspected",
     },
   },
-} as const satisfies Record<ArchiveRefusalKey, Match>;
+} as const;
 
 type Refusal = keyof typeof ARCHIVE_REFUSAL;
 

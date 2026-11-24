@@ -270,7 +270,7 @@ if (!databaseUrl || !runPostgresTests) {
           (key) =>
             !Object.values(TREE_PARENT_GUARDS).some(
               (guard) => `${guard.table}.parent_id` === key,
-            ) && SELF_REFERENCE_EXEMPTIONS[key] === undefined,
+            ) && !SELF_REFERENCE_EXEMPTIONS.has(key),
         )
         .toSorted();
 

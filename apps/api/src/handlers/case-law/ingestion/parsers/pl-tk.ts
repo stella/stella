@@ -56,20 +56,6 @@ const PL_TK_SOURCE_SYSTEM = "ipo.trybunal.gov.pl";
 
 const collapse = (text: string): string => text.replace(/\s+/gu, " ").trim();
 
-type PolishMonthsKey =
-  | "stycznia"
-  | "lutego"
-  | "marca"
-  | "kwietnia"
-  | "maja"
-  | "czerwca"
-  | "lipca"
-  | "sierpnia"
-  | "września"
-  | "października"
-  | "listopada"
-  | "grudnia";
-
 const POLISH_MONTHS = {
   stycznia: 1,
   lutego: 2,
@@ -83,7 +69,7 @@ const POLISH_MONTHS = {
   października: 10,
   listopada: 11,
   grudnia: 12,
-} as const satisfies Record<PolishMonthsKey, number>;
+} as const;
 
 const isPolishMonth = (value: string): value is keyof typeof POLISH_MONTHS =>
   Object.hasOwn(POLISH_MONTHS, value);
