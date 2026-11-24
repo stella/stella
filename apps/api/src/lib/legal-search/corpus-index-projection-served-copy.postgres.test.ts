@@ -667,7 +667,7 @@ const withDriftedDecision = async (
       source: false,
       decision: false,
     };
-    let settleBeforeSeed = async () => undefined;
+    let settleBeforeSeed = async (): Promise<void> => undefined;
     try {
       if (beforeSeed !== undefined) {
         settleBeforeSeed = await beforeSeed(observer, fixture);

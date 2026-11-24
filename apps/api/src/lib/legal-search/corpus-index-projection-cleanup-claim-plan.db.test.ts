@@ -362,11 +362,6 @@ test("the claim's decision probes the erasure records of its page alone, however
   );
   await analyzeRecords();
   const own = await explain(decision);
-  console.log("own-trail buffers", {
-    small: small.buffers,
-    large: large.buffers,
-    own: own.buffers,
-  });
   expect(own.rows).toBe(LIMIT);
   expect(own.lines.join("\n")).not.toContain("Seq Scan");
   expect(own.buffers).toBeLessThanOrEqual(Math.round(small.buffers * 1.5));

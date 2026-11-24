@@ -228,13 +228,16 @@ describe("the claim's decision about a drifted copy a state still names", () => 
 
   test("restores a copy one change behind whose desired index moved: it serves until the append to the new index applies", async () => {
     const served = await servedEntity();
-    await changeDesired(served.entityId, 2, {
-      action: "upsert",
-      fingerprint: fingerprint(1),
-    });
+    await run(sql`
+      UPDATE case_law_decisions SET projection_epoch = 2
+      WHERE id = ${served.entityId}
+    `);
     await run(sql`
       UPDATE corpus_index_projection_states
-      SET desired_index_id = 'case_law_v5_other'
+      SET desired_epoch = 2, desired_fingerprint = ${fingerprint(1)},
+          desired_index_id = 'case_law_v5_other',
+          desired_at = statement_timestamp(), work_status = 'eligible',
+          updated_at = statement_timestamp()
       WHERE entity_id = ${served.entityId}
     `);
     await previousPrepare(served.entityId, served.revision);
