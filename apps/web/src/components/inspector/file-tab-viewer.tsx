@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/utils";
 import { FileChatWarmup } from "@/components/ai-suggestions/file-chat-warmup";
 import { DocxEditorSlot } from "@/components/docx/docx-editor-host";
 import { DOCX_EDITOR_SLOT } from "@/components/docx/docx-editor-host.logic";
+import { AudioFileViewer } from "@/components/inspector/audio-file-viewer";
 import { DocumentAiSourceBar } from "@/components/inspector/document-ai-source-bar";
 import { EmailFileViewer } from "@/components/inspector/email-html-viewer";
 import {
@@ -495,6 +496,8 @@ const FileTabViewerComponent = ({
         );
       case "text":
         return probeSignature(<PlainTextFileViewer tab={tab} />);
+      case "audio":
+        return <AudioFileViewer onDownload={handleDownload} tab={tab} />;
       case "xlsx":
       case "pptx":
         return (

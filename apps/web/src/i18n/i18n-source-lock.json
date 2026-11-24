@@ -3818,6 +3818,7 @@
   "inspector.anonymization.unsupportedVisualContent": "This file contains images or vector graphics that cannot be checked for sensitive text. Export is unavailable.",
   "inspector.anonymization.waitForMatches": "Wait for the anonymization scan to finish.",
   "inspector.anonymization.workspaceTermsHeading": "Workspace terms ({count})",
+  "inspector.audioUnplayable": "This recording can't be played here. Download it to listen.",
   "inspector.closeAllTabs": "Close {count, plural, one {# tab} other {all # tabs}}",
   "inspector.closeOtherTabs": "Close {count, plural, one {# other tab} other {# other tabs}}",
   "inspector.closeTab": "Close <bdi>{name}</bdi>",
@@ -5469,6 +5470,7 @@
   "settings.organization.documentTypes.addPlaceholder": "Add a document type (e.g. Employment Agreement)",
   "settings.organization.documentTypes.deleteFailed": "Couldn't delete document type",
   "settings.organization.documentTypes.description": "Define the document types your organization reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+  "settings.organization.documentTypes.empty": "No document types yet",
   "settings.organization.documentTypes.labelAria": "Document type name",
   "settings.organization.documentTypes.reorder": "Reorder document type",
   "settings.organization.documentTypes.title": "Document types",
@@ -7220,6 +7222,5 @@
   "workspaces.workflow.serviceTierPrompt.flex": "Use reduced credits",
   "workspaces.workflow.serviceTierPrompt.standard": "Start now",
   "workspaces.workflow.serviceTierPrompt.title": "Use reduced credits?",
-  "workspaces.workflow.startedSuccessfully": "Workflow started successfully",
-  "settings.organization.documentTypes.empty": "No document types yet"
+  "workspaces.workflow.startedSuccessfully": "Workflow started successfully"
 }

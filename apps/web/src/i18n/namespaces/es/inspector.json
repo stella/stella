@@ -540,6 +540,7 @@
       "waitForMatches": "Espere a que termine el análisis de anonimización.",
       "workspaceTermsHeading": "Términos del espacio de trabajo ({count})"
     },
+    "audioUnplayable": "Esta grabación no se puede reproducir aquí. Descárgala para escucharla.",
     "closeAllTabs": "Cerrar {count, plural, one {# pestaña} many {las # pestañas} other {las # pestañas}}",
     "closeOtherTabs": "Cerrar {count, plural, one {la otra pestaña} many {las otras # pestañas} other {las otras # pestañas}}",
     "closeTab": "Cerrar <bdi>{name}</bdi>",

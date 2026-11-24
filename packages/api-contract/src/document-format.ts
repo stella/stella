@@ -48,6 +48,7 @@ export type DocumentFormatKind =
   | "openDocumentSheet"
   | "csv"
   | "image"
+  | "audio"
   | "email"
   | ConvertedDocumentFormat["kind"]
   | HtmlRenderedDocumentFormat["kind"]
@@ -180,6 +181,30 @@ const DOCUMENT_FORMATS: readonly RecognisedDocumentFormat[] = [
     label: "WEBP",
     mimeTypes: ["image/webp"],
     extensions: [".webp"],
+  },
+  {
+    kind: "audio",
+    label: "MP3",
+    mimeTypes: ["audio/mpeg", "audio/mp3"],
+    extensions: [".mp3"],
+  },
+  {
+    kind: "audio",
+    label: "M4A",
+    mimeTypes: ["audio/mp4", "audio/m4a", "audio/x-m4a"],
+    extensions: [".m4a"],
+  },
+  {
+    kind: "audio",
+    label: "OGG",
+    mimeTypes: ["audio/ogg", "audio/opus"],
+    extensions: [".ogg", ".oga", ".opus"],
+  },
+  {
+    kind: "audio",
+    label: "WAV",
+    mimeTypes: ["audio/wav", "audio/x-wav", "audio/wave"],
+    extensions: [".wav"],
   },
   // A sequence (a burst) previews as its first picture, like the still.
   {
@@ -344,6 +369,9 @@ export const documentFormat = (
   const label = extensionLabel(fileName);
   if (media.startsWith("image/")) {
     return { kind: "image", mark: "image", label };
+  }
+  if (media.startsWith("audio/")) {
+    return { kind: "audio", mark: "audio", label };
   }
   if (media.startsWith("text/")) {
     return { kind: "text", mark: "text", label };

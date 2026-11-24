@@ -540,6 +540,7 @@
       "waitForMatches": "Attendez la fin de l’analyse d’anonymisation.",
       "workspaceTermsHeading": "Termes de l’espace de travail ({count})"
     },
+    "audioUnplayable": "Cet enregistrement ne peut pas être lu ici. Téléchargez-le pour l'écouter.",
     "closeAllTabs": "Fermer {count, plural, one {# onglet} many {les # onglets} other {les # onglets}}",
     "closeOtherTabs": "Fermer {count, plural, one {l’autre onglet} many {les # autres onglets} other {les # autres onglets}}",
     "closeTab": "Fermer <bdi>{name}</bdi>",
