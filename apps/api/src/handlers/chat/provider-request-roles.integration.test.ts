@@ -39,6 +39,7 @@ import createSkillComment from "@/api/handlers/skills/comments/create";
 import generateSkillDraft from "@/api/handlers/skills/drafts/generate";
 import draftSkillFromChat from "@/api/handlers/skills/from-chat/draft";
 import createProposalFromComments from "@/api/handlers/skills/proposals/from-comments/create";
+import suggestSkillImprovements from "@/api/handlers/skills/proposals/suggest-improvements/create";
 import createSkillResource from "@/api/handlers/skills/resources/create";
 import rewriteSkillResource from "@/api/handlers/skills/resources/rewrite";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -530,6 +531,22 @@ const TASK_REQUESTS = {
                 ids.userA1,
               ),
             ),
+          }),
+        ),
+      );
+    },
+  },
+  "skill-suggest-improvements": {
+    file: "handlers/skills/proposals/suggest-improvements/create.ts",
+    task: "short-text",
+    settings: { caching: true, sendMode: false },
+    run: async (run) => {
+      const { skillId } = await seedSkill();
+      await suggestSkillImprovements.handler(
+        asTestRaw<Parameters<typeof suggestSkillImprovements.handler>[0]>(
+          handlerContext(run, {
+            body: {},
+            params: { skillId },
           }),
         ),
       );

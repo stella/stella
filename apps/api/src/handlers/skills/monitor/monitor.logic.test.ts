@@ -43,10 +43,10 @@ describe("aggregateSkillMonitor", () => {
         },
       ],
       userProfiles: new Map([
-        ["user-1", { image: null, name: "Petra Harbrook" }],
+        ["user-1", { image: null, name: "Tereza Kovářová" }],
         [
           "user-2",
-          { image: "https://example.test/jan.png", name: "Jan Novák" },
+          { image: "https://example.test/marek.png", name: "Marek Procházka" },
         ],
       ]),
       windowDays: 7,
@@ -71,11 +71,11 @@ describe("aggregateSkillMonitor", () => {
     expect(summary.activeUsers).toEqual([
       {
         id: "user-2",
-        image: "https://example.test/jan.png",
-        name: "Jan Novák",
+        image: "https://example.test/marek.png",
+        name: "Marek Procházka",
         uses: 1,
       },
-      { id: "user-1", image: null, name: "Petra Harbrook", uses: 1 },
+      { id: "user-1", image: null, name: "Tereza Kovářová", uses: 1 },
     ]);
   });
 });

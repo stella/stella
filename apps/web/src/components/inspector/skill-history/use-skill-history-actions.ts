@@ -270,21 +270,18 @@ const useSuggestSkillImprovements = (
       return null;
     }
     setSuggestingImprovements(true);
-    try {
-      const response = await skill.proposals["suggest-improvements"].post(
-        focus !== undefined && focus.trim().length > 0
-          ? { focus: focus.trim() }
-          : {},
-      );
-      if (response.error) {
-        report(response.error);
-        return null;
-      }
-      invalidateProposals();
-      return response.data.id;
-    } finally {
-      setSuggestingImprovements(false);
+    const response = await skill.proposals["suggest-improvements"].post(
+      focus !== undefined && focus.trim().length > 0
+        ? { focus: focus.trim() }
+        : {},
+    );
+    setSuggestingImprovements(false);
+    if (response.error) {
+      report(response.error);
+      return null;
     }
+    invalidateProposals();
+    return response.data.id;
   };
   return { suggestImprovements, suggestingImprovements };
 };

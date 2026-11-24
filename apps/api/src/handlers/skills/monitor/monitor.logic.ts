@@ -19,20 +19,20 @@ export type SkillMonitorAuditRow = {
   userId: string;
 };
 
-export type SkillMonitorDailyPoint = {
+type SkillMonitorDailyPoint = {
   contextReads: number;
   date: string;
   users: number;
   uses: number;
 };
 
-export type SkillMonitorContextFileStat = {
+type SkillMonitorContextFileStat = {
   errors: number;
   path: string;
   reads: number;
 };
 
-export type SkillMonitorActiveUser = {
+type SkillMonitorActiveUser = {
   id: string;
   image: string | null;
   name: string | null;

@@ -1,3 +1,5 @@
+import { FaceLabelPending } from "@stll/ui/control-face";
+
 import { FileTreeRowPending } from "@/components/file-tree/file-tree.pending";
 import { PendingText } from "@/components/pending-text";
 
@@ -26,12 +28,7 @@ export const SkillDetailPending = () => (
         <div data-slot="skill-editor-instructions">
           <div className="overflow-hidden rounded-xl border">
             <div className="flex items-center border-b px-3 py-2">
-              <span className="text-foreground text-sm font-medium">
-                <PendingText
-                  barClassName="w-20"
-                  id="knowledge.agentSkills.instructionsSection"
-                />
-              </span>
+              <FaceLabelPending className="w-20" />
             </div>
             <div className="p-4">
               <SkillFilesPending />
@@ -40,14 +37,8 @@ export const SkillDetailPending = () => (
         </div>
         <div className="overflow-hidden rounded-xl border">
           <div className="flex items-center border-b px-3 py-2">
-            <span
-              className="text-foreground text-sm font-medium"
-              data-slot="skill-editor-files"
-            >
-              <PendingText
-                barClassName="w-16"
-                id="knowledge.agentSkills.contextSection"
-              />
+            <span data-slot="skill-editor-files">
+              <FaceLabelPending className="w-16" />
             </span>
           </div>
           <div className="p-2">

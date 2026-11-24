@@ -28,8 +28,18 @@ import { useQueryViewError } from "@/lib/use-query-view";
 type MonitorWindowDays = 7 | 30 | 90;
 const MAX_VISIBLE_AVATARS = 5;
 
-const isMonitorWindow = (value: number): value is MonitorWindowDays =>
-  value === 7 || value === 30 || value === 90;
+const parseMonitorWindow = (value: string | null): MonitorWindowDays | null => {
+  if (value === "7") {
+    return 7;
+  }
+  if (value === "30") {
+    return 30;
+  }
+  if (value === "90") {
+    return 90;
+  }
+  return null;
+};
 
 const shortDateLabel = (isoDate: string, locale: string): string => {
   const parsed = new Date(`${isoDate}T00:00:00Z`);
@@ -111,8 +121,8 @@ export function SkillMonitorPanel({ skillId }: SkillMonitorPanelProps) {
           </div>
           <Select
             onValueChange={(next) => {
-              const parsed = Number(next);
-              if (isMonitorWindow(parsed)) {
+              const parsed = parseMonitorWindow(next);
+              if (parsed !== null) {
                 setDays(parsed);
               }
             }}

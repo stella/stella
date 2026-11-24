@@ -2,6 +2,8 @@ import { panic, Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 import * as v from "valibot";
 
+import { AI_FAILURE_CODES } from "@stll/api-contract";
+
 import { abortableTx } from "@/api/db/safe-db";
 import { agentSkillProposals, agentSkillResources } from "@/api/db/schema";
 import { skillRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
@@ -17,6 +19,7 @@ import { checkSkillPackage } from "@/api/lib/agent-skills/skill-package-check";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
+import { generateArtefact } from "@/api/lib/ai-generation/provenance";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -33,26 +36,12 @@ import { requireTanStackAIAvailableForTask } from "@/api/lib/tanstack-ai-models"
 
 import { preservesFrontmatter } from "../frontmatter-guard";
 
+const GENERATOR =
+  "apps/api/src/handlers/skills/proposals/suggest-improvements/create.ts";
 const FOCUS_MAX_CHARS = 2000;
 const SUMMARY_MAX_CHARS = 600;
 const GENERATION_TIMEOUT_MS = 90_000;
 const GENERATION_MAX_OUTPUT_TOKENS = 8192;
-
-const suggestParamsSchema = v.object({
-  skillId: resourceIdSchema("agentSkill"),
-});
-
-const suggestBodySchema = v.object({
-  focus: v.optional(
-    v.pipe(
-      v.string(),
-      v.maxLength(FOCUS_MAX_CHARS),
-      v.description(
-        "Optional focus area for improvements (e.g. clarity, edge cases, structure).",
-      ),
-    ),
-  ),
-});
 
 const config = {
   contract: "patch",
@@ -74,8 +63,18 @@ const config = {
     reason: "agent_tool_authoring",
     consumesServices: true,
   },
-  params: suggestParamsSchema,
-  body: suggestBodySchema,
+  params: v.object({ skillId: resourceIdSchema("agentSkill") }),
+  body: v.object({
+    focus: v.optional(
+      v.pipe(
+        v.string(),
+        v.maxLength(FOCUS_MAX_CHARS),
+        v.description(
+          "Optional focus area for improvements (e.g. clarity, edge cases, structure).",
+        ),
+      ),
+    ),
+  }),
   requiresUsage: {
     actionType: "chat",
     serviceTier: "flex",
@@ -101,7 +100,6 @@ const suggestSkillImprovements = createSafeRootHandler(
     if (orgAIConfigStatus === ORG_AI_CONFIG_STATUS.unreadable) {
       return Result.err(storedAIConfigUnreadableError());
     }
-
     yield* requireTanStackAIAvailableForTask({
       dataClass: "customer",
       configStatus: orgAIConfigStatus,
@@ -115,22 +113,18 @@ const suggestSkillImprovements = createSafeRootHandler(
           skillId: params.skillId,
           organizationId: session.activeOrganizationId,
         });
-
         const editableOrigin = requireEditableSkillOrigin(skill.origin);
         if (Result.isError(editableOrigin)) {
           return Result.err(editableOrigin.error);
         }
-
         await lockSkillForAnchor(tx, params.skillId);
-
         const revision = await loadLatestSkillRevision(tx, {
           skillId: params.skillId,
           organizationId: session.activeOrganizationId,
         });
         if (!revision) {
-          panic("agent skill has no revision");
+          return panic("agent skill has no revision");
         }
-
         const resources = await tx
           .select({
             content: agentSkillResources.content,
@@ -148,7 +142,6 @@ const suggestSkillImprovements = createSafeRootHandler(
           )
           .orderBy(asc(agentSkillResources.path))
           .limit(LIMITS.agentSkillResourcesPerSkill);
-
         return Result.ok({ resources, revision });
       }),
     );
@@ -156,7 +149,6 @@ const suggestSkillImprovements = createSafeRootHandler(
       return Result.err(sourceResult.error);
     }
     const source = sourceResult.value;
-
     const packageCheck = checkSkillPackage({
       resources: source.resources.map((entry) => ({
         content: entry.content,
@@ -186,38 +178,43 @@ const suggestSkillImprovements = createSafeRootHandler(
 
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateTanStackObjectForTask({
-          userId: user.id,
-          dataClass: "customer",
-          admission: configuredModelAdmission({ modelAdmission }),
-          deadlineMs: GENERATION_TIMEOUT_MS,
-          maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
-          task: "short-text",
-          serviceTier: "flex",
-          orgAIConfig,
-          managedAIResidency,
-          organizationId: session.activeOrganizationId,
-          tenantWorkspaceIds: [],
-          analytics: aiAnalytics,
-          caching: resolveCaching({
-            promptCachingEnabled,
-            task: "short-text",
-            scopeKey: `${session.activeOrganizationId}:skills:${params.skillId}:suggest`,
-          }),
-          outputSchema: aiRevisionSchema,
-          prompt: buildPrompt({
-            currentBody: source.revision.body,
-            diagnostics: packageCheck.diagnostics.map((item) => item.message),
-            focus: body.focus,
-            missingReferences: packageCheck.missingReferences,
-            resourcePaths: source.resources.map((item) => item.path),
-          }),
+        await generateArtefact({
+          generator: GENERATOR,
+          sources: { decisionIds: [], inputs: [] },
+          generate: async () =>
+            await generateTanStackObjectForTask({
+              userId: user.id,
+              dataClass: "customer",
+              admission: configuredModelAdmission({ modelAdmission }),
+              deadlineMs: GENERATION_TIMEOUT_MS,
+              maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
+              task: "short-text",
+              serviceTier: "flex",
+              orgAIConfig,
+              managedAIResidency,
+              organizationId: session.activeOrganizationId,
+              tenantWorkspaceIds: [],
+              analytics: aiAnalytics,
+              caching: resolveCaching({
+                promptCachingEnabled,
+                task: "short-text",
+                scopeKey: `${session.activeOrganizationId}:skills:${params.skillId}:suggest`,
+              }),
+              outputSchema: aiRevisionSchema,
+              prompt: buildPrompt({
+                currentBody: source.revision.body,
+                diagnostics: packageCheck.diagnostics.map((d) => d.message),
+                focus: body.focus,
+                missingReferences: packageCheck.missingReferences,
+                resourcePaths: source.resources.map((r) => r.path),
+              }),
+            }),
         }),
       catch: (cause) => {
         aiAnalytics.captureError(cause);
         return new HandlerError({
           status: 502,
-          code: "internal_error",
+          code: AI_FAILURE_CODES.providerError,
           message: "Could not suggest improvements. Please try again.",
           cause,
         });
@@ -229,18 +226,17 @@ const suggestSkillImprovements = createSafeRootHandler(
 
     const validated = validateSuggestedMarkdown({
       original: source.revision.body,
-      raw: generation.value.markdown,
+      raw: generation.value.value.markdown,
     });
     if (Result.isError(validated)) {
       return Result.err(validated.error);
     }
     const markdown = validated.value;
-
-    const summary = buildSummary(generation.value.summary);
+    const summary = buildSummary(generation.value.value.summary);
 
     const created = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        const rows = await tx
+        const [row] = await tx
           .insert(agentSkillProposals)
           .values({
             organizationId: session.activeOrganizationId,
@@ -252,25 +248,19 @@ const suggestSkillImprovements = createSafeRootHandler(
             authorId: user.id,
           })
           .returning({ id: agentSkillProposals.id });
-
-        const row = rows.at(0);
         if (!row) {
           return panic("insert into agent_skill_proposals returned no row");
         }
-
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
           resourceType: AUDIT_RESOURCE_TYPE.AGENT_SKILL_PROPOSAL,
           resourceId: row.id,
-          changes: {
-            status: { old: null, new: "draft" },
-          },
+          changes: { status: { old: null, new: "draft" } },
           metadata: {
             skillId: params.skillId,
             source: "suggest_improvements",
           },
         });
-
         return row;
       }),
     );
@@ -291,7 +281,7 @@ const validateSuggestedMarkdown = ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: AI_FAILURE_CODES.providerError,
         message: "The suggested skill revision was empty. Please try again.",
       }),
     );
@@ -300,7 +290,7 @@ const validateSuggestedMarkdown = ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: AI_FAILURE_CODES.providerError,
         message: "The suggested skill revision exceeds the maximum size.",
       }),
     );
@@ -309,7 +299,7 @@ const validateSuggestedMarkdown = ({
     return Result.err(
       new HandlerError({
         status: 502,
-        code: "internal_error",
+        code: AI_FAILURE_CODES.providerError,
         message:
           "The suggested skill revision dropped or altered its frontmatter. Please try again.",
       }),
@@ -322,10 +312,9 @@ const buildSummary = (generated: string): string => {
   const prefix = "Suggested improvements: ";
   const trimmed = generated.trim();
   const room = Math.max(0, SUMMARY_MAX_CHARS - prefix.length);
-  if (trimmed.length === 0) {
-    return "Suggested improvements to instructions.";
-  }
-  return `${prefix}${trimmed.slice(0, room)}`;
+  return trimmed.length === 0
+    ? "Suggested improvements to instructions."
+    : `${prefix}${trimmed.slice(0, room)}`;
 };
 
 const buildPrompt = ({
@@ -348,7 +337,6 @@ const buildPrompt = ({
     "Do not invent facts, citations, or files that do not exist.",
     "Keep edits tight and purposeful so the diff is easy for a human reviewer to inspect and accept.",
   ];
-
   if (resourcePaths.length > 0) {
     sections.push(
       `Available context files in this skill:\n${resourcePaths.map((p) => `- ${p}`).join("\n")}`,
@@ -367,7 +355,6 @@ const buildPrompt = ({
   if (focus !== undefined && focus.trim().length > 0) {
     sections.push(`Author's focus request:\n${focus.trim()}`);
   }
-
   sections.push(`Current SKILL.md:\n${currentBody}`);
   return sections.join("\n\n");
 };

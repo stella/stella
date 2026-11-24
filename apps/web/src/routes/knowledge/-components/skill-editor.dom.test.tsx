@@ -178,10 +178,14 @@ const mount = ({
       .queryKey,
     { items: [] },
   );
-  client.setQueryData(
-    organizationOptions(user.activeOrganizationId).queryKey,
-    null,
-  );
+  client.setQueryData(organizationOptions(user.activeOrganizationId).queryKey, {
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    id: user.activeOrganizationId,
+    invitations: [],
+    members: [],
+    name: "Test Org",
+    slug: "test-org",
+  });
   const patches: PatchRequest[] = [];
   const boundary = spyOn(globalThis, "fetch").mockImplementation(
     Object.assign(
