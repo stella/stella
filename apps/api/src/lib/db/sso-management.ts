@@ -437,12 +437,18 @@ export const createOrganizationSamlProvider = async (
       mode: "update",
     });
 
-    const existingProviders = await tx
-      .select({ id: ssoProvider.id })
-      .from(ssoProvider)
-      .where(eq(ssoProvider.organizationId, params.organizationId))
-      .limit(MAX_SSO_PROVIDERS_PER_ORG);
-    if (existingProviders.length >= MAX_SSO_PROVIDERS_PER_ORG) {
+    const existingProviders = await readBounded(
+      tx
+        .select({ id: ssoProvider.id })
+        .from(ssoProvider)
+        .where(eq(ssoProvider.organizationId, params.organizationId))
+        .orderBy(asc(ssoProvider.id)),
+      MAX_SSO_PROVIDERS_PER_ORG,
+    );
+    if (
+      existingProviders.type === "truncated" ||
+      existingProviders.rows.length >= MAX_SSO_PROVIDERS_PER_ORG
+    ) {
       return Result.err(
         new SsoManagementError({
           message: `An organization can configure at most ${MAX_SSO_PROVIDERS_PER_ORG} SSO providers`,
