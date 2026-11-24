@@ -489,7 +489,6 @@
       "browseIntegrations": "Dodaj usługę",
       "browserExtensionConnectHint": "Po instalacji otwórz rozszerzenie na tej karcie stella, zezwól na dostęp do witryn i połącz kartę.",
       "browserExtensionDescription": "Czat stella może czytać strony i z nich korzystać w wybranej przez Ciebie karcie Chrome. Każda czynność czeka na Twoją zgodę.",
-      "browserExtensionInstall": "Dodaj do Chrome",
       "browserExtensionTitle": "Rozszerzenie przeglądarki",
       "browserSiteRemove": "Usuń {site}",
       "browserSitesDescription": "Na tych stronach działania czatu w przeglądarce są wykonywane bez pytania. Usuń stronę, aby znów otrzymywać pytania.",

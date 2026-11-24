@@ -489,7 +489,6 @@
       "browseIntegrations": "Pridėti paslaugą",
       "browserExtensionConnectHint": "Įdiegę atidarykite plėtinį šioje „stella“ kortelėje, leiskite pasiekti svetaines ir prijunkite kortelę.",
       "browserExtensionDescription": "„stella“ pokalbis gali skaityti ir naudoti svetaines jūsų pasirinktoje Chrome kortelėje. Kiekvienas veiksmas laukia jūsų patvirtinimo.",
-      "browserExtensionInstall": "Pridėti prie Chrome",
       "browserExtensionTitle": "Naršyklės plėtinys",
       "browserSiteRemove": "Pašalinti {site}",
       "browserSitesDescription": "Šiose svetainėse pokalbio veiksmai naršyklėje atliekami neklausiant. Pašalinkite svetainę, kad vėl būtumėte klausiami.",

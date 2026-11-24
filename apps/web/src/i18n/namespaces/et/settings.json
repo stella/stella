@@ -489,7 +489,6 @@
       "browseIntegrations": "Lisa teenus",
       "browserExtensionConnectHint": "Pärast installimist avage laiendus sellel stella vahekaardil, lubage juurdepääs veebisaitidele ja ühendage vahekaart.",
       "browserExtensionDescription": "stella vestlus saab teie valitud Chrome'i vahekaardil veebisaite lugeda ja kasutada. Iga toiming ootab teie kinnitust.",
-      "browserExtensionInstall": "Lisa Chrome'i",
       "browserExtensionTitle": "Brauserilaiendus",
       "browserSiteRemove": "Eemalda {site}",
       "browserSitesDescription": "Nendel veebisaitidel tehakse vestluse brauseritoimingud küsimata. Eemaldage veebisait, et teilt uuesti küsitaks.",

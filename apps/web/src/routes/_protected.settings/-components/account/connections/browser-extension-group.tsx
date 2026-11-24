@@ -48,7 +48,7 @@ export const BrowserExtensionGroup = () => {
               target="_blank"
             >
               <ExternalLinkIcon />
-              {t("settings.connections.browserExtensionInstall")}
+              {t("common.addToChrome")}
             </a>
           </ListItemActions>
         </ListItem>

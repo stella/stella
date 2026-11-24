@@ -69,6 +69,10 @@ import {
   DATA_EXPORT_ORGANIZATION_RECORD_NAMES,
 } from "@/api/lib/data-export/archive-plan";
 import { DATA_EXPORT_RETENTION_MS } from "@/api/lib/data-export/queue";
+import {
+  authorizeStoredDataExportReplay,
+  canReadStoredDataExport,
+} from "@/api/lib/data-export/stored-export-access";
 import { fingerprintHttpRequest } from "@/api/lib/idempotency/request-receipts";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
@@ -1791,5 +1795,342 @@ describe("run ownership", () => {
         completedAt: new Date("2026-10-01T00:00:00.000Z"),
       })
       .where(eq(organizationDataExports.id, exportId));
+  });
+});
+
+describe("stored export access", () => {
+  const readyPart = (matterIds: readonly string[]) => ({
+    index: 1,
+    attempt: 1,
+    fileName: "part.zip",
+    sizeBytes: 1,
+    sha256: "0".repeat(64),
+    matterIds: [...matterIds],
+    fileCount: 1,
+    totals: {
+      matters: matterIds.length,
+      documents: 0,
+      versions: 0,
+      files: 0,
+      fileBytes: 0,
+    },
+    problems: [],
+  });
+
+  const ownerContext = (audit: () => Promise<void> = async () => {}) =>
+    createTestHandlerContext({
+      audit,
+      safeDb: createSafeDb(database, [], ids.orgA, ids.userAdmin),
+      scopedDb: createRootMembershipScopedDb(
+        { organizationId: ids.orgA, userId: ids.userAdmin },
+        database,
+      ),
+      memberRole: sessionMemberRole("owner"),
+      session: { activeOrganizationId: ids.orgA },
+      user: { id: ids.userAdmin },
+    });
+
+  const readAll = async (
+    context: ReturnType<typeof ownerContext>,
+    exportId: SafeId<"dataExport">,
+  ) => ({
+    get: await invoke(readDataExport, { ...context, params: { exportId } }),
+    download: await invoke(downloadDataExport, {
+      ...context,
+      params: { exportId },
+      body: { file: { type: "part", index: 1 } },
+    }),
+    list: JSON.stringify(
+      await invoke(listDataExports, { ...context, query: {} }),
+    ),
+  });
+
+  const withAssignedOnlyMatter = async (
+    run: (matterId: SafeId<"workspace">) => Promise<void>,
+  ) => {
+    const matterId = toSafeId<"workspace">(Bun.randomUUIDv7());
+    // One transaction: an assigned-only matter needs its internal member by
+    // commit.
+    await testDb.transaction(async (tx) => {
+      await tx.insert(workspaces).values({
+        id: matterId,
+        organizationId: ids.orgA,
+        clientId: ids.contactA,
+        name: "Walled matter",
+        reference: `W-${matterId.slice(0, 8)}`,
+        visibility: "assigned_only",
+      });
+      await tx
+        .insert(workspaceMembers)
+        .values({ workspaceId: matterId, userId: ids.userA1 });
+    });
+    try {
+      await run(matterId);
+    } finally {
+      await testDb.delete(workspaces).where(eq(workspaces.id, matterId));
+    }
+  };
+
+  test("an unassigned owner with export permission cannot read, list or download an export of an assigned-only matter", async () => {
+    await withAssignedOnlyMatter(async (matterId) => {
+      const exportId = await insertExport({
+        organizationId: ids.orgA,
+        requestedBy: ids.userA1,
+        status: "ready",
+        expiresAt: NOT_YET_EXPIRED,
+        parts: [readyPart([ids.wsA1, matterId])],
+      });
+      let audits = 0;
+      const context = ownerContext(async () => {
+        audits += 1;
+      });
+      const refused = await readAll(context, exportId);
+      expect(refused.get).toMatchObject({ code: 404 });
+      expect(refused.download).toMatchObject({ code: 404 });
+      expect(refused.list).not.toContain(exportId);
+      expect(audits).toBe(0);
+
+      // Assigned, the owner sees every matter and may read the export.
+      await testDb
+        .insert(workspaceMembers)
+        .values({ workspaceId: matterId, userId: ids.userAdmin });
+      const allowed = await readAll(context, exportId);
+      expect(allowed.get).toMatchObject({ id: exportId, status: "ready" });
+      expect(allowed.list).toContain(exportId);
+    });
+  });
+
+  test("a member without export permission cannot read an export of matters they see", async () => {
+    const exportId = await insertExport({
+      organizationId: ids.orgA,
+      requestedBy: ids.userAdmin,
+      status: "ready",
+      expiresAt: NOT_YET_EXPIRED,
+      parts: [readyPart([ids.wsA1])],
+    });
+    const readable = await createRootMembershipScopedDb(
+      { organizationId: ids.orgA, userId: ids.userA1 },
+      database,
+    )(
+      async (tx) =>
+        await canReadStoredDataExport({
+          tx,
+          organizationId: ids.orgA,
+          userId: ids.userA1,
+          exportId,
+        }),
+    );
+    expect(readable).toBe(false);
+  });
+
+  test("the requester loses the export once they lose sight of a matter in it, plan included", async () => {
+    await withAssignedOnlyMatter(async (matterId) => {
+      await testDb
+        .insert(workspaceMembers)
+        .values({ workspaceId: matterId, userId: ids.userAdmin });
+      const ready = await insertExport({
+        organizationId: ids.orgA,
+        requestedBy: ids.userAdmin,
+        status: "ready",
+        expiresAt: NOT_YET_EXPIRED,
+        parts: [readyPart([matterId])],
+      });
+      const context = ownerContext();
+      expect(
+        await invoke(readDataExport, {
+          ...context,
+          params: { exportId: ready },
+        }),
+      ).toMatchObject({ id: ready });
+
+      // A running export whose plan still has the matter to pack.
+      const plannedOnly = await insertExport({
+        organizationId: ids.orgA,
+        requestedBy: ids.userAdmin,
+        status: "failed",
+        plan: {
+          parts: [
+            {
+              index: 1,
+              matterIds: [matterId],
+              estimatedBytes: 1,
+              paths: { manifest: "manifest.json", readme: "README.txt" },
+            },
+          ],
+          mattersTotal: 1,
+          bytesTotal: 1,
+          paths: {
+            organization: {
+              records: asTestRaw<
+                DataExportPlanRecord["paths"]["organization"]["records"]
+              >({}),
+              templateFiles: {},
+            },
+            matters: {},
+          },
+        },
+      });
+
+      await testDb
+        .delete(workspaceMembers)
+        .where(
+          and(
+            eq(workspaceMembers.workspaceId, matterId),
+            eq(workspaceMembers.userId, ids.userAdmin),
+          ),
+        );
+      for (const exportId of [ready, plannedOnly]) {
+        // db-await-in-loop: two exports, each read through every route
+        const refused = await readAll(context, exportId);
+        expect(refused.get).toMatchObject({ code: 404 });
+        expect(refused.download).toMatchObject({ code: 404 });
+        expect(refused.list).not.toContain(exportId);
+      }
+    });
+  });
+
+  test("a stored download link is not replayed to a caller who lost sight of a matter in the export", async () => {
+    await withAssignedOnlyMatter(async (matterId) => {
+      await testDb
+        .insert(workspaceMembers)
+        .values({ workspaceId: matterId, userId: ids.userAdmin });
+      const exportId = await insertExport({
+        organizationId: ids.orgA,
+        requestedBy: ids.userAdmin,
+        status: "ready",
+        expiresAt: NOT_YET_EXPIRED,
+        parts: [readyPart([matterId])],
+      });
+      const key = Bun.randomUUIDv7();
+      const route = "/v1/data-exports/:exportId/download";
+      const body = { file: { type: "manifest" } };
+      const params = { exportId };
+      const responseBody = {
+        url: "https://example.test/export-part",
+        fileName: "export-manifest.json",
+        sizeBytes: null,
+        sha256: null,
+        urlExpiresAt: "2099-01-01T00:00:00.000Z",
+      };
+      const scopedDb = createRootMembershipScopedDb(
+        { organizationId: ids.orgA, userId: ids.userAdmin },
+        database,
+      );
+      await scopedDb(
+        async (tx) =>
+          await tx.insert(requestIdempotencyReceipts).values({
+            organizationId: ids.orgA,
+            userId: ids.userAdmin,
+            idempotencyKey: key,
+            route,
+            requestFingerprint: await fingerprintHttpRequest({
+              method: "POST",
+              route,
+              body,
+              params,
+              query: {},
+            }),
+            state: "completed",
+            responseCode: 200,
+            responseBody,
+            completedAt: dbClock.now(),
+          }),
+      );
+      let audits = 0;
+      const context = createTestHandlerContext({
+        audit: async () => {
+          audits += 1;
+        },
+        scopedDb,
+        safeDb: NO_DB,
+        memberRole: sessionMemberRole("owner"),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userAdmin },
+        route,
+        body,
+        params,
+        query: {},
+        set: { status: 200, headers: {} },
+        request: new Request("https://example.test/download", {
+          method: "POST",
+          headers: { "Idempotency-Key": key },
+        }),
+      });
+      try {
+        const replay = await invoke(downloadDataExport, context);
+        expect(replay).toBeInstanceOf(Response);
+        await testDb
+          .delete(workspaceMembers)
+          .where(
+            and(
+              eq(workspaceMembers.workspaceId, matterId),
+              eq(workspaceMembers.userId, ids.userAdmin),
+            ),
+          );
+        const receiptsBefore = await testDb.$count(
+          requestIdempotencyReceipts,
+          eq(requestIdempotencyReceipts.organizationId, ids.orgA),
+        );
+        expect(await invoke(downloadDataExport, context)).toMatchObject({
+          code: 404,
+        });
+        expect(
+          await invoke(downloadDataExport, {
+            ...context,
+            request: new Request("https://example.test/download", {
+              method: "POST",
+              headers: { "Idempotency-Key": Bun.randomUUIDv7() },
+            }),
+          }),
+        ).toMatchObject({ code: 404 });
+        expect(
+          await testDb.$count(
+            requestIdempotencyReceipts,
+            eq(requestIdempotencyReceipts.organizationId, ids.orgA),
+          ),
+        ).toBe(receiptsBefore);
+        expect(audits).toBe(0);
+      } finally {
+        await testDb
+          .delete(requestIdempotencyReceipts)
+          .where(
+            and(
+              eq(requestIdempotencyReceipts.organizationId, ids.orgA),
+              eq(requestIdempotencyReceipts.idempotencyKey, key),
+            ),
+          );
+      }
+    });
+  });
+
+  test("a stored create answer is not replayed for an export the caller cannot read", async () => {
+    await withAssignedOnlyMatter(async (matterId) => {
+      const exportId = await insertExport({
+        organizationId: ids.orgA,
+        requestedBy: ids.userA1,
+        status: "failed",
+        parts: [readyPart([matterId])],
+      });
+      const context = createTestHandlerContext({
+        audit: NO_AUDIT,
+        scopedDb: createRootMembershipScopedDb(
+          { organizationId: ids.orgA, userId: ids.userAdmin },
+          database,
+        ),
+        safeDb: NO_DB,
+        memberRole: sessionMemberRole("owner"),
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userAdmin },
+      });
+      expect(
+        await authorizeStoredDataExportReplay(context, {
+          outcome: DATA_EXPORT_START_OUTCOME.ALREADY_ACTIVE,
+          export: { id: exportId },
+        }),
+      ).toMatchObject({ status: "error", error: { status: 404 } });
+      expect(
+        await authorizeStoredDataExportReplay(context, { unexpected: true }),
+      ).toMatchObject({ status: "error", error: { status: 404 } });
+    });
   });
 });

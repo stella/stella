@@ -6,6 +6,7 @@ import {
 import { useRouter } from "@tanstack/react-router";
 import { panic } from "better-result";
 
+import type { MatterVisibility } from "@stll/api-contract/matter-visibility";
 import { DEFAULT_FILE_PROPERTY_NAME } from "@stll/api-contract/property-policy";
 
 import { getTranslator } from "@/i18n/translator";
@@ -27,12 +28,11 @@ import { workspacesKeys } from "@/lib/workspaces/queries";
 import { useTableStore } from "@/lib/workspaces/table-store";
 
 type CreateWorkspaceVars = {
-  // Omit `clientId` to create a personal matter (initially visible
-  // only to the creator). With `clientId`, `memberUserIds` may add
-  // other members; for personal matters that field is ignored.
   clientId?: string;
   memberUserIds?: string[];
   name: string;
+  // Omitted: the API's default for whether `clientId` is given.
+  visibility?: MatterVisibility;
 };
 
 export const useCreateWorkspace = () => {
@@ -53,10 +53,13 @@ export const useCreateWorkspace = () => {
           id: toSafeId<"workspace">(id),
           ...(vars.clientId !== undefined && {
             clientId: toSafeId<"contact">(vars.clientId),
-            ...(vars.memberUserIds && vars.memberUserIds.length > 0
-              ? { memberUserIds: vars.memberUserIds }
-              : {}),
           }),
+          ...(vars.memberUserIds && vars.memberUserIds.length > 0
+            ? { memberUserIds: vars.memberUserIds }
+            : {}),
+          ...(vars.visibility === undefined
+            ? {}
+            : { visibility: vars.visibility }),
           name: vars.name,
           filePropertyName: DEFAULT_FILE_PROPERTY_NAME,
         });
@@ -95,6 +98,9 @@ type WorkspaceUpdateType = keyof WorkspaceUpdateValueByType;
 
 export type WorkspaceUpdate =
   | { type: "clientId"; value: string; expectedClientId: string | null }
+  // `confirmWidening` is the person's consent to show the matter to people
+  // who cannot see it now; the API refuses a widening sent without it.
+  | { type: "visibility"; value: MatterVisibility; confirmWidening?: true }
   | {
       [Type in WorkspaceUpdateType]: {
         type: Type;
@@ -111,6 +117,7 @@ const WORKSPACE_UPDATE_REFRESH_SCOPE = {
   leadUserId: "query-cache",
   name: "route-metadata",
   reference: "query-cache",
+  visibility: "query-cache",
 } as const satisfies Record<
   WorkspaceUpdate["type"],
   WorkspaceUpdateRefreshScope
@@ -144,6 +151,10 @@ export const workspaceUpdateBody = (update: WorkspaceUpdate) => {
       return { name: update.value };
     case "reference":
       return { reference: update.value };
+    case "visibility":
+      return update.confirmWidening
+        ? { visibility: update.value, confirmWidening: true as const }
+        : { visibility: update.value };
     default: {
       update satisfies never;
       return panic(`Unhandled update: ${String(update)}`);

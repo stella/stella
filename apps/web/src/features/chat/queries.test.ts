@@ -3221,6 +3221,7 @@ describe("chat runtime identity across query refetch", () => {
     webSearchAvailable: false,
     webSearchEnabled: false,
     context: {
+      source: "estimate" as const,
       estimatedTokens,
       triggerTokens: 200_000,
       breakdown: {

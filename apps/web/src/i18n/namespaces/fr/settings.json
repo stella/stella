@@ -489,7 +489,6 @@
       "browseIntegrations": "Ajouter un service",
       "browserExtensionConnectHint": "Après l'installation, ouvrez l'extension dans cet onglet stella, autorisez l'accès aux sites web et connectez l'onglet.",
       "browserExtensionDescription": "La conversation stella peut lire et utiliser des sites web dans un onglet Chrome de votre choix. Chaque action attend votre approbation.",
-      "browserExtensionInstall": "Ajouter à Chrome",
       "browserExtensionTitle": "Extension du navigateur",
       "browserSiteRemove": "Retirer {site}",
       "browserSitesDescription": "Sur ces sites, les actions de la conversation dans le navigateur s'exécutent sans demander. Retirez un site pour que la question vous soit de nouveau posée.",

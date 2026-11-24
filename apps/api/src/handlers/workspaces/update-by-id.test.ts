@@ -35,6 +35,26 @@ const createContext = ({
     workspaceId: toSafeId<"workspace">("ws_test123"),
   });
 
+/** The actor's current role and reach, read after the matter lock. */
+const authoritySelect = {
+  from: () => ({
+    innerJoin: () => ({
+      where: () => ({
+        limit: async () => [
+          {
+            role: "owner",
+            workspaceId: "ws_test123",
+            workspaceStatus: "active",
+          },
+        ],
+      }),
+    }),
+  }),
+};
+
+const readsAuthority = (fields: Record<string, unknown> | undefined) =>
+  fields !== undefined && "role" in fields;
+
 describe("updateWorkspace", () => {
   test("rejects client changes to contacts outside the active organization", async () => {
     const workspaceSelect = {
@@ -64,7 +84,10 @@ describe("updateWorkspace", () => {
 
     const { getCallCount, safeDb, scopedDb } = createScopedDbMock({
       execute: aggregateRecorder().tx.execute,
-      select: () => {
+      select: (fields?: Record<string, unknown>) => {
+        if (readsAuthority(fields)) {
+          return authoritySelect;
+        }
         selectCount++;
         return selectCount === 1 ? workspaceSelect : clientSelect;
       },
@@ -99,15 +122,18 @@ describe("updateWorkspace", () => {
     };
     const { safeDb, scopedDb } = createScopedDbMock({
       execute: aggregateRecorder().tx.execute,
-      select: () => ({
-        from: () => ({
-          // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the locking chain the contact lookup uses
-          where: () =>
-            Object.assign(Promise.resolve([workspaceRow]), {
-              for: () => ({ limit: async () => [] }),
-            }),
-        }),
-      }),
+      select: (fields?: Record<string, unknown>) =>
+        readsAuthority(fields)
+          ? authoritySelect
+          : {
+              from: () => ({
+                // oxlint-disable-next-line typescript/promise-function-async -- async would wrap the row promise and drop the locking chain the contact lookup uses
+                where: () =>
+                  Object.assign(Promise.resolve([workspaceRow]), {
+                    for: () => ({ limit: async () => [] }),
+                  }),
+              }),
+            },
     });
 
     const result = await updateWorkspace.handler(

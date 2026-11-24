@@ -55,6 +55,7 @@
     "./untrusted-content-fence": "./src/untrusted-content-fence.ts",
     "./audit-log": "./src/audit-log.ts",
     "./legal-holds": "./src/legal-holds.ts",
+    "./matter-visibility": "./src/matter-visibility.ts",
     "./model-run-caps": "./src/model-run-caps.ts",
     "./verification-rechecks": "./src/verification-rechecks.ts",
     "./action-admission": "./src/action-admission.ts",

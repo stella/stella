@@ -559,7 +559,7 @@
     },
     "create": {
       "matterName": "Názov spisu",
-      "personalDescription": "Osobné spisy sú súkromné a nepotrebujú klienta. Neskôr ich môžete povýšiť, aby ste ich zdieľali s tímom."
+      "personalDescription": "Klient je nepovinný. Môžete ho pridať neskôr; nezmení to, kto spis vidí."
     },
     "createNewWorkspace": "Vytvoriť nový spis",
     "defaultName": "Bez názvu",
@@ -1051,11 +1051,10 @@
         "third_party": "Tretia strana",
         "witness": "Svedok"
       },
-      "personalDescription": "Osobné spisy sú iba pre vás. Povýšte ich na klientsky spis, aby ste ich zdieľali s tímom.",
+      "personalDescription": "Tento spis nemá klienta. Pridaním klienta sa nezmení, kto spis vidí.",
       "personalLabel": "Osobný",
       "promoteCta": "Povýšiť na klientsky spis",
-      "promoteDescription": "Priraďte klienta na zdieľanie tohto spisu s tímom. Akcia je nezvratná: povýšené spisy nie je možné vrátiť na osobné.",
-      "promoteToClientConfirm": "Spis <bdi>{matterName}</bdi> bude priradený klientovi <bdi>{clientName}</bdi> a zdieľaný s tímom. Na osobný ho už nebude možné vrátiť.",
+      "promoteDescription": "Priraďte spisu klienta. Kto spis vidí, zostane rovnaké. Klienta môžete neskôr zmeniť, ale nie odstrániť.",
       "promotedSuccess": "Spis povýšený",
       "recentClients": "Nedávni klienti",
       "removeClient": "Odstrániť klienta",
@@ -1426,6 +1425,19 @@
       },
       "useTemplate": "Použiť predvoľbu…",
       "viewSettings": "Nastavenia zobrazenia"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administrátori a priradení",
+      "adminsAndAssignedDescription": "Vlastníci, administrátori a ľudia priradení k spisu",
+      "allMembers": "Celý tím",
+      "allMembersDescription": "Všetci členovia tímu okrem externých používateľov",
+      "assignedOnly": "Iba priradení",
+      "assignedOnlyDescription": "Iba ľudia priradení k spisu",
+      "label": "Kto vidí spis",
+      "widenConfirm": "Zmeniť viditeľnosť",
+      "widenTitle": "Sprístupniť spis viacerým ľuďom?",
+      "widenToAdminsAndAssigned": "Vlastníci a administrátori budú môcť otvoriť tento spis a jeho dokumenty, aj keď k nemu nie sú priradení.",
+      "widenToAllMembers": "Všetci členovia tímu okrem externých používateľov budú môcť otvoriť tento spis a jeho dokumenty, aj keď k nemu nie sú priradení."
     },
     "workflow": {
       "largeRunPrompt": {

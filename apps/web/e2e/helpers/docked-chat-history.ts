@@ -34,6 +34,7 @@ export const dockedChatMessagePage = {
   reasoningEffort: null,
   runTarget: { kind: "cloud" as const, approvals: "ask" as const },
   context: {
+    source: "estimate" as const,
     estimatedTokens: 0,
     triggerTokens: 0,
     cacheStableTokens: 0,

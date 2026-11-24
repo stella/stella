@@ -14,10 +14,14 @@ import {
 } from "@/components/member-combobox";
 import { QueryViewFeedback } from "@/components/query-view-feedback";
 import { leadSectionContent } from "@/components/workspaces/lead-section.logic";
+import { canChangeMatterVisibility } from "@/components/workspaces/matter-visibility.logic";
 import { usePermissions } from "@/hooks/use-permissions";
+import { roleOptions } from "@/lib/auth-queries";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { notifyUserError } from "@/lib/errors/user-toast";
 import { queryView } from "@/lib/query-view.logic";
+import { useQueryViewError } from "@/lib/use-query-view";
 import { useUpdateWorkspace } from "@/lib/workspaces/mutations";
 import { workspaceOptions } from "@/lib/workspaces/queries";
 import { workspaceMembersOptions } from "@/lib/workspaces/queries/workspace-members";
@@ -28,7 +32,10 @@ type LeadSectionProps = {
 
 export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
   const t = useTranslations();
-  const canUpdate = usePermissions({ workspace: ["update"] });
+  const { id: userId } = useAuthenticatedUser();
+  const canUpdateMatters = usePermissions({ workspace: ["update"] });
+  const roleView = queryView(useQuery(roleOptions));
+  useQueryViewError(roleView, "LeadSection:role");
   const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)));
   const membersView = queryView(useQuery(workspaceMembersOptions(workspaceId)));
   const content = leadSectionContent({
@@ -66,6 +73,17 @@ export const LeadSection = ({ workspaceId }: LeadSectionProps) => {
       return panic("Unhandled matter lead read state");
   }
   const leadUserId = content.workspace.leadUserId;
+  // The lead is the matter's steward alongside its visibility: the same
+  // people may change either (the API refuses everyone else).
+  const canUpdate = canChangeMatterVisibility({
+    canUpdateMatters,
+    role:
+      roleView.type === "items" && roleView.refetchError === undefined
+        ? roleView.items
+        : undefined,
+    userId,
+    leadUserId,
+  });
   const memberOptions = workspaceMemberOptions(content.members);
   // A lead whose account is gone is not offered, but the field still shows
   // that someone leads the matter, as the remove button beside it does.

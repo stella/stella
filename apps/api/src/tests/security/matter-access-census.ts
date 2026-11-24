@@ -22,7 +22,7 @@ import {
  *   SQL name). Only the owner module may.
  * - `derives-matter-access`: it combines matter membership
  *   (`workspaceMembers` / `workspace_members`) with an organization-role rule
- *   (`CLIENT_MATTER_ADMIN_ROLES`, `WORKSPACE_ACCESS_BY_ROLE`, or a member
+ *   (`MATTER_ADMIN_ROLES`, `INTERNAL_MEMBER_ROLES`, `WORKSPACE_ACCESS_BY_ROLE`, or a member
  *   role together with a client id),
  *   i.e. it computes the view's rule a second time. No module may.
  * - `owner-connection-workspace-set`: it imports the owner connection
@@ -34,7 +34,7 @@ import {
  *   connection per symbol (`<symbol>#rootDb`), so a reviewed reader that
  *   starts using `rootDb` in a symbol needs its entry updated.
  * - `names-matter-role-rule`: it names the organization-role reach of the
- *   rule (`CLIENT_MATTER_ADMIN_ROLES`, `WORKSPACE_ACCESS_BY_ROLE`). The rule
+ *   rule (`MATTER_ADMIN_ROLES`, `INTERNAL_MEMBER_ROLES`, `WORKSPACE_ACCESS_BY_ROLE`). The rule
  *   belongs in the database (`stella_workspace_access`); every app copy is
  *   enumerated.
  *
@@ -89,7 +89,8 @@ const VIEW_IDENTIFIERS = new Set([
 ]);
 const VIEW_SQL_NAME = /stella_authorized_workspaces/gu;
 const ROLE_RULE_IDENTIFIERS = new Set([
-  "CLIENT_MATTER_ADMIN_ROLES",
+  "MATTER_ADMIN_ROLES",
+  "INTERNAL_MEMBER_ROLES",
   "WORKSPACE_ACCESS_BY_ROLE",
 ]);
 const WORKSPACE_SET_IDENTIFIERS = new Set([
@@ -637,7 +638,7 @@ const readFacts = (file: string, source: string): Facts => {
 
 // Cheap prefilter so only candidate files are parsed.
 const CANDIDATE =
-  /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb|db\/root\b|CLIENT_MATTER_ADMIN_ROLES|WORKSPACE_ACCESS_BY_ROLE/u;
+  /stellaAuthorizedWorkspaces|WORKSPACE_ACCESS_VIEW_NAME|stella_authorized_workspaces|workspaceMembers|workspace_members|rootDb|db\/root\b|MATTER_ADMIN_ROLES|INTERNAL_MEMBER_ROLES|WORKSPACE_ACCESS_BY_ROLE/u;
 
 const hasSites = (sites: MatterAccessSites) => Object.keys(sites).length > 0;
 

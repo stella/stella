@@ -3604,7 +3604,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
       "destructiveHint": "Save matter can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save matter is confined to the private workspace or a bounded computation."
     },
-    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
+    "description": "Create a matter (omit matter_id; name required) or update one: name, client_id, reference, billing_reference, visibility, status ('archived'/'active'). Returns the matter ID.",
     "annotations": {
       "title": "Save matter",
       "destructiveHint": true,
@@ -3620,7 +3620,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID to update; omit to create a new matter"
+          "description": "Matter to update; omit to create"
         },
         "name": {
           "type": "string",
@@ -3631,7 +3631,23 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
         "client_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client."
+          "description": "Client contact ID; never changes visibility."
+        },
+        "visibility": {
+          "enum": [
+            "all_members",
+            "admins_and_assigned",
+            "assigned_only"
+          ],
+          "type": "string",
+          "description": "Who sees it unassigned. Default: admins_and_assigned with client_id, else assigned_only."
+        },
+        "confirm_widening": {
+          "enum": [
+            true
+          ],
+          "description": "Needed to widen visibility; ask the user.",
+          "type": "boolean"
         },
         "reference": {
           "type": "string",
@@ -3657,7 +3673,7 @@ exports[`MCP registry quality (advanced surface) tool surface snapshot (name, sc
             "archived"
           ],
           "type": "string",
-          "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
+          "description": "Update only: 'archived' or 'active'."
         }
       }
     }
@@ -11211,7 +11227,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
       "destructiveHint": "Save matter can overwrite, delete, cancel, revoke, or otherwise irreversibly change existing state.",
       "openWorldHint": "Save matter is confined to the private workspace or a bounded computation."
     },
-    "description": "Create, update, archive, or unarchive a matter. Omit matter_id to create a new matter (name required; pass client_id to attach a client contact). Pass matter_id to update an existing matter: set name, reference, or billing_reference, and/or set status to 'archived' or 'active' to archive or unarchive it. Returns the matter ID.",
+    "description": "Create a matter (omit matter_id; name required) or update one: name, client_id, reference, billing_reference, visibility, status ('archived'/'active'). Returns the matter ID.",
     "annotations": {
       "title": "Save matter",
       "destructiveHint": true,
@@ -11227,7 +11243,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "matter_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Matter ID to update; omit to create a new matter"
+          "description": "Matter to update; omit to create"
         },
         "name": {
           "type": "string",
@@ -11238,7 +11254,23 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "client_id": {
           "type": "string",
           "format": "uuid",
-          "description": "Contact ID of the matter's client. On create it makes a client matter; on update it attaches a client to a personal matter or replaces the client."
+          "description": "Client contact ID; never changes visibility."
+        },
+        "visibility": {
+          "enum": [
+            "all_members",
+            "admins_and_assigned",
+            "assigned_only"
+          ],
+          "type": "string",
+          "description": "Who sees it unassigned. Default: admins_and_assigned with client_id, else assigned_only."
+        },
+        "confirm_widening": {
+          "enum": [
+            true
+          ],
+          "description": "Needed to widen visibility; ask the user.",
+          "type": "boolean"
         },
         "reference": {
           "type": "string",
@@ -11264,7 +11296,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "archived"
           ],
           "type": "string",
-          "description": "Set 'archived' to archive the matter or 'active' to unarchive it. Only valid when updating."
+          "description": "Update only: 'archived' or 'active'."
         }
       }
     }

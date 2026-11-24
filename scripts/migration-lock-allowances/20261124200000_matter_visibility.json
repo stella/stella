@@ -1,0 +1,6 @@
+{
+  "add-column": "The visibility column is nullable and default-free, so adding it rewrites no workspaces rows; lock_timeout is 1s and statement_timeout is 5s.",
+  "add-constraint": "The visibility CHECK is added NOT VALID, with no existing-row scan; the registered online repair validates it after commit through the contention gate. lock_timeout is 1s and statement_timeout is 5s.",
+  "replace-view": "The authorization view keeps its columns, grants and explicit-ID branch; only its membership branch now calls the matter access function. Replacing a view definition is a catalog change with no data scan; lock_timeout is 1s and statement_timeout is 5s.",
+  "create-trigger": "The stewardship triggers are catalog-only additions on workspace_members, member and workspaces; creating them scans no rows. lock_timeout is 1s and statement_timeout is 5s."
+}

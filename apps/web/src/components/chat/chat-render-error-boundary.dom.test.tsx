@@ -67,7 +67,6 @@ const threadView = (threadMessages: ChatUIMessage[], analytics: Analytics) => (
                   activitySession={{
                     reportedUnknownActivityTypes: new Set<string>(),
                   }}
-                  approvalPendingMessageId={null}
                   messages={threadMessages}
                   onAskUserSubmit={() => {}}
                   onCreateDocumentResolve={() => {}}

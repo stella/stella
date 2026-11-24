@@ -100,5 +100,8 @@
   },
   "desktopUpdateNeeded": {
     "message": "Atnaujinkite stella desktop ir šį plėtinį"
+  },
+  "desktopConnecting": {
+    "message": "Jungiamasi prie „stella desktop“…"
   }
 }

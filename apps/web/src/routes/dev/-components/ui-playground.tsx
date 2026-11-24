@@ -1695,7 +1695,6 @@ function SharedChatRendererSample() {
         >
           <ChatThreadMessages
             activitySession={activitySession}
-            approvalPendingMessageId={null}
             messages={SHARED_CHAT_RENDERER_MESSAGES}
             onAskUserSubmit={() => {
               /* no-op in playground */

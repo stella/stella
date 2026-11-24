@@ -10,6 +10,13 @@ type VisualLoader = {
 };
 
 const visualLoaders = {
+  "browser-extension-chip": {
+    load: async () => {
+      const { BrowserExtensionChipPlayground } =
+        await import("./-components/browser-extension-chip-playground");
+      return { default: BrowserExtensionChipPlayground };
+    },
+  },
   "appeal-reviews": {
     load: async () => {
       const { AppealReviewsPlayground } =

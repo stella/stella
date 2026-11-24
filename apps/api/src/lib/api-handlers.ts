@@ -1141,6 +1141,14 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies<TContext> = {
   authorize?: (ctx: TContext) => Promise<Result<void, HandlerError>>;
+  /**
+   * Runs before a stored response is replayed, with that response's body,
+   * for a replay whose answer depends on what the stored response names.
+   */
+  authorizeReplay?: (
+    ctx: TContext,
+    body: unknown,
+  ) => Promise<Result<void, HandlerError>>;
   admit?: typeof withActionAdmission;
   checkAccountOperation?: typeof checkRestrictedAccountOperation;
   announce?: typeof announceResourceSetUpdates;
@@ -1163,6 +1171,7 @@ type ScopedOperationInput<
   handler: SafeHandlerFn<TContext, TResult>;
   admit: typeof withActionAdmission;
   authorize?: HandlerAdmissionDependencies<TContext>["authorize"];
+  authorizeReplay?: HandlerAdmissionDependencies<TContext>["authorizeReplay"];
 };
 
 export const runCheckedScopedHandler = async <
@@ -1183,9 +1192,8 @@ export const runCheckedScopedHandler = async <
   /** The live request's response state; the proof's copy by default. */
   responseSet: ResponseSet = scratch.ctx.set,
 ): Promise<SafeHandlerResult<TResult>> => {
-  const { ctx, config, handler, admit, authorize } = cloneOperationInput(
-    proof.input.value,
-  );
+  const { ctx, config, handler, admit, authorize, authorizeReplay } =
+    cloneOperationInput(proof.input.value);
   const admission = config.actionAdmission;
   const run = async (handlerContext: TContext) =>
     await runSafeHandler({
@@ -1251,6 +1259,12 @@ export const runCheckedScopedHandler = async <
               ...(authorize === undefined
                 ? {}
                 : { authorize: async () => await authorize(ctx) }),
+              ...(authorizeReplay === undefined
+                ? {}
+                : {
+                    authorizeReplay: async (body: unknown) =>
+                      await authorizeReplay(ctx, body),
+                  }),
               checkResponse: (body) => {
                 const memberRole = readAuthorizedMemberRole(ctx);
                 if (
@@ -1435,6 +1449,7 @@ const createSafeScopedHandler = <
   handler: SafeHandlerFn<TContext, TResult>,
   {
     authorize,
+    authorizeReplay,
     admit = withActionAdmission,
     checkAccountOperation = checkRestrictedAccountOperation,
     announce = announceResourceSetUpdates,
@@ -1519,6 +1534,7 @@ const createSafeScopedHandler = <
             handler,
             admit,
             ...(authorize === undefined ? {} : { authorize }),
+            ...(authorizeReplay === undefined ? {} : { authorizeReplay }),
           },
           check: async ({
             ctx: checkedContext,

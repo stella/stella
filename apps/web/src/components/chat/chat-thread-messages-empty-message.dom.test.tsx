@@ -76,7 +76,6 @@ const renderThread = async (
                     activitySession={{
                       reportedUnknownActivityTypes: new Set<string>(),
                     }}
-                    approvalPendingMessageId={null}
                     isGenerating={false}
                     messages={threadMessages}
                     onAskUserSubmit={() => {}}

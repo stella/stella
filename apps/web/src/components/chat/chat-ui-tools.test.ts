@@ -4,10 +4,12 @@ import {
   ACTION_ADMISSION_CODES,
   ACTION_ADMISSION_REFUSALS,
 } from "@stll/api-contract/action-admission";
+import { BROWSER_CONTROL_TOOL_NAME } from "@stll/api-contract/browser-control";
 import {
   CHAT_TOOL_EXECUTOR_METADATA_KEY,
   createChatPastedTextPart,
 } from "@stll/api-contract/chat";
+import { CHAT_LOCAL_RUN_TOOL_NAMES } from "@stll/api-contract/chat-local-run-tool";
 import { FOLIO_AGENT_TOOL_NAMES } from "@stll/folio-agents";
 
 import {
@@ -16,6 +18,7 @@ import {
   getApprovalToolName,
   getAwaitedAssistantMessageId,
   getChatAssistantTurnError,
+  getChatToolIcon,
   getChatToolTitleKey,
   getChatWorkAwaitedAtOpen,
   getCurrentApprovalPendingMessageId,
@@ -303,6 +306,24 @@ describe("canonical chat UI projection", () => {
     } satisfies PersistedChatMessage;
 
     expect(projectCanonicalChatUIMessages([message]).at(0)).toBe(message);
+  });
+});
+
+describe("chat tool icons", () => {
+  test("every tool titled as the browser step leads with the browser glyph", () => {
+    expect(getChatToolTitleKey(CHAT_LOCAL_RUN_TOOL_NAMES.browser)).toBe(
+      getChatToolTitleKey(BROWSER_CONTROL_TOOL_NAME),
+    );
+    expect(getChatToolIcon(BROWSER_CONTROL_TOOL_NAME)).toBe("browser");
+    expect(getChatToolIcon(CHAT_LOCAL_RUN_TOOL_NAMES.browser)).toBe("browser");
+  });
+
+  test("web lookups lead with the web glyph, other tools with the edit glyph", () => {
+    expect(getChatToolIcon("web_search")).toBe("web");
+    expect(getChatToolIcon("fetch_url")).toBe("web");
+    expect(getChatToolIcon(CHAT_LOCAL_RUN_TOOL_NAMES.webSearch)).toBe("web");
+    expect(getChatToolIcon("save_matter")).toBe("edit");
+    expect(getChatToolIcon("mcp__example__create_issue")).toBe("edit");
   });
 });
 

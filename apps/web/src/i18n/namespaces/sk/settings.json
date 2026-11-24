@@ -489,7 +489,6 @@
       "browseIntegrations": "Pridať službu",
       "browserExtensionConnectHint": "Po inštalácii otvorte rozšírenie na tejto karte aplikácie stella, povoľte prístup k webom a kartu pripojte.",
       "browserExtensionDescription": "Chat v aplikácii stella môže čítať weby a pracovať s nimi na karte Chromu, ktorú zvolíte. Každá akcia čaká na vaše schválenie.",
-      "browserExtensionInstall": "Pridať do Chromu",
       "browserExtensionTitle": "Rozšírenie prehliadača",
       "browserSiteRemove": "Odobrať {site}",
       "browserSitesDescription": "Akcie chatu v prehliadači na týchto weboch prebiehajú bez pýtania. Po odobratí webu sa budeme znova pýtať.",

@@ -489,7 +489,6 @@
       "browseIntegrations": "Pievienot pakalpojumu",
       "browserExtensionConnectHint": "Pēc instalēšanas atveriet paplašinājumu šajā stella cilnē, atļaujiet piekļuvi vietnēm un savienojiet cilni.",
       "browserExtensionDescription": "stella tērzēšana var lasīt un izmantot vietnes jūsu izvēlētā Chrome cilnē. Katra darbība gaida jūsu apstiprinājumu.",
-      "browserExtensionInstall": "Pievienot pārlūkam Chrome",
       "browserExtensionTitle": "Pārlūka paplašinājums",
       "browserSiteRemove": "Noņemt {site}",
       "browserSitesDescription": "Šajās vietnēs tērzēšanas darbības pārlūkā notiek bez jautāšanas. Noņemiet vietni, lai jums atkal jautātu.",

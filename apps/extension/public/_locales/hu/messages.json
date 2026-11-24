@@ -100,5 +100,8 @@
   },
   "desktopUpdateNeeded": {
     "message": "Frissítse a stella desktopot és ezt a bővítményt"
+  },
+  "desktopConnecting": {
+    "message": "Csatlakozás a stella desktop alkalmazáshoz…"
   }
 }

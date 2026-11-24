@@ -100,5 +100,8 @@
   },
   "desktopUpdateNeeded": {
     "message": "Uuendage stella desktopi ja seda laiendust"
+  },
+  "desktopConnecting": {
+    "message": "Ühendamine rakendusega stella desktop…"
   }
 }

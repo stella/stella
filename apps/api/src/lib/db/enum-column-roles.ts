@@ -773,4 +773,9 @@ export const ENUM_COLUMN_ROLES = {
   workspace_contacts: {
     role: ATTRIBUTE,
   },
+  workspaces: {
+    // Any level may follow any other; widening is confirmed by the caller,
+    // not constrained as a lifecycle.
+    visibility: ATTRIBUTE,
+  },
 } as const satisfies EnumColumnRoles;

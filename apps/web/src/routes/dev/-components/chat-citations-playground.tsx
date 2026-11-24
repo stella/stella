@@ -168,7 +168,6 @@ export function ChatCitationsPlayground({
           >
             <ChatThreadMessages
               activitySession={activitySession}
-              approvalPendingMessageId={null}
               isGenerating={frame.isGenerating}
               key={`run-${run}`}
               messages={frame.messages}

@@ -55,14 +55,34 @@ export const isOrganizationManagementRole = (
   );
 
 /**
- * The roles that reach every client matter without a matter assignment. The
- * stella_authorized_workspaces view repeats this list in SQL; the API's RLS
- * coverage test binds the two.
+ * The roles that reach a matter visible to admins and assigned members
+ * (`admins_and_assigned`, and every wider level) without a matter
+ * assignment. The database rule (`stella_authorized_workspace_ids` and the
+ * `stella_authorized_workspaces` view) repeats this list in SQL; the API's
+ * RLS coverage test binds the two.
  */
-export const CLIENT_MATTER_ADMIN_ROLES = [
+export const MATTER_ADMIN_ROLES = [
   "owner",
   "admin",
 ] as const satisfies readonly OrganizationRoleName[];
+
+/**
+ * The organization's own people: every role except `external`. They reach a
+ * matter visible to all members (`all_members`) without an assignment, and
+ * only they can keep an assigned-only matter reachable. External users reach
+ * a matter only through an assignment, at every visibility.
+ */
+export const INTERNAL_MEMBER_ROLES = [
+  "owner",
+  "admin",
+  "member",
+  "intern",
+] as const satisfies readonly OrganizationRoleName[];
+
+export const isInternalMemberRole = (
+  role: string,
+): role is (typeof INTERNAL_MEMBER_ROLES)[number] =>
+  INTERNAL_MEMBER_ROLES.some((internal) => internal === role);
 
 export const roles = {
   owner: ac.newRole(ROLE_GRANTS.owner),

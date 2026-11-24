@@ -489,7 +489,6 @@
       "browseIntegrations": "Add a service",
       "browserExtensionConnectHint": "After installing, open the extension on this stella tab, allow website access, and connect the tab.",
       "browserExtensionDescription": "stella chat can read and use websites in a Chrome tab you choose. Every action waits for your approval.",
-      "browserExtensionInstall": "Add to Chrome",
       "browserExtensionTitle": "Browser extension",
       "browserSiteRemove": "Remove {site}",
       "browserSitesDescription": "Chat's browser actions on these websites run without asking. Remove a website to be asked again.",

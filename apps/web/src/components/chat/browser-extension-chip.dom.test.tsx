@@ -215,7 +215,9 @@ for (const status of Object.values(BROWSER_EXTENSION_STATUS)) {
         );
         expect(
           await screen.findByText(
-            messages.chat.browserExtension.connectDescription,
+            status === BROWSER_EXTENSION_STATUS.needsSiteAccess
+              ? messages.chat.browserExtension.siteAccessDescription
+              : messages.chat.browserExtension.connectDescription,
           ),
         ).toBeTruthy();
         expect(screen.queryByRole("link")).toBeNull();
@@ -265,18 +267,42 @@ test("the mounted chip changes from checking to install when the announcement de
   ).toBeTruthy();
 });
 
-test("the connected tooltip explains the separate website tab", async () => {
+test("the connected chip names its state, explains the plugin and links to allowed sites", async () => {
   await states[BROWSER_EXTENSION_STATUS.connected]();
   showChip();
   const trigger = screen.getByRole("button", {
     name: messages.chat.browserExtension.connected,
   });
-  await act(async () => {
-    trigger.focus();
+  expect(
+    document.querySelector(
+      `[id="${trigger.getAttribute("aria-describedby") ?? ""}"]`,
+    )?.textContent,
+  ).toBe(messages.chat.browserExtensionPreview.connected);
+
+  fireEvent.click(trigger);
+  expect(
+    await screen.findByText(
+      messages.chat.browserExtension.connectedDescription,
+    ),
+  ).toBeTruthy();
+  expect(screen.getByText(messages.common.connected)).toBeTruthy();
+  const manageLink = screen.getByRole("link", {
+    name: messages.chat.browserExtension.manageSites,
+  });
+  expect(manageLink.getAttribute("href")).toBe("/settings/account/connections");
+});
+
+test("the not-installed chip describes its state before clicking", async () => {
+  await states[BROWSER_EXTENSION_STATUS.notInstalled]();
+  showChip();
+  const trigger = screen.getByRole("button", {
+    name: messages.chat.browserExtension.install,
   });
   expect(
-    await screen.findByText(messages.chat.browserExtension.description),
-  ).toBeTruthy();
+    document.querySelector(
+      `[id="${trigger.getAttribute("aria-describedby") ?? ""}"]`,
+    )?.textContent,
+  ).toBe(messages.chat.browserExtensionPreview.notInstalled);
 });
 
 for (const origin of PRODUCTION_STELLA_ORIGINS) {
@@ -286,7 +312,7 @@ for (const origin of PRODUCTION_STELLA_ORIGINS) {
     showChip();
     await openInstallPopover();
     const link = screen.getByRole("link", {
-      name: messages.chat.browserExtension.install,
+      name: messages.common.addToChrome,
     });
     expect(link.getAttribute("href")).toBe(BROWSER_EXTENSION_STORE_URL);
     expect(link.getAttribute("rel")).toBe("noopener noreferrer");

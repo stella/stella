@@ -26,7 +26,6 @@ export const ChatLinkIconsPlayground = () => {
   }));
   const props = {
     activitySession,
-    approvalPendingMessageId: null,
     messages: [
       {
         id: "visual-chat-link-icons",

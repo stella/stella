@@ -34,6 +34,7 @@ import { MATTER_INFO_ICON_SLOT_CLASS } from "@/components/workspaces/matter-info
 import { MembersSection } from "@/components/workspaces/members-section";
 import { PartiesSection } from "@/components/workspaces/parties-section";
 import { ReferenceChangeConfirmation } from "@/components/workspaces/reference-change-confirmation";
+import { VisibilitySection } from "@/components/workspaces/visibility-section";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -425,6 +426,9 @@ export const MatterMetadataPanel = ({
 
         {/* Lead */}
         <LeadSection workspaceId={workspaceId} />
+
+        {/* Visibility */}
+        <VisibilitySection workspaceId={workspaceId} />
 
         {/* Automatic document naming */}
         <DocumentNamingSection workspaceId={workspaceId} />

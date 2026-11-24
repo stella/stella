@@ -502,6 +502,29 @@ describe("always allowing a website", () => {
     ).not.toContain(alwaysAllowSite);
   });
 
+  test("a key press offers the website it names, whatever page was last reported", () => {
+    const pressEnter = stepOn(
+      "https://example.com/search",
+      { action: "press-key", key: "Enter" },
+      "textbox",
+    );
+    for (const reported of [
+      null,
+      readOf("https://example.com/search"),
+      readOf("https://other.test/"),
+    ]) {
+      const render = () =>
+        renderCard(browserPart(pressEnter, "approval-requested"), undefined, {
+          user: member,
+        });
+      const markup =
+        reported === null ? render() : afterReport(reported, render);
+      expect(markup).toContain(messages.chat.approval.allowOnce);
+      expect(markup).toContain(alwaysAllowSite);
+      expect(markup).toContain("example.com");
+    }
+  });
+
   test("an answered card no longer offers it", () => {
     const markup = renderCard(
       browserPart(clickNews, "complete", { status: "error" }),
