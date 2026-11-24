@@ -26,7 +26,7 @@ const bodySchema = v.object({
     v.minValue(1),
     v.maxValue(FILE_SIZE_LIMIT_BYTES.document),
   ),
-  sha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+  sha256Hex: v.pipe(v.string(), v.length(64), v.regex(/^[0-9a-f]{64}$/u)),
 });
 
 const config = {

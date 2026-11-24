@@ -47,7 +47,7 @@ const previewBodySchema = v.object({
   prompt: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
   contentType: previewableContentType,
   entityId: resourceIdSchema("entity"),
-  options: v.optional(v.array(optionSchema)),
+  options: v.optional(v.pipe(v.array(optionSchema), v.maxLength(500))),
   dependencies: v.optional(
     v.pipe(v.array(dependencySchema), v.maxLength(LIMITS.propertiesCount)),
   ),

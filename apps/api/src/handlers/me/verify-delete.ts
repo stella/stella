@@ -20,11 +20,14 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const deleteAccountVerifyBody = v.object({
   code: v.pipe(v.string(), v.minLength(6), v.maxLength(6)),
   reassignments: v.optional(
-    v.array(
-      v.object({
-        entityId: resourceIdSchema("entity"),
-        reassignedUserId: userIdSchema,
-      }),
+    v.pipe(
+      v.array(
+        v.object({
+          entityId: resourceIdSchema("entity"),
+          reassignedUserId: userIdSchema,
+        }),
+      ),
+      v.maxLength(1000),
     ),
   ),
 });

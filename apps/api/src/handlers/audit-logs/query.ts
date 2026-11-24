@@ -70,6 +70,7 @@ export const readAuditLogsQuerySchema = v.object({
     v.pipe(
       v.string(),
       v.minLength(1),
+      v.maxLength(256),
       v.description("Only entries with this audit action"),
     ),
   ),
@@ -77,6 +78,7 @@ export const readAuditLogsQuerySchema = v.object({
     v.pipe(
       v.string(),
       v.minLength(1),
+      v.maxLength(256),
       v.description("Only entries about this resource type"),
     ),
   ),
@@ -84,6 +86,7 @@ export const readAuditLogsQuerySchema = v.object({
     v.pipe(
       v.string(),
       v.minLength(1),
+      v.maxLength(256),
       v.description(
         "Only entries about this resource id; requires resourceType",
       ),
@@ -103,6 +106,7 @@ export const readAuditLogsQuerySchema = v.object({
   from: v.exactOptional(
     v.pipe(
       v.string(),
+      v.maxLength(64),
       v.isoTimestamp(),
       API_STORABLE_INSTANT_CHECK,
       v.description("Only entries created on or after this ISO date-time"),
@@ -111,6 +115,7 @@ export const readAuditLogsQuerySchema = v.object({
   to: v.exactOptional(
     v.pipe(
       v.string(),
+      v.maxLength(64),
       v.isoTimestamp(),
       API_STORABLE_INSTANT_CHECK,
       v.description("Only entries created on or before this ISO date-time"),

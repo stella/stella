@@ -28,7 +28,7 @@ const viewSortSchema = v.strictObject({
 export type ViewSort = v.InferOutput<typeof viewSortSchema>;
 
 export const tViewSortSchema = v.strictObject({
-  propertyId: v.pipe(v.string(), v.minLength(1)),
+  propertyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   desc: v.boolean(),
 });
 
@@ -43,7 +43,7 @@ const viewCalculationSchema = v.strictObject({
 });
 
 const tViewCalculationSchema = v.strictObject({
-  propertyId: v.pipe(v.string(), v.minLength(1)),
+  propertyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   kind: v.picklist([...CALCULATION_KINDS]),
 });
 
@@ -279,8 +279,13 @@ export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
 const tBaseLayoutSchema = {
   filters: v.pipe(v.array(tConditionNode), v.maxLength(VIEW_FILTERS_MAX)),
   sorts: v.pipe(v.array(tViewSortSchema), v.maxLength(VIEW_SORTS_MAX)),
-  hiddenProperties: v.array(v.string()),
-  calculations: v.optional(v.array(tViewCalculationSchema)),
+  hiddenProperties: v.pipe(
+    v.array(v.pipe(v.string(), v.maxLength(128))),
+    v.maxLength(500),
+  ),
+  calculations: v.optional(
+    v.pipe(v.array(tViewCalculationSchema), v.maxLength(500)),
+  ),
 };
 
 const tVersionedBaseLayoutSchema = {
@@ -300,10 +305,18 @@ export const tViewLayoutSchema = v.union([
   }),
   v.strictObject({
     type: v.literal("table"),
-    columnOrder: v.array(v.string()),
-    columnPinning: v.array(v.string()),
+    columnOrder: v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(128))),
+      v.maxLength(500),
+    ),
+    columnPinning: v.pipe(
+      v.array(v.pipe(v.string(), v.maxLength(128))),
+      v.maxLength(500),
+    ),
     ...tVersionedBaseLayoutSchema,
-    groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+    groupByPropertyId: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    ),
   }),
   v.strictObject({
     type: v.literal("filesystem"),
@@ -312,26 +325,37 @@ export const tViewLayoutSchema = v.union([
   v.strictObject({
     type: v.literal("kanban"),
     ...tVersionedBaseLayoutSchema,
-    groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
-    subgroupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+    groupByPropertyId: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    ),
+    subgroupByPropertyId: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    ),
   }),
   v.strictObject({
     type: v.literal("calendar"),
     ...tVersionedBaseLayoutSchema,
-    datePropertyId: v.pipe(v.string(), v.minLength(1)),
-    endDatePropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+    datePropertyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    endDatePropertyId: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    ),
     additionalDatePropertyIds: v.optional(
-      v.array(v.pipe(v.string(), v.minLength(1))),
+      v.pipe(
+        v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+        v.maxLength(100),
+      ),
     ),
     mode: v.picklist(["month", "week", "year"]),
   }),
   v.strictObject({
     type: v.literal("timeline"),
     ...tVersionedBaseLayoutSchema,
-    startDatePropertyId: v.pipe(v.string(), v.minLength(1)),
-    endDatePropertyId: v.pipe(v.string(), v.minLength(1)),
+    startDatePropertyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    endDatePropertyId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
     zoom: v.picklist(["day", "week", "month", "quarter"]),
-    groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+    groupByPropertyId: v.optional(
+      v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+    ),
     showTable: v.boolean(),
   }),
   v.strictObject({
@@ -356,7 +380,7 @@ const tViewTemplatePropertyToolSchema = v.union([
 
 export const tViewTemplatePropertySchema = v.strictObject({
   version: v.literal(1),
-  sourceId: v.pipe(v.string(), v.minLength(1)),
+  sourceId: v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
   name: displayNameSchema(),
   content: scalarPropertyContentSchema,
   tool: tViewTemplatePropertyToolSchema,
@@ -366,7 +390,11 @@ export const tViewTemplatePropertySchema = v.strictObject({
     v.pipe(
       v.array(
         v.strictObject({
-          dependsOnSourceId: v.pipe(v.string(), v.minLength(1)),
+          dependsOnSourceId: v.pipe(
+            v.string(),
+            v.minLength(1),
+            v.maxLength(128),
+          ),
           condition: v.union([tConditionNode, v.null()]),
         }),
       ),
@@ -383,11 +411,15 @@ export const tCreateViewInputSchema = v.strictObject({
   id: resourceIdSchema("workspaceView"),
   name: displayNameSchema(),
   layout: tViewLayoutSchema,
-  templateProperties: v.optional(v.array(tViewTemplatePropertySchema)),
+  templateProperties: v.optional(
+    v.pipe(v.array(tViewTemplatePropertySchema), v.maxLength(500)),
+  ),
 });
 
 export const tUpdateViewBodySchema = v.strictObject({
   name: v.optional(displayNameSchema()),
   layout: v.optional(tViewLayoutSchema),
-  templateProperties: v.optional(v.array(tViewTemplatePropertySchema)),
+  templateProperties: v.optional(
+    v.pipe(v.array(tViewTemplatePropertySchema), v.maxLength(500)),
+  ),
 });

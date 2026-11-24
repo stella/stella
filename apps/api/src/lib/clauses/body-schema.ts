@@ -41,16 +41,16 @@ true satisfies ExactUnion<
 >;
 
 const clauseRunSchema = v.object({
-  text: v.string(),
+  text: v.pipe(v.string(), v.maxLength(LIMITS.clauseExpectedBodyTextChars)),
   bold: v.exactOptional(v.boolean()),
   italic: v.exactOptional(v.boolean()),
 });
 
 const clauseParagraphSchema = v.strictObject({
-  text: v.string(),
-  style: v.exactOptional(v.string()),
+  text: v.pipe(v.string(), v.maxLength(LIMITS.clauseExpectedBodyTextChars)),
+  style: v.exactOptional(v.pipe(v.string(), v.maxLength(128))),
   level: v.exactOptional(v.pipe(v.number(), v.integer())),
-  runs: v.exactOptional(v.array(clauseRunSchema)),
+  runs: v.exactOptional(v.pipe(v.array(clauseRunSchema), v.maxLength(1000))),
   listKind: v.exactOptional(clauseListKindSchema),
   numbering: v.exactOptional(
     v.strictObject({
@@ -65,12 +65,13 @@ const clauseParagraphSchema = v.strictObject({
   ),
   isDirective: v.exactOptional(v.boolean()),
   directiveKind: v.exactOptional(blockDirectiveKindSchema),
-  directiveExpression: v.exactOptional(v.string()),
+  directiveExpression: v.exactOptional(v.pipe(v.string(), v.maxLength(2048))),
 });
 
 export const clauseBodySchema = v.pipe(
   v.array(clauseParagraphSchema),
   v.minLength(1),
+  v.maxLength(LIMITS.clauseExpectedBodyParagraphs),
 );
 
 export const clauseExpectedBodySchema = v.pipe(

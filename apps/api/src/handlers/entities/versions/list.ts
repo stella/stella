@@ -28,7 +28,7 @@ const readVersionsParamsSchema = workspaceParams({
 });
 
 const readVersionsQuerySchema = v.object({
-  before: v.optional(v.string()),
+  before: v.optional(v.pipe(v.string(), v.maxLength(128))),
   filePropertyId: v.optional(resourceIdSchema("property")),
 });
 

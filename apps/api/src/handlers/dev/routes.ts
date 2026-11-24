@@ -349,7 +349,7 @@ export const devRoute = routes(
 // flow needs them). server.ts registers them only when local development
 // access is open; the gate answers 404 for any other caller of the module.
 const lastOtp = defineEndpoint.public(
-  { query: v.object({ email: v.string() }) },
+  { query: v.object({ email: v.pipe(v.string(), v.maxLength(320)) }) },
   ({ query }) => {
     const otp = readDevOtp(query.email);
     if (!otp) {

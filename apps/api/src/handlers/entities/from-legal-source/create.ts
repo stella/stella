@@ -27,7 +27,7 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const createFromLegalSourceBodySchema = v.object({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-  source: v.pipe(v.string(), v.minLength(1)),
+  source: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),
 });
 
 const CREATE_FROM_LEGAL_SOURCE_ERROR_CODE = {

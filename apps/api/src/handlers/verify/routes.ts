@@ -17,7 +17,7 @@ const VERIFICATION_CODE = new RegExp(VERIFICATION_CODE_PATTERN, "u");
 const resolveVerificationCode = defineEndpoint.member(
   {
     params: v.object({
-      code: v.pipe(v.string(), v.regex(VERIFICATION_CODE)),
+      code: v.pipe(v.string(), v.maxLength(64), v.regex(VERIFICATION_CODE)),
     }),
   },
   async ({ params, session, scopedDb }) =>

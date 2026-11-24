@@ -7,7 +7,7 @@ import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbou
 import { boeClient } from "@/api/lib/legal-search/boe-client";
 
 const paramsSchema = v.object({
-  date: v.pipe(v.string(), v.regex(/^\d{8}$/u)),
+  date: v.pipe(v.string(), v.length(8), v.regex(/^\d{8}$/u)),
 });
 
 const bormeSummary = createSafeRootHandler(

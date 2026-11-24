@@ -78,18 +78,21 @@ export const importSkillsBodySchema = v.object({
             type: v.literal("content-hash"),
             value: v.pipe(
               v.string(),
+              v.maxLength(128),
               v.regex(new RegExp(CONTENT_HASH_PATTERN, "u")),
             ),
           }),
           v.object({
             entrypointHash: v.pipe(
               v.string(),
+              v.maxLength(128),
               v.regex(new RegExp(CONTENT_HASH_PATTERN, "u")),
             ),
             sourceUrl: v.pipe(v.string(), v.minLength(1), v.maxLength(2048)),
             type: v.literal("github-commit"),
             value: v.pipe(
               v.string(),
+              v.maxLength(64),
               v.regex(new RegExp(GITHUB_COMMIT_SHA_PATTERN, "u")),
             ),
           }),

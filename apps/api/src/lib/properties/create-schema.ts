@@ -40,7 +40,7 @@ export const createPropertyBodySchema = v.object({
       v.maxLength(LIMITS.propertyDependenciesPerProperty),
     ),
   ),
-  options: v.optional(v.array(selectOptionSchema)),
+  options: v.optional(v.pipe(v.array(selectOptionSchema), v.maxLength(500))),
   currency: v.optional(v.nullable(currencyCodeSchema())),
   fallback: v.optional(
     v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1000))),

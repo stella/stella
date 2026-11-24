@@ -102,7 +102,11 @@ export const listStatutesQuerySchema = v.object({
   ),
   /** An act's own number, `<number>/<year>`; the request asks for that work. */
   number: v.optional(
-    v.pipe(v.string(), v.regex(new RegExp(ACT_NUMBER_PATTERN.source, "u"))),
+    v.pipe(
+      v.string(),
+      v.maxLength(64),
+      v.regex(new RegExp(ACT_NUMBER_PATTERN.source, "u")),
+    ),
   ),
   /**
    * The collection the number was published in (`sb`), or the Magyar

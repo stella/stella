@@ -30,11 +30,13 @@ const calendarTasksBodySchema = v.object({
   dateFrom: apiDateTimeSchema,
   dateTo: apiDateTimeSchema,
   datePropertyIds: v.pipe(
-    v.array(v.pipe(v.string(), v.minLength(1))),
+    v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
     v.minLength(1),
     v.maxLength(LIMITS.propertiesCount + BUILT_IN_DATE_IDS.length),
   ),
-  endDatePropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
+  endDatePropertyId: v.optional(
+    v.pipe(v.string(), v.minLength(1), v.maxLength(128)),
+  ),
   filters: v.optional(
     v.pipe(v.array(tConditionNode), v.maxLength(LIMITS.viewFiltersCount)),
   ),

@@ -37,6 +37,7 @@ export const desktopRegistryRequestHeaders = v.looseObject({
   ...desktopRegistryRequestIdentityHeaders,
   "content-type": v.pipe(
     v.string(),
+    v.maxLength(256),
     v.regex(/^application\/json(?:\s*;.*)?$/iu),
   ),
 });

@@ -34,7 +34,11 @@ import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 const fillBodySchema = v.object({
   file: fileSchema({ maxBytes: FILE_SIZE_LIMIT_BYTES.multipartDocument }),
-  values: v.pipe(v.string(), v.description("Map of field path to value.")),
+  values: v.pipe(
+    v.string(),
+    v.maxLength(1_000_000),
+    v.description("Map of field path to value."),
+  ),
 });
 
 const fillQuerySchema = v.object({

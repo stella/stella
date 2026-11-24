@@ -34,7 +34,7 @@ const config = {
   params: v.object({ threadId: resourceIdSchema("chatThread") }),
   query: v.object({ workspaceId: v.optional(resourceIdSchema("workspace")) }),
   body: v.object({
-    model: v.union([v.string(), v.null()]),
+    model: v.union([v.pipe(v.string(), v.maxLength(256)), v.null()]),
     reasoningEffort: v.optional(
       v.union([
         v.literal("none"),

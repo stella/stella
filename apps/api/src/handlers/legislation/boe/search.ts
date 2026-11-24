@@ -54,6 +54,7 @@ const querySchema = v.object({
   dateFrom: v.optional(
     v.pipe(
       v.string(),
+      v.length(8),
       v.regex(/^\d{8}$/u),
       v.description("Only laws published on or after this date (YYYYMMDD)"),
     ),
@@ -61,6 +62,7 @@ const querySchema = v.object({
   dateTo: v.optional(
     v.pipe(
       v.string(),
+      v.length(8),
       v.regex(/^\d{8}$/u),
       v.description("Only laws published on or before this date (YYYYMMDD)"),
     ),

@@ -124,7 +124,7 @@ export type { ChatEditApplyMode, ChatRunMode, DocxEditRepresentation };
 const rawMessageProperties = {
   id: resourceIdSchema("chatMessage"),
   metadata: v.exactOptional(v.unknown()),
-  parts: v.array(v.unknown()),
+  parts: v.pipe(v.array(v.unknown()), v.maxLength(512)),
 };
 
 const rawMessageSchema = v.looseObject({
@@ -304,7 +304,9 @@ const sendMessageCommonProperties = {
    * persisted on the chat thread so subsequent turns reuse it
    * without re-sending.
    */
-  contextMatterIds: v.exactOptional(v.array(resourceIdSchema("workspace"))),
+  contextMatterIds: v.exactOptional(
+    v.pipe(v.array(resourceIdSchema("workspace")), v.maxLength(256)),
+  ),
   truncateAfterMessageId: v.exactOptional(resourceIdSchema("chatMessage")),
   turnIntent: v.exactOptional(
     v.union([
@@ -483,7 +485,9 @@ const agUiEnvelopeCommonProperties = {
         name: v.pipe(v.string(), v.minLength(1), v.maxLength(512)),
         description: v.pipe(v.string(), v.maxLength(16_384)),
         parameters: v.exactOptional(v.unknown()),
-        metadata: v.exactOptional(v.record(v.string(), v.unknown())),
+        metadata: v.exactOptional(
+          v.pipe(v.record(v.string(), v.unknown()), v.maxEntries(64)),
+        ),
       }),
     ),
     v.maxLength(512),

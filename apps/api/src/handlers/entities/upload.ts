@@ -106,12 +106,16 @@ const uploadEntityBodySchema = v.object({
 
 const uploadGeneratedDocumentBodySchema = v.object({
   ...uploadEntityBodySchema.entries,
-  contentSha256Hex: v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/u)),
+  contentSha256Hex: v.pipe(
+    v.string(),
+    v.length(64),
+    v.regex(/^[0-9a-f]{64}$/u),
+  ),
   draftChatThreadId: v.optional(resourceIdSchema("chatThread")),
   messageId: resourceIdSchema("chatMessage"),
   threadId: resourceIdSchema("chatThread"),
   threadWorkspaceId: v.optional(resourceIdSchema("workspace")),
-  toolCallId: v.string(),
+  toolCallId: v.pipe(v.string(), v.maxLength(256)),
 });
 
 type UploadEntityHandlerProps = {

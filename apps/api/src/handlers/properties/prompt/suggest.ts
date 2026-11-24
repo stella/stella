@@ -36,10 +36,13 @@ const suggestPromptBodySchema = v.object({
   name: defaultVarcharSchema,
   contentType: suggestableContentType,
   options: v.optional(
-    v.array(
-      v.object({
-        value: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
-      }),
+    v.pipe(
+      v.array(
+        v.object({
+          value: v.pipe(v.string(), v.minLength(1), v.maxLength(1000)),
+        }),
+      ),
+      v.maxLength(500),
     ),
   ),
   currentPrompt: v.optional(v.pipe(v.string(), v.maxLength(2000))),
