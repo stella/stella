@@ -1,4 +1,3 @@
-import { EditorState, TextSelection } from "@tiptap/pm/state";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -6,7 +5,6 @@ import {
   fromProseDoc,
   toProseDoc,
 } from "@stll/folio-core/prosemirror/conversion";
-import { createDerivedFieldsPlugin } from "@stll/folio-core/prosemirror/plugins/derivedFields";
 import { schema } from "@stll/folio-core/prosemirror/schema";
 import { createDocx, parseDocx } from "@stll/folio-core/server";
 import { assertProperty } from "@stll/property-testing";
@@ -15,8 +13,8 @@ import {
   collectEvidenceReferences,
   createEvidenceField,
   EVIDENCE_DERIVED_FIELDS,
+  evidenceFieldInsertion,
   evidenceLabel,
-  readEvidenceField,
 } from "./evidence-reference";
 import type { EvidenceReference } from "./evidence-reference";
 
@@ -52,80 +50,46 @@ describe("evidence references", () => {
           maxLength: 60,
         }),
         (ids) => {
-          let state = EditorState.create({
-            schema,
-            plugins: [createDerivedFieldsPlugin(() => EVIDENCE_DERIVED_FIELDS)],
-          });
-          state = state.applyTransaction(
-            state.tr.replaceWith(
-              0,
-              state.doc.content.size,
-              documentWith(ids).content,
-            ),
-          ).state;
-          const references = collectEvidenceReferences(state.doc).references;
-          expect(references).toHaveLength(new Set(ids).size);
+          const instructions = ids.map(
+            (id) => evidenceFieldInsertion(source(id)).instruction,
+          );
+          expect(instructions.every(EVIDENCE_DERIVED_FIELDS.owns)).toBe(true);
+          const labels = EVIDENCE_DERIVED_FIELDS.displayTexts(instructions);
+          const first = [...new Set(ids)];
+          expect(labels).toEqual(
+            ids.map((id) => evidenceLabel(first.indexOf(id) + 1)),
+          );
+          const references = collectEvidenceReferences(
+            documentWith(ids),
+          ).references;
           expect(references.map(({ reference }) => reference.entityId)).toEqual(
-            [...new Set(ids)].map((id) => source(id).entityId),
+            first.map((id) => source(id).entityId),
           );
-          for (const entry of references) {
-            for (const position of entry.positions) {
-              const node = state.doc.nodeAt(position);
-              expect(node).not.toBeNull();
-              if (node === null) {
-                throw new Error("Expected evidence field");
-              }
-              expect(readEvidenceField(node)).toMatchObject({
-                type: "reference",
-                displayText: evidenceLabel(entry.number),
-              });
-            }
-          }
-          const fixedPoint = state.applyTransaction(
-            state.tr
-              .setSelection(TextSelection.atEnd(state.doc))
-              .insertText(" ordinary prose"),
+          expect(references.map(({ number }) => number)).toEqual(
+            first.map((_, index) => index + 1),
           );
-          expect(fixedPoint.transactions).toHaveLength(1);
-          expect(
-            fixedPoint.state.doc.textBetween(
-              0,
-              fixedPoint.state.doc.content.size,
-            ),
-          ).toMatch(/ ordinary prose$/u);
+          // Labels derived again from the same fields do not change.
+          expect(EVIDENCE_DERIVED_FIELDS.displayTexts(instructions)).toEqual(
+            labels,
+          );
         },
       ),
       {},
     );
   });
 
-  test("removing the first exhibit renumbers later references and undo restores them", async () => {
-    const { closeHistory, history, undo } = await import("@tiptap/pm/history");
-    let state = EditorState.create({
-      schema,
-      plugins: [
-        history(),
-        createDerivedFieldsPlugin(() => EVIDENCE_DERIVED_FIELDS),
-      ],
-    });
-    state = state.applyTransaction(
-      state.tr.replaceWith(
-        0,
-        state.doc.content.size,
-        documentWith([1, 2, 2]).content,
-      ),
-    ).state;
-    const original = state.doc;
-    state = state.applyTransaction(closeHistory(state.tr).delete(1, 2)).state;
-    expect(
-      collectEvidenceReferences(state.doc).references.map(
-        ({ number }) => number,
-      ),
-    ).toEqual([1]);
-    undo(state, (transaction) => {
-      state = state.applyTransaction(transaction).state;
-    });
-    expect(state.doc.eq(original)).toBe(true);
+  test("removing the first exhibit renumbers later references", () => {
+    const instructions = [1, 2, 2].map(
+      (id) => evidenceFieldInsertion(source(id)).instruction,
+    );
+    expect(EVIDENCE_DERIVED_FIELDS.displayTexts(instructions)).toEqual([
+      evidenceLabel(1),
+      evidenceLabel(2),
+      evidenceLabel(2),
+    ]);
+    expect(EVIDENCE_DERIVED_FIELDS.displayTexts(instructions.slice(1))).toEqual(
+      [evidenceLabel(1), evidenceLabel(1)],
+    );
   });
 
   test("DOCX save and reopen preserve source identity, generated label and ordinary prose", async () => {

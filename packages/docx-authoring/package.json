@@ -37,7 +37,6 @@
     "prosemirror-tables": "catalog:",
     "prosemirror-transform": "catalog:",
     "prosemirror-view": "catalog:",
-    "y-prosemirror": "catalog:",
     "y-protocols": "catalog:",
     "yjs": "catalog:"
   }
