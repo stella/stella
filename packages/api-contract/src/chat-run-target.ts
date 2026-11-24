@@ -502,6 +502,20 @@ export type ChatLocalRunContext = v.InferOutput<
 >;
 
 /**
+ * The context meter of a thread whose turns run on the member's computer.
+ * The harness builds and compacts that context itself, so only its own
+ * report measures it: `reported` is what it said after the thread's latest
+ * answer, or `null` while that answer carries no report (its first turn is
+ * still running, or the turn ended before the harness reported). Stella's
+ * own estimate measures a different context, its cloud prompt and tools
+ * against a cloud model's window, so it never stands in for this.
+ */
+export type ChatHarnessContextUsage = {
+  source: "harness";
+  reported: ChatLocalRunContext | null;
+};
+
+/**
  * The run-finished metadata key under which a turn that ran on the member's
  * computer reports the model it asked for and the one the harness ran it on,
  * which differ when the provider rerouted the turn (Codex `model/rerouted`,

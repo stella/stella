@@ -2,7 +2,7 @@ import * as v from "valibot";
 
 import {
   CHAT_CLOUD_RUN_TARGET,
-  type ChatLocalRunContext,
+  type ChatHarnessContextUsage,
   chatLocalRunContextSchema,
   type ChatLocalRunTarget,
   chatLocalRunTargetSchema,
@@ -79,20 +79,22 @@ export const sameChatRunTarget = (
     : right.kind === left.kind;
 
 /**
- * How full the context of a thread whose turns run on the member's computer
- * is: what the harness reported after the thread's latest answer, which the
- * next turn starts from. `undefined` for a thread that runs on stella's own
- * models, or whose latest answer carries no report; the composer then shows
- * its own estimate.
+ * The context meter of a thread whose turns run on the member's computer:
+ * what its harness reported after the thread's latest answer, which the next
+ * turn starts from, or `reported: null` while that answer carries no report.
+ * `undefined` for a thread that runs on stella's own models, whose meter is
+ * stella's estimate. A thread on a computer never gets the estimate: it
+ * measures stella's cloud prompt and tools against a cloud model's window,
+ * not the context the harness builds.
  */
-export const reportedLocalRunContext = ({
+export const localRunContextUsage = ({
   target,
   messages,
 }: {
   target: ChatRunTarget;
   /** The thread's messages, oldest first, with their stored metadata. */
   messages: readonly { role: string; metadata?: unknown }[];
-}): ChatLocalRunContext | undefined => {
+}): ChatHarnessContextUsage | undefined => {
   if (target.kind !== "local") {
     return undefined;
   }
@@ -102,5 +104,8 @@ export const reportedLocalRunContext = ({
     v.object({ localRunContext: chatLocalRunContextSchema }),
     metadata,
   );
-  return parsed.success ? parsed.output.localRunContext : undefined;
+  return {
+    source: "harness",
+    reported: parsed.success ? parsed.output.localRunContext : null,
+  };
 };
