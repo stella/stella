@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, isNull, or } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   MCP_RESPONSE_DISPOSITION,
   mcpConnectorAuthorizationReviews,

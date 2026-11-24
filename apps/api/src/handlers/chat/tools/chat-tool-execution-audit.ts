@@ -5,7 +5,7 @@ import { CHAT_TOOL_POLICY_REQUIRES_APPROVAL } from "@stll/api-contract";
 import { microsoft365CalendarRangeEntries } from "@stll/api-contract/microsoft365";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   raiseChatToolError,
   reraiseChatToolFailure,

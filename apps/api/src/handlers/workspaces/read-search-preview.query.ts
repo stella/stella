@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 import { and, asc, desc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { entities, fields } from "@/api/db/schema";
 import { openAgendaTask } from "@/api/handlers/workspaces/agenda-conditions";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   entities,
   entityVersions,

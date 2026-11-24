@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

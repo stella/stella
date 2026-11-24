@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import { entities } from "@/api/db/schema";
 import {
   flowRunsWorkspaceParamsSchema,

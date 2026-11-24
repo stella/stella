@@ -17,7 +17,7 @@ import {
 import type { TimeZoneId } from "@stll/time";
 
 import { ORGANIZATION_AI_INSTRUCTIONS_MAX_LENGTH } from "@/api/db/organization-settings-constants";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   DEFAULT_DOCUMENT_PROCESSING_MODE,
   DEFAULT_TIME_EDIT_WINDOW_DAYS,

@@ -10,7 +10,7 @@ import {
 import type { LegislationWindowDispositionBasis } from "@stll/api-contract/legislation-expression";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { restrictLegislationDocumentUrls } from "@/api/handlers/legislation/ingestion/outbound-urls";
 import {

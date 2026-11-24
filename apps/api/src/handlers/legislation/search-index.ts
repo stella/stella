@@ -14,7 +14,7 @@ import {
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   legislationDocuments,
   legislationSearchDocuments,

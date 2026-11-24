@@ -4,7 +4,7 @@ import * as v from "valibot";
 
 import { slugify } from "@stll/text-normalize";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { mcpConnectors } from "@/api/db/schema";
 import type { McpConnectorAuthType } from "@/api/db/schema";
 import {

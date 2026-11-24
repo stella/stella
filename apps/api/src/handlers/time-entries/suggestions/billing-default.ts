@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { inArray } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { billingArrangements } from "@/api/db/schema";
 import {
   type ResolvedRate,

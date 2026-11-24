@@ -7,7 +7,7 @@ import {
   MICROSOFT365_CALENDAR_TOTAL_CAP,
 } from "@stll/api-contract/microsoft365";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   calendarEventsInputSchema,

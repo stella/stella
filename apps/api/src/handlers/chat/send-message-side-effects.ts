@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, notExists } from "drizzle-orm";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
 import type { PersistableChatMessage } from "@/api/handlers/chat/types";

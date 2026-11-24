@@ -6,7 +6,7 @@ import { BILLING_STATUS } from "@stll/api-contract";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { TIME_ENTRY_RATE_REQUIRED_CODE } from "@stll/api-contract/time-entries";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { timeEntries } from "@/api/db/schema";
 import { timeEntryRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

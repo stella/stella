@@ -20,7 +20,7 @@ import type {
 } from "@stll/folio-agents";
 import type { FolioAgentToolInputByName } from "@stll/folio-agents/tool-contract";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   DOCX_EDIT_REPRESENTATION,
   type DocxEditRepresentation,

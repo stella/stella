@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { PreparedReaderAnswer } from "@/api/handlers/legal-reader/answers/operation";
 import { streamReaderAnswer } from "@/api/handlers/legal-reader/answers/stream";
 import type { OrgAIConfig } from "@/api/lib/ai-config";

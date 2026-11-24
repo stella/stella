@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { WORKSPACE_CONTACT_ROLES } from "@stll/api-contract";
 import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { workspaceContacts } from "@/api/db/schema";
 import { workspaceContactRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { createErrorCapture, detached } from "@/api/lib/analytics/capture";

@@ -10,7 +10,7 @@ import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { env } from "@/api/env";
 import { status } from "@/api/http/status";
 import { captureError } from "@/api/lib/analytics/capture";

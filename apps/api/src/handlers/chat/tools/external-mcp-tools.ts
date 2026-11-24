@@ -6,7 +6,7 @@ import type { ConnectableMcpConnectorCatalog } from "@stll/api-contract/chat-con
 import { LIST_CONNECTABLE_CONNECTORS_TOOL_NAME } from "@stll/api-contract/chat-connector";
 import { mapWithConcurrency } from "@stll/concurrency";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { auditChatToolExecutions } from "@/api/handlers/chat/tools/chat-tool-execution-audit";
 import type {
   ChatToolExecutionAuditContext,

@@ -7,7 +7,7 @@ import { createZipStream } from "@stll/docx-core/zip/stream";
 import { fetchWithTimeout } from "@stll/fetch";
 import { readBodyWithIdleDeadline } from "@stll/fetch/body-reader";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import {
   buildArchivePaths,

@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { softLawSources } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SoftLawAdapterConfiguration } from "@/api/lib/legal-search/soft-law-types";

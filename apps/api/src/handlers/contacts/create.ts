@@ -6,7 +6,7 @@ import { contactCreateFieldsSchema } from "@stll/api-contract/contact-write";
 import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { contacts } from "@/api/db/schema";
 import { lockContactCapacity } from "@/api/handlers/contacts/contact-capacity";
 import { mintContactId } from "@/api/handlers/contacts/contact-id";

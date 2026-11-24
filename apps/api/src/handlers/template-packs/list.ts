@@ -5,7 +5,7 @@ import { agentInputNormalizationMetadata } from "@stll/agent-input";
 import { numberFromString } from "@stll/api-contract/http-input";
 import type { TemplatePackCatalogue } from "@stll/template-packs";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type {
   HandlerConfig,

@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 
 import { createStatuteSlug } from "@stll/api-contract/statute-route";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { legislationDocuments } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";

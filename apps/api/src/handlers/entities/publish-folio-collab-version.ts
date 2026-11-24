@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { envBase } from "@/api/env-base";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";

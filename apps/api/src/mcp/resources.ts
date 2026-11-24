@@ -26,7 +26,7 @@ import {
   readSkillResource,
 } from "@stll/skills";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { envBase } from "@/api/env-base";
 import type { McpToolName } from "@/api/http/handler-config-types";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";

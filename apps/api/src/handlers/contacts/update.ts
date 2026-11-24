@@ -7,7 +7,7 @@ import { currencyMinorUnitDigits } from "@stll/money";
 import { BILLING_MATTER_READ_PERMISSION } from "@stll/permissions";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { contacts } from "@/api/db/schema";
 import { mergeContactMetadata } from "@/api/handlers/contacts/contact-metadata";
 import {

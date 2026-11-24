@@ -8,7 +8,7 @@ import type {
 } from "@stll/folio-core";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { documentVersionRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";
 import { captureError } from "@/api/lib/analytics/capture";

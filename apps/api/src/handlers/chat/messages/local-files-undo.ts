@@ -7,7 +7,7 @@ import type {
   ChatLocalFilesUndoRead,
 } from "@stll/api-contract/chat-local-files-undo";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import {
   type ChatWorkspaceAccess,
