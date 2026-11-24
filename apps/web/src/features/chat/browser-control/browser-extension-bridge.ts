@@ -446,7 +446,7 @@ const postCancel = (controllerId: string, turnId: string): void => {
 
 /** Brings the active controlled tab to the front when the user asks to sign in. */
 export const focusBrowserExtensionTab = (): boolean => {
-  const { controllerId } = getBrowserExtensionState();
+  const { controllerId } = getBridgeRuntime();
   if (controllerId === null) {
     return false;
   }
