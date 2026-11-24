@@ -56,6 +56,7 @@ const NEW_THREAD: ThreadResponse = {
   model: null,
   olderCursor: null,
   reasoningEffort: null,
+  runTarget: { kind: "cloud", approvals: "ask" },
   threadExists: false,
   threadRevision: "2026-10-10T12:00:00.000Z",
   usedAnonymization: false,

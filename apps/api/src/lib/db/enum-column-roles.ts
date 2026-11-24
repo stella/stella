@@ -197,6 +197,7 @@ export const ENUM_COLUMN_ROLES = {
     decision: ATTRIBUTE,
   },
   chat_threads: {
+    chat_cloud_approvals: ATTRIBUTE,
     chat_reasoning_effort: ATTRIBUTE,
   },
   chat_tool_grants: {

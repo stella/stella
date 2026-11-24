@@ -8,6 +8,7 @@ import {
   type BrowserControlCommand,
   type BrowserControlResult,
 } from "@stll/api-contract/browser-control";
+import type { BrowserStepDecision } from "@stll/api-contract/browser-step-gate";
 import {
   DESKTOP_RUNNER_APPROVAL_MODES,
   type DesktopRunnerApprovalMode,
@@ -160,7 +161,7 @@ describe("the browser gate on what the extension reported", () => {
                 grantedOrigins: new Set(granted ? [SITE] : []),
                 level,
               });
-              const expected = (() => {
+              const expected = ((): BrowserStepDecision => {
                 if (step.kind === "free") {
                   return { type: "run", by: "level" };
                 }

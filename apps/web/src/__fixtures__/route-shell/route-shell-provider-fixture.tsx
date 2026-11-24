@@ -424,6 +424,7 @@ const installFixtureNetwork = () => {
             model: null,
             olderCursor: null,
             reasoningEffort: null,
+            runTarget: { kind: "cloud", approvals: "ask" },
             threadExists: false,
             threadRevision: null,
             usedAnonymization: false,

@@ -150,7 +150,7 @@ const draftThread = ({
   model: null,
   olderCursor: null,
   reasoningEffort: null,
-  ...(runTarget === null ? {} : { runTarget }),
+  runTarget: runTarget ?? { kind: "cloud", approvals: "ask" },
   threadExists: exists,
   threadRevision: "2026-10-10T12:00:00.000Z",
   usedAnonymization: false,

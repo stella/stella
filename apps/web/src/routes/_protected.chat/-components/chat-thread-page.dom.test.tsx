@@ -107,6 +107,7 @@ const savedThread = {
   model: null,
   olderCursor: null,
   reasoningEffort: null,
+  runTarget: { kind: "cloud", approvals: "ask" },
   threadExists: true,
   threadRevision: "2026-10-10T12:00:00.000Z",
   usedAnonymization: false,

@@ -32,6 +32,7 @@ export const dockedChatMessagePage = {
   webSearchEnabled: false,
   model: null,
   reasoningEffort: null,
+  runTarget: { kind: "cloud" as const, approvals: "ask" as const },
   context: {
     estimatedTokens: 0,
     triggerTokens: 0,
