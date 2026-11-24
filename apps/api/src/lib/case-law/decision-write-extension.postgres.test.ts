@@ -8,6 +8,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { withExecutorSavepoint } from "@/api/lib/db/aggregate-lock";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
@@ -139,13 +140,22 @@ if (!databaseUrl || !runPostgresTests) {
           );
           const dialect = new PgDialect();
           const sleepingQueries: string[] = [];
+          const sleepingQueryErrorCodes: (string | undefined)[] = [];
           const observedTx = {
             execute: async (query: SQL) => {
               const statement = dialect.sqlToQuery(query).sql;
-              if (statement.includes("pg_sleep")) {
+              const isSleep = statement.includes("pg_sleep");
+              if (isSleep) {
                 sleepingQueries.push(statement);
               }
-              return await tx.execute(query);
+              try {
+                return await tx.execute(query);
+              } catch (error) {
+                if (isSleep) {
+                  sleepingQueryErrorCodes.push(getPgErrorCode(error));
+                }
+                throw error;
+              }
             },
           };
           const outcome = await runDecisionWriteExtension(
@@ -164,6 +174,7 @@ if (!databaseUrl || !runPostgresTests) {
           );
           expect(outcome.type).toBe("deferred");
           expect(sleepingQueries).toHaveLength(1);
+          expect(sleepingQueryErrorCodes).toEqual([PG_ERROR.QUERY_CANCELED]);
           expect(
             executedRows(
               await tx.execute(

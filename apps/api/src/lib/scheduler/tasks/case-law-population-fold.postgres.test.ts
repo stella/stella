@@ -652,7 +652,6 @@ describe.skipIf(!enabled)("population fold scheduler owner (postgres)", () => {
             event: "population_burst_proof",
             pendingBefore: count,
             pendingAfter: 0,
-            elapsedMs,
             auditBatches: audits.length,
             auditDeltas: count,
             stale,
