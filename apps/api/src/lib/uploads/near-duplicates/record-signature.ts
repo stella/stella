@@ -3,11 +3,11 @@
 import { Result } from "better-result";
 import { and, eq, notInArray, sql } from "drizzle-orm";
 
-import type { RootDatabase } from "@/api/db/root";
 import {
   entityVersionMinhashBands,
   entityVersionMinhashSignatures,
 } from "@/api/db/schema";
+import type { RootDatabase } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { keyedContentLookupKey } from "@/api/lib/content-encryption";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";

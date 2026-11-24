@@ -2,13 +2,13 @@ import { panic } from "better-result";
 import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import {
   sanctionsEditionFanouts,
   sanctionsMonitoringBackfills,
   sanctionsOrganizationMarks,
   sanctionsSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { readCursorPage } from "@/api/lib/db/read-bounded";

@@ -1,9 +1,9 @@
 import { Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { templateFills, templates } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

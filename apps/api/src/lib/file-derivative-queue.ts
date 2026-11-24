@@ -8,7 +8,6 @@ import type { ConversionRefusal } from "@stll/api-contract/conversion-refusal";
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db-types";
 import { fields, workspaces } from "@/api/db/schema";
 import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
@@ -16,6 +15,7 @@ import type {
   DerivativeFailureReason,
   FieldContent,
 } from "@/api/db/schema-validators";
+import type { Transaction } from "@/api/db/types";
 import { envBase } from "@/api/env-base";
 import { captureError, detached } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";

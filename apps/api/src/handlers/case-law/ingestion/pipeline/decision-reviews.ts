@@ -5,8 +5,8 @@ import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decisio
 import { readDecisionDocketReference } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import { caseLawDecisionReviews, caseLawDecisions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { decisionCitationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { planCzechAppealReviews } from "@/api/handlers/case-law/ingestion/cz-appeal-reviews";

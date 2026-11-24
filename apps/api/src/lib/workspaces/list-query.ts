@@ -3,7 +3,7 @@ import {
   WORKSPACE_STATUS,
 } from "@stll/api-contract/workspace-status";
 
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
 

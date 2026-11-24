@@ -10,7 +10,6 @@ import {
 } from "@stll/legal-ast/decision-identifier";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   caseLawDecisionIdentifiers,
@@ -18,6 +17,7 @@ import {
   caseLawDecisionSourceIdentities,
   caseLawHeldDecisionAttachments,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   type CitationGraphTransaction,
   runCitationGraphTransaction,

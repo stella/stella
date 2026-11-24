@@ -17,10 +17,10 @@ import { eq } from "drizzle-orm";
 
 import { classifyFailure, declareFingerprintFields } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatThreads } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";

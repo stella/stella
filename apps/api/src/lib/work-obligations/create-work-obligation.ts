@@ -1,4 +1,3 @@
-import type { Transaction } from "@/api/db/root";
 import {
   WORK_OBLIGATION_EVENT_TYPE,
   WORK_OBLIGATION_STATUS,
@@ -7,6 +6,7 @@ import {
   workObligations,
   type WorkObligationSource,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AgendaItemKind, TaskStatus } from "@/api/lib/entity-constants";

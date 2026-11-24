@@ -4,7 +4,6 @@ import { getTableConfig } from "drizzle-orm/pg-core";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { stella, WORKSPACE_ACCESS_MODE } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
   chatThreads,
   CORRESPONDENCE_REVIEW_RESET_SETTING,
@@ -12,6 +11,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { runScopedWorkInTransaction } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";

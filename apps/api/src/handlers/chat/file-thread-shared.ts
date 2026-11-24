@@ -3,13 +3,13 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { ReasoningEffort } from "@stll/ai-catalog";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDbError } from "@/api/db/safe-db-types";
 import {
   CHAT_THREAD_TITLE_MAX_LENGTH,
   chatThreads,
   fileChatThreads,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
   estimateChatContextPromptTokens,

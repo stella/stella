@@ -2,10 +2,10 @@ import { panic, Result } from "better-result";
 import { sql } from "drizzle-orm";
 import type { PgInsertValue } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawCitations, caseLawPolarityRules } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { CitationGraphTransaction } from "@/api/handlers/case-law/citation-graph-transaction";
 import { CITATION_KIND } from "@/api/handlers/case-law/citation-kind";
 import type { ProceduralKeys } from "@/api/handlers/case-law/citation-kind";

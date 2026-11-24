@@ -11,7 +11,6 @@ import { memberWaitsOf } from "@stll/api-contract/chat-member-wait";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import { defaultDatabaseRetry, type SafeDbError } from "@/api/db/safe-db";
 import {
   chatLocalRunStepContents,
@@ -19,6 +18,7 @@ import {
   chatThreads,
   userFiles,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   attachTerminalTurnOutcome,
   cancelPendingChatToolCalls,

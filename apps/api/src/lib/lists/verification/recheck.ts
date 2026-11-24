@@ -24,9 +24,9 @@ import { VERIFICATION_RECHECKS_PER_REQUEST_MAX } from "@stll/api-contract/verifi
 import { mapWithConcurrency } from "@stll/concurrency";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { legalListClaimReviewEvents } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";

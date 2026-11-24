@@ -2,8 +2,8 @@ import { and, asc, eq, isNull, lt, lte, or, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import type { RootDatabase } from "@/api/db/root";
 import { documentNamingRuns } from "@/api/db/schema";
+import type { RootDatabase } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";

@@ -3,7 +3,6 @@ import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
-import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS,
@@ -14,6 +13,7 @@ import {
   schedulerJobs,
 } from "@/api/db/schema";
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";
 import { withAggregateTransaction } from "@/api/lib/db/aggregate-lock";

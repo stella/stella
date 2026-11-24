@@ -3,7 +3,6 @@ import { and, eq, inArray, or } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -14,6 +13,7 @@ import {
   caseLawDecisionSupplements,
   caseLawIndexJobs,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runDecisionWriteExtension } from "@/api/lib/case-law/decision-write-extension";

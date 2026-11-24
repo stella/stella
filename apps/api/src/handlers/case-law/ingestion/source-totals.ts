@@ -11,7 +11,6 @@ import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
-import type { Transaction } from "@/api/db/root";
 import type { IngestionScopedDb, ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawSources } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
@@ -21,6 +20,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { loadGateHealthConfig } from "@/api/env-online-index";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

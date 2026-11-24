@@ -5,9 +5,9 @@ import {
   type ChatLocalRunApprovalCeiling,
 } from "@stll/api-contract/chat-run-target";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db-types";
 import { organizationSettings } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";

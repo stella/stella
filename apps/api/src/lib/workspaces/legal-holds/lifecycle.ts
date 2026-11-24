@@ -3,8 +3,8 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { LEGAL_HOLD_ERROR_CODE } from "@stll/api-contract/legal-holds";
 
-import type { Transaction } from "@/api/db/root";
 import { entities, legalHolds, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";

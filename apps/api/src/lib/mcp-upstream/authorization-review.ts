@@ -2,12 +2,12 @@ import { panic } from "better-result";
 import type { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   mcpConnectorAuthorizationReviews,
   mcpUserConnections,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";

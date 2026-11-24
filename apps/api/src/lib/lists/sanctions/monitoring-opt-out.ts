@@ -3,7 +3,6 @@ import { and, eq, isNotNull, isNull, ne, or } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
-import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   organizationSettings,
@@ -11,6 +10,7 @@ import {
   sanctionsContactScreenings,
   sanctionsOrganizationMarks,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";

@@ -2,8 +2,8 @@ import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { Transaction } from "@/api/db/root";
 import { chatThreads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import {
   assertChatThreadScopeMatches,

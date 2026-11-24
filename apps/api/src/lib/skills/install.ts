@@ -3,7 +3,6 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { sha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   AGENT_SKILL_COMMAND_PATTERN,
@@ -12,6 +11,7 @@ import {
   RESERVED_AGENT_SKILL_COMMANDS,
 } from "@/api/db/schema";
 import type { AgentSkillOrigin, AgentSkillScope } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { UNBOUND } from "@/api/lib/agent-skills/binding";
 import type { SkillBinding } from "@/api/lib/agent-skills/binding";
 import {

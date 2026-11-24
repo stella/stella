@@ -5,7 +5,6 @@ import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { renderDocumentName } from "@stll/api-contract/document-name";
 import type { PermissionInput } from "@stll/permissions";
 
-import type { RootDatabase, Transaction } from "@/api/db/root";
 import {
   documentNamingRuns,
   documentProcessingRuns,
@@ -13,6 +12,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
+import type { RootDatabase, Transaction } from "@/api/db/types";
 import { renameEntityHandler } from "@/api/handlers/entities/rename-operation";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";

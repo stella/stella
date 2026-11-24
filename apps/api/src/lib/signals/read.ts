@@ -10,9 +10,9 @@ import type {
 } from "@stll/api-contract/signals";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db-types";
 import { signals, workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";

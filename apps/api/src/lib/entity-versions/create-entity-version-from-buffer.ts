@@ -4,9 +4,9 @@ import { and, eq } from "drizzle-orm";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db-types";
 import { pendingUploads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   captureError,
   createErrorCapture,
