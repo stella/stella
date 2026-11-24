@@ -19,6 +19,8 @@ import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-i
 import type { CaseLawProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
+import { stemCorpusText } from "@/api/lib/legal-search/morphology/stem-text";
 import { judgeMcpToolLatency } from "@/api/mcp/tool-latency-budgets";
 
 /**
@@ -124,7 +126,7 @@ const GROUPS = [
         court: "Kúria",
         query: "kártérítés szerződés",
         sentence:
-          "A bíróság a szerződésszegésből eredő kártérítési igényt vizsgálta.",
+          "A bíróság a szerződés megszegéséből eredő kártérítési igényt vizsgálta.",
       },
     ],
   },
@@ -134,6 +136,36 @@ const CONTROL_GROUP: GroupProfile = {
   group: "pol_control",
   splits: 1,
   countries: GROUPS[2].countries,
+};
+
+/**
+ * Every query term must occur in its country's sentence, compared the way the
+ * probe's query and the projection compare them (stemmed in the country's
+ * language, surface form where it has none). A compound such as
+ * "szerződésszegés" does not contain "szerződés", so a sentence that only
+ * holds a compound answers no hits on any engine; this catches that before
+ * the slow seeding instead of after it.
+ */
+const assertProfilesMatchTheirQueries = (): void => {
+  for (const { countries } of GROUPS) {
+    for (const profile of countries) {
+      const language = corpusMorphologyLanguage(profile.country);
+      const terms = (text: string): string[] =>
+        (language === null ? text : stemCorpusText(text, language))
+          .toLowerCase()
+          .split(/[^\p{L}\p{N}]+/u)
+          .filter((term) => term.length > 0);
+      const sentenceTerms = new Set(terms(profile.sentence));
+      const missing = terms(profile.query).filter(
+        (term) => !sentenceTerms.has(term),
+      );
+      if (missing.length > 0) {
+        panic(
+          `${profile.country}: the fixture sentence lacks query term(s) ${missing.join(", ")}`,
+        );
+      }
+    }
+  }
 };
 
 const ENGINE_CONTAINER = process.env["STELLA_COLD_SEARCH_CONTAINER"] ?? "";
@@ -492,6 +524,7 @@ const main = async (): Promise<void> => {
       "STELLA_COLD_SEARCH_CONTAINER and STELLA_CORPUS_ENGINE_TEST_ENDPOINT are required",
     );
   }
+  assertProfilesMatchTheirQueries();
   await Promise.all(GROUPS.map(seedGroup));
   await seedControl();
 
