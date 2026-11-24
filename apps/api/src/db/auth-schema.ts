@@ -1080,6 +1080,7 @@ export const scimManagedConnection = pgTable(
     ),
     uniqueIndex("scim_managed_conn_connection_id_uidx").on(table.connectionId),
     index("scim_managed_conn_domain_idx").on(table.provisioningDomainId),
+    tableOwnerAccess("scim_managed_connection"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1109,6 +1110,7 @@ export const scimManagedCredential = pgTable(
     index("scim_managed_cred_conn_rec_idx").on(table.connectionRecordId),
     uniqueIndex("scim_managed_cred_id_uidx").on(table.credentialId),
     uniqueIndex("scim_managed_cred_active_slot_uidx").on(table.activeSlotKey),
+    tableOwnerAccess("scim_managed_credential"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1130,6 +1132,7 @@ export const scimManagedConnectionEvent = pgTable(
   (table) => [
     index("scim_managed_evt_conn_rec_idx").on(table.connectionRecordId),
     uniqueIndex("scim_managed_evt_key_uidx").on(table.eventKey),
+    tableOwnerAccess("scim_managed_connection_event"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1161,6 +1164,7 @@ export const scimConnectionBinding = pgTable(
   (table) => [
     index("scim_conn_binding_conn_id_idx").on(table.connectionId),
     uniqueIndex("scim_conn_binding_conn_key_uidx").on(table.connectionKey),
+    tableOwnerAccess("scim_connection_binding"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1184,6 +1188,7 @@ export const scimIdentityTombstone = pgTable(
     index("scim_tombstone_domain_idx").on(table.provisioningDomainId),
     uniqueIndex("scim_tombstone_ext_id_key_uidx").on(table.externalIdKey),
     index("scim_tombstone_user_id_idx").on(table.userId),
+    tableOwnerAccess("scim_identity_tombstone"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1203,6 +1208,7 @@ export const scimSubject = pgTable(
   (table) => [
     uniqueIndex("scim_subject_user_id_uidx").on(table.userId),
     index("scim_subject_profile_source_idx").on(table.profileSourceId),
+    tableOwnerAccess("scim_subject"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1243,6 +1249,7 @@ export const scimUser = pgTable(
     uniqueIndex("scim_user_username_key_uidx").on(table.userNameKey),
     uniqueIndex("scim_user_ext_id_key_uidx").on(table.externalIdKey),
     uniqueIndex("scim_user_order_key_uidx").on(table.orderKey),
+    tableOwnerAccess("scim_user"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1273,6 +1280,7 @@ export const scimProjectionGrant = pgTable(
     index("scim_proj_grant_scim_user_idx").on(table.scimUserId),
     index("scim_proj_grant_user_id_idx").on(table.userId),
     uniqueIndex("scim_proj_grant_key_uidx").on(table.grantKey),
+    tableOwnerAccess("scim_projection_grant"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1298,6 +1306,7 @@ export const scimGroup = pgTable(
     uniqueIndex("scim_group_display_name_key_uidx").on(table.displayNameKey),
     uniqueIndex("scim_group_ext_id_key_uidx").on(table.externalIdKey),
     uniqueIndex("scim_group_order_key_uidx").on(table.orderKey),
+    tableOwnerAccess("scim_group"),
     ...denyStellaAccessPolicies(),
   ],
 );
@@ -1321,6 +1330,7 @@ export const scimGroupMember = pgTable(
     index("scim_group_member_group_id_idx").on(table.groupId),
     index("scim_group_member_scim_user_idx").on(table.scimUserId),
     uniqueIndex("scim_group_member_key_uidx").on(table.membershipKey),
+    tableOwnerAccess("scim_group_member"),
     ...denyStellaAccessPolicies(),
   ],
 );
