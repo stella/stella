@@ -73,7 +73,16 @@
           "Polish",
           "PortugueseBR",
           "Slovak"
-        ]
+        ],
+        "customLanguageFiles": {
+          "Czech": "../nsis/languages/Czech.nsh",
+          "Estonian": "../nsis/languages/Estonian.nsh",
+          "Hungarian": "../nsis/languages/Hungarian.nsh",
+          "Latvian": "../nsis/languages/Latvian.nsh",
+          "Lithuanian": "../nsis/languages/Lithuanian.nsh",
+          "Polish": "../nsis/languages/Polish.nsh",
+          "Slovak": "../nsis/languages/Slovak.nsh"
+        }
       }
     }
   },
