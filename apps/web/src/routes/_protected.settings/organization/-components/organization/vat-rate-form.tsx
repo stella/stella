@@ -148,6 +148,7 @@ export const VatRateForm = ({
                   {t("billing.vatRates.validFrom")}
                 </FieldLabel>
                 <DatePickerPopover
+                  disabled={disabled}
                   id={`${id}-from`}
                   labelledBy={`${id}-from-label`}
                   onChange={(date) => {
@@ -168,6 +169,7 @@ export const VatRateForm = ({
                   {t("billing.vatRates.validTo")}
                 </FieldLabel>
                 <DatePickerPopover
+                  disabled={disabled}
                   id={`${id}-to`}
                   labelledBy={`${id}-to-label`}
                   onChange={(date) => {

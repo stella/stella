@@ -743,6 +743,7 @@
         "addPlaceholder": "Pridať typ dokumentu (napr. pracovná zmluva)",
         "deleteFailed": "Typ dokumentu sa nepodarilo odstrániť",
         "description": "Definujte typy dokumentov, ktoré vaša organizácia kontroluje. Playbooky sa vzťahujú na tieto typy a klasifikátor AI do nich dokumenty zaraďuje.",
+        "empty": "Zatiaľ žiadne typy dokumentov",
         "labelAria": "Názov typu dokumentu",
         "reorder": "Zmeniť poradie typu dokumentu",
         "title": "Typy dokumentov"

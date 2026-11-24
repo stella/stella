@@ -38,7 +38,7 @@ describe("VAT rate display", () => {
         style: "percent",
         maximumFractionDigits: 2,
       }).format(0.2125);
-      expect(markup).toBe(expected);
+      expect(markup).toBe(`<span class="tabular-nums">${expected}</span>`);
     });
 
     test(`translates overlap and keeps server failures private in ${locale}`, () => {

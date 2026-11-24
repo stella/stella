@@ -743,6 +743,7 @@
         "addPlaceholder": "Dodaj typ dokumentu (np. umowa o pracę)",
         "deleteFailed": "Nie udało się usunąć typu dokumentu",
         "description": "Zdefiniuj typy dokumentów przeglądanych przez Twoją organizację. Playbooki odnoszą się do tych typów, a klasyfikator AI przypisuje do nich dokumenty.",
+        "empty": "Brak typów dokumentów",
         "labelAria": "Nazwa typu dokumentu",
         "reorder": "Zmień kolejność typu dokumentu",
         "title": "Typy dokumentów"

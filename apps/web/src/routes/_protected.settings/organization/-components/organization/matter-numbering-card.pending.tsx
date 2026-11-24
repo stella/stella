@@ -2,14 +2,15 @@ import type { ReactNode } from "react";
 
 import {
   ButtonFace,
-  CheckboxFace,
   FaceLabelPending,
   FieldDescriptionFace,
   FieldFace,
   FieldTriggerFace,
   InputFace,
   LabelFace,
+  SwitchFace,
 } from "@stll/ui/control-face";
+import { Separator } from "@stll/ui/separator";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 
 import { MatterNumberPreview } from "@/components/matter-number-preview.pending";
@@ -59,15 +60,13 @@ export const MatterNumberingCardFrame = ({
         {customPattern}
         {padding}
         {preview}
+        <Separator />
         {documentNaming}
         {save}
       </div>
     </SettingsPanel>
   </SettingsSection>
 );
-
-/** The checkbox beside its caption. */
-export const MATTER_NUMBERING_TOGGLE_ROW_CLASS = "flex items-center gap-2";
 
 /** The next number: its caption, then the number in a code chip. */
 
@@ -116,23 +115,23 @@ const PickerFieldPending = ({
 export const MatterNumberingCardPending = () => (
   <MatterNumberingCardFrame
     numberingToggle={
-      <FieldFace density="snug">
-        <div className={MATTER_NUMBERING_TOGGLE_ROW_CLASS}>
-          <CheckboxFace />
+      <div className="flex min-h-11 items-center justify-between gap-4 py-2">
+        <span className="flex min-w-0 flex-col gap-0.5">
           <LabelFace>
             <PendingText
               barClassName="w-40"
               id="organization.matterNumber.showInTitle"
             />
           </LabelFace>
-        </div>
-        <FieldDescriptionFace>
-          <PendingText
-            barClassName="w-72 max-w-full"
-            id="organization.matterNumber.showInTitleDescription"
-          />
-        </FieldDescriptionFace>
-      </FieldFace>
+          <FieldDescriptionFace>
+            <PendingText
+              barClassName="w-72 max-w-full"
+              id="organization.matterNumber.showInTitleDescription"
+            />
+          </FieldDescriptionFace>
+        </span>
+        <SwitchFace />
+      </div>
     }
     padding={
       <PickerFieldPending

@@ -2,23 +2,24 @@ import { useTranslations } from "use-intl";
 
 import { Temporal } from "@stll/time";
 
+import Tooltip from "@/components/tooltip";
 import { useFormatter } from "@/i18n/formatting-context";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { VatRate } from "@/lib/organization/vat-rates";
-import { MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
+import { formatFullTimestamp, MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
 
 const BASIS_POINTS_PER_UNIT = 10_000;
 
 export const VatRatePercentage = ({ rateBps }: { rateBps: number }) => {
   const format = useFormatter();
   return (
-    <>
+    <span className="tabular-nums">
       {format.number(rateBps / BASIS_POINTS_PER_UNIT, {
         style: "percent",
         maximumFractionDigits: 2,
       })}
-    </>
+    </span>
   );
 };
 
@@ -33,7 +34,11 @@ export const VatRateDate = ({ date }: { date: string | null }) => {
     timeZone: "UTC",
   }).epochMilliseconds;
   return (
-    <>{format.dateTime(instant, { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" })}</>
+    <Tooltip content={formatFullTimestamp(date)} render={<span />}>
+      <span className="tabular-nums">
+        {format.dateTime(instant, { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" })}
+      </span>
+    </Tooltip>
   );
 };
 

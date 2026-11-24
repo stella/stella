@@ -6,8 +6,7 @@ import { useTranslations } from "use-intl";
 
 import { documentNamePatternProblem } from "@stll/api-contract/document-name";
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
-import { Field, FieldDescription, FieldLabel } from "@stll/ui/field";
+import { Field, FieldLabel } from "@stll/ui/field";
 import { Input } from "@stll/ui/input";
 import {
   Select,
@@ -16,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { SwitchField } from "@stll/ui/switch";
 
 import { DocumentNamePatternField } from "@/components/document-name-pattern-field";
 import { MatterNumberPreview } from "@/components/matter-number-preview.pending";
@@ -32,7 +32,6 @@ import {
 } from "@/lib/organization/settings-queries";
 import { queryView } from "@/lib/query-view.logic";
 import {
-  MATTER_NUMBERING_TOGGLE_ROW_CLASS,
   MatterNumberingCardFrame,
   MatterNumberingCardPending,
   MatterNumberPreviewPending,
@@ -180,27 +179,15 @@ const MatterNumberingCardBody = ({
   return (
     <MatterNumberingCardFrame
       numberingToggle={
-        /* Inside the field so the checkbox is described by it. */
-        <Field className="gap-1">
-          <div className={MATTER_NUMBERING_TOGGLE_ROW_CLASS}>
-            <Checkbox
-              checked={settings.matterNumberingEnabled}
-              disabled={numberingToggle.isPending}
-              onCheckedChange={(checked) => {
-                if (typeof checked !== "boolean") {
-                  return;
-                }
-                numberingToggle.mutate(checked);
-              }}
-            />
-            <FieldLabel>
-              {t("organization.matterNumber.showInTitle")}
-            </FieldLabel>
-          </div>
-          <FieldDescription>
-            {t("organization.matterNumber.showInTitleDescription")}
-          </FieldDescription>
-        </Field>
+        <SwitchField
+          checked={settings.matterNumberingEnabled}
+          description={t("organization.matterNumber.showInTitleDescription")}
+          disabled={numberingToggle.isPending}
+          label={t("organization.matterNumber.showInTitle")}
+          onCheckedChange={(checked) => {
+            numberingToggle.mutate(checked);
+          }}
+        />
       }
       pattern={
         <Field>
@@ -306,8 +293,12 @@ const MatterNumberingCardBody = ({
       save={
         <Button
           className="self-start"
-          disabled={namePatternProblem !== null}
-          disabledReason={t("organization.documentNaming.invalid")}
+          disabled={updateMutation.isPending || namePatternProblem !== null}
+          disabledReason={
+            updateMutation.isPending
+              ? t("common.saving")
+              : t("organization.documentNaming.invalid")
+          }
           loading={updateMutation.isPending}
           onClick={() => updateMutation.mutate()}
           size="sm"

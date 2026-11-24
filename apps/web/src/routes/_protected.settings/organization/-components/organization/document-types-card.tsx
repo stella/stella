@@ -15,9 +15,27 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import {
+  AlertDialog,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogTitle,
+} from "@stll/ui/alert-dialog";
 import { Button } from "@stll/ui/button";
+import { EntityActions, EntityActionsButton } from "@stll/ui/entity-actions";
+import type { EntityAction } from "@stll/ui/entity-actions";
 import { Form } from "@stll/ui/form";
-import { GripVerticalIcon, PlusIcon, Trash2Icon } from "@stll/ui/icons";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  FileTextIcon,
+  GripVerticalIcon,
+  PlusIcon,
+  Trash2Icon,
+} from "@stll/ui/icons";
 import { Input } from "@stll/ui/input";
 import { cn } from "@stll/ui/utils";
 
@@ -77,6 +95,7 @@ export const DocumentTypesCard = () => {
   const items = data ? data.items : [];
 
   const [newLabel, setNewLabel] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<DocumentType | null>(null);
   // Created through a settings mutation, not a create hook: guard it here.
   const once = useSingleFlight();
 
@@ -109,6 +128,24 @@ export const DocumentTypesCard = () => {
     errorToast: { title: t("errors.actionFailed") },
   });
 
+  const deleteMutation = useSettingsMutation({
+    exceptionScope: {
+      type: "handler",
+      handlerId: "DocumentTypesCard.deleteMutation.useSettingsMutation",
+    },
+    mutationFn: async (documentTypeId: SafeId<"documentType">) =>
+      unwrapApiResponse(
+        await api["document-types"]({ documentTypeId }).delete(),
+      ),
+    invalidate: documentTypesInvalidationKey,
+    // Surfaces the API's "in use by N playbook(s)" guard message.
+    errorToast: {
+      title: t("settings.organization.documentTypes.deleteFailed"),
+      description: t("errors.actionFailed"),
+    },
+    onSuccess: () => setDeleteTarget(null),
+  });
+
   const handleReorder = (
     draggedId: SafeId<"documentType">,
     targetId: SafeId<"documentType">,
@@ -123,6 +160,15 @@ export const DocumentTypesCard = () => {
       return;
     }
     reorderMutation.mutate(ids.toSpliced(from, 1).toSpliced(to, 0, draggedId));
+  };
+
+  const handleMove = (index: number, delta: -1 | 1) => {
+    const current = items.at(index);
+    const target = items.at(index + delta);
+    if (!current || !target) {
+      return;
+    }
+    handleReorder(current.id, target.id);
   };
 
   const submitNew = () => {
@@ -155,16 +201,35 @@ export const DocumentTypesCard = () => {
   return (
     <DocumentTypesCardShell>
       <QueryViewFeedback view={settingsView} />
-      {items.length > 0 && (
+      {items.length > 0 ? (
         <DocumentTypeRows>
-          {items.map((item) => (
+          {items.map((item, index) => (
             <DocumentTypeRow
+              canMoveDown={index < items.length - 1}
+              canMoveUp={index > 0}
+              isReordering={reorderMutation.isPending}
               key={item.id}
+              onMoveDown={() => handleMove(index, 1)}
+              onMoveUp={() => handleMove(index, -1)}
               onReorder={handleReorder}
+              onRequestDelete={() => setDeleteTarget(item)}
               type={item}
             />
           ))}
         </DocumentTypeRows>
+      ) : (
+        <div className="bg-muted/30 flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-8 text-center">
+          <FileTextIcon
+            aria-hidden="true"
+            className="text-muted-foreground size-8"
+          />
+          <p className="text-foreground text-sm font-medium">
+            {t("settings.organization.documentTypes.empty")}
+          </p>
+          <p className="text-muted-foreground max-w-md text-xs">
+            {t("settings.organization.documentTypes.description")}
+          </p>
+        </div>
       )}
 
       <Form
@@ -194,22 +259,82 @@ export const DocumentTypesCard = () => {
           {t("common.add")}
         </Button>
       </Form>
+
+      <AlertDialog
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) {
+            setDeleteTarget(null);
+          }
+        }}
+        open={deleteTarget !== null}
+      >
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("common.deleteConfirmDescription", {
+                name: deleteTarget?.label ?? "",
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose
+              render={
+                <Button
+                  disabled={deleteMutation.isPending}
+                  disabledReason={t("common.deleting")}
+                  variant="ghost"
+                />
+              }
+            >
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={deleteMutation.isPending}
+              disabledReason={t("common.deleting")}
+              loading={deleteMutation.isPending}
+              onClick={() => {
+                if (deleteTarget !== null) {
+                  deleteMutation.mutate(deleteTarget.id);
+                }
+              }}
+              variant="destructive"
+            >
+              {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </DocumentTypesCardShell>
   );
 };
 
 type DocumentTypeRowProps = {
   type: DocumentType;
+  canMoveUp: boolean;
+  canMoveDown: boolean;
+  isReordering: boolean;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
   onReorder: (
     draggedId: SafeId<"documentType">,
     targetId: SafeId<"documentType">,
   ) => void;
+  onRequestDelete: () => void;
 };
 
-const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
+const DocumentTypeRow = ({
+  type,
+  canMoveUp,
+  canMoveDown,
+  isReordering,
+  onMoveUp,
+  onMoveDown,
+  onReorder,
+  onRequestDelete,
+}: DocumentTypeRowProps) => {
   const t = useTranslations();
-
-  const [rowRef, setRowRef] = useState<HTMLElement | null>(null);
+  const [rowRef, setRowRef] = useState<HTMLLIElement | null>(null);
   const [gripRef, setGripRef] = useState<HTMLButtonElement | null>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [draft, setDraft] = useState(type.label);
@@ -292,23 +417,6 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
     onError: () => setDraft(type.label),
   });
 
-  const deleteMutation = useSettingsMutation({
-    exceptionScope: {
-      type: "handler",
-      handlerId: "DocumentTypeRow.deleteMutation.useSettingsMutation",
-    },
-    mutationFn: async () =>
-      unwrapApiResponse(
-        await api["document-types"]({ documentTypeId: type.id }).delete(),
-      ),
-    invalidate: documentTypesInvalidationKey,
-    // Surfaces the API's "in use by N playbook(s)" guard message.
-    errorToast: {
-      title: t("settings.organization.documentTypes.deleteFailed"),
-      description: t("errors.actionFailed"),
-    },
-  });
-
   const commitRename = () => {
     const label = draft.trim();
     if (label.length === 0) {
@@ -321,10 +429,38 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
     renameMutation.mutate(label);
   };
 
+  const rowActions: readonly EntityAction[] = [
+    {
+      label: t("common.moveUp"),
+      icon: <ArrowUpIcon className="size-3.5" />,
+      disabled: !canMoveUp || isReordering,
+      onClick: onMoveUp,
+    },
+    {
+      label: t("common.moveDown"),
+      icon: <ArrowDownIcon className="size-3.5" />,
+      disabled: !canMoveDown || isReordering,
+      onClick: onMoveDown,
+    },
+    {
+      label: t("common.delete"),
+      icon: <Trash2Icon className="size-3.5" />,
+      variant: "destructive",
+      separatorBefore: true,
+      onClick: onRequestDelete,
+    },
+  ];
+
   return (
-    <DocumentTypeRowFace
-      className={cn(isDropTarget && "ring-primary ring-2")}
-      ref={setRowRef}
+    <EntityActions
+      actions={rowActions}
+      label={t("common.actions")}
+      render={
+        <DocumentTypeRowFace
+          className={cn(isDropTarget && "ring-primary ring-2")}
+          ref={setRowRef}
+        />
+      }
     >
       <Button
         aria-label={t("settings.organization.documentTypes.reorder")}
@@ -349,18 +485,7 @@ const DocumentTypeRow = ({ type, onReorder }: DocumentTypeRowProps) => {
         }}
         value={draft}
       />
-      <Button
-        aria-label={t("common.delete")}
-        className="shrink-0"
-        disabled={deleteMutation.isPending}
-        disabledReason={t("common.deleting")}
-        onClick={() => deleteMutation.mutate()}
-        size="icon-xs"
-        type="button"
-        variant="ghost"
-      >
-        <Trash2Icon />
-      </Button>
-    </DocumentTypeRowFace>
+      <EntityActionsButton />
+    </EntityActions>
   );
 };

@@ -7185,5 +7185,6 @@
   "workspaces.workflow.serviceTierPrompt.flex": "Use reduced credits",
   "workspaces.workflow.serviceTierPrompt.standard": "Start now",
   "workspaces.workflow.serviceTierPrompt.title": "Use reduced credits?",
-  "workspaces.workflow.startedSuccessfully": "Workflow started successfully"
+  "workspaces.workflow.startedSuccessfully": "Workflow started successfully",
+  "settings.organization.documentTypes.empty": "No document types yet"
 }

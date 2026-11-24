@@ -128,33 +128,28 @@ export const NumberSeriesForm = ({
                 <FieldLabel htmlFor={`${id}-type`}>
                   {t("billing.numberSeries.documentType")}
                 </FieldLabel>
-                {series ? (
-                  <output id={`${id}-type`} className="text-sm">
-                    {t(DOCUMENT_TYPE_LABELS[series.documentType])}
-                  </output>
-                ) : (
-                  <Select
-                    value={field.state.value}
-                    onValueChange={(value) => {
-                      if (v.is(schema.entries.documentType, value)) {
-                        field.handleChange(value);
-                      }
-                    }}
-                  >
-                    <SelectTrigger id={`${id}-type`}>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectPopup>
-                      {Object.entries(DOCUMENT_TYPE_LABELS).map(
-                        ([value, label]) => (
-                          <SelectItem key={value} value={value}>
-                            {t(label)}
-                          </SelectItem>
-                        ),
-                      )}
-                    </SelectPopup>
-                  </Select>
-                )}
+                <Select
+                  disabled={disabled || series !== undefined}
+                  value={field.state.value}
+                  onValueChange={(value) => {
+                    if (v.is(schema.entries.documentType, value)) {
+                      field.handleChange(value);
+                    }
+                  }}
+                >
+                  <SelectTrigger id={`${id}-type`}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectPopup>
+                    {Object.entries(DOCUMENT_TYPE_LABELS).map(
+                      ([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {t(label)}
+                        </SelectItem>
+                      ),
+                    )}
+                  </SelectPopup>
+                </Select>
                 <FieldError />
               </Field>
             )}

@@ -93,15 +93,15 @@ export const TimePolicyCardPending = () => (
           </ButtonFace>
         </div>
       </TimePolicyFieldPending>
-      <FieldFace className="min-h-11" layout="inline">
-        <SwitchFace />
+      <div className="flex min-h-11 items-center justify-between gap-4 py-2">
         <LabelFace>
           <PendingText
             barClassName="w-40"
             id="settings.organization.timePolicy.narrativeRequired"
           />
         </LabelFace>
-      </FieldFace>
+        <SwitchFace />
+      </div>
       <ButtonFace className="self-start" size="default" variant="default">
         <PendingText barClassName="w-24" id="common.saveChanges" />
       </ButtonFace>

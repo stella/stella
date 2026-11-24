@@ -40,6 +40,8 @@ export const MonthLockPicker = ({
   );
   const month = value === "" ? null : value.slice(-2);
   const yearValue = parseDecimalToken(year).unwrapOr(null);
+  const effectiveYear =
+    yearValue !== null && yearValue >= 1 ? yearValue : previousMonth.year;
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <Select
@@ -49,7 +51,14 @@ export const MonthLockPicker = ({
           if (next === null) {
             return;
           }
-          onChange(`${year.padStart(4, "0")}-${next}`);
+          const resolvedYear =
+            yearValue !== null && yearValue >= 1
+              ? yearValue
+              : previousMonth.year;
+          if (yearValue === null || yearValue < 1) {
+            setYear(String(resolvedYear));
+          }
+          onChange(`${String(resolvedYear).padStart(4, "0")}-${next}`);
         }}
       >
         <SelectTrigger
@@ -72,8 +81,8 @@ export const MonthLockPicker = ({
             return (
               <SelectItem
                 disabled={
-                  (yearValue ?? 0) > previousMonth.year ||
-                  ((yearValue ?? 0) === previousMonth.year &&
+                  effectiveYear > previousMonth.year ||
+                  (effectiveYear === previousMonth.year &&
                     monthNumber > previousMonth.month)
                 }
                 key={monthValue}
@@ -89,6 +98,7 @@ export const MonthLockPicker = ({
         </SelectPopup>
       </Select>
       <NumberInput
+        aria-label={t("workspaces.views.calendar.year")}
         className="min-h-11 w-28"
         disabled={disabled}
         // A year reads without a thousands separator.
@@ -103,7 +113,11 @@ export const MonthLockPicker = ({
           const nextYear = next === null ? "" : String(next);
           setYear(nextYear);
           if (month !== null) {
-            onChange(`${nextYear.padStart(4, "0")}-${month}`);
+            if (next !== null && next >= 1) {
+              onChange(`${String(next).padStart(4, "0")}-${month}`);
+            } else {
+              onChange("");
+            }
           }
         }}
         required={month !== null}
