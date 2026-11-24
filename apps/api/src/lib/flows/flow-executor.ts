@@ -14,7 +14,7 @@ import { markdownToStellaDocx } from "@stll/docx-authoring/markdown";
 import { todayFor } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { abortTransaction, resultTx } from "@/api/db/safe-db";
 import {
   entities,
@@ -96,7 +96,6 @@ import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { readWorkspaceOrganizationTimeZone } from "@/api/lib/organization-time-zone";
 import type { ModelDispatchAdmission } from "@/api/lib/rate-limit/model-dispatch-admission";
 import { broadcastWorkspaceResourceUpdated } from "@/api/lib/resource-realtime";
-import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 import { flushEntitySearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { generateTanStackTextForTask } from "@/api/lib/tanstack-ai-generate";
@@ -165,6 +164,14 @@ const FLOW_RUN_COMPLETION_NOTICE_SINK = failureSink({
  * BullMQ worker retries; the run is only flipped to `failed` from the worker's
  * final-attempt `failed` handler (`failFlowRunFromWorker`).
  */
+type FlowScopedDbOptions = {
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  workspaceIds: SafeId<"workspace">[];
+};
+type MakeFlowScopedDb = (options: FlowScopedDbOptions) => ScopedDb;
+type MakeFlowSafeDb = (options: FlowScopedDbOptions) => SafeDb;
+
 export const executeFlowStep = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   signal: AbortSignal,
@@ -172,8 +179,9 @@ export const executeFlowStep = async (
     admission,
     database,
     generateTextForTask = generateTanStackTextForTask,
-    makeScopedDb = createRootScopedDb,
-    makeSafeDb = createRootSafeDb,
+    makeScopedDb,
+    makeSafeDb,
+    inputDb,
     enqueueStep = enqueueFlowStep,
     broadcastUpdate = broadcastFlowRunUpdate,
     createEntity = createEntityFromBuffer,
@@ -190,8 +198,10 @@ export const executeFlowStep = async (
     database: Pick<typeof rootDb, "query">;
     /** External model-dispatch boundary; supplied by focused integration tests. */
     generateTextForTask?: typeof generateTanStackTextForTask | undefined;
-    makeScopedDb?: typeof createRootScopedDb | undefined;
-    makeSafeDb?: typeof createRootSafeDb | undefined;
+    makeScopedDb: MakeFlowScopedDb;
+    makeSafeDb?: MakeFlowSafeDb | undefined;
+    /** Membership-scoped handle for reading input documents under the requester's current access. */
+    inputDb?: ScopedDb | undefined;
     enqueueStep?: typeof enqueueFlowStep | undefined;
     broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
     createEntity?: typeof createEntityFromBuffer | undefined;
@@ -323,7 +333,8 @@ export const executeFlowStep = async (
         organizationId: scope.organizationId,
         actorUserId,
         scopedDb,
-        safeDb: makeSafeDb({
+        inputDb: inputDb ?? scopedDb,
+        safeDb: (makeSafeDb ?? panic("flow ai step requires makeSafeDb"))({
           organizationId: scope.organizationId,
           userId: actorUserId,
           workspaceIds: [run.workspaceId],
@@ -443,7 +454,8 @@ type RunAiStepArgs = {
   run: LoadedRun;
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
-  scopedDb: ReturnType<typeof createRootScopedDb>;
+  scopedDb: ScopedDb;
+  inputDb: ScopedDb;
   safeDb: SafeDb;
   signal: AbortSignal;
   dispatchText: typeof generateTanStackTextForTask;
@@ -461,6 +473,7 @@ const runAiStep = async ({
   organizationId,
   actorUserId,
   scopedDb,
+  inputDb,
   safeDb,
   signal,
   dispatchText,
@@ -471,9 +484,9 @@ const runAiStep = async ({
   );
   const documents = stepDef.includeDocuments
     ? await loadInputDocuments({
-        scopedDb,
+        scopedDb: inputDb,
         organizationId,
-        workspaceIds: await scopedDb(async (tx) =>
+        workspaceIds: await inputDb(async (tx) =>
           (
             await authorizedWorkspaceIds(tx, {
               organizationId,
@@ -644,7 +657,7 @@ const readPriorAiMarkdown = async (
 };
 
 type LoadInputDocumentsOptions = {
-  scopedDb: ReturnType<typeof createRootScopedDb>;
+  scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   workspaceIds: AuthorizedWorkspaceIds;
   entityIds: SafeId<"entity">[];
@@ -835,7 +848,7 @@ type RunCreateDocumentArgs = {
   run: LoadedRun;
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
-  scopedDb: ReturnType<typeof createRootScopedDb>;
+  scopedDb: ScopedDb;
   createEntity: typeof createEntityFromBuffer;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   enqueueStep: typeof enqueueFlowStep;
@@ -961,7 +974,7 @@ type CompleteStepArgs = {
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
   flowName: string;
-  scopedDb: ReturnType<typeof createRootScopedDb>;
+  scopedDb: ScopedDb;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   enqueueStep: typeof enqueueFlowStep;
 };
@@ -1159,7 +1172,7 @@ const pauseAtReviewGate = async ({
   stepDef: Extract<FlowStep, { kind: "review-gate" }>;
   organizationId: SafeId<"organization">;
   actorUserId: SafeId<"user">;
-  scopedDb: ReturnType<typeof createRootScopedDb>;
+  scopedDb: ScopedDb;
   broadcastUpdate: typeof broadcastFlowRunUpdate;
   taskFeatures: TaskDeploymentFeatures;
   flushSearchRepairs: typeof flushEntitySearchRepairs;
@@ -1313,12 +1326,12 @@ export const failFlowRunFromWorker = async (
   error: unknown,
   {
     database,
-    makeScopedDb = createRootScopedDb,
+    makeScopedDb,
     broadcastUpdate = broadcastFlowRunUpdate,
   }: {
     /** The worker's connection: the run and scope reads, and the write when the run has no actor left. */
     database: Pick<typeof rootDb, "query" | "transaction">;
-    makeScopedDb?: typeof createRootScopedDb | undefined;
+    makeScopedDb: MakeFlowScopedDb;
     broadcastUpdate?: typeof broadcastFlowRunUpdate | undefined;
   },
 ): Promise<void> => {
