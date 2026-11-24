@@ -39,6 +39,7 @@ import { readReservedCorpusProjectionMaterialsTx } from "@/api/lib/legal-search/
 import {
   buildCorpusProjectionRouteOffline,
   CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT,
+  CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_MS,
   type CorpusProjectionOfflineAdmission,
   type CorpusProjectionOfflineBuildLock,
   type CorpusProjectionOfflineBuildLockHold,
@@ -53,6 +54,7 @@ import {
 import {
   CORPUS_PROJECTION_OFFLINE_DEFAULT_INGEST_BYTES_PER_SECOND,
   CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_BYTES,
+  CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS,
   type CorpusProjectionOfflineBuildPolicy,
   planCorpusProjectionOfflineBuild,
 } from "@/api/lib/legal-search/corpus-index-projection-offline-plan";
@@ -748,6 +750,10 @@ type RunCommand = {
   holdStartAdmissionMs?: number;
   /** Collects the revisions of every start admission. */
   startUnits?: number[];
+  /** Collects the page limit of every reservation admission. */
+  reserveUnits?: number[];
+  /** Collects a copy of every progress report. */
+  progressReports?: CorpusProjectionOfflineBuildProgress[];
   /** Called as each shard reaches the indexer. */
   onDelivery?: () => Promise<void>;
   /** The process dies right before the run's first proof of its own. */
@@ -774,8 +780,12 @@ const LONG_RETRY_MS = 24 * 60 * 60_000;
  * A re-derivation that moves no state, standing in for one whose derivation
  * agrees with the desired state while the material read does not.
  */
-const KEEP_DESIRED: CorpusProjectionMismatchRederivation = async () => {
+const KEEP_DESIRED: CorpusProjectionMismatchRederivation = async (
+  _run,
+  leases,
+) => {
   await Promise.resolve();
+  return { reconciled: 0, unchanged: leases.length, held: 0, missing: 0 };
 };
 
 type Command = RunCommand | { type: "advance"; ms: number };
@@ -847,6 +857,7 @@ const admissionOf = (
           .where(eq(corpusIndexGenerations.generation, TARGET.generation));
       }
       reservePages += 1;
+      command.reserveUnits?.push(unit.revisions);
     }
     if (unit.phase === "start" && !changedBeforeStart) {
       const entity = await entityIn(model, "reserved");
@@ -932,6 +943,13 @@ const runBuild = async (
         lock: lockOf(model),
         admit: admissionOf(model, command),
         resumeAfter,
+        ...(command.progressReports === undefined
+          ? {}
+          : {
+              onProgress: (progress) => {
+                command.progressReports?.push(structuredClone(progress));
+              },
+            }),
         testing: {
           clock: async () => await now(model),
           sleep: async (milliseconds) => {
@@ -1541,6 +1559,52 @@ describe("offline route build", () => {
         .filter(({ entityId }) => mismatched.includes(entityId))
         .every(({ desiredEpoch }) => desiredEpoch === 2n),
     ).toBe(true);
+  });
+
+  test("an all-mismatch stretch widens its pages and reports progress before any shard", async () => {
+    const shardRevisions = 64;
+    const pages = [
+      CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS,
+      CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS * 2,
+      CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS * 4,
+      shardRevisions,
+    ];
+    const model = await newModel(pages.reduce((sum, page) => sum + page, 0));
+    await setCanonicalContent(model.entityIds, "e");
+    const reserveUnits: number[] = [];
+    const progressReports: CorpusProjectionOfflineBuildProgress[] = [];
+    const outcome = await runBuild(model, {
+      ...QUIET_RUN,
+      maxShardRevisions: shardRevisions,
+      reserveUnits,
+      progressReports,
+      // Each page's re-derivation takes a report interval of the run's clock.
+      rederive: async (run, leases) => {
+        model.offsetMs += CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_MS;
+        return await rederiveMismatchedCorpusProjectionDesiredStates(
+          run,
+          leases,
+        );
+      },
+    });
+    expect(outcome?.status).toBe("drained");
+    // Every lease of the first pages was re-derived, nothing built: each
+    // page is as large as the first page plus every lease re-derived before.
+    expect(reserveUnits.slice(0, pages.length)).toEqual(pages);
+    expect(outcome?.progress.canonicalInputMismatch).toMatchObject({
+      revisions: model.entityIds.length,
+      rederived: model.entityIds.length,
+      consecutivePages: 0,
+    });
+    expect(outcome?.progress.proved).toBe(model.entityIds.length);
+    // The stretch reported its re-derived leases before any shard delivered.
+    // The first page starts the interval; each later one closes it.
+    expect(
+      progressReports
+        .filter(({ shards }) => shards.delivered === 0)
+        .slice(0, pages.length - 1)
+        .map(({ canonicalInputMismatch }) => canonicalInputMismatch.rederived),
+    ).toEqual([24, 56, 120]);
   });
 
   test("bounds consecutive pages of mismatches re-deriving cannot move and resumes them once due", async () => {

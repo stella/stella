@@ -36,7 +36,11 @@ import type {
   OnlineMigrationConnection,
   OnlineMigrationParam,
 } from "@/api/db/online-migration-connection";
-import type { caseLawDecisions, InvoiceStatus } from "@/api/db/schema";
+import type {
+  caseLawDecisions,
+  InvoiceStatus,
+  legislationSources,
+} from "@/api/db/schema";
 import {
   billingArrangements,
   billingCodes,
@@ -4278,21 +4282,107 @@ const caseLawProjectionCanonicalColumns = (
 
 type CaseLawProjectionRepairRowsOptions = {
   decisions: typeof caseLawDecisions;
-  sourceId: SafeId<"caseLawSource">;
+  /** Every source of the batch, already share-locked in source id order. */
+  sourceIds: readonly SafeId<"caseLawSource">[];
   decisionIds: readonly SafeId<"caseLawDecision">[];
 };
+
+/**
+ * Share-lock the source policy of a batch of decisions in source id order,
+ * the first half of the canonical projection lock order. A decision with no
+ * row is absent from the result.
+ */
+export const lockCaseLawProjectionRepairSources = async (
+  tx: Transaction,
+  {
+    decisions,
+    decisionIds,
+  }: {
+    decisions: typeof caseLawDecisions;
+    decisionIds: readonly SafeId<"caseLawDecision">[];
+  },
+) =>
+  await tx
+    .select({
+      decisionId: decisions.id,
+      sourceId: caseLawSources.id,
+      sourceDescriptor: caseLawSources.descriptor,
+    })
+    .from(caseLawSources)
+    .innerJoin(decisions, eq(decisions.sourceId, caseLawSources.id))
+    .where(inArray(decisions.id, [...decisionIds]))
+    .orderBy(asc(caseLawSources.id), asc(decisions.id))
+    .limit(decisionIds.length)
+    .for("share", { of: caseLawSources });
+
+/** The legislation half of `lockCaseLawProjectionRepairSources`. */
+export const lockLegislationProjectionRepairSources = async (
+  tx: Transaction,
+  {
+    sources,
+    documentIds,
+  }: {
+    sources: typeof legislationSources;
+    documentIds: readonly SafeId<"legislationDocument">[];
+  },
+) =>
+  await tx
+    .select({
+      documentId: legislationDocuments.id,
+      sourceId: sources.id,
+      sourceDescriptor: sources.descriptor,
+    })
+    .from(sources)
+    .innerJoin(
+      legislationDocuments,
+      eq(legislationDocuments.sourceId, sources.id),
+    )
+    .where(inArray(legislationDocuments.id, [...documentIds]))
+    .orderBy(asc(sources.id), asc(legislationDocuments.id))
+    .limit(documentIds.length)
+    .for("share", { of: sources });
+
+/**
+ * Source policy is already locked; acquire legislation canonical rows in id
+ * order. The caller reads their canonical columns under these locks.
+ */
+export const lockLegislationProjectionRepairRows = async (
+  tx: Transaction,
+  {
+    sourceIds,
+    documentIds,
+  }: {
+    sourceIds: readonly SafeId<"legislationSource">[];
+    documentIds: readonly SafeId<"legislationDocument">[];
+  },
+) =>
+  await tx
+    .select({
+      documentId: legislationDocuments.id,
+      sourceId: legislationDocuments.sourceId,
+    })
+    .from(legislationDocuments)
+    .where(
+      and(
+        inArray(legislationDocuments.sourceId, [...sourceIds]),
+        inArray(legislationDocuments.id, [...documentIds]),
+      ),
+    )
+    .orderBy(asc(legislationDocuments.id))
+    .limit(documentIds.length)
+    .for("update");
 
 /** Source policy is already locked; acquire canonical rows in id order. */
 export const lockCaseLawProjectionRepairRows = async (
   tx: Transaction,
-  { decisions, sourceId, decisionIds }: CaseLawProjectionRepairRowsOptions,
+  { decisions, sourceIds, decisionIds }: CaseLawProjectionRepairRowsOptions,
 ) =>
   await tx
     .select(caseLawProjectionCanonicalColumns(decisions))
     .from(decisions)
     .where(
       and(
-        eq(decisions.sourceId, sourceId),
+        inArray(decisions.sourceId, [...sourceIds]),
         inArray(decisions.id, [...decisionIds]),
       ),
     )
@@ -4321,8 +4411,10 @@ export const lockCaseLawProjectionRepairIdentifiers = async (
     .limit(decisionIds.length * DECISION_IDENTIFIER_MAX_COUNT + 1)
     .for("share");
 
-type CaseLawProjectionRepairStatesOptions = {
-  decisionIds: readonly SafeId<"caseLawDecision">[];
+type CorpusProjectionRepairStatesOptions = {
+  family: CorpusFamily;
+  /** Canonical ids of the family, their rows already locked. */
+  entityIds: readonly string[];
   generations: readonly string[];
 };
 
@@ -4798,23 +4890,23 @@ export const lockCorpusProjectionIntentsById = async (
     .for("update");
 
 /** Canonical rows precede desired-state rows in the projection lock order. */
-export const lockCaseLawProjectionRepairStates = async (
+export const lockCorpusProjectionRepairStates = async (
   tx: Transaction,
-  { decisionIds, generations }: CaseLawProjectionRepairStatesOptions,
+  { family, entityIds, generations }: CorpusProjectionRepairStatesOptions,
 ) =>
   await tx
     .select()
     .from(corpusIndexProjectionStates)
     .where(
       and(
-        eq(corpusIndexProjectionStates.family, "case_law"),
+        eq(corpusIndexProjectionStates.family, family),
         inArray(corpusIndexProjectionStates.generation, [...generations]),
-        inArray(corpusIndexProjectionStates.entityId, [...decisionIds]),
+        inArray(corpusIndexProjectionStates.entityId, [...entityIds]),
       ),
     )
     .orderBy(
       asc(corpusIndexProjectionStates.entityId),
       asc(corpusIndexProjectionStates.generation),
     )
-    .limit(decisionIds.length * generations.length)
+    .limit(entityIds.length * generations.length)
     .for("update");

@@ -21,6 +21,7 @@ import {
   CORPUS_PROJECTION_OFFLINE_DEFAULT_INGEST_BYTES_PER_SECOND,
   CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_BYTES,
   CORPUS_PROJECTION_OFFLINE_DEFAULT_MAX_SHARD_REVISIONS,
+  CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS,
   corpusProjectionOfflineBlockFits,
   corpusProjectionOfflineBlockJoins,
   type CorpusProjectionOfflineBuildPolicy,
@@ -673,11 +674,18 @@ describe("offline build plan", () => {
           }),
           { nil: null },
         ),
-        ({ manifest, policy }, remainingRevisions, averageBlockBytes) => {
+        fc.nat({ max: CORPUS_INDEX_OFFLINE_REQUEST_MAX_REVISIONS * 4 }),
+        (
+          { manifest, policy },
+          remainingRevisions,
+          averageBlockBytes,
+          rederivedRevisions,
+        ) => {
           const plan = planCorpusProjectionOfflineBuild(manifest, policy);
           const limit = corpusProjectionOfflinePageLimit(plan, {
             remainingRevisions,
             averageBlockBytes,
+            rederivedRevisions,
           });
           expect(limit).toBeGreaterThanOrEqual(1);
           expect(limit).toBeLessThanOrEqual(
@@ -691,6 +699,18 @@ describe("offline build plan", () => {
           if (averageBlockBytes !== null && limit > 1) {
             expect(limit * averageBlockBytes).toBeLessThanOrEqual(
               plan.shardByteCap,
+            );
+          }
+          // Before any block is measured, each re-derived lease widens the
+          // page by one, up to the same caps.
+          if (averageBlockBytes === null) {
+            expect(limit).toBe(
+              Math.min(
+                CORPUS_PROJECTION_STORE_MAX_BATCH_SIZE,
+                remainingRevisions,
+                CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS +
+                  rederivedRevisions,
+              ),
             );
           }
         },

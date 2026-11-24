@@ -27,8 +27,11 @@ import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   lockCaseLawProjectionRepairIdentifiers,
   lockCaseLawProjectionRepairRows,
-  lockCaseLawProjectionRepairStates,
+  lockCaseLawProjectionRepairSources,
+  lockCorpusProjectionRepairStates,
   lockCorpusProjectionRevisionsAfterStates,
+  lockLegislationProjectionRepairRows,
+  lockLegislationProjectionRepairSources,
   withAggregateSavepoint,
 } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
@@ -437,7 +440,7 @@ const lockCaseLawProjectionInput = async (
   const source = await lockCaseLawProjectionSource(tx, subject);
   const rows = await lockCaseLawProjectionRepairRows(tx, {
     decisions: caseLawDecisions,
-    sourceId: source.sourceId,
+    sourceIds: [source.sourceId],
     decisionIds: [subject.entityId],
   });
   const row = rows.at(0);
@@ -552,8 +555,7 @@ export type CanonicalProjectionEpochUpdate =
     }
   | {
       family: "legislation";
-      entityId: SafeId<"legislationDocument">;
-      epoch: bigint;
+      epochs: readonly { id: SafeId<"legislationDocument">; epoch: bigint }[];
     };
 
 const projectionEpochUpdate = (
@@ -564,7 +566,10 @@ const projectionEpochUpdate = (
     case "case_law":
       return { family: "case_law", epochs: [{ id: subject.entityId, epoch }] };
     case "legislation":
-      return { family: "legislation", entityId: subject.entityId, epoch };
+      return {
+        family: "legislation",
+        epochs: [{ id: subject.entityId, epoch }],
+      };
     default:
       subject satisfies never;
       return panic("Unhandled projection subject");
@@ -616,15 +621,30 @@ const setCanonicalProjectionEpoch = async (
       return;
     }
     case "legislation": {
+      if (update.epochs.length === 0) {
+        return;
+      }
       const write = replayWrite(legislationDocuments, {
-        projectionEpoch: update.epoch,
+        projectionEpoch: sqlCaseFragment({
+          branches: update.epochs.map(
+            ({ id, epoch }) =>
+              sql`WHEN ${legislationDocuments.id} = ${id} THEN ${epoch.toString()}::bigint`,
+          ),
+          fallback: sql`${legislationDocuments.projectionEpoch}`,
+        }),
         updatedAt: CANONICAL_PROJECTION_EPOCH_KEEPS_FRESHNESS.legislation,
       });
       await tx
         .update(legislationDocuments)
         .set(write.set)
         .where(
-          and(write.setWhere, eq(legislationDocuments.id, update.entityId)),
+          and(
+            write.setWhere,
+            inArray(
+              legislationDocuments.id,
+              update.epochs.map(({ id }) => id),
+            ),
+          ),
         );
       return;
     }
@@ -2015,7 +2035,7 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
   }
   const rows = await lockCaseLawProjectionRepairRows(tx, {
     decisions: caseLawDecisions,
-    sourceId,
+    sourceIds: [sourceId],
     decisionIds,
   });
   const ids = rows.map(({ documentId }) => documentId);
@@ -2048,8 +2068,9 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
   );
   const rankingSignals = await readCaseLawRankingSignals(tx, ids);
   const manifests = await projectionManifests(tx, "case_law");
-  const states = await lockCaseLawProjectionRepairStates(tx, {
-    decisionIds: ids,
+  const states = await lockCorpusProjectionRepairStates(tx, {
+    family: "case_law",
+    entityIds: ids,
     generations: manifests.map(({ generation }) => generation),
   });
   const values: (typeof corpusIndexProjectionStates.$inferInsert)[] = [];
@@ -2101,4 +2122,342 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
     epochs: advanced,
   });
   await writeDesiredStates(tx, values, "canonical");
+};
+
+/** A transaction holds at most this many canonical projection locks. */
+export const CORPUS_PROJECTION_REPAIR_BATCH_SIZE =
+  CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE;
+
+/** What one subject of a batch repair came to. */
+export type CorpusProjectionBatchRepairOutcome =
+  | { type: "reconciled"; outcome: ReconcileOutcome }
+  | { type: "held"; hold: CorpusProjectionServedCopyHold }
+  | { type: "missing" };
+
+type LockedBatchInput = LockedProjectionInput & {
+  subject: CorpusIndexProjectionSubject;
+};
+
+/**
+ * Lock a batch of case-law subjects as one subject is locked, each kind of
+ * row at once: source policy in source id order, then the canonical rows and
+ * their identifiers in decision id order. A subject with no canonical row
+ * under its source is left out: it is missing.
+ */
+const lockCaseLawProjectionInputsTx = async (
+  tx: Transaction,
+  decisionIds: readonly SafeId<"caseLawDecision">[],
+): Promise<LockedBatchInput[]> => {
+  const sources = await lockCaseLawProjectionRepairSources(tx, {
+    decisions: caseLawDecisions,
+    decisionIds,
+  });
+  if (sources.length === 0) {
+    return [];
+  }
+  const sourceOf = new Map(
+    sources.map((source) => [source.decisionId, source]),
+  );
+  const rows = (
+    await lockCaseLawProjectionRepairRows(tx, {
+      decisions: caseLawDecisions,
+      sourceIds: [...new Set(sources.map(({ sourceId }) => sourceId))],
+      decisionIds: sources.map(({ decisionId }) => decisionId),
+    })
+  ).filter(
+    ({ documentId, sourceId }) =>
+      sourceOf.get(documentId)?.sourceId === sourceId,
+  );
+  if (rows.length === 0) {
+    return [];
+  }
+  const ids = rows.map(({ documentId }) => documentId);
+  const identifiers = new Map<string, { type: string; value: string }[]>(
+    ids.map((id) => [id, []]),
+  );
+  for (const identifier of await lockCaseLawProjectionRepairIdentifiers(
+    tx,
+    ids,
+  )) {
+    const values =
+      identifiers.get(identifier.decisionId) ??
+      panic("Unrequested projection identifier");
+    values.push({ type: identifier.type, value: identifier.value });
+    if (values.length > DECISION_IDENTIFIER_MAX_COUNT) {
+      return panic(
+        `Case-law projection subject exceeds ${DECISION_IDENTIFIER_MAX_COUNT} identifiers: ${identifier.decisionId}`,
+      );
+    }
+  }
+  const provisionKeys = await readCaseLawProvisionKeys(
+    tx,
+    rows.map(({ documentId, jurisdiction }) => ({
+      id: documentId,
+      jurisdiction,
+    })),
+  );
+  const vacated = await readCaseLawJurisdictionVacatedTx(
+    tx,
+    rows.map(({ jurisdiction }) => jurisdiction),
+  );
+  const rankingSignals = await readCaseLawRankingSignals(tx, ids);
+  return rows.map((row) => ({
+    subject: { family: "case_law" as const, entityId: row.documentId },
+    epoch: row.projectionEpoch,
+    input: caseLawProjectionInputFromCanonical({
+      ...row,
+      identifiers:
+        identifiers.get(row.documentId) ??
+        panic(`Identifiers were not loaded for ${row.documentId}`),
+      provisionKeys:
+        provisionKeys.get(row.documentId) ??
+        panic(`Provision keys were not loaded for ${row.documentId}`),
+      rankingSignals:
+        rankingSignals.get(row.documentId) ??
+        panic(`Ranking signals were not loaded for ${row.documentId}`),
+      vacatedFrom: vacated.get(row.jurisdiction) ?? null,
+      // A source without a descriptor is a valid policy: only a source the
+      // batch did not lock is a fault.
+      sourceDescriptor: (
+        sourceOf.get(row.documentId) ??
+        panic(`Source was not locked for ${row.documentId}`)
+      ).sourceDescriptor,
+    }),
+  }));
+};
+
+/** The legislation half of `lockCaseLawProjectionInputsTx`. */
+const lockLegislationProjectionInputsTx = async (
+  tx: Transaction,
+  documentIds: readonly SafeId<"legislationDocument">[],
+): Promise<LockedBatchInput[]> => {
+  const sources = await lockLegislationProjectionRepairSources(tx, {
+    sources: legislationSources,
+    documentIds,
+  });
+  if (sources.length === 0) {
+    return [];
+  }
+  const sourceOf = new Map(
+    sources.map((source) => [source.documentId, source]),
+  );
+  const locked = await lockLegislationProjectionRepairRows(tx, {
+    sourceIds: [...new Set(sources.map(({ sourceId }) => sourceId))],
+    documentIds: sources.map(({ documentId }) => documentId),
+  });
+  if (locked.length === 0) {
+    return [];
+  }
+  // The rows are locked above: this read sees them as they commit.
+  const rows = await tx
+    .select({
+      ...LEGISLATION_PROJECTION_CANONICAL_COLUMNS,
+      projectionEpoch: legislationDocuments.projectionEpoch,
+    })
+    .from(legislationDocuments)
+    .where(
+      inArray(
+        legislationDocuments.id,
+        locked.map(({ documentId }) => documentId),
+      ),
+    )
+    .orderBy(asc(legislationDocuments.id))
+    .limit(locked.length);
+  return rows.flatMap((row) => {
+    const source = sourceOf.get(row.documentId);
+    if (source?.sourceId !== row.sourceId) {
+      return [];
+    }
+    return [
+      {
+        subject: { family: "legislation" as const, entityId: row.documentId },
+        epoch: row.projectionEpoch,
+        input: legislationProjectionInputFromCanonical({
+          ...row,
+          sourceDescriptor: source.sourceDescriptor,
+        }),
+      },
+    ];
+  });
+};
+
+const lockProjectionInputsTx = async (
+  tx: Transaction,
+  subjects: readonly CorpusIndexProjectionSubject[],
+): Promise<LockedBatchInput[]> => {
+  const caseLaw = subjects.flatMap((subject) =>
+    subject.family === "case_law" ? [subject.entityId] : [],
+  );
+  const legislation = subjects.flatMap((subject) =>
+    subject.family === "legislation" ? [subject.entityId] : [],
+  );
+  if (caseLaw.length > 0 && legislation.length > 0) {
+    return panic("A projection repair batch holds one family");
+  }
+  return caseLaw.length > 0
+    ? await lockCaseLawProjectionInputsTx(tx, caseLaw)
+    : await lockLegislationProjectionInputsTx(tx, legislation);
+};
+
+/** One canonical epoch statement for every subject of a batch that moved. */
+const batchEpochUpdate = (
+  family: CorpusIndexProjectionSubject["family"],
+  advanced: readonly { subject: CorpusIndexProjectionSubject; epoch: bigint }[],
+): CanonicalProjectionEpochUpdate => {
+  switch (family) {
+    case "case_law":
+      return {
+        family,
+        epochs: advanced.flatMap(({ subject, epoch }) =>
+          subject.family === "case_law"
+            ? [{ id: subject.entityId, epoch }]
+            : [],
+        ),
+      };
+    case "legislation":
+      return {
+        family,
+        epochs: advanced.flatMap(({ subject, epoch }) =>
+          subject.family === "legislation"
+            ? [{ id: subject.entityId, epoch }]
+            : [],
+        ),
+      };
+    default:
+      family satisfies never;
+      return panic(`Unhandled family: ${String(family)}`);
+  }
+};
+
+/**
+ * `reconcileCorpusProjectionDesiredStateTx` for a batch of one family's
+ * subjects in one transaction, each subject ending as its own transaction
+ * would have left it. Locks follow the canonical order, each kind at once
+ * and in id order: source policy, canonical rows and identifiers, the
+ * projection writer fence, then the desired states. The subjects whose write
+ * takes no named copy away from readers move together, in one canonical
+ * epoch statement and one desired-state statement. Each other subject goes
+ * through the repair writer on its own
+ * (`writeRepairedCorpusProjectionDesiredStatesTx`), so its hold, or its
+ * restore, touches no other subject. A subject whose canonical row is gone
+ * is missing, and nothing of it moves.
+ */
+export const reconcileCorpusProjectionDesiredStatesTx = async (
+  tx: Transaction,
+  subjects: readonly CorpusIndexProjectionSubject[],
+): Promise<ReadonlyMap<string, CorpusProjectionBatchRepairOutcome>> => {
+  const family = subjects.at(0)?.family;
+  if (family === undefined) {
+    return new Map();
+  }
+  const distinct = [
+    ...new Map(subjects.map((subject) => [subject.entityId, subject])).values(),
+  ];
+  if (distinct.length > CORPUS_PROJECTION_REPAIR_BATCH_SIZE) {
+    return panic(
+      `A projection repair batch holds at most ${CORPUS_PROJECTION_REPAIR_BATCH_SIZE} subjects`,
+    );
+  }
+  const outcomes = new Map<string, CorpusProjectionBatchRepairOutcome>(
+    distinct.map(({ entityId }) => [entityId, { type: "missing" }]),
+  );
+  const locked = await lockProjectionInputsTx(tx, distinct);
+  if (locked.length === 0) {
+    return outcomes;
+  }
+  const manifests = await projectionManifests(tx, family);
+  const states =
+    manifests.length === 0
+      ? []
+      : await lockCorpusProjectionRepairStates(tx, {
+          family,
+          entityIds: locked.map(({ subject }) => subject.entityId),
+          generations: manifests.map(({ generation }) => generation),
+        });
+  const plans = locked.map(({ subject, epoch: currentEpoch, input }) => {
+    const existing = states.filter(
+      ({ entityId }) => entityId === subject.entityId,
+    );
+    const projections = projectionsFromSnapshot(
+      manifests,
+      input,
+      new Set(
+        existing
+          .filter(({ desiredAction }) => desiredAction === "upsert")
+          .map(({ generation }) => generation),
+      ),
+    );
+    if (projections.length === 0) {
+      const values: DesiredStateValues = [];
+      return { subject, currentEpoch, epoch: currentEpoch, values, count: 0 };
+    }
+    const { epoch, values } = reconcileProjectionPlan({
+      subject,
+      currentEpoch,
+      existing,
+      projections,
+    });
+    return { subject, currentEpoch, epoch, values, count: projections.length };
+  });
+  const named = await readNamedCopiesTx(
+    tx,
+    plans.flatMap(({ values }) => values),
+  );
+  const atRisk = new Set(copiesAtRisk(named).map(({ entityId }) => entityId));
+  const clean = plans.filter(({ subject }) => !atRisk.has(subject.entityId));
+  await setCanonicalProjectionEpoch(
+    tx,
+    batchEpochUpdate(
+      family,
+      clean.filter(({ epoch, currentEpoch }) => epoch !== currentEpoch),
+    ),
+  );
+  await writeDesiredStates(
+    tx,
+    clean.flatMap(({ values }) => values),
+    "repair",
+  );
+  for (const plan of clean) {
+    outcomes.set(plan.subject.entityId, {
+      type: "reconciled",
+      outcome: {
+        epoch: plan.epoch,
+        changed: plan.values.length > 0,
+        generationCount: plan.count,
+        servedCopies: named.flatMap(
+          ({ generation, entityId, risk, copyIsIntact }) =>
+            entityId === plan.subject.entityId && risk === null && copyIsIntact
+              ? [{ generation, entityId, outcome: "already_current" } as const]
+              : [],
+        ),
+      },
+    });
+  }
+  for (const plan of plans.filter(({ subject }) =>
+    atRisk.has(subject.entityId),
+  )) {
+    // db-await-in-loop: a subject at risk restores or holds alone, in turn
+    const written = await writeRepairedCorpusProjectionDesiredStatesTx(tx, {
+      epochs:
+        plan.epoch === plan.currentEpoch
+          ? null
+          : projectionEpochUpdate(plan.subject, plan.epoch),
+      values: plan.values,
+    });
+    outcomes.set(
+      plan.subject.entityId,
+      written.isErr()
+        ? { type: "held", hold: written.error }
+        : {
+            type: "reconciled",
+            outcome: {
+              epoch: plan.epoch,
+              changed: plan.values.length > 0,
+              generationCount: plan.count,
+              servedCopies: written.value.servedCopies,
+            },
+          },
+    );
+  }
+  return outcomes;
 };

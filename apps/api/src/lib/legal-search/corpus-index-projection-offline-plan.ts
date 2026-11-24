@@ -88,7 +88,7 @@ const MAX_PROOF_ALLOWANCE_MS = 30 * 60_000;
 export const CORPUS_PROJECTION_OFFLINE_MAX_WALK_PASSES = 16;
 
 /** Leases the first page takes, before any block's size is known. */
-const CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS = 8;
+export const CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS = 8;
 
 /** What a run may choose. Every field is validated against the manifest. */
 export type CorpusProjectionOfflineBuildPolicy = {
@@ -457,17 +457,27 @@ export const corpusProjectionOfflineLoneKillJudgement = (
  * far, and a small first page while no block has been measured. Memory per
  * page is then bounded by bytes, not only by count; a page whose blocks
  * still overflow is cut where they do and the rest handed back.
+ *
+ * Until a block is measured, every lease the run re-derived instead of
+ * building widens that first page by one: a re-derived lease holds no bytes,
+ * so a run of wholly mismatched pages doubles its page each time instead of
+ * re-deriving a few rows per page. The same caps bound it.
  */
 export const corpusProjectionOfflinePageLimit = (
   plan: Pick<CorpusProjectionOfflinePlan, "shardByteCap">,
   {
     remainingRevisions,
     averageBlockBytes,
-  }: { remainingRevisions: number; averageBlockBytes: number | null },
+    rederivedRevisions,
+  }: {
+    remainingRevisions: number;
+    averageBlockBytes: number | null;
+    rederivedRevisions: number;
+  },
 ): number => {
   const byBytes =
     averageBlockBytes === null
-      ? CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS
+      ? CORPUS_PROJECTION_OFFLINE_FIRST_PAGE_REVISIONS + rederivedRevisions
       : Math.max(1, Math.floor(plan.shardByteCap / averageBlockBytes));
   return Math.max(
     1,
