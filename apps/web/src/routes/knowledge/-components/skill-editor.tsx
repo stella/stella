@@ -802,7 +802,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 {tSkills("previewSkill")}
               </Button>
             )}
-            {access !== "none" && !enabled && (
+            {access !== "none" && !enabled && resolvedTab !== "settings" && (
               <Button
                 disabled={patchMetadata.isPending}
                 disabledReason={t("common.saving")}
