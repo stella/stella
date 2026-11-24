@@ -62,20 +62,28 @@ export const runningTimer = (timers: TimeTimer[]) => {
     .at(0)?.timer;
 };
 
-const TIMER_REFUSALS = new Map<string, TranslationKey>([
-  ["narrative_required", "billing.globalTimer.narrativeRequired"],
-  ["time_period_locked", "billing.globalTimer.periodLocked"],
-  ["timer_matter_required", "billing.matterRequired"],
-  ["timer_matter_inaccessible", "billing.globalTimer.matterInaccessible"],
-  [
-    "timer_original_entry_inaccessible",
-    "billing.globalTimer.matterInaccessible",
-  ],
-  ["timer_not_running", "billing.globalTimer.timerUnavailable"],
-  ["timer_completion_changed", "billing.globalTimer.timerUnavailable"],
-]);
+type TimerRefusalCode =
+  | "narrative_required"
+  | "time_period_locked"
+  | "timer_matter_required"
+  | "timer_matter_inaccessible"
+  | "timer_original_entry_inaccessible"
+  | "timer_not_running"
+  | "timer_completion_changed";
 
+const TIMER_REFUSALS = {
+  narrative_required: "billing.globalTimer.narrativeRequired",
+  time_period_locked: "billing.globalTimer.periodLocked",
+  timer_matter_required: "billing.matterRequired",
+  timer_matter_inaccessible: "billing.globalTimer.matterInaccessible",
+  timer_original_entry_inaccessible: "billing.globalTimer.matterInaccessible",
+  timer_not_running: "billing.globalTimer.timerUnavailable",
+  timer_completion_changed: "billing.globalTimer.timerUnavailable",
+} as const satisfies Record<TimerRefusalCode, TranslationKey>;
+
+const isTimerRefusal = (code: string): code is keyof typeof TIMER_REFUSALS =>
+  Object.hasOwn(TIMER_REFUSALS, code);
 export const timerErrorKey = (error: unknown) =>
-  APIError.is(error) && error.code !== undefined
-    ? (TIMER_REFUSALS.get(error.code) ?? null)
+  APIError.is(error) && error.code !== undefined && isTimerRefusal(error.code)
+    ? TIMER_REFUSALS[error.code]
     : null;

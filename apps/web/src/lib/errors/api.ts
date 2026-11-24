@@ -403,14 +403,21 @@ const CODE_ERROR_KEYS = {
   [SAVED_SEARCH_NOT_FOUND_ERROR_CODE]: STATUS_ERROR_KEYS.notFound,
 } as const satisfies Record<string, TranslationKey>;
 
-const USAGE_REJECTION_REASON_KEYS = new Map<string, TranslationKey>([
-  ["entitlement_inactive", CODE_ERROR_KEYS.usage_limit_exceeded],
-  ["no_entitlement", CODE_ERROR_KEYS.usage_limit_exceeded],
-  ["usage_limit_exceeded", CODE_ERROR_KEYS.usage_limit_exceeded],
-]);
+type UsageRejectionReason =
+  "entitlement_inactive" | "no_entitlement" | "usage_limit_exceeded";
+
+const USAGE_REJECTION_REASON_KEYS = {
+  entitlement_inactive: CODE_ERROR_KEYS.usage_limit_exceeded,
+  no_entitlement: CODE_ERROR_KEYS.usage_limit_exceeded,
+  usage_limit_exceeded: CODE_ERROR_KEYS.usage_limit_exceeded,
+} as const satisfies Record<UsageRejectionReason, TranslationKey>;
 
 const isKnownErrorCode = (code: string): code is keyof typeof CODE_ERROR_KEYS =>
   Object.hasOwn(CODE_ERROR_KEYS, code);
+const isUsageRejectionReason = (
+  reason: string,
+): reason is keyof typeof USAGE_REJECTION_REASON_KEYS =>
+  Object.hasOwn(USAGE_REJECTION_REASON_KEYS, reason);
 
 /**
  * The localized message for a refusal code carried outside an HTTP error (a
@@ -523,7 +530,7 @@ export const isDisplayableAPIError = (error: APIError): boolean =>
   isAuthRefusal(error) ||
   (error.status === 402 &&
     typeof error.details?.["reason"] === "string" &&
-    USAGE_REJECTION_REASON_KEYS.has(error.details["reason"]));
+    isUsageRejectionReason(error.details["reason"]));
 
 export const internalToolErrorMessage = (error: APIError): string => {
   if (
@@ -583,11 +590,12 @@ const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
   ) {
     return translateError(CODE_ERROR_KEYS[code]);
   }
-  if (status === 402 && typeof details?.["reason"] === "string") {
-    const reasonKey = USAGE_REJECTION_REASON_KEYS.get(details["reason"]);
-    if (reasonKey !== undefined) {
-      return translateError(reasonKey);
-    }
+  if (
+    status === 402 &&
+    typeof details?.["reason"] === "string" &&
+    isUsageRejectionReason(details["reason"])
+  ) {
+    return translateError(USAGE_REJECTION_REASON_KEYS[details["reason"]]);
   }
   return translateError(STATUS_TO_KEY[status] ?? STATUS_ERROR_KEYS.unknown);
 };

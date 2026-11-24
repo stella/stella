@@ -104,9 +104,7 @@ export const FEEDBACK_DEFAULT_KIND = "bug" as const satisfies FeedbackKind;
  *  `*` matches exactly one path segment, so matter and country ids need no
  *  entry of their own. The longest matching pattern wins, which keeps the
  *  result independent of declaration order. */
-export const defineFeedbackRoutes = <
-  const T extends Record<string, FeedbackArea>,
->(
+const defineFeedbackRoutes = <const T extends Record<string, FeedbackArea>>(
   entries: T,
 ): T => entries;
 

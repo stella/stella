@@ -161,11 +161,16 @@ const fontSizeToRem = (halfPoints: number | undefined): string | undefined => {
   return "1.25rem"; // 20pt+
 };
 
-const ALIGNMENT_CLASS = new Map<string, string>([
-  ["center", "text-center"],
-  ["right", "text-right"],
-  ["both", "text-justify"],
-]);
+type PreviewAlignmentKey = "center" | "right" | "both";
+
+const ALIGNMENT_CLASS: Record<PreviewAlignmentKey, string> = {
+  center: "text-center",
+  right: "text-right",
+  both: "text-justify",
+};
+
+const isPreviewAlignmentKey = (key: string): key is PreviewAlignmentKey =>
+  Object.hasOwn(ALIGNMENT_CLASS, key);
 
 // ── Sub-components ───────────────────────────────────────
 
@@ -206,9 +211,10 @@ const PreviewParagraph = ({
 }) => {
   const isHeading = paragraph.style?.startsWith("Heading");
   const sizeRem = fontSizeToRem(paragraph.fontSize);
-  const alignClass = paragraph.alignment
-    ? ALIGNMENT_CLASS.get(paragraph.alignment)
-    : undefined;
+  const alignClass =
+    paragraph.alignment && isPreviewAlignmentKey(paragraph.alignment)
+      ? ALIGNMENT_CLASS[paragraph.alignment]
+      : undefined;
 
   if (paragraph.isDirective && paragraph.directiveKind) {
     const isConditional =

@@ -23,85 +23,104 @@ const FALLBACK_COLOR: EntityColor = {
   text: [0.25, 0.25, 0.25],
 };
 
-const ENTITY_COLORS = new Map<string, EntityColor>(
-  Object.entries({
-    person: {
-      fill: [0.74, 0.83, 0.95],
-      border: [0.38, 0.56, 0.83],
-      text: [0.11, 0.29, 0.55],
-    },
-    organization: {
-      fill: [0.73, 0.91, 0.78],
-      border: [0.29, 0.73, 0.4],
-      text: [0.08, 0.4, 0.15],
-    },
-    "phone number": {
-      fill: [0.98, 0.76, 0.83],
-      border: [0.96, 0.45, 0.58],
-      text: [0.74, 0.12, 0.24],
-    },
-    address: {
-      fill: [0.99, 0.93, 0.7],
-      border: [0.98, 0.82, 0.2],
-      text: [0.63, 0.49, 0.04],
-    },
-    "email address": {
-      fill: [0.99, 0.84, 0.69],
-      border: [0.98, 0.58, 0.24],
-      text: [0.77, 0.33, 0.01],
-    },
-    date: {
-      fill: [0.91, 0.8, 0.94],
-      border: [0.75, 0.52, 0.81],
-      text: [0.43, 0.18, 0.52],
-    },
-    "bank account number": {
-      fill: [0.99, 0.79, 0.79],
-      border: [0.97, 0.45, 0.45],
-      text: [0.72, 0.11, 0.11],
-    },
-    iban: {
-      fill: [0.99, 0.79, 0.79],
-      border: [0.97, 0.45, 0.45],
-      text: [0.72, 0.11, 0.11],
-    },
-    "tax identification number": {
-      fill: [0.6, 0.92, 0.9],
-      border: [0.18, 0.71, 0.67],
-      text: [0.05, 0.37, 0.35],
-    },
-    "identity card number": {
-      fill: [0.78, 0.78, 0.97],
-      border: [0.5, 0.5, 0.91],
-      text: [0.23, 0.23, 0.6],
-    },
-    "registration number": {
-      fill: [0.65, 0.93, 0.97],
-      border: [0.13, 0.78, 0.85],
-      text: [0.06, 0.41, 0.45],
-    },
-    "case number": {
-      fill: [0.65, 0.93, 0.97],
-      border: [0.13, 0.78, 0.85],
-      text: [0.06, 0.41, 0.45],
-    },
-    "credit card number": {
-      fill: [1, 0.79, 0.82],
-      border: [0.98, 0.44, 0.52],
-      text: [0.74, 0.12, 0.21],
-    },
-    "passport number": {
-      fill: [0.87, 0.82, 0.95],
-      border: [0.66, 0.55, 0.87],
-      text: [0.36, 0.25, 0.6],
-    },
-    "czech birth number": {
-      fill: [0.98, 0.76, 0.83],
-      border: [0.96, 0.45, 0.58],
-      text: [0.74, 0.12, 0.24],
-    },
-  }),
-);
+type KnownAnonymizeEntityLabel =
+  | "person"
+  | "organization"
+  | "phone number"
+  | "address"
+  | "email address"
+  | "date"
+  | "bank account number"
+  | "iban"
+  | "tax identification number"
+  | "identity card number"
+  | "registration number"
+  | "case number"
+  | "credit card number"
+  | "passport number"
+  | "czech birth number";
+
+const ENTITY_COLORS: Record<KnownAnonymizeEntityLabel, EntityColor> = {
+  person: {
+    fill: [0.74, 0.83, 0.95],
+    border: [0.38, 0.56, 0.83],
+    text: [0.11, 0.29, 0.55],
+  },
+  organization: {
+    fill: [0.73, 0.91, 0.78],
+    border: [0.29, 0.73, 0.4],
+    text: [0.08, 0.4, 0.15],
+  },
+  "phone number": {
+    fill: [0.98, 0.76, 0.83],
+    border: [0.96, 0.45, 0.58],
+    text: [0.74, 0.12, 0.24],
+  },
+  address: {
+    fill: [0.99, 0.93, 0.7],
+    border: [0.98, 0.82, 0.2],
+    text: [0.63, 0.49, 0.04],
+  },
+  "email address": {
+    fill: [0.99, 0.84, 0.69],
+    border: [0.98, 0.58, 0.24],
+    text: [0.77, 0.33, 0.01],
+  },
+  date: {
+    fill: [0.91, 0.8, 0.94],
+    border: [0.75, 0.52, 0.81],
+    text: [0.43, 0.18, 0.52],
+  },
+  "bank account number": {
+    fill: [0.99, 0.79, 0.79],
+    border: [0.97, 0.45, 0.45],
+    text: [0.72, 0.11, 0.11],
+  },
+  iban: {
+    fill: [0.99, 0.79, 0.79],
+    border: [0.97, 0.45, 0.45],
+    text: [0.72, 0.11, 0.11],
+  },
+  "tax identification number": {
+    fill: [0.6, 0.92, 0.9],
+    border: [0.18, 0.71, 0.67],
+    text: [0.05, 0.37, 0.35],
+  },
+  "identity card number": {
+    fill: [0.78, 0.78, 0.97],
+    border: [0.5, 0.5, 0.91],
+    text: [0.23, 0.23, 0.6],
+  },
+  "registration number": {
+    fill: [0.65, 0.93, 0.97],
+    border: [0.13, 0.78, 0.85],
+    text: [0.06, 0.41, 0.45],
+  },
+  "case number": {
+    fill: [0.65, 0.93, 0.97],
+    border: [0.13, 0.78, 0.85],
+    text: [0.06, 0.41, 0.45],
+  },
+  "credit card number": {
+    fill: [1, 0.79, 0.82],
+    border: [0.98, 0.44, 0.52],
+    text: [0.74, 0.12, 0.21],
+  },
+  "passport number": {
+    fill: [0.87, 0.82, 0.95],
+    border: [0.66, 0.55, 0.87],
+    text: [0.36, 0.25, 0.6],
+  },
+  "czech birth number": {
+    fill: [0.98, 0.76, 0.83],
+    border: [0.96, 0.45, 0.58],
+    text: [0.74, 0.12, 0.24],
+  },
+};
+
+const isKnownAnonymizeEntityLabel = (
+  key: string,
+): key is KnownAnonymizeEntityLabel => Object.hasOwn(ENTITY_COLORS, key);
 
 /** Normalized sRGB triple (0–1 per channel) to a CSS `rgb()` color string. */
 const normalizedSrgbTripleToCss = (triple: ColorTriple): string => {
@@ -113,7 +132,9 @@ const normalizedSrgbTripleToCss = (triple: ColorTriple): string => {
 const getEntityPDFColors = (
   label: string,
 ): { fill: ColorTriple; border: ColorTriple; text: ColorTriple } => {
-  const c = ENTITY_COLORS.get(label) ?? FALLBACK_COLOR;
+  const c = isKnownAnonymizeEntityLabel(label)
+    ? ENTITY_COLORS[label]
+    : FALLBACK_COLOR;
   return { fill: c.fill, border: c.border, text: c.text };
 };
 
