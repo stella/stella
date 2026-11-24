@@ -359,6 +359,40 @@ test("an untyped version hashes to the bytes it had before classifications", () 
   }
 });
 
+test("an amendment snapshot without a named channel hashes to the bytes it had before channels", () => {
+  const { window, expressionKind } = UNTYPED_HASHES[0];
+  const classification = { ...EFFECTIVE_CONSOLIDATION, expressionKind };
+  const amendments = {
+    observedAt: "2026-10-20T10:00:00Z",
+    relations: [],
+    coverage: { type: "complete" },
+  } as const;
+  const preChannelHash =
+    "0244f3672faa2c2775e08fa8ffd086d22d8f5bf71616db1d3300f9991ec87d84";
+  for (const channel of [undefined, "legacy"]) {
+    expect(
+      legislationSourceHash(
+        {
+          ...HASH_INPUT,
+          amendments: {
+            ...amendments,
+            ...(channel === undefined ? {} : { channel }),
+          },
+        },
+        window,
+        classification,
+      ),
+    ).toBe(preChannelHash);
+  }
+  expect(
+    legislationSourceHash(
+      { ...HASH_INPUT, amendments: { ...amendments, channel: "bulk" } },
+      window,
+      classification,
+    ),
+  ).not.toBe(preChannelHash);
+});
+
 test("a typed classification moves the source hash, and each one differently", () => {
   const { window, hash } = UNTYPED_HASHES[0];
   const typed = [

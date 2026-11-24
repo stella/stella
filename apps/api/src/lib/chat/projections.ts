@@ -1941,11 +1941,6 @@ export const READ_CASE_LAW_DECISION_PROJECTION = v.strictObject({
 
 export { READ_CASE_LAW_CITATIONS_PROJECTION } from "./case-law-citation-projection";
 
-/**
- * The window of a Work's consolidated versions a statute read returns.
- * Newest validity window first, bounded by the versions page size: enough to
- * see which consolidations exist, not the whole amendment history.
- */
 // These dates have already passed calendar validation at ingestion; the wire
 // declares their shape without embedding a runtime-only admission function.
 const amendmentWireDateProjection = v.pipe(
@@ -2066,6 +2061,12 @@ const amendmentCoverageAggregationFields = {
     }),
   ),
 };
+
+/**
+ * The window of a Work's consolidated versions a statute read returns.
+ * Newest validity window first, bounded by the versions page size: enough to
+ * see which consolidations exist, not the whole amendment history.
+ */
 const STATUTE_AMENDMENT_PAGE_PROJECTION = v.nullable(
   v.strictObject({
     items: v.array(

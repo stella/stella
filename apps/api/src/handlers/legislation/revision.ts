@@ -112,11 +112,17 @@ export const legislationSourceHash = (
       ...(input.amendments === undefined
         ? []
         : [
-            [
-              input.amendments.relations,
-              input.amendments.coverage,
-              input.amendments.channel ?? LEGISLATION_AMENDMENT_LEGACY_CHANNEL,
-            ],
+            // The default channel keeps the hash of revisions stored before
+            // channels existed, so they are not rewritten on the next pass.
+            (input.amendments.channel ??
+              LEGISLATION_AMENDMENT_LEGACY_CHANNEL) ===
+            LEGISLATION_AMENDMENT_LEGACY_CHANNEL
+              ? [input.amendments.relations, input.amendments.coverage]
+              : [
+                  input.amendments.relations,
+                  input.amendments.coverage,
+                  input.amendments.channel,
+                ],
           ]),
       ...(typed === null
         ? []
