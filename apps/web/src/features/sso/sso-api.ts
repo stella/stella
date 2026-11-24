@@ -5,8 +5,8 @@ import type {
   CreateOidcSsoProviderBody,
   CreateSamlSsoProviderBody,
   DiscoverSsoBody,
-  SsoProtocol,
   OrganizationSsoPolicyRequirement,
+  SsoProtocol,
   TestOidcSsoProviderBody,
 } from "@stll/api-contract/sso";
 

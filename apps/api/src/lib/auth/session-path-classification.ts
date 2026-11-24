@@ -202,7 +202,9 @@ const AUTH_SESSION_PATH_PREFIXES: readonly {
   },
   {
     prefix: "/sso/saml2/callback/",
-    classification: noSecondFactor("organization SAML identity provider sign-in"),
+    classification: noSecondFactor(
+      "organization SAML identity provider sign-in",
+    ),
   },
   {
     prefix: "/sso/saml2/sp/metadata",

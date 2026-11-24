@@ -479,7 +479,6 @@ export const createOrganizationSamlProvider = async (
   return Result.ok(toProviderSummary(inserted, params.urls));
 };
 
-
 export const deleteOrganizationSsoProvider = async (
   db: SsoManagementDb,
   params: {
