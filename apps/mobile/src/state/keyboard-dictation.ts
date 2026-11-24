@@ -134,7 +134,7 @@ const statusSchema = v.object({
 });
 
 /** The session as the app shows it. */
-export type KeyboardSession =
+type KeyboardSession =
   | { readonly type: "off" }
   | {
       readonly type: "warm";
@@ -197,12 +197,17 @@ type Job<Setup> = {
   readonly setup: Promise<Setup>;
   /** Each piece's text by its index, transcribed as it arrives. */
   readonly pieces: Map<number, Promise<string | null>>;
+  /** Every index taken, a last piece without audio included. */
+  readonly seen: Set<number>;
+  /** The last piece's index, once it came. */
+  last: number | undefined;
 };
 
 /**
  * Keyboard dictations under way. Each piece is transcribed as it arrives,
- * while the next is recorded; the last one ends the dictation, whose pieces'
- * texts are joined in spoken order and delivered. A piece that failed
+ * while the next is recorded; the dictation ends once its last piece and
+ * every one before it have come, in whatever order, and its pieces' texts
+ * are joined in spoken order and delivered. A piece that failed
  * leaves a gap, and the rest is still delivered; with nothing heard, the
  * outcome says whether nothing was said or nothing could be transcribed.
  */
@@ -216,13 +221,19 @@ export const keyboardJobs = <Setup>(options: KeyboardJobsOptions<Setup>) => {
         const job = jobs.get(piece.jobId) ?? {
           setup: options.prepare(),
           pieces: new Map(),
+          seen: new Set(),
+          last: undefined,
         };
         jobs.set(piece.jobId, job);
         const { uri } = piece;
         if (uri !== undefined) {
           job.pieces.set(piece.index, transcribed(options, job, uri, piece));
         }
+        job.seen.add(piece.index);
         if (piece.last) {
+          job.last = piece.index;
+        }
+        if (job.last !== undefined && job.seen.size > job.last) {
           jobs.delete(piece.jobId);
           ended.push(conclude(options, job, piece.jobId));
         }

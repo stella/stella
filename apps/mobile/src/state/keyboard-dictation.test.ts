@@ -42,7 +42,9 @@ describe("the keyboard's link", () => {
   test("a stale or future link only warms the microphone", () => {
     expect(
       readKeyboardHandoff(link(NOW - KEYBOARD_HANDOFF_WINDOW_MS - 1), NOW),
-    ).toEqual({ type: "warm" });
+    ).toEqual({
+      type: "warm",
+    });
     expect(readKeyboardHandoff(link(NOW + 1), NOW)).toEqual({ type: "warm" });
   });
 
@@ -200,6 +202,24 @@ describe("keyboard dictations", () => {
     expect(prepared()).toBe(1);
   });
 
+  test("a last piece taken before an earlier one waits for it", async () => {
+    const { answer, delivered, jobs, prepared } = harness();
+    const early = jobs.take([piece(0, false), piece(2, true)]);
+    await settle();
+    answer(0).resolve("first");
+    answer(2).resolve("third");
+    await early;
+    expect(delivered).toEqual([]);
+    const late = jobs.take([piece(1, false)]);
+    await settle();
+    answer(1).resolve("second");
+    await late;
+    expect(delivered).toEqual([
+      { jobId: JOB, outcome: { type: "text", text: "first second third" } },
+    ]);
+    expect(prepared()).toBe(1);
+  });
+
   test("a failed piece leaves a gap; the rest still arrives", async () => {
     const { answer, delivered, jobs } = harness();
     const done = jobs.take([piece(0, false), piece(1, false), piece(2, true)]);
@@ -285,7 +305,7 @@ describe("keyboard dictations", () => {
 
   test("however pieces arrive and their texts return, the text keeps spoken order", async () => {
     await assertProperty(
-      "keyboard dictation joins pieces in spoken order",
+      "however pieces arrive and their texts return, the text keeps spoken order",
       fc.asyncProperty(
         fc.integer({ min: 1, max: 6 }).chain((count) =>
           fc.tuple(

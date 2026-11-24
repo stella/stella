@@ -88,6 +88,9 @@ final class KeyboardDictationSession {
 
   /// Guarded by `writerLock`.
   private var writer: KeyboardCaptureWriter?
+  /// Pieces the audio thread cut and `handOver` has yet to receive, in
+  /// spoken order. Guarded by `writerLock`.
+  private var cut: [KeyboardCapturePiece] = []
 
   private init() {}
 
@@ -157,12 +160,24 @@ final class KeyboardDictationSession {
     }
   }
 
-  /// Closes the session and forgets the text the keyboard has not
-  /// inserted yet: the person turned the microphone off or signed out.
+  /// Closes the session and forgets every dictation under way and the
+  /// text the keyboard has not inserted yet: the person turned the
+  /// microphone off or signed out. A transcription still running is
+  /// refused when it delivers, and pieces not yet taken are deleted unread.
   func end() {
     queue.sync {
       endSession()
+      for jobId in transcribing {
+        cancelled.insert(jobId)
+      }
+      transcribing.removeAll()
+      for piece in pending {
+        cancelled.insert(piece.jobId)
+        Self.remove(piece.uri)
+      }
+      pending.removeAll()
       store?.remove(KeyboardDictationBridge.resultsKey)
+      publish(notify: true)
     }
   }
 
@@ -273,15 +288,20 @@ final class KeyboardDictationSession {
     guard capture?.jobId == jobId else {
       return false
     }
-    // Nil when the writer ended by itself at the dictation's limit; its
-    // last piece is then already on its way to `handOver`.
-    let last = writerLock.withLock { () -> KeyboardCapturePiece? in
-      let piece = writer?.finish()
+    // The pieces cut before the stop go first, so the last piece never
+    // overtakes one still on its way. No last piece when the writer ended
+    // by itself at the dictation's limit: it is then among the cut ones.
+    let pieces = writerLock.withLock { () -> [KeyboardCapturePiece] in
+      var pieces = cut
+      cut = []
+      if let last = writer?.finish() {
+        pieces.append(last)
+      }
       writer = nil
-      return piece
+      return pieces
     }
-    if let last {
-      handOver([last])
+    if !pieces.isEmpty {
+      handOver(pieces)
     }
     return true
   }
@@ -473,18 +493,32 @@ final class KeyboardDictationSession {
 
   /// On the audio thread: writes the buffer while a dictation records.
   private func receive(_ buffer: AVAudioPCMBuffer) {
-    let pieces = writerLock.withLock { () -> [KeyboardCapturePiece] in
+    let wasCut = writerLock.withLock { () -> Bool in
       guard let current = writer else {
-        return []
+        return false
       }
       let pieces = current.append(buffer)
       if pieces.contains(where: \.last) {
         writer = nil
       }
+      cut.append(contentsOf: pieces)
+      return !pieces.isEmpty
+    }
+    if wasCut {
+      queue.async { [weak self] in self?.handOverCut() }
+    }
+  }
+
+  /// On the queue: hands over what the audio thread cut, unless a stop
+  /// already took it along.
+  private func handOverCut() {
+    let pieces = writerLock.withLock { () -> [KeyboardCapturePiece] in
+      let pieces = cut
+      cut = []
       return pieces
     }
     if !pieces.isEmpty {
-      queue.async { [weak self] in self?.handOver(pieces) }
+      handOver(pieces)
     }
   }
 
