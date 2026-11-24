@@ -654,14 +654,14 @@ export type PlUodoSkipTally = Partial<Record<PlUodoSkipReason, number>>;
 export const tallyPlUodoSkips = (
   rows: readonly PlUodoRow[],
 ): PlUodoSkipTally => {
-  const tally: PlUodoSkipTally = {};
+  const tally = new Map<string, number>();
   for (const row of rows) {
     const recordClass = classifyPlUodoRow(row);
     if (recordClass.type === "skipped") {
-      tally[recordClass.reason] = (tally[recordClass.reason] ?? 0) + 1;
+      tally.set(recordClass.reason, (tally.get(recordClass.reason) ?? 0) + 1);
     }
   }
-  return tally;
+  return Object.fromEntries(tally);
 };
 
 const reportSkips = (where: string, tally: PlUodoSkipTally): void => {

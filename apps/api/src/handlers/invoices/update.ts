@@ -120,10 +120,17 @@ const buildInvoiceUpdateAuditChanges = (
   changedFields: InvoiceUpdateChanges,
 ): FieldDiffs => {
   const changes: FieldDiffs = {};
-  for (const field of ["documentType", "originalInvoiceId"] as const) {
-    if (changedFields[field] !== undefined) {
-      changes[field] = { old: existing[field], new: changedFields[field] };
-    }
+  if (changedFields.documentType !== undefined) {
+    changes["documentType"] = {
+      old: existing.documentType,
+      new: changedFields.documentType,
+    };
+  }
+  if (changedFields.originalInvoiceId !== undefined) {
+    changes["originalInvoiceId"] = {
+      old: existing.originalInvoiceId,
+      new: changedFields.originalInvoiceId,
+    };
   }
   if (changedFields.invoiceNumber !== undefined) {
     changes["invoiceNumber"] = {

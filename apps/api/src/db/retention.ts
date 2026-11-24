@@ -316,6 +316,46 @@ export const TABLE_RETENTION = {
   oauth_consent: {
     boundedBy: "Authenticated account-owned consent and revocation.",
   },
+  scim_connection_binding: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_group: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_group_member: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_identity_tombstone: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_managed_connection: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_managed_connection_event: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_managed_credential: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_projection_grant: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_subject: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
+  scim_user: {
+    boundedBy:
+      "Organization-owned SCIM directory provisioning state managed by @better-auth/scim.",
+  },
   organization_sso_pending_member: {
     boundedBy:
       "Organization and account lifecycle; cascade-deleted with either owner and cleared on account deletion.",

@@ -617,7 +617,7 @@ const mergeCopies = ({
 }: AssistantSnapshotGroup): AssistantSnapshotMessage => {
   const contents: string[] = [];
   const toolCalls: NonNullable<AssistantSnapshotMessage["toolCalls"]> = [];
-  const toolCallMetadata: Record<string, unknown> = {};
+  const toolCallMetadataEntries = new Map<string, unknown>();
   for (const copy of copies) {
     if (typeof copy.content === "string" && copy.content.length > 0) {
       contents.push(copy.content);
@@ -625,8 +625,11 @@ const mergeCopies = ({
     if (copy.toolCalls !== undefined) {
       toolCalls.push(...copy.toolCalls);
     }
-    Object.assign(toolCallMetadata, readToolCallMetadata(copy));
+    for (const [k, v] of Object.entries(readToolCallMetadata(copy) ?? {})) {
+      toolCallMetadataEntries.set(k, v);
+    }
   }
+  const toolCallMetadata = Object.fromEntries(toolCallMetadataEntries);
   const { content: _content, toolCalls: _toolCalls, ...identity } = copies[0];
   const metadata = withToolCallMetadata({
     metadata: identity.metadata,

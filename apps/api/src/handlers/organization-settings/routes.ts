@@ -42,11 +42,13 @@ import approveOrganizationSsoPendingMember from "@/api/handlers/organization-set
 import createOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/create-domain";
 import createOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/create-provider";
 import createOrganizationSamlSsoProvider from "@/api/handlers/organization-settings/sso/create-saml-provider";
+import createOrganizationScimToken from "@/api/handlers/organization-settings/sso/create-scim-token";
 import deleteOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/delete-domain";
 import deleteOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/delete-provider";
 import readOrganizationSso from "@/api/handlers/organization-settings/sso/get";
 import parseOrganizationSamlMetadata from "@/api/handlers/organization-settings/sso/parse-saml-metadata";
 import rejectOrganizationSsoPendingMember from "@/api/handlers/organization-settings/sso/reject-pending-member";
+import revokeOrganizationScimToken from "@/api/handlers/organization-settings/sso/revoke-scim-token";
 import testOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/test-provider";
 import updateOrganizationSsoPolicy from "@/api/handlers/organization-settings/sso/update-policy";
 import verifyOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/verify-domain";
@@ -112,6 +114,8 @@ export const organizationSettingsRoute = mount(
         "/pending-members/:pendingId/reject": {
           POST: rejectOrganizationSsoPendingMember,
         },
+        "/scim-tokens": { POST: createOrganizationScimToken },
+        "/scim-tokens/:tokenId": { DELETE: revokeOrganizationScimToken },
       },
       {
         prefix: "/sso",

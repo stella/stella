@@ -1,0 +1,5 @@
+{
+  "create-table-references": "All 10 Better Auth @better-auth/scim tables are created empty in this migration, so foreign keys referencing user and parent SCIM tables validate no existing rows under 1s lock_timeout.",
+  "row-level-security": "Row security is enabled and forced on the 10 new empty SCIM tables before any row or reader exists, under 1s lock_timeout.",
+  "create-policy": "Owner-only and auth_no_stella_access policies are metadata additions on the 10 new empty SCIM tables, under 1s lock_timeout."
+}

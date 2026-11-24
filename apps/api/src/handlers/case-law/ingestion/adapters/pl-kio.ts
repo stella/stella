@@ -1,4 +1,4 @@
-// parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: Reconciliation exposes the existing listing total for the census; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: imports ingestion bindings directly from their existing owner.
@@ -321,7 +321,7 @@ const readPlKioListingItem = (
   node: cheerio.Cheerio<AnyNode>,
   readText = visibleHtmlText,
 ): PlKioListingItem => {
-  const item: PlKioListingItem = { html: node.toString() };
+  const fields = new Map<string, string | undefined>();
   const labels = node.find("label");
   labels.each((index) => {
     const label = labels.eq(index);
@@ -331,12 +331,15 @@ const readPlKioListingItem = (
     }
     const parent = label.parent().clone();
     parent.find("label").remove();
-    item[LISTING_LABELS[name]] = presentText(readText(parent));
+    fields.set(LISTING_LABELS[name], presentText(readText(parent)));
   });
   const href = node.find("a.link-details").attr("href");
-  item.id =
-    href === undefined ? undefined : DETAILS_HREF.exec(href)?.groups?.["id"];
-  return item;
+  return {
+    html: node.toString(),
+    ...Object.fromEntries(fields),
+    id:
+      href === undefined ? undefined : DETAILS_HREF.exec(href)?.groups?.["id"],
+  };
 };
 
 /**

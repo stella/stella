@@ -268,14 +268,14 @@ type PlNcourtListing = {
 export const normalizePlNcourtListingRow = (
   value: Record<string, unknown>,
 ): PlNcourtListingRow => {
-  const row: PlNcourtListingRow = {};
+  const entries = new Map<keyof PlNcourtListingRow, string>();
   for (const field of LISTING_ROW_FIELDS) {
     const text = value[field];
     if (typeof text === "string" && text.length > 0) {
-      row[field] = text;
+      entries.set(field, text);
     }
   }
-  return row;
+  return Object.fromEntries(entries);
 };
 
 /** A listed row's elements this adapter has no name for. */
@@ -933,25 +933,26 @@ const unmappedFieldsOf = ({
   detail: PlNcourtDetail | null;
   listing: Record<string, unknown>;
 }): Record<string, string> => {
-  const unmapped: Record<string, string> = Object.fromEntries(
-    unmappedListingFields(listing),
-  );
+  const unmappedMap = new Map<string, string>(unmappedListingFields(listing));
   if (detail?.type === "record") {
     for (const [name, value] of detail.fields) {
       if (!isSourceField(name)) {
-        unmapped[name] = value;
+        unmappedMap.set(name, value);
       }
     }
   }
   if (content !== null) {
     for (const name of contentFieldNames(content)) {
       if (!isSourceField(name)) {
-        unmapped[name] =
-          content.attributes[name.slice(CONTENT_ATTRIBUTE_PREFIX.length)] ?? "";
+        unmappedMap.set(
+          name,
+          content.attributes[name.slice(CONTENT_ATTRIBUTE_PREFIX.length)] ?? "",
+        );
       }
     }
   }
-  for (const name of Object.keys(unmapped)) {
+  const unmapped: Record<string, string> = Object.fromEntries(unmappedMap);
+  for (const name of unmappedMap.keys()) {
     logger.warn("case_law.ingestion.source_field_unmapped", {
       adapterKey: ADAPTER_KEYS.PL_NCOURT,
       field: name,

@@ -1,4 +1,4 @@
-// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: [cz-regional] recapture upgrades a document-only stored payload to the crawl's envelope; crawl and replay build decisions as before.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -287,7 +287,9 @@ const mapDecisionType = (
   if (!type || type === DECISION_TYPE_NOT_STATED) {
     return undefined;
   }
-  const mapped = DECISION_TYPE_MAP[type];
+  const mapped = Object.hasOwn(DECISION_TYPE_MAP, type)
+    ? DECISION_TYPE_MAP[type]
+    : undefined;
   if (mapped !== undefined) {
     return mapped;
   }

@@ -125,6 +125,7 @@ import {
   getFollowingAssistantRestorations,
   getMentionTagAttr,
   sentinelIsAboveRoot,
+  stickyUserHeaderLayout,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import { ChatTranscriptCopy } from "@/components/chat/chat-transcript-copy";
@@ -505,7 +506,6 @@ export const ChatThreadMessages = ({
   activitySession,
   activeFileName,
   assistantTextDensity = "default",
-  approvalPendingMessageId,
   branchSource,
   error,
   followUps,
@@ -588,16 +588,7 @@ export const ChatThreadMessages = ({
         resetOn={message.parts}
         surface="chat-message"
       >
-        <Message
-          className={cn(
-            "transition-opacity duration-200",
-            approvalPendingMessageId &&
-              approvalPendingMessageId !== message.id &&
-              "opacity-40",
-          )}
-          from={message.role}
-          data-chat-message-id={message.id}
-        >
+        <Message from={message.role} data-chat-message-id={message.id}>
           <ChatMessageActionsScope
             canExport={getMessageText(message) !== ""}
             canFork={canFork}
@@ -781,7 +772,6 @@ export const ChatThreadMessages = ({
           }
           return (
             <StickyUserTurn
-              approvalPendingMessageId={approvalPendingMessageId}
               headerIndex={turn.index}
               headerMessage={turn.header}
               isGenerating={generationActive}
@@ -816,7 +806,6 @@ export const ChatThreadMessages = ({
 };
 
 type StickyUserTurnProps = {
-  approvalPendingMessageId: string | null;
   headerIndex: number;
   headerMessage: PersistedChatMessage;
   isGenerating: boolean;
@@ -828,6 +817,30 @@ type StickyUserTurnProps = {
 
 const STICKY_USER_HEADER_NATURAL_HEIGHT_VAR =
   "--sticky-user-header-natural-height";
+const STICKY_USER_HEADER_PINNED_HEIGHT_VAR =
+  "--sticky-user-header-pinned-height";
+const STICKY_USER_HEADER_STICK_AT_VAR = "--sticky-user-header-stick-at";
+
+/** Publishes a header's measured height and where it pins (see
+ *  `stickyUserHeaderLayout`) on its turn, for the header and its sentinel. */
+const publishStickyUserHeaderLayout = (
+  turn: HTMLElement,
+  naturalHeight: number,
+) => {
+  const { pinnedHeight, stickAt } = stickyUserHeaderLayout(naturalHeight);
+  turn.style.setProperty(
+    STICKY_USER_HEADER_NATURAL_HEIGHT_VAR,
+    `${String(naturalHeight)}px`,
+  );
+  turn.style.setProperty(
+    STICKY_USER_HEADER_PINNED_HEIGHT_VAR,
+    `${String(pinnedHeight)}px`,
+  );
+  turn.style.setProperty(
+    STICKY_USER_HEADER_STICK_AT_VAR,
+    `${String(stickAt)}px`,
+  );
+};
 
 /**
  * One turn in the sticky layout: a user header pinned to the top of the
@@ -836,7 +849,6 @@ const STICKY_USER_HEADER_NATURAL_HEIGHT_VAR =
  * turn's header takes over.
  */
 const StickyUserTurn = ({
-  approvalPendingMessageId,
   headerIndex,
   headerMessage,
   isGenerating,
@@ -851,7 +863,9 @@ const StickyUserTurn = ({
     isGenerating,
     message: headerMessage,
   });
+  const turnRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const stickSentinelRef = useRef<HTMLDivElement>(null);
   const stickyHeaderRef = useRef<HTMLDivElement>(null);
   const [isStuck, setIsStuck] = useState(false);
   const restorationPairs = getFollowingAssistantRestorations(
@@ -881,43 +895,42 @@ const StickyUserTurn = ({
   // anchoring moves the sentinel back below the sticky boundary; that
   // immediately expands the header again and creates a render/scroll loop.
   // Capture the natural height before paint, then keep that outer layout box
-  // stable while the inner pinned chrome becomes compact.
+  // stable while the inner pinned chrome becomes compact. The box pins only
+  // once all of it but the shelf's slice has scrolled away, so the shelf
+  // sits flush on the answer instead of over an empty band.
   useLayoutEffect(() => {
+    const turn = turnRef.current;
     const header = stickyHeaderRef.current;
-    if (!header) {
+    if (!turn || !header) {
       return;
     }
-    header.style.setProperty(
-      STICKY_USER_HEADER_NATURAL_HEIGHT_VAR,
-      `${String(header.offsetHeight)}px`,
-    );
+    publishStickyUserHeaderLayout(turn, header.offsetHeight);
   }, [headerMessage.id]);
 
   useExternalSyncEffect(() => {
+    const turn = turnRef.current;
     const header = stickyHeaderRef.current;
-    if (!header) {
+    if (!turn || !header) {
       return undefined;
     }
     const observer = new ResizeObserver(() => {
       if (header.dataset["stuck"] !== "false") {
         return;
       }
-      header.style.setProperty(
-        STICKY_USER_HEADER_NATURAL_HEIGHT_VAR,
-        `${String(header.offsetHeight)}px`,
-      );
+      publishStickyUserHeaderLayout(turn, header.offsetHeight);
     });
     observer.observe(header);
     return () => observer.disconnect();
   }, [headerMessage.id]);
 
-  // Stuck-detection: an out-of-flow 1px sentinel marks the header's natural
-  // top. Once it scrolls above the container's top edge the header is pinned.
+  // Stuck-detection: an out-of-flow 1px sentinel marks where the header pins
+  // (`stickAt` below its natural top). Once it scrolls above the container's
+  // top edge the header is pinned.
   // Re-armed on `headerMessage.id` so a thread switch or paginated prepend
   // rebinds the observer to this turn's live sentinel and container.
   useExternalSyncEffect(() => {
     const root = scrollRef?.current;
-    const target = sentinelRef.current;
+    const target = stickSentinelRef.current;
     if (!root || !target) {
       return undefined;
     }
@@ -932,7 +945,7 @@ const StickyUserTurn = ({
     );
     observer.observe(target);
     return () => observer.disconnect();
-    // scrollRef/sentinelRef are stable refs; headerMessage.id re-arms on
+    // scrollRef/stickSentinelRef are stable refs; headerMessage.id re-arms on
     // thread switch or prepend.
   }, [scrollRef, headerMessage.id]);
 
@@ -956,6 +969,7 @@ const StickyUserTurn = ({
     <section
       className="relative flex flex-col gap-3"
       data-chat-turn-id={headerMessage.id}
+      ref={turnRef}
     >
       <div
         aria-hidden="true"
@@ -963,12 +977,20 @@ const StickyUserTurn = ({
         ref={sentinelRef}
       />
       <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-(--sticky-user-header-stick-at,0px) h-px"
+        data-sticky-user-header-pin=""
+        ref={stickSentinelRef}
+      />
+      <div
         className={cn(
           // Only needs to cover in-flow transcript content scrolling beneath
           // it (z-auto). The page-level stacking order (see chat-thread-page)
           // keeps the floating composer above the whole transcript, so this
           // must NOT climb high enough to overlay it. `z-10` is the ceiling.
-          "group/sticky sticky top-0 z-10",
+          "group/sticky sticky z-10",
+          // Scrolls in flow until only the shelf's slice is left in view.
+          "top-[calc(var(--sticky-user-header-stick-at,0px)*-1)]",
           // Preserve the natural in-flow height while pinned. The compact
           // chrome below owns its own paint, so the transparent remainder
           // neither hides nor intercepts the answer scrolling underneath.
@@ -980,6 +1002,10 @@ const StickyUserTurn = ({
         <div
           className={cn(
             "pointer-events-auto relative",
+            // Stuck: the shelf fills exactly the slice left in view, at the
+            // box's bottom edge, right above the answer.
+            "group-data-[stuck=true]/sticky:absolute group-data-[stuck=true]/sticky:inset-x-0 group-data-[stuck=true]/sticky:bottom-0",
+            "group-data-[stuck=true]/sticky:h-(--sticky-user-header-pinned-height) group-data-[stuck=true]/sticky:overflow-y-clip",
             // Unstuck: opaque band flush with the page (no chrome/box).
             "group-data-[stuck=false]/sticky:bg-background",
             // Stuck: near-opaque compact glass shelf. Keeping these styles
@@ -1004,10 +1030,7 @@ const StickyUserTurn = ({
           )}
           <Message
             className={cn(
-              "relative z-10 transition-opacity duration-200",
-              approvalPendingMessageId &&
-                approvalPendingMessageId !== headerMessage.id &&
-                "opacity-40",
+              "relative z-10",
               "group-data-[stuck=true]/sticky:pointer-events-none",
               "group-data-[stuck=true]/sticky:[&_a]:pointer-events-auto",
               "group-data-[stuck=true]/sticky:[&_button]:pointer-events-auto",
@@ -1841,7 +1864,6 @@ type ChatThreadMessagesProps = {
   activeFileName?: string | undefined;
   /** Compact prose is reserved for constrained overlays over a document. */
   assistantTextDensity?: "compact" | "default" | undefined;
-  approvalPendingMessageId: string | null;
   /**
    * What to ask next, drawn at the end of the answer it follows
    * (`followUps.messageId`), after that answer's actions. The one place

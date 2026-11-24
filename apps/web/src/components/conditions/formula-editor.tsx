@@ -179,10 +179,9 @@ export const FormulaEditor = ({
       });
     }
   }
-  const exampleData: Record<string, number> = {};
-  for (const entry of exampleFields) {
-    exampleData[entry.path] = entry.value;
-  }
+  const exampleData: Record<string, number> = Object.fromEntries(
+    exampleFields.map((entry) => [entry.path, entry.value]),
+  );
   const exampleResult = evaluateFormulaExample(value, exampleData);
   const finiteExampleResult =
     exampleResult !== undefined && Number.isFinite(exampleResult)

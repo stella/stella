@@ -485,6 +485,7 @@ export const FAILURE_TAGS = [
   "SchedulerJobPauseError",
   "SchedulerJobTimeoutError",
   "SchedulerTaskFailure",
+  "ScimManagementError",
   "ScreeningQueryError",
   "ScreeningWorkLimitError",
   "ScriptArgumentError",

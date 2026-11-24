@@ -83,24 +83,24 @@ export const LandingLayout = ({
           the viewport exactly and never scrolls; the columns do. */}
         <LandingScroll className="min-h-0 flex-1">
           <div className="flex min-h-full w-full flex-col items-center px-4 @2xl:h-full">
-            {/* The box may grow past the preferred fold height; keep every one
-              of its controls reachable without making the whole page
-              scroll. The viewport clips, so the inline padding leaves room
-              at the sides for the box's outer halo (the shield ring, focus
-              rings). */}
-            <LandingScroll
-              className="min-h-72 w-full max-w-2xl shrink-0 basis-[22rem] @2xl:shrink"
-              scrollFade
-            >
-              <div className="flex min-h-full w-full flex-col items-center justify-center gap-8 px-1">
-                {hero}
-              </div>
-            </LandingScroll>
+            {/* The fold prefers 22rem but never ends above the hero's own
+              height: a plain flex item's minimum is its content, so a box
+              grown by a long paste pushes the columns down instead of
+              being clipped, controls and all, under them (a scroll box's
+              minimum is zero). The editor caps its own growth and scrolls
+              inside. The inline padding leaves room at the sides for the
+              box's outer halo (the shield ring, focus rings), which the
+              page's viewport clips. */}
+            <div className="flex w-full max-w-2xl shrink-0 basis-[22rem] flex-col items-center justify-center gap-8 px-1 @2xl:shrink">
+              {hero}
+            </div>
             {/* Side by side, the columns share the remaining height; each
               `LandingSection` keeps its heading in place and scrolls its own
               rows, so a long list in one column never pushes another's
-              heading out of view. */}
-            <div className="grid w-full shrink-0 gap-8 pb-6 @2xl:min-h-0 @2xl:flex-1 @2xl:auto-rows-fr @2xl:grid-cols-3">
+              heading out of view. They never shrink below a heading and a
+              couple of rows: when a grown hero leaves less than that, the
+              page scrolls instead of the columns collapsing. */}
+            <div className="grid w-full shrink-0 gap-8 pb-6 @2xl:min-h-48 @2xl:flex-1 @2xl:auto-rows-fr @2xl:grid-cols-3">
               {children}
             </div>
             {footer !== undefined && (

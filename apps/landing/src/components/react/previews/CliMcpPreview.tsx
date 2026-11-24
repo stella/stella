@@ -262,9 +262,9 @@ export const CliMcpPreview = ({
     if (activeDrag?.pointerId !== event.pointerId) {
       return;
     }
-    setPositions((current) => {
-      const next = { ...current };
-      next[activeDrag.window] = {
+    setPositions((current) => ({
+      ...current,
+      [activeDrag.window]: {
         x: clamp(
           activeDrag.startX + event.clientX - activeDrag.pointerX,
           activeDrag.minX,
@@ -275,9 +275,8 @@ export const CliMcpPreview = ({
           activeDrag.minY,
           activeDrag.maxY,
         ),
-      };
-      return next;
-    });
+      },
+    }));
   };
 
   const handleDragPointerUp = (event: PointerEvent<HTMLDivElement>) => {

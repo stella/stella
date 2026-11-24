@@ -78,15 +78,17 @@ const updateList = createSafeHandler(
           { name: body.name, description: body.description, status },
           ["name", "description", "status"],
         );
-        const changes: Record<string, { old: unknown; new: unknown }> = {};
+        const changeEntries = new Map<string, { old: unknown; new: unknown }>();
         for (const field of ["name", "description", "status"] as const) {
           const next = updates[field];
           if (next !== undefined && next !== existing[field]) {
-            changes[field] = { old: existing[field], new: next };
+            changeEntries.set(field, { old: existing[field], new: next });
           }
         }
+        const changes: Record<string, { old: unknown; new: unknown }> =
+          Object.fromEntries(changeEntries);
 
-        if (Object.keys(changes).length === 0) {
+        if (changeEntries.size === 0) {
           return existing;
         }
 

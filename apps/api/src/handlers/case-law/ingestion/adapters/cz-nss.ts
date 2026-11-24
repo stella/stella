@@ -1,4 +1,4 @@
-// parser-output-unchanged: adds an explicit exact-document recovery capability; standing crawl and stored replay outputs are unchanged.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: Named fetchDecisionContent options preserve its body, argument values and evaluation order.
 // parser-output-unchanged: HTML parser bindings come from their package owner; DOM and serialization behavior are unchanged.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -2328,20 +2328,27 @@ const reparseStoredRaw = async (
   const publishedCaseNumber = storedPublishedCaseNumber(stored);
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
   const storedDecisionText = splitStoredDecisionTextMetadata(stored.metadata);
-  const textFields = { ...storedDecisionText.textFields };
+  const updatedTextFields = new Map<
+    (typeof DECISION_TEXT_FIELD_KEYS)[number],
+    ReturnType<typeof czNssTextField>
+  >();
   // Only legacy text without a sidecar, or text already read as present, can
   // be reclassified. A sidecar's absence (including quarantine) stays closed.
   for (const key of DECISION_TEXT_FIELD_KEYS) {
     const storedText = stored.metadata[key];
-    const field = textFields[key];
+    const field = storedDecisionText.textFields[key];
     if (
       typeof storedText === "string" &&
       (field.type === TEXT_FIELD_TYPE.PRESENT ||
         stored.metadata[DECISION_TEXT_ABSENCE_METADATA_KEY] === undefined)
     ) {
-      textFields[key] = czNssTextField(storedText);
+      updatedTextFields.set(key, czNssTextField(storedText));
     }
   }
+  const textFields = {
+    ...storedDecisionText.textFields,
+    ...Object.fromEntries(updatedTextFields),
+  };
   const statedLegalSentence = storedDetail?.legalSentence;
   const legalSentenceField =
     statedLegalSentence === undefined

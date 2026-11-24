@@ -1,8 +1,12 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
-import type { ChatLocalRunContext } from "@stll/api-contract/chat-run-target";
+import type {
+  ChatHarnessContextUsage,
+  ChatLocalRunContext,
+} from "@stll/api-contract/chat-run-target";
 import { Button } from "@stll/ui/button";
 import {
   Popover,
@@ -23,7 +27,8 @@ import { useFormatter } from "@/i18n/formatting-context";
  *  chat-messages endpoint. The five breakdown parts sum to `estimatedTokens`,
  *  so the segmented bar renders without any reconciliation. `cacheStableTokens`
  *  (= prompt + tools) is the prompt-cache-stable prefix. */
-export type ChatContextUsage = {
+type ChatContextEstimate = {
+  source: "estimate";
   estimatedTokens: number;
   triggerTokens: number;
   cacheStableTokens: number;
@@ -35,10 +40,14 @@ export type ChatContextUsage = {
     attachmentTokens: number;
     conversationTokens: number;
   };
-  /** For a thread whose turns run on the member's computer: what its
-   *  harness reported, shown instead of the estimate. */
-  reported?: ChatLocalRunContext | undefined;
 };
+
+/**
+ * What the meter shows: stella's estimate for a thread on its own models, or
+ * for a thread whose turns run on the member's computer, only what its
+ * harness reported.
+ */
+export type ChatContextUsage = ChatContextEstimate | ChatHarnessContextUsage;
 
 type ChatContextMeterProps =
   | { status: "pending" }
@@ -83,7 +92,6 @@ type ContextPart = {
 };
 
 export const ChatContextMeter = (props: ChatContextMeterProps) => {
-  const t = useTranslations("chat.contextMeter");
   const format = useFormatter();
 
   if (props.status === "pending") {
@@ -95,23 +103,53 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
     // Zero-state for a brand-new/empty thread: the empty ring in the
     // muted tone, with no popover — there is no conversation to break down
     // yet, so the trigger is inert rather than opening an empty sheet.
-    return (
-      <span
-        aria-label={t("triggerLabel", { percent: format.number(0) })}
-        className={CHAT_CONTEXT_METER_BOX_CLASS}
-        role="status"
-      >
-        <ContextRing percent={0} />
-      </span>
-    );
+    return <EmptyContextMeter />;
   }
 
   const compact = (value: number) =>
     format.number(value, { notation: "compact", maximumFractionDigits: 1 });
 
-  if (usage.reported !== undefined) {
-    return <ReportedContextMeter compact={compact} reported={usage.reported} />;
+  switch (usage.source) {
+    case "harness":
+      // Before the harness reports, nothing measures its context: the empty
+      // ring, never stella's estimate of a different context.
+      return usage.reported === null ? (
+        <EmptyContextMeter />
+      ) : (
+        <ReportedContextMeter compact={compact} reported={usage.reported} />
+      );
+    case "estimate":
+      return <EstimatedContextMeter compact={compact} usage={usage} />;
+    default:
+      usage satisfies never;
+      return panic("Unhandled context meter source");
   }
+};
+
+/** The empty ring in the muted tone, with nothing to break down. */
+const EmptyContextMeter = () => {
+  const t = useTranslations("chat.contextMeter");
+  const format = useFormatter();
+  return (
+    <span
+      aria-label={t("triggerLabel", { percent: format.number(0) })}
+      className={CHAT_CONTEXT_METER_BOX_CLASS}
+      role="status"
+    >
+      <ContextRing percent={0} />
+    </span>
+  );
+};
+
+/** Stella's estimate of its next send, against the compaction trigger. */
+const EstimatedContextMeter = ({
+  usage,
+  compact,
+}: {
+  usage: ChatContextEstimate;
+  compact: (value: number) => string;
+}) => {
+  const t = useTranslations("chat.contextMeter");
 
   const percent = Math.min(
     100,
@@ -233,7 +271,7 @@ const buildContextParts = ({
   usage,
 }: {
   t: TranslateFn;
-  usage: ChatContextUsage;
+  usage: ChatContextEstimate;
 }): ContextPart[] => {
   const { breakdown, summarizedMessageCount } = usage;
   const summaryLabel =
@@ -294,7 +332,7 @@ const contextTone = (percent: number): ContextTone => {
 
 type ContextBarProps = {
   parts: ContextPart[];
-  usage: ChatContextUsage;
+  usage: ChatContextEstimate;
 };
 
 const ContextBar = ({ parts, usage }: ContextBarProps) => {

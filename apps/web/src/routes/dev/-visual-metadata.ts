@@ -108,7 +108,8 @@ type VisualRegistryKey =
   | "shell-pending"
   | "workspace-table"
   | "public-law-toolbar"
-  | "chat-history-decision";
+  | "chat-history-decision"
+  | "browser-extension-chip";
 
 export const visualRegistry = {
   "appeal-reviews": {
@@ -182,6 +183,10 @@ export const visualRegistry = {
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
   "public-law-toolbar": { label: "Public law toolbar", layout: "plain" },
   "chat-history-decision": { label: "Chat history decision", layout: "plain" },
+  "browser-extension-chip": {
+    label: "Browser extension chip",
+    layout: "plain",
+  },
 } as const satisfies Record<VisualRegistryKey, VisualEntry>;
 
 export type VisualName = keyof typeof visualRegistry;

@@ -56,6 +56,16 @@ const PRODUCT_AUTH_MODEL_NAMES = [
   "oauthRefreshToken",
   "oauthResource",
   "oauthConsent",
+  "scimConnectionBinding",
+  "scimGroup",
+  "scimGroupMember",
+  "scimIdentityTombstone",
+  "scimManagedConnection",
+  "scimManagedConnectionEvent",
+  "scimManagedCredential",
+  "scimProjectionGrant",
+  "scimSubject",
+  "scimUser",
   "ssoProvider",
 ] as const;
 

@@ -100,5 +100,8 @@
   },
   "desktopUpdateNeeded": {
     "message": "حدّث stella desktop وهذه الإضافة"
+  },
+  "desktopConnecting": {
+    "message": "جارٍ الاتصال بـ stella desktop…"
   }
 }

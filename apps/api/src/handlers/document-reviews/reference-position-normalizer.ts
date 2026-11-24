@@ -569,7 +569,11 @@ export const createPartialProposalReader = (
     const events: ReviewProposalEvent[] = [];
     while (cursors[cursor] < closed) {
       const parsed = v.safeParse(schema, raw[cursors[cursor]]);
-      cursors[cursor] += 1;
+      if (cursor === "positions") {
+        cursors.positions += 1;
+      } else {
+        cursors.skipped += 1;
+      }
       if (parsed.success) {
         events.push(...accept(parsed.output));
       }

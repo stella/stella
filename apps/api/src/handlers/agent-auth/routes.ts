@@ -19,7 +19,7 @@ import { defineEndpoint } from "@/api/lib/endpoints";
 
 /** The manifest's preflight: any origin may read the skill manifest. */
 const manifestPreflight = defineEndpoint.public({ cors: "own" }, ({ set }) => {
-  Object.assign(set.headers, AGENT_AUTH_MANIFEST_HEADERS);
+  set.headers = { ...set.headers, ...AGENT_AUTH_MANIFEST_HEADERS };
   return status(204);
 });
 

@@ -755,11 +755,11 @@ const drive = async (root: string, args: readonly string[]) => {
   const records = parseCaptureLog(readFileSync(captureLog, "utf-8"));
   rmSync(captureLog, { force: true });
   const capturedAt = Temporal.Now.instant().toString();
-  const entries = records.map((record) =>
-    Object.assign(record, decideAttachable({ after, before, record }), {
-      capturedAt,
-    }),
-  );
+  const entries = records.map((record) => ({
+    ...record,
+    ...decideAttachable({ after, before, record }),
+    capturedAt,
+  }));
   if (entries.length > 0) {
     writeRunManifest(root, entries);
     const refused = entries.find((entry) => !entry.attachable);

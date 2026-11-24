@@ -1,4 +1,4 @@
-// parser-output-unchanged: the bracketed-number word test moved unchanged into the printed-label grammar.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: a source policy reads paragraph input as it reads element text; paragraph callers without a policy are unchanged.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: Aspose writes `-aw-headerfooter-type` only as a nonempty declaration, which the former substring selector and the declaration read select alike.
@@ -664,14 +664,16 @@ export const validateAst = (
   }
 
   // Block type distribution
-  const typeCounts: Record<string, number> = {};
+  const typeCountEntries = new Map<string, number>();
   for (const b of blocks) {
     const key =
       b.type === "paragraph" && b.role !== undefined
         ? `paragraph-${b.role}`
         : b.type;
-    typeCounts[key] = (typeCounts[key] ?? 0) + 1;
+    typeCountEntries.set(key, (typeCountEntries.get(key) ?? 0) + 1);
   }
+  const typeCounts: Record<string, number> =
+    Object.fromEntries(typeCountEntries);
 
   // Must have at least one heading
   const headingCount = blocks.filter((b) => b.type === "heading").length;

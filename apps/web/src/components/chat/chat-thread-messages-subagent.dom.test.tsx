@@ -175,7 +175,6 @@ const turnTree = (
                     activitySession={{
                       reportedUnknownActivityTypes: new Set<string>(),
                     }}
-                    approvalPendingMessageId={null}
                     messages={[turnOf(parts)]}
                     onAskUserSubmit={() => {}}
                     onCreateDocumentResolve={() => {}}

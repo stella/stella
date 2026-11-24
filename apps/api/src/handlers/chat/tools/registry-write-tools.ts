@@ -127,7 +127,7 @@ export const buildChatWriteTools = (
     DEFAULT_MCP_TOOL_DEFINITIONS,
   );
 
-  const tools: ChatToolMap = {};
+  const toolEntries = new Map<string, ChatToolMap[string]>();
   for (const toolName of projectedWriteToolNames()) {
     const entry = WRITE_TOOL_REF_FIELD_MAP[toolName];
     const definition = projectMcpFeatureInput(
@@ -164,41 +164,44 @@ export const buildChatWriteTools = (
         ? entry.chatDescription
         : definition.description;
 
-    tools[toolName] = toolDefinition({
-      name: toolName,
-      description: scopeMcpDescriptorProse(description, hiddenIds),
-      inputSchema,
-    }).server(async (args: unknown) => {
-      const toolArgs = isRecord(args) ? args : {};
-      // Same mechanical retry policy as the code-mode read runner: a call
-      // that already failed with a server defect this turn is refused before
-      // dispatch instead of re-executed.
-      if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: knownDefectRefusalMessage(toolName),
-        });
-      }
-      const executionDeps = await resolveCurrentChatRegistryContext({
-        contextDeps,
-        resolveCurrentExecutionContext,
-      });
-      const result = Result.isError(executionDeps)
-        ? executionDeps
-        : await runRegistryWriteTool({
-            args: toolArgs,
-            context: buildMcpContextFromChat(executionDeps.value),
-            refRegistry,
-            toolName,
+    toolEntries.set(
+      toolName,
+      toolDefinition({
+        name: toolName,
+        description: scopeMcpDescriptorProse(description, hiddenIds),
+        inputSchema,
+      }).server(async (args: unknown) => {
+        const toolArgs = isRecord(args) ? args : {};
+        // Same mechanical retry policy as the code-mode read runner: a call
+        // that already failed with a server defect this turn is refused before
+        // dispatch instead of re-executed.
+        if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
+          throw new ChatToolError({
+            kind: "server-defect",
+            message: knownDefectRefusalMessage(toolName),
           });
-      if (Result.isError(result)) {
-        if (result.error.kind === "server-defect") {
-          toolDefectMemo.recordDefect(toolName, toolArgs);
         }
-        throw result.error;
-      }
-      return result.value;
-    });
+        const executionDeps = await resolveCurrentChatRegistryContext({
+          contextDeps,
+          resolveCurrentExecutionContext,
+        });
+        const result = Result.isError(executionDeps)
+          ? executionDeps
+          : await runRegistryWriteTool({
+              args: toolArgs,
+              context: buildMcpContextFromChat(executionDeps.value),
+              refRegistry,
+              toolName,
+            });
+        if (Result.isError(result)) {
+          if (result.error.kind === "server-defect") {
+            toolDefectMemo.recordDefect(toolName, toolArgs);
+          }
+          throw result.error;
+        }
+        return result.value;
+      }),
+    );
   }
-  return tools;
+  return Object.fromEntries(toolEntries);
 };

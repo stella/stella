@@ -22,10 +22,18 @@ describe("landing layout in one column", () => {
   test("splits the height between columns only side by side", () => {
     const grid = classesOf(markup, /<div class="(grid [^"]+)"/u);
     expect(grid).toContain("shrink-0");
-    for (const bounded of ["flex-1", "min-h-0", "auto-rows-fr"]) {
+    for (const bounded of ["flex-1", "auto-rows-fr"]) {
       expect(grid).not.toContain(bounded);
       expect(grid).toContain(`@2xl:${bounded}`);
     }
+  });
+
+  // A hero grown by a long paste on a short window took the whole height
+  // and left each column's rows a zero-height viewport.
+  test("keeps the columns a usable floor side by side", () => {
+    const grid = classesOf(markup, /<div class="(grid [^"]+)"/u);
+    expect(grid).toContain("@2xl:min-h-48");
+    expect(grid).not.toContain("@2xl:min-h-0");
   });
 
   test("bounds a column's rows only side by side", () => {
@@ -47,6 +55,19 @@ describe("landing layout in one column", () => {
     expect(page).toContain("min-h-full");
     expect(page).toContain("@2xl:h-full");
     expect(page).not.toContain("h-full");
+  });
+
+  // A scroll box's minimum height is zero: a composer grown by a long paste
+  // overflowed the fold and its send row was clipped under the columns.
+  test("never clips the hero: it sits in the page's only scroll area", () => {
+    const viewports = markup.match(/data-slot="scroll-area-viewport"/gu) ?? [];
+    // The page and the one section's rows; nothing wraps the hero.
+    expect(viewports).toHaveLength(2);
+    const hero = classesOf(markup, /<div class="([^"]+)"><p>hero<\/p>/u);
+    expect(hero).toContain("basis-[22rem]");
+    expect(hero.some((name) => /^(?:@2xl:)?(?:min-)?h-/u.test(name))).toBe(
+      false,
+    );
   });
 });
 

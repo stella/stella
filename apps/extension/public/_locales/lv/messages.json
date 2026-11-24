@@ -100,5 +100,8 @@
   },
   "desktopUpdateNeeded": {
     "message": "Atjauniniet stella desktop un šo paplašinājumu"
+  },
+  "desktopConnecting": {
+    "message": "Notiek savienošana ar stella desktop…"
   }
 }

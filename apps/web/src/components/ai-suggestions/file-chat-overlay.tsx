@@ -2664,7 +2664,6 @@ const FileChatOverlayInner = ({
               }
               activeFileName={activeFile?.fileName}
               assistantTextDensity="compact"
-              approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               followUps={{
                 analyticsSurface: "document-chat",

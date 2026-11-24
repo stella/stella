@@ -1054,6 +1054,361 @@ export const oauthConsent = pgTable(
   ],
 );
 
+/**
+ * Better Auth `@better-auth/scim` managed provisioning connections, credentials,
+ * events, bindings, users, groups, and projection grants.
+ */
+export const SCIM_MANAGED_CONNECTION_STATUSES = [
+  "active",
+  "decommissioning",
+  "decommissioned",
+] as const;
+
+export const SCIM_MANAGED_CREDENTIAL_STATUSES = [
+  "active",
+  "expired",
+  "revoked",
+  "decommissioned",
+] as const;
+
+export const SCIM_CONNECTION_DECOMMISSION_STATUSES = [
+  "active",
+  "reconciling",
+  "complete",
+] as const;
+
+export const scimManagedConnection = pgTable(
+  "scim_managed_connection",
+  {
+    id: text("id").primaryKey(),
+    creationRequestId: text("creation_request_id").notNull(),
+    connectionId: text("connection_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    status: text("status", {
+      enum: SCIM_MANAGED_CONNECTION_STATUSES,
+    }).notNull(),
+    revision: integer("revision").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    createdBy: text("created_by").notNull(),
+    decommissionStartedAt: timestamptz("decommission_started_at"),
+    decommissionStartedBy: text("decommission_started_by"),
+    decommissionedAt: timestamptz("decommissioned_at"),
+    decommissionedBy: text("decommissioned_by"),
+  },
+  (table) => [
+    foreignKey({
+      name: "scim_managed_conn_org_fk",
+      columns: [table.provisioningDomainId],
+      foreignColumns: [organization.id],
+    }).onDelete("cascade"),
+    uniqueIndex("scim_managed_conn_creation_req_uidx").on(
+      table.creationRequestId,
+    ),
+    uniqueIndex("scim_managed_conn_connection_id_uidx").on(table.connectionId),
+    index("scim_managed_conn_domain_idx").on(table.provisioningDomainId),
+    uniqueIndex("scim_managed_conn_active_domain_uidx")
+      .on(table.provisioningDomainId)
+      .where(sql`${table.status} = 'active'`),
+    check(
+      "scim_managed_conn_status_check",
+      inArray(table.status, SCIM_MANAGED_CONNECTION_STATUSES),
+    ),
+    check(
+      "scim_managed_conn_decomm_state_check",
+      sql`${table.status} <> 'decommissioned' OR ${table.decommissionedAt} IS NOT NULL`,
+    ),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimManagedCredential = pgTable(
+  "scim_managed_credential",
+  {
+    id: text("id").primaryKey(),
+    connectionRecordId: text("connection_record_id").notNull(),
+    credentialId: text("credential_id").notNull(),
+    tokenDigest: text("token_digest").notNull(),
+    hashVersion: text("hash_version").notNull(),
+    activeSlotKey: text("active_slot_key").notNull(),
+    status: text("status", {
+      enum: SCIM_MANAGED_CREDENTIAL_STATUSES,
+    }).notNull(),
+    serializedScopes: text("serialized_scopes").notNull(),
+    expiresAt: timestamptz("expires_at").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    createdBy: text("created_by").notNull(),
+    lastUsedAt: timestamptz("last_used_at"),
+    revokedAt: timestamptz("revoked_at"),
+    revokedBy: text("revoked_by"),
+    decommissionedAt: timestamptz("decommissioned_at"),
+  },
+  (table) => [
+    foreignKey({
+      name: "scim_managed_cred_conn_rec_fk",
+      columns: [table.connectionRecordId],
+      foreignColumns: [scimManagedConnection.id],
+    }).onDelete("cascade"),
+    index("scim_managed_cred_conn_rec_idx").on(table.connectionRecordId),
+    uniqueIndex("scim_managed_cred_id_uidx").on(table.credentialId),
+    uniqueIndex("scim_managed_cred_active_slot_uidx").on(table.activeSlotKey),
+    check(
+      "scim_managed_cred_status_check",
+      inArray(table.status, SCIM_MANAGED_CREDENTIAL_STATUSES),
+    ),
+    check(
+      "scim_managed_cred_revoked_state_check",
+      sql`${table.status} <> 'revoked' OR ${table.revokedAt} IS NOT NULL`,
+    ),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimManagedConnectionEvent = pgTable(
+  "scim_managed_connection_event",
+  {
+    id: text("id").primaryKey(),
+    connectionRecordId: text("connection_record_id").notNull(),
+    eventKey: text("event_key").notNull(),
+    sequence: integer("sequence").notNull(),
+    type: text("type").notNull(),
+    actorId: text("actor_id").notNull(),
+    credentialId: text("credential_id"),
+    createdAt: timestamptz("created_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "scim_managed_evt_conn_rec_fk",
+      columns: [table.connectionRecordId],
+      foreignColumns: [scimManagedConnection.id],
+    }).onDelete("cascade"),
+    index("scim_managed_evt_conn_rec_idx").on(table.connectionRecordId),
+    uniqueIndex("scim_managed_evt_key_uidx").on(table.eventKey),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimConnectionBinding = pgTable(
+  "scim_connection_binding",
+  {
+    id: text("id").primaryKey(),
+    connectionId: text("connection_id").notNull(),
+    connectionKey: text("connection_key").notNull(),
+    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    decommissionedAt: timestamptz("decommissioned_at"),
+    decommissionStatus: text("decommission_status", {
+      enum: SCIM_CONNECTION_DECOMMISSION_STATUSES,
+    })
+      .default("active")
+      .notNull(),
+    decommissionCursorUserId: text("decommission_cursor_user_id"),
+    decommissionReconciledUserCount: integer(
+      "decommission_reconciled_user_count",
+    )
+      .default(0)
+      .notNull(),
+    decommissionBatchCount: integer("decommission_batch_count")
+      .default(0)
+      .notNull(),
+    decommissionRevision: integer("decommission_revision").default(0).notNull(),
+    decommissionCompletedAt: timestamptz("decommission_completed_at"),
+    decommissionLeaseId: text("decommission_lease_id"),
+    decommissionLeaseExpiresAt: timestamptz("decommission_lease_expires_at"),
+  },
+  (table) => [
+    foreignKey({
+      name: "scim_conn_binding_org_fk",
+      columns: [table.provisioningDomainId],
+      foreignColumns: [organization.id],
+    }).onDelete("cascade"),
+    index("scim_conn_binding_conn_id_idx").on(table.connectionId),
+    uniqueIndex("scim_conn_binding_conn_key_uidx").on(table.connectionKey),
+    check(
+      "scim_conn_binding_decomm_status_check",
+      inArray(table.decommissionStatus, SCIM_CONNECTION_DECOMMISSION_STATUSES),
+    ),
+    check(
+      "scim_conn_binding_decomm_state_check",
+      sql`${table.decommissionStatus} <> 'complete' OR ${table.decommissionCompletedAt} IS NOT NULL`,
+    ),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimIdentityTombstone = pgTable(
+  "scim_identity_tombstone",
+  {
+    id: text("id").primaryKey(),
+    connectionId: text("connection_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    externalId: text("external_id").notNull(),
+    externalIdKey: text("external_id_key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    profile: text("profile").notNull(),
+    deletedAt: timestamptz("deleted_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "scim_tombstone_org_fk",
+      columns: [table.provisioningDomainId],
+      foreignColumns: [organization.id],
+    }).onDelete("cascade"),
+    index("scim_tombstone_conn_id_idx").on(table.connectionId),
+    index("scim_tombstone_domain_idx").on(table.provisioningDomainId),
+    uniqueIndex("scim_tombstone_ext_id_key_uidx").on(table.externalIdKey),
+    index("scim_tombstone_user_id_idx").on(table.userId),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimSubject = pgTable(
+  "scim_subject",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    profileSourceId: text("profile_source_id"),
+    revision: integer("revision").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    uniqueIndex("scim_subject_user_id_uidx").on(table.userId),
+    index("scim_subject_profile_source_idx").on(table.profileSourceId),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimUser = pgTable(
+  "scim_user",
+  {
+    id: text("id").primaryKey(),
+    connectionId: text("connection_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    connectionUserKey: text("connection_user_key").notNull(),
+    userName: text("user_name").notNull(),
+    userNameKey: text("user_name_key").notNull(),
+    primaryEmail: text("primary_email").notNull(),
+    workEmailValueIndex: text("work_email_value_index").notNull(),
+    emailValueIndex: text("email_value_index").notNull(),
+    displayName: text("display_name").notNull(),
+    formattedName: text("formatted_name").notNull(),
+    givenName: text("given_name"),
+    familyName: text("family_name"),
+    serializedEmails: text("serialized_emails").notNull(),
+    serializedAttributes: text("serialized_attributes"),
+    externalId: text("external_id"),
+    externalIdKey: text("external_id_key"),
+    active: boolean("active").notNull(),
+    orderKey: text("order_key").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    index("scim_user_conn_id_idx").on(table.connectionId),
+    index("scim_user_domain_idx").on(table.provisioningDomainId),
+    index("scim_user_user_id_idx").on(table.userId),
+    uniqueIndex("scim_user_conn_user_key_uidx").on(table.connectionUserKey),
+    uniqueIndex("scim_user_username_key_uidx").on(table.userNameKey),
+    uniqueIndex("scim_user_ext_id_key_uidx").on(table.externalIdKey),
+    uniqueIndex("scim_user_order_key_uidx").on(table.orderKey),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimProjectionGrant = pgTable(
+  "scim_projection_grant",
+  {
+    id: text("id").primaryKey(),
+    connectionId: text("connection_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id").notNull(),
+    scimUserId: text("scim_user_id")
+      .notNull()
+      .references(() => scimUser.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    sourceKind: text("source_kind").notNull(),
+    sourceId: text("source_id").notNull(),
+    sourceValue: text("source_value"),
+    role: text("role").notNull(),
+    grantKey: text("grant_key").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "scim_proj_grant_org_fk",
+      columns: [table.provisioningDomainId],
+      foreignColumns: [organization.id],
+    }).onDelete("cascade"),
+    index("scim_proj_grant_conn_id_idx").on(table.connectionId),
+    index("scim_proj_grant_domain_idx").on(table.provisioningDomainId),
+    index("scim_proj_grant_scim_user_idx").on(table.scimUserId),
+    index("scim_proj_grant_user_id_idx").on(table.userId),
+    uniqueIndex("scim_proj_grant_key_uidx").on(table.grantKey),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimGroup = pgTable(
+  "scim_group",
+  {
+    id: text("id").primaryKey(),
+    connectionId: text("connection_id").notNull(),
+    provisioningDomainId: text("provisioning_domain_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    revision: integer("revision").default(0).notNull(),
+    displayName: text("display_name").notNull(),
+    displayNameKey: text("display_name_key").notNull(),
+    externalId: text("external_id"),
+    externalIdKey: text("external_id_key"),
+    orderKey: text("order_key").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+    updatedAt: timestamptz("updated_at").notNull(),
+  },
+  (table) => [
+    index("scim_group_conn_id_idx").on(table.connectionId),
+    index("scim_group_domain_idx").on(table.provisioningDomainId),
+    uniqueIndex("scim_group_display_name_key_uidx").on(table.displayNameKey),
+    uniqueIndex("scim_group_ext_id_key_uidx").on(table.externalIdKey),
+    uniqueIndex("scim_group_order_key_uidx").on(table.orderKey),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+export const scimGroupMember = pgTable(
+  "scim_group_member",
+  {
+    id: text("id").primaryKey(),
+    connectionId: text("connection_id").notNull(),
+    groupId: text("group_id")
+      .notNull()
+      .references(() => scimGroup.id, { onDelete: "cascade" }),
+    scimUserId: text("scim_user_id")
+      .notNull()
+      .references(() => scimUser.id, { onDelete: "cascade" }),
+    membershipKey: text("membership_key").notNull(),
+    createdAt: timestamptz("created_at").notNull(),
+  },
+  (table) => [
+    index("scim_group_member_conn_id_idx").on(table.connectionId),
+    index("scim_group_member_group_id_idx").on(table.groupId),
+    index("scim_group_member_scim_user_idx").on(table.scimUserId),
+    uniqueIndex("scim_group_member_key_uidx").on(table.membershipKey),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
 export const authSchema = {
   user,
   session,
@@ -1064,6 +1419,16 @@ export const authSchema = {
   member,
   invitation,
   ssoProvider,
+  scimManagedConnection,
+  scimManagedCredential,
+  scimManagedConnectionEvent,
+  scimConnectionBinding,
+  scimIdentityTombstone,
+  scimSubject,
+  scimUser,
+  scimProjectionGrant,
+  scimGroup,
+  scimGroupMember,
   jwks,
   apikey,
   oauthClient,

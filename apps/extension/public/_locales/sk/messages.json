@@ -100,5 +100,8 @@
   },
   "desktopUpdateNeeded": {
     "message": "Aktualizujte stella desktop a toto rozšírenie"
+  },
+  "desktopConnecting": {
+    "message": "Pripájanie k aplikácii stella desktop…"
   }
 }

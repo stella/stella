@@ -166,7 +166,6 @@ describe("chat thread messages", () => {
             activitySession={{
               reportedUnknownActivityTypes: new Set<string>(),
             }}
-            approvalPendingMessageId={null}
             messages={[activity]}
             onAskUserSubmit={() => {}}
             onCreateDocumentResolve={() => {}}
@@ -221,7 +220,6 @@ describe("chat thread messages", () => {
       renderWithProviders(
         <ChatThreadMessages
           activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-          approvalPendingMessageId={null}
           messages={[
             ...activities,
             {
@@ -284,7 +282,6 @@ describe("chat thread messages", () => {
       const html = renderWithProviders(
         <ChatThreadMessages
           activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-          approvalPendingMessageId={null}
           messages={[structuredClone(stored)]}
           onAskUserSubmit={() => {}}
           onCreateDocumentResolve={() => {}}
@@ -328,7 +325,6 @@ describe("chat thread messages", () => {
       renderWithProviders(
         <ChatThreadMessages
           activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-          approvalPendingMessageId={null}
           messages={structuredClone(thread)}
           onAskUserSubmit={() => {}}
           onContinuePausedTurn={() => {}}
@@ -388,7 +384,6 @@ describe("chat thread messages", () => {
       const html = renderWithProviders(
         <ChatThreadMessages
           activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-          approvalPendingMessageId={null}
           messages={[reloaded]}
           error={getChatAssistantTurnError(reloaded)}
           onAskUserSubmit={() => {}}
@@ -424,7 +419,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -444,7 +438,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         error={new Error("provider failed")}
         isGenerating
         messages={[]}
@@ -467,7 +460,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         error={new Error("provider_stream_incomplete")}
         isGenerating={false}
         messages={[]}
@@ -579,7 +571,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -633,7 +624,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -671,7 +661,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -714,7 +703,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -756,7 +744,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -794,7 +781,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -836,7 +822,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId="message-approval"
         messages={approvalRequestMessages()}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -850,6 +835,31 @@ describe("chat thread messages", () => {
     expect(html).toContain("Allow once");
   });
 
+  // The card itself asks for the decision; the rest of the thread stays as
+  // it was, so the member's own message never reads as unsent.
+  test("no message fades while an approval waits", () => {
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
+        messages={approvalRequestMessages()}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        stickyUserMessages
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Allow once");
+    const messageTags = html.match(/<[^>]*data-chat-message-id[^>]*>/gu) ?? [];
+    expect(messageTags.length).toBe(2);
+    for (const tag of messageTags) {
+      expect(tag).not.toMatch(/opacity-/u);
+    }
+  });
+
   // A user who types instead of answering supersedes the turn: the server
   // cancels the approval when it accepts the new message, so the card keeps
   // showing the request but stops offering a decision.
@@ -857,7 +867,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         isGenerating
         messages={[
           ...approvalRequestMessages(),
@@ -912,7 +921,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={askUserMessages()}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -936,7 +944,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={[
           {
             id: "message-user",
@@ -993,7 +1000,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={[
           {
             id: "message-user",
@@ -1038,7 +1044,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         isGenerating
         messages={[
           ...askUserMessages(),
@@ -1107,7 +1112,6 @@ describe("chat thread messages", () => {
     renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId="message-browse"
         messages={[
           {
             id: "message-user",
@@ -1264,7 +1268,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1310,7 +1313,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -1348,7 +1350,6 @@ describe("chat thread messages", () => {
     const content = (
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -1387,7 +1388,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1432,7 +1432,6 @@ describe("chat thread messages", () => {
     const content = (
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1476,7 +1475,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1521,7 +1519,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1560,7 +1557,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1590,7 +1586,6 @@ describe("chat thread messages", () => {
       renderWithProviders(
         <ChatThreadMessages
           activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-          approvalPendingMessageId={null}
           messages={[
             {
               id: "answer",
@@ -1689,7 +1684,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1722,7 +1716,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1757,7 +1750,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -1787,7 +1779,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         isGenerating
         messages={chatMessages}
         onAskUserSubmit={() => {}}
@@ -1809,7 +1800,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         error={new Error("provider details must stay hidden")}
         messages={[]}
         onAskUserSubmit={() => {}}
@@ -1908,7 +1898,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         error={new Error("SDK transport wrapper", { cause: refusal })}
         messages={[
           {
@@ -1937,7 +1926,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         error={new Error("model_unavailable")}
         messages={[]}
         onAskUserSubmit={() => {}}
@@ -1959,7 +1947,6 @@ describe("chat thread messages", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         error={
           new Error(
             JSON.stringify({
@@ -2045,7 +2032,6 @@ describe("buildMessageTurns", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={chatMessages}
         onAskUserSubmit={() => {}}
         onCreateDocumentResolve={() => {}}
@@ -2071,7 +2057,6 @@ describe("buildMessageTurns", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={[
           {
             id: "message-user",
@@ -2107,7 +2092,6 @@ describe("buildMessageTurns", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={[
           {
             id: "message-replied-ask",
@@ -2147,7 +2131,6 @@ describe("buildMessageTurns", () => {
     const html = renderWithProviders(
       <ChatThreadMessages
         activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-        approvalPendingMessageId={null}
         messages={[
           {
             id: "message-user",
@@ -2268,7 +2251,6 @@ test("sent pasted text renders once as a collapsed attachment", () => {
   const html = renderWithProviders(
     <ChatThreadMessages
       activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-      approvalPendingMessageId={null}
       messages={[
         {
           id: "message-pasted",

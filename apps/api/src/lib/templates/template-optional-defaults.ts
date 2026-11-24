@@ -206,20 +206,24 @@ export const applyOmittedOptionalPlaceholderDefaults = ({
 }: ApplyOmittedOptionalPlaceholderDefaultsOptions): OptionalPlaceholderDefaults => {
   const placeholders = new Set(placeholderPaths);
   const defaultedPaths: string[] = [];
-  const normalized = { ...values };
+  const defaults = new Map<string, string>();
 
   for (const field of fields) {
     if (
       !isUserEnteredField(field) ||
       isTemplateFieldRequired(field) ||
       !placeholders.has(field.path) ||
-      resolvePath(field.path, normalized) !== undefined
+      defaults.has(field.path) ||
+      resolvePath(field.path, values) !== undefined
     ) {
       continue;
     }
-    normalized[field.path] = "";
+    defaults.set(field.path, "");
     defaultedPaths.push(field.path);
   }
 
-  return { defaultedPaths, values: normalized };
+  return {
+    defaultedPaths,
+    values: { ...values, ...Object.fromEntries(defaults) },
+  };
 };

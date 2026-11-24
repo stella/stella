@@ -1496,7 +1496,9 @@ const READ_SCOPE_BY_DOMAIN_SCOPE: Record<string, string> = {
  * scope is its own read scope.
  */
 export const readScopeForDomainScope = (domainScope: string): string =>
-  READ_SCOPE_BY_DOMAIN_SCOPE[domainScope] ?? domainScope;
+  Object.hasOwn(READ_SCOPE_BY_DOMAIN_SCOPE, domainScope)
+    ? (READ_SCOPE_BY_DOMAIN_SCOPE[domainScope] ?? domainScope)
+    : domainScope;
 
 export type ScopeResolution =
   | { status: "resolved"; readScope: string; writeScope: string }

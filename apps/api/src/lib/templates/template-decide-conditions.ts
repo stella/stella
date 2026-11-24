@@ -172,18 +172,20 @@ const planTemplateConditions = (
 ): TemplateConditionPlan => {
   const conditions = templateAiConditions(fields);
   const supplied = new Map<string, boolean>();
-  const questions: Record<string, NoulQuestion> = {};
+  const questionEntries = new Map<string, NoulQuestion>();
   for (const { path, prompt } of conditions) {
     const existing = resolvePath(path, values);
     if (existing !== undefined && existing !== "") {
       supplied.set(path, evaluateCondition(path, values));
       continue;
     }
-    questions[path] = {
+    questionEntries.set(path, {
       ...conditionQuestion(prompt),
       ...conditionSkillCapability(prompt),
-    };
+    });
   }
+  const questions: Record<string, NoulQuestion> =
+    Object.fromEntries(questionEntries);
 
   if (supplied.size === conditions.length) {
     return {

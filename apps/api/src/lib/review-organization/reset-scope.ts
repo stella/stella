@@ -44,6 +44,26 @@ export const REVIEW_RESET_KEPT_TABLES = {
     "Sign-in policy set by operators, not reviewer content.",
   organization_sso_domain:
     "Sign-in domain verification records set by operators, not reviewer content.",
+  scim_connection_binding:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_group:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_group_member:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_identity_tombstone:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_managed_connection:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_managed_connection_event:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_managed_credential:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_projection_grant:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_subject:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
+  scim_user:
+    "SCIM directory provisioning state managed by @better-auth/scim, not reviewer content.",
   organization_sso_pending_member:
     "Pending SSO membership approval queue managed by operators, not reviewer content.",
   billing_draft_user_settings:

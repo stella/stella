@@ -113,7 +113,7 @@ export const normalizeExternalMcpToolsForChat = ({
   tools,
 }: NormalizeExternalMcpToolsForChatInput): NormalizedExternalMcpToolsForChat => {
   const allowedToolNames = allowedTools ? new Set(allowedTools) : null;
-  const loadedTools: ChatToolMap = {};
+  const loadedToolEntries = new Map<string, ChatToolMap[string]>();
   const toolNames: string[] = [];
 
   for (const toolDefinition of tools) {
@@ -136,7 +136,7 @@ export const normalizeExternalMcpToolsForChat = ({
       continue;
     }
     toolNames.push(rawToolName);
-    loadedTools[exposedToolName] = chatTool;
+    loadedToolEntries.set(exposedToolName, chatTool);
   }
 
   // External MCP tools must always require approval here, regardless of the
@@ -148,7 +148,7 @@ export const normalizeExternalMcpToolsForChat = ({
     toolNames,
     tools: applyChatToolPolicies({
       defaultPolicyKind: CHAT_TOOL_POLICY_KIND.external,
-      tools: loadedTools,
+      tools: Object.fromEntries(loadedToolEntries),
     }),
   };
 };

@@ -70,7 +70,6 @@ const renderMessage = (message: ChatUIMessage) =>
   renderWithProviders(
     <ChatThreadMessages
       activitySession={{ reportedUnknownActivityTypes: new Set<string>() }}
-      approvalPendingMessageId={null}
       messages={[message]}
       onResend={() => {}}
       onAskUserSubmit={() => {}}

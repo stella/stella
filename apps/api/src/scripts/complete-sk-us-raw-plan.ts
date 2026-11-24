@@ -287,7 +287,7 @@ export const runSkUsRawBatch = async ({
   after,
   ...options
 }: RunSkUsRawBatchOptions) => {
-  const counts: Record<string, number> = {};
+  const countEntries = new Map<string, number>();
   let scanned = 0;
   let cursor = after;
   let stopped = false;
@@ -297,7 +297,7 @@ export const runSkUsRawBatch = async ({
       rows: itemBatch,
     });
     for (const [outcome, count] of Object.entries(result.counts)) {
-      counts[outcome] = (counts[outcome] ?? 0) + count;
+      countEntries.set(outcome, (countEntries.get(outcome) ?? 0) + count);
       scanned += count;
     }
     cursor = result.cursor ?? cursor;
@@ -306,5 +306,5 @@ export const runSkUsRawBatch = async ({
       break;
     }
   }
-  return { scanned, counts, cursor, stopped };
+  return { scanned, counts: Object.fromEntries(countEntries), cursor, stopped };
 };

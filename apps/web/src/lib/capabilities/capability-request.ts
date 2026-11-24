@@ -43,6 +43,8 @@ export type AppOnlyWriteId =
   | "organization-settings.sso.providers.saml.post"
   | "organization-settings.sso.providers.test.post"
   | "organization-settings.sso.saml.parse-metadata.post"
+  | "organization-settings.sso.scim-tokens.post"
+  | "organization-settings.sso.scim-tokens.delete"
   | "case-law.citations.check"
   | "chat.browser-site-grants.create"
   | "chat.browser-site-grants.delete"

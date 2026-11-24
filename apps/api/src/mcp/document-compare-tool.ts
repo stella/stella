@@ -469,11 +469,11 @@ export type CompareToolInput = v.InferOutput<
 const changeCountsByKind = (
   changes: readonly { kind: string }[],
 ): Record<string, number> => {
-  const counts: Record<string, number> = {};
+  const counts = new Map<string, number>();
   for (const { kind } of changes) {
-    counts[kind] = (counts[kind] ?? 0) + 1;
+    counts.set(kind, (counts.get(kind) ?? 0) + 1);
   }
-  return counts;
+  return Object.fromEntries(counts);
 };
 
 /** A story is named by its kind; its relationship/note ids mean nothing to a caller. */

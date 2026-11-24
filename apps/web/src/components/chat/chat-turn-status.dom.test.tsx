@@ -74,7 +74,6 @@ const View = (props: ThreadProps) => (
                   activitySession={{
                     reportedUnknownActivityTypes: new Set<string>(),
                   }}
-                  approvalPendingMessageId={null}
                   onAskUserSubmit={() => {}}
                   onCreateDocumentResolve={() => {}}
                   onOpenCreatedDocument={() => {}}

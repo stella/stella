@@ -1,4 +1,4 @@
-// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: [cz-us] bounded response body reads preserve identical HTML text; only oversized responses are refused.
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -2426,16 +2426,15 @@ const buildCzUsDecision = ({
     abstractState:
       abstractHtml === undefined ? abstractState : CZ_US_ABSTRACT_STATE.READ,
   });
-  Object.assign(
-    decision,
-    multiResponseSourceRaw({
+  return plainTextIngestionResult({
+    ...decision,
+    ...multiResponseSourceRaw({
       listingHtml: listed.listingHtml,
       textHtml,
       detailHtml,
       abstractHtml,
     }),
-  );
-  return plainTextIngestionResult(decision);
+  });
 };
 
 /** A page beside the document that the court did not answer for. */

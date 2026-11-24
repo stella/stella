@@ -9,14 +9,14 @@ import {
 import type { CourtEntry, CourtMap, CourtType } from "./types.js";
 
 const CODE_PATTERN = /^(?:NS|OS|MS|KS|VS)[A-Z0-9]{0,8}$/u;
-const COURT_TOKEN_ALIASES: Record<string, string> = {
-  brne: "brno",
-  olomouci: "olomouc",
-  ostrave: "ostrava",
-  pardubicich: "pardubice",
-  plzni: "plzen",
-  praze: "praha",
-};
+const COURT_TOKEN_ALIASES = new Map<string, string>([
+  ["brne", "brno"],
+  ["olomouci", "olomouc"],
+  ["ostrave", "ostrava"],
+  ["pardubicich", "pardubice"],
+  ["plzni", "plzen"],
+  ["praze", "praha"],
+]);
 
 export const classifyCourtCode = (code: string): CourtType => {
   const normalized = code.trim().toUpperCase();
@@ -119,7 +119,7 @@ const detectCourtTypeHint = (value: string): CourtType | null => {
 
 const compactCourtValue = (value: string): string => value.replaceAll(" ", "");
 const normalizeCourtToken = (token: string): string =>
-  COURT_TOKEN_ALIASES[token] ?? token;
+  COURT_TOKEN_ALIASES.get(token) ?? token;
 
 const tokenizeCourtValue = (value: string): string[] => {
   const normalized = normalizeCourtQuery(value);

@@ -26,6 +26,7 @@ const label = (percent: number) =>
 
 /** An estimate of a quarter of the trigger, as the next send would carry. */
 const ESTIMATE: ChatContextUsage = {
+  source: "estimate",
   estimatedTokens: 16_000,
   triggerTokens: 64_000,
   cacheStableTokens: 6000,
@@ -48,12 +49,20 @@ describe("the composer's context meter", () => {
 
   test("shows what the harness reported for a thread on the member's computer, against its window", () => {
     const html = render({
-      ...ESTIMATE,
+      source: "harness",
       reported: { usedTokens: 192_000, windowTokens: 200_000 },
     });
-    // 96% of the harness's window, not the estimate's 25% of the trigger.
+    // 96% of the harness's window.
     expect(html).toContain(`aria-label="${label(96)}"`);
     expect(html).toContain('data-source="reported"');
     expect(html).toContain("text-destructive");
+  });
+
+  test("stays empty for a thread on the member's computer until its harness reports", () => {
+    const html = render({ source: "harness", reported: null });
+    expect(html).toContain(`aria-label="${label(0)}"`);
+    expect(html).not.toContain("data-source");
+    expect(html).not.toContain("text-destructive");
+    expect(html).not.toContain("text-warning");
   });
 });

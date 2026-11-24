@@ -365,7 +365,14 @@ const createNeedsResolver = ({
     }
     const widened: ChatSkillContext = { ...chatContext };
     for (const need of chosen) {
-      Object.assign(widened, needs.get(need));
+      for (const [k, v] of Object.entries(needs.get(need) ?? {})) {
+        Object.defineProperty(widened, k, {
+          value: v,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
+      }
     }
     const names = chatContextToolNames(inputs, widened);
     namesWith.set(key, names);

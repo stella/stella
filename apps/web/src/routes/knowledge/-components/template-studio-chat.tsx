@@ -706,7 +706,6 @@ const TemplateStudioChatInner = ({
     createDocumentMattersView,
     addToolResult,
     streamdownComponents,
-    approvalPendingMessageId,
   } = useChatSession({
     exceptionScope: {
       type: "handler",
@@ -1455,7 +1454,6 @@ const TemplateStudioChatInner = ({
               answerRewriteAvailability={
                 data.usedAnonymization ? "anonymized" : "available"
               }
-              approvalPendingMessageId={approvalPendingMessageId}
               error={error}
               isGenerating={isGenerating}
               messages={messages}

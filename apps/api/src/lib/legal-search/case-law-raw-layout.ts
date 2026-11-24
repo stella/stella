@@ -531,7 +531,26 @@ export const reconcileCaseLawRawLayoutPage = async ({
     const { outcome, copies } = Result.isError(reconciled)
       ? { outcome: RAW_LAYOUT_ROW_OUTCOME.RETRY, copies: 0 }
       : reconciled.value;
-    counts[outcome] += 1;
+    switch (outcome) {
+      case RAW_LAYOUT_ROW_OUTCOME.CURRENT:
+        counts.current += 1;
+        break;
+      case RAW_LAYOUT_ROW_OUTCOME.MIGRATED:
+        counts.migrated += 1;
+        break;
+      case RAW_LAYOUT_ROW_OUTCOME.OVERTAKEN:
+        counts.overtaken += 1;
+        break;
+      case RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE:
+        counts.unmovable += 1;
+        break;
+      case RAW_LAYOUT_ROW_OUTCOME.DANGLING:
+        counts.dangling += 1;
+        break;
+      case RAW_LAYOUT_ROW_OUTCOME.RETRY:
+        counts.retry += 1;
+        break;
+    }
     counts.copies += copies;
     if (
       outcome === RAW_LAYOUT_ROW_OUTCOME.UNMOVABLE ||

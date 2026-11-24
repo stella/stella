@@ -263,7 +263,20 @@ const emptyStats = (total: number): ReportStats => ({
 });
 
 const countFinding = (stats: ReportStats, finding: ReportFinding): void => {
-  stats.bySeverity[finding.severity] += 1;
+  switch (finding.severity) {
+    case "blocker":
+      stats.bySeverity.blocker += 1;
+      break;
+    case "high":
+      stats.bySeverity.high += 1;
+      break;
+    case "medium":
+      stats.bySeverity.medium += 1;
+      break;
+    case "low":
+      stats.bySeverity.low += 1;
+      break;
+  }
   stats.redFlags += 1;
 };
 

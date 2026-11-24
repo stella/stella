@@ -331,6 +331,16 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   "organization_sso_policy",
   "organization_sso_domain",
   "organization_sso_pending_member",
+  "scim_connection_binding",
+  "scim_group",
+  "scim_group_member",
+  "scim_identity_tombstone",
+  "scim_managed_connection",
+  "scim_managed_connection_event",
+  "scim_managed_credential",
+  "scim_projection_grant",
+  "scim_subject",
+  "scim_user",
   // Machine API keys: credential digests plus the permission set each key
   // carries. A tenant-scoped connection must be able to neither read a digest
   // nor widen a key's permissions, so every access goes through better-auth on

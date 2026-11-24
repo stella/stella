@@ -63,6 +63,7 @@ import {
   bindOwnerSyntheticSessionAuthorizer,
   isPartnerOAuthClient,
   provisionOrgSsoMemberByProviderRecord,
+  readOrgSsoSeatLimit,
   rlsDb,
   rootDb,
 } from "@/api/db/root";
@@ -239,6 +240,7 @@ import {
   REVIEW_ACCOUNT_SIGN_IN_BUDGET,
 } from "@/api/lib/auth/review-account-plugin";
 import { REVIEW_ACCOUNT_OPERATION } from "@/api/lib/auth/review-account-policy";
+import { createScimProvisioningPlugin } from "@/api/lib/auth/scim-provisioning";
 import { getServiceOAuthClaims } from "@/api/lib/auth/service-client";
 import {
   carriesSessionCredential,
@@ -2806,6 +2808,10 @@ export const createAuth = (
       organizationPlugin,
       // Mounted always, answering 404 until FEATURE_ENTERPRISE_SSO is on.
       createSsoSignInPlugin(),
+      createScimProvisioningPlugin({
+        secret: env.BETTER_AUTH_SECRET,
+        readOrganizationSeatLimit: readOrgSsoSeatLimit,
+      }),
       // Holds the organization endpoints to the same SSO decision.
       createSsoOrganizationGuardPlugin(),
       createMemberInvitationSectionsPlugin(

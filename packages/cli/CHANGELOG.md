@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.4.0
+
+### Minor Changes
+
+- [#9409](https://github.com/stella/stella/pull/9409) [`1169629`](https://github.com/stella/stella/commit/1169629996628d4daeec5fffd597402089f731de) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `save_matter` takes `visibility` (`all_members`, `admins_and_assigned` or `assigned_only`) to choose who can open a matter without being assigned, and `confirm_widening` to show an existing matter to more people. A client no longer decides who can see a matter.
+
 ## 8.3.1
 
 ### Patch Changes

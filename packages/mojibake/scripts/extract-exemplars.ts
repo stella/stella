@@ -143,7 +143,7 @@ export const extractExemplars = (): ExtractedExemplars => {
     return panic("cldr-misc-full/package.json has no version");
   }
   const license = readFileSync(path.join(packageRoot, "LICENSE"), "utf-8");
-  const exemplars: ExtractedExemplars["exemplars"] = {};
+  const exemplars = new Map<string, Record<ExemplarField, string>>();
   const primaryTags = readdirSync(path.join(packageRoot, "main"))
     .filter((tag) => LANGUAGE_TAG.test(tag))
     .toSorted();
@@ -168,13 +168,13 @@ export const extractExemplars = (): ExtractedExemplars => {
     const block = isObject(raw)
       ? raw
       : panic(`CLDR ${tag}: invalid supplement characters`);
-    exemplars[tag] = {
+    exemplars.set(tag, {
       main: setString(tag, block["exemplarCharacters"]),
       auxiliary: setString(tag, block["auxiliary"]),
       punctuation: setString(tag, block["punctuation"]),
-    };
+    });
   }
-  return { version, license, exemplars };
+  return { version, license, exemplars: Object.fromEntries(exemplars) };
 };
 
 /**
