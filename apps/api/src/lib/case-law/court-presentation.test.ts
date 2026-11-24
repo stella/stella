@@ -4,6 +4,7 @@ import { US_COURTS } from "@stll/api-contract/us-courts";
 
 import { courtWeightMapFromSeed } from "@/api/handlers/case-law/court-weight-seed";
 import {
+  COURT_REGISTRY_UNAVAILABLE,
   courtPresentation,
   decisionCourtAbbreviation,
   readCourtRegistry,
@@ -34,11 +35,12 @@ test("every directory court supplies its citation code independently of DB regis
     expect(decisionCourtAbbreviation(subject), directoryCourt.id).toBe(
       directoryCourt.shortCode,
     );
-    expect(courtPresentation(null, subject), directoryCourt.id).toEqual(
-      courtPresentation(registry, subject),
-    );
     expect(
-      courtPresentation(null, subject).courtAbbreviation,
+      courtPresentation(COURT_REGISTRY_UNAVAILABLE, subject),
+      directoryCourt.id,
+    ).toEqual(courtPresentation(registry, subject));
+    expect(
+      courtPresentation(COURT_REGISTRY_UNAVAILABLE, subject).courtAbbreviation,
       directoryCourt.id,
     ).toBe(directoryCourt.shortCode);
   }
@@ -124,7 +126,7 @@ test("no registry means no chip, never a chip at the wrong rank", () => {
   // The abbreviation is derivable without the registry, so the tempting
   // answer is to show it at the bottom of the scale. That draws the Supreme
   // Court as a district one; the court's name is beside it either way.
-  expect(courtPresentation(null, SUPREME_COURT)).toEqual({
+  expect(courtPresentation(COURT_REGISTRY_UNAVAILABLE, SUPREME_COURT)).toEqual({
     courtAbbreviation: null,
     courtTier: "other",
   });
@@ -135,7 +137,7 @@ test("a registry read that fails degrades instead of propagating", async () => {
     await readCourtRegistry(async () => {
       throw new TypeError("root pool unreachable");
     }),
-  ).toBeNull();
+  ).toBe(COURT_REGISTRY_UNAVAILABLE);
 });
 
 test("a registry read that stalls degrades instead of holding the read", async () => {
@@ -146,7 +148,7 @@ test("a registry read that stalls degrades instead of holding the read", async (
           // Never settles: the pooled connection the server reaped silently.
         }),
     ),
-  ).toBeNull();
+  ).toBe(COURT_REGISTRY_UNAVAILABLE);
 }, 10_000);
 
 test("a registry that answers is passed through", async () => {

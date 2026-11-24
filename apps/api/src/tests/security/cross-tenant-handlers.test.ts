@@ -561,7 +561,7 @@ const compareDocumentDependencies = {
     presignedUrl: "https://files.example/comparison.docx",
     stampable: false,
   }),
-  resolveDocxEditAuthorName: async () => "Cross-tenant test user",
+  resolveDocxEditAuthorName: async () => Result.ok("Cross-tenant test user"),
   // The isolation cases all ask for a saved version; a temporary redline never
   // reaches another tenant because the object key leads with the organization.
   deliverTemporaryRedline: async () =>

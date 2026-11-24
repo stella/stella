@@ -263,7 +263,11 @@ const failure = (
   code: CompareFailureCode,
   message: string,
   hint: string,
-): CompareFailure => ({ code, message, hint });
+): CompareFailure => ({
+  code,
+  message,
+  hint,
+});
 
 export const mapCompareDocxError = (
   error: CompareDocxError,
@@ -692,10 +696,12 @@ export const createDocumentCompareGenerator = (
       }
     }
 
-    const author = await dependencies.resolveDocxEditAuthorName({
-      safeDb,
-      userId: user.id,
-    });
+    const author = yield* Result.await(
+      dependencies.resolveDocxEditAuthorName({
+        safeDb,
+        userId: user.id,
+      }),
+    );
     if (author === null) {
       return Result.err(
         new HandlerError({
