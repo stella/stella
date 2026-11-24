@@ -287,15 +287,27 @@ export const checkBudgetMinutes = (
   name: string,
 ) => checkBudgetOf(budgets, job, name).minutes;
 
-/** A pooled check's measured p95 duration in seconds for partition balancing. */
+const DEFAULT_UNBUDGETED_CHECK_WEIGHT_SECONDS = 60;
+
+/**
+ * A pooled check's measured p95 duration in seconds for partition balancing.
+ * Never throws on a missing budget entry so partition scheduling cannot abort
+ * skipped checks or bypass per-check budget validation in `runChecks`.
+ */
 export const checkBudgetP95Seconds = (
   budgets: CheckBudgets,
   job: CheckPoolJob,
   name: string,
-) => {
-  const budget = checkBudgetOf(budgets, job, name);
-  return budget.samples > 0 && budget.p95Seconds > 0
-    ? budget.p95Seconds
+): number => {
+  const budget = Object.hasOwn(budgets[job], name)
+    ? budgets[job][name]
+    : undefined;
+  if (budget === undefined) {
+    return DEFAULT_UNBUDGETED_CHECK_WEIGHT_SECONDS;
+  }
+  const p95 = budget.p95Seconds;
+  return budget.samples > 0 && p95 !== undefined && p95 > 0
+    ? p95
     : budget.minutes * 60;
 };
 

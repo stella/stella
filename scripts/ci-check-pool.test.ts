@@ -122,6 +122,7 @@ test("checkBudgetP95Seconds falls back to budget minutes when a check has no mea
   expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Unmeasured")).toBe(
     1200,
   );
+  expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Missing")).toBe(60);
 });
 
 test("weighted matrix partitions balance heavy checks across bins and keep registry order", () => {
