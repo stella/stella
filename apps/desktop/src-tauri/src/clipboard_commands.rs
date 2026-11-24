@@ -405,6 +405,59 @@ fn write_history_item(
     .map_err(|message| ClipboardCopyError::History { message })
 }
 
+/// What a copy does with the window once the clips are on the clipboard.
+#[derive(Clone, Copy)]
+enum AfterCopy {
+  /// A copy made in the window hands off to the app underneath.
+  HideWindow,
+  /// The window already hid itself; hiding again could close a window the
+  /// user reopened in the meantime.
+  LeaveWindow,
+}
+
+/// Writes the clips in the given order: one as itself, moved to the front of
+/// history, several composed into one.
+fn copy_items(
+  state: &ClipboardAppState,
+  ids: &[String],
+  format: ClipboardCopyFormat,
+  window: &WebviewWindow,
+  after: AfterCopy,
+) -> Result<(), ClipboardCopyError> {
+  let history = if let [id] = ids {
+    let history = match write_history_item(state, id, format) {
+      Err(error @ ClipboardCopyError::Copy { .. }) => return Err(error),
+      outcome => outcome,
+    };
+    // The clip is on the system clipboard either way, so the hand-off
+    // proceeds and a history failure is reported after it.
+    best_effort(
+      window.emit(HISTORY_EVENT, ()),
+      "clipboard history change was not announced",
+    );
+    history
+  } else {
+    let copy_error = |message| ClipboardCopyError::Copy { message };
+    let mut manager = state
+      .lock()
+      .map_err(|poisoned| copy_error(lock_error(poisoned)))?;
+    let combined = manager.compose_items(ids, format).map_err(copy_error)?;
+    if let Err(message) = manager.write_item(&combined, None, format) {
+      manager.clear_suppression();
+      drop(manager);
+      return Err(copy_error(message));
+    }
+    drop(manager);
+    Ok(())
+  };
+  match after {
+    AfterCopy::HideWindow => clipboard_window::hide(window)
+      .map_err(|message| ClipboardCopyError::Hide { message })?,
+    AfterCopy::LeaveWindow => {}
+  }
+  history
+}
+
 #[tauri::command]
 pub fn clipboard_copy_item(
   _caller: ClipboardCaller,
@@ -413,46 +466,31 @@ pub fn clipboard_copy_item(
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<(), ClipboardCopyError> {
-  let history = match write_history_item(state.inner(), &id, format) {
-    Err(error @ ClipboardCopyError::Copy { .. }) => return Err(error),
-    outcome => outcome,
-  };
-  // The clip is on the system clipboard either way, so the hand-off proceeds
-  // and a history failure is reported after it.
-  best_effort(
-    window.emit(HISTORY_EVENT, ()),
-    "clipboard history change was not announced",
-  );
-  clipboard_window::hide(&window)
-    .map_err(|message| ClipboardCopyError::Hide { message })?;
-  history
+  copy_items(state.inner(), &[id], format, &window, AfterCopy::HideWindow)
 }
 
 #[tauri::command]
 pub fn clipboard_copy_items(
-  caller: ClipboardCaller,
+  _caller: ClipboardCaller,
   format: ClipboardCopyFormat,
   ids: Vec<String>,
   state: State<'_, ClipboardAppState>,
   window: WebviewWindow,
 ) -> Result<(), ClipboardCopyError> {
-  if let [id] = ids.as_slice() {
-    return clipboard_copy_item(caller, format, id.clone(), state, window);
-  }
-  let copy_error = |message| ClipboardCopyError::Copy { message };
-  {
-    let mut manager = state
-      .lock()
-      .map_err(|poisoned| copy_error(lock_error(poisoned)))?;
-    let combined = manager.compose_items(&ids, format).map_err(copy_error)?;
-    if let Err(message) = manager.write_item(&combined, None, format) {
-      manager.clear_suppression();
-      drop(manager);
-      return Err(copy_error(message));
-    }
-  }
-  clipboard_window::hide(&window)
-    .map_err(|message| ClipboardCopyError::Hide { message })
+  copy_items(state.inner(), &ids, format, &window, AfterCopy::HideWindow)
+}
+
+/// Copies the selection left in the window when an outside click dismissed
+/// it. The window hid itself before announcing the dismissal.
+#[tauri::command]
+pub fn clipboard_copy_dismissed_selection(
+  _caller: ClipboardCaller,
+  format: ClipboardCopyFormat,
+  ids: Vec<String>,
+  state: State<'_, ClipboardAppState>,
+  window: WebviewWindow,
+) -> Result<(), ClipboardCopyError> {
+  copy_items(state.inner(), &ids, format, &window, AfterCopy::LeaveWindow)
 }
 
 /// Copies or cuts a selection made inside a Clips window (the panel or the

@@ -7,6 +7,7 @@ import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
   CLIPBOARD_SCREEN_CAPTURES,
+  CLIPBOARD_WINDOW_SESSION_EVENT,
   isClipboardCaptureRevision,
   isClipboardCopyError,
   isClipboardEditorContext,
@@ -16,6 +17,7 @@ import {
   isClipboardImagePreviewDataUrl,
   isClipboardItem,
   isClipboardSnapshot,
+  isClipboardWindowSession,
 } from "../src/clipboard/clipboard-types";
 
 const snapshotWithWelcomeStatus = (welcomeStatus: unknown) => ({
@@ -319,6 +321,22 @@ describe("clipboard events", () => {
   test("event names match the native contract", () => {
     expect(CLIPBOARD_EDITOR_SESSION_EVENT).toBe(contract.editorSessionEvent);
     expect(CLIPBOARD_HISTORY_CHANGED_EVENT).toBe(contract.historyChangedEvent);
+    expect(CLIPBOARD_WINDOW_SESSION_EVENT).toBe(contract.windowSessionEvent);
+  });
+
+  test("accepts the window session payloads the native side sends", () => {
+    expect(isClipboardWindowSession({ type: "opened" })).toBe(true);
+    expect(
+      isClipboardWindowSession({ reason: "deactivated", type: "hidden" }),
+    ).toBe(true);
+    expect(
+      isClipboardWindowSession({ reason: "requested", type: "hidden" }),
+    ).toBe(true);
+    expect(isClipboardWindowSession({ type: "hidden" })).toBe(false);
+    expect(isClipboardWindowSession({ reason: "blur", type: "hidden" })).toBe(
+      false,
+    );
+    expect(isClipboardWindowSession({ type: "focus" })).toBe(false);
   });
 
   test("accepts the editor session payloads the native side sends", () => {

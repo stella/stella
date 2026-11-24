@@ -313,6 +313,28 @@ export const isClipboardCaptureUpdate = (
 // Rust constants.
 export const CLIPBOARD_HISTORY_CHANGED_EVENT = "clipboard-history-changed";
 export const CLIPBOARD_EDITOR_SESSION_EVENT = "clipboard-editor-session";
+export const CLIPBOARD_WINDOW_SESSION_EVENT = "clipboard-window-session";
+
+const CLIPBOARD_HIDE_REASONS = ["requested", "deactivated"] as const;
+
+/** Why the native side hid the clipboard window: `deactivated` is an outside
+ *  click, every other close is `requested`. */
+export type ClipboardHideReason = (typeof CLIPBOARD_HIDE_REASONS)[number];
+
+/** Native presentation of the clipboard window; it alone starts and ends a
+ *  session, never page focus or blur. */
+export type ClipboardWindowSession =
+  { type: "opened" } | { type: "hidden"; reason: ClipboardHideReason };
+
+const isClipboardHideReason = (value: unknown): value is ClipboardHideReason =>
+  CLIPBOARD_HIDE_REASONS.some((reason) => reason === value);
+
+export const isClipboardWindowSession = (
+  value: unknown,
+): value is ClipboardWindowSession =>
+  isRecord(value) &&
+  (value["type"] === "opened" ||
+    (value["type"] === "hidden" && isClipboardHideReason(value["reason"])));
 
 /** What the reused editor window shows: one clip per session, or nothing. */
 export type ClipboardEditorSession =

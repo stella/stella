@@ -164,7 +164,7 @@ pub use activation::{ActivationReturn, return_activation};
 mod park;
 #[cfg(target_os = "macos")]
 pub use park::{
-  disable_occlusion_detection, is_panel_presented, park_window,
-  prepare_transient_overlay, present_activating_window, present_key_panel,
-  present_passive_overlay,
+  disable_occlusion_detection, is_panel_presented, observe_panel_deactivation,
+  park_window, prepare_transient_overlay, present_activating_window,
+  present_key_panel, present_passive_overlay,
 };

@@ -3,6 +3,7 @@ import { panic } from "better-result";
 import { withClipboardSettings } from "./clipboard-settings";
 import type {
   ClipboardCaptureUpdate,
+  ClipboardHideReason,
   ClipboardSettingsSnapshot,
   ClipboardSnapshot,
 } from "./clipboard-types";
@@ -51,6 +52,33 @@ export const clipboardSelection = (
     default: {
       action satisfies never;
       return panic("Unknown clipboard selection action.");
+    }
+  }
+};
+
+type ClipboardDismissalCopy =
+  { type: "none" } | { type: "copySelection"; ids: string[]; session: number };
+
+/** An outside click commits the selection it leaves behind, in selection
+ *  order; any other close (Escape, a copy, the shortcut) copies nothing. */
+export const clipboardDismissalCopy = (
+  selection: ClipboardSelectionState,
+  reason: ClipboardHideReason,
+): ClipboardDismissalCopy => {
+  switch (reason) {
+    case "requested":
+      return { type: "none" };
+    case "deactivated":
+      return selection.ids.length === 0
+        ? { type: "none" }
+        : {
+            type: "copySelection",
+            ids: [...selection.ids],
+            session: selection.session,
+          };
+    default: {
+      reason satisfies never;
+      return panic("Unknown clipboard hide reason.");
     }
   }
 };

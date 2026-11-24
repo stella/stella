@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 
 import type { ClipboardSelectionState } from "../src/clipboard/clipboard-selection";
 import {
+  clipboardDismissalCopy,
   clipboardHistory,
   clipboardSelection,
 } from "../src/clipboard/clipboard-selection";
@@ -66,6 +67,52 @@ describe("ordered clipboard selection", () => {
     expect(
       clipboardSelection(selected, { type: "copySucceeded", session: 7 }),
     ).toEqual({ ids: ["new"], session: 8 });
+  });
+});
+
+describe("clipboard dismissal", () => {
+  test("an outside click commits the selection once, in selection order", () => {
+    const selection = { ids: ["third", "first", "second"], session: 4 };
+    const dismissal = clipboardDismissalCopy(selection, "deactivated");
+    expect(dismissal).toEqual({
+      type: "copySelection",
+      ids: ["third", "first", "second"],
+      session: 4,
+    });
+    if (dismissal.type !== "copySelection") {
+      panic("an outside click with a selection copies it");
+    }
+    expect(dismissal.ids).not.toBe(selection.ids);
+  });
+
+  test("an outside click without a selection copies nothing", () => {
+    expect(
+      clipboardDismissalCopy({ ids: [], session: 4 }, "deactivated"),
+    ).toEqual({ type: "none" });
+  });
+
+  test("a close the window asked for never copies the selection", () => {
+    expect(
+      clipboardDismissalCopy({ ids: ["first"], session: 4 }, "requested"),
+    ).toEqual({ type: "none" });
+  });
+
+  test("the commit's completion cannot clear a selection made after a reopen", () => {
+    const dismissed = { ids: ["first"], session: 4 };
+    const dismissal = clipboardDismissalCopy(dismissed, "deactivated");
+    if (dismissal.type !== "copySelection") {
+      panic("an outside click with a selection copies it");
+    }
+    const reopened = clipboardSelection(
+      clipboardSelection(dismissed, { type: "sessionStarted" }),
+      { type: "toggle", id: "second" },
+    );
+    expect(
+      clipboardSelection(reopened, {
+        type: "copySucceeded",
+        session: dismissal.session,
+      }),
+    ).toEqual({ ids: ["second"], session: 5 });
   });
 });
 
