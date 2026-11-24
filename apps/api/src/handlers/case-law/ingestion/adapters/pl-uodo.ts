@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -488,9 +489,11 @@ const NSA = "Naczelny Sąd Administracyjny";
 const WSA_PREFIX = "Wojewódzki Sąd Administracyjny ";
 
 /** Seats the record abbreviates, spelled as the court's name spells them. */
-const WSA_SEAT_SPELLINGS: Readonly<Record<string, string>> = {
-  "w Gorzowie Wlkp.": "w Gorzowie Wielkopolskim",
-};
+const WSA_SEAT_SPELLINGS = new Map<string, string>(
+  Object.entries({
+    "w Gorzowie Wlkp.": "w Gorzowie Wielkopolskim",
+  }),
+);
 
 const PRE_REFORM_NSA = "NSA w Warszawie (przed reformą)";
 const PRE_REFORM_BRANCH = /^NSA oz\. (?<seat>we? \p{Lu}.*)$/u;
@@ -531,7 +534,7 @@ const administrativeCourtOf = (
   if (printed.startsWith(WSA_PREFIX)) {
     const printedSeat = printed.slice(WSA_PREFIX.length);
     return {
-      name: `${WSA_PREFIX}${WSA_SEAT_SPELLINGS[printedSeat] ?? printedSeat}`,
+      name: `${WSA_PREFIX}${WSA_SEAT_SPELLINGS.get(printedSeat) ?? printedSeat}`,
       level: "regional-administrative",
       asPrinted: printed,
     };
@@ -546,10 +549,12 @@ const PRESIDENT = "Prezes Urzędu Ochrony Danych Osobowych";
  * each is the President signing or someone signing on the President's
  * authority. The office decides either way.
  */
-const AUTHORITY_SIGNING_LINES: Readonly<Record<string, boolean>> = {
-  [PRESIDENT]: false,
-  "z up. Prezesa Urzędu Ochrony Danych Osobowych": true,
-};
+const AUTHORITY_SIGNING_LINES = new Map<string, boolean>(
+  Object.entries({
+    [PRESIDENT]: false,
+    "z up. Prezesa Urzędu Ochrony Danych Osobowych": true,
+  }),
+);
 
 /**
  * The deciding office of an authority record, from the signing line its
@@ -561,7 +566,7 @@ const authorityOf = (row: PlUodoRow): PlUodoAuthority | null => {
     (entity) => entity.function === "creator",
   )?.title;
   const onAuthority =
-    printed === undefined ? undefined : AUTHORITY_SIGNING_LINES[printed];
+    printed === undefined ? undefined : AUTHORITY_SIGNING_LINES.get(printed);
   return printed === undefined || onAuthority === undefined
     ? null
     : { name: PRESIDENT, asPrinted: printed, onAuthority };

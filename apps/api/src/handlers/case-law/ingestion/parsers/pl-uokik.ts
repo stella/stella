@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK)
  * document reader.
@@ -267,20 +268,22 @@ const DOCKET_LABEL = /^sy\p{L}*\.?\s*akt\s*:?\s*/iu;
 /** A court docket leads with its division's numeral: `VI ACa 527/08`. */
 const DIVISION_LED = /^[IVXL]{1,6} \p{L}/u;
 
-const POLISH_MONTHS: Readonly<Record<string, string>> = {
-  stycznia: "01",
-  lutego: "02",
-  marca: "03",
-  kwietnia: "04",
-  maja: "05",
-  czerwca: "06",
-  lipca: "07",
-  sierpnia: "08",
-  września: "09",
-  października: "10",
-  listopada: "11",
-  grudnia: "12",
-};
+const POLISH_MONTHS = new Map<string, string>(
+  Object.entries({
+    stycznia: "01",
+    lutego: "02",
+    marca: "03",
+    kwietnia: "04",
+    maja: "05",
+    czerwca: "06",
+    lipca: "07",
+    sierpnia: "08",
+    września: "09",
+    października: "10",
+    listopada: "11",
+    grudnia: "12",
+  }),
+);
 
 const DATE_LINE =
   /^dnia\s+(?<day>\d{1,2})\s+(?<month>\p{L}+)\s+(?<year>\d{4})/iu;
@@ -300,8 +303,9 @@ const collapse = (text: string): string => text.replace(/\s+/gu, " ").trim();
 
 const dayOf = (line: string): string | undefined => {
   const groups = DATE_LINE.exec(line)?.groups;
-  const month =
-    POLISH_MONTHS[groups?.["month"]?.toLocaleLowerCase("pl-PL") ?? ""];
+  const month = POLISH_MONTHS.get(
+    groups?.["month"]?.toLocaleLowerCase("pl-PL") ?? "",
+  );
   const day = groups?.["day"];
   const year = groups?.["year"];
   if (month === undefined || day === undefined || year === undefined) {

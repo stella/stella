@@ -189,34 +189,36 @@ const EMAIL_ATTACHMENT_MAX_COUNT = 25;
 const EMAIL_ATTACHMENT_MAX_BYTES = 25 * 1024 * 1024;
 const EMAIL_MAX_NESTING_DEPTH = 2;
 
-const ATTACHMENT_EXTENSION_MIME_TYPES: Record<string, string> = {
-  csv: "text/csv",
-  doc: DOC_MIME_TYPE,
-  docm: DOCM_MIME_TYPE,
-  docx: DOCX_MIME_TYPE,
-  eml: EML_MIME_TYPE,
-  epub: EPUB_MIME_TYPE,
-  htm: "text/html",
-  html: "text/html",
-  ics: "text/calendar",
-  json: "application/json",
-  markdown: "text/markdown",
-  md: "text/markdown",
-  msg: MSG_MIME_TYPE,
-  odp: ODP_MIME_TYPE,
-  ods: ODS_MIME_TYPE,
-  odt: ODT_MIME_TYPE,
-  pdf: PDF_MIME_TYPE,
-  ppsx: PPSX_MIME_TYPE,
-  ppt: PPT_MIME_TYPE,
-  pptx: PPTX_MIME_TYPE,
-  rtf: RTF_MIME_TYPE,
-  text: "text/plain",
-  txt: "text/plain",
-  xls: XLS_MIME_TYPE,
-  xlsb: XLSB_MIME_TYPE,
-  xlsx: XLSX_MIME_TYPE,
-};
+const ATTACHMENT_EXTENSION_MIME_TYPES = new Map<string, string>(
+  Object.entries({
+    csv: "text/csv",
+    doc: DOC_MIME_TYPE,
+    docm: DOCM_MIME_TYPE,
+    docx: DOCX_MIME_TYPE,
+    eml: EML_MIME_TYPE,
+    epub: EPUB_MIME_TYPE,
+    htm: "text/html",
+    html: "text/html",
+    ics: "text/calendar",
+    json: "application/json",
+    markdown: "text/markdown",
+    md: "text/markdown",
+    msg: MSG_MIME_TYPE,
+    odp: ODP_MIME_TYPE,
+    ods: ODS_MIME_TYPE,
+    odt: ODT_MIME_TYPE,
+    pdf: PDF_MIME_TYPE,
+    ppsx: PPSX_MIME_TYPE,
+    ppt: PPT_MIME_TYPE,
+    pptx: PPTX_MIME_TYPE,
+    rtf: RTF_MIME_TYPE,
+    text: "text/plain",
+    txt: "text/plain",
+    xls: XLS_MIME_TYPE,
+    xlsb: XLSB_MIME_TYPE,
+    xlsx: XLSX_MIME_TYPE,
+  }),
+);
 
 /**
  * PDFs convert through anydoc like the office formats. A scanned or
@@ -748,7 +750,7 @@ const resolveAttachmentMimeType = (
   if (!extension) {
     return null;
   }
-  return ATTACHMENT_EXTENSION_MIME_TYPES[extension] ?? null;
+  return ATTACHMENT_EXTENSION_MIME_TYPES.get(extension) ?? null;
 };
 
 const isSkippedInlineImage = (attachment: EmailAttachment): boolean =>

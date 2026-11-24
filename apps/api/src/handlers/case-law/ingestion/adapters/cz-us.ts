@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [cz-us] bounded response body reads preserve identical HTML text; only oversized responses are refused.
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
@@ -320,13 +321,15 @@ const extractLabel = (html: string, labelId: string): string | undefined => {
  * Docket senate prefix → the senate segment NALUS prints in its ECLIs:
  * chambers by number, the plenary as `Pl`.
  */
-const ECLI_SENATE_SEGMENT: Record<string, string> = {
-  I: "1",
-  II: "2",
-  III: "3",
-  IV: "4",
-  Pl: "Pl",
-};
+const ECLI_SENATE_SEGMENT = new Map<string, string>(
+  Object.entries({
+    I: "1",
+    II: "2",
+    III: "3",
+    IV: "4",
+    Pl: "Pl",
+  }),
+);
 
 const parseCaseNumberComponents = (
   caseNumber: string,
@@ -360,7 +363,7 @@ const buildEcli = (
     return undefined;
   }
   const { senate, caseIndex, shortYear } = components;
-  const senateSegment = ECLI_SENATE_SEGMENT[senate];
+  const senateSegment = ECLI_SENATE_SEGMENT.get(senate);
   if (senateSegment === undefined) {
     return undefined;
   }

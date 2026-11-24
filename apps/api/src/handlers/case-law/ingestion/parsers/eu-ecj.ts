@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: the lost-content verdict is the same validateAst result; only the logging moved to the pipeline.
 // parser-output-unchanged: Whole-document validation reuses the unmodified parsed source; bounded decision subtrees retain serialization and reparsing, so diagnostics and output are unchanged.
@@ -442,14 +443,16 @@ export const ecjDocumentHtml = (html: string): EcjDocumentSource => {
 };
 
 /** Semantic heading tags, mapped onto the AST's three levels. */
-const HEADING_TAGS: Record<string, 1 | 2 | 3 | undefined> = {
-  h1: 1,
-  h2: 1,
-  h3: 2,
-  h4: 3,
-  h5: 3,
-  h6: 3,
-};
+const HEADING_TAGS = new Map<string, 1 | 2 | 3>(
+  Object.entries({
+    h1: 1,
+    h2: 1,
+    h3: 2,
+    h4: 3,
+    h5: 3,
+    h6: 3,
+  }),
+);
 
 const HEADING_LEVELS = [1, 2, 3] as const;
 type HeadingLevel = (typeof HEADING_LEVELS)[number];
@@ -1030,7 +1033,7 @@ const visitChild = ({
   // The oldest layout drops the class vocabulary entirely and marks
   // its sections with semantic heading tags. It never emits `h1`, so
   // its `h2` is the document's top level.
-  const tagLevel = HEADING_TAGS[tag ?? ""];
+  const tagLevel = HEADING_TAGS.get(tag ?? "");
   if (tagLevel !== undefined) {
     pushHeading(builder, {
       level: tagLevel,

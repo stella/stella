@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: node types and predicates now come from @stll/html/nodes; the whitespace walk and rendering are unchanged.
 // parser-output-unchanged: adds `renderHtmlWhiteSpace` and `isHtmlBlock`, which read a parsed document; `collapseHtmlWhitespace` is unchanged, and only the Polish courts reader calls the new functions.
 import { panic } from "better-result";
@@ -112,15 +113,17 @@ const WHITE_SPACE = {
 
 type WhiteSpace = (typeof WHITE_SPACE)[keyof typeof WHITE_SPACE];
 
-const WHITE_SPACE_VALUES: Readonly<Record<string, WhiteSpace>> = {
-  normal: WHITE_SPACE.COLLAPSE,
-  nowrap: WHITE_SPACE.COLLAPSE,
-  initial: WHITE_SPACE.COLLAPSE,
-  pre: WHITE_SPACE.PRESERVE,
-  "pre-wrap": WHITE_SPACE.PRESERVE,
-  "break-spaces": WHITE_SPACE.PRESERVE,
-  "pre-line": WHITE_SPACE.PRESERVE_BREAKS,
-};
+const WHITE_SPACE_VALUES = new Map<string, WhiteSpace>(
+  Object.entries({
+    normal: WHITE_SPACE.COLLAPSE,
+    nowrap: WHITE_SPACE.COLLAPSE,
+    initial: WHITE_SPACE.COLLAPSE,
+    pre: WHITE_SPACE.PRESERVE,
+    "pre-wrap": WHITE_SPACE.PRESERVE,
+    "break-spaces": WHITE_SPACE.PRESERVE,
+    "pre-line": WHITE_SPACE.PRESERVE_BREAKS,
+  }),
+);
 
 /** Elements a browser's own style sheet sets `white-space: pre`. */
 const PREFORMATTED_TAGS: ReadonlySet<string> = new Set([
@@ -234,9 +237,7 @@ export const isHtmlBlock = (element: Element): boolean =>
 const ownWhiteSpace = (element: Element): WhiteSpace | undefined =>
   inlineStyleValue(element, (property, value) => {
     const mode =
-      property === "white-space" && Object.hasOwn(WHITE_SPACE_VALUES, value)
-        ? WHITE_SPACE_VALUES[value]
-        : undefined;
+      property === "white-space" ? WHITE_SPACE_VALUES.get(value) : undefined;
     return mode === undefined ? undefined : { value: mode };
   })?.value ??
   (PREFORMATTED_TAGS.has(element.tagName.toLowerCase())

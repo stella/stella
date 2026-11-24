@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical lookup results.
 /**
  * The key under which a Supreme Court ruling stored by one Polish source
  * meets the same ruling stored by another.
@@ -74,9 +75,11 @@ export const normalizeSupremeCourtDocket = (docket: string): string => {
  * of its 1990s merits rulings "orzeczenie"; SAOS files the same rulings as
  * judgments.
  */
-const RULING_KIND_ALIASES: Readonly<Record<string, string>> = {
-  orzeczenie: "wyrok",
-};
+const RULING_KIND_ALIASES = new Map<string, string>(
+  Object.entries({
+    orzeczenie: "wyrok",
+  }),
+);
 
 const rulingKindOf = (decisionType: string): string | undefined => {
   const lowered = decisionType
@@ -86,7 +89,9 @@ const rulingKindOf = (decisionType: string): string | undefined => {
   const kind = RULING_KINDS.find(
     (candidate) => lowered === candidate || lowered.startsWith(`${candidate} `),
   );
-  return kind === undefined ? undefined : (RULING_KIND_ALIASES[kind] ?? kind);
+  return kind === undefined
+    ? undefined
+    : (RULING_KIND_ALIASES.get(kind) ?? kind);
 };
 
 type SupremeCourtRulingKeyInput = Pick<

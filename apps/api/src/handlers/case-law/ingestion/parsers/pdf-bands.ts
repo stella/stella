@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [pl-sn] the PDF reader moved here from pl-sn.ts; the Supreme Court page reading is the same code, reached the same way.
 // parser-output-unchanged: [pl-kis] the PDF reader moved here from pl-sn.ts; the default reading pl-kis uses is the same code.
 // parser-output-unchanged: [cz-nss] the PDF reader moved here from pl-sn.ts; the default reading the NSS document reader uses is the same code.
@@ -105,14 +106,19 @@ const SOFT_HYPHEN_END = /\p{L}-$/u;
  */
 const RESUMES_A_BROKEN_WORD = /^\p{Ll}/u;
 
-const HTML_ESCAPES: Readonly<Record<string, string>> = {
-  "&": "&amp;",
-  "<": "&lt;",
-  ">": "&gt;",
-};
+const HTML_ESCAPES = new Map<string, string>(
+  Object.entries({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+  }),
+);
 
 const escapeHtml = (text: string): string =>
-  text.replace(/[&<>]/gu, (character) => HTML_ESCAPES[character] ?? character);
+  text.replace(
+    /[&<>]/gu,
+    (character) => HTML_ESCAPES.get(character) ?? character,
+  );
 
 /**
  * The x every body line of a page starts at: the most common one.

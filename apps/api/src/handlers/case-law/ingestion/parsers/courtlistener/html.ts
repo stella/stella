@@ -1,3 +1,4 @@
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: shared exclusion and text helpers discard the same script/style content as the existing walks; page-chrome text normalization uses the shared normalizeUnicode owner with the same NFC form.
 // parser-output-unchanged: validation reads the source paragraphs directly, as the markup built from them parsed to.
@@ -166,26 +167,29 @@ const PARAGRAPHS: Readonly<Record<string, DraftRole>> = {
  * opinion's author line. Only divisions carry these: the generic column
  * reuses words like `parties` and `docket` on paragraphs of body text.
  */
-const DIVISION_ROLES: Readonly<Record<string, DraftRole | "heading">> = {
-  casename: "parties",
-  caseopinionby: "heading",
-  citations: "front-matter",
-  counsel: "counsel",
-  courtinfo: "front-matter",
-  courtsummary: "summary",
-  docketnumber: "front-matter",
-  judges: "panel",
-  panel: "panel",
-  summaries: "apparatus",
-};
+const DIVISION_ROLES = new Map<string, DraftRole | "heading">(
+  Object.entries({
+    casename: "parties",
+    caseopinionby: "heading",
+    citations: "front-matter",
+    counsel: "counsel",
+    courtinfo: "front-matter",
+    courtsummary: "summary",
+    docketnumber: "front-matter",
+    judges: "panel",
+    panel: "panel",
+    summaries: "apparatus",
+  }),
+);
 
 const divisionRole = (element: Element): DraftRole | "heading" | undefined => {
   if (nameOf(element) !== "div") {
     return undefined;
   }
   for (const name of classesOf(element)) {
-    if (Object.hasOwn(DIVISION_ROLES, name)) {
-      return DIVISION_ROLES[name];
+    const role = DIVISION_ROLES.get(name);
+    if (role !== undefined) {
+      return role;
     }
   }
   return undefined;
