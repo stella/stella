@@ -4,7 +4,6 @@ import { and, eq, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import { isPrintedCourtJurisdiction } from "@stll/api-contract/court-identity";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionAliases,
   caseLawDecisionFallbackIdentities,
@@ -12,6 +11,7 @@ import {
   caseLawDecisions,
   caseLawDecisionSourceIdentities,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { normalizeDecisionIdentifier } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import {
   DECISION_DATE_OUT_OF_BOUNDS,

@@ -8,8 +8,8 @@ import {
 import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db-types";
+import type { Transaction } from "@/api/db/types";
 import { HTTP_FAILURE } from "@/api/http/errors";
 import { AUDIT_RESOURCE_TYPE, type AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";

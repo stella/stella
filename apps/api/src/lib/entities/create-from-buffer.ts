@@ -5,11 +5,11 @@ import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped } from "@/api/db/safe-db";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { entities, fields, pendingUploads, workspaces } from "@/api/db/schema";
 import type { PendingUploadFinalizedResult } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   captureError,
   createErrorCapture,

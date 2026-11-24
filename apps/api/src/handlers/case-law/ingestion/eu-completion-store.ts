@@ -23,7 +23,6 @@ import { createSha256 } from "@stll/sha256/bun";
 import { DAY_IN_MS } from "@stll/time";
 
 import { decodeCheckpoint } from "@/api/db/backfill-runtime";
-import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
@@ -41,6 +40,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import {

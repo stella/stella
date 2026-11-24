@@ -1,10 +1,10 @@
 import { and, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   pendingUploads,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { bufferIntentObjectKey } from "@/api/lib/buffer-intent-reconciliation";
 import { tmpUploadKeys } from "@/api/lib/uploads/runtime";

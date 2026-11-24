@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { chatThreads } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { resolveFeatureAccess } from "@/api/lib/auth/feature-access/context";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";

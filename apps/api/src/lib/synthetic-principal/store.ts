@@ -2,8 +2,8 @@ import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import { member, organization, session, user } from "@/api/db/auth-schema";
-import type { RootDatabase } from "@/api/db/root";
 import { syntheticSessionControl } from "@/api/db/schema";
+import type { RootDatabase } from "@/api/db/types";
 import { env } from "@/api/env";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import {

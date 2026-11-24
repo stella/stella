@@ -4,7 +4,6 @@ import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { isCountryCode } from "@stll/country-codes";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 
-import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   organizationSettings,
@@ -13,6 +12,7 @@ import {
   sanctionsContactScreenings,
   sanctionsScreeningEvents,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

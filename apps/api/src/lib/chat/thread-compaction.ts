@@ -29,7 +29,6 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { declareFailureClass, readFailureBrand } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   CHAT_COMPACTION_MEMORY_ELIGIBILITY,
@@ -39,6 +38,7 @@ import {
   chatThreads,
 } from "@/api/db/schema";
 import type { ChatCompactionMemoryEligibility } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { type OrgAIConfig, resolveCaching } from "@/api/lib/ai-config";
 import { estimateTextTokens } from "@/api/lib/ai-generation/token-estimate";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";

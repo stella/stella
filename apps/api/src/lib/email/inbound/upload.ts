@@ -15,7 +15,6 @@ import {
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { safeDbFromScoped, type ScopedDb } from "@/api/db/safe-db";
 import {
   correspondenceAttachments,
@@ -24,6 +23,7 @@ import {
   fields,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   type AuditRecorder,
   createBackgroundAuditRecorder,

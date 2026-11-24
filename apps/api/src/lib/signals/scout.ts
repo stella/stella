@@ -3,9 +3,9 @@ import { and, eq } from "drizzle-orm";
 
 import type { ScoutKey } from "@stll/api-contract/signals";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { SCOUT_RUN_STATUS, scoutRuns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

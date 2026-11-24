@@ -2,8 +2,8 @@ import type { Named } from "@gdp-ts/core";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";

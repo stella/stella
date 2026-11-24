@@ -1,11 +1,11 @@
 import { and, asc, count, desc, eq, inArray, ne } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   entityVersionMinhashBands,
   entityVersionMinhashSignatures,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   estimateSimilarity,

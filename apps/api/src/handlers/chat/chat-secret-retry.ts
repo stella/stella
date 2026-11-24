@@ -5,8 +5,8 @@ import { timingSafeEqual } from "node:crypto";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import { sha256Bytes } from "@stll/sha256/node";
 
-import type { Transaction } from "@/api/db/root";
 import { chatSecrets, chatTurns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { readSavedChatSecret } from "@/api/handlers/chat/chat-secrets";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateLock } from "@/api/lib/db/aggregate-lock";

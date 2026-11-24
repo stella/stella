@@ -6,7 +6,6 @@ import * as v from "valibot";
 import { apiDateSchema } from "@stll/api-contract/api-date";
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
-import type { Transaction } from "@/api/db/root";
 import { abortableTx } from "@/api/db/safe-db";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
@@ -19,6 +18,7 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import type { ListItemType, WorkObligationStatus } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type {
   AuditAction,

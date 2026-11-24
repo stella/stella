@@ -12,7 +12,6 @@ import type { PgAsyncDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 
 import { LIST_ITEM_TYPE } from "@stll/api-contract/entity-options";
 
-import type { Transaction } from "@/api/db/root";
 import {
   entities,
   legalListClaimCarryOutcomes,
@@ -23,6 +22,7 @@ import {
   legalListVerificationBlocks,
   legalListVerificationRuns,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { readFactTiers, readSourceKinds } from "@/api/lib/lists/fact-tiers";

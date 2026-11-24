@@ -6,8 +6,8 @@
 
 import { and, eq } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";

@@ -10,7 +10,6 @@ import {
   CORRESPONDENCE_MAX_BODY_CHARACTERS,
 } from "@stll/api-contract/correspondence";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { abortableTx } from "@/api/db/safe-db";
 import {
@@ -20,6 +19,7 @@ import {
   correspondenceSources,
   entities,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

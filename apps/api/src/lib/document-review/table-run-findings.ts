@@ -18,9 +18,9 @@
 import { panic } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { properties } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockActiveTableRun } from "@/api/lib/db/aggregate-lock";
 import type { ReviewWithheldSource } from "@/api/lib/document-review/contract";

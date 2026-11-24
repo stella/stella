@@ -3,8 +3,8 @@ import { and, asc, inArray, lte, sql } from "drizzle-orm";
 
 import { mapWithConcurrency } from "@stll/concurrency";
 
-import type { Transaction } from "@/api/db/root";
 import { chatTurns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withChatRunPings } from "@/api/lib/chat/chat-run-pings";
 import type { ChatRunPings } from "@/api/lib/chat/chat-run-pings";

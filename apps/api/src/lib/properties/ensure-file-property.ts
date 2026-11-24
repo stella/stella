@@ -1,7 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { properties } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -7,7 +7,6 @@ import type {
 } from "@stll/api-contract/audit-log";
 
 import { workspaceCheck, workspaceIdCheck } from "@/api/db/rls";
-import type { Transaction } from "@/api/db/root";
 import {
   contacts,
   entities,
@@ -16,6 +15,7 @@ import {
   userFiles,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

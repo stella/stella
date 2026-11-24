@@ -1,7 +1,7 @@
 import { sql } from "drizzle-orm";
 
-import type { RootDatabase } from "@/api/db/root";
 import type { documentProcessingRuns } from "@/api/db/schema";
+import type { RootDatabase } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { NAMING_TEXT_MIN_CHARS } from "@/api/lib/uploads/document-naming/document-naming.logic";
 

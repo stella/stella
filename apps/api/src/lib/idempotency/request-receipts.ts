@@ -18,7 +18,6 @@ import { createSha256, sha256Hex } from "@stll/sha256/bun";
 import { stableStringify } from "@stll/stable-stringify";
 import { DAY_IN_MS } from "@stll/time";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db-types";
 import { requestIdempotencyReceipts as receipts } from "@/api/db/schema";
 import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
@@ -26,6 +25,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { isHttpStatusResponse } from "@/api/http/status";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";

@@ -5,9 +5,9 @@ import { eq } from "drizzle-orm";
 import { AI_MONEY_COLUMN_UNAVAILABLE_CODE } from "@stll/api-contract/property-policy";
 import type { ConditionNode } from "@stll/conditions";
 
-import type { Transaction } from "@/api/db/root";
 import { properties, propertyDependencies } from "@/api/db/schema";
 import { isScopedFeatureEnabled } from "@/api/db/scoped-feature-access";
+import type { Transaction } from "@/api/db/types";
 import { arrayOrEmpty } from "@/api/lib/array";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
