@@ -2286,7 +2286,9 @@ mod tests {
     let (_, dir) = temp_preference();
     crate::local_store::create_private_dir(&dir).unwrap();
     let path = dir.join(CLOUD_MODEL_PREFERENCE_FILE_NAME);
-    std::fs::write(&path, "elevenlabs/scribe-v3\n").unwrap();
+    DevicePreference::at(path.clone())
+      .write("elevenlabs/scribe-v3")
+      .unwrap();
     assert_eq!(
       stored_cloud_model(&DevicePreference::at(path)),
       (Some("elevenlabs/scribe-v3".to_string()), false)
@@ -2306,7 +2308,9 @@ mod tests {
     );
     // A stored value that is no model id is unreadable too.
     let invalid = dir.join("invalid-model");
-    std::fs::write(&invalid, "bad\u{7}model").unwrap();
+    DevicePreference::at(invalid.clone())
+      .write("bad\u{7}model")
+      .unwrap();
     assert_eq!(
       stored_cloud_model(&DevicePreference::at(invalid)),
       (None, true)
