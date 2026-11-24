@@ -1,6 +1,6 @@
 use crate::logging::best_effort;
 use std::{
-  sync::Mutex,
+  sync::{Mutex, PoisonError},
   time::{Duration, Instant},
 };
 #[cfg(target_os = "macos")]
@@ -78,6 +78,102 @@ impl ClipboardStartupTrace {
         trace.open_kind
       })
   }
+}
+
+/// Why the clipboard window hid.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+enum HideReason {
+  /// Escape, a copy, the shortcut, or another close the window asked for.
+  Requested,
+  /// Another window or app took activation: an outside click.
+  Deactivated,
+}
+
+/// What the clipboard webview is told about its window. Native presentation
+/// owns the session: page focus and blur also fire for focus moves inside
+/// the host window (WebView2), so they never start or end one.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum WindowSessionEvent {
+  Opened,
+  Hidden { reason: HideReason },
+}
+
+pub const WINDOW_SESSION_EVENT: &str = "clipboard-window-session";
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+enum WindowPresence {
+  #[default]
+  Hidden,
+  Presented,
+}
+
+impl WindowPresence {
+  /// `Opened` only when the window was hidden: showing a window that is
+  /// already up (the tray while it is open) keeps its session.
+  fn open(&mut self) -> Option<WindowSessionEvent> {
+    match std::mem::replace(self, Self::Presented) {
+      Self::Hidden => Some(WindowSessionEvent::Opened),
+      Self::Presented => None,
+    }
+  }
+
+  /// One `Hidden` per session, whichever signal reports the end first:
+  /// AppKit's resign-key hook, the framework focus event and an explicit
+  /// hide can all report the same dismissal.
+  fn hide(&mut self, reason: HideReason) -> Option<WindowSessionEvent> {
+    match std::mem::replace(self, Self::Hidden) {
+      Self::Presented => Some(WindowSessionEvent::Hidden { reason }),
+      Self::Hidden => None,
+    }
+  }
+}
+
+/// Whether the clipboard window is presented, as native presentation last
+/// changed it.
+#[derive(Default)]
+pub struct ClipboardWindowSession(Mutex<WindowPresence>);
+
+impl ClipboardWindowSession {
+  fn transition(
+    &self,
+    change: impl FnOnce(&mut WindowPresence) -> Option<WindowSessionEvent>,
+  ) -> Option<WindowSessionEvent> {
+    // The presence is a plain value, so a panic elsewhere cannot leave it
+    // half-written.
+    change(&mut self.0.lock().unwrap_or_else(PoisonError::into_inner))
+  }
+}
+
+fn change_window_session(
+  app: &AppHandle,
+  change: impl FnOnce(&mut WindowPresence) -> Option<WindowSessionEvent>,
+) {
+  let Some(event) = app.state::<ClipboardWindowSession>().transition(change) else {
+    return;
+  };
+  if app
+    .emit_to(CLIPBOARD_WINDOW_LABEL, WINDOW_SESSION_EVENT, event)
+    .is_ok()
+  {
+    return;
+  }
+  // A lost `Hidden` drops the selection an outside click commits.
+  tracing::warn!("clipboard window session could not be announced");
+  let operation = match event {
+    WindowSessionEvent::Opened => DesktopTelemetryOperation::ClipboardWindowOpen,
+    WindowSessionEvent::Hidden { .. } => DesktopTelemetryOperation::ClipboardWindowHide,
+  };
+  capture_window_error(app, operation, DesktopTelemetryWindow::Clipboard);
+}
+
+fn begin_window_session(app: &AppHandle) {
+  change_window_session(app, WindowPresence::open);
+}
+
+fn end_window_session(app: &AppHandle, reason: HideReason) {
+  change_window_session(app, |presence| presence.hide(reason));
 }
 
 fn capture_window_timing(
@@ -323,6 +419,7 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
       );
       return;
     }
+    begin_window_session(app);
     capture_window_timing(
       app,
       DesktopTelemetrySpan::ClipboardWindowShow,
@@ -383,6 +480,8 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
         );
         return;
       }
+      // The page may not listen yet; it starts in a fresh session anyway.
+      begin_window_session(app);
       if let Some((elapsed, open_kind)) = app
         .try_state::<ClipboardStartupTrace>()
         .and_then(|trace| trace.elapsed())
@@ -424,11 +523,22 @@ fn show_as(app: &AppHandle, created_kind: ClipboardOpenKind) {
       // WebKit back to sleep and defeat the parking.
       #[cfg(target_os = "macos")]
       stella_desktop_macos::disable_occlusion_detection(&window);
+      // The panel parks itself when it resigns key status, and the framework
+      // focus event is not guaranteed for its runtime class.
+      #[cfg(target_os = "macos")]
+      {
+        let app = app.clone();
+        stella_desktop_macos::observe_panel_deactivation(move || {
+          end_window_session(&app, HideReason::Deactivated);
+        });
+      }
       let window_to_hide = window.clone();
       window.on_window_event(move |event| {
-        if matches!(event, tauri::WindowEvent::Focused(false))
-          && hide(&window_to_hide).is_err()
-        {
+        if !matches!(event, tauri::WindowEvent::Focused(false)) {
+          return;
+        }
+        end_window_session(window_to_hide.app_handle(), HideReason::Deactivated);
+        if hide_window(&window_to_hide).is_err() {
           capture_window_error(
             window_to_hide.app_handle(),
             DesktopTelemetryOperation::ClipboardWindowHide,
@@ -472,11 +582,29 @@ pub fn toggle(app: &AppHandle) {
   show(app);
 }
 
+/// Another stella window opened from the clipboard window takes key status
+/// from it; that hand-off is the user's own action, not an outside click.
+pub(crate) fn hand_off(window: &WebviewWindow) {
+  if window.label() == CLIPBOARD_WINDOW_LABEL {
+    end_window_session(window.app_handle(), HideReason::Requested);
+  }
+}
+
+/// Closes the clipboard window on request (Escape, copy, the shortcut). The
+/// session ends before the window gives up key status, so the focus loss that
+/// follows is not taken for an outside click.
+pub fn hide(window: &WebviewWindow) -> Result<(), String> {
+  if window.label() == CLIPBOARD_WINDOW_LABEL {
+    end_window_session(window.app_handle(), HideReason::Requested);
+  }
+  hide_window(window)
+}
+
 /// Parks the window, which also gives key status back to the app underneath,
 /// or orders it out when parking is not possible. Serves both an explicit
-/// dismissal (Escape, copy) and the hide on blur: whatever the user focused
-/// instead keeps it either way.
-pub fn hide(window: &WebviewWindow) -> Result<(), String> {
+/// dismissal and the hide on blur: whatever the user focused instead keeps it
+/// either way.
+fn hide_window(window: &WebviewWindow) -> Result<(), String> {
   #[cfg(target_os = "macos")]
   if park(window) {
     return Ok(());
@@ -602,6 +730,9 @@ impl ClipboardEditorSessions {
 /// Opens the editor on `item_id`, reusing the window when it exists. A new
 /// window shows itself once its page has loaded.
 pub fn open_editor(app: &AppHandle, item_id: String) -> Result<(), String> {
+  // The editor takes key status from the panel; that hand-off is the user's
+  // own action, not an outside click.
+  end_window_session(app, HideReason::Requested);
   let sessions = app.state::<ClipboardEditorSessions>();
   let Some(window) = app.get_webview_window(CLIPBOARD_EDITOR_WINDOW_LABEL) else {
     sessions.begin(item_id, ClipboardOpenKind::FirstOpen)?;
@@ -754,6 +885,7 @@ mod tests {
       serde_json::from_str(include_str!("../../fixtures/clipboard-contract.json"))
         .unwrap();
     assert_eq!(contract["editorSessionEvent"], EDITOR_SESSION_EVENT);
+    assert_eq!(contract["windowSessionEvent"], WINDOW_SESSION_EVENT);
     assert_eq!(
       contract["historyChangedEvent"],
       crate::clipboard::HISTORY_EVENT
@@ -802,6 +934,47 @@ mod tests {
       serde_json::to_value(EditorSessionEvent::Idle).unwrap(),
       serde_json::json!({ "type": "idle" })
     );
+  }
+
+  #[test]
+  fn window_session_events_match_the_frontend_union() {
+    assert_eq!(
+      serde_json::to_value(WindowSessionEvent::Opened).unwrap(),
+      serde_json::json!({ "type": "opened" })
+    );
+    assert_eq!(
+      serde_json::to_value(WindowSessionEvent::Hidden {
+        reason: HideReason::Deactivated,
+      })
+      .unwrap(),
+      serde_json::json!({ "type": "hidden", "reason": "deactivated" })
+    );
+    assert_eq!(
+      serde_json::to_value(WindowSessionEvent::Hidden {
+        reason: HideReason::Requested,
+      })
+      .unwrap(),
+      serde_json::json!({ "type": "hidden", "reason": "requested" })
+    );
+  }
+
+  #[test]
+  fn each_window_session_ends_once_whichever_signal_reports_it_first() {
+    let reasons = [HideReason::Requested, HideReason::Deactivated];
+    for first in reasons {
+      for second in reasons {
+        let mut presence = WindowPresence::default();
+        assert_eq!(presence.hide(first), None, "nothing to end before an open");
+        assert_eq!(presence.open(), Some(WindowSessionEvent::Opened));
+        assert_eq!(presence.open(), None, "showing an open window keeps it");
+        assert_eq!(
+          presence.hide(first),
+          Some(WindowSessionEvent::Hidden { reason: first })
+        );
+        assert_eq!(presence.hide(second), None);
+        assert_eq!(presence.open(), Some(WindowSessionEvent::Opened));
+      }
+    }
   }
 
   #[test]

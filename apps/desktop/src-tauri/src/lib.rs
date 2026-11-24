@@ -252,6 +252,7 @@ pub fn run() {
     .manage::<ClipboardAppState>(Arc::clone(&clipboard_manager))
     .manage(clipboard_window::ClipboardEditorSessions::default())
     .manage(clipboard_window::ClipboardStartupTrace::default())
+    .manage(clipboard_window::ClipboardWindowSession::default())
     .manage(dictation::DictationState::load())
     .manage(app_window::AppWindows::default())
     .manage(transcribe_recording::TranscribeState::default())
