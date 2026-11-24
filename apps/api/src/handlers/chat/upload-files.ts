@@ -19,7 +19,7 @@ import { decodeDeclared } from "@stll/mojibake/declared-charset";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   chatThreads,
   entityDeletionCleanupRequests,

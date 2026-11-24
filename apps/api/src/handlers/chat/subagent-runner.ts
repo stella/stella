@@ -5,7 +5,7 @@ import { panic, Result } from "better-result";
 import type { ModelTask } from "@stll/ai-catalog";
 import type { AIErrorKind } from "@stll/api-contract";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,

@@ -6,7 +6,7 @@ import * as v from "valibot";
 import { TASK_STATUSES } from "@stll/api-contract";
 
 import { assertIdentifierLiteral } from "@/api/db/json-utils";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";

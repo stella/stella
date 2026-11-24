@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { entities, workspaces } from "@/api/db/schema";
 import { entityKindSchema } from "@/api/db/schema-validators";
 import { entityRealtimeUpdates } from "@/api/handlers/realtime-resource-sets";

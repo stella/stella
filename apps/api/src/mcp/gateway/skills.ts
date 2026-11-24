@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 
-import type { SafeDbError } from "@/api/db/safe-db";
+import type { SafeDbError } from "@/api/db/safe-db-types";
 import { NO_SKILL_BINDING_SCOPE } from "@/api/lib/agent-skills/binding";
 import {
   narrowModelOfferedSkills,

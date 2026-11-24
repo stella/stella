@@ -5,7 +5,7 @@ import type {
   OutboundActionPreview,
 } from "@stll/api-contract/outbound-action";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /** A provider refusal, reported to the user by its stable code. */

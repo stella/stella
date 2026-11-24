@@ -1,4 +1,4 @@
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sourceDecisionIdsIn } from "@/api/lib/case-law/withdrawn-copy-projection";

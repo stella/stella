@@ -7,7 +7,7 @@ import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
 import {

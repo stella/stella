@@ -30,7 +30,7 @@ import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { CHAT_CONTEXT_FILE_MAX_MEGABYTES } from "@stll/chat-limits";
 import type { SkillMetadata } from "@stll/skills/frontmatter";
 
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { env } from "@/api/env";
 import {

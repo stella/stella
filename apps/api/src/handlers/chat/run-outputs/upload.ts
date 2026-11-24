@@ -7,7 +7,7 @@ import { runOutputMimeTypeOf } from "@stll/api-contract/chat-file-types";
 import { DESKTOP_RUNNER_OUTPUT_MAX_BYTES } from "@stll/api-contract/desktop-runner";
 import { classifyFailure } from "@stll/errors";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { chatThreads } from "@/api/db/schema";
 import { readOpenLocalRunThread } from "@/api/handlers/chat/local-run-plan";
 import {

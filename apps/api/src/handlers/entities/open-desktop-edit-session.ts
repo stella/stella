@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { RESOURCE_TYPE, resourceRef } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   bufferObjectCleanupIntents,
   desktopEditSessions,

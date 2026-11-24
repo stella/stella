@@ -22,7 +22,7 @@ import {
 import { workspaceIsVisible } from "@stll/api-contract/workspace-status";
 import { classifyFailure } from "@stll/errors";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { env } from "@/api/env";
 import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { consumeDictationLimit } from "@/api/handlers/dictation/limits";

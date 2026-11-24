@@ -8,7 +8,7 @@ import {
 } from "@stll/api-contract/desktop-billing-drafts";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { contacts } from "@/api/db/schema";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import {

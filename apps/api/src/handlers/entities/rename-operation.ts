@@ -1,7 +1,7 @@
 import { panic, Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { entities, fields } from "@/api/db/schema";
 import { createErrorCapture, detached } from "@/api/lib/analytics/capture";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";

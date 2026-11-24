@@ -7,7 +7,7 @@ import type { listSkillMetadata } from "@stll/skills";
 
 import { rlsDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db-types";
 import {
   createExplicitSafeDb,
   createExplicitScopedDb,

@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { NOTIFICATION_KIND } from "@stll/api-contract/notifications";
 import { resolveUiLocale } from "@stll/locales";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { reportExports } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";

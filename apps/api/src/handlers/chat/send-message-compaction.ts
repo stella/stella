@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { UsageEventLane } from "@/api/db/schema";
 import {
   chatThreadNeedsCompaction,

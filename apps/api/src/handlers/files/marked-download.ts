@@ -15,7 +15,7 @@ import { Result } from "better-result";
 
 import type { MarkedPdfExportMode } from "@stll/api-contract/marked-pdf-export";
 
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

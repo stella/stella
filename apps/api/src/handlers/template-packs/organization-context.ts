@@ -2,7 +2,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { type CountryCode, isCountryCode } from "@stll/country-codes";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { templates } from "@/api/db/schema";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";

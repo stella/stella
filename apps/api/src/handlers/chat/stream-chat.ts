@@ -61,7 +61,7 @@ import type { ChatTurnBudget } from "@stll/chat-limits";
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";

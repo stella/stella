@@ -5,7 +5,7 @@ import * as v from "valibot";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,

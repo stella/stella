@@ -3,7 +3,7 @@ import type * as v from "valibot";
 
 import type { DesktopBillingDraftMode } from "@stll/api-contract/desktop-billing-drafts";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   DatabaseError,
