@@ -94,7 +94,10 @@ describe("adaptAiFields", () => {
     const seen: { context: string }[][] = [];
     const adapter: AiOccurrenceAdapter = async ({ occurrences }) => {
       seen.push([...occurrences]);
-      return occurrences.map((_, i) => `RENDERING-${String(i + 1)}`);
+      return {
+        type: "adapted",
+        renderings: occurrences.map((_, i) => `RENDERING-${String(i + 1)}`),
+      };
     };
 
     const adapted = await adaptAiFields({
@@ -139,7 +142,7 @@ describe("adaptAiFields", () => {
       file: docx,
       fields: [lawField],
       values: { law: "stub" },
-      adapt: async () => ["ONE", "TWO"],
+      adapt: async () => ({ type: "adapted", renderings: ["ONE", "TWO"] }),
     });
     const text = await documentText(adapted.file);
     expect(text).toBe("First ONE, then TWO again.");
@@ -155,7 +158,7 @@ describe("adaptAiFields", () => {
       file: docx,
       fields: [lawField],
       values: { law: "stub" },
-      adapt: async () => ["ADAPTED"],
+      adapt: async () => ({ type: "adapted", renderings: ["ADAPTED"] }),
     });
     const text = await documentText(adapted.file);
     expect(text).toBe("Per ADAPTED of the land.");
@@ -169,7 +172,7 @@ describe("adaptAiFields", () => {
       file: docx,
       fields: [lawField],
       values: { law: "czech law" },
-      adapt: async () => ["only one"],
+      adapt: async () => ({ type: "adapted", renderings: ["only one"] }),
     });
     expect(adapted.adaptedPaths).toEqual([]);
     expect(adapted.file).toBe(docx);
@@ -201,7 +204,9 @@ describe("adaptAiFields", () => {
       fields: [lawField, { path: "court", aiAdapt: true }],
       values: { law: "czech law", court: "district court" },
       adapt: async ({ fieldPath }) =>
-        fieldPath === "law" ? undefined : ["ADAPTED COURT"],
+        fieldPath === "law"
+          ? { type: "failed" }
+          : { type: "adapted", renderings: ["ADAPTED COURT"] },
     });
     expect(adapted.adaptedPaths).toEqual(["court"]);
     expect(adapted.failures.map(({ fieldPath }) => fieldPath)).toEqual(["law"]);
@@ -213,7 +218,10 @@ describe("adaptAiFields", () => {
       file: docx,
       fields: [{ path: "company.name", aiAdapt: true }],
       values: { company: { name: "ACME s.r.o." } },
-      adapt: async ({ stub }) => [`ADAPTED(${stub})`],
+      adapt: async ({ stub }) => ({
+        type: "adapted",
+        renderings: [`ADAPTED(${stub})`],
+      }),
     });
     const text = await documentText(adapted.file);
     expect(text).toBe("Company: ADAPTED(ACME s.r.o.)");
@@ -235,7 +243,7 @@ describe("adaptAiFields", () => {
       file: docx,
       fields: [lawField],
       values: {},
-      adapt: async () => ["X"],
+      adapt: async () => ({ type: "adapted", renderings: ["X"] }),
     });
     expect(noStub.file).toBe(docx);
     expect(noStub.adaptedPaths).toEqual([]);

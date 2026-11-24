@@ -42,6 +42,9 @@ type MarkerOccurrence = {
   context: string;
 };
 
+export type AiOccurrenceAdaptation =
+  { type: "adapted"; renderings: string[] } | { type: "failed" };
+
 export type AiOccurrenceAdapter = (input: {
   /** The user-entered canonical value to adapt. */
   stub: string;
@@ -50,7 +53,7 @@ export type AiOccurrenceAdapter = (input: {
   /** The field's drafting instruction (`aiPrompt`), if any. */
   prompt: string | undefined;
   occurrences: readonly MarkerOccurrence[];
-}) => Promise<string[] | undefined>;
+}) => Promise<AiOccurrenceAdaptation>;
 
 export type AdaptAiFieldsResult = {
   /** The template with adapted occurrences rewritten, derived from the input. */
@@ -133,7 +136,7 @@ export const adaptAiFields = async ({
     if (occurrences.length === 0) {
       continue;
     }
-    const renderings = await adapt({
+    const adaptation = await adapt({
       stub,
       fieldPath: field.path,
       label: field.label,
@@ -142,7 +145,10 @@ export const adaptAiFields = async ({
     });
     // A count mismatch would mis-align every later occurrence; fall back to
     // the global stub fill for the whole field instead, and report it.
-    if (renderings === undefined || renderings.length !== occurrences.length) {
+    if (
+      adaptation.type === "failed" ||
+      adaptation.renderings.length !== occurrences.length
+    ) {
       failures.push({
         fieldPath: field.path,
         valuePath: field.path,
@@ -152,7 +158,7 @@ export const adaptAiFields = async ({
       });
       continue;
     }
-    renderingsByPath.set(field.path, renderings);
+    renderingsByPath.set(field.path, adaptation.renderings);
   }
   if (renderingsByPath.size === 0) {
     return { ...unchanged, failures };

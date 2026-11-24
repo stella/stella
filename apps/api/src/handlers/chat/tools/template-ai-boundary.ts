@@ -124,7 +124,7 @@ export const templateAiCollaboratorsForBoundary = ({
               observeFailure(prepared.error, { sink: PREPARE_FAILED_SINK });
               // An undecided condition excludes its block, as when the model
               // cannot answer.
-              return undefined;
+              return { decidedBy: "undecided", reason: "failed" };
             }
             return await decideAiCondition(prepared.value);
           },
@@ -163,10 +163,17 @@ export const templateAiCollaboratorsForBoundary = ({
               observeFailure(prepared.error, { sink: PREPARE_FAILED_SINK });
               // An unadapted stub keeps the user's value, as when the model
               // cannot answer.
-              return undefined;
+              return { type: "failed" };
             }
             const adapted = await adaptAiValue(prepared.value);
-            return adapted?.map((text) => restore(input.fieldPath, text));
+            return adapted.type === "adapted"
+              ? {
+                  type: "adapted",
+                  renderings: adapted.renderings.map((text) =>
+                    restore(input.fieldPath, text),
+                  ),
+                }
+              : adapted;
           },
         }),
   };
