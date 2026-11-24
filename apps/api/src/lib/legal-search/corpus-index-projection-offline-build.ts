@@ -78,6 +78,7 @@ import {
 import {
   cancelCorpusProjectionReservations,
   classifyCorpusProjectionReservationFailures,
+  type CorpusProjectionMismatchRederivation,
   type CorpusProjectionPayloadReader,
   type CorpusProjectionReservationFailureOfLease,
   corpusProjectionRevisionBuildFailure,
@@ -371,6 +372,7 @@ export type CorpusProjectionOfflineBuildOptions<Family extends CorpusFamily> = {
     sleep: (milliseconds: number) => Promise<void>;
     payloadReader?: CorpusProjectionPayloadReader;
     newShardId?: () => string;
+    rederive?: CorpusProjectionMismatchRederivation;
   };
 };
 
@@ -391,7 +393,10 @@ export type CorpusProjectionOfflineBuildProgress = {
     revisions: number;
     /** Pages containing at least one mismatch, including mixed pages. */
     pages: number;
-    /** Successive pages wholly mismatched and successfully canceled. */
+    /**
+     * Successive pages wholly mismatched in states re-derivation could not
+     * move, each held for a retry.
+     */
     consecutivePages: number;
   };
   /**
@@ -500,9 +505,10 @@ export type CorpusProjectionOfflineBuildOutcome = {
    *   run, or the append cycle, settles them. Nothing is lost meanwhile.
    * - `no_progress`: a full pass reserved work but started none of it.
    * - `canonical_input_mismatch`: consecutive pages named current desired
-   *   states whose authoritative inputs disagree. Canceled reservations stay
-   *   eligible; the reported cursor precedes the rejected streak for repair
-   *   and resume. Previously started shards still settle and prove.
+   *   states whose authoritative inputs disagree and which re-deriving from
+   *   those inputs did not move. They wait out a retry; the reported cursor
+   *   precedes the rejected streak for repair and resume. Previously started
+   *   shards still settle and prove.
    * - `walk_pass_limit`: the run walked the queue its most times and the
    *   last pass still found work.
    * - `rate_too_slow`: a shard was killed too large and half of it no longer
@@ -1689,6 +1695,7 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
       rejected: materials.rejected,
       policy,
       testNow: await this.#testNow(),
+      rederive: this.#options.testing?.rederive,
     });
     this.#progress.notStarted.cancelled += rejected.cancelled;
     this.#progress.notStarted.leaseLost += rejected.leaseLost;
@@ -1702,10 +1709,11 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
     if (mismatches > 0) {
       diagnostic.pages += 1;
     }
+    // A mismatch whose re-derived desired state moved is repaired work, not
+    // an unproductive page: only states re-derivation could not move count.
     if (
       page.leases.length > 0 &&
-      mismatches === page.leases.length &&
-      rejected.cancelled === page.leases.length
+      rejected.mismatchHeld === page.leases.length
     ) {
       if (diagnostic.consecutivePages === 0) {
         this.#beforeMismatchPages = beforePage;
@@ -1716,8 +1724,8 @@ class OfflineRouteBuild<Family extends CorpusFamily> {
         CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT
       ) {
         this.#stop ??= "canonical_input_mismatch";
-        // Canceled inputs remain eligible. Resume before the whole rejected
-        // streak so a repaired canonical state is not skipped on retry.
+        // Held inputs wait out their retry. Resume before the whole rejected
+        // streak so a state repaired meanwhile is not skipped on retry.
         this.#progress.cursor = this.#beforeMismatchPages;
       }
     } else {
