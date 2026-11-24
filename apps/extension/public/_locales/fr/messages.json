@@ -100,5 +100,8 @@
   },
   "desktopUpdateNeeded": {
     "message": "Mettez à jour stella desktop et cette extension"
+  },
+  "desktopConnecting": {
+    "message": "Connexion à stella desktop…"
   }
 }

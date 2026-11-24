@@ -23,6 +23,7 @@ import {
   hasDesktopLinkAccess,
   removeAllSiteAccess,
 } from "../lib/access";
+import { syncActionIcon } from "../lib/action-icon";
 import { storedCommandBudget } from "../lib/command-budget";
 import { CONTROL_TRANSPORT } from "../lib/control-holder";
 import {
@@ -80,6 +81,10 @@ import {
   rememberStellaTab,
   replaceStellaTab,
 } from "../lib/stella-tabs";
+import {
+  BROWSER_CONTROLLER_STORAGE_KEY,
+  BROWSER_DESKTOP_LINK_STORAGE_KEY,
+} from "../lib/storage-keys";
 import {
   forgetContainedTab,
   onContainedTabsChanged,
@@ -567,6 +572,15 @@ export default defineBackground(() => {
   loadDownloadScope().catch(() => undefined);
   registerOptionalListeners();
   chrome.permissions.onAdded.addListener(registerOptionalListeners);
+  syncActionIcon().catch(() => undefined);
+  chrome.storage.session.onChanged.addListener((changes) => {
+    if (
+      BROWSER_CONTROLLER_STORAGE_KEY in changes ||
+      BROWSER_DESKTOP_LINK_STORAGE_KEY in changes
+    ) {
+      syncActionIcon().catch(() => undefined);
+    }
+  });
   // Every worker start reconnects: Chrome ends the host with the worker.
   desktopLink.connect().catch(() => undefined);
   chrome.alarms.onAlarm.addListener((alarm) => {

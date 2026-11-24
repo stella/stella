@@ -16,8 +16,17 @@ const SITE_ACCESS = {
 export const hasAllSiteAccess = async () =>
   await chrome.permissions.contains(SITE_ACCESS);
 
+/**
+ * Initial setup requests website access together with `nativeMessaging` in one
+ * gesture so stella desktop connects automatically without a second prompt.
+ */
+const INITIAL_SITE_AND_DESKTOP_ACCESS = {
+  origins: SITE_ACCESS.origins,
+  permissions: [...SITE_ACCESS.permissions, "nativeMessaging"],
+} satisfies chrome.permissions.Permissions;
+
 export const requestAllSiteAccess = async () =>
-  await chrome.permissions.request(SITE_ACCESS);
+  await chrome.permissions.request(INITIAL_SITE_AND_DESKTOP_ACCESS);
 
 export const removeAllSiteAccess = async () =>
   await chrome.permissions.remove(SITE_ACCESS);
