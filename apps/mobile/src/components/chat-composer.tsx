@@ -1,7 +1,7 @@
 import { use, useImperativeHandle, useState } from "react";
 import type { Ref } from "react";
 
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
+import { GlassView } from "expo-glass-effect";
 import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { useTranslations } from "use-intl";
 
@@ -269,10 +269,10 @@ export const ChatComposer = ({
     };
   }
 
-  // iOS 26's Liquid Glass: the box is a glass capsule floating over the
+  // On iOS, Liquid Glass: the box is a glass capsule floating over the
   // screen, as the platform's own message fields are. Elsewhere it keeps the
   // web's bordered box.
-  const glass = Platform.OS === "ios" && isLiquidGlassAvailable();
+  const glass = Platform.OS === "ios";
   const Box = glass ? GlassBox : BorderedBox;
 
   return (

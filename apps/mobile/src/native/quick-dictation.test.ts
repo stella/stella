@@ -202,7 +202,7 @@ describe("the native side of a dictation started outside the app", () => {
       );
       expect(bundle.split("DictationControl()").length).toBe(2);
       expect(bundle).toContain(
-        "    WidgetLiveActivity()\n    if #available(iOS 18.0, *) {\n      DictationControl()\n    }\n  }",
+        "    WidgetLiveActivity()\n    DictationControl()\n  }",
       );
     } finally {
       rmSync(root, { force: true, recursive: true });

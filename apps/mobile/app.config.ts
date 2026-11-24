@@ -4,6 +4,7 @@ import {
   IOSConfig,
   withDangerousMod,
   withPodfile,
+  withPodfileProperties,
   withXcodeProject,
 } from "expo/config-plugins";
 import type { ConfigPlugin, ExportedConfig } from "expo/config-plugins";
@@ -34,6 +35,9 @@ const VARIANTS = ["development", "preview", "production"] as const;
 
 /** The store version; `scripts/fingerprint.ts` hashes its release line. */
 export const APP_VERSION = "0.1.0";
+
+/** Minimum iOS version the app, its extensions and local pods target. */
+export const IOS_DEPLOYMENT_TARGET = "26.0";
 
 type Variant = (typeof VARIANTS)[number];
 
@@ -361,6 +365,7 @@ const addExtensionTarget = (
       CURRENT_PROJECT_VERSION: `"${buildNumber}"`,
       GENERATE_INFOPLIST_FILE: "NO",
       INFOPLIST_FILE: `"${name}/${infoPlist}"`,
+      IPHONEOS_DEPLOYMENT_TARGET: IOS_DEPLOYMENT_TARGET,
       MARKETING_VERSION: `"${version}"`,
       ...Object.fromEntries(
         Object.entries(settings).map(([key, value]) => [key, `"${value}"`]),
@@ -587,6 +592,48 @@ const withBarGlyphs: ConfigPlugin = (config) =>
       return mod;
     },
   ]);
+
+/** Sets `IPHONEOS_DEPLOYMENT_TARGET` on the project and every native target. */
+const setIosDeploymentTarget = (
+  project: XcodeProject,
+  deploymentTarget: string,
+) => {
+  const configurationLists = [
+    project.getFirstProject().firstProject.buildConfigurationList,
+    ...IOSConfig.Target.getNativeTargets(project).map(
+      ([, target]) => target.buildConfigurationList,
+    ),
+  ];
+  for (const listId of configurationLists) {
+    for (const [
+      ,
+      configuration,
+    ] of IOSConfig.XcodeUtils.getBuildConfigurationsForListId(
+      project,
+      listId,
+    )) {
+      configuration.buildSettings["IPHONEOS_DEPLOYMENT_TARGET"] =
+        deploymentTarget;
+    }
+  }
+};
+
+/**
+ * Sets the iOS deployment target for CocoaPods (`Podfile.properties.json`)
+ * and every Xcode build configuration (the project, the app, and extensions).
+ * Registered first so the Xcode mod runs after every extension target is added.
+ */
+const withIosDeploymentTarget: ConfigPlugin = (config) =>
+  withXcodeProject(
+    withPodfileProperties(config, (mod) => {
+      mod.modResults["ios.deploymentTarget"] = IOS_DEPLOYMENT_TARGET;
+      return mod;
+    }),
+    (mod) => {
+      setIosDeploymentTarget(mod.modResults, IOS_DEPLOYMENT_TARGET);
+      return mod;
+    },
+  );
 
 /** CocoaPods owns the widget bundle phase; keep its entry point in the app. */
 export const WIDGETS_BUNDLE_HOOK = `
@@ -872,13 +919,15 @@ export const appConfigFor = ({
   const keyboardExtension =
     signing === undefined || signing.keyboardProfileUuid !== undefined;
   const config = withBarGlyphs(
-    appConfigBase({
-      ...inputs,
-      keyboardExtension,
-      liveActivities: storeCapabilities,
-      pushNotifications: storeCapabilities,
-      shareExtension,
-    }),
+    withIosDeploymentTarget(
+      appConfigBase({
+        ...inputs,
+        keyboardExtension,
+        liveActivities: storeCapabilities,
+        pushNotifications: storeCapabilities,
+        shareExtension,
+      }),
+    ),
   );
   // The native module is autolinked even when the extension is omitted.
   const bundled = withWidgetsBundle(config);

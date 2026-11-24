@@ -31,7 +31,9 @@ declare module "xcode" {
       };
     };
 
-    getFirstProject(): { firstProject: { mainGroup: UUID } };
+    getFirstProject(): {
+      firstProject: { buildConfigurationList: UUID; mainGroup: UUID };
+    };
 
     /** A group of `files`, each referenced by its name under `path`. */
     addPbxGroup(

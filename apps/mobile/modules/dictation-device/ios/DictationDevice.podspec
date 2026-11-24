@@ -5,7 +5,7 @@ Pod::Spec.new do |s|
   s.description    = 'Sets the audio session a dictation records in and reports interruptions and a lost microphone.'
   s.author         = ''
   s.homepage       = 'https://stll.app'
-  s.platforms      = { :ios => '16.4' }
+  s.platforms      = { :ios => '26.0' }
   s.source         = { git: '' }
   s.static_framework = true
 

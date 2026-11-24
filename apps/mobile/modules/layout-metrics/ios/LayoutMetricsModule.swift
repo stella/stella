@@ -24,11 +24,9 @@ final class LayoutObserverView: ExpoView {
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
     isUserInteractionEnabled = false
-    if #available(iOS 17.0, *) {
-      registerForTraitChanges([UITraitHorizontalSizeClass.self]) {
-        (view: LayoutObserverView, _: UITraitCollection) in
-        view.publish()
-      }
+    registerForTraitChanges([UITraitHorizontalSizeClass.self]) {
+      (view: LayoutObserverView, _: UITraitCollection) in
+      view.publish()
     }
     // The hinge APIs arrived in the iOS 27.1 SDK.
     #if canImport(UIKit, _version: 9127.0.85)
@@ -59,14 +57,6 @@ final class LayoutObserverView: ExpoView {
       }
     }
     publish()
-  }
-
-  // Before iOS 17 the size class arrives here rather than by registration.
-  override func traitCollectionDidChange(_ previous: UITraitCollection?) {
-    super.traitCollectionDidChange(previous)
-    if previous?.horizontalSizeClass != traitCollection.horizontalSizeClass {
-      publish()
-    }
   }
 
   override func layoutSubviews() {

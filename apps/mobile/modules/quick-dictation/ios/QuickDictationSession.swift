@@ -75,14 +75,7 @@ public final class QuickDictationSession {
 
   /// Asks for the microphone; only meaningful with the app in front.
   public func requestMicrophone() async -> Bool {
-    if #available(iOS 17.0, *) {
-      return await AVAudioApplication.requestRecordPermission()
-    }
-    return await withCheckedContinuation { continuation in
-      AVAudioSession.sharedInstance().requestRecordPermission { granted in
-        continuation.resume(returning: granted)
-      }
-    }
+    await AVAudioApplication.requestRecordPermission()
   }
 
   /// Drops what is being recorded or waits, and its Live Activity.
@@ -369,17 +362,7 @@ public final class QuickDictationSession {
   }
 
   private static func microphone() -> MicrophoneAccess {
-    if #available(iOS 17.0, *) {
-      switch AVAudioApplication.shared.recordPermission {
-      case .granted:
-        return .granted
-      case .undetermined:
-        return .undecided
-      default:
-        return .denied
-      }
-    }
-    switch AVAudioSession.sharedInstance().recordPermission {
+    switch AVAudioApplication.shared.recordPermission {
     case .granted:
       return .granted
     case .undetermined:
