@@ -26,7 +26,7 @@ import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 const MAX_PENDING_MEMBERS_PER_ORG = 200;
 
-const SSO_PENDING_MEMBER_TRANSITIONS = defineTransitions(
+export const SSO_PENDING_MEMBER_TRANSITIONS = defineTransitions(
   organizationSsoPendingMember,
   {
     pending: ["approved", "rejected", "pending"],

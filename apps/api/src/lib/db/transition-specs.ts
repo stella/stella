@@ -36,6 +36,7 @@ import {
 } from "@/api/lib/db/flow-run-transition-spec";
 import { FOLIO_COLLAB_TRANSITION_IDENTITIES } from "@/api/lib/db/folio-collab-transition-identities";
 import { READER_ANSWER_TRANSITION_IDENTITIES } from "@/api/lib/db/reader-answer-transition-identities";
+import { SSO_PENDING_MEMBER_TRANSITIONS } from "@/api/lib/db/sso-provisioning";
 import type {
   StatusTable,
   WRITABLE_STATUS_COLUMNS,
@@ -577,6 +578,7 @@ export const TRANSITIONS = {
   organizationDataExports: DATA_EXPORT_TRANSITIONS,
   organizationFileObjects: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   organizationSettings: FIRM_MONITORING_TRANSITIONS,
+  organizationSsoPendingMember: SSO_PENDING_MEMBER_TRANSITIONS,
   pdfSigningSessions: PDF_SIGNING_SESSION_TRANSITIONS,
   pendingUploads: { unmanaged: UNMANAGED_REASONS.fileLifecycle },
   playbookDefinitions: { unmanaged: UNMANAGED_REASONS.userDecision },

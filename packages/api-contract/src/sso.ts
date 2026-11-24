@@ -95,13 +95,13 @@ export const normalizeSsoDomain = (raw: string): string =>
     return trimmed;
   })();
 
-export const ssoDomainNameSchema = v.pipe(
+export const ssoDomainNameSchema = /* @__PURE__ */ v.pipe(
   v.string(),
   v.transform(normalizeSsoDomain),
   v.regex(SSO_DOMAIN_PATTERN, "Enter a valid domain name"),
 );
 
-export const createOidcSsoProviderBodySchema = v.strictObject({
+export const createOidcSsoProviderBodySchema = /* @__PURE__ */ v.strictObject({
   displayName: displayNameSchema({ maxLength: 80 }),
   issuer: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
   clientId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
@@ -127,7 +127,7 @@ export type CreateOidcSsoProviderBody = v.InferOutput<
   typeof createOidcSsoProviderBodySchema
 >;
 
-export const createSamlSsoProviderBodySchema = v.strictObject({
+export const createSamlSsoProviderBodySchema = /* @__PURE__ */ v.strictObject({
   providerId: v.optional(
     v.pipe(v.string(), v.trim(), v.regex(/^sso_[a-z0-9_-]{4,48}$/u)),
   ),
@@ -146,7 +146,7 @@ export type CreateSamlSsoProviderBody = v.InferOutput<
   typeof createSamlSsoProviderBodySchema
 >;
 
-export const testOidcSsoProviderBodySchema = v.strictObject({
+export const testOidcSsoProviderBodySchema = /* @__PURE__ */ v.strictObject({
   issuer: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
   discoveryEndpoint: v.optional(
     v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
@@ -157,23 +157,27 @@ export type TestOidcSsoProviderBody = v.InferOutput<
   typeof testOidcSsoProviderBodySchema
 >;
 
-export const updateOrganizationSsoPolicyBodySchema = v.strictObject({
-  requirement: v.picklist(ORGANIZATION_SSO_POLICY_REQUIREMENTS),
-  provisioningMode: v.optional(v.picklist(ORGANIZATION_SSO_PROVISIONING_MODES)),
-  seatLimit: v.optional(
-    v.nullable(
-      v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100_000)),
+export const updateOrganizationSsoPolicyBodySchema =
+  /* @__PURE__ */ v.strictObject({
+    requirement: v.picklist(ORGANIZATION_SSO_POLICY_REQUIREMENTS),
+    provisioningMode: v.optional(
+      v.picklist(ORGANIZATION_SSO_PROVISIONING_MODES),
     ),
-  ),
-});
+    seatLimit: v.optional(
+      v.nullable(
+        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100_000)),
+      ),
+    ),
+  });
 
 export type UpdateOrganizationSsoPolicyBody = v.InferOutput<
   typeof updateOrganizationSsoPolicyBodySchema
 >;
 
-export const createOrganizationSsoDomainBodySchema = v.strictObject({
-  domain: ssoDomainNameSchema,
-});
+export const createOrganizationSsoDomainBodySchema =
+  /* @__PURE__ */ v.strictObject({
+    domain: ssoDomainNameSchema,
+  });
 
 export type CreateOrganizationSsoDomainBody = v.InferOutput<
   typeof createOrganizationSsoDomainBodySchema
