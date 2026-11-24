@@ -118,6 +118,9 @@ export type DictationSnapshot = {
   cloudAvailable: boolean;
   /** The stella AI model the user picked; null: the region's default. */
   cloudModel: string | null;
+  /** A model was stored but cannot be read: none is shown as chosen, and
+   *  nothing goes to stella AI until the speaker picks one. */
+  cloudModelUnreadable?: boolean | undefined;
   /** The speaker's custom words, kept on this computer for the dictation
    *  account. */
   customWords: string[];
