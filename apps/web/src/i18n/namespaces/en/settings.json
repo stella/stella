@@ -748,6 +748,7 @@
         "addPlaceholder": "Add a document type (e.g. Employment Agreement)",
         "deleteFailed": "Couldn't delete document type",
         "description": "Define the document types your organization reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+        "empty": "No document types yet",
         "labelAria": "Document type name",
         "reorder": "Reorder document type",
         "title": "Document types"

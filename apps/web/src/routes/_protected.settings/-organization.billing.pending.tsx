@@ -40,7 +40,6 @@ export const SellerProfilesCardShell = ({
   <BillingSettingsFrame
     actions={action}
     description="billing.sellerProfiles.description"
-    heading="billing.sellerProfiles.title"
   >
     {children}
   </BillingSettingsFrame>

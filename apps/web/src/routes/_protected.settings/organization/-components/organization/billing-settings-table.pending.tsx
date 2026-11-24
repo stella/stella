@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 import {
@@ -82,6 +82,26 @@ export const BillingSettingsTable = ({
   </Table>
 );
 
+export const BillingSettingsRowElement = (
+  props: ComponentProps<typeof TableRow>,
+) => <TableRow {...props} />;
+
+export const BillingSettingsRowCells = <ColumnId extends string>({
+  columns,
+  cells,
+}: {
+  columns: readonly (BillingSettingsColumn & { id: ColumnId })[];
+  cells: Record<NoInfer<ColumnId>, ReactNode>;
+}) => (
+  <>
+    {columns.map(({ id, className }) => (
+      <TableCellFace className={className} key={id}>
+        {cells[id]}
+      </TableCellFace>
+    ))}
+  </>
+);
+
 export const BillingSettingsRow = <ColumnId extends string>({
   columns,
   cells,
@@ -90,10 +110,6 @@ export const BillingSettingsRow = <ColumnId extends string>({
   cells: Record<NoInfer<ColumnId>, ReactNode>;
 }) => (
   <TableRow>
-    {columns.map(({ id, className }) => (
-      <TableCellFace className={className} key={id}>
-        {cells[id]}
-      </TableCellFace>
-    ))}
+    <BillingSettingsRowCells cells={cells} columns={columns} />
   </TableRow>
 );

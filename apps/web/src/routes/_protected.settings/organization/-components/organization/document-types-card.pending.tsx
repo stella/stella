@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from "react";
 
 import { ButtonFace, InputFace } from "@stll/ui/control-face";
-import { GripVerticalIcon, PlusIcon, Trash2Icon } from "@stll/ui/icons";
+import { EllipsisIcon, GripVerticalIcon, PlusIcon } from "@stll/ui/icons";
 import { InlineSkeleton } from "@stll/ui/skeleton";
 import { cn } from "@stll/ui/utils";
 
@@ -26,12 +26,14 @@ export function DocumentTypeRows({ children }: { children: ReactNode }) {
 
 export function DocumentTypeRowFace({
   className,
+  dropTarget = false,
   ...props
-}: ComponentProps<"li">) {
+}: ComponentProps<"li"> & { dropTarget?: boolean }) {
   return (
     <li
       className={cn(
         "bg-card flex items-center gap-2 rounded-lg border px-2 py-1.5",
+        dropTarget && "ring-primary ring-2",
         className,
       )}
       {...props}
@@ -52,7 +54,7 @@ export function DocumentTypesCardPending() {
               <InlineSkeleton className="h-3.5 w-32" />
             </span>
             <ButtonFace size="icon-xs" variant="ghost">
-              <Trash2Icon />
+              <EllipsisIcon />
             </ButtonFace>
           </DocumentTypeRowFace>
         ))}

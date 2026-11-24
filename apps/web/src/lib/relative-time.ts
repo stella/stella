@@ -87,6 +87,12 @@ export const UTC_MEDIUM_DATE_FORMAT = {
   timeZone: "UTC",
 } as const satisfies Intl.DateTimeFormatOptions;
 
+/** The full calendar date of a date-only value; see `UTC_CALENDAR_DATE_FORMAT`. */
+export const UTC_FULL_DATE_FORMAT = {
+  dateStyle: "full",
+  timeZone: "UTC",
+} as const satisfies Intl.DateTimeFormatOptions;
+
 /** "Monday" — a weekday named in running text. */
 export const WEEKDAY_NAME_FORMAT = {
   weekday: "long",

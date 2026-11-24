@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
-import { IntlProvider } from "use-intl";
+import { createFormatter, IntlProvider } from "use-intl";
+
+import { Temporal } from "@stll/time";
 
 import { FormattingProvider } from "@/i18n/formatting-context";
 import ar from "@/i18n/langs/ar.json";
@@ -9,6 +11,11 @@ import en from "@/i18n/langs/en.json";
 import { APIError } from "@/lib/errors/api";
 import type { VatRate } from "@/lib/organization/vat-rates";
 import {
+  UTC_FULL_DATE_FORMAT,
+  UTC_MEDIUM_DATE_FORMAT,
+} from "@/lib/relative-time";
+import {
+  VatRateDate,
   VatRatePercentage,
   VatRateRefusal,
   vatRateStatus,
@@ -38,7 +45,7 @@ describe("VAT rate display", () => {
         style: "percent",
         maximumFractionDigits: 2,
       }).format(0.2125);
-      expect(markup).toBe(expected);
+      expect(markup).toBe(`<span class="tabular-nums">${expected}</span>`);
     });
 
     test(`translates overlap and keeps server failures private in ${locale}`, () => {
@@ -93,5 +100,29 @@ describe("VAT rate display", () => {
     expect(vatRateStatus({ rate: openPeriod, date: "2030-01-31" })).toBe(
       "future",
     );
+  });
+
+  test("preserves the VAT calendar date in time zones west of UTC", () => {
+    const markup = renderToStaticMarkup(
+      <IntlProvider locale="en" messages={en} timeZone="America/Los_Angeles">
+        <FormattingProvider locale="en" timeZone="America/Los_Angeles">
+          <VatRateDate date={PERIOD.validFrom} />
+        </FormattingProvider>
+      </IntlProvider>,
+    );
+    const instant = Temporal.PlainDate.from(PERIOD.validFrom).toZonedDateTime({
+      plainTime: Temporal.PlainTime.from("00:00"),
+      timeZone: "UTC",
+    }).epochMilliseconds;
+    const format = createFormatter({
+      locale: "en",
+      timeZone: "America/Los_Angeles",
+    });
+    const expectedCell = format.dateTime(instant, UTC_MEDIUM_DATE_FORMAT);
+    const expectedTooltip = format.dateTime(instant, UTC_FULL_DATE_FORMAT);
+    expect(markup).toContain(expectedCell);
+    expect(expectedCell).toContain("Feb 1, 2030");
+    expect(expectedTooltip).toContain("February 1, 2030");
+    expect(expectedTooltip).not.toContain("January 31");
   });
 });

@@ -748,6 +748,7 @@
         "addPlaceholder": "Lisa dokumendiliik (nt tööleping)",
         "deleteFailed": "Dokumendiliigi kustutamine nurjus",
         "description": "Määrake dokumendiliigid, mida teie organisatsioon üle vaatab. Playbookid rakenduvad neile ning tehisintellekti klassifikaator liigitab dokumendid nende alusel.",
+        "empty": "Dokumenditüüpe veel pole",
         "labelAria": "Dokumendiliigi nimi",
         "reorder": "Muuda dokumendiliigi järjestust",
         "title": "Dokumendiliigid"

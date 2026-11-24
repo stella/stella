@@ -748,6 +748,7 @@
         "addPlaceholder": "Dokumentumtípus hozzáadása (pl. munkaszerződés)",
         "deleteFailed": "Nem sikerült törölni a dokumentumtípust",
         "description": "Határozza meg a szervezet által felülvizsgált dokumentumtípusokat. A playbookok ezekre vonatkoznak, az AI-osztályozó pedig ezekbe sorolja a dokumentumokat.",
+        "empty": "Még nincsenek dokumentumtípusok",
         "labelAria": "Dokumentumtípus neve",
         "reorder": "Dokumentumtípus átrendezése",
         "title": "Dokumentumtípusok"

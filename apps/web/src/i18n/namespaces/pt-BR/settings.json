@@ -748,6 +748,7 @@
         "addPlaceholder": "Adicionar um tipo de documento (por exemplo, contrato de trabalho)",
         "deleteFailed": "Não foi possível excluir o tipo de documento",
         "description": "Defina os tipos de documentos que sua organização revisa. Os playbooks se aplicam a esses tipos, e o classificador de IA organiza os documentos neles.",
+        "empty": "Ainda não há tipos de documento",
         "labelAria": "Nome do tipo de documento",
         "reorder": "Reordenar tipo de documento",
         "title": "Tipos de documentos"

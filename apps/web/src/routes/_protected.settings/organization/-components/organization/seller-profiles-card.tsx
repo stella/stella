@@ -275,7 +275,7 @@ const SellerProfilesCardBody = ({
                   <Button
                     variant="destructive"
                     disabled={mutation.isPending}
-                    disabledReason={t("common.saving")}
+                    disabledReason={t("common.archiving")}
                     onClick={() =>
                       detached(
                         run({ type: "archive", id: dialog.profile.id }),

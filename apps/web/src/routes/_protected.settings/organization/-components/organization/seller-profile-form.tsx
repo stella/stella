@@ -1,16 +1,17 @@
-import type { ReactElement } from "react";
 import { useId } from "react";
+import type { ReactElement } from "react";
 
 import { useForm, useSelector } from "@tanstack/react-form";
 import { useTranslations } from "use-intl";
 
-import { SELLER_PROFILE_TEXT_FIELDS } from "@stll/api-contract";
+import type { SELLER_PROFILE_TEXT_FIELDS } from "@stll/api-contract";
 import { Button } from "@stll/ui/button";
 import { DialogFooter, DialogPanel } from "@stll/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@stll/ui/field";
 import { Form } from "@stll/ui/form";
 import { Input } from "@stll/ui/input";
-import { Switch } from "@stll/ui/switch";
+import { Separator } from "@stll/ui/separator";
+import { SwitchField } from "@stll/ui/switch";
 import { Textarea } from "@stll/ui/textarea";
 import { cn } from "@stll/ui/utils";
 
@@ -30,6 +31,8 @@ import {
   sellerProfileFormSchema,
 } from "./seller-profile-form.logic";
 
+type SellerProfileTextField = Exclude<keyof SellerProfileInput, "vatPayer">;
+
 const FIELD_LABELS = {
   legalName: "billing.sellerProfiles.legalName",
   registrationId: "billing.sellerProfiles.registrationId",
@@ -48,10 +51,32 @@ const FIELD_LABELS = {
   accountNumber: "common.anonymizationLabels.bankAccountNumber",
   defaultCurrency: "billing.sellerProfiles.defaultCurrency",
   footerNotes: "billing.sellerProfiles.footerNotes",
-} as const satisfies Record<
-  Exclude<keyof SellerProfileInput, "vatPayer">,
-  string
->;
+} as const satisfies Record<SellerProfileTextField, string>;
+
+type SellerProfileFieldGroupEntry = SellerProfileTextField | "vatPayer";
+
+const FIELD_GROUPS = [
+  [
+    "legalName",
+    "registrationId",
+    "taxId",
+    "vatId",
+    "vatPayer",
+    "registerEntry",
+    "barRegistration",
+  ],
+  ["addressLine1", "addressLine2", "city", "postalCode", "country", "email"],
+  ["iban", "bic", "accountNumber", "defaultCurrency"],
+  ["footerNotes"],
+] as const satisfies readonly (readonly SellerProfileFieldGroupEntry[])[];
+
+// Compile-time guard: every text field from the API contract belongs to a group.
+true satisfies Exclude<
+  (typeof SELLER_PROFILE_TEXT_FIELDS)[number],
+  (typeof FIELD_GROUPS)[number][number]
+> extends never
+  ? true
+  : never;
 
 type SellerProfileFormProps = {
   profile?: SellerProfile;
@@ -97,6 +122,87 @@ export const SellerProfileForm = ({
   const isSubmitting = useSelector(form.store, (state) => state.isSubmitting);
   const disabled = pending || isSubmitting;
 
+  const renderField = (name: SellerProfileFieldGroupEntry) => {
+    if (name === "vatPayer") {
+      return (
+        <form.Field key={name} name="vatPayer">
+          {(field) => (
+            <Field name={field.name} className="justify-center">
+              <SwitchField
+                checked={field.state.value}
+                description={t("billing.sellerProfiles.vatPayerHelp")}
+                disabled={disabled}
+                disabledReason={t("common.saving")}
+                id={`${id}-vatPayer`}
+                label={t("common.vatPayer")}
+                onCheckedChange={(checked) => field.handleChange(checked)}
+              />
+            </Field>
+          )}
+        </form.Field>
+      );
+    }
+
+    const control = (
+      <form.Field key={name} name={name}>
+        {(field) => (
+          <Field
+            name={field.name}
+            className={cn(name === "footerNotes" && "sm:col-span-2")}
+          >
+            <FieldLabel htmlFor={`${id}-${name}`}>
+              {t(FIELD_LABELS[name])}
+            </FieldLabel>
+            {name === "footerNotes" ? (
+              <Textarea
+                id={`${id}-${name}`}
+                maxLength={SELLER_PROFILE_LIMITS[name]}
+                onBlur={field.handleBlur}
+                onChange={(event) =>
+                  field.handleChange(event.currentTarget.value)
+                }
+                rows={3}
+                value={field.state.value}
+              />
+            ) : (
+              <Input
+                id={`${id}-${name}`}
+                dir={
+                  name === "iban" ||
+                  name === "bic" ||
+                  name === "email" ||
+                  name === "accountNumber" ||
+                  name === "defaultCurrency"
+                    ? "ltr"
+                    : undefined
+                }
+                maxLength={SELLER_PROFILE_LIMITS[name]}
+                onBlur={field.handleBlur}
+                onChange={(event) =>
+                  field.handleChange(event.currentTarget.value)
+                }
+                required={name === "legalName" || name === "defaultCurrency"}
+                value={field.state.value}
+              />
+            )}
+            <FieldError />
+          </Field>
+        )}
+      </form.Field>
+    );
+    return name === "email" ? (
+      <CallerFeatureGate key={name} feature={CALLER_FEATURE.invoiceLinks}>
+        {(admission) => (
+          <SellerReplyEmailField admission={admission}>
+            {control}
+          </SellerReplyEmailField>
+        )}
+      </CallerFeatureGate>
+    ) : (
+      control
+    );
+  };
+
   return (
     <Form
       dirty={dirty}
@@ -112,100 +218,15 @@ export const SellerProfileForm = ({
       }}
     >
       <DialogPanel>
-        <fieldset
-          className="grid min-w-0 gap-4 sm:grid-cols-2"
-          disabled={disabled}
-        >
-          {SELLER_PROFILE_TEXT_FIELDS.map((name) => {
-            const control = (
-              <form.Field key={name} name={name}>
-                {(field) => (
-                  <Field
-                    name={field.name}
-                    className={cn(name === "footerNotes" && "sm:col-span-2")}
-                  >
-                    <FieldLabel htmlFor={`${id}-${name}`}>
-                      {t(FIELD_LABELS[name])}
-                    </FieldLabel>
-                    {name === "footerNotes" ? (
-                      <Textarea
-                        id={`${id}-${name}`}
-                        maxLength={SELLER_PROFILE_LIMITS[name]}
-                        onBlur={field.handleBlur}
-                        onChange={(event) =>
-                          field.handleChange(event.currentTarget.value)
-                        }
-                        rows={3}
-                        value={field.state.value}
-                      />
-                    ) : (
-                      <Input
-                        id={`${id}-${name}`}
-                        dir={
-                          name === "iban" ||
-                          name === "bic" ||
-                          name === "email" ||
-                          name === "accountNumber" ||
-                          name === "defaultCurrency"
-                            ? "ltr"
-                            : undefined
-                        }
-                        maxLength={SELLER_PROFILE_LIMITS[name]}
-                        onBlur={field.handleBlur}
-                        onChange={(event) =>
-                          field.handleChange(event.currentTarget.value)
-                        }
-                        required={
-                          name === "legalName" || name === "defaultCurrency"
-                        }
-                        value={field.state.value}
-                      />
-                    )}
-                    <FieldError />
-                  </Field>
-                )}
-              </form.Field>
-            );
-            return name === "email" ? (
-              <CallerFeatureGate
-                key={name}
-                feature={CALLER_FEATURE.invoiceLinks}
-              >
-                {(admission) => (
-                  <SellerReplyEmailField admission={admission}>
-                    {control}
-                  </SellerReplyEmailField>
-                )}
-              </CallerFeatureGate>
-            ) : (
-              control
-            );
-          })}
-          <form.Field name="vatPayer">
-            {(field) => (
-              <Field name={field.name} className="sm:col-span-2">
-                <div className="flex items-start gap-3">
-                  <Switch
-                    aria-describedby={`${id}-vatPayer-help`}
-                    checked={field.state.value}
-                    id={`${id}-vatPayer`}
-                    onCheckedChange={(checked) => field.handleChange(checked)}
-                  />
-                  <div className="flex flex-col gap-0.5">
-                    <FieldLabel htmlFor={`${id}-vatPayer`}>
-                      {t("common.vatPayer")}
-                    </FieldLabel>
-                    <span
-                      className="text-muted-foreground text-xs"
-                      id={`${id}-vatPayer-help`}
-                    >
-                      {t("billing.sellerProfiles.vatPayerHelp")}
-                    </span>
-                  </div>
-                </div>
-              </Field>
-            )}
-          </form.Field>
+        <fieldset className="flex min-w-0 flex-col gap-5" disabled={disabled}>
+          {FIELD_GROUPS.map((group, groupIndex) => (
+            <div key={group[0]} className="flex flex-col gap-5">
+              {groupIndex > 0 && <Separator />}
+              <div className="grid min-w-0 gap-4 sm:grid-cols-2">
+                {group.map(renderField)}
+              </div>
+            </div>
+          ))}
         </fieldset>
       </DialogPanel>
       <DialogFooter>

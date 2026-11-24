@@ -748,6 +748,7 @@
         "addPlaceholder": "Pridėti dokumento tipą (pvz., darbo sutartį)",
         "deleteFailed": "Nepavyko ištrinti dokumento tipo",
         "description": "Nustatykite dokumentų tipus, kuriuos peržiūri jūsų organizacija. Peržiūros vadovai taikomi šiems tipams, o DI klasifikatorius pagal juos suskirsto dokumentus.",
+        "empty": "Dokumentų tipų dar nėra",
         "labelAria": "Dokumento tipo pavadinimas",
         "reorder": "Keisti dokumento tipo eilės tvarką",
         "title": "Dokumentų tipai"

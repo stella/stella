@@ -15,7 +15,7 @@ export const NumberSeriesPreviewValue = ({
   const t = useTranslations();
   return (
     <div className="flex flex-col gap-1">
-      <output>
+      <output className="font-mono tabular-nums">
         <BidiText>{preview.number}</BidiText>
       </output>
       {preview.availability === "already_allocated" && (

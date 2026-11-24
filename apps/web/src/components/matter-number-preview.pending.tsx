@@ -11,7 +11,10 @@ export const MatterNumberPreview = ({
 }) => (
   <div className="flex items-center gap-2">
     <span className="text-muted-foreground text-xs">{label}</span>
-    <span className="bg-muted rounded-sm border px-2 py-1 font-mono text-sm">
+    <span
+      className="bg-muted rounded-sm border px-2 py-1 font-mono text-sm tabular-nums"
+      dir="ltr"
+    >
       {children}
     </span>
   </div>

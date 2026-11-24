@@ -17,8 +17,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
+import { SwitchField } from "@stll/ui/switch";
 
-import { Switch } from "@/components/switch";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
@@ -110,6 +110,7 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
     invalidate: organizationSettingsKeys.byOrganization(
       user.activeOrganizationId,
     ),
+    successToast: { title: t("common.saved") },
     onSuccess: () => {
       detached(
         Promise.all([
@@ -158,6 +159,15 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
   const dirty = useSelector(form.store, (state) => state.isDirty);
   const disabled = !canEdit || mutation.isPending;
   const errorKey = timePolicyErrorKey(mutation.error);
+  const clearDateDisabledReason = (() => {
+    if (mutation.isPending) {
+      return t("common.saving");
+    }
+    if (!canEdit) {
+      return t("errors.api.forbidden");
+    }
+    return t("common.noDateToClear");
+  })();
   return (
     <TimePolicyCardFrame>
       <Form
@@ -274,9 +284,7 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
                 />
                 <Button
                   disabled={disabled || field.state.value === ""}
-                  disabledReason={
-                    disabled ? t("common.saving") : t("common.noDateToClear")
-                  }
+                  disabledReason={clearDateDisabledReason}
                   onClick={() => field.handleChange("")}
                   type="button"
                   variant="ghost"
@@ -307,17 +315,18 @@ export const TimePolicyForm = ({ settings, canEdit }: TimePolicyFormProps) => {
         </form.Field>
         <form.Field name="timeNarrativeRequired">
           {(field) => (
-            <Field className="min-h-11 flex-row items-center gap-2">
-              <Switch
-                disabled={disabled}
-                id={`${id}-narrative`}
-                checked={field.state.value}
-                onCheckedChange={field.handleChange}
-              />
-              <FieldLabel htmlFor={`${id}-narrative`}>
-                {t("settings.organization.timePolicy.narrativeRequired")}
-              </FieldLabel>
-            </Field>
+            <SwitchField
+              checked={field.state.value}
+              disabled={disabled}
+              disabledReason={
+                mutation.isPending
+                  ? t("common.saving")
+                  : t("errors.api.forbidden")
+              }
+              id={`${id}-narrative`}
+              label={t("settings.organization.timePolicy.narrativeRequired")}
+              onCheckedChange={field.handleChange}
+            />
           )}
         </form.Field>
         {mutation.error !== null && (

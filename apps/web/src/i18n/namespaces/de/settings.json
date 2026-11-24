@@ -748,6 +748,7 @@
         "addPlaceholder": "Dokumentart hinzufügen (z. B. Arbeitsvertrag)",
         "deleteFailed": "Dokumentart konnte nicht gelöscht werden",
         "description": "Legen Sie die Dokumentarten fest, die Ihre Organisation prüft. Playbooks werden diesen zugeordnet; der KI-Klassifikator sortiert Dokumente entsprechend ein.",
+        "empty": "Noch keine Dokumenttypen",
         "labelAria": "Name der Dokumentart",
         "reorder": "Dokumentart neu anordnen",
         "title": "Dokumentarten"

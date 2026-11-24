@@ -748,6 +748,7 @@
         "addPlaceholder": "Pievienojiet dokumenta tipu (piem., darba līgums)",
         "deleteFailed": "Neizdevās izdzēst dokumenta tipu",
         "description": "Definējiet dokumentu tipus, ko jūsu organizācija pārbauda. Pārbaudes ceļveži attiecas uz šiem tipiem, un AI klasifikators sašķiro dokumentus atbilstoši tiem.",
+        "empty": "Dokumentu tipu vēl nav",
         "labelAria": "Dokumenta tipa nosaukums",
         "reorder": "Pārkārtot dokumenta tipu",
         "title": "Dokumentu tipi"

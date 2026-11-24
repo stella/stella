@@ -14,6 +14,8 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/dialog";
+import { EntityActions, EntityActionsButton } from "@stll/ui/entity-actions";
+import type { EntityAction } from "@stll/ui/entity-actions";
 import { Label } from "@stll/ui/label";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
@@ -45,7 +47,8 @@ import {
 import { useSettingsMutation } from "@/routes/_protected.settings/organization/-hooks/use-settings-mutation";
 
 import {
-  BillingSettingsRow,
+  BillingSettingsRowCells,
+  BillingSettingsRowElement,
   BillingSettingsTable,
 } from "./billing-settings-table.pending";
 
@@ -194,85 +197,83 @@ const NumberSeriesCardBody = ({
               ? { type: "pending" }
               : {
                   type: "loaded",
-                  children: seriesList.map((series) => (
-                    <BillingSettingsRow
-                      key={series.id}
-                      columns={NUMBER_SERIES_COLUMNS}
-                      cells={{
-                        name: (
-                          <>
-                            <BidiText>{series.name}</BidiText>
-                            {series.isDefault && (
-                              <p className="text-muted-foreground text-xs">
-                                {t("billing.numberSeries.default")}
-                              </p>
-                            )}
-                          </>
-                        ),
-                        documentType: t(
-                          DOCUMENT_TYPE_LABELS[series.documentType],
-                        ),
-                        pattern: <BidiText>{series.pattern}</BidiText>,
-                        preview:
-                          preview.type === "open" &&
-                          preview.id === series.id ? (
-                            <NumberSeriesPreview
-                              organizationId={organizationId}
-                              id={series.id}
-                              date={date}
-                            />
-                          ) : (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() =>
-                                setPreview({ type: "open", id: series.id })
-                              }
-                            >
-                              {t("billing.numberSeries.preview")}
-                            </Button>
-                          ),
-                        actions: (
-                          <div className="flex flex-wrap gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={mutation.isPending}
-                              disabledReason={t("common.saving")}
-                              onClick={() => open({ type: "edit", series })}
-                            >
-                              {t("common.edit")}
-                            </Button>
-                            {!series.isDefault && (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={mutation.isPending}
-                                disabledReason={t("common.saving")}
-                                onClick={() =>
-                                  detached(
-                                    run({ type: "default", id: series.id }),
-                                    "number-series.default",
-                                  )
-                                }
-                              >
-                                {t("billing.numberSeries.setDefault")}
-                              </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              disabled={mutation.isPending}
-                              disabledReason={t("common.archiving")}
-                              onClick={() => open({ type: "archive", series })}
-                            >
-                              {t("common.archive")}
-                            </Button>
-                          </div>
-                        ),
-                      }}
-                    />
-                  )),
+                  children: seriesList.map((series) => {
+                    const rowActions: readonly EntityAction[] = [
+                      {
+                        label: t("common.edit"),
+                        disabled: mutation.isPending,
+                        onClick: () => open({ type: "edit", series }),
+                      },
+                      ...(series.isDefault
+                        ? []
+                        : [
+                            {
+                              label: t("billing.numberSeries.setDefault"),
+                              disabled: mutation.isPending,
+                              onClick: () =>
+                                detached(
+                                  run({ type: "default", id: series.id }),
+                                  "number-series.default",
+                                ),
+                            } satisfies EntityAction,
+                          ]),
+                      {
+                        label: t("common.archive"),
+                        variant: "destructive",
+                        separatorBefore: true,
+                        disabled: mutation.isPending,
+                        onClick: () => open({ type: "archive", series }),
+                      },
+                    ];
+                    return (
+                      <EntityActions
+                        key={series.id}
+                        actions={rowActions}
+                        label={t("common.actions")}
+                        render={<BillingSettingsRowElement />}
+                      >
+                        <BillingSettingsRowCells
+                          columns={NUMBER_SERIES_COLUMNS}
+                          cells={{
+                            name: (
+                              <>
+                                <BidiText>{series.name}</BidiText>
+                                {series.isDefault && (
+                                  <p className="text-muted-foreground text-xs">
+                                    {t("billing.numberSeries.default")}
+                                  </p>
+                                )}
+                              </>
+                            ),
+                            documentType: t(
+                              DOCUMENT_TYPE_LABELS[series.documentType],
+                            ),
+                            pattern: <BidiText>{series.pattern}</BidiText>,
+                            preview:
+                              preview.type === "open" &&
+                              preview.id === series.id ? (
+                                <NumberSeriesPreview
+                                  organizationId={organizationId}
+                                  id={series.id}
+                                  date={date}
+                                />
+                              ) : (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() =>
+                                    setPreview({ type: "open", id: series.id })
+                                  }
+                                >
+                                  {t("billing.numberSeries.preview")}
+                                </Button>
+                              ),
+                            actions: <EntityActionsButton />,
+                          }}
+                        />
+                      </EntityActions>
+                    );
+                  }),
                 }
           }
         />
@@ -331,7 +332,7 @@ const NumberSeriesCardBody = ({
                   <Button
                     variant="destructive"
                     disabled={mutation.isPending}
-                    disabledReason={t("common.saving")}
+                    disabledReason={t("common.archiving")}
                     onClick={() =>
                       detached(
                         run({ type: "archive", id: dialog.series.id }),
