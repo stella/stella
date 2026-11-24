@@ -28,13 +28,13 @@ import { useChatEditorManager } from "@/components/chat-editor-provider";
 import { unsentOwnWords } from "@/components/chat/local-run-question.logic";
 import { SecretInput } from "@/components/secret-input";
 import type { LocalRunAnswerDelivery } from "@/features/chat/chat-runtime";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import {
   useFormattingLocale,
   useStepsMarkerStyle,
 } from "@/i18n/formatting-context";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
 type LocalRunQuestionCardProps = {

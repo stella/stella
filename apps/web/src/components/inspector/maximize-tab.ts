@@ -7,12 +7,12 @@ import {
 } from "@/components/inspector/case-decision-view";
 import type { InspectorTab } from "@/components/inspector/inspector-tabs-store";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
+import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
 import {
   chatThreadOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/features/chat/queries";
 import { setThreadActiveSkill } from "@/features/chat/thread-active-skill-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 
 type MaximizeContext = {

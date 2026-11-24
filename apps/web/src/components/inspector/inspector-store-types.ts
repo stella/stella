@@ -8,8 +8,8 @@ import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import type { CaseDecisionPlacement } from "@/components/inspector/case-decision-view";
 import type { FileTab } from "@/components/inspector/file-tab";
 import type { StructuredCloneable } from "@/components/inspector/view-registry";
+import type { ChatThreadId } from "@/features/chat/chat-thread-ref-types";
 import type { LegalDocumentChatKey } from "@/features/chat/legal-document-chat-key";
-import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import type { skillDetailOptions } from "@/lib/knowledge/queries";
 
 export type ExternalTabId = `external:${string}`;
