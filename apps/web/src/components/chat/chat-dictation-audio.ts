@@ -154,7 +154,7 @@ export const transcribeDictationAudio = async ({
 }): Promise<DictationTranscribeOutcome> => {
   const result = await Result.tryPromise(async () => {
     const file = await recordingToWav(audio);
-    return await invokeCapability("dictation.transcribe", (request) =>
+    return await invokeCapability("dictation.transcribe", async (request) =>
       api.dictation.transcribe.post(
         {
           file,
