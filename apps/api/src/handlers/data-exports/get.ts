@@ -7,6 +7,7 @@ import {
   dataExportSummaryColumns,
   toDataExportSummary,
 } from "@/api/handlers/data-exports/summary";
+import type { UNPROJECTED_DATA_EXPORT_COLUMNS } from "@/api/handlers/data-exports/summary";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { resourceIdSchema } from "@/api/lib/custom-schema";
@@ -15,6 +16,10 @@ import {
   readableStoredDataExports,
 } from "@/api/lib/data-export/stored-export-access";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type {
+  UnbackedProjectionKeys,
+  UnprojectedColumns,
+} from "@/api/lib/projection-totality";
 
 const config = {
   contract: "patch",
@@ -65,6 +70,23 @@ const readDataExport = createSafeRootHandler(
           }),
       ),
     );
+    // The summary columns are the projection summary.ts checks for totality;
+    // the matter ids only feed the access check and are not returned.
+    type SelectedDataExportRow = Omit<(typeof rows)[number], "matterIds">;
+    true satisfies UnprojectedColumns<
+      typeof organizationDataExports.$inferSelect,
+      SelectedDataExportRow,
+      (typeof UNPROJECTED_DATA_EXPORT_COLUMNS)[number]
+    > extends never
+      ? true
+      : never;
+    true satisfies UnbackedProjectionKeys<
+      typeof organizationDataExports.$inferSelect,
+      SelectedDataExportRow,
+      (typeof UNPROJECTED_DATA_EXPORT_COLUMNS)[number]
+    > extends never
+      ? true
+      : never;
     const row = rows.at(0);
     // An export the caller may no longer read answers as one that is absent.
     if (row === undefined) {
