@@ -93,7 +93,7 @@ const requiredKeys = [...englishTable.keys()].toSorted();
 const readCustomTable = (language: string, file: string) => {
   const table: LangStringTable = new Map();
   const lines = readFileSync(path.join(TAURI_DIR, file), "utf-8")
-    .split("\n")
+    .split(/\r?\n/u)
     .filter((line) => line !== "");
   for (const line of lines) {
     const [, key, languageId, value] = LANG_STRING_LINE.exec(line) ?? [];
