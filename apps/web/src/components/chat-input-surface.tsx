@@ -194,6 +194,18 @@ const chatComposerDisabledReasons = ({
   };
 };
 
+const dictationThreadKey = (
+  context: Pick<ComposerContextMenuProps, "threadRef"> | undefined,
+) => {
+  if (context === undefined) {
+    return "no-thread";
+  }
+  if (context.threadRef.scope === "workspace") {
+    return `workspace:${context.threadRef.workspaceId}:${context.threadRef.threadId}`;
+  }
+  return `global:${context.threadRef.threadId}`;
+};
+
 export const ChatInputSurface = ({
   autoFocus,
   className,
@@ -447,6 +459,7 @@ export const ChatInputSurface = ({
                   submitDraft={submitDraft}
                 />
                 <ChatComposerDictateButton
+                  key={dictationThreadKey(context)}
                   blank={isBlank}
                   context={context}
                   controller={controller}

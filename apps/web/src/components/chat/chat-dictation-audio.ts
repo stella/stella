@@ -1,4 +1,14 @@
+import { Result } from "better-result";
+
 import { MAX_TRANSCRIPTION_AUDIO_SECONDS } from "@stll/api-contract/transcription";
+
+import type { ChatEditorController } from "@/components/chat-editor-provider";
+import { composerText } from "@/components/chat-editor-source";
+import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
+import { getLiveEditor } from "@/components/live-editor";
+import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
+import { toAPIError } from "@/lib/errors/api";
 
 const SAMPLE_RATE = 16_000;
 const WAV_HEADER_BYTES = 44;
@@ -7,7 +17,38 @@ const WAV_HEADER_BYTES = 44;
 const MAX_DICTATION_SAMPLES = MAX_TRANSCRIPTION_AUDIO_SECONDS * SAMPLE_RATE;
 
 /** Recording stops itself a second short of the most audio one transcription takes. */
-export const DICTATION_MAX_MS = (MAX_TRANSCRIPTION_AUDIO_SECONDS - 1) * 1000;
+const DICTATION_MAX_MS = (MAX_TRANSCRIPTION_AUDIO_SECONDS - 1) * 1000;
+
+export type DictationRecording = {
+  recorder: MediaRecorder;
+  stream: MediaStream;
+  timer: ReturnType<typeof setTimeout>;
+};
+
+type DictationTranscribeOutcome =
+  | { readonly type: "text"; readonly text: string }
+  | { readonly type: "silent" }
+  | { readonly type: "error"; readonly error: unknown };
+
+type DictationStartOutcome =
+  | { readonly type: "started"; readonly recording: DictationRecording }
+  | { readonly type: "denied" }
+  | { readonly type: "cancelled" }
+  | { readonly type: "error"; readonly error: unknown };
+
+const stopTracks = (stream: MediaStream) => {
+  for (const track of stream.getTracks()) {
+    track.stop();
+  }
+};
+
+export const releaseDictationRecording = ({
+  stream,
+  timer,
+}: DictationRecording) => {
+  clearTimeout(timer);
+  stopTracks(stream);
+};
 
 /** Mixes decoded audio channels into a mono buffer bounded to the server duration limit. */
 export const mixChannelsToMono = (
@@ -66,7 +107,7 @@ export const encodeWav = (samples: Float32Array, sampleRate: number): Blob => {
 };
 
 /** The browser's recording (WebM, Ogg or MP4) as mono 16 kHz WAV. */
-export const recordingToWav = async (recording: Blob): Promise<File> => {
+const recordingToWav = async (recording: Blob): Promise<File> => {
   // Decoding in a context at 16 kHz resamples as it decodes.
   const decoded = await new OfflineAudioContext(
     1,
@@ -81,4 +122,103 @@ export const recordingToWav = async (recording: Blob): Promise<File> => {
   return new File([encodeWav(mono, SAMPLE_RATE)], "dictation.wav", {
     type: "audio/wav",
   });
+};
+
+export const applyDictatedText = (
+  controller: Pick<ChatEditorController, "editor" | "focus" | "setContent">,
+  text: string,
+) => {
+  const liveEditor = getLiveEditor(controller.editor);
+  if (liveEditor === null) {
+    return;
+  }
+  if (liveEditor.isEmpty) {
+    controller.setContent(composerText(text));
+    controller.focus();
+    return;
+  }
+  const separator = /\s$/u.test(liveEditor.getText()) ? "" : " ";
+  liveEditor
+    .chain()
+    .focus("end")
+    .insertContent({ type: "text", text: `${separator}${text}` })
+    .run();
+};
+
+export const transcribeDictationAudio = async ({
+  audio,
+  context,
+}: {
+  audio: Blob;
+  context: Pick<ComposerContextMenuProps, "threadRef"> | undefined;
+}): Promise<DictationTranscribeOutcome> => {
+  const result = await Result.tryPromise(async () => {
+    const file = await recordingToWav(audio);
+    return await invokeCapability("dictation.transcribe", (request) =>
+      api.dictation.transcribe.post(
+        {
+          file,
+          ...(context?.threadRef.scope === "workspace"
+            ? { matterId: context.threadRef.workspaceId }
+            : {}),
+        },
+        request,
+      ),
+    );
+  });
+  if (Result.isError(result)) {
+    return { type: "error", error: result.error };
+  }
+  if (result.value.error) {
+    return { type: "error", error: toAPIError(result.value.error) };
+  }
+  const text = result.value.data.text.trim();
+  if (text === "") {
+    return { type: "silent" };
+  }
+  return { type: "text", text };
+};
+
+export const acquireAndStartRecording = async ({
+  isStillValid,
+  onStop,
+}: {
+  isStillValid: () => boolean;
+  onStop: (audio: Blob, recorder: MediaRecorder) => void;
+}): Promise<DictationStartOutcome> => {
+  const streamResult = await Result.tryPromise(
+    async () => await navigator.mediaDevices.getUserMedia({ audio: true }),
+  );
+  if (Result.isError(streamResult)) {
+    return isStillValid() ? { type: "denied" } : { type: "cancelled" };
+  }
+
+  const stream = streamResult.value;
+  if (!isStillValid()) {
+    stopTracks(stream);
+    return { type: "cancelled" };
+  }
+
+  const startResult = Result.try(() => {
+    const recorder = new MediaRecorder(stream);
+    const chunks: Blob[] = [];
+    recorder.ondataavailable = (event) => {
+      chunks.push(event.data);
+    };
+    recorder.onstop = () => {
+      onStop(new Blob(chunks, { type: recorder.mimeType }), recorder);
+    };
+    recorder.start();
+    const timer = setTimeout(() => {
+      recorder.stop();
+    }, DICTATION_MAX_MS);
+    return { recorder, stream, timer };
+  });
+
+  if (Result.isError(startResult)) {
+    stopTracks(stream);
+    return { type: "error", error: startResult.error };
+  }
+
+  return { type: "started", recording: startResult.value };
 };

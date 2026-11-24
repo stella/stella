@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import type { ReactElement } from "react";
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -9,57 +9,23 @@ import { DictateIcon, SquareIcon } from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 
 import type { ChatEditorController } from "@/components/chat-editor-provider";
-import { composerText } from "@/components/chat-editor-source";
+import type { DictationRecording } from "@/components/chat/chat-dictation-audio";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
-import { getLiveEditor } from "@/components/live-editor";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useMountEffect } from "@/hooks/use-effect";
-import { api } from "@/lib/api";
-import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
-import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
 type Phase = "idle" | "acquiring" | "recording" | "transcribing";
 
-type Recording = {
-  recorder: MediaRecorder;
-  stream: MediaStream;
-  timer: ReturnType<typeof setTimeout>;
+type ActiveSession = {
+  recording: DictationRecording;
+  release: (recording: DictationRecording) => void;
 };
 
-const stopTracks = (stream: MediaStream) => {
-  for (const track of stream.getTracks()) {
-    track.stop();
-  }
-};
-
-const release = ({ stream, timer }: Recording) => {
-  clearTimeout(timer);
-  stopTracks(stream);
-};
-
-const applyDictatedText = (
-  controller: Pick<ChatEditorController, "editor" | "focus" | "setContent">,
-  text: string,
-) => {
-  const liveEditor = getLiveEditor(controller.editor);
-  if (liveEditor === null) {
-    return;
-  }
-  if (liveEditor.isEmpty) {
-    controller.setContent(composerText(text));
-    controller.focus();
-    return;
-  }
-  const separator = /\s$/u.test(liveEditor.getText()) ? "" : " ";
-  liveEditor
-    .chain()
-    .focus("end")
-    .insertContent({ type: "text", text: `${separator}${text}` })
-    .run();
-};
+const loadDictationAudio = async () =>
+  await import("@/components/chat/chat-dictation-audio");
 
 /**
  * The microphone an empty composer shows in place of send (`children`):
@@ -90,137 +56,107 @@ export const ChatComposerDictateButton = ({
 }) => {
   const t = useTranslations();
   const [phase, setPhase] = useState<Phase>("idle");
-  const recording = useRef<Recording | null>(null);
+  const activeSession = useRef<ActiveSession | null>(null);
   const acquiring = useRef(false);
   const generation = useRef(0);
 
-  // Leaving the composer drops any active recording and invalidates pending
-  // microphone acquisition or transcription.
+  // Leaving the composer or switching threads drops any active recording and
+  // invalidates pending microphone acquisition or transcription.
   useMountEffect(() => () => {
     generation.current += 1;
     acquiring.current = false;
-    const dropped = recording.current;
-    recording.current = null;
+    const dropped = activeSession.current;
+    activeSession.current = null;
     if (dropped !== null) {
-      dropped.recorder.stop();
-      release(dropped);
+      dropped.recording.recorder.stop();
+      dropped.release(dropped.recording);
     }
   });
 
-  const transcribe = async (audio: Blob, runGeneration: number) => {
-    const result = await Result.tryPromise(async () => {
-      const { recordingToWav } =
-        await import("@/components/chat/chat-dictation-audio");
-      const file = await recordingToWav(audio);
-      return await invokeCapability("dictation.transcribe", (request) =>
-        api.dictation.transcribe.post(
-          {
-            file,
-            ...(context?.threadRef.scope === "workspace"
-              ? { matterId: context.threadRef.workspaceId }
-              : {}),
-          },
-          request,
-        ),
-      );
-    });
-    if (runGeneration !== generation.current) {
-      return;
-    }
-    setPhase("idle");
-    if (Result.isError(result)) {
-      notifyUserError(result.error, t("chat.dictationFailed"));
-      return;
-    }
-    if (result.value.error) {
-      notifyUserError(
-        toAPIError(result.value.error),
-        t("chat.dictationFailed"),
-      );
-      return;
-    }
-    const text = result.value.data.text.trim();
-    if (text === "") {
-      notifyUserProblem(t("chat.dictationSilent"));
-      return;
-    }
-    applyDictatedText(controller, text);
-  };
-
   const start = async () => {
-    if (acquiring.current || recording.current !== null) {
+    if (acquiring.current || activeSession.current !== null) {
       return;
     }
     acquiring.current = true;
     setPhase("acquiring");
     const runGeneration = generation.current;
 
-    const streamResult = await Result.tryPromise(
-      async () => await navigator.mediaDevices.getUserMedia({ audio: true }),
-    );
-    if (Result.isError(streamResult)) {
+    const moduleResult = await Result.tryPromise(loadDictationAudio);
+    if (Result.isError(moduleResult)) {
       acquiring.current = false;
       if (runGeneration === generation.current) {
         setPhase("idle");
-        notifyUserProblem(t("chat.dictationDenied"));
+        notifyUserError(moduleResult.error, t("chat.dictationFailed"));
       }
       return;
     }
+    const {
+      acquireAndStartRecording,
+      applyDictatedText,
+      releaseDictationRecording,
+      transcribeDictationAudio,
+    } = moduleResult.value;
 
-    const stream = streamResult.value;
-    if (runGeneration !== generation.current) {
-      acquiring.current = false;
-      stopTracks(stream);
-      return;
-    }
-
-    const audioModuleResult = await Result.tryPromise(
-      async () => await import("@/components/chat/chat-dictation-audio"),
-    );
-    acquiring.current = false;
-    if (Result.isError(audioModuleResult)) {
-      stopTracks(stream);
-      if (runGeneration === generation.current) {
-        setPhase("idle");
-        notifyUserError(audioModuleResult.error, t("chat.dictationFailed"));
-      }
-      return;
-    }
-    if (runGeneration !== generation.current) {
-      stopTracks(stream);
-      return;
-    }
-    const { DICTATION_MAX_MS } = audioModuleResult.value;
-
-    const recorder = new MediaRecorder(stream);
-    const chunks: Blob[] = [];
-    recorder.ondataavailable = (event) => {
-      chunks.push(event.data);
-    };
-    recorder.onstop = () => {
-      if (recording.current?.recorder !== recorder) {
+    const transcribe = async (audio: Blob) => {
+      const outcome = await transcribeDictationAudio({ audio, context });
+      if (runGeneration !== generation.current) {
         return;
       }
-      release(recording.current);
-      recording.current = null;
-      setPhase("transcribing");
-      detached(
-        transcribe(
-          new Blob(chunks, { type: recorder.mimeType }),
-          runGeneration,
-        ),
-        "chat-composer-dictate-button.transcribe",
-      );
+      setPhase("idle");
+      switch (outcome.type) {
+        case "text":
+          applyDictatedText(controller, outcome.text);
+          return;
+        case "silent":
+          notifyUserProblem(t("chat.dictationSilent"));
+          return;
+        case "error":
+          notifyUserError(outcome.error, t("chat.dictationFailed"));
+          return;
+        default:
+          outcome satisfies never;
+          panic(`Unhandled dictation transcribe outcome`);
+      }
     };
-    recording.current = {
-      recorder,
-      stream,
-      timer: setTimeout(() => {
-        recorder.stop();
-      }, DICTATION_MAX_MS),
-    };
-    recorder.start();
-    setPhase("recording");
+
+    const outcome = await acquireAndStartRecording({
+      isStillValid: () => runGeneration === generation.current,
+      onStop: (audio, recorder) => {
+        if (activeSession.current?.recording.recorder !== recorder) {
+          return;
+        }
+        activeSession.current.release(activeSession.current.recording);
+        activeSession.current = null;
+        setPhase("transcribing");
+        detached(transcribe(audio), "chat-composer-dictate-button.transcribe");
+      },
+    });
+    acquiring.current = false;
+
+    switch (outcome.type) {
+      case "started":
+        activeSession.current = {
+          recording: outcome.recording,
+          release: releaseDictationRecording,
+        };
+        setPhase("recording");
+        return;
+      case "denied":
+        setPhase("idle");
+        notifyUserProblem(t("chat.dictationDenied"));
+        return;
+      case "cancelled":
+        return;
+      case "error":
+        if (runGeneration === generation.current) {
+          setPhase("idle");
+          notifyUserError(outcome.error, t("chat.dictationFailed"));
+        }
+        return;
+      default:
+        outcome satisfies never;
+        panic(`Unhandled dictation start outcome`);
+    }
   };
 
   if ((!blank || isGenerating) && phase === "idle") {
@@ -250,7 +186,7 @@ export const ChatComposerDictateButton = ({
       disabledReason={label}
       onClick={() => {
         if (phase === "recording") {
-          recording.current?.recorder.stop();
+          activeSession.current?.recording.recorder.stop();
           return;
         }
         detached(start(), "chat-composer-dictate-button.start");
