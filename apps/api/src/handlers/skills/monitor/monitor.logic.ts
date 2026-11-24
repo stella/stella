@@ -1,4 +1,12 @@
+import { panic } from "better-result";
+
 import { Temporal } from "@stll/time";
+
+import {
+  parseSkillReadAuditMetadata,
+  SKILL_READ_OUTCOME,
+  SKILL_READ_SURFACE,
+} from "@/api/lib/agent-skills/skill-read-audit";
 
 export const SKILL_MONITOR_WINDOWS = [7, 30, 90] as const;
 
@@ -48,6 +56,7 @@ export type SkillMonitorSummary = {
   mcpReads: number;
   totalReads: number;
   totalUses: number;
+  truncated: boolean;
   uniqueUsers: number;
   windowDays: SkillMonitorWindowDays;
   windowEnd: string;
@@ -71,24 +80,6 @@ const compareKeys = (a: string, b: string): number => {
   return 0;
 };
 
-const readStringMetadata = (
-  metadata: Record<string, unknown> | null,
-  key: string,
-): string | null => {
-  const value = metadata?.[key];
-  return typeof value === "string" ? value : null;
-};
-
-export const monitorWindowStartInstant = (
-  now: Date,
-  windowDays: SkillMonitorWindowDays,
-): Date => {
-  const startDay = toUtcPlainDate(now).subtract({ days: windowDays - 1 });
-  return new Date(
-    startDay.toZonedDateTime("UTC").toInstant().epochMilliseconds,
-  );
-};
-
 /**
  * Aggregate a skill's `audit_logs` access rows and current resource list into
  * the Monitor dashboard payload. Pure so it can be unit-tested without Postgres.
@@ -97,12 +88,14 @@ export const aggregateSkillMonitor = ({
   now,
   resourcePaths,
   rows,
+  truncated = false,
   userProfiles,
   windowDays,
 }: {
   now: Date;
   resourcePaths: readonly string[];
   rows: readonly SkillMonitorAuditRow[];
+  truncated?: boolean;
   userProfiles?: ReadonlyMap<string, SkillMonitorUserProfile>;
   windowDays: SkillMonitorWindowDays;
 }): SkillMonitorSummary => {
@@ -154,10 +147,25 @@ export const aggregateSkillMonitor = ({
       continue;
     }
 
-    const path = readStringMetadata(row.metadata, "path");
-    const surface = readStringMetadata(row.metadata, "surface");
-    const outcome = readStringMetadata(row.metadata, "outcome");
-    const isError = outcome === "error";
+    const parsed = parseSkillReadAuditMetadata(row.metadata);
+    if (parsed === null) {
+      continue;
+    }
+
+    const { outcome, path, surface } = parsed;
+    let isError: boolean;
+    switch (outcome) {
+      case SKILL_READ_OUTCOME.error:
+        isError = true;
+        break;
+      case SKILL_READ_OUTCOME.success:
+        isError = false;
+        break;
+      default: {
+        outcome satisfies never;
+        return panic("Unhandled skill read outcome");
+      }
+    }
 
     allUsers.add(row.userId);
     bucket.users.add(row.userId);
@@ -177,10 +185,17 @@ export const aggregateSkillMonitor = ({
       userEntry.fallbackUses += 1;
     }
 
-    if (surface === "mcp") {
-      mcpReads += 1;
-    } else {
-      chatReads += 1;
+    switch (surface) {
+      case SKILL_READ_SURFACE.mcp:
+        mcpReads += 1;
+        break;
+      case SKILL_READ_SURFACE.chat:
+        chatReads += 1;
+        break;
+      default: {
+        surface satisfies never;
+        return panic("Unhandled skill read surface");
+      }
     }
 
     if (isError) {
@@ -252,6 +267,7 @@ export const aggregateSkillMonitor = ({
     mcpReads,
     totalReads,
     totalUses,
+    truncated,
     uniqueUsers: allUsers.size,
     windowDays,
     windowEnd: endDay.toString(),

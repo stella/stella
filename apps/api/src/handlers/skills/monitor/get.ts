@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { member, user as userTable } from "@/api/db/auth-schema";
@@ -70,65 +70,70 @@ const getSkillMonitor = createSafeRootHandler(
     const windowDays: SkillMonitorWindowDays = query.days ?? 7;
     const now = new Date();
 
-    const [resourceRows, auditRows, profileRows] = yield* Result.await(
-      safeDb(async (tx) => {
-        const resources = await tx
-          .select({ path: agentSkillResources.path })
-          .from(agentSkillResources)
-          .where(
-            and(
-              eq(agentSkillResources.skillId, skill.id),
-              eq(
-                agentSkillResources.organizationId,
-                session.activeOrganizationId,
+    const [resourceRows, auditRows, profileRows, truncated] =
+      yield* Result.await(
+        safeDb(async (tx) => {
+          const resources = await tx
+            .select({ path: agentSkillResources.path })
+            .from(agentSkillResources)
+            .where(
+              and(
+                eq(agentSkillResources.skillId, skill.id),
+                eq(
+                  agentSkillResources.organizationId,
+                  session.activeOrganizationId,
+                ),
               ),
-            ),
-          )
-          .orderBy(asc(agentSkillResources.path))
-          .limit(LIMITS.agentSkillResourcesPerSkill);
+            )
+            .orderBy(asc(agentSkillResources.path))
+            .limit(LIMITS.agentSkillResourcesPerSkill);
 
-        const logs = await tx
-          .select({
-            createdAt: auditLogs.createdAt,
-            metadata: auditLogs.metadata,
-            runId: auditLogs.runId,
-            userId: auditLogs.userId,
-          })
-          .from(auditLogs)
-          .where(
-            and(
-              eq(auditLogs.organizationId, session.activeOrganizationId),
-              eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.AGENT_SKILL),
-              eq(auditLogs.resourceId, skill.id),
-              eq(auditLogs.action, AUDIT_ACTION.ACCESS),
-              sql`${auditLogs.createdAt} >= now() - make_interval(days => ${windowDays})`,
-            ),
-          )
-          .orderBy(asc(auditLogs.createdAt))
-          .limit(MONITOR_AUDIT_ROW_LIMIT);
+          const logs = await tx
+            .select({
+              createdAt: auditLogs.createdAt,
+              metadata: auditLogs.metadata,
+              runId: auditLogs.runId,
+              userId: auditLogs.userId,
+            })
+            .from(auditLogs)
+            .where(
+              and(
+                eq(auditLogs.organizationId, session.activeOrganizationId),
+                eq(auditLogs.resourceType, AUDIT_RESOURCE_TYPE.AGENT_SKILL),
+                eq(auditLogs.resourceId, skill.id),
+                eq(auditLogs.action, AUDIT_ACTION.ACCESS),
+                sql`${auditLogs.createdAt} >= now() - make_interval(days => ${windowDays})`,
+              ),
+            )
+            .orderBy(desc(auditLogs.createdAt))
+            .limit(MONITOR_AUDIT_ROW_LIMIT + 1);
 
-        const userIds = [...new Set(logs.map((row) => row.userId))];
-        const profiles =
-          userIds.length === 0
-            ? []
-            : await tx
-                .select({
-                  id: userTable.id,
-                  image: userTable.image,
-                  name: userTable.name,
-                })
-                .from(userTable)
-                .innerJoin(member, eq(member.userId, userTable.id))
-                .where(
-                  and(
-                    eq(member.organizationId, session.activeOrganizationId),
-                    inArray(userTable.id, userIds),
-                  ),
-                );
+          const isTruncated = logs.length > MONITOR_AUDIT_ROW_LIMIT;
+          const boundedLogs = isTruncated
+            ? logs.slice(0, MONITOR_AUDIT_ROW_LIMIT)
+            : logs;
+          const userIds = [...new Set(boundedLogs.map((row) => row.userId))];
+          const profiles =
+            userIds.length === 0
+              ? []
+              : await tx
+                  .select({
+                    id: userTable.id,
+                    image: userTable.image,
+                    name: userTable.name,
+                  })
+                  .from(userTable)
+                  .innerJoin(member, eq(member.userId, userTable.id))
+                  .where(
+                    and(
+                      eq(member.organizationId, session.activeOrganizationId),
+                      inArray(userTable.id, userIds),
+                    ),
+                  );
 
-        return [resources, logs, profiles] as const;
-      }),
-    );
+          return [resources, boundedLogs, profiles, isTruncated] as const;
+        }),
+      );
 
     const userProfiles = new Map(
       profileRows.map((row) => [row.id, { image: row.image, name: row.name }]),
@@ -139,6 +144,7 @@ const getSkillMonitor = createSafeRootHandler(
         now,
         resourcePaths: resourceRows.map((row) => row.path),
         rows: auditRows,
+        truncated,
         userProfiles,
         windowDays,
       }),

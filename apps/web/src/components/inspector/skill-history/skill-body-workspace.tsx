@@ -265,7 +265,7 @@ export const SkillBodyWorkspace = ({
       key={`live:${String(editorGeneration)}:${String(commenting)}`}
       markdown={liveMarkdown}
       onMarkdownChange={onPersistBody}
-      readOnly={!canManage || commenting}
+      readOnly={!canManage || !isProposable || commenting}
       {...(commenting
         ? { onAddComment: addComment, onDeleteComment: deleteComment }
         : {})}

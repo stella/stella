@@ -362,7 +362,17 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       storedBase: bodyContent,
     });
   };
-  const adoptBody = (_editorMarkdown: string) => {
+  const adoptBody = (editorMarkdown: string) => {
+    const key = skillDetailOptions(
+      activeOrganizationId,
+      userId,
+      skillId,
+    ).queryKey;
+    queryClient.setQueryData(key, (current) =>
+      current
+        ? { ...current, body: toStoredMarkdown(editorMarkdown, current.body) }
+        : current,
+    );
     onChanged();
     detached(detail.refetch(), "skill-editor.adopt-body");
   };

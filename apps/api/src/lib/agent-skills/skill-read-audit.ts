@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db/safe-db-types";
 import { CHAT_SKILL_SOURCE } from "@/api/lib/agent-skills/skills";
@@ -14,7 +15,7 @@ export const SKILL_READ_SURFACE = {
   mcp: "mcp",
 } as const;
 
-type SkillReadSurface =
+export type SkillReadSurface =
   (typeof SKILL_READ_SURFACE)[keyof typeof SKILL_READ_SURFACE];
 
 export const SKILL_READ_OUTCOME = {
@@ -44,6 +45,28 @@ type SkillReadAuditEventOptions = {
  * it. It names the skill and the file, never the content. A built-in has no
  * row, so its slug is the resource id; `skillSource` says which.
  */
+const skillReadAuditMetadataSchema = v.object({
+  outcome: v.picklist([SKILL_READ_OUTCOME.error, SKILL_READ_OUTCOME.success]),
+  path: v.nullable(v.string()),
+  skillSource: v.optional(
+    v.picklist([CHAT_SKILL_SOURCE.installed, CHAT_SKILL_SOURCE.builtIn]),
+  ),
+  slug: v.optional(v.string()),
+  surface: v.picklist([SKILL_READ_SURFACE.chat, SKILL_READ_SURFACE.mcp]),
+});
+
+export type SkillReadAuditMetadata = v.InferOutput<
+  typeof skillReadAuditMetadataSchema
+>;
+
+/** Validate persisted skill-read audit metadata against the canonical contract. */
+export const parseSkillReadAuditMetadata = (
+  metadata: unknown,
+): SkillReadAuditMetadata | null => {
+  const parsed = v.safeParse(skillReadAuditMetadataSchema, metadata);
+  return parsed.success ? parsed.output : null;
+};
+
 const skillReadAuditEvent = ({
   outcome,
   path,
