@@ -1,3 +1,4 @@
+// parser-output-unchanged: [eu-ecj] bounded response body reads preserve identical payloads; only oversized responses are refused.
 // parser-output-unchanged: [eu-ecj] bounded Formex archive reads yield the same entries in the same order; only oversized archives are refused.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: [eu-ecj] capture retains original ZIP bytes; replay of existing envelopes is unchanged.
@@ -24,6 +25,7 @@ import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 // parser-output-unchanged: SHA-256 ownership changes preserve input bytes, serialization and update order, so stored hashes and parser output remain identical.
 import { sha256Hex as hashContent } from "@stll/sha256/bun";
+import { readCappedBytes } from "@stll/skills/streaming";
 import { Temporal } from "@stll/time";
 
 import {
@@ -133,6 +135,40 @@ import { isRecord } from "@/api/lib/type-guards";
 
 import { EU_ECJ_METADATA_URL_SCHEMA } from "./eu-ecj.metadata-urls";
 
+const readEcjResponseBytes = async (
+  response: Response,
+  subject: string,
+): Promise<Uint8Array> => {
+  if (response.body === null) {
+    return new Uint8Array();
+  }
+  const bytes = await readCappedBytes(response.body, PUBLISHER_BODY_MAX_BYTES);
+  if (bytes === null) {
+    return await Promise.reject(
+      new AdapterFetchError({
+        message: `CJEU ${subject} body exceeded ${PUBLISHER_BODY_MAX_BYTES} bytes`,
+        adapterKey: ADAPTER_KEYS.EU_ECJ,
+        cursor: null,
+        httpStatus: response.status,
+      }),
+    );
+  }
+  return bytes;
+};
+
+const readEcjResponseText = async (
+  response: Response,
+  subject: string,
+): Promise<string> =>
+  new TextDecoder("utf-8", { fatal: true }).decode(
+    await readEcjResponseBytes(response, subject),
+  );
+
+const readEcjResponseJson = async (
+  response: Response,
+  subject: string,
+): Promise<unknown> => JSON.parse(await readEcjResponseText(response, subject));
+
 /**
  * European Court of Justice (CJEU) adapter.
  *
@@ -200,8 +236,7 @@ export const ECJ_LANGUAGES = [
 type EcjLanguage = (typeof ECJ_LANGUAGES)[number];
 
 const eurLexSourceUrl = (lang: EcjLanguage, celex: string) =>
-  `https://eur-lex.europa.eu/legal-content/${lang}` +
-  `/ALL/?uri=CELEX:${celex}`;
+  `https://eur-lex.europa.eu/legal-content/${lang}/ALL/?uri=CELEX:${celex}`;
 
 // Intl.Locale construction is not free and SPARQL pages repeat the same
 // 24 language URIs thousands of times during backfills; memoize per
@@ -522,9 +557,7 @@ export const buildListingQuery = ({
 }: ListingQueryOptions): string => {
   const celexClause =
     celexFilter && celexFilter.length > 0
-      ? `\n  VALUES ?celex { ${celexFilter
-          .map((celex) => `"${celex}"^^xsd:string`)
-          .join(" ")} }`
+      ? `\n  VALUES ?celex { ${celexFilter.map((celex) => `"${celex}"^^xsd:string`).join(" ")} }`
       : "";
 
   return `
@@ -590,7 +623,7 @@ const queryDecisions = async ({
     });
   }
 
-  const json = await response.json();
+  const json = await readEcjResponseJson(response, "SPARQL");
   if (!isSparqlResponse(json)) {
     throw new AdapterFetchError({
       message: "CJEU SPARQL returned an invalid payload",
@@ -951,7 +984,7 @@ const readDocumentResponse = async ({
     return { type: "address-exhausted", status: response.status };
   }
 
-  const html = await response.text();
+  const html = await readEcjResponseText(response, "document");
   return html.length > MIN_DOCUMENT_LENGTH
     ? { type: "document", html, url }
     : { type: "address-exhausted", status: response.status };
@@ -2277,7 +2310,10 @@ export const fetchNotice = async ({
       }),
     );
   }
-  return Result.ok({ type: "present", xml: await response.text() });
+  return Result.ok({
+    type: "present",
+    xml: await readEcjResponseText(response, "Cellar notice"),
+  });
 };
 
 type EcjFormexRead =
@@ -2362,14 +2398,15 @@ const fetchFormex = async (
   ) {
     return Result.ok({
       type: "fetched",
-      formex: await response.text(),
+      formex: await readEcjResponseText(response, "Formex XML"),
       formexOriginalZip: undefined,
     });
   }
-  const bytes = await response.arrayBuffer();
+  const bytes = await readEcjResponseBytes(response, "Formex ZIP");
+  const buffer = new Uint8Array(bytes).buffer;
   return Result.ok({
     type: "fetched",
-    formex: await readEcjFormexArchive(bytes),
+    formex: await readEcjFormexArchive(buffer),
     formexOriginalZip: Buffer.from(bytes).toBase64(),
   });
 };
@@ -3848,7 +3885,9 @@ export const euEcjAdapter = defineSourceAdapter({
       if (!response.ok) {
         return sourceTotalProbeFailed(SOURCE_TOTAL_PROBE_FAILURE.HTTP_STATUS);
       }
-      const total = sumEcjTotalCount(await response.json());
+      const total = sumEcjTotalCount(
+        await readEcjResponseJson(response, "SPARQL total count"),
+      );
       if (total === undefined) {
         return sourceTotalProbeFailed(
           SOURCE_TOTAL_PROBE_FAILURE.UNREADABLE_PAYLOAD,

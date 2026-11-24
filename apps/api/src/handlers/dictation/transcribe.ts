@@ -89,7 +89,7 @@ export const RETAINING_MODELS_FEATURE_ID =
  * feature decisions come with the request; a caller that arrives without
  * them for this member reads them, as handler feature admission does.
  */
-export const readRetainingModelsGrant = async ({
+export const readRetainingModelsDecision = async ({
   featureAccessSnapshot,
   safeDb,
   session,
@@ -602,7 +602,7 @@ export const createDictationTranscribeEndpoint = ({
                 ...ctx,
                 allowOutsideRegion: true,
                 allowRetainingModels: async () =>
-                  await readRetainingModelsGrant(ctx),
+                  await readRetainingModelsDecision(ctx),
               }
             : ctx,
           {

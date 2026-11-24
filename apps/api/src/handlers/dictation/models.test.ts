@@ -1,12 +1,10 @@
 import { Result } from "better-result";
-import { beforeEach, expect, test } from "bun:test";
+import { expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { desktopDictationModelsSchema } from "@stll/api-contract/desktop-dictation-transcription";
-import { createTestState } from "@stll/test-state";
 
 import type { SafeDb } from "@/api/db/safe-db";
-import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -23,16 +21,9 @@ import { listDictationModels } from "./desktop-transcription";
 import { createDictationModelsEndpoint } from "./models";
 import type { TranscriptionDeployment } from "./transcription-deployment";
 
-const testState = createTestState({ file: import.meta.path, config: env });
-
 const USER_ID = toSafeId<"user">("phone-dictating-member");
 const ORGANIZATION_ID = toSafeId<"organization">("phone-dictating-firm");
 const EMAIL = "phone-dictation@example.test";
-const GRANT = {
-  type: "member",
-  organizationId: ORGANIZATION_ID,
-  email: EMAIL,
-} as const;
 const SCRIBE = "elevenlabs-direct/scribe-v3";
 /** An ElevenLabs key without zero retention: Scribe v3 keeps the audio. */
 const RETAINING: TranscriptionDeployment = {
@@ -44,24 +35,12 @@ const RETAINING: TranscriptionDeployment = {
   },
 };
 
-beforeEach(() => {
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-});
-
-const grantRetainingModels = () => {
-  // The decision's prerequisites come with it, as the registry requires.
-  testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-    "desktop-dictation": [GRANT],
-    "desktop-dictation-cloud": [GRANT],
-    "desktop-dictation-retaining-models": [GRANT],
-  });
-};
-
-const memberDecisions = () =>
+/** Every member whose email is verified has the dictation decisions. */
+const memberDecisions = (emailVerified: boolean) =>
   buildFeatureAccessSnapshot({
     organizationId: ORGANIZATION_ID,
     userId: USER_ID,
-    identity: { email: EMAIL, emailVerified: true },
+    identity: { email: EMAIL, emailVerified },
     enrolments: [],
   });
 
@@ -73,11 +52,13 @@ const listFor = async ({
   role = "member",
   residency = "us",
   withSnapshot = true,
+  emailVerified = true,
 }: {
   deployment?: TranscriptionDeployment;
   role?: "member" | "external";
   residency?: "eu" | "us";
   withSnapshot?: boolean;
+  emailVerified?: boolean;
 } = {}) => {
   const endpoint = createDictationModelsEndpoint({
     readDeployment: () => deployment,
@@ -86,19 +67,23 @@ const listFor = async ({
     createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
       audit: NO_AUDIT,
       // A request with the member's decisions reads nothing; one without
-      // them reads them, as the resolver would from the grants.
+      // them reads them, as the resolver would.
       safeDb: withSnapshot
         ? NO_DB
         : asTestRaw<SafeDb>(async () => {
             decisionReads += 1;
-            return await Promise.resolve(Result.ok(memberDecisions()));
+            return await Promise.resolve(
+              Result.ok(memberDecisions(emailVerified)),
+            );
           }),
       scopedDb: NO_DB,
       memberRole: sessionMemberRole(role),
       session: { activeOrganizationId: ORGANIZATION_ID },
       user: { id: USER_ID, email: EMAIL },
       managedAIResidency: residency,
-      ...(withSnapshot ? { featureAccessSnapshot: memberDecisions() } : {}),
+      ...(withSnapshot
+        ? { featureAccessSnapshot: memberDecisions(emailVerified) }
+        : {}),
       request: new Request("https://stella.test/v1/dictation/models"),
       route: "/v1/dictation/models",
     }),
@@ -112,12 +97,17 @@ const listed = (response: Awaited<ReturnType<typeof listFor>>) => {
   return v.parse(desktopDictationModelsSchema, response);
 };
 
-test("a member gets the labelled list a labelling desktop gets, without any desktop decision", async () => {
+test("a member gets the labelled list a labelling desktop gets", async () => {
   const models = listed(await listFor());
   expect(models).toEqual(
     listDictationModels(
       { orgAIConfig: null, managedAIResidency: "us" },
-      { deployment: RETAINING, labeled: true, retention: true },
+      {
+        deployment: RETAINING,
+        labeled: true,
+        retention: true,
+        retainingModels: true,
+      },
     ),
   );
   // Every model carries its labels, and a region without its own models
@@ -130,16 +120,18 @@ test("a member gets the labelled list a labelling desktop gets, without any desk
   expect(models.models.some(({ outsideRegion }) => outsideRegion)).toBe(true);
 });
 
-test("a model whose provider keeps the audio is listed, marked, only to a member granted such models", async () => {
-  const withoutGrant = listed(await listFor({ residency: "eu" }));
-  expect(withoutGrant.models.map(({ id }) => id)).not.toContain(SCRIBE);
-  grantRetainingModels();
-  const granted = listed(await listFor({ residency: "eu" }));
-  expect(granted.models.find(({ id }) => id === SCRIBE)).toMatchObject({
+test("a model whose provider keeps the audio is listed, marked, to a member", async () => {
+  const member = listed(await listFor({ residency: "eu" }));
+  expect(member.models.find(({ id }) => id === SCRIBE)).toMatchObject({
     retainsData: true,
   });
   // Never the default.
-  expect(granted.defaultModelId).not.toBe(SCRIBE);
+  expect(member.defaultModelId).not.toBe(SCRIBE);
+  // A caller whose email is unverified has no such decision.
+  const unverified = listed(
+    await listFor({ residency: "eu", emailVerified: false }),
+  );
+  expect(unverified.models.map(({ id }) => id)).not.toContain(SCRIBE);
   // A request without the member's decisions reads them once.
   expect(decisionReads).toBe(0);
   const read = listed(await listFor({ residency: "eu", withSnapshot: false }));
@@ -147,9 +139,9 @@ test("a model whose provider keeps the audio is listed, marked, only to a member
   expect(decisionReads).toBe(1);
 });
 
-test("the grant is not read where no provider keeps the audio", async () => {
+test("the member's decisions are not read where no provider keeps the audio", async () => {
   const readsBefore = decisionReads;
-  // No provider that keeps the audio: nothing for the grant to add.
+  // No provider that keeps the audio: nothing for the decision to add.
   const zeroRetention = listed(
     await listFor({
       deployment: {

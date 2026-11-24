@@ -1,14 +1,12 @@
 import { Result } from "better-result";
-import { afterAll, beforeEach, expect, test } from "bun:test";
+import { afterAll, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
   DESKTOP_DICTATION_CLEANUP_LIMITS,
   desktopDictationCleanupResponseSchema,
 } from "@stll/api-contract/desktop-dictation-cleanup";
-import { createTestState } from "@stll/test-state";
 
-import { env } from "@/api/env";
 import { HttpStatusResponse } from "@/api/http/status";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { getConfiguredChatModelOptions } from "@/api/lib/chat-model-selection";
@@ -26,7 +24,6 @@ import {
   DICTATING_USER_ID as USER_ID,
   exerciseDesktopDictationEndpoint,
   exerciseMemberDictationEndpoint,
-  grantDesktopDictation,
   testDesktopDictationGate,
   testMemberDictationGate,
 } from "@/api/tests/helpers/desktop-dictation-endpoint";
@@ -42,18 +39,12 @@ import {
 import { listDictationCleanupModels } from "./cleanup-models";
 import { createMemberDictationCleanupEndpoint } from "./member-cleanup";
 
-const testState = createTestState({ file: import.meta.path, config: env });
-
 const servers: TestServer[] = [];
 afterAll(async () => {
   await Promise.all(servers.map(async (server) => await server.stop()));
 });
 
 const TRANSCRIPT = "a tedy nový řádek se rozhodl odejít za tučně 24 dní";
-
-beforeEach(() => {
-  grantDesktopDictation(testState);
-});
 
 const CLEANED: DictationCleanupModelOutput = {
   segments: [
@@ -89,7 +80,7 @@ const organizationWords =
 type ExerciseOptions = {
   input?: unknown;
   organization?: readonly string[];
-  granted?: boolean;
+  emailVerified?: boolean;
   role?: "member" | "external";
   limited?: boolean;
   answer?: () => DictationCleanupModelOutput;
@@ -108,14 +99,13 @@ const exercise = async ({
         ...endpointOptions,
         readVocabulary: organizationWords(organization),
       }),
-    testState,
     servers,
     input,
     answer,
     ...options,
   });
 
-test("a granted desktop gets the model's segments for its transcript text", async () => {
+test("a linked desktop gets the model's segments for its transcript text", async () => {
   const { response, calls, limit } = await exercise();
   expect(response.status).toBe(200);
   const body: unknown = await response.json();
@@ -418,7 +408,6 @@ const exerciseMember = async (
         ...endpointOptions,
         readVocabulary: organizationWords([]),
       }),
-    testState,
     route: "/v1/dictation/cleanup",
     body: { transcript: TRANSCRIPT, locale: "cs", languages: ["cs", "en"] },
     answer: () => CLEANED,

@@ -9,6 +9,7 @@
 // parser-output-unchanged: gating desktop dictation cleanup on its access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: registering desktop cloud dictation access leaves ingestion features and parsed records unchanged.
 // parser-output-unchanged: registering access to dictation models that keep the audio leaves ingestion features and parsed records unchanged.
+// parser-output-unchanged: opening desktop dictation to every member leaves ingestion features and parsed records unchanged.
 import type { DesktopFeatureId } from "@stll/api-contract/desktop-feature-access";
 import { VISUAL_PREVIEW_TOOL_NAME } from "@stll/api-contract/visual-preview";
 
@@ -163,29 +164,31 @@ export const FEATURE_REGISTRY = defineFeatureRegistry({
   "local-agents": {
     enrolment: "self-serve",
   },
-  // Desktop-gated too: the desktop offers dictation only while this decision
-  // is enabled. It covers transcription on the computer plus the optional
-  // text cleanup, the only part that reaches the API:
-  // `handlers/dictation/cleanup.ts` refuses it without this decision.
+  // The three dictation decisions are open to every live member with a
+  // verified email. Desktop clients read each one from the served decisions,
+  // so all three stay registered.
+  //
+  // Transcription on the computer plus the optional text cleanup, the only
+  // part that reaches the API: `handlers/dictation/cleanup.ts` refuses it
+  // without this decision.
   "desktop-dictation": {
-    enrolment: "invitation",
+    enrolment: "general-availability",
   },
-  // Transcription by stella AI, a grant of its own because the audio leaves
-  // the computer. The desktop offers it, and uploads audio, only while this
-  // decision is enabled; `handlers/dictation/desktop-transcription.ts`
-  // refuses both of its routes without it.
+  // Transcription by stella AI; the audio leaves the computer. The desktop
+  // offers it, and uploads audio, only while this decision is enabled;
+  // `handlers/dictation/desktop-transcription.ts` refuses both of its routes
+  // without it.
   "desktop-dictation-cloud": {
-    prerequisites: ["desktop-dictation"],
-    enrolment: "invitation",
+    enrolment: "general-availability",
   },
   // Transcription models whose provider keeps the audio and transcript, such
-  // as ElevenLabs on a key without zero retention: chosen members only.
+  // as ElevenLabs on a key without zero retention. Clients mark them in the
+  // model list and show a notice that the provider stores the audio while
+  // one is chosen; the notice informs and never blocks.
   // `handlers/dictation/desktop-transcription.ts` lists them, and transcribes
-  // with them, only while this decision is enabled; the desktop refreshes
-  // its model list when it changes.
+  // with them, only while this decision is enabled.
   "desktop-dictation-retaining-models": {
-    prerequisites: ["desktop-dictation-cloud"],
-    enrolment: "invitation",
+    enrolment: "general-availability",
   },
   // Table columns that carry a legal analysis end to end (money extraction,
   // more as they land). Each entry point admits it where its input uses it;

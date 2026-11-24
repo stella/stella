@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 8.3.0
+
+### Minor Changes
+
+- [#9313](https://github.com/stella/stella/pull/9313) [`746341c`](https://github.com/stella/stella/commit/746341c81b0a44a75e98a28da82d3edf15c9deba) Thanks [@NavpreetSSidhu](https://github.com/NavpreetSSidhu)! - `entities.placements.suggest` takes `suggestMatter` to also propose a matter name and client from the documents, for turning a personal matter into a client matter.
+
 ## 8.2.2
 
 ### Patch Changes

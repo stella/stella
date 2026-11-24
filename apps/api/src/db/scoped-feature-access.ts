@@ -4,11 +4,28 @@ import type { SQLWrapper } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/types";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { FEATURE_REGISTRY } from "@/api/lib/feature-access/registry";
+import type { FeatureId } from "@/api/lib/feature-access/registry";
 import {
   buildFeatureAccessSnapshot,
   featureAccessReadPlan,
 } from "@/api/lib/feature-access/snapshot";
 import { isRecord } from "@/api/lib/type-guards";
+
+/** The features a database scope decides: invitation features only. */
+type ScopedFeatureId = {
+  [
+    Id in FeatureId
+  ]: (typeof FEATURE_REGISTRY)[Id]["enrolment"] extends "invitation"
+    ? Id
+    : never;
+}[FeatureId];
+
+const SCOPED_FEATURE_IDS: ReadonlySet<string> = new Set(
+  Object.entries(FEATURE_REGISTRY)
+    .filter(([, { enrolment }]) => enrolment === "invitation")
+    .map(([featureId]) => featureId),
+);
 
 type ScopedFeatureAccessOptions = {
   tx: { execute: (query: SQLWrapper | string) => PromiseLike<unknown> };
@@ -26,11 +43,13 @@ export const resolveScopedFeatureIds = async ({
   }
   // Request scopes reuse their authenticated snapshot. Snapshot-less scopes
   // retain invitation-only admission, including under restricted owner roles
-  // and migration schemas that cannot read feature enrolments.
-  const { candidates } = featureAccessReadPlan({
+  // and migration schemas that cannot read feature enrolments or members:
+  // scoped admission reads only invitation features, so a generally
+  // available feature never makes such a scope read the caller's identity.
+  const candidates = featureAccessReadPlan({
     organizationId,
     enrolmentSource: "none",
-  });
+  }).candidates.filter((featureId) => SCOPED_FEATURE_IDS.has(featureId));
   if (candidates.length === 0) {
     return [];
   }
@@ -64,14 +83,21 @@ export const resolveScopedFeatureIds = async ({
     enrolments: [],
   });
   return [...snapshot.decisions]
-    .filter(([, decision]) => decision.status === "enabled")
+    .filter(
+      ([featureId, decision]) =>
+        decision.status === "enabled" && SCOPED_FEATURE_IDS.has(featureId),
+    )
     .map(([featureId]) => featureId);
 };
 
-/** Admission reads the feature decision installed by the authenticated scope. */
+/**
+ * Admission reads the feature decision installed by the authenticated scope.
+ * Only invitation features are decided in every scope; a generally
+ * available or self-serve feature is admitted from the request's snapshot.
+ */
 export const isScopedFeatureEnabled = async (
   tx: Pick<Transaction, "execute">,
-  featureId: string,
+  featureId: ScopedFeatureId,
 ): Promise<boolean> => {
   const row = executedRows(
     await tx.execute(sql`SELECT
