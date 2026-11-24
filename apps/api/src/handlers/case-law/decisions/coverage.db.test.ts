@@ -1097,7 +1097,9 @@ test.each([
 test(
   "a week the arrivals read did not answer for is unknown, never zero",
   async () => {
-    const coverage = await loadCoverage({ readArrivals: async () => null });
+    const coverage = await loadCoverage({
+      readArrivals: async () => ({ status: "unavailable" as const }),
+    });
     expect(Result.isOk(coverage)).toBe(true);
     if (Result.isError(coverage)) {
       return;
