@@ -288,6 +288,18 @@ const selectConnectionFields = {
   oauthClientSecretIv: mcpOAuthClients.clientSecretIv,
 } satisfies Record<string, unknown>;
 
+type LoadActiveMcpConnectionsOutcome =
+  | { status: "loaded"; connections: LoadedMcpConnection[] }
+  | { status: "unavailable" };
+
+type LoadMcpConnectionOutcome =
+  | { status: "loaded"; connection: LoadedMcpConnection }
+  | { status: "not_found" }
+  | { status: "unavailable" };
+
+type CreateMcpClientOutcome =
+  { status: "connected"; client: MCPClient } | { status: "unavailable" };
+
 export const loadActiveMcpConnectionsForUser = async ({
   organizationId,
   safeDb,
@@ -296,7 +308,7 @@ export const loadActiveMcpConnectionsForUser = async ({
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
-}): Promise<LoadedMcpConnection[]> => {
+}): Promise<LoadActiveMcpConnectionsOutcome> => {
   const rowsResult = await safeDb((tx) =>
     tx
       .select(selectConnectionFields)
@@ -342,15 +354,18 @@ export const loadActiveMcpConnectionsForUser = async ({
 
   if (Result.isError(rowsResult)) {
     observeFailure(rowsResult.error, { sink: CONNECTION_LOAD_FAILED });
-    return [];
+    return { status: "unavailable" };
   }
 
-  return await normalizeConnectionRows({
-    organizationId,
-    rows: rowsResult.value,
-    safeDb,
-    userId,
-  });
+  return {
+    status: "loaded",
+    connections: await normalizeConnectionRows({
+      organizationId,
+      rows: rowsResult.value,
+      safeDb,
+      userId,
+    }),
+  };
 };
 
 export const loadMcpConnectionById = async ({
@@ -363,7 +378,7 @@ export const loadMcpConnectionById = async ({
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
-}): Promise<LoadedMcpConnection | null> => {
+}): Promise<LoadMcpConnectionOutcome> => {
   const rowsResult = await safeDb((tx) =>
     tx
       .select(selectConnectionFields)
@@ -408,7 +423,7 @@ export const loadMcpConnectionById = async ({
 
   if (Result.isError(rowsResult)) {
     observeFailure(rowsResult.error, { sink: CONNECTION_LOAD_FAILED });
-    return null;
+    return { status: "unavailable" };
   }
 
   const normalized = await normalizeConnectionRows({
@@ -417,7 +432,10 @@ export const loadMcpConnectionById = async ({
     safeDb,
     userId,
   });
-  return normalized.at(0) ?? null;
+  const connection = normalized.at(0);
+  return connection
+    ? { status: "loaded", connection }
+    : { status: "not_found" };
 };
 
 /**
@@ -670,7 +688,7 @@ export const createMcpClientForConnection = async ({
   row: LoadedMcpConnection;
   safeDb: SafeDb;
   userId: SafeId<"user">;
-}): Promise<MCPClient | null> => {
+}): Promise<CreateMcpClientOutcome> => {
   const bound = bindMcpConnection(row);
   if (Result.isError(bound)) {
     observeFailure(bound.error, { sink: CLIENT_SETUP_FAILED });
@@ -690,7 +708,7 @@ export const createMcpClientForConnection = async ({
     if (Result.isError(review)) {
       observeFailure(review.error, { sink: CLIENT_SETUP_FAILED });
     }
-    return null;
+    return { status: "unavailable" };
   }
   const token = await resolveAuthorizationToken({
     organizationId,
@@ -701,7 +719,7 @@ export const createMcpClientForConnection = async ({
     dependencies,
   });
   if (token.type === "skip") {
-    return null;
+    return { status: "unavailable" };
   }
 
   const target = await outboundFetch.validateOutboundFetchTarget(
@@ -709,17 +727,20 @@ export const createMcpClientForConnection = async ({
   );
   if (Result.isError(target)) {
     observeFailure(target.error, { sink: CLIENT_SETUP_FAILED });
-    return null;
+    return { status: "unavailable" };
   }
 
-  return await dependencies.createMCPClient({
-    transport: createBoundMcpTransport({
-      row: bound.value,
-      token: token.value,
-      safeFetch: outboundFetch.safeOutboundFetchStream,
-      permit,
+  return {
+    status: "connected",
+    client: await dependencies.createMCPClient({
+      transport: createBoundMcpTransport({
+        row: bound.value,
+        token: token.value,
+        safeFetch: outboundFetch.safeOutboundFetchStream,
+        permit,
+      }),
     }),
-  });
+  };
 };
 
 type BoundMcpTransportOptions = {
@@ -766,16 +787,17 @@ const discoverCachedMcpTools = async ({
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<DiscoverCachedMcpToolsResult> => {
-  const client = await createMcpClientForConnection({
+  const clientOutcome = await createMcpClientForConnection({
     permit,
     organizationId,
     row,
     safeDb,
     userId,
   });
-  if (!client) {
+  if (clientOutcome.status !== "connected") {
     return { tools: [], server: null };
   }
+  const { client } = clientOutcome;
 
   try {
     const tools = await client.tools();
@@ -810,15 +832,16 @@ export const refreshCachedMcpToolsForConnection = async ({
   userId: SafeId<"user">;
 }): Promise<void> => {
   try {
-    const row = await loadMcpConnectionById({
+    const loadedRow = await loadMcpConnectionById({
       connectionId,
       organizationId,
       safeDb,
       userId,
     });
-    if (!row) {
+    if (loadedRow.status !== "loaded") {
       return;
     }
+    const row = loadedRow.connection;
 
     const { tools: cachedTools, server } = await discoverCachedMcpTools({
       permit,
@@ -889,7 +912,7 @@ export const proxyMcpToolCall = async ({
   safeDb: SafeDb;
   userId: SafeId<"user">;
 }): Promise<CallToolResult> => {
-  const client = await createMcpClientForConnection({
+  const clientOutcome = await createMcpClientForConnection({
     organizationId,
     permit,
     ...(dependencies === undefined ? {} : { dependencies }),
@@ -898,11 +921,12 @@ export const proxyMcpToolCall = async ({
     safeDb,
     userId,
   });
-  if (!client) {
+  if (clientOutcome.status !== "connected") {
     return serializeToolResult(
       errorResult("External MCP connection is unavailable"),
     );
   }
+  const { client } = clientOutcome;
 
   try {
     const tools = await client.tools(
@@ -1411,15 +1435,19 @@ const resolveMcpTokenDuringRefresh = async ({
     await (dependencies.wait?.(MCP_REFRESH_WAIT_INTERVAL_MS) ??
       sleep(MCP_REFRESH_WAIT_INTERVAL_MS));
     // db-await-in-loop: bounded wait for a concurrent refresh; each attempt re-reads one row after a pause
-    const refreshedRow = await loadMcpConnectionById({
+    const refreshedOutcome = await loadMcpConnectionById({
       connectionId: row.userConnectionId,
       organizationId,
       safeDb,
       userId,
     });
-    if (!refreshedRow || refreshedRow.type !== "oauth2") {
+    if (
+      refreshedOutcome.status !== "loaded" ||
+      refreshedOutcome.connection.type !== "oauth2"
+    ) {
       return { type: "skip" };
     }
+    const refreshedRow = refreshedOutcome.connection;
     const currentTime =
       dependencies.now?.() ??
       new Date(Temporal.Now.instant().epochMilliseconds);

@@ -121,8 +121,14 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
   test("keeps the discovered client usable for long-running tool execution", async () => {
     const row = buildRow();
     const fakeClient = buildFakeClient();
-    loadActiveMcpConnectionsForUserMock.mockResolvedValue([row]);
-    createMcpClientForConnectionMock.mockResolvedValue(asMcpClient(fakeClient));
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue({
+      status: "loaded",
+      connections: [row],
+    });
+    createMcpClientForConnectionMock.mockResolvedValue({
+      status: "connected",
+      client: asMcpClient(fakeClient),
+    });
 
     const loaded = await loadExternalMcpToolsForUserForTest({
       nullUnionStrategy: "json-schema",
@@ -139,14 +145,20 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
 
   test("closes the MCP client when discovery fails after the client is created", async () => {
     const row = buildRow();
-    loadActiveMcpConnectionsForUserMock.mockResolvedValue([row]);
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue({
+      status: "loaded",
+      connections: [row],
+    });
 
     const fakeClient = buildFakeClient({
       tools: mock(async () => {
         throw new Error("upstream tools() call failed");
       }),
     });
-    createMcpClientForConnectionMock.mockResolvedValue(asMcpClient(fakeClient));
+    createMcpClientForConnectionMock.mockResolvedValue({
+      status: "connected",
+      client: asMcpClient(fakeClient),
+    });
 
     const loaded = await loadExternalMcpToolsForUserForTest({
       nullUnionStrategy: "json-schema",
@@ -175,9 +187,15 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
 
   test("closes the MCP client when it settles late after a discovery timeout", async () => {
     const row = buildRow();
-    loadActiveMcpConnectionsForUserMock.mockResolvedValue([row]);
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue({
+      status: "loaded",
+      connections: [row],
+    });
 
-    const clientCreation = createDeferred<MCPClient>();
+    const clientCreation = createDeferred<{
+      status: "connected";
+      client: MCPClient;
+    }>();
     const closeCalled = createDeferred<undefined>();
     const fakeClient = buildFakeClient({
       close: mock(async () => {
@@ -211,7 +229,10 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
     expect(fakeClient.close).not.toHaveBeenCalled();
 
     // Discovery settles well after the timeout already gave up on it.
-    clientCreation.resolve(asMcpClient(fakeClient));
+    clientCreation.resolve({
+      status: "connected",
+      client: asMcpClient(fakeClient),
+    });
     await closeCalled.promise;
 
     expect(fakeClient.close).toHaveBeenCalledTimes(1);
@@ -219,7 +240,10 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
 
   test("closes the MCP client immediately on timeout when the client was already created and tools() is the hung step", async () => {
     const row = buildRow();
-    loadActiveMcpConnectionsForUserMock.mockResolvedValue([row]);
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue({
+      status: "loaded",
+      connections: [row],
+    });
 
     // Never resolves — simulates `client.tools()` (not client creation)
     // being the step that hangs past the aggregate discovery timeout.
@@ -227,7 +251,10 @@ describe("loadExternalMcpToolsForUser client lifecycle", () => {
     const fakeClient = buildFakeClient({
       tools: mock(async () => await hangingTools.promise),
     });
-    createMcpClientForConnectionMock.mockResolvedValue(asMcpClient(fakeClient));
+    createMcpClientForConnectionMock.mockResolvedValue({
+      status: "connected",
+      client: asMcpClient(fakeClient),
+    });
 
     withTimeoutMock.mockImplementation(async (operation, opts) => {
       // Mirrors the real `withTimeout`, but flushes microtasks first so the
@@ -274,7 +301,10 @@ describe("loadExternalMcpToolsForUser across connectors", () => {
       slug: "second",
       userConnectionId: toSafeId<"mcpUserConnection">("connection-second"),
     };
-    loadActiveMcpConnectionsForUserMock.mockResolvedValue([first, second]);
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue({
+      status: "loaded",
+      connections: [first, second],
+    });
     // The first connector answers only once the second has started, so a
     // discovery that waited for one connector before the next never settles.
     const secondStarted = createDeferred<undefined>();
@@ -285,18 +315,21 @@ describe("loadExternalMcpToolsForUser across connectors", () => {
         } else {
           secondStarted.resolve(undefined);
         }
-        return asMcpClient(
-          buildFakeClient({
-            tools: mock(async (): Promise<AnyServerTool[]> => [
-              {
-                name: "lookup",
-                description: "Look up one record",
-                __toolSide: "server",
-                inputSchema: { type: "object", properties: {} },
-              },
-            ]),
-          }),
-        );
+        return {
+          status: "connected" as const,
+          client: asMcpClient(
+            buildFakeClient({
+              tools: mock(async (): Promise<AnyServerTool[]> => [
+                {
+                  name: "lookup",
+                  description: "Look up one record",
+                  __toolSide: "server",
+                  inputSchema: { type: "object", properties: {} },
+                },
+              ]),
+            }),
+          ),
+        };
       },
     );
 

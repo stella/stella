@@ -128,7 +128,10 @@ const createFailingContext = (): AuthorizedMcpRequestContext => {
 describe("external MCP gateway tools", () => {
   beforeEach(() => {
     loadActiveMcpConnectionsForUserMock.mockReset();
-    loadActiveMcpConnectionsForUserMock.mockResolvedValue([activeConnection]);
+    loadActiveMcpConnectionsForUserMock.mockResolvedValue({
+      status: "loaded",
+      connections: [activeConnection],
+    });
     proxyMcpToolCallMock.mockReset();
     refreshCachedMcpToolsForConnectionMock.mockReset();
     refreshCachedMcpToolsForConnectionMock.mockResolvedValue(undefined);

@@ -375,13 +375,15 @@ describe("MCP connector authorization reviews", () => {
       );
       connectionReads = 0;
       expect(
-        await loadMcpConnectionById({
-          connectionId: connection.id,
-          organizationId,
-          safeDb,
-          userId: connection.userId,
-        }),
-      ).not.toBeNull();
+        (
+          await loadMcpConnectionById({
+            connectionId: connection.id,
+            organizationId,
+            safeDb,
+            userId: connection.userId,
+          })
+        ).status,
+      ).toBe("loaded");
       expect(connectionReads).toBe(1);
     }
     Result.unwrap(
@@ -410,7 +412,7 @@ describe("MCP connector authorization reviews", () => {
           safeDb,
           userId: connection.userId,
         }),
-      ).toBeNull();
+      ).toEqual({ status: "not_found" });
       expect(connectionReads).toBe(1);
       connectionReads = 0;
       expect(
@@ -419,7 +421,7 @@ describe("MCP connector authorization reviews", () => {
           safeDb,
           userId: connection.userId,
         }),
-      ).toEqual([]);
+      ).toEqual({ status: "loaded", connections: [] });
       expect(connectionReads).toBe(1);
     }
     await testDb
@@ -478,21 +480,27 @@ describe("MCP connector authorization reviews", () => {
       createSafeDb(testDb, [], organizationId, memberId),
     );
     expect(
-      await loadMcpConnectionById({
-        connectionId: memberConnectionId,
-        organizationId,
-        safeDb,
-        userId: memberId,
-      }),
-    ).not.toBeNull();
-    expect(
       (
-        await loadActiveMcpConnectionsForUser({
+        await loadMcpConnectionById({
+          connectionId: memberConnectionId,
           organizationId,
           safeDb,
           userId: memberId,
         })
-      ).map((connection) => connection.userConnectionId),
+      ).status,
+    ).toBe("loaded");
+    const activeConnections = await loadActiveMcpConnectionsForUser({
+      organizationId,
+      safeDb,
+      userId: memberId,
+    });
+    expect(activeConnections.status).toBe("loaded");
+    expect(
+      activeConnections.status === "loaded"
+        ? activeConnections.connections.map(
+            (connection) => connection.userConnectionId,
+          )
+        : [],
     ).toEqual([memberConnectionId]);
     await testDb.insert(mcpOAuthClients).values({
       organizationId,
@@ -513,19 +521,19 @@ describe("MCP connector authorization reviews", () => {
       safeDb,
       userId: memberId,
     });
-    expect(previousConnection).not.toBeNull();
-    if (!previousConnection) {
+    expect(previousConnection.status).toBe("loaded");
+    if (previousConnection.status !== "loaded") {
       return;
     }
     expect(
       await createMcpClientForConnection({
         organizationId,
         permit: outboundPermit,
-        row: previousConnection,
+        row: previousConnection.connection,
         safeDb,
         userId: memberId,
       }),
-    ).toBeNull();
+    ).toEqual({ status: "unavailable" });
     expect(
       await testDb
         .select({
@@ -624,7 +632,7 @@ describe("MCP connector authorization reviews", () => {
         safeDb,
         userId: memberId,
       }),
-    ).toBeNull();
+    ).toEqual({ status: "not_found" });
   });
 
   test("reviews a connector configured without an issuer until an administrator approves it", async () => {
@@ -705,23 +713,25 @@ describe("MCP connector authorization reviews", () => {
       createSafeDb(testDb, [], organizationId, ownerId),
     );
     const connect = async () => {
-      const row = await loadMcpConnectionById({
+      const loaded = await loadMcpConnectionById({
         connectionId: legacyConnectionId,
         organizationId,
         safeDb: ownerDb,
         userId: ownerId,
       });
-      return row === null
-        ? null
-        : await createMcpClientForConnection({
-            organizationId,
-            permit: outboundPermit,
-            row,
-            safeDb: ownerDb,
-            userId: ownerId,
-            dependencies,
-            outboundFetch,
-          });
+      if (loaded.status !== "loaded") {
+        return null;
+      }
+      const outcome = await createMcpClientForConnection({
+        organizationId,
+        permit: outboundPermit,
+        row: loaded.connection,
+        safeDb: ownerDb,
+        userId: ownerId,
+        dependencies,
+        outboundFetch,
+      });
+      return outcome.status === "connected" ? outcome.client : null;
     };
 
     expect(await connect()).toBeNull();
