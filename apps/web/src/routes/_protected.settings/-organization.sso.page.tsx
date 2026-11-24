@@ -298,6 +298,11 @@ const OidcProvidersSection = ({
     },
   });
 
+  const handleProviderCreated = async () => {
+    setShowAddProvider(false);
+    await onChanged();
+  };
+
   return (
     <section className="border-border bg-card space-y-4 rounded-xl border p-4">
       <div className="flex items-center justify-between gap-2">
@@ -323,10 +328,7 @@ const OidcProvidersSection = ({
       {showAddProvider && (
         <AddOidcProviderForm
           onCancel={() => setShowAddProvider(false)}
-          onCreated={async () => {
-            setShowAddProvider(false);
-            await onChanged();
-          }}
+          onCreated={handleProviderCreated}
         />
       )}
 
