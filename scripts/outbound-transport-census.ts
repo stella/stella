@@ -733,12 +733,6 @@ export const OUTBOUND_TRANSPORT_CENSUS = [
     transports: ["module:@stll/business-registries/default-formats"],
   },
   {
-    path: "apps/web/src/routes/dev/-components/autocomplete-playground.tsx",
-    class: "operator-configured-infrastructure",
-    reason: "Exercises autocomplete streaming through the configured API.",
-    transports: ["module:@stll/fetch"],
-  },
-  {
     path: "apps/web/src/components/docx/use-edit-session.ts",
     class: "operator-configured-infrastructure",
     reason: "Downloads edit-session documents from API-issued storage URLs.",

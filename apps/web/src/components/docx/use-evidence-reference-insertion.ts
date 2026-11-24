@@ -9,14 +9,13 @@ import type {
 import { useEvidenceReferences } from "@/components/docx/use-evidence-references";
 import { detached } from "@/lib/detached";
 
-import type { DocxEditModeResult } from "./docx-browser-editor.logic";
+import { canInsertEvidenceReference } from "./docx-browser-editor.logic";
+import type {
+  DocxEditModeResult,
+  DocxEditorSession,
+} from "./docx-browser-editor.logic";
 
 export type EvidenceReferencesDialogState = "closed" | "open" | "requested";
-
-const canInsertEvidenceReference = (
-  canUnlock: boolean,
-  compatibility: DocxCompatibility | null,
-) => canUnlock && compatibility?.canSafelyEdit !== false;
 
 type UseEvidenceReferenceInsertionOptions = {
   canUnlock: boolean;
@@ -26,6 +25,7 @@ type UseEvidenceReferenceInsertionOptions = {
   dialogState: EvidenceReferencesDialogState;
   editorMode: EditorMode;
   editorRef: RefObject<DocxEditorRef | null>;
+  editorSession: DocxEditorSession;
   isUnlocked: boolean;
   onDialogStateChange: (state: EvidenceReferencesDialogState) => void;
   requestEditMode: () => Promise<DocxEditModeResult>;
@@ -43,13 +43,21 @@ export const useEvidenceReferenceInsertion = ({
   dialogState,
   editorMode,
   editorRef,
+  editorSession,
   isUnlocked,
   onDialogStateChange,
   requestEditMode,
 }: UseEvidenceReferenceInsertionOptions) => {
   const editable = isUnlocked && editorMode !== "viewing";
-  const evidence = useEvidenceReferences(editable);
-  const canInsert = canInsertEvidenceReference(canUnlock, compatibility);
+  // Renumbering stays off where the session would refuse it.
+  const evidence = useEvidenceReferences(
+    editable && editorSession === "legacy",
+  );
+  const canInsert = canInsertEvidenceReference({
+    canUnlock,
+    compatibility,
+    editorSession,
+  });
 
   const handleEvidenceReferencesClick = () => {
     if (!canInsert || isUnlocked) {

@@ -34,10 +34,10 @@ import {
 } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { validateDesktopEditFileBuffer } from "@/api/lib/entity-versions/validate-desktop-edit-file-buffer";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { materializeYjsOverScannedDocx } from "@/api/lib/file-scan/document-parsers";
 import { scanFile } from "@/api/lib/file-scan/scan";
 import { readStoredFile } from "@/api/lib/file-scan/stored-file";
 import { deleteOrganizationFileWithSignal } from "@/api/lib/files/delete-organization-file";
+import { materializeRoomOverScannedDocx } from "@/api/lib/files/folio-collab-room-materialization";
 import {
   organizationFileUsageHandlerError,
   writeOrganizationFile,
@@ -324,10 +324,21 @@ const checkpointFolioCollabRoomHandler = async function* (
       }),
     );
   }
-  const materialized = await materializeYjsOverScannedDocx({
+  const materializedResult = await materializeRoomOverScannedDocx({
     source: sourceDocx,
     yjsUpdate: Buffer.from(persisted.snapshot.snapshotBase64, "base64"),
   });
+  if (Result.isError(materializedResult)) {
+    return Result.err(
+      new HandlerError({
+        code: "folio_collab_room_unreadable",
+        status: 409,
+        message: "Collaborative room could not be saved from its journal.",
+        cause: materializedResult.error,
+      }),
+    );
+  }
+  const materialized = materializedResult.value;
   if (materialized.byteLength > FOLIO_COLLAB_CHECKPOINT_MAX_BYTES) {
     return Result.err(
       new HandlerError({

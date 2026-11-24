@@ -271,6 +271,7 @@ export const FAILURE_TAGS = [
   "FlowRunStartError",
   "FlowStepError",
   "FolioCollabSnapshotStoreError",
+  "FolioRoomSnapshotError",
   "FreeTierPolicyMissingError",
   "FreshLoginDeadlineError",
   "GeneratedFileWriteError",

@@ -123,7 +123,6 @@ export const visualRegistry = {
   "reader-answers": { label: "Reader anchored answers", layout: "plain" },
   "reader-selection": { label: "Reader selection toolbar", layout: "plain" },
   "answer-edit": { label: "Chat answer edits", layout: "plain" },
-  autocomplete: { label: "Autocomplete", layout: "plain" },
   ui: { label: "UI components", layout: "plain" },
   "control-sizes": { label: "Control sizes", layout: "control-sizes" },
   "inspector-pane": { label: "Inspector pane", layout: "inspector-pane" },

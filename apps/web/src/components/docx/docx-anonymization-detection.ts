@@ -1,7 +1,7 @@
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { panic } from "better-result";
 
-import type { AnonymizationTerm } from "@stll/folio-react";
+import type { FolioAnonymizationTerm } from "@stll/folio-react";
 
 import { useInspectorAnonymizationStore } from "@/components/inspector/inspector-anonymization-store";
 import type { AnonymizationPipelineStatus } from "@/components/inspector/inspector-store-types";
@@ -21,7 +21,7 @@ type StartAnonymizationDetectionOptions = {
     excludedCanonicals: readonly string[];
   }) => Promise<{ pairs: readonly { original: string; label: string }[] }>;
   fieldId: string;
-  onDetected: (terms: AnonymizationTerm[]) => void;
+  onDetected: (terms: FolioAnonymizationTerm[]) => void;
   /** Read on every run so allowlist changes apply without a restart. */
   readExcludedCanonicals: () => readonly string[];
   /** The live editor view; only its current document is read. */

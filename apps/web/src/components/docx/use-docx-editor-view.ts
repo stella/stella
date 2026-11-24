@@ -3,6 +3,8 @@ import type { RefObject } from "react";
 
 import type { EditorView } from "@tiptap/pm/view";
 
+import type { Document } from "@stll/folio-react";
+
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
 import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
 import { useDocxCitationCheck } from "@/components/docx/citation-check/use-docx-citation-check";
@@ -41,11 +43,13 @@ export const useDocxEditorView = ({
   // toggle once retrieval grounding is wired and the audit-log
   // table exists. The hook installs a transaction wrapper on the
   // view and tears down on unmount.
-  useAutocompleteStream(editorView, {
+  useAutocompleteStream({
+    editorRef,
+    view: editorView,
     enabled: import.meta.env.DEV,
     language: "en",
   });
-  const onAnonymizationMatchesChange = useDocxAnonymizationHighlights({
+  const anonymization = useDocxAnonymizationHighlights({
     editorView,
     entityId,
     fieldId,
@@ -61,11 +65,22 @@ export const useDocxEditorView = ({
   return {
     editorView,
     /**
+     * The editor's `onChange`, locked or not: it notes each change for
+     * entity detection, then hands it to `onEdit`, if any.
+     */
+    editorChange:
+      (onEdit: ((document: Document) => void) | null) =>
+      (document: Document) => {
+        anonymization.noteDocumentChanged();
+        onEdit?.(document);
+      },
+    /**
      * `DocxEditor` props that capture the view, bridge anonymization and
      * carry the citation check's menu entry.
      */
     editorProps: {
-      onAnonymizationMatchesChange,
+      anonymizationTerms: anonymization.anonymizationTerms,
+      onAnonymizationMatchesChange: anonymization.onAnonymizationMatchesChange,
       ...anonymizationSelectionProps,
       ...citationCheck.editorProps,
       onEditorViewReady: setEditorView,
