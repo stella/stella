@@ -1168,13 +1168,14 @@ const ScimProvisioningSection = ({
   );
   const scimBaseUrl = `${browserAuthBaseUrl()}/api/auth/scim/v2`;
 
+  const createTokenMutationFn = resourceMutation({
+    mutation: "createOrganizationScimToken",
+    queryClient,
+    scope: { type: "organization" },
+    mutationFn: async () => await createOrganizationScimToken({}),
+  });
   const createTokenMutation = useMutation({
-    mutationFn: resourceMutation({
-      mutation: "createOrganizationScimToken",
-      queryClient,
-      scope: { type: "organization" },
-      mutationFn: async () => await createOrganizationScimToken({}),
-    }),
+    mutationFn: createTokenMutationFn,
     onSuccess: (created) => {
       setCreatedBearerToken(created.bearerToken);
       stellaToast.add({
