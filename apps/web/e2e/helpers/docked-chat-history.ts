@@ -33,6 +33,7 @@ export const dockedChatMessagePage = {
   model: null,
   reasoningEffort: null,
   context: {
+    source: "estimate" as const,
     estimatedTokens: 0,
     triggerTokens: 0,
     cacheStableTokens: 0,
