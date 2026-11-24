@@ -762,38 +762,39 @@ export const listOrganizationSsoProvidersForMember = async (
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
   },
-): Promise<PublicSsoProviderOption[]> => {
-  const membership = await db
-    .select({ id: member.id })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, params.organizationId),
-        eq(member.userId, params.userId),
-      ),
-    )
-    .limit(1);
+): Promise<PublicSsoProviderOption[]> =>
+  await withAggregateTransaction(db, async (tx) => {
+    const membership = await tx
+      .select({ id: member.id })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, params.organizationId),
+          eq(member.userId, params.userId),
+        ),
+      )
+      .limit(1);
 
-  if (membership.length === 0) {
-    return [];
-  }
+    if (membership.length === 0) {
+      return [];
+    }
 
-  const providersRead = await readBounded(
-    db
-      .select()
-      .from(ssoProvider)
-      .where(eq(ssoProvider.organizationId, params.organizationId))
-      .orderBy(asc(ssoProvider.createdAt)),
-    MAX_SSO_PROVIDERS_PER_ORG,
-  );
-  const providers =
-    providersRead.type === "complete"
-      ? providersRead.rows
-      : panic("SSO provider list exceeded bounded cap");
+    const providersRead = await readBounded(
+      tx
+        .select()
+        .from(ssoProvider)
+        .where(eq(ssoProvider.organizationId, params.organizationId))
+        .orderBy(asc(ssoProvider.createdAt)),
+      MAX_SSO_PROVIDERS_PER_ORG,
+    );
+    const providers =
+      providersRead.type === "complete"
+        ? providersRead.rows
+        : panic("SSO provider list exceeded bounded cap");
 
-  return providers.map((provider) => ({
-    providerId: provider.providerId,
-    displayName: provider.displayName,
-    protocol: protocolOfProvider(provider),
-  }));
-};
+    return providers.map((provider) => ({
+      providerId: provider.providerId,
+      displayName: provider.displayName,
+      protocol: protocolOfProvider(provider),
+    }));
+  });

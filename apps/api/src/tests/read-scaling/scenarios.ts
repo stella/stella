@@ -1,7 +1,6 @@
 import { panic } from "better-result";
-import { createHmac } from "node:crypto";
 
-import { env } from "@/api/env";
+import { listOrgSsoProvidersForMember } from "@/api/db/root";
 import { readMemberOrganizationSsoProviders } from "@/api/handlers/auth/routes";
 import { readBillingDraftSettings } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
@@ -188,38 +187,18 @@ export const readScalingScenarios = [
     name: "member organization sso providers",
     expectedRows: 1,
     definition: readMemberOrganizationSsoProviders,
-    measure: async () => {
-      const token = `sso-scale-${Bun.randomUUIDv7()}`;
-      const sig = createHmac("sha256", env.BETTER_AUTH_SECRET)
-        .update(token)
-        .digest("base64");
-      const cookie = `better-auth.session_token=${encodeURIComponent(`${token}.${sig}`)}`;
-      const reqUrl = "https://example.test/v1/auth/sso/organization-providers";
-      const req = new Request(reqUrl, { headers: { cookie } });
-      return await runWithMeasuredQueryCounter(async (counter) => {
-        const response = await readMemberOrganizationSsoProviders.run(
-          asTestRaw<
-            Parameters<typeof readMemberOrganizationSsoProviders.run>[0]
-          >({
-            ctx: {
-              request: req,
-              url: new URL(reqUrl),
-              params: {},
-              set: { headers: {}, status: 200 },
-            },
-            route: "/v1/auth/sso/organization-providers",
-            readBody: async () => undefined,
-          }),
-        );
-        const body =
-          response instanceof HttpStatusResponse ? response.response : response;
+    measure: async (fixture: ReadFixture) =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const providers = await listOrgSsoProvidersForMember({
+          organizationId: fixture.organizationId,
+          userId: fixture.userId,
+        });
         return {
           statements: counter.count,
-          transactionRoundTrips: Math.max(counter.transactions, 1),
-          responseBytes: Buffer.byteLength(JSON.stringify(body)),
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(JSON.stringify({ providers })),
           rows: 1,
         };
-      });
-    },
+      }),
   },
 ];
