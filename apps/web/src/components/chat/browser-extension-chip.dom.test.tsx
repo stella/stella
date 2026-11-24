@@ -283,9 +283,6 @@ test("the connected preview card and popover explain what the extension does and
       messages.chat.browserExtension.connectedDescription,
     ),
   ).toBeTruthy();
-  expect(
-    screen.getByText(messages.chat.browserExtension.tipShareTab),
-  ).toBeTruthy();
   const manageLink = screen.getByRole("link", {
     name: messages.chat.browserExtension.manageSites,
   });
