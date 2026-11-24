@@ -275,7 +275,7 @@ export const normalizePlNcourtListingRow = (
       entries.set(field, text);
     }
   }
-  return Object.fromEntries(entries) as PlNcourtListingRow;
+  return Object.fromEntries(entries);
 };
 
 /** A listed row's elements this adapter has no name for. */

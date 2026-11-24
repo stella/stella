@@ -270,9 +270,7 @@ const fetchParties = async ({
     }
     parties.set(link.role, toContactSourceRecord(contact));
   }
-  return Object.fromEntries(parties) as Partial<
-    Record<WorkspaceContactRole, ContactSourceRecord>
-  >;
+  return Object.fromEntries(parties);
 };
 
 const fetchAttorneys = async ({

@@ -13,11 +13,16 @@ export const pickDefined = <
   obj: T,
   keys: readonly K[],
 ): Partial<Pick<T, K>> => {
-  const entries = new Map<K, T[K]>();
+  const result: Partial<Pick<T, K>> = {};
   for (const key of keys) {
     if (obj[key] !== undefined) {
-      entries.set(key, obj[key]);
+      Object.defineProperty(result, key, {
+        value: obj[key],
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
-  return Object.fromEntries(entries) as Partial<Pick<T, K>>;
+  return result;
 };

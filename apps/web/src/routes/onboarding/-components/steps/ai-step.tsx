@@ -198,7 +198,10 @@ export const AIStep = ({
         ? current.bedrock
         : { status: "idle" },
     };
-    const resetProviders = new Map<ProviderId, ProviderRowState>();
+    const resetProviders = new Map<
+      keyof RowStateMap,
+      RowStateMap[keyof RowStateMap]
+    >();
     for (const draft of next) {
       const fingerprint = fingerprintDraft(draft);
       const state = nextRowStates[draft.provider];

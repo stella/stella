@@ -179,6 +179,9 @@ export const censusCaseLawRawObjectsPage = async ({
         case RAW_PREFIX_STATE.ERASED:
           counts.erased += 1;
           break;
+        case RAW_PREFIX_STATE.RESERVED:
+          counts.reserved += 1;
+          break;
         case RAW_PREFIX_STATE.ORPHANED:
           counts.orphaned += 1;
           break;

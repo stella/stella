@@ -378,7 +378,7 @@ const resolveStyleFormatting = (
     }
     rPr = mergeTextFormatting(rPr, style.rPr);
   }
-  return { pPr: Object.fromEntries(pPrEntries) as ParagraphFormatting, rPr };
+  return { pPr: Object.fromEntries(pPrEntries), rPr };
 };
 
 const mergeTextFormatting = (

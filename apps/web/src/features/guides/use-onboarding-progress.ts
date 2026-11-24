@@ -52,7 +52,7 @@ export const parseGuideProgress = (
       progress.set(tourId, parsedStatus.output);
     }
   }
-  return Object.fromEntries(progress) as StoredGuideProgress;
+  return Object.fromEntries(progress);
 };
 
 const isGuideTourId = (value: string): value is GuideTourId =>

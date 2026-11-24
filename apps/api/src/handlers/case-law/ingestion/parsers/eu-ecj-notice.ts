@@ -329,9 +329,12 @@ const reportsReference = (
     const values = textValues($, $(element));
     if (values.length > 0) {
       const key = tag.slice("CONTAINER_CASE-LAW_".length);
-      const list = reference.get(key) ?? [];
-      list.push(...values);
-      reference.set(key, list);
+      const existing = reference.get(key);
+      if (existing === undefined) {
+        reference.set(key, [...values]);
+      } else {
+        existing.push(...values);
+      }
     }
   }
   return Object.fromEntries(reference);

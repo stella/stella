@@ -97,7 +97,7 @@ export const SelectRowContent = <TRow extends TableRowData = TableTreeNode>({
       const start = Math.min(lastSelectedIndex.current, index);
       const end = Math.max(lastSelectedIndex.current, index);
       const rows = table.getRowModel().rows;
-      const patchEntries = new Map<string, boolean>();
+      const patchEntries = new Map<string, true>();
       for (let i = start; i <= end; i++) {
         const r = rows[i];
         if (r) {

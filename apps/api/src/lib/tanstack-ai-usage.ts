@@ -185,17 +185,22 @@ const addCounts = <TKey extends string>(
   if (step === undefined) {
     return total;
   }
-  const sum = new Map<TKey, number>();
+  const sum: Partial<Record<TKey, number>> = {};
   for (const key in keys) {
     if (!Object.hasOwn(keys, key)) {
       continue;
     }
     const value = addCount(total[key], step[key]);
     if (value !== undefined) {
-      sum.set(key, value);
+      Object.defineProperty(sum, key, {
+        value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
-  return Object.fromEntries(sum) as Partial<Record<TKey, number>>;
+  return sum;
 };
 
 const addBilled = (

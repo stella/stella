@@ -661,7 +661,7 @@ export const tallyPlUodoSkips = (
       tally.set(recordClass.reason, (tally.get(recordClass.reason) ?? 0) + 1);
     }
   }
-  return Object.fromEntries(tally) as PlUodoSkipTally;
+  return Object.fromEntries(tally);
 };
 
 const reportSkips = (where: string, tally: PlUodoSkipTally): void => {

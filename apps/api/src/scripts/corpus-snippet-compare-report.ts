@@ -343,6 +343,12 @@ export const summarizeSnippetComparison = (
       hits += 1;
       if (outcome.status === "skipped") {
         switch (outcome.reason) {
+          case "no_payload":
+            skipped.no_payload += 1;
+            break;
+          case "unanchored":
+            skipped.unanchored += 1;
+            break;
           case "anchor_not_found":
             skipped.anchor_not_found += 1;
             break;

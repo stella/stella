@@ -159,5 +159,5 @@ const getTokenStyle = ({ types }: Token): CSSProperties => {
     }
   }
 
-  return Object.fromEntries(styleEntries) as CSSProperties;
+  return Object.fromEntries(styleEntries);
 };

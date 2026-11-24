@@ -339,7 +339,7 @@ const readPlKioListingItem = (
     ...Object.fromEntries(fields),
     id:
       href === undefined ? undefined : DETAILS_HREF.exec(href)?.groups?.["id"],
-  } as PlKioListingItem;
+  };
 };
 
 /**
