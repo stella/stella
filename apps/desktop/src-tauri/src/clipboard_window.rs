@@ -582,6 +582,14 @@ pub fn toggle(app: &AppHandle) {
   show(app);
 }
 
+/// Another stella window opened from the clipboard window takes key status
+/// from it; that hand-off is the user's own action, not an outside click.
+pub(crate) fn hand_off(window: &WebviewWindow) {
+  if window.label() == CLIPBOARD_WINDOW_LABEL {
+    end_window_session(window.app_handle(), HideReason::Requested);
+  }
+}
+
 /// Closes the clipboard window on request (Escape, copy, the shortcut). The
 /// session ends before the window gives up key status, so the focus loss that
 /// follows is not taken for an outside click.
