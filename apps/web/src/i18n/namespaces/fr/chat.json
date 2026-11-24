@@ -219,6 +219,13 @@
       "updating": "Mise à jour de l’extension en attente",
       "updatingDescription": "Votre extension stella est une version antérieure. Chrome la met à jour automatiquement, généralement en quelques heures ; stella pourra ensuite de nouveau ouvrir et lire des sites web pour vous."
     },
+    "browserSignIn": {
+      "continue": "Je suis connecté",
+      "description": "Une page ouverte en arrière-plan demande une connexion. Ouvrez l'onglet pour vous connecter dans Chrome, puis continuez.",
+      "openTab": "Ouvrir l'onglet de connexion",
+      "title": "Connexion requise",
+      "titleWithHost": "Se connecter à {host}"
+    },
     "cancelQueuedMessage": "Annuler le message en file d’attente",
     "caseLawGreeting": "Posez vos questions sur cette décision ; son texte intégral est disponible ici.",
     "chatAbout": "Insérer dans la conversation IA",

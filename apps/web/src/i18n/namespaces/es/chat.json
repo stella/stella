@@ -219,6 +219,13 @@
       "updating": "Actualización de la extensión pendiente",
       "updatingDescription": "Tu extensión de stella es una versión anterior. Chrome la actualiza automáticamente, normalmente en unas horas; después, stella podrá volver a abrir y leer sitios web por ti."
     },
+    "browserSignIn": {
+      "continue": "Ya inicié sesión",
+      "description": "Una página abierta en segundo plano requiere iniciar sesión. Abre la pestaña para iniciar sesión en Chrome y luego continúa.",
+      "openTab": "Abrir pestaña de inicio de sesión",
+      "title": "Inicio de sesión requerido",
+      "titleWithHost": "Iniciar sesión en {host}"
+    },
     "cancelQueuedMessage": "Cancelar mensaje en cola",
     "caseLawGreeting": "Pregunta sobre esta decisión; el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",

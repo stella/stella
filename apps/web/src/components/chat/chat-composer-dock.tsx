@@ -12,6 +12,7 @@ import { Popover, PopoverPanel } from "@stll/ui/popover";
 import { ConversationScrollButton } from "@/components/ai-elements/conversation";
 import { AnonymizationPreviewCard } from "@/components/chat/anonymization-preview";
 import { BrowserExtensionChip } from "@/components/chat/browser-extension-chip";
+import { BrowserSignInCard } from "@/components/chat/browser-sign-in-card";
 import {
   CHAT_COMPOSER_DOCK_END_CLASS,
   CHAT_COMPOSER_DOCK_START_CLASS,
@@ -167,124 +168,130 @@ export const ChatComposerDock = (props: ChatComposerDockProps) => {
   const setAnonymized = useSetChatAnonymized(threadRef);
   const newThreadAnchorRef = useRef<HTMLSpanElement>(null);
   return (
-    <ComposerStatusRow
-      // The row's empty middle carries the scroll-to-bottom action, so the
-      // composer never grows a row for it and nothing floats over the chips.
-      center={<ConversationScrollButton />}
-      className={className}
-      end={
-        <div
-          aria-hidden={disabled ? true : undefined}
-          // Shrinkable, not fixed: in a 320px inspector pane this cluster and
-          // the one opposite it are together wider than the row, and a
-          // `shrink-0` here would spend the difference on a horizontal
-          // scrollbar. The model label truncates instead.
-          className={CHAT_COMPOSER_DOCK_END_CLASS}
-        >
-          {/* An open prompt keeps the button that anchors it, disabled while
+    <>
+      {!disabled && <BrowserSignInCard />}
+      <ComposerStatusRow
+        // The row's empty middle carries the scroll-to-bottom action, so the
+        // composer never grows a row for it and nothing floats over the chips.
+        center={<ConversationScrollButton />}
+        className={className}
+        end={
+          <div
+            aria-hidden={disabled ? true : undefined}
+            // Shrinkable, not fixed: in a 320px inspector pane this cluster and
+            // the one opposite it are together wider than the row, and a
+            // `shrink-0` here would spend the difference on a horizontal
+            // scrollbar. The model label truncates instead.
+            className={CHAT_COMPOSER_DOCK_END_CLASS}
+          >
+            {/* An open prompt keeps the button that anchors it, disabled while
               the surface offers no new thread (a rotation is under way). */}
-          {(onNewThread !== null || newThreadPrompt !== undefined) && (
-            <>
-              {/* The anchor wraps the button rather than tracking it, so the
+            {(onNewThread !== null || newThreadPrompt !== undefined) && (
+              <>
+                {/* The anchor wraps the button rather than tracking it, so the
                   button's own click handler stays a plain handler. */}
-              <span className="inline-flex" ref={newThreadAnchorRef}>
-                <CapabilityAction
-                  action={{ capability: "ai" }}
-                  surface="control"
+                <span className="inline-flex" ref={newThreadAnchorRef}>
+                  <CapabilityAction
+                    action={{ capability: "ai" }}
+                    surface="control"
+                  >
+                    {(capabilityProps) => (
+                      <Button
+                        aria-label={t("chat.newChat")}
+                        disabled={onNewThread === null}
+                        disabledReason={t("chat.alreadyInNewChat")}
+                        onClick={onNewThread ?? undefined}
+                        size="icon-xs"
+                        tooltip={t("chat.newChat")}
+                        variant="muted"
+                        {...capabilityProps}
+                      >
+                        <NewChatIcon className="size-3.5" />
+                      </Button>
+                    )}
+                  </CapabilityAction>
+                </span>
+                <Popover
+                  onOpenChange={(open) => {
+                    if (!open) {
+                      newThreadPrompt?.onCancel();
+                    }
+                  }}
+                  open={newThreadPrompt !== undefined}
                 >
-                  {(capabilityProps) => (
-                    <Button
-                      aria-label={t("chat.newChat")}
-                      disabled={onNewThread === null}
-                      disabledReason={t("chat.alreadyInNewChat")}
-                      onClick={onNewThread ?? undefined}
-                      size="icon-xs"
-                      tooltip={t("chat.newChat")}
-                      variant="muted"
-                      {...capabilityProps}
-                    >
-                      <NewChatIcon className="size-3.5" />
-                    </Button>
-                  )}
-                </CapabilityAction>
-              </span>
-              <Popover
-                onOpenChange={(open) => {
-                  if (!open) {
-                    newThreadPrompt?.onCancel();
-                  }
-                }}
-                open={newThreadPrompt !== undefined}
-              >
-                <PopoverPanel
-                  align="end"
-                  anchor={newThreadAnchorRef}
-                  className="w-72"
-                  side="top"
-                >
-                  {newThreadPrompt?.content}
-                </PopoverPanel>
-              </Popover>
-            </>
-          )}
-          {/* Beside the model it qualifies: while the local mock answers,
+                  <PopoverPanel
+                    align="end"
+                    anchor={newThreadAnchorRef}
+                    className="w-72"
+                    side="top"
+                  >
+                    {newThreadPrompt?.content}
+                  </PopoverPanel>
+                </Popover>
+              </>
+            )}
+            {/* Beside the model it qualifies: while the local mock answers,
               the selected model is not the one replying. */}
-          <ChatMockModelBadge />
-          {models && <ChatComposerChips models={models} />}
-          {/* The meter renders on every surface: it shows an empty ring
+            <ChatMockModelBadge />
+            {models && <ChatComposerChips models={models} />}
+            {/* The meter renders on every surface: it shows an empty ring
               for a brand-new thread (context null) and fills in once an
               estimate lands. */}
-          {renderState.status === "pending" ? (
-            <ChatContextMeter status="pending" />
-          ) : (
-            <ChatContextMeter status="ready" usage={renderState.data.context} />
-          )}
-        </div>
-      }
-      start={
-        // `icon-xs` toggles keep the whole row visually subordinate to
-        // the composer input above it: the status row is quiet chrome
-        // (muted text-xs, borderless controls), never a second toolbar.
-        <div
-          aria-hidden={disabled ? true : undefined}
-          className={CHAT_COMPOSER_DOCK_START_CLASS}
-          data-slot="chat-composer-dock"
-          data-status={props.status}
-        >
-          {leadingContext}
-          {showWebSearch && (
-            <ChatWebSearchToggle
-              disabled={disabled}
-              enabled={webSearchEnabled}
-              size="icon-xs"
-              threadRef={threadRef}
-            />
-          )}
-          {/* Wrapper, not the toggle itself: the anchor is registered here so
-              the guides slice stays out of the chat feature slice's imports. */}
-          <span
-            {...guideAnchor(GUIDE_ANCHORS.chatAnonymize, guideAnchorsEnabled)}
-            className="inline-flex"
+            {renderState.status === "pending" ? (
+              <ChatContextMeter status="pending" />
+            ) : (
+              <ChatContextMeter
+                status="ready"
+                usage={renderState.data.context}
+              />
+            )}
+          </div>
+        }
+        start={
+          // `icon-xs` toggles keep the whole row visually subordinate to
+          // the composer input above it: the status row is quiet chrome
+          // (muted text-xs, borderless controls), never a second toolbar.
+          <div
+            aria-hidden={disabled ? true : undefined}
+            className={CHAT_COMPOSER_DOCK_START_CLASS}
+            data-slot="chat-composer-dock"
+            data-status={props.status}
           >
-            {/* The preview card says what the shield does and whether it
+            {leadingContext}
+            {showWebSearch && (
+              <ChatWebSearchToggle
+                disabled={disabled}
+                enabled={webSearchEnabled}
+                size="icon-xs"
+                threadRef={threadRef}
+              />
+            )}
+            {/* Wrapper, not the toggle itself: the anchor is registered here so
+              the guides slice stays out of the chat feature slice's imports. */}
+            <span
+              {...guideAnchor(GUIDE_ANCHORS.chatAnonymize, guideAnchorsEnabled)}
+              className="inline-flex"
+            >
+              {/* The preview card says what the shield does and whether it
                 is on, so the toggle's own on/off tooltip would repeat it. */}
-            <AnonymizationPreviewCard
-              enabled={anonymized}
-              trigger={
-                <ChatAnonymizedToggle
-                  disabled={disabled}
-                  enabled={anonymized}
-                  onChange={setAnonymized}
-                  size="icon-xs"
-                  tooltip={false}
-                />
-              }
-            />
-          </span>
-          {!disabled && <BrowserExtensionChip />}
-          {endExtras}
-        </div>
-      }
-    />
+              <AnonymizationPreviewCard
+                enabled={anonymized}
+                trigger={
+                  <ChatAnonymizedToggle
+                    disabled={disabled}
+                    enabled={anonymized}
+                    onChange={setAnonymized}
+                    size="icon-xs"
+                    tooltip={false}
+                  />
+                }
+              />
+            </span>
+            {!disabled && <BrowserExtensionChip />}
+            {endExtras}
+          </div>
+        }
+      />
+    </>
   );
 };

@@ -219,6 +219,13 @@
       "updating": "Gaida paplašinājuma atjauninājumu",
       "updatingDescription": "Jūsu stella paplašinājums ir vecāka versija. Chrome to atjaunina automātiski, parasti dažu stundu laikā; pēc tam stella atkal varēs jums atvērt un lasīt vietnes."
     },
+    "browserSignIn": {
+      "continue": "Esmu pieteicies",
+      "description": "Fonā atvērtā lapa pieprasa pieteikšanos. Atveriet cilni, lai pieteiktos Chrome pārlūkā, un pēc tam turpiniet.",
+      "openTab": "Atvērt pieteikšanās cilni",
+      "title": "Nepieciešama pieteikšanās",
+      "titleWithHost": "Pieteikties vietnē {host}"
+    },
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdodiet jautājumus par šo lēmumu; pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI tērzēšanā",

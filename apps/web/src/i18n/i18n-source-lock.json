@@ -1489,6 +1489,11 @@
   "chat.browserExtension.reloadDescription": "Your stella extension is newer than this tab. Reload this tab to keep using it.",
   "chat.browserExtension.updating": "Extension update pending",
   "chat.browserExtension.updatingDescription": "Your stella extension is an older version. Chrome updates it automatically, usually within a few hours; then stella can open and read websites for you again.",
+  "chat.browserSignIn.continue": "I've signed in",
+  "chat.browserSignIn.description": "A page opened in the background asks you to sign in. Open the tab to sign in with Chrome, then continue.",
+  "chat.browserSignIn.openTab": "Open sign-in tab",
+  "chat.browserSignIn.title": "Sign in required",
+  "chat.browserSignIn.titleWithHost": "Sign in to {host}",
   "chat.cancelQueuedMessage": "Cancel queued message",
   "chat.caseLawGreeting": "Ask about this decision; its full text is available here.",
   "chat.chatAbout": "Chat about this",
@@ -5471,6 +5476,7 @@
   "settings.organization.documentTypes.addPlaceholder": "Add a document type (e.g. Employment Agreement)",
   "settings.organization.documentTypes.deleteFailed": "Couldn't delete document type",
   "settings.organization.documentTypes.description": "Define the document types your organization reviews. Playbooks scope to these, and the AI classifier sorts documents into them.",
+  "settings.organization.documentTypes.empty": "No document types yet",
   "settings.organization.documentTypes.labelAria": "Document type name",
   "settings.organization.documentTypes.reorder": "Reorder document type",
   "settings.organization.documentTypes.title": "Document types",
@@ -7232,6 +7238,5 @@
   "workspaces.workflow.serviceTierPrompt.flex": "Use reduced credits",
   "workspaces.workflow.serviceTierPrompt.standard": "Start now",
   "workspaces.workflow.serviceTierPrompt.title": "Use reduced credits?",
-  "workspaces.workflow.startedSuccessfully": "Workflow started successfully",
-  "settings.organization.documentTypes.empty": "No document types yet"
+  "workspaces.workflow.startedSuccessfully": "Workflow started successfully"
 }

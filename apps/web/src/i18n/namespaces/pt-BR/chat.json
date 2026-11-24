@@ -219,6 +219,13 @@
       "updating": "Atualização da extensão pendente",
       "updatingDescription": "Sua extensão stella está em uma versão anterior. O Chrome a atualiza automaticamente, em geral em poucas horas; depois disso, a stella poderá voltar a abrir e ler sites para você."
     },
+    "browserSignIn": {
+      "continue": "Já fiz login",
+      "description": "Uma página aberta em segundo plano pede login. Abra a aba para entrar no Chrome e depois continue.",
+      "openTab": "Abrir aba de login",
+      "title": "Login necessário",
+      "titleWithHost": "Entrar em {host}"
+    },
     "cancelQueuedMessage": "Cancelar mensagem na fila",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
     "chatAbout": "Converse sobre isso",

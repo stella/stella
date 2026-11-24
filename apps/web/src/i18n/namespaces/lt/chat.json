@@ -219,6 +219,13 @@
       "updating": "Laukiama plėtinio naujinio",
       "updatingDescription": "Jūsų stella plėtinys yra senesnės versijos. „Chrome“ jį atnaujina automatiškai, paprastai per kelias valandas; tada stella vėl galės jums atidaryti ir skaityti svetaines."
     },
+    "browserSignIn": {
+      "continue": "Prisijungiau",
+      "description": "Fone atidarytas puslapis prašo prisijungti. Atidarykite kortelę, prisijunkite per „Chrome“ ir tęskite.",
+      "openTab": "Atidaryti prisijungimo kortelę",
+      "title": "Reikalingas prisijungimas",
+      "titleWithHost": "Prisijungti prie {host}"
+    },
     "cancelQueuedMessage": "Atšaukti eilėje esančią žinutę",
     "caseLawGreeting": "Klauskite apie šį sprendimą; visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į DI pokalbį",

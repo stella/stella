@@ -219,6 +219,13 @@
       "updating": "Extension update pending",
       "updatingDescription": "Your stella extension is an older version. Chrome updates it automatically, usually within a few hours; then stella can open and read websites for you again."
     },
+    "browserSignIn": {
+      "continue": "I've signed in",
+      "description": "A page opened in the background asks you to sign in. Open the tab to sign in with Chrome, then continue.",
+      "openTab": "Open sign-in tab",
+      "title": "Sign in required",
+      "titleWithHost": "Sign in to {host}"
+    },
     "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Ask about this decision; its full text is available here.",
     "chatAbout": "Chat about this",

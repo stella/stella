@@ -219,6 +219,13 @@
       "updating": "Čaká sa na aktualizáciu rozšírenia",
       "updatingDescription": "Vaše rozšírenie stella je v staršej verzii. Chrome ho aktualizuje automaticky, zvyčajne v priebehu niekoľkých hodín, a potom pre vás stella bude môcť znova otvárať a čítať weby."
     },
+    "browserSignIn": {
+      "continue": "Som prihlásený",
+      "description": "Stránka otvorená na pozadí vyžaduje prihlásenie. Otvorte kartu, prihláste sa v Chrome a potom pokračujte.",
+      "openTab": "Otvoriť kartu na prihlásenie",
+      "title": "Vyžaduje sa prihlásenie",
+      "titleWithHost": "Prihlásiť sa na {host}"
+    },
     "cancelQueuedMessage": "Zrušiť správu v poradí",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie; plný text je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",

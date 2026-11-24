@@ -219,6 +219,13 @@
       "updating": "A bővítmény frissítésre vár",
       "updatingDescription": "A stella bővítménye régebbi verzió. A Chrome automatikusan frissíti, általában néhány órán belül; utána a stella ismét megnyithat és elolvashat weboldalakat Önnek."
     },
+    "browserSignIn": {
+      "continue": "Bejelentkeztem",
+      "description": "Egy háttérben megnyitott oldal bejelentkezést kér. Nyissa meg a lapot a Chrome-ban való bejelentkezéshez, majd folytassa.",
+      "openTab": "Bejelentkezési lap megnyitása",
+      "title": "Bejelentkezés szükséges",
+      "titleWithHost": "Bejelentkezés ide: {host}"
+    },
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezzen erről a határozatról; a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI-csevegésbe",

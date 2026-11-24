@@ -219,6 +219,13 @@
       "updating": "Erweiterungs-Update ausstehend",
       "updatingDescription": "Ihre stella-Erweiterung ist eine ältere Version. Chrome aktualisiert sie automatisch, meist innerhalb weniger Stunden; danach kann stella wieder Websites für Sie öffnen und lesen."
     },
+    "browserSignIn": {
+      "continue": "Ich bin angemeldet",
+      "description": "Eine im Hintergrund geöffnete Seite erfordert eine Anmeldung. Öffnen Sie den Tab zum Anmelden in Chrome und fahren Sie dann fort.",
+      "openTab": "Anmelde-Tab öffnen",
+      "title": "Anmeldung erforderlich",
+      "titleWithHost": "Bei {host} anmelden"
+    },
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stellen Sie Fragen zu dieser Entscheidung; der vollständige Text ist hier verfügbar.",
     "chatAbout": "In KI-Chat einfügen",
