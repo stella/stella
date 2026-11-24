@@ -92,6 +92,7 @@ import {
   ChatMessageActionsScope,
 } from "@/components/chat/chat-message-actions-menu";
 import { CHAT_PENDING_TEXT_CLASS } from "@/components/chat/chat-pending-text";
+import { ChatProse } from "@/components/chat/chat-prose";
 import { ChatRanOnModel } from "@/components/chat/chat-ran-on-model";
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
 import {
@@ -2723,22 +2724,23 @@ const AssistantMessageParts = (props: AssistantMessagePartsProps) => {
         return null;
       }
       return (
-        <AssistantTextPart
-          className={cn(
-            // An answer is read, not scanned: body text one step up from the
-            // UI's, with the line height a paragraph of prose needs.
-            assistantTextDensity === "default" && "text-base/6.5",
-            assistantTextDensity === "compact" &&
-              "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
-          )}
-          components={streamdownComponents}
-          isStreaming={index === streamingEntryIndex}
-          key={`${message.id}-text-${index}`}
-          restorationPairs={restorationPairs}
-          partIndex={index}
-          sourceOffsets={!isTurnActive}
-          text={part.content}
-        />
+        <ChatProse key={`${message.id}-text-${index}`}>
+          <AssistantTextPart
+            className={cn(
+              // An answer is read, not scanned: body text one step up from the
+              // UI's, with the line height a paragraph of prose needs.
+              assistantTextDensity === "default" && "text-base/6.5",
+              assistantTextDensity === "compact" &&
+                "text-[13px] leading-5 [&_h1]:my-2 [&_h1]:text-[16px] [&_h1]:leading-5 [&_h2]:my-2 [&_h2]:text-[15px] [&_h2]:leading-5 [&_h3]:my-1.5 [&_h3]:text-[14px] [&_h3]:leading-5 [&_h4]:my-1.5 [&_h4]:text-[13px] [&_h4]:leading-5 [&_h5]:my-1.5 [&_h5]:text-[13px] [&_h5]:leading-5 [&_h6]:my-1.5 [&_h6]:text-[13px] [&_h6]:leading-5",
+            )}
+            components={streamdownComponents}
+            isStreaming={index === streamingEntryIndex}
+            restorationPairs={restorationPairs}
+            partIndex={index}
+            sourceOffsets={!isTurnActive}
+            text={part.content}
+          />
+        </ChatProse>
       );
     }
 
@@ -3163,13 +3165,15 @@ const NarratedIntent = ({
     lines={3}
     render={<div />}
   >
-    <AssistantTextPart
-      className="[&_p]:my-0"
-      components={components}
-      isStreaming={false}
-      restorationPairs={restorationPairs}
-      text={text}
-    />
+    <ChatProse>
+      <AssistantTextPart
+        className="[&_p]:my-0"
+        components={components}
+        isStreaming={false}
+        restorationPairs={restorationPairs}
+        text={text}
+      />
+    </ChatProse>
   </TruncatedText>
 );
 
@@ -3594,23 +3598,24 @@ const UserMessageText = ({
         : undefined,
     [restorationPairs],
   );
-  if (rehypePlugins === undefined) {
-    return (
-      <MessageResponse
-        components={USER_TEXT_STREAMDOWN_COMPONENTS}
-        fallbackChildren={userMessageFallbackText(text)}
-      >
-        {text}
-      </MessageResponse>
-    );
-  }
   return (
-    <MessageResponse
-      components={USER_TEXT_STREAMDOWN_COMPONENTS}
-      fallbackChildren={userMessageFallbackText(text)}
-      rehypePlugins={rehypePlugins}
-    >
-      {text}
-    </MessageResponse>
+    <ChatProse>
+      {rehypePlugins === undefined ? (
+        <MessageResponse
+          components={USER_TEXT_STREAMDOWN_COMPONENTS}
+          fallbackChildren={userMessageFallbackText(text)}
+        >
+          {text}
+        </MessageResponse>
+      ) : (
+        <MessageResponse
+          components={USER_TEXT_STREAMDOWN_COMPONENTS}
+          fallbackChildren={userMessageFallbackText(text)}
+          rehypePlugins={rehypePlugins}
+        >
+          {text}
+        </MessageResponse>
+      )}
+    </ChatProse>
   );
 };
