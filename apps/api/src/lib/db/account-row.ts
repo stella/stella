@@ -253,6 +253,18 @@ export const anonymizeDeletedAccountRow = async (
     .where(eq(user.id, userId));
 };
 
+/**
+ * Returns one account's profile language to a new account's unset default,
+ * where the browser's language applies.
+ */
+export const clearAccountProfileLocale = async (
+  tx: Transaction,
+  userId: SafeId<"user">,
+): Promise<void> => {
+  // audit: skip - resets the synthetic monitoring principal to a new account's default; no member's choice is changed
+  await tx.update(user).set({ locale: null }).where(eq(user.id, userId));
+};
+
 type MarkAccountEmailsUndeliverableOptions = {
   database: Pick<typeof rootDb, "update">;
   emails: readonly NormalizedEmail[];

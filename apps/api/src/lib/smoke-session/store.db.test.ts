@@ -6,7 +6,7 @@ import {
   PROFESSIONAL_USE_TERMS_VERSION,
 } from "@stll/api-contract/professional-use";
 
-import { session } from "@/api/db/auth-schema";
+import { session, user } from "@/api/db/auth-schema";
 import { userProfessionalUseAcceptances } from "@/api/db/schema";
 import { mintSmokeSession } from "@/api/lib/smoke-session/store";
 import {
@@ -58,4 +58,29 @@ test("minting a smoke session creates its principal's missing professional-use a
       termsVersion: PROFESSIONAL_USE_TERMS_VERSION,
     },
   ]);
+});
+
+test("minting a smoke session returns its principal's profile language to unset", async () => {
+  const first = await mintSmokeSession("default");
+  const token = first.cookieValue.slice(0, first.cookieValue.indexOf("."));
+  const [owner] = await testDb
+    .select({ userId: session.userId })
+    .from(session)
+    .where(eq(session.token, token));
+  if (owner === undefined) {
+    throw new Error("The minted session has no row");
+  }
+  await testDb
+    .update(user)
+    .set({ locale: "cs" })
+    .where(eq(user.id, owner.userId));
+
+  await mintSmokeSession("default");
+
+  expect(
+    await testDb
+      .select({ locale: user.locale })
+      .from(user)
+      .where(eq(user.id, owner.userId)),
+  ).toEqual([{ locale: null }]);
 });
