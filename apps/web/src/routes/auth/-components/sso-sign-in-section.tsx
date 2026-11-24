@@ -52,7 +52,7 @@ export const SsoSignInSection = ({
   const capabilitiesView = queryView(capabilitiesQuery);
   const enterpriseSsoEnabled =
     (capabilitiesView.type === "items" &&
-      capabilitiesView.items.enterpriseSso === true) ||
+      capabilitiesView.items.enterpriseSso) ||
     ssoProviderId !== undefined;
 
   const isReauthPrompt = ssoProviderId === "required";
@@ -109,7 +109,7 @@ export const SsoSignInSection = ({
     window.location.assign(result.value);
   };
 
-  const handleDiscover = async (event: React.FormEvent) => {
+  const handleDiscover = async (event: React.SyntheticEvent) => {
     event.preventDefault();
     const trimmed = email.trim();
     if (!trimmed.includes("@")) {
@@ -231,7 +231,12 @@ export const SsoSignInSection = ({
               {t("auth.sso.signInWithSso")}
             </Button>
           ) : (
-            <Form className="space-y-2" onSubmit={handleDiscover}>
+            <Form
+              className="space-y-2"
+              onSubmit={(event) => {
+                detached(handleDiscover(event), "sso-sign-in.discover");
+              }}
+            >
               <Field invalid={lookupError !== null}>
                 <Input
                   autoComplete="email"

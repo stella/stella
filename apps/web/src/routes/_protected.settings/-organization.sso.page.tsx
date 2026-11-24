@@ -323,9 +323,9 @@ const OidcProvidersSection = ({
       {showAddProvider && (
         <AddOidcProviderForm
           onCancel={() => setShowAddProvider(false)}
-          onCreated={() => {
+          onCreated={async () => {
             setShowAddProvider(false);
-            return onChanged();
+            await onChanged();
           }}
         />
       )}

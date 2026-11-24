@@ -145,7 +145,7 @@ export const startSsoSignInRedirect = async (options: {
         : undefined;
     return Result.err(
       new APIError({
-        status: rawErr.status ?? 500,
+        status: rawErr.status,
         code,
         message: rawErr.message ?? "Could not start SSO sign-in",
       }),
