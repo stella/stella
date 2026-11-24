@@ -1,9 +1,4 @@
 {
-  "apps/desktop/src-tauri/src/account.rs": {
-    "count": 4,
-    "owner": "apps/desktop/src-tauri",
-    "reason": "pre-kit census; inject clocks and isolate test state"
-  },
   "apps/desktop/src-tauri/src/clipboard_image_export.rs": {
     "count": 1,
     "owner": "apps/desktop/src-tauri",
@@ -11,11 +6,6 @@
   },
   "apps/desktop/src-tauri/src/desktop_crash.rs": {
     "count": 2,
-    "owner": "apps/desktop/src-tauri",
-    "reason": "pre-kit census; inject clocks and isolate test state"
-  },
-  "apps/desktop/src-tauri/src/handoff.rs": {
-    "count": 11,
     "owner": "apps/desktop/src-tauri",
     "reason": "pre-kit census; inject clocks and isolate test state"
   },

@@ -244,7 +244,8 @@ pub fn handle_url(
   manager: Arc<Mutex<SessionManager>>,
   app_handle: AppHandle,
 ) {
-  let handoff_expires = std::time::Instant::now() + crate::handoff::HANDOFF_LIFETIME;
+  let handoff_expires =
+    crate::handoff::monotonic_now() + crate::handoff::HANDOFF_LIFETIME;
   match parse_deep_link(raw_url) {
     Some(DeepLinkAction::ConnectAccount {
       api_base_url,
@@ -403,7 +404,7 @@ struct HandoffRun {
   target: crate::handoff::Target,
   api_base_url: String,
   token: String,
-  expires: std::time::Instant,
+  expires: std::time::Duration,
 }
 
 /// Every handoff ends in front of the user: in its own window, in a notice,
@@ -440,7 +441,7 @@ async fn redeem_handoff(
   manager: &Arc<Mutex<SessionManager>>,
   app: &AppHandle,
 ) -> Result<(), crate::handoff::Stop> {
-  if std::time::Instant::now() >= run.expires {
+  if crate::handoff::monotonic_now() >= run.expires {
     return Err(crate::handoff::Failure::Expired.into());
   }
   let trusted = match run.target {

@@ -483,7 +483,7 @@ pub(crate) struct ParkedHandoff {
   pub target: Target,
   pub api_base_url: String,
   pub token: zeroize::Zeroizing<String>,
-  pub expires: std::time::Instant,
+  pub expires: Duration,
   recovery: AccountRecovery,
 }
 
@@ -493,7 +493,39 @@ enum AccountRecovery {
   AwaitingAccount,
 }
 
-static PARKED: std::sync::Mutex<Option<ParkedHandoff>> = std::sync::Mutex::new(None);
+const MONOTONIC_ORIGIN: Duration = Duration::from_secs(86_400);
+
+pub(crate) fn monotonic_now() -> Duration {
+  static HANDOFF_EPOCH: std::sync::OnceLock<std::time::Instant> =
+    std::sync::OnceLock::new();
+  MONOTONIC_ORIGIN + HANDOFF_EPOCH.get_or_init(std::time::Instant::now).elapsed()
+}
+
+struct ParkedSlot(std::sync::Mutex<Option<ParkedHandoff>>);
+
+impl ParkedSlot {
+  const fn new() -> Self {
+    Self(std::sync::Mutex::new(None))
+  }
+
+  fn lock(&self) -> std::sync::MutexGuard<'_, Option<ParkedHandoff>> {
+    self
+      .0
+      .lock()
+      .unwrap_or_else(std::sync::PoisonError::into_inner)
+  }
+
+  #[cfg(test)]
+  fn take_at(&self, now: Duration) -> Resumable {
+    match self.lock().take() {
+      None => Resumable::Nothing,
+      Some(parked) if now >= parked.expires => Resumable::Expired,
+      Some(parked) => Resumable::Ready(parked),
+    }
+  }
+}
+
+static PARKED: ParkedSlot = ParkedSlot::new();
 static ACCOUNT_OFFER: Mutex<()> = Mutex::const_new(());
 static CONNECTION_START: Mutex<()> = Mutex::const_new(());
 
@@ -564,9 +596,7 @@ impl AccountOffer {
     let mismatch = account_mismatch(state, &original.api_base_url)
       .await
       .map_err(Failure::Terminal)?;
-    let mut parked = PARKED
-      .lock()
-      .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut parked = PARKED.lock();
     let Some(current) = parked.as_mut() else {
       return Ok(OfferConnection::NotCurrent);
     };
@@ -576,7 +606,7 @@ impl AccountOffer {
     {
       return Ok(OfferConnection::NotCurrent);
     }
-    if std::time::Instant::now() >= current.expires {
+    if monotonic_now() >= current.expires {
       parked.take();
       return Ok(OfferConnection::Expired);
     }
@@ -590,13 +620,11 @@ impl AccountOffer {
   }
 
   pub(crate) fn pending(&self) -> Resumable {
-    self.pending_at(std::time::Instant::now())
+    self.pending_at(monotonic_now())
   }
 
-  fn pending_at(&self, now: std::time::Instant) -> Resumable {
-    let mut parked = PARKED
-      .lock()
-      .unwrap_or_else(std::sync::PoisonError::into_inner);
+  fn pending_at(&self, now: Duration) -> Resumable {
+    let mut parked = PARKED.lock();
     let resumable = match parked.as_ref() {
       Some(current)
         if current.token.as_str() == self.token.as_str()
@@ -624,7 +652,6 @@ impl AccountOffer {
 pub(crate) async fn expire_parked(token: &str, api_base_url: &str) -> Resumable {
   let expires = PARKED
     .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner)
     .as_ref()
     .filter(|current| {
       current.token.as_str() == token && current.api_base_url == api_base_url
@@ -633,7 +660,10 @@ pub(crate) async fn expire_parked(token: &str, api_base_url: &str) -> Resumable 
   let Some(expires) = expires else {
     return Resumable::Nothing;
   };
-  tokio::time::sleep_until(tokio::time::Instant::from_std(expires)).await;
+  let remaining = expires.saturating_sub(monotonic_now());
+  if !remaining.is_zero() {
+    tokio::time::sleep(remaining).await;
+  }
   account_offer(token, api_base_url).await.pending()
 }
 
@@ -649,9 +679,9 @@ pub(crate) async fn park_if_unlinked(
   target: Target,
   api_base_url: &str,
   token: &str,
-  expires: std::time::Instant,
+  expires: Duration,
 ) -> Result<AccountWait, String> {
-  if std::time::Instant::now() >= expires {
+  if monotonic_now() >= expires {
     return Ok(AccountWait::Expired);
   }
   // Linking shares this lease: it either publishes before this check, or
@@ -659,7 +689,7 @@ pub(crate) async fn park_if_unlinked(
   let _start = CONNECTION_START.lock().await;
   let _lease = crate::account::lock_requests().await;
   let account = crate::account::current(state).await?;
-  if std::time::Instant::now() >= expires {
+  if monotonic_now() >= expires {
     return Ok(AccountWait::Expired);
   }
   if account.is_some_and(|account| account.api_base_url == api_base_url) {
@@ -669,15 +699,8 @@ pub(crate) async fn park_if_unlinked(
   Ok(AccountWait::Parked)
 }
 
-fn park_until(
-  target: Target,
-  api_base_url: &str,
-  token: &str,
-  expires: std::time::Instant,
-) {
-  *PARKED
-    .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(ParkedHandoff {
+fn park_until(target: Target, api_base_url: &str, token: &str, expires: Duration) {
+  *PARKED.lock() = Some(ParkedHandoff {
     target,
     api_base_url: api_base_url.into(),
     token: zeroize::Zeroizing::new(token.into()),
@@ -690,7 +713,6 @@ fn park_until(
 pub(crate) fn unpark(token: &str, api_base_url: &str) -> bool {
   PARKED
     .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner)
     .take_if(|parked| {
       parked.token.as_str() == token && parked.api_base_url == api_base_url
     })
@@ -732,31 +754,21 @@ impl Eq for ParkedHandoff {}
 
 #[cfg(test)]
 fn take_parked() -> Resumable {
-  take_parked_at(std::time::Instant::now())
+  take_parked_at(monotonic_now())
 }
 
 #[cfg(test)]
-fn take_parked_at(now: std::time::Instant) -> Resumable {
-  let parked = PARKED
-    .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner)
-    .take();
-  match parked {
-    None => Resumable::Nothing,
-    Some(parked) if now >= parked.expires => Resumable::Expired,
-    Some(parked) => Resumable::Ready(parked),
-  }
+fn take_parked_at(now: Duration) -> Resumable {
+  PARKED.take_at(now)
 }
 
 pub(crate) async fn take_parked_for_account(api_base_url: &str) -> ResumeAfterLink {
   let _start = CONNECTION_START.lock().await;
-  let mut parked = PARKED
-    .lock()
-    .unwrap_or_else(std::sync::PoisonError::into_inner);
+  let mut parked = PARKED.lock();
   let Some(current) = parked.as_mut() else {
     return ResumeAfterLink::Nothing;
   };
-  if std::time::Instant::now() >= current.expires {
+  if monotonic_now() >= current.expires {
     parked.take();
     return ResumeAfterLink::Expired;
   }
@@ -1440,7 +1452,7 @@ mod tests {
           target,
           &origin,
           &token,
-          std::time::Instant::now() + HANDOFF_LIFETIME
+          monotonic_now() + HANDOFF_LIFETIME
         )
         .await
         .unwrap(),
@@ -1497,7 +1509,7 @@ mod tests {
           target,
           &origin,
           &token,
-          std::time::Instant::now() + HANDOFF_LIFETIME
+          monotonic_now() + HANDOFF_LIFETIME
         )
         .await
         .unwrap(),
@@ -1525,7 +1537,7 @@ mod tests {
 
     // A replacement owns the next offer; cancelling the old dialog cannot
     // strand it. Poll the queued lease once to deterministically hold the dialog.
-    let now = std::time::Instant::now();
+    let now = monotonic_now();
     park_until(
       Target::DesktopEdit,
       &origin,
@@ -1650,7 +1662,7 @@ mod tests {
         ("https://other.example.test", "second"),
         ("https://other.example.test", "first"),
       ] {
-        let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+        let expires = monotonic_now() + HANDOFF_LIFETIME;
         assert_eq!(
           park_if_unlinked(&state, Target::DesktopEdit, &origin, "first", expires)
             .await
@@ -1776,7 +1788,7 @@ mod tests {
       assert!(notice.contains(&server_a));
       assert!(notice.contains(&origin));
       let before = redeems.load(std::sync::atomic::Ordering::SeqCst);
-      let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+      let expires = monotonic_now() + HANDOFF_LIFETIME;
       assert_eq!(
         park_if_unlinked(&state, target, &origin, "mismatch", expires)
           .await
@@ -1848,7 +1860,7 @@ mod tests {
     // A different-origin pending connection has its own state and re-offer,
     // rather than pretending the replacement can use the pending account.
     let other_api = "https://other.example.test";
-    let expires = std::time::Instant::now() + HANDOFF_LIFETIME;
+    let expires = monotonic_now() + HANDOFF_LIFETIME;
     *state.lock().await =
       crate::account::AccountStore::fixture(linked_fixture(&origin, "stella_dr_live"));
     assert!(matches!(
@@ -1883,7 +1895,7 @@ mod tests {
     // Parking an aged link preserves its arrival deadline, including across
     // a resumed handoff; no new account offer may renew the server token.
     for target in [Target::DesktopEdit, Target::PdfSigning] {
-      let arrived = std::time::Instant::now() - Duration::from_secs(115);
+      let arrived = monotonic_now() - Duration::from_secs(115);
       let original_expiry = arrived + HANDOFF_LIFETIME;
       assert_eq!(
         park_if_unlinked(&state, target, &origin, &token, original_expiry)
@@ -1910,7 +1922,7 @@ mod tests {
           target,
           &origin,
           &token,
-          std::time::Instant::now() - Duration::from_nanos(1)
+          monotonic_now() - Duration::from_nanos(1)
         )
         .await
         .unwrap(),
@@ -1941,7 +1953,7 @@ mod tests {
     assert!(crate::account::current(&state).await.unwrap().is_none());
 
     // One slot, newest wins, and it lapses with the handoff's lifetime.
-    let now = std::time::Instant::now();
+    let now = monotonic_now();
     park_until(
       Target::DesktopEdit,
       &origin,
