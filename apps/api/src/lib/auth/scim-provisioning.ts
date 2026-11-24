@@ -58,6 +58,7 @@ const scimDeploymentGate = createAuthMiddleware(() => {
       message: "SCIM directory provisioning is not enabled.",
     });
   }
+  return Promise.resolve();
 });
 
 /**
