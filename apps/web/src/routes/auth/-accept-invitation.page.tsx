@@ -72,6 +72,10 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
         readQueryResult(Result.err(failure));
       }
 
+      // Accepting consumed the invitation, so this page's loader would now
+      // report it missing: leave the page before the session refresh
+      // re-runs the loaders of the matched routes.
+      await navigate({ to: "/workspaces", replace: true });
       const refreshed = await Result.tryPromise({
         try: async () => await invalidateSession.mutateAsync(),
         catch: transformUnknownError,
@@ -80,7 +84,6 @@ function AcceptInvitation({ invitation }: AcceptInvitationProps) {
         notifyUserError(refreshed.error, t("errors.actionFailed"));
       }
       readQueryResult(refreshed);
-      await navigate({ to: "/workspaces", replace: true });
     },
     onError: (error) => {
       analytics.captureError(error, {

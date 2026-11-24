@@ -188,3 +188,90 @@ test.each([
 
   expect(reported).toEqual([]);
 });
+
+test("accepting leaves the page before the session refresh, so the consumed invitation is never read again", async () => {
+  const { InvitationPage } = await import("./-accept-invitation.page");
+  const calls: string[] = [];
+  let accepted = false;
+  const json = (status: number, body: unknown) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const { pathname } = new URL(
+        input instanceof Request ? input.url : input.toString(),
+      );
+      calls.push(pathname);
+      if (pathname.endsWith("/organization/get-invitation")) {
+        // Accepting consumes the invitation, as the server does.
+        return await Promise.resolve(
+          accepted
+            ? json(400, {
+                code: "INVITATION_NOT_FOUND",
+                message: "Invitation not found",
+              })
+            : json(200, pendingInvitation("member")),
+        );
+      }
+      if (pathname.endsWith("/organization/accept-invitation")) {
+        accepted = true;
+        return await Promise.resolve(
+          json(200, { invitation: pendingInvitation("member") }),
+        );
+      }
+      return await Promise.resolve(json(200, null));
+    },
+    { preconnect: () => undefined },
+  );
+
+  const root = createRootRoute();
+  const invitation = createRoute({
+    getParentRoute: () => root,
+    path: "/auth/accept-invitation/$invitationId",
+    beforeLoad: () => ({ signedInEmail: "person@example.test" }),
+    loader: async ({ params }) => await loadInvitationView(params.invitationId),
+    component: InvitationPage,
+  });
+  const workspaces = createRoute({
+    getParentRoute: () => root,
+    path: "/workspaces",
+  });
+  const router = createRouter({
+    history: createMemoryHistory({
+      initialEntries: ["/auth/accept-invitation/invitation-1"],
+    }),
+    routeTree: root.addChildren([invitation, workspaces]),
+  });
+  await router.load();
+  render(
+    <QueryClientProvider client={new QueryClient()}>
+      <IntlProvider locale="en" messages={messages} timeZone="UTC">
+        <RouterProvider router={router} />
+      </IntlProvider>
+    </QueryClientProvider>,
+  );
+
+  const accept = (await screen.findByText(messages.common.accept)).closest(
+    "button",
+  );
+  if (accept === null) {
+    throw new Error("The invitation offers no accept button");
+  }
+  fireEvent.click(accept);
+
+  await waitFor(() => {
+    expect(router.state.location.pathname).toBe("/workspaces");
+    expect(router.state.status).toBe("idle");
+  });
+  const acceptedAt = calls.findIndex((path) =>
+    path.endsWith("/organization/accept-invitation"),
+  );
+  expect(acceptedAt).toBeGreaterThan(-1);
+  expect(
+    calls
+      .slice(acceptedAt)
+      .filter((path) => path.endsWith("/organization/get-invitation")),
+  ).toEqual([]);
+});
