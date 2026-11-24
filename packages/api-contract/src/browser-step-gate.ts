@@ -39,9 +39,11 @@ type BrowserLevelGate = Exclude<
 
 /**
  * The kinds of step on an element the levels tell apart. `search` is typing
- * into a search field, or pressing a key there (Enter runs the search the
- * typing set up); `click` is a click, or a key press anywhere else (it can
- * submit a form); `type` is typing anywhere else, or choosing an option.
+ * into a search field; `click` is a click, or a key press in any element (it
+ * can submit a form); `type` is typing anywhere else, or choosing an option.
+ * A key press follows the click rule whatever role the page gives the
+ * element: the role is the page's own word, and a page could call any form
+ * field a search field to have it submitted without asking.
  */
 export const BROWSER_STEP_KINDS = ["click", "search", "type"] as const;
 export type BrowserStepKind = (typeof BROWSER_STEP_KINDS)[number];
@@ -74,7 +76,7 @@ export const browserStepKind = (
     case BROWSER_CONTROL_ACTION.click:
       return "click";
     case BROWSER_CONTROL_ACTION.pressKey:
-      return inSearchField ? "search" : "click";
+      return "click";
     case BROWSER_CONTROL_ACTION.fill:
       return inSearchField ? "search" : "type";
     case BROWSER_CONTROL_ACTION.select:

@@ -231,7 +231,7 @@ const TOOL_DEFINITIONS = {
   },
   press_key: {
     description:
-      "Press a key in an element of the page this chat last read, by its ref, and read the page that follows. Enter submits the field's form (a search, for one) or activates a button or link; Escape leaves a field or closes a list; Tab moves to the next field; ArrowDown and ArrowUp move through a select's options. Depending on the member's approval setting, a key press may wait for the member to allow it in chat, as a click does; in a search field (role searchbox) it follows typing there instead. A refusal comes back as declined.",
+      "Press a key in an element of the page this chat last read, by its ref, and read the page that follows. Enter submits the field's form (a search, for one) or activates a button or link; Escape leaves a field or closes a list; Tab moves to the next field; ArrowDown and ArrowUp move through a select's options. Depending on the member's approval setting, a key press may wait for the member to allow it in chat, as a click does; a refusal comes back as declined.",
     inputSchema: {
       type: "object",
       properties: {
