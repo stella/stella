@@ -37,18 +37,10 @@ describe.skipIf(process.env["STELLA_RUN_POSTGRES_TESTS"] !== "true")(
             fixtures.at(0) ?? panic("Small learned-fix fixture required");
           const large =
             fixtures.at(1) ?? panic("Large learned-fix fixture required");
-          // The desktop read answers only while dictation is granted.
           testState.patchConfig({
             FEATURE_ORG_ACCESS_STATE: true,
             FEATURE_CONFIGURED_ACCESS: false,
             FEATURE_FREE_TIER: false,
-            API_FEATURE_ACCESS_GRANTS: {
-              ...env.API_FEATURE_ACCESS_GRANTS,
-              "desktop-dictation": [small, large].map(({ organizationId }) => ({
-                type: "organization" as const,
-                organizationId,
-              })),
-            },
           });
           for (const scenario of learnedFixesScalingScenarios) {
             expect(

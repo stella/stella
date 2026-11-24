@@ -131,9 +131,9 @@ test("a granted member enrolled in time billing sees the feature enabled", async
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "enabled" },
-      "desktop-dictation": { status: "hidden" },
-      "desktop-dictation-cloud": { status: "hidden" },
-      "desktop-dictation-retaining-models": { status: "hidden" },
+      "desktop-dictation": { status: "enabled" },
+      "desktop-dictation-cloud": { status: "enabled" },
+      "desktop-dictation-retaining-models": { status: "enabled" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -146,9 +146,9 @@ test("a granted member sees the feature enabled without reading identity again",
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "enabled" },
-      "desktop-dictation": { status: "hidden" },
-      "desktop-dictation-cloud": { status: "hidden" },
-      "desktop-dictation-retaining-models": { status: "hidden" },
+      "desktop-dictation": { status: "enabled" },
+      "desktop-dictation-cloud": { status: "enabled" },
+      "desktop-dictation-retaining-models": { status: "enabled" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -162,9 +162,9 @@ test("a granted member without time billing sees the activity timeline hidden", 
   expect(body).toStrictEqual({
     features: {
       "activity-timeline": { status: "hidden" },
-      "desktop-dictation": { status: "hidden" },
-      "desktop-dictation-cloud": { status: "hidden" },
-      "desktop-dictation-retaining-models": { status: "hidden" },
+      "desktop-dictation": { status: "enabled" },
+      "desktop-dictation-cloud": { status: "enabled" },
+      "desktop-dictation-retaining-models": { status: "enabled" },
       "local-agents": { status: "hidden" },
     },
   });
@@ -180,12 +180,24 @@ test("a member grant does not cross the desktop account organization", async () 
   });
 });
 
-test("callers outside the grant see the feature hidden", async () => {
-  for (const caller of [
-    { email: "other@example.test", emailVerified: true },
-    { email: GRANTED_EMAIL, emailVerified: false },
-    null,
-  ]) {
+test("a verified member outside the grant sees only dictation enabled", async () => {
+  expect(
+    await readAs({
+      caller: { email: "other@example.test", emailVerified: true },
+    }),
+  ).toStrictEqual({
+    features: {
+      "activity-timeline": { status: "hidden" },
+      "desktop-dictation": { status: "enabled" },
+      "desktop-dictation-cloud": { status: "enabled" },
+      "desktop-dictation-retaining-models": { status: "enabled" },
+      "local-agents": { status: "hidden" },
+    },
+  });
+});
+
+test("an unverified or deleted caller sees every feature hidden", async () => {
+  for (const caller of [{ email: GRANTED_EMAIL, emailVerified: false }, null]) {
     expect(await readAs({ caller })).toStrictEqual({
       features: {
         "activity-timeline": { status: "hidden" },

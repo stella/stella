@@ -1,5 +1,5 @@
 import { Result, UnhandledException } from "better-result";
-import { beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import * as fc from "fast-check";
 import * as v from "valibot";
 
@@ -17,10 +17,8 @@ import {
   TRANSCRIPTION_LABELS_SHOWN_FIELD,
 } from "@stll/api-contract/transcription";
 import { assertProperty } from "@stll/property-testing";
-import { createTestState } from "@stll/test-state";
 
 import { safeDbFromScoped } from "@/api/db/safe-db";
-import { env } from "@/api/env";
 import { makeM4aAudioBytes } from "@/api/handlers/dictation/audio-fixtures.test-helper";
 import { transcribeWithElevenLabs } from "@/api/handlers/dictation/elevenlabs-provider";
 import { transcribeAudio } from "@/api/handlers/dictation/provider";
@@ -53,8 +51,6 @@ import {
   createDictationTranscribeEndpoint,
   executeDictation,
 } from "./transcribe";
-
-const testState = createTestState({ file: import.meta.path, config: env });
 
 type DictationContext = Exclude<
   Parameters<typeof executeDictation>[0],
@@ -912,11 +908,6 @@ describe("a member's labels flag", () => {
   const USER_ID = toSafeId<"user">("labelling-member");
   const ORGANIZATION_ID = toSafeId<"organization">("labelling-firm");
   const EMAIL = "labelling-member@example.test";
-  const GRANT = {
-    type: "member",
-    organizationId: ORGANIZATION_ID,
-    email: EMAIL,
-  } as const;
   const SCRIBE = "elevenlabs-direct/scribe-v3";
   /** An ElevenLabs key without zero retention: Scribe v3 keeps the audio. */
   const RETAINING = {
@@ -928,28 +919,19 @@ describe("a member's labels flag", () => {
     },
   } as const;
 
-  beforeEach(() => {
-    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {});
-  });
-
-  const grantRetainingModels = () => {
-    testState.setConfig("API_FEATURE_ACCESS_GRANTS", {
-      "desktop-dictation": [GRANT],
-      "desktop-dictation-cloud": [GRANT],
-      "desktop-dictation-retaining-models": [GRANT],
-    });
-  };
-
   const transcribeAs = async ({
     modelId,
     labels,
     residency = "eu",
     deployment = RETAINING,
+    emailVerified = true,
   }: {
     modelId: string;
     labels: boolean;
     residency?: "eu" | "us";
     deployment?: TranscriptionDeployment;
+    /** Every member whose email is verified has the dictation decisions. */
+    emailVerified?: boolean;
   }) => {
     const f = fixture(1234, 1234, deployment);
     const { scopedDb } = createScopedDbMock({});
@@ -975,7 +957,7 @@ describe("a member's labels flag", () => {
         featureAccessSnapshot: buildFeatureAccessSnapshot({
           organizationId: ORGANIZATION_ID,
           userId: USER_ID,
-          identity: { email: EMAIL, emailVerified: true },
+          identity: { email: EMAIL, emailVerified },
           enrolments: [],
         }),
         body: {
@@ -1002,23 +984,25 @@ describe("a member's labels flag", () => {
     return refusal.success ? refusal.output.code : undefined;
   };
 
-  test("lets a granted member name a model whose provider keeps the audio", async () => {
-    grantRetainingModels();
+  test("lets a member name a model whose provider keeps the audio", async () => {
     const { result, f } = await transcribeAs({ modelId: SCRIBE, labels: true });
     expect(result).not.toBeInstanceOf(HttpStatusResponse);
     expect(result).toMatchObject({ modelId: SCRIBE, text: TEXT });
     expect(f.directRequests).toHaveLength(1);
   });
 
-  test("never lets a member without the grant name such a model", async () => {
-    const { result, f } = await transcribeAs({ modelId: SCRIBE, labels: true });
+  test("never lets a caller whose email is unverified name such a model", async () => {
+    const { result, f } = await transcribeAs({
+      modelId: SCRIBE,
+      labels: true,
+      emailVerified: false,
+    });
     expect(result instanceof HttpStatusResponse && result.code).toBe(503);
     expect(refusalCode(result)).toBe("transcription_model_unavailable");
     expect(f.directRequests).toEqual([]);
   });
 
-  test("without it, a granted member still gets the region's models only", async () => {
-    grantRetainingModels();
+  test("without it, a member still gets the region's models only", async () => {
     const retaining = await transcribeAs({ modelId: SCRIBE, labels: false });
     expect(refusalCode(retaining.result)).toBe(
       "transcription_model_unavailable",
@@ -1051,7 +1035,7 @@ describe("a member's labels flag", () => {
     expect(f.settlements.at(0)?.caller.transcriptionEndpoint).toBe("global");
   });
 
-  test("reads the grant only for a named model whose provider keeps the audio, after matter access", async () => {
+  test("reads the member's decision only for a named model whose provider keeps the audio, after matter access", async () => {
     let reads = 0;
     const readGrant = async () => {
       reads += 1;
@@ -1078,7 +1062,7 @@ describe("a member's labels flag", () => {
     expect((await run({ modelId: undefined })).result.isOk()).toBe(true);
     expect((await run({ modelId: MODEL })).result.isOk()).toBe(true);
     expect(reads).toBe(0);
-    // A matter the member cannot see is refused before the grant is read.
+    // A matter the member cannot see is refused before the decision is read.
     const hidden = await run(
       {
         modelId: SCRIBE,
