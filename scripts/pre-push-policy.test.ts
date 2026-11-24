@@ -36,14 +36,10 @@ const assertLightweightPush = (config: unknown) => {
       },
       "ai-skills": {
         files: pushFiles,
-        glob: "{.ai/**,.agents/skills/**,.claude/skills/**,.claude/commands/**,.gitmodules,.coderabbit.yaml,scripts/check-ai-skill-sync.sh,scripts/check-ai-skill-sources.sh,**/AGENTS.md,**/GEMINI.md}",
+        glob: "{.ai/**,.agents/skills/**,.claude/skills/**,.claude/commands/**,.gitmodules,.coderabbit.yaml,scripts/check-ai-skill-sync.sh,scripts/check-ai-skill-sources.sh,AGENTS.md,GEMINI.md,**/AGENTS.md,**/GEMINI.md}",
         run: "bash scripts/check-ai-skill-sources.sh",
       },
-      lockfiles: {
-        files: pushFiles,
-        glob: "{**/bun.lock,**/bun.lockb,**/package-lock.json,**/yarn.lock,**/pnpm-lock.yaml,**/bunfig.toml,.github/dependabot.yml,scripts/check-standalone-lockfiles.ts}",
-        run: "bun run check:standalone-lockfiles",
-      },
+      lockfiles: { run: "bun run check:standalone-lockfiles" },
       "job-classification": {
         files: pushFiles,
         glob: `{${CLASSIFICATION_INPUT_GLOBS.join(",")}}`,

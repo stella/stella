@@ -101,13 +101,11 @@ pre-push:
       run: bash scripts/check-pushed-signatures.sh
     ai-skills:
       files: git diff --name-only origin/main...HEAD
-      glob: "{.ai/**,.agents/skills/**,.claude/skills/**,.claude/commands/**,.gitmodules,.coderabbit.yaml,scripts/check-ai-skill-sync.sh,scripts/check-ai-skill-sources.sh,**/AGENTS.md,**/GEMINI.md}"
+      glob: "{.ai/**,.agents/skills/**,.claude/skills/**,.claude/commands/**,.gitmodules,.coderabbit.yaml,scripts/check-ai-skill-sync.sh,scripts/check-ai-skill-sources.sh,AGENTS.md,GEMINI.md,**/AGENTS.md,**/GEMINI.md}"
       run: bash scripts/check-ai-skill-sources.sh
     # Every lockfile besides the root bun.lock needs the release-age
     # quarantine, a Dependabot cooldown and a frozen install.
     lockfiles:
-      files: git diff --name-only origin/main...HEAD
-      glob: "{**/bun.lock,**/bun.lockb,**/package-lock.json,**/yarn.lock,**/pnpm-lock.yaml,**/bunfig.toml,.github/dependabot.yml,scripts/check-standalone-lockfiles.ts}"
       run: bun run check:standalone-lockfiles
     # Runs only when the pushed commits touch a job classification input
     # (pinned to CLASSIFICATION_INPUT_GLOBS in scripts/pre-push-policy.test.ts).
