@@ -55,12 +55,13 @@ export const useAppliedDesktopAppearance = (
   const changes = useRef(0);
 
   useEffect(() => {
-    let disposed = false;
+    // A signal, not a local flag: the cleanup flips it while a read awaits.
+    const lifetime = new AbortController();
     let readStarted = false;
     // Runs once the listener is live: a change emitted before then would be
     // missed, and a read made before then could return the value it replaced.
     const read = async () => {
-      if (readStarted || disposed) {
+      if (readStarted || lifetime.signal.aborted) {
         return;
       }
       readStarted = true;
@@ -85,7 +86,7 @@ export const useAppliedDesktopAppearance = (
         });
         return;
       }
-      if (!disposed && changes.current === changesAtStart) {
+      if (!lifetime.signal.aborted && changes.current === changesAtStart) {
         cacheAppearance(result.value);
         setAppearance(result.value);
       }
@@ -121,7 +122,7 @@ export const useAppliedDesktopAppearance = (
     });
 
     return () => {
-      disposed = true;
+      lifetime.abort();
       unsubscribe();
     };
   }, [telemetryWindow]);
