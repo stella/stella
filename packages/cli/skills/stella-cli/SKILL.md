@@ -340,7 +340,7 @@ are omitted here. Input union keys are required unless marked `?`.
   - `--user-id` — Matter member ID (string)
   - optional: --reassign-to
 - `stella matter save`
-  - optional: --matter-id, --name, --client-id, --visibility (all_members|admins_and_assigned|assigned_only), --reference, --billing-reference, --status (active|archived)
+  - optional: --matter-id, --name, --client-id, --visibility (all_members|admins_and_assigned|assigned_only), --confirm-widening, --reference, --billing-reference, --status (active|archived)
 - `stella organization create`
   - `--name` — Name of the new organization. (string)
   - optional: --slug
