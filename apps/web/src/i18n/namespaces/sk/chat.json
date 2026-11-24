@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "Už máte? Načítať znova",
       "connect": "Pripojiť Chrome plugin",
-      "connectDescription": "Kliknite na ikonu stella na lište Chrome, povoľte prístup a pripojte sa.",
+      "connectDescription": "Kliknite na ikonu stella na lište Chromu a pripojte túto kartu.",
       "connected": "Chrome plugin pripojený",
-      "connectedDescription": "V chate môžete požiadať o čítanie webov, kde ste prihlásení. stella sa vždy pýta vopred.",
+      "connectedDescription": "stella číta weby, kde ste prihlásení, vždy s vaším súhlasom.",
       "install": "Nainštalovať Chrome plugin",
-      "installDescription": "Umožní aplikácii stella čítať weby vo vašom Chrome, vždy s vaším súhlasom.",
+      "installDescription": "Umožní aplikácii stella čítať weby, kde ste prihlásení, vždy s vaším súhlasom.",
       "manageSites": "Povolené weby",
       "name": "Plugin pre Chrome",
       "reload": "Znovu načítať kartu",
-      "reloadDescription": "Chrome plugin je novší než táto karta. Načítajte ju znova.",
+      "reloadDescription": "Plugin sa aktualizoval po otvorení tejto karty.",
       "statusNotInstalled": "Nenainštalované",
       "statusReload": "Potrebné načítanie",
       "statusUpdating": "Aktualizuje sa",
       "updating": "Čaká sa na aktualizáciu",
-      "updatingDescription": "Chrome aktualizuje plugin automaticky v priebehu niekoľkých hodín."
+      "updatingDescription": "Chrome ho aktualizuje automaticky v priebehu niekoľkých hodín."
     },
     "browserExtensionPreview": {
-      "answer": "Podľa § 2001 vyžaduje odstúpenie písomné oznámenie druhej strane.",
-      "connected": "Chrome plugin je pripojený. Kliknite pre podrobnosti.",
-      "excerpt": "§ 2001: Odstúpenie vyžaduje písomné oznámenie…",
-      "notConnected": "Chrome plugin ešte nie je pripojený. Kliknite pre pripojenie.",
-      "notInstalled": "Chrome plugin nie je nainštalovaný. Kliknite pre inštaláciu.",
-      "prompt": "Over § 2001 na mojom portáli a cituj ho.",
-      "reload": "Chrome plugin bol aktualizovaný. Kliknite pre opätovné načítanie.",
+      "answer": "Podľa <cite>§ 2001</cite> musíte odstúpenie oznámiť druhej strane písomne.",
+      "connected": "Chrome plugin je pripojený: stella môže čítať weby, kde ste prihlásení.",
+      "notConnected": "Chrome plugin je nainštalovaný, ale ešte nie je pripojený.",
+      "notInstalled": "Chrome plugin ešte nie je nainštalovaný.",
+      "page": "§ 2000 Každá strana môže odstúpiť pred plnením. <passage>§ 2001 Odstúpenie vyžaduje písomné oznámenie druhej strane.</passage>",
+      "prompt": "Čo hovorí môj portál o odstúpení?",
+      "reload": "Chrome plugin sa aktualizoval: načítajte túto kartu znova.",
       "steps": {
         "ask": "Opýtate sa",
         "cited": "stella odpovie",
-        "read": "Chrome plugin číta"
+        "read": "stella číta váš portál"
       },
       "updating": "Čaká sa na aktualizáciu Chrome pluginu."
     },

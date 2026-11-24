@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "مثبّت بالفعل؟ إعادة التحميل",
       "connect": "ربط إضافة Chrome",
-      "connectDescription": "انقر على أيقونة stella في Chrome واسمح بالوصول ثم اتصل.",
+      "connectDescription": "انقر على أيقونة stella في شريط أدوات Chrome واربط هذا التبويب.",
       "connected": "إضافة Chrome متصلة",
-      "connectedDescription": "اطلب في الدردشة قراءة المواقع المسجّل دخولك إليها. يطلب stella موافقتك دائمًا.",
+      "connectedDescription": "يقرأ stella المواقع التي سجّلت الدخول إليها، دائمًا بموافقتك.",
       "install": "تثبيت إضافة Chrome",
-      "installDescription": "يتيح لـ stella قراءة المواقع في Chrome بموافقتك دائمًا.",
+      "installDescription": "تتيح لتطبيق stella قراءة المواقع التي سجّلت الدخول إليها، دائمًا بموافقتك.",
       "manageSites": "المواقع المسموح بها",
       "name": "إضافة Chrome",
       "reload": "إعادة تحميل التبويب",
-      "reloadDescription": "إضافة Chrome أحدث من هذا التبويب. أعد تحميله للمتابعة.",
+      "reloadDescription": "تم تحديث الإضافة بعد فتح هذا التبويب.",
       "statusNotInstalled": "غير مثبّت",
       "statusReload": "يلزم إعادة التحميل",
       "statusUpdating": "جارٍ التحديث",
       "updating": "التحديث قيد الانتظار",
-      "updatingDescription": "يحدّث Chrome الإضافة تلقائيًا خلال بضع ساعات."
+      "updatingDescription": "يحدّثها Chrome تلقائيًا خلال بضع ساعات."
     },
     "browserExtensionPreview": {
-      "answer": "وفقًا للمادة 2001، يتطلب الانسحاب إشعارًا كتابيًا.",
-      "connected": "إضافة Chrome متصلة. انقر للتفاصيل.",
-      "excerpt": "المادة 2001: يتطلب الانسحاب إشعارًا كتابيًا…",
-      "notConnected": "إضافة Chrome غير متصلة. انقر للاتصال.",
-      "notInstalled": "إضافة Chrome غير مثبّتة. انقر للتثبيت.",
-      "prompt": "تحقق من المادة 2001 في بوابتي واستشهد بها.",
-      "reload": "تم تحديث إضافة Chrome. انقر لإعادة التحميل.",
+      "answer": "بموجب <cite>المادة 2001</cite>، يجب إخطار الطرف الآخر بالانسحاب كتابيًا.",
+      "connected": "إضافة Chrome متصلة: يمكن لتطبيق stella قراءة المواقع التي سجّلت الدخول إليها.",
+      "notConnected": "إضافة Chrome مثبّتة لكنها غير متصلة بعد.",
+      "notInstalled": "إضافة Chrome غير مثبّتة بعد.",
+      "page": "المادة 2000: يجوز لأي طرف الانسحاب قبل التنفيذ. <passage>المادة 2001: يتطلب الانسحاب إشعارًا كتابيًا إلى الطرف الآخر.</passage>",
+      "prompt": "ماذا تقول بوابتي عن الانسحاب؟",
+      "reload": "تم تحديث إضافة Chrome: أعد تحميل هذا التبويب.",
       "steps": {
         "ask": "تسأل",
         "cited": "stella يجيب",
-        "read": "الإضافة تقرأ"
+        "read": "stella يقرأ بوابتك"
       },
       "updating": "تحديث إضافة Chrome قيد الانتظار."
     },

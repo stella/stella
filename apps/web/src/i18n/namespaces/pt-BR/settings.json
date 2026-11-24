@@ -489,7 +489,6 @@
       "browseIntegrations": "Adicionar um serviço",
       "browserExtensionConnectHint": "Depois de instalar, abra a extensão nesta guia da stella, permita o acesso aos sites e conecte a guia.",
       "browserExtensionDescription": "O chat da stella pode ler e usar sites em uma guia do Chrome que você escolher. Cada ação aguarda sua aprovação.",
-      "browserExtensionInstall": "Adicionar ao Chrome",
       "browserExtensionTitle": "Extensão do navegador",
       "browserSiteRemove": "Remover {site}",
       "browserSitesDescription": "Nesses sites, as ações do chat no navegador são executadas sem perguntar. Remova um site para voltar a ser consultado.",

@@ -489,7 +489,6 @@
       "browseIntegrations": "إضافة خدمة",
       "browserExtensionConnectHint": "بعد التثبيت، افتح الإضافة في علامة تبويب stella هذه، واسمح بالوصول إلى المواقع، ثم اربط علامة التبويب.",
       "browserExtensionDescription": "يمكن لدردشة stella قراءة المواقع واستخدامها في علامة تبويب Chrome التي تختارها. كل إجراء ينتظر موافقتك.",
-      "browserExtensionInstall": "إضافة إلى Chrome",
       "browserExtensionTitle": "إضافة المتصفح",
       "browserSiteRemove": "إزالة {site}",
       "browserSitesDescription": "تُنفَّذ إجراءات الدردشة في المتصفح على هذه المواقع دون سؤال. أزِل موقعًا ليُطلب منك الإذن مجددًا.",

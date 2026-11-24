@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "Juba olemas? Laadi uuesti",
       "connect": "Ühenda Chrome'i plugin",
-      "connectDescription": "Klõpsake Chrome'is stella ikoonil, lubage juurdepääs ja ühendage.",
+      "connectDescription": "Klõpsake Chrome'i tööriistaribal stella ikoonil ja ühendage see kaart.",
       "connected": "Chrome'i plugin ühendatud",
-      "connectedDescription": "Paluge vestluses lugeda sisse logitud saite. stella küsib alati enne luba.",
+      "connectedDescription": "stella loeb saite, kuhu olete sisse logitud, alati teie loal.",
       "install": "Installi Chrome'i plugin",
-      "installDescription": "Lubab rakendusel stella lugeda saite teie Chrome'is, alati teie loal.",
+      "installDescription": "Laseb rakendusel stella lugeda saite, kuhu olete sisse logitud, alati teie loal.",
       "manageSites": "Lubatud saidid",
       "name": "Chrome'i plugin",
       "reload": "Laadi kaart uuesti",
-      "reloadDescription": "Chrome'i plugin on sellest kaardist uuem. Laadige kaart uuesti.",
+      "reloadDescription": "Plugin uuenes pärast selle kaardi avamist.",
       "statusNotInstalled": "Installimata",
       "statusReload": "Vajab laadimist",
       "statusUpdating": "Uuendamine",
       "updating": "Uuendus ootel",
-      "updatingDescription": "Chrome uuendab plugina automaatselt mõne tunni jooksul."
+      "updatingDescription": "Chrome uuendab seda automaatselt mõne tunni jooksul."
     },
     "browserExtensionPreview": {
-      "answer": "§ 2001 kohaselt nõuab taganemine kirjalikku teadet.",
-      "connected": "Chrome'i plugin on ühendatud. Klõpsake üksikasjadeks.",
-      "excerpt": "§ 2001: Taganemine nõuab kirjalikku teadet…",
-      "notConnected": "Chrome'i plugin pole ühendatud. Klõpsake ühendamiseks.",
-      "notInstalled": "Chrome'i plugin pole installitud. Klõpsake installimiseks.",
-      "prompt": "Kontrolli § 2001 mu portaalis ja tsiteeri.",
-      "reload": "Chrome'i plugin uuenes. Klõpsake uuesti laadimiseks.",
+      "answer": "<cite>§ 2001</cite> kohaselt peate taganemisest teisele poolele kirjalikult teatama.",
+      "connected": "Chrome'i plugin on ühendatud: stella saab lugeda saite, kuhu olete sisse logitud.",
+      "notConnected": "Chrome'i plugin on installitud, kuid pole veel ühendatud.",
+      "notInstalled": "Chrome'i plugin pole veel installitud.",
+      "page": "§ 2000 Kumbki pool võib enne täitmist lepingust taganeda. <passage>§ 2001 Taganemiseks tuleb teisele poolele saata kirjalik teade.</passage>",
+      "prompt": "Mida mu portaal taganemise kohta ütleb?",
+      "reload": "Chrome'i plugin uuenes: laadige see kaart uuesti.",
       "steps": {
         "ask": "Küsite",
         "cited": "stella vastab",
-        "read": "Plugin loeb"
+        "read": "stella loeb teie portaali"
       },
       "updating": "Chrome'i plugina uuendus ootel."
     },

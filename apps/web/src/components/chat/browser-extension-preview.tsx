@@ -15,18 +15,20 @@ import {
 } from "@stll/ui/icons";
 import { cn } from "@stll/ui/utils";
 
+/** A neutral host for the signed-in site the preview reads. */
 const PREVIEW_HOST = "portal.example.com";
 
 type BrowserExtensionPreviewCardProps = {
-  /** One-line status summary shown under the preview and announced to screen readers. */
+  /** One line on the plugin's state, shown under the preview. */
   description: string;
-  /** The composer trigger the card explains on hover and focus. */
+  /** The composer control the card explains on hover and focus. */
   trigger: ReactElement;
 };
 
 /**
- * Hover and focus preview of the Chrome plugin chip, matching the
- * anonymization shield beside it.
+ * Hover and focus preview of the Chrome plugin: you ask, stella reads the
+ * page you are signed in to and finds the passage, then answers citing it.
+ * Built like the anonymization preview beside it.
  */
 export const BrowserExtensionPreviewCard = ({
   description,
@@ -37,9 +39,24 @@ export const BrowserExtensionPreviewCard = ({
   </AnimatedPreviewCard>
 );
 
-/** Looping 3-stage preview shared by the hover card and the click popover. */
-export const BrowserExtensionPreview = () => {
+const BrowserExtensionPreview = () => {
   const t = useTranslations();
+  // Explicit ReactNode: the inferred `t.rich` result carries React 19's
+  // Promise<AwaitedReactNode> member, which promise-function-async flags.
+  const page = (found: boolean): ReactNode =>
+    t.rich("chat.browserExtensionPreview.page", {
+      passage: (chunks) => <Passage found={found}>{chunks}</Passage>,
+    });
+  const answer: ReactNode = t.rich("chat.browserExtensionPreview.answer", {
+    cite: (chunks) => (
+      <span
+        className="bg-info/12 text-info rounded-sm px-0.5"
+        data-browser-extension-preview="citation"
+      >
+        {chunks}
+      </span>
+    ),
+  });
 
   return (
     <AnimatedPreview
@@ -66,29 +83,23 @@ export const BrowserExtensionPreview = () => {
               icon={BrowserControlIcon}
               tone="assistant"
             >
-              <div className="flex flex-col gap-1.5">
-                <span className="text-muted-foreground text-2xs inline-flex items-center gap-1">
-                  <GlobeIcon className="size-3 shrink-0" />
-                  <span>{PREVIEW_HOST}</span>
-                </span>
-                <AnimatedPreview
-                  pace="beat"
-                  stages={[
-                    { id: "loading", content: <TypingDots /> },
-                    {
-                      id: "excerpt",
-                      content: (
-                        <span>{t("chat.browserExtensionPreview.excerpt")}</span>
-                      ),
-                    },
-                  ]}
-                />
-              </div>
+              <span className="text-muted-foreground mb-1.5 flex items-center gap-1.5 border-b pb-1.5">
+                <GlobeIcon className="size-3 shrink-0" />
+                <bdi>{PREVIEW_HOST}</bdi>
+              </span>
+              {/* The page loads, then the passage that answers lights up. */}
+              <AnimatedPreview
+                pace="beat"
+                stages={[
+                  { id: "page", content: page(false) },
+                  { id: "passage", content: page(true) },
+                ]}
+              />
             </PreviewStep>
           ),
         },
         {
-          id: "cited",
+          id: "answered",
           content: (
             <PreviewStep
               caption={t("chat.browserExtensionPreview.steps.cited")}
@@ -99,12 +110,7 @@ export const BrowserExtensionPreview = () => {
                 pace="beat"
                 stages={[
                   { id: "typing", content: <TypingDots /> },
-                  {
-                    id: "answer",
-                    content: (
-                      <span>{t("chat.browserExtensionPreview.answer")}</span>
-                    ),
-                  },
+                  { id: "answer", content: answer },
                 ]}
               />
             </PreviewStep>
@@ -115,27 +121,41 @@ export const BrowserExtensionPreview = () => {
   );
 };
 
+type PassageProps = {
+  found: boolean;
+  children: ReactNode;
+};
+
+const Passage = ({ found, children }: PassageProps) => (
+  <span
+    className={cn("rounded-sm px-0.5", found && "bg-warning/15")}
+    data-browser-extension-preview={found ? "passage" : undefined}
+  >
+    {children}
+  </span>
+);
+
 type PreviewStepProps = {
-  icon: LucideIcon;
   caption: string;
+  icon: LucideIcon;
   tone: "user" | "assistant";
   children: ReactNode;
 };
 
 const PreviewStep = ({
-  icon: Icon,
   caption,
+  icon: StepIcon,
   tone,
   children,
 }: PreviewStepProps) => (
   <div className="flex flex-col gap-1.5">
-    <div className="text-muted-foreground text-2xs flex items-center gap-1.5 font-medium">
-      <Icon className="size-3 shrink-0" />
-      <span>{caption}</span>
-    </div>
+    <span className="text-muted-foreground text-2xs flex items-center gap-1.5 font-medium">
+      <StepIcon className="size-3 shrink-0" />
+      {caption}
+    </span>
     <div
       className={cn(
-        "border-border/70 text-foreground rounded-md border px-2.5 py-2 text-xs leading-relaxed",
+        "rounded-md border px-2 py-1.5 text-xs leading-relaxed",
         tone === "user" ? "bg-muted/60" : "bg-card",
       )}
     >

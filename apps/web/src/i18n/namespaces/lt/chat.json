@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "Jau įdiegta? Įkelti iš naujo",
       "connect": "Prijungti „Chrome“ papildinį",
-      "connectDescription": "Spustelėkite „stella“ piktogramą „Chrome“, leiskite prieigą ir prijunkite.",
+      "connectDescription": "Spustelėkite stella piktogramą „Chrome“ įrankių juostoje ir prijunkite šią kortelę.",
       "connected": "„Chrome“ papildinys prijungtas",
-      "connectedDescription": "Paprašykite pokalbyje skaityti prisijungtas svetaines. „stella“ visada klausia leidimo.",
+      "connectedDescription": "stella skaito svetaines, kuriose esate prisijungę, visada su jūsų leidimu.",
       "install": "Įdiegti „Chrome“ papildinį",
-      "installDescription": "Leidžia „stella“ skaityti svetaines jūsų „Chrome“ naršyklėje tik su jūsų sutikimu.",
+      "installDescription": "Leidžia programai stella skaityti svetaines, kuriose esate prisijungę, visada su jūsų leidimu.",
       "manageSites": "Leidžiamos svetainės",
       "name": "„Chrome“ papildinys",
       "reload": "Įkelti kortelę iš naujo",
-      "reloadDescription": "„Chrome“ papildinys naujesnis už šią kortelę. Įkelkite ją iš naujo.",
+      "reloadDescription": "Papildinys atnaujintas po to, kai atidarėte šią kortelę.",
       "statusNotInstalled": "Neįdiegta",
       "statusReload": "Reikia įkelti",
       "statusUpdating": "Atnaujinama",
       "updating": "Laukiama atnaujinimo",
-      "updatingDescription": "„Chrome“ papildinį atnaujina automatiškai per kelias valandas."
+      "updatingDescription": "„Chrome“ jį atnaujins automatiškai per kelias valandas."
     },
     "browserExtensionPreview": {
-      "answer": "Pagal § 2001 atsisakymui būtinas rašytinis pranešimas.",
-      "connected": "„Chrome“ papildinys prijungtas. Spustelėkite detaliau.",
-      "excerpt": "§ 2001: Atsisakymui būtinas rašytinis pranešimas…",
-      "notConnected": "„Chrome“ papildinys neprijungtas. Spustelėkite prijungimui.",
-      "notInstalled": "„Chrome“ papildinys neįdiegtas. Spustelėkite įdiegimui.",
-      "prompt": "Patikrink § 2001 mano portale ir pacituok.",
-      "reload": "„Chrome“ papildinys atnaujintas. Spustelėkite perkrovimui.",
+      "answer": "Pagal <cite>§ 2001</cite> turite raštu pranešti kitai šaliai apie atsisakymą.",
+      "connected": "„Chrome“ papildinys prijungtas: stella gali skaityti svetaines, kuriose esate prisijungę.",
+      "notConnected": "„Chrome“ papildinys įdiegtas, bet dar neprijungtas.",
+      "notInstalled": "„Chrome“ papildinys dar neįdiegtas.",
+      "page": "§ 2000 Bet kuri šalis gali atsisakyti sutarties iki jos įvykdymo. <passage>§ 2001 Atsisakymui būtinas rašytinis pranešimas kitai šaliai.</passage>",
+      "prompt": "Ką mano portale rašoma apie atsisakymą?",
+      "reload": "„Chrome“ papildinys atnaujintas: įkelkite šią kortelę iš naujo.",
       "steps": {
         "ask": "Klausiate",
-        "cited": "„stella“ atsako",
-        "read": "Papildinys skaito"
+        "cited": "stella atsako",
+        "read": "stella skaito jūsų portalą"
       },
       "updating": "Laukiama „Chrome“ papildinio atnaujinimo."
     },

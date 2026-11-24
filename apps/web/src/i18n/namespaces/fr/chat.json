@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "Déjà installé ? Recharger",
       "connect": "Connecter le plugin Chrome",
-      "connectDescription": "Cliquez sur l'icône stella dans Chrome, autorisez l'accès puis connectez.",
+      "connectDescription": "Cliquez sur l'icône stella dans la barre d'outils de Chrome et connectez cet onglet.",
       "connected": "Plugin Chrome connecté",
-      "connectedDescription": "Demandez dans la conversation de lire vos sites connectés. stella demande toujours avant d'agir.",
+      "connectedDescription": "stella lit les sites auxquels vous êtes connecté, toujours avec votre accord.",
       "install": "Installer le plugin Chrome",
-      "installDescription": "Permet à stella de lire vos sites dans Chrome, toujours avec votre accord.",
+      "installDescription": "Permet à stella de lire les sites auxquels vous êtes connecté, toujours avec votre accord.",
       "manageSites": "Sites autorisés",
       "name": "Plugin Chrome",
       "reload": "Recharger l'onglet",
-      "reloadDescription": "Votre plugin Chrome est plus récent que cet onglet. Rechargez-le.",
+      "reloadDescription": "Le plugin a été mis à jour après l'ouverture de cet onglet.",
       "statusNotInstalled": "Non installé",
       "statusReload": "Rechargement requis",
       "statusUpdating": "Mise à jour",
       "updating": "Mise à jour en attente",
-      "updatingDescription": "Chrome met à jour le plugin automatiquement en quelques heures."
+      "updatingDescription": "Chrome le met à jour automatiquement en quelques heures."
     },
     "browserExtensionPreview": {
-      "answer": "Selon le § 2001, la résiliation exige une notification écrite.",
-      "connected": "Le plugin Chrome est connecté. Cliquez pour les détails.",
-      "excerpt": "§ 2001 : La résiliation exige un écrit…",
-      "notConnected": "Le plugin Chrome n'est pas connecté. Cliquez pour connecter.",
-      "notInstalled": "Le plugin Chrome n'est pas installé. Cliquez pour installer.",
-      "prompt": "Vérifie le § 2001 sur mon portail et cite-le.",
-      "reload": "Plugin Chrome mis à jour. Cliquez pour recharger.",
+      "answer": "Selon le <cite>§ 2001</cite>, vous devez notifier la résiliation à l'autre partie par écrit.",
+      "connected": "Le plugin Chrome est connecté : stella peut lire les sites auxquels vous êtes connecté.",
+      "notConnected": "Le plugin Chrome est installé, mais pas encore connecté.",
+      "notInstalled": "Le plugin Chrome n'est pas encore installé.",
+      "page": "§ 2000 Chaque partie peut résilier avant l'exécution. <passage>§ 2001 La résiliation exige une notification écrite à l'autre partie.</passage>",
+      "prompt": "Que dit mon portail sur la résiliation ?",
+      "reload": "Le plugin Chrome a été mis à jour : rechargez cet onglet.",
       "steps": {
         "ask": "Vous demandez",
         "cited": "stella répond",
-        "read": "Le plugin lit"
+        "read": "stella lit votre portail"
       },
       "updating": "Mise à jour du plugin Chrome en attente."
     },

@@ -489,7 +489,6 @@
       "browseIntegrations": "Szolgáltatás hozzáadása",
       "browserExtensionConnectHint": "Telepítés után nyissa meg a bővítményt ezen a stella-lapon, engedélyezze a webhelyek elérését, és csatlakoztassa a lapot.",
       "browserExtensionDescription": "A stella csevegés az Ön által választott Chrome-lapon olvashat és használhat webhelyeket. Minden művelet az Ön jóváhagyására vár.",
-      "browserExtensionInstall": "Hozzáadás a Chrome-hoz",
       "browserExtensionTitle": "Böngészőbővítmény",
       "browserSiteRemove": "{site} eltávolítása",
       "browserSitesDescription": "Ezeken a webhelyeken a csevegés böngészőműveletei kérdés nélkül futnak. Ha eltávolít egy webhelyet, újra rákérdezünk.",

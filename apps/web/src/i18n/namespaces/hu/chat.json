@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "Már telepítve? Újratöltés",
       "connect": "Chrome bővítmény csatlakoztatása",
-      "connectDescription": "Kattintson a stella ikonra a Chrome-ban, engedélyezze a hozzáférést és csatlakozzon.",
+      "connectDescription": "Kattintson a stella ikonra a Chrome eszköztárán, és csatlakoztassa ezt a lapot.",
       "connected": "Chrome bővítmény csatlakoztatva",
-      "connectedDescription": "Kérje a csevegésben a bejelentkezett oldalak olvasását. A stella mindig előre kérdez.",
+      "connectedDescription": "A stella olvassa azokat az oldalakat, ahová be van jelentkezve, mindig az Ön jóváhagyásával.",
       "install": "Chrome bővítmény telepítése",
-      "installDescription": "Lehetővé teszi, hogy a stella az Ön engedélyével olvassa a Chrome-oldalakat.",
+      "installDescription": "Lehetővé teszi, hogy a stella olvassa azokat az oldalakat, ahová be van jelentkezve, mindig az Ön jóváhagyásával.",
       "manageSites": "Engedélyezett oldalak",
       "name": "Chrome bővítmény",
       "reload": "Lap újratöltése",
-      "reloadDescription": "A Chrome bővítmény újabb ennél a lapnál. Töltse újra a lapot.",
+      "reloadDescription": "A bővítmény a lap megnyitása után frissült.",
       "statusNotInstalled": "Nincs telepítve",
       "statusReload": "Újratöltés szükséges",
       "statusUpdating": "Frissítés",
       "updating": "Frissítés függőben",
-      "updatingDescription": "A Chrome néhány órán belül automatikusan frissíti a bővítményt."
+      "updatingDescription": "A Chrome néhány órán belül automatikusan frissíti."
     },
     "browserExtensionPreview": {
-      "answer": "A § 2001 szerint az elálláshoz írásbeli értesítés szükséges.",
-      "connected": "A Chrome bővítmény csatlakoztatva. Kattintson a részletekért.",
-      "excerpt": "§ 2001: Az elálláshoz írásbeli értesítés kell…",
-      "notConnected": "A Chrome bővítmény nincs csatlakoztatva. Kattintson a csatlakozáshoz.",
-      "notInstalled": "A Chrome bővítmény nincs telepítve. Kattintson a telepítéshez.",
-      "prompt": "Nézd meg a § 2001-et a portálomon és idézd.",
-      "reload": "A Chrome bővítmény frissült. Kattintson az újratöltéshez.",
+      "answer": "A <cite>§ 2001</cite> szerint a másik felet írásban kell értesítenie az elállásról.",
+      "connected": "A Chrome bővítmény csatlakoztatva: a stella olvashatja azokat az oldalakat, ahová be van jelentkezve.",
+      "notConnected": "A Chrome bővítmény telepítve van, de még nincs csatlakoztatva.",
+      "notInstalled": "A Chrome bővítmény még nincs telepítve.",
+      "page": "§ 2000 Bármelyik fél elállhat a teljesítés előtt. <passage>§ 2001 Az elálláshoz írásbeli értesítés szükséges a másik félnek.</passage>",
+      "prompt": "Mit ír a portálom az elállásról?",
+      "reload": "A Chrome bővítmény frissült: töltse újra ezt a lapot.",
       "steps": {
         "ask": "Kérdez",
         "cited": "A stella válaszol",
-        "read": "A bővítmény olvas"
+        "read": "A stella olvassa a portálját"
       },
       "updating": "Chrome bővítmény frissítés függőben."
     },

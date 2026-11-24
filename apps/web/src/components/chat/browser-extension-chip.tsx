@@ -7,19 +7,11 @@ import {
 } from "@stll/api-contract/browser-control";
 import { ChatLink } from "@stll/chat/link";
 import { Button, buttonVariants } from "@stll/ui/button";
-import { BrowserControlIcon, RefreshCwIcon } from "@stll/ui/icons";
-import {
-  Popover,
-  PopoverDescription,
-  PopoverPanel,
-  PopoverTrigger,
-} from "@stll/ui/popover";
+import { BrowserControlIcon } from "@stll/ui/icons";
+import { Popover, PopoverPanel, PopoverTrigger } from "@stll/ui/popover";
 import { cn } from "@stll/ui/utils";
 
-import {
-  BrowserExtensionPreview,
-  BrowserExtensionPreviewCard,
-} from "@/components/chat/browser-extension-preview";
+import { BrowserExtensionPreviewCard } from "@/components/chat/browser-extension-preview";
 import { useBrowserExtensionState } from "@/features/chat/browser-control/browser-extension-bridge";
 import { useBrowserExtensionStoreUrl } from "@/features/chat/browser-control/use-browser-extension-store-url";
 
@@ -31,44 +23,47 @@ type VisibleStatus =
   | typeof BROWSER_EXTENSION_STATUS.notPaired
   | typeof BROWSER_EXTENSION_STATUS.notInstalled;
 
-/** The accessible label, hover caption, and short popover line for each visible state. */
-const metaFor = (status: VisibleStatus) => {
+/**
+ * Per visible state: the control's accessible label, the line under the
+ * hover preview, and the popover's status word and sentence.
+ */
+const copyFor = (status: VisibleStatus) => {
   switch (status) {
     case BROWSER_EXTENSION_STATUS.connected:
       return {
-        description: "chat.browserExtension.connectedDescription",
         label: "chat.browserExtension.connected",
-        previewDescription: "chat.browserExtensionPreview.connected",
-        statusLabel: "common.connected",
+        preview: "chat.browserExtensionPreview.connected",
+        status: "common.connected",
+        description: "chat.browserExtension.connectedDescription",
       } as const;
     case BROWSER_EXTENSION_STATUS.extensionOutdated:
       return {
-        description: "chat.browserExtension.updatingDescription",
         label: "chat.browserExtension.updating",
-        previewDescription: "chat.browserExtensionPreview.updating",
-        statusLabel: "chat.browserExtension.statusUpdating",
+        preview: "chat.browserExtensionPreview.updating",
+        status: "chat.browserExtension.statusUpdating",
+        description: "chat.browserExtension.updatingDescription",
       } as const;
     case BROWSER_EXTENSION_STATUS.stellaOutdated:
       return {
-        description: "chat.browserExtension.reloadDescription",
         label: "chat.browserExtension.reload",
-        previewDescription: "chat.browserExtensionPreview.reload",
-        statusLabel: "chat.browserExtension.statusReload",
+        preview: "chat.browserExtensionPreview.reload",
+        status: "chat.browserExtension.statusReload",
+        description: "chat.browserExtension.reloadDescription",
       } as const;
     case BROWSER_EXTENSION_STATUS.notInstalled:
       return {
-        description: "chat.browserExtension.installDescription",
         label: "chat.browserExtension.install",
-        previewDescription: "chat.browserExtensionPreview.notInstalled",
-        statusLabel: "chat.browserExtension.statusNotInstalled",
+        preview: "chat.browserExtensionPreview.notInstalled",
+        status: "chat.browserExtension.statusNotInstalled",
+        description: "chat.browserExtension.installDescription",
       } as const;
     case BROWSER_EXTENSION_STATUS.needsSiteAccess:
     case BROWSER_EXTENSION_STATUS.notPaired:
       return {
-        description: "chat.browserExtension.connectDescription",
         label: "chat.browserExtension.connect",
-        previewDescription: "chat.browserExtensionPreview.notConnected",
-        statusLabel: "common.notConnected",
+        preview: "chat.browserExtensionPreview.notConnected",
+        status: "common.notConnected",
+        description: "chat.browserExtension.connectDescription",
       } as const;
     default:
       status satisfies never;
@@ -80,6 +75,60 @@ const reloadPage = () => {
   window.location.reload();
 };
 
+type BrowserExtensionActionProps = {
+  status: VisibleStatus;
+  storeUrl: string | null;
+};
+
+/** The popover's one thing to do for a state, if it has one. */
+const BrowserExtensionAction = ({
+  status,
+  storeUrl,
+}: BrowserExtensionActionProps) => {
+  const t = useTranslations();
+
+  switch (status) {
+    case BROWSER_EXTENSION_STATUS.connected:
+      return (
+        <a
+          className={cn(
+            buttonVariants({ size: "xs", variant: "outline" }),
+            "w-fit",
+          )}
+          href="/settings/account/connections"
+        >
+          {t("chat.browserExtension.manageSites")}
+        </a>
+      );
+    case BROWSER_EXTENSION_STATUS.notInstalled:
+      return (
+        <div className="flex items-center gap-1">
+          {storeUrl !== null && (
+            <ChatLink appearance="tray" href={storeUrl}>
+              {t("common.addToChrome")}
+            </ChatLink>
+          )}
+          <Button onClick={reloadPage} size="xs" variant="ghost">
+            {t("chat.browserExtension.alreadyInstalledReload")}
+          </Button>
+        </div>
+      );
+    case BROWSER_EXTENSION_STATUS.stellaOutdated:
+      return (
+        <Button className="w-fit" onClick={reloadPage} size="xs">
+          {t("chat.browserExtension.reload")}
+        </Button>
+      );
+    case BROWSER_EXTENSION_STATUS.extensionOutdated:
+    case BROWSER_EXTENSION_STATUS.needsSiteAccess:
+    case BROWSER_EXTENSION_STATUS.notPaired:
+      return null;
+    default:
+      status satisfies never;
+      return panic("Unhandled browser extension status");
+  }
+};
+
 export type BrowserExtensionChipViewProps = {
   status: BrowserExtensionStatus;
   storeUrl: string | null;
@@ -88,9 +137,10 @@ export type BrowserExtensionChipViewProps = {
 };
 
 /**
- * Pure presentation of the Chrome plugin composer chip: one quiet icon in the
- * composer status row, with an animated preview on hover and a compact,
- * animated popover on click.
+ * Pure presentation of the Chrome plugin control in the composer status row:
+ * one quiet icon, tinted like the anonymization shield beside it while the
+ * plugin is connected. Hover plays what the plugin does; a click opens its
+ * state and the one thing to do about it.
  */
 export const BrowserExtensionChipView = ({
   status,
@@ -116,98 +166,49 @@ export const BrowserExtensionChipView = ({
       return panic("Unhandled browser extension status");
   }
 
-  const isConnected = status === BROWSER_EXTENSION_STATUS.connected;
-  const needsInstall = status === BROWSER_EXTENSION_STATUS.notInstalled;
-  const needsReload = status === BROWSER_EXTENSION_STATUS.stellaOutdated;
-  const showPreview =
-    isConnected ||
-    needsInstall ||
-    status === BROWSER_EXTENSION_STATUS.notPaired ||
-    status === BROWSER_EXTENSION_STATUS.needsSiteAccess;
-  const meta = metaFor(status);
-  const label = t(meta.label);
+  const connected = status === BROWSER_EXTENSION_STATUS.connected;
+  const copy = copyFor(status);
 
   return (
     <Popover defaultOpen={defaultOpen} key={status}>
       <BrowserExtensionPreviewCard
-        description={t(meta.previewDescription)}
+        description={t(copy.preview)}
         trigger={
           <PopoverTrigger
             render={
               <Button
-                aria-label={label}
-                className="relative"
+                aria-label={t(copy.label)}
                 size="icon-xs"
                 tooltip={false}
-                variant="muted"
+                variant={connected ? "secondary" : "muted"}
               />
             }
           >
-            <BrowserControlIcon className="size-3.5" />
-            {isConnected && (
-              <span
-                aria-hidden="true"
-                className="bg-success ring-background absolute end-0.5 bottom-0.5 size-1.5 rounded-full ring-1"
-              />
-            )}
+            <BrowserControlIcon
+              className={cn("size-3.5", connected && "text-info")}
+            />
           </PopoverTrigger>
         }
       />
       <PopoverPanel align="start" className="w-72" padding="md" side="top">
-        {showPreview && <BrowserExtensionPreview />}
-
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center justify-between gap-2 text-xs">
+        <div className="flex flex-col gap-1 text-xs">
+          <div className="flex items-baseline justify-between gap-3">
             <span className="text-foreground font-medium">
               {t("chat.browserExtension.name")}
             </span>
-            <span className="text-muted-foreground">{t(meta.statusLabel)}</span>
+            <span className="text-muted-foreground">{t(copy.status)}</span>
           </div>
-
-          <PopoverDescription>{t(meta.description)}</PopoverDescription>
-
-          {isConnected && (
-            <a
-              className={cn(
-                buttonVariants({ size: "xs", variant: "ghost" }),
-                "text-muted-foreground hover:text-foreground -ms-1.5 w-fit",
-              )}
-              href="/settings/account/connections"
-            >
-              {t("chat.browserExtension.manageSites")}
-            </a>
-          )}
-
-          {needsInstall && (
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
-              {storeUrl !== null && (
-                <ChatLink appearance="tray" href={storeUrl}>
-                  {t("chat.browserExtension.install")}
-                </ChatLink>
-              )}
-              <Button onClick={reloadPage} size="xs" variant="ghost">
-                <RefreshCwIcon className="size-3" />
-                {t("chat.browserExtension.alreadyInstalledReload")}
-              </Button>
-            </div>
-          )}
-
-          {needsReload && (
-            <Button className="w-fit" onClick={reloadPage} size="xs">
-              <RefreshCwIcon className="size-3" />
-              {t("chat.browserExtension.reload")}
-            </Button>
-          )}
+          <p className="text-muted-foreground leading-relaxed">
+            {t(copy.description)}
+          </p>
         </div>
+        <BrowserExtensionAction status={status} storeUrl={storeUrl} />
       </PopoverPanel>
     </Popover>
   );
 };
 
-/**
- * The Chrome plugin's state as one quiet icon in the composer status row,
- * like the globe and shield beside it.
- */
+/** The Chrome plugin's live state as one quiet icon in the composer status row. */
 export const BrowserExtensionChip = () => {
   const { status } = useBrowserExtensionState();
   const storeUrl = useBrowserExtensionStoreUrl();

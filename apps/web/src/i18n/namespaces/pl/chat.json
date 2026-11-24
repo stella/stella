@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "Już zainstalowano? Odśwież",
       "connect": "Połącz wtyczkę Chrome",
-      "connectDescription": "Kliknij ikonę stella w Chrome, zezwól na dostęp i połącz.",
+      "connectDescription": "Kliknij ikonę stella na pasku Chrome i połącz tę kartę.",
       "connected": "Wtyczka Chrome połączona",
-      "connectedDescription": "Poproś na czacie o odczyt zalogowanych stron. stella zawsze pyta o zgodę.",
+      "connectedDescription": "stella czyta strony, na których jesteś zalogowany, zawsze za Twoją zgodą.",
       "install": "Zainstaluj wtyczkę Chrome",
-      "installDescription": "Pozwala aplikacji stella czytać strony w Twoim Chrome, zawsze za Twoją zgodą.",
+      "installDescription": "Pozwala aplikacji stella czytać strony, na których jesteś zalogowany, zawsze za Twoją zgodą.",
       "manageSites": "Dozwolone strony",
       "name": "Wtyczka Chrome",
       "reload": "Odśwież kartę",
-      "reloadDescription": "Wtyczka Chrome jest nowsza niż ta karta. Odśwież ją.",
+      "reloadDescription": "Wtyczka została zaktualizowana po otwarciu tej karty.",
       "statusNotInstalled": "Nie zainstalowano",
       "statusReload": "Wymagane odświeżenie",
       "statusUpdating": "Aktualizacja",
       "updating": "Oczekuje na aktualizację",
-      "updatingDescription": "Chrome aktualizuje wtyczkę automatycznie w ciągu kilku godzin."
+      "updatingDescription": "Chrome zaktualizuje ją automatycznie w ciągu kilku godzin."
     },
     "browserExtensionPreview": {
-      "answer": "Zgodnie z § 2001 odstąpienie wymaga pisemnego zawiadomienia.",
-      "connected": "Wtyczka Chrome jest połączona. Kliknij po szczegóły.",
-      "excerpt": "§ 2001: Odstąpienie wymaga formy pisemnej…",
-      "notConnected": "Wtyczka Chrome nie jest połączona. Kliknij, aby połączyć.",
-      "notInstalled": "Wtyczka Chrome nie jest zainstalowana. Kliknij, aby zainstalować.",
-      "prompt": "Sprawdź § 2001 na moim portalu i zacytuj.",
-      "reload": "Wtyczka Chrome została zaktualizowana. Kliknij, aby odświeżyć.",
+      "answer": "Zgodnie z <cite>§ 2001</cite> musisz zawiadomić drugą stronę o odstąpieniu na piśmie.",
+      "connected": "Wtyczka Chrome jest połączona: stella może czytać strony, na których jesteś zalogowany.",
+      "notConnected": "Wtyczka Chrome jest zainstalowana, ale jeszcze niepołączona.",
+      "notInstalled": "Wtyczka Chrome nie jest jeszcze zainstalowana.",
+      "page": "§ 2000 Każda strona może odstąpić przed spełnieniem świadczenia. <passage>§ 2001 Odstąpienie wymaga pisemnego zawiadomienia drugiej strony.</passage>",
+      "prompt": "Co mój portal mówi o odstąpieniu?",
+      "reload": "Wtyczka Chrome została zaktualizowana: odśwież tę kartę.",
       "steps": {
         "ask": "Pytasz",
         "cited": "stella odpowiada",
-        "read": "Wtyczka czyta"
+        "read": "stella czyta Twój portal"
       },
       "updating": "Oczekuje na aktualizację wtyczki Chrome."
     },

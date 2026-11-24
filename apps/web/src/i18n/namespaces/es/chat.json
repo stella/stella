@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "¿Ya instalado? Recargar",
       "connect": "Conectar plugin de Chrome",
-      "connectDescription": "Haz clic en el icono de stella en Chrome, permite el acceso y conéctate.",
+      "connectDescription": "Haz clic en el icono de stella en la barra de Chrome y conecta esta pestaña.",
       "connected": "Plugin de Chrome conectado",
-      "connectedDescription": "Pide en el chat leer sitios donde tienes sesión. stella siempre pregunta antes.",
+      "connectedDescription": "stella lee los sitios en los que has iniciado sesión, siempre con tu aprobación.",
       "install": "Instalar plugin de Chrome",
-      "installDescription": "Permite que stella lea sitios en tu Chrome, siempre con tu aprobación.",
+      "installDescription": "Permite que stella lea los sitios en los que has iniciado sesión, siempre con tu aprobación.",
       "manageSites": "Sitios permitidos",
       "name": "Plugin de Chrome",
       "reload": "Recargar pestaña",
-      "reloadDescription": "Tu plugin de Chrome es más nuevo que esta pestaña. Recárgala.",
+      "reloadDescription": "El plugin se actualizó después de abrir esta pestaña.",
       "statusNotInstalled": "No instalado",
       "statusReload": "Requiere recarga",
       "statusUpdating": "Actualizando",
       "updating": "Actualización pendiente",
-      "updatingDescription": "Chrome actualiza el plugin automáticamente en unas horas."
+      "updatingDescription": "Chrome lo actualiza automáticamente en unas horas."
     },
     "browserExtensionPreview": {
-      "answer": "Según el § 2001, el desistimiento requiere aviso por escrito.",
-      "connected": "El plugin de Chrome está conectado. Haz clic para detalles.",
-      "excerpt": "§ 2001: El desistimiento requiere aviso escrito…",
-      "notConnected": "El plugin de Chrome no está conectado. Haz clic para conectar.",
-      "notInstalled": "El plugin de Chrome no está instalado. Haz clic para instalar.",
-      "prompt": "Revisa el § 2001 en mi portal y cítalo.",
-      "reload": "Plugin de Chrome actualizado. Haz clic para recargar.",
+      "answer": "Según el <cite>§ 2001</cite>, debes notificar el desistimiento a la otra parte por escrito.",
+      "connected": "El plugin de Chrome está conectado: stella puede leer los sitios en los que has iniciado sesión.",
+      "notConnected": "El plugin de Chrome está instalado, pero aún no está conectado.",
+      "notInstalled": "El plugin de Chrome aún no está instalado.",
+      "page": "§ 2000 Cualquiera de las partes puede desistir antes del cumplimiento. <passage>§ 2001 El desistimiento requiere aviso por escrito a la otra parte.</passage>",
+      "prompt": "¿Qué dice mi portal sobre el desistimiento?",
+      "reload": "El plugin de Chrome se actualizó: recarga esta pestaña.",
       "steps": {
         "ask": "Preguntas",
         "cited": "stella responde",
-        "read": "El plugin lee"
+        "read": "stella lee tu portal"
       },
       "updating": "Actualización del plugin de Chrome pendiente."
     },

@@ -210,33 +210,33 @@
     "browserExtension": {
       "alreadyInstalledReload": "Schon installiert? Neu laden",
       "connect": "Chrome-Plugin verbinden",
-      "connectDescription": "Klicken Sie auf das stella-Symbol in Chrome, erlauben Sie den Zugriff und verbinden Sie sich.",
+      "connectDescription": "Klicken Sie in der Chrome-Symbolleiste auf das stella-Symbol und verbinden Sie diesen Tab.",
       "connected": "Chrome-Plugin verbunden",
-      "connectedDescription": "Bitten Sie im Chat darum, angemeldete Websites zu lesen. stella fragt immer vorher.",
+      "connectedDescription": "stella liest Websites, bei denen Sie angemeldet sind, immer mit Ihrer Zustimmung.",
       "install": "Chrome-Plugin installieren",
-      "installDescription": "Lässt stella angemeldete Websites in Chrome lesen, immer mit Ihrer Zustimmung.",
+      "installDescription": "Lässt stella Websites lesen, bei denen Sie angemeldet sind, immer mit Ihrer Zustimmung.",
       "manageSites": "Erlaubte Websites",
       "name": "Chrome-Plugin",
       "reload": "Tab neu laden",
-      "reloadDescription": "Ihr Chrome-Plugin ist neuer als dieser Tab. Laden Sie ihn neu.",
+      "reloadDescription": "Das Plugin wurde aktualisiert, nachdem dieser Tab geöffnet wurde.",
       "statusNotInstalled": "Nicht installiert",
       "statusReload": "Neu laden nötig",
       "statusUpdating": "Aktualisierung",
       "updating": "Update ausstehend",
-      "updatingDescription": "Chrome aktualisiert das Plugin automatisch innerhalb weniger Stunden."
+      "updatingDescription": "Chrome aktualisiert es automatisch innerhalb weniger Stunden."
     },
     "browserExtensionPreview": {
-      "answer": "Nach § 2001 erfordert der Rücktritt eine schriftliche Erklärung.",
-      "connected": "Chrome-Plugin ist verbunden. Klicken für Details.",
-      "excerpt": "§ 2001: Der Rücktritt erfordert Schriftform…",
-      "notConnected": "Chrome-Plugin nicht verbunden. Klicken zum Verbinden.",
-      "notInstalled": "Chrome-Plugin nicht installiert. Klicken zum Installieren.",
-      "prompt": "Prüfe § 2001 in meinem Portal und zitiere ihn.",
-      "reload": "Chrome-Plugin aktualisiert. Klicken zum Neuladen.",
+      "answer": "Nach <cite>§ 2001</cite> müssen Sie den Rücktritt der anderen Partei schriftlich erklären.",
+      "connected": "Chrome-Plugin ist verbunden: stella kann Websites lesen, bei denen Sie angemeldet sind.",
+      "notConnected": "Chrome-Plugin ist installiert, aber noch nicht verbunden.",
+      "notInstalled": "Chrome-Plugin ist noch nicht installiert.",
+      "page": "§ 2000 Jede Partei kann vor der Leistung zurücktreten. <passage>§ 2001 Der Rücktritt erfordert eine schriftliche Erklärung gegenüber der anderen Partei.</passage>",
+      "prompt": "Was sagt mein Portal zum Rücktritt?",
+      "reload": "Chrome-Plugin wurde aktualisiert: Laden Sie diesen Tab neu.",
       "steps": {
         "ask": "Sie fragen",
         "cited": "stella antwortet",
-        "read": "Chrome-Plugin liest"
+        "read": "stella liest Ihr Portal"
       },
       "updating": "Chrome-Plugin-Update ausstehend."
     },
