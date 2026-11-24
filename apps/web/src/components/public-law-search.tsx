@@ -10,8 +10,9 @@ import { Loader } from "@stll/ui/loader";
 
 import { ACCOUNT_GATE_OUTCOME } from "@/components/auth/require-account.logic";
 import { useRequireAccount } from "@/components/auth/use-require-account";
-import { askPublicLawInChat } from "@/components/public-law-ask";
+import type { AskPublicLawInChatOptions } from "@/components/public-law-ask";
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { CapabilityAction } from "@/lib/organization/feature-access/capability-actions";
 
 type PublicLawSearchProps = {
@@ -175,6 +176,16 @@ export const PublicLawRefine = ({
 };
 
 /**
+ * The chat hand-off (composer document, inspector tabs, queued sends) loads on
+ * the press, so the search boxes and the error views that recover a law page
+ * do not carry it into the chunks every visit preloads.
+ */
+const askInChat = async (options: AskPublicLawInChatOptions): Promise<void> => {
+  const { askPublicLawInChat } = await import("@/components/public-law-ask");
+  askPublicLawInChat(options);
+};
+
+/**
  * Asks the entry in a chat scoped to the corpus, sent at once. Drawn for every
  * reader; a visitor is asked for an account at the moment the question would
  * be sent, and comes back to the same list.
@@ -202,12 +213,15 @@ export const PublicLawAskInChat = ({
             if (ensureAccount() !== ACCOUNT_GATE_OUTCOME.allowed) {
               return;
             }
-            askPublicLawInChat({
-              label: question,
-              question,
-              scope: askScope.scope,
-              scopeLabel: askScope.label,
-            });
+            detached(
+              askInChat({
+                label: question,
+                question,
+                scope: askScope.scope,
+                scopeLabel: askScope.label,
+              }),
+              "public-law-search.ask-in-chat",
+            );
           }}
           size="sm"
           type="button"
