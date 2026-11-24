@@ -1351,3 +1351,14 @@ export const outboundRequests = {
   resolvedBytes: executeResolvedAddressRequest,
   resolvedStream: executeResolvedAddressStreamRequest,
 } as const;
+
+/**
+ * Resolves DNS TXT records through the API's registered DNS owner so callers
+ * outside this module do not import `node:dns/promises` directly.
+ */
+export const resolveDnsTxtRecords = async (
+  hostname: string,
+): Promise<string[][]> => {
+  const resolver = new Resolver();
+  return await resolver.resolveTxt(hostname);
+};

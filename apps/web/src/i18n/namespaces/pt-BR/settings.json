@@ -745,6 +745,7 @@
         "reorder": "Reordenar tipo de documento",
         "title": "Tipos de documentos"
       },
+      "enterSlug": "Insira o identificador da organização na URL.",
       "localRuns": {
         "description": "O máximo que um agente de programação pode fazer sem perguntar ao executar um chat no computador de um membro. Um limite mais baixo vale a partir da próxima mensagem de cada membro; uma execução já em andamento mantém suas permissões.",
         "title": "Agentes de programação nos computadores dos membros",
@@ -778,6 +779,40 @@
         "opaque": "Gerar um nome curto aleatório",
         "title": "Nome curto da organização"
       },
+      "sso": {
+        "addDomain": "Adicionar domínio",
+        "addProvider": "Adicionar provedor OIDC",
+        "callbackUrlLabel": "URL de callback",
+        "clientIdLabel": "ID do cliente",
+        "clientSecretLabel": "Client Secret",
+        "description": "Configure provedores de identidade OIDC, verifique os domínios de e-mail da organização e exija SSO dos membros.",
+        "discoveryEndpointLabel": "Endpoint de descoberta (opcional)",
+        "discoveryFailed": "Não foi possível verificar o documento de descoberta OIDC",
+        "discoverySuccess": "Documento de descoberta OIDC verificado",
+        "discoveryVerifiedDetail": "Emissor verificado: {issuer}",
+        "dnsTxtInstructions": "Adicione este registro DNS TXT no seu registrador de domínio e clique em Verificar agora:",
+        "domainAdded": "Domínio adicionado",
+        "domainDeleted": "Domínio removido",
+        "domainRecordNotFound": "Registro DNS TXT ainda não encontrado. A propagação pode levar alguns minutos.",
+        "domainVerified": "Domínio verificado",
+        "domainsDescription": "Verifique a propriedade do domínio via registro DNS TXT para direcionar logins com e-mail corporativo.",
+        "domainsLabel": "Domínios de e-mail permitidos (separados por vírgula)",
+        "domainsTitle": "Domínios verificados",
+        "issuerLabel": "URL do emissor (Issuer)",
+        "launchUrlLabel": "URL de login direto",
+        "noDomains": "Nenhum domínio adicionado.",
+        "noProviders": "Nenhum provedor de identidade configurado.",
+        "policyUpdated": "Política de SSO atualizada",
+        "providerAdded": "Provedor SSO adicionado",
+        "providerDeleted": "Provedor SSO removido",
+        "providersDescription": "Conecte Okta, Microsoft Entra ID, Google Workspace, Ping Identity ou qualquer provedor OIDC padrão.",
+        "providersTitle": "Provedores de identidade",
+        "requireSsoDescription": "Quando ativado, os membros precisam entrar por um provedor de identidade desta organização.",
+        "requireSsoTitle": "Exigir SSO nesta organização",
+        "testDiscovery": "Testar descoberta",
+        "title": "Logon único (SSO)",
+        "verifyDomain": "Verificar agora"
+      },
       "timePolicy": {
         "description": "Defina o arredondamento do tempo, os limites de edição e os bloqueios mensais.",
         "editWindow": "Prazo de edição (dias)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Enviar logotipo",
       "usage": "Uso",
+      "usageCheckoutProviderUnavailable": "O provedor de pagamentos está indisponível para pagamentos on-line.",
       "usageDescription": "Limites de uso e estado da habilitação desta organização",
       "usageEmptyDescription": "Configure uma habilitação de uso para ativar recursos de IA medidos nesta organização.",
       "usageEmptyTitle": "Nenhuma habilitação de uso",
@@ -817,9 +853,11 @@
       "usageManageError": "Não foi possível abrir o gerenciamento de uso hospedado",
       "usageManuallyManaged": "Gerenciado manualmente",
       "usagePacksDescription": "Pacotes avulsos de unidades adicionados ao seu período atual.",
+      "usagePacksRequireActivePlan": "Ative ou retome um plano hospedado para comprar pacotes de unidades.",
       "usagePacksTitle": "Pacotes de unidades",
       "usagePlanCheckout": "Continuar para o pagamento",
       "usagePlanCheckoutError": "Não foi possível iniciar o pagamento",
+      "usagePlanCheckoutUnavailable": "O pagamento on-line não está disponível para este plano.",
       "usagePlanPriceMonthTemplate": "{price} / mês",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / assento / mês",
@@ -841,11 +879,7 @@
         "title": "Vereditos da verificação de documentos",
         "unavailable": "Nenhum modelo de decisão está disponível para esta organização.",
         "updated": "Configuração de verificação atualizada"
-      },
-      "enterSlug": "Insira o identificador da organização na URL.",
-      "usageCheckoutProviderUnavailable": "O provedor de pagamentos está indisponível para pagamentos on-line.",
-      "usagePacksRequireActivePlan": "Ative ou retome um plano hospedado para comprar pacotes de unidades.",
-      "usagePlanCheckoutUnavailable": "O pagamento on-line não está disponível para este plano."
+      }
     }
   }
 }

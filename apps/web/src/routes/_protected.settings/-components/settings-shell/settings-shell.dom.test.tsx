@@ -156,6 +156,7 @@ test.each(
       "/settings/account/beta",
       "/settings/organization/general",
       "/settings/organization/members",
+      "/settings/organization/sso",
       "/settings/organization/usage",
       "/settings/organization/audit-logs",
       "/settings/organization/ai",

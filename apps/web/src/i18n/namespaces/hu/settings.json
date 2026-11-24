@@ -745,6 +745,7 @@
         "reorder": "Dokumentumtípus átrendezése",
         "title": "Dokumentumtípusok"
       },
+      "enterSlug": "Adja meg a szervezet URL-azonosítóját.",
       "localRuns": {
         "description": "Legfeljebb ennyit tehet meg egy kódoló ügynök kérdezés nélkül, amikor egy tag számítógépén futtat egy csevegést. Az alacsonyabb korlát minden tag következő üzenetétől érvényes; a már futó munkamenet megtartja az engedélyeit.",
         "title": "Kódoló ügynökök a tagok számítógépein",
@@ -778,6 +779,40 @@
         "opaque": "Véletlenszerű rövid név létrehozása",
         "title": "Szervezet rövid neve"
       },
+      "sso": {
+        "addDomain": "Domain hozzáadása",
+        "addProvider": "OIDC szolgáltató hozzáadása",
+        "callbackUrlLabel": "Visszahívási URL",
+        "clientIdLabel": "Ügyfél-azonosító",
+        "clientSecretLabel": "Client Secret",
+        "description": "Állítson be OIDC identitásszolgáltatókat, igazolja a szervezet e-mail domainjeit, és tegye kötelezővé az SSO-t.",
+        "discoveryEndpointLabel": "Discovery végpont (opcionális)",
+        "discoveryFailed": "Az OIDC discovery dokumentum nem ellenőrizhető",
+        "discoverySuccess": "OIDC discovery dokumentum ellenőrizve",
+        "discoveryVerifiedDetail": "Ellenőrzött kibocsátó: {issuer}",
+        "dnsTxtInstructions": "Adja hozzá ezt a DNS TXT rekordot a domainregisztrátoránál, majd kattintson az Ellenőrzés most gombra:",
+        "domainAdded": "Domain hozzáadva",
+        "domainDeleted": "Domain eltávolítva",
+        "domainRecordNotFound": "A DNS TXT rekord még nem található. A frissülés néhány percet vehet igénybe.",
+        "domainVerified": "Domain igazolva",
+        "domainsDescription": "Igazolja a domain tulajdonjogát DNS TXT rekorddal a munkahelyi e-mail alapú irányításhoz.",
+        "domainsLabel": "Engedélyezett e-mail domainek (vesszővel elválasztva)",
+        "domainsTitle": "Igazolt domainek",
+        "issuerLabel": "Kibocsátó (Issuer) URL",
+        "launchUrlLabel": "Közvetlen bejelentkezési URL",
+        "noDomains": "Még nincs hozzáadott domain.",
+        "noProviders": "Még nincs beállítva identitásszolgáltató.",
+        "policyUpdated": "SSO-szabályzat frissítve",
+        "providerAdded": "SSO szolgáltató hozzáadva",
+        "providerDeleted": "SSO szolgáltató eltávolítva",
+        "providersDescription": "Csatlakoztassa az Okta, Microsoft Entra ID, Google Workspace, Ping Identity vagy bármely szabványos OIDC szolgáltatót.",
+        "providersTitle": "Identitásszolgáltatók",
+        "requireSsoDescription": "Bekapcsolás esetén a tagoknak a szervezet egyik identitásszolgáltatóján keresztül kell bejelentkezniük.",
+        "requireSsoTitle": "SSO kötelezővé tétele a szervezetben",
+        "testDiscovery": "Discovery tesztelése",
+        "title": "Egyszeri bejelentkezés (SSO)",
+        "verifyDomain": "Ellenőrzés most"
+      },
       "timePolicy": {
         "description": "Állítsa be az idő kerekítését, a szerkesztési határidőket és a hónapok zárolását.",
         "editWindow": "Szerkesztési határidő (nap)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Logó feltöltése",
       "usage": "Használat",
+      "usageCheckoutProviderUnavailable": "A fizetési szolgáltató nem érhető el az online fizetéshez.",
       "usageDescription": "Használati korlátok és jogosultsági állapot ehhez a szervezethez",
       "usageEmptyDescription": "Állíts be használati jogosultságot, hogy a szervezet használhassa a mért AI-funkciókat.",
       "usageEmptyTitle": "Nincs használati jogosultság",
@@ -817,9 +853,11 @@
       "usageManageError": "Nem sikerült megnyitni a hosztolt használat kezelését",
       "usageManuallyManaged": "Kézzel kezelt",
       "usagePacksDescription": "Egyszeri egységcsomagok, amelyek a jelenlegi időszakhoz adódnak hozzá.",
+      "usagePacksRequireActivePlan": "Egységcsomag vásárlásához indítson vagy folytasson egy hosztolt csomagot.",
       "usagePacksTitle": "Egységcsomagok",
       "usagePlanCheckout": "Tovább a fizetéshez",
       "usagePlanCheckoutError": "Nem sikerült elindítani a fizetést",
+      "usagePlanCheckoutUnavailable": "Ehhez a csomaghoz nem érhető el online fizetés.",
       "usagePlanPriceMonthTemplate": "{price} / hó",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / hely / hó",
@@ -841,11 +879,7 @@
         "title": "Következtetések a dokumentumok ellenőrzésekor",
         "unavailable": "Ennek a szervezetnek nincs elérhető döntési modellje.",
         "updated": "Az ellenőrzési beállítás frissült"
-      },
-      "enterSlug": "Adja meg a szervezet URL-azonosítóját.",
-      "usageCheckoutProviderUnavailable": "A fizetési szolgáltató nem érhető el az online fizetéshez.",
-      "usagePacksRequireActivePlan": "Egységcsomag vásárlásához indítson vagy folytasson egy hosztolt csomagot.",
-      "usagePlanCheckoutUnavailable": "Ehhez a csomaghoz nem érhető el online fizetés."
+      }
     }
   }
 }

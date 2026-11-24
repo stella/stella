@@ -745,6 +745,7 @@
         "reorder": "Muuda dokumendiliigi järjestust",
         "title": "Dokumendiliigid"
       },
+      "enterSlug": "Sisestage organisatsiooni URL-i lühinimi.",
       "localRuns": {
         "description": "Kõige rohkem, mida programmeerimisagent tohib küsimata teha, kui ta käitab vestlust liikme arvutis. Madalam piir kehtib iga liikme järgmisest sõnumist; juba käimasolev käivitus säilitab oma õigused.",
         "title": "Programmeerimisagendid liikmete arvutites",
@@ -778,6 +779,40 @@
         "opaque": "Loo juhuslik lühinimi",
         "title": "Organisatsiooni lühinimi"
       },
+      "sso": {
+        "addDomain": "Lisa domeen",
+        "addProvider": "Lisa OIDC pakkuja",
+        "callbackUrlLabel": "Tagasihelistuse URL",
+        "clientIdLabel": "Kliendi ID",
+        "clientSecretLabel": "Client Secret",
+        "description": "Seadistage OIDC identiteedipakkujad, kinnitage organisatsiooni e-posti domeenid ja nõudke liikmetelt SSO-d.",
+        "discoveryEndpointLabel": "Discovery otspunkt (valikuline)",
+        "discoveryFailed": "OIDC discovery dokumenti ei õnnestunud kinnitada",
+        "discoverySuccess": "OIDC discovery dokument on kinnitatud",
+        "discoveryVerifiedDetail": "Kinnitatud väljaandja: {issuer}",
+        "dnsTxtInstructions": "Lisage see DNS TXT kirje oma domeeniregistripidaja juures ja klõpsake seejärel Kinnita kohe:",
+        "domainAdded": "Domeen lisatud",
+        "domainDeleted": "Domeen eemaldatud",
+        "domainRecordNotFound": "DNS TXT kirjet veel ei leitud. Levimine võib võtta mõne minuti.",
+        "domainVerified": "Domeen kinnitatud",
+        "domainsDescription": "Kinnitage domeeni omandiõigus DNS TXT kirje abil, et töö e-postiga sisselogijad suunataks õigele pakkujale.",
+        "domainsLabel": "Lubatud e-posti domeenid (komaga eraldatud)",
+        "domainsTitle": "Kinnitatud domeenid",
+        "issuerLabel": "Väljaandja (Issuer) URL",
+        "launchUrlLabel": "Otsene sisselogimise URL",
+        "noDomains": "Domeene pole veel lisatud.",
+        "noProviders": "Ühtegi identiteedipakkujat pole veel seadistatud.",
+        "policyUpdated": "SSO poliitika uuendatud",
+        "providerAdded": "SSO pakkuja lisatud",
+        "providerDeleted": "SSO pakkuja eemaldatud",
+        "providersDescription": "Ühendage Okta, Microsoft Entra ID, Google Workspace, Ping Identity või mis tahes standardne OIDC pakkuja.",
+        "providersTitle": "Identiteedipakkujad",
+        "requireSsoDescription": "Kui see on sisse lülitatud, peavad liikmed sisse logima selle organisatsiooni identiteedipakkuja kaudu.",
+        "requireSsoTitle": "Nõua selles organisatsioonis SSO-d",
+        "testDiscovery": "Testi discovery-t",
+        "title": "Ühekordne sisselogimine (SSO)",
+        "verifyDomain": "Kinnita kohe"
+      },
       "timePolicy": {
         "description": "Määrake aja ümardamine, muutmise tähtajad ja kuude lukustamine.",
         "editWindow": "Muutmise tähtaeg (päevades)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Laadi logo üles",
       "usage": "Kasutus",
+      "usageCheckoutProviderUnavailable": "Makseteenuse pakkuja pole veebimakseks saadaval.",
       "usageDescription": "Selle organisatsiooni kasutuslimiidid ja õiguse olek",
       "usageEmptyDescription": "Seadista kasutusõigus, et lubada selles organisatsioonis mõõdetud AI-funktsioonid.",
       "usageEmptyTitle": "Kasutusõigus puudub",
@@ -817,9 +853,11 @@
       "usageManageError": "Majutatud kasutuse haldust ei saanud avada",
       "usageManuallyManaged": "Käsitsi hallatud",
       "usagePacksDescription": "Ühekordsed ühikupaketid, mis lisatakse praegusele perioodile.",
+      "usagePacksRequireActivePlan": "Ühikupakettide ostmiseks aktiveerige või taastage majutatud pakett.",
       "usagePacksTitle": "Ühikupaketid",
       "usagePlanCheckout": "Jätka kassasse",
       "usagePlanCheckoutError": "Kassasse ei saanud siirduda",
+      "usagePlanCheckoutUnavailable": "Selle paketi eest ei saa veebis tasuda.",
       "usagePlanPriceMonthTemplate": "{price} / kuus",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / koht / kuus",
@@ -841,11 +879,7 @@
         "title": "Dokumentide kontrollimise otsused",
         "unavailable": "Sellel organisatsioonil pole ühtegi otsustusmudelit saadaval.",
         "updated": "Kontrollimise seadistus on uuendatud"
-      },
-      "enterSlug": "Sisestage organisatsiooni URL-i lühinimi.",
-      "usageCheckoutProviderUnavailable": "Makseteenuse pakkuja pole veebimakseks saadaval.",
-      "usagePacksRequireActivePlan": "Ühikupakettide ostmiseks aktiveerige või taastage majutatud pakett.",
-      "usagePlanCheckoutUnavailable": "Selle paketi eest ei saa veebis tasuda."
+      }
     }
   }
 }

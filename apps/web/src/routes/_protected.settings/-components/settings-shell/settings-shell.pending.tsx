@@ -107,6 +107,12 @@ export const ORGANIZATION_SECTIONS = [
         icon: UsersIcon,
       },
       {
+        to: "/settings/organization/sso",
+        labelKey: "settings.organization.sso.title",
+        icon: ShieldIcon,
+        gate: "enterpriseSso",
+      },
+      {
         to: "/settings/organization/usage",
         labelKey: "admin.planAndUsage",
         icon: GaugeIcon,

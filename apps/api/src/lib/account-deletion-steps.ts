@@ -29,6 +29,7 @@ import {
   oauthConsent,
   oauthRefreshToken,
   organization,
+  organizationSsoDomain,
   session,
   ssoProvider,
   twoFactor,
@@ -259,6 +260,7 @@ const REVOKE_AUTH_CREDENTIALS_TABLES = [
   twoFactor,
   invitation,
   apikey,
+  organizationSsoDomain,
   ssoProvider,
 ] as const satisfies readonly PgTable[];
 
@@ -298,6 +300,13 @@ export const revokeAuthCredentialsAndInvitations = async ({
     .update(ssoProvider)
     .set({ userId: null })
     .where(eq(ssoProvider.userId, currentUserId));
+  // An organization's verified SSO domain outlives the admin who registered it;
+  // only the attribution is cleared.
+  // audit: skip - verifyAndDeleteUser records the parent account-deletion request in this transaction.
+  await tx
+    .update(organizationSsoDomain)
+    .set({ createdBy: null })
+    .where(eq(organizationSsoDomain.createdBy, currentUserId));
 };
 
 const REVOKE_OAUTH_TOKENS_TABLES = [

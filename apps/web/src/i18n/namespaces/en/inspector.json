@@ -567,18 +567,18 @@
       "back": "Back to the list",
       "download": "Download {fileName}",
       "noFilesInside": "There are no files inside.",
+      "noMatches": "No file matches “{query}”.",
       "noPreview": "This file type has no preview. Download it or save it to a matter.",
       "notConverted": "This file couldn't be converted for preview. Download it or save it to a matter.",
       "open": "Open {fileName}",
+      "search": "Find a file by name or folder",
       "unavailable": {
         "encrypted": "Password-protected, can’t be opened",
         "link": "A link to another file, not followed",
         "tooLarge": "Too large to open",
         "unreadable": "Damaged, can’t be opened",
         "unsupported": "Compressed in a way that can’t be opened"
-      },
-      "search": "Find a file by name or folder",
-      "noMatches": "No file matches “{query}”."
+      }
     },
     "firstSourceReached": "This is the first source.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Hide pane",
     "lastSourceReached": "This is the last source.",
+    "mailbox": {
+      "messages": "Messages",
+      "noMatches": "No message matches “{query}”.",
+      "noMessages": "This mailbox holds no messages.",
+      "search": "Search messages",
+      "truncated": "Only the first {count, number} messages are listed.",
+      "unreadable": "This mailbox couldn’t be read."
+    },
     "matterPicker": {
       "allMatters": "All matters",
       "description": "Pick the matters this chat can draw on.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Show pane",
     "swapViews": "Swap main and side views",
-    "title": "Inspector",
-    "mailbox": {
-      "messages": "Messages",
-      "noMatches": "No message matches “{query}”.",
-      "noMessages": "This mailbox holds no messages.",
-      "search": "Search messages",
-      "truncated": "Only the first {count, number} messages are listed.",
-      "unreadable": "This mailbox couldn’t be read."
-    }
+    "title": "Inspector"
   }
 }

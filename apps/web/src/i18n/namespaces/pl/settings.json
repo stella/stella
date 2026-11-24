@@ -745,6 +745,7 @@
         "reorder": "Zmień kolejność typu dokumentu",
         "title": "Typy dokumentów"
       },
+      "enterSlug": "Wpisz identyfikator organizacji używany w adresie URL.",
       "localRuns": {
         "description": "Najwięcej, ile agent programistyczny może zrobić bez pytania, gdy prowadzi czat na komputerze członka. Niższy limit obowiązuje od następnej wiadomości każdego członka; trwające już uruchomienie zachowuje swoje uprawnienia.",
         "title": "Agenci programistyczni na komputerach członków",
@@ -778,6 +779,40 @@
         "opaque": "Wygeneruj losową krótką nazwę",
         "title": "Krótka nazwa organizacji"
       },
+      "sso": {
+        "addDomain": "Dodaj domenę",
+        "addProvider": "Dodaj dostawcę OIDC",
+        "callbackUrlLabel": "Adres URL wywołania zwrotnego",
+        "clientIdLabel": "Identyfikator klienta",
+        "clientSecretLabel": "Client Secret",
+        "description": "Skonfiguruj dostawców tożsamości OIDC, zweryfikuj domeny e-mail organizacji i wymagaj SSO od członków.",
+        "discoveryEndpointLabel": "Adres discovery (opcjonalny)",
+        "discoveryFailed": "Nie udało się zweryfikować dokumentu OIDC discovery",
+        "discoverySuccess": "Dokument OIDC discovery został zweryfikowany",
+        "discoveryVerifiedDetail": "Zweryfikowany wystawca: {issuer}",
+        "dnsTxtInstructions": "Dodaj ten rekord DNS TXT u rejestratora domeny, a następnie kliknij Zweryfikuj teraz:",
+        "domainAdded": "Dodano domenę",
+        "domainDeleted": "Usunięto domenę",
+        "domainRecordNotFound": "Nie znaleziono jeszcze rekordu DNS TXT. Propagacja może potrwać kilka minut.",
+        "domainVerified": "Domena zweryfikowana",
+        "domainsDescription": "Zweryfikuj własność domeny przez rekord DNS TXT, aby kierować logowania służbowym e-mailem do Twojego dostawcy.",
+        "domainsLabel": "Dozwolone domeny e-mail (rozdzielone przecinkami)",
+        "domainsTitle": "Zweryfikowane domeny",
+        "issuerLabel": "URL wystawcy (Issuer)",
+        "launchUrlLabel": "Bezpośredni adres logowania",
+        "noDomains": "Nie dodano jeszcze żadnych domen.",
+        "noProviders": "Nie skonfigurowano jeszcze żadnych dostawców tożsamości.",
+        "policyUpdated": "Zaktualizowano politykę SSO",
+        "providerAdded": "Dodano dostawcę SSO",
+        "providerDeleted": "Usunięto dostawcę SSO",
+        "providersDescription": "Połącz Okta, Microsoft Entra ID, Google Workspace, Ping Identity lub dowolnego standardowego dostawcę OIDC.",
+        "providersTitle": "Dostawcy tożsamości",
+        "requireSsoDescription": "Po włączeniu członkowie muszą logować się przez dostawcę tożsamości tej organizacji.",
+        "requireSsoTitle": "Wymagaj SSO dla tej organizacji",
+        "testDiscovery": "Testuj discovery",
+        "title": "Logowanie jednokrotne (SSO)",
+        "verifyDomain": "Zweryfikuj teraz"
+      },
       "timePolicy": {
         "description": "Ustaw zaokrąglanie czasu, terminy edycji i blokady miesięcy.",
         "editWindow": "Termin edycji (dni)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Prześlij logo",
       "usage": "Użycie",
+      "usageCheckoutProviderUnavailable": "Operator płatności jest niedostępny do obsługi płatności online.",
       "usageDescription": "Limity użycia i stan uprawnień tej organizacji",
       "usageEmptyDescription": "Skonfiguruj uprawnienie do użycia, aby włączyć mierzone funkcje AI w tej organizacji.",
       "usageEmptyTitle": "Brak uprawnienia do użycia",
@@ -817,9 +853,11 @@
       "usageManageError": "Nie udało się otworzyć zarządzania użyciem hostowanym",
       "usageManuallyManaged": "Zarządzane ręcznie",
       "usagePacksDescription": "Jednorazowe pakiety jednostek dodawane do bieżącego okresu.",
+      "usagePacksRequireActivePlan": "Aktywuj lub wznów plan hostowany, aby kupić pakiety jednostek.",
       "usagePacksTitle": "Pakiety jednostek",
       "usagePlanCheckout": "Przejdź do płatności",
       "usagePlanCheckoutError": "Nie udało się rozpocząć płatności",
+      "usagePlanCheckoutUnavailable": "Płatność online za ten plan jest niedostępna.",
       "usagePlanPriceMonthTemplate": "{price} / miesiąc",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / miejsce / miesiąc",
@@ -841,11 +879,7 @@
         "title": "Rozstrzygnięcia przy weryfikacji dokumentów",
         "unavailable": "Ta organizacja nie ma dostępnego modelu decyzyjnego.",
         "updated": "Zaktualizowano ustawienie weryfikacji"
-      },
-      "enterSlug": "Wpisz identyfikator organizacji używany w adresie URL.",
-      "usageCheckoutProviderUnavailable": "Operator płatności jest niedostępny do obsługi płatności online.",
-      "usagePacksRequireActivePlan": "Aktywuj lub wznów plan hostowany, aby kupić pakiety jednostek.",
-      "usagePlanCheckoutUnavailable": "Płatność online za ten plan jest niedostępna."
+      }
     }
   }
 }

@@ -617,6 +617,9 @@ export const TAGGED_FAILURE_REASON = {
   publisher_target_refused: "tagged_failure",
   robots_disallowed: "tagged_failure",
   court_unrecognized: "tagged_failure",
+  oidc_discovery_error: "tagged_failure",
+  sso_domain_dns_error: "tagged_failure",
+  sso_management_error: "tagged_failure",
   robots_unavailable: "tagged_failure",
 } as const satisfies Record<FailureTag, FailureReason>;
 

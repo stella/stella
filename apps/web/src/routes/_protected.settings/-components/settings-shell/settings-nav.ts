@@ -7,7 +7,8 @@ import {
 } from "@/routes/_protected.settings/-components/settings-shell/settings-shell.pending";
 
 /** Per-member conditions that hide a navigation item. */
-type SettingsNavGate = "memory" | "beta" | "timeBilling" | "billing" | "usage";
+type SettingsNavGate =
+  "memory" | "beta" | "timeBilling" | "billing" | "usage" | "enterpriseSso";
 
 export type SettingsNavAccess = {
   role: Role | undefined;
@@ -19,6 +20,8 @@ export type SettingsNavAccess = {
   timeBilling: boolean;
   /** Plan and usage is available on this deployment. */
   usage: boolean;
+  /** Enterprise SSO is enabled on this deployment. */
+  enterpriseSso?: boolean;
 };
 
 // Both phases draw the sections (./settings-shell.pending.tsx); this
@@ -37,12 +40,14 @@ export const settingsNavSections = ({
   beta,
   timeBilling,
   usage,
+  enterpriseSso = false,
 }: SettingsNavAccess) => {
   const open: Record<SettingsNavGate, boolean> = {
     memory,
     beta,
     timeBilling,
     usage,
+    enterpriseSso,
     billing: isBillingSettingsAccessible({ previewEnabled: timeBilling, role }),
   };
   const sections: readonly SettingsNavSectionSource[] =

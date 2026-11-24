@@ -745,6 +745,7 @@
         "reorder": "Réorganiser le type de document",
         "title": "Types de documents"
       },
+      "enterSlug": "Saisissez l’identifiant de l’organisation dans l’URL.",
       "localRuns": {
         "description": "Ce qu’un agent de code peut faire au maximum sans demander lorsqu’il exécute une conversation sur l’ordinateur d’un membre. Une limite plus basse s’applique dès le prochain message de chaque membre ; une exécution déjà en cours conserve ses autorisations.",
         "title": "Agents de code sur les ordinateurs des membres",
@@ -778,6 +779,40 @@
         "opaque": "Générer un nom court aléatoire",
         "title": "Nom court de l’organisation"
       },
+      "sso": {
+        "addDomain": "Ajouter un domaine",
+        "addProvider": "Ajouter un fournisseur OIDC",
+        "callbackUrlLabel": "URL de rappel (Callback)",
+        "clientIdLabel": "Identifiant client (Client ID)",
+        "clientSecretLabel": "Secret client (Client Secret)",
+        "description": "Configurez vos fournisseurs OIDC, vérifiez les domaines e-mail de l'organisation et imposez le SSO aux membres.",
+        "discoveryEndpointLabel": "Point de découverte (facultatif)",
+        "discoveryFailed": "Impossible de vérifier le document de découverte OIDC",
+        "discoverySuccess": "Document de découverte OIDC vérifié",
+        "discoveryVerifiedDetail": "Émetteur vérifié : {issuer}",
+        "dnsTxtInstructions": "Ajoutez cet enregistrement DNS TXT chez votre registraire, puis cliquez sur Vérifier maintenant :",
+        "domainAdded": "Domaine ajouté",
+        "domainDeleted": "Domaine supprimé",
+        "domainRecordNotFound": "Enregistrement DNS TXT introuvable pour le moment. La propagation peut prendre quelques minutes.",
+        "domainVerified": "Domaine vérifié",
+        "domainsDescription": "Vérifiez la propriété du domaine via un enregistrement DNS TXT pour router les connexions professionnelles.",
+        "domainsLabel": "Domaines e-mail autorisés (séparés par des virgules)",
+        "domainsTitle": "Domaines vérifiés",
+        "issuerLabel": "URL de l'émetteur (Issuer)",
+        "launchUrlLabel": "URL de connexion directe",
+        "noDomains": "Aucun domaine ajouté.",
+        "noProviders": "Aucun fournisseur d'identité configuré.",
+        "policyUpdated": "Politique SSO mise à jour",
+        "providerAdded": "Fournisseur SSO ajouté",
+        "providerDeleted": "Fournisseur SSO supprimé",
+        "providersDescription": "Connectez Okta, Microsoft Entra ID, Google Workspace, Ping Identity ou tout fournisseur OIDC standard.",
+        "providersTitle": "Fournisseurs d'identité",
+        "requireSsoDescription": "Lorsqu'il est activé, les membres doivent se connecter via l'un des fournisseurs d'identité de cette organisation.",
+        "requireSsoTitle": "Exiger le SSO pour cette organisation",
+        "testDiscovery": "Tester la découverte",
+        "title": "Authentification unique (SSO)",
+        "verifyDomain": "Vérifier maintenant"
+      },
       "timePolicy": {
         "description": "Définissez les arrondis du temps, les délais de modification et les verrouillages mensuels.",
         "editWindow": "Délai de modification (jours)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Importer un logo",
       "usage": "Utilisation",
+      "usageCheckoutProviderUnavailable": "Le prestataire de paiement est indisponible pour le règlement en ligne.",
       "usageDescription": "Limites d’utilisation et état des droits pour cette organisation",
       "usageEmptyDescription": "Configurez un droit d’utilisation pour activer les fonctionnalités d’IA mesurées pour cette organisation.",
       "usageEmptyTitle": "Aucun droit d’utilisation",
@@ -817,9 +853,11 @@
       "usageManageError": "Impossible d’ouvrir la gestion de l’utilisation hébergée",
       "usageManuallyManaged": "Géré manuellement",
       "usagePacksDescription": "Packs d’unités ponctuels ajoutés à votre période en cours.",
+      "usagePacksRequireActivePlan": "Activez ou reprenez une offre hébergée pour acheter des packs d’unités.",
       "usagePacksTitle": "Packs d’unités",
       "usagePlanCheckout": "Continuer vers le paiement",
       "usagePlanCheckoutError": "Impossible de démarrer le paiement",
+      "usagePlanCheckoutUnavailable": "Le paiement en ligne est indisponible pour cette offre.",
       "usagePlanPriceMonthTemplate": "{price} / mois",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / siège / mois",
@@ -841,11 +879,7 @@
         "title": "Verdicts de la vérification des documents",
         "unavailable": "Aucun modèle de décision n’est disponible pour cette organisation.",
         "updated": "Paramètre de vérification mis à jour"
-      },
-      "enterSlug": "Saisissez l’identifiant de l’organisation dans l’URL.",
-      "usageCheckoutProviderUnavailable": "Le prestataire de paiement est indisponible pour le règlement en ligne.",
-      "usagePacksRequireActivePlan": "Activez ou reprenez une offre hébergée pour acheter des packs d’unités.",
-      "usagePlanCheckoutUnavailable": "Le paiement en ligne est indisponible pour cette offre."
+      }
     }
   }
 }

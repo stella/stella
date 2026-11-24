@@ -745,6 +745,7 @@
         "reorder": "Keisti dokumento tipo eilės tvarką",
         "title": "Dokumentų tipai"
       },
+      "enterSlug": "Įveskite organizacijos URL identifikatorių.",
       "localRuns": {
         "description": "Daugiausia, ką programavimo agentas gali daryti neklausdamas, kai vykdo pokalbį nario kompiuteryje. Žemesnė riba taikoma nuo kito kiekvieno nario pranešimo; jau vykstantis paleidimas išlaiko savo leidimus.",
         "title": "Programavimo agentai narių kompiuteriuose",
@@ -778,6 +779,40 @@
         "opaque": "Sugeneruoti atsitiktinį trumpąjį pavadinimą",
         "title": "Organizacijos trumpasis pavadinimas"
       },
+      "sso": {
+        "addDomain": "Pridėti domeną",
+        "addProvider": "Pridėti OIDC teikėją",
+        "callbackUrlLabel": "Atgalinio iškvietimo URL",
+        "clientIdLabel": "Kliento ID",
+        "clientSecretLabel": "Client Secret",
+        "description": "Konfigūruokite OIDC tapatybės teikėjus, patvirtinkite organizacijos el. pašto domenus ir reikalaukite SSO.",
+        "discoveryEndpointLabel": "Discovery adresas (neprivaloma)",
+        "discoveryFailed": "Nepavyko patvirtinti OIDC discovery dokumento",
+        "discoverySuccess": "OIDC discovery dokumentas patvirtintas",
+        "discoveryVerifiedDetail": "Patvirtintas išdavėjas: {issuer}",
+        "dnsTxtInstructions": "Pridėkite šį DNS TXT įrašą pas savo domeno registratorių, tada spustelėkite Tikrinti dabar:",
+        "domainAdded": "Domenas pridėtas",
+        "domainDeleted": "Domenas pašalintas",
+        "domainRecordNotFound": "DNS TXT įrašas dar nerastas. Sklaida gali užtrukti kelias minutes.",
+        "domainVerified": "Domenas patvirtintas",
+        "domainsDescription": "Patvirtinkite domeno nuosavybę per DNS TXT įrašą, kad darbinio el. pašto prisijungimai būtų nukreipiami.",
+        "domainsLabel": "Leidžiami el. pašto domenai (atskirti kableliais)",
+        "domainsTitle": "Patvirtinti domenai",
+        "issuerLabel": "Išdavėjo (Issuer) URL",
+        "launchUrlLabel": "Tiesioginio prisijungimo URL",
+        "noDomains": "Domenų dar nepridėta.",
+        "noProviders": "Dar nesukonfigūruotas joks tapatybės teikėjas.",
+        "policyUpdated": "SSO politika atnaujinta",
+        "providerAdded": "SSO teikėjas pridėtas",
+        "providerDeleted": "SSO teikėjas pašalintas",
+        "providersDescription": "Prijunkite Okta, Microsoft Entra ID, Google Workspace, Ping Identity arba bet kurį standartinį OIDC teikėją.",
+        "providersTitle": "Tapatybės teikėjai",
+        "requireSsoDescription": "Įjungus, nariai privalės prisijungti per vieną iš šios organizacijos tapatybės teikėjų.",
+        "requireSsoTitle": "Reikalauti SSO šioje organizacijoje",
+        "testDiscovery": "Tikrinti discovery",
+        "title": "Vienkartinis prisijungimas (SSO)",
+        "verifyDomain": "Tikrinti dabar"
+      },
       "timePolicy": {
         "description": "Nustatykite laiko apvalinimą, redagavimo terminus ir mėnesių užrakinimą.",
         "editWindow": "Redagavimo terminas (dienomis)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Įkelti logotipą",
       "usage": "Naudojimas",
+      "usageCheckoutProviderUnavailable": "Mokėjimo paslaugų teikėjas nepasiekiamas atsiskaityti internetu.",
       "usageDescription": "Šios organizacijos naudojimo limitai ir teisės būsena",
       "usageEmptyDescription": "Sukonfigūruokite naudojimo teisę, kad šiai organizacijai būtų įjungtos matuojamos DI funkcijos.",
       "usageEmptyTitle": "Nėra naudojimo teisės",
@@ -817,9 +853,11 @@
       "usageManageError": "Nepavyko atidaryti prieglobos naudojimo valdymo",
       "usageManuallyManaged": "Valdoma rankiniu būdu",
       "usagePacksDescription": "Vienkartiniai vienetų paketai, pridedami prie dabartinio laikotarpio.",
+      "usagePacksRequireActivePlan": "Norėdami įsigyti vienetų paketų, aktyvinkite arba atnaujinkite priglobtą planą.",
       "usagePacksTitle": "Vienetų paketai",
       "usagePlanCheckout": "Pereiti prie apmokėjimo",
       "usagePlanCheckoutError": "Nepavyko pradėti apmokėjimo",
+      "usagePlanCheckoutUnavailable": "Už šį planą negalima sumokėti internetu.",
       "usagePlanPriceMonthTemplate": "{price} / mėnesį",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / vietai / mėnesį",
@@ -841,11 +879,7 @@
         "title": "Dokumentų tikrinimo išvados",
         "unavailable": "Šiai organizacijai nėra prieinamo sprendimų modelio.",
         "updated": "Tikrinimo nustatymas atnaujintas"
-      },
-      "enterSlug": "Įveskite organizacijos URL identifikatorių.",
-      "usageCheckoutProviderUnavailable": "Mokėjimo paslaugų teikėjas nepasiekiamas atsiskaityti internetu.",
-      "usagePacksRequireActivePlan": "Norėdami įsigyti vienetų paketų, aktyvinkite arba atnaujinkite priglobtą planą.",
-      "usagePlanCheckoutUnavailable": "Už šį planą negalima sumokėti internetu."
+      }
     }
   }
 }

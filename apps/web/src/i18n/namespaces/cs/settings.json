@@ -745,6 +745,7 @@
         "reorder": "Změnit pořadí typu dokumentu",
         "title": "Typy dokumentů"
       },
+      "enterSlug": "Zadejte identifikátor organizace pro adresu URL.",
       "localRuns": {
         "description": "Nejvíc, co smí programovací agent udělat bez ptaní, když spouští chat v počítači člena. Nižší limit platí od další zprávy každého člena; běh, který už probíhá, si svá oprávnění ponechá.",
         "title": "Programovací agenti v počítačích členů",
@@ -778,6 +779,40 @@
         "opaque": "Vygenerovat náhodný krátký název",
         "title": "Krátký název organizace"
       },
+      "sso": {
+        "addDomain": "Přidat doménu",
+        "addProvider": "Přidat poskytovatele OIDC",
+        "callbackUrlLabel": "Adresa URL pro zpětné volání",
+        "clientIdLabel": "ID klienta",
+        "clientSecretLabel": "Client Secret",
+        "description": "Nastavte poskytovatele identity OIDC, ověřte e-mailové domény organizace a vyžadujte SSO pro členy.",
+        "discoveryEndpointLabel": "Koncový bod discovery (volitelné)",
+        "discoveryFailed": "Dokument OIDC discovery se nepodařilo ověřit",
+        "discoverySuccess": "Dokument OIDC discovery byl ověřen",
+        "discoveryVerifiedDetail": "Ověřený vydavatel: {issuer}",
+        "dnsTxtInstructions": "Přidejte tento DNS TXT záznam u svého registrátora domény a poté klikněte na Ověřit nyní:",
+        "domainAdded": "Doména přidána",
+        "domainDeleted": "Doména odstraněna",
+        "domainRecordNotFound": "DNS TXT záznam zatím nebyl nalezen. Propagace může trvat několik minut.",
+        "domainVerified": "Doména ověřena",
+        "domainsDescription": "Ověřte vlastnictví domény pomocí DNS TXT záznamu, aby byli uživatelé přesměrováni na vašeho poskytovatele identity.",
+        "domainsLabel": "Povolené e-mailové domény (oddělené čárkou)",
+        "domainsTitle": "Ověřené domény",
+        "issuerLabel": "URL vydavatele (Issuer)",
+        "launchUrlLabel": "Přímá přihlašovací URL",
+        "noDomains": "Zatím nebyly přidány žádné domény.",
+        "noProviders": "Zatím není nastaven žádný poskytovatel identity.",
+        "policyUpdated": "Požadavek na SSO byl aktualizován",
+        "providerAdded": "Poskytovatel SSO byl přidán",
+        "providerDeleted": "Poskytovatel SSO byl odstraněn",
+        "providersDescription": "Připojte Okta, Microsoft Entra ID, Google Workspace, Ping Identity nebo jiného standardního poskytovatele OIDC.",
+        "providersTitle": "Poskytovatelé identity",
+        "requireSsoDescription": "Po zapnutí se členové musí pro přístup ke spisům a nastavením přihlásit přes poskytovatele identity této organizace.",
+        "requireSsoTitle": "Vyžadovat SSO pro tuto organizaci",
+        "testDiscovery": "Otestovat discovery",
+        "title": "Jednotné přihlášení (SSO)",
+        "verifyDomain": "Ověřit nyní"
+      },
       "timePolicy": {
         "description": "Nastavte zaokrouhlování času, omezení úprav a uzamykání měsíců.",
         "editWindow": "Lhůta pro úpravy (dny)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Nahrát logo",
       "usage": "Využití",
+      "usageCheckoutProviderUnavailable": "Poskytovatel plateb není pro platbu online dostupný.",
       "usageDescription": "Limity využití a stav oprávnění pro tuto organizaci",
       "usageEmptyDescription": "Nakonfigurujte oprávnění k využití, aby organizace mohla používat měřené funkce AI.",
       "usageEmptyTitle": "Žádné oprávnění k využití",
@@ -817,9 +853,11 @@
       "usageManageError": "Nepodařilo se otevřít správu hostovaného využití",
       "usageManuallyManaged": "Spravováno ručně",
       "usagePacksDescription": "Jednorázové balíčky jednotek přidané do aktuálního období.",
+      "usagePacksRequireActivePlan": "Pro nákup balíčků jednotek aktivujte nebo obnovte hostovaný tarif.",
       "usagePacksTitle": "Balíčky jednotek",
       "usagePlanCheckout": "Pokračovat k objednávce",
       "usagePlanCheckoutError": "Nepodařilo se zahájit objednávku",
+      "usagePlanCheckoutUnavailable": "Pro tento tarif není dostupná platba online.",
       "usagePlanPriceMonthTemplate": "{price} / měsíc",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / místo / měsíc",
@@ -841,11 +879,7 @@
         "title": "Závěry při ověřování dokumentů",
         "unavailable": "Této organizaci není k dispozici žádný rozhodovací model.",
         "updated": "Nastavení ověřování bylo aktualizováno"
-      },
-      "enterSlug": "Zadejte identifikátor organizace pro adresu URL.",
-      "usageCheckoutProviderUnavailable": "Poskytovatel plateb není pro platbu online dostupný.",
-      "usagePacksRequireActivePlan": "Pro nákup balíčků jednotek aktivujte nebo obnovte hostovaný tarif.",
-      "usagePlanCheckoutUnavailable": "Pro tento tarif není dostupná platba online."
+      }
     }
   }
 }

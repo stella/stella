@@ -567,18 +567,18 @@
       "back": "Atpakaļ uz sarakstu",
       "download": "Lejupielādēt {fileName}",
       "noFilesInside": "Iekšā nav neviena faila.",
+      "noMatches": "Vaicājumam “{query}” neatbilst neviens fails.",
       "noPreview": "Šim faila veidam nav priekšskatījuma. Lejupielādējiet to vai saglabājiet lietā.",
       "notConverted": "Šo failu neizdevās pārveidot priekšskatījumam. Lejupielādējiet to vai saglabājiet lietā.",
       "open": "Atvērt {fileName}",
+      "search": "Atrast failu pēc nosaukuma vai mapes",
       "unavailable": {
         "encrypted": "Aizsargāts ar paroli, nevar atvērt",
         "link": "Saite uz citu failu, netiek atvērta",
         "tooLarge": "Pārāk liels, lai atvērtu",
         "unreadable": "Bojāts, nevar atvērt",
         "unsupported": "Saspiests veidā, ko nevar atvērt"
-      },
-      "search": "Atrast failu pēc nosaukuma vai mapes",
-      "noMatches": "Vaicājumam “{query}” neatbilst neviens fails."
+      }
     },
     "firstSourceReached": "Šis ir pirmais avots.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Slēpt paneli",
     "lastSourceReached": "Šis ir pēdējais avots.",
+    "mailbox": {
+      "messages": "E-pasta ziņojumi",
+      "noMatches": "Vaicājumam “{query}” neatbilst neviens e-pasta ziņojums.",
+      "noMessages": "Šajā pastkastītē nav e-pasta ziņojumu.",
+      "search": "Meklēt e-pasta ziņojumos",
+      "truncated": "Tiek rādīti tikai pirmie {count, number} e-pasta ziņojumi.",
+      "unreadable": "Šo pastkastīti neizdevās nolasīt."
+    },
     "matterPicker": {
       "allMatters": "Visas lietas",
       "description": "Izvēlieties lietas, uz kurām šī tērzēšana var balstīties.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Rādīt paneli",
     "swapViews": "Apmainīt galveno skatu un sānu paneli",
-    "title": "Inspektors",
-    "mailbox": {
-      "messages": "E-pasta ziņojumi",
-      "noMatches": "Vaicājumam “{query}” neatbilst neviens e-pasta ziņojums.",
-      "noMessages": "Šajā pastkastītē nav e-pasta ziņojumu.",
-      "search": "Meklēt e-pasta ziņojumos",
-      "truncated": "Tiek rādīti tikai pirmie {count, number} e-pasta ziņojumi.",
-      "unreadable": "Šo pastkastīti neizdevās nolasīt."
-    }
+    "title": "Inspektors"
   }
 }

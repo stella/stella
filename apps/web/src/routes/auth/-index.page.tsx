@@ -5,6 +5,7 @@ import { getRouteApi, useLocation } from "@tanstack/react-router";
 import { SignInPanel } from "@/components/auth/sign-in-panel";
 import { isAcceptInvitationRedirect } from "@/lib/redirect";
 
+import { SsoSignInSection } from "./-components/sso-sign-in-section";
 import { getOauthPostLoginRedirectTo } from "./-index.logic";
 import { SignInShell } from "./-index.pending";
 
@@ -23,6 +24,8 @@ export function SignInPage() {
     select: (s) => s.redirectTo ?? "/",
   });
   const entryMethod = route.useSearch({ select: (s) => s.method });
+  const ssoProviderId = route.useSearch({ select: (s) => s.sso });
+  const ssoError = route.useSearch({ select: (s) => s.error });
   const location = useLocation({
     select: ({ hash, searchStr }) => ({ hash, searchStr }),
   });
@@ -34,6 +37,11 @@ export function SignInPage() {
         entryMethod={entryMethod}
         redirectTo={redirectTo}
         reserveInvitationHint={isAcceptInvitationRedirect(defaultRedirectTo)}
+      />
+      <SsoSignInSection
+        redirectTo={redirectTo}
+        ssoError={ssoError}
+        ssoProviderId={ssoProviderId}
       />
       {DevQuickStartButton === null ? null : (
         <Suspense fallback={null}>

@@ -41,6 +41,8 @@ export const REVIEW_RESET_KEPT_TABLES = {
   sso_provider: "Sign-in configuration set by operators, not reviewer content.",
   organization_sso_policy:
     "Sign-in policy set by operators, not reviewer content.",
+  organization_sso_domain:
+    "Sign-in domain verification records set by operators, not reviewer content.",
   billing_draft_user_settings:
     "Per-user billing draft consent and preferences, not reviewer content.",
   conflict_checks:

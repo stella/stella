@@ -203,6 +203,8 @@ export const ROUTE_CACHE_CLASSES = {
   "/settings/organization/tools": "private-no-store",
   "/admin/ai": "private-no-store",
   "/settings/organization/ai": "private-no-store",
+  "/admin/sso": "private-no-store",
+  "/settings/organization/sso": "private-no-store",
   "/admin/billing": "private-no-store",
   "/settings/organization/billing": "private-no-store",
   "/admin/anonymization": "private-no-store",

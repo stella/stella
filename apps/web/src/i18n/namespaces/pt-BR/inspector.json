@@ -567,18 +567,18 @@
       "back": "Voltar para a lista",
       "download": "Baixar {fileName}",
       "noFilesInside": "Não há arquivos dentro.",
+      "noMatches": "Nenhum arquivo corresponde a “{query}”.",
       "noPreview": "Este tipo de arquivo não tem pré-visualização. Baixe-o ou salve-o em um caso.",
       "notConverted": "Não foi possível converter este arquivo para pré-visualização. Baixe-o ou salve-o em um caso.",
       "open": "Abrir {fileName}",
+      "search": "Encontrar um arquivo por nome ou pasta",
       "unavailable": {
         "encrypted": "Protegido por senha, não pode ser aberto",
         "link": "Link para outro arquivo, não é aberto",
         "tooLarge": "Grande demais para abrir",
         "unreadable": "Danificado, não pode ser aberto",
         "unsupported": "Compactado de um modo que não pode ser aberto"
-      },
-      "search": "Encontrar um arquivo por nome ou pasta",
-      "noMatches": "Nenhum arquivo corresponde a “{query}”."
+      }
     },
     "firstSourceReached": "Esta é a primeira fonte.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Ocultar painel",
     "lastSourceReached": "Esta é a última fonte.",
+    "mailbox": {
+      "messages": "Mensagens",
+      "noMatches": "Nenhuma mensagem corresponde a “{query}”.",
+      "noMessages": "Esta caixa de correio não contém mensagens.",
+      "search": "Pesquisar mensagens",
+      "truncated": "Somente as primeiras {count, number} mensagens são exibidas.",
+      "unreadable": "Não foi possível ler esta caixa de correio."
+    },
     "matterPicker": {
       "allMatters": "Todos os casos",
       "description": "Escolha os casos que este chat pode usar.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Mostrar painel",
     "swapViews": "Trocar a visualização principal e o painel lateral",
-    "title": "Inspetor",
-    "mailbox": {
-      "messages": "Mensagens",
-      "noMatches": "Nenhuma mensagem corresponde a “{query}”.",
-      "noMessages": "Esta caixa de correio não contém mensagens.",
-      "search": "Pesquisar mensagens",
-      "truncated": "Somente as primeiras {count, number} mensagens são exibidas.",
-      "unreadable": "Não foi possível ler esta caixa de correio."
-    }
+    "title": "Inspetor"
   }
 }

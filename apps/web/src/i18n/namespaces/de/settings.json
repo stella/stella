@@ -745,6 +745,7 @@
         "reorder": "Dokumentart neu anordnen",
         "title": "Dokumentarten"
       },
+      "enterSlug": "Geben Sie den URL-Kurznamen der Organisation ein.",
       "localRuns": {
         "description": "Wie viel ein Coding-Agent höchstens ohne Nachfrage tun darf, wenn er einen Chat auf dem Computer eines Mitglieds ausführt. Ein niedrigeres Limit gilt ab der nächsten Nachricht jedes Mitglieds; ein bereits laufender Durchlauf behält seine Berechtigungen.",
         "title": "Coding-Agenten auf den Computern der Mitglieder",
@@ -778,6 +779,40 @@
         "opaque": "Zufälligen Kurznamen erstellen",
         "title": "Kurzname der Organisation"
       },
+      "sso": {
+        "addDomain": "Domain hinzufügen",
+        "addProvider": "OIDC-Anbieter hinzufügen",
+        "callbackUrlLabel": "Callback-URL",
+        "clientIdLabel": "Client-ID",
+        "clientSecretLabel": "Client-Secret",
+        "description": "Konfigurieren Sie OIDC-Identitätsanbieter, verifizieren Sie E-Mail-Domains und erzwingen Sie SSO für Mitglieder.",
+        "discoveryEndpointLabel": "Discovery-Endpunkt (optional)",
+        "discoveryFailed": "OIDC-Discovery-Dokument konnte nicht geprüft werden",
+        "discoverySuccess": "OIDC-Discovery-Dokument bestätigt",
+        "discoveryVerifiedDetail": "Bestätigter Issuer: {issuer}",
+        "dnsTxtInstructions": "Fügen Sie diesen DNS-TXT-Eintrag bei Ihrem Domain-Anbieter hinzu und klicken Sie dann auf Jetzt prüfen:",
+        "domainAdded": "Domain hinzugefügt",
+        "domainDeleted": "Domain entfernt",
+        "domainRecordNotFound": "DNS-TXT-Eintrag noch nicht gefunden. Die Verbreitung kann einige Minuten dauern.",
+        "domainVerified": "Domain verifiziert",
+        "domainsDescription": "Bestätigen Sie die Domain-Inhaberschaft per DNS-TXT, damit Anmeldungen mit geschäftlicher E-Mail weitergeleitet werden.",
+        "domainsLabel": "Zulässige E-Mail-Domains (kommagetrennt)",
+        "domainsTitle": "Verifizierte Domains",
+        "issuerLabel": "Issuer-URL",
+        "launchUrlLabel": "Direkte Anmelde-URL",
+        "noDomains": "Noch keine Domains hinzugefügt.",
+        "noProviders": "Noch kein Identitätsanbieter konfiguriert.",
+        "policyUpdated": "SSO-Richtlinie aktualisiert",
+        "providerAdded": "SSO-Anbieter hinzugefügt",
+        "providerDeleted": "SSO-Anbieter entfernt",
+        "providersDescription": "Verbinden Sie Okta, Microsoft Entra ID, Google Workspace, Ping Identity oder einen beliebigen OIDC-Anbieter.",
+        "providersTitle": "Identitätsanbieter",
+        "requireSsoDescription": "Wenn aktiviert, müssen sich Mitglieder über einen Identitätsanbieter dieser Organisation anmelden, um auf Akten und Einstellungen zuzugreifen.",
+        "requireSsoTitle": "SSO für diese Organisation erzwingen",
+        "testDiscovery": "Discovery testen",
+        "title": "Single Sign-On (SSO)",
+        "verifyDomain": "Jetzt prüfen"
+      },
       "timePolicy": {
         "description": "Legen Sie Zeitrundung, Bearbeitungsfristen und Monatssperren fest.",
         "editWindow": "Bearbeitungsfrist (Tage)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Logo hochladen",
       "usage": "Nutzung",
+      "usageCheckoutProviderUnavailable": "Der Zahlungsanbieter steht für die Online-Zahlung nicht zur Verfügung.",
       "usageDescription": "Nutzungslimits und Berechtigungsstatus für diese Organisation",
       "usageEmptyDescription": "Konfigurieren Sie eine Nutzungsberechtigung, um gemessene KI-Funktionen für diese Organisation zu aktivieren.",
       "usageEmptyTitle": "Keine Nutzungsberechtigung",
@@ -817,9 +853,11 @@
       "usageManageError": "Gehostete Nutzungsverwaltung konnte nicht geöffnet werden",
       "usageManuallyManaged": "Manuell verwaltet",
       "usagePacksDescription": "Einmalige Einheitenpakete, die Ihrem aktuellen Zeitraum hinzugefügt werden.",
+      "usagePacksRequireActivePlan": "Aktivieren Sie einen gehosteten Tarif oder setzen Sie ihn fort, um Einheitenpakete zu kaufen.",
       "usagePacksTitle": "Einheitenpakete",
       "usagePlanCheckout": "Weiter zum Bezahlvorgang",
       "usagePlanCheckoutError": "Bezahlvorgang konnte nicht gestartet werden",
+      "usagePlanCheckoutUnavailable": "Für diesen Tarif ist keine Online-Zahlung verfügbar.",
       "usagePlanPriceMonthTemplate": "{price} / Monat",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / Platz / Monat",
@@ -841,11 +879,7 @@
         "title": "Ergebnisse der Dokumentprüfung",
         "unavailable": "Für diese Organisation ist kein Entscheidungsmodell verfügbar.",
         "updated": "Prüfeinstellung aktualisiert"
-      },
-      "enterSlug": "Geben Sie den URL-Kurznamen der Organisation ein.",
-      "usageCheckoutProviderUnavailable": "Der Zahlungsanbieter steht für die Online-Zahlung nicht zur Verfügung.",
-      "usagePacksRequireActivePlan": "Aktivieren Sie einen gehosteten Tarif oder setzen Sie ihn fort, um Einheitenpakete zu kaufen.",
-      "usagePlanCheckoutUnavailable": "Für diesen Tarif ist keine Online-Zahlung verfügbar."
+      }
     }
   }
 }

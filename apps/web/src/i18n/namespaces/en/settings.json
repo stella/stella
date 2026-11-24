@@ -745,6 +745,7 @@
         "reorder": "Reorder document type",
         "title": "Document types"
       },
+      "enterSlug": "Enter the organization URL slug.",
       "localRuns": {
         "description": "The most a coding agent may do without asking when it runs a chat on a member's computer. A lower limit applies from each member's next message; a run already going keeps its permissions.",
         "title": "Coding agents on members' computers",
@@ -778,6 +779,40 @@
         "opaque": "Generate a random handle",
         "title": "Organization handle"
       },
+      "sso": {
+        "addDomain": "Add domain",
+        "addProvider": "Add OIDC provider",
+        "callbackUrlLabel": "Callback URL",
+        "clientIdLabel": "Client ID",
+        "clientSecretLabel": "Client secret",
+        "description": "Configure OIDC identity providers, verify organization email domains, and require SSO for members.",
+        "discoveryEndpointLabel": "Discovery endpoint (optional)",
+        "discoveryFailed": "Could not verify OIDC discovery document",
+        "discoverySuccess": "OIDC discovery document verified",
+        "discoveryVerifiedDetail": "Verified issuer: {issuer}",
+        "dnsTxtInstructions": "Add this DNS TXT record at your domain registrar, then click Verify now:",
+        "domainAdded": "Domain added",
+        "domainDeleted": "Domain removed",
+        "domainRecordNotFound": "DNS TXT record not found yet. Propagation can take a few minutes.",
+        "domainVerified": "Domain verified",
+        "domainsDescription": "Verify domain ownership via DNS TXT so users signing in with a work email are routed to your identity provider.",
+        "domainsLabel": "Allowed email domains (comma-separated)",
+        "domainsTitle": "Verified domains",
+        "issuerLabel": "Issuer URL",
+        "launchUrlLabel": "Direct sign-in URL",
+        "noDomains": "No domains added yet.",
+        "noProviders": "No identity providers configured yet.",
+        "policyUpdated": "SSO requirement updated",
+        "providerAdded": "SSO provider added",
+        "providerDeleted": "SSO provider removed",
+        "providersDescription": "Connect Okta, Microsoft Entra ID, Google Workspace, Ping Identity, or any standard OIDC provider.",
+        "providersTitle": "Identity providers",
+        "requireSsoDescription": "When enabled, members must sign in through one of this organization's identity providers to access its matters and settings.",
+        "requireSsoTitle": "Require SSO for this organization",
+        "testDiscovery": "Test discovery",
+        "title": "Single sign-on",
+        "verifyDomain": "Verify now"
+      },
       "timePolicy": {
         "description": "Set time rounding, editing limits and monthly locks.",
         "editWindow": "Editing window (days)",
@@ -801,6 +836,7 @@
       },
       "uploadLogo": "Upload logo",
       "usage": "Usage",
+      "usageCheckoutProviderUnavailable": "The payment provider is unavailable for online checkout.",
       "usageDescription": "Usage limits and entitlement state for this organization",
       "usageEmptyDescription": "Configure a usage entitlement to enable metered AI features for this organization.",
       "usageEmptyTitle": "No usage entitlement",
@@ -817,9 +853,11 @@
       "usageManageError": "Could not open hosted usage management",
       "usageManuallyManaged": "Manually managed",
       "usagePacksDescription": "One-time unit packs added to your current period.",
+      "usagePacksRequireActivePlan": "Start or resume a hosted plan to buy unit packs.",
       "usagePacksTitle": "Unit packs",
       "usagePlanCheckout": "Continue to checkout",
       "usagePlanCheckoutError": "Could not start checkout",
+      "usagePlanCheckoutUnavailable": "Online checkout is unavailable for this plan.",
       "usagePlanPriceMonthTemplate": "{price} / month",
       "usagePlanPriceOneTimeTemplate": "{price}",
       "usagePlanPriceSeatMonthTemplate": "{price} / seat / month",
@@ -841,11 +879,7 @@
         "title": "Verdicts in document verification",
         "unavailable": "No decision model is available to this organization.",
         "updated": "Verification setting updated"
-      },
-      "enterSlug": "Enter the organization URL slug.",
-      "usageCheckoutProviderUnavailable": "The payment provider is unavailable for online checkout.",
-      "usagePacksRequireActivePlan": "Start or resume a hosted plan to buy unit packs.",
-      "usagePlanCheckoutUnavailable": "Online checkout is unavailable for this plan."
+      }
     }
   }
 }
