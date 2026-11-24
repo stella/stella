@@ -27,12 +27,24 @@ import {
   appConfigFor,
   BAR_GLYPHS_FOLDER,
   copyBarGlyphs,
+  copyKeyboardExtension,
+  KEYBOARD_BRIDGE,
+  KEYBOARD_DICTATE_ROUTE,
+  KEYBOARD_EXTENSION_FOLDER,
+  KEYBOARD_SETUP_ROUTE,
+  keyboardStringsSwift,
+  readKeyboardStrings,
   SHARE_EXTENSION_FOLDER,
   SHARE_ROUTE,
   UPDATE_SIGNING_CERTIFICATE,
 } from "../app.config";
 import manifest from "../package.json" with { type: "json" };
 import { BAR_GLYPHS } from "./bar-glyphs.gen";
+import {
+  KEYBOARD_HANDOFF_WINDOW_MS,
+  KEYBOARD_LANGUAGES,
+  KEYBOARD_LAYOUTS,
+} from "./state/keyboard-dictation";
 
 const RUNTIME_VERSION = "2965817a6ba1e5b803427be6ba77a293ad958df4";
 
@@ -122,6 +134,9 @@ describe("the app's builds", () => {
         mobileRedirectUri(variant).startsWith(`${String(config.scheme)}:`),
       ).toBe(true);
       expect(config.extra).toEqual({
+        keyboardDictation: {
+          appGroup: `group.${String(config.ios?.bundleIdentifier)}`,
+        },
         liveActivities: true,
         pushNotifications: true,
         shareInbox: {
@@ -156,6 +171,7 @@ describe("the app's builds", () => {
       variant: "preview",
     });
     expect(signed.extra).toEqual({
+      keyboardDictation: null,
       liveActivities: false,
       pushNotifications: false,
       shareInbox: null,
@@ -183,9 +199,10 @@ describe("the app's builds", () => {
       variant: "preview",
     });
     expect(signed.extra).toEqual({
+      // The share extension and the keyboard wait for profiles of their own.
+      keyboardDictation: null,
       liveActivities: true,
       pushNotifications: true,
-      // The share extension waits for a profile of its own.
       shareInbox: null,
       variant: "preview",
     });
@@ -256,6 +273,187 @@ describe("the app's builds", () => {
     expect(keys.length).toBeGreaterThan(0);
     for (const key of keys) {
       expect(plist).toContain(`<key>${key}</key>`);
+    }
+  });
+
+  test("a release with the keyboard profile carries the keyboard and its App Group", () => {
+    const signed = appConfigFor({
+      buildNumber: 7,
+      runtimeVersion: RUNTIME_VERSION,
+      signing: {
+        keyboardProfileUuid: "keyboard",
+        profileUuid: "profile",
+        teamId: "TEAM",
+        widgetsProfileUuid: "widgets",
+      },
+      signingCertificatePresent: true,
+      variant: "preview",
+    });
+    expect(signed.extra?.["keyboardDictation"]).toEqual({
+      appGroup: "group.app.stll.mobile.preview",
+    });
+    expect(signed.extra?.["shareInbox"]).toBeNull();
+    expect(signed.ios?.entitlements).toEqual({
+      "com.apple.security.application-groups": [
+        "group.app.stll.mobile.preview",
+      ],
+    });
+  });
+
+  test("the keyboard opens routes the app has, and reads only settings the config sets", () => {
+    for (const route of [KEYBOARD_DICTATE_ROUTE, KEYBOARD_SETUP_ROUTE]) {
+      expect(existsSync(path.join(SOURCE_ROOT, "app", `${route}.tsx`))).toBe(
+        true,
+      );
+    }
+    const extension = path.join(SOURCE_ROOT, "..", KEYBOARD_EXTENSION_FOLDER);
+    const plist = readFileSync(
+      path.join(extension, "StellaKeyboard-Info.plist"),
+      "utf-8",
+    );
+    expect(plist).toContain("<key>RequestsOpenAccess</key>\n\t\t\t<true/>");
+    const config = readFileSync(
+      path.join(SOURCE_ROOT, "..", "app.config.ts"),
+      "utf-8",
+    );
+    const settings = [
+      ...plist.matchAll(/\$\((STELLA_[A-Z_]+)\)/gu),
+      ...readFileSync(
+        path.join(extension, "StellaKeyboard.entitlements"),
+        "utf-8",
+      ).matchAll(/\$\((STELLA_[A-Z_]+)\)/gu),
+    ].map((match) => match[1] ?? "");
+    expect(settings.length).toBeGreaterThan(0);
+    for (const setting of settings) {
+      expect(config).toContain(`${setting}: `);
+    }
+    const keys = [
+      ...readFileSync(
+        path.join(extension, "KeyboardViewController.swift"),
+        "utf-8",
+      ).matchAll(/info\["(\w+)"\]/gu),
+    ].map((match) => match[1] ?? "");
+    expect(keys.length).toBeGreaterThan(0);
+    for (const key of keys) {
+      expect(plist).toContain(`<key>${key}</key>`);
+    }
+  });
+
+  test("the keyboard and the app agree on the languages and the link's window", () => {
+    const bridge = readFileSync(
+      path.join(SOURCE_ROOT, "..", KEYBOARD_BRIDGE),
+      "utf-8",
+    );
+    const languages = /static let languages = \[([^\]]*)\]/u.exec(bridge)?.[1];
+    expect(
+      [...(languages ?? "").matchAll(/"(\w+)"/gu)].map((match) => match[1]),
+    ).toEqual([...KEYBOARD_LANGUAGES]);
+    const window = /static let handoffWindowMs: Int64 = ([\d_]+)/u.exec(
+      bridge,
+    )?.[1];
+    expect(Number(window?.replaceAll("_", ""))).toBe(
+      KEYBOARD_HANDOFF_WINDOW_MS,
+    );
+    const layouts = /enum KeyboardLayoutChoice[^{]*\{([^}]*)\}/u.exec(
+      bridge,
+    )?.[1];
+    expect(
+      [...(layouts ?? "").matchAll(/case (\w+)/gu)].map((match) => match[1]),
+    ).toEqual([...KEYBOARD_LAYOUTS]);
+  });
+
+  test("the keyboard types every Czech and Slovak letter, from either layout", () => {
+    const keys = readFileSync(
+      path.join(
+        SOURCE_ROOT,
+        "..",
+        KEYBOARD_EXTENSION_FOLDER,
+        "KeyboardKeys.swift",
+      ),
+      "utf-8",
+    );
+    const accents = keys.slice(
+      keys.indexOf("static let accents"),
+      keys.indexOf("static let symbols"),
+    );
+    for (const letter of "ěščřžýáíéúůďťňäôľĺŕó") {
+      expect(accents).toContain(`"${letter}"`);
+    }
+  });
+
+  test("every message the keyboard shows is in the catalogs, in every locale", () => {
+    const catalogs = readKeyboardStrings(path.join(SOURCE_ROOT, ".."));
+    const source = Object.keys(catalogs["en"] ?? {}).toSorted();
+    expect(Object.keys(catalogs).toSorted()).toEqual(
+      [...UI_LOCALES].toSorted(),
+    );
+    for (const messages of Object.values(catalogs)) {
+      expect(Object.keys(messages).toSorted()).toEqual(source);
+    }
+    const extension = path.join(SOURCE_ROOT, "..", KEYBOARD_EXTENSION_FOLDER);
+    const named = new Set(
+      readdirSync(extension)
+        .filter((name) => name.endsWith(".swift"))
+        .flatMap((name) =>
+          [
+            ...readFileSync(path.join(extension, name), "utf-8").matchAll(
+              /strings\.(\w+)/gu,
+            ),
+          ].map((match) => match[1] ?? ""),
+        ),
+    );
+    expect(named.size).toBeGreaterThan(0);
+    for (const key of named) {
+      expect(source).toContain(key);
+    }
+  });
+
+  test("the keyboard's messages compile to Swift literals that say exactly the message", () => {
+    const swift = keyboardStringsSwift({
+      en: { ready: 'Say "hi" \\ (twice)\nthen \\(stop)' },
+      cs: { ready: "Řekněte\u0007ahoj" },
+    });
+    expect(swift).toContain("  let ready: String");
+    expect(swift).toContain(
+      'ready: "Say \\"hi\\" \\\\ (twice)\\u{a}then \\\\(stop)"',
+    );
+    expect(swift).toContain('ready: "Řekněte\\u{7}ahoj"');
+    expect(() => keyboardStringsSwift({ en: { ready: "a" }, cs: {} })).toThrow(
+      "cs lacks keyboard.ready",
+    );
+    expect(() => keyboardStringsSwift({ en: { "not-swift": "a" } })).toThrow(
+      "keyboard.not-swift is no Swift name",
+    );
+  });
+
+  test("prebuild copies the keyboard, the bridge and its messages into the native project", () => {
+    const platformProjectRoot = mkdtempSync(
+      path.join(tmpdir(), "stella-keyboard-"),
+    );
+    try {
+      mkdirSync(path.join(platformProjectRoot, "StellaKeyboard", "stale"), {
+        recursive: true,
+      });
+      copyKeyboardExtension({
+        platformProjectRoot,
+        projectRoot: path.join(SOURCE_ROOT, ".."),
+      });
+      expect(
+        readdirSync(
+          path.join(platformProjectRoot, "StellaKeyboard"),
+        ).toSorted(),
+      ).toEqual(
+        [
+          "KeyboardDictationBridge.swift",
+          "KeyboardKeys.swift",
+          "KeyboardStrings.swift",
+          "KeyboardViewController.swift",
+          "StellaKeyboard-Info.plist",
+          "StellaKeyboard.entitlements",
+        ].toSorted(),
+      );
+    } finally {
+      rmSync(platformProjectRoot, { force: true, recursive: true });
     }
   });
 
@@ -516,4 +714,33 @@ describe("the app's text", () => {
       ),
     ).toEqual([]);
   });
+});
+
+describe("the app's transcriptions", () => {
+  /**
+   * The one module that sends a recording to a model by name. Everything
+   * else goes through `transcribeWithinClass`, so a server that cannot serve
+   * the picked model hands the audio only to one of its provider, region
+   * side and retention, never to the server's default.
+   */
+  const SENDER = path.join("state", "dictation.ts");
+
+  const sendsDirectly = (source: string): string[] =>
+    source.match(/\btranscribeRecording\b/gu) ?? [];
+
+  test("finds the sender, and the scan sees the call it forbids elsewhere", () => {
+    expect(appModules).toContain(SENDER);
+    expect(
+      sendsDirectly(readFileSync(path.join(SOURCE_ROOT, SENDER), "utf-8")),
+    ).not.toEqual([]);
+  });
+
+  test.each(appModules.filter((name) => name !== SENDER))(
+    "%s transcribes only within the picked model's class",
+    (name) => {
+      expect(
+        sendsDirectly(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).toEqual([]);
+    },
+  );
 });

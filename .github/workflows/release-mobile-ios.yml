@@ -187,6 +187,38 @@ jobs:
           cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
           echo "MOBILE_SHARE_PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
 
+      # The stella keyboard is another target with its own profile, granted
+      # the App Group as the share profile is. Without one the app config
+      # leaves the keyboard out; like the share extension, it signs only
+      # beside the widget extension.
+      - name: Install the keyboard extension's App Store profile
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          PROFILE_BASE64: ${{ inputs.variant == 'production' && secrets.MOBILE_KEYBOARD_PROFILE_PRODUCTION || secrets.MOBILE_KEYBOARD_PROFILE_PREVIEW }}
+        run: |
+          set -euo pipefail
+          if [ -z "$PROFILE_BASE64" ]; then
+            echo "No keyboard profile: this build leaves the stella keyboard out." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if [ -z "${MOBILE_WIDGETS_PROFILE_UUID:-}" ]; then
+            echo "the keyboard signs only beside the widget extension; add its profile first" >&2
+            exit 1
+          fi
+          expected="$MOBILE_BUNDLE_IDENTIFIER.keyboard"
+          profile="$RUNNER_TEMP/keyboard.mobileprovision"
+          printf '%s' "$PROFILE_BASE64" | base64 -d > "$profile"
+          decoded="$RUNNER_TEMP/keyboard-profile.plist"
+          security cms -D -i "$profile" > "$decoded"
+          identifier="$(plutil -extract Entitlements.application-identifier raw -o - "$decoded")"
+          if [ "$identifier" != "$APPLE_TEAM_ID.$expected" ]; then
+            echo "the keyboard profile signs $identifier, not $APPLE_TEAM_ID.$expected" >&2
+            exit 1
+          fi
+          uuid="$(plutil -extract UUID raw -o - "$decoded")"
+          cp "$profile" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
+          echo "MOBILE_KEYBOARD_PROFILE_UUID=$uuid" >> "$GITHUB_ENV"
+
       - name: Generate the native iOS project
         working-directory: apps/mobile
         env:
@@ -287,6 +319,9 @@ jobs:
           fi
           if [ -n "${MOBILE_SHARE_PROFILE_UUID:-}" ]; then
             profiles="$profiles,\"$MOBILE_BUNDLE_IDENTIFIER.share\":\"$MOBILE_SHARE_PROFILE_UUID\""
+          fi
+          if [ -n "${MOBILE_KEYBOARD_PROFILE_UUID:-}" ]; then
+            profiles="$profiles,\"$MOBILE_BUNDLE_IDENTIFIER.keyboard\":\"$MOBILE_KEYBOARD_PROFILE_UUID\""
           fi
           plutil -insert provisioningProfiles -json "$profiles}" "$export_options"
           plutil -insert manageAppVersionAndBuildNumber -bool NO "$export_options"

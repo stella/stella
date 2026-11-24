@@ -57,6 +57,8 @@ export type TranscriptionChoice = {
   /** The matter the text is for, whose names the model should expect. */
   readonly matterId?: string | undefined;
   readonly vocabulary?: readonly string[] | undefined;
+  /** The ISO 639-1 language spoken; absent, the model hears which. */
+  readonly language?: string | undefined;
 };
 
 /**
@@ -87,6 +89,9 @@ export const transcribeRecording = async ({
   }
   if (choice.matterId !== undefined) {
     form.append("matterId", choice.matterId);
+  }
+  if (choice.language !== undefined) {
+    form.append("language", choice.language);
   }
   if (choice.vocabulary !== undefined && choice.vocabulary.length > 0) {
     form.append("vocabulary", JSON.stringify(choice.vocabulary));

@@ -26,6 +26,8 @@ import { sha256Hex } from "@stll/sha256/bun";
 import {
   APP_VERSION,
   BAR_GLYPHS_FOLDER,
+  KEYBOARD_EXTENSION_FOLDER,
+  readKeyboardStrings,
   SHARE_EXTENSION_FOLDER,
 } from "../app.config";
 
@@ -120,6 +122,20 @@ const createNativeFingerprint = async (
               type: "dir" as const,
               filePath: SHARE_EXTENSION_FOLDER,
               reasons: ["shareExtension"],
+            },
+            // The keyboard's sources, and its messages, which the prebuild
+            // compiles into it from the catalogs; the bridge it shares with
+            // the app is hashed with the app's own native module.
+            {
+              type: "dir" as const,
+              filePath: KEYBOARD_EXTENSION_FOLDER,
+              reasons: ["keyboardExtension"],
+            },
+            {
+              type: "contents" as const,
+              id: "keyboardStrings",
+              contents: JSON.stringify(readKeyboardStrings(projectRoot)),
+              reasons: ["keyboardExtension"],
             },
           ]
         : []),

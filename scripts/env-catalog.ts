@@ -1582,6 +1582,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "MOBILE_PROFILE_UUID",
   "MOBILE_WIDGETS_PROFILE_UUID",
   "MOBILE_SHARE_PROFILE_UUID",
+  "MOBILE_KEYBOARD_PROFILE_UUID",
   "MOBILE_RUNTIME_VERSION",
   // The fake harness CLIs log how they started and what they receive to the
   // file their tests name; the fake Codex app server also logs its CODEX_HOME.

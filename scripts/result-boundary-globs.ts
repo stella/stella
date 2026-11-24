@@ -54,6 +54,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/mobile/src/widgets/**/*.{ts,tsx}",
   "apps/mobile/src/app/document/**/*.{ts,tsx}",
   "apps/mobile/src/app/part/**/*.{ts,tsx}",
+  "apps/mobile/src/app/keyboard/**/*.{ts,tsx}",
   "apps/mobile/src/components/document-viewer/**/*.{ts,tsx}",
   "apps/outlook/src/components/**/*.{ts,tsx}",
   "apps/outlook/src/i18n/**/*.{ts,tsx}",
