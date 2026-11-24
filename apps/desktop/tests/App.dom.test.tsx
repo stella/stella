@@ -22,6 +22,8 @@ const { clearMocks, mockIPC, mockWindows } =
   await import("@tauri-apps/api/mocks");
 const { emit } = await import("@tauri-apps/api/event");
 const { DesktopIntlProvider, defaultMessages } = await import("../src/i18n");
+const { DesktopAppearanceProvider } =
+  await import("../src/shared/use-desktop-appearance");
 const { default: App } = await import("../src/mainview/App");
 
 type PreferenceKey = keyof DesktopNotificationPreferences;
@@ -218,7 +220,9 @@ const startWindow = async (): Promise<RenderResult> => {
     settingsWindow ??
     render(
       <DesktopIntlProvider language="en" messages={defaultMessages}>
-        <App />
+        <DesktopAppearanceProvider appearance="system">
+          <App />
+        </DesktopAppearanceProvider>
       </DesktopIntlProvider>,
     );
   if (settingsWindow === null) {

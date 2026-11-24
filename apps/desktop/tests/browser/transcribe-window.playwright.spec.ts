@@ -103,6 +103,7 @@ const open = async (
       return {
         account_record_use: () => null,
         desktop_report_error: () => null,
+        get_desktop_appearance: () => "system",
         get_desktop_language: () => "en",
         transcribe_get_snapshot: () => {
           if (Reflect.get(window, failsFlag) === true) {

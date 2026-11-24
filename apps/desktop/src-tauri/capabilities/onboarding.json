@@ -5,6 +5,7 @@
   "permissions": [
     "core:event:allow-listen",
     "core:event:allow-unlisten",
+    "allow-get-desktop-appearance",
     "allow-get-desktop-language",
     "allow-set-desktop-language",
     "allow-account-record-use",

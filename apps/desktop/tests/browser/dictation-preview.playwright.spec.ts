@@ -47,6 +47,7 @@ const openPanel = async (
     handlers: (data) => ({
       account_record_use: () => null,
       desktop_report_error: () => null,
+      get_desktop_appearance: () => "system",
       get_desktop_language: () => "en",
       set_desktop_language: () => null,
       dictation_preview_get_snapshot: () => {

@@ -74,6 +74,7 @@ const openWindow = async (
         },
         clipboard_get_editor_context: () => structuredClone(context),
         clipboard_get_snapshot: () => structuredClone(snapshot),
+        get_desktop_appearance: () => "system",
         get_desktop_language: () => "en",
         registry_get_state: () => ({ status: "disconnected" }),
       };

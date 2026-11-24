@@ -208,14 +208,17 @@ pub fn manage(app: &AppHandle) {
   });
 }
 
-/// The scheme the main window draws in: the app follows the system's, as the
-/// window reports it. Unknown without the window, so the browser's then decides.
+/// The scheme the main window draws in: the chosen appearance, else the
+/// system's as the window reports it. Unknown without the window, so the
+/// browser's then decides.
 fn main_window_scheme(app: &AppHandle) -> crate::outcome_page::OutcomeScheme {
   use crate::outcome_page::OutcomeScheme;
-  match app
-    .get_webview_window("main")
-    .and_then(|window| window.theme().ok())
-  {
+  let theme = crate::appearance::saved().theme().or_else(|| {
+    app
+      .get_webview_window("main")
+      .and_then(|window| window.theme().ok())
+  });
+  match theme {
     Some(tauri::Theme::Light) => OutcomeScheme::Light,
     Some(tauri::Theme::Dark) => OutcomeScheme::Dark,
     _ => OutcomeScheme::System,

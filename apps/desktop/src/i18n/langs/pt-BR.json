@@ -1111,6 +1111,14 @@
     "account": "Conta",
     "accountLinked": "Vinculada",
     "app": "Aplicativo",
+    "appearance": {
+      "choices": {
+        "dark": "Escuro",
+        "light": "Claro",
+        "system": "Conforme o sistema"
+      },
+      "title": "Aparência"
+    },
     "connectToHost": "Conectar a {host}",
     "connectToHostDescription": "Abre {host} no navegador para você aprovar este computador.",
     "connectToStella": "Conectar à stella web",
@@ -1133,6 +1141,7 @@
     "errorRevealAppData": "O stella desktop não conseguiu mostrar os dados do aplicativo.",
     "errorSaveTelemetry": "Não foi possível salvar a preferência de envio de relatórios. Tente novamente.",
     "errorSetupGuide": "O stella desktop não conseguiu abrir a configuração.",
+    "errorUpdateAppearance": "O stella desktop não conseguiu alterar a aparência.",
     "errorUpdateAutostart": "O stella desktop não conseguiu atualizar o início ao fazer login.",
     "errorUpdateLanguage": "O stella desktop não conseguiu atualizar o idioma da interface.",
     "errorUpdatePreferences": "O stella desktop não conseguiu atualizar as configurações de notificação.",

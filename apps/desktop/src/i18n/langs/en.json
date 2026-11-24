@@ -1111,6 +1111,14 @@
     "account": "Account",
     "accountLinked": "Linked",
     "app": "App",
+    "appearance": {
+      "choices": {
+        "dark": "Dark",
+        "light": "Light",
+        "system": "Match system"
+      },
+      "title": "Appearance"
+    },
     "connectToHost": "Connect to {host}",
     "connectToHostDescription": "Opens {host} in your browser so you can approve this computer.",
     "connectToStella": "Connect to stella web",
@@ -1133,6 +1141,7 @@
     "errorRevealAppData": "stella desktop could not reveal app data.",
     "errorSaveTelemetry": "Could not save the reporting preference. Try again.",
     "errorSetupGuide": "stella desktop could not open setup.",
+    "errorUpdateAppearance": "stella desktop could not change the appearance.",
     "errorUpdateAutostart": "stella desktop could not update start-on-login.",
     "errorUpdateLanguage": "stella desktop could not update the interface language.",
     "errorUpdatePreferences": "stella desktop could not update notification settings.",

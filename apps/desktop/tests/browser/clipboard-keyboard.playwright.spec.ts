@@ -253,6 +253,7 @@ const installNativeBoundary = async (
         dictation_get_snapshot: () => ({
           available: dictationOffer === "available",
         }),
+        get_desktop_appearance: () => "system",
         get_desktop_language: () => nativeLanguage,
         registry_get_state: () => ({ status: "disconnected" }),
         is_autostart_enabled: () => false,

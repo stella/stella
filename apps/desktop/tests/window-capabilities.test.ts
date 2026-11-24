@@ -27,6 +27,10 @@ const SHELL_INVOKE_SOURCES = [
     sourcePath: "src/i18n/index.tsx",
   },
   {
+    entryImport: "../shared/use-desktop-appearance",
+    sourcePath: "src/shared/use-desktop-appearance.tsx",
+  },
+  {
     entryImport: "../telemetry/desktop-telemetry",
     exportedBinding: "reportDesktopError",
     sourcePath: "src/telemetry/desktop-telemetry.ts",
@@ -41,6 +45,7 @@ const SHELL_INVOKE_SOURCES = [
 const SHELL_WINDOW_MODULES: Record<string, readonly string[]> = {
   "src-tauri/capabilities/default.json": [
     "src/mainview/App.tsx",
+    "src/mainview/AppearanceSetting.tsx",
     "src/mainview/DictationInputFix.tsx",
     "src/mainview/DictationLearnedFixes.tsx",
     "src/mainview/DictationMicrophone.tsx",
