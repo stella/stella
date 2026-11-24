@@ -7,7 +7,10 @@ import { useFormatter } from "@/i18n/formatting-context";
 import { APIError } from "@/lib/errors/api";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import type { VatRate } from "@/lib/organization/vat-rates";
-import { formatFullTimestamp, MEDIUM_DATE_FORMAT } from "@/lib/relative-time";
+import {
+  UTC_FULL_DATE_FORMAT,
+  UTC_MEDIUM_DATE_FORMAT,
+} from "@/lib/relative-time";
 
 const BASIS_POINTS_PER_UNIT = 10_000;
 
@@ -34,9 +37,12 @@ export const VatRateDate = ({ date }: { date: string | null }) => {
     timeZone: "UTC",
   }).epochMilliseconds;
   return (
-    <Tooltip content={formatFullTimestamp(date)} render={<span />}>
+    <Tooltip
+      content={format.dateTime(instant, UTC_FULL_DATE_FORMAT)}
+      render={<span />}
+    >
       <span className="tabular-nums">
-        {format.dateTime(instant, { ...MEDIUM_DATE_FORMAT, timeZone: "UTC" })}
+        {format.dateTime(instant, UTC_MEDIUM_DATE_FORMAT)}
       </span>
     </Tooltip>
   );
