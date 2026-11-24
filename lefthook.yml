@@ -55,7 +55,7 @@ pre-commit:
       files: bun scripts/precommit-paths.ts
       run: bash scripts/check-ai-skill-sources.sh
     workflows:
-      glob: ".github/{workflows,actions}/**/*.{yml,yaml}"
+      glob: "{.github/workflows/*.{yml,yaml},.github/actions/**/*.{yml,yaml}}"
       files: bun scripts/precommit-paths.ts
       run: bun scripts/check-workflow-yaml.ts && bun scripts/check-workflow-shells.ts
     tracked-symlinks:
