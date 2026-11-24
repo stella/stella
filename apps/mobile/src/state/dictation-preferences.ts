@@ -83,7 +83,7 @@ const preferencesKey = ({ serverUrl, userId }: AccountKeys): string =>
 /** The person's dictation choices could not be read: nothing may be uploaded on a guess. */
 export class DictationPreferencesUnreadableError extends TaggedError(
   "DictationPreferencesUnreadableError",
-)<{ message: string; cause?: unknown }>() {}
+)<{ message: string; cause?: unknown }> {}
 
 /**
  * The choices a dictation is transcribed with: what the phone kept, or the
