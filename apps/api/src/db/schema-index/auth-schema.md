@@ -384,159 +384,159 @@ scim_managed_connection.id                       text         pk,not null  auth-
 scim_managed_connection.creation_request_id      text         not null     auth-schema.ts:1084
 scim_managed_connection.connection_id            text         not null     auth-schema.ts:1085
 scim_managed_connection.provisioning_domain_id   text         fk,not null  auth-schema.ts:1086
-scim_managed_connection.status                   text         not null     auth-schema.ts:1089
-scim_managed_connection.revision                 integer      not null     auth-schema.ts:1092
-scim_managed_connection.created_at               timestamptz  not null     auth-schema.ts:1093
-scim_managed_connection.created_by               text         not null     auth-schema.ts:1094
-scim_managed_connection.decommission_started_at  timestamptz  null         auth-schema.ts:1095
-scim_managed_connection.decommission_started_by  text         null         auth-schema.ts:1096
-scim_managed_connection.decommissioned_at        timestamptz  null         auth-schema.ts:1097
-scim_managed_connection.decommissioned_by        text         null         auth-schema.ts:1098
+scim_managed_connection.status                   text         not null     auth-schema.ts:1087
+scim_managed_connection.revision                 integer      not null     auth-schema.ts:1090
+scim_managed_connection.created_at               timestamptz  not null     auth-schema.ts:1091
+scim_managed_connection.created_by               text         not null     auth-schema.ts:1092
+scim_managed_connection.decommission_started_at  timestamptz  null         auth-schema.ts:1093
+scim_managed_connection.decommission_started_by  text         null         auth-schema.ts:1094
+scim_managed_connection.decommissioned_at        timestamptz  null         auth-schema.ts:1095
+scim_managed_connection.decommissioned_by        text         null         auth-schema.ts:1096
 ```
 
-## scim_managed_credential · `scimManagedCredential` · auth-schema.ts:1121 · rls
+## scim_managed_credential · `scimManagedCredential` · auth-schema.ts:1124 · rls
 
 ```text
-scim_managed_credential.id                    text         pk,not null  auth-schema.ts:1124
-scim_managed_credential.connection_record_id  text         fk,not null  auth-schema.ts:1125
-scim_managed_credential.credential_id         text         not null     auth-schema.ts:1126
-scim_managed_credential.token_digest          text         not null     auth-schema.ts:1127
-scim_managed_credential.hash_version          text         not null     auth-schema.ts:1128
-scim_managed_credential.active_slot_key       text         not null     auth-schema.ts:1129
-scim_managed_credential.status                text         not null     auth-schema.ts:1130
-scim_managed_credential.serialized_scopes     text         not null     auth-schema.ts:1133
-scim_managed_credential.expires_at            timestamptz  not null     auth-schema.ts:1134
-scim_managed_credential.created_at            timestamptz  not null     auth-schema.ts:1135
-scim_managed_credential.created_by            text         not null     auth-schema.ts:1136
-scim_managed_credential.last_used_at          timestamptz  null         auth-schema.ts:1137
-scim_managed_credential.revoked_at            timestamptz  null         auth-schema.ts:1138
-scim_managed_credential.revoked_by            text         null         auth-schema.ts:1139
-scim_managed_credential.decommissioned_at     timestamptz  null         auth-schema.ts:1140
+scim_managed_credential.id                    text         pk,not null  auth-schema.ts:1127
+scim_managed_credential.connection_record_id  text         fk,not null  auth-schema.ts:1128
+scim_managed_credential.credential_id         text         not null     auth-schema.ts:1129
+scim_managed_credential.token_digest          text         not null     auth-schema.ts:1130
+scim_managed_credential.hash_version          text         not null     auth-schema.ts:1131
+scim_managed_credential.active_slot_key       text         not null     auth-schema.ts:1132
+scim_managed_credential.status                text         not null     auth-schema.ts:1133
+scim_managed_credential.serialized_scopes     text         not null     auth-schema.ts:1136
+scim_managed_credential.expires_at            timestamptz  not null     auth-schema.ts:1137
+scim_managed_credential.created_at            timestamptz  not null     auth-schema.ts:1138
+scim_managed_credential.created_by            text         not null     auth-schema.ts:1139
+scim_managed_credential.last_used_at          timestamptz  null         auth-schema.ts:1140
+scim_managed_credential.revoked_at            timestamptz  null         auth-schema.ts:1141
+scim_managed_credential.revoked_by            text         null         auth-schema.ts:1142
+scim_managed_credential.decommissioned_at     timestamptz  null         auth-schema.ts:1143
 ```
 
-## scim_managed_connection_event · `scimManagedConnectionEvent` · auth-schema.ts:1163 · rls
+## scim_managed_connection_event · `scimManagedConnectionEvent` · auth-schema.ts:1166 · rls
 
 ```text
-scim_managed_connection_event.id                    text         pk,not null  auth-schema.ts:1166
-scim_managed_connection_event.connection_record_id  text         fk,not null  auth-schema.ts:1167
-scim_managed_connection_event.event_key             text         not null     auth-schema.ts:1168
-scim_managed_connection_event.sequence              integer      not null     auth-schema.ts:1169
-scim_managed_connection_event.type                  text         not null     auth-schema.ts:1170
-scim_managed_connection_event.actor_id              text         not null     auth-schema.ts:1171
-scim_managed_connection_event.credential_id         text         null         auth-schema.ts:1172
-scim_managed_connection_event.created_at            timestamptz  not null     auth-schema.ts:1173
+scim_managed_connection_event.id                    text         pk,not null  auth-schema.ts:1169
+scim_managed_connection_event.connection_record_id  text         fk,not null  auth-schema.ts:1170
+scim_managed_connection_event.event_key             text         not null     auth-schema.ts:1171
+scim_managed_connection_event.sequence              integer      not null     auth-schema.ts:1172
+scim_managed_connection_event.type                  text         not null     auth-schema.ts:1173
+scim_managed_connection_event.actor_id              text         not null     auth-schema.ts:1174
+scim_managed_connection_event.credential_id         text         null         auth-schema.ts:1175
+scim_managed_connection_event.created_at            timestamptz  not null     auth-schema.ts:1176
 ```
 
-## scim_connection_binding · `scimConnectionBinding` · auth-schema.ts:1187 · rls
+## scim_connection_binding · `scimConnectionBinding` · auth-schema.ts:1190 · rls
 
 ```text
-scim_connection_binding.id                                  text         pk,not null       auth-schema.ts:1190
-scim_connection_binding.connection_id                       text         not null          auth-schema.ts:1191
-scim_connection_binding.connection_key                      text         not null          auth-schema.ts:1192
-scim_connection_binding.provisioning_domain_id              text         fk,not null       auth-schema.ts:1193
-scim_connection_binding.created_at                          timestamptz  not null          auth-schema.ts:1194
-scim_connection_binding.decommissioned_at                   timestamptz  null              auth-schema.ts:1195
-scim_connection_binding.decommission_status                 text         default,not null  auth-schema.ts:1196
-scim_connection_binding.decommission_cursor_user_id         text         null              auth-schema.ts:1201
-scim_connection_binding.decommission_reconciled_user_count  integer      default,not null  auth-schema.ts:1202
-scim_connection_binding.decommission_batch_count            integer      default,not null  auth-schema.ts:1207
-scim_connection_binding.decommission_revision               integer      default,not null  auth-schema.ts:1210
-scim_connection_binding.decommission_completed_at           timestamptz  null              auth-schema.ts:1211
-scim_connection_binding.decommission_lease_id               text         null              auth-schema.ts:1212
-scim_connection_binding.decommission_lease_expires_at       timestamptz  null              auth-schema.ts:1213
+scim_connection_binding.id                                  text         pk,not null       auth-schema.ts:1193
+scim_connection_binding.connection_id                       text         not null          auth-schema.ts:1194
+scim_connection_binding.connection_key                      text         not null          auth-schema.ts:1195
+scim_connection_binding.provisioning_domain_id              text         fk,not null       auth-schema.ts:1196
+scim_connection_binding.created_at                          timestamptz  not null          auth-schema.ts:1197
+scim_connection_binding.decommissioned_at                   timestamptz  null              auth-schema.ts:1198
+scim_connection_binding.decommission_status                 text         default,not null  auth-schema.ts:1199
+scim_connection_binding.decommission_cursor_user_id         text         null              auth-schema.ts:1204
+scim_connection_binding.decommission_reconciled_user_count  integer      default,not null  auth-schema.ts:1205
+scim_connection_binding.decommission_batch_count            integer      default,not null  auth-schema.ts:1210
+scim_connection_binding.decommission_revision               integer      default,not null  auth-schema.ts:1213
+scim_connection_binding.decommission_completed_at           timestamptz  null              auth-schema.ts:1214
+scim_connection_binding.decommission_lease_id               text         null              auth-schema.ts:1215
+scim_connection_binding.decommission_lease_expires_at       timestamptz  null              auth-schema.ts:1216
 ```
 
-## scim_identity_tombstone · `scimIdentityTombstone` · auth-schema.ts:1235 · rls
+## scim_identity_tombstone · `scimIdentityTombstone` · auth-schema.ts:1238 · rls
 
 ```text
-scim_identity_tombstone.id                      text         pk,not null  auth-schema.ts:1238
-scim_identity_tombstone.connection_id           text         not null     auth-schema.ts:1239
-scim_identity_tombstone.provisioning_domain_id  text         fk,not null  auth-schema.ts:1240
-scim_identity_tombstone.external_id             text         not null     auth-schema.ts:1241
-scim_identity_tombstone.external_id_key         text         not null     auth-schema.ts:1242
-scim_identity_tombstone.user_id                 text         fk,not null  auth-schema.ts:1243
-scim_identity_tombstone.profile                 text         not null     auth-schema.ts:1246
-scim_identity_tombstone.deleted_at              timestamptz  not null     auth-schema.ts:1247
+scim_identity_tombstone.id                      text         pk,not null  auth-schema.ts:1241
+scim_identity_tombstone.connection_id           text         not null     auth-schema.ts:1242
+scim_identity_tombstone.provisioning_domain_id  text         fk,not null  auth-schema.ts:1243
+scim_identity_tombstone.external_id             text         not null     auth-schema.ts:1244
+scim_identity_tombstone.external_id_key         text         not null     auth-schema.ts:1245
+scim_identity_tombstone.user_id                 text         fk,not null  auth-schema.ts:1246
+scim_identity_tombstone.profile                 text         not null     auth-schema.ts:1249
+scim_identity_tombstone.deleted_at              timestamptz  not null     auth-schema.ts:1250
 ```
 
-## scim_subject · `scimSubject` · auth-schema.ts:1263 · rls
+## scim_subject · `scimSubject` · auth-schema.ts:1266 · rls
 
 ```text
-scim_subject.id                 text         pk,not null  auth-schema.ts:1266
-scim_subject.user_id            text         fk,not null  auth-schema.ts:1267
-scim_subject.profile_source_id  text         null         auth-schema.ts:1270
-scim_subject.revision           integer      not null     auth-schema.ts:1271
-scim_subject.created_at         timestamptz  not null     auth-schema.ts:1272
-scim_subject.updated_at         timestamptz  not null     auth-schema.ts:1273
+scim_subject.id                 text         pk,not null  auth-schema.ts:1269
+scim_subject.user_id            text         fk,not null  auth-schema.ts:1270
+scim_subject.profile_source_id  text         null         auth-schema.ts:1273
+scim_subject.revision           integer      not null     auth-schema.ts:1274
+scim_subject.created_at         timestamptz  not null     auth-schema.ts:1275
+scim_subject.updated_at         timestamptz  not null     auth-schema.ts:1276
 ```
 
-## scim_user · `scimUser` · auth-schema.ts:1282 · rls
+## scim_user · `scimUser` · auth-schema.ts:1285 · rls
 
 ```text
-scim_user.id                      text         pk,not null  auth-schema.ts:1285
-scim_user.connection_id           text         not null     auth-schema.ts:1286
-scim_user.provisioning_domain_id  text         fk,not null  auth-schema.ts:1287
-scim_user.user_id                 text         fk,not null  auth-schema.ts:1290
-scim_user.connection_user_key     text         not null     auth-schema.ts:1293
-scim_user.user_name               text         not null     auth-schema.ts:1294
-scim_user.user_name_key           text         not null     auth-schema.ts:1295
-scim_user.primary_email           text         not null     auth-schema.ts:1296
-scim_user.work_email_value_index  text         not null     auth-schema.ts:1297
-scim_user.email_value_index       text         not null     auth-schema.ts:1298
-scim_user.display_name            text         not null     auth-schema.ts:1299
-scim_user.formatted_name          text         not null     auth-schema.ts:1300
-scim_user.given_name              text         null         auth-schema.ts:1301
-scim_user.family_name             text         null         auth-schema.ts:1302
-scim_user.serialized_emails       text         not null     auth-schema.ts:1303
-scim_user.serialized_attributes   text         null         auth-schema.ts:1304
-scim_user.external_id             text         null         auth-schema.ts:1305
-scim_user.external_id_key         text         null         auth-schema.ts:1306
-scim_user.active                  boolean      not null     auth-schema.ts:1307
-scim_user.order_key               text         not null     auth-schema.ts:1308
-scim_user.created_at              timestamptz  not null     auth-schema.ts:1309
-scim_user.updated_at              timestamptz  not null     auth-schema.ts:1310
+scim_user.id                      text         pk,not null  auth-schema.ts:1288
+scim_user.connection_id           text         not null     auth-schema.ts:1289
+scim_user.provisioning_domain_id  text         fk,not null  auth-schema.ts:1290
+scim_user.user_id                 text         fk,not null  auth-schema.ts:1293
+scim_user.connection_user_key     text         not null     auth-schema.ts:1296
+scim_user.user_name               text         not null     auth-schema.ts:1297
+scim_user.user_name_key           text         not null     auth-schema.ts:1298
+scim_user.primary_email           text         not null     auth-schema.ts:1299
+scim_user.work_email_value_index  text         not null     auth-schema.ts:1300
+scim_user.email_value_index       text         not null     auth-schema.ts:1301
+scim_user.display_name            text         not null     auth-schema.ts:1302
+scim_user.formatted_name          text         not null     auth-schema.ts:1303
+scim_user.given_name              text         null         auth-schema.ts:1304
+scim_user.family_name             text         null         auth-schema.ts:1305
+scim_user.serialized_emails       text         not null     auth-schema.ts:1306
+scim_user.serialized_attributes   text         null         auth-schema.ts:1307
+scim_user.external_id             text         null         auth-schema.ts:1308
+scim_user.external_id_key         text         null         auth-schema.ts:1309
+scim_user.active                  boolean      not null     auth-schema.ts:1310
+scim_user.order_key               text         not null     auth-schema.ts:1311
+scim_user.created_at              timestamptz  not null     auth-schema.ts:1312
+scim_user.updated_at              timestamptz  not null     auth-schema.ts:1313
 ```
 
-## scim_projection_grant · `scimProjectionGrant` · auth-schema.ts:1324 · rls
+## scim_projection_grant · `scimProjectionGrant` · auth-schema.ts:1327 · rls
 
 ```text
-scim_projection_grant.id                      text         pk,not null  auth-schema.ts:1327
-scim_projection_grant.connection_id           text         not null     auth-schema.ts:1328
-scim_projection_grant.provisioning_domain_id  text         fk,not null  auth-schema.ts:1329
-scim_projection_grant.scim_user_id            text         fk,not null  auth-schema.ts:1330
-scim_projection_grant.user_id                 text         fk,not null  auth-schema.ts:1333
-scim_projection_grant.source_kind             text         not null     auth-schema.ts:1336
-scim_projection_grant.source_id               text         not null     auth-schema.ts:1337
-scim_projection_grant.source_value            text         null         auth-schema.ts:1338
-scim_projection_grant.role                    text         not null     auth-schema.ts:1339
-scim_projection_grant.grant_key               text         not null     auth-schema.ts:1340
-scim_projection_grant.created_at              timestamptz  not null     auth-schema.ts:1341
-scim_projection_grant.updated_at              timestamptz  not null     auth-schema.ts:1342
+scim_projection_grant.id                      text         pk,not null  auth-schema.ts:1330
+scim_projection_grant.connection_id           text         not null     auth-schema.ts:1331
+scim_projection_grant.provisioning_domain_id  text         fk,not null  auth-schema.ts:1332
+scim_projection_grant.scim_user_id            text         fk,not null  auth-schema.ts:1333
+scim_projection_grant.user_id                 text         fk,not null  auth-schema.ts:1336
+scim_projection_grant.source_kind             text         not null     auth-schema.ts:1339
+scim_projection_grant.source_id               text         not null     auth-schema.ts:1340
+scim_projection_grant.source_value            text         null         auth-schema.ts:1341
+scim_projection_grant.role                    text         not null     auth-schema.ts:1342
+scim_projection_grant.grant_key               text         not null     auth-schema.ts:1343
+scim_projection_grant.created_at              timestamptz  not null     auth-schema.ts:1344
+scim_projection_grant.updated_at              timestamptz  not null     auth-schema.ts:1345
 ```
 
-## scim_group · `scimGroup` · auth-schema.ts:1359 · rls
+## scim_group · `scimGroup` · auth-schema.ts:1362 · rls
 
 ```text
-scim_group.id                      text         pk,not null       auth-schema.ts:1362
-scim_group.connection_id           text         not null          auth-schema.ts:1363
-scim_group.provisioning_domain_id  text         fk,not null       auth-schema.ts:1364
-scim_group.revision                integer      default,not null  auth-schema.ts:1367
-scim_group.display_name            text         not null          auth-schema.ts:1368
-scim_group.display_name_key        text         not null          auth-schema.ts:1369
-scim_group.external_id             text         null              auth-schema.ts:1370
-scim_group.external_id_key         text         null              auth-schema.ts:1371
-scim_group.order_key               text         not null          auth-schema.ts:1372
-scim_group.created_at              timestamptz  not null          auth-schema.ts:1373
-scim_group.updated_at              timestamptz  not null          auth-schema.ts:1374
+scim_group.id                      text         pk,not null       auth-schema.ts:1365
+scim_group.connection_id           text         not null          auth-schema.ts:1366
+scim_group.provisioning_domain_id  text         fk,not null       auth-schema.ts:1367
+scim_group.revision                integer      default,not null  auth-schema.ts:1370
+scim_group.display_name            text         not null          auth-schema.ts:1371
+scim_group.display_name_key        text         not null          auth-schema.ts:1372
+scim_group.external_id             text         null              auth-schema.ts:1373
+scim_group.external_id_key         text         null              auth-schema.ts:1374
+scim_group.order_key               text         not null          auth-schema.ts:1375
+scim_group.created_at              timestamptz  not null          auth-schema.ts:1376
+scim_group.updated_at              timestamptz  not null          auth-schema.ts:1377
 ```
 
-## scim_group_member · `scimGroupMember` · auth-schema.ts:1386 · rls
+## scim_group_member · `scimGroupMember` · auth-schema.ts:1389 · rls
 
 ```text
-scim_group_member.id              text         pk,not null  auth-schema.ts:1389
-scim_group_member.connection_id   text         not null     auth-schema.ts:1390
-scim_group_member.group_id        text         fk,not null  auth-schema.ts:1391
-scim_group_member.scim_user_id    text         fk,not null  auth-schema.ts:1394
-scim_group_member.membership_key  text         not null     auth-schema.ts:1397
-scim_group_member.created_at      timestamptz  not null     auth-schema.ts:1398
+scim_group_member.id              text         pk,not null  auth-schema.ts:1392
+scim_group_member.connection_id   text         not null     auth-schema.ts:1393
+scim_group_member.group_id        text         fk,not null  auth-schema.ts:1394
+scim_group_member.scim_user_id    text         fk,not null  auth-schema.ts:1397
+scim_group_member.membership_key  text         not null     auth-schema.ts:1400
+scim_group_member.created_at      timestamptz  not null     auth-schema.ts:1401
 ```
