@@ -6,6 +6,8 @@ import {
   decodeBase64DataUrl,
   getFollowingAssistantRestorations,
   sentinelIsAboveRoot,
+  STICKY_USER_HEADER_PINNED_MAX_HEIGHT_PX,
+  stickyUserHeaderLayout,
   userMessageFallbackText,
 } from "@/components/chat/chat-thread-messages.logic";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
@@ -222,6 +224,36 @@ describe("getFollowingAssistantRestorations", () => {
     const messages = [userMessage("u1")];
 
     expect(getFollowingAssistantRestorations(messages, 5)).toEqual([]);
+  });
+});
+
+describe("stickyUserHeaderLayout", () => {
+  // Pinned, the header's box spans [-stickAt, naturalHeight - stickAt] of the
+  // viewport and the answer starts at its bottom; the shelf paints
+  // [0, pinnedHeight]. Any difference is an unpainted band over the answer.
+  const unpaintedBand = (naturalHeight: number) => {
+    const { pinnedHeight, stickAt } = stickyUserHeaderLayout(naturalHeight);
+    return naturalHeight - stickAt - pinnedHeight;
+  };
+
+  test("a pinned long message leaves no empty band above the answer", () => {
+    for (const naturalHeight of [0, 1, 44, 73, 74, 75, 120, 350, 2400]) {
+      expect(unpaintedBand(naturalHeight)).toBe(0);
+    }
+  });
+
+  test("a long message scrolls in flow until only the shelf's slice is left", () => {
+    expect(stickyUserHeaderLayout(350)).toEqual({
+      pinnedHeight: STICKY_USER_HEADER_PINNED_MAX_HEIGHT_PX,
+      stickAt: 350 - STICKY_USER_HEADER_PINNED_MAX_HEIGHT_PX,
+    });
+  });
+
+  test("a message shorter than the shelf pins at once at its own height", () => {
+    expect(stickyUserHeaderLayout(44)).toEqual({
+      pinnedHeight: 44,
+      stickAt: 0,
+    });
   });
 });
 

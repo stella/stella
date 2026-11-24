@@ -371,6 +371,41 @@ export const getFollowingAssistantRestorations = (
   return EMPTY_RESTORATION_PAIRS;
 };
 
+/**
+ * The most a pinned user message shows: the shelf's top padding, two of the
+ * bubble's 24px lines with its vertical padding, and the shelf's bottom
+ * border. The pinned chrome is exactly this tall (or the message's own
+ * height, when shorter).
+ */
+export const STICKY_USER_HEADER_PINNED_MAX_HEIGHT_PX = 74;
+
+export type StickyUserHeaderLayout = {
+  /** The pinned shelf's height. */
+  pinnedHeight: number;
+  /** How far the turn scrolls before the header pins: its sticky `top` is
+   *  the negative of this, and the stuck sentinel sits this far down. */
+  stickAt: number;
+};
+
+/**
+ * Where a user header of `naturalHeight` pins. It scrolls away in flow until
+ * only its last `pinnedHeight` pixels are in view, and pins there showing the
+ * compact shelf in exactly that slice. The answer below therefore always
+ * starts right under what is painted: the header's in-flow height never
+ * changes (so scroll anchoring never fights the pin), and none of it is left
+ * as an empty band between the shelf and the answer.
+ */
+export const stickyUserHeaderLayout = (
+  naturalHeight: number,
+): StickyUserHeaderLayout => {
+  const height = Math.max(0, naturalHeight);
+  const pinnedHeight = Math.min(
+    height,
+    STICKY_USER_HEADER_PINNED_MAX_HEIGHT_PX,
+  );
+  return { pinnedHeight, stickAt: height - pinnedHeight };
+};
+
 type SentinelEntry = {
   readonly isIntersecting: boolean;
   readonly boundingClientRect: { readonly top: number };
