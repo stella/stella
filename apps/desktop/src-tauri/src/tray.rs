@@ -268,8 +268,8 @@ fn set_tray_icon(
   tray: &tauri::tray::TrayIcon,
   icon: tauri::image::Image<'_>,
 ) -> tauri::Result<()> {
-  tray.set_icon(Some(icon))?;
   // Replacing the image clears macOS template tinting.
+  tray.set_icon(Some(icon))?;
   #[cfg(target_os = "macos")]
   tray.set_icon_as_template(true)?;
   Ok(())
