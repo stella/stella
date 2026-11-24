@@ -27,6 +27,8 @@ type TestRunPlanInput = {
   readonly pathKind: (arg: string) => PathKind;
   /** Test files under a directory argument, relative to the package root. */
   readonly testFilesIn: (directory: string) => readonly string[];
+  /** Number of shards to split the isolated DOM suite into when running the full suite. */
+  readonly domShards?: number;
 };
 
 const DOM_TEST_SUFFIX = ".dom.test.tsx";
@@ -126,10 +128,61 @@ const withSuiteOutfiles = (runs: readonly TestRun[]): readonly TestRun[] =>
  * argument that names nothing is reported rather than run as a filter.
  * When more than one run is planned, a `--reporter-outfile` is split per run.
  */
+// Bun reads a bare relative name as a filter, so relative paths are pinned
+// with `./`; absolute paths (POSIX, drive-rooted or UNC) already resolve.
+const toPath = (file: string): string =>
+  path.win32.isAbsolute(file) ? file : `./${file}`;
+
+const buildDefaultRuns = ({
+  domShards,
+  flags,
+  testFilesIn,
+}: {
+  readonly domShards: number;
+  readonly flags: readonly string[];
+  readonly testFilesIn: (directory: string) => readonly string[];
+}): readonly TestRun[] => {
+  if (domShards <= 1) {
+    return DEFAULT_RUNS.map((run) => ({
+      label: run.label,
+      args: [...run.args, ...flags],
+    }));
+  }
+  const domFiles = [...new Set(testFilesIn(".").map(normalize))].filter(
+    isDomTest,
+  );
+  if (domFiles.length < domShards) {
+    return DEFAULT_RUNS.map((run) => ({
+      label: run.label,
+      args: [...run.args, ...flags],
+    }));
+  }
+  const buckets = Array.from({ length: domShards }, () => [] as string[]);
+  for (const [index, file] of domFiles.entries()) {
+    buckets[index % domShards]?.push(toPath(file));
+  }
+  const domRuns: TestRun[] = buckets
+    .map((bucket, index) => ({
+      label: `dom-${String(index + 1)}`,
+      args: ["--isolate", ...bucket, ...flags],
+    }))
+    .filter((run) => run.args.length > flags.length + 1);
+  const nonDomRuns = DEFAULT_RUNS.filter((run) => run.label !== "dom").map(
+    (run) => ({
+      label: run.label,
+      args: [...run.args, ...flags],
+    }),
+  );
+  // Schedule the isolated DOM shards first so parallel lanes overlap them
+  // immediately instead of waiting on a serial tail.
+  return [...domRuns, ...nonDomRuns];
+};
+
 export const planTestRuns = ({
   argv,
   pathKind,
   testFilesIn,
+  domShards = 1,
 }: TestRunPlanInput): TestRunPlan => {
   const flags: string[] = [];
   const files: string[] = [];
@@ -170,10 +223,7 @@ export const planTestRuns = ({
   if (!namedPaths) {
     return {
       runs: withSuiteOutfiles(
-        DEFAULT_RUNS.map((run) => ({
-          label: run.label,
-          args: [...run.args, ...flags],
-        })),
+        buildDefaultRuns({ domShards, flags, testFilesIn }),
       ),
       missingPaths,
     };
@@ -187,11 +237,6 @@ export const planTestRuns = ({
   const unit = unique.filter(
     (file) => !isDomTest(file) && !isE2eUnitTest(file),
   );
-  // Bun reads a bare relative name as a filter, so relative paths are pinned
-  // with `./`; absolute paths (POSIX, drive-rooted or UNC) already resolve.
-  const toPath = (file: string): string =>
-    path.win32.isAbsolute(file) ? file : `./${file}`;
-
   const runs = [
     {
       label: "unit",
