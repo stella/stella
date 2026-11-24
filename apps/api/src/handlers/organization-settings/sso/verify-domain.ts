@@ -6,6 +6,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { verifyDomainTxtRecord } from "@/api/lib/auth/sso-domain-verify";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 import { mapSsoDomainDnsError, mapSsoManagementError } from "./sso-error-map";
@@ -78,5 +79,11 @@ const verifyOrganizationSsoDomainHandler = createSafeRootHandler(
     return Result.ok({ domain: updated.value, verified });
   },
 );
+
+declareAggregateMutation(verifyOrganizationSsoDomainHandler, {
+  type: "independent",
+  reason:
+    "Single-row DNS verification check guarded by partial unique index on verified domain.",
+});
 
 export default verifyOrganizationSsoDomainHandler;

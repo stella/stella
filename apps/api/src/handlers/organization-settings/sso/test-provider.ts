@@ -6,6 +6,7 @@ import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { probeOidcDiscovery } from "@/api/lib/auth/sso-discovery";
 import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapOidcDiscoveryError } from "./sso-error-map";
 
@@ -32,5 +33,10 @@ const testOrganizationSsoProviderHandler = createSafeRootHandler(
     return Result.ok(value);
   },
 );
+
+declareAggregateMutation(testOrganizationSsoProviderHandler, {
+  type: "independent",
+  reason: "Read-only OIDC discovery probe with no persisted mutation.",
+});
 
 export default testOrganizationSsoProviderHandler;

@@ -592,6 +592,7 @@ export const FAILURE_TAGS = [
   "agent_excluded",
   "court_unrecognized",
   "crawl_delay_unsupported",
+  "oidc_discovery_error",
   "publisher_body_limit",
   "publisher_body_not_replayable",
   "publisher_bypass_unaudited",
@@ -600,6 +601,8 @@ export const FAILURE_TAGS = [
   "publisher_target_refused",
   "robots_disallowed",
   "robots_unavailable",
+  "sso_domain_dns_error",
+  "sso_management_error",
 ] as const;
 
 export type FailureTag = (typeof FAILURE_TAGS)[number];

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import { readMemberOrganizationSsoProviders } from "@/api/handlers/auth/routes";
 import { readBillingDraftSettings } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
 import readEntities from "@/api/handlers/entities/list";
@@ -9,6 +10,7 @@ import {
   readBillingKnowledgeFile,
 } from "@/api/handlers/organization-settings/billing-drafts";
 import readBillingDraftConfiguration from "@/api/handlers/organization-settings/billing-drafts/get";
+import readOrganizationSsoHandler from "@/api/handlers/organization-settings/sso/get";
 import readMatterNumbering from "@/api/handlers/workspaces/matter-numbering/get";
 import type { ApiRoutePath } from "@/api/http/api-route-types";
 import { HttpStatusResponse } from "@/api/http/status";
@@ -145,6 +147,62 @@ export const readScalingScenarios = [
           statements: counter.count,
           transactionRoundTrips: counter.transactions,
           responseBytes: Buffer.byteLength(JSON.stringify(response)),
+          rows: 1,
+        };
+      }),
+  },
+  {
+    name: "organization sso settings",
+    expectedRows: 1,
+    definition: readOrganizationSsoHandler,
+    measure: async (fixture: ReadFixture) =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const response = await readOrganizationSsoHandler.handler(
+          asTestRaw<Parameters<typeof readOrganizationSsoHandler.handler>[0]>({
+            safeDb: fixture.safeDb,
+            user: { id: fixture.userId },
+            session: { activeOrganizationId: fixture.organizationId },
+            memberRole: sessionMemberRole("owner"),
+            request: new Request(
+              "https://example.test/v1/organization-settings/sso",
+            ),
+            route: "/v1/organization-settings/sso" satisfies ApiRoutePath,
+          }),
+        );
+        if (response instanceof HttpStatusResponse) {
+          return panic(
+            "Organization SSO settings scaling requires a successful handler response",
+          );
+        }
+        return {
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(JSON.stringify(response)),
+          rows: 1,
+        };
+      }),
+  },
+  {
+    name: "member organization sso providers",
+    expectedRows: 1,
+    definition: readMemberOrganizationSsoProviders,
+    measure: async () =>
+      await runWithMeasuredQueryCounter(async (counter) => {
+        const response = await readMemberOrganizationSsoProviders.run(
+          asTestRaw<
+            Parameters<typeof readMemberOrganizationSsoProviders.run>[0]
+          >({
+            request: new Request(
+              "https://example.test/v1/auth/sso/organization-providers",
+            ),
+          }),
+        );
+        const body =
+          response instanceof HttpStatusResponse ? response.response : response;
+        return {
+          statements: counter.count,
+          transactionRoundTrips: counter.transactions,
+          responseBytes: Buffer.byteLength(JSON.stringify(body)),
           rows: 1,
         };
       }),

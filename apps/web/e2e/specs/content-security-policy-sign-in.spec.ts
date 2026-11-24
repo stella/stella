@@ -26,6 +26,7 @@ for (const provider of SIGN_IN_PROVIDERS) {
         apiJson("v1/auth/capabilities", "get", {
           ...capabilities,
           transactionalEmail: true,
+          enterpriseSso: false,
         }),
       );
     });

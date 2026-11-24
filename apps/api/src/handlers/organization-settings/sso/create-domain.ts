@@ -6,6 +6,7 @@ import { createOrgSsoDomain } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapSsoManagementError } from "./sso-error-map";
 
@@ -46,5 +47,11 @@ const createOrganizationSsoDomainHandler = createSafeRootHandler(
     return Result.ok(created.value);
   },
 );
+
+declareAggregateMutation(createOrganizationSsoDomainHandler, {
+  type: "independent",
+  reason:
+    "Domain uniqueness is enforced by unique indexes on organization_sso_domain.",
+});
 
 export default createOrganizationSsoDomainHandler;

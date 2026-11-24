@@ -167,9 +167,7 @@ const AddOidcProviderForm = ({
         </div>
 
         <Field>
-          <FieldLabel>
-            {t("settings.organization.sso.displayNameLabel")}
-          </FieldLabel>
+          <FieldLabel>{t("common.displayName")}</FieldLabel>
           <Input
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="Okta"
@@ -499,8 +497,8 @@ const VerifiedDomainsSection = ({
                   </span>
                   <Badge>
                     {domain.status === "verified"
-                      ? t("settings.organization.sso.statusVerified")
-                      : t("settings.organization.sso.statusPending")}
+                      ? t("common.verified")
+                      : t("organization.invitations.statuses.pending")}
                   </Badge>
                 </div>
                 <div className="flex items-center gap-1.5">

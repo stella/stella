@@ -567,18 +567,18 @@
       "back": "Vissza a listához",
       "download": "{fileName} letöltése",
       "noFilesInside": "Nincsenek benne fájlok.",
+      "noMatches": "Egyetlen fájl sem felel meg ennek: „{query}”.",
       "noPreview": "Ehhez a fájltípushoz nincs előnézet. Töltse le, vagy mentse egy ügybe.",
       "notConverted": "Ezt a fájlt nem sikerült átalakítani az előnézethez. Töltse le, vagy mentse egy ügybe.",
       "open": "{fileName} megnyitása",
+      "search": "Fájl keresése név vagy mappa alapján",
       "unavailable": {
         "encrypted": "Jelszóval védett, nem nyitható meg",
         "link": "Hivatkozás egy másik fájlra, nem nyitjuk meg",
         "tooLarge": "Túl nagy a megnyitáshoz",
         "unreadable": "Sérült, nem nyitható meg",
         "unsupported": "Olyan módon tömörített, amely nem nyitható meg"
-      },
-      "search": "Fájl keresése név vagy mappa alapján",
-      "noMatches": "Egyetlen fájl sem felel meg ennek: „{query}”."
+      }
     },
     "firstSourceReached": "Ez az első forrás.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Panel elrejtése",
     "lastSourceReached": "Ez az utolsó forrás.",
+    "mailbox": {
+      "messages": "Üzenetek",
+      "noMatches": "Egyetlen üzenet sem felel meg ennek: „{query}”.",
+      "noMessages": "Ez a postafiók nem tartalmaz üzeneteket.",
+      "search": "Keresés az üzenetekben",
+      "truncated": "Csak az első {count, number} üzenet látható.",
+      "unreadable": "Ezt a postafiókot nem sikerült beolvasni."
+    },
     "matterPicker": {
       "allMatters": "Összes ügy",
       "description": "Válassza ki, mely ügyekre támaszkodhat ez a csevegés.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Panel megjelenítése",
     "swapViews": "A fő nézet és az oldalsó panel felcserélése",
-    "title": "Ellenőrző panel",
-    "mailbox": {
-      "messages": "Üzenetek",
-      "noMatches": "Egyetlen üzenet sem felel meg ennek: „{query}”.",
-      "noMessages": "Ez a postafiók nem tartalmaz üzeneteket.",
-      "search": "Keresés az üzenetekben",
-      "truncated": "Csak az első {count, number} üzenet látható.",
-      "unreadable": "Ezt a postafiókot nem sikerült beolvasni."
-    }
+    "title": "Ellenőrző panel"
   }
 }

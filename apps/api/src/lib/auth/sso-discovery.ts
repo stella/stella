@@ -117,7 +117,7 @@ export const probeOidcDiscovery = async ({
     url: endpointResult.value,
     permit,
     maxBytes: OIDC_DISCOVERY_MAX_BYTES,
-    timeoutMs: OIDC_DISCOVERY_TIMEOUT_MS,
+    timeout: { type: "headers", ms: OIDC_DISCOVERY_TIMEOUT_MS },
     headers: { accept: "application/json" },
   });
   if (response.isErr()) {

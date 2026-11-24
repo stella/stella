@@ -16,6 +16,7 @@ import { Input } from "@stll/ui/input";
 import { TextSeparator } from "@stll/ui/separator";
 
 import {
+  fetchMemberOrgSsoProviders,
   lookupSsoProviders,
   startSsoSignInRedirect,
 } from "@/features/sso/sso-api";
@@ -75,6 +76,13 @@ export const SsoSignInSection = ({
       ),
   });
   const directProviderView = queryView(directProviderQuery);
+
+  const memberOrgProvidersQuery = useQuery({
+    queryKey: ["sso-member-org-providers"],
+    enabled: isReauthPrompt,
+    queryFn: async ({ signal }) => await fetchMemberOrgSsoProviders(signal),
+  });
+  const memberOrgProvidersView = queryView(memberOrgProvidersQuery);
 
   const errorMessage =
     ssoError !== undefined && isSsoCallbackErrorCode(ssoError)
@@ -148,6 +156,10 @@ export const SsoSignInSection = ({
     directProviderView.type === "items"
       ? directProviderView.items.providers.at(0)
       : undefined;
+  const reauthProviders =
+    memberOrgProvidersView.type === "items"
+      ? memberOrgProvidersView.items.providers
+      : [];
   const busyReason = t("common.loading");
 
   return (
@@ -161,10 +173,33 @@ export const SsoSignInSection = ({
         </div>
       )}
 
+      {isReauthPrompt && reauthProviders.length > 0 && (
+        <div className="border-border bg-card space-y-2 rounded-lg border p-3">
+          {reauthProviders.map((provider) => (
+            <Button
+              key={provider.providerId}
+              className="w-full"
+              disabled={busy}
+              disabledReason={busyReason}
+              onClick={() => {
+                detached(
+                  launchProvider(provider.providerId),
+                  "sso-sign-in.launch-reauth",
+                );
+              }}
+              type="button"
+              variant="outline"
+            >
+              {provider.displayName ?? t("auth.sso.continueWithSso")}
+            </Button>
+          ))}
+        </div>
+      )}
+
       {directProvider !== undefined && (
         <div className="border-border bg-card space-y-2 rounded-lg border p-3">
           <p className="text-foreground text-sm font-medium">
-            {directProvider.displayName ?? t("auth.sso.title")}
+            {directProvider.displayName ?? t("settings.organization.sso.title")}
           </p>
           <Button
             className="w-full"

@@ -567,18 +567,18 @@
       "back": "Wróć do listy",
       "download": "Pobierz {fileName}",
       "noFilesInside": "W środku nie ma żadnych plików.",
+      "noMatches": "Żaden plik nie pasuje do „{query}”.",
       "noPreview": "Tego typu pliku nie można wyświetlić w podglądzie. Pobierz go lub zapisz w sprawie.",
       "notConverted": "Nie udało się przekonwertować tego pliku do podglądu. Pobierz go lub zapisz w sprawie.",
       "open": "Otwórz {fileName}",
+      "search": "Znajdź plik po nazwie lub folderze",
       "unavailable": {
         "encrypted": "Chroniony hasłem, nie można otworzyć",
         "link": "Odnośnik do innego pliku, nie jest otwierany",
         "tooLarge": "Za duży, by go otworzyć",
         "unreadable": "Uszkodzony, nie można otworzyć",
         "unsupported": "Skompresowany w sposób, którego nie można otworzyć"
-      },
-      "search": "Znajdź plik po nazwie lub folderze",
-      "noMatches": "Żaden plik nie pasuje do „{query}”."
+      }
     },
     "firstSourceReached": "To pierwsze źródło.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Ukryj panel",
     "lastSourceReached": "To ostatnie źródło.",
+    "mailbox": {
+      "messages": "Wiadomości",
+      "noMatches": "Żadna wiadomość nie pasuje do „{query}”.",
+      "noMessages": "Ta skrzynka pocztowa nie zawiera wiadomości.",
+      "search": "Szukaj w wiadomościach",
+      "truncated": "Wyświetlono tylko pierwsze {count, number} wiadomości.",
+      "unreadable": "Nie udało się odczytać tej skrzynki pocztowej."
+    },
     "matterPicker": {
       "allMatters": "Wszystkie sprawy",
       "description": "Wybierz sprawy, na których czat może się opierać.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Pokaż panel",
     "swapViews": "Zamień widok główny z panelem bocznym",
-    "title": "Inspektor",
-    "mailbox": {
-      "messages": "Wiadomości",
-      "noMatches": "Żadna wiadomość nie pasuje do „{query}”.",
-      "noMessages": "Ta skrzynka pocztowa nie zawiera wiadomości.",
-      "search": "Szukaj w wiadomościach",
-      "truncated": "Wyświetlono tylko pierwsze {count, number} wiadomości.",
-      "unreadable": "Nie udało się odczytać tej skrzynki pocztowej."
-    }
+    "title": "Inspektor"
   }
 }

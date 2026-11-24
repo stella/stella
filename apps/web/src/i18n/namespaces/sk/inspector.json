@@ -567,18 +567,18 @@
       "back": "Späť na zoznam",
       "download": "Stiahnuť {fileName}",
       "noFilesInside": "Vo vnútri nie sú žiadne súbory.",
+      "noMatches": "Výrazu „{query}“ nezodpovedá žiadny súbor.",
       "noPreview": "Tento typ súboru nemá náhľad. Stiahnite si ho alebo ho uložte do spisu.",
       "notConverted": "Tento súbor sa nepodarilo previesť na náhľad. Stiahnite si ho alebo ho uložte do spisu.",
       "open": "Otvoriť {fileName}",
+      "search": "Nájsť súbor podľa názvu alebo priečinka",
       "unavailable": {
         "encrypted": "Chránené heslom, nedá sa otvoriť",
         "link": "Odkaz na iný súbor, neotvára sa",
         "tooLarge": "Príliš veľký, nedá sa otvoriť",
         "unreadable": "Poškodený, nedá sa otvoriť",
         "unsupported": "Komprimované spôsobom, ktorý sa nedá otvoriť"
-      },
-      "search": "Nájsť súbor podľa názvu alebo priečinka",
-      "noMatches": "Výrazu „{query}“ nezodpovedá žiadny súbor."
+      }
     },
     "firstSourceReached": "Toto je prvý zdroj.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Skryť panel",
     "lastSourceReached": "Toto je posledný zdroj.",
+    "mailbox": {
+      "messages": "Správy",
+      "noMatches": "Výrazu „{query}“ nezodpovedá žiadna správa.",
+      "noMessages": "Táto poštová schránka neobsahuje žiadne správy.",
+      "search": "Hľadať v správach",
+      "truncated": "Zobrazuje sa len prvých {count, number} správ.",
+      "unreadable": "Túto poštovú schránku sa nepodarilo prečítať."
+    },
     "matterPicker": {
       "allMatters": "Všetky spisy",
       "description": "Vyberte spisy, z ktorých môže tento chat čerpať.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Zobraziť panel",
     "swapViews": "Vymeniť hlavné zobrazenie a bočný panel",
-    "title": "Inšpektor",
-    "mailbox": {
-      "messages": "Správy",
-      "noMatches": "Výrazu „{query}“ nezodpovedá žiadna správa.",
-      "noMessages": "Táto poštová schránka neobsahuje žiadne správy.",
-      "search": "Hľadať v správach",
-      "truncated": "Zobrazuje sa len prvých {count, number} správ.",
-      "unreadable": "Túto poštovú schránku sa nepodarilo prečítať."
-    }
+    "title": "Inšpektor"
   }
 }

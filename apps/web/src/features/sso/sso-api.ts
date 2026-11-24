@@ -7,21 +7,11 @@ import type {
   OrganizationSsoPolicyRequirement,
   TestOidcSsoProviderBody,
 } from "@stll/api-contract/sso";
-import { fetchWithTimeout } from "@stll/fetch";
 
 import { api } from "@/lib/api";
-import { browserAuthBaseUrl } from "@/lib/api-url";
+import { authClient } from "@/lib/auth-client";
+import { invokeAppOnlyWrite } from "@/lib/capabilities/capability-request";
 import { APIError, unwrapApiResponse } from "@/lib/errors/api";
-
-const SSO_SIGN_IN_TIMEOUT_MS = 12_000;
-
-const trimTrailingSlashes = (value: string): string => {
-  let end = value.length;
-  while (end > 0 && value.codePointAt(end - 1) === 47) {
-    end -= 1;
-  }
-  return value.slice(0, end);
-};
 
 export const fetchOrgSsoSettings = async (signal?: AbortSignal) =>
   unwrapApiResponse(
@@ -33,50 +23,80 @@ export const fetchOrgSsoSettings = async (signal?: AbortSignal) =>
 export const saveOrgSsoPolicy = async (
   requirement: OrganizationSsoPolicyRequirement,
 ) =>
-  unwrapApiResponse(
-    await api["organization-settings"].sso.policy.put({ requirement }),
+  await invokeAppOnlyWrite("organization-settings.sso.policy.put", async () =>
+    unwrapApiResponse(
+      await api["organization-settings"].sso.policy.put({ requirement }),
+    ),
   );
 
 export const registerOidcSsoProvider = async (
   body: CreateOidcSsoProviderBody,
 ) =>
-  unwrapApiResponse(
-    await api["organization-settings"].sso.providers.post(body),
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.providers.post",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso.providers.post(body),
+      ),
   );
 
 export const probeOidcSsoProvider = async (body: TestOidcSsoProviderBody) =>
-  unwrapApiResponse(
-    await api["organization-settings"].sso.providers.test.post(body),
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.providers.test.post",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso.providers.test.post(body),
+      ),
   );
 
 export const removeOrgSsoProvider = async (providerId: string) =>
-  unwrapApiResponse(
-    await api["organization-settings"].sso.providers({ providerId }).delete(),
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.providers.delete",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso
+          .providers({ providerId })
+          .delete(),
+      ),
   );
 
 export const addOrgSsoDomain = async (domain: string) =>
-  unwrapApiResponse(
-    await api["organization-settings"].sso.domains.post({ domain }),
+  await invokeAppOnlyWrite("organization-settings.sso.domains.post", async () =>
+    unwrapApiResponse(
+      await api["organization-settings"].sso.domains.post({ domain }),
+    ),
   );
 
 export const verifyOrgSsoDomain = async (domainId: string) =>
-  unwrapApiResponse(
-    await api["organization-settings"].sso.domains({ domainId }).verify.post(),
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.domains.verify.post",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso
+          .domains({ domainId })
+          .verify.post(),
+      ),
   );
 
 export const removeOrgSsoDomain = async (domainId: string) =>
-  unwrapApiResponse(
-    await api["organization-settings"].sso.domains({ domainId }).delete(),
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.domains.delete",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso.domains({ domainId }).delete(),
+      ),
   );
 
 export const lookupSsoProviders = async (
   body: DiscoverSsoBody,
   signal?: AbortSignal,
 ) =>
-  unwrapApiResponse(
-    await api.auth.sso.discover.post(
-      body,
-      signal ? { fetch: { signal } } : undefined,
+  await invokeAppOnlyWrite("auth.sso.discover.post", async () =>
+    unwrapApiResponse(
+      await api.auth.sso.discover.post(
+        body,
+        signal ? { fetch: { signal } } : undefined,
+      ),
     ),
   );
 
@@ -91,34 +111,22 @@ const ssoSignInResponseSchema = v.object({
   url: v.pipe(v.string(), v.url()),
 });
 
-const apiErrorBodySchema = v.looseObject({
-  code: v.optional(v.string()),
-  message: v.optional(v.string()),
-});
-
 export const startSsoSignInRedirect = async (options: {
   providerId: string;
   callbackURL: string;
   errorCallbackURL: string;
   loginHint?: string;
 }): Promise<Result<string, APIError>> => {
-  const endpoint = `${trimTrailingSlashes(browserAuthBaseUrl())}/api/auth/sign-in/sso`;
   const response = await Result.tryPromise({
     try: async () =>
-      await fetchWithTimeout(endpoint, {
+      await authClient.$fetch<unknown>("/sign-in/sso", {
         method: "POST",
-        credentials: "include",
-        timeout: { type: "total", ms: SSO_SIGN_IN_TIMEOUT_MS },
-        headers: {
-          "content-type": "application/json",
-          accept: "application/json",
-        },
-        body: JSON.stringify({
+        body: {
           providerId: options.providerId,
           callbackURL: options.callbackURL,
           errorCallbackURL: options.errorCallbackURL,
           ...(options.loginHint ? { loginHint: options.loginHint } : {}),
-        }),
+        },
       }),
     catch: () =>
       new APIError({
@@ -129,30 +137,21 @@ export const startSsoSignInRedirect = async (options: {
   if (response.isErr()) {
     return Result.err(response.error);
   }
-  const payload = await Result.tryPromise({
-    try: async (): Promise<unknown> => await response.value.json(),
-    catch: () =>
-      new APIError({
-        status: response.value.status || 500,
-        message: "Could not parse SSO sign-in response",
-      }),
-  });
-  if (payload.isErr()) {
-    return Result.err(payload.error);
-  }
-  if (!response.value.ok) {
-    const err = v.safeParse(apiErrorBodySchema, payload.value);
+  if (response.value.error) {
+    const rawErr = response.value.error;
+    const code =
+      "code" in rawErr && typeof rawErr.code === "string"
+        ? rawErr.code
+        : undefined;
     return Result.err(
       new APIError({
-        status: response.value.status,
-        code: err.success ? err.output.code : undefined,
-        message:
-          (err.success ? err.output.message : undefined) ??
-          `Request failed (${response.value.status})`,
+        status: rawErr.status ?? 500,
+        code,
+        message: rawErr.message ?? "Could not start SSO sign-in",
       }),
     );
   }
-  const parsed = v.safeParse(ssoSignInResponseSchema, payload.value);
+  const parsed = v.safeParse(ssoSignInResponseSchema, response.value.data);
   if (!parsed.success) {
     return Result.err(
       new APIError({

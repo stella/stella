@@ -567,18 +567,18 @@
       "back": "Zurück zur Liste",
       "download": "{fileName} herunterladen",
       "noFilesInside": "Darin sind keine Dateien.",
+      "noMatches": "Keine Datei entspricht „{query}“.",
       "noPreview": "Für diesen Dateityp gibt es keine Vorschau. Laden Sie die Datei herunter oder speichern Sie sie in einer Akte.",
       "notConverted": "Diese Datei konnte nicht für die Vorschau umgewandelt werden. Laden Sie sie herunter oder speichern Sie sie in einer Akte.",
       "open": "{fileName} öffnen",
+      "search": "Datei nach Name oder Ordner suchen",
       "unavailable": {
         "encrypted": "Passwortgeschützt, lässt sich nicht öffnen",
         "link": "Verweis auf eine andere Datei, wird nicht geöffnet",
         "tooLarge": "Zu groß zum Öffnen",
         "unreadable": "Beschädigt, lässt sich nicht öffnen",
         "unsupported": "Mit einem Verfahren komprimiert, das sich nicht öffnen lässt"
-      },
-      "search": "Datei nach Name oder Ordner suchen",
-      "noMatches": "Keine Datei entspricht „{query}“."
+      }
     },
     "firstSourceReached": "Dies ist die erste Quelle.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Bereich ausblenden",
     "lastSourceReached": "Dies ist die letzte Quelle.",
+    "mailbox": {
+      "messages": "Nachrichten",
+      "noMatches": "Keine Nachricht entspricht „{query}“.",
+      "noMessages": "Dieses Postfach enthält keine Nachrichten.",
+      "search": "Nachrichten durchsuchen",
+      "truncated": "Nur die ersten {count, number} Nachrichten werden angezeigt.",
+      "unreadable": "Dieses Postfach konnte nicht gelesen werden."
+    },
     "matterPicker": {
       "allMatters": "Alle Akten",
       "description": "Wählen Sie die Akten aus, auf die dieser Chat zurückgreifen kann.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Bereich anzeigen",
     "swapViews": "Hauptansicht und Seitenleiste tauschen",
-    "title": "Inspektor",
-    "mailbox": {
-      "messages": "Nachrichten",
-      "noMatches": "Keine Nachricht entspricht „{query}“.",
-      "noMessages": "Dieses Postfach enthält keine Nachrichten.",
-      "search": "Nachrichten durchsuchen",
-      "truncated": "Nur die ersten {count, number} Nachrichten werden angezeigt.",
-      "unreadable": "Dieses Postfach konnte nicht gelesen werden."
-    }
+    "title": "Inspektor"
   }
 }

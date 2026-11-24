@@ -6,6 +6,7 @@ import { updateOrgSsoRequirement } from "@/api/db/root";
 import { ACCOUNT_ACCESS, createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { declareAggregateMutation } from "@/api/lib/db/aggregate-mutation-declaration";
 
 import { mapSsoManagementError } from "./sso-error-map";
 
@@ -45,5 +46,11 @@ const updateOrganizationSsoPolicyHandler = createSafeRootHandler(
     return Result.ok(updated.value);
   },
 );
+
+declareAggregateMutation(updateOrganizationSsoPolicyHandler, {
+  type: "independent",
+  reason:
+    "Serialized inside rootDb via withAggregateTransaction and withAggregateLock on organization.",
+});
 
 export default updateOrganizationSsoPolicyHandler;

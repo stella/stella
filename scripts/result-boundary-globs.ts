@@ -35,6 +35,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/playwright-tools/src/**/*.ts",
   "packages/render-probe/src/**/*.{ts,tsx}",
   "apps/web/src/features/law-search-history/**/*.ts",
+  "apps/web/src/features/sso/**/*.ts",
   "apps/desktop/src/activity/**/*.ts",
   "apps/desktop/src/activity/**/*.tsx",
   "apps/api/src/handlers/mobile-updates/**/*.ts",

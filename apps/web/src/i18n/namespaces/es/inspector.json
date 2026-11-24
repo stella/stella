@@ -567,18 +567,18 @@
       "back": "Volver a la lista",
       "download": "Descargar {fileName}",
       "noFilesInside": "No contiene ningún archivo.",
+      "noMatches": "Ningún archivo coincide con «{query}».",
       "noPreview": "Este tipo de archivo no tiene vista previa. Descárguelo o guárdelo en un asunto.",
       "notConverted": "No se pudo convertir este archivo para la vista previa. Descárguelo o guárdelo en un asunto.",
       "open": "Abrir {fileName}",
+      "search": "Buscar un archivo por nombre o carpeta",
       "unavailable": {
         "encrypted": "Protegido con contraseña, no se puede abrir",
         "link": "Enlace a otro archivo, no se abre",
         "tooLarge": "Demasiado grande para abrirlo",
         "unreadable": "Dañado, no se puede abrir",
         "unsupported": "Comprimido de un modo que no se puede abrir"
-      },
-      "search": "Buscar un archivo por nombre o carpeta",
-      "noMatches": "Ningún archivo coincide con «{query}»."
+      }
     },
     "firstSourceReached": "Esta es la primera fuente.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Ocultar panel",
     "lastSourceReached": "Esta es la última fuente.",
+    "mailbox": {
+      "messages": "Mensajes",
+      "noMatches": "Ningún mensaje coincide con «{query}».",
+      "noMessages": "Este buzón no contiene mensajes.",
+      "search": "Buscar mensajes",
+      "truncated": "Solo se muestran los primeros {count, number} mensajes.",
+      "unreadable": "No se ha podido leer este buzón."
+    },
     "matterPicker": {
       "allMatters": "Todos los asuntos",
       "description": "Elige los asuntos en los que puede basarse este chat.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Mostrar panel",
     "swapViews": "Intercambiar la vista principal y el panel lateral",
-    "title": "Panel de inspección",
-    "mailbox": {
-      "messages": "Mensajes",
-      "noMatches": "Ningún mensaje coincide con «{query}».",
-      "noMessages": "Este buzón no contiene mensajes.",
-      "search": "Buscar mensajes",
-      "truncated": "Solo se muestran los primeros {count, number} mensajes.",
-      "unreadable": "No se ha podido leer este buzón."
-    }
+    "title": "Panel de inspección"
   }
 }

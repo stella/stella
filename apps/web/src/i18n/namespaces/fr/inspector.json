@@ -567,18 +567,18 @@
       "back": "Retour à la liste",
       "download": "Télécharger {fileName}",
       "noFilesInside": "Aucun fichier à l’intérieur.",
+      "noMatches": "Aucun fichier ne correspond à « {query} ».",
       "noPreview": "Ce type de fichier n’a pas d’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
       "notConverted": "Ce fichier n’a pas pu être converti pour l’aperçu. Téléchargez-le ou enregistrez-le dans un dossier.",
       "open": "Ouvrir {fileName}",
+      "search": "Rechercher un fichier par nom ou dossier",
       "unavailable": {
         "encrypted": "Protégé par un mot de passe, impossible à ouvrir",
         "link": "Lien vers un autre fichier, non ouvert",
         "tooLarge": "Trop volumineux pour être ouvert",
         "unreadable": "Endommagé, impossible à ouvrir",
         "unsupported": "Compressé d’une manière impossible à ouvrir"
-      },
-      "search": "Rechercher un fichier par nom ou dossier",
-      "noMatches": "Aucun fichier ne correspond à « {query} »."
+      }
     },
     "firstSourceReached": "Il s’agit de la première source.",
     "groups": {
@@ -604,6 +604,14 @@
     },
     "hidePane": "Masquer le volet",
     "lastSourceReached": "Il s’agit de la dernière source.",
+    "mailbox": {
+      "messages": "Courriels",
+      "noMatches": "Aucun courriel ne correspond à « {query} ».",
+      "noMessages": "Cette boîte aux lettres ne contient aucun message.",
+      "search": "Rechercher dans les courriels",
+      "truncated": "Seuls les {count, number} premiers messages sont affichés.",
+      "unreadable": "Impossible de lire cette boîte aux lettres."
+    },
     "matterPicker": {
       "allMatters": "Tous les dossiers",
       "description": "Choisissez les dossiers sur lesquels cette conversation peut s'appuyer.",
@@ -839,14 +847,6 @@
     },
     "showPane": "Afficher le volet",
     "swapViews": "Échanger la vue principale et le panneau latéral",
-    "title": "Inspecteur",
-    "mailbox": {
-      "messages": "Courriels",
-      "noMatches": "Aucun courriel ne correspond à « {query} ».",
-      "noMessages": "Cette boîte aux lettres ne contient aucun message.",
-      "search": "Rechercher dans les courriels",
-      "truncated": "Seuls les {count, number} premiers messages sont affichés.",
-      "unreadable": "Impossible de lire cette boîte aux lettres."
-    }
+    "title": "Inspecteur"
   }
 }

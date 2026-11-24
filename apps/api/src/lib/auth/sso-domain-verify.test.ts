@@ -67,7 +67,7 @@ describe("verifyDomainTxtRecord", () => {
     const result = await verifyDomainTxtRecord({
       domain: "slow.example.com",
       expectedToken: `${SSO_DOMAIN_TXT_VALUE_PREFIX}xyz`,
-      timeoutMs: 20,
+      timeoutMs: 20, // timeout under test
       resolveTxt: async () => await new Promise(() => {}),
     });
 

@@ -183,6 +183,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "DELETE /v1/organization-settings/sso/domains/:domainId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/sso/providers/:providerId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "DELETE /v1/organization-settings/feature-enrolments/:featureId": {
     type: "non-replay",
     reason: "current-state",
@@ -797,6 +805,22 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organization-settings/sso/domains": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/sso/domains/:domainId/verify": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/sso/providers": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "POST /v1/organization-settings/sso/providers/test": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/verification-decision-model": {
     type: "non-replay",
     reason: "current-state",
@@ -1212,6 +1236,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     reason: "current-state",
   },
   "PUT /v1/organization-settings/feature-enrolments/:featureId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "PUT /v1/organization-settings/sso/policy": {
     type: "non-replay",
     reason: "current-state",
   },

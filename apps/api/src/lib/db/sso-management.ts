@@ -5,6 +5,7 @@ import { randomBytes } from "node:crypto";
 
 import {
   normalizeSsoDomain,
+  SSO_DOMAIN_TXT_HOST_PREFIX,
   SSO_DOMAIN_TXT_VALUE_PREFIX,
 } from "@stll/api-contract/sso";
 import type {
@@ -25,7 +26,6 @@ import {
   organizationSsoPolicy,
   ssoProvider,
 } from "@/api/db/auth-schema";
-import { domainTxtInstruction } from "@/api/lib/auth/sso-domain-verify";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
@@ -35,6 +35,13 @@ import {
 import { admitSsoOidcConfig } from "@/api/lib/db/sso-provider-config";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
+
+const domainTxtInstruction = (domain: string, token: string) => ({
+  txtHost: `${SSO_DOMAIN_TXT_HOST_PREFIX}.${domain}`,
+  txtValue: token.startsWith(SSO_DOMAIN_TXT_VALUE_PREFIX)
+    ? token
+    : `${SSO_DOMAIN_TXT_VALUE_PREFIX}${token}`,
+});
 
 const DEFAULT_OIDC_SCOPES = ["openid", "email", "profile"] as const;
 const MAX_SSO_PROVIDERS_PER_ORG = 50;
