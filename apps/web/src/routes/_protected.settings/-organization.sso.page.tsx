@@ -8,7 +8,6 @@ import {
 } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
-import { ORGANIZATION_SSO_PROVISIONING_MODES } from "@stll/api-contract/sso";
 import type {
   OrganizationSsoDomainSummary,
   OrganizationSsoPendingMemberSummary,
@@ -1043,7 +1042,13 @@ const ProvisioningAndSeatsSection = ({
       >
         <div className="space-y-3">
           <div className="flex flex-wrap gap-2">
-            {ORGANIZATION_SSO_PROVISIONING_MODES.map((mode) => (
+            {(
+              [
+                "invite_only",
+                "admin_approval",
+                "jit_active",
+              ] as const satisfies readonly OrganizationSsoProvisioningMode[]
+            ).map((mode) => (
               <Button
                 key={mode}
                 onClick={() => setSelectedMode(mode)}
@@ -1226,8 +1231,6 @@ export const OrganizationSsoPage = () => {
             onCheckedChange={(checked) => {
               policyMutation.mutate({
                 requirement: checked ? "required" : "optional",
-                provisioningMode: settings.provisioningMode,
-                seatLimit: settings.seatLimit,
               });
             }}
           />

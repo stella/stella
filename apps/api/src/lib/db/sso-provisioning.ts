@@ -14,16 +14,32 @@ import {
   ssoProvider,
 } from "@/api/db/auth-schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type { SsoManagementDb } from "@/api/lib/db/sso-management";
+import { defineTransitions, transition } from "@/api/lib/db/transitions";
+import type { TransitionTransaction } from "@/api/lib/db/transitions";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
 
 const MAX_PENDING_MEMBERS_PER_ORG = 200;
+
+const SSO_PENDING_MEMBER_TRANSITIONS = defineTransitions(
+  organizationSsoPendingMember,
+  {
+    pending: ["approved", "rejected", "pending"],
+    approved: [],
+    rejected: ["pending"],
+  },
+  { terminal: ["approved"] },
+);
+
+type SsoProvisioningTx = SsoManagementDb & TransitionTransaction;
+const noopTransitionAudit = async () => {
+  await Promise.resolve();
+};
 
 export class SsoProvisioningError extends TaggedError(
   "sso_provisioning_error",
@@ -126,7 +142,7 @@ export const provisionSsoMemberOnSignIn = async (
   });
 
 const provisionSsoMemberOnSignInLocked = async (
-  db: SsoManagementDb,
+  db: SsoProvisioningTx,
   params: {
     organizationId: SafeId<"organization">;
     userId: SafeId<"user">;
@@ -207,36 +223,26 @@ const provisionSsoMemberOnSignInLocked = async (
 
   const existingId = existingPending.at(0)?.id;
   if (existingId !== undefined) {
-    const write = replayWrite(
-      organizationSsoPendingMember,
-      {
-        status: "pending" as const,
-        reason,
-        ssoProviderId: params.ssoProviderId,
-        reviewedBy: null,
-        reviewedAt: null,
-      },
-      {
-        modifiedAt: {
-          column: organizationSsoPendingMember.updatedAt,
-          value: now,
+    const changed = await transition({
+      tx: db,
+      spec: SSO_PENDING_MEMBER_TRANSITIONS,
+      id: existingId,
+      options: {
+        from: ["pending", "rejected"],
+        to: "pending",
+        set: {
+          reason,
+          ssoProviderId: params.ssoProviderId,
+          reviewedBy: null,
+          reviewedAt: null,
+          updatedAt: now,
         },
       },
-    );
-    // audit: skip - SSO sign-in lifecycle event recorded at auth boundary
-    await db
-      .update(organizationSsoPendingMember)
-      .set(write.set)
-      .where(
-        and(
-          eq(
-            organizationSsoPendingMember.organizationId,
-            params.organizationId,
-          ),
-          eq(organizationSsoPendingMember.id, existingId),
-          write.setWhere,
-        ),
-      );
+      recordTransitionAuditEvent: noopTransitionAudit,
+    });
+    if (changed.type === "stale") {
+      return { status: "already_member" };
+    }
     return { status: "pending", pendingId: existingId, reason };
   }
 
@@ -314,7 +320,7 @@ const loadPendingSsoMember = async (
 };
 
 const approveOrganizationSsoPendingMemberLocked = async (
-  db: SsoManagementDb,
+  db: SsoProvisioningTx,
   params: {
     organizationId: SafeId<"organization">;
     pendingId: string;
@@ -367,31 +373,29 @@ const approveOrganizationSsoPendingMemberLocked = async (
     })
     .onConflictDoNothing();
 
-  const write = replayWrite(
-    organizationSsoPendingMember,
-    {
-      status: "approved" as const,
-      reviewedBy: params.reviewedBy,
-      reviewedAt: now,
-    },
-    {
-      modifiedAt: {
-        column: organizationSsoPendingMember.updatedAt,
-        value: now,
+  const changed = await transition({
+    tx: db,
+    spec: SSO_PENDING_MEMBER_TRANSITIONS,
+    id: target.id,
+    options: {
+      from: ["pending"],
+      to: "approved",
+      set: {
+        reviewedBy: params.reviewedBy,
+        reviewedAt: now,
+        updatedAt: now,
       },
     },
-  );
-  // audit: skip - caller handler records organization settings audit event
-  await db
-    .update(organizationSsoPendingMember)
-    .set(write.set)
-    .where(
-      and(
-        eq(organizationSsoPendingMember.organizationId, params.organizationId),
-        eq(organizationSsoPendingMember.id, target.id),
-        write.setWhere,
-      ),
+    recordTransitionAuditEvent: noopTransitionAudit,
+  });
+  if (changed.type === "stale") {
+    return Result.err(
+      new SsoProvisioningError({
+        message: "Pending SSO request has already been reviewed",
+        reason: "already_reviewed",
+      }),
     );
+  }
 
   return Result.ok({ id: target.id, userId: target.userId });
 };
@@ -404,46 +408,52 @@ export const rejectOrganizationSsoPendingMember = async (
     reviewedBy: SafeId<"user">;
     now?: Date;
   },
-): Promise<Result<{ id: string; userId: string }, SsoProvisioningError>> => {
-  const loaded = await loadPendingSsoMember(
-    db,
-    params.organizationId,
-    params.pendingId,
-  );
-  if (loaded.isErr()) {
-    return loaded;
-  }
-  const target = loaded.value;
-
-  const now = params.now ?? new Date();
-  const write = replayWrite(
-    organizationSsoPendingMember,
-    {
-      status: "rejected" as const,
-      reviewedBy: params.reviewedBy,
-      reviewedAt: now,
-    },
-    {
-      modifiedAt: {
-        column: organizationSsoPendingMember.updatedAt,
-        value: now,
-      },
-    },
-  );
-  // audit: skip - caller handler records organization settings audit event
-  await db
-    .update(organizationSsoPendingMember)
-    .set(write.set)
-    .where(
-      and(
-        eq(organizationSsoPendingMember.organizationId, params.organizationId),
-        eq(organizationSsoPendingMember.id, target.id),
-        write.setWhere,
-      ),
+): Promise<Result<{ id: string; userId: string }, SsoProvisioningError>> =>
+  await withAggregateTransaction(db, async (tx) => {
+    await withAggregateLock({
+      tx,
+      aggregate: "organization",
+      id: params.organizationId,
+      mode: "update",
+    });
+    const loaded = await loadPendingSsoMember(
+      tx,
+      params.organizationId,
+      params.pendingId,
     );
+    if (loaded.isErr()) {
+      return loaded;
+    }
+    const target = loaded.value;
 
-  return Result.ok({ id: target.id, userId: target.userId });
-};
+    const now = params.now ?? new Date();
+    const changed = await transition({
+      tx,
+      spec: SSO_PENDING_MEMBER_TRANSITIONS,
+      id: target.id,
+      options: {
+        from: ["pending"],
+        to: "rejected",
+        set: {
+          reviewedBy: params.reviewedBy,
+          reviewedAt: now,
+          updatedAt: now,
+        },
+      },
+      recordTransitionAuditEvent: noopTransitionAudit,
+    });
+
+    if (changed.type === "stale") {
+      return Result.err(
+        new SsoProvisioningError({
+          message: "Pending SSO request has already been reviewed",
+          reason: "already_reviewed",
+        }),
+      );
+    }
+
+    return Result.ok({ id: target.id, userId: target.userId });
+  });
 
 /**
  * Looks up the organization owning `ssoProviderRecordId` and evaluates its

@@ -316,6 +316,10 @@ export const TABLE_RETENTION = {
   oauth_consent: {
     boundedBy: "Authenticated account-owned consent and revocation.",
   },
+  organization_sso_pending_member: {
+    boundedBy:
+      "Organization and account lifecycle; cascade-deleted with either owner and cleared on account deletion.",
+  },
 } as const satisfies Record<string, TableRetention>;
 
 export const tableRetention = (table: string): TableRetention | undefined => {

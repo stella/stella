@@ -611,6 +611,10 @@ export const ENUM_COLUMN_ROLES = {
   // Either requirement may follow the other at any time.
   organization_sso_policy: {
     requirement: ATTRIBUTE,
+    provisioning_mode: ATTRIBUTE,
+  },
+  organization_sso_pending_member: {
+    reason: ATTRIBUTE,
   },
   organization_settings: {
     ai_billing_drafts_mode: ATTRIBUTE,
