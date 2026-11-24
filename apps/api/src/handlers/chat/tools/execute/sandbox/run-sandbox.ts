@@ -1190,66 +1190,69 @@ const runHostCall = ({
   parsedArgs,
 }: RunHostCallProps): Promise<void> => {
   const workPromise = (async () => {
-    try {
-      const hostResult = await Result.tryPromise({
-        try: async () =>
-          await fn.execute({
-            input: parsedArgs,
-            signal: state.abortController.signal,
-          }),
-        catch: (cause) =>
-          createVmBridgeError(
-            "SandboxHostError",
-            errorMessageFromUnknown(cause),
-          ),
-      });
-
-      if (Result.isError(hostResult)) {
-        settleDeferredWithBridgeError({
-          ctx,
-          deferred,
-          clock,
-          error: hostResult.error,
-          state,
+    const outcome = await Result.tryPromise({
+      try: async () => {
+        const hostResult = await Result.tryPromise({
+          try: async () =>
+            await fn.execute({
+              input: parsedArgs,
+              signal: state.abortController.signal,
+            }),
+          catch: (cause) =>
+            createVmBridgeError(
+              "SandboxHostError",
+              errorMessageFromUnknown(cause),
+            ),
         });
-        return;
-      }
 
-      const serialised = serializeHostFunctionValue(hostResult.value);
-      if (Result.isError(serialised)) {
-        settleDeferredWithBridgeError({
-          ctx,
-          deferred,
-          clock,
-          error: createVmBridgeError(
-            "SandboxHostError",
-            serialised.error.message,
-          ),
-          state,
-        });
-        return;
-      }
+        if (Result.isError(hostResult)) {
+          settleDeferredWithBridgeError({
+            ctx,
+            deferred,
+            clock,
+            error: hostResult.error,
+            state,
+          });
+          return;
+        }
 
-      if (shouldIgnoreHostCompletion({ ctx, clock, state })) {
-        return;
-      }
+        const serialised = serializeHostFunctionValue(hostResult.value);
+        if (Result.isError(serialised)) {
+          settleDeferredWithBridgeError({
+            ctx,
+            deferred,
+            clock,
+            error: createVmBridgeError(
+              "SandboxHostError",
+              serialised.error.message,
+            ),
+            state,
+          });
+          return;
+        }
 
-      if (serialised.value === undefined) {
-        deferred.resolve(ctx.undefined);
-        return;
-      }
+        if (shouldIgnoreHostCompletion({ ctx, clock, state })) {
+          return;
+        }
 
-      using result = ctx.newString(serialised.value);
-      deferred.resolve(result);
-    } catch (error: unknown) {
+        if (serialised.value === undefined) {
+          deferred.resolve(ctx.undefined);
+          return;
+        }
+
+        using result = ctx.newString(serialised.value);
+        deferred.resolve(result);
+      },
+      catch: (error: unknown) =>
+        createVmBridgeError("SandboxHostError", errorMessageFromUnknown(error)),
+    });
+
+    if (Result.isError(outcome)) {
       settleDeferredWithBridgeError({
         ctx,
         deferred,
         clock,
-        error: createVmBridgeError(
-          "SandboxHostError",
-          errorMessageFromUnknown(error),
-        ),
+        error: outcome.error,
         state,
       });
     }
