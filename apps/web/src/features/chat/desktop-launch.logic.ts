@@ -5,6 +5,7 @@ import type {
   ChatLocalRunReadiness,
   ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
+import type { ChatSendIntent } from "@stll/api-contract/chat-send-intent";
 
 /** Opens stella desktop, or brings it forward when it is already open. */
 export const DESKTOP_PING_URL = "stella://ping";
@@ -47,15 +48,40 @@ export const hasConnectedComputer = (readiness: ChatLocalRunReadiness) =>
   readiness.runners.some((runner) => runner.connected);
 
 /**
- * Whether a turn bound for `target` needs stella desktop opened first: it
- * runs on the member's computer, the member may run turns there, and the
- * last read found none of their computers connected. Nothing is claimed
- * before the computers are read.
+ * What may open stella desktop: the member picking their computer to run on,
+ * or a send, by where its message goes (`chatSendIntent`).
  */
-export const needsDesktopLaunch = (
-  target: ChatRunTarget,
-  readiness: ChatLocalRunReadiness | undefined,
-) =>
+export type DesktopLaunchCause =
+  { type: "pick" } | { type: "send"; intent: ChatSendIntent };
+
+/**
+ * Whether a send starts a run on the computer. Only a new turn does: a
+ * message steered into the running turn or queued behind it starts nothing
+ * there. The running turn owns its computer (connected, or the turn waits
+ * for it itself), and the server sends a queued message when the turn ends.
+ */
+const SEND_STARTS_RUN = {
+  start: true,
+  steer: false,
+  queue: false,
+} as const satisfies Record<ChatSendIntent, boolean>;
+
+/**
+ * Whether `cause` needs stella desktop opened first: a pick of, or a send
+ * that starts a turn on, the member's computer, which the member may run
+ * turns on, while the last read found none of their computers connected.
+ * Nothing is claimed before the computers are read.
+ */
+export const needsDesktopLaunch = ({
+  cause,
+  target,
+  readiness,
+}: {
+  cause: DesktopLaunchCause;
+  target: ChatRunTarget;
+  readiness: ChatLocalRunReadiness | undefined;
+}) =>
+  (cause.type === "pick" || SEND_STARTS_RUN[cause.intent]) &&
   target.kind === "local" &&
   readiness?.status === "enabled" &&
   !hasConnectedComputer(readiness);

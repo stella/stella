@@ -25,7 +25,6 @@ import {
   QUEUED_MESSAGE_FILES_ON_REMOVE,
   type QueuedMessageFilesOnRemove,
 } from "@stll/api-contract/chat-queue";
-import { CHAT_LOCAL_RUN_STEER_SOURCE } from "@stll/api-contract/chat-run-target";
 import { requiresPerCallChatApproval } from "@stll/api-contract/chat-secret";
 import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import {
@@ -33,6 +32,7 @@ import {
   CHAT_SEND_INTENT,
   CHAT_TURN_STEERING,
   type ChatMemberSendAction,
+  type ChatSendIntent,
   chatSendIntent,
   type ChatThreadSendState,
 } from "@stll/api-contract/chat-send-intent";
@@ -150,6 +150,7 @@ import { chatErrorTranslationKey } from "@/features/chat/chat-request-error";
 import {
   type ChatRuntime,
   type ChatSendMessageOptions,
+  type ChatSteerOutcome,
   type ChatUserMessageInput,
   hasChatErrorCode,
   queuedChatSendOf,
@@ -929,6 +930,17 @@ export const useChatSession = ({
       : { type: "idle" };
   }, [chat, readQueue, turnRuns]);
 
+  /**
+   * Where a message the member sends now goes (`chatSendIntent`), read
+   * synchronously, so a send handler can decide inside the member's gesture
+   * whether the message starts a turn.
+   */
+  const sendIntentOf = useCallback(
+    (action: ChatMemberSendAction): ChatSendIntent =>
+      chatSendIntent(threadSendState(), action),
+    [threadSendState],
+  );
+
   /** Put a message the server did not take back into the composer. Falls
    *  back to a notice when this surface shows no composer of the thread. */
   const restoreIntoComposer = useCallback(
@@ -1055,30 +1067,37 @@ export const useChatSession = ({
   );
 
   /**
-   * Hand `text` to the turn running on the member's computer under `id`. A
-   * turn that does not take it leaves `onNotTaken` to place the message.
+   * Hand queued message `id`, whole as `text`, to the turn running on the
+   * member's computer. Taken, the server removes it from the queue at the
+   * `revision` the turn was handed (one edited since stays queued); not
+   * taken, it stays queued for the turn's end. Every steer from this page
+   * goes through here, so a message is on screen, queued, from the moment
+   * it is sent until the turn shows it as its own.
    */
-  const steerTurn = useCallback(
-    (input: { id: string; text: string }, onNotTaken: () => Promise<void>) => {
-      detached(
-        (async () => {
-          const outcome = await chat.steerLocalTurn({
-            inputId: input.id,
-            text: input.text,
-            source: { type: CHAT_LOCAL_RUN_STEER_SOURCE.composer },
-          });
-          if (outcome.type === "steered") {
-            return;
-          }
-          if (outcome.type === "refused") {
-            notifySteerRefused(outcome.reason);
-          }
-          await onNotTaken();
-        })(),
-        "use-chat-session.steer",
-      );
+  const steerQueuedMessage = useCallback(
+    async ({
+      id,
+      revision,
+      text,
+    }: {
+      id: string;
+      revision: number;
+      text: string;
+    }): Promise<ChatSteerOutcome> => {
+      removedHereRef.current.add(id);
+      const outcome = await chat.steerLocalTurn({
+        inputId: id,
+        text,
+        revision,
+      });
+      if (outcome.type === "steered") {
+        await settleSteeredHandOff(id);
+      } else {
+        removedHereRef.current.delete(id);
+      }
+      return outcome;
     },
-    [chat, notifySteerRefused],
+    [chat, settleSteeredHandOff],
   );
 
   /**
@@ -1162,16 +1181,30 @@ export const useChatSession = ({
             }
             return queued;
           }
-          // The running turn takes it; one that does not keeps it queued
-          // for its end, so messages go in the order they were sent.
-          steerTurn({ id: message.id, text }, async () => {
-            // Not queued either (the refusal was told): the composer
-            // gets it back, where the thread shows one.
-            if ((await enqueueMessage(message, options)).kind === "kept") {
-              restoreIntoComposer(message);
-            }
-          });
-          return CHAT_SEND_SENT;
+          // Queued first, so it shows at once and outlives a reload, then
+          // handed to the running turn; one the turn does not take keeps
+          // its place in the queue for the turn's end, so messages go in
+          // the order they were sent.
+          const queued = await enqueueMessage(message, options);
+          const queuedItem = readQueue().items.find(
+            ({ id }) => id === message.id,
+          );
+          if (queued.kind === "sent" && queuedItem !== undefined) {
+            detached(
+              (async () => {
+                const outcome = await steerQueuedMessage({
+                  id: message.id,
+                  revision: queuedItem.revision,
+                  text,
+                });
+                if (outcome.type === "refused") {
+                  notifySteerRefused(outcome.reason);
+                }
+              })(),
+              "use-chat-session.steer",
+            );
+          }
+          return queued;
         }
         case CHAT_SEND_INTENT.queue:
           return await enqueueMessage(message, options);
@@ -1214,8 +1247,7 @@ export const useChatSession = ({
       notifySteerRefused,
       readQueue,
       resolveToolApproval,
-      restoreIntoComposer,
-      steerTurn,
+      steerQueuedMessage,
       t,
       threadSendState,
       timingSurface,
@@ -1272,26 +1304,12 @@ export const useChatSession = ({
               const steer = Result.isOk(whole)
                 ? queuedSteerOf({ item, read: whole.value })
                 : null;
-              // Taken, the server removes it from the queue at the revision
-              // the turn was handed (one edited since stays queued).
-              removedHereRef.current.add(id);
               const steered =
                 steer !== null &&
-                (
-                  await chat.steerLocalTurn({
-                    inputId: id,
-                    text: steer.text,
-                    source: {
-                      type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
-                      revision: steer.revision,
-                    },
-                  })
-                ).type === "steered";
+                (await steerQueuedMessage({ id, ...steer })).type === "steered";
               if (steered) {
-                await settleSteeredHandOff(id);
                 return;
               }
-              removedHereRef.current.delete(id);
               await writeQueue(
                 async () =>
                   await sendQueuedChatMessageNow(threadRef.threadId, id),
@@ -1317,9 +1335,8 @@ export const useChatSession = ({
       }
     },
     [
-      chat,
       readQueue,
-      settleSteeredHandOff,
+      steerQueuedMessage,
       threadRef.threadId,
       threadSendState,
       writeQueue,
@@ -2459,22 +2476,9 @@ export const useChatSession = ({
     steerOnResumeRef.current = null;
     detached(
       (async () => {
-        // Taken, the server removes it from the queue at that revision.
-        removedHereRef.current.add(steered.id);
-        const outcome = await chat.steerLocalTurn({
-          inputId: steered.id,
-          text: steered.text,
-          source: {
-            type: CHAT_LOCAL_RUN_STEER_SOURCE.queued,
-            revision: steered.revision,
-          },
-        });
-        if (outcome.type !== "steered") {
-          removedHereRef.current.delete(steered.id);
-        }
+        const outcome = await steerQueuedMessage(steered);
         switch (outcome.type) {
           case "steered":
-            await settleSteeredHandOff(steered.id);
             return;
           case "refused":
             notifySteerRefused(outcome.reason);
@@ -2488,7 +2492,7 @@ export const useChatSession = ({
       })(),
       "use-chat-session.steer-on-resume",
     );
-  }, [chat, notifySteerRefused, settleSteeredHandOff, turnRunning]);
+  }, [notifySteerRefused, steerQueuedMessage, turnRunning]);
 
   // The server sends the first queued message as a turn of its own, which
   // this page did not start: once that message has left the queue (not
@@ -2541,6 +2545,7 @@ export const useChatSession = ({
     resendLatestMessage,
     sendMessage,
     queueMessage,
+    sendIntentOf,
     continuePausedTurn,
     queue,
     editQueuedMessage,

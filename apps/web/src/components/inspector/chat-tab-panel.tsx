@@ -28,6 +28,10 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import {
+  CHAT_MEMBER_SEND_ACTION,
+  CHAT_SEND_INTENT,
+} from "@stll/api-contract/chat-send-intent";
 import { Button } from "@stll/ui/button";
 import { Maximize2Icon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
@@ -298,6 +302,7 @@ export const ChatTabPanel = ({
     continuePausedTurn,
     resendLatestMessage,
     sendMessage,
+    sendIntentOf,
     queue,
     stop,
     stopPending,
@@ -672,7 +677,9 @@ export const ChatTabPanel = ({
       // their computer opens stella desktop when none is connected. A queued
       // question sent on mount is no gesture, so it never opens it.
       if (!handledReserved) {
-        composerModels.openDesktopForSend();
+        composerModels.openDesktopForSend(
+          sendIntentOf(CHAT_MEMBER_SEND_ACTION.send),
+        );
         return await handlePromptSubmit({ prompt, files });
       }
 
@@ -680,7 +687,8 @@ export const ChatTabPanel = ({
       if (newThreadMessage === undefined) {
         return CHAT_SEND_SENT;
       }
-      composerModels.openDesktopForSend();
+      // `/new` with a message starts a new thread's turn.
+      composerModels.openDesktopForSend(CHAT_SEND_INTENT.start);
       if (!(await ensureAIAvailable())) {
         return CHAT_SEND_KEPT;
       }
@@ -802,7 +810,9 @@ export const ChatTabPanel = ({
                       );
                       detached(
                         editorController.submit(async (draft) => {
-                          composerModels.openDesktopForSend();
+                          composerModels.openDesktopForSend(
+                            sendIntentOf(CHAT_MEMBER_SEND_ACTION.send),
+                          );
                           if (!(await ensureAIAvailable())) {
                             return CHAT_SEND_KEPT;
                           }

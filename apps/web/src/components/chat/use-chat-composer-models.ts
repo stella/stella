@@ -16,6 +16,7 @@ import {
   type ChatLocalRunTarget,
   type ChatRunTarget,
 } from "@stll/api-contract/chat-run-target";
+import type { ChatSendIntent } from "@stll/api-contract/chat-send-intent";
 
 import {
   CHAT_RUN_ON_CLOUD_ONLY,
@@ -38,7 +39,10 @@ import {
 } from "@/components/chat/composer-choice";
 import { useEffectiveRunTarget } from "@/components/chat/use-effective-run-target";
 import type { ChatThreadRef } from "@/features/chat/chat-thread-ref-types";
-import { needsDesktopLaunch } from "@/features/chat/desktop-launch.logic";
+import {
+  type DesktopLaunchCause,
+  needsDesktopLaunch,
+} from "@/features/chat/desktop-launch.logic";
 import {
   applyChatModelChange,
   localRunnersOptions,
@@ -98,13 +102,15 @@ export type ChatComposerModels = {
     Result<void, ModelPersistError | ComposerChoiceSuperseded>
   >;
   /**
-   * Opens stella desktop when the next turn runs on the member's computer
-   * and none of their computers is connected; the turn's request then waits
-   * for it (`heldForDesktop`). Call it first in a send handler, before any
+   * Opens stella desktop when a send that starts a turn (`intent`, from
+   * `chatSendIntent`) runs it on the member's computer and none of their
+   * computers is connected; the turn's request then waits for it
+   * (`heldForDesktop`). A message steered into or queued behind a running
+   * turn never opens it. Call it first in a send handler, before any
    * `await`, so it runs inside the member's click or key press: a browser
    * opens a `stella://` link only then.
    */
-  openDesktopForSend: () => void;
+  openDesktopForSend: (intent: ChatSendIntent) => void;
 };
 
 /**
@@ -332,20 +338,24 @@ export const useChatComposerModels = ({
   const desktop = useDesktopLaunch(activeOrganizationId);
   // Called only inside the member's own pick or send. A turn sent while the
   // launch waits holds its request for it; nothing else awaits it.
-  const openDesktopIfOffline = (target: ChatRunTarget) => {
+  const openDesktopIfOffline = (
+    cause: DesktopLaunchCause,
+    target: ChatRunTarget,
+  ) => {
     if (
-      needsDesktopLaunch(
+      needsDesktopLaunch({
+        cause,
         target,
-        queryClient.getQueryData(
+        readiness: queryClient.getQueryData(
           localRunnersOptions(activeOrganizationId).queryKey,
         ),
-      )
+      })
     ) {
       detached(desktop.launch(), "chat-composer.open-desktop");
     }
   };
-  const openDesktopForSend = useLatestCallback(() => {
-    openDesktopIfOffline(getRunTarget());
+  const openDesktopForSend = useLatestCallback((intent: ChatSendIntent) => {
+    openDesktopIfOffline({ type: "send", intent }, getRunTarget());
   });
   const pick = (change: Partial<ComposerChoice>) => {
     const current = queryClient.getQueryData(queryKey);
@@ -380,7 +390,7 @@ export const useChatComposerModels = ({
                 rememberRunTarget(activeOrganizationId, target);
                 // Picking the member's computer while none is connected
                 // opens stella desktop now, so it is ready by the send.
-                openDesktopIfOffline(target);
+                openDesktopIfOffline({ type: "pick" }, target);
                 pick({ runTarget: target });
               },
             }

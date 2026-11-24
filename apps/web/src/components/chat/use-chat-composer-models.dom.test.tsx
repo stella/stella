@@ -9,6 +9,7 @@ import {
   type ChatRunTarget,
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
+import { CHAT_SEND_INTENT } from "@stll/api-contract/chat-send-intent";
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
@@ -577,7 +578,7 @@ test("a new chat whose remembered computer is not connected opens nothing, and i
   await waitFor(() => expect(result.current.models.state).toBe("ready"));
 
   act(() => {
-    result.current.openDesktopForSend();
+    result.current.openDesktopForSend(CHAT_SEND_INTENT.start);
   });
 
   expect(result.current.getRunTarget()).toEqual({ kind: "cloud" });
@@ -590,10 +591,41 @@ test("a send on stella, or on a computer that is connected, opens nothing", asyn
   const { result } = await renderReadyComposer();
 
   act(() => {
-    result.current.openDesktopForSend();
+    result.current.openDesktopForSend(CHAT_SEND_INTENT.start);
   });
 
   expect(desktop.open).not.toHaveBeenCalled();
+});
+
+test("a message for a turn already running on the computer never opens stella desktop, even when the last read found it disconnected", async () => {
+  // The read the page holds says disconnected while the computer's turn
+  // still runs on it (the computer reconnecting after a relinked account).
+  const desktop = computerConnectingOnOpen();
+  serve({ computers: desktop.computers });
+  const { result, queryClient } = renderComposer(
+    Promise.resolve({ ...AUTO_ON_STELLA, runTarget: CODEX }),
+  );
+  await waitFor(() => expect(result.current.models.state).toBe("ready"));
+  await queryClient.query(localRunnersOptions(ORGANIZATION_ID));
+  expect(result.current.getRunTarget()).toEqual(CODEX);
+
+  // Steered into the running turn, or queued behind it: neither starts a
+  // run on the computer, so neither has a reason to open it.
+  act(() => {
+    result.current.openDesktopForSend(CHAT_SEND_INTENT.steer);
+    result.current.openDesktopForSend(CHAT_SEND_INTENT.queue);
+  });
+  expect(desktop.open).not.toHaveBeenCalled();
+  expect(getDesktopLaunch().pending()).toBeNull();
+
+  // A message that starts the next turn there does open it.
+  act(() => {
+    result.current.openDesktopForSend(CHAT_SEND_INTENT.start);
+  });
+  const launching = getDesktopLaunch().pending();
+  expect(desktop.open).toHaveBeenCalledTimes(1);
+  expect(desktop.open).toHaveBeenCalledWith(DESKTOP_PING_URL);
+  expect(await launching?.outcome).toBe("connected");
 });
 
 test("choosing the computer while none is connected opens stella desktop on that pick, once", async () => {
