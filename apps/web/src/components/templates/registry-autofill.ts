@@ -39,31 +39,31 @@ type CanonicalKey =
  * jurisdictions: PL (KRS/NIP/REGON), CZ (IČO/DIČ), GB (company number),
  * EU (VAT). Extend as adapters surface more identifiers.
  */
-const SUFFIX_MAP: Record<string, CanonicalKey> = {
-  name: "name",
-  company_name: "name",
-  legal_form: "legalForm",
-  legalform: "legalForm",
-  form: "legalForm",
-  krs: "registrationId",
-  ico: "registrationId",
-  crn: "registrationId",
-  company_number: "registrationId",
-  reg_no: "registrationId",
-  registration_number: "registrationId",
-  nip: "taxId",
-  vat: "taxId",
-  vat_id: "taxId",
-  dic: "taxId",
-  tax_id: "taxId",
-  regon: "statId",
-  stat_id: "statId",
-  address: "address",
-  seat: "address",
-  registered_office: "address",
-  share_capital: "shareCapital",
-  capital: "shareCapital",
-};
+const SUFFIX_MAP = new Map<string, CanonicalKey>([
+  ["name", "name"],
+  ["company_name", "name"],
+  ["legal_form", "legalForm"],
+  ["legalform", "legalForm"],
+  ["form", "legalForm"],
+  ["krs", "registrationId"],
+  ["ico", "registrationId"],
+  ["crn", "registrationId"],
+  ["company_number", "registrationId"],
+  ["reg_no", "registrationId"],
+  ["registration_number", "registrationId"],
+  ["nip", "taxId"],
+  ["vat", "taxId"],
+  ["vat_id", "taxId"],
+  ["dic", "taxId"],
+  ["tax_id", "taxId"],
+  ["regon", "statId"],
+  ["stat_id", "statId"],
+  ["address", "address"],
+  ["seat", "address"],
+  ["registered_office", "address"],
+  ["share_capital", "shareCapital"],
+  ["capital", "shareCapital"],
+]);
 
 /** Share capital is surfaced verbatim by the adapter; pair it with the
  *  ISO currency for display (e.g. `99910510,00 PLN`). */
@@ -137,7 +137,7 @@ export const groupSupportsRegistryAutofill = (
 ): boolean =>
   groupFields.some((field) => {
     const suffix = suffixOf(field.path);
-    return suffix !== undefined && suffix in SUFFIX_MAP;
+    return suffix !== undefined && SUFFIX_MAP.has(suffix);
   });
 
 /** Resolve which field paths to set, and to what, from a hit. */
@@ -153,7 +153,7 @@ export const buildAutofillUpdates = (
     if (suffix === undefined) {
       continue;
     }
-    const key = SUFFIX_MAP[suffix];
+    const key = SUFFIX_MAP.get(suffix);
     if (key === undefined) {
       continue;
     }

@@ -24,12 +24,12 @@ const OPTION_VARS = [
   "--option-teal",
 ] as const;
 
-const CORE_CATEGORY_VAR: Record<string, string> = {
-  facts: "--option-blue",
-  "procedural-history": "--option-amber",
-  reasoning: "--option-violet",
-  holding: "--option-emerald",
-};
+const CORE_CATEGORY_VAR = new Map<string, string>([
+  ["facts", "--option-blue"],
+  ["procedural-history", "--option-amber"],
+  ["reasoning", "--option-violet"],
+  ["holding", "--option-emerald"],
+]);
 
 export const hashString = (s: string): number => {
   let h = 0;
@@ -42,7 +42,7 @@ export const hashString = (s: string): number => {
 
 /** Get the CSS variable name for a category's color. */
 export const getCategoryVar = (category: string): string => {
-  const fixed = CORE_CATEGORY_VAR[category];
+  const fixed = CORE_CATEGORY_VAR.get(category);
   if (fixed) {
     return fixed;
   }

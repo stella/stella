@@ -44,10 +44,17 @@ const TONE_CLASS: Readonly<Record<CatalogueEntryIconTone, string>> = {
   muted: "text-muted-foreground",
 };
 
-const SLUG_LUCIDE_OVERRIDES: Readonly<Record<string, LucideIcon>> = {
+type SlugLucideOverrideKey = "web-search" | "anonymize";
+
+const SLUG_LUCIDE_OVERRIDES: Readonly<
+  Record<SlugLucideOverrideKey, LucideIcon>
+> = {
   "web-search": GlobeIcon,
   anonymize: EyeOffIcon,
 };
+
+const isSlugLucideOverrideKey = (slug: string): slug is SlugLucideOverrideKey =>
+  Object.hasOwn(SLUG_LUCIDE_OVERRIDES, slug);
 
 export const CatalogueEntryIcon = ({
   slug,
@@ -63,7 +70,7 @@ export const CatalogueEntryIcon = ({
     return <DocxIcon className={className} height={size} width={size} />;
   }
 
-  if (slug && slug in SLUG_LUCIDE_OVERRIDES) {
+  if (slug && isSlugLucideOverrideKey(slug)) {
     const Icon = SLUG_LUCIDE_OVERRIDES[slug];
     if (Icon) {
       return (

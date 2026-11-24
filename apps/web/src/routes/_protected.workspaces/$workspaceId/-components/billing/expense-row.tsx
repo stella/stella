@@ -31,12 +31,12 @@ type ExpenseRowProps = {
   onDelete: (id: string) => void;
 };
 
-const STATUS_STYLES: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  approved: "bg-success/10 text-success dark:text-success",
-  billed: "bg-accent text-foreground",
-  written_off: "bg-destructive/10 text-destructive dark:text-destructive",
-};
+const STATUS_STYLES = new Map<string, string>([
+  ["draft", "bg-muted text-muted-foreground"],
+  ["approved", "bg-success/10 text-success dark:text-success"],
+  ["billed", "bg-accent text-foreground"],
+  ["written_off", "bg-destructive/10 text-destructive dark:text-destructive"],
+]);
 
 export const ExpenseRow = ({
   expense,
@@ -110,7 +110,7 @@ export const ExpenseRow = ({
           <span
             className={cn(
               "text-3xs shrink-0 rounded-sm px-1.5 py-0.5",
-              STATUS_STYLES[expense.status] ?? STATUS_STYLES["draft"],
+              STATUS_STYLES.get(expense.status) ?? STATUS_STYLES.get("draft"),
             )}
           >
             {

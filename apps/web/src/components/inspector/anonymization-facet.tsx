@@ -139,39 +139,27 @@ const DEFAULT_LABEL: LabelOption = "misc";
 // Detector output not in this map falls back to the raw label
 // string so unfamiliar categories still render something
 // readable.
-const LABEL_TRANSLATION_KEYS = {
-  organization: "common.anonymizationLabels.organization",
-  person: "common.anonymizationLabels.person",
-  address: "common.anonymizationLabels.address",
-  country: "common.country",
-  "phone number": "common.anonymizationLabels.phoneNumber",
-  "email address": "common.anonymizationLabels.emailAddress",
-  date: "common.anonymizationLabels.date",
-  "date of birth": "common.anonymizationLabels.dateOfBirth",
-  "bank account number": "common.anonymizationLabels.bankAccountNumber",
-  iban: "common.anonymizationLabels.iban",
-  "tax identification number":
-    "common.anonymizationLabels.taxIdentificationNumber",
-  "identity card number": "common.anonymizationLabels.identityCardNumber",
-  "registration number": "common.anonymizationLabels.registrationNumber",
-  "case number": "caseLaw.columns.caseNumber",
-  "credit card number": "common.anonymizationLabels.creditCardNumber",
-  "passport number": "common.anonymizationLabels.passportNumber",
-  "monetary amount": "common.anonymizationLabels.monetaryAmount",
-  "land parcel": "common.anonymizationLabels.landParcel",
-  misc: "common.anonymizationLabels.miscellaneous",
-  // Back-compat alias: legacy server entries still labelled
-  // "other" before the wasm runtime adopted the canonical
-  // "misc" key. Kept so old workspace catalogs render with a
-  // proper translated label instead of falling back to the
-  // raw string.
-  other: "common.anonymizationLabels.miscellaneous",
-} as const satisfies Record<string, TranslationKey>;
-
-type LabelTranslationKey = keyof typeof LABEL_TRANSLATION_KEYS;
-
-const isLabelTranslationKey = (label: string): label is LabelTranslationKey =>
-  Object.hasOwn(LABEL_TRANSLATION_KEYS, label);
+const LABEL_TRANSLATION_KEYS = new Map<string, TranslationKey>([
+  ["organization", "common.anonymizationLabels.organization"],
+  ["person", "common.anonymizationLabels.person"],
+  ["address", "common.anonymizationLabels.address"],
+  ["country", "common.country"],
+  ["phone number", "common.anonymizationLabels.phoneNumber"],
+  ["email address", "common.anonymizationLabels.emailAddress"],
+  ["date", "common.anonymizationLabels.date"],
+  ["date of birth", "common.anonymizationLabels.dateOfBirth"],
+  ["bank account number", "common.anonymizationLabels.bankAccountNumber"],
+  ["iban", "common.anonymizationLabels.iban"],
+  ["identity card number", "common.anonymizationLabels.identityCardNumber"],
+  ["registration number", "common.anonymizationLabels.registrationNumber"],
+  ["case number", "caseLaw.columns.caseNumber"],
+  ["credit card number", "common.anonymizationLabels.creditCardNumber"],
+  ["passport number", "common.anonymizationLabels.passportNumber"],
+  ["monetary amount", "common.anonymizationLabels.monetaryAmount"],
+  ["land parcel", "common.anonymizationLabels.landParcel"],
+  ["misc", "common.anonymizationLabels.miscellaneous"],
+  ["other", "common.anonymizationLabels.miscellaneous"],
+]);
 
 type AnonymizationFacetProps = {
   workspaceId: string;
@@ -226,7 +214,10 @@ export const AnonymizationFacet = ({
   const locale = useFormattingLocale();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
-    isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
+    (() => {
+      const key = LABEL_TRANSLATION_KEYS.get(label);
+      return key ? t(key) : label;
+    })();
   const termsQuery = useQuery(anonymizationTermsOptions(workspaceId));
   const termsQueryView = queryView(termsQuery);
   useQueryViewError(termsQueryView, "AnonymizationFacet:query");

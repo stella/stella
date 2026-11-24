@@ -64,7 +64,11 @@ export const menuCommitBenches = {
 } as const;
 
 // Browser tests share the fixture census without importing the app graph.
-export const visualRegistry = {
+const defineVisualRegistry = <const T extends Record<string, VisualEntry>>(
+  entries: T,
+): T => entries;
+
+export const visualRegistry = defineVisualRegistry({
   "appeal-reviews": {
     label: "Synthetic appeal review evidence",
     layout: "plain",
@@ -136,7 +140,7 @@ export const visualRegistry = {
   "workspace-table": { label: "Workspace table", layout: "workspace-table" },
   "public-law-toolbar": { label: "Public law toolbar", layout: "plain" },
   "chat-history-decision": { label: "Chat history decision", layout: "plain" },
-} as const satisfies Record<string, VisualEntry>;
+});
 
 export type VisualName = keyof typeof visualRegistry;
 

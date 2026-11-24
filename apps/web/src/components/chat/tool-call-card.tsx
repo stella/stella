@@ -305,14 +305,10 @@ const getMcpToolInfo = (toolName: string): McpToolInfo | null => {
   return { connectorSlug: connector };
 };
 
-const NATIVE_TOOL_BRANDS: Record<string, string> = {
-  // Historical aliases for chat history that predates the unified
-  // `business_registry_lookup` tool. New turns route through the
-  // unified tool; the per-jurisdiction brand is resolved at render
-  // time from the call input rather than from the tool name.
-  ares_lookup_company: "ARES",
-  ares_search_companies: "ARES",
-};
+const NATIVE_TOOL_BRANDS = new Map<string, string>([
+  ["ares_lookup_company", "ARES"],
+  ["ares_search_companies", "ARES"],
+]);
 
 type CatalogEntry = {
   brand: string;
@@ -345,7 +341,7 @@ const findCatalogEntry = ({
     };
   }
 
-  const nativeBrand = NATIVE_TOOL_BRANDS[toolName];
+  const nativeBrand = NATIVE_TOOL_BRANDS.get(toolName);
   if (nativeBrand === undefined) {
     return null;
   }

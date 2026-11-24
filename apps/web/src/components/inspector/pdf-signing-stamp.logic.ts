@@ -162,15 +162,12 @@ export const adjustStampBox = ({
   );
 };
 
-const KEY_DIRECTIONS = {
-  ArrowDown: { x: 0, y: 1 },
-  ArrowLeft: { x: -1, y: 0 },
-  ArrowRight: { x: 1, y: 0 },
-  ArrowUp: { x: 0, y: -1 },
-} as const satisfies Record<string, Vector>;
-
-const isArrowKey = (key: string): key is keyof typeof KEY_DIRECTIONS =>
-  Object.hasOwn(KEY_DIRECTIONS, key);
+const KEY_DIRECTIONS = new Map<string, Vector>([
+  ["ArrowDown", { x: 0, y: 1 }],
+  ["ArrowLeft", { x: -1, y: 0 }],
+  ["ArrowRight", { x: 1, y: 0 }],
+  ["ArrowUp", { x: 0, y: -1 }],
+]);
 
 /** Arrow keys move the box; with Shift they resize it. */
 export const stampKeyAdjustment = ({
@@ -180,10 +177,10 @@ export const stampKeyAdjustment = ({
   key: string;
   shiftKey: boolean;
 }): { deltaPt: Vector; mode: StampAdjustMode } | null => {
-  if (!isArrowKey(key)) {
+  const direction = KEY_DIRECTIONS.get(key);
+  if (direction === undefined) {
     return null;
   }
-  const direction = KEY_DIRECTIONS[key];
   return {
     deltaPt: { x: direction.x * KEY_STEP_PT, y: direction.y * KEY_STEP_PT },
     mode: shiftKey ? "resize" : "move",

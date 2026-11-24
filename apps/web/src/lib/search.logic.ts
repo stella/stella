@@ -15,13 +15,13 @@ export const normalizeSearchQuery = (query: string): string => query.trim();
 const stripSearchMarkup = (value: string): string =>
   value.replaceAll("<mark>", " ").replaceAll("</mark>", " ").trim();
 
-const SEARCH_HEADLINE_NAMED_ENTITIES: Readonly<Record<string, string>> = {
-  amp: "&",
-  apos: "'",
-  gt: ">",
-  lt: "<",
-  quot: '"',
-};
+const SEARCH_HEADLINE_NAMED_ENTITIES = new Map<string, string>([
+  ["amp", "&"],
+  ["apos", "'"],
+  ["gt", ">"],
+  ["lt", "<"],
+  ["quot", '"'],
+]);
 const MAX_UNICODE_CODE_POINT = 1_114_111;
 const SEARCH_HEADLINE_ENTITY = /&(?:#x[\da-f]+|#\d+|[a-z]+);/giu;
 
@@ -41,7 +41,7 @@ const decodeSearchHeadlineEntities = (value: string): string =>
         ? String.fromCodePoint(codePoint)
         : encoded;
     }
-    return SEARCH_HEADLINE_NAMED_ENTITIES[normalizedEntity] ?? encoded;
+    return SEARCH_HEADLINE_NAMED_ENTITIES.get(normalizedEntity) ?? encoded;
   });
 
 const getMarkedSearchTerms = (headline: string | null): string[] => {
