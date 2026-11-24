@@ -817,6 +817,10 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
+  "POST /v1/organization-settings/sso/providers/saml": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/sso/providers/test": {
     type: "non-replay",
     reason: "current-state",

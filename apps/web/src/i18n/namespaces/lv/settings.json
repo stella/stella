@@ -780,8 +780,10 @@
         "title": "Organizācijas īsais nosaukums"
       },
       "sso": {
+        "acsUrlLabel": "ACS adrese (URL)",
         "addDomain": "Pievienot domēnu",
         "addProvider": "Pievienot OIDC nodrošinātāju",
+        "addSamlProvider": "Pievienot SAML 2.0 nodrošinātāju",
         "callbackUrlLabel": "Atzvanīšanas URL",
         "clientIdLabel": "Klienta ID",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +811,10 @@
         "providersTitle": "Identitātes nodrošinātāji",
         "requireSsoDescription": "Kad ieslēgts, dalībniekiem jāpiesakās ar vienu no šīs organizācijas identitātes nodrošinātājiem.",
         "requireSsoTitle": "Pieprasīt SSO šai organizācijai",
+        "samlCertLabel": "IdP X.509 parakstīšanas sertifikāts (PEM)",
+        "samlEntityIdLabel": "IdP izdevēja URI",
+        "samlEntryPointLabel": "IdP SSO URL (ieejas punkts)",
+        "spMetadataUrlLabel": "SP metadatu adrese (URL)",
         "testDiscovery": "Pārbaudīt discovery",
         "title": "Vienotā pieteikšanās (SSO)",
         "verifyDomain": "Pārbaudīt tagad"

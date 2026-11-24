@@ -780,8 +780,10 @@
         "title": "Organization handle"
       },
       "sso": {
+        "acsUrlLabel": "ACS URL",
         "addDomain": "Add domain",
         "addProvider": "Add OIDC provider",
+        "addSamlProvider": "Add SAML 2.0 provider",
         "callbackUrlLabel": "Callback URL",
         "clientIdLabel": "Client ID",
         "clientSecretLabel": "Client secret",
@@ -809,6 +811,10 @@
         "providersTitle": "Identity providers",
         "requireSsoDescription": "When enabled, members must sign in through one of this organization's identity providers to access its matters and settings.",
         "requireSsoTitle": "Require SSO for this organization",
+        "samlCertLabel": "IdP X.509 signing certificate (PEM)",
+        "samlEntityIdLabel": "IdP Issuer URI",
+        "samlEntryPointLabel": "IdP SSO URL (Entry point)",
+        "spMetadataUrlLabel": "SP Metadata URL",
         "testDiscovery": "Test discovery",
         "title": "Single sign-on",
         "verifyDomain": "Verify now"

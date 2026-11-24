@@ -780,8 +780,10 @@
         "title": "Kurzname der Organisation"
       },
       "sso": {
+        "acsUrlLabel": "ACS-URL",
         "addDomain": "Domain hinzufügen",
         "addProvider": "OIDC-Anbieter hinzufügen",
+        "addSamlProvider": "SAML 2.0-Anbieter hinzufügen",
         "callbackUrlLabel": "Callback-URL",
         "clientIdLabel": "Client-ID",
         "clientSecretLabel": "Client-Secret",
@@ -809,6 +811,10 @@
         "providersTitle": "Identitätsanbieter",
         "requireSsoDescription": "Wenn aktiviert, müssen sich Mitglieder über einen Identitätsanbieter dieser Organisation anmelden, um auf Akten und Einstellungen zuzugreifen.",
         "requireSsoTitle": "SSO für diese Organisation erzwingen",
+        "samlCertLabel": "IdP X.509-Signaturzertifikat (PEM)",
+        "samlEntityIdLabel": "IdP-Aussteller-URI",
+        "samlEntryPointLabel": "IdP-SSO-URL (Einstiegspunkt)",
+        "spMetadataUrlLabel": "SP-Metadaten-URL",
         "testDiscovery": "Discovery testen",
         "title": "Single Sign-On (SSO)",
         "verifyDomain": "Jetzt prüfen"

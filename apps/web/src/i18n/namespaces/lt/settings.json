@@ -780,8 +780,10 @@
         "title": "Organizacijos trumpasis pavadinimas"
       },
       "sso": {
+        "acsUrlLabel": "ACS adresas (URL)",
         "addDomain": "Pridėti domeną",
         "addProvider": "Pridėti OIDC teikėją",
+        "addSamlProvider": "Pridėti SAML 2.0 teikėją",
         "callbackUrlLabel": "Atgalinio iškvietimo URL",
         "clientIdLabel": "Kliento ID",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +811,10 @@
         "providersTitle": "Tapatybės teikėjai",
         "requireSsoDescription": "Įjungus, nariai privalės prisijungti per vieną iš šios organizacijos tapatybės teikėjų.",
         "requireSsoTitle": "Reikalauti SSO šioje organizacijoje",
+        "samlCertLabel": "IdP X.509 pasirašymo sertifikatas (PEM)",
+        "samlEntityIdLabel": "IdP išdavėjo URI",
+        "samlEntryPointLabel": "IdP SSO URL (įėjimo taškas)",
+        "spMetadataUrlLabel": "SP metaduomenų adresas (URL)",
         "testDiscovery": "Tikrinti discovery",
         "title": "Vienkartinis prisijungimas (SSO)",
         "verifyDomain": "Tikrinti dabar"

@@ -780,8 +780,10 @@
         "title": "Szervezet rövid neve"
       },
       "sso": {
+        "acsUrlLabel": "ACS URL-cím",
         "addDomain": "Domain hozzáadása",
         "addProvider": "OIDC szolgáltató hozzáadása",
+        "addSamlProvider": "SAML 2.0 szolgáltató hozzáadása",
         "callbackUrlLabel": "Visszahívási URL",
         "clientIdLabel": "Ügyfél-azonosító",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +811,10 @@
         "providersTitle": "Identitásszolgáltatók",
         "requireSsoDescription": "Bekapcsolás esetén a tagoknak a szervezet egyik identitásszolgáltatóján keresztül kell bejelentkezniük.",
         "requireSsoTitle": "SSO kötelezővé tétele a szervezetben",
+        "samlCertLabel": "IdP X.509 aláíró tanúsítvány (PEM)",
+        "samlEntityIdLabel": "IdP kibocsátó URI",
+        "samlEntryPointLabel": "IdP SSO URL (belépési pont)",
+        "spMetadataUrlLabel": "SP metaadat URL-cím",
         "testDiscovery": "Discovery tesztelése",
         "title": "Egyszeri bejelentkezés (SSO)",
         "verifyDomain": "Ellenőrzés most"
