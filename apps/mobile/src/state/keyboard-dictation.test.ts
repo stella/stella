@@ -285,7 +285,7 @@ describe("keyboard dictations", () => {
     const { answer, delivered, jobs } = harness();
     const done = jobs.take([
       piece(0, false),
-      piece(5, true, { jobId: OTHER_JOB, uri: "file:///piece-5.m4a" }),
+      piece(0, true, { jobId: OTHER_JOB, uri: "file:///piece-5.m4a" }),
       piece(1, true),
     ]);
     await settle();
