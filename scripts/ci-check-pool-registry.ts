@@ -294,7 +294,9 @@ export const checkBudgetP95Seconds = (
   name: string,
 ) => {
   const budget = checkBudgetOf(budgets, job, name);
-  return budget.p95Seconds ?? budget.minutes * 60;
+  return budget.samples > 0 && budget.p95Seconds > 0
+    ? budget.p95Seconds
+    : budget.minutes * 60;
 };
 
 /** A pooled check's measured peak memory; a check without one cannot run. */

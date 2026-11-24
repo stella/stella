@@ -54,6 +54,7 @@ import {
   CHECK_POOL_JOBS,
   CHECK_POOL_STEP_NAMES,
   checkBudgetMinutes,
+  checkBudgetP95Seconds,
   checkPeakRssMiB,
   checkPoolJob,
   checkPoolStepRun,
@@ -93,6 +94,33 @@ test("an exact named subset retains manifest order", () => {
   expect(selectChecks(checks, undefined)).toEqual(checks);
   expect(() => selectChecks(checks, "First,Missing")).toThrow(
     "Unknown check name(s): Missing",
+  );
+});
+
+test("checkBudgetP95Seconds falls back to budget minutes when a check has no measured samples", () => {
+  const budgets = {
+    "ci-checks-policy": {},
+    "ci-checks-rest": {
+      Measured: {
+        minutes: 5,
+        samples: 10,
+        p95Seconds: 42,
+        p99Seconds: 50,
+        peakRssMiB: 256,
+      },
+      Unmeasured: {
+        minutes: 20,
+        samples: 0,
+        p95Seconds: 0,
+        p99Seconds: 0,
+        peakRssMiB: 512,
+      },
+    },
+    "code-quality-web-rest": {},
+  };
+  expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Measured")).toBe(42);
+  expect(checkBudgetP95Seconds(budgets, "ci-checks-rest", "Unmeasured")).toBe(
+    1200,
   );
 });
 
