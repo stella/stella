@@ -12,7 +12,6 @@
     "apps/api/src/lib/buffer-intent-reconciliation.ts::reconcileBufferObjectCleanupIntents::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/buffer-intent-reconciliation.ts::reconcileStaleBufferIntentBatch::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/case-law/court-presentation.ts::readCourtRegistry::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/document-processing-queue.ts::runSearchIndexReplayAttempt::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/docx/ai-field-generator.ts::buildAiConditionDecider::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/docx/ai-field-generator.ts::buildAiConditionDecider::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/docx/ai-field-generator.ts::buildAiOccurrenceAdapter::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
@@ -27,10 +26,8 @@
     "apps/api/src/lib/mcp-upstream/connections.ts::discoverMcpRefreshMetadata::result-error-returns-empty#2": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/mcp-upstream/connections.ts::loadActiveMcpConnectionsForUser::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/mcp-upstream/connections.ts::loadMcpConnectionById::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/scheduler/tasks/case-law-provision-state-backfill.ts::createCaseLawProvisionStateBackfillTask::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/search/extraction-worker.ts::extractAttachmentPlaintext::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "apps/api/src/lib/search/extraction-worker.ts::extractPdfMarkdown::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
-    "apps/api/src/lib/templates/suggest-template-fields.ts::suggestTemplateFieldsOrEmpty::catch-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure.",
     "packages/cli/src/registry-cache.ts::readCacheFile::result-error-returns-empty#1": "Existing site pending review: return a ReadOutcome or propagate the failure."
   }
 }

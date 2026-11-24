@@ -209,9 +209,10 @@ export const createCaseLawProvisionStateBackfillTask =
                   });
                   if (confirmed.isErr()) {
                     completionFailure = confirmed.error;
-                    return false;
                   }
-                  return confirmed.value.type === "complete";
+                  return (
+                    confirmed.isOk() && confirmed.value.type === "complete"
+                  );
                 });
                 if (completionFailure !== undefined) {
                   return Result.err(completionFailure);
@@ -228,7 +229,7 @@ export const createCaseLawProvisionStateBackfillTask =
     if (Result.isError(settled)) {
       if (signal.aborted) {
         logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
-        return undefined;
+        return Result.ok(undefined);
       }
       return Result.err(
         new SchedulerTaskFailure({
@@ -243,7 +244,7 @@ export const createCaseLawProvisionStateBackfillTask =
       // the unit rolled back and the next run retries it from its cursor.
       if (signal.aborted) {
         logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
-        return undefined;
+        return Result.ok(undefined);
       }
       if (run.error.cause instanceof BackfillHeldError) {
         logger.info(
@@ -257,7 +258,7 @@ export const createCaseLawProvisionStateBackfillTask =
               : { heldSince: run.error.cause.heldSince }),
           }),
         );
-        return undefined;
+        return Result.ok(undefined);
       }
       return Result.err(
         new SchedulerTaskFailure({
