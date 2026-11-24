@@ -197,6 +197,10 @@ export const BillingDraftsCard = () => {
     .map((file) => file.fileId);
 
   const nextCursor = files.data?.nextCursor;
+  const disabledReason = canEdit
+    ? t("common.saving")
+    : t("errors.api.forbidden");
+
   return (
     <BillingDraftsCardFrame>
       {(files.isError || editor.isError) &&
@@ -209,6 +213,7 @@ export const BillingDraftsCard = () => {
         <Switch
           checked={config.data.mode === "enabled"}
           disabled={!canEdit || mutation.isPending}
+          disabledReason={disabledReason}
           onCheckedChange={(enabled) =>
             mutation.mutate({ mode: enabled ? "enabled" : "disabled" })
           }
@@ -251,6 +256,7 @@ export const BillingDraftsCard = () => {
               })
             }
             disabled={!canEdit || mutation.isPending}
+            disabledReason={disabledReason}
           />
           <FieldLabel>
             {t("settings.organization.billingDrafts.ledes")}
