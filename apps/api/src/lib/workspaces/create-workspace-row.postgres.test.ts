@@ -142,6 +142,7 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
           clientId: null,
           name: "Personal matter",
           reference: "NEW-1",
+          visibility: "assigned_only",
         });
         // A dependent row passes the row policies through the access rule
         // alone: unpin the new matter so pinned ids cannot authorize it.
@@ -198,6 +199,7 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
           clientId: fixture.clientId,
           name: "Client matter",
           reference: "NEW-2",
+          visibility: "admins_and_assigned",
         });
       });
       expect(await assignmentsOf(db, workspaceId)).toEqual([]);
@@ -221,6 +223,7 @@ describe.skipIf(!runPostgresTests)("creating a matter (postgres)", () => {
                 clientId: null,
                 name: "Service matter",
                 reference: "NEW-3",
+                visibility: "assigned_only",
               });
             }),
           ),

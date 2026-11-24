@@ -2,10 +2,11 @@ import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-const MIGRATION_PATH = nodePath.resolve(
-  import.meta.dir,
+/** Migrations that define the read functions, oldest first; the newest definition wins. */
+const MIGRATION_PATHS = [
   "../../../drizzle/20261015090000_matter_access_rule_function/migration.sql",
-);
+  "../../../drizzle/20261124200000_matter_visibility/migration.sql",
+].map((migration) => nodePath.resolve(import.meta.dir, migration));
 
 /** The read functions and their argument lists, as granted. */
 const READ_FUNCTIONS = {
@@ -27,22 +28,33 @@ export const matterAccessFunctionStatements = (
 ): string[] => {
   const target = quoteIdentifier(schema);
   const names = Object.keys(READ_FUNCTIONS);
-  const definitions = readFileSync(MIGRATION_PATH, "utf-8")
-    .split("--> statement-breakpoint")
-    .map((part) => part.replace(/^[ \t]*--[^\n]*\n?/gmu, "").trim())
-    .filter((part) =>
-      names.some((name) => part.startsWith(`CREATE FUNCTION public.${name}(`)),
-    )
-    .map((part) =>
-      part
-        .replaceAll("public.", () => `${target}.`)
-        .replace(
-          "SET search_path = pg_catalog, public",
-          () => `SET search_path = pg_catalog, ${target}`,
-        ),
-    );
+  const latest = new Map<string, string>();
+  for (const path of MIGRATION_PATHS) {
+    for (const part of readFileSync(path, "utf-8")
+      .split("--> statement-breakpoint")
+      .map((statement) =>
+        statement.replace(/^[ \t]*--[^\n]*\n?/gmu, "").trim(),
+      )) {
+      const name = names.find(
+        (candidate) =>
+          part.startsWith(`CREATE FUNCTION public.${candidate}(`) ||
+          part.startsWith(`CREATE OR REPLACE FUNCTION public.${candidate}(`),
+      );
+      if (name !== undefined) {
+        latest.set(name, part.replace(/^CREATE OR REPLACE /u, "CREATE "));
+      }
+    }
+  }
+  const definitions = [...latest.values()].map((part) =>
+    part
+      .replaceAll("public.", () => `${target}.`)
+      .replace(
+        "SET search_path = pg_catalog, public",
+        () => `SET search_path = pg_catalog, ${target}`,
+      ),
+  );
   if (definitions.length !== names.length) {
-    panic("The matter access migration no longer defines its read functions");
+    panic("The matter access migrations no longer define its read functions");
   }
   const grants = roles.flatMap((role) =>
     Object.entries(READ_FUNCTIONS).map(

@@ -559,7 +559,7 @@
     },
     "create": {
       "matterName": "Název spisu",
-      "personalDescription": "Osobní spisy jsou soukromé a nepotřebují klienta. Později je můžete povýšit a sdílet s týmem."
+      "personalDescription": "Klient je nepovinný. Můžete ho přidat později; to nezmění, kdo spis vidí."
     },
     "createNewWorkspace": "Vytvořit nový spis",
     "defaultName": "Bez názvu",
@@ -1051,11 +1051,10 @@
         "third_party": "Třetí strana",
         "witness": "Svědek"
       },
-      "personalDescription": "Osobní spisy jsou jen pro vás. Povýšením na klientský spis je sdílíte s týmem.",
+      "personalDescription": "Tento spis nemá klienta. Přidáním klienta se nezmění, kdo spis vidí.",
       "personalLabel": "Osobní",
       "promoteCta": "Povýšit na klientský spis",
-      "promoteDescription": "Přidělením klienta sdílíte spis s týmem. Změna je nevratná: spis nelze vrátit na osobní.",
-      "promoteToClientConfirm": "Spis <bdi>{matterName}</bdi> bude přidělen klientovi <bdi>{clientName}</bdi> a sdílen s týmem. Na osobní ho už nepůjde vrátit.",
+      "promoteDescription": "Přidělte spisu klienta. Kdo spis vidí, zůstane stejné. Klienta můžete později změnit, ale ne odebrat.",
       "promotedSuccess": "Spis povýšen",
       "recentClients": "Nedávní klienti",
       "removeClient": "Odebrat klienta",
@@ -1426,6 +1425,19 @@
       },
       "useTemplate": "Použít předvolbu…",
       "viewSettings": "Nastavení zobrazení"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administrátoři a přiřazení",
+      "adminsAndAssignedDescription": "Vlastníci, administrátoři a lidé přiřazení ke spisu",
+      "allMembers": "Celý tým",
+      "allMembersDescription": "Všichni členové týmu kromě externích uživatelů",
+      "assignedOnly": "Jen přiřazení",
+      "assignedOnlyDescription": "Pouze lidé přiřazení ke spisu",
+      "label": "Kdo vidí spis",
+      "widenConfirm": "Změnit viditelnost",
+      "widenTitle": "Zpřístupnit spis více lidem?",
+      "widenToAdminsAndAssigned": "Vlastníci a administrátoři budou moci otevřít tento spis a jeho dokumenty, i když k němu nejsou přiřazeni.",
+      "widenToAllMembers": "Všichni členové týmu kromě externích uživatelů budou moci otevřít tento spis a jeho dokumenty, i když k němu nejsou přiřazeni."
     },
     "workflow": {
       "largeRunPrompt": {

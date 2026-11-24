@@ -32,6 +32,7 @@ import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
 import { workTask } from "@/api/lib/tasks/work-task";
 import { workspaceCreationCapacity } from "@/api/lib/workspaces/creation-capacity";
 import { readWorkspaceListRows } from "@/api/lib/workspaces/list-query";
+import { effectiveMatterVisibility } from "@/api/lib/workspaces/matter-visibility";
 
 const config = {
   contract: "patch",
@@ -202,6 +203,7 @@ const readWorkspaces = createSafeRootHandler(
         clientId: workspace.clientId,
         color: workspace.color,
         leadUserId: workspace.leadUserId,
+        visibility: effectiveMatterVisibility(workspace),
         lastActivityAt: workspace.lastActivityAt,
         createdAt: workspace.createdAt,
         client: client

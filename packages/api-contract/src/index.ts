@@ -1067,3 +1067,14 @@ export type {
 export * from "./vat-rate-presets";
 export { PARTY_IDENTIFIER_MAX_LENGTH } from "./party-identifiers";
 export { SELLER_PROFILE_TEXT_FIELDS } from "./seller-profile-fields";
+export {
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  MATTER_VISIBILITIES,
+  MATTER_VISIBILITY,
+  MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE,
+  defaultMatterVisibilityFor,
+  effectiveMatterVisibility,
+  isMatterVisibility,
+  widensMatterVisibility,
+} from "./matter-visibility";
+export type { MatterVisibility } from "./matter-visibility";

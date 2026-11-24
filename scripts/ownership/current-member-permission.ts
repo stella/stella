@@ -48,6 +48,11 @@ export default {
           "Revalidates the definition author's current role before scheduling a durable run.",
       },
       {
+        path: "apps/api/src/lib/data-export/stored-export-access.ts",
+        reason:
+          "Revalidates the reader's current role before a stored organization export is read, listed, downloaded or replayed.",
+      },
+      {
         path: "apps/api/src/handlers/reports/report-export-queue.ts",
         reason:
           "Revalidates the queued export requester's current role before loading report content.",

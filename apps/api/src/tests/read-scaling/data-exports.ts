@@ -2,7 +2,11 @@ import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
-import { auditLogs, organizationDataExports } from "@/api/db/schema";
+import {
+  auditLogs,
+  organizationDataExports,
+  workspaces,
+} from "@/api/db/schema";
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { planOrganizationPaths } from "@/api/handlers/data-exports/archive-path-plan";
 import { ArchivePathAllocator } from "@/api/handlers/data-exports/archive-paths";
@@ -90,6 +94,17 @@ export const seedDataExportReadScaling = async (
       role: "owner",
       createdAt: new Date(),
     });
+    // The exported matters exist and are open to owners, so every export
+    // stays readable by its owner as the population grows.
+    await db.insert(workspaces).values(
+      matterIds.map((id, index) => ({
+        id,
+        organizationId,
+        name: `Exported matter ${String(index)}`,
+        reference: `EXP-${String(index)}`,
+        visibility: "admins_and_assigned" as const,
+      })),
+    );
     await scopedDb(
       async (tx) =>
         await tx.insert(organizationDataExports).values(

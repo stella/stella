@@ -28,6 +28,7 @@ import {
   lockMatterCreationClient,
   lockMatterCreationMembers,
 } from "@/api/lib/db/aggregate-lock";
+import { databaseConstraintRefusal } from "@/api/lib/db/constraint-refusals";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
@@ -45,10 +46,15 @@ import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 import { createWorkspaceInTransaction } from "@/api/lib/workspaces/create-workspace-row";
 import { workspaceCreationCapacity } from "@/api/lib/workspaces/creation-capacity";
 import { nextAvailableMatterName } from "@/api/lib/workspaces/matter-name";
+import {
+  defaultMatterVisibilityFor,
+  matterVisibilitySchema,
+} from "@/api/lib/workspaces/matter-visibility";
 
-// A request without `clientId` creates a personal matter (initially
-// visible only to the creator). With `clientId`, it's a normal
-// client matter and `memberUserIds` may add additional members.
+// `visibility` decides who can open the matter without an assignment. When
+// omitted, a matter without a client stays with the people assigned to it
+// (the creator and `memberUserIds`), and a client matter is also open to
+// owners and admins: the same default for web, API, MCP and CLI.
 const createWorkspaceBodySchema = v.object({
   id: resourceIdSchema("workspace"),
   clientId: v.optional(
@@ -68,6 +74,13 @@ const createWorkspaceBodySchema = v.object({
   billingReference: v.optional(
     v.nullable(v.pipe(v.string(), v.maxLength(128))),
   ),
+  visibility: v.optional(
+    matterVisibilitySchema(
+      "Who can open the matter without being assigned: all_members, " +
+        "admins_and_assigned or assigned_only. Defaults to assigned_only " +
+        "without a client and admins_and_assigned with one.",
+    ),
+  ),
 });
 
 const config = {
@@ -75,7 +88,8 @@ const config = {
   featureAccess: AVT_LAYOUT_DISCOVERY_FEATURE_ACCESS,
   description:
     "Create a new matter (name required; pass clientId to attach a client " +
-    "contact). Returns the matter ID.",
+    "contact, memberUserIds to assign members and visibility to choose who " +
+    "can open it). Returns the matter ID.",
   permissions: { workspace: ["create"] },
   accountAccess: ACCOUNT_ACCESS.sandbox,
   realtime: organizationWorkspaceRealtimeUpdates,
@@ -120,18 +134,16 @@ export const createWorkspaceHandler = async function* ({
   recordAuditEvent,
   body,
 }: CreateWorkspaceHandlerProps) {
-  if (body.clientId !== undefined && (body.memberUserIds?.length ?? 0) > 0) {
+  if ((body.memberUserIds?.length ?? 0) > 0) {
     yield* checkDemoAccountOperation(userEmail);
   }
+  const visibility =
+    body.visibility ??
+    defaultMatterVisibilityFor({ hasClient: body.clientId !== undefined });
   const txResult = yield* Result.await(
     resultTx(safeDb, async (tx) => {
-      // New personal matters (no clientId) start with exactly one
-      // member: the creator. Additional members can be attached
-      // through the workspace members endpoint after creation.
-      const requestedMemberUserIds =
-        body.clientId !== undefined && body.memberUserIds !== undefined
-          ? Array.from(new Set(body.memberUserIds))
-          : [];
+      // The creator is always assigned; `memberUserIds` assigns more.
+      const requestedMemberUserIds = Array.from(new Set(body.memberUserIds));
 
       const grantedUserIds = [...new Set([userId, ...requestedMemberUserIds])];
       const orgFilter = eq(workspaces.organizationId, organizationId);
@@ -191,8 +203,7 @@ export const createWorkspaceHandler = async function* ({
 
       // Membership verified above — brand each requested user ID.
       // Combined with the session user.id, this gives a typed list
-      // of org-validated members for the insert below. New personal
-      // matters start with exactly one member: the creator.
+      // of org-validated members for the insert below.
       const workspaceMemberUserIds = Array.from(
         new Set([
           userId,
@@ -243,6 +254,7 @@ export const createWorkspaceHandler = async function* ({
         clientId: body.clientId ?? null,
         name: newName,
         reference,
+        visibility,
         ...(body.billingReference === undefined
           ? {}
           : { billingReference: body.billingReference }),
@@ -330,6 +342,7 @@ export const createWorkspaceHandler = async function* ({
               name: newName,
               reference,
               clientId: body.clientId ?? null,
+              visibility,
               memberCount: workspaceMemberUserIds.length,
             },
           },
@@ -339,7 +352,10 @@ export const createWorkspaceHandler = async function* ({
       await enqueueWorkspaceSearchRepairs(tx, [workspaceId]);
 
       return Result.ok({ id: body.id });
-    }),
+    }).then((result) =>
+      // The stewardship refusal answers MCP callers too, not only HTTP.
+      result.mapError((error) => databaseConstraintRefusal(error) ?? error),
+    ),
   );
 
   flushCreatedWorkspaceSearch(txResult.id);

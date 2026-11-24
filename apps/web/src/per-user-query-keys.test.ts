@@ -192,6 +192,9 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [accountDataExportLatestOptions(USER).queryKey],
   },
   "account-exports/status/get.ts": { kind: "no-web-caller", calls: [] },
+  // Organization exports are read through the API, MCP and CLI, not the web.
+  "data-exports/get.ts": { kind: "no-web-caller", calls: [] },
+  "data-exports/list.ts": { kind: "no-web-caller", calls: [] },
   // The phone and the desktop sync learned dictation fixes; the web does not dictate.
   "dictation/learned-fixes/list.ts": { kind: "no-web-caller", calls: [] },
   "organizations/audit-export/get.ts": {

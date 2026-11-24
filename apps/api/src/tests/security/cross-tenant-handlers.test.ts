@@ -1883,7 +1883,10 @@ const isolationCases: IsolationCase[] = [
     runAAgainstB: async ({ workspaceA }) =>
       await runHandler(listDataExports, workspaceA, { query: {} }),
     runBPositive: async ({ workspaceB }) =>
-      await runHandler(listDataExports, workspaceB, { query: {} }),
+      await asOrganizationBExportAdmin(
+        async () =>
+          await runHandler(listDataExports, workspaceB, { query: {} }),
+      ),
     expectDenied: (result) => expectPageExcludesId(result, dataExportB),
     expectPositive: (result) => expectPageContainsId(result, dataExportB),
   },
@@ -1894,9 +1897,12 @@ const isolationCases: IsolationCase[] = [
         params: { exportId: dataExportB },
       }),
     runBPositive: async ({ workspaceB }) =>
-      await runHandler(readDataExport, workspaceB, {
-        params: { exportId: dataExportB },
-      }),
+      await asOrganizationBExportAdmin(
+        async () =>
+          await runHandler(readDataExport, workspaceB, {
+            params: { exportId: dataExportB },
+          }),
+      ),
     expectDenied: expectStatus(404),
     expectPositive: (result) =>
       expectRecordFieldEquals(result, "id", dataExportB),
@@ -4742,6 +4748,25 @@ const createWorkspaceContext = ({
 type TestEndpoint<TContext> =
   | { handler: (context: TContext) => Promise<unknown> }
   | ((context: TContext) => Promise<unknown>);
+
+/**
+ * A stored export is read only by someone who holds export permission now,
+ * so organization B's positive read runs while its member is an admin.
+ */
+const asOrganizationBExportAdmin = async <T>(run: () => Promise<T>) => {
+  await testDb
+    .update(member)
+    .set({ role: "admin" })
+    .where(eq(member.id, ids.memberB1org));
+  try {
+    return await run();
+  } finally {
+    await testDb
+      .update(member)
+      .set({ role: "member" })
+      .where(eq(member.id, ids.memberB1org));
+  }
+};
 
 const runHandler = async <TContext>(
   endpoint: TestEndpoint<TContext>,

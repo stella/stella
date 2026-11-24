@@ -559,7 +559,7 @@
     },
     "create": {
       "matterName": "Nom du dossier",
-      "personalDescription": "Les dossiers personnels sont privés et ne nécessitent pas de client. Vous pourrez les promouvoir plus tard pour les partager avec l'équipe."
+      "personalDescription": "Le client est facultatif. Vous pourrez l’ajouter plus tard ; cela ne change pas qui voit le dossier."
     },
     "createNewWorkspace": "Créer un nouveau dossier",
     "defaultName": "Sans titre",
@@ -1051,11 +1051,10 @@
         "third_party": "Tiers",
         "witness": "Témoin"
       },
-      "personalDescription": "Les dossiers personnels sont privés. Promouvoir vers un client pour partager avec l'équipe.",
+      "personalDescription": "Ce dossier n’a pas de client. En ajouter un ne change pas qui le voit.",
       "personalLabel": "Personnel",
       "promoteCta": "Promouvoir au client",
-      "promoteDescription": "Associez un client pour partager ce dossier avec l'équipe. Action irréversible : les dossiers promus ne peuvent pas redevenir personnels.",
-      "promoteToClientConfirm": "Le dossier <bdi>{matterName}</bdi> sera associé à <bdi>{clientName}</bdi> et partagé avec l'équipe. Il ne pourra plus redevenir personnel.",
+      "promoteDescription": "Associez un client à ce dossier. Les personnes qui le voient restent les mêmes. Vous pourrez changer le client plus tard, mais pas le retirer.",
       "promotedSuccess": "Dossier promu",
       "recentClients": "Clients récents",
       "removeClient": "Retirer le client",
@@ -1426,6 +1425,19 @@
       },
       "useTemplate": "Utiliser le préréglage…",
       "viewSettings": "Paramètres de la vue"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Administrateurs et personnes affectées",
+      "adminsAndAssignedDescription": "Propriétaires, administrateurs et personnes affectées au dossier",
+      "allMembers": "Toute l’équipe",
+      "allMembersDescription": "Tous les membres de l’équipe, sauf les utilisateurs externes",
+      "assignedOnly": "Personnes affectées uniquement",
+      "assignedOnlyDescription": "Uniquement les personnes affectées au dossier",
+      "label": "Qui peut le voir",
+      "widenConfirm": "Modifier la visibilité",
+      "widenTitle": "Rendre ce dossier visible à plus de personnes ?",
+      "widenToAdminsAndAssigned": "Les propriétaires et les administrateurs pourront ouvrir ce dossier et ses documents sans y être affectés.",
+      "widenToAllMembers": "Tous les membres de l’équipe, sauf les utilisateurs externes, pourront ouvrir ce dossier et ses documents sans y être affectés."
     },
     "workflow": {
       "largeRunPrompt": {

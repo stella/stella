@@ -559,7 +559,7 @@
     },
     "create": {
       "matterName": "Ügy neve",
-      "personalDescription": "A személyes ügyek privátak és nem igényelnek ügyfelet. Később előléptethetők, hogy megoszthassa a csapattal."
+      "personalDescription": "Az ügyfél megadása nem kötelező. Később is hozzáadhatja; ez nem változtat azon, hogy ki látja az ügyet."
     },
     "createNewWorkspace": "Új ügy létrehozása",
     "defaultName": "Névtelen",
@@ -1051,11 +1051,10 @@
         "third_party": "Harmadik fél",
         "witness": "Tanú"
       },
-      "personalDescription": "A személyes ügyek csak az Ön számára láthatók. Léptesse elő ügyfélüggyé a csapattal való megosztáshoz.",
+      "personalDescription": "Ennek az ügynek nincs ügyfele. Ügyfél hozzáadása nem változtat azon, hogy ki látja.",
       "personalLabel": "Személyes",
       "promoteCta": "Előléptetés ügyfélüggyé",
-      "promoteDescription": "Csatoljon ügyfelet az ügy csapattal való megosztásához. Az előléptetés végleges: az előléptetett ügy nem vonható vissza személyesre.",
-      "promoteToClientConfirm": "A(z) <bdi>{matterName}</bdi> ügyet hozzárendeljük a(z) <bdi>{clientName}</bdi> ügyfélhez, és megosztjuk a csapattal. Ezután nem állítható vissza személyesre.",
+      "promoteDescription": "Rendeljen ügyfelet ehhez az ügyhöz. Az, hogy ki látja, nem változik. Az ügyfelet később módosíthatja, de nem távolíthatja el.",
       "promotedSuccess": "Ügy előléptetve",
       "recentClients": "Legutóbbi ügyfelek",
       "removeClient": "Ügyfél eltávolítása",
@@ -1426,6 +1425,19 @@
       },
       "useTemplate": "Előbeállítás használata…",
       "viewSettings": "Nézetbeállítások"
+    },
+    "visibility": {
+      "adminsAndAssigned": "Adminisztrátorok és hozzárendeltek",
+      "adminsAndAssignedDescription": "Tulajdonosok, adminisztrátorok és az ügyhöz hozzárendelt személyek",
+      "allMembers": "Teljes csapat",
+      "allMembersDescription": "A csapat minden tagja, a külső felhasználók kivételével",
+      "assignedOnly": "Csak hozzárendeltek",
+      "assignedOnlyDescription": "Csak az ügyhöz hozzárendelt személyek",
+      "label": "Ki láthatja",
+      "widenConfirm": "Láthatóság módosítása",
+      "widenTitle": "Több személy számára teszi láthatóvá az ügyet?",
+      "widenToAdminsAndAssigned": "A tulajdonosok és az adminisztrátorok hozzárendelés nélkül is megnyithatják ezt az ügyet és a dokumentumait.",
+      "widenToAllMembers": "A csapat minden tagja, a külső felhasználók kivételével, hozzárendelés nélkül is megnyithatja ezt az ügyet és a dokumentumait."
     },
     "workflow": {
       "largeRunPrompt": {

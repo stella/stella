@@ -2,7 +2,6 @@ import { panic } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
 import { WORKSPACE_STATUS } from "@stll/api-contract/workspace-status";
-import { CLIENT_MATTER_ADMIN_ROLES } from "@stll/permissions";
 
 import { workspaces } from "@/api/db/schema";
 import type { Transaction } from "@/api/db/types";
@@ -14,6 +13,7 @@ import {
   TIMER_MATTER_LOCK_SCOPE,
 } from "@/api/lib/db/aggregate-lock";
 import { memberReachesMatterSql } from "@/api/lib/workspaces/authorized-workspace-ids";
+import { roleReachesMatterSql } from "@/api/lib/workspaces/matter-visibility";
 
 export const hasCurrentTimerMatterAccess = async ({
   organizationId,
@@ -27,14 +27,14 @@ export const hasCurrentTimerMatterAccess = async ({
   workspaceId: SafeId<"workspace">;
 }): Promise<boolean> => {
   await lockWorkspaceLifecycle(tx, workspaceId);
-  // This predicate only preserves the timer's original lock scope, including
-  // its client-admin assignment-lock exemption. The later database rule is
-  // the access decision.
+  // This predicate only chooses the timer's lock scope: a matter the
+  // member's role reaches through its visibility needs no assignment lock.
+  // The later database rule is the access decision.
   const rows = sql`CASE
-    WHEN organization_member.role IN (${sql.join(
-      CLIENT_MATTER_ADMIN_ROLES.map((role) => sql`${role}`),
-      sql`, `,
-    )}) AND workspace.client_id IS NOT NULL THEN ${TIMER_MATTER_LOCK_SCOPE.client}
+    WHEN ${roleReachesMatterSql(sql`organization_member.role`, {
+      visibility: sql`workspace.visibility`,
+      clientId: sql`workspace.client_id`,
+    })} THEN ${TIMER_MATTER_LOCK_SCOPE.role}
     WHEN EXISTS (
       SELECT 1 FROM workspace_members AS workspace_member
       WHERE workspace_member.workspace_id = workspace.id
@@ -61,7 +61,7 @@ export const hasCurrentTimerMatterAccess = async ({
         mode: "share",
       });
       break;
-    case TIMER_MATTER_LOCK_SCOPE.client:
+    case TIMER_MATTER_LOCK_SCOPE.role:
       break;
     default:
       lockScope satisfies never;

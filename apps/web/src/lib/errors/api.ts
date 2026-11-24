@@ -37,6 +37,10 @@ import { CORRESPONDENCE_SOURCE_CHANGED_CODE } from "@stll/api-contract/correspon
 import { ORGANIZATION_DATA_BOX_REFUSAL_CODE } from "@stll/api-contract/data-box";
 import { HOSTED_CHECKOUT_REFUSAL_CODE } from "@stll/api-contract/hosted-checkout";
 import { LEGAL_HOLD_ACTIVE } from "@stll/api-contract/legal-holds";
+import {
+  MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+  MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE,
+} from "@stll/api-contract/matter-visibility";
 import { MODEL_RUN_CAP_CODES } from "@stll/api-contract/model-run-caps";
 import type { ModelRunCapCode } from "@stll/api-contract/model-run-caps";
 import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
@@ -333,6 +337,10 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [MATTER_VISIBILITY_WIDENING_UNCONFIRMED_CODE]:
+    "errors.apiCodes.matterVisibilityWideningUnconfirmed",
+  [MATTER_STEWARD_HANDOVER_REQUIRED_CODE]:
+    "errors.apiCodes.matterStewardHandoverRequired",
   [CORRESPONDENCE_SOURCE_CHANGED_CODE]:
     "errors.apiCodes.correspondenceSourceChanged",
   [ORGANIZATION_DATA_BOX_REFUSAL_CODE.limitReached]:

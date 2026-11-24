@@ -48,7 +48,8 @@ type MatterClientDropTarget = {
 };
 
 // `move` reassigns a client matter; `promote` attaches the first client to a
-// personal matter, which shares it with the team and cannot be undone.
+// personal matter, which cannot be undone because a client cannot be removed.
+// Neither changes who can see the matter.
 export type AcceptedMatterClientDrop =
   | ({ type: "move"; previousClientId: string } & MatterClientDropTarget)
   | ({ type: "promote" } & MatterClientDropTarget);

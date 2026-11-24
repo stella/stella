@@ -1,5 +1,8 @@
 import { APIError } from "better-auth/api";
 
+import { MATTER_STEWARD_HANDOVER_REQUIRED_CODE } from "@stll/api-contract/matter-visibility";
+
+import { MATTER_STEWARD_CONSTRAINT } from "@/api/lib/db/constraint-refusals";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const OWNER_REQUIRED_CONSTRAINT = "member_organization_owner_required";
@@ -21,6 +24,13 @@ export const mapMembershipInvariantError = (error: unknown): unknown => {
     const constraint = cause["constraint_name"] ?? cause["constraint"];
     if (constraint === OWNER_REQUIRED_CONSTRAINT) {
       return ownerRequiredError();
+    }
+    if (constraint === MATTER_STEWARD_CONSTRAINT) {
+      return new APIError("CONFLICT", {
+        code: MATTER_STEWARD_HANDOVER_REQUIRED_CODE,
+        message:
+          "This member is the last internal member assigned to a matter visible to assigned members only. Assign another internal member to those matters first.",
+      });
     }
     if (
       constraint === "member_single_product_role" ||
