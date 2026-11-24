@@ -226,7 +226,7 @@ const TOOL_DEFINITIONS = {
   },
   press_key: {
     description:
-      "Press a key in an element of the page this chat last read, by its ref, and read the page that follows. Enter submits the field's form (a search, for one) or activates a button or link; Escape leaves a field or closes a list; Tab moves to the next field; ArrowDown and ArrowUp move through a select's options. Depending on the member's approval setting, a key press may wait for the member to allow it in chat, as a click does; a refusal comes back as declined.",
+      "Press a key in an element of the page this chat last read, by its ref, and read the page that follows. Enter submits the field's form (a search, for one) or activates a button or link; Escape leaves a field or closes a list; Tab moves to the next field; ArrowDown and ArrowUp move through a select's options. Depending on the member's approval setting, a key press may wait for the member to allow it in chat, as a click does; in a search field (role searchbox) it follows typing there instead. A refusal comes back as declined.",
     inputSchema: {
       type: "object",
       properties: {
@@ -646,8 +646,8 @@ type StepGates = Record<"click" | "search" | "type", BrowserGate>;
 /**
  * When a click or a typing step asks the member, or is refused, by the
  * run's approval mode. Plan is read-only: it opens and reads, and refuses
- * every click and typing step without asking. Opening, reading and typing
- * into a search field never ask; a sign-in page still goes to the member
+ * every click and typing step without asking. Opening, reading, and typing
+ * or pressing a key in a search field never ask; a sign-in page still goes to the member
  * at every level. One gate for every harness: the server asks, whatever
  * the harness itself was told to allow. A mode added to the contract fails
  * here until its rule is set.
@@ -721,9 +721,11 @@ const elementStepDecision = (
 
 /**
  * Whether `command` runs, waits for the member or is refused under
- * `approvals`. A key press can submit a form, so it is held like a click;
- * choosing an option can change what a page does, so it is held like typing
- * outside a search field. Going back and switching to another of the chat's
+ * `approvals`. A key press can submit a form, so it is held like a click,
+ * except in a search field: there Enter runs the search the typing set up,
+ * so a key follows the same rule as that typing. Choosing an option can
+ * change what a page does, so it is held like typing outside a search
+ * field. Going back and switching to another of the chat's
  * tabs move between pages, as opening one does, and never ask: going back
  * reaches only a page the chat read in that tab (`PageSeen.trails`), and
  * switching only a tab its latest read listed.
@@ -743,10 +745,11 @@ const browserStepDecision = (
         { action: "type" },
       );
     case BROWSER_CONTROL_ACTION.pressKey:
-      return elementStepDecision(gates.click, command, {
-        action: "press_key",
-        key: command.key,
-      });
+      return elementStepDecision(
+        gates[command.target.role === SEARCH_FIELD_ROLE ? "search" : "click"],
+        command,
+        { action: "press_key", key: command.key },
+      );
     case BROWSER_CONTROL_ACTION.select:
       return elementStepDecision(gates.type, command, {
         action: "select",

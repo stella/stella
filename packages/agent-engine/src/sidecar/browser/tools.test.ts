@@ -844,6 +844,59 @@ describe("browser steps by the run's approval mode", () => {
     });
   }
 
+  // Enter in a search field runs the search its typing set up, so it follows
+  // that typing's rule; in any other field it can submit a form, as a click.
+  const ENTER_CASES = [
+    { approvals: "ask", field: "search", asked: [] },
+    { approvals: "ask", field: "other", asked: ["press_key"] },
+    { approvals: "auto", field: "search", asked: [] },
+    { approvals: "auto", field: "other", asked: [] },
+    { approvals: "full_auto", field: "search", asked: [] },
+    { approvals: "full_auto", field: "other", asked: [] },
+  ] as const satisfies readonly {
+    approvals: DesktopRunnerApprovalMode;
+    field: "search" | "other";
+    asked: readonly "press_key"[];
+  }[];
+
+  for (const { approvals, asked, field } of ENTER_CASES) {
+    test(`${approvals}: Enter in a ${field} field asks ${asked.length === 0 ? "nothing" : "first"}`, async () => {
+      const read = field === "search" ? searchPage : page;
+      const session = createLocalBrowserSession();
+      const browser = recorder([read("r-1"), read("r-2")], { approvals });
+      await session.call("snapshot", {}, browser.context);
+      const result = await session.call(
+        "press_key",
+        { ref: "E1", key: "Enter" },
+        browser.context,
+      );
+      expect(result.isError).toBe(false);
+      expect(browser.asked.map(({ action }) => action)).toEqual([...asked]);
+      expect(browser.sent.map(({ command }) => command.action)).toEqual([
+        "snapshot",
+        "press-key",
+      ]);
+    });
+  }
+
+  test("plan refuses Enter even in a search field", async () => {
+    const session = createLocalBrowserSession();
+    const browser = recorder([searchPage("r-1")], { approvals: "plan" });
+    await session.call("snapshot", {}, browser.context);
+    const result = await session.call(
+      "press_key",
+      { ref: "E1", key: "Enter" },
+      browser.context,
+    );
+    expect(browser.asked).toEqual([]);
+    expect(browser.sent.map(({ command }) => command.action)).toEqual([
+      "snapshot",
+    ]);
+    expect(parsed(result)).toMatchObject({
+      code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+    });
+  });
+
   test("the member sees the element's role and name and the page address", async () => {
     const browser = await steps("ask", "other");
     expect(browser.asked).toEqual([
