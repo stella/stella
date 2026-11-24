@@ -8,7 +8,12 @@ import { createOpaqueOrganizationSlug } from "@stll/auth-model";
 import { classifyFailure, declareFailureClass } from "@stll/errors";
 
 import { agentRegistration } from "@/api/db/agent-auth-schema";
-import { member, organization, user } from "@/api/db/auth-schema";
+import {
+  member,
+  organization,
+  organizationSsoPolicy,
+  user,
+} from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import {
   oauthGrantRevocations,
