@@ -3,7 +3,7 @@ import { hashKey } from "@tanstack/react-query";
 import type { EntityFind } from "@stll/api-contract";
 import { isUuid } from "@stll/api-contract/safe-id";
 
-import type { ViewSort } from "@/lib/api";
+import type { ViewSort } from "@/lib/api-contract";
 import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
 import {
   entitiesRootKey,

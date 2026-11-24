@@ -11,7 +11,7 @@ import {
   aiUnavailableResponse,
 } from "@/__fixtures__/ai-availability";
 import { isDisabledControl } from "@/__fixtures__/disabled-control";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 // Match Vite's worker asset import without replacing the page or its runtime.
@@ -245,7 +245,9 @@ const serveSavedBuilder = ({
         ];
         return new Response(
           events.map((event) => `data: ${JSON.stringify(event)}\n\n`).join(""),
-          { headers: { "Content-Type": "text/event-stream" } },
+          {
+            headers: { "Content-Type": "text/event-stream" },
+          },
         );
       }
       if (

@@ -3,7 +3,7 @@ import { createElement } from "react";
 import { expectTypeOf } from "bun:test";
 
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 import {
   InvoiceSendsSection,
   SendInvoiceForm,

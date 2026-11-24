@@ -3,7 +3,7 @@ import { afterAll, afterEach, expect, test } from "bun:test";
 
 import { unregisterDomEnvironment } from "@stll/property-testing/dom-environment";
 
-import type { WebApiRoutes } from "@/lib/api";
+import type { WebApiRoutes } from "@/lib/api-contract";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/chat" });
 
