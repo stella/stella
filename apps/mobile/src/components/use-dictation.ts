@@ -67,8 +67,7 @@ import {
 import type { SignalWatch } from "@/state/dictation-level";
 import {
   chosenModelId,
-  DEFAULT_DICTATION_PREFERENCES,
-  readDictationPreferences,
+  readDictationChoice,
 } from "@/state/dictation-preferences";
 import type { DictationPreferences } from "@/state/dictation-preferences";
 import type {
@@ -707,18 +706,20 @@ const openMicrophone = async ({
   if (!permission.granted) {
     return { type: "denied" };
   }
-  const session = source.session();
-  // A choice the phone cannot read is the default.
-  const preferences =
-    session === undefined
-      ? DEFAULT_DICTATION_PREFERENCES
-      : await readDictationPreferences(deviceAccountStore, session).catch(
-          () => DEFAULT_DICTATION_PREFERENCES,
-        );
+  // Choices the phone cannot read start nothing: guessing them could send
+  // the recording to a model the person did not pick.
+  const choice = await readDictationChoice(
+    deviceAccountStore,
+    source.session(),
+  );
   // A start that no longer counts leaves the shared session alone.
   if (!current()) {
     return { type: "stale" };
   }
+  if (choice.isErr()) {
+    return { type: "failed" };
+  }
+  const preferences = choice.value;
   await setAudioModeAsync(RECORDING_MODE);
   const prepared = await Result.tryPromise(async () => {
     await recorder.prepareToRecordAsync();

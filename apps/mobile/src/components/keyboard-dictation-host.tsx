@@ -25,7 +25,7 @@ import { transcribeWithinClass } from "@/state/dictation";
 import { readLearnedFixes } from "@/state/dictation-learned";
 import {
   chosenModelId,
-  readDictationPreferences,
+  readDictationChoice,
 } from "@/state/dictation-preferences";
 import type { DictationPreferences } from "@/state/dictation-preferences";
 import {
@@ -112,14 +112,11 @@ const readSetup = async (
   source: AccessTokenSource,
 ): Promise<KeyboardSetup | null> => {
   const session = source.session();
-  if (session === undefined) {
-    return null;
-  }
   const [preferences, learned] = await Promise.all([
-    Result.tryPromise(
-      async () => await readDictationPreferences(deviceAccountStore, session),
-    ),
-    readLearnedFixes(deviceAccountStore, session).catch(() => []),
+    readDictationChoice(deviceAccountStore, session),
+    session === undefined
+      ? []
+      : readLearnedFixes(deviceAccountStore, session).catch(() => []),
   ]);
   return preferences.isOk()
     ? { preferences: preferences.value, learned }

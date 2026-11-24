@@ -7,6 +7,7 @@ import {
   chosenModelId,
   DEFAULT_DICTATION_PREFERENCES,
   forgetDictationPreferences,
+  readDictationChoice,
   readDictationPreferences,
   shownModel,
   writeDictationPreferences,
@@ -195,5 +196,59 @@ describe("dictation preferences", () => {
     expect(
       (await readDictationPreferences(store, ACCOUNT)).modelClass,
     ).toBeNull();
+  });
+});
+
+describe("the choices a dictation uploads on", () => {
+  test("nothing kept is the person's choice of the defaults", async () => {
+    const { store } = memoryStore();
+    const choice = await readDictationChoice(store, ACCOUNT);
+    expect(choice.isOk() && choice.value).toEqual(
+      DEFAULT_DICTATION_PREFERENCES,
+    );
+  });
+
+  test("a kept choice reads back", async () => {
+    const { store } = memoryStore();
+    const picked = {
+      ...DEFAULT_DICTATION_PREFERENCES,
+      modelId: "elevenlabs/scribe-v3",
+    };
+    await writeDictationPreferences(store, ACCOUNT, picked);
+    const choice = await readDictationChoice(store, ACCOUNT);
+    expect(choice.isOk() && choice.value).toEqual(picked);
+  });
+
+  test("a kept choice this build cannot read is an error, never the defaults", async () => {
+    const { items, store } = memoryStore();
+    await writeDictationPreferences(store, ACCOUNT, {
+      ...DEFAULT_DICTATION_PREFERENCES,
+      modelId: "elevenlabs/scribe-v3",
+    });
+    for (const key of items.keys()) {
+      items.set(key, "{not json");
+    }
+    const choice = await readDictationChoice(store, ACCOUNT);
+    expect(choice.isErr() && choice.error._tag).toBe(
+      "DictationPreferencesUnreadableError",
+    );
+  });
+
+  test("a store that fails to read is an error, never the defaults", async () => {
+    const store: AccountStore = {
+      read: async () => await Promise.reject(new Error("keychain locked")),
+      write: async () => undefined,
+      remove: async () => undefined,
+    };
+    const choice = await readDictationChoice(store, ACCOUNT);
+    expect(choice.isErr() && choice.error._tag).toBe(
+      "DictationPreferencesUnreadableError",
+    );
+  });
+
+  test("no signed-in account is an error", async () => {
+    const { store } = memoryStore();
+    const choice = await readDictationChoice(store, undefined);
+    expect(choice.isErr()).toBe(true);
   });
 });

@@ -1,3 +1,4 @@
+import { Result, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -79,21 +80,70 @@ type AccountKeys = { readonly serverUrl: string; readonly userId: string };
 const preferencesKey = ({ serverUrl, userId }: AccountKeys): string =>
   `dictation-preferences.${keyPart(serverUrl)}.${keyPart(userId)}`;
 
-/** What the phone kept, or the defaults when it kept nothing this build reads. */
-export const readDictationPreferences = async (
+/** The person's dictation choices could not be read: nothing may be uploaded on a guess. */
+export class DictationPreferencesUnreadableError extends TaggedError(
+  "DictationPreferencesUnreadableError",
+)<{ message: string; cause?: unknown }>() {}
+
+/**
+ * The choices a dictation is transcribed with: what the phone kept, or the
+ * defaults when nothing was ever kept. A dictation uploads only on these.
+ * Choices the phone kept but cannot read, or no signed-in account, are an
+ * error, never the defaults: the default model may be of another provider,
+ * region side or retention than the one picked.
+ */
+export const readDictationChoice = async (
   store: AccountStore,
-  account: AccountKeys,
-): Promise<DictationPreferences> => {
-  const stored = await store.read(preferencesKey(account));
-  if (stored === null) {
-    return DEFAULT_DICTATION_PREFERENCES;
+  account: AccountKeys | undefined,
+): Promise<
+  Result<DictationPreferences, DictationPreferencesUnreadableError>
+> => {
+  if (account === undefined) {
+    return Result.err(
+      new DictationPreferencesUnreadableError({
+        message: "No signed-in account to read dictation choices for",
+      }),
+    );
+  }
+  const stored = await Result.tryPromise({
+    try: async () => await store.read(preferencesKey(account)),
+    catch: (cause) =>
+      new DictationPreferencesUnreadableError({
+        message: "The phone could not read the dictation choices",
+        cause,
+      }),
+  });
+  if (stored.isErr()) {
+    return Result.err(stored.error);
+  }
+  if (stored.value === null) {
+    return Result.ok(DEFAULT_DICTATION_PREFERENCES);
   }
   const parsed = v.safeParse(
     v.pipe(v.string(), v.parseJson(), preferencesSchema),
-    stored,
+    stored.value,
   );
-  return parsed.success ? parsed.output : DEFAULT_DICTATION_PREFERENCES;
+  return parsed.success
+    ? Result.ok(parsed.output)
+    : Result.err(
+        new DictationPreferencesUnreadableError({
+          message: "The kept dictation choices are not readable by this build",
+        }),
+      );
 };
+
+/**
+ * The choices as Settings shows them, the defaults when they cannot be
+ * read. Only for showing and changing them; a dictation reads
+ * `readDictationChoice`, which never falls back.
+ */
+export const readDictationPreferences = async (
+  store: AccountStore,
+  account: AccountKeys,
+): Promise<DictationPreferences> =>
+  (await readDictationChoice(store, account)).unwrapOr(
+    DEFAULT_DICTATION_PREFERENCES,
+  );
 
 export const writeDictationPreferences = async (
   store: AccountStore,
