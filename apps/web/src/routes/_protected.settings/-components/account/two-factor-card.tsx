@@ -285,7 +285,10 @@ const BackupCodesList = ({ codes }: { codes: readonly string[] }) => {
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="bg-muted grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-md p-3 font-mono text-sm">
+      <div
+        className="bg-muted grid grid-cols-2 gap-x-4 gap-y-1.5 rounded-md p-3 font-mono text-sm tabular-nums"
+        dir="ltr"
+      >
         {codes.map((code) => (
           <span key={code}>{code}</span>
         ))}
@@ -464,7 +467,15 @@ const EnableTwoFactorDialog = ({
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup>
         {queryFeedback}
-        <DialogFormState dirty={code !== "" || password !== ""} />
+        <DialogFormState
+          dirty={
+            step === "setup" ||
+            step === "verify" ||
+            step === "codes" ||
+            code !== "" ||
+            password !== ""
+          }
+        />
         <DialogHeader>
           <DialogTitle>
             {t("settings.account.twoFactor.setupTitle")}
@@ -532,9 +543,15 @@ const EnableTwoFactorDialog = ({
                   <span className="text-muted-foreground text-xs">
                     {t("settings.account.twoFactor.manualSetupKey")}
                   </span>
-                  <code className="bg-muted rounded-sm px-2 py-1 font-mono text-sm">
-                    {secret}
-                  </code>
+                  <div className="flex items-center gap-1.5">
+                    <code
+                      className="bg-muted rounded-sm px-2 py-1 font-mono text-sm"
+                      dir="ltr"
+                    >
+                      {secret}
+                    </code>
+                    <CopyControl size="xs" text={secret} variant="ghost" />
+                  </div>
                 </div>
               )}
             </div>
@@ -575,6 +592,11 @@ const EnableTwoFactorDialog = ({
           )}
         </div>
         <DialogFooter>
+          {step !== "codes" && (
+            <DialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </DialogClose>
+          )}
           {step === "confirm" && (
             <Button
               disabled={
@@ -646,11 +668,6 @@ const EnableTwoFactorDialog = ({
             <Button onClick={() => handleOpenChange(false)} variant="default">
               {t("settings.account.twoFactor.backupCodesSavedConfirm")}
             </Button>
-          )}
-          {step !== "codes" && (
-            <DialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </DialogClose>
           )}
         </DialogFooter>
       </DialogPopup>

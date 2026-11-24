@@ -5,7 +5,7 @@ import {
   FaceLabelPending,
   FieldTriggerFace,
 } from "@stll/ui/control-face";
-import { SettingsPanel, SettingsRow, SettingsSection } from "@stll/ui/settings";
+import { SettingsPanel, SettingsRow } from "@stll/ui/settings";
 
 import { PendingText } from "@/components/pending-text";
 import type { PendingTextKey } from "@/components/pending-text";
@@ -113,10 +113,18 @@ export const ProfilePageShell = ({
       <SettingsPanel>
         <div className="flex flex-col gap-2">{timeZone}</div>
       </SettingsPanel>
+    </SettingsSectionPending>
+
+    <SettingsSectionPending
+      description="settings.account.wordEditIdentityDescription"
+      title="settings.account.wordEditIdentity"
+    >
       <SettingsPanel>{wordEditIdentity}</SettingsPanel>
     </SettingsSectionPending>
 
-    <SettingsSection>{localePreferences}</SettingsSection>
+    <SettingsSectionPending title="settings.account.localePreferences">
+      {localePreferences}
+    </SettingsSectionPending>
 
     <SettingsSectionPending title="navigation.chat">
       {chatPreferences}

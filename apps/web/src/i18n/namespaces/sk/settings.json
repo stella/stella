@@ -377,6 +377,7 @@
       "displayNameRequired": "Zadajte zobrazované meno.",
       "displayNameSaved": "Zobrazované meno aktualizované",
       "enterOtp": "Overovací kód",
+      "localePreferences": "Jazyk a región",
       "otpSentSuccess": "Overovací kód bol odoslaný na váš e-mail.",
       "personalDataExportDescription": "Osobné údaje z vášho účtu v jednom súbore. Príprava trvá pár minút, odkaz platí hodinu.",
       "personalDataExportExpired": "Platnosť odkazu vypršala.",
@@ -476,6 +477,8 @@
         "setupTitle": "Nastaviť dvojfaktorové overenie",
         "title": "Dvojfaktorové overenie"
       },
+      "wordEditIdentity": "Identita pre úpravy vo Worde",
+      "wordEditIdentityDescription": "Meno a iniciály používané pri revíziách a sledovaní zmien v dokumentoch Word.",
       "wordEditIdentitySaved": "Identita pre úpravy vo Worde aktualizovaná",
       "wordEditShortcut": "Iniciály pre úpravy vo Worde",
       "wordEditShortcutDescription": "Krátka značka pre vaše iniciály pri úpravách vo Worde.",

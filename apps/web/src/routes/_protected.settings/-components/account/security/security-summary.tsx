@@ -108,6 +108,9 @@ export const SecuritySummary = ({
               socialProviderSchema,
               account.providerId,
             );
+            if (account.providerId === "credential") {
+              return t("auth.password");
+            }
             return provider.success
               ? socialProviderName(provider.output)
               : account.providerId;

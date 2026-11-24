@@ -377,6 +377,7 @@
       "displayNameRequired": "Adjon meg egy megjelenített nevet.",
       "displayNameSaved": "Megjelenített név frissítve",
       "enterOtp": "Ellenőrző kód",
+      "localePreferences": "Nyelv és régió",
       "otpSentSuccess": "Az ellenőrző kódot elküldtük az e-mail címére.",
       "personalDataExportDescription": "A fiókjában tárolt személyes adatok egyetlen fájlban. Az előkészítés néhány percig tart, a hivatkozás egy óráig érvényes.",
       "personalDataExportExpired": "A hivatkozás lejárt.",
@@ -476,6 +477,8 @@
         "setupTitle": "Kétfaktoros hitelesítés beállítása",
         "title": "Kétfaktoros hitelesítés"
       },
+      "wordEditIdentity": "Word-szerkesztési azonosító",
+      "wordEditIdentityDescription": "A Word-dokumentumok véleményezésekor és korrektúrázásakor használt név és monogram.",
       "wordEditIdentitySaved": "Word-szerkesztési azonosító frissítve",
       "wordEditShortcut": "Monogram a Word-módosításokhoz",
       "wordEditShortcutDescription": "Rövid jelölés a Word-szerkesztéseknél megjelenő monogramjához.",

@@ -1,8 +1,8 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { Checkbox } from "@stll/ui/checkbox";
 import { SettingsPanel, settingsRowIds } from "@stll/ui/settings";
+import { Switch } from "@stll/ui/switch";
 
 import { RecoverableErrorStatus } from "@/components/recoverable-error-status";
 import { detached } from "@/lib/detached";
@@ -21,13 +21,15 @@ type BetaFeatureToggleProps = {
   feature: BetaFeature;
   checked: boolean;
   disabled?: boolean | undefined;
+  disabledReason?: string | undefined;
   onCheckedChange: (next: boolean) => void;
 };
 
-/** A preview's row with its live checkbox. */
+/** A preview's row with its live switch. */
 const BetaFeatureToggle = ({
   checked,
   disabled,
+  disabledReason,
   feature,
   onCheckedChange,
 }: BetaFeatureToggleProps) => {
@@ -40,12 +42,13 @@ const BetaFeatureToggle = ({
       feature={feature}
       title={t(title)}
     >
-      <Checkbox
+      <Switch
         aria-describedby={ids.description}
         aria-labelledby={ids.label}
         id={ids.control}
         checked={checked}
         disabled={disabled}
+        disabledReason={disabledReason}
         onCheckedChange={(next) => {
           if (next === checked) {
             return;
@@ -70,6 +73,7 @@ function SelfServeFeaturePanel({
   enrolment: { feature, mutation },
   feature: name,
 }: SelfServeFeaturePanelProps) {
+  const t = useTranslations();
   if (!feature) {
     return null;
   }
@@ -77,6 +81,7 @@ function SelfServeFeaturePanel({
     <BetaFeatureToggle
       checked={feature.enrolled}
       disabled={mutation.isPending}
+      disabledReason={t("common.saving")}
       feature={name}
       onCheckedChange={(next) => mutation.mutate(next)}
     />

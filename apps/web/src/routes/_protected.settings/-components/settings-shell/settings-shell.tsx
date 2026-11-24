@@ -225,7 +225,7 @@ const SignInReviewBadge = ({ count }: { count: number }) => {
       className="ms-auto"
       tone="warning"
     >
-      {format.number(count)}
+      <span className="tabular-nums">{format.number(count)}</span>
     </Badge>
   );
 };

@@ -377,6 +377,7 @@
       "displayNameRequired": "أدخل اسمًا ظاهرًا.",
       "displayNameSaved": "تم تحديث الاسم الظاهر",
       "enterOtp": "رمز التحقق",
+      "localePreferences": "اللغة والمنطقة",
       "otpSentSuccess": "تم إرسال رمز التحقق إلى بريدك الإلكتروني.",
       "personalDataExportDescription": "البيانات الشخصية في حسابك في ملف واحد. يستغرق التحضير بضع دقائق، ويعمل الرابط لمدة ساعة.",
       "personalDataExportExpired": "انتهت صلاحية الرابط.",
@@ -476,6 +477,8 @@
         "setupTitle": "إعداد المصادقة الثنائية",
         "title": "المصادقة الثنائية"
       },
+      "wordEditIdentity": "هوية تعديل مستندات Word",
+      "wordEditIdentityDescription": "الاسم والأحرف الأولى المستخدمة عند مراجعة مستندات Word أو تتبّع التغييرات فيها.",
       "wordEditIdentitySaved": "تم تحديث هوية تحرير Word",
       "wordEditShortcut": "الأحرف الأولى لتعديلات Word",
       "wordEditShortcutDescription": "وسم قصير للأحرف الأولى من اسمك في تحريرات Word.",

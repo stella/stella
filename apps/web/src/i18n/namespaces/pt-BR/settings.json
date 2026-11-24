@@ -377,6 +377,7 @@
       "displayNameRequired": "Informe um nome de exibição.",
       "displayNameSaved": "Nome de exibição atualizado",
       "enterOtp": "Código de verificação",
+      "localePreferences": "Idioma e região",
       "otpSentSuccess": "Código de verificação enviado para o seu e-mail.",
       "personalDataExportDescription": "Os dados pessoais da sua conta em um só arquivo. A preparação leva alguns minutos; o link vale por uma hora.",
       "personalDataExportExpired": "O link expirou.",
@@ -476,6 +477,8 @@
         "setupTitle": "Configurar a autenticação de dois fatores",
         "title": "Autenticação de dois fatores"
       },
+      "wordEditIdentity": "Identidade para edições no Word",
+      "wordEditIdentityDescription": "Nome e iniciais usados ao revisar ou controlar alterações em documentos do Word.",
       "wordEditIdentitySaved": "Identidade de edição do Word atualizada",
       "wordEditShortcut": "Iniciais para edições no Word",
       "wordEditShortcutDescription": "Tag curta para suas iniciais nas edições do Word.",
