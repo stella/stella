@@ -74,7 +74,7 @@ pre-commit:
 # documentation-only pushes skip compiler work. scripts/pre-push-policy.test.ts
 # guards this boundary.
 pre-push:
-  parallel: false
+  parallel: true
   commands:
     # Same rule and pathspecs as CI (scripts/changeset-policy.json), two git
     # diffs. Skips silently on a branch that touches no released package.
@@ -86,6 +86,8 @@ pre-push:
     # Same check as merge-queue admission: a branch that merged main must stamp
     # its new migrations after main's newest one. Reads git only.
     migration-order:
+      files: git diff --name-only origin/main...HEAD
+      glob: "{apps/api/drizzle/**,apps/api/src/lib/db/migration-alias-inventory.json,apps/api/src/lib/db/migration-ledger.ts,scripts/check-migration-order.ts}"
       run: bun scripts/check-migration-order.ts origin/main
     secrets:
       # The hook's stdin carries the ref updates the push would publish; the
@@ -98,15 +100,19 @@ pre-push:
       use_stdin: true
       run: bash scripts/check-pushed-signatures.sh
     ai-skills:
+      files: git diff --name-only origin/main...HEAD
+      glob: "{.ai/**,.agents/skills/**,.claude/skills/**,.claude/commands/**,.gitmodules,.coderabbit.yaml,scripts/check-ai-skill-sync.sh,scripts/check-ai-skill-sources.sh,**/AGENTS.md,**/GEMINI.md}"
       run: bash scripts/check-ai-skill-sources.sh
     # Every lockfile besides the root bun.lock needs the release-age
     # quarantine, a Dependabot cooldown and a frozen install.
     lockfiles:
+      files: git diff --name-only origin/main...HEAD
+      glob: "{**/bun.lock,**/bun.lockb,**/package-lock.json,**/yarn.lock,**/pnpm-lock.yaml,**/bunfig.toml,.github/dependabot.yml,scripts/check-standalone-lockfiles.ts}"
       run: bun run check:standalone-lockfiles
-    # One git diff, then nothing unless the pushed commits touch a job
-    # classification input. It removes the decisions of jobs that are not
-    # privileged or no longer exist (commit the removal and push again) and
-    # fails on any privileged job that still needs review. CI rechecks at
-    # the workflow revision.
+    # Runs only when the pushed commits touch a job classification input
+    # (pinned to CLASSIFICATION_INPUT_GLOBS in scripts/pre-push-policy.test.ts).
+    # Removes stale decisions and fails on privileged jobs needing review.
     job-classification:
+      files: git diff --name-only origin/main...HEAD
+      glob: "{.github/workflows/**,.github/actions/**,.github/ci-job-classification-decisions/**,.github/ci-job-classification-sources.json,.github/global-rule-inputs.json,scripts/check-ci-job-classification.ts,scripts/ci-job-classification/**,packages/collation/src/collation.ts,packages/sha256/src/node.ts}"
       run: bun scripts/check-ci-job-classification.ts --pre-push
