@@ -1481,7 +1481,10 @@ const discoverMcpRefreshMetadata = async ({
   issuerBinding,
   leaseExpiresAt,
   deferRefresh,
-}: DiscoverMcpRefreshMetadataOptions): Promise<BoundOAuthMetadata | null> => {
+}: DiscoverMcpRefreshMetadataOptions): Promise<
+  | { status: "discovered"; metadata: BoundOAuthMetadata }
+  | { status: "unavailable" }
+> => {
   const metadata = await dependencies.discoverOAuthMetadata({
     rawMcpUrl: row.url,
     permit,
@@ -1501,7 +1504,7 @@ const discoverMcpRefreshMetadata = async ({
       if (Result.isError(observed)) {
         observeFailure(observed.error, { sink: TOKEN_REFRESH_FAILED });
         await deferRefresh();
-        return null;
+        return { status: "unavailable" };
       }
       const review = await recordMcpAuthorizationReview({
         safeDb,
@@ -1540,7 +1543,7 @@ const discoverMcpRefreshMetadata = async ({
     } else {
       await deferRefresh();
     }
-    return null;
+    return { status: "unavailable" };
   }
   if (metadata.value.authorizationServer.issuer !== issuerBinding.issuer) {
     const review = await recordMcpAuthorizationReview({
@@ -1560,10 +1563,10 @@ const discoverMcpRefreshMetadata = async ({
     if (Result.isError(review)) {
       observeFailure(review.error, { sink: TOKEN_REFRESH_FAILED });
     }
-    return null;
+    return { status: "unavailable" };
   }
 
-  return metadata.value;
+  return { status: "discovered", metadata: metadata.value };
 };
 
 const resolveOAuthAuthorizationToken = async ({
@@ -1646,7 +1649,7 @@ const resolveOAuthAuthorizationToken = async ({
         dependencies.now?.() ??
         new Date(Temporal.Now.instant().epochMilliseconds),
     });
-  const metadata = await discoverMcpRefreshMetadata({
+  const discoveredMetadata = await discoverMcpRefreshMetadata({
     dependencies,
     organizationId,
     permit,
@@ -1657,9 +1660,10 @@ const resolveOAuthAuthorizationToken = async ({
     leaseExpiresAt,
     deferRefresh,
   });
-  if (!metadata) {
+  if (discoveredMetadata.status === "unavailable") {
     return { type: "skip" };
   }
+  const { metadata } = discoveredMetadata;
 
   const refreshToken = await dependencies.decryptMcpSecret({
     ciphertext: row.refreshTokenEncrypted,

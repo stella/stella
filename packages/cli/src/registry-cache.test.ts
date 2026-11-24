@@ -81,8 +81,7 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
     const file = cacheFile();
     await writeCacheFile(filePath, file);
     const read = await readCacheFile(filePath);
-    expect(read?.serverOrigin).toBe(file.serverOrigin);
-    expect(read).toEqual(file);
+    expect(read).toEqual({ status: "ok", file });
   });
 
   test("writer serializes exactly deployment and version metadata", async () => {
@@ -118,7 +117,9 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
     const filePath = path.join(dir, "n.json");
     await writeCacheFile(filePath, cacheFile({ lastNudgedVersion: "0.2.0" }));
     const read = await readCacheFile(filePath);
-    expect(read?.lastNudgedVersion).toBe("0.2.0");
+    expect(read.status === "ok" ? read.file.lastNudgedVersion : undefined).toBe(
+      "0.2.0",
+    );
   });
 
   test("preserves only deployment omission evidence across a roundtrip", async () => {
@@ -133,10 +134,12 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
       }),
     );
     const read = await readCacheFile(filePath);
-    expect(read).not.toHaveProperty("grantedScopes");
-    expect(read).not.toHaveProperty("scopeOmittedTools");
-    expect(read?.featureOmittedTools).toEqual(["search_decisions"]);
-    expect(read?.featureOmittedCapabilities).toEqual(["usage.entitlement.get"]);
+    expect(read.status).toBe("ok");
+    const file = read.status === "ok" ? read.file : undefined;
+    expect(file).not.toHaveProperty("grantedScopes");
+    expect(file).not.toHaveProperty("scopeOmittedTools");
+    expect(file?.featureOmittedTools).toEqual(["search_decisions"]);
+    expect(file?.featureOmittedCapabilities).toEqual(["usage.entitlement.get"]);
   });
 
   test("a malformed omission attestation drops the whole file (fail closed)", async () => {
@@ -147,20 +150,20 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
       filePath,
       JSON.stringify({ ...cacheFile(), featureOmittedTools: [1] }),
     );
-    expect(await readCacheFile(filePath)).toBeUndefined();
+    expect(await readCacheFile(filePath)).toEqual({ status: "unavailable" });
   });
 
-  test("a missing file reads as undefined", async () => {
+  test("a missing file reads as unavailable", async () => {
     const read = await readCacheFile("/nonexistent/stella/cache.json");
-    expect(read).toBeUndefined();
+    expect(read).toEqual({ status: "unavailable" });
   });
 
-  test("a wrong-version file reads as undefined (invalidated)", async () => {
+  test("a wrong-version file reads as unavailable (invalidated)", async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "stella-cache-"));
     tempDirs.push(dir);
     const filePath = path.join(dir, "v.json");
     await writeCacheFile(filePath, cacheFile({ version: 99 }));
-    expect(await readCacheFile(filePath)).toBeUndefined();
+    expect(await readCacheFile(filePath)).toEqual({ status: "unavailable" });
   });
 
   test("caller listing data never participates in a metadata cache read", async () => {
@@ -174,7 +177,10 @@ describe("readCacheFile / writeCacheFile roundtrip", () => {
         listings: [{ name: "x" /* missing inputSchema */ }],
       }),
     );
-    expect(await readCacheFile(filePath)).not.toHaveProperty("listings");
+    const read = await readCacheFile(filePath);
+    expect(read.status === "ok" ? read.file : undefined).not.toHaveProperty(
+      "listings",
+    );
   });
 });
 

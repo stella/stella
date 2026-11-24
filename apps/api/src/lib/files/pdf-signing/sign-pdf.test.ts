@@ -382,12 +382,15 @@ describe("two-phase PDF signing", () => {
         fetcher: async ({ url }) => {
           fetched.push(url);
           if (!crlServed) {
-            return null;
+            return { status: "unavailable" };
           }
           if (url === ROOT_CRL_URL) {
-            return rootCrl;
+            return { status: "ok", body: rootCrl };
           }
-          return url === CRL_URL ? crl : (extraCrls[url] ?? null);
+          const body = url === CRL_URL ? crl : extraCrls[url];
+          return body === undefined
+            ? { status: "unavailable" }
+            : { status: "ok", body };
         },
       });
 
@@ -467,7 +470,9 @@ describe("two-phase PDF signing", () => {
 
     test("embeds revocation data fetched through the guarded provider for a complete chain", async () => {
       const { applied, basePdf, crl, fetched, globalFetches } =
-        await signUnderIssuingCa({ chainComplete: true });
+        await signUnderIssuingCa({
+          chainComplete: true,
+        });
 
       // Every step was an incremental update: the stored bytes are still the
       // document's prefix, so the signature's byte range is intact.

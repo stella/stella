@@ -59,7 +59,7 @@ describe("revocation data for long-term validation", () => {
         method,
         url,
       });
-      return null;
+      return { status: "unavailable" };
     };
 
     const provider = createTestProvider(fetcher);
@@ -77,8 +77,10 @@ describe("revocation data for long-term validation", () => {
   test("counts a certificate covered only once real revocation data arrived", async () => {
     const { leaf, root } = await buildLeaf();
     const crl = await createTestCrl(root);
-    const fetcher: PkiFetcher = async ({ url }) =>
-      url === OCSP_URL ? unsuccessfulOcspResponse() : crl;
+    const fetcher: PkiFetcher = async ({ url }) => ({
+      status: "ok",
+      body: url === OCSP_URL ? unsuccessfulOcspResponse() : crl,
+    });
 
     const provider = createTestProvider(fetcher);
 
@@ -93,9 +95,10 @@ describe("revocation data for long-term validation", () => {
 
   test("ignores a distribution point that serves something other than a CRL", async () => {
     const { leaf, root } = await buildLeaf();
-    const provider = createTestProvider(async () =>
-      new TextEncoder().encode("<html>maintenance</html>"),
-    );
+    const provider = createTestProvider(async () => ({
+      status: "ok",
+      body: new TextEncoder().encode("<html>maintenance</html>"),
+    }));
 
     expect(await provider.getCRL(leaf.der, root.der)).toBe(null);
     expect(provider.covers(leaf.der)).toBe(false);
@@ -108,7 +111,10 @@ describe("revocation data for long-term validation", () => {
       status: "revoked",
       subject: leaf,
     });
-    const provider = createTestProvider(async () => revoked);
+    const provider = createTestProvider(async () => ({
+      status: "ok",
+      body: revoked,
+    }));
 
     expect(await provider.getOCSP(leaf.der, root.der)).toEqual(revoked);
     expect(provider.isRevoked(leaf.der)).toBe(true);
@@ -122,7 +128,10 @@ describe("revocation data for long-term validation", () => {
       status: "good",
       subject: leaf,
     });
-    const provider = createTestProvider(async () => good);
+    const provider = createTestProvider(async () => ({
+      status: "ok",
+      body: good,
+    }));
 
     await provider.getOCSP(leaf.der, root.der);
     expect(provider.covers(leaf.der)).toBe(true);
@@ -141,7 +150,10 @@ describe("revocation data for long-term validation", () => {
       status: "revoked",
       subject: other,
     });
-    const provider = createTestProvider(async () => aboutOther);
+    const provider = createTestProvider(async () => ({
+      status: "ok",
+      body: aboutOther,
+    }));
 
     expect(await provider.getOCSP(leaf.der, root.der)).toBe(null);
     expect(provider.isRevoked(leaf.der)).toBe(false);
@@ -157,7 +169,9 @@ describe("revocation data for long-term validation", () => {
     // Same issuer name, wrong key: it must not revoke, nor count as data.
     const forged = await createTestCrl(impostor, [leaf]);
     const provider = createTestProvider(async ({ url }) =>
-      url === CRL_URL ? forged : null,
+      url === CRL_URL
+        ? { status: "ok", body: forged }
+        : { status: "unavailable" },
     );
 
     expect(await provider.getCRL(leaf.der, root.der)).toBe(null);
@@ -171,7 +185,9 @@ describe("revocation data for long-term validation", () => {
 
     const { revoked } = await findRevokedCertificates({
       provider: createTestProvider(async ({ url }) =>
-        url === CRL_URL ? crl : null,
+        url === CRL_URL
+          ? { status: "ok", body: crl }
+          : { status: "unavailable" },
       ),
       signerChain: [leaf.der, root.der],
     });
@@ -180,7 +196,8 @@ describe("revocation data for long-term validation", () => {
   });
 
   describe("authenticity and currency", () => {
-    const serve = (bytes: Uint8Array) => createTestProvider(async () => bytes);
+    const serve = (bytes: Uint8Array) =>
+      createTestProvider(async () => ({ status: "ok", body: bytes }));
 
     test("ignores a good OCSP answer the issuer did not sign", async () => {
       const { leaf, root } = await buildLeaf();
@@ -293,7 +310,9 @@ describe("revocation data for long-term validation", () => {
         thisUpdate: new Date(Date.now() - 9 * day),
       });
       const provider = createTestProvider(async ({ url }) =>
-        url === CRL_URL ? stale : null,
+        url === CRL_URL
+          ? { status: "ok", body: stale }
+          : { status: "unavailable" },
       );
 
       expect(await provider.getCRL(leaf.der, root.der)).toBe(null);

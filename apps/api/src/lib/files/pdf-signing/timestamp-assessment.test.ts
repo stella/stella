@@ -63,7 +63,7 @@ describe("recorded tokens from the documented public authorities", () => {
         // Offline: the shipped anchor must complete the chain on its own.
         fetcher: async ({ url }) => {
           fetched.push(url);
-          return null;
+          return { status: "unavailable" };
         },
         permit,
         timestamp: validated,
@@ -77,7 +77,7 @@ describe("recorded tokens from the documented public authorities", () => {
 
       // Without the shipped anchors the same token is not vouched for.
       const bare = await assessTimestamp({
-        fetcher: async () => null,
+        fetcher: async () => ({ status: "unavailable" }),
         permit,
         timestamp: validated,
         trust: { anchors: [], pinnedUnits: new Set() },

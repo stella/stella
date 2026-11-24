@@ -212,10 +212,11 @@ export const resolveCommandTree = async ({
       ? registry
       : undefined;
   const currentAccess = file === undefined ? undefined : featureAccess;
-  const cached =
+  const cachedRead =
     file === undefined && serverOrigin !== undefined
       ? await readCacheFile(cachePathFor(serverOrigin, env))
       : undefined;
+  const cached = cachedRead?.status === "ok" ? cachedRead.file : undefined;
   const deployment =
     file ??
     (cached !== undefined &&
@@ -352,7 +353,8 @@ export const refreshRegistryCache = async ({
   bakedListings?: readonly RegistryToolListing[];
 }): Promise<RefreshOutcome> => {
   const filePath = cachePathFor(serverOrigin, env);
-  const existing = await readCacheFile(filePath);
+  const existingRead = await readCacheFile(filePath);
+  const existing = existingRead.status === "ok" ? existingRead.file : undefined;
 
   if (!force && configDir === undefined) {
     if (existing === undefined) {

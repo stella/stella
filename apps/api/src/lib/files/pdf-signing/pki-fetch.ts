@@ -32,10 +32,11 @@ type PkiFetchRequest = {
   url: string;
 };
 
-/** The response body, or `null` for any failure: PKI data is best effort. */
-export type PkiFetcher = (
-  request: PkiFetchRequest,
-) => Promise<Uint8Array | null>;
+type PkiFetchOutcome =
+  { status: "ok"; body: Uint8Array } | { status: "unavailable" };
+
+/** The response body, or `unavailable` for any failure: PKI data is best effort. */
+export type PkiFetcher = (request: PkiFetchRequest) => Promise<PkiFetchOutcome>;
 
 /**
  * A fetcher that stops fetching once `budgetMs` has passed. Each request is
@@ -48,7 +49,8 @@ export const withFetchBudget = (
   now: () => number = () => Temporal.Now.instant().epochMilliseconds,
 ): PkiFetcher => {
   const deadline = now() + budgetMs;
-  return async (request) => (now() >= deadline ? null : await fetcher(request));
+  return async (request) =>
+    now() >= deadline ? { status: "unavailable" } : await fetcher(request);
 };
 
 export const safePkiFetch: PkiFetcher = async ({
@@ -64,7 +66,7 @@ export const safePkiFetch: PkiFetcher = async ({
     timeoutMs: PKI_FETCH_TIMEOUT_MS,
   });
   if (Result.isError(target)) {
-    return null;
+    return { status: "unavailable" };
   }
 
   const response = await fetchWithResolvedAddress({
@@ -80,7 +82,7 @@ export const safePkiFetch: PkiFetcher = async ({
     url: target.value.url,
   });
   if (Result.isError(response) || !response.value.ok) {
-    return null;
+    return { status: "unavailable" };
   }
-  return new Uint8Array(response.value.body);
+  return { status: "ok", body: new Uint8Array(response.value.body) };
 };
