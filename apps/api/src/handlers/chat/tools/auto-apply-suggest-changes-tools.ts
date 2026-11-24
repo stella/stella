@@ -77,6 +77,22 @@ import { DOCX_MIME_TYPE } from "@/api/mime-types";
  * a "set your name" modal inline, then retries the same tool call, instead
  * of just reporting a generic error to the model.
  */
+const resolveAuthorForChatTool = async (
+  safeDb: Parameters<typeof resolveDocxEditAuthorName>[0]["safeDb"],
+  userId: Parameters<typeof resolveDocxEditAuthorName>[0]["userId"],
+): Promise<Result<string | null, ChatToolError>> => {
+  const authorResult = await resolveDocxEditAuthorName({ safeDb, userId });
+  return Result.isError(authorResult)
+    ? Result.err(
+        new ChatToolError({
+          kind: "server-defect",
+          message: "Could not read your profile name for document edits",
+          cause: authorResult.error,
+        }),
+      )
+    : Result.ok(authorResult.value);
+};
+
 const SUGGEST_CHANGES_AUTHOR_NAME_REQUIRED_CODE = "author_name_required";
 
 const operationIdSchema = v.strictObject({ id: v.string() });
@@ -349,18 +365,9 @@ export const createAutoApplySuggestChangesTools = ({
         }
         const { workspaceId, entityId } = authorized.value.operation;
 
-        const authorResult = await resolveDocxEditAuthorName({
-          safeDb,
-          userId,
-        });
+        const authorResult = await resolveAuthorForChatTool(safeDb, userId);
         if (Result.isError(authorResult)) {
-          return Result.err(
-            new ChatToolError({
-              kind: "server-defect",
-              message: "Could not read your profile name for document edits",
-              cause: authorResult.error,
-            }),
-          );
+          return authorResult;
         }
         const authorName = authorResult.value;
         if (
