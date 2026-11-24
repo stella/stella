@@ -36,7 +36,7 @@ const SOURCES = [
 const decisionId = (suffix: string) =>
   toSafeId<"caseLawDecision">(`0198e331-e578-7000-8000-000000000b${suffix}`);
 /** Moved canonical content: re-derived to a new epoch. */
-const MOVED = [decisionId("05"), decisionId("01"), decisionId("03")];
+const MOVED = [decisionId("05"), decisionId("01"), decisionId("03")] as const;
 /** Unchanged canonical content: re-derived to the state it holds. */
 const UNCHANGED = decisionId("04");
 /** Withdrawn while a served copy is named: the repair is held. */
@@ -271,12 +271,12 @@ test("a page of mismatches re-derives in one transaction as one repair per subje
   // and one desired-state statement, whatever their count.
   expect(
     batchStatements.filter((query) =>
-      /^update "case_law_decisions" set "projection_epoch"/u.test(query),
+      query.startsWith('update "case_law_decisions" set "projection_epoch"'),
     ),
   ).toHaveLength(1);
   expect(
     batchStatements.filter((query) =>
-      /^insert into "corpus_index_projection_states"/u.test(query),
+      query.startsWith('insert into "corpus_index_projection_states"'),
     ),
   ).toHaveLength(1);
 
