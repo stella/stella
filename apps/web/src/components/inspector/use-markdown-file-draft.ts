@@ -4,12 +4,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
+import type { MarkdownHybridEditorHandle } from "@stll/markdown-editor";
 import { stellaToast } from "@stll/ui/toast";
 
 import { getMarkdownDraftSyncDecision } from "@/components/inspector/file-tab-panel.logic";
 import { useInspectorTabsStore } from "@/components/inspector/inspector-tabs-store";
 import type { FileTab } from "@/components/inspector/inspector-tabs-store";
-import type { MarkdownHybridEditorHandle } from "@/components/markdown/markdown-hybrid-editor";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { MARKDOWN_MIME } from "@/lib/consts";

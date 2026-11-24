@@ -5,13 +5,13 @@ import { eq, sql } from "drizzle-orm";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { contacts } from "@/api/db/schema";
 import {
   createScopedDb,
   createTenantlessDb,
   markRlsDatabase,
 } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { withOwnerOrganizationScope } from "@/api/lib/db/owner-organization-scope";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

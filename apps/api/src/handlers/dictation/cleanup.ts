@@ -23,6 +23,7 @@ import {
   DICTATION_CLEANUP_SYSTEM_PROMPT,
   dictationCleanupModelOutputSchema,
 } from "./cleanup-model";
+import { resolveDictationCleanupModel } from "./cleanup-models";
 import {
   type DesktopDictationGate,
   type DictationGeneration,
@@ -82,8 +83,10 @@ const cleanupVocabulary = async (
 
 /**
  * One cleanup generation, whichever credential proved its caller: the
- * transcript goes to the organization's fast model, and its answer is
- * accepted only when it is a plausible cleanup of that transcript. The
+ * transcript goes to the organization's fast model, or to the model the
+ * speaker chose while the organization still offers it, and its answer is
+ * accepted only when it is a plausible cleanup of that transcript, whatever
+ * the speaker's own instructions asked for. The
  * caller has already authorized the member, the limit, usage and the action.
  */
 export const cleanUpDictation = async ({
@@ -96,16 +99,18 @@ export const cleanUpDictation = async ({
     body,
     readVocabulary,
   );
+  const { model, ...asked } = body;
   return await generateDictationAnswer({
     ...options,
     feature: "dictation.cleanup",
     failureName: "Dictation cleanup",
     task: "short-text",
+    modelId: resolveDictationCleanupModel(model, options.caller.orgAIConfig),
     deadlineMs: CLEANUP_DEADLINE_MS,
     outputTokenBudget: CLEANUP_OUTPUT_TOKENS,
     system: DICTATION_CLEANUP_SYSTEM_PROMPT,
     prompt: buildDictationCleanupPrompt(
-      vocabulary === undefined ? body : { ...body, vocabulary },
+      vocabulary === undefined ? asked : { ...asked, vocabulary },
     ),
     outputSchema: dictationCleanupModelOutputSchema,
     accept: (output) => acceptDictationCleanup(output, body),
@@ -121,8 +126,10 @@ type DictationCleanupEndpointOptions = DictationCleanupGeneration &
  * mistakes and turns spoken punctuation and formatting commands into typed
  * segments. The request may say where the text goes (the kind of app, and
  * when the speaker shares them the window title and the text before the
- * cursor), which only sets the register. Neither the transcript, its
- * context nor the answer is stored or logged.
+ * cursor), which only sets the register, and the speaker's own
+ * instructions, which only choose among forms the rules leave open. Neither
+ * the transcript, its context, the instructions nor the answer is stored or
+ * logged.
  */
 export const createDictationCleanupEndpoint = ({
   generateObjectForTask,

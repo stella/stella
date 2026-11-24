@@ -1,5 +1,6 @@
 mod accessibility_guide;
 mod account;
+mod account_avatar;
 mod account_switch;
 mod activity;
 mod activity_calls;
@@ -415,6 +416,9 @@ pub fn run() {
           tray::refresh(&handle, &mgr.get_snapshot());
         });
       }
+
+      // Verify the linked account's picture once per start.
+      account_avatar::refresh(&handle);
 
       // Handle tray menu events
       {

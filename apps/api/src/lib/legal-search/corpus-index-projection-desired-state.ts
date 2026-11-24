@@ -11,7 +11,6 @@ import {
 
 import { DECISION_IDENTIFIER_MAX_COUNT } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
@@ -22,6 +21,7 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { replayWrite } from "@/api/lib/case-law/replay-write";
 import {

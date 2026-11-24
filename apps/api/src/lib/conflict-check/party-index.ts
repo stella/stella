@@ -9,8 +9,8 @@ import type {
   ScreenedParty,
 } from "@stll/sanctions";
 
-import type { Transaction } from "@/api/db/root";
 import { contacts } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { identifierVariants } from "@/api/lib/conflict-check/identifiers";
 import { LIMITS } from "@/api/lib/limits";

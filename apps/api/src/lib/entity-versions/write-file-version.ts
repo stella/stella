@@ -3,7 +3,6 @@ import { and, eq, sql } from "drizzle-orm";
 
 import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 
-import type { Transaction } from "@/api/db/root";
 import {
   cellMetadata,
   desktopEditSessions,
@@ -14,6 +13,7 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

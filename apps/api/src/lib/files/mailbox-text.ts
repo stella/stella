@@ -11,8 +11,8 @@ import { MAILBOX_MAX_MESSAGES } from "@stll/api-contract/mailbox";
 
 import { parsedEmailToText, parseEmail } from "@/api/lib/files/email-to-html";
 import {
-  type MailboxEntry,
   mailboxEntry,
+  type MailboxListedMessage,
 } from "@/api/lib/files/mailbox-messages";
 import {
   type MboxMessage,
@@ -35,7 +35,7 @@ const isInlineImage = ({
   mimeType: string | null;
 }) => contentId !== null && (mimeType ?? "").startsWith("image/");
 
-const headerLines = (entry: MailboxEntry): string[] => {
+const headerLines = (entry: MailboxListedMessage): string[] => {
   const rows: readonly (readonly [string, string | null])[] = [
     ["From", entry.from],
     ["Date", entry.date],
@@ -46,28 +46,28 @@ const headerLines = (entry: MailboxEntry): string[] => {
   );
 };
 
-/** One message's text: its header, body and attachments' names. */
-const messageText = async (
-  entry: MailboxEntry,
-  stored: Uint8Array | null,
+/**
+ * One message's text: its header, body and attachments' names. `email` is
+ * the message as an email, or null when it is not read (too large).
+ */
+export const mailboxMessageText = async (
+  entry: MailboxListedMessage,
+  email: Uint8Array | null,
 ): Promise<string> => {
   const heading = `Message ${String(entry.index + 1)}${
     entry.folder === null ? "" : ` (folder: ${entry.folder})`
   }`;
-  if (entry.unavailable === "tooLarge" || stored === null) {
+  if (entry.unavailable === "unreadable") {
+    return `${heading}\nThe message could not be read.`;
+  }
+  if (entry.unavailable === "tooLarge" || email === null) {
     return [
       heading,
       ...headerLines(entry),
       "The message is too large to read.",
     ].join("\n");
   }
-  if (entry.unavailable === "unreadable") {
-    return `${heading}\nThe message could not be read.`;
-  }
-  const parsed = await parseEmail(
-    toArrayBuffer(mboxMessageBytes(stored, entry.bounded)),
-    EML_MIME_TYPE,
-  );
+  const parsed = await parseEmail(toArrayBuffer(email), EML_MIME_TYPE);
   if (parsed.isErr()) {
     return [
       heading,
@@ -87,6 +87,12 @@ const messageText = async (
   ].join("\n");
 };
 
+/** What a mailbox's text opens with. */
+export const MAILBOX_TEXT_HEADING = "Mailbox.";
+
+/** What a mailbox's text says when it holds more messages than are read. */
+export const MAILBOX_TEXT_TRUNCATED = `Only the first ${String(MAILBOX_MAX_MESSAGES)} messages are read.`;
+
 /**
  * The text of the mailbox `chunks` stream, cut at `maxChars`. Every chunk is
  * consumed, so a writer streaming the file in is never cut off; once the
@@ -101,7 +107,7 @@ export const readMailboxText = async ({
   maxChars: number;
   mailboxName: string;
 }): Promise<Result<string, MboxParseError>> => {
-  const blocks: string[] = ["Mailbox."];
+  const blocks: string[] = [MAILBOX_TEXT_HEADING];
   let length = blocks[0]?.length ?? 0;
   const ready: MboxMessage[] = [];
   const scanner = new MboxScanner((message) => {
@@ -116,7 +122,12 @@ export const readMailboxText = async ({
         return;
       }
       const entry = await mailboxEntry(message, mailboxName);
-      const block = await messageText(entry, message.stored);
+      const block = await mailboxMessageText(
+        entry,
+        message.stored === null
+          ? null
+          : mboxMessageBytes(message.stored, entry.bounded),
+      );
       blocks.push(block);
       length += block.length + 2;
     }
@@ -133,9 +144,7 @@ export const readMailboxText = async ({
     return Result.err(scanner.failure);
   }
   if (scanner.truncated) {
-    blocks.push(
-      `Only the first ${String(MAILBOX_MAX_MESSAGES)} messages are read.`,
-    );
+    blocks.push(MAILBOX_TEXT_TRUNCATED);
   }
   return Result.ok(blocks.join("\n\n").slice(0, maxChars));
 };

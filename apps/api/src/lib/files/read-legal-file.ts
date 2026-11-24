@@ -29,6 +29,8 @@ import {
   readLegalFilePreview,
 } from "@/api/lib/files/read-legal-file-preview";
 import { readMailboxContent } from "@/api/lib/files/read-mailbox-file";
+import { readSignatureFile } from "@/api/lib/files/read-signature-file";
+import { signatureDocumentText } from "@/api/lib/files/signature-document-text";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
 import { zipArchiveText } from "@/api/lib/files/zip-archive-text";
 import { LIMITS } from "@/api/lib/limits";
@@ -116,10 +118,59 @@ const readZipArchiveContent: LegalContentReader = async (options) => {
   });
 };
 
+/**
+ * A signature file's text, or null for a `.sig` or `.xml` file whose bytes
+ * are not a signature: that file is read the way it would be otherwise.
+ */
+const readSignatureContent = async (
+  options: LegalFileReadOptions,
+): Promise<
+  Result<
+    {
+      text: string;
+      attachments: { entityId: SafeId<"entity">; position: number }[];
+    } | null,
+    HandlerError
+  >
+> => {
+  const read = await readSignatureFile(options);
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  if ("type" in read.value) {
+    return Result.ok(null);
+  }
+  const { preview, reply } = read.value;
+  return Result.ok({
+    text: signatureDocumentText(reply, preview.signedFiles),
+    attachments: [],
+  });
+};
+
+const readNamedSignatureContent: LegalContentReader = async (options) => {
+  const read = await readSignatureContent(options);
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  return Result.ok(read.value ?? { text: "", attachments: [] });
+};
+
+/** An `.xml` file read as the XAdES signature it holds, else as XML. */
+const readXmlContent: LegalContentReader = async (options) => {
+  const signature = await readSignatureContent(options);
+  if (signature.isErr()) {
+    return Result.err(signature.error);
+  }
+  if (signature.value !== null) {
+    return Result.ok(signature.value);
+  }
+  return await readEInvoiceContent(options);
+};
+
 export const LEGAL_FILE_READERS = {
   isdoc: readEInvoiceContent,
   isdocx: readEInvoiceContent,
-  xml: readEInvoiceContent,
+  xml: readXmlContent,
   ofd: readStructuredDocumentContent,
   uyap: readStructuredDocumentContent,
   asicE: readAsicContent,
@@ -129,6 +180,7 @@ export const LEGAL_FILE_READERS = {
   xadesZep: readSignedDossierContent,
   zip: readZipArchiveContent,
   mbox: readMailboxContent,
+  pst: readMailboxContent,
   cades: async (options) => {
     const read = await readLegalFilePreview(
       options,
@@ -140,6 +192,8 @@ export const LEGAL_FILE_READERS = {
     }
     return Result.ok({ text: cadesDocumentText(read.value), attachments: [] });
   },
+  cadesDetached: readNamedSignatureContent,
+  xades: readNamedSignatureContent,
   dataBox: async (options) => {
     const read = await readDataBoxFile(options);
     if (read.isErr()) {

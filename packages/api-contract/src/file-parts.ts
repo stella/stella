@@ -28,7 +28,10 @@ export const FILE_PART_KINDS = {
   member: "member",
   /** An attachment of an email, a data-box message or an invoice. */
   attachment: "attachment",
-  /** A message of a mailbox (`.mbox`), delivered as an email of its own. */
+  /**
+   * A message of a mailbox (`.mbox`, Outlook `.pst`), delivered as an email
+   * of its own.
+   */
   message: "message",
 } as const;
 export type FilePartKind =

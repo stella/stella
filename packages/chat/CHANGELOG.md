@@ -1,5 +1,36 @@
 # @stll/chat
 
+## 0.6.14
+
+### Patch Changes
+
+- Updated dependencies [[`1ab906c`](https://github.com/stella/stella/commit/1ab906cc4ad7916de5ef21284416343ea2e2810c)]:
+  - @stll/ui@0.88.0
+
+## 0.6.13
+
+### Patch Changes
+
+- Updated dependencies [[`1798f66`](https://github.com/stella/stella/commit/1798f6615a61ddf02e091d925269ed735bef75fe)]:
+  - @stll/ui@0.87.0
+
+## 0.6.12
+
+### Patch Changes
+
+- Updated dependencies [[`b280d21`](https://github.com/stella/stella/commit/b280d21b8b6bc7149a342a08f2d78036f1099186)]:
+  - @stll/ui@0.86.0
+
+## 0.6.11
+
+### Patch Changes
+
+- [#9265](https://github.com/stella/stella/pull/9265) [`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `@ag-ui/core` to `1.0.5`.
+  Update `tldts` to `7.5.4`.
+  Update `lucide-react` to `1.74.0`.
+- Updated dependencies [[`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63), [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b)]:
+  - @stll/ui@0.85.0
+
 ## 0.6.10
 
 ### Patch Changes

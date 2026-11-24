@@ -1,7 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   desktopEditSessions,
   documentProcessingRuns,
@@ -10,6 +9,7 @@ import {
   pdfSigningSessions,
   timeEntries,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

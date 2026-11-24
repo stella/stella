@@ -14,7 +14,7 @@ import {
 import { numberFromString } from "@stll/api-contract/http-input";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { auditLogs, auditPeoplePerformerSql } from "@/api/db/schema";
 import {
   AUDIT_ACTION,

@@ -17,7 +17,7 @@ import {
 } from "@stll/api-contract/chat-local-run-step-content";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   chatLocalRunStepContents,
   chatThreads,

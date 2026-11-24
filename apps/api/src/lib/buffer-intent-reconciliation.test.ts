@@ -5,9 +5,9 @@ import { PgDialect } from "drizzle-orm/pg-core";
 
 import { rejectionOf } from "@stll/property-testing/rejection";
 
-import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { BUFFER_OBJECT_CLEANUP_INTENT_STATUS } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { isRecord } from "@/api/lib/type-guards";

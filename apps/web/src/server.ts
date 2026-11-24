@@ -7,6 +7,7 @@ import {
 import { createStartHandler, StartServer } from "@tanstack/react-start/server";
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
 
+import { isAnonymousRequest } from "@/anonymous-request";
 import { env } from "@/env";
 import { loadServerDocumentPresentation } from "@/i18n/document-presentation";
 import { withRequestI18n } from "@/i18n/request-i18n.server";
@@ -15,7 +16,10 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import { browserApiBaseUrl, externalApiOrigin } from "@/lib/api-origins";
 import { frameSandboxUrls } from "@/lib/api-url";
 import { isSearchUnavailableError } from "@/lib/public-law-api";
-import { SSR_CACHE_CLASS_HEADER } from "@/route-response-policy";
+import {
+  responseCachePolicy,
+  SSR_CACHE_CLASS_HEADER,
+} from "@/route-response-policy";
 import { withContentSecurityPolicy } from "@/security/content-security-policy.server";
 import {
   createSsrErrorReporter,
@@ -76,6 +80,21 @@ export default createServerEntry({
             sandboxUrls: frameSandboxUrls(),
           },
           fetchResponse: async () => {
+            const cachePolicy = (headers: Headers, upstreamStatus: number) =>
+              responseCachePolicy({
+                cacheClass: headers.get(SSR_CACHE_CLASS_HEADER),
+                status: documentStatus(headers, upstreamStatus),
+                isHtml:
+                  headers
+                    .get("Content-Type")
+                    ?.split(";")
+                    .at(0)
+                    ?.trim()
+                    .toLowerCase() === "text/html",
+                isAnonymous: isAnonymousRequest(request),
+                setsCookie: headers.has("Set-Cookie"),
+                routeCacheControl: headers.get("Cache-Control"),
+              });
             const response = isSsrDocumentRequest(request)
               ? await fetchBoundedSsrResponse({
                   request,
@@ -127,6 +146,12 @@ export default createServerEntry({
                       ),
                     )(renderRequest),
                   reportError: reportSsrError,
+                  // A document a shared cache may store must never end as a
+                  // complete transfer after the deadline cut its render short.
+                  deadlineEnding: (rendered) =>
+                    cachePolicy(rendered.headers, rendered.status).shared
+                      ? "error"
+                      : "close",
                 })
               : await handler.fetch(request);
             const headers = new Headers(response.headers);
@@ -138,29 +163,17 @@ export default createServerEntry({
             )) {
               headers.set(name, value);
             }
+            const policy = cachePolicy(headers, response.status);
             // A route that rendered a degraded page names the status it wants; the
             // marker is consumed here so only the status crosses the wire.
             const status = documentStatus(headers, response.status);
             headers.delete(SSR_STATUS_HEADER);
-            const cacheClass = headers.get(SSR_CACHE_CLASS_HEADER);
             headers.delete(SSR_CACHE_CLASS_HEADER);
-            const isSuccessful = status >= 200 && status < 300;
-            const isHtml =
-              headers
-                .get("Content-Type")
-                ?.split(";")
-                .at(0)
-                ?.trim()
-                .toLowerCase() === "text/html";
-            if (
-              cacheClass !== "public-anonymous" ||
-              !isSuccessful ||
-              isHtml ||
-              !headers.has("Cache-Control")
-            ) {
-              headers.set("Cache-Control", "private, no-store");
+            headers.set("Cache-Control", policy.cacheControl);
+            if (policy.vary !== null) {
+              headers.append("Vary", policy.vary);
             }
-            if (cacheClass !== "public-indexable" || !isSuccessful || !isHtml) {
+            if (!policy.indexable) {
               headers.set("X-Robots-Tag", "noindex");
             }
 

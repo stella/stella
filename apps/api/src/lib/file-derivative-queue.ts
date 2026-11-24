@@ -9,7 +9,7 @@ import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import { fields, workspaces } from "@/api/db/schema";
 import { DERIVATIVE_FAILURE_REASON } from "@/api/db/schema-validators";
 import type {

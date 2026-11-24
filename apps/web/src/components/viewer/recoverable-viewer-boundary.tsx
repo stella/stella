@@ -37,6 +37,7 @@ export type ViewerSurface =
   | "inspector-structured-document"
   | "inspector-cades"
   | "inspector-signed-dossier"
+  | "inspector-signature"
   | "inspector-data-box"
   | "inspector-e-invoice"
   | "inspector-zip"

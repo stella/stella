@@ -1,4 +1,4 @@
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { FeatureId } from "@/api/lib/feature-access/registry";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";

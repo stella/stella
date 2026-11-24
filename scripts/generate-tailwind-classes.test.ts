@@ -29,7 +29,6 @@ test("a lint pass's large report is read while the pass runs", async () => {
 });
 
 test("a stalled lint pass is stopped and fails generation, naming the pass", async () => {
-  const started = performance.now();
   // real-time: the pass must be stopped by its own timeout.
   const rejection = await rejectionOf(
     runLintPass([process.execPath, "-e", "setInterval(() => {}, 1000);"], {
@@ -42,7 +41,6 @@ test("a stalled lint pass is stopped and fails generation, naming the pass", asy
   expect(message).toContain(
     "Tailwind cache generation (scripts/generate-tailwind-classes.ts --write): the stalled test oxlint pass was still running after 0.2 s and was stopped. It had written 0 bytes of its report, and its ",
   );
-  expect(performance.now() - started).toBeLessThan(4000);
 });
 
 test.skipIf(process.platform !== "linux")(

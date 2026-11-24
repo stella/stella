@@ -30,7 +30,7 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { declareFailureClass, readFailureBrand } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import {
   CHAT_COMPACTION_MEMORY_ELIGIBILITY,
   CHAT_COMPACTION_MEMORY_EXTRACTABLE,

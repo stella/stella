@@ -11,12 +11,12 @@ import {
   normalizeStructuredDecisionIdentifier,
 } from "@stll/legal-ast/decision-identifier";
 
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ecliKeyAmongSql } from "@/api/lib/case-law/case-number-match-key";
 import { canonicalDecisionIdSql } from "@/api/lib/case-law/decision-alias";

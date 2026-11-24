@@ -50,6 +50,7 @@ import { decisionFilterValidationScalingScenario } from "./decision-filter-valid
 import { decisionSummaryScalingScenario } from "./decision-summary";
 import { desktopRunnerUpgradeScalingScenario } from "./desktop-runner-upgrade";
 import {
+  desktopDictationCleanupModelsScalingScenario,
   desktopDictationModelsScalingScenario,
   dictationModelsScalingScenario,
   dictationScalingScenario,
@@ -94,6 +95,7 @@ import {
 import { readScalingScenarios } from "./scenarios";
 import { sharepointBrowseScalingScenarios } from "./sharepoint-browse";
 import { sharepointCapabilitiesScalingScenario } from "./sharepoint-capabilities";
+import { signaturePreviewScalingScenario } from "./signature-preview";
 import { signedDossierPreviewScalingScenario } from "./signed-dossier";
 import { similarDocumentsScalingScenarios } from "./similar-documents";
 import { skillExportScalingScenarios } from "./skill-export";
@@ -167,6 +169,7 @@ const measuredApiScenarios = [
   structuredDocumentScalingScenario,
   eInvoicePreviewScalingScenario,
   cadesPreviewScalingScenario,
+  signaturePreviewScalingScenario,
   dataBoxPreviewScalingScenario,
   emailReadingScalingScenario,
   ...dataBoxSettingsScalingScenarios,
@@ -191,6 +194,7 @@ const measuredApiScenarios = [
   ...legislationMatterLinkScalingScenarios,
   dictationScalingScenario,
   desktopDictationModelsScalingScenario,
+  desktopDictationCleanupModelsScalingScenario,
   dictationModelsScalingScenario,
   organizationSlugScalingScenario,
   organizationAuditExportScalingScenario,

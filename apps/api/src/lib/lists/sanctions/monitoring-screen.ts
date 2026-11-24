@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { contacts } from "@/api/db/schema";
 import {
   monitoringFingerprint,

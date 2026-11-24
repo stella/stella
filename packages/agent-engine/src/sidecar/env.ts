@@ -149,3 +149,17 @@ export const stellaBrowserTestHooks = (): StellaBrowserTestHooks | null => {
     browserLog: setValue(STELLA_BROWSER_TEST_VARIABLES.browserLog),
   };
 };
+
+/** MCP proxy URL and bearer token passed to `--mcp-stdio-bridge`. */
+export const mcpStdioBridgeConfig = (): {
+  url: string;
+  token: string;
+} | null => {
+  const url = process.env["STELLA_MCP_URL"];
+  const token = process.env["STELLA_MCP_TOKEN"];
+  delete process.env["STELLA_MCP_TOKEN"];
+  if (url === undefined || token === undefined || url === "" || token === "") {
+    return null;
+  }
+  return { url, token };
+};

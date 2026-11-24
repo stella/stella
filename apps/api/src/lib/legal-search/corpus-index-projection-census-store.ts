@@ -3,11 +3,11 @@ import { and, asc, eq, gt, inArray, isNotNull, lte, sql } from "drizzle-orm";
 
 import { isUuid } from "@stll/uuid-codec";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";

@@ -6,7 +6,7 @@ import type { AiCellSettlement } from "@stll/api-contract";
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 import type { ConditionNode } from "@stll/conditions";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { justifications } from "@/api/db/schema";
 import type { JustificationContent, VerdictMatchedRef } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";

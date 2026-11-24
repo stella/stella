@@ -1,0 +1,5 @@
+{
+  "metric": "direct-third-party-declarations",
+  "delta": 7,
+  "reason": "The hybrid Markdown editor moves from apps/web into the new @stll/markdown-editor package so the desktop can render it too. Its four engine dependencies (@vscode/markdown-editor, @vscode/observables, @neftaly/editcontext-polyfill, katex) move with it and leave apps/web. The rest are what any React package here declares again in its own manifest: react (peer and dev), @types/react, bun-types, better-result and use-debounce, plus the happy-dom registrator its DOM tests use. Every one of them is already in the lockfile at the same version, so nothing new is installed."
+}

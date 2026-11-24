@@ -398,6 +398,14 @@ export const DOCUMENT_MARKS = {
   }),
   bdoc: taggedFormatMark({ color: "#0f6e7a", lines: [["B", "D", "O", "C"]] }),
   cades: taggedFormatMark({ color: "#6b4c9a", lines: [["P", "7", "M"]] }),
+  cadesDetached: taggedFormatMark({
+    color: "#57418a",
+    lines: [["P", "7", "S"]],
+  }),
+  xades: taggedFormatMark({
+    color: "#4b4f8f",
+    lines: [["X", "A", "D", "E", "S"]],
+  }),
   fatturaPA: taggedFormatMark({ color: "#1d6f42", lines: [["F", "P", "A"]] }),
   isdoc: taggedFormatMark({
     color: "#1f5fa8",
@@ -410,6 +418,7 @@ export const DOCUMENT_MARKS = {
   xml: taggedFormatMark({ color: "#5c6470", lines: [["X", "M", "L"]] }),
   zip: taggedFormatMark({ color: "#7a5c2e", lines: [["Z", "I", "P"]] }),
   mbox: taggedFormatMark({ color: "#2f6b5c", lines: [["M", "B", "O", "X"]] }),
+  pst: taggedFormatMark({ color: "#2b5d8a", lines: [["P", "S", "T"]] }),
   eAkta: taggedFormatMark({ color: "#8c2f5d", lines: [["E", "S", "3"]] }),
   et3: taggedFormatMark({ color: "#a2481f", lines: [["E", "T", "3"]] }),
   zep: taggedFormatMark({ color: "#24529c", lines: [["Z", "E", "P"]] }),

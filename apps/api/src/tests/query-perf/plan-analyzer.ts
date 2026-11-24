@@ -7,6 +7,7 @@ import type { ExplainPlanDocument } from "@/api/tests/explain-as-stella";
 
 import { isExceptedPlanViolation } from "./plan-exceptions";
 import type { QueryPerfProfileId } from "./profiles";
+import { median } from "./sampling";
 import { isLargeQueryPerfRelation } from "./table-sizes";
 
 /** Fixture rows represent one percent of the production-shape population. */
@@ -32,6 +33,80 @@ export type PlanViolation = {
   statement: string;
   node: Record<string, unknown>;
   message: string;
+};
+
+const nodeLabel = (node: Record<string, unknown>) => {
+  const nodeType = node["Node Type"];
+  const relation = node["Relation Name"];
+  return `${typeof nodeType === "string" ? nodeType : "unknown node"}${typeof relation === "string" ? ` on ${relation}` : ""}`;
+};
+
+type PlanViolationSubject = Pick<
+  PlanViolation,
+  "owner" | "profileId" | "statement"
+>;
+
+const planViolation = (
+  { owner, profileId, statement }: PlanViolationSubject,
+  kind: PlanViolation["kind"],
+  node: Record<string, unknown>,
+  detail: string,
+): PlanViolation => ({
+  kind,
+  owner,
+  profileId,
+  statement,
+  node,
+  message: `${owner}: ${detail}; statement: ${statement}; node: ${nodeLabel(node)}`,
+});
+
+const scaledTimeAllowanceMs = (ownerDeadlineMs: number | undefined) =>
+  ownerDeadlineMs === undefined
+    ? undefined
+    : ownerDeadlineMs * QUERY_PERF_TIMEOUT_SHARE;
+
+/** Whether one execution time, scaled to production, exceeds the owner's statement share. */
+export const exceedsScaledTimeAllowance = (
+  executionTimeMs: number,
+  ownerDeadlineMs: number | undefined,
+) => {
+  const allowance = scaledTimeAllowanceMs(ownerDeadlineMs);
+  return (
+    allowance !== undefined &&
+    executionTimeMs * QUERY_PERF_FIXTURE_SCALE_FACTOR > allowance
+  );
+};
+
+/**
+ * The scaled-time finding for one statement, decided by the median of its
+ * execution-time samples rather than by any single one of them.
+ */
+export const scaledTimeViolations = ({
+  document,
+  executionTimesMs,
+  ...subject
+}: PlanViolationSubject & {
+  document: ExplainPlanDocument;
+  executionTimesMs: readonly number[];
+  ownerDeadlineMs: number | undefined;
+}): PlanViolation[] => {
+  const allowance = scaledTimeAllowanceMs(subject.ownerDeadlineMs);
+  const executionTime = median(executionTimesMs);
+  if (
+    allowance === undefined ||
+    !exceedsScaledTimeAllowance(executionTime, subject.ownerDeadlineMs)
+  ) {
+    return [];
+  }
+  const scaled = executionTime * QUERY_PERF_FIXTURE_SCALE_FACTOR;
+  return [
+    planViolation(
+      subject,
+      "scaled-time",
+      document.Plan,
+      `scaled execution time ${String(scaled)} ms (median of ${String(executionTimesMs.length)} samples) exceeds ${String(allowance)} ms`,
+    ),
+  ].filter((violation) => !isExceptedPlanViolation(violation));
 };
 
 const children = (node: Record<string, unknown>) => {
@@ -79,12 +154,6 @@ const hasOuterStreamBound = (node: Record<string, unknown>): boolean => {
   );
 };
 
-const nodeLabel = (node: Record<string, unknown>) => {
-  const nodeType = node["Node Type"];
-  const relation = node["Relation Name"];
-  return `${typeof nodeType === "string" ? nodeType : "unknown node"}${typeof relation === "string" ? ` on ${relation}` : ""}`;
-};
-
 // The folded queue is deliberately empty in this job profile. PostgreSQL
 // chooses a zero-buffer sequential scan there; its nonempty maximum window
 // is measured separately, without relaxing classification of queue storage.
@@ -120,14 +189,9 @@ export const analyzePlan = ({
     node: Record<string, unknown>,
     detail: string,
   ) => {
-    violations.push({
-      kind,
-      owner,
-      profileId,
-      statement,
-      node,
-      message: `${owner}: ${detail}; statement: ${statement}; node: ${nodeLabel(node)}`,
-    });
+    violations.push(
+      planViolation({ owner, profileId, statement }, kind, node, detail),
+    );
   };
   if (ownerDeadlineMs === undefined) {
     report(
@@ -195,21 +259,5 @@ export const analyzePlan = ({
     }
   };
   visit(document.Plan);
-  const executionTime = document["Execution Time"];
-  const allowance =
-    ownerDeadlineMs === undefined
-      ? undefined
-      : ownerDeadlineMs * QUERY_PERF_TIMEOUT_SHARE;
-  if (
-    allowance !== undefined &&
-    typeof executionTime === "number" &&
-    executionTime * QUERY_PERF_FIXTURE_SCALE_FACTOR > allowance
-  ) {
-    report(
-      "scaled-time",
-      document.Plan,
-      `scaled execution time ${String(executionTime * QUERY_PERF_FIXTURE_SCALE_FACTOR)} ms exceeds ${String(allowance)} ms`,
-    );
-  }
   return violations.filter((violation) => !isExceptedPlanViolation(violation));
 };

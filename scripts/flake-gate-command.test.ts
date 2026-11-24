@@ -126,7 +126,7 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "packages/cli/package.json:test",
       },
       {
-        "command": "bun run test:bun && cargo test",
+        "command": "bun run test:bun && bash ../../scripts/cargo-test.sh",
         "reason": "shell-syntax",
         "script": "packages/heic-decoder/package.json:test",
       },
@@ -136,7 +136,12 @@ test("the generic parser records unsupported shell shapes independently of dedic
         "script": "packages/mcp-apps/package.json:test",
       },
       {
-        "command": "bun run test:bun && cargo test",
+        "command": "bun run test:bun && bash ../../scripts/cargo-test.sh --features assemble",
+        "reason": "shell-syntax",
+        "script": "packages/pst-reader/package.json:test",
+      },
+      {
+        "command": "bun run test:bun && bash ../../scripts/cargo-test.sh",
         "reason": "shell-syntax",
         "script": "packages/scan-engine/package.json:test",
       },

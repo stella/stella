@@ -1,38 +1,21 @@
 import { Result } from "better-result";
-import type { UnhandledException } from "better-result";
 import { TransactionRollbackError } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type {
-  CreateIngestionDbOptions,
-  SafeDbRetryConfig as BaseSafeDbRetryConfig,
-} from "@/api/db/scoped";
+  SafeDb,
+  SafeDbError,
+  SafeDbOrTx,
+  SafeDbRetryConfig,
+  ScopedDb,
+} from "@/api/db/safe-db-types";
+import type { Transaction } from "@/api/db/types";
 import { withAggregateSavepoint } from "@/api/lib/db/aggregate-lock";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { DatabaseRlsError } from "@/api/lib/errors/tagged-errors";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
 export { abortTransaction };
-
-/**
- * Scoped database handle that wraps every operation in a short-lived RLS
- * transaction. Handlers receive this capability from auth and must not import
- * the owner-level database handle.
- */
-export type ScopedDb<TTransaction = Transaction> = <T>(
-  fn: (tx: TTransaction) => Promise<T>,
-) => Promise<T>;
-
-/** Corpus operations can bound schema-lane waits; createIngestionDb honors these budgets. */
-export type IngestionScopedDb = <T>(
-  fn: (tx: Transaction) => Promise<T>,
-  options?: CreateIngestionDbOptions,
-) => Promise<T>;
-
-export type SafeDbError = DatabaseError | DatabaseRlsError | UnhandledException;
-
-export type SafeDbRetryConfig = BaseSafeDbRetryConfig<SafeDbError>;
+export type { SafeDb, SafeDbError, SafeDbOrTx, SafeDbRetryConfig, ScopedDb };
 
 export const defaultDatabaseRetry: SafeDbRetryConfig = {
   retry: {
@@ -46,20 +29,11 @@ export const defaultDatabaseRetry: SafeDbRetryConfig = {
   },
 };
 
-export type SafeDb<TTransaction = Transaction> = <T>(
-  fn: (tx: TTransaction) => Promise<T>,
-  retry?: SafeDbRetryConfig,
-) => Promise<Result<T, SafeDbError>>;
-
 /** The same scoped handle, failing with a `Result` instead of a throw. */
 export const safeDbFromScoped =
   (scopedDb: ScopedDb): SafeDb =>
   async <T>(run: (tx: Transaction) => Promise<T>) =>
     await Result.tryPromise(async () => await scopedDb(run));
-
-/** A safe scoped handle or a transaction already opened by its caller. */
-export type SafeDbOrTx =
-  { safeDb: SafeDb; tx?: undefined } | { safeDb?: undefined; tx: Transaction };
 
 /**
  * Recover the failure a transaction callback threw to abort itself.

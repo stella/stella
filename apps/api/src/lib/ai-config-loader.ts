@@ -18,8 +18,8 @@ import {
   resolveAIProviderSettings,
 } from "@stll/api-contract/organization-ai-availability";
 
-import type { Transaction } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {

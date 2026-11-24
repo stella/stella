@@ -6,6 +6,11 @@
   "maxSegments": 2000,
   "maxWindowTitleLength": 200,
   "maxTextBeforeCursorLength": 1000,
+  "maxCustomInstructionsLength": 1000,
+  "maxModelLength": 200,
+  "modelsPath": "/v1/desktop/dictation/cleanup-models",
+  "maxModels": 500,
+  "maxModelDisplayNameLength": 120,
   "appKinds": [
     "email",
     "chat",

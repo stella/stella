@@ -34,8 +34,29 @@ export const documentsBucketOrigin = (
 export const createContentSecurityPolicyNonce = (): string =>
   createRandomValue();
 
+/**
+ * How a document's own scripts are admitted:
+ * - `nonce`: a private document carries a fresh nonce per response, and code
+ *   those scripts load is trusted transitively (`'strict-dynamic'`).
+ * - `hashes`: a document a shared cache may store is sent to many viewers, so
+ *   its policy names only the base64 SHA-256 of each inline script it holds.
+ *   A parser-inserted `<script src>` cannot be admitted by a hash in every
+ *   browser, so `'self'` stays in force here (no `'strict-dynamic'`) and admits
+ *   the same-origin bootstrap files and lazy chunks.
+ */
+type DocumentScriptSources =
+  | { kind: "nonce"; nonce: string }
+  | { kind: "hashes"; hashes: readonly string[] };
+
+const scriptSourceExpressions = (
+  scripts: DocumentScriptSources,
+): readonly string[] =>
+  scripts.kind === "nonce"
+    ? [`'nonce-${scripts.nonce}'`, "'strict-dynamic'"]
+    : scripts.hashes.map((hash) => `'sha256-${hash}'`);
+
 export const buildContentSecurityPolicy = (
-  nonce: string,
+  scripts: DocumentScriptSources,
   environment: ContentSecurityPolicyEnvironment,
 ): string => {
   const apiOrigin = origin(environment.browserApiBase ?? environment.apiBase);
@@ -62,7 +83,12 @@ export const buildContentSecurityPolicy = (
 
   return [
     "default-src 'self'",
-    `script-src 'self' 'nonce-${nonce}' 'strict-dynamic' 'wasm-unsafe-eval'${posthogOrigin === null ? "" : ` ${posthogOrigin}`}`,
+    [
+      "script-src 'self'",
+      ...scriptSourceExpressions(scripts),
+      "'wasm-unsafe-eval'",
+      ...(posthogOrigin === null ? [] : [posthogOrigin]),
+    ].join(" "),
     "style-src 'self' 'unsafe-inline'",
     `img-src 'self' data: blob: https://lh3.googleusercontent.com ${apiOrigin} ${documentOrigin}`,
     "font-src 'self' data:",

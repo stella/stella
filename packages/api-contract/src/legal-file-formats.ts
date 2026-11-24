@@ -1,5 +1,6 @@
 import { ASIC_FILE_FORMATS } from "./asic-file-formats";
 import { E_INVOICE_FILE_FORMATS } from "./e-invoice-formats";
+import { SIGNATURE_FILE_FORMATS } from "./signature-file-formats";
 import { SIGNED_DOSSIER_FORMATS } from "./signed-dossier-formats";
 import { STRUCTURED_DOCUMENT_FORMATS } from "./structured-document-formats";
 
@@ -57,6 +58,28 @@ export const MBOX_FILE_FORMAT = {
   mimeAliases: [],
 } as const;
 
+/**
+ * An Outlook mailbox file (`.pst`, and `.ost` in the same layout): a store of
+ * folders and messages. Every message is a part of the file (`message:N`,
+ * numbered down the folders in order) and opens as an email of its own.
+ */
+export const PST_FILE_FORMAT = {
+  kind: "pst",
+  auditFormat: "pst",
+  label: "PST",
+  extensions: [".pst", ".ost"],
+  mimeType: "application/vnd.ms-outlook-pst",
+  mimeAliases: [],
+} as const;
+
+/** Formats whose files are mailboxes: lists of messages, each an email. */
+export const MAILBOX_FILE_FORMATS = [
+  MBOX_FILE_FORMAT,
+  PST_FILE_FORMAT,
+] as const;
+
+export const MAILBOX_FILE_KINDS = MAILBOX_FILE_FORMATS.map(({ kind }) => kind);
+
 export const [ASIC_E_FILE_FORMAT, ASIC_S_FILE_FORMAT] = ASIC_FILE_FORMATS;
 
 export const ASIC_FILE_KINDS = ASIC_FILE_FORMATS.map(({ kind }) => kind);
@@ -67,6 +90,13 @@ export const [E_AKTA_FILE_FORMAT, ZEP_FILE_FORMAT, XADES_ZEP_FILE_FORMAT] =
 export const SIGNED_DOSSIER_KINDS = SIGNED_DOSSIER_FORMATS.map(
   ({ kind }) => kind,
 );
+export const [CADES_DETACHED_FILE_FORMAT, XADES_FILE_FORMAT] =
+  SIGNATURE_FILE_FORMATS;
+
+export {
+  SIGNATURE_FILE_KINDS,
+  type SignatureFileFormatKind,
+} from "./signature-file-formats";
 
 /** Recognized legal containers shared by Files, search and chat. */
 export const LEGAL_FILE_FORMATS = [
@@ -74,10 +104,12 @@ export const LEGAL_FILE_FORMATS = [
   CADES_FILE_FORMAT,
   ...ASIC_FILE_FORMATS,
   ...SIGNED_DOSSIER_FORMATS,
+  ...SIGNATURE_FILE_FORMATS,
   ...STRUCTURED_DOCUMENT_FORMATS,
   ...E_INVOICE_FILE_FORMATS,
   ZIP_FILE_FORMAT,
   MBOX_FILE_FORMAT,
+  PST_FILE_FORMAT,
 ] as const;
 
 export type LegalFileFormat = (typeof LEGAL_FILE_FORMATS)[number];

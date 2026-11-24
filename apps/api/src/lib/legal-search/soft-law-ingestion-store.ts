@@ -3,7 +3,7 @@ import type { SQL } from "drizzle-orm";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   softLawDocumentLocators,
   softLawDocuments,

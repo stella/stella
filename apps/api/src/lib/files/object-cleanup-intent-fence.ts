@@ -1,8 +1,8 @@
-import type { Transaction } from "@/api/db/root";
 import {
   BUFFER_OBJECT_CLEANUP_INTENT_STATUS,
   bufferObjectCleanupIntents,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockOrganizationObjectIntentFence } from "@/api/lib/db/aggregate-lock";
 

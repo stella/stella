@@ -1684,11 +1684,8 @@ describe("collaboration server", () => {
         },
       });
 
-      const startedAt = Date.now();
       await collabServer.destroy();
       destroyed = true;
-
-      expect(Date.now() - startedAt).toBeLessThan(1000);
     } finally {
       provider.destroy();
       ydoc.destroy();

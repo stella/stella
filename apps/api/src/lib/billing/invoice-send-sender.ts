@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { and, eq, isNull } from "drizzle-orm";
 
 import { member, organization, user as authUser } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   emailColumnMatches,

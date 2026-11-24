@@ -14,8 +14,8 @@ import {
   DOCX_SUGGESTIONS_PENDING_MAX,
 } from "@stll/api-contract";
 
-import type { Transaction } from "@/api/db/root";
 import { docxSuggestions, entities } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 

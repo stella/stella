@@ -11,6 +11,7 @@ import type { EInvoicePreview } from "@stll/api-contract/e-invoice";
 import type { EmailReading } from "@stll/api-contract/email-reading";
 import type { UnscannedContentReason } from "@stll/api-contract/file-scan-warnings";
 import type { MailboxPreview } from "@stll/api-contract/mailbox";
+import type { SignaturePreview } from "@stll/api-contract/signature";
 import type { signedDossierPreviewSchema } from "@stll/api-contract/signed-dossier";
 import type { ZipArchivePreview } from "@stll/api-contract/zip-archive";
 
@@ -514,8 +515,10 @@ describe("reading a document's file", () => {
     });
     const file = (await read(fetch)).unwrap();
     expect(file.viewer).toBe("quick-look");
-    expect(calls.slice(0, 3)).toEqual([
+    // An `.xml` file is asked for a signature first.
+    expect(calls.slice(0, 4)).toEqual([
       "/v1/entities/matter-1/entity/entity-1/versions",
+      "/v1/files/matter-1/signature/field%3F1",
       "/v1/files/matter-1/e-invoice/field%3F1",
       "/v1/files/matter-1/url/field%3F1?purpose=display",
     ]);
@@ -656,6 +659,8 @@ describe("reading a document's file", () => {
       });
       expect(calls).toEqual([
         "/v1/entities/matter-1/entity/entity-1/versions",
+        // An `.xml` file is asked for a signature first.
+        ...(format === "xml" ? ["/v1/files/matter-1/signature/field%3F1"] : []),
         "/v1/files/matter-1/e-invoice/field%3F1",
       ]);
     },
@@ -676,6 +681,88 @@ describe("reading a document's file", () => {
       expect(calls.at(-1)).toBe("/v1/files/matter-1/e-invoice/field%3F1");
     },
   );
+  const signature: Extract<SignaturePreview, { type: "signature" }> = {
+    type: "signature",
+    standard: "cades",
+    packaging: "detached",
+    signers: [
+      {
+        id: "layer-0.signer-0",
+        name: "Example notary office",
+        signedAt: "2026-03-02T09:30:00.000Z",
+      },
+    ],
+    statedFileNames: [],
+    signedFiles: [
+      {
+        entityId: "entity-2",
+        fieldId: "field-2",
+        fileName: "smlouva.pdf",
+        binding: "digestMatches",
+      },
+    ],
+    document: null,
+  };
+
+  test.each([
+    ["smlouva.pdf.p7s", "application/pkcs7-signature"],
+    ["podanie.XADES", "application/octet-stream"],
+    ["smlouva.pdf.sig", "application/octet-stream"],
+    ["podanie.xml", "text/xml"],
+  ])(
+    "opens %s as the signature the server reads in it",
+    async (fileName, mimeType) => {
+      const { fetch, calls } = server((path) =>
+        Response.json(
+          path.endsWith("/versions")
+            ? legalFileVersion(fileName, mimeType)
+            : signature,
+        ),
+      );
+      const file = (await read(fetch)).unwrap();
+      expect(file.viewer === "signature" && file.preview.unwrap()).toEqual(
+        signature,
+      );
+      expect(calls).toEqual([
+        "/v1/entities/matter-1/entity/entity-1/versions",
+        "/v1/files/matter-1/signature/field%3F1",
+      ]);
+    },
+  );
+
+  test("an .xml file the server finds no signature in opens as XML", async () => {
+    const { fetch, calls } = server((path) => {
+      if (path.endsWith("/versions")) {
+        return Response.json(legalFileVersion("faktura.xml", "text/xml"));
+      }
+      return path.includes("/signature/")
+        ? Response.json({ type: "notSignature" })
+        : Response.json({ type: "invoice", invoice: invoicePreview });
+    });
+    const file = (await read(fetch)).unwrap();
+    expect(file.viewer).toBe("e-invoice");
+    expect(calls).toEqual([
+      "/v1/entities/matter-1/entity/entity-1/versions",
+      "/v1/files/matter-1/signature/field%3F1",
+      "/v1/files/matter-1/e-invoice/field%3F1",
+    ]);
+  });
+
+  test("a file named as a signature that holds none reads as unreadable", async () => {
+    const { fetch } = server((path) =>
+      Response.json(
+        path.endsWith("/versions")
+          ? legalFileVersion("podpis.p7s", "application/pkcs7-signature")
+          : { type: "notSignature" },
+      ),
+    );
+    const file = (await read(fetch)).unwrap();
+    expect(
+      file.viewer === "signature" &&
+        file.preview.status === "error" &&
+        file.preview.error,
+    ).toMatchObject({ status: 422, code: "preview_unavailable" });
+  });
 
   test.each([".ASICE", ".sce", ".bdoc", ".asics", ".scs"])(
     "reads an ASiC archive with the %s extension through the preview",
@@ -785,6 +872,8 @@ describe("reading a document's file", () => {
     ["spis-23-C-118-2026.mbox", "application/mbox"],
     ["Doručená pošta.mbox", "application/octet-stream"],
     ["korespondence.MBX", "application/octet-stream"],
+    ["korespondence.pst", "application/octet-stream"],
+    ["Archiv 2023.PST", "application/vnd.ms-outlook-pst"],
   ])(
     "reads the mailbox %s (%s) through the mailbox preview",
     async (fileName, mimeType) => {

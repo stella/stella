@@ -136,14 +136,25 @@ type OpenEntityInInspectorOptions = {
   documentOnScreen: CurrentWorkspaceDocument;
   entity?: Pick<WorkspaceEntity, "fields" | "kind"> | undefined;
   entityId: string;
+  /** One exact file of the document; without it, its first displayable file. */
+  fieldId?: string | undefined;
   label: string;
   workspaceId: string;
 };
+
+const requestedFields = <TField extends FileTabSourceField>(
+  fields: Iterable<TField>,
+  fieldId: string | undefined,
+): TField[] =>
+  fieldId === undefined
+    ? [...fields]
+    : [...fields].filter(({ id }) => id === fieldId);
 
 export const openEntityInInspector = async ({
   documentOnScreen,
   entity,
   entityId,
+  fieldId,
   label,
   workspaceId,
 }: OpenEntityInInspectorOptions): Promise<OpenEntityResult> => {
@@ -165,7 +176,7 @@ export const openEntityInInspector = async ({
     const opened = openDisplayableFile({
       documentOnScreen,
       entityId,
-      fields: definedFields(entity),
+      fields: requestedFields(definedFields(entity), fieldId),
       label,
       workspaceId,
     });
@@ -199,7 +210,7 @@ export const openEntityInInspector = async ({
     const opened = openDisplayableFile({
       documentOnScreen,
       entityId,
-      fields: data.fields,
+      fields: requestedFields(data.fields, fieldId),
       label: responseLabel,
       workspaceId,
     });

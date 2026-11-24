@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { agentSkills } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS } from "@/api/lib/agent-skills/skills";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertTestSkill } from "@/api/tests/helpers/agent-skill-db";

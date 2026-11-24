@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 
 import { sanitizeErrorAttributesForOutput } from "@stll/errors";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_BATCH_FAILURE,
   CaseLawBatchApplyError,

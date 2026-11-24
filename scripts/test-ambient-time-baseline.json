@@ -1504,11 +1504,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/legal-search/corpus-index-client.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/legal-search/corpus-index-delete-survivor.contract.test.ts": {
     "count": 4,
     "owner": "api",
@@ -1719,11 +1714,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/observability/otlp-log-exporter.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/organization-member-assignments.db.test.ts": {
     "count": 1,
     "owner": "api",
@@ -1874,11 +1864,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/search/highlight.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/search/index-entity-stamps.db.test.ts": {
     "count": 1,
     "owner": "api",
@@ -1944,11 +1929,6 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/subprocess.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/synthetic-principal/ai-admission.postgres.test.ts": {
     "count": 3,
     "owner": "api",
@@ -1964,13 +1944,8 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/lib/tanstack-ai-generate.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/lib/tanstack-ai-provider-retry.test.ts": {
-    "count": 3,
+    "count": 1,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2114,18 +2089,8 @@
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "apps/api/src/mcp/search-index-unavailable.test.ts": {
-    "count": 2,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "apps/api/src/mcp/server.test.ts": {
     "count": 1,
-    "owner": "api",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "apps/api/src/mcp/tool-name-suggestions.test.ts": {
-    "count": 2,
     "owner": "api",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2255,7 +2220,7 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "apps/collab/src/server.test.ts": {
-    "count": 8,
+    "count": 6,
     "owner": "collab",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2474,21 +2439,6 @@
     "owner": "invoicing",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
-  "packages/legal-atlas/src/document-stage-observer.test.ts": {
-    "count": 2,
-    "owner": "legal-atlas",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/legal-atlas/src/provision-citation-grammars.property.test.ts": {
-    "count": 2,
-    "owner": "legal-atlas",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/mcp-kit/src/envelope.test.ts": {
-    "count": 4,
-    "owner": "mcp-kit",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
   "packages/sanctions/src/dense-screening.test.ts": {
     "count": 2,
     "owner": "sanctions",
@@ -2497,16 +2447,6 @@
   "packages/sanctions/src/screening.test.ts": {
     "count": 4,
     "owner": "sanctions",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/scripts/src/process-stderr.test.ts": {
-    "count": 2,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "packages/template-conditions/src/parse.test.ts": {
-    "count": 2,
-    "owner": "template-conditions",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "packages/ui/src/components/animated-preview.dom.test.tsx": {
@@ -2530,22 +2470,12 @@
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/ci-check-pool.test.ts": {
-    "count": 5,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/ci-failure-digest.test.ts": {
-    "count": 2,
+    "count": 3,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
   "scripts/ci-store-save.test.ts": {
     "count": 3,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/code-quality-task-budget.test.ts": {
-    "count": 6,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },
@@ -2561,11 +2491,6 @@
   },
   "scripts/flake-gate-process.test.ts": {
     "count": 3,
-    "owner": "scripts",
-    "reason": "pre-kit census; migrate to @stll/test-kit"
-  },
-  "scripts/generate-tailwind-classes.test.ts": {
-    "count": 2,
     "owner": "scripts",
     "reason": "pre-kit census; migrate to @stll/test-kit"
   },

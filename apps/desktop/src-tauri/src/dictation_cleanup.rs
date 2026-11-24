@@ -49,6 +49,13 @@ struct Contract {
   max_segments: usize,
   max_window_title_length: usize,
   max_text_before_cursor_length: usize,
+  /// In characters, as the API counts them.
+  max_custom_instructions_length: usize,
+  /// In UTF-16 code units, as the API counts them.
+  max_model_length: usize,
+  models_path: String,
+  max_models: usize,
+  max_model_display_name_length: usize,
   /// `dictation_context::AppKind` names the same kinds; a test binds them.
   #[cfg(test)]
   app_kinds: Vec<String>,
@@ -194,6 +201,140 @@ impl CleanupForm {
   }
 }
 
+const INSTRUCTIONS_CONTROL: &str = "cleanup instructions cannot hold a control character other than a line break or a tab";
+const INSTRUCTIONS_TOO_LONG: &str =
+  "cleanup instructions are longer than stella AI accepts";
+const MODEL_INVALID: &str = "this cleanup model cannot be chosen";
+
+/// What the speaker set for cleanup beyond its form: their own instructions,
+/// style guidance the server ranks below its rules, and the model they chose
+/// (`None`: automatic, the organization's fast model). Like the transcript,
+/// neither is logged.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CleanupPreferences {
+  pub custom_instructions: Option<String>,
+  pub model: Option<String>,
+}
+
+/// Instructions as stored: line endings as `\n`, trimmed, none when blank.
+/// Text beyond the contract's bound or with a control character other than a
+/// line break or a tab is refused whole, so nothing the speaker typed is cut
+/// without a word. The error names the bound, never the text.
+pub fn custom_instructions(raw: &str) -> Result<Option<String>, &'static str> {
+  let text = raw.replace("\r\n", "\n").replace('\r', "\n");
+  let text = text.trim();
+  if text.is_empty() {
+    return Ok(None);
+  }
+  if text
+    .chars()
+    .any(|character| character.is_control() && character != '\n' && character != '\t')
+  {
+    return Err(INSTRUCTIONS_CONTROL);
+  }
+  if text.chars().count() > contract().max_custom_instructions_length {
+    return Err(INSTRUCTIONS_TOO_LONG);
+  }
+  Ok(Some(text.to_string()))
+}
+
+/// A chosen model as stored: a picker value within the contract's bound, or
+/// none for automatic. Whether the organization offers it is the server's
+/// call on every cleanup.
+pub fn cleanup_model(raw: &str) -> Result<Option<String>, &'static str> {
+  let value = raw.trim();
+  if value.is_empty() {
+    return Ok(None);
+  }
+  if value.chars().any(char::is_control)
+    || value.encode_utf16().count() > contract().max_model_length
+  {
+    return Err(MODEL_INVALID);
+  }
+  Ok(Some(value.to_string()))
+}
+
+/// One model cleanup may run on, as the API lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CleanupModel {
+  pub value: String,
+  pub display_name: String,
+  pub provider: String,
+}
+
+/// The models besides automatic, in the chat model picker's order.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CleanupModels {
+  pub models: Vec<CleanupModel>,
+}
+
+/// The list, held to the contract's bounds.
+pub fn parse_models(body: &[u8]) -> Result<CleanupModels, String> {
+  let listed = serde_json::from_slice::<CleanupModels>(body)
+    .map_err(|_error| INVALID.to_string())?;
+  let contract = contract();
+  let bounded = |text: &str, limit: usize| {
+    !text.is_empty()
+      && text.encode_utf16().count() <= limit
+      && !text.chars().any(char::is_control)
+  };
+  let valid = listed.models.len() <= contract.max_models
+    && listed.models.iter().all(|model| {
+      bounded(&model.value, contract.max_model_length)
+        && bounded(&model.display_name, contract.max_model_display_name_length)
+        && bounded(&model.provider, contract.max_model_display_name_length)
+    });
+  if valid {
+    Ok(listed)
+  } else {
+    Err(INVALID.to_string())
+  }
+}
+
+/// The dictation account's cleanup models, for the Settings window.
+pub async fn models(app: &AppHandle) -> Result<CleanupModels, String> {
+  let account = dictation_account(app).await?;
+  let response = crate::http_client::device_proof_request(
+    client()?.get(format!(
+      "{}{}",
+      account.api_base_url,
+      contract().models_path
+    )),
+    &account.device_key,
+    Some(&account.credential.key),
+    None,
+  )?
+  .send()
+  .await
+  .map_err(request_cause_logged(FAILURE));
+  drop(account);
+  let mut response = response?;
+  if !response.status().is_success() {
+    return Err(format!(
+      "dictation cleanup models were refused: {}",
+      response.status()
+    ));
+  }
+  let limit = contract().max_models
+    * (contract().max_model_length + 2 * contract().max_model_display_name_length)
+    * 6
+    + 64;
+  let mut body = Vec::new();
+  while let Some(chunk) = response
+    .chunk()
+    .await
+    .map_err(request_cause_logged(FAILURE))?
+  {
+    if body.len() + chunk.len() > limit {
+      return Err(INVALID.to_string());
+    }
+    body.extend_from_slice(&chunk);
+  }
+  parse_models(&body)
+}
+
 /// Every segment's text is at most a transcript long, and JSON spends at
 /// most six bytes on a character; the field names fit in the rest.
 fn max_response_bytes() -> usize {
@@ -221,6 +362,12 @@ struct CleanupRequest<'a> {
   style: CleanupStyle,
   #[serde(rename = "translateTo", skip_serializing_if = "Option::is_none")]
   translate_to: Option<&'a str>,
+  /// The speaker's own instructions; absent when there are none.
+  #[serde(rename = "customInstructions", skip_serializing_if = "Option::is_none")]
+  custom_instructions: Option<&'a str>,
+  /// The model the speaker chose; absent for automatic.
+  #[serde(skip_serializing_if = "Option::is_none")]
+  model: Option<&'a str>,
 }
 
 #[derive(Deserialize)]
@@ -502,6 +649,8 @@ struct Asked<'a> {
   vocabulary: &'a [String],
   context: &'a CleanupContext,
   form: CleanupForm,
+  custom_instructions: Option<&'a str>,
+  model: Option<&'a str>,
 }
 
 async fn post(
@@ -522,6 +671,8 @@ async fn post(
         vocabulary: asked.vocabulary,
         style: asked.form.style,
         translate_to: asked.form.translate_to,
+        custom_instructions: asked.custom_instructions,
+        model: asked.model,
       }),
     &account.device_key,
     Some(&account.credential.key),
@@ -532,14 +683,22 @@ async fn post(
   .map_err(request_cause_logged(FAILURE))
 }
 
-/// What to ask again after `status`: an API from before styles refuses a
-/// request that names a style or a language to write in as invalid, and one
-/// from before custom words a request with them, so each is dropped in turn,
-/// the newest first; asked again without it, the API still cleans up. `None`
-/// once nothing is left to drop or the refusal was of another kind.
+/// What to ask again after `status`: an API from before instructions and a
+/// chosen model refuses a request that carries either, one from before styles
+/// a request that names a style or a language to write in, and one from before
+/// custom words a request with them, so each is dropped in turn, the newest
+/// first; asked again without it, the API still cleans up. `None` once nothing
+/// is left to drop or the refusal was of another kind.
 fn fallback<'a>(status: reqwest::StatusCode, asked: &Asked<'a>) -> Option<Asked<'a>> {
   if status != reqwest::StatusCode::UNPROCESSABLE_ENTITY {
     return None;
+  }
+  if asked.custom_instructions.is_some() || asked.model.is_some() {
+    return Some(Asked {
+      custom_instructions: None,
+      model: None,
+      ..*asked
+    });
   }
   if asked.form != CleanupForm::default() {
     return Some(Asked {
@@ -632,6 +791,7 @@ async fn request(
   vocabulary: &[String],
   context: &CleanupContext,
   form: CleanupForm,
+  preferences: &CleanupPreferences,
 ) -> Result<Vec<Segment>, String> {
   let account = dictation_account(app).await?;
   let segments = send(
@@ -643,6 +803,8 @@ async fn request(
       vocabulary,
       context,
       form,
+      custom_instructions: preferences.custom_instructions.as_deref(),
+      model: preferences.model.as_deref(),
     },
   )
   .await;
@@ -681,13 +843,22 @@ pub fn clean_up(
   vocabulary: &[String],
   context: &CleanupContext,
   form: CleanupForm,
+  preferences: &CleanupPreferences,
 ) -> (Option<Vec<Segment>>, Cleanup) {
   if transcript.chars().count() > contract().max_transcript_length {
     return (None, Cleanup::TooLong);
   }
   match bounded(
     TIMEOUT,
-    request(app, transcript, languages, vocabulary, context, form),
+    request(
+      app,
+      transcript,
+      languages,
+      vocabulary,
+      context,
+      form,
+      preferences,
+    ),
   ) {
     Some(Ok(segments)) => (Some(segments), Cleanup::Applied),
     Some(Err(error)) => {
@@ -1059,6 +1230,8 @@ mod tests {
                 "appKind": "document",
                 "windowTitle": "Kupní smlouva.docx",
               },
+              "customInstructions": "Use British spelling.\nNever use emoji.",
+              "model": "anthropic::claude-sonnet-4-5",
             });
           if signed && authorized && only_text {
             (StatusCode::OK, FIXTURE.to_string())
@@ -1083,6 +1256,8 @@ mod tests {
       vocabulary: &[],
       context: &context,
       form: CleanupForm::default(),
+      custom_instructions: Some("Use British spelling.\nNever use emoji."),
+      model: Some("anthropic::claude-sonnet-4-5"),
     };
     let good = AccountRequest::fixture(linked(base.clone(), "stella_dr_good")).await;
     assert_eq!(
@@ -1116,6 +1291,8 @@ mod tests {
         vocabulary,
         style: CleanupStyle::Polished,
         translate_to: None,
+        custom_instructions: None,
+        model: None,
       })
       .unwrap()
     };
@@ -1142,6 +1319,8 @@ mod tests {
         vocabulary: &[],
         style,
         translate_to,
+        custom_instructions: None,
+        model: None,
       })
       .unwrap()
     };
@@ -1215,8 +1394,15 @@ mod tests {
         style: CleanupStyle::Notes,
         translate_to: Some("en"),
       },
+      custom_instructions: Some("Keep my sentence fragments."),
+      model: Some("model-a"),
     };
-    let without_form = fallback(invalid, &asked).unwrap();
+    let without_preferences = fallback(invalid, &asked).unwrap();
+    assert_eq!(without_preferences.custom_instructions, None);
+    assert_eq!(without_preferences.model, None);
+    assert_eq!(without_preferences.form, asked.form);
+    assert_eq!(without_preferences.vocabulary, words.as_slice());
+    let without_form = fallback(invalid, &without_preferences).unwrap();
     assert_eq!(without_form.form, CleanupForm::default());
     assert_eq!(without_form.vocabulary, words.as_slice());
     let without_words = fallback(invalid, &without_form).unwrap();
@@ -1230,6 +1416,105 @@ mod tests {
       reqwest::StatusCode::BAD_GATEWAY,
     ] {
       assert!(fallback(status, &asked).is_none(), "{status}");
+    }
+  }
+  #[test]
+  fn instructions_and_a_chosen_model_are_fields_absent_when_unset() {
+    let context = CleanupContext {
+      app_kind: crate::dictation_context::AppKind::Email,
+      window_title: None,
+      text_before_cursor: None,
+    };
+    let body = |custom_instructions, model| {
+      serde_json::to_value(CleanupRequest {
+        transcript: "send the draft",
+        locale: None,
+        languages: &[],
+        context: &context,
+        vocabulary: &[],
+        style: CleanupStyle::Polished,
+        translate_to: None,
+        custom_instructions,
+        model,
+      })
+      .unwrap()
+    };
+    let unset = body(None, None);
+    assert!(unset.get("customInstructions").is_none());
+    assert!(unset.get("model").is_none());
+    let set = body(
+      Some("Use British spelling."),
+      Some("openrouter::anthropic/claude-sonnet-4.5"),
+    );
+    assert_eq!(set["customInstructions"], "Use British spelling.");
+    assert_eq!(set["model"], "openrouter::anthropic/claude-sonnet-4.5");
+  }
+
+  #[test]
+  fn instructions_are_held_to_the_contract_bound_in_characters() {
+    let limit = contract().max_custom_instructions_length;
+    // The bound is the API's: code points, so an astral character counts
+    // once, as it does on the server.
+    let at_limit = "📝".repeat(limit);
+    assert_eq!(at_limit.chars().count(), limit);
+    assert!(at_limit.encode_utf16().count() > limit);
+    assert_eq!(custom_instructions(&at_limit), Ok(Some(at_limit.clone())));
+    assert_eq!(
+      custom_instructions(&format!("{at_limit}x")),
+      Err(INSTRUCTIONS_TOO_LONG)
+    );
+    assert_eq!(
+      custom_instructions(
+        "  Use British spelling.\r\nNever use emoji.\r\tKeep fragments. \n"
+      ),
+      Ok(Some(
+        "Use British spelling.\nNever use emoji.\n\tKeep fragments.".to_string()
+      ))
+    );
+    assert_eq!(custom_instructions(" \n\t "), Ok(None));
+    assert_eq!(
+      custom_instructions("press \u{1b}[A"),
+      Err(INSTRUCTIONS_CONTROL)
+    );
+  }
+
+  #[test]
+  fn a_chosen_model_is_held_to_the_contract_bound() {
+    let limit = contract().max_model_length;
+    let prefix = "openrouter::";
+    let at_limit = format!("{prefix}{}", "x".repeat(limit - prefix.len()));
+    assert_eq!(cleanup_model(&at_limit), Ok(Some(at_limit.clone())));
+    assert_eq!(cleanup_model(&format!("{at_limit}x")), Err(MODEL_INVALID));
+    assert_eq!(cleanup_model("  "), Ok(None));
+    assert_eq!(cleanup_model("openrouter::a\nb"), Err(MODEL_INVALID));
+  }
+
+  #[test]
+  fn the_models_list_is_held_to_the_contract() {
+    let model = r#"{"value":"anthropic::claude-sonnet-4-5","displayName":"Claude Sonnet 4.5","provider":"anthropic"}"#;
+    assert_eq!(
+      parse_models(format!(r#"{{"models":[{model}]}}"#).as_bytes()).unwrap(),
+      CleanupModels {
+        models: vec![CleanupModel {
+          value: "anthropic::claude-sonnet-4-5".to_string(),
+          display_name: "Claude Sonnet 4.5".to_string(),
+          provider: "anthropic".to_string(),
+        }],
+      }
+    );
+    let too_many = format!(
+      r#"{{"models":[{}]}}"#,
+      vec![model; contract().max_models + 1].join(",")
+    );
+    for body in [
+      "not json".to_string(),
+      "{}".to_string(),
+      r#"{"models":[{"value":"a::b","displayName":"B","provider":"a","apiKey":"k"}]}"#
+        .to_string(),
+      r#"{"models":[{"value":"","displayName":"B","provider":"a"}]}"#.to_string(),
+      too_many,
+    ] {
+      assert!(parse_models(body.as_bytes()).is_err(), "{body}");
     }
   }
 }

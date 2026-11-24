@@ -4,7 +4,7 @@ import type { SQL } from "drizzle-orm";
 import { createCaseLawDecisionSlug } from "@stll/api-contract/case-law-decision-route";
 
 import { CASE_LAW_DECISIONS_SLUG_UIDX } from "@/api/db/online-unique-indexes";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
   CASE_LAW_DECISION_SLUG_ALLOCATION_ATTEMPTS,

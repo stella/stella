@@ -2,8 +2,8 @@ import { panic, Result } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import { INVOICE_STATUS } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   INVOICE_DETAIL_RELATIONS,
   INVOICE_DOCUMENT_COLUMNS,

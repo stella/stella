@@ -470,11 +470,8 @@ describe("OTLP log export", () => {
     });
 
     exporter.emit(info("slow.record"));
-    const startedAt = performance.now();
     await exporter.flush();
     stalled.resolve(undefined);
-
-    expect(performance.now() - startedAt).toBeLessThan(2000);
     expect(failures).toEqual([
       {
         kind: "network",

@@ -8,7 +8,7 @@ import { courtParagraphNumbersByAnchor } from "@stll/legal-ast/court-paragraph-n
 import type { Block } from "@stll/legal-ast/document-ast";
 import { Temporal } from "@stll/time";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   caseLawResearchAnswers,
   caseLawResearchColumns,

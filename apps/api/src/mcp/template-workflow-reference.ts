@@ -1,4 +1,4 @@
-import type { McpToolName } from "@/api/lib/api-handlers";
+import type { McpToolName } from "@/api/http/handler-config-types";
 import {
   MAX_DOCX_MEGABYTES,
   MAX_INLINE_DOCX_BYTES,

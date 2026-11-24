@@ -50,7 +50,7 @@ test("CI repeats changed tests only on pull requests in one existing test shard"
     new URL("../.github/workflows/ci.yml", import.meta.url),
   ).text();
   expect(source).toContain("github.event_name == 'pull_request'");
-  expect(source).toContain("matrix.shard == 'rest-web'");
+  expect(source).toContain("matrix.shard == 'rest'");
   expect(source).toContain(
     [
       `cat > "$RUNNER_TEMP/changed-files.json" <<'CHANGED_FILES_JSON'\n`,

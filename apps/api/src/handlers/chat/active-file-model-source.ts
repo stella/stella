@@ -1,4 +1,7 @@
-import { legalFileFormat } from "@stll/api-contract/document-format";
+import {
+  legalFileFormat,
+  signatureFormatCandidate,
+} from "@stll/api-contract/document-format";
 
 import type { FieldContent } from "@/api/db/schema-validators";
 import { isNativelyRenderableMimeType } from "@/api/lib/files/pdf-derivative-policy";
@@ -48,6 +51,8 @@ export const getActiveFileSourceForModel = (
 
   if (
     legalFileFormat(content.mimeType, content.fileName) !== undefined ||
+    signatureFormatCandidate(content.mimeType, content.fileName) !==
+      undefined ||
     (content.pdfFileId === null &&
       isNativelyRenderableMimeType(content.mimeType) &&
       isOfficeDocumentMimeType(content.mimeType))

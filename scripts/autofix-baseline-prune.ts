@@ -81,6 +81,28 @@ export const PRUNABLE_BASELINE_WRITERS = [
       { path: BASELINE_PATHS.schedulerTaskAuthority, collection: ["members"] },
     ],
   },
+  {
+    write: ["bun", "scripts/seed-test-determinism-baselines.ts"],
+    baselines: [
+      { path: BASELINE_PATHS.testState, collection: [] },
+      { path: BASELINE_PATHS.testWallclockAssertion, collection: [] },
+      { path: BASELINE_PATHS.testRealTimers, collection: [] },
+      { path: BASELINE_PATHS.testAmbientTime, collection: [] },
+    ],
+  },
+  {
+    write: ["bun", "scripts/check-rust-test-determinism.ts", "--write"],
+    baselines: [{ path: BASELINE_PATHS.rustTestDeterminism, collection: [] }],
+  },
+  {
+    write: ["bun", "scripts/check-mutation-query-invalidation.ts", "--write"],
+    baselines: [
+      {
+        path: BASELINE_PATHS.mutationQueryInvalidation,
+        collection: ["entries"],
+      },
+    ],
+  },
 ] as const satisfies readonly BaselineWriter[];
 
 type RegisteredBaseline =

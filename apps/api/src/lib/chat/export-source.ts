@@ -1,4 +1,4 @@
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { THREAD_ARTEFACT_PROVENANCE_COLUMNS } from "@/api/lib/chat/artefact-provenance";
 

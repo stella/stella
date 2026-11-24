@@ -17,6 +17,7 @@ import {
   writeMbox,
 } from "@/api/tests/fixtures/mbox";
 import { wrapP7m } from "@/api/tests/fixtures/p7m";
+import { LAW_FIRM_MESSAGES, pstFixture } from "@/api/tests/fixtures/pst";
 import { zfoFile } from "@/api/tests/fixtures/zfo";
 import { makeZipArchive } from "@/api/tests/fixtures/zip-archive";
 import { testScannedFile } from "@/api/tests/helpers/scanned-file";
@@ -290,6 +291,88 @@ describe("a part that is itself a container", () => {
       mimeType: "application/pdf",
     });
     expect(ruling.bytes).toEqual(RULING);
+  });
+
+  test("an Outlook mailbox in an archive opens each message as an email, and its attachments", async () => {
+    const bytes = makeZipArchive([
+      { name: "export/korespondence.pst", data: pstFixture("law-firm.pst") },
+    ]);
+    const source = stored(bytes, "podklady-ke-sporu.zip", "application/zip");
+    const messages = await listOf(bytes, member(0));
+    expect(
+      messages?.map(({ fileName, folder, part, unavailable }) => [
+        fileName,
+        folder,
+        part?.mediaType ?? unavailable,
+      ]),
+    ).toEqual(
+      LAW_FIRM_MESSAGES.map(({ fileName, folder }, index) => [
+        fileName,
+        folder,
+        // Its list row claims more than a message may be.
+        index === 6 ? "tooLarge" : "message/rfc822",
+      ]),
+    );
+    const message = (
+      await readPartOfFile(
+        source,
+        {
+          kind: FILE_PART_KINDS.message,
+          index: 1,
+          within: member(0),
+        },
+        "ibm437",
+      )
+    ).unwrap();
+    expect(message).toMatchObject({
+      fileName: LAW_FIRM_MESSAGES[1].fileName,
+      mimeType: "message/rfc822",
+    });
+    expect(new TextDecoder().decode(message.bytes)).toContain(
+      "Subject: =?UTF-8?B?",
+    );
+    // A later message opens on its own, past one whose row is over the bound.
+    const last = 8;
+    const closing = (
+      await readPartOfFile(
+        source,
+        { kind: FILE_PART_KINDS.message, index: last, within: member(0) },
+        "ibm437",
+      )
+    ).unwrap();
+    expect(closing.fileName).toBe(LAW_FIRM_MESSAGES[last].fileName);
+    expect(LAW_FIRM_MESSAGES).toHaveLength(last + 1);
+    // The message over the bound and one past the end have no part to open.
+    for (const index of [6, LAW_FIRM_MESSAGES.length]) {
+      expect(
+        (
+          await readPartOfFile(
+            source,
+            { kind: FILE_PART_KINDS.message, index, within: member(0) },
+            "ibm437",
+          )
+        ).isErr(),
+      ).toBe(true);
+    }
+    const notes = (
+      await readPartOfFile(
+        source,
+        {
+          kind: FILE_PART_KINDS.attachment,
+          index: 1,
+          within: {
+            kind: FILE_PART_KINDS.message,
+            index: 0,
+            within: member(0),
+          },
+        },
+        "ibm437",
+      )
+    ).unwrap();
+    expect(notes.fileName).toBe("poznámky k návrhu.txt");
+    expect(new TextDecoder().decode(notes.bytes)).toContain(
+      "Konkurenční doložka",
+    );
   });
 
   test("a path runs at most the deepest a part may sit", () => {

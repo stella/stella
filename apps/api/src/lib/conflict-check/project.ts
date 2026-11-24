@@ -10,9 +10,9 @@ import type {
 } from "@stll/api-contract/conflict-checks";
 
 import { member, user } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import type { conflictChecks } from "@/api/db/schema";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readConflictMatterAccess } from "@/api/lib/conflict-check/links";
 import type { ConflictMatterAccess } from "@/api/lib/conflict-check/links";

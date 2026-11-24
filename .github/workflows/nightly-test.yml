@@ -110,7 +110,7 @@ jobs:
       - name: Login to GitHub Container Registry for browser images
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -216,7 +216,7 @@ jobs:
         id: registry
         if: github.event.pull_request.head.repo.fork != true && github.token != ''
         continue-on-error: true
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        uses: ./.github/actions/docker-login
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -277,20 +277,12 @@ jobs:
       - name: Full test suite
         env:
           API_TEST_SHARD_COUNT: ${{ needs.full-test-plan.outputs.api-shards }}
-          SHARD: ${{ matrix.shard == 'rest-web' && 'rest' || matrix.shard }}
+          SHARD: ${{ matrix.shard }}
           TURBO_FORCE: "true"
         run: |
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
           export API_TEST_SHARD
-          bun run test -- --concurrency=2 "${shard_args[@]}"
-      - name: Full web test suite
-        if: matrix.shard == 'rest-web'
-        env:
-          SHARD: web
-          TURBO_FORCE: "true"
-        run: |
-          read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
           bun run test -- --concurrency=2 "${shard_args[@]}"
 
   # The production client build is the remaining browser-CI setup hotspot.

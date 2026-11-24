@@ -14,7 +14,6 @@ import {
   filePartId,
 } from "@stll/api-contract/file-parts";
 
-import type { Transaction } from "@/api/db/root";
 import {
   correspondence,
   correspondenceAttachments,
@@ -23,6 +22,7 @@ import {
   entityVersions,
   fields,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import { withDataBoxDirection } from "@/api/lib/email/correspondence/data-box/direction";

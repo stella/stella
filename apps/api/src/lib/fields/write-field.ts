@@ -8,7 +8,7 @@ import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import {
   cellMetadata,
   entities,

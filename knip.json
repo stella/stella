@@ -60,7 +60,7 @@
       "entry": ["src/**/*.test.ts"]
     },
     "packages/brand": {
-      "entry": ["src/index.ts", "src/**/*.test.ts"]
+      "entry": ["src/**/*.test.ts"]
     },
     "packages/cli": {
       "entry": ["src/**/*.test.ts"]
@@ -201,6 +201,9 @@
     "packages/legal-ast": {
       "entry": ["src/**/*.test.ts"]
     },
+    "packages/markdown-editor": {
+      "entry": ["src/**/*.test.ts"]
+    },
     "packages/mcp-apps": {
       "entry": [
         "src/*/app.tsx",
@@ -237,6 +240,10 @@
       "ignore": ["generated/**"]
     },
     "packages/heic-decoder": {
+      "entry": ["src/**/*.test.ts"],
+      "ignore": ["generated/**"]
+    },
+    "packages/pst-reader": {
       "entry": ["src/**/*.test.ts"],
       "ignore": ["generated/**"]
     },

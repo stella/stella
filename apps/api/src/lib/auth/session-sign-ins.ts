@@ -9,8 +9,8 @@ import {
 import type { MapPlace } from "@stll/transactional/map/location-map";
 
 import { session } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { sessionSignIns } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   createAuditRecorder,
   createBackgroundAuditRecorder,

@@ -11,7 +11,7 @@ import { Result, TaggedError } from "better-result";
 import { parseIntegerToken } from "@stll/agent-input/numeric-token";
 import { Temporal } from "@stll/time";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   type EmptiedDocumentBatchError,

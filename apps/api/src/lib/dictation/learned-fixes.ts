@@ -25,8 +25,8 @@ import {
   LEARNED_FIX_SWITCHES,
 } from "@stll/transcript/learned-fixes";
 
-import type { Transaction } from "@/api/db/root";
 import { dictationLearnedFixes } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import { withDeviceChanges } from "@/api/lib/dictation/learned-fixes-sync";

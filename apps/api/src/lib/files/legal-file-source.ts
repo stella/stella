@@ -1,12 +1,15 @@
 import { Result, UnhandledException } from "better-result";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
-import { legalFileFormat } from "@stll/api-contract/document-format";
+import {
+  legalFileFormat,
+  signatureFormatCandidate,
+} from "@stll/api-contract/document-format";
 import type { LegalFileFormatKind } from "@stll/api-contract/legal-file-formats";
 import { BodyByteLimitError } from "@stll/fetch/body-reader";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { HTTP_FAILURE } from "@/api/http/errors";
 import { AUDIT_RESOURCE_TYPE, type AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";
@@ -80,12 +83,22 @@ type StoredFileContent = {
 const legalSourceFormat =
   (acceptedKinds: readonly LegalFileFormatKind[]) =>
   (content: StoredFileContent) => {
-    const format = legalFileFormat(content.mimeType, content.fileName);
+    // A `.sig` or `.xml` file reaches a signature reader as a candidate: its
+    // reader decides from the bytes, and only a reader that accepts the kind.
+    // A reader of the registered kind (`.xml` as XML) reads it as that.
+    const registered = legalFileFormat(content.mimeType, content.fileName);
+    const candidate =
+      registered !== undefined && acceptedKinds.includes(registered.kind)
+        ? undefined
+        : signatureFormatCandidate(content.mimeType, content.fileName);
+    const format = candidate ?? registered;
     if (!format || !acceptedKinds.includes(format.kind)) {
       return null;
     }
     return {
       kind: format.kind,
+      /** The name alone does not make the file this format. */
+      sniffed: candidate !== undefined,
       mimeType: format.mimeType,
       auditFormat: format.auditFormat,
       ...(isDocumentArchiveMimeType(format.mimeType)

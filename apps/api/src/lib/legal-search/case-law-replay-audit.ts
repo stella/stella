@@ -1,8 +1,8 @@
-import type { Transaction } from "@/api/db/root";
 import {
   caseLawReplayAuditEvents,
   REPLAY_MAINTENANCE_AUDIT_SERVICE,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 
 type ReplayMaintenanceAuditEvent = Omit<
   typeof caseLawReplayAuditEvents.$inferInsert,

@@ -26,6 +26,7 @@ import {
   ISDOC_FILE_FORMAT,
   ISDOCX_FILE_FORMAT,
   MBOX_FILE_FORMAT,
+  PST_FILE_FORMAT,
   XML_FILE_FORMAT,
 } from "@stll/api-contract/legal-file-formats";
 import { SIGNED_DOSSIER_FORMATS } from "@stll/api-contract/signed-dossier-formats";
@@ -69,6 +70,7 @@ import { readMarkedDownload } from "@/api/handlers/files/marked-download";
 import { readFilePartListEndpoint } from "@/api/handlers/files/part-list";
 import saveFilePartEndpoint from "@/api/handlers/files/part-save";
 import { readScrubbedDownload } from "@/api/handlers/files/scrubbed-download";
+import { signaturePreviewEndpoint } from "@/api/handlers/files/signature";
 import { signedDossierPreviewEndpoint } from "@/api/handlers/files/signed-dossier";
 import structuredDocumentEndpoint from "@/api/handlers/files/structured-document";
 import { zipArchivePreviewEndpoint } from "@/api/handlers/files/zip-archive";
@@ -129,6 +131,11 @@ import {
   PEC_SIGNER_NAME,
   pecMessage,
 } from "@/api/tests/fixtures/pec";
+import { LAW_FIRM_MAILBOX_NAME, pstFixture } from "@/api/tests/fixtures/pst";
+import {
+  detachedCms,
+  envelopingXades,
+} from "@/api/tests/fixtures/signature-files";
 import { makeEAktaFixture } from "@/api/tests/fixtures/signed-dossier";
 import { FIXTURE_MESSAGE, zfoFile } from "@/api/tests/fixtures/zfo";
 import { makeZipArchive } from "@/api/tests/fixtures/zip-archive";
@@ -145,6 +152,7 @@ import { emailReadingScalingScenario } from "@/api/tests/read-scaling/email-read
 import { filePartListScalingScenario } from "@/api/tests/read-scaling/file-part-list";
 import { mailboxScalingScenario } from "@/api/tests/read-scaling/mailbox";
 import { readScalingViolations } from "@/api/tests/read-scaling/measurement";
+import { signaturePreviewScalingScenario } from "@/api/tests/read-scaling/signature-preview";
 import { signedDossierPreviewScalingScenario } from "@/api/tests/read-scaling/signed-dossier";
 import { structuredDocumentScalingScenario } from "@/api/tests/read-scaling/structured-document";
 import { zipArchiveScalingScenario } from "@/api/tests/read-scaling/zip-archive";
@@ -1205,6 +1213,19 @@ const seedMbox = async (tenant: "a" | "b" = "a") => {
     return await seedFile(stored, "b");
   }
   return await seedStored(stored, MAILBOX.bytes);
+};
+
+/** An Outlook mailbox, stored as bytes named `.pst` as a browser uploads it. */
+const seedPst = async (tenant: "a" | "b" = "a") => {
+  const stored = {
+    fileName: LAW_FIRM_MAILBOX_NAME,
+    mimeType: "application/octet-stream",
+    pdfFileId: null,
+  };
+  if (tenant === "b") {
+    return await seedFile(stored, "b");
+  }
+  return await seedStored(stored, pstFixture("law-firm.pst"));
 };
 
 const partListContext = (
@@ -2471,6 +2492,142 @@ describe("mailbox delivery", () => {
   });
 });
 
+describe("Outlook mailbox delivery", () => {
+  test("a PST lists its messages folder by folder and reads its text for AI", async () => {
+    const { fieldId, entityId, entityVersionId } = await seedPst();
+    await testDb
+      .update(entities)
+      .set({ currentVersionId: entityVersionId })
+      .where(eq(entities.id, entityId));
+    const view = await mailboxPreviewEndpoint.handler(
+      legalFileContext(fieldId, scopedDbA()),
+    );
+    expect(view).toMatchObject({
+      truncated: false,
+      messages: [
+        {
+          subject: "Smlouva o převodu podílu: návrh k připomínkám",
+          from: "Petra Vlková",
+          folder: "Doručená pošta",
+          part: {
+            part: "message:0",
+            fileName: "Smlouva o převodu podílu_ návrh k připomínkám.eml",
+            mediaType: EML_MIME_TYPE,
+          },
+          unavailable: null,
+        },
+        { subject: "Re: Termín jednání" },
+        { subject: null, fileName: "korespondence-3.eml" },
+        { subject: "Zápis z porady" },
+        { subject: "Plná moc" },
+        {
+          subject: "Fwd: Výzva k úhradě",
+          folder: "Doručená pošta/Klienti/Fiktivní stavby",
+        },
+        { subject: "Spis ve skenech", part: null, unavailable: "tooLarge" },
+        { folder: "Odeslaná pošta" },
+        { subject: "Uzavření věci", folder: "Archiv/2023" },
+      ],
+    });
+    await expectOneContentRow(entityId, {
+      action: "access",
+      metadata: { fieldId, format: PST_FILE_FORMAT.auditFormat },
+    });
+    const read = await LEGAL_FILE_READERS.pst({
+      fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    const { text } = read.unwrap();
+    expect(text).toStartWith("Mailbox.");
+    expect(text).toContain("Subject: Re: Termín jednání");
+    expect(text).toContain(
+      "Attachments: navrh-smlouvy.pdf, poznámky k návrhu.txt",
+    );
+  });
+
+  test("a message opens as an email, and its attachments by their paths", async () => {
+    const { fieldId, entityId } = await seedPst();
+    const issued = (await readPartUrl(fieldId, "message:0")).unwrap();
+    expect(issued).toMatchObject({
+      fileName: "Smlouva o převodu podílu_ návrh k připomínkám.eml",
+      mimeType: EML_MIME_TYPE,
+    });
+    const message = await (
+      await redeemPartUrl(issued.presignedUrl)
+    )
+      .unwrap()
+      .text();
+    expect(message).toContain("From: =?UTF-8?B?");
+    expect(message).toContain("<petra.vlkova@vlkova-lisy.example>");
+
+    const listed = await readFilePartListEndpoint.handler(
+      partListContext(fieldId, "message:0", scopedDbA()),
+    );
+    expect(listed).toMatchObject({
+      files: [
+        {
+          fileName: "navrh-smlouvy.pdf",
+          part: { part: "message:0/attachment:0" },
+        },
+        {
+          fileName: "poznámky k návrhu.txt",
+          part: { part: "message:0/attachment:1" },
+        },
+      ],
+    });
+    const notes = (
+      await readPartUrl(fieldId, "message:0/attachment:1")
+    ).unwrap();
+    expect(
+      await (await redeemPartUrl(notes.presignedUrl)).unwrap().text(),
+    ).toContain("Konkurenční doložka");
+
+    const reading = await emailReadingEndpoint.handler({
+      ...legalFileContext(fieldId, scopedDbA()),
+      query: { part: "message:0" },
+    });
+    expect(reading).toMatchObject({
+      subject: "Smlouva o převodu podílu: návrh k připomínkám",
+      attachments: [
+        { part: "message:0/attachment:0", fileName: "navrh-smlouvy.pdf" },
+        { part: "message:0/attachment:1", fileName: "poznámky k návrhu.txt" },
+      ],
+    });
+    expect(
+      (await auditRowsFor(entityId)).map(({ metadata }) => metadata),
+    ).toContainEqual(
+      expect.objectContaining({ format: "pst", part: "message:0" }),
+    );
+  });
+
+  test("a message over the bound, or one it does not have, is not opened and records nothing", async () => {
+    const { fieldId, entityId } = await seedPst();
+    const tooLarge = await readPartUrl(fieldId, "message:6");
+    expect(tooLarge.isErr() && tooLarge.error.status).toBe(422);
+    const missing = await readPartUrl(fieldId, "message:9");
+    expect(missing.isErr() && missing.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+
+  test("refuses another matter's mailbox and its messages", async () => {
+    const { fieldId, entityId } = await seedPst("b");
+    expect(
+      answeredStatus(
+        await mailboxPreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDbA()),
+        ),
+      ),
+    ).toBe(404);
+    const message = await readPartUrl(fieldId, "message:0");
+    expect(message.isErr() && message.error.status).toBe(404);
+    expect(await auditRowsFor(entityId)).toEqual([]);
+  });
+});
+
 describe("signed container delivery", () => {
   test("an existing generic upload shows the same documents and signers in Files and AI", async () => {
     const { fieldId, entityId, entityVersionId } = await seedEAkta();
@@ -2797,6 +2954,294 @@ const readDataBox = async (fieldId: SafeId<"field">, scopedDb: ScopedDb) =>
     recordAuditEvent: recorderA(),
   });
 
+// Unique per test: the matter is shared, and a digest finds any equal bytes.
+const signedText = () =>
+  new TextEncoder().encode(
+    `Smlouva o dílo, podepsané znění ${Bun.randomUUIDv7()}`,
+  );
+
+/** A current matter document whose stored bytes are `bytes`. */
+const seedCurrent = async (
+  stored: StoredFile,
+  bytes: Uint8Array,
+  side: "a" | "b" = "a",
+) => {
+  const seeded =
+    side === "a"
+      ? await seedStored(
+          {
+            ...stored,
+            sha256Hex: sha256Hex(bytes),
+            sizeBytes: bytes.byteLength,
+          },
+          bytes,
+        )
+      : await seedFile(
+          {
+            ...stored,
+            sha256Hex: sha256Hex(bytes),
+            sizeBytes: bytes.byteLength,
+          },
+          "b",
+        );
+  await testDb
+    .update(entities)
+    .set({ currentVersionId: seeded.entityVersionId })
+    .where(eq(entities.id, seeded.entityId));
+  return seeded;
+};
+
+const seedEnvelopingXades = async () =>
+  await seedStored(
+    { fileName: "podanie.xml", mimeType: "text/xml", pdfFileId: null },
+    await envelopingXades(await pdfBytes()),
+  );
+
+const signaturePreview = async (fieldId: SafeId<"field">) => {
+  const preview = await signaturePreviewEndpoint.handler(
+    legalFileContext(fieldId, scopedDbA()),
+  );
+  if (preview instanceof HttpStatusResponse) {
+    return panic(`Expected a signature preview, got ${preview.code}`);
+  }
+  return preview;
+};
+
+describe("detached signature delivery", () => {
+  test("names the signed document in the reader's matter, bound by digest", async () => {
+    const SIGNED_TEXT = signedText();
+    const signed = await seedCurrent(
+      { fileName: "smlouva.pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+      SIGNED_TEXT,
+    );
+    // The same name and bytes in a matter the reader cannot open.
+    await seedCurrent(
+      { fileName: "smlouva.pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+      SIGNED_TEXT,
+      "b",
+    );
+    const signature = await seedCurrent(
+      {
+        fileName: "smlouva.pdf.p7s",
+        mimeType: "application/pkcs7-signature",
+        pdfFileId: null,
+      },
+      await detachedCms(SIGNED_TEXT),
+    );
+    const preview = await signaturePreview(signature.fieldId);
+    expect(preview).toMatchObject({
+      type: "signature",
+      standard: "cades",
+      packaging: "detached",
+      document: null,
+      signedFiles: [
+        {
+          entityId: signed.entityId,
+          fieldId: signed.fieldId,
+          fileName: "smlouva.pdf",
+          binding: "digestMatches",
+        },
+      ],
+    });
+    await expectOneContentRow(signature.entityId, {
+      action: "access",
+      metadata: { fieldId: signature.fieldId, format: "cades-detached" },
+    });
+    // Reading the signature reads nothing of the signed document.
+    expect(await auditRowsFor(signed.entityId)).toEqual([]);
+
+    const agent = await LEGAL_FILE_READERS.cadesDetached({
+      fieldId: signature.fieldId,
+      scopedDb: scopedDbA(),
+      workspaceId: ids.wsA1,
+      organizationId: ids.orgA,
+      recordAuditEvent: recorderA(),
+      purpose: "agent",
+    });
+    expect(agent.unwrap().text).toContain(
+      "Document in this matter: smlouva.pdf (its stored bytes match the digest the signature states; this binds the bytes, it does not verify the signature)",
+    );
+  });
+
+  test("tells a renamed signed copy from a changed file of the signed name", async () => {
+    const SIGNED_TEXT = signedText();
+    const renamed = await seedCurrent(
+      { fileName: "sken 0042.pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+      SIGNED_TEXT,
+    );
+    const changed = await seedCurrent(
+      { fileName: "dodatek.pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+      new TextEncoder().encode("Smlouva o dílo, změněné znění"),
+    );
+    const signature = await seedCurrent(
+      {
+        fileName: "dodatek.p7s",
+        mimeType: "application/octet-stream",
+        pdfFileId: null,
+      },
+      await detachedCms(SIGNED_TEXT),
+    );
+    const preview = await signaturePreview(signature.fieldId);
+    expect(preview.type === "signature" && preview.signedFiles).toEqual([
+      {
+        entityId: renamed.entityId,
+        fieldId: renamed.fieldId,
+        fileName: "sken 0042.pdf",
+        binding: "digestMatches",
+      },
+      {
+        entityId: changed.entityId,
+        fieldId: changed.fieldId,
+        fileName: "dodatek.pdf",
+        binding: "digestDiffers",
+      },
+    ]);
+  });
+
+  test("compares a SHA-1 digest against the stored bytes of the named file", async () => {
+    const SIGNED_TEXT = signedText();
+    const signed = await seedCurrent(
+      { fileName: "wniosek.pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+      SIGNED_TEXT,
+    );
+    const signature = await seedCurrent(
+      {
+        fileName: "wniosek.pdf.sig",
+        mimeType: "application/octet-stream",
+        pdfFileId: null,
+      },
+      await detachedCms(SIGNED_TEXT, { digestAlgorithm: "SHA-1" }),
+    );
+    const preview = await signaturePreview(signature.fieldId);
+    expect(preview.type === "signature" && preview.signedFiles).toEqual([
+      {
+        entityId: signed.entityId,
+        fieldId: signed.fieldId,
+        fileName: "wniosek.pdf",
+        binding: "digestMatches",
+      },
+    ]);
+  });
+
+  test("finds the signed file whatever the case of its name", async () => {
+    const SIGNED_TEXT = signedText();
+    const signed = await seedCurrent(
+      { fileName: "Odvolani.Pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+      SIGNED_TEXT,
+    );
+    const signature = await seedCurrent(
+      {
+        fileName: "odvolani.p7s",
+        mimeType: "application/octet-stream",
+        pdfFileId: null,
+      },
+      await detachedCms(SIGNED_TEXT, { digestAlgorithm: "SHA-1" }),
+    );
+    const preview = await signaturePreview(signature.fieldId);
+    expect(preview.type === "signature" && preview.signedFiles).toEqual([
+      {
+        entityId: signed.entityId,
+        fieldId: signed.fieldId,
+        fileName: "Odvolani.Pdf",
+        binding: "digestMatches",
+      },
+    ]);
+  });
+
+  test("a plain .xml file is not a signature, and nothing is delivered", async () => {
+    const plain = await seedStored(
+      { fileName: "faktura.xml", mimeType: "text/xml", pdfFileId: null },
+      new TextEncoder().encode("<faktura><castka>100</castka></faktura>"),
+    );
+    expect(await signaturePreview(plain.fieldId)).toEqual({
+      type: "notSignature",
+    });
+    expect(await auditRowsFor(plain.entityId)).toEqual([]);
+  });
+
+  test("a file named as a signature that holds none is unreadable", async () => {
+    const named = await seedStored(
+      {
+        fileName: "podpis.p7s",
+        mimeType: "application/pkcs7-signature",
+        pdfFileId: null,
+      },
+      new TextEncoder().encode("not a signature"),
+    );
+    expectStatus(
+      await signaturePreviewEndpoint.handler(
+        legalFileContext(named.fieldId, scopedDbA()),
+      ),
+      422,
+    );
+    expect(await auditRowsFor(named.entityId)).toEqual([]);
+  });
+
+  test("refuses a signature in another matter", async () => {
+    const { fieldId } = await seedFile(
+      {
+        fileName: "podpis.xades",
+        mimeType: "application/octet-stream",
+        pdfFileId: null,
+      },
+      "b",
+    );
+    const context = legalFileContext(fieldId, scopedDbA());
+    expect(
+      answeredStatus(await signaturePreviewEndpoint.handler(context)),
+    ).toBe(404);
+  });
+
+  test.each([signaturePreviewScalingScenario])(
+    "$name cost stays bounded as a matter grows",
+    async ({ measure }) => {
+      const { fieldId } = await seedEnvelopingXades();
+      const context = legalFileContext(fieldId, scopedDbA());
+      const small = await measure(context);
+      const unrelated = Array.from({ length: 80 }, () => ({
+        id: createSafeId<"entity">(),
+        name: "Docket entry",
+        kind: "document" as const,
+        workspaceId: ids.wsA1,
+      }));
+      seededEntityIds.push(...unrelated.map(({ id }) => id));
+      await testDb.insert(entities).values(unrelated);
+      const large = await measure(context);
+      expect(small.statements).toBeGreaterThan(0);
+      expect(small.rows).toBe(1);
+      expect(readScalingViolations({ small, large })).toEqual([]);
+    },
+  );
+
+  test("a detached signature's matter lookup stays bounded as a matter grows", async () => {
+    const SIGNED_TEXT = signedText();
+    await seedCurrent(
+      { fileName: "smlouva.pdf", mimeType: PDF_MIME_TYPE, pdfFileId: null },
+      SIGNED_TEXT,
+    );
+    const signature = await seedCurrent(
+      {
+        fileName: "smlouva.pdf.p7s",
+        mimeType: "application/pkcs7-signature",
+        pdfFileId: null,
+      },
+      await detachedCms(SIGNED_TEXT),
+    );
+    const context = legalFileContext(signature.fieldId, scopedDbA());
+    const small = await signaturePreviewScalingScenario.measure(context);
+    const unrelated = Array.from({ length: 80 }, () => ({
+      id: createSafeId<"entity">(),
+      name: "Docket entry",
+      kind: "document" as const,
+      workspaceId: ids.wsA1,
+    }));
+    seededEntityIds.push(...unrelated.map(({ id }) => id));
+    await testDb.insert(entities).values(unrelated);
+    const large = await signaturePreviewScalingScenario.measure(context);
+    expect(readScalingViolations({ small, large })).toEqual([]);
+  });
+});
+
 describe("data-box file preview", () => {
   test("opens an unfiled source by field and audits the read", async () => {
     const file = await seedDataBox();
@@ -3033,6 +3478,16 @@ const answeredStatus = (answer: unknown): number => {
 };
 
 const STREAMED_PATHS: readonly StreamedPath[] = [
+  {
+    name: "a signature preview",
+    seed: seedEnvelopingXades,
+    read: async ({ fieldId }, scopedDb) =>
+      answeredStatus(
+        await signaturePreviewEndpoint.handler(
+          legalFileContext(fieldId, scopedDb),
+        ),
+      ),
+  },
   {
     name: "an ASiC inventory",
     seed: seedAsic,

@@ -52,7 +52,7 @@ import {
   chatRunTargetSchema,
 } from "@stll/api-contract/chat-run-target";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import type { StoredFileRef } from "@/api/handlers/chat/attachment-validation";
 import {
   validateChatFileParts,

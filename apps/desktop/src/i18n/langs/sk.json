@@ -233,6 +233,14 @@
     "writeDescription": "Zadajte opis tohto záznamu."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "Skontrolovať znova",
+      "notInstalled": "Nainštalujte Antigravity 1.5 alebo novší a prihláste sa v ňom.",
+      "signedIn": "Prihlásené do Antigravity",
+      "signedOut": "Prihláste sa v Antigravity CLI, aby ste ho mohli používať v aplikácii stella.",
+      "title": "Antigravity",
+      "tooOld": "Aktualizujte Antigravity na 1.5 alebo novší a prihláste sa v ňom."
+    },
     "callbackAccount": "Účet",
     "callbackCloseTab": "Túto kartu môžete zavrieť.",
     "callbackConnectedBody": "Požiadavky na AI v aplikácii stella teraz využívajú váš plán ChatGPT.",
@@ -603,6 +611,19 @@
       "description": "Opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu. Cez aplikáciu stella sa poskytovateľovi AI vašej organizácie odošle len text, nie zvuk; stella ho neukladá.",
       "descriptionCloud": "stella AI navyše opraví chyby rozpoznávania a vyslovené formátovanie, napríklad „nový riadok“ alebo „tučne“, a prispôsobí text aplikácii, napríklad e-mailu.",
       "title": "Upraviť pomocou AI"
+    },
+    "cleanupInstructions": {
+      "description": "Ako chcete mať text napísaný, napríklad variant pravopisu alebo slová, ktorým sa vyhnúť. Úprava sa nimi riadi, kde to jej pravidlá dovolia, a nikdy nemení, čo ste povedali.",
+      "placeholder": "Napríklad: Používaj britský pravopis. Nikdy nepoužívaj emoji. Zachovaj moje neúplné vety.",
+      "saveFailed": "Pokyny sa nepodarilo uložiť. Skúste to znova.",
+      "title": "Vaše pokyny"
+    },
+    "cleanupModel": {
+      "automatic": "Automaticky",
+      "automaticDescription": "Použije rýchly model vašej organizácie.",
+      "chosenDescription": "Keď tento model potrebuje viac ako pár sekúnd, text sa napíše bez úpravy.",
+      "title": "Model AI",
+      "withdrawn": "Zvolený model už nie je k dispozícii, úprava preto beží automaticky."
     },
     "cleanupStyle": {
       "casual": {
@@ -1253,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "Zahodiť moje úpravy",
+      "editorLabel": "Editor upraveného textu",
       "failedCount": "{count, plural, one {# časť neupravená} few {# časti neupravené} other {# častí neupravených}}",
       "fileNameMarkdown": "{title} upravený text.md",
       "fileNameText": "{title} upravený text.txt",
@@ -1324,6 +1347,7 @@
       "audioMissing": "Nahrávka už v tomto okne nie je otvorená, preto sa do spisu neuložila.",
       "audioTooLarge": "Nahrávka je väčšia ako {size}, preto sa do spisu neuložila.",
       "cleanedDocxFileName": "{title} – upravený text.docx",
+      "cleanedNotFiled": "Upravený text sa nepodarilo uložiť do spisu.",
       "cleanedTitle": "{title} – upravený text",
       "documents": "Ukladajú sa dokumenty Word…",
       "docxFileName": "{title} – prepis.docx",
@@ -1366,7 +1390,6 @@
       "saveToMatterFailed": "Prepis sa nepodarilo uložiť do spisu. Skúste to znova.",
       "saveWithTimestamps": "Text s časmi (.txt)",
       "saveWithoutTimestamps": "Text bez časov (.txt)",
-      "savedToMatter": "Uložené do spisu {matter} ako {fileName}.",
       "savingToMatter": "Ukladá sa…",
       "thisComputer": "Tento počítač",
       "transcriptTitle": "Prepis"

@@ -18,7 +18,7 @@ import { eq } from "drizzle-orm";
 import { classifyFailure, declareFingerprintFields } from "@stll/errors";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatThreads } from "@/api/db/schema";
 import type { RlsDatabase } from "@/api/db/scoped";
 import { loadOrgAISettings } from "@/api/lib/ai-config-loader";

@@ -8,7 +8,7 @@
 import { PDF } from "@libpdf/core";
 import { Result } from "better-result";
 
-import type { SafeDb } from "@/api/db/safe-db";
+import type { SafeDb } from "@/api/db/safe-db-types";
 import type { PdfSigningStamp } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readEntityVersionFile } from "@/api/lib/entity-versions/load-entity-version-file-buffer";

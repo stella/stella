@@ -63,8 +63,9 @@ export const DICTATION_READY = {
 } as const satisfies DictationSnapshot;
 
 /** Dictation in Settings at its tallest: stella AI with a model whose
- *  provider keeps the audio, cleanup with both context switches, custom
- *  words, and the speech model still on this computer. */
+ *  provider keeps the audio, cleanup with the speaker's instructions, a
+ *  model choice and both context switches, custom words, and the speech
+ *  model still on this computer. */
 export const SETTINGS_DICTATION = {
   appSettings: [
     {
@@ -75,6 +76,9 @@ export const SETTINGS_DICTATION = {
   ],
   available: true,
   cleanup: true,
+  cleanupInstructions:
+    "Use British spelling.\nNever use emoji.\nKeep defined terms such as “the Purchaser” capitalised.",
+  cleanupModel: null,
   cleanupStyle: "polished",
   cloudAvailable: true,
   cloudModel: "elevenlabs-direct/scribe-v3",
@@ -99,9 +103,7 @@ export const SETTINGS_DICTATION = {
   model: { status: "ready" },
   modelBytes: 740_363_168,
   phase: "idle",
-  recentApps: [
-    { identifier: "com.apple.mail", kind: "email", name: "Mail" },
-  ],
+  recentApps: [{ identifier: "com.apple.mail", kind: "email", name: "Mail" }],
   retypeKeys: { code: "KeyV", modifiers: ["alt", "shift"] },
   retypeShortcut: true,
   retypeShortcutTaken: false,
@@ -115,6 +117,22 @@ export const SETTINGS_DICTATION = {
   whileDictating: "lower",
   whileDictatingOffered: ["nothing", "lower", "pause"],
 } as const satisfies DictationSettingSnapshot;
+
+/** The models the organization offers for cleanup besides automatic. */
+export const CLEANUP_MODELS = {
+  models: [
+    {
+      value: "openrouter::anthropic/claude-haiku-4.5",
+      displayName: "Claude Haiku 4.5",
+      provider: "openrouter",
+    },
+    {
+      value: "openrouter::google/gemini-2.5-flash",
+      displayName: "Gemini 2.5 Flash",
+      provider: "openrouter",
+    },
+  ],
+};
 
 /** The region's stella AI transcription models. */
 export const CLOUD_MODELS = {
@@ -181,6 +199,7 @@ export const ACCOUNT = {
   identity: { organizationId: "organization-1", userId: "user-1" },
   server: "https://app.example.test",
   status: "connected",
+  avatar: null,
 } as const satisfies DesktopAccountSnapshot;
 
 export const APP_STATE = {

@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import { DESKTOP_EDIT_FILE_TYPE_CONFIG } from "./desktop-edit-file-types";
-import { documentFormat, RECOGNISED_DOCUMENT_FORMATS } from "./document-format";
+import {
+  documentFormat,
+  RECOGNISED_DOCUMENT_FORMATS,
+  signatureFormatCandidate,
+} from "./document-format";
 import type { DocumentFormatKind } from "./document-format";
 import { EML_MIME_TYPE, MSG_MIME_TYPE } from "./email-mime-types";
 import {
@@ -60,6 +64,22 @@ describe("documentFormat", () => {
     });
   });
 
+  test.each([
+    ["application/vnd.ms-outlook-pst", "korespondence.pst"],
+    ["application/vnd.ms-outlook-pst", null],
+    ["application/octet-stream", "Archiv 2023.PST"],
+    ["application/octet-stream", "mailbox.ost"],
+  ] as const)(
+    "an Outlook mailbox stored as %s named %s is a PST",
+    (type, name) => {
+      expect(documentFormat(type, name)).toEqual({
+        kind: "pst",
+        mark: "pst",
+        label: "PST",
+      });
+    },
+  );
+
   test("uses the email mark for EML and Outlook MSG files", () => {
     expect(kindOf(EML_MIME_TYPE)).toBe("email");
     expect(kindOf(MSG_MIME_TYPE)).toBe("email");
@@ -94,7 +114,9 @@ describe("documentFormat", () => {
       ["message.eml", "email"],
       ["datová zpráva.ZFO", "dataBox"],
       ["contratto.pdf.P7M.P7M", "cades"],
-      ["firma.p7s", "file"],
+      ["firma.p7s", "cadesDetached"],
+      ["podanie.pdf.XADES", "xades"],
+      ["release.sig", "file"],
       ["readme.md", "markdown"],
       ["notes.txt", "text"],
       ["archive.zip", "zip"],
@@ -266,5 +288,30 @@ describe("documentFormat", () => {
         expect(profile.mark).not.toBe(format.kind);
       }
     }
+  });
+});
+
+describe("signatureFormatCandidate", () => {
+  test("names a signature reader only for names the bytes must settle", () => {
+    const candidateOf = (mimeType: string | null, fileName: string) =>
+      signatureFormatCandidate(mimeType, fileName)?.kind;
+    expect(candidateOf(null, "contract.pdf.sig")).toBe("cadesDetached");
+    expect(candidateOf("application/pgp-signature", "release.SIG")).toBe(
+      "cadesDetached",
+    );
+    expect(candidateOf("text/xml", "podanie.xml")).toBe("xades");
+    expect(candidateOf("application/xml", "export")).toBe("xades");
+    expect(candidateOf("application/octet-stream", "podanie.XML")).toBe(
+      "xades",
+    );
+  });
+
+  test("leaves files recognised by name to their own reader", () => {
+    expect(signatureFormatCandidate(null, "contract.pdf.p7s")).toBeUndefined();
+    expect(signatureFormatCandidate(null, "podanie.xades")).toBeUndefined();
+    expect(
+      signatureFormatCandidate("application/pdf", "x.xml"),
+    ).toBeUndefined();
+    expect(signatureFormatCandidate(null, "notes.txt")).toBeUndefined();
   });
 });

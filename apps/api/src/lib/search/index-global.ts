@@ -19,7 +19,7 @@ import { Temporal } from "@stll/time";
 
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import type {
   ContactAddress,
@@ -68,10 +68,7 @@ import type {
   GlobalSearchCursor,
   SearchRankingTier,
 } from "@/api/lib/search/pagination";
-import {
-  buildSearchPreviewPassages,
-  buildSearchPreviewPassageValueRows,
-} from "@/api/lib/search/preview-passages";
+import { buildSearchPreviewPassages } from "@/api/lib/search/preview-passages";
 import { lockCurrentSearchProjectionRepair } from "@/api/lib/search/projection-repair-fence";
 import type { SearchProjectionRepairFence } from "@/api/lib/search/projection-repair-fence";
 import {
@@ -1719,30 +1716,44 @@ const writeContactProjections = async (
       return;
     }
     const ids = projections.map(({ contact }) => contact.id);
+    const contactPayload = projections.map(({ contact, searchableText }) => ({
+      contact_id: contact.id,
+      organization_id: contact.organizationId,
+      contact_type: contact.type,
+      title: contact.displayName,
+      searchable_text: searchableText,
+      updated_at:
+        contact.updatedAt instanceof Date
+          ? contact.updatedAt.toISOString()
+          : contact.updatedAt,
+    }));
     await tx.execute(sql`
       INSERT INTO contact_search_documents (
         contact_id, organization_id, contact_type,
         title, searchable_text, updated_at, tsv
-      ) VALUES ${sql.join(
-        projections.map(
-          ({ contact, searchableText }) => sql`(
-            ${contact.id},
-            ${contact.organizationId},
-            ${contact.type},
-            ${contact.displayName},
-            ${searchableText},
-            ${contact.updatedAt},
-            to_tsvector(
-              'simple',
-              unaccent(arabic_normalize(
-                coalesce(${contact.displayName}, '') || ' ' ||
-                coalesce(${searchableText}, '')
-              ))
-            )
-          )`,
-        ),
-        sql`, `,
-      )}
+      )
+      SELECT
+        v.contact_id,
+        v.organization_id,
+        v.contact_type,
+        v.title,
+        v.searchable_text,
+        v.updated_at,
+        to_tsvector(
+          'simple',
+          unaccent(arabic_normalize(
+            coalesce(v.title, '') || ' ' ||
+            coalesce(v.searchable_text, '')
+          ))
+        )
+      FROM jsonb_to_recordset(${JSON.stringify(contactPayload)}::text::jsonb) AS v(
+        contact_id uuid,
+        organization_id text,
+        contact_type text,
+        title text,
+        searchable_text text,
+        updated_at timestamptz
+      )
       ON CONFLICT (contact_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         contact_type = EXCLUDED.contact_type,
@@ -1755,21 +1766,32 @@ const writeContactProjections = async (
       DELETE FROM contact_search_document_preview_passages
       WHERE contact_id = ANY(${typedPgArray(ids, "uuid")})
     `);
+    const contactPassagesPayload = projections.flatMap(
+      ({ contact, passages }) =>
+        passages.map(({ ordinal, content }) => ({
+          contact_id: contact.id,
+          organization_id: contact.organizationId,
+          ordinal,
+          content,
+        })),
+    );
     await tx.execute(sql`
       INSERT INTO contact_search_document_preview_passages (
         contact_id, organization_id, generation, ordinal, content, tsv
-      ) VALUES ${sql.join(
-        projections.map(({ contact, passages }) =>
-          buildSearchPreviewPassageValueRows({
-            generation: previewGeneration,
-            leadingValues: [sql`${contact.id}`, sql`${contact.organizationId}`],
-            passages,
-            regconfig: sql`'simple'`,
-            useUnaccent: true,
-          }),
-        ),
-        sql`, `,
-      )}
+      )
+      SELECT
+        p.contact_id,
+        p.organization_id,
+        ${previewGeneration}::uuid,
+        p.ordinal,
+        p.content,
+        to_tsvector('simple'::regconfig, unaccent(arabic_normalize(p.content)))
+      FROM jsonb_to_recordset(${JSON.stringify(contactPassagesPayload)}::text::jsonb) AS p(
+        contact_id uuid,
+        organization_id text,
+        ordinal integer,
+        content text
+      )
     `);
     await tx.execute(sql`
       UPDATE contact_search_documents
@@ -1906,29 +1928,36 @@ const writeWorkspaceProjections = async (
       return;
     }
     const ids = projections.map(({ workspace }) => workspace.id);
+    const workspacePayload = projections.map(
+      ({ workspace, searchableText, updatedAt }) => ({
+        workspace_id: workspace.id,
+        organization_id: workspace.organizationId,
+        title: workspace.name,
+        searchable_text: searchableText,
+        updated_at:
+          updatedAt instanceof Date ? updatedAt.toISOString() : updatedAt,
+      }),
+    );
     await tx.execute(sql`
       INSERT INTO workspace_search_documents (
         workspace_id, organization_id,
         title, searchable_text, updated_at, tsv
-      ) VALUES ${sql.join(
-        projections.map(
-          ({ workspace, searchableText, updatedAt }) => sql`(
-            ${workspace.id},
-            ${workspace.organizationId},
-            ${workspace.name},
-            ${searchableText},
-            ${updatedAt},
-            to_tsvector(
-              'simple',
-              unaccent(arabic_normalize(
-                coalesce(${workspace.name}, '') || ' ' ||
-                coalesce(${searchableText}, '')
-              ))
-            )
-          )`,
-        ),
-        sql`, `,
-      )}
+      )
+      SELECT
+        v.workspace_id,
+        v.organization_id,
+        v.title,
+        v.searchable_text,
+        v.updated_at,
+        to_tsvector(
+          'simple',
+          unaccent(arabic_normalize(
+            coalesce(v.title, '') || ' ' ||
+            coalesce(v.searchable_text, '')
+          ))
+        )
+      FROM jsonb_to_recordset(${JSON.stringify(workspacePayload)}::text::jsonb)
+        AS v(workspace_id uuid, organization_id text, title text, searchable_text text, updated_at timestamptz)
       ON CONFLICT (workspace_id) DO UPDATE SET
         organization_id = EXCLUDED.organization_id,
         title = EXCLUDED.title,
@@ -1940,24 +1969,23 @@ const writeWorkspaceProjections = async (
       DELETE FROM workspace_search_document_preview_passages
       WHERE workspace_id = ANY(${typedPgArray(ids, "uuid")})
     `);
+    const workspacePassagesPayload = projections.flatMap(
+      ({ workspace, passages }) =>
+        passages.map(({ ordinal, content }) => ({
+          workspace_id: workspace.id,
+          organization_id: workspace.organizationId,
+          ordinal,
+          content,
+        })),
+    );
     await tx.execute(sql`
       INSERT INTO workspace_search_document_preview_passages (
         workspace_id, organization_id, generation, ordinal, content, tsv
-      ) VALUES ${sql.join(
-        projections.map(({ workspace, passages }) =>
-          buildSearchPreviewPassageValueRows({
-            generation: previewGeneration,
-            leadingValues: [
-              sql`${workspace.id}`,
-              sql`${workspace.organizationId}`,
-            ],
-            passages,
-            regconfig: sql`'simple'`,
-            useUnaccent: true,
-          }),
-        ),
-        sql`, `,
-      )}
+      )
+      SELECT p.workspace_id, p.organization_id, ${previewGeneration}::uuid, p.ordinal, p.content,
+        to_tsvector('simple'::regconfig, unaccent(arabic_normalize(p.content)))
+      FROM jsonb_to_recordset(${JSON.stringify(workspacePassagesPayload)}::text::jsonb)
+        AS p(workspace_id uuid, organization_id text, ordinal integer, content text)
     `);
     await tx.execute(sql`
       UPDATE workspace_search_documents

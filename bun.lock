@@ -123,6 +123,7 @@
         "@stll/parameter-store": "workspace:*",
         "@stll/permissions": "workspace:*",
         "@stll/portable-path": "workspace:*",
+        "@stll/pst-reader": "workspace:*",
         "@stll/redis-config": "workspace:*",
         "@stll/regex-set": "catalog:",
         "@stll/runtime-mode": "workspace:*",
@@ -262,6 +263,7 @@
         "@stll/concurrency": "workspace:*",
         "@stll/docx-authoring": "workspace:*",
         "@stll/locales": "workspace:*",
+        "@stll/markdown-editor": "workspace:*",
         "@stll/text-normalize": "workspace:*",
         "@stll/time": "0.4.3",
         "@stll/transcript": "workspace:*",
@@ -277,6 +279,7 @@
         "@playwright/test": "^1.65.1",
         "@stll/agent-engine": "workspace:*",
         "@stll/property-testing": "workspace:*",
+        "@stll/sha256": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
         "@tauri-apps/cli": "^2.12.5",
@@ -580,7 +583,6 @@
         "@hocuspocus/provider": "^4.8.0",
         "@libpdf/core": "catalog:",
         "@mcp-ui/client": "catalog:",
-        "@neftaly/editcontext-polyfill": "^0.1.1",
         "@silurus/ooxml": "catalog:",
         "@standard-schema/spec": "^1.1.0",
         "@stll/agent-input": "workspace:^",
@@ -617,6 +619,7 @@
         "@stll/legal-ast": "workspace:*",
         "@stll/legal-atlas": "workspace:*",
         "@stll/locales": "workspace:*",
+        "@stll/markdown-editor": "workspace:*",
         "@stll/mojibake": "workspace:*",
         "@stll/money": "workspace:*",
         "@stll/permissions": "workspace:*",
@@ -666,8 +669,6 @@
         "@tiptap/pm": "^3.34.0",
         "@tiptap/react": "^3.34.0",
         "@tiptap/suggestion": "^3.34.0",
-        "@vscode/markdown-editor": "0.0.2-184",
-        "@vscode/observables": "0.1.1-0",
         "better-auth": "catalog:",
         "better-result": "catalog:",
         "cobe": "^2.0.1",
@@ -675,7 +676,6 @@
         "driver.js": "1.14.0",
         "immer": "^11.2.10",
         "isbot": "5.2.3",
-        "katex": "^0.16.47",
         "lucide-react": "catalog:",
         "mdast-util-from-markdown": "2.1.0",
         "mdast-util-gfm": "3.1.0",
@@ -820,7 +820,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.3.0",
+      "version": "0.3.1",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "@stll/text-normalize": "workspace:*",
@@ -974,7 +974,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.6.10",
+      "version": "0.6.14",
       "dependencies": {
         "@ag-ui/core": "1.0.5",
         "@stll/ai-catalog": "workspace:^",
@@ -1023,7 +1023,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "8.1.2",
+      "version": "8.2.2",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1341,6 +1341,30 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/markdown-editor": {
+      "name": "@stll/markdown-editor",
+      "version": "0.0.0",
+      "dependencies": {
+        "@neftaly/editcontext-polyfill": "^0.1.1",
+        "@stll/ui": "workspace:*",
+        "@vscode/markdown-editor": "0.0.2-184",
+        "@vscode/observables": "0.1.1-0",
+        "better-result": "catalog:",
+        "katex": "^0.16.47",
+        "use-debounce": "^10.1.1",
+      },
+      "devDependencies": {
+        "@happy-dom/global-registrator": "21.0.4",
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "@types/react": "catalog:react19",
+        "bun-types": "catalog:",
+        "react": "catalog:react19",
+      },
+      "peerDependencies": {
+        "react": ">=19",
+      },
+    },
     "packages/mcp-apps": {
       "name": "@stll/mcp-apps",
       "version": "0.0.0",
@@ -1488,6 +1512,14 @@
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
         "oxc-parser": "catalog:",
+      },
+    },
+    "packages/pst-reader": {
+      "name": "@stll/pst-reader",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
       },
     },
     "packages/redis-config": {
@@ -1763,7 +1795,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.84.1",
+      "version": "0.88.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1863,7 +1895,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.24.0",
+      "version": "0.24.4",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",
@@ -1911,30 +1943,31 @@
     "lefthook",
   ],
   "patchedDependencies": {
+    "@astrojs/mdx@8.1.3": "patches/@astrojs%2Fmdx@8.1.3.patch",
+    "@tanstack/openai-base@1.0.3": "patches/@tanstack%2Fopenai-base@1.0.3.patch",
+    "@tanstack/ai@1.4.0": "patches/@tanstack%2Fai@1.4.0.patch",
+    "happy-dom@21.0.4": "patches/happy-dom@21.0.4.patch",
+    "@vscode/markdown-editor@0.0.2-184": "patches/@vscode%2Fmarkdown-editor@0.0.2-184.patch",
+    "@better-auth/oauth-provider@1.7.25": "patches/@better-auth%2Foauth-provider@1.7.25.patch",
+    "@emnapi/runtime@2.0.0-beta.2": "patches/@emnapi%2Fruntime@2.0.0-beta.2.patch",
+    "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",
+    "@libpdf/core@0.5.3": "patches/@libpdf%2Fcore@0.5.3.patch",
+    "@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch",
+    "@tanstack/ai-openai@1.1.1": "patches/@tanstack%2Fai-openai@1.1.1.patch",
     "drizzle-orm@1.0.0-rc.5": "patches/drizzle-orm@1.0.0-rc.5.patch",
     "@tanstack/ai-code-mode@1.1.1": "patches/@tanstack%2Fai-code-mode@1.1.1.patch",
     "@tanstack/ai-openrouter@1.1.2": "patches/@tanstack%2Fai-openrouter@1.1.2.patch",
     "mailauth@8.1.0": "patches/mailauth@8.1.0.patch",
     "@tanstack/openai-base@1.0.4": "patches/@tanstack%2Fopenai-base@1.0.4.patch",
-    "@astrojs/mdx@8.1.3": "patches/@astrojs%2Fmdx@8.1.3.patch",
-    "@tanstack/ai@1.4.0": "patches/@tanstack%2Fai@1.4.0.patch",
-    "happy-dom@21.0.4": "patches/happy-dom@21.0.4.patch",
+    "@neftaly/editcontext-polyfill@0.1.1": "patches/@neftaly%2Feditcontext-polyfill@0.1.1.patch",
     "@tanstack/ai-client@1.1.0": "patches/@tanstack%2Fai-client@1.1.0.patch",
     "@tanstack/ai-mcp@1.2.0": "patches/@tanstack%2Fai-mcp@1.2.0.patch",
-    "@vscode/markdown-editor@0.0.2-184": "patches/@vscode%2Fmarkdown-editor@0.0.2-184.patch",
     "@tanstack/ai-mistral@1.1.1": "patches/@tanstack%2Fai-mistral@1.1.1.patch",
-    "@better-auth/oauth-provider@1.7.25": "patches/@better-auth%2Foauth-provider@1.7.25.patch",
-    "@tanstack/openai-base@1.0.3": "patches/@tanstack%2Fopenai-base@1.0.3.patch",
-    "@emnapi/runtime@2.0.0-beta.2": "patches/@emnapi%2Fruntime@2.0.0-beta.2.patch",
     "@tanstack/ai-bedrock@1.3.0": "patches/@tanstack%2Fai-bedrock@1.3.0.patch",
-    "@mcp-ui/client@7.1.1": "patches/@mcp-ui%2Fclient@7.1.1.patch",
     "oxlint-tailwindcss@1.17.2": "patches/oxlint-tailwindcss@1.17.2.patch",
-    "@libpdf/core@0.5.3": "patches/@libpdf%2Fcore@0.5.3.patch",
     "@emnapi/runtime@1.11.3": "patches/@emnapi%2Fruntime@1.11.3.patch",
     "@tanstack/ai-gemini@1.2.2": "patches/@tanstack%2Fai-gemini@1.2.2.patch",
     "@tanstack/ai-anthropic@1.1.1": "patches/@tanstack%2Fai-anthropic@1.1.1.patch",
-    "@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch",
-    "@tanstack/ai-openai@1.1.1": "patches/@tanstack%2Fai-openai@1.1.1.patch",
   },
   "overrides": {
     "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
@@ -3573,6 +3606,8 @@
 
     "@stll/locales": ["@stll/locales@workspace:packages/locales"],
 
+    "@stll/markdown-editor": ["@stll/markdown-editor@workspace:packages/markdown-editor"],
+
     "@stll/mcp-apps": ["@stll/mcp-apps@workspace:packages/mcp-apps"],
 
     "@stll/mcp-kit": ["@stll/mcp-kit@workspace:packages/mcp-kit"],
@@ -3598,6 +3633,8 @@
     "@stll/portable-path": ["@stll/portable-path@workspace:packages/portable-path"],
 
     "@stll/property-testing": ["@stll/property-testing@workspace:packages/property-testing"],
+
+    "@stll/pst-reader": ["@stll/pst-reader@workspace:packages/pst-reader"],
 
     "@stll/redis-config": ["@stll/redis-config@workspace:packages/redis-config"],
 

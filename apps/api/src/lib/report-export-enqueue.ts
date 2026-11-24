@@ -202,11 +202,13 @@ export const reconcileQueuedReportExports = async ({
       .orderBy(asc(reportExports.createdAt), asc(reportExports.id))
       .limit(RECONCILE_SCAN_PAGE_SIZE);
 
-  const handle = async (row: QueuedReportExportRow): Promise<boolean> => {
+  const handle = async (
+    row: QueuedReportExportRow,
+  ): Promise<"handed-off" | "skipped" | "failed"> => {
     const { aiNarrative, format, requestedBy } = row;
     if (requestedBy === null) {
       unattributed += 1;
-      return false;
+      return "skipped";
     }
     if (format === null || aiNarrative === null) {
       unrecoverable += 1;
@@ -219,7 +221,7 @@ export const reconcileQueuedReportExports = async ({
         .where(
           and(eq(reportExports.id, row.id), eq(reportExports.status, "queued")),
         );
-      return false;
+      return "skipped";
     }
     const outcome = await Result.tryPromise({
       try: async () =>
@@ -249,9 +251,11 @@ export const reconcileQueuedReportExports = async ({
         stage: "requeue",
         workspaceId: row.workspaceId,
       });
-      return false;
+      return "failed";
     }
-    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED;
+    return outcome.value === QUEUE_REQUEUE_OUTCOME.REQUEUED
+      ? "handed-off"
+      : "skipped";
   };
 
   const scan = await scanPendingRows({ handle, readPage });

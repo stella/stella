@@ -8,12 +8,12 @@ import {
 } from "@stll/api-contract/correspondence";
 import { sha256Hex as hashSha256Hex } from "@stll/sha256/bun";
 
-import type { Transaction } from "@/api/db/root";
 import {
   correspondence,
   correspondenceAttachments,
   correspondenceSources,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

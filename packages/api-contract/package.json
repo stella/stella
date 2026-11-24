@@ -179,6 +179,8 @@
     "./certified-email": "./src/certified-email.ts",
     "./email-reading": "./src/email-reading.ts",
     "./preview-text": "./src/preview-text.ts",
+    "./signature": "./src/signature.ts",
+    "./signature-file-formats": "./src/signature-file-formats.ts",
     "./data-box": "./src/data-box.ts",
     "./email-mime-types": "./src/email-mime-types.ts",
     "./file-parts": "./src/file-parts.ts",

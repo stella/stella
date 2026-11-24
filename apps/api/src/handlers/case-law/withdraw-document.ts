@@ -11,7 +11,7 @@ import { and, eq } from "drizzle-orm";
  * The two share the object-deletion step and nothing else.
  */
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,

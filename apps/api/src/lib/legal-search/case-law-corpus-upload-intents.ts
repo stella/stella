@@ -5,7 +5,7 @@ import { backoffDelay } from "@stll/concurrency/backoff-delay";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import type { Transaction } from "@/api/db/root";
-import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import type { SafeDb, ScopedDb } from "@/api/db/safe-db-types";
 import {
   CASE_LAW_CORPUS_UPLOAD_INTENT_STATUS,
   caseLawCorpusPackRefs,

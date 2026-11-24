@@ -12,8 +12,8 @@ import { and, asc, desc, eq } from "drizzle-orm";
 import { foldReviewDecisions } from "@stll/api-contract/review-decision";
 import type { ReviewDecisionEvent } from "@stll/api-contract/review-decision";
 
-import type { Transaction } from "@/api/db/root";
 import { documentReviewFindingDecisions } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 

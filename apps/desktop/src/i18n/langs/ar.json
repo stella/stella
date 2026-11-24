@@ -233,6 +233,14 @@
     "writeDescription": "أدخل وصفًا لهذا الإدخال."
   },
   "agentSubscriptions": {
+    "antigravity": {
+      "checkAgain": "التحقق مرة أخرى",
+      "notInstalled": "ثبّت Antigravity 1.5 أو أحدث، ثم سجّل الدخول منه.",
+      "signedIn": "تم تسجيل الدخول إلى Antigravity",
+      "signedOut": "سجّل الدخول من واجهة سطر أوامر Antigravity لاستخدامه في stella.",
+      "title": "Antigravity",
+      "tooOld": "حدّث Antigravity إلى 1.5 أو أحدث، ثم سجّل الدخول منه."
+    },
     "callbackAccount": "الحساب",
     "callbackCloseTab": "يمكنك إغلاق علامة التبويب هذه.",
     "callbackConnectedBody": "تستخدم طلبات الذكاء الاصطناعي في stella الآن خطة ChatGPT الخاصة بك.",
@@ -603,6 +611,19 @@
       "description": "يصحّح أخطاء التعرّف والتنسيق المنطوق مثل «سطر جديد» أو «غامق»، ويلائم النص مع التطبيق، مثل البريد الإلكتروني. يُرسَل النص فقط، وليس الصوت، عبر stella إلى مزوّد الذكاء الاصطناعي لمؤسستك، ولا تخزّنه stella.",
       "descriptionCloud": "يصحّح الذكاء الاصطناعي في stella أيضًا أخطاء التعرّف والتنسيق المنطوق مثل «سطر جديد» أو «غامق»، ويلائم النص مع التطبيق، مثل البريد الإلكتروني.",
       "title": "التنقيح بالذكاء الاصطناعي"
+    },
+    "cleanupInstructions": {
+      "description": "الطريقة التي تفضّل أن يُكتب بها نصك، مثل نمط إملائي معيّن أو كلمات تريد تجنّبها. يتّبعها التنقيح حيث تسمح قواعده، ولا يغيّر أبدًا ما قلته.",
+      "placeholder": "مثلًا: استخدم التهجئة البريطانية. لا تستخدم الرموز التعبيرية أبدًا. حافظ على جملي غير المكتملة.",
+      "saveFailed": "تعذّر حفظ تعليماتك. حاول مرة أخرى.",
+      "title": "تعليماتك"
+    },
+    "cleanupModel": {
+      "automatic": "تلقائي",
+      "automaticDescription": "يستخدم النموذج السريع لمؤسستك.",
+      "chosenDescription": "إذا استغرق هذا النموذج أكثر من بضع ثوانٍ، يُكتب النص دون تنقيح.",
+      "title": "نموذج الذكاء الاصطناعي",
+      "withdrawn": "النموذج الذي اخترته لم يعد متاحًا، لذا يستخدم التنقيح الخيار التلقائي."
     },
     "cleanupStyle": {
       "casual": {
@@ -1253,6 +1274,8 @@
   },
   "transcribe": {
     "cleaned": {
+      "discardEdits": "تجاهل تعديلاتي",
+      "editorLabel": "محرر النص المنقّح",
       "failedCount": "{count, plural, zero {لم يُنقَّح أي جزء} one {جزء واحد لم يُنقَّح} two {جزءان لم يُنقَّحا} few {# أجزاء لم تُنقَّح} many {# جزءًا لم يُنقَّح} other {# جزء لم يُنقَّح}}",
       "fileNameMarkdown": "{title} منقّح.md",
       "fileNameText": "{title} منقّح.txt",
@@ -1324,6 +1347,7 @@
       "audioMissing": "لم يعد التسجيل مفتوحًا في هذه النافذة، لذا لم يُحفظ في الملف.",
       "audioTooLarge": "التسجيل أكبر من {size}، لذا لم يُحفظ في الملف.",
       "cleanedDocxFileName": "{title} - النص المنقح.docx",
+      "cleanedNotFiled": "تعذّر حفظ النص المنقّح في الملف.",
       "cleanedTitle": "{title} - النص المنقح",
       "documents": "جارٍ حفظ مستندات Word…",
       "docxFileName": "{title} - نص.docx",
@@ -1366,7 +1390,6 @@
       "saveToMatterFailed": "تعذّر حفظ النص في الملف. حاول مرة أخرى.",
       "saveWithTimestamps": "نص مع الطوابع الزمنية (.txt)",
       "saveWithoutTimestamps": "نص بدون الطوابع الزمنية (.txt)",
-      "savedToMatter": "تم الحفظ في {matter} باسم {fileName}.",
       "savingToMatter": "جارٍ الحفظ…",
       "thisComputer": "هذا الكمبيوتر",
       "transcriptTitle": "النص المفرّغ"

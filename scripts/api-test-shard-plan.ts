@@ -5,13 +5,16 @@ export const API_TEST_SHARD_IDS = [
   "api-4",
   "api-5",
   "api-6",
+  "api-7",
+  "api-8",
 ] as const;
 
-type FullTestJobShard = (typeof API_TEST_SHARD_IDS)[number] | "rest-web";
+type FullTestJobShard = (typeof API_TEST_SHARD_IDS)[number] | "rest" | "web";
 
 export const FULL_TEST_JOB_SHARDS = [
   ...API_TEST_SHARD_IDS,
-  "rest-web",
+  "rest",
+  "web",
 ] satisfies FullTestJobShard[];
 
 export const isApiTestShardId = (

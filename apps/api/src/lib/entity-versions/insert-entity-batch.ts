@@ -1,7 +1,7 @@
 import { inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import { entities, fields } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
 import type { NamedEntityInsert } from "@/api/lib/entities/sibling-name-insert";

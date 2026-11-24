@@ -133,4 +133,21 @@ describe("Codex turn failures", () => {
       ),
     ).toBeNull();
   });
+
+  test("recognizes encrypted history rejection as a recoverable provider error", () => {
+    const failure = classifyTurnFailure({
+      error: {
+        message: "invalid_encrypted_content: could not decrypt history",
+        codexErrorInfo: "invalid_encrypted_content",
+      },
+      rateLimits: null,
+      now: NOW,
+    });
+    expect(failure).toEqual({
+      type: "provider_error",
+      message:
+        "Codex could not verify this session's encrypted conversation history. Send another message to continue in a fresh session with the visible conversation history.",
+      code: "invalid_encrypted_content",
+    });
+  });
 });

@@ -43,6 +43,7 @@
     "security:audit:report": "bun scripts/dependency-audit.ts",
     "security:audit:write-baseline": "bun scripts/dependency-audit.ts --write-baseline",
     "env:generate": "bun --no-env-file scripts/env-tool.ts generate",
+    "baselines:shrink": "bun scripts/autofix-baseline-prune.ts prune",
     "format": "bun fmt",
     "env:check": "bun --no-env-file scripts/env-tool.ts check",
     "env:audit": "bun --no-env-file scripts/env-tool.ts audit",
@@ -372,7 +373,8 @@
     "drizzle-orm@1.0.0-rc.5": "patches/drizzle-orm@1.0.0-rc.5.patch",
     "@vscode/markdown-editor@0.0.2-184": "patches/@vscode%2Fmarkdown-editor@0.0.2-184.patch",
     "@better-auth/oauth-provider@1.7.25": "patches/@better-auth%2Foauth-provider@1.7.25.patch",
-    "@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch"
+    "@better-auth/cimd@1.7.25": "patches/@better-auth%2Fcimd@1.7.25.patch",
+    "@neftaly/editcontext-polyfill@0.1.1": "patches/@neftaly%2Feditcontext-polyfill@0.1.1.patch"
   },
   "trustedDependencies": [
     "lefthook"

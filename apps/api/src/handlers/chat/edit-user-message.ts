@@ -3,7 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { CHAT_MESSAGE_EDIT_ERROR_CODE } from "@stll/api-contract";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import { resolveEditedUserMessageId } from "@/api/handlers/chat/chat-schema";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";

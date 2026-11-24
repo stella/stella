@@ -5,8 +5,8 @@ import { workspaceAcceptsWrites } from "@stll/api-contract/workspace-status";
 import type { PermissionInput } from "@stll/permissions";
 
 import { member } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AccessibleWorkspace } from "@/api/lib/auth/accessible-workspace";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockMemberAccessRow } from "@/api/lib/db/aggregate-lock";

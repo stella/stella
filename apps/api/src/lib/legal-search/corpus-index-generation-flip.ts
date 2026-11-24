@@ -58,7 +58,6 @@ import { eq, sql } from "drizzle-orm";
 import { declareFingerprintFields } from "@stll/errors";
 
 import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerationFlips,
   corpusIndexGenerations,
@@ -66,6 +65,7 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { readBounded } from "@/api/lib/db/read-bounded";

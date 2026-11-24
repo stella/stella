@@ -1,7 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { entities, entityVersions, fields } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { withAggregateRowQuery } from "@/api/lib/db/aggregate-lock";

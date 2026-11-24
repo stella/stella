@@ -1,4 +1,4 @@
-import type { Transaction } from "@/api/db/root";
+import type { Transaction } from "@/api/db/types";
 
 /**
  * The caller authorized the writer before producing the bytes: a request

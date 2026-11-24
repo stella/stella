@@ -5,8 +5,8 @@ import { drizzle } from "drizzle-orm/pglite";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
-import type { Transaction } from "@/api/db/root";
 import { corpusIndexGenerations } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,

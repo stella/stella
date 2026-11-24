@@ -8,7 +8,10 @@ import {
 } from "@/api/lib/errors/tagged-errors";
 import type { FileKey } from "@/api/lib/file-key";
 import { openS3ObjectStream } from "@/api/lib/s3";
-import { extractMailboxStreamText } from "@/api/lib/search/extract-content";
+import {
+  extractMailboxStreamText,
+  type StreamedMailboxFormat,
+} from "@/api/lib/search/extract-content";
 
 /**
  * Streams a stored mailbox, one network chunk in memory at a time. A live
@@ -57,7 +60,7 @@ export const openStoredMailbox = async ({
  * A source that fails errors the stream and is remembered, so a reader
  * that saw only part of the file is never taken as having read all of it.
  */
-const streamOf = (chunks: AsyncIterable<Uint8Array>) => {
+export const streamOf = (chunks: AsyncIterable<Uint8Array>) => {
   const iterator = chunks[Symbol.asyncIterator]();
   const state: { failure: unknown } = { failure: undefined };
   const stream = new ReadableStream<Uint8Array>({
@@ -89,6 +92,7 @@ const streamOf = (chunks: AsyncIterable<Uint8Array>) => {
 export const readStoredMailboxText = async ({
   key,
   fileName,
+  format = MBOX_FILE_FORMAT,
   maxChars,
   signal,
   timeoutMs,
@@ -96,6 +100,8 @@ export const readStoredMailboxText = async ({
 }: {
   key: FileKey;
   fileName: string;
+  /** The mailbox's format: a `.mbox` unless named. */
+  format?: StreamedMailboxFormat;
   maxChars?: number;
   signal: AbortSignal;
   timeoutMs?: number;
@@ -107,6 +113,7 @@ export const readStoredMailboxText = async ({
     stream,
     sizeBytes: opened.sizeBytes,
     fileName,
+    format,
     signal,
     ...(maxChars === undefined ? {} : { maxChars }),
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
@@ -119,7 +126,7 @@ export const readStoredMailboxText = async ({
       code: EXTRACTION_WORKER_ERROR_CODE.external,
       message: "The stored mailbox could not be read to its end",
       exitCode: null,
-      mimeType: MBOX_FILE_FORMAT.mimeType,
+      mimeType: format.mimeType,
       sizeBytes: opened.sizeBytes,
       termination: null,
       workerErrorClass: null,

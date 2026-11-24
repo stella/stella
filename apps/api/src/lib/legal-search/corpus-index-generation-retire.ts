@@ -29,7 +29,6 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import { declareFingerprintFields } from "@stll/errors";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerationFlips,
   corpusIndexGenerations,
@@ -38,6 +37,7 @@ import {
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
 import { setSharedTransactionTimeouts } from "@/api/db/shared-pool-timeouts";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { readBounded } from "@/api/lib/db/read-bounded";
 import type {

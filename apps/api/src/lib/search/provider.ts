@@ -1,4 +1,4 @@
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import {
   createPgFtsSearchReader,
   pgFtsSearchMaintenance,

@@ -2,8 +2,8 @@ import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { GetColumnData, SQL } from "drizzle-orm";
 import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
-import type { Transaction } from "@/api/db/root";
 import { contacts } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";

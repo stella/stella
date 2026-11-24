@@ -371,13 +371,21 @@
     "title": "SharePoint e OneDrive"
   },
   "signedFile": {
+    "bindingDiffers": "O conteúdo não corresponde ao hash informado na assinatura.",
+    "bindingMatches": "O conteúdo corresponde ao hash informado na assinatura.",
+    "bindingNotCompared": "Encontrado pelo nome do arquivo. O conteúdo não foi comparado.",
     "deliveryReceipt": "Comprovante de entrega de um dossiê eletrônico",
+    "digestNote": "Um hash correspondente mostra que estes são os dados assinados. Isso não verifica a assinatura.",
     "layer": "Camada de assinaturas {number, number}",
     "noReadableContent": "Não há conteúdo legível para exibir na prévia.",
     "noSigners": "Nenhum dado de signatário foi encontrado.",
     "pdfUnavailable": "A prévia do PDF não está disponível.",
+    "signedAt": "Horário de assinatura informado: {time}",
     "signedDocument": "Documento assinado",
+    "signedFileMissing": "O arquivo assinado não está neste caso.",
     "signers": "Signatários",
+    "signs": "Arquivo assinado",
+    "statedFilesMissing": "Citados na assinatura, não encontrados neste caso:",
     "unknownSigner": "Signatário desconhecido",
     "unreadable": "Não foi possível ler o arquivo assinado.",
     "unverified": "As assinaturas não foram verificadas."

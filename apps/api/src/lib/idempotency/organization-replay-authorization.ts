@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 import type { PermissionInput } from "@stll/permissions";
 
 import { member } from "@/api/db/auth-schema";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { lockMemberAccessRow } from "@/api/lib/db/aggregate-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

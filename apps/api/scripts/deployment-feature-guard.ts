@@ -119,6 +119,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
     "Email readings use the matter file read permission on every deployment",
   ],
   [
+    "/v1/files/:workspaceId/signature",
+    "Signature file previews use the matter file read permission on every deployment",
+  ],
+  [
     "/v1/files/:workspaceId/data-box",
     "Data-box previews use the matter file read permission on every deployment",
   ],
@@ -310,6 +314,10 @@ const ALWAYS_ON_ROUTE_PREFIXES: ReadonlyMap<string, string> = new Map([
   [
     "/v1/desktop/dictation/cleanup",
     "Desktop dictation cleanup enforces the caller's dictation feature decision, its dictation kill switch, model availability and usage admission on every deployment",
+  ],
+  [
+    "/v1/desktop/dictation/cleanup-models",
+    "Desktop dictation lists the cleanup models only for a caller whose dictation feature decision is enabled and whose role may use AI, on every deployment",
   ],
   [
     "/v1/desktop/dictation/learned-fixes",

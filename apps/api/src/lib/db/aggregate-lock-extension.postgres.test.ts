@@ -6,9 +6,9 @@ import { MEMBER_REMOVAL_BUSY_CODE } from "@stll/api-contract";
 import { rejectionOf } from "@stll/property-testing/rejection";
 
 import { organization } from "@/api/db/auth-schema";
-import type { Transaction } from "@/api/db/root";
 import { abortTransaction } from "@/api/db/safe-db";
 import { workspaces } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

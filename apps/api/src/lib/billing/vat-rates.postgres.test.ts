@@ -10,9 +10,9 @@ import { eq, inArray } from "drizzle-orm";
 
 import { VAT_RATE_PRESETS } from "@stll/invoicing";
 
-import type { Transaction } from "@/api/db/root";
 import { vatRates } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import type { Transaction } from "@/api/db/types";
 import createVatRate from "@/api/handlers/vat-rates/create";
 import applyVatRatePreset from "@/api/handlers/vat-rates/presets/create";
 import updateVatRate from "@/api/handlers/vat-rates/update";

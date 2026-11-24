@@ -2750,7 +2750,7 @@ export const runSearchIndexReplayAttempt = async ({
   onSuccess: () => Promise<boolean>;
   timeoutMs?: number;
   transitionTimeoutMs?: number;
-}): Promise<boolean> => {
+}): Promise<"replayed" | "skipped" | "failed"> => {
   const indexed = await Result.tryPromise({
     try: async () =>
       await withTimeout(indexEntity, {
@@ -2764,12 +2764,13 @@ export const runSearchIndexReplayAttempt = async ({
       label: "document OCR search-index replay failure transition",
       timeoutMs: transitionTimeoutMs,
     });
-    return false;
+    return "failed";
   }
-  return await withTimeout(onSuccess, {
+  const replayed = await withTimeout(onSuccess, {
     label: "document OCR search-index replay success transition",
     timeoutMs: transitionTimeoutMs,
   });
+  return replayed ? "replayed" : "skipped";
 };
 
 const recoverFailedSearchIndex = async (
@@ -2782,7 +2783,7 @@ const recoverFailedSearchIndex = async (
   }: FailedSearchIndexCandidate,
   dependencies: DocumentProcessingReconciliationDependencies,
 ): Promise<boolean> =>
-  await runSearchIndexReplayAttempt({
+  (await runSearchIndexReplayAttempt({
     indexEntity: async () => await dependencies.indexEntity(entityId),
     onFailure: async (error) => {
       captureError(
@@ -2839,7 +2840,7 @@ const recoverFailedSearchIndex = async (
       );
       return true;
     },
-  });
+  })) === "replayed";
 
 /**
  * A replay this phase claimed and did not complete went back to `failed`

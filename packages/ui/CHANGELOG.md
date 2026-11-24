@@ -1,5 +1,35 @@
 # @stll/ui
 
+## 0.88.0
+
+### Minor Changes
+
+- [#9187](https://github.com/stella/stella/pull/9187) [`1ab906c`](https://github.com/stella/stella/commit/1ab906cc4ad7916de5ef21284416343ea2e2810c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add P7S and XAdES document marks shared by web and native renderers.
+
+## 0.87.0
+
+### Minor Changes
+
+- [#9294](https://github.com/stella/stella/pull/9294) [`1798f66`](https://github.com/stella/stella/commit/1798f6615a61ddf02e091d925269ed735bef75fe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for Outlook mailboxes (`.pst`).
+
+## 0.86.0
+
+### Minor Changes
+
+- [#9226](https://github.com/stella/stella/pull/9226) [`b280d21`](https://github.com/stella/stella/commit/b280d21b8b6bc7149a342a08f2d78036f1099186) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Export OpenAI, Claude, Gemini, and Antigravity brand icons from `@stll/ui/brand-icons`.
+
+## 0.85.0
+
+### Minor Changes
+
+- [#9275](https://github.com/stella/stella/pull/9275) [`e1d953a`](https://github.com/stella/stella/commit/e1d953a644572aabd221066d6b567d05f17cbb5b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add a shared web and native document mark for mailboxes (`.mbox`).
+
+### Patch Changes
+
+- [#9265](https://github.com/stella/stella/pull/9265) [`6bc0546`](https://github.com/stella/stella/commit/6bc0546997b8d2bec84322aebee4c8249415af63) Thanks [@dependabot](https://github.com/apps/dependabot)! - Update `@ag-ui/core` to `1.0.5`.
+  Update `tldts` to `7.5.4`.
+  Update `lucide-react` to `1.74.0`.
+
 ## 0.84.1
 
 ### Patch Changes

@@ -8,7 +8,7 @@ import { resolveEmailMimeType } from "@stll/api-contract/email-mime-types";
 import type { EmailReading } from "@stll/api-contract/email-reading";
 import type { FilePart } from "@stll/api-contract/file-parts";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { ScopedDb } from "@/api/db/safe-db-types";
 import { HTTP_FAILURE } from "@/api/http/errors";
 import { AUDIT_RESOURCE_TYPE, type AuditRecorder } from "@/api/lib/audit-log";
 import { CONTENT_DELIVERY_AUDIT_ACTION } from "@/api/lib/audited-download";

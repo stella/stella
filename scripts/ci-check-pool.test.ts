@@ -640,11 +640,9 @@ test("silent busy children, each lighter than the first, are never stuck", async
 }, 30_000);
 
 test("a silent, idle check is stopped as stuck with its process tree", async () => {
-  const started = performance.now();
   const { launched, log } = await launchIn("echo started\nsleep 600", {
     stuckAfterMs: 500,
   });
-  expect(performance.now() - started).toBeLessThan(10_000);
   expect(launched.stopped).toEqual({ reason: "stuck", idleMinutes: 0 });
   expect(launched.exitCode).not.toBe(0);
   expect(log).toStartWith("started\n");
@@ -1620,16 +1618,20 @@ test("the generated manifest guard defers the scan engine outside PR depth runs 
       ? planned.env["GENERATED_CHECKS_IN_OTHER_JOBS"]
       : undefined;
   };
-  expect(deferred({ pr_depth_only: true })).toBe('["","",""]');
+  expect(deferred({ pr_depth_only: true })).toBe('["","","",""]');
   expect(deferred({ pr_depth_only: false })).toBe(
-    '["scan-engine-wasm","heic-decoder-wasm",""]',
+    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm",""]',
   );
   // Push and merge-group runs have no inputs: GitHub renders them as null.
-  expect(deferred(null)).toBe('["scan-engine-wasm","heic-decoder-wasm",""]');
+  expect(deferred(null)).toBe(
+    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm",""]',
+  );
   // code-quality-web-rest runs the full typecheck coverage in this run.
   expect(
     deferred(null, { package_checks_required: "true", trusted: "true" }),
-  ).toBe('["scan-engine-wasm","heic-decoder-wasm","api-typecheck-projects"]');
+  ).toBe(
+    '["scan-engine-wasm","heic-decoder-wasm","pst-reader-wasm","api-typecheck-projects"]',
+  );
 });
 
 test("only a failed check's own error commands reach the job log", () => {

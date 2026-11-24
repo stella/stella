@@ -294,7 +294,9 @@ export const createEntityFromBuffer = async ({
   let writeState: "confirmed" | "uncertain" = "uncertain";
 
   try {
-    const cleanupObject = async (): Promise<boolean> => {
+    const cleanupObject = async (): Promise<
+      { status: "deleted" } | { status: "failed" }
+    > => {
       const cleanup = Result.flatten(
         await Result.tryPromise({
           try: async () =>
@@ -317,16 +319,16 @@ export const createEntityFromBuffer = async ({
             objectKey: s3Key,
           }),
         );
-        return false;
+        return { status: "failed" };
       }
-      return true;
+      return { status: "deleted" };
     };
 
     const settleUncertainWrite = async () => {
       // A transport failure is ambiguous: S3 may publish after this immediate
       // delete completes. Keep the intent recoverable so later sweeps remove
       // any late publication; the heartbeat stops in finally below.
-      const cleanupSucceeded = await cleanupObject();
+      const cleanupSucceeded = (await cleanupObject()).status === "deleted";
       if (publication.type === "service") {
         const settled = await settleObjectCleanupIntentsAfterWriter({
           safeDb,
@@ -594,7 +596,7 @@ export const createEntityFromBuffer = async ({
       });
     } catch (error) {
       if (!transactionState.durableReferencePrepared) {
-        const cleanupSucceeded = await cleanupObject();
+        const cleanupSucceeded = (await cleanupObject()).status === "deleted";
         if (publication.type === "service") {
           const settled = await settleObjectCleanupIntentsAfterWriter({
             safeDb,

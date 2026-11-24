@@ -1,12 +1,12 @@
 import { panic } from "better-result";
 import { and, asc, eq, inArray, ne, or, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db/root";
 import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
   corpusIndexProjectionStates,
 } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
 import { CORPUS_INDEX_APPEND_PRODUCING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";

@@ -2,9 +2,9 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { chunk as chunkItems } from "@stll/concurrency/chunk";
 
-import type { Transaction } from "@/api/db/root";
 import { cellMetadata, justifications } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
+import type { Transaction } from "@/api/db/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 

@@ -38,6 +38,8 @@ import {
 import {
   LEGAL_FILE_FORMATS,
   type LegalFileFormatKind,
+  SIGNATURE_FILE_KINDS,
+  type SignatureFileFormatKind,
 } from "@stll/api-contract/legal-file-formats";
 import type {
   PreviewText,
@@ -47,6 +49,7 @@ import { sanitizeErrorForOutput, sanitizeQueryErrorText } from "@stll/errors";
 import { extractDocxText, FolioDocxReviewer } from "@stll/folio-core/server";
 import { load } from "@stll/html";
 import { decodeDeclared } from "@stll/mojibake/declared-charset";
+import { Temporal } from "@stll/time";
 
 import { dataBoxDocumentText } from "@/api/lib/email/correspondence/data-box/document-text";
 import { DATA_BOX_PREVIEW_MODE } from "@/api/lib/email/correspondence/data-box/preview-contract";
@@ -61,6 +64,7 @@ import {
   ARCHIVE_PREVIEW_WORKER_EXIT,
   ASIC_PREVIEW_WORKER_MODE,
   MAILBOX_TEXT_WORKER_MODE,
+  PST_WORKER_EXIT,
   SIGNED_DOSSIER_WORKER_MODE,
   STRUCTURED_DOCUMENT_PREVIEW_MODE,
   ZIP_ARCHIVE_PREVIEW_MODE,
@@ -115,6 +119,23 @@ import {
 import type { MboxParseError } from "@/api/lib/files/mbox";
 import type { P7mParseError } from "@/api/lib/files/p7m";
 import { partMediaType } from "@/api/lib/files/part-media-type";
+import {
+  PST_OPERATION_MAX_MS,
+  pstBytesFile,
+  type PstReadError,
+  readPstText,
+} from "@/api/lib/files/pst-mailbox";
+import {
+  isPstWorkerMode,
+  readPstWorkerRequest,
+  runPstWorker,
+} from "@/api/lib/files/pst-worker";
+import { signatureDocumentText } from "@/api/lib/files/signature-document-text";
+import {
+  SIGNATURE_WORKER_EXIT,
+  SIGNATURE_WORKER_MODE,
+} from "@/api/lib/files/signature-preview-protocol";
+import { extractSignaturePreview } from "@/api/lib/files/signature-preview-worker";
 import type { SignedDossierParseError } from "@/api/lib/files/signed-dossier";
 import { signedDossierText } from "@/api/lib/files/signed-dossier-text";
 import { extractSignedDossierPreview } from "@/api/lib/files/signed-dossier-worker";
@@ -391,6 +412,7 @@ type LegalTextReadError =
   | AsicParseError
   | DocumentPackageError
   | MboxParseError
+  | PstReadError
   | FileScanFailedError
   | FileScanRejectedError
   | P7mParseError
@@ -544,6 +566,61 @@ const extractMailboxText = async ({
     mailboxName: "mailbox",
   });
 
+/**
+ * A file that is not a signature has no text here: a `.sig` or `.xml` file is
+ * read as one only when its bytes are one.
+ */
+const extractSignatureText =
+  (kind: SignatureFileFormatKind) =>
+  async ({
+    fileBytes,
+    maxChars,
+  }: LegalTextReadOptions): Promise<
+    Result<string | null, LegalTextReadError>
+  > => {
+    const preview = await extractSignaturePreview({
+      fileBytes,
+      kind,
+      fileName: "",
+      maxChars,
+      readText: extractEmbeddedPayloadText,
+    });
+    if (preview.isErr()) {
+      return preview.error._tag === "SignatureParseError"
+        ? Result.ok(null)
+        : Result.err(preview.error);
+    }
+    return Result.ok(signatureDocumentText(preview.value.reply));
+  };
+
+/**
+ * An `.xml` file's text: an XAdES signature reads as one, with its signers
+ * and the document it carries or signs; any other XML as an invoice or as
+ * its text.
+ */
+const extractXmlText = async (
+  options: LegalTextReadOptions,
+): Promise<Result<string | null, LegalTextReadError | EmailParseError>> => {
+  const signature = await extractSignatureText("xades")(options);
+  if (signature.isErr() || signature.value !== null) {
+    return signature;
+  }
+  return await extractEInvoiceText(options);
+};
+
+const extractPstText = async ({
+  fileBytes,
+  maxChars,
+}: LegalTextReadOptions): Promise<
+  Result<string | null, LegalTextReadError | EmailParseError>
+> =>
+  await readPstText({
+    open: (deadline) => pstBytesFile(fileBytes, deadline),
+    maxChars,
+    mailboxName: "mailbox",
+    deadline: Temporal.Now.instant().epochMilliseconds + PST_OPERATION_MAX_MS,
+  });
+
 const extractStructuredText = async (options: LegalTextReadOptions) => {
   const read = await extractStructuredDocument(options);
   return read.map(({ text }) => text);
@@ -558,12 +635,15 @@ const LEGAL_TEXT_READERS = {
   zep: extractSignedDossierText,
   xadesZep: extractSignedDossierText,
   cades: extractCadesText,
+  cadesDetached: extractSignatureText("cadesDetached"),
+  xades: extractSignatureText("xades"),
   dataBox: extractDataBoxText,
   isdoc: extractEInvoiceText,
   isdocx: extractEInvoiceText,
-  xml: extractEInvoiceText,
+  xml: extractXmlText,
   zip: extractZipText,
   mbox: extractMailboxText,
+  pst: extractPstText,
 } satisfies Record<
   LegalFileFormatKind,
   (
@@ -946,6 +1026,7 @@ const embeddedPartExit = (error: EmbeddedPartError) => {
     case "EmailParseError":
     case "MboxParseError":
     case "P7mParseError":
+    case "PstReadError":
     case "SignedDossierParseError":
       return Result.ok(EMBEDDED_PART_WORKER_EXIT.unreadable);
     case "FileScanRejectedError":
@@ -1031,6 +1112,45 @@ const writeZipArchivePreview = async (options: {
   return Result.ok(0);
 };
 
+const isSignatureKind = (value: string): value is SignatureFileFormatKind =>
+  SIGNATURE_FILE_KINDS.some((kind) => kind === value);
+
+const writeSignaturePreview = async ({
+  fileBytes,
+  kind,
+  fileName,
+  maxChars,
+}: {
+  fileBytes: Uint8Array;
+  kind: string;
+  fileName: string;
+  maxChars: number;
+}) => {
+  if (!isSignatureKind(kind)) {
+    return panic("Signature worker kind is invalid");
+  }
+  const preview = await extractSignaturePreview({
+    fileBytes,
+    kind,
+    fileName,
+    maxChars,
+    readText: extractEmbeddedPayloadText,
+  });
+  if (preview.isErr()) {
+    switch (preview.error._tag) {
+      case "SignatureParseError":
+        return Result.ok(SIGNATURE_WORKER_EXIT.unreadable);
+      case "FileScanRejectedError":
+        return Result.ok(SIGNATURE_WORKER_EXIT.rejected);
+      case "FileScanFailedError":
+      case "UnhandledException":
+        return Result.err(preview.error);
+    }
+  }
+  await writeWorkerStdout(JSON.stringify(preview.value.reply));
+  return Result.ok(0);
+};
+
 function exitWithWorkerError(error: unknown): never {
   const errorClass = getWorkerErrorClass(error);
   const output = sanitizeErrorForOutput(formatWorkerErrorLine(errorClass));
@@ -1065,6 +1185,18 @@ try {
   if (mimeType === MAILBOX_TEXT_WORKER_MODE) {
     process.exit(await writeMailboxText(maxChars));
   }
+  if (isPstWorkerMode(mimeType)) {
+    const request = readPstWorkerRequest(
+      mimeType,
+      maxChars,
+      process.argv.slice(4),
+    );
+    process.exit(
+      request === null
+        ? PST_WORKER_EXIT.unreadable
+        : await runPstWorker(request, Bun.stdin.stream()),
+    );
+  }
   const fileBytes = new Uint8Array(await Bun.stdin.arrayBuffer());
   if (mimeType === DATA_BOX_PREVIEW_MODE) {
     await writeWorkerStdout(
@@ -1076,6 +1208,18 @@ try {
     const preview = await writeCadesPreview({
       fileBytes,
       fileName: process.argv[4] ?? "",
+      maxChars,
+    });
+    if (preview.isErr()) {
+      exitWithWorkerError(preview.error);
+    }
+    process.exit(preview.value);
+  }
+  if (mimeType === SIGNATURE_WORKER_MODE.preview) {
+    const preview = await writeSignaturePreview({
+      fileBytes,
+      kind: process.argv[4] ?? "",
+      fileName: process.argv[5] ?? "",
       maxChars,
     });
     if (preview.isErr()) {

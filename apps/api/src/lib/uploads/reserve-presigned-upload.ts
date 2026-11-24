@@ -4,7 +4,7 @@ import type { Err } from "better-result";
 import { classifyFailure } from "@stll/errors";
 import { sha256HexToBase64 } from "@stll/sha256";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError } from "@/api/db/safe-db-types";
 import { type PendingUploadPurposeData, pendingUploads } from "@/api/db/schema";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";

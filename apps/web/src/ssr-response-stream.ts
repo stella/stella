@@ -21,6 +21,14 @@ const unavailableSsrResponse = () =>
     },
   });
 
+/**
+ * How a body ends when its renderer was cut off by the deadline and then
+ * finished its recovery instructions: `close` completes it normally; `error`
+ * still forwards every byte but then fails the transfer, so a shared cache
+ * never stores the degraded document.
+ */
+export type SsrDeadlineEnding = "close" | "error";
+
 type BoundedSsrResponseOptions = {
   request: Request;
   fetchResponse: (
@@ -29,6 +37,8 @@ type BoundedSsrResponseOptions = {
   ) => Promise<Response>;
   reportError: (error: unknown) => void;
   lifetimeMs?: number;
+  /** Decided from the response's headers, before its body is sent. */
+  deadlineEnding?: (response: Response) => SsrDeadlineEnding;
 };
 
 export const fetchBoundedSsrResponse = async ({
@@ -36,6 +46,7 @@ export const fetchBoundedSsrResponse = async ({
   fetchResponse,
   reportError,
   lifetimeMs = SSR_STREAM_LIFETIME_MS,
+  deadlineEnding = () => "close",
 }: BoundedSsrResponseOptions): Promise<Response> => {
   const started = performance.now();
   const renderer = new AbortController();
@@ -106,6 +117,10 @@ export const fetchBoundedSsrResponse = async ({
       }
       const headers = new Headers(response.headers);
       // A stream can fail after headers are sent; never cache a partial document.
+      // The server entry alone may share an anonymous public document, and it
+      // asks for `deadlineEnding: "error"` there: a body that failed or was
+      // cut off by the deadline then ends in an error, which a shared cache
+      // never stores.
       headers.set("Cache-Control", "private, no-store");
       headers.delete("Content-Length");
       return new Response(
@@ -115,6 +130,7 @@ export const fetchBoundedSsrResponse = async ({
           reportError,
           abortRenderer: (error) => renderer.abort(error),
           lifetimeMs: Math.max(0, lifetimeMs - (performance.now() - started)),
+          deadlineEnding: deadlineEnding(response),
         }),
         {
           headers,
@@ -137,6 +153,7 @@ type BoundedSsrStreamOptions = {
   abortRenderer: (error: unknown) => void;
   lifetimeMs?: number;
   drainMs?: number;
+  deadlineEnding?: SsrDeadlineEnding;
 };
 
 // React aborts pending boundaries by emitting client-render instructions.
@@ -149,12 +166,14 @@ export const boundSsrStream = ({
   abortRenderer,
   lifetimeMs = SSR_STREAM_LIFETIME_MS,
   drainMs = SSR_ABORT_DRAIN_MS,
+  deadlineEnding = "close",
 }: BoundedSsrStreamOptions): ReadableStream<Uint8Array> => {
   const reader = source.getReader();
   const detached = createDetached(reportError);
   let phase: "rendering" | "draining" | "closed" = "rendering";
   const isClosed = () => phase === "closed";
   let timeout: ReturnType<typeof setTimeout> | undefined;
+  let deadlineError: SsrStreamTimeoutError | undefined;
   let controller: ReadableStreamDefaultController<Uint8Array>;
 
   const cleanup = () => {
@@ -192,6 +211,7 @@ export const boundSsrStream = ({
     const error = new SsrStreamTimeoutError({
       message: "Server-rendered HTML exceeded its stream lifetime",
     });
+    deadlineError = error;
     timeout = setTimeout(() => {
       if (isClosed()) {
         return;
@@ -238,6 +258,10 @@ export const boundSsrStream = ({
         phase = "closed";
         cleanup();
         reader.releaseLock();
+        if (deadlineError !== undefined && deadlineEnding === "error") {
+          controller.error(deadlineError);
+          return;
+        }
         controller.close();
         return;
       }

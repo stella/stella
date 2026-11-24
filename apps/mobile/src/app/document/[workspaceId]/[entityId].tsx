@@ -11,10 +11,14 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useLocale, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import { PREVIEW_UNAVAILABLE_ERROR_CODE } from "@stll/api-contract";
 import type { FilePartDescriptor } from "@stll/api-contract/file-parts";
+import type {
+  SignaturePreview,
+  SignedFileBinding,
+} from "@stll/api-contract/signature";
 import { Button } from "@stll/ui/button";
 import { Loader } from "@stll/ui/loader";
 import { Text } from "@stll/ui/text";
@@ -71,6 +75,12 @@ const ORIGINAL = "original";
 
 type Failure = "offline" | "noFile" | "failed" | "unsupported" | "android";
 
+const SIGNED_FILE_BINDING_KEYS = {
+  digestMatches: "bindingMatches",
+  digestDiffers: "bindingDiffers",
+  notCompared: "bindingNotCompared",
+} as const satisfies Record<SignedFileBinding, string>;
+
 type Phase =
   | { readonly status: "opening" }
   | { readonly status: "failed"; readonly failure: Failure }
@@ -113,6 +123,7 @@ const openDocument = async ({
     file.value.viewer === "email" ||
     file.value.viewer === "dataBox" ||
     file.value.viewer === "e-invoice" ||
+    file.value.viewer === "signature" ||
     file.value.viewer === "structured-document" ||
     file.value.viewer === "zip" ||
     file.value.viewer === "mailbox"
@@ -478,6 +489,101 @@ const usePartSave = ({
   };
 };
 
+/** A signature file: who signed (unverified) and what it signs or carries. */
+const SignaturePreviewBody = ({
+  file,
+  signature,
+}: {
+  file: LegalDocumentFile;
+  signature: Extract<SignaturePreview, { type: "signature" }>;
+}) => {
+  const { workspaceId } = useLocalSearchParams<{ workspaceId: string }>();
+  const signedFile = useTranslations("signedFile");
+  const format = useFormatter();
+  const router = useRouter();
+  const { document, packaging, signedFiles, signers, statedFileNames } =
+    signature;
+  const listed = new Set(signedFiles.map(({ fileName }) => fileName));
+  const unlisted = statedFileNames.filter((name) => !listed.has(name));
+  return (
+    <>
+      <Text accessibilityRole="header" selectable variant="headline">
+        {document?.fileName ?? file.fileName}
+      </Text>
+      <Text variant="caption">{signedFile("unverified")}</Text>
+      <View>
+        <Text accessibilityRole="header" variant="label">
+          {signedFile("signers")}
+        </Text>
+        {signers.map((signer) => (
+          <View key={signer.id}>
+            <Text selectable>{signer.name ?? signedFile("unknownSigner")}</Text>
+            {signer.signedAt !== null && (
+              <Text variant="caption">
+                {signedFile("signedAt", {
+                  time: format.dateTime(new Date(signer.signedAt), {
+                    dateStyle: "medium",
+                    timeStyle: "short",
+                  }),
+                })}
+              </Text>
+            )}
+          </View>
+        ))}
+      </View>
+      {packaging === "detached" && (
+        <View>
+          <Text accessibilityRole="header" variant="label">
+            {signedFile("signs")}
+          </Text>
+          {signedFiles.length === 0 && (
+            <Text variant="caption">{signedFile("signedFileMissing")}</Text>
+          )}
+          {signedFiles.map(({ entityId, fileName, binding }) => (
+            <View key={entityId}>
+              <Button
+                hitSlop={8}
+                onPress={() => {
+                  router.push({
+                    pathname: "/document/[workspaceId]/[entityId]",
+                    params: { workspaceId, entityId },
+                  });
+                }}
+                size="inline"
+                variant="link"
+              >
+                <Text variant="label">{fileName}</Text>
+              </Button>
+              <Text variant="caption">
+                {signedFile(SIGNED_FILE_BINDING_KEYS[binding])}
+              </Text>
+            </View>
+          ))}
+          {unlisted.length > 0 && (
+            <>
+              <Text variant="caption">{signedFile("statedFilesMissing")}</Text>
+              {unlisted.map((fileName) => (
+                <Text key={fileName} selectable>
+                  {fileName}
+                </Text>
+              ))}
+            </>
+          )}
+          {signedFiles.some(({ binding }) => binding !== "notCompared") && (
+            <Text variant="caption">{signedFile("digestNote")}</Text>
+          )}
+        </View>
+      )}
+      {packaging !== "detached" &&
+        (document?.text.trim() ? (
+          <Text selectable>{document.text}</Text>
+        ) : (
+          <Text variant="caption">{signedFile("noReadableContent")}</Text>
+        ))}
+    </>
+  );
+};
+
 const LegalFilePreview = ({
   file,
   onRetry,
@@ -574,6 +680,9 @@ const LegalFilePreview = ({
             ))}
         </>
       );
+    }
+    if (viewer === "signature" && Result.isOk(preview)) {
+      return <SignaturePreviewBody file={file} signature={preview.value} />;
     }
     if (preview.status === "ok") {
       if (viewer === "email") {
@@ -705,6 +814,9 @@ const LegalFilePreview = ({
           </>
         );
       }
+      if (!("text" in preview.value)) {
+        return null;
+      }
       if (viewer !== "dataBox") {
         return <Text selectable>{preview.value.text}</Text>;
       }
@@ -737,6 +849,7 @@ const LegalFilePreview = ({
       cades: signedFile("unreadable"),
       email: t(requestFailure),
       "signed-dossier": signedFile("unreadable"),
+      signature: signedFile("unreadable"),
     } satisfies Record<typeof viewer, string>;
     const unreadableMessage = unreadableMessages[viewer];
     return (

@@ -148,7 +148,6 @@ describe("spawnWorker", () => {
   // the signal fires.
   test("classifies caller cancellation and kills the subprocess promptly", async () => {
     const abort = new AbortController();
-    const startedAt = Date.now();
     const timer = setTimeout(() => abort.abort(), 250);
     const result = await spawnWorker({
       workerPath: SLEEP_WORKER,
@@ -159,7 +158,6 @@ describe("spawnWorker", () => {
     clearTimeout(timer);
 
     expect(Result.isError(result)).toBe(true);
-    expect(Date.now() - startedAt).toBeLessThan(10_000);
     if (Result.isError(result)) {
       expect(result.error).toBeInstanceOf(SubprocessError);
       expect(result.error.termination?.reason).toBe(

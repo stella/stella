@@ -19,7 +19,16 @@ export const DESKTOP_DICTATION_CLEANUP_LIMITS = {
   segments: contract.maxSegments,
   windowTitleLength: contract.maxWindowTitleLength,
   textBeforeCursorLength: contract.maxTextBeforeCursorLength,
+  customInstructionsLength: contract.maxCustomInstructionsLength,
+  modelLength: contract.maxModelLength,
+  models: contract.maxModels,
+  modelDisplayNameLength: contract.maxModelDisplayNameLength,
 } as const;
+
+/** The models a linked desktop may choose for cleanup besides automatic:
+ *  the ones the organization's chat model picker offers. */
+export const DESKTOP_DICTATION_CLEANUP_MODELS_PATH =
+  `${STELLA_API_VERSION_PREFIX}/desktop/dictation/cleanup-models` as const;
 
 /** The kind of app a dictation goes to, which sets the register cleanup
  *  writes in. Webmail and online documents cannot be told apart from other
@@ -89,6 +98,31 @@ const maxCodePoints = (limit: number) =>
     (text: string) => countDictationCodePoints(text) <= limit,
     `Text is longer than ${limit} characters`,
   );
+
+/** A code-point bound, with the UTF-16 bound it implies (two units per code
+ *  point at most) stated too, so the published schema carries a length. */
+const boundedText = (limit: number) =>
+  v.pipe(v.string(), v.maxLength(limit * 2), maxCodePoints(limit));
+
+/** What the speaker wrote for cleanup to follow, such as "use British
+ *  spelling, never use emoji": style guidance below the system rules, which
+ *  never replaces them or the answer's shape. Several lines may come;
+ *  no other control character. Neither logged nor stored. */
+const customInstructionsSchema = v.optional(
+  v.pipe(
+    boundedText(DESKTOP_DICTATION_CLEANUP_LIMITS.customInstructionsLength),
+    v.minLength(1),
+    v.regex(/^[\P{Cc}\n\t]*$/u),
+  ),
+);
+
+/** A model as the chat model picker names it (`provider::modelId`). */
+const cleanupModelSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.modelLength),
+  v.regex(/^\P{Cc}+$/u),
+);
 
 /** How far a cleaned answer may shrink from what was dictated. Cleanup
  *  replaces spoken `formattingCommands` by marks, breaks or bold, so the
@@ -213,6 +247,11 @@ export const desktopDictationCleanupRequestSchema = v.strictObject({
   /** The language to write the cleaned text in, whatever language it was
    *  dictated in. Absent, every word stays in its spoken language. */
   translateTo: v.optional(v.picklist(DESKTOP_DICTATION_TRANSLATION_LANGUAGES)),
+  customInstructions: customInstructionsSchema,
+  /** The model the speaker chose from `DESKTOP_DICTATION_CLEANUP_MODELS_PATH`;
+   *  absent: automatic, the organization's fast model. One the organization
+   *  no longer offers is cleaned up automatically, never refused. */
+  model: v.optional(cleanupModelSchema),
 });
 export type DesktopDictationCleanupRequest = v.InferOutput<
   typeof desktopDictationCleanupRequestSchema
@@ -252,6 +291,33 @@ export const desktopDictationCleanupResponseSchema = v.strictObject({
 });
 export type DesktopDictationCleanupResponse = v.InferOutput<
   typeof desktopDictationCleanupResponseSchema
+>;
+
+/** One model cleanup may run on: its picker value, its name and the
+ *  provider that runs it. */
+export const desktopDictationCleanupModelSchema = v.strictObject({
+  value: cleanupModelSchema,
+  displayName: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.modelDisplayNameLength),
+  ),
+  provider: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.modelDisplayNameLength),
+  ),
+});
+
+/** The models besides automatic, in the chat model picker's order. */
+export const desktopDictationCleanupModelsSchema = v.strictObject({
+  models: v.pipe(
+    v.array(desktopDictationCleanupModelSchema),
+    v.maxLength(DESKTOP_DICTATION_CLEANUP_LIMITS.models),
+  ),
+});
+export type DesktopDictationCleanupModels = v.InferOutput<
+  typeof desktopDictationCleanupModelsSchema
 >;
 
 // --- Recording cleanup ------------------------------------------------------
@@ -305,6 +371,7 @@ export const desktopDictationRecordingCleanupRequestSchema = v.strictObject({
   locale: localeSchema,
   languages: languagesSchema,
   vocabulary: vocabularySchema,
+  customInstructions: customInstructionsSchema,
 });
 export type DesktopDictationRecordingCleanupRequest = v.InferOutput<
   typeof desktopDictationRecordingCleanupRequestSchema
@@ -338,11 +405,6 @@ const writtenText = (allowLineFeed: boolean) =>
  * images, HTML, code, tables, block quotes or rules; the server removes
  * them. Lines end in `\n` only.
  */
-/** A code-point bound, with the UTF-16 bound it implies (two units per code
- *  point at most) stated too, so the published schema carries a length. */
-const boundedText = (limit: number) =>
-  v.pipe(v.string(), v.maxLength(limit * 2), maxCodePoints(limit));
-
 export const desktopDictationRecordingCleanupResponseSchema = v.strictObject({
   instructions: v.pipe(
     v.array(
