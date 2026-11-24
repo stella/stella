@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { ReactElement } from "react";
 
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
@@ -14,15 +15,17 @@ import {
   recordingToWav,
 } from "@/components/chat/chat-dictation-audio";
 import type { ComposerContextMenuProps } from "@/components/chat/composer-plus-menu";
+import { getLiveEditor } from "@/components/live-editor";
 import { guideAnchor } from "@/features/guides/guide-anchor";
 import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError, notifyUserProblem } from "@/lib/errors/user-toast";
 
-type Phase = "idle" | "recording" | "transcribing";
+type Phase = "idle" | "acquiring" | "recording" | "transcribing";
 
 type Recording = {
   recorder: MediaRecorder;
@@ -30,11 +33,36 @@ type Recording = {
   timer: ReturnType<typeof setTimeout>;
 };
 
-const release = ({ stream, timer }: Recording) => {
-  clearTimeout(timer);
+const stopTracks = (stream: MediaStream) => {
   for (const track of stream.getTracks()) {
     track.stop();
   }
+};
+
+const release = ({ stream, timer }: Recording) => {
+  clearTimeout(timer);
+  stopTracks(stream);
+};
+
+const applyDictatedText = (
+  controller: Pick<ChatEditorController, "editor" | "focus" | "setContent">,
+  text: string,
+) => {
+  const liveEditor = getLiveEditor(controller.editor);
+  if (liveEditor === null) {
+    return;
+  }
+  if (liveEditor.isEmpty) {
+    controller.setContent(composerText(text));
+    controller.focus();
+    return;
+  }
+  const separator = /\s$/u.test(liveEditor.getText()) ? "" : " ";
+  liveEditor
+    .chain()
+    .focus("end")
+    .insertContent({ type: "text", text: `${separator}${text}` })
+    .run();
 };
 
 /**
@@ -57,7 +85,7 @@ export const ChatComposerDictateButton = ({
   children: ReactElement;
   /** A matter chat's names help the transcription. */
   context: Pick<ComposerContextMenuProps, "threadRef"> | undefined;
-  controller: Pick<ChatEditorController, "focus" | "setContent">;
+  controller: Pick<ChatEditorController, "editor" | "focus" | "setContent">;
   disabled: boolean;
   /** The guide's send step points at whichever control holds the slot. */
   guideAnchorsEnabled: boolean;
@@ -67,9 +95,14 @@ export const ChatComposerDictateButton = ({
   const t = useTranslations();
   const [phase, setPhase] = useState<Phase>("idle");
   const recording = useRef<Recording | null>(null);
+  const acquiring = useRef(false);
+  const generation = useRef(0);
 
-  // Leaving the composer drops the recording instead of transcribing it.
+  // Leaving the composer drops any active recording and invalidates pending
+  // microphone acquisition or transcription.
   useMountEffect(() => () => {
+    generation.current += 1;
+    acquiring.current = false;
     const dropped = recording.current;
     recording.current = null;
     if (dropped !== null) {
@@ -78,41 +111,70 @@ export const ChatComposerDictateButton = ({
     }
   });
 
-  const transcribe = async (audio: Blob) => {
-    try {
+  const transcribe = async (audio: Blob, runGeneration: number) => {
+    const result = await Result.tryPromise(async () => {
       const file = await recordingToWav(audio);
-      const response = await api.dictation.transcribe.post({
-        file,
-        ...(context?.threadRef.scope === "workspace"
-          ? { matterId: context.threadRef.workspaceId }
-          : {}),
-      });
-      if (response.error) {
-        notifyUserError(toAPIError(response.error), t("chat.dictationFailed"));
-        return;
-      }
-      const text = response.data.text.trim();
-      if (text === "") {
-        notifyUserProblem(t("chat.dictationSilent"));
-        return;
-      }
-      controller.setContent(composerText(text));
-      controller.focus();
-    } catch (error) {
-      notifyUserError(error, t("chat.dictationFailed"));
-    } finally {
-      setPhase("idle");
+      return await invokeCapability("dictation.transcribe", (request) =>
+        api.dictation.transcribe.post(
+          {
+            file,
+            ...(context?.threadRef.scope === "workspace"
+              ? { matterId: context.threadRef.workspaceId }
+              : {}),
+          },
+          request,
+        ),
+      );
+    });
+    if (runGeneration !== generation.current) {
+      return;
     }
+    setPhase("idle");
+    if (Result.isError(result)) {
+      notifyUserError(result.error, t("chat.dictationFailed"));
+      return;
+    }
+    if (result.value.error) {
+      notifyUserError(
+        toAPIError(result.value.error),
+        t("chat.dictationFailed"),
+      );
+      return;
+    }
+    const text = result.value.data.text.trim();
+    if (text === "") {
+      notifyUserProblem(t("chat.dictationSilent"));
+      return;
+    }
+    applyDictatedText(controller, text);
   };
 
   const start = async () => {
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    } catch {
-      notifyUserProblem(t("chat.dictationDenied"));
+    if (acquiring.current || recording.current !== null) {
       return;
     }
+    acquiring.current = true;
+    setPhase("acquiring");
+    const runGeneration = generation.current;
+
+    const streamResult = await Result.tryPromise(
+      async () => await navigator.mediaDevices.getUserMedia({ audio: true }),
+    );
+    acquiring.current = false;
+    if (Result.isError(streamResult)) {
+      if (runGeneration === generation.current) {
+        setPhase("idle");
+        notifyUserProblem(t("chat.dictationDenied"));
+      }
+      return;
+    }
+
+    const stream = streamResult.value;
+    if (runGeneration !== generation.current) {
+      stopTracks(stream);
+      return;
+    }
+
     const recorder = new MediaRecorder(stream);
     const chunks: Blob[] = [];
     recorder.ondataavailable = (event) => {
@@ -126,7 +188,10 @@ export const ChatComposerDictateButton = ({
       recording.current = null;
       setPhase("transcribing");
       detached(
-        transcribe(new Blob(chunks, { type: recorder.mimeType })),
+        transcribe(
+          new Blob(chunks, { type: recorder.mimeType }),
+          runGeneration,
+        ),
         "chat-composer-dictate-button.transcribe",
       );
     };
@@ -147,16 +212,24 @@ export const ChatComposerDictateButton = ({
 
   const label = {
     idle: t("chat.dictate"),
+    acquiring: t("chat.dictate"),
     recording: t("chat.dictationFinish"),
     transcribing: t("chat.dictationTranscribing"),
   }[phase];
 
-  return (
+  const dictateButton = (
     <Button
-      {...guideAnchor(GUIDE_ANCHORS.chatSend, guideAnchorsEnabled)}
+      {...guideAnchor(
+        GUIDE_ANCHORS.chatSend,
+        guideAnchorsEnabled && !isGenerating,
+      )}
       aria-busy={phase === "transcribing" ? true : undefined}
       aria-label={label}
-      disabled={phase === "transcribing" || (disabled && phase === "idle")}
+      disabled={
+        phase === "acquiring" ||
+        phase === "transcribing" ||
+        (disabled && phase === "idle")
+      }
       disabledReason={label}
       onClick={() => {
         if (phase === "recording") {
@@ -170,15 +243,27 @@ export const ChatComposerDictateButton = ({
       type="button"
       variant="composer"
     >
-      {phase === "idle" && (
+      {(phase === "idle" || phase === "acquiring") && (
         <DictateIcon aria-hidden="true" className="size-3.5" />
       )}
       {phase === "recording" && (
-        <SquareIcon aria-hidden="true" className="text-destructive size-3.5" />
+        <SquareIcon aria-hidden="true" className="size-3.5" />
       )}
       {phase === "transcribing" && (
         <Loader className="size-3.5" label={label} size="sm" />
       )}
     </Button>
   );
+
+  // Keep the turn stop control reachable when generation starts during dictation.
+  if (isGenerating) {
+    return (
+      <>
+        {dictateButton}
+        {children}
+      </>
+    );
+  }
+
+  return dictateButton;
 };

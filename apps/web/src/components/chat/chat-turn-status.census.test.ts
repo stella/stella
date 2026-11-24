@@ -9,6 +9,8 @@ const OWNER = "components/chat/chat-turn-status.tsx";
 const CHAT_SOURCE_PATH = /^(?:components|features)\/chat\//u;
 const ALLOWED_NON_TURN_LOADERS = {
   "components/chat/ask-user-card.tsx": "submitting a user answer",
+  "components/chat/chat-composer-dictate-button.tsx":
+    "dictation transcription action",
   "components/chat/chat-message-actions-menu.tsx": "export action",
   "components/chat/chat-prompt-improve-button.tsx": "prompt rewrite action",
   "components/chat/connect-connector-card.tsx": "connector authorization",

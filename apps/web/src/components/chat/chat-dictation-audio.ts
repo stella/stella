@@ -3,8 +3,32 @@ import { MAX_TRANSCRIPTION_AUDIO_SECONDS } from "@stll/api-contract/transcriptio
 const SAMPLE_RATE = 16_000;
 const WAV_HEADER_BYTES = 44;
 
+/** Maximum mono samples accepted by the transcription route at 16 kHz. */
+const MAX_DICTATION_SAMPLES = MAX_TRANSCRIPTION_AUDIO_SECONDS * SAMPLE_RATE;
+
 /** Recording stops itself a second short of the most audio one transcription takes. */
 export const DICTATION_MAX_MS = (MAX_TRANSCRIPTION_AUDIO_SECONDS - 1) * 1000;
+
+/** Mixes decoded audio channels into a mono buffer bounded to the server duration limit. */
+export const mixChannelsToMono = (
+  channels: readonly Float32Array[],
+  maxSamples = MAX_DICTATION_SAMPLES,
+): Float32Array => {
+  const firstChannel = channels.at(0);
+  if (firstChannel === undefined) {
+    return new Float32Array(0);
+  }
+  const sampleCount = Math.min(firstChannel.length, maxSamples);
+  const mono = new Float32Array(sampleCount);
+  const channelCount = channels.length;
+  for (const channel of channels) {
+    const limit = Math.min(channel.length, sampleCount);
+    for (let index = 0; index < limit; index++) {
+      mono[index] = (mono[index] ?? 0) + (channel[index] ?? 0) / channelCount;
+    }
+  }
+  return mono;
+};
 
 /** 16-bit PCM WAV, the one recorded format every browser can produce that
  *  the transcription route reads the duration of. */
@@ -49,12 +73,11 @@ export const recordingToWav = async (recording: Blob): Promise<File> => {
     1,
     SAMPLE_RATE,
   ).decodeAudioData(await recording.arrayBuffer());
-  const mono = new Float32Array(decoded.length);
+  const channels: Float32Array[] = [];
   for (let channel = 0; channel < decoded.numberOfChannels; channel++) {
-    for (const [index, sample] of decoded.getChannelData(channel).entries()) {
-      mono[index] = (mono[index] ?? 0) + sample / decoded.numberOfChannels;
-    }
+    channels.push(decoded.getChannelData(channel));
   }
+  const mono = mixChannelsToMono(channels, MAX_DICTATION_SAMPLES);
   return new File([encodeWav(mono, SAMPLE_RATE)], "dictation.wav", {
     type: "audio/wav",
   });

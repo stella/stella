@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { encodeWav } from "@/components/chat/chat-dictation-audio";
+import {
+  encodeWav,
+  mixChannelsToMono,
+} from "@/components/chat/chat-dictation-audio";
 
 describe("encodeWav", () => {
   test("writes a mono 16-bit PCM WAV the transcription route can read", async () => {
@@ -23,5 +26,17 @@ describe("encodeWav", () => {
     expect([0, 1, 2, 3].map((i) => view.getInt16(44 + i * 2, true))).toEqual([
       0, 32_767, -32_768, 32_767,
     ]);
+  });
+});
+
+describe("mixChannelsToMono", () => {
+  test("averages channels and caps the output at maxSamples", () => {
+    const left = new Float32Array([0.2, 0.4, 0.6, 0.8]);
+    const right = new Float32Array([0.6, 0.8, 1, 1]);
+    const mono = mixChannelsToMono([left, right], 2);
+
+    expect(mono.length).toBe(2);
+    expect(mono[0]).toBeCloseTo(0.4, 5);
+    expect(mono[1]).toBeCloseTo(0.6, 5);
   });
 });
