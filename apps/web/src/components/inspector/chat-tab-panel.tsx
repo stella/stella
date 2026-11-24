@@ -190,6 +190,7 @@ export const ChatTabPanel = ({
           readDocumentKey: getTabLegalKey,
         });
   const tabActiveSkill = tab.activeSkill;
+  const skillLabel = useSkillLabel();
   const getActiveSkill = useLatestCallback(() => tabActiveSkill);
   const t = useTranslations();
   const capturePromptSubmitError = useCallback(
@@ -434,7 +435,8 @@ export const ChatTabPanel = ({
   // suggested skills are the reader's own drafting and review skills, which are
   // about a document they are writing, not one a court handed down.
   const decisionPrompts = useDecisionChatPrompts(tabLegalKey);
-  const emptyStatePrompts = decisionPrompts ?? suggestedSkills;
+  const emptyStatePrompts =
+    tabActiveSkill !== undefined ? [] : (decisionPrompts ?? suggestedSkills);
   const handleSelectPrompt = (prompt: PromptSuggestion) => {
     editorController.setContent(composerStoredMarkdown(prompt.body));
     editorController.focus();
@@ -787,6 +789,11 @@ export const ChatTabPanel = ({
             <ConversationContent className="gap-3 pb-32">
               {messages.length === 0 && !isGenerating && !error ? (
                 <ChatEmptyState
+                  activeSkillName={
+                    tabActiveSkill === undefined
+                      ? undefined
+                      : skillLabel(tabActiveSkill)
+                  }
                   onSelectPrompt={handleSelectPrompt}
                   prompts={emptyStatePrompts}
                 />
@@ -974,14 +981,24 @@ const useChatComposerPlaceholder = (
 };
 
 type ChatEmptyStateProps = {
+  activeSkillName?: string | undefined;
   prompts: readonly PromptSuggestion[];
   onSelectPrompt: (prompt: PromptSuggestion) => void;
 };
 
-const ChatEmptyState = ({ prompts, onSelectPrompt }: ChatEmptyStateProps) => (
-  <div className="m-auto flex flex-col items-center gap-6 py-12">
+const ChatEmptyState = ({
+  activeSkillName,
+  prompts,
+  onSelectPrompt,
+}: ChatEmptyStateProps) => (
+  <div className="m-auto flex flex-col items-center gap-4 px-6 py-12 text-center">
     <StellaMark className="text-foreground size-10" />
-    <PromptSuggestions onSelect={onSelectPrompt} prompts={prompts} />
+    {activeSkillName !== undefined ? (
+      <p className="text-foreground text-base font-medium">{activeSkillName}</p>
+    ) : null}
+    {prompts.length > 0 ? (
+      <PromptSuggestions onSelect={onSelectPrompt} prompts={prompts} />
+    ) : null}
   </div>
 );
 
@@ -1124,6 +1141,7 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
  * spinner flash, no layout shift.
  */
 export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
+  const skillLabel = useSkillLabel();
   const suggestedSkills = offeredSuggestedSkills(useSuggestedSkills());
   const decisionPrompts = useDecisionChatPrompts(tab.activeLegalKey);
   const threadRef = chatTabThreadRef(tab);
@@ -1145,8 +1163,17 @@ export const ChatTabPanelShell = ({ tab }: { tab: ChatTab }) => {
       <Conversation className="min-h-0 flex-1">
         <ConversationContent className="gap-3 pb-32">
           <ChatEmptyState
+            activeSkillName={
+              tab.activeSkill === undefined
+                ? undefined
+                : skillLabel(tab.activeSkill)
+            }
             onSelectPrompt={noop}
-            prompts={decisionPrompts ?? suggestedSkills}
+            prompts={
+              tab.activeSkill !== undefined
+                ? []
+                : (decisionPrompts ?? suggestedSkills)
+            }
           />
         </ConversationContent>
       </Conversation>

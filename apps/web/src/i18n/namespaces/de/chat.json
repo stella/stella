@@ -1063,6 +1063,8 @@
     "statusProposed": "In Prüfung",
     "statusRejected": "Abgelehnt",
     "submitForReview": "Zur Prüfung einreichen",
+    "suggestImprovements": "Suggest improvements",
+    "suggestingImprovements": "Suggesting…",
     "summaryLabel": "Zusammenfassung",
     "summaryPlaceholder": "Was ändert sich?"
   },

@@ -227,6 +227,7 @@ export const ACTION_KIND_KILL_SWITCH = {
   "skills.generate-draft": "skills",
   "skills.draft-from-chat": "skills",
   "skills.propose-from-comments": "skills",
+  "skills.suggest-improvements": "skills",
   "time-entries.polish-narrative": "time-narratives",
   "billing.activity-drafts": "billing-drafts",
   "entities.suggest-placements": "placement-suggestions",

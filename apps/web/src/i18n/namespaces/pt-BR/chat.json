@@ -1063,6 +1063,8 @@
     "statusProposed": "Em análise",
     "statusRejected": "Recusada",
     "submitForReview": "Enviar para análise",
+    "suggestImprovements": "Suggest improvements",
+    "suggestingImprovements": "Suggesting…",
     "summaryLabel": "Resumo",
     "summaryPlaceholder": "O que muda?"
   },

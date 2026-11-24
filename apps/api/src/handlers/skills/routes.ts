@@ -15,12 +15,14 @@ import importSkillFromUrl from "@/api/handlers/skills/from-url/import";
 import getSkill from "@/api/handlers/skills/get";
 import importSkillsFromUrls from "@/api/handlers/skills/import";
 import listSkills from "@/api/handlers/skills/list";
+import getSkillMonitor from "@/api/handlers/skills/monitor/get";
 import createSkillProposal from "@/api/handlers/skills/proposals/create";
 import deleteSkillProposal from "@/api/handlers/skills/proposals/delete";
 import createSkillProposalFromComments from "@/api/handlers/skills/proposals/from-comments/create";
 import getSkillProposal from "@/api/handlers/skills/proposals/get";
 import listSkillProposals from "@/api/handlers/skills/proposals/list";
 import reviewSkillProposal from "@/api/handlers/skills/proposals/review";
+import suggestSkillImprovements from "@/api/handlers/skills/proposals/suggest-improvements/create";
 import updateSkillProposal from "@/api/handlers/skills/proposals/update";
 import createSkillResource from "@/api/handlers/skills/resources/create";
 import deleteSkillResource from "@/api/handlers/skills/resources/delete";
@@ -51,6 +53,7 @@ export const skillsRoute = mount(
       "/commands": { GET: listSkillCommands },
       "/:skillId": { GET: getSkill, PATCH: updateSkill, DELETE: deleteSkill },
       "/:skillId/export": { GET: exportSkill },
+      "/:skillId/monitor": { GET: getSkillMonitor },
       "/from-blueprint": { POST: fromBlueprint },
       "/from-chat": { POST: draftSkillFromChat },
       "/upload": { POST: uploadSkill },
@@ -77,6 +80,9 @@ export const skillsRoute = mount(
       },
       "/:skillId/proposals/from-comments": {
         POST: createSkillProposalFromComments,
+      },
+      "/:skillId/proposals/suggest-improvements": {
+        POST: suggestSkillImprovements,
       },
       "/:skillId/proposals/:proposalId/review": { POST: reviewSkillProposal },
       "/:skillId/comments": {

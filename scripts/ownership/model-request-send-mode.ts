@@ -20,6 +20,7 @@ const MODEL_REQUESTS_WITHOUT_CHAT_CONTENT = [
   "apps/api/src/handlers/search/ai.ts",
   "apps/api/src/handlers/skills/drafts/generate.ts",
   "apps/api/src/handlers/skills/proposals/from-comments/create.ts",
+  "apps/api/src/handlers/skills/proposals/suggest-improvements/create.ts",
   "apps/api/src/handlers/skills/resources/rewrite.ts",
   "apps/api/src/handlers/templates/prefill.ts",
   "apps/api/src/handlers/time-entries/polish-narrative.ts",

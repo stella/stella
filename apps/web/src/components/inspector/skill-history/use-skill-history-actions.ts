@@ -125,6 +125,9 @@ export const useSkillHistoryActions = ({
     invalidateComments();
   };
 
+  const { suggestImprovements, suggestingImprovements } =
+    useSuggestSkillImprovements(skill, invalidateProposals, report);
+
   /** Opens a draft branched from the current revision. Returns its id. */
   const createProposal = async (): Promise<string | null> => {
     const response = await submitIntent.run({
@@ -242,6 +245,8 @@ export const useSkillHistoryActions = ({
   return {
     addComment,
     createProposal,
+    suggestImprovements,
+    suggestingImprovements,
     deleteComment,
     deleteProposal,
     reviewProposal,
@@ -250,4 +255,36 @@ export const useSkillHistoryActions = ({
     setCommentResolved,
     setProposalStatus,
   };
+};
+
+const useSuggestSkillImprovements = (
+  skill: ReturnType<typeof api.skills>,
+  invalidateProposals: () => void,
+  report: (error: Parameters<typeof toAPIError>[0]) => void,
+) => {
+  const [suggestingImprovements, setSuggestingImprovements] = useState(false);
+  const suggestImprovements = async (
+    focus?: string,
+  ): Promise<string | null> => {
+    if (suggestingImprovements) {
+      return null;
+    }
+    setSuggestingImprovements(true);
+    try {
+      const response = await skill.proposals["suggest-improvements"].post(
+        focus !== undefined && focus.trim().length > 0
+          ? { focus: focus.trim() }
+          : {},
+      );
+      if (response.error) {
+        report(response.error);
+        return null;
+      }
+      invalidateProposals();
+      return response.data.id;
+    } finally {
+      setSuggestingImprovements(false);
+    }
+  };
+  return { suggestImprovements, suggestingImprovements };
 };
