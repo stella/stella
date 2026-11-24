@@ -57,7 +57,7 @@ const oauthStateCutoff = () =>
   new Date(Temporal.Now.instant().epochMilliseconds - STATE_TTL_MS);
 
 const requestQuery = v.object({
-  code: v.optional(v.pipe(v.string(), v.maxLength(4096))),
+  code: v.optional(v.pipe(v.string(), v.maxLength(16_384))),
   state: v.optional(v.pipe(v.string(), v.maxLength(512))),
   iss: v.optional(v.pipe(v.string(), v.maxLength(2048))),
 });

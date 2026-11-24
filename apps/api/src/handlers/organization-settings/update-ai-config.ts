@@ -48,7 +48,7 @@ const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 
 const providerBody = v.object({
   provider: v.picklist(BYOK_PROVIDER_VALUES),
-  apiKey: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+  apiKey: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(4096))),
   anthropicWorkspaceId: v.optional(
     v.pipe(
       v.string(),
@@ -68,13 +68,13 @@ const modelSelectionBody = v.object({
 const decisionBodyByProvider = {
   typesafe: v.object({
     provider: v.literal("typesafe"),
-    apiKey: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+    apiKey: v.optional(v.pipe(v.string(), v.minLength(1), v.maxLength(4096))),
     modelId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
   }),
   openai: v.object({
     provider: v.literal("openai"),
     apiKey: v.optional(
-      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(512))),
+      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(4096))),
     ),
     region: v.optional(v.picklist(["eu", "global"])),
     modelId: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),

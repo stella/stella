@@ -88,7 +88,7 @@ export const sitemapShardDecisionsQuerySchema = v.object({
   ),
   year: v.pipe(
     v.string(),
-    v.length(4),
+    v.maxLength(7),
     v.regex(new RegExp(SITEMAP_YEAR_PATTERN, "u")),
   ),
   month: v.pipe(

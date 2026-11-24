@@ -393,10 +393,7 @@
   },
   "no-imported-class-constant/no-imported-class-constant": {},
   "require-bounded-request-schema/require-bounded-request-schema": {},
-  "no-unbounded-response-body/no-unbounded-response-body": {
-    "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts": 6,
-    "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 3
-  },
+  "no-unbounded-response-body/no-unbounded-response-body": {},
   "no-computed-key-record-assignment/no-computed-key-record-assignment": {
     "apps/api/scripts/ai-provider-canary-chat-toolsets.ts": 1,
     "apps/api/scripts/ai-provider-cassette.ts": 1,

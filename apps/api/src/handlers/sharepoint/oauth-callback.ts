@@ -38,7 +38,7 @@ const STATE_TTL_MS = 10 * 60 * 1000;
 const CONNECTED_STATUS = "connected";
 
 const requestQuery = v.object({
-  code: v.optional(v.pipe(v.string(), v.maxLength(4096))),
+  code: v.optional(v.pipe(v.string(), v.maxLength(16_384))),
   state: v.optional(v.pipe(v.string(), v.maxLength(512))),
   error: v.optional(v.pipe(v.string(), v.maxLength(512))),
 });
