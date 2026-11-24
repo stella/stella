@@ -1,4 +1,4 @@
-// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: [cz-us] bounded response body reads preserve identical HTML text; only oversized responses are refused.
 // parser-output-unchanged: source-fields-cz: Inventory-only target changes leave parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.

@@ -1,4 +1,4 @@
-// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 // parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
 // parser-output-unchanged: the lost-content verdict is the same validateAst result; only the logging moved to the pipeline.
 // parser-output-unchanged: Whole-document validation reuses the unmodified parsed source; bounded decision subtrees retain serialization and reparsing, so diagnostics and output are unchanged.

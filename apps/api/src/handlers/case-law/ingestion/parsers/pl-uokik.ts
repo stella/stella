@@ -1,4 +1,4 @@
-// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK)
  * document reader.

@@ -1,4 +1,4 @@
-// parser-output-unchanged: [map-lookup] replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
 import { panic, Result } from "better-result";
 /**
  * The CourtListener record contract: one cluster with every row of the pinned
