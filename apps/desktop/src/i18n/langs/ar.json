@@ -430,7 +430,7 @@
     "registryPreviewResult": "تخطيط مثالي · ليس نتيجة من السجل",
     "registryRetry": "إعادة المحاولة",
     "registrySearch": "البحث في السجل التجاري",
-    "registrySearchHint": "اكتب للبحث في هذا السجل.",
+    "registrySearchHint": "اكتب للبحث في سجل {registry}.",
     "registrySearchPlaceholder": "اسم الشركة أو رقم التسجيل",
     "registrySearching": "جارٍ البحث…",
     "registrySelect": "اختيار السجل",

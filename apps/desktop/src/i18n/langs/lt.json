@@ -430,7 +430,7 @@
     "registryPreviewResult": "Pavyzdinis išdėstymas · ne registro rezultatas",
     "registryRetry": "Bandyti dar kartą",
     "registrySearch": "Ieškoti įmonių registre",
-    "registrySearchHint": "Įveskite tekstą, kad ieškotumėte šiame registre.",
+    "registrySearchHint": "Įveskite tekstą, kad ieškotumėte registre {registry}.",
     "registrySearchPlaceholder": "Įmonės pavadinimas arba registracijos numeris",
     "registrySearching": "Ieškoma…",
     "registrySelect": "Pasirinkite registrą",

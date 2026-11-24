@@ -430,7 +430,7 @@
     "registryPreviewResult": "Beispiellayout · kein Handelsergebnis",
     "registryRetry": "Erneut versuchen",
     "registrySearch": "Handelsregister durchsuchen",
-    "registrySearchHint": "Tippen Sie, um dieses Register zu durchsuchen.",
+    "registrySearchHint": "Tippen Sie, um das Register {registry} zu durchsuchen.",
     "registrySearchPlaceholder": "Firmenname oder Registernummer",
     "registrySearching": "Suche läuft…",
     "registrySelect": "Register auswählen",

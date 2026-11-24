@@ -430,7 +430,7 @@
     "registryPreviewResult": "Mise en page d’exemple · pas un résultat du registre",
     "registryRetry": "Réessayer",
     "registrySearch": "Rechercher dans le registre du commerce",
-    "registrySearchHint": "Saisissez du texte pour rechercher dans ce registre.",
+    "registrySearchHint": "Saisissez du texte pour rechercher dans le registre {registry}.",
     "registrySearchPlaceholder": "Nom de l’entreprise ou numéro d’immatriculation",
     "registrySearching": "Recherche en cours…",
     "registrySelect": "Sélectionner un registre",

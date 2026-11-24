@@ -401,7 +401,7 @@
   "clipboard.registryPreviewResult": "Example layout · not a registry result",
   "clipboard.registryRetry": "Try again",
   "clipboard.registrySearch": "Search commercial registry",
-  "clipboard.registrySearchHint": "Type to search this registry.",
+  "clipboard.registrySearchHint": "Type to search the {registry} registry.",
   "clipboard.registrySearchPlaceholder": "Company name or registration number",
   "clipboard.registrySearching": "Searching…",
   "clipboard.registrySelect": "Select registry",

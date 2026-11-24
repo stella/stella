@@ -430,7 +430,7 @@
     "registryPreviewResult": "Ukázkové rozvržení · nejde o výsledek z rejstříku",
     "registryRetry": "Zkusit znovu",
     "registrySearch": "Hledat v obchodním rejstříku",
-    "registrySearchHint": "Začněte psát a prohledejte tento rejstřík.",
+    "registrySearchHint": "Začněte psát a prohledejte rejstřík {registry}.",
     "registrySearchPlaceholder": "Název společnosti nebo IČO",
     "registrySearching": "Hledání…",
     "registrySelect": "Vybrat rejstřík",
