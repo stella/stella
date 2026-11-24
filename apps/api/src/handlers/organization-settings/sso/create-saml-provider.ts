@@ -25,6 +25,7 @@ const createOrganizationSamlSsoProvider = createSafeRootHandler(
     const created = await createOrgSamlProvider({
       organizationId: session.activeOrganizationId,
       userId: user.id,
+      ...(body.providerId !== undefined ? { providerId: body.providerId } : {}),
       displayName: body.displayName,
       issuer: body.issuer,
       entryPoint: body.entryPoint,

@@ -102,6 +102,9 @@ export type CreateOidcSsoProviderBody = v.InferOutput<
 >;
 
 export const createSamlSsoProviderBodySchema = v.strictObject({
+  providerId: v.optional(
+    v.pipe(v.string(), v.trim(), v.regex(/^sso_[a-z0-9_-]{4,48}$/u)),
+  ),
   displayName: displayNameSchema({ maxLength: 80 }),
   issuer: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(512)),
   entryPoint: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
@@ -233,4 +236,42 @@ export const testOidcSsoProviderResponseSchema = v.object({
 
 export type TestOidcSsoProviderResponse = v.InferOutput<
   typeof testOidcSsoProviderResponseSchema
+>;
+
+export const SAML_METADATA_MAX_BYTES = 512 * 1024;
+
+export const parseSamlMetadataBodySchema = /* @__PURE__ */ v.union([
+  /* @__PURE__ */ v.strictObject({
+    source: /* @__PURE__ */ v.literal("url"),
+    metadataUrl: /* @__PURE__ */ v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.maxLength(2048),
+      v.url(),
+    ),
+  }),
+  /* @__PURE__ */ v.strictObject({
+    source: /* @__PURE__ */ v.literal("xml"),
+    xml: /* @__PURE__ */ v.pipe(
+      v.string(),
+      v.trim(),
+      v.minLength(1),
+      v.maxLength(SAML_METADATA_MAX_BYTES),
+    ),
+  }),
+]);
+
+export type ParseSamlMetadataBody = v.InferOutput<
+  typeof parseSamlMetadataBodySchema
+>;
+
+export const parseSamlMetadataResponseSchema = /* @__PURE__ */ v.object({
+  issuer: v.string(),
+  entryPoint: v.string(),
+  cert: v.string(),
+});
+
+export type ParseSamlMetadataResponse = v.InferOutput<
+  typeof parseSamlMetadataResponseSchema
 >;

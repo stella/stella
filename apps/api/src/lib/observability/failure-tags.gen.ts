@@ -597,6 +597,7 @@ export const FAILURE_TAGS = [
   "court_unrecognized",
   "crawl_delay_unsupported",
   "oidc_discovery_error",
+  "saml_metadata_error",
   "publisher_body_limit",
   "publisher_body_not_replayable",
   "publisher_bypass_unaudited",

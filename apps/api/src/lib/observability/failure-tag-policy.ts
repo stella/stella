@@ -619,6 +619,7 @@ export const TAGGED_FAILURE_REASON = {
   robots_disallowed: "tagged_failure",
   court_unrecognized: "tagged_failure",
   oidc_discovery_error: "tagged_failure",
+  saml_metadata_error: "tagged_failure",
   sso_domain_dns_error: "tagged_failure",
   sso_management_error: "tagged_failure",
   robots_unavailable: "tagged_failure",

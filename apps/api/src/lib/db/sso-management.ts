@@ -394,7 +394,8 @@ export const createOrganizationSamlProvider = async (
     );
   }
 
-  const providerId = generateProviderId(params.displayName);
+  const providerId =
+    params.providerId?.trim() || generateProviderId(params.displayName);
   const acsUrl = params.urls.acsUrlFor(providerId);
   const samlConfigJson = JSON.stringify({
     issuer: normalizedIssuer,

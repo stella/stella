@@ -2,6 +2,7 @@ import { panic } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
 
+import type { SamlMetadataError } from "@/api/lib/auth/saml-metadata";
 import type { OidcDiscoveryError } from "@/api/lib/auth/sso-discovery";
 import type { SsoDomainDnsError } from "@/api/lib/auth/sso-domain-verify";
 import type { SsoManagementError } from "@/api/lib/db/sso-management";
@@ -75,3 +76,29 @@ export const mapSsoDomainDnsError = (error: SsoDomainDnsError): HandlerError =>
     }),
     "upstream_unavailable",
   );
+
+export const mapSamlMetadataError = (
+  error: SamlMetadataError,
+): HandlerError => {
+  switch (error.reason) {
+    case "invalid_url":
+    case "invalid_document":
+      return new HandlerError({
+        status: 400,
+        code: `sso_saml_metadata_${error.reason}`,
+        message: error.message,
+      });
+    case "fetch_failed":
+      return classifyFailure(
+        new HandlerError({
+          status: 502,
+          code: "sso_saml_metadata_fetch_failed",
+          message: error.message,
+        }),
+        "upstream_unavailable",
+      );
+    default:
+      error.reason satisfies never;
+      return panic("Unhandled SAML metadata error reason");
+  }
+};

@@ -349,6 +349,7 @@ export const ROUTE_LATENCY_CLASSES = {
   "POST /v1/organization-settings/sso/providers": "crud",
   "POST /v1/organization-settings/sso/providers/saml": "crud",
   "POST /v1/organization-settings/sso/providers/test": "crud",
+  "POST /v1/organization-settings/sso/saml/parse-metadata": "crud",
   "PUT /v1/organization-settings/sso/policy": "crud",
   "GET /v1/organization-settings/ai-availability": "crud",
   "GET /v1/organization-settings/ai-config": "crud",
