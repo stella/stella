@@ -88,7 +88,7 @@ const STEPS = (ref: string) =>
     },
     {
       name: "Enter in a search field",
-      kind: "search",
+      kind: "click",
       command: {
         action: BROWSER_CONTROL_ACTION.pressKey,
         key: "Enter",

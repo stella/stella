@@ -853,10 +853,10 @@ describe("browser steps by the run's approval mode", () => {
     });
   }
 
-  // Enter in a search field runs the search its typing set up, so it follows
-  // that typing's rule; in any other field it can submit a form, as a click.
+  // Enter can submit a form, so it is held like a click in every field: the
+  // search role is the page's own word, never a reason to skip asking.
   const ENTER_CASES = [
-    { approvals: "ask", field: "search", asked: [] },
+    { approvals: "ask", field: "search", asked: ["press_key"] },
     { approvals: "ask", field: "other", asked: ["press_key"] },
     { approvals: "auto", field: "search", asked: [] },
     { approvals: "auto", field: "other", asked: [] },
