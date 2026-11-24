@@ -35,7 +35,7 @@ import { useChatEditorManager } from "@/components/chat-editor-provider";
 import { containsCredentialCandidate } from "@/components/chat-secret-candidate.logic";
 import { AttachmentChip } from "@/components/chat/attachment-chip";
 import { ChatImageThumbnailCard } from "@/components/chat/chat-image-attachment";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import {
   createUserMessageEditDraft,
   createUserMessageEditSessions,

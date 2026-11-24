@@ -30,7 +30,7 @@ import { TruncatedText } from "@stll/ui/truncated-text";
 import { cn } from "@stll/ui/utils";
 
 import { ChatRenderErrorBoundary } from "@/components/chat/chat-render-error-boundary";
-import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import type { ChatPart } from "@/components/chat/chat-ui-tools-types";
 import { stellaAppDisclosure } from "@/components/chat/stella-app-disclosure.logic";
 import type { StellaAppDisclosure } from "@/components/chat/stella-app-disclosure.logic";
 import {

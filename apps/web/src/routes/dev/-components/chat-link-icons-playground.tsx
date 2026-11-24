@@ -3,7 +3,7 @@ import type { ComponentProps } from "react";
 
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
-import type { AskUserInput } from "@/components/chat/chat-ui-tools";
+import type { AskUserInput } from "@/components/chat/chat-ui-tools-types";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
 import { LanguagePicker } from "@/components/language-picker";
 import { createPlaygroundChatApproval } from "@/routes/dev/-components/playground-chat-approval";

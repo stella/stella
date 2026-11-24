@@ -11,7 +11,7 @@ import type { RequestSecretOutput } from "@stll/api-contract/chat-secret";
 import type {
   ApprovalToolName,
   ToolApprovalGrant,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import type { ChatSendMessageOptions } from "@/features/chat/chat-runtime";
 
 export type NormalConnectionAction = "preserve" | "replace-with-receipt-only";

@@ -3,7 +3,7 @@ import { isDeclinedChatToolCall } from "@stll/api-contract/chat";
 import type {
   ChatUITools,
   RegisteredChatUIToolCallPart,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 
 export type SpawnSubagentsToolCallState = Extract<
   RegisteredChatUIToolCallPart,

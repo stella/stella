@@ -5,7 +5,7 @@ import { CHAT_TURN_INTENT } from "@stll/api-contract";
 import type {
   ChatPart,
   PersistedChatMessage,
-} from "@/components/chat/chat-ui-tools";
+} from "@/components/chat/chat-ui-tools-types";
 import { chatMessageEditRefusalCode } from "@/components/chat/chat-user-actions";
 import type { UserMessageEditFailure } from "@/components/chat/user-message-edit.logic";
 import { findChatRequestError } from "@/features/chat/chat-request-error";

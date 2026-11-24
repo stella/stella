@@ -1,6 +1,6 @@
 import type { Element, ElementContent, Root, RootContent, Text } from "hast";
 
-import type { ChatAnonRestoration } from "@/components/chat/chat-ui-tools";
+import type { ChatAnonRestoration } from "@/components/chat/chat-ui-tools-types";
 
 /**
  * AST-level highlighter for round-tripped anonymization values.

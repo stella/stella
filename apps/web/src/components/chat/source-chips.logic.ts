@@ -24,7 +24,7 @@ import {
   chatAnswerMarkdownDocuments,
   citationUrlKey,
 } from "@/components/chat/chat-decision-citations.logic";
-import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
+import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools-types";
 import type {
   BusinessRegistrySourceReference,
   CaseLawDecisionSourceReference,

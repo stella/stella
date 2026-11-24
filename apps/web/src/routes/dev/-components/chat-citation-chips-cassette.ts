@@ -1,4 +1,4 @@
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools-types";
 import { decisionReferenceHref } from "@/components/references/reference.logic";
 
 // Inline citations the way models write them: the court named just before a

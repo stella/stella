@@ -24,7 +24,7 @@ import {
 import { TruncatedText } from "@stll/ui/truncated-text";
 
 import { useChatEditorManager } from "@/components/chat-editor-provider";
-import type { ChatPart } from "@/components/chat/chat-ui-tools";
+import type { ChatPart } from "@/components/chat/chat-ui-tools-types";
 import { useTheme } from "@/components/theme-provider";
 import { useOpenDecisionTab } from "@/features/case-law/open-decision-tab";
 import { decisionOptions } from "@/features/case-law/queries/decisions";
