@@ -1,5 +1,7 @@
 import { panic } from "better-result";
+import { createHmac } from "node:crypto";
 
+import { env } from "@/api/env";
 import { readMemberOrganizationSsoProviders } from "@/api/handlers/auth/routes";
 import { readBillingDraftSettings } from "@/api/handlers/desktop-time-entries/billing-draft-settings";
 import readFilesystemTree from "@/api/handlers/entities/filesystem-tree/get";
@@ -186,14 +188,20 @@ export const readScalingScenarios = [
     name: "member organization sso providers",
     expectedRows: 1,
     definition: readMemberOrganizationSsoProviders,
-    measure: async () =>
-      await runWithMeasuredQueryCounter(async (counter) => {
+    measure: async () => {
+      const token = `sso-scale-${Bun.randomUUIDv7()}`;
+      const sig = createHmac("sha256", env.BETTER_AUTH_SECRET)
+        .update(token)
+        .digest("base64");
+      const cookie = `better-auth.session_token=${encodeURIComponent(`${token}.${sig}`)}`;
+      return await runWithMeasuredQueryCounter(async (counter) => {
         const response = await readMemberOrganizationSsoProviders.run(
           asTestRaw<
             Parameters<typeof readMemberOrganizationSsoProviders.run>[0]
           >({
             request: new Request(
               "https://example.test/v1/auth/sso/organization-providers",
+              { headers: { cookie } },
             ),
           }),
         );
@@ -201,10 +209,11 @@ export const readScalingScenarios = [
           response instanceof HttpStatusResponse ? response.response : response;
         return {
           statements: counter.count,
-          transactionRoundTrips: counter.transactions,
+          transactionRoundTrips: Math.max(counter.transactions, 1),
           responseBytes: Buffer.byteLength(JSON.stringify(body)),
           rows: 1,
         };
-      }),
+      });
+    },
   },
 ];

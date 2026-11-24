@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+import { displayNameSchema } from "./display-name";
+
 /**
  * The error code a request answers with when its organization requires
  * single sign-on and the session was not created by that organization's
@@ -74,7 +76,7 @@ export const ssoDomainNameSchema = v.pipe(
 );
 
 export const createOidcSsoProviderBodySchema = v.strictObject({
-  displayName: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(80)),
+  displayName: displayNameSchema({ maxLength: 80 }),
   issuer: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
   clientId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
   clientSecret: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),

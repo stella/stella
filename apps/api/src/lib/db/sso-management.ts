@@ -32,6 +32,7 @@ import {
   withAggregateLock,
   withAggregateTransaction,
 } from "@/api/lib/db/aggregate-lock";
+import { readBounded } from "@/api/lib/db/read-bounded";
 import { admitSsoOidcConfig } from "@/api/lib/db/sso-provider-config";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
@@ -193,25 +194,41 @@ export const readOrganizationSsoSettings = async (
   organizationId: SafeId<"organization">,
   urls: ProviderUrlBuilders,
 ): Promise<OrganizationSsoSettingsResponse> => {
-  const [policyRows, providerRows, domainRows] = await Promise.all([
-    db
-      .select({ requirement: organizationSsoPolicy.requirement })
-      .from(organizationSsoPolicy)
-      .where(eq(organizationSsoPolicy.organizationId, organizationId))
-      .limit(1),
-    db
-      .select()
-      .from(ssoProvider)
-      .where(eq(ssoProvider.organizationId, organizationId))
-      .orderBy(asc(ssoProvider.createdAt))
-      .limit(MAX_SSO_PROVIDERS_PER_ORG),
-    db
-      .select()
-      .from(organizationSsoDomain)
-      .where(eq(organizationSsoDomain.organizationId, organizationId))
-      .orderBy(asc(organizationSsoDomain.domain))
-      .limit(MAX_SSO_DOMAINS_PER_ORG),
-  ]);
+  const [policyRows, providerRead, domainRead] = await withAggregateTransaction(
+    db,
+    async (tx) =>
+      await Promise.all([
+        tx
+          .select({ requirement: organizationSsoPolicy.requirement })
+          .from(organizationSsoPolicy)
+          .where(eq(organizationSsoPolicy.organizationId, organizationId))
+          .limit(1),
+        readBounded(
+          tx
+            .select()
+            .from(ssoProvider)
+            .where(eq(ssoProvider.organizationId, organizationId))
+            .orderBy(asc(ssoProvider.createdAt)),
+          MAX_SSO_PROVIDERS_PER_ORG,
+        ),
+        readBounded(
+          tx
+            .select()
+            .from(organizationSsoDomain)
+            .where(eq(organizationSsoDomain.organizationId, organizationId))
+            .orderBy(asc(organizationSsoDomain.domain)),
+          MAX_SSO_DOMAINS_PER_ORG,
+        ),
+      ]),
+  );
+  const providerRows =
+    providerRead.type === "complete"
+      ? providerRead.rows
+      : panic("SSO provider list exceeded bounded cap");
+  const domainRows =
+    domainRead.type === "complete"
+      ? domainRead.rows
+      : panic("SSO domain list exceeded bounded cap");
 
   return {
     requirement: policyRows.at(0)?.requirement ?? "optional",
@@ -355,8 +372,7 @@ export const deleteOrganizationSsoProvider = async (
     const existing = await tx
       .select({ id: ssoProvider.id, providerId: ssoProvider.providerId })
       .from(ssoProvider)
-      .where(eq(ssoProvider.organizationId, params.organizationId))
-      .limit(MAX_SSO_PROVIDERS_PER_ORG);
+      .where(eq(ssoProvider.organizationId, params.organizationId));
 
     const target = existing.find(
       (row) =>
@@ -422,8 +438,7 @@ export const updateOrganizationSsoRequirement = async (
       const providers = await tx
         .select({ id: ssoProvider.id })
         .from(ssoProvider)
-        .where(eq(ssoProvider.organizationId, params.organizationId))
-        .limit(MAX_SSO_PROVIDERS_PER_ORG);
+        .where(eq(ssoProvider.organizationId, params.organizationId));
       if (providers.length === 0) {
         return Result.err(
           new SsoManagementError({
@@ -436,8 +451,7 @@ export const updateOrganizationSsoRequirement = async (
       const orgMembers = await tx
         .select({ userId: member.userId })
         .from(member)
-        .where(eq(member.organizationId, params.organizationId))
-        .limit(500);
+        .where(eq(member.organizationId, params.organizationId));
       if (orgMembers.length > 0) {
         const providerIds = providers.map((row) => row.id);
         const boundAccounts = await tx
@@ -703,12 +717,18 @@ export const discoverVerifiedSsoProvidersByDomain = async (
     return [];
   }
 
-  const providers = await db
-    .select()
-    .from(ssoProvider)
-    .where(eq(ssoProvider.organizationId, verifiedOrgId))
-    .orderBy(asc(ssoProvider.createdAt))
-    .limit(MAX_SSO_PROVIDERS_PER_ORG);
+  const providersRead = await readBounded(
+    db
+      .select()
+      .from(ssoProvider)
+      .where(eq(ssoProvider.organizationId, verifiedOrgId))
+      .orderBy(asc(ssoProvider.createdAt)),
+    MAX_SSO_PROVIDERS_PER_ORG,
+  );
+  const providers =
+    providersRead.type === "complete"
+      ? providersRead.rows
+      : panic("SSO provider list exceeded bounded cap");
 
   return providers
     .filter((provider) => splitDomains(provider.domain).includes(domain))
@@ -758,12 +778,18 @@ export const listOrganizationSsoProvidersForMember = async (
     return [];
   }
 
-  const providers = await db
-    .select()
-    .from(ssoProvider)
-    .where(eq(ssoProvider.organizationId, params.organizationId))
-    .orderBy(asc(ssoProvider.createdAt))
-    .limit(MAX_SSO_PROVIDERS_PER_ORG);
+  const providersRead = await readBounded(
+    db
+      .select()
+      .from(ssoProvider)
+      .where(eq(ssoProvider.organizationId, params.organizationId))
+      .orderBy(asc(ssoProvider.createdAt)),
+    MAX_SSO_PROVIDERS_PER_ORG,
+  );
+  const providers =
+    providersRead.type === "complete"
+      ? providersRead.rows
+      : panic("SSO provider list exceeded bounded cap");
 
   return providers.map((provider) => ({
     providerId: provider.providerId,

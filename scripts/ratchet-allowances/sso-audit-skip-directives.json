@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 8,
+  "reason": "7 owner-DB SSO management writes in apps/api/src/lib/db/sso-management.ts run inside rootDb while every mutating handler in apps/api/src/handlers/organization-settings/sso/* records the corresponding organization_settings audit event via recordAuditEvent, plus 1 attribution-clearing update on organization_sso_domain in apps/api/src/lib/account-deletion-steps.ts under the parent account-deletion audit."
+}
