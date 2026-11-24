@@ -22,10 +22,18 @@ describe("landing layout in one column", () => {
   test("splits the height between columns only side by side", () => {
     const grid = classesOf(markup, /<div class="(grid [^"]+)"/u);
     expect(grid).toContain("shrink-0");
-    for (const bounded of ["flex-1", "min-h-0", "auto-rows-fr"]) {
+    for (const bounded of ["flex-1", "auto-rows-fr"]) {
       expect(grid).not.toContain(bounded);
       expect(grid).toContain(`@2xl:${bounded}`);
     }
+  });
+
+  // A hero grown by a long paste on a short window took the whole height
+  // and left each column's rows a zero-height viewport.
+  test("keeps the columns a usable floor side by side", () => {
+    const grid = classesOf(markup, /<div class="(grid [^"]+)"/u);
+    expect(grid).toContain("@2xl:min-h-48");
+    expect(grid).not.toContain("@2xl:min-h-0");
   });
 
   test("bounds a column's rows only side by side", () => {

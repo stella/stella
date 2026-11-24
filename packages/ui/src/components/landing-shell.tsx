@@ -97,8 +97,10 @@ export const LandingLayout = ({
             {/* Side by side, the columns share the remaining height; each
               `LandingSection` keeps its heading in place and scrolls its own
               rows, so a long list in one column never pushes another's
-              heading out of view. */}
-            <div className="grid w-full shrink-0 gap-8 pb-6 @2xl:min-h-0 @2xl:flex-1 @2xl:auto-rows-fr @2xl:grid-cols-3">
+              heading out of view. They never shrink below a heading and a
+              couple of rows: when a grown hero leaves less than that, the
+              page scrolls instead of the columns collapsing. */}
+            <div className="grid w-full shrink-0 gap-8 pb-6 @2xl:min-h-48 @2xl:flex-1 @2xl:auto-rows-fr @2xl:grid-cols-3">
               {children}
             </div>
             {footer !== undefined && (
