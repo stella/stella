@@ -12,6 +12,7 @@ import type {
   OrganizationSsoDomainSummary,
   OrganizationSsoPolicyRequirement,
   OrganizationSsoProviderSummary,
+  OrganizationSsoProvisioningMode,
   OrganizationSsoSettingsResponse,
   PublicSsoProviderOption,
   SsoProtocol,
@@ -37,6 +38,10 @@ import {
   admitSsoOidcConfig,
   admitSsoSamlConfig,
 } from "@/api/lib/db/sso-provider-config";
+import {
+  countOrganizationActiveSeats,
+  listOrganizationPendingSsoMembers,
+} from "@/api/lib/db/sso-provisioning";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -203,12 +208,22 @@ export const readOrganizationSsoSettings = async (
   organizationId: SafeId<"organization">,
   urls: ProviderUrlBuilders,
 ): Promise<OrganizationSsoSettingsResponse> => {
-  const [policyRows, providerRead, domainRead] = await withAggregateTransaction(
+  const [
+    policyRows,
+    providerRead,
+    domainRead,
+    activeSeatCount,
+    pendingMembers,
+  ] = await withAggregateTransaction(
     db,
     async (tx) =>
       await Promise.all([
         tx
-          .select({ requirement: organizationSsoPolicy.requirement })
+          .select({
+            requirement: organizationSsoPolicy.requirement,
+            provisioningMode: organizationSsoPolicy.provisioningMode,
+            seatLimit: organizationSsoPolicy.seatLimit,
+          })
           .from(organizationSsoPolicy)
           .where(eq(organizationSsoPolicy.organizationId, organizationId))
           .limit(1),
@@ -228,6 +243,8 @@ export const readOrganizationSsoSettings = async (
             .orderBy(asc(organizationSsoDomain.domain)),
           MAX_SSO_DOMAINS_PER_ORG,
         ),
+        countOrganizationActiveSeats(tx, organizationId),
+        listOrganizationPendingSsoMembers(tx, organizationId),
       ]),
   );
   const providerRows =
@@ -239,10 +256,15 @@ export const readOrganizationSsoSettings = async (
       ? domainRead.rows
       : panic("SSO domain list exceeded bounded cap");
 
+  const policy = policyRows.at(0);
   return {
-    requirement: policyRows.at(0)?.requirement ?? "optional",
+    requirement: policy?.requirement ?? "optional",
+    provisioningMode: policy?.provisioningMode ?? "invite_only",
+    seatLimit: policy?.seatLimit ?? null,
+    activeSeatCount,
     providers: providerRows.map((row) => toProviderSummary(row, urls)),
     domains: domainRows.map(toDomainSummary),
+    pendingMembers,
   };
 };
 
@@ -578,9 +600,18 @@ export const updateOrganizationSsoRequirement = async (
   params: {
     organizationId: SafeId<"organization">;
     requirement: OrganizationSsoPolicyRequirement;
+    provisioningMode?: OrganizationSsoProvisioningMode;
+    seatLimit?: number | null;
   },
 ): Promise<
-  Result<{ requirement: OrganizationSsoPolicyRequirement }, SsoManagementError>
+  Result<
+    {
+      requirement: OrganizationSsoPolicyRequirement;
+      provisioningMode: OrganizationSsoProvisioningMode;
+      seatLimit: number | null;
+    },
+    SsoManagementError
+  >
 > =>
   await withAggregateTransaction(db, async (tx) => {
     await withAggregateLock({
@@ -640,24 +671,42 @@ export const updateOrganizationSsoRequirement = async (
     }
 
     const existing = await tx
-      .select({ organizationId: organizationSsoPolicy.organizationId })
+      .select({
+        organizationId: organizationSsoPolicy.organizationId,
+        provisioningMode: organizationSsoPolicy.provisioningMode,
+        seatLimit: organizationSsoPolicy.seatLimit,
+      })
       .from(organizationSsoPolicy)
       .where(eq(organizationSsoPolicy.organizationId, params.organizationId))
       .limit(1);
 
+    const current = existing.at(0);
+    const nextProvisioningMode =
+      params.provisioningMode ?? current?.provisioningMode ?? "invite_only";
+    const nextSeatLimit =
+      params.seatLimit !== undefined
+        ? params.seatLimit
+        : (current?.seatLimit ?? null);
+
     const now = new Date();
-    if (existing.length === 0) {
+    if (current === undefined) {
       // audit: skip - caller handler records organization settings audit event
       await tx.insert(organizationSsoPolicy).values({
         organizationId: params.organizationId,
         requirement: params.requirement,
+        provisioningMode: nextProvisioningMode,
+        seatLimit: nextSeatLimit,
         createdAt: now,
         updatedAt: now,
       });
     } else {
       const write = replayWrite(
         organizationSsoPolicy,
-        { requirement: params.requirement },
+        {
+          requirement: params.requirement,
+          provisioningMode: nextProvisioningMode,
+          seatLimit: nextSeatLimit,
+        },
         { modifiedAt: { column: organizationSsoPolicy.updatedAt, value: now } },
       );
       // audit: skip - caller handler records organization settings audit event
@@ -672,7 +721,11 @@ export const updateOrganizationSsoRequirement = async (
         );
     }
 
-    return Result.ok({ requirement: params.requirement });
+    return Result.ok({
+      requirement: params.requirement,
+      provisioningMode: nextProvisioningMode,
+      seatLimit: nextSeatLimit,
+    });
   });
 
 export const createOrganizationSsoDomain = async (

@@ -3,6 +3,7 @@ import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   pgPolicy,
@@ -484,6 +485,20 @@ export const ssoProvider = pgTable(
 
 /** Whether an organization's members must sign in through its SSO provider. */
 export const ORGANIZATION_SSO_REQUIREMENTS = ["optional", "required"] as const;
+export const ORGANIZATION_SSO_PROVISIONING_MODES = [
+  "invite_only",
+  "admin_approval",
+  "jit_active",
+] as const;
+export const ORGANIZATION_SSO_PENDING_REASONS = [
+  "admin_approval",
+  "seat_limit_reached",
+] as const;
+export const ORGANIZATION_SSO_PENDING_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+] as const;
 
 /**
  * An organization's single sign-on policy; no row means SSO is optional.
@@ -503,6 +518,12 @@ export const organizationSsoPolicy = pgTable(
     requirement: text("requirement", {
       enum: ORGANIZATION_SSO_REQUIREMENTS,
     }).notNull(),
+    provisioningMode: text("provisioning_mode", {
+      enum: ORGANIZATION_SSO_PROVISIONING_MODES,
+    })
+      .default("invite_only")
+      .notNull(),
+    seatLimit: integer("seat_limit"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()
@@ -513,6 +534,14 @@ export const organizationSsoPolicy = pgTable(
     check(
       "organization_sso_policy_requirement_check",
       inArray(table.requirement, ORGANIZATION_SSO_REQUIREMENTS),
+    ),
+    check(
+      "organization_sso_policy_provisioning_mode_check",
+      inArray(table.provisioningMode, ORGANIZATION_SSO_PROVISIONING_MODES),
+    ),
+    check(
+      "organization_sso_policy_seat_limit_check",
+      sql`${table.seatLimit} IS NULL OR ${table.seatLimit} >= 1`,
     ),
     tableOwnerAccess("organization_sso_policy"),
     ...denyStellaAccessPolicies(),
@@ -567,6 +596,77 @@ export const organizationSsoDomain = pgTable(
       sql`${table.domain} ~ ${sql.raw(`'${ORGANIZATION_SSO_DOMAIN_PATTERN}'`)}`,
     ),
     tableOwnerAccess("organization_sso_domain"),
+    ...denyStellaAccessPolicies(),
+  ],
+);
+
+/**
+ * Pending SSO membership requests awaiting admin approval or an open seat.
+ * Kept apart from `member` so pending users hold no workspace access until
+ * an administrator approves them.
+ */
+export const organizationSsoPendingMember = pgTable(
+  "organization_sso_pending_member",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    email: text("email").notNull(),
+    name: text("name"),
+    ssoProviderId: text("sso_provider_id"),
+    reason: text("reason", {
+      enum: ORGANIZATION_SSO_PENDING_REASONS,
+    }).notNull(),
+    status: text("status", {
+      enum: ORGANIZATION_SSO_PENDING_STATUSES,
+    })
+      .default("pending")
+      .notNull(),
+    reviewedBy: text("reviewed_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamptz("reviewed_at"),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+    updatedAt: timestamptz("updated_at")
+      .defaultNow()
+      .$onUpdate(() => /* @__PURE__ */ new Date())
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      name: "org_sso_pending_member_org_fk",
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+    }).onDelete("cascade"),
+    foreignKey({
+      name: "org_sso_pending_member_provider_fk",
+      columns: [table.ssoProviderId],
+      foreignColumns: [ssoProvider.id],
+    }).onDelete("set null"),
+    uniqueIndex("organization_sso_pending_member_org_user_uidx").on(
+      table.organizationId,
+      table.userId,
+    ),
+    index("organization_sso_pending_member_org_status_idx").on(
+      table.organizationId,
+      table.status,
+    ),
+    index("organization_sso_pending_member_user_id_idx").on(table.userId),
+    check(
+      "organization_sso_pending_member_reason_check",
+      inArray(table.reason, ORGANIZATION_SSO_PENDING_REASONS),
+    ),
+    check(
+      "organization_sso_pending_member_status_check",
+      inArray(table.status, ORGANIZATION_SSO_PENDING_STATUSES),
+    ),
+    check(
+      "org_sso_pending_member_review_state_check",
+      sql`(${table.status} = 'pending' AND ${table.reviewedAt} IS NULL AND ${table.reviewedBy} IS NULL) OR (${table.status} IN ('approved', 'rejected') AND ${table.reviewedAt} IS NOT NULL)`,
+    ),
+    tableOwnerAccess("organization_sso_pending_member"),
     ...denyStellaAccessPolicies(),
   ],
 );

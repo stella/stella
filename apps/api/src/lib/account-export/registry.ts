@@ -447,6 +447,11 @@ export const ACCOUNT_EXPORT_REGISTRY = {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
   },
+  // Pending SSO membership requests awaiting admin review.
+  organization_sso_pending_member: {
+    type: "exempt",
+    reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,
+  },
   style_sets: {
     type: "exempt",
     reason: ACCOUNT_EXPORT_EXEMPT_REASON.organization,

@@ -2403,6 +2403,14 @@
       "reason": "New SSO domain verification route; pending write scaling harness coverage."
     },
     {
+      "id": "POST /v1/organization-settings/sso/pending-members/:pendingId/approve",
+      "reason": "New SSO pending member approval route; pending write scaling harness coverage."
+    },
+    {
+      "id": "POST /v1/organization-settings/sso/pending-members/:pendingId/reject",
+      "reason": "New SSO pending member rejection route; pending write scaling harness coverage."
+    },
+    {
       "id": "POST /v1/organization-settings/sso/providers",
       "reason": "New SSO OIDC provider registration route; pending write scaling harness coverage."
     },

@@ -1,0 +1,7 @@
+{
+  "add-column": "organization_sso_policy gains provisioning_mode (constant default) and nullable seat_limit, a metadata-only catalog change with no table rewrite under 1s lock_timeout and 5s statement_timeout.",
+  "add-constraint": "Both CHECK constraints on organization_sso_policy are added NOT VALID with no existing-row scan under 1s lock_timeout and 5s statement_timeout.",
+  "create-table-references": "organization_sso_pending_member is created empty in this migration, so its organization, user, and sso_provider foreign keys validate no existing rows under 1s lock_timeout.",
+  "row-level-security": "Row security is enabled and forced on the new empty organization_sso_pending_member table before any row or reader exists, under 1s lock_timeout.",
+  "create-policy": "Owner-only and deny-stella policies are metadata additions on the new empty organization_sso_pending_member table, under 1s lock_timeout."
+}

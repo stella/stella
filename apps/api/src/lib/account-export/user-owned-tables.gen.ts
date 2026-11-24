@@ -98,6 +98,7 @@ export const USER_OWNED_TABLE_NAMES = [
   "organization_data_exports",
   "organization_professional_use_acceptances",
   "organization_sso_domain",
+  "organization_sso_pending_member",
   "outbound_actions",
   "pdf_signing_sessions",
   "pending_uploads",

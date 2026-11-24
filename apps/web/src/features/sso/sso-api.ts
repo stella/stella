@@ -5,10 +5,10 @@ import type {
   CreateOidcSsoProviderBody,
   CreateSamlSsoProviderBody,
   DiscoverSsoBody,
-  OrganizationSsoPolicyRequirement,
   ParseSamlMetadataBody,
   SsoProtocol,
   TestOidcSsoProviderBody,
+  UpdateOrganizationSsoPolicyBody,
 } from "@stll/api-contract/sso";
 
 import { api } from "@/lib/api";
@@ -23,13 +23,31 @@ export const fetchOrgSsoSettings = async (signal?: AbortSignal) =>
     ),
   );
 
-export const saveOrgSsoPolicy = async (
-  requirement: OrganizationSsoPolicyRequirement,
-) =>
+export const saveOrgSsoPolicy = async (body: UpdateOrganizationSsoPolicyBody) =>
   await invokeAppOnlyWrite("organization-settings.sso.policy.put", async () =>
-    unwrapApiResponse(
-      await api["organization-settings"].sso.policy.put({ requirement }),
-    ),
+    unwrapApiResponse(await api["organization-settings"].sso.policy.put(body)),
+  );
+
+export const approveOrgSsoPendingMember = async (pendingId: string) =>
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.pending-members.approve.post",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso["pending-members"]({
+          pendingId,
+        }).approve.post(),
+      ),
+  );
+
+export const rejectOrgSsoPendingMember = async (pendingId: string) =>
+  await invokeAppOnlyWrite(
+    "organization-settings.sso.pending-members.reject.post",
+    async () =>
+      unwrapApiResponse(
+        await api["organization-settings"].sso["pending-members"]({
+          pendingId,
+        }).reject.post(),
+      ),
   );
 
 export const registerOidcSsoProvider = async (

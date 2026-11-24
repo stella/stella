@@ -101,6 +101,11 @@ import type {
   CreateOrganizationOidcProviderParams,
   CreateOrganizationSamlProviderParams,
 } from "@/api/lib/db/sso-management";
+import {
+  approveOrganizationSsoPendingMember,
+  provisionSsoMemberByProviderRecord,
+  rejectOrganizationSsoPendingMember,
+} from "@/api/lib/db/sso-provisioning";
 import { abortTransaction } from "@/api/lib/db/transaction-abort";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { fingerprintRequest } from "@/api/lib/idempotency/request-receipts";
@@ -440,6 +445,14 @@ export const discoverSsoByEmailDomain = async (domain: string) =>
 
 export const discoverSsoByProviderId = async (providerId: string) =>
   await discoverSsoProviderById(rootDb, providerId);
+
+export const approveOrgSsoPendingMember = async (
+  params: Parameters<typeof approveOrganizationSsoPendingMember>[1],
+) => await approveOrganizationSsoPendingMember(rootDb, params);
+
+export const rejectOrgSsoPendingMember = async (
+  params: Parameters<typeof rejectOrganizationSsoPendingMember>[1],
+) => await rejectOrganizationSsoPendingMember(rootDb, params);
 
 export const listOrgSsoProvidersForMember = async (
   params: Parameters<typeof listOrganizationSsoProvidersForMember>[1],
@@ -899,3 +912,10 @@ export const createOrganizationForAccount = async (
           ),
   });
 };
+
+export const provisionOrgSsoMemberByProviderRecord = async (params: {
+  ssoProviderRecordId: string;
+  userId: SafeId<"user">;
+  email: string;
+  name?: string | null;
+}) => await provisionSsoMemberByProviderRecord(rootDb, params);

@@ -1,0 +1,5 @@
+{
+  "metric": "audit-skip-directives",
+  "delta": 5,
+  "reason": "Owner-DB inserts in apps/api/src/lib/db/sso-provisioning.ts (3: 1 org-settings member approval insert audited by caller handler via recordAuditEvent, plus 2 Better Auth sign-in lifecycle inserts covered by the auth sign-in boundary) and apps/api/src/lib/account-deletion-steps.ts (2: account deletion cleanup)."
+}

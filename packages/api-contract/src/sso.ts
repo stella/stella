@@ -56,6 +56,32 @@ export const ORGANIZATION_SSO_POLICY_REQUIREMENTS = [
 export type OrganizationSsoPolicyRequirement =
   (typeof ORGANIZATION_SSO_POLICY_REQUIREMENTS)[number];
 
+export const ORGANIZATION_SSO_PROVISIONING_MODES = [
+  "invite_only",
+  "admin_approval",
+  "jit_active",
+] as const;
+
+export type OrganizationSsoProvisioningMode =
+  (typeof ORGANIZATION_SSO_PROVISIONING_MODES)[number];
+
+export const SSO_PENDING_MEMBER_REASONS = [
+  "admin_approval",
+  "seat_limit_reached",
+] as const;
+
+export type SsoPendingMemberReason =
+  (typeof SSO_PENDING_MEMBER_REASONS)[number];
+
+export const SSO_PENDING_MEMBER_STATUSES = [
+  "pending",
+  "approved",
+  "rejected",
+] as const;
+
+export type SsoPendingMemberStatus =
+  (typeof SSO_PENDING_MEMBER_STATUSES)[number];
+
 /** Normalized RFC-1035 hostname (e.g. `acme.example.com`). */
 export const SSO_DOMAIN_PATTERN =
   /^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/u;
@@ -69,13 +95,13 @@ export const normalizeSsoDomain = (raw: string): string =>
     return trimmed;
   })();
 
-export const ssoDomainNameSchema = v.pipe(
+export const ssoDomainNameSchema = /* @__PURE__ */ v.pipe(
   v.string(),
   v.transform(normalizeSsoDomain),
   v.regex(SSO_DOMAIN_PATTERN, "Enter a valid domain name"),
 );
 
-export const createOidcSsoProviderBodySchema = v.strictObject({
+export const createOidcSsoProviderBodySchema = /* @__PURE__ */ v.strictObject({
   displayName: displayNameSchema({ maxLength: 80 }),
   issuer: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
   clientId: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
@@ -101,7 +127,7 @@ export type CreateOidcSsoProviderBody = v.InferOutput<
   typeof createOidcSsoProviderBodySchema
 >;
 
-export const createSamlSsoProviderBodySchema = v.strictObject({
+export const createSamlSsoProviderBodySchema = /* @__PURE__ */ v.strictObject({
   providerId: v.optional(
     v.pipe(v.string(), v.trim(), v.regex(/^sso_[a-z0-9_-]{4,48}$/u)),
   ),
@@ -120,7 +146,7 @@ export type CreateSamlSsoProviderBody = v.InferOutput<
   typeof createSamlSsoProviderBodySchema
 >;
 
-export const testOidcSsoProviderBodySchema = v.strictObject({
+export const testOidcSsoProviderBodySchema = /* @__PURE__ */ v.strictObject({
   issuer: v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
   discoveryEndpoint: v.optional(
     v.pipe(v.string(), v.trim(), v.url(), v.maxLength(512)),
@@ -131,17 +157,27 @@ export type TestOidcSsoProviderBody = v.InferOutput<
   typeof testOidcSsoProviderBodySchema
 >;
 
-export const updateOrganizationSsoPolicyBodySchema = v.strictObject({
-  requirement: v.picklist(ORGANIZATION_SSO_POLICY_REQUIREMENTS),
-});
+export const updateOrganizationSsoPolicyBodySchema =
+  /* @__PURE__ */ v.strictObject({
+    requirement: v.picklist(ORGANIZATION_SSO_POLICY_REQUIREMENTS),
+    provisioningMode: v.optional(
+      v.picklist(ORGANIZATION_SSO_PROVISIONING_MODES),
+    ),
+    seatLimit: v.optional(
+      v.nullable(
+        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100_000)),
+      ),
+    ),
+  });
 
 export type UpdateOrganizationSsoPolicyBody = v.InferOutput<
   typeof updateOrganizationSsoPolicyBodySchema
 >;
 
-export const createOrganizationSsoDomainBodySchema = v.strictObject({
-  domain: ssoDomainNameSchema,
-});
+export const createOrganizationSsoDomainBodySchema =
+  /* @__PURE__ */ v.strictObject({
+    domain: ssoDomainNameSchema,
+  });
 
 export type CreateOrganizationSsoDomainBody = v.InferOutput<
   typeof createOrganizationSsoDomainBodySchema
@@ -198,10 +234,28 @@ export type OrganizationSsoDomainSummary = v.InferOutput<
   typeof organizationSsoDomainSummarySchema
 >;
 
+export const organizationSsoPendingMemberSummarySchema = v.object({
+  id: v.string(),
+  userId: v.string(),
+  email: v.string(),
+  name: v.nullable(v.string()),
+  reason: v.picklist(SSO_PENDING_MEMBER_REASONS),
+  status: v.picklist(SSO_PENDING_MEMBER_STATUSES),
+  createdAt: v.string(),
+});
+
+export type OrganizationSsoPendingMemberSummary = v.InferOutput<
+  typeof organizationSsoPendingMemberSummarySchema
+>;
+
 export const organizationSsoSettingsResponseSchema = v.object({
   requirement: v.picklist(ORGANIZATION_SSO_POLICY_REQUIREMENTS),
+  provisioningMode: v.picklist(ORGANIZATION_SSO_PROVISIONING_MODES),
+  seatLimit: v.nullable(v.number()),
+  activeSeatCount: v.number(),
   providers: v.array(organizationSsoProviderSummarySchema),
   domains: v.array(organizationSsoDomainSummarySchema),
+  pendingMembers: v.array(organizationSsoPendingMemberSummarySchema),
 });
 
 export type OrganizationSsoSettingsResponse = v.InferOutput<

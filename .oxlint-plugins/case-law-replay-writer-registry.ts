@@ -9,7 +9,7 @@ export type ReplayWriterOwner = {
 export const REPLAY_WRITER_REGISTRY = [
   {
     file: "apps/api/src/db/root.ts",
-    line: 877,
+    line: 890,
     kind: "pending",
   },
   {

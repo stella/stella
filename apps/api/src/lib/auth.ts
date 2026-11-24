@@ -62,6 +62,7 @@ import {
   bindOwnerSyntheticSessionAuthorityReader,
   bindOwnerSyntheticSessionAuthorizer,
   isPartnerOAuthClient,
+  provisionOrgSsoMemberByProviderRecord,
   rlsDb,
   rootDb,
 } from "@/api/db/root";
@@ -2503,6 +2504,23 @@ export const createAuth = (
               throw new APIError("UNAUTHORIZED", {
                 message: DISCONNECTED_SIGN_IN_MESSAGE,
               });
+            }
+            const ssoProviderRecordId = session["ssoProviderId"];
+            if (
+              typeof ssoProviderRecordId === "string" &&
+              ssoProviderRecordId.length > 0
+            ) {
+              const ssoUser = await ctx?.context.internalAdapter.findUserById(
+                session.userId,
+              );
+              if (ssoUser !== null && ssoUser !== undefined) {
+                await provisionOrgSsoMemberByProviderRecord({
+                  ssoProviderRecordId,
+                  userId: toSafeId<"user">(session.userId),
+                  email: ssoUser.email,
+                  name: ssoUser.name,
+                });
+              }
             }
             // Where the session signed in from, recorded only when the request
             // proved it came through CloudFront; otherwise `unknown`.

@@ -38,6 +38,7 @@ import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
 import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
 import updateSanctionsMonitoring from "@/api/handlers/organization-settings/sanctions-monitoring/update";
+import approveOrganizationSsoPendingMember from "@/api/handlers/organization-settings/sso/approve-pending-member";
 import createOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/create-domain";
 import createOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/create-provider";
 import createOrganizationSamlSsoProvider from "@/api/handlers/organization-settings/sso/create-saml-provider";
@@ -45,6 +46,7 @@ import deleteOrganizationSsoDomain from "@/api/handlers/organization-settings/ss
 import deleteOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/delete-provider";
 import readOrganizationSso from "@/api/handlers/organization-settings/sso/get";
 import parseOrganizationSamlMetadata from "@/api/handlers/organization-settings/sso/parse-saml-metadata";
+import rejectOrganizationSsoPendingMember from "@/api/handlers/organization-settings/sso/reject-pending-member";
 import testOrganizationSsoProvider from "@/api/handlers/organization-settings/sso/test-provider";
 import updateOrganizationSsoPolicy from "@/api/handlers/organization-settings/sso/update-policy";
 import verifyOrganizationSsoDomain from "@/api/handlers/organization-settings/sso/verify-domain";
@@ -104,6 +106,12 @@ export const organizationSettingsRoute = mount(
         "/domains": { POST: createOrganizationSsoDomain },
         "/domains/:domainId/verify": { POST: verifyOrganizationSsoDomain },
         "/domains/:domainId": { DELETE: deleteOrganizationSsoDomain },
+        "/pending-members/:pendingId/approve": {
+          POST: approveOrganizationSsoPendingMember,
+        },
+        "/pending-members/:pendingId/reject": {
+          POST: rejectOrganizationSsoPendingMember,
+        },
       },
       {
         prefix: "/sso",

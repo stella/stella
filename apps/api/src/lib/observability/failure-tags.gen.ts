@@ -608,6 +608,7 @@ export const FAILURE_TAGS = [
   "saml_metadata_error",
   "sso_domain_dns_error",
   "sso_management_error",
+  "sso_provisioning_error",
 ] as const;
 
 export type FailureTag = (typeof FAILURE_TAGS)[number];
