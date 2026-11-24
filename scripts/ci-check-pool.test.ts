@@ -96,6 +96,34 @@ test("an exact named subset retains manifest order", () => {
   );
 });
 
+test("weighted matrix partitions balance heavy checks across bins and keep registry order", () => {
+  const checks = [
+    check("HeavyA"),
+    check("LightA"),
+    check("LightB"),
+    check("HeavyB"),
+    check("Medium"),
+    check("LightC"),
+  ];
+  const weights: Record<string, number> = {
+    HeavyA: 500,
+    HeavyB: 200,
+    Medium: 120,
+    LightA: 10,
+    LightB: 10,
+    LightC: 10,
+  };
+  const weight = (entry: PoolCheck) => weights[entry.name] ?? 1;
+  const part1 = partitionChecks(checks, "1/2", weight).map(({ name }) => name);
+  const part2 = partitionChecks(checks, "2/2", weight).map(({ name }) => name);
+  expect([...part1, ...part2].toSorted()).toEqual(
+    checks.map(({ name }) => name).toSorted(),
+  );
+  // HeavyA (500) goes to bin 1; HeavyB (200) + Medium (120) + lights go to bin 2.
+  expect(part1).toEqual(["HeavyA"]);
+  expect(part2).toEqual(["LightA", "LightB", "HeavyB", "Medium", "LightC"]);
+});
+
 test("matrix partitions cover every pooled check exactly once", () => {
   const checks = [check("First"), check("Second"), check("Third")];
   const selected = ["1/2", "2/2"].flatMap((partition) =>
@@ -634,7 +662,9 @@ test("silent busy children, each lighter than the first, are never stuck", async
     `(end=$((SECONDS + ${secondsBusy})); while (( SECONDS < end )); do :; done)`;
   const { launched } = await launchIn(
     [busy(3), busy(2), busy(2), busy(2)].join("\n"),
-    { stuckAfterMs: 2500 },
+    {
+      stuckAfterMs: 2500,
+    },
   );
   expect(launched).toMatchObject({ exitCode: 0, stopped: undefined });
 }, 30_000);
@@ -656,7 +686,10 @@ test("a silent, idle check is stopped as stuck with its process tree", async () 
 test("a check that keeps progressing still stops at its budget", async () => {
   const { launched, log } = await launchIn(
     "while true; do echo tick; sleep 0.05; done",
-    { budgetMinutes: 0.01, stuckAfterMs: 60_000 },
+    {
+      budgetMinutes: 0.01,
+      stuckAfterMs: 60_000,
+    },
   );
   expect(launched.stopped).toEqual({
     reason: "over-budget",

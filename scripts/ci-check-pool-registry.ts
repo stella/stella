@@ -287,6 +287,16 @@ export const checkBudgetMinutes = (
   name: string,
 ) => checkBudgetOf(budgets, job, name).minutes;
 
+/** A pooled check's measured p95 duration in seconds for partition balancing. */
+export const checkBudgetP95Seconds = (
+  budgets: CheckBudgets,
+  job: CheckPoolJob,
+  name: string,
+) => {
+  const budget = checkBudgetOf(budgets, job, name);
+  return budget.p95Seconds ?? budget.minutes * 60;
+};
+
 /** A pooled check's measured peak memory; a check without one cannot run. */
 export const checkPeakRssMiB = (
   budgets: CheckBudgets,
