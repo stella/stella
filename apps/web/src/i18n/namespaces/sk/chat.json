@@ -474,6 +474,8 @@
       "permissionPlan": "Plán",
       "permissionPlanDescription": "Najprv číta a plánuje; pred každou zmenou sa opýta, kým plán neschválite.",
       "permissionSandboxed": "Beží v izolovanom prostredí; skôr než zmení niečo vo vašom počítači, opýta sa.",
+      "permissionScaleHigh": "Samostatne",
+      "permissionScaleLow": "Opatrne",
       "permissionUnavailable": "V tomto počítači nie je k dispozícii",
       "permissions": "Oprávnenia",
       "refusalConflictingRunMode": "Táto požiadavka sa má spustiť zároveň v cloudovom agentovi aj vo vašom počítači. Vyberte jedno v ponuke Spustiť na.",
@@ -702,6 +704,7 @@
     "richContentTitle": "Interaktívny obsah",
     "richContentUnavailable": "Tento obsah nemožno bezpečne zobraziť.",
     "runOn": {
+      "agent": "Agent",
       "checkFailed": "Počítač sa nepodarilo skontrolovať",
       "chipLabel": "Kde beží: {place}",
       "cloud": "Cloud",
@@ -728,6 +731,7 @@
       "stepsInstall": "Otvára sa stella desktop. Ak sa neotvorí, otvorte ho vo svojom počítači a v časti Nastavenia › Všeobecné zvoľte pri agentovi {harness} Nainštalovať.",
       "stepsSignInClaudeCode": "Otvára sa stella desktop na prihlásenie. Ak sa neotvorí, otvorte ho a zvoľte Nastavenia › Všeobecné › Prihlásiť sa cez Claude.",
       "stepsSignInCodex": "Otvára sa stella desktop na prihlásenie. Ak sa neotvorí, otvorte ho a zvoľte Nastavenia › Všeobecné › Pokračovať s ChatGPT.",
+      "where": "Kde beží",
       "yourComputer": "Váš počítač",
       "yourComputerDescription": "Použije Codex alebo Claude Code vo vašom počítači s vaším vlastným predplatným. Môže čítať a meniť súbory v priečinku tohto chatu; čo smie urobiť bez opýtania, určujú jeho oprávnenia."
     },

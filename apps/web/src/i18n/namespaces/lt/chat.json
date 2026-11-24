@@ -474,6 +474,8 @@
       "permissionPlan": "Planas",
       "permissionPlanDescription": "Pirmiausia skaito ir planuoja; prieš kiekvieną pakeitimą klausia, kol nepatvirtinsite plano.",
       "permissionSandboxed": "Veikia izoliuotoje aplinkoje; prieš ką nors keisdamas jūsų kompiuteryje, paklausia.",
+      "permissionScaleHigh": "Savarankiškai",
+      "permissionScaleLow": "Atsargiai",
       "permissionUnavailable": "Šiame kompiuteryje nepasiekiama",
       "permissions": "Leidimai",
       "refusalConflictingRunMode": "Ši užklausa prašo veikti ir su debesies agentu, ir jūsų kompiuteryje. Pasirinkite vieną meniu Paleisti.",
@@ -702,6 +704,7 @@
     "richContentTitle": "Interaktyvus turinys",
     "richContentUnavailable": "Šio turinio negalima saugiai rodyti.",
     "runOn": {
+      "agent": "Agentas",
       "checkFailed": "Nepavyko patikrinti jūsų kompiuterio",
       "chipLabel": "Kur veikia: {place}",
       "cloud": "Debesis",
@@ -728,6 +731,7 @@
       "stepsInstall": "Atidaroma stella desktop. Jei programa neatsidaro, atidarykite ją savo kompiuteryje ir skiltyje Nustatymai › Bendra prie agento {harness} pasirinkite Įdiegti.",
       "stepsSignInClaudeCode": "Atidaroma stella desktop prisijungimui. Jei programa neatsidaro, atidarykite ją ir pasirinkite Nustatymai › Bendra › Prisijungti su Claude.",
       "stepsSignInCodex": "Atidaroma stella desktop prisijungimui. Jei programa neatsidaro, atidarykite ją ir pasirinkite Nustatymai › Bendra › Tęsti su ChatGPT.",
+      "where": "Kur veikia",
       "yourComputer": "Jūsų kompiuteris",
       "yourComputerDescription": "Naudoja Codex arba Claude Code jūsų kompiuteryje su jūsų pačių prenumerata. Gali skaityti ir keisti šio pokalbio aplanko failus; leidimai nustato, ką jis gali daryti neklausdamas."
     },

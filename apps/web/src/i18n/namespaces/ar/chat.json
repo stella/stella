@@ -474,6 +474,8 @@
       "permissionPlan": "خطة",
       "permissionPlanDescription": "يقرأ ويخطط أولًا، ويسأل قبل أي تغيير حتى توافق على الخطة.",
       "permissionSandboxed": "يعمل في بيئة معزولة، ويسأل قبل تغيير أي شيء على حاسوبك.",
+      "permissionScaleHigh": "باستقلالية",
+      "permissionScaleLow": "بحذر",
       "permissionUnavailable": "غير متاح على هذا الحاسوب",
       "permissions": "الأذونات",
       "refusalConflictingRunMode": "يطلب هذا الطلب التشغيل مع الوكيل السحابي وعلى حاسوبك معًا. اختر واحدًا من قائمة التشغيل على.",
@@ -702,6 +704,7 @@
     "richContentTitle": "محتوى تفاعلي",
     "richContentUnavailable": "لا يمكن عرض هذا المحتوى بأمان.",
     "runOn": {
+      "agent": "الوكيل",
       "checkFailed": "تعذّر التحقق من حاسوبك",
       "chipLabel": "مكان التشغيل: {place}",
       "cloud": "السحابة",
@@ -728,6 +731,7 @@
       "stepsInstall": "جارٍ فتح stella desktop. إن لم يُفتح، فافتحه على حاسوبك، ثم اختر في الإعدادات › عام زر تثبيت بجوار {harness}.",
       "stepsSignInClaudeCode": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › تسجيل الدخول باستخدام Claude.",
       "stepsSignInCodex": "جارٍ فتح stella desktop لتسجيل الدخول. إن لم يُفتح، فافتحه واختر الإعدادات › عام › المتابعة باستخدام ChatGPT.",
+      "where": "مكان التشغيل",
       "yourComputer": "حاسوبك",
       "yourComputerDescription": "يستخدم Codex أو Claude Code على حاسوبك باشتراكك الخاص. يمكنه قراءة الملفات وتغييرها في مجلد هذه الدردشة، وتحدد الأذونات ما يمكنه فعله دون أن يسألك."
     },

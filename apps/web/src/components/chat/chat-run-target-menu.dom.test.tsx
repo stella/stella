@@ -190,8 +190,12 @@ const renderModels = (selected: ChatLocalRunTarget) => {
 const radioItem = async (view: ReturnType<typeof render>, label: string) =>
   await waitFor(() => {
     const item = view.getAllByRole("menuitemradio").find((candidate) =>
-      // A checked item starts with its indicator's "Selected" title.
-      candidate.textContent.replace(/^Selected/u, "").startsWith(label),
+      // A permission mode is an icon named by its label; a checked row
+      // starts with its indicator's "Selected" title.
+      (
+        candidate.getAttribute("aria-label") ??
+        candidate.textContent.replace(/^Selected/u, "")
+      ).startsWith(label),
     );
     if (item === undefined) {
       throw new Error(`no ${label} choice`);
@@ -209,24 +213,35 @@ test("a local turn offers every permission mode, and the ones this computer cann
   expect(auto.getAttribute("aria-checked")).toBe("false");
   expect(ask.getAttribute("aria-disabled")).not.toBe("true");
   expect(fullAuto.getAttribute("aria-disabled")).toBe("true");
-  expect(fullAuto.textContent).toContain("Not available on this computer");
-  expect(auto.textContent).toContain(
-    "Does what it judges safe on its own; asks about the rest.",
+  expect(fullAuto.getAttribute("aria-label")).toBe(
+    "Full auto · Not available on this computer",
   );
+  // Only the chosen mode says what it lets the agent do.
+  expect(
+    view.getByText(messages.chat.localRun.permissionAskDescription),
+  ).toBeTruthy();
+  expect(
+    view.queryByText(messages.chat.localRun.permissionAutoDescription),
+  ).toBeNull();
 });
 
 test("Plan is offered with what it does, under any limit, and choosing it keeps the harness and model", async () => {
-  const { view, chosen } = renderMenu(LOCAL, {
+  const { view, chosen, rerender } = renderMenu(LOCAL, {
     ...READINESS,
     maxApprovals: "ask",
   });
   const plan = await radioItem(view, "Plan");
   expect(plan.getAttribute("aria-disabled")).not.toBe("true");
-  expect(plan.textContent).toContain(
-    "Reads and plans first; asks before any change until you approve the plan.",
-  );
   fireEvent.click(plan);
   expect(chosen).toEqual([{ ...LOCAL, approvals: "plan" }]);
+  rerender({ ...LOCAL, approvals: "plan" });
+  expect(
+    await waitFor(() =>
+      view.getByText(
+        "Reads and plans first; asks before any change until you approve the plan.",
+      ),
+    ),
+  ).toBeTruthy();
 });
 
 test("a mode above the organization's limit is disabled with that reason, apart from the ones the computer cannot run", async () => {
@@ -237,8 +252,16 @@ test("a mode above the organization's limit is disabled with that reason, apart 
   const auto = await radioItem(view, "Auto");
   const fullAuto = await radioItem(view, "Full auto");
   expect(auto.getAttribute("aria-disabled")).toBe("true");
-  expect(auto.textContent).toContain("Not allowed by your organization");
-  expect(fullAuto.textContent).toContain("Not available on this computer");
+  expect(auto.getAttribute("aria-label")).toBe(
+    "Auto · Not allowed by your organization",
+  );
+  expect(fullAuto.getAttribute("aria-label")).toBe(
+    "Full auto · Not available on this computer",
+  );
+  // Each says why once under the row too.
+  expect(
+    view.getByText("Auto · Not allowed by your organization"),
+  ).toBeTruthy();
   fireEvent.click(auto);
   expect(chosen).toEqual([]);
 });
@@ -318,30 +341,51 @@ test("a harness that runs in one mode offers no choice and says how it behaves",
       .getAllByRole("menuitemradio")
       .map((item) => item.textContent.replace(/^Selected/u, "")),
   ).toEqual([
-    `${messages.chat.runOn.cloud}${messages.chat.runOn.cloudDescription}`,
+    messages.chat.runOn.cloud,
+    messages.chat.runOn.yourComputer,
     "Codex",
     "Claude Code",
     messages.chat.localRun.folderOwn,
   ]);
 });
 
-test("a cloud turn offers every level, saying what each does in the browser", async () => {
+test("a cloud turn offers every level, saying what the chosen one does in the browser", async () => {
   const { view, chosen } = renderMenu({ kind: "cloud", approvals: "ask" });
   await waitFor(() => view.getByText(messages.chat.runOn.cloudPermissionsHint));
   expect(view.queryByText(messages.chat.localRun.permissions)).not.toBeNull();
-  const { runOn } = messages.chat;
-  for (const description of [
-    runOn.cloudPermissionPlanDescription,
-    runOn.cloudPermissionAskDescription,
-    runOn.cloudPermissionAutoDescription,
-    runOn.cloudPermissionFullAutoDescription,
+  const { localRun, runOn } = messages.chat;
+  for (const label of [
+    localRun.permissionPlan,
+    messages.common.ask,
+    messages.chat.modelSelector.autoLabel,
+    localRun.permissionFullAuto,
   ]) {
-    expect(view.queryByText(description)).not.toBeNull();
+    expect(await radioItem(view, label)).toBeTruthy();
   }
-  fireEvent.click(
-    await radioItem(view, messages.chat.localRun.permissionFullAuto),
-  );
+  expect(view.queryByText(runOn.cloudPermissionAskDescription)).not.toBeNull();
+  expect(view.queryByText(localRun.permissionAskDescription)).toBeNull();
+  expect(view.queryByText(runOn.cloudPermissionAutoDescription)).toBeNull();
+  fireEvent.click(await radioItem(view, localRun.permissionFullAuto));
   expect(chosen).toEqual([{ kind: "cloud", approvals: "full_auto" }]);
+});
+
+test("moving back to the cloud keeps the chat's level within the organization's limit", async () => {
+  const { view, chosen } = renderMenu({ ...CODEX, approvals: "auto" });
+  // The limit is the computers' report's, so wait for it to be read.
+  await waitFor(() => view.getByText("Codex"));
+  const cloud = await waitFor(() => {
+    const item = view
+      .getAllByRole("menuitemradio")
+      .find((candidate) =>
+        candidate.textContent.includes(messages.chat.runOn.cloud),
+      );
+    if (item === undefined) {
+      throw new Error("no cloud choice");
+    }
+    return item;
+  });
+  fireEvent.click(cloud);
+  expect(chosen).toEqual([{ kind: "cloud", approvals: "auto" }]);
 });
 
 test("the places open with the cloud, the member's computer and its ready agents", async () => {

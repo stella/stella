@@ -474,6 +474,8 @@
       "permissionPlan": "Planifier",
       "permissionPlanDescription": "Lit et planifie d’abord ; demande avant chaque modification tant que vous n’avez pas approuvé le plan.",
       "permissionSandboxed": "S’exécute dans un bac à sable ; demande avant de modifier votre ordinateur.",
+      "permissionScaleHigh": "Autonome",
+      "permissionScaleLow": "Prudent",
       "permissionUnavailable": "Indisponible sur cet ordinateur",
       "permissions": "Autorisations",
       "refusalConflictingRunMode": "Cette demande doit s’exécuter à la fois avec l’agent cloud et sur votre ordinateur. Choisissez-en un sous Exécuter sur.",
@@ -702,6 +704,7 @@
     "richContentTitle": "Contenu interactif",
     "richContentUnavailable": "Ce contenu ne peut pas être affiché en toute sécurité.",
     "runOn": {
+      "agent": "Agent",
       "checkFailed": "Impossible de vérifier votre ordinateur",
       "chipLabel": "Exécution : {place}",
       "cloud": "Cloud",
@@ -728,6 +731,7 @@
       "stepsInstall": "Ouverture de stella desktop. S’il ne s’ouvre pas, ouvrez-le sur votre ordinateur et, dans Paramètres › Général, choisissez Installer pour {harness}.",
       "stepsSignInClaudeCode": "Ouverture de stella desktop pour vous connecter. S’il ne s’ouvre pas, ouvrez-le et choisissez Paramètres › Général › Se connecter avec Claude.",
       "stepsSignInCodex": "Ouverture de stella desktop pour vous connecter. S’il ne s’ouvre pas, ouvrez-le et choisissez Paramètres › Général › Continuer avec ChatGPT.",
+      "where": "Exécution",
       "yourComputer": "Votre ordinateur",
       "yourComputerDescription": "Utilise Codex ou Claude Code sur votre ordinateur avec votre propre abonnement. Il peut lire et modifier les fichiers du dossier de cette conversation ; ses autorisations fixent ce qu’il peut faire sans demander."
     },

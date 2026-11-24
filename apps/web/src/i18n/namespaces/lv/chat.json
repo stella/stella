@@ -474,6 +474,8 @@
       "permissionPlan": "Plāns",
       "permissionPlanDescription": "Vispirms lasa un plāno; pirms katras izmaiņas jautā, kamēr neapstiprināsiet plānu.",
       "permissionSandboxed": "Darbojas izolētā vidē; pirms kaut ko maina jūsu datorā, pajautā.",
+      "permissionScaleHigh": "Patstāvīgi",
+      "permissionScaleLow": "Piesardzīgi",
       "permissionUnavailable": "Šajā datorā nav pieejams",
       "permissions": "Atļaujas",
       "refusalConflictingRunMode": "Šis pieprasījums vienlaikus prasa darboties ar mākoņa aģentu un jūsu datorā. Izvēlieties vienu izvēlnē Palaist.",
@@ -702,6 +704,7 @@
     "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
     "runOn": {
+      "agent": "Aģents",
       "checkFailed": "Neizdevās pārbaudīt jūsu datoru",
       "chipLabel": "Darbojas: {place}",
       "cloud": "Mākonis",
@@ -728,6 +731,7 @@
       "stepsInstall": "Notiek stella desktop atvēršana. Ja lietotne neatveras, atveriet to savā datorā un sadaļā Iestatījumi › Vispārīgi pie aģenta {harness} izvēlieties Instalēt.",
       "stepsSignInClaudeCode": "Notiek stella desktop atvēršana, lai pierakstītos. Ja lietotne neatveras, atveriet to un izvēlieties Iestatījumi › Vispārīgi › Pierakstīties ar Claude.",
       "stepsSignInCodex": "Notiek stella desktop atvēršana, lai pierakstītos. Ja lietotne neatveras, atveriet to un izvēlieties Iestatījumi › Vispārīgi › Turpināt ar ChatGPT.",
+      "where": "Darbojas",
       "yourComputer": "Jūsu dators",
       "yourComputerDescription": "Izmanto Codex vai Claude Code jūsu datorā ar jūsu pašu abonementu. Tas var lasīt un mainīt failus šīs tērzēšanas mapē; atļaujas nosaka, ko tas drīkst darīt bez jautāšanas."
     },
