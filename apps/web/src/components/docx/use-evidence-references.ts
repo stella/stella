@@ -2,19 +2,14 @@ import { useState } from "react";
 
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
 
-import { useLatestCallback } from "@/hooks/use-latest-callback";
+import {
+  createEvidenceReferencesPlugin,
+  EVIDENCE_DERIVED_FIELDS,
+} from "./evidence-reference";
 
-import { createEvidenceReferencesPlugin } from "./evidence-reference";
-
-export const useEvidenceReferences = (editable: boolean) => {
+export const useEvidenceReferences = () => {
   const [document, setDocument] = useState<ProseMirrorNode | null>(null);
-  const isEditable = useLatestCallback(() => editable);
   // Folio retains these plugins across document replacement; identity must stay stable.
-  const plugins = [
-    createEvidenceReferencesPlugin({
-      isEditable,
-      onDocumentChange: setDocument,
-    }),
-  ];
-  return { document, plugins };
+  const plugins = [createEvidenceReferencesPlugin(setDocument)];
+  return { derivedFields: EVIDENCE_DERIVED_FIELDS, document, plugins };
 };
