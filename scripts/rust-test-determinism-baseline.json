@@ -4,11 +4,6 @@
     "owner": "apps/desktop/src-tauri",
     "reason": "pre-kit census; inject clocks and isolate test state"
   },
-  "apps/desktop/src-tauri/src/activity.rs": {
-    "count": 9,
-    "owner": "apps/desktop/src-tauri",
-    "reason": "pre-kit census; inject clocks and isolate test state"
-  },
   "apps/desktop/src-tauri/src/clipboard_image_export.rs": {
     "count": 1,
     "owner": "apps/desktop/src-tauri",
