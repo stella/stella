@@ -271,6 +271,7 @@ const TranscriptionChoice = ({ controls, snapshot }: ScreenProps) => {
               <div className="px-3 ps-10 pb-3">
                 <CloudModel
                   cloudModel={snapshot.cloudModel}
+                  cloudModelUnreadable={snapshot.cloudModelUnreadable}
                   controls={controls}
                   offered={cloud.offered}
                 />
@@ -385,16 +386,18 @@ const LocalModel = ({
  *  the warning when its provider keeps the audio. */
 const CloudModel = ({
   cloudModel,
+  cloudModelUnreadable = false,
   controls,
   offered,
 }: {
   cloudModel: string | null;
+  cloudModelUnreadable?: boolean | undefined;
   controls: DictationControls;
   offered: NonNullable<CloudModelOffer["offered"]>;
 }) => {
   const destinationT = useTranslations("dictation.destination");
   const labelId = useId();
-  const chosen = shownCloudModel(offered, cloudModel);
+  const chosen = shownCloudModel(offered, cloudModel, cloudModelUnreadable);
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-3">
