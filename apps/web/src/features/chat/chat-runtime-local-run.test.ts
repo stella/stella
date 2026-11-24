@@ -56,11 +56,11 @@ const installRunningTurn = () => {
     async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = input instanceof Request ? input.url : input.toString();
       if (new URL(url, "http://localhost").pathname.endsWith("/steer")) {
-        steers.push(
+        const request =
           input instanceof Request
-            ? await input.json()
-            : JSON.parse(String(init?.body)),
-        );
+            ? input
+            : new Request(new URL(url, "http://localhost"), init);
+        steers.push(await request.json());
         steerPosted.resolve(undefined);
         // Taken to the computer; the turn's stream says what became of it.
         return Response.json({ steer: { type: "queued" } });
