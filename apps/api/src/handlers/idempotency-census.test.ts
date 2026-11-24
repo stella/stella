@@ -817,10 +817,14 @@ const ROOT_MUTATION_DISPOSITIONS = {
     type: "non-replay",
     reason: "current-state",
   },
-  "POST /v1/organization-settings/sso/scim-tokens":
-    "Creates a new managed SCIM bearer credential via @better-auth/scim; admin-initiated and bounded by maxActiveCredentials.",
-  "DELETE /v1/organization-settings/sso/scim-tokens/:tokenId":
-    "Idempotent revocation of a managed SCIM bearer credential.",
+  "POST /v1/organization-settings/sso/scim-tokens": {
+    type: "non-replay",
+    reason: "current-state",
+  },
+  "DELETE /v1/organization-settings/sso/scim-tokens/:tokenId": {
+    type: "non-replay",
+    reason: "current-state",
+  },
   "POST /v1/organization-settings/sso/pending-members/:pendingId/reject": {
     type: "non-replay",
     reason: "current-state",

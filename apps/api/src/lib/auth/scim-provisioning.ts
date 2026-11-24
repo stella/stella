@@ -10,6 +10,7 @@ import type {
   SCIMTransactionContext,
 } from "@better-auth/scim";
 import { scim } from "@better-auth/scim";
+import { panic } from "better-result";
 
 import { isEnterpriseSsoDeployed } from "@/api/lib/db/sso-access";
 import { normalizeEmail } from "@/api/lib/email/normalized-email";
@@ -195,5 +196,28 @@ export const createScimProvisioningPlugin = ({
     matcher: (ctx) => ctx.path?.startsWith(SCIM_ENDPOINT_PREFIX) ?? false,
     handler: scimDeploymentGate,
   });
-  return plugin;
+  const {
+    scimManagedConnection,
+    scimManagedCredential,
+    scimManagedConnectionEvent,
+    ...baseSchema
+  } = plugin.schema;
+  if (
+    !scimManagedConnection ||
+    !scimManagedCredential ||
+    !scimManagedConnectionEvent
+  ) {
+    return panic(
+      "Managed SCIM schema missing when managedConnections is configured",
+    );
+  }
+  return {
+    ...plugin,
+    schema: {
+      ...baseSchema,
+      scimManagedConnection,
+      scimManagedCredential,
+      scimManagedConnectionEvent,
+    },
+  };
 };
