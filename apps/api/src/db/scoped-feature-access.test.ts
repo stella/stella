@@ -14,6 +14,7 @@ import { resolveScopedFeatureIds } from "@/api/db/scoped-feature-access";
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
+  FEATURE_REGISTRY,
   LEGAL_LISTS_FEATURE_ID,
   LIST_VERIFICATION_FEATURE_ID,
 } from "@/api/lib/feature-access/registry";
@@ -21,6 +22,12 @@ import { buildFeatureAccessSnapshot } from "@/api/lib/feature-access/snapshot";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
 const testState = createTestState({ file: import.meta.path, config: env });
+
+const INVITATION_FEATURE_IDS: ReadonlySet<string> = new Set(
+  Object.entries(FEATURE_REGISTRY)
+    .filter(([, { enrolment }]) => enrolment === "invitation")
+    .map(([featureId]) => featureId),
+);
 
 const grant = { type: "organization", organizationId: "fixture-org" } as const;
 const memberIdentity = {
@@ -171,7 +178,7 @@ test("a disabled legal-lists deployment admits neither the feature nor its depen
   );
 });
 
-test("the database scope and the request snapshot make the same decision", async () => {
+test("the database scope and the request snapshot make the same invitation decisions", async () => {
   for (const mode of [RUNTIME_MODE.strict, RUNTIME_MODE.open]) {
     for (const legalLists of [false, true]) {
       for (const featureIds of GRANT_SETS) {
@@ -182,8 +189,13 @@ test("the database scope and the request snapshot make the same decision", async
             identity: memberIdentity,
             enrolments: [],
           });
+          // A snapshot-less scope decides invitation features only.
           const snapshotEnabled = [...snapshot.decisions]
-            .filter(([, decision]) => decision.status === "enabled")
+            .filter(
+              ([featureId, decision]) =>
+                decision.status === "enabled" &&
+                INVITATION_FEATURE_IDS.has(featureId),
+            )
             .map(([featureId]) => featureId);
           const scoped = await resolveForMember();
           expect(scoped).toEqual(snapshotEnabled);
@@ -271,6 +283,15 @@ test("request transactions reuse their authenticated feature snapshot", async ()
       expect(featureAccessSnapshot.decisions.get("time-billing")?.status).toBe(
         "enabled",
       );
+      // The request scope installs every enabled decision of its snapshot,
+      // self-serve and generally available ones included.
+      const snapshotEnabled = JSON.stringify(
+        [...featureAccessSnapshot.decisions]
+          .filter(([, decision]) => decision.status === "enabled")
+          .map(([featureId]) => featureId),
+      );
+      expect(snapshotEnabled).toContain(LEGAL_LISTS_FEATURE_ID);
+      expect(snapshotEnabled).toContain("time-billing");
       const dialect = new PgDialect();
       let queries = 0;
       const tx = {
@@ -287,7 +308,7 @@ test("request transactions reuse their authenticated feature snapshot", async ()
             );
           expect(setting).not.toBeNull();
           expect(rendered.params.at(Number(setting?.at(1)) - 1)).toBe(
-            JSON.stringify([LEGAL_LISTS_FEATURE_ID, "time-billing"]),
+            snapshotEnabled,
           );
           return [];
         },

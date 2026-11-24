@@ -11,6 +11,7 @@ import readOrganizationSettings, {
 } from "@/api/handlers/organization-settings/get";
 import { resolveFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
 import { toSafeId } from "@/api/lib/branded-types";
+import { isFeatureDeployed } from "@/api/lib/feature-access/deployment";
 import { createFeatureAccessSnapshot } from "@/api/lib/feature-access/policy";
 import {
   FEATURE_REGISTRY,
@@ -44,6 +45,24 @@ const unenrolledSettingsDatabase = (email: string) =>
   createScopedDbMock(
     { query: { organizationSettings: { findFirst: async () => undefined } } },
     { featureAccess: { identity: { email, emailVerified: true } } },
+  );
+
+/** A verified member without grants or enrolments: only a deployed,
+ *  generally available feature is enabled. */
+const unenrolledCapabilities = () =>
+  Object.fromEntries(
+    Object.entries(FEATURE_REGISTRY)
+      .filter(([featureId]) => featureId !== LIST_VERIFICATION_FEATURE_ID)
+      .map(([featureId, { enrolment }]) => [
+        featureId,
+        {
+          status:
+            enrolment === "general-availability" &&
+            isFeatureDeployed(FEATURE_REGISTRY, featureId)
+              ? "enabled"
+              : "hidden",
+        },
+      ]),
   );
 
 describe("projectOrganizationSettingsRow", () => {
@@ -192,7 +211,7 @@ test("organization settings expose registry-derived enabled or hidden statuses w
   }
 });
 
-test("organization settings derive capabilities from the production registry, hidden without an enrolment", async () => {
+test("organization settings derive capabilities from the production registry, only generally available ones without an enrolment", async () => {
   const database = unenrolledSettingsDatabase("standard@example.test");
   const result = await readOrganizationSettings.handler(
     createTestHandlerContext<
@@ -203,13 +222,7 @@ test("organization settings derive capabilities from the production registry, hi
       scopedDb: database.scopedDb,
     }),
   );
-  expect(result).toMatchObject({
-    capabilities: Object.fromEntries(
-      Object.keys(FEATURE_REGISTRY)
-        .filter((featureId) => featureId !== LIST_VERIFICATION_FEATURE_ID)
-        .map((featureId) => [featureId, { status: "hidden" }]),
-    ),
-  });
+  expect(result).toMatchObject({ capabilities: unenrolledCapabilities() });
 });
 
 test("organization settings recompute a supplied snapshot when the user or active organization changes", async () => {
@@ -254,13 +267,7 @@ test("organization settings recompute a supplied snapshot when the user or activ
         user: { id: toSafeId<"user">(principal.userId) },
       }),
     );
-    expect(result).toMatchObject({
-      capabilities: Object.fromEntries(
-        Object.keys(FEATURE_REGISTRY)
-          .filter((featureId) => featureId !== LIST_VERIFICATION_FEATURE_ID)
-          .map((featureId) => [featureId, { status: "hidden" }]),
-      ),
-    });
+    expect(result).toMatchObject({ capabilities: unenrolledCapabilities() });
     expect(result).not.toHaveProperty("capabilities.fixture-invitation");
   }
 });
