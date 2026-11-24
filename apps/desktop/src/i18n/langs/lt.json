@@ -456,7 +456,7 @@
     "searchOptions": "Paieškos parinktys",
     "searchOptionsReset": "Atkurti paieškos parinktis",
     "searchPlaceholder": "Ieškoti iškarpinės istorijoje",
-    "selectionCount": "{count, plural, one {# pažymėta iškarpa} few {# pažymėtos iškarpos} many {# pažymėtos iškarpos} other {# pažymėtų iškarpų}}",
+    "selectionCount": "{count, plural, one {# pažymėta iškarpa} few {# pažymėtos iškarpos} other {# pažymėtų iškarpų}}",
     "showInRecordings": "Rodyti įrašuose",
     "strikethrough": "Perbrauktas",
     "timeline": "Iškarpinės laiko juosta",

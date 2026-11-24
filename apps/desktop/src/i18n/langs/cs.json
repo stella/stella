@@ -456,7 +456,7 @@
     "searchOptions": "Možnosti hledání",
     "searchOptionsReset": "Obnovit možnosti hledání",
     "searchPlaceholder": "Hledat v historii schránky",
-    "selectionCount": "{count, plural, one {# vybraný klip} few {# vybrané klipy} many {# vybraného klipu} other {# vybraných klipů}}",
+    "selectionCount": "{count, plural, one {# vybraný klip} few {# vybrané klipy} other {# vybraných klipů}}",
     "showInRecordings": "Zobrazit v nahrávkách",
     "strikethrough": "Přeškrtnuté",
     "timeline": "Časová osa schránky",
