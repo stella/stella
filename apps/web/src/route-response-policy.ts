@@ -132,7 +132,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/invoice-link": "private-no-store",
   "/consent": "private-no-store",
   "/dev": "private-no-store",
-  "/robots.txt": "private-no-store",
+  "/robots.txt": "public-anonymous",
   "/sitemap.xml": "public-anonymous",
   "/chat": "private-no-store",
   "/settings": "private-no-store",
