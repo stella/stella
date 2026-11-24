@@ -93,7 +93,7 @@ import { readerAnnotationKeys } from "@/components/legal-reader/annotations/read
 import { useProxiedIconSrc } from "@/components/proxied-icon";
 import {
   BROWSER_APPROVAL_MODE,
-  browserCommandSite,
+  browserCommandSites,
   currentBrowserAutoApproval,
   recordBrowserSiteGrantApproval,
   setBrowserApprovalMode,
@@ -439,9 +439,9 @@ export const PendingToolApprovalCard = ({
 };
 
 /**
- * How a browser command card relates to website approvals: the website its
- * command acts on or moves to (by exact origin), whether the reads mode or a
- * website approval may answer it, and the user's stored approvals. Like a
+ * How a browser command card relates to website approvals: the website the
+ * card names (by exact origin), whether the reads mode or a website approval
+ * may answer it, and the user's stored approvals. Like a
  * stored tool grant, a website approval the API did not confirm (`unconfirmed`)
  * answers nothing.
  */
@@ -458,10 +458,12 @@ const useBrowserCardApproval = ({
     grantedOrigins: sites.grantedOrigins,
   });
   const observedPage = useBrowserObservedPage();
-  const site =
+  // The offer follows the website the card names; whether an approval
+  // answers the command is decided on the proven one (`autoApproval`).
+  const shownSite =
     browserCommand === null
       ? null
-      : browserCommandSite({ command: browserCommand, observedPage });
+      : browserCommandSites({ command: browserCommand, observedPage }).shown;
   const siteGrantOrigin =
     autoApproval.type === "site-grant" && !unconfirmed
       ? autoApproval.origin
@@ -493,12 +495,17 @@ const useBrowserCardApproval = ({
       );
     },
     isReadsAutoApproval: autoApproval.type === "reads-mode",
-    /** The site the card offers to always allow: known, and not yet allowed. */
+    /**
+     * The site the card offers to always allow: the one it names, when known
+     * and not yet allowed.
+     */
     offeredSite:
-      site !== null && sites.canGrant && !sites.grantedOrigins.has(site)
-        ? site
+      shownSite !== null &&
+      sites.canGrant &&
+      !sites.grantedOrigins.has(shownSite)
+        ? shownSite
         : null,
-    site,
+    shownSite,
     siteGrantOrigin,
     sites,
   };
@@ -773,7 +780,7 @@ export const ToolApprovalCard = ({
 
       <ToolApprovalSummary
         activeFileName={activeFileName}
-        browserSite={browserApproval.site}
+        browserSite={browserApproval.shownSite}
         externalInput={showsExternalInput ? externalInput : undefined}
         isAwaitingDecision={isAwaitingDecision}
         part={part}
