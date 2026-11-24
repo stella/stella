@@ -6624,6 +6624,7 @@ jobs:
           bash packages/scan-engine/scripts/test-wasm-offline.sh
           bash packages/heic-decoder/scripts/test-wasm-offline.sh
           bash packages/pst-reader/scripts/test-wasm-offline.sh
+          bash packages/recording-wasm/scripts/test-wasm-offline.sh
 
       - name: Record fresh WebAssembly checksums
         if: failure() && steps.wasm-check.outcome == 'failure'
@@ -6642,6 +6643,7 @@ jobs:
             ${{ runner.temp }}/scan-engine-wasm/
             ${{ runner.temp }}/heic-decoder-wasm/
             ${{ runner.temp }}/pst-reader-wasm/
+            ${{ runner.temp }}/recording-wasm/
             ${{ runner.temp }}/scan-engine-wasm.sha256
             ${{ runner.temp }}/scan-engine-wasm.toolchain
           retention-days: 7
@@ -6658,10 +6660,10 @@ jobs:
         timeout-minutes: 10
         env:
           CARGO_NET_RETRY: "5"
-        run: for p in scan-engine heic-decoder pst-reader; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
+        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do bash .github/actions/cargo-deny/fetch.sh packages/$p/Cargo.toml; done
 
       - name: License audit
-        run: for p in scan-engine heic-decoder pst-reader; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
+        run: for p in scan-engine heic-decoder pst-reader recording-wasm; do cargo deny --offline --manifest-path packages/$p/Cargo.toml check --config packages/$p/deny.toml --hide-inclusion-graph bans licenses sources; done
 
       - name: Save Rust build cache
         if: success()

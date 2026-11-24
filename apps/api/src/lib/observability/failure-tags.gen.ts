@@ -440,6 +440,7 @@ export const FAILURE_TAGS = [
   "ReaderAnswerCorpusError",
   "ReaderProvisionSpanMismatchError",
   "ReconciliationPayloadSerializationError",
+  "RecordingRefusedError",
   "RedirectChainError",
   "RedisClientClosedError",
   "RedisConfigurationError",

@@ -1,0 +1,31 @@
+{
+  "name": "@stll/recording-wasm",
+  "version": "0.0.0",
+  "private": true,
+  "description": "The desktop's recording reader as WebAssembly: format detection, decoding, 16 kHz mono and pieces cut at pauses, for server-side transcription",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/recording.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf target .cache .turbo node_modules",
+    "test": "bun run test:bun && bash ../../scripts/cargo-test.sh",
+    "test:bun": "bun test src",
+    "typecheck": "bun check --no-pretty --all --project=tsconfig.json",
+    "lint": "cd ../.. && bun scripts/lint.ts packages/recording-wasm",
+    "lint:fix": "cd ../.. && bun scripts/lint.ts --fix packages/recording-wasm",
+    "format:rust": "cargo fmt",
+    "build:wasm": "bash scripts/build-wasm.sh",
+    "build:wasm:container": "bash scripts/build-wasm-container.sh",
+    "check:wasm": "bun --preload ../../scripts/offline-network-preload.ts scripts/check-wasm.ts"
+  },
+  "dependencies": {
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:"
+  }
+}
