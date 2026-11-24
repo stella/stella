@@ -787,3 +787,40 @@ describe("the app's transcriptions", () => {
     },
   );
 });
+
+describe("the app's dictation choices", () => {
+  /**
+   * The modules that may read the choices with the defaults in place of
+   * unreadable ones: where they are kept, and Settings, which only shows
+   * and changes them. A dictation reads `readDictationChoice`, which fails
+   * rather than guess, so an unreadable choice never sends a recording to
+   * the default model.
+   */
+  const SHOWERS = new Set([
+    path.join("state", "dictation-preferences.ts"),
+    path.join("components", "dictation-setting.tsx"),
+  ]);
+
+  const guesses = (source: string): string[] =>
+    source.match(
+      /\b(?:readDictationPreferences|DEFAULT_DICTATION_PREFERENCES)\b/gu,
+    ) ?? [];
+
+  test("finds the modules that may show the defaults, and the scan sees what it forbids elsewhere", () => {
+    for (const name of SHOWERS) {
+      expect(appModules).toContain(name);
+      expect(
+        guesses(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).not.toEqual([]);
+    }
+  });
+
+  test.each(appModules.filter((name) => !SHOWERS.has(name)))(
+    "%s reads the choices only through readDictationChoice",
+    (name) => {
+      expect(
+        guesses(readFileSync(path.join(SOURCE_ROOT, name), "utf-8")),
+      ).toEqual([]);
+    },
+  );
+});
