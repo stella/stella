@@ -123,7 +123,6 @@ export const skillMonitorScalingScenarios = [
           createTestHandlerContext<
             Parameters<typeof getSkillMonitor.handler>[0]
           >({
-            memberRole: "owner",
             params: { skillId: fixture.skillId },
             query: { days: 7 },
             request: new Request(
@@ -136,11 +135,14 @@ export const skillMonitorScalingScenarios = [
             user: { email: fixture.email, id: fixture.userId },
           }),
         );
-        if (isHttpStatusResponse(response) || response.daily.length !== 7) {
+        if (
+          isHttpStatusResponse(response) ||
+          response.dailyTrend.length !== 7
+        ) {
           panic("Skill monitor scaling requires a 7-day summary response");
         }
         return {
-          rows: response.daily.length,
+          rows: response.dailyTrend.length,
           responseBytes: Buffer.byteLength(JSON.stringify(response)),
           statements: counter.count,
           transactionRoundTrips: counter.transactions,
