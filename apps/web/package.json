@@ -183,7 +183,6 @@
     "use-intl": "catalog:",
     "uuid": "^14.0.3",
     "valibot": "catalog:",
-    "y-prosemirror": "catalog:",
     "y-protocols": "catalog:",
     "yjs": "catalog:",
     "zod": "^4.6.6",

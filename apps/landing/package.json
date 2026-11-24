@@ -64,7 +64,6 @@
     "tailwindcss": "catalog:",
     "use-debounce": "^10.1.1",
     "use-intl": "catalog:",
-    "y-prosemirror": "catalog:",
     "y-protocols": "catalog:",
     "yjs": "catalog:"
   },

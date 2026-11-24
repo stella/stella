@@ -28,7 +28,6 @@
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "use-intl": "catalog:",
-    "y-prosemirror": "catalog:",
     "y-protocols": "catalog:",
     "yjs": "catalog:"
   },

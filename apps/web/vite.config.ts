@@ -769,7 +769,6 @@ export default defineConfig(({ mode, command }) => {
         "@tiptap/extension-list",
         "diff",
         "pele/lazy",
-        "y-prosemirror",
         "yjs",
       ],
       // @stll/*-wasm packages and @silurus/ooxml load their .wasm binaries via
