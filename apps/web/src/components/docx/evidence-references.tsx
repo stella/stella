@@ -7,6 +7,7 @@ import { Result, TaggedError } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import type { FolioFieldInsertion } from "@stll/folio-react";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -32,7 +33,7 @@ import { entitiesWindowOptions } from "@/lib/workspaces/queries/entities";
 
 import {
   collectEvidenceReferences,
-  createEvidenceField,
+  evidenceFieldInsertion,
   evidenceLabel,
 } from "./evidence-reference";
 import type { EvidenceReference } from "./evidence-reference";
@@ -87,6 +88,8 @@ type EvidenceReferencesDialogProps = {
   editable: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Inserts a field in place of the editor selection. */
+  insertField: (field: FolioFieldInsertion) => boolean;
 };
 
 export const EvidenceReferencesDialog = ({
@@ -99,6 +102,7 @@ export const EvidenceReferencesDialog = ({
   editable,
   open,
   onOpenChange,
+  insertField,
 }: EvidenceReferencesDialogProps) => {
   const t = useTranslations();
 
@@ -173,6 +177,7 @@ export const EvidenceReferencesDialog = ({
             <EvidenceFilePicker
               entityId={entityId}
               fieldId={fieldId}
+              insertField={insertField}
               onInserted={() => onOpenChange(false)}
               view={view}
               workspaceId={workspaceId}
@@ -188,11 +193,16 @@ class EvidenceSourceUnavailableError extends TaggedError(
   "EvidenceSourceUnavailableError",
 )<{ message: string }> {}
 
+class EvidenceInsertRefusedError extends TaggedError(
+  "EvidenceInsertRefusedError",
+)<{ message: string }> {}
+
 type EvidenceFilePickerProps = {
   workspaceId: string;
   entityId: string;
   fieldId: string;
   view: EditorView;
+  insertField: (field: FolioFieldInsertion) => boolean;
   onInserted: () => void;
 };
 
@@ -201,6 +211,7 @@ const EvidenceFilePicker = ({
   entityId,
   fieldId: currentFieldId,
   view,
+  insertField,
   onInserted,
 }: EvidenceFilePickerProps) => {
   const t = useTranslations();
@@ -302,14 +313,14 @@ const EvidenceFilePicker = ({
       ) {
         return;
       }
-      view.dispatch(
-        view.state.tr
-          .replaceSelectionWith(
-            createEvidenceField(view.state.schema, result.value),
-            false,
-          )
-          .scrollIntoView(),
-      );
+      if (!insertField(evidenceFieldInsertion(result.value))) {
+        reportInsertError(
+          new EvidenceInsertRefusedError({
+            message: "The editor did not insert the evidence reference",
+          }),
+        );
+        return;
+      }
       onInserted();
       view.focus();
     },

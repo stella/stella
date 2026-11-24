@@ -187,11 +187,27 @@ fn main() {
     panel.makeKeyAndOrderFront(None);
     assert!(panel.isKeyWindow());
 
+    let deactivations = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let observed = Arc::clone(&deactivations);
+    observe_panel_deactivation(move || {
+      observed.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    });
+
     // Clicking outside transfers key status and invokes the panel override.
     panel.resignKeyWindow();
 
     assert_eq!(panel.alphaValue(), 0.0);
     assert!(panel.ignoresMouseEvents());
+    assert_eq!(deactivations.load(std::sync::atomic::Ordering::SeqCst), 1);
+
+    // A park the app requested marks the panel parked before key status
+    // moves, so the resign that follows is not an outside click.
+    panel.setAlphaValue(1.0);
+    panel.setIgnoresMouseEvents(false);
+    panel.makeKeyAndOrderFront(None);
+    set_panel_parked(&panel);
+    panel.resignKeyWindow();
+    assert_eq!(deactivations.load(std::sync::atomic::Ordering::SeqCst), 1);
 
     // Presenting the parked panel keeps the webview as first responder: the
     // content-view visibility cycle that resumes WebKit's commits makes AppKit
@@ -229,6 +245,9 @@ fn main() {
         &***webview,
       ));
     }
+
+    // Each park above gave up key status on the app's request.
+    assert_eq!(deactivations.load(std::sync::atomic::Ordering::SeqCst), 1);
 
     // The editor is an ordinary window that activates the app: WebKit draws
     // the caret and focus ring only in the active app's key window, and a

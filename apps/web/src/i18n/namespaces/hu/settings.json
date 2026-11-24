@@ -257,6 +257,8 @@
     },
     "members": {
       "billingAccess": "Számlázási adatok megtekintése",
+      "billingAccessDescription": "Lehetővé teszi az óradíjak, összegek és számlák megtekintését azoknál az ügyeknél, amelyekhez a tag hozzáfér. A tulajdonosok és az adminisztrátorok mindig rendelkeznek ezzel a hozzáféréssel.",
+      "billingAccessIncludedInRole": "A szerepkör tartalmazza",
       "changeRole": "Szerepkör módosítása",
       "confirmRoleChangeDescription": "{email} szerepköre {oldRole, select, owner {tulajdonosról} admin {adminisztrátorról} member {tagról} intern {gyakornokról} external {külső együttműködőről} other {}} {newRole, select, owner {tulajdonosra} admin {adminisztrátorra} member {tagra} intern {gyakornokra} external {külső együttműködőre} other {}} módosul.",
       "confirmRoleChangeTitle": "Szerepkör módosítása",
@@ -780,8 +782,10 @@
         "title": "Szervezet rövid neve"
       },
       "sso": {
+        "acsUrlLabel": "ACS URL-cím",
         "addDomain": "Domain hozzáadása",
         "addProvider": "OIDC szolgáltató hozzáadása",
+        "addSamlProvider": "SAML 2.0 szolgáltató hozzáadása",
         "callbackUrlLabel": "Visszahívási URL",
         "clientIdLabel": "Ügyfél-azonosító",
         "clientSecretLabel": "Client Secret",
@@ -809,6 +813,10 @@
         "providersTitle": "Identitásszolgáltatók",
         "requireSsoDescription": "Bekapcsolás esetén a tagoknak a szervezet egyik identitásszolgáltatóján keresztül kell bejelentkezniük.",
         "requireSsoTitle": "SSO kötelezővé tétele a szervezetben",
+        "samlCertLabel": "IdP X.509 aláíró tanúsítvány (PEM)",
+        "samlEntityIdLabel": "IdP kibocsátó URI",
+        "samlEntryPointLabel": "IdP SSO URL (belépési pont)",
+        "spMetadataUrlLabel": "SP metaadat URL-cím",
         "testDiscovery": "Discovery tesztelése",
         "title": "Egyszeri bejelentkezés (SSO)",
         "verifyDomain": "Ellenőrzés most"

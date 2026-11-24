@@ -454,6 +454,7 @@ export const TAGGED_FAILURE_REASON = {
   ReaderAnswerCorpusError: "tagged_failure",
   ReaderProvisionSpanMismatchError: "tagged_failure",
   ReconciliationPayloadSerializationError: "tagged_failure",
+  RecordingRefusedError: "request_invalid",
   RedirectChainError: "tagged_failure",
   RedisClientClosedError: "tagged_failure",
   RedisConfigurationError: "tagged_failure",

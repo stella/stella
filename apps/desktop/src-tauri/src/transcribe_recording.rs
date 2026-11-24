@@ -1461,10 +1461,15 @@ pub async fn transcribe_search_matters(
   matters
 }
 
-/// Opens the window, from the tray or the Settings window.
+/// Opens the window, from the tray, the Settings window or the clipboard
+/// window.
 #[tauri::command]
-pub fn transcribe_open(app: AppHandle) -> Result<(), String> {
+pub fn transcribe_open(
+  app: AppHandle,
+  window: tauri::WebviewWindow,
+) -> Result<(), String> {
   require_available(&app)?;
+  crate::clipboard_window::hand_off(&window);
   crate::transcribe_window::show(&app);
   Ok(())
 }

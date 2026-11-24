@@ -14,8 +14,6 @@ const SRC = path.resolve(import.meta.dir, "..");
 const UNGUARDED_CREATE_FORMS: Record<string, string> = {
   "components/workspaces/create-matter-dialog.tsx":
     "rewritten in the open new-matter change; it adopts the guard there",
-  "features/command-palette/components/upload-document-dialog.tsx":
-    "a file chooser hands over one selection per event; uploads track their own batches",
 };
 
 const CREATE_HOOK_DEFINITION =

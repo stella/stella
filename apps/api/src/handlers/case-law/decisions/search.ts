@@ -3081,9 +3081,13 @@ const readCaseLawSearchFacets = async ({
   recordCacheOutcome,
   timeDbRead,
   totalQuery,
-}: ReadCaseLawSearchFacetsOptions): Promise<CaseLawSearchFacetsRead | null> => {
+}: ReadCaseLawSearchFacetsOptions): Promise<
+  | { status: "available"; read: CaseLawSearchFacetsRead }
+  | { status: "skipped" }
+  | { status: "unavailable" }
+> => {
   if (queryFor === null || !aggregationsApplyEveryFilter(body)) {
-    return null;
+    return { status: "skipped" };
   }
   // Read ahead of the aggregations, and failing closed: source policy is an
   // input to every count below, so a revocation this read cannot confirm means
@@ -3100,7 +3104,7 @@ const readCaseLawSearchFacets = async ({
       reason: "facets_unavailable",
       count: 1,
     });
-    return null;
+    return { status: "unavailable" };
   }
 
   const aggregates = caseLawFacetAggregateCache.reader({
@@ -3140,7 +3144,7 @@ const readCaseLawSearchFacets = async ({
       reason: "facets_unavailable",
       count: 1,
     });
-    return null;
+    return { status: "unavailable" };
   }
 
   const { court, decisionType, language, source, year } = read.value.facets;
@@ -3184,26 +3188,29 @@ const readCaseLawSearchFacets = async ({
     courtWeights,
   });
   return {
-    facets:
-      body.facets?.length === 0
-        ? null
-        : {
-            court: courtFacets,
-            courtYear,
-            year,
-            decisionType: foldStatedDecisionTypeBuckets(decisionType),
-            source: labelSourceBuckets(
-              source.map(({ value, label, count }) => ({
-                value,
-                label,
-                count,
-                countType: FACET_COUNT_TYPE.ESTIMATE,
-              })),
-              registry.value.nameById,
-            ),
-            language,
-          },
-    total: countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, read.value.total),
+    status: "available",
+    read: {
+      facets:
+        body.facets?.length === 0
+          ? null
+          : {
+              court: courtFacets,
+              courtYear,
+              year,
+              decisionType: foldStatedDecisionTypeBuckets(decisionType),
+              source: labelSourceBuckets(
+                source.map(({ value, label, count }) => ({
+                  value,
+                  label,
+                  count,
+                  countType: FACET_COUNT_TYPE.ESTIMATE,
+                })),
+                registry.value.nameById,
+              ),
+              language,
+            },
+      total: countedSearchTotal(SEARCH_TOTAL_TYPE.ESTIMATE, read.value.total),
+    },
   };
 };
 
@@ -4057,10 +4064,10 @@ export const searchCorpusIndexDecisions = async (
         timeDbRead: async (run) =>
           await dbTimer.time(CASE_LAW_SEARCH_DB_READ.sourceRegistry, run),
         totalQuery: reads.totalQuery,
-      }).then((read) => {
+      }).then((outcome) => {
         facetMs = performance.now() - concurrentStartedAt;
         trace.facetMs = facetMs;
-        return read;
+        return outcome.status === "available" ? outcome.read : null;
       })
     : null;
   const [searchPage, facetsAndTotal] = await Promise.all([pageRead, facetRead]);

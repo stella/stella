@@ -87,6 +87,7 @@ import type {
 import { downloadFile } from "@/lib/utils";
 import { useUpdateView } from "@/lib/workspaces/mutations/views";
 import { usePropertyDisplayName } from "@/lib/workspaces/property-display-name";
+import { workspaceOptions } from "@/lib/workspaces/queries";
 import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
@@ -916,6 +917,7 @@ const FilesystemOrganizerAction = ({
   const filesData =
     filesDataView.type === "items" ? filesDataView.items : undefined;
   const allFiles = normalizeOptionalArray(filesData);
+  const workspaceView = queryView(useQuery(workspaceOptions(workspaceId)));
 
   const existingFolders = (() => {
     const folderById = new Map(
@@ -1024,6 +1026,10 @@ const FilesystemOrganizerAction = ({
         files={organizerFiles}
         onOpenChange={setOpen}
         open={open}
+        suggestMatter={
+          workspaceView.type === "items" &&
+          workspaceView.items.clientId === null
+        }
         workspaceId={workspaceId}
       />
     </>

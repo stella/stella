@@ -2407,6 +2407,10 @@
       "reason": "New SSO OIDC provider registration route; pending write scaling harness coverage."
     },
     {
+      "id": "POST /v1/organization-settings/sso/providers/saml",
+      "reason": "New SSO SAML provider registration route; pending write scaling harness coverage."
+    },
+    {
       "id": "POST /v1/organization-settings/sso/providers/test",
       "reason": "New SSO OIDC discovery test route; pending write scaling harness coverage."
     },

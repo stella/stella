@@ -15,7 +15,12 @@ import {
   LEGISLATION_AMENDMENT_CHANGE_KINDS,
   LEGISLATION_AMENDMENT_EFFECTIVE_TYPES,
 } from "@/api/lib/legal-search/legislation-ingestion-types";
-import type { LegislationAmendmentCoverage } from "@/api/lib/legal-search/legislation-ingestion-types";
+import type {
+  LegislationAmendmentChannelObservation,
+  LegislationAmendmentChannelSnapshot,
+  LegislationAmendmentResolvedEffect,
+  LegislationAmendmentStoredCoverage,
+} from "@/api/lib/legal-search/legislation-ingestion-types";
 import { redistributableLegislationSourceFor } from "@/api/lib/legal-search/legislation-redistribution-sql";
 import {
   legislationVersionRef,
@@ -890,7 +895,10 @@ export const legislationAmendmentSnapshots = p.pgTable(
     targetEli: p.varchar("target_eli", { length: 512 }).notNull(),
     language: p.varchar({ length: 16 }).notNull(),
     observedAt: timestamptz("observed_at").notNull(),
-    coverage: jsonb().$type<LegislationAmendmentCoverage>().notNull(),
+    coverage: jsonb().$type<LegislationAmendmentStoredCoverage>().notNull(),
+    /** Independent channel watermarks; omitted by writers predating channels. */
+    channelSnapshots:
+      jsonb("channel_snapshots").$type<LegislationAmendmentChannelSnapshot[]>(),
   },
   (t) => [
     p.primaryKey({
@@ -931,6 +939,11 @@ export const legislationAmendments = p.pgTable(
       .notNull(),
     effectiveDate: p.date("effective_date"),
     effectiveText: p.text("effective_text"),
+    /** Resolved publisher effect; compatibility date columns contain actual dates only. */
+    effectDetails:
+      jsonb("effect_details").$type<LegislationAmendmentResolvedEffect>(),
+    /** Latest source contributions, retained separately by publisher channel. */
+    observations: jsonb().$type<LegislationAmendmentChannelObservation[]>(),
     publisherInstruction: p.text("publisher_instruction"),
   },
   (t) => [
@@ -955,6 +968,15 @@ export const legislationAmendments = p.pgTable(
     p.check(
       "legislation_amendments_identity",
       sql`${t.publisherId} <> '' AND ${t.amendingEli} <> '' AND ${t.affectedAnchor} <> ''`,
+    ),
+    p.check(
+      "legislation_amendments_effect_projection",
+      sql`${t.effectDetails} IS NULL OR COALESCE(CASE ${t.effectDetails}->>'type'
+        WHEN 'date' THEN ${t.effectiveDate} IS NOT NULL AND ${t.effectiveDate}::text = ${t.effectDetails}->>'on'
+        WHEN 'conditional' THEN ${t.effectiveDate}::text IS NOT DISTINCT FROM ${t.effectDetails}->>'actualDate'
+        WHEN 'not-stated' THEN ${t.effectiveDate} IS NULL
+        WHEN 'conflicting' THEN ${t.effectiveDate} IS NULL
+        ELSE false END, false)`,
     ),
     ...globalCaseLawPolicies(),
     ...publicLawReaderPolicies(),

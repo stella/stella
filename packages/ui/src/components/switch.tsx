@@ -11,6 +11,7 @@ import {
   SWITCH_ROOT_SIZE_CLASS_NAME,
   type SwitchSize,
 } from "./toggle-classes";
+import { renderTooltipTrigger } from "./tooltip-trigger-helper";
 
 const SWITCH_THUMB_SIZE_CLASS_NAME = {
   default:
@@ -20,28 +21,48 @@ const SWITCH_THUMB_SIZE_CLASS_NAME = {
 
 type SwitchProps = SwitchPrimitive.Root.Props & {
   size?: SwitchSize | undefined;
+  /**
+   * Why the switch cannot be toggled right now, in the reader's terms.
+   * Shown as a tooltip while `disabled` is true.
+   */
+  disabledReason?: React.ReactNode;
 };
 
-const Switch = ({ className, size = "default", ...props }: SwitchProps) => (
-  <SwitchPrimitive.Root
-    className={cn(
-      SWITCH_ROOT_CLASS_NAME,
-      SWITCH_ROOT_SIZE_CLASS_NAME[size],
-      className,
-    )}
-    data-size={size}
-    data-slot="switch"
-    {...props}
-  >
-    <SwitchPrimitive.Thumb
+const Switch = ({
+  className,
+  disabled,
+  disabledReason,
+  size = "default",
+  ...props
+}: SwitchProps) => {
+  const trigger = (
+    <SwitchPrimitive.Root
       className={cn(
-        "bg-background pointer-events-none block rounded-full shadow-xs transition-transform",
-        SWITCH_THUMB_SIZE_CLASS_NAME[size],
+        SWITCH_ROOT_CLASS_NAME,
+        SWITCH_ROOT_SIZE_CLASS_NAME[size],
+        className,
       )}
-      data-slot="switch-thumb"
-    />
-  </SwitchPrimitive.Root>
-);
+      data-size={size}
+      data-slot="switch"
+      disabled={disabled}
+      {...props}
+    >
+      <SwitchPrimitive.Thumb
+        className={cn(
+          "bg-background pointer-events-none block rounded-full shadow-xs transition-transform",
+          SWITCH_THUMB_SIZE_CLASS_NAME[size],
+        )}
+        data-slot="switch-thumb"
+      />
+    </SwitchPrimitive.Root>
+  );
+
+  return renderTooltipTrigger({
+    keepTriggerMounted: disabledReason !== undefined,
+    tooltip: disabled ? disabledReason : undefined,
+    trigger,
+  });
+};
 
 /**
  * A setting row: its label and an optional description at the start, the
@@ -52,6 +73,7 @@ const Switch = ({ className, size = "default", ...props }: SwitchProps) => (
 const SwitchField = ({
   className,
   description,
+  disabledReason,
   label,
   size,
   ...props
@@ -83,6 +105,7 @@ const SwitchField = ({
       </span>
       <Switch
         aria-describedby={description === undefined ? undefined : descriptionId}
+        disabledReason={disabledReason}
         size={size}
         {...props}
       />

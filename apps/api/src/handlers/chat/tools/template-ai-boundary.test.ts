@@ -50,7 +50,12 @@ const recordingCollaborators = (draftSuffix = "") => {
         stub: string;
       }) => {
         sent.push(input);
-        return input.occurrences.map(() => `${input.stub}, as signatory`);
+        return {
+          type: "adapted" as const,
+          renderings: input.occurrences.map(
+            () => `${input.stub}, as signatory`,
+          ),
+        };
       },
       decideAiCondition: async (input: { values: Record<string, unknown> }) => {
         sent.push(input);
@@ -109,7 +114,10 @@ describe("template AI fields in a chat turn", () => {
       type: "drafted",
       value: `Dear ${NAME}, signed.`,
     });
-    expect(anonymized.adapted).toEqual([`${NAME}, as signatory`]);
+    expect(anonymized.adapted).toEqual({
+      type: "adapted",
+      renderings: [`${NAME}, as signatory`],
+    });
     expect([...anonymized.unrestoredFields]).toEqual([]);
   });
 

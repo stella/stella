@@ -854,6 +854,8 @@
       "instructionsEmpty": "Keine eigenen Hinweise",
       "instructionsPlaceholder": "z. B. Deutsche Ordnernamen verwenden, nach Gegenpartei gruppieren, Datum mit Jahr voranstellen.",
       "instructionsTitle": "KI-Hinweise",
+      "newClientHint": "Beim Übernehmen wird ein neuer Kontakt angelegt.",
+      "newMatterFromDocuments": "Neue Akte aus Dokumenten",
       "noChangesToApply": "Es sind keine Dateien oder Ordner zum Organisieren vorhanden.",
       "noFilesToOrganize": "Fügen Sie Dateien zum Organisieren hinzu.",
       "organized": "Dateien organisiert",

@@ -101,6 +101,7 @@ const USER_CREATION_PATH_ORIGINS = new Map([
   [AGENT_IDENTITY_CREATE_USER_PATH, USER_CREATION_ORIGIN.agentProvisioning],
   [REVIEW_ACCOUNT_CREATE_USER_PATH, USER_CREATION_ORIGIN.operatorCommand],
   ["/sso/callback/:providerId", USER_CREATION_ORIGIN.ssoRegistration],
+  ["/sso/saml2/sp/acs/:providerId", USER_CREATION_ORIGIN.ssoRegistration],
 ]);
 
 // Every social provider calls back on `/callback/:id`, every SSO provider on
@@ -109,6 +110,7 @@ const USER_CREATION_PATH_ORIGINS = new Map([
 const CALLBACK_TEMPLATES = [
   { prefix: "/callback/", template: "/callback/:id" },
   { prefix: "/sso/callback/", template: "/sso/callback/:providerId" },
+  { prefix: "/sso/saml2/sp/acs/", template: "/sso/saml2/sp/acs/:providerId" },
 ] as const;
 
 /**

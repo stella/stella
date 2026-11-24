@@ -846,7 +846,7 @@ mechanics, and similar), not gaps in coverage.
 | native_device | 5 |
 | native_tool_ui | 17 |
 | organization_export | 2 |
-| provider_secret | 43 |
+| provider_secret | 44 |
 | public_indexing | 13 |
 | realtime_stream | 10 |
 | search_ui | 23 |

@@ -29,6 +29,7 @@ import {
 } from "@stll/ui/list";
 
 import { QueryViewFeedback } from "@/components/query-view-feedback";
+import { Timestamp } from "@/components/timestamp";
 import {
   SHAREPOINT_ACCESS,
   SHAREPOINT_CONNECTION_STATE,
@@ -43,7 +44,6 @@ import {
 } from "@/features/sharepoint/sharepoint-hooks";
 import type { SharepointConnection } from "@/features/sharepoint/sharepoint-queries";
 import { matchesConnectionQuery } from "@/lib/account/connections.logic";
-import { formatRelativeTime } from "@/lib/relative-time";
 
 type FailedSharepointRead = Extract<SharepointAccessView, { type: "error" }>;
 
@@ -236,9 +236,13 @@ const ConnectionDescription = ({
   if (connection.accountLabel) {
     return <BidiText>{connection.accountLabel}</BidiText>;
   }
-  return t("settings.connections.connectedAgo", {
-    time: formatRelativeTime(connection.createdAt),
-  });
+  return (
+    <Timestamp
+      format="relative"
+      renderLabel={(time) => t("settings.connections.connectedAgo", { time })}
+      value={connection.createdAt}
+    />
+  );
 };
 
 const DisconnectButton = () => {

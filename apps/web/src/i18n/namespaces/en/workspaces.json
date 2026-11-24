@@ -854,6 +854,8 @@
       "instructionsEmpty": "No custom instructions",
       "instructionsPlaceholder": "e.g. Use English folder names, group by counterparty, prefix dates with year.",
       "instructionsTitle": "AI instructions",
+      "newClientHint": "A new contact is created when you apply.",
+      "newMatterFromDocuments": "New matter from documents",
       "noChangesToApply": "There are no files or folders to organize.",
       "noFilesToOrganize": "Add files to organize.",
       "organized": "Files organized",

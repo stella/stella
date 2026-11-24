@@ -854,6 +854,8 @@
       "instructionsEmpty": "Nėra individualių nurodymų",
       "instructionsPlaceholder": "pvz. Naudok lietuviškus aplankų pavadinimus, grupuok pagal priešingą šalį, datas pradėk nuo metų.",
       "instructionsTitle": "DI nurodymai",
+      "newClientHint": "Pritaikius bus sukurtas naujas kontaktas.",
+      "newMatterFromDocuments": "Nauja byla iš dokumentų",
       "noChangesToApply": "Nėra tvarkytinų failų ar aplankų.",
       "noFilesToOrganize": "Pridėkite failų, kuriuos norite sutvarkyti.",
       "organized": "Failai sutvarkyti",

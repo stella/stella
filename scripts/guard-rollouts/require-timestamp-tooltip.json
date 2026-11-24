@@ -1,0 +1,18 @@
+{
+  "id": "require-timestamp-tooltip",
+  "rules": ["require-timestamp-tooltip/require-timestamp-tooltip"],
+  "type": "changed-lines",
+  "expiresAt": "2026-12-01T00:00:00.000Z",
+  "check": [
+    "bun",
+    "--bun",
+    "oxlint",
+    "-c",
+    "oxlint.config.ts",
+    "--allow",
+    "all",
+    "--deny",
+    "require-timestamp-tooltip/require-timestamp-tooltip",
+    "apps/web/src"
+  ]
+}

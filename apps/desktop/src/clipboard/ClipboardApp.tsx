@@ -28,8 +28,6 @@ import { combine } from "@atlaskit/pragmatic-drag-and-drop/utils/combine";
 import { preserveOffsetOnSource } from "@atlaskit/pragmatic-drag-and-drop/utils/preserve-offset-on-source";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/utils/set-custom-native-drag-preview";
 import { invoke } from "@tauri-apps/api/core";
-import { TauriEvent } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { panic } from "better-result";
 import { useFormatter, useLocale, useTranslations } from "use-intl";
 
@@ -79,6 +77,7 @@ import {
   TagsIcon,
   Trash2Icon,
   VideoIcon,
+  WavesIcon,
   XIcon,
 } from "@stll/ui/icons";
 import type { LucideIcon } from "@stll/ui/icons";
@@ -128,6 +127,7 @@ import {
   useClipboardShortcut,
   useKeyboardLayout,
 } from "../shared/use-clipboard-shortcut";
+import { useDictationAvailability } from "../shared/use-dictation-availability";
 import {
   describeError,
   DESKTOP_TELEMETRY_ERROR_CODES,
@@ -183,7 +183,10 @@ import type {
   ClipboardSearchOptions,
   ClipboardSearchScope,
 } from "./clipboard-logic";
-import { clipboardHistory } from "./clipboard-selection";
+import {
+  clipboardDismissalCopy,
+  clipboardHistory,
+} from "./clipboard-selection";
 import {
   CLIPBOARD_RETENTION_LABEL_KEYS,
   clipboardGroupDropIndex,
@@ -200,10 +203,12 @@ import {
 import {
   CLIPBOARD_HISTORY_CHANGED_EVENT,
   CLIPBOARD_RETENTIONS,
+  CLIPBOARD_WINDOW_SESSION_EVENT,
   isClipboardCaptureRevision,
   isClipboardCaptureUpdate,
   isClipboardCopyError,
   isClipboardSnapshot,
+  isClipboardWindowSession,
 } from "./clipboard-types";
 import type {
   ClipboardCaptureStatus,
@@ -217,6 +222,7 @@ import type {
   ClipboardSnapshot,
   ClipboardSourceAppExclusion,
   ClipboardSourceAppVisual,
+  ClipboardWindowSession,
 } from "./clipboard-types";
 import { ClipboardCardPreview } from "./ClipboardCardPreview";
 import {
@@ -1660,6 +1666,8 @@ const ClipboardWelcomeDialog = ({
 const ClipboardApp = () => {
   const t = useTranslations("clipboard");
   const locale = useLocale();
+  const tTranscribe = useTranslations("transcribe");
+  const dictationAvailability = useDictationAvailability();
   const railDirection = isUiLocale(locale)
     ? getUiLocaleDirection(locale)
     : "ltr";
@@ -1696,6 +1704,7 @@ const ClipboardApp = () => {
   }, []);
   const railPointerRef = useRef<ClipboardPointerPosition | null>(null);
   const contextMenuTriggerRef = useRef<HTMLElement>(null);
+  const selectionBarRef = useRef<HTMLDivElement>(null);
   const snapshotRequestIdRef = useRef(0);
   const captureUpdatesRef = useRef<ClipboardCaptureUpdate[]>([]);
   const snapshotPendingRef = useRef(false);
@@ -1717,7 +1726,7 @@ const ClipboardApp = () => {
     clipboardHistory,
     {
       snapshot: EMPTY_SNAPSHOT,
-      selection: { ids: [], session: 0 },
+      selection: { ids: [], session: 0, copy: "idle" },
     },
   );
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
@@ -2024,48 +2033,63 @@ const ClipboardApp = () => {
     });
   };
 
-  useEffect(() => {
-    const prepareNextOpen = () => {
-      if (connectionFlowRef.current === "signIn") {
-        return;
-      }
-      if (welcomeOpen) {
-        return;
-      }
-      // The parked panel is painted before its next focus event. Prepare that
-      // frame now, and prevent WebKit from restoring focus to the old card.
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-      railPointerRef.current = null;
-      flushSync(() => {
-        setQuery("");
-        setSearchSource("clips");
-        setSearchComposing(false);
-        setSelectedIndex(0);
-      });
-      timelineRailRef.current?.scrollTo({ behavior: "instant", left: 0 });
-    };
-    const onError = () => {
-      reportDesktopError({
-        code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
-        operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
-        window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
-      });
-      setError({ message: t("errorUpdateHistory"), source: "operation" });
-    };
-    const stopListening = subscribeDesktopEvent({
-      event: TauriEvent.WINDOW_BLUR,
-      handler: prepareNextOpen,
-      options: { target: { kind: "Window", label: getCurrentWindow().label } },
-      onError,
+  const prepareNextOpen = () => {
+    if (connectionFlowRef.current === "signIn") {
+      return;
+    }
+    if (welcomeOpen) {
+      return;
+    }
+    // The parked panel is painted before it opens again. Prepare that frame
+    // now, and prevent WebKit from restoring focus to the old card.
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    railPointerRef.current = null;
+    flushSync(() => {
+      setQuery("");
+      setSearchSource("clips");
+      setSearchComposing(false);
+      setSelectedIndex(0);
     });
-    window.addEventListener("blur", prepareNextOpen);
-    return () => {
-      stopListening();
-      window.removeEventListener("blur", prepareNextOpen);
-    };
-  }, [t, welcomeOpen]);
+    timelineRailRef.current?.scrollTo({ behavior: "instant", left: 0 });
+  };
+
+  const startSession = () => {
+    dispatchClipboard({ type: "sessionStarted" });
+    setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
+    // The pointer may have moved while the window was hidden; the next
+    // pointer move only seeds the position.
+    railPointerRef.current = null;
+    if (connectionFlowRef.current === "signIn") {
+      connectionFlowRef.current = "idle";
+      searchInputRef.current?.focus();
+      return;
+    }
+    if (welcomeOpen) {
+      return;
+    }
+    flushSync(() => {
+      setQuery("");
+      setSearchSource("clips");
+      setSearchComposing(false);
+      setSelectedIndex(0);
+    });
+    const newestItem = filterClipboardItems(
+      snapshot.items,
+      "",
+      activeGroupId,
+    ).at(0);
+    if (newestItem) {
+      revealCard({
+        rail: timelineRailRef.current,
+        id: newestItem.id,
+        focus: true,
+      });
+      return;
+    }
+    timelineRef.current?.focus();
+  };
 
   useEffect(() => {
     const focusActiveCard = () => {
@@ -2079,42 +2103,6 @@ const ClipboardApp = () => {
       }
       timelineRef.current?.focus();
     };
-    const handleWindowFocus = () => {
-      dispatchClipboard({ type: "sessionStarted" });
-      setAgeReferenceTime(Temporal.Now.instant().epochMilliseconds);
-      // The pointer may have moved while the window was hidden; the next
-      // pointer move only seeds the position.
-      railPointerRef.current = null;
-      if (connectionFlowRef.current === "signIn") {
-        connectionFlowRef.current = "idle";
-        searchInputRef.current?.focus();
-        return;
-      }
-      if (welcomeOpen) {
-        return;
-      }
-      flushSync(() => {
-        setQuery("");
-        setSearchSource("clips");
-        setSearchComposing(false);
-        setSelectedIndex(0);
-      });
-      const newestItem = filterClipboardItems(
-        snapshot.items,
-        "",
-        activeGroupId,
-      ).at(0);
-      if (newestItem) {
-        revealCard({
-          rail: timelineRailRef.current,
-          id: newestItem.id,
-          focus: true,
-        });
-        return;
-      }
-      timelineRef.current?.focus();
-    };
-    window.addEventListener("focus", handleWindowFocus);
     // A card other than the active one holds focus when a snapshot landed
     // after an open (a clip copied right before it slid in at the front);
     // focus follows the selection.
@@ -2130,8 +2118,21 @@ const ClipboardApp = () => {
     ) {
       focusActiveCard();
     }
-    return () => window.removeEventListener("focus", handleWindowFocus);
-  }, [activeGroupId, activeItemId, snapshot.items, welcomeOpen]);
+    // Only places focus nobody holds, so the page focus events WebView2 also
+    // fires for focus moves inside the window leave state alone; sessions
+    // follow the native window events below.
+    const placeLostFocus = () => {
+      if (
+        !welcomeOpen &&
+        (document.activeElement === document.body ||
+          document.activeElement === timelineRef.current)
+      ) {
+        focusActiveCard();
+      }
+    };
+    window.addEventListener("focus", placeLostFocus);
+    return () => window.removeEventListener("focus", placeLostFocus);
+  }, [activeItemId, snapshot.items, welcomeOpen]);
 
   const nextGroupColor = nextClipboardGroupColor(snapshot.groups);
   let emptyStateTitle = t("emptyTitle");
@@ -2236,19 +2237,15 @@ const ClipboardApp = () => {
     }
   };
 
-  const copyItem = (
-    item: ClipboardItem,
-    format: ClipboardCopyFormat = "original",
-  ) => {
+  /** A failure stays on screen, or shows on the next open when the window
+   *  already hid. */
+  const trackCopy = (copying: Promise<unknown>, session: number) => {
     setError((current) => (current?.source === "operation" ? null : current));
-    const { ids, session } = selection;
-    const copying =
-      ids.length > 0
-        ? invoke("clipboard_copy_items", { format, ids })
-        : invoke("clipboard_copy_item", { format, id: item.id });
+    dispatchClipboard({ type: "copyStarted", session });
     void copying
       .then(() => dispatchClipboard({ type: "copySucceeded", session }))
       .catch((error: unknown) => {
+        dispatchClipboard({ type: "copyFailed", session });
         // An unrecognised rejection means the clip never left the window.
         const kind = isClipboardCopyError(error) ? error.kind : "copy";
         const feedback = COPY_FAILURE_FEEDBACK[kind];
@@ -2260,6 +2257,107 @@ const ClipboardApp = () => {
         setError({ message: t(feedback.messageKey), source: "operation" });
       });
   };
+
+  const copySelection = (format: ClipboardCopyFormat) => {
+    const { ids, session } = selection;
+    trackCopy(invoke("clipboard_copy_items", { format, ids }), session);
+  };
+
+  const copyItem = (
+    item: ClipboardItem,
+    format: ClipboardCopyFormat = "original",
+  ) => {
+    if (selection.ids.length > 0) {
+      copySelection(format);
+      return;
+    }
+    trackCopy(
+      invoke("clipboard_copy_item", { format, id: item.id }),
+      selection.session,
+    );
+  };
+
+  const clearSelection = () => {
+    // The selection bar unmounts with focus inside it; hand focus back to the
+    // rail so the keyboard keeps working.
+    const focusInBar =
+      selectionBarRef.current?.contains(document.activeElement) ?? false;
+    dispatchClipboard({ type: "clear" });
+    if (!focusInBar) {
+      return;
+    }
+    // The registry scope has no rail to reveal a card in.
+    if (activeItemId && timelineRailRef.current) {
+      revealCard({
+        rail: timelineRailRef.current,
+        id: activeItemId,
+        focus: true,
+      });
+      return;
+    }
+    timelineRef.current?.focus();
+  };
+
+  // Native presentation owns the session. The page also sees focus and blur
+  // for focus moves inside the window (WebView2), which must neither clear
+  // nor commit a selection.
+  const handleWindowSession = useEffectEvent(
+    (windowSession: ClipboardWindowSession) => {
+      switch (windowSession.type) {
+        case "opened":
+          startSession();
+          return;
+        case "hidden": {
+          const dismissal = clipboardDismissalCopy(
+            selection,
+            windowSession.reason,
+          );
+          if (dismissal.type === "copySelection") {
+            trackCopy(
+              invoke("clipboard_copy_dismissed_selection", {
+                format: "original",
+                ids: dismissal.ids,
+              }),
+              dismissal.session,
+            );
+          }
+          prepareNextOpen();
+          return;
+        }
+        default: {
+          windowSession satisfies never;
+          panic("Unknown clipboard window session event.");
+        }
+      }
+    },
+  );
+
+  useEffect(
+    () =>
+      subscribeDesktopEvent<unknown>({
+        event: CLIPBOARD_WINDOW_SESSION_EVENT,
+        handler: ({ payload }) => {
+          if (!isClipboardWindowSession(payload)) {
+            reportDesktopError({
+              code: DESKTOP_TELEMETRY_ERROR_CODES.invalidResponse,
+              operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
+              window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+            });
+            return;
+          }
+          handleWindowSession(payload);
+        },
+        onError: () => {
+          reportDesktopError({
+            code: DESKTOP_TELEMETRY_ERROR_CODES.eventSubscriptionFailed,
+            operation: DESKTOP_TELEMETRY_OPERATIONS.clipboardWindowHide,
+            window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+          });
+          setError({ message: t("errorUpdateHistory"), source: "operation" });
+        },
+      }),
+    [t],
+  );
 
   const copyItemFromEnter = (item: ClipboardItem, shiftKey: boolean) => {
     const format = shiftKey && item.type !== "image" ? "plainText" : "original";
@@ -2848,7 +2946,7 @@ const ClipboardApp = () => {
       return;
     }
     if (selection.ids.length > 0) {
-      dispatchClipboard({ type: "clear" });
+      clearSelection();
       return;
     }
     requestHide();
@@ -2898,6 +2996,10 @@ const ClipboardApp = () => {
     ? "paused"
     : "active";
   const captureActionLabel = captureActive ? t("pause") : t("resume");
+  const selectionLabel =
+    selection.ids.length === 0
+      ? null
+      : t("selectionCount", { count: selection.ids.length });
   let persistenceWarningLabel = t("memoryOnly");
   if (snapshot.persistence.status === "deletionOnly") {
     persistenceWarningLabel = t("errorReadHistory");
@@ -3203,6 +3305,32 @@ const ClipboardApp = () => {
                   </TooltipTrigger>
                   <TooltipPopup>Stella</TooltipPopup>
                 </Tooltip>
+                {dictationAvailability === "available" ? (
+                  <Button
+                    aria-label={tTranscribe("title")}
+                    className="size-11 shrink-0 rounded-full"
+                    onClick={() => {
+                      void invoke("transcribe_open").catch((error: unknown) => {
+                        reportDesktopError({
+                          code: DESKTOP_TELEMETRY_ERROR_CODES.invokeFailed,
+                          detail: describeError(error),
+                          operation:
+                            DESKTOP_TELEMETRY_OPERATIONS.clipboardExternalOpen,
+                          window: DESKTOP_TELEMETRY_WINDOWS.clipboard,
+                        });
+                        setError({
+                          message: t("errorOpenTranscribeRecording"),
+                          source: "operation",
+                        });
+                      });
+                    }}
+                    size="icon"
+                    tooltip={tTranscribe("title")}
+                    variant="ghost"
+                  >
+                    <WavesIcon aria-hidden="true" className="size-4" />
+                  </Button>
+                ) : null}
                 {snapshot.captureStatus === "paused" ? (
                   <Button
                     aria-label={t("resume")}
@@ -3393,6 +3521,41 @@ const ClipboardApp = () => {
               </InputGroup>
 
               <div className="flex min-w-0 items-center gap-2">
+                {/* Mounted before any selection exists, so screen readers
+                    announce the first count too. */}
+                <span className="sr-only" role="status">
+                  {selectionLabel}
+                </span>
+                {selectionLabel === null ? null : (
+                  <div
+                    aria-label={selectionLabel}
+                    className="bg-foreground/6 flex shrink-0 items-center gap-0.5 rounded-full ps-3"
+                    data-clipboard-selection-bar=""
+                    ref={selectionBarRef}
+                    role="group"
+                  >
+                    <span
+                      aria-hidden="true"
+                      className="text-xs font-medium whitespace-nowrap tabular-nums"
+                    >
+                      {selectionLabel}
+                    </span>
+                    <Button
+                      className="h-11 rounded-full px-3 text-xs"
+                      onClick={() => copySelection("original")}
+                      variant="ghost"
+                    >
+                      {t("copySelection")}
+                    </Button>
+                    <Button
+                      className="h-11 rounded-full px-3 text-xs"
+                      onClick={clearSelection}
+                      variant="ghost"
+                    >
+                      {t("cancel")}
+                    </Button>
+                  </div>
+                )}
                 {controls}
                 {registryFeedback}
                 <nav

@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import {
   createOrganizationOidcProvider,
+  createOrganizationSamlProvider,
   createOrganizationSsoDomain,
   deleteOrganizationSsoDomain,
   deleteOrganizationSsoProvider,
@@ -32,6 +33,10 @@ import type { TestDatabase } from "@/api/tests/security/test-utils";
 const urls = {
   callbackUrlFor: (providerId: string) =>
     `https://app.example.com/api/auth/sso/callback/${providerId}`,
+  acsUrlFor: (providerId: string) =>
+    `https://app.example.com/api/auth/sso/saml2/sp/acs/${providerId}`,
+  spMetadataUrlFor: (providerId: string) =>
+    `https://app.example.com/api/auth/sso/saml2/sp/metadata?providerId=${providerId}`,
   launchUrlFor: (providerId: string) =>
     `https://app.example.com/auth?sso=${providerId}`,
 };
@@ -314,5 +319,68 @@ describe("sso-management", () => {
     expect(await discoverVerifiedSsoProvidersByDomain(testDb, domain)).toEqual(
       [],
     );
+  });
+
+  test("creates and discovers hardened SAML 2.0 providers with verified domains, ACS, and SP metadata URLs", async () => {
+    const adminId = await insertUser(`${unique("saml")}@saml.example.com`);
+    const orgId = await insertOrg("SAML Org");
+    const domain = `${unique("saml-dom")}.example.com`;
+    const sampleCert =
+      "-----BEGIN CERTIFICATE-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A\n-----END CERTIFICATE-----";
+
+    // Unverified domain is rejected for SAML too.
+    const unverified = await createOrganizationSamlProvider(testDb, {
+      organizationId: orgId,
+      userId: adminId,
+      displayName: "Okta SAML Unverified",
+      issuer: "https://idp.saml.example.com/entity",
+      entryPoint: "https://idp.saml.example.com/sso/saml",
+      cert: sampleCert,
+      domains: [domain],
+      urls,
+    });
+    expect(unverified.isErr()).toBe(true);
+
+    const claim = await createOrganizationSsoDomain(testDb, {
+      organizationId: orgId,
+      createdBy: adminId,
+      domain,
+    });
+    expect(claim.isOk()).toBe(true);
+    if (claim.isOk()) {
+      await recordOrganizationSsoDomainCheck(testDb, {
+        organizationId: orgId,
+        domainId: claim.value.id,
+        verified: true,
+        checkedAt: new Date(clock.now()),
+      });
+    }
+
+    const created = await createOrganizationSamlProvider(testDb, {
+      organizationId: orgId,
+      userId: adminId,
+      displayName: "Okta SAML",
+      issuer: "https://idp.saml.example.com/entity",
+      entryPoint: "https://idp.saml.example.com/sso/saml",
+      cert: sampleCert,
+      domains: [domain],
+      urls,
+    });
+    expect(created.isOk()).toBe(true);
+    if (!created.isOk()) {
+      return;
+    }
+    expect(created.value.protocol).toBe("saml");
+    expect(created.value.acsUrl).toContain("/api/auth/sso/saml2/sp/acs/");
+    expect(created.value.spMetadataUrl).toContain(
+      "/api/auth/sso/saml2/sp/metadata",
+    );
+
+    const discovered = await discoverVerifiedSsoProvidersByDomain(
+      testDb,
+      domain,
+    );
+    expect(discovered).toHaveLength(1);
+    expect(discovered.at(0)?.protocol).toBe("saml");
   });
 });

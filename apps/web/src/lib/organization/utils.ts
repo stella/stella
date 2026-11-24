@@ -1,11 +1,9 @@
-import { Result } from "better-result";
 import * as v from "valibot";
 
 import { ORGANIZATION_NAME_MAX_LENGTH } from "@stll/api-contract/organization-create";
 import { ORGANIZATION_SLUG_RULES } from "@stll/auth-model";
-import { Temporal } from "@stll/time";
 
-import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
+import { getTranslator } from "@/i18n/i18n-store";
 import { requiredTrimmedStringSchema } from "@/lib/schema";
 
 export const getOrganizationSchema = () => {
@@ -32,22 +30,4 @@ export const getOrganizationSchema = () => {
       ),
     ),
   });
-};
-export const formatMemberDate = (date: string | Date, locale?: string) => {
-  const timestamp = Result.try(() => {
-    if (date instanceof Date) {
-      return Temporal.Instant.fromEpochMilliseconds(date.getTime())
-        .epochMilliseconds;
-    }
-    if (/^\d{4}-\d{2}-\d{2}$/u.test(date)) {
-      return Temporal.PlainDate.from(date).toZonedDateTime({
-        plainTime: Temporal.PlainTime.from("00:00"),
-        timeZone: "UTC",
-      }).epochMilliseconds;
-    }
-    return Temporal.Instant.from(date).epochMilliseconds;
-  }).unwrapOr(Number.NaN);
-  return new Intl.DateTimeFormat(locale ?? useI18nStore.getState().lang).format(
-    timestamp,
-  );
 };
