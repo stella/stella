@@ -1516,6 +1516,7 @@
   "chat.browserSignIn.titleWithHost": "Sign in to {host}",
   "chat.cancelQueuedMessage": "Cancel queued message",
   "chat.caseLawGreeting": "Ask about this decision; its full text is available here.",
+  "chat.cellCitationUnavailable": "That cell is no longer available.",
   "chat.chatAbout": "Chat about this",
   "chat.choosePromptImprovementStrategy": "Prompt improvement options",
   "chat.commandsSection": "Commands",

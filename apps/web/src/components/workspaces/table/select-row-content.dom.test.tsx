@@ -324,6 +324,7 @@ const EntityFixture = ({ contentMode, columnLayout }: FixtureProps) => {
           onToggleExpandedCell={() => undefined}
           workspaceId="selection-test"
           activeEntityId={null}
+          activeJustificationFieldId={null}
           activePropertyId={null}
           activeTaskId={null}
           editingEntityId={null}

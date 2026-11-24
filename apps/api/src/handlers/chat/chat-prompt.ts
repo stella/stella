@@ -141,7 +141,10 @@ import type {
   ChatSafePromptLayers,
 } from "@/api/lib/chat/chat-prompt-layers";
 import { buildOrganizationAIInstructionsPrompt } from "@/api/lib/chat/organization-ai-instructions";
-import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import {
+  CHAT_CELL_CITATION_REF_PREFIX,
+  type ChatRefRegistry,
+} from "@/api/lib/chat/ref-registry";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
 import {
@@ -1798,7 +1801,7 @@ const buildWorkspaceContextSections = ({
       )
       .join(", ");
     sections.push(
-      `Extracted properties on this matter (its tabular-review columns): ${propertyList}. EXTRACTED DATA FIRST: when the question is answerable from an extracted property (clause presence, parties, dates, amounts, statuses), read those field values across the matter's documents — read tools return fields keyed by propertyRef — instead of searching document content; the extracted values are the human-reviewed source of truth. Use content search only when no extracted property covers the question.`,
+      `Extracted properties on this matter (its tabular-review columns): ${propertyList}. EXTRACTED DATA FIRST: when the question is answerable from an extracted property (clause presence, parties, dates, amounts, statuses), read those field values across the matter's documents — read tools return fields keyed by propertyRef — instead of searching document content; the extracted values are the human-reviewed source of truth. Use content search only when no extracted property covers the question. CITE THE CELL: when you state an extracted value, link it to its review cell as [Document name · Property name](${CHAT_CELL_CITATION_REF_PREFIX}ent_N:prop_N), with the document's entityRef and the property's propertyRef copied verbatim from the tool output.`,
     );
   }
   return sections;

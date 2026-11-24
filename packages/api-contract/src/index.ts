@@ -178,6 +178,16 @@ export {
 } from "./chat-edit";
 export type { ChatEditApplyMode, DocxEditRepresentation } from "./chat-edit";
 export {
+  CHAT_CELL_CITATION_HREF_PREFIX,
+  parseChatCellCitationHref,
+  replaceChatCellCitationHrefs,
+  toChatCellCitationHref,
+} from "./chat-cell-citation";
+export type {
+  ChatCellCitationHref,
+  ChatCellCitationTarget,
+} from "./chat-cell-citation";
+export {
   CHAT_DECISION_PASSAGE_HREF_PREFIX,
   chatDecisionPassagesIn,
   parseChatDecisionPassageHref,

@@ -1,12 +1,15 @@
 import type React from "react";
 import { Fragment, isValidElement } from "react";
 
-import { useRouter } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
+import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import {
+  type ChatCellCitationTarget,
   type ChatSourceCitationTarget,
   parseCanonicalChatSourceCitationHref,
+  parseChatCellCitationHref,
 } from "@stll/api-contract";
 import { isCaseLawDecisionId } from "@stll/api-contract/case-law-decision-route";
 import {
@@ -15,9 +18,10 @@ import {
 } from "@stll/api-contract/chat-reference-href";
 import { sanitizeHref } from "@stll/decision-reader/sanitize-href";
 import { isFolioBlockId } from "@stll/folio-react";
-import { MailIcon } from "@stll/ui/icons";
+import { MailIcon, TableIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
+import { openCellCitation } from "@/components/chat/cell-citation-open";
 import {
   ChatDecisionCitation,
   ChatRouteDecisionCitation,
@@ -234,6 +238,15 @@ export const StreamdownMentionLink = ({
     );
   }
 
+  const cellCitation = parseChatCellCitationHref(href);
+  if (cellCitation) {
+    return (
+      <CellCitationChip interactive={interactive} target={cellCitation}>
+        {children}
+      </CellCitationChip>
+    );
+  }
+
   if (href.startsWith(FOLIO_BLOCK_PREFIX)) {
     const rawBlockId = href.slice(FOLIO_BLOCK_PREFIX.length);
     // The AI rendered a `#folio:<id>` href into its answer; refuse
@@ -395,6 +408,39 @@ const SourceCitationChip = ({
       truncate
     >
       {visibleText ? children : fallbackLabel}
+    </InlinePill>
+  );
+};
+
+const CellCitationChip = ({
+  children,
+  interactive,
+  target,
+}: {
+  children: React.ReactNode;
+  interactive: boolean;
+  target: ChatCellCitationTarget;
+}) => {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const router = useRouter();
+
+  return (
+    <InlinePill
+      leadingIcon={<TableIcon className="size-3 shrink-0" />}
+      onActivate={
+        interactive
+          ? () => {
+              detached(
+                openCellCitation({ navigate, queryClient, router, target }),
+                "streamdown-mention-link.open-cell-citation",
+              );
+            }
+          : undefined
+      }
+      truncate
+    >
+      {children}
     </InlinePill>
   );
 };

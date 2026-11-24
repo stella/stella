@@ -20,6 +20,7 @@ import {
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
   brandPersistedFieldId,
+  brandPersistedPropertyId,
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import {
@@ -415,4 +416,34 @@ test("handled model-authored refs become inert text without an exception", () =>
   );
   expect(result).toBe("[unknown](#stella-unresolved-ref)");
   expect(analytics.exceptions()).toEqual([]);
+});
+
+test("a cell citation resolves to its canonical link and back", () => {
+  const registry = createChatRefRegistry();
+  const target = entityTarget(0);
+  const propertyId = brandPersistedPropertyId(
+    "01a0df7d-c93a-7105-99f9-c66cf1b14d30",
+  );
+  const cellRef = `${registry.toEntityRef(target)}:${registry.toPropertyRef(propertyId)}`;
+  const canonical = `#stella-cell=${target.workspaceId}:${target.entityId}:${propertyId}`;
+
+  expect(
+    registry.resolveAssistantTextRefs(`[Cap](#stella-cell-ref=${cellRef})`),
+  ).toBe(`[Cap](${canonical})`);
+  expect(registry.hydrateAssistantTextRefs(`[Cap](${canonical})`)).toBe(
+    `[Cap](#stella-cell-ref=${cellRef})`,
+  );
+  // A ref never minted, a canonical link the model wrote itself, or one a
+  // user pasted names nothing this turn showed.
+  for (const text of [
+    "[Cap](#stella-cell-ref=ent_1:prop_9)",
+    `[Cap](${canonical})`,
+  ]) {
+    expect(registry.resolveAssistantTextRefs(text)).toBe(
+      "[Cap](#stella-unresolved-ref)",
+    );
+  }
+  expect(registry.hydrateUserTextRefs(`[Cap](${canonical})`)).toBe(
+    "[Cap](#stella-unresolved-ref)",
+  );
 });

@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Zrušiť správu v poradí",
     "caseLawGreeting": "Spýtajte sa na toto rozhodnutie; plný text je k dispozícii.",
+    "cellCitationUnavailable": "Táto bunka už nie je k dispozícii.",
     "chatAbout": "Vložiť do AI chatu",
     "choosePromptImprovementStrategy": "Možnosti vylepšenia zadania",
     "commandsSection": "Príkazy",

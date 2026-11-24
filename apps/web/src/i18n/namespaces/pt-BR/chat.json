@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Cancelar mensagem na fila",
     "caseLawGreeting": "Pergunte sobre esta decisão; o texto completo está disponível aqui.",
+    "cellCitationUnavailable": "Esta célula não está mais disponível.",
     "chatAbout": "Converse sobre isso",
     "choosePromptImprovementStrategy": "Opções de aprimoramento do prompt",
     "commandsSection": "Comandos",

@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Cancel queued message",
     "caseLawGreeting": "Ask about this decision; its full text is available here.",
+    "cellCitationUnavailable": "That cell is no longer available.",
     "chatAbout": "Chat about this",
     "choosePromptImprovementStrategy": "Prompt improvement options",
     "commandsSection": "Commands",

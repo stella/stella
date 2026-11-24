@@ -7,8 +7,10 @@ import {
   parseCanonicalChatSourceCitationHref,
   replaceCanonicalChatResourceHrefs,
   replaceCanonicalChatSourceCitationHrefs,
+  replaceChatCellCitationHrefs,
   RESOURCE_TYPE,
   resourceRef,
+  toChatCellCitationHref,
   toChatResourceHref,
   toChatSourceCitationHref,
 } from "@stll/api-contract";
@@ -39,6 +41,8 @@ import {
 export const CHAT_ENTITY_REF_PREFIX = "#stella-entity-ref=";
 export const CHAT_WORKSPACE_REF_PREFIX = "#stella-workspace-ref=";
 export const CHAT_SOURCE_CITATION_REF_PREFIX = "#stella-source-ref=";
+/** `<entity ref>:<property ref>`: one tabular-review cell. */
+export const CHAT_CELL_CITATION_REF_PREFIX = "#stella-cell-ref=";
 /**
  * Replacement href for a ref the model cited but this turn never minted — a
  * fabricated or mangled citation. The web renderer shows the link label as
@@ -63,6 +67,9 @@ const ENTITY_REF_LINK_REGEX = createRefLinkRegex(CHAT_ENTITY_REF_PREFIX);
 const WORKSPACE_REF_LINK_REGEX = createRefLinkRegex(CHAT_WORKSPACE_REF_PREFIX);
 const SOURCE_CITATION_REF_LINK_REGEX = createRefLinkRegex(
   CHAT_SOURCE_CITATION_REF_PREFIX,
+);
+const CELL_CITATION_REF_LINK_REGEX = createRefLinkRegex(
+  CHAT_CELL_CITATION_REF_PREFIX,
 );
 
 /**
@@ -640,7 +647,7 @@ export const createChatRefRegistry = (
     `${CHAT_SOURCE_CITATION_REF_PREFIX}${toSourceCitationRef(target)}`;
 
   const reportUnknownAssistantRef = (
-    kind: "source-citation" | "matter" | "entity",
+    kind: "source-citation" | "cell-citation" | "matter" | "entity",
     ref: string,
   ) => {
     reportRefTelemetry({
@@ -677,6 +684,24 @@ export const createChatRefRegistry = (
       text: withoutDirectSourceCitations,
     });
 
+    const withCellCitationRefs = replaceRefLinks({
+      regex: CELL_CITATION_REF_LINK_REGEX,
+      resolve: (ref) => {
+        const [entityRef = "", propertyRef = ""] = ref.split(":");
+        const entity = entityState.refToTarget.get(entityRef);
+        const propertyId = propertyState.refToTarget.get(propertyRef);
+        if (!entity || !propertyId) {
+          reportUnknownAssistantRef("cell-citation", ref);
+          return CHAT_UNRESOLVED_REF_HREF;
+        }
+        return toChatCellCitationHref({ ...entity, propertyId });
+      },
+      text: replaceChatCellCitationHrefs(
+        withSourceCitationRefs,
+        () => CHAT_UNRESOLVED_REF_HREF,
+      ),
+    });
+
     const withWorkspaceRefs = replaceRefLinks({
       regex: WORKSPACE_REF_LINK_REGEX,
       resolve: (ref) => {
@@ -690,7 +715,7 @@ export const createChatRefRegistry = (
           resource: toWorkspaceResource(workspaceId),
         });
       },
-      text: withSourceCitationRefs,
+      text: withCellCitationRefs,
     });
 
     return replaceRefLinks({
@@ -708,12 +733,13 @@ export const createChatRefRegistry = (
   };
 
   const hydrateAssistantTextRefs = (text: string) => {
-    const withSourceCitationRefs = replaceCanonicalChatSourceCitationHrefs(
-      text,
-      toSourceCitationRefHref,
+    const withCitationRefs = replaceChatCellCitationHrefs(
+      replaceCanonicalChatSourceCitationHrefs(text, toSourceCitationRefHref),
+      (cell) =>
+        `${CHAT_CELL_CITATION_REF_PREFIX}${toEntityRef(cell)}:${toPropertyRef(cell.propertyId)}`,
     );
     return replaceCanonicalChatResourceHrefs(
-      withSourceCitationRefs,
+      withCitationRefs,
       ({ href, target }) => {
         switch (target.type) {
           case RESOURCE_TYPE.WORKSPACE:
@@ -745,11 +771,13 @@ export const createChatRefRegistry = (
     // A user may paste a durable source href, but only normalized review
     // output may mint a model-facing source ref. Strip the locator's raw ids
     // while preserving ordinary entity and matter mentions.
-    const withoutUntrustedSourceCitations =
+    const withoutUntrustedSourceCitations = replaceChatCellCitationHrefs(
       replaceCanonicalChatSourceCitationHrefs(
         text,
         () => CHAT_UNRESOLVED_REF_HREF,
-      );
+      ),
+      () => CHAT_UNRESOLVED_REF_HREF,
+    );
     return replaceCanonicalChatResourceHrefs(
       withoutUntrustedSourceCitations,
       ({ href, target }) => {

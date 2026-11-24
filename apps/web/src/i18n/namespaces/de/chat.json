@@ -254,6 +254,7 @@
     },
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stellen Sie Fragen zu dieser Entscheidung; der vollständige Text ist hier verfügbar.",
+    "cellCitationUnavailable": "Diese Zelle ist nicht mehr verfügbar.",
     "chatAbout": "In KI-Chat einfügen",
     "choosePromptImprovementStrategy": "Optionen zur Prompt-Verbesserung",
     "commandsSection": "Befehle",
