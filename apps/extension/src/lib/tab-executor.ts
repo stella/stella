@@ -824,12 +824,14 @@ const readPreflight = async (
     );
   }
   if (handsSignInToMember && isIdentityProviderUrl(tab.url)) {
+    await bringTabToFront(tabId);
     return needsMember();
   }
   // Every frame is checked before any is read: a frame without a sign-in
   // is never read for a tab another frame hands to the member. Each frame
   // checks again as it reads, for a sign-in that appears in between.
   if (handsSignInToMember && (await tabAsksForSignIn(tabId))) {
+    await bringTabToFront(tabId);
     return needsMember();
   }
   const frames = await listReaderFrames(tabId);
@@ -907,11 +909,24 @@ const readSnapshot = async ({
   // A sign-in in any frame, or a top document that turned out to be an
   // identity provider's, is the member's: nothing is returned or stored.
   if (outcome.type !== "window") {
-    return readRefusal(outcome, requiredOrigin);
+    const failure = readRefusal(outcome, requiredOrigin);
+    if (
+      failure.status === "error" &&
+      failure.code === BROWSER_CONTROL_ERROR_CODE.needsMember
+    ) {
+      await bringTabToFront(tabId);
+    }
+    return failure;
   }
   const { window } = outcome;
   const refusal = topDocumentRefusal(window.top, signIn, requiredOrigin);
   if (refusal !== null) {
+    if (
+      refusal.status === "error" &&
+      refusal.code === BROWSER_CONTROL_ERROR_CODE.needsMember
+    ) {
+      await bringTabToFront(tabId);
+    }
     return refusal;
   }
   const url = window.top.url.slice(0, BROWSER_CONTROL_LIMITS.urlChars);
@@ -1196,7 +1211,7 @@ const openControlledTab = async (
   const reused = newTab ? null : existing;
   const tabId =
     reused?.tab.id ??
-    (await chrome.tabs.create({ active: true, url: "about:blank" })).id;
+    (await chrome.tabs.create({ active: false, url: "about:blank" })).id;
   if (tabId === undefined) {
     return { status: "unavailable" };
   }
@@ -1253,8 +1268,7 @@ const openControlledTab = async (
   const navigation = createTabNavigationObserver(tabId);
   try {
     const navigated = await Result.tryPromise(
-      async () =>
-        await chrome.tabs.update(tabId, { active: true, url: url.href }),
+      async () => await chrome.tabs.update(tabId, { url: url.href }),
     );
     if (Result.isError(navigated)) {
       // Chrome refused the navigation, so the page never loaded: a new tab
@@ -1539,42 +1553,17 @@ const runGoBack = async (
   }
 };
 
-/** What the user had in front before a tab was shown, to put back. */
-type Foreground = {
-  /** The window that had focus; null when none did. */
-  focusedWindowId: number | null;
-  /** The tab that was active in the shown tab's window. */
-  tabId: number | null;
+/** Brings a controlled tab to the front only when the member must sign in. */
+const bringTabToFront = async (tabId: number): Promise<void> => {
+  const tab = await chrome.tabs.get(tabId).catch(() => null);
+  if (tab === null) {
+    return;
+  }
+  await chrome.tabs.update(tabId, { active: true }).catch(() => undefined);
+  await chrome.windows
+    .update(tab.windowId, { focused: true })
+    .catch(() => undefined);
 };
-
-/**
- * Makes the tab active in its window and focuses that window, after noting
- * what was in front. Any failure, reading or showing, fails the whole step.
- */
-const showTab = async (tabId: number, windowId: number) =>
-  await Result.tryPromise(async (): Promise<Foreground> => {
-    const [active, focused] = await Promise.all([
-      chrome.tabs.query({ active: true, windowId }),
-      chrome.windows.getLastFocused(),
-    ]);
-    await chrome.tabs.update(tabId, { active: true });
-    await chrome.windows.update(windowId, { focused: true });
-    return {
-      focusedWindowId: focused.focused ? (focused.id ?? null) : null,
-      tabId: active.at(0)?.id ?? null,
-    };
-  });
-
-/** Puts back the tab and window focus `showTab` found. */
-const restoreForeground = async ({ focusedWindowId, tabId }: Foreground) =>
-  await Result.tryPromise(async () => {
-    if (tabId !== null) {
-      await chrome.tabs.update(tabId, { active: true });
-    }
-    if (focusedWindowId !== null) {
-      await chrome.windows.update(focusedWindowId, { focused: true });
-    }
-  });
 
 /** What makes a tab chat's to switch to: who opened it, never a listing. */
 const NOT_A_CHAT_TAB =
@@ -1636,27 +1625,7 @@ const runSwitchTab = async (
     await budget.refund();
     return cancelled();
   }
-  // The user sees the tab chat will operate, as with `open`: active in its
-  // window, and that window focused. It comes to the front before anything
-  // is committed, so a tab Chrome cannot show changes nothing.
-  const shown = await showTab(tabId, tab.windowId);
-  if (Result.isError(shown)) {
-    await budget.refund();
-    return browserControlError(
-      BROWSER_CONTROL_ERROR_CODE.executionFailed,
-      "Chrome could not bring that tab to the front, so control stayed where it was. Take a snapshot to see chat's tabs.",
-    );
-  }
-  if (isStopped(signal)) {
-    // Control never moved, so what the user saw before comes back too.
-    if (Result.isError(await restoreForeground(shown.value))) {
-      return outcomeUnknown(
-        "The tab was brought to the front, and Chrome could not put the previous one back; control stayed on the tab chat had.",
-      );
-    }
-    await budget.refund();
-    return cancelled();
-  }
+
   // Containment moves first: it re-checks the tab is chat's in the same step,
   // and nothing else needs undoing when it refuses. Should the worker stop
   // before the second write, the stored controlled tab is still the old one,

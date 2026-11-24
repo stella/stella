@@ -147,7 +147,7 @@ export const connectedOrigin = ({ state }: PopupView): string | null => {
  */
 export type DesktopLinkView = {
   messageKey: PopupMessageKey;
-  type: "allow" | "connected" | "not-running" | "update-needed";
+  type: "allow" | "connected" | "connecting" | "not-running" | "update-needed";
 };
 
 export const desktopLinkView = ({
@@ -165,9 +165,9 @@ export const desktopLinkView = ({
       return { messageKey: "desktopConnected", type: "connected" };
     case DESKTOP_LINK_STATE.incompatible:
       return { messageKey: "desktopUpdateNeeded", type: "update-needed" };
-    // The host waits for stella desktop until it answers.
-    case DESKTOP_LINK_STATE.offline:
     case DESKTOP_LINK_STATE.waiting:
+      return { messageKey: "desktopConnecting", type: "connecting" };
+    case DESKTOP_LINK_STATE.offline:
       return { messageKey: "desktopNotRunning", type: "not-running" };
     default:
       state satisfies never;

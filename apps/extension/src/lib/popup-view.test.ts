@@ -215,14 +215,12 @@ describe("the stella desktop row", () => {
     expect(
       desktopLinkView({ allowed: true, state: DESKTOP_LINK_STATE.connected }),
     ).toEqual({ messageKey: "desktopConnected", type: "connected" });
-    for (const state of [
-      DESKTOP_LINK_STATE.offline,
-      DESKTOP_LINK_STATE.waiting,
-    ]) {
-      expect(desktopLinkView({ allowed: true, state }).type).toBe(
-        "not-running",
-      );
-    }
+    expect(
+      desktopLinkView({ allowed: true, state: DESKTOP_LINK_STATE.waiting }),
+    ).toEqual({ messageKey: "desktopConnecting", type: "connecting" });
+    expect(
+      desktopLinkView({ allowed: true, state: DESKTOP_LINK_STATE.offline }),
+    ).toEqual({ messageKey: "desktopNotRunning", type: "not-running" });
     expect(
       desktopLinkView({
         allowed: true,
