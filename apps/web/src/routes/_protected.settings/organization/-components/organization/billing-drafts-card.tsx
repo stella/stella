@@ -23,7 +23,6 @@ import { ListItemSkeleton } from "@stll/ui/list-shell";
 import { SearchField } from "@stll/ui/search-field";
 import { SettingsPanel, SettingsSection } from "@stll/ui/settings";
 import { Switch } from "@stll/ui/switch";
-import { cn } from "@stll/ui/utils";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
@@ -281,7 +280,6 @@ export const BillingDraftsCard = () => {
             attached={attachedIds.includes(file.id)}
             canEdit={canEdit}
             file={file}
-            isClientMode={client !== null}
             mutationPending={mutation.isPending}
             savePending={save.isPending}
             onEdit={() => {
@@ -370,7 +368,6 @@ type BillingKnowledgeFileRowProps = {
   attached: boolean;
   canEdit: boolean;
   file: KnowledgeFile;
-  isClientMode: boolean;
   mutationPending: boolean;
   savePending: boolean;
   onEdit: () => void;
@@ -381,7 +378,6 @@ const BillingKnowledgeFileRow = ({
   attached,
   canEdit,
   file,
-  isClientMode,
   mutationPending,
   savePending,
   onEdit,
@@ -394,39 +390,12 @@ const BillingKnowledgeFileRow = ({
 
   return (
     <ListItem>
-      {isClientMode ? (
-        <Checkbox
-          aria-label={file.path}
-          checked={attached}
-          disabled={!canEdit || mutationPending}
-          onCheckedChange={onToggle}
-        />
-      ) : (
-        <Button
-          aria-checked={attached}
-          aria-label={file.path}
-          disabled={!canEdit || mutationPending}
-          disabledReason={disabledReason}
-          onClick={() => onToggle(!attached)}
-          role="radio"
-          size="icon-sm"
-          tooltip={file.path}
-          type="button"
-          variant="ghost"
-        >
-          <span
-            aria-hidden="true"
-            className={cn(
-              "flex size-4 items-center justify-center rounded-full border",
-              attached ? "border-primary bg-primary" : "border-input",
-            )}
-          >
-            {attached && (
-              <span className="bg-primary-foreground size-1.5 rounded-full" />
-            )}
-          </span>
-        </Button>
-      )}
+      <Checkbox
+        aria-label={file.path}
+        checked={attached}
+        disabled={!canEdit || mutationPending}
+        onCheckedChange={onToggle}
+      />
       <ListItemContent>
         <ListItemTitle>
           <BidiText>{file.path}</BidiText>
