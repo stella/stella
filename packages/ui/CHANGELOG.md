@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.89.2
+
+### Patch Changes
+
+- [#9430](https://github.com/stella/stella/pull/9430) [`60de427`](https://github.com/stella/stella/commit/60de42771f3d41f9e2849c923a17075a1871c93c) Thanks [@jan-kubica](https://github.com/jan-kubica)! - `LandingLayout` keeps the hero at its own height: a box that grows past the fold pushes the columns down instead of being clipped.
+
 ## 0.89.1
 
 ### Patch Changes
