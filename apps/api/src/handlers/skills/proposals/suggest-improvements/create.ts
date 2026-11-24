@@ -20,7 +20,10 @@ import { checkSkillPackage } from "@/api/lib/agent-skills/skill-package-check";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { storedAIConfigUnreadableError } from "@/api/lib/ai-config-response";
-import { generateArtefact } from "@/api/lib/ai-generation/provenance";
+import {
+  generateArtefact,
+  readUnsourcedArtefact,
+} from "@/api/lib/ai-generation/provenance";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   ACCOUNT_ACCESS,
@@ -240,7 +243,7 @@ const suggestSkillImprovements = createSafeRootHandler(
         ),
       );
     }
-    const generated = generation.value.value.value;
+    const generated = readUnsourcedArtefact(generation.value.value);
 
     const validated = validateSuggestedMarkdown({
       original: source.revision.body,

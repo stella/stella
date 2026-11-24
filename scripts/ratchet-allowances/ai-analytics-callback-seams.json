@@ -1,0 +1,5 @@
+{
+  "metric": "ai-analytics-callback-seams",
+  "delta": 1,
+  "reason": "New AI generation route POST /v1/skills/:skillId/proposals/suggest-improvements uses the existing createTanStackAIAnalyticsCallbacks seam alongside the other skill generation handlers until the callback seam migrates."
+}

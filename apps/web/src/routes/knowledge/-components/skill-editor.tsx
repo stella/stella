@@ -71,6 +71,7 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useFormattingLocale } from "@/i18n/formatting-context";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { isMarkdownFile, MARKDOWN_MIME } from "@/lib/consts";
 import { detached } from "@/lib/detached";
 import { APIError, toAPIError, unwrapApiResponse } from "@/lib/errors/api";
@@ -340,9 +341,11 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       }: SerializedSaveContext<{ markdown: string; storedBase: string }>,
     ) => {
       const stored = toStoredMarkdown(markdown, storedBase);
-      const response = await api.skills({ skillId: safeSkillId }).patch({
-        body: stored,
-      });
+      const response = await invokeCapability(
+        "skills.update",
+        async (request) =>
+          api.skills({ skillId: safeSkillId }).patch({ body: stored }, request),
+      );
       if (response.error) {
         if (hasPending()) {
           return;

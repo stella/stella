@@ -777,6 +777,10 @@
       "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
     {
+      "id": "GET /v1/skills/:skillId/monitor",
+      "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
+    },
+    {
       "id": "GET /v1/skills/:skillId/proposals",
       "reason": "Requires a skills fixture that grows persisted inputs at a fixed response window; pending read harness coverage."
     },
@@ -2608,6 +2612,10 @@
     },
     {
       "id": "POST /v1/skills/:skillId/proposals/from-comments",
+      "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
+    },
+    {
+      "id": "POST /v1/skills/:skillId/proposals/suggest-improvements",
       "reason": "State-changing surface awaits the write harness for statements, transactions and emitted response bytes."
     },
     {

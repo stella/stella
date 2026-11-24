@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
+import { invokeCapability } from "@/lib/capabilities/capability-request";
 import { detached } from "@/lib/detached";
 import { toAPIError } from "@/lib/errors/api";
 import { notifyUserError } from "@/lib/errors/user-toast";
@@ -291,7 +292,11 @@ const useSuggestSkillImprovements = ({
           ? { focus: focus.trim() }
           : {},
       send: async (payload) =>
-        skill.proposals["suggest-improvements"].post(payload),
+        invokeCapability(
+          "skills.proposals.suggest-improvements.create",
+          async (request) =>
+            skill.proposals["suggest-improvements"].post(payload, request),
+        ),
     });
     setSuggestingImprovements(false);
     if (response.error) {
