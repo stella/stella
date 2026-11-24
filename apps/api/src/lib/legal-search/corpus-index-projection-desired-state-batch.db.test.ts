@@ -203,37 +203,46 @@ const SUBJECTS: CorpusIndexProjectionSubject[] = [
   UNCHANGED,
 ].map((entityId) => ({ family: "case_law", entityId }));
 
-const outcomeType = (outcome: CorpusProjectionBatchRepairOutcome) =>
+type SubjectOutcome =
+  | { type: "reconciled"; changed: boolean }
+  | { type: "held" | "missing" | "at_risk" };
+
+const outcomeType = (
+  outcome: CorpusProjectionBatchRepairOutcome,
+): SubjectOutcome =>
   outcome.type === "reconciled"
     ? { type: outcome.type, changed: outcome.outcome.changed }
     : { type: outcome.type };
 
+/** The per-subject repair path: one subject in its own transaction. */
+const repairAlone = async (
+  subject: CorpusIndexProjectionSubject,
+): Promise<SubjectOutcome> =>
+  await db
+    .transaction(
+      async (tx) =>
+        await reconcileCorpusProjectionDesiredStateTx(
+          asTestRaw<Transaction>(tx),
+          subject,
+        ),
+    )
+    .then(
+      (written): SubjectOutcome =>
+        written.isOk()
+          ? { type: "reconciled", changed: written.value.changed }
+          : { type: "held" },
+      (error: unknown): SubjectOutcome =>
+        error instanceof CorpusIndexProjectionSubjectMissingError
+          ? { type: "missing" }
+          : panic(`Unexpected repair failure: ${String(error)}`),
+    );
+
 test("a page of mismatches re-derives in one transaction as one repair per subject would", async () => {
   await seedMismatches();
-  const perRow = new Map<string, ReturnType<typeof outcomeType>>();
+  const perRow = new Map<string, SubjectOutcome>();
   for (const subject of SUBJECTS) {
     // db-await-in-loop: the per-subject reference path, one transaction each
-    const outcome = await db
-      .transaction(
-        async (tx) =>
-          await reconcileCorpusProjectionDesiredStateTx(
-            asTestRaw<Transaction>(tx),
-            subject,
-          ),
-      )
-      .then(
-        (written) =>
-          outcomeType(
-            written.isOk()
-              ? { type: "reconciled", outcome: written.value }
-              : { type: "held", hold: written.error },
-          ),
-        (error: unknown) =>
-          error instanceof CorpusIndexProjectionSubjectMissingError
-            ? outcomeType({ type: "missing" })
-            : panic(`Unexpected repair failure: ${String(error)}`),
-      );
-    perRow.set(subject.entityId, outcome);
+    perRow.set(subject.entityId, await repairAlone(subject));
   }
   const expected = await projection();
 
@@ -247,12 +256,21 @@ test("a page of mismatches re-derives in one transaction as one repair per subje
       ),
   );
   const batchStatements = [...statements];
+  // The batch moves nothing of a subject at risk; its own repair follows.
+  expect(batch.get(HELD)?.type).toBe("at_risk");
+  const batchThenAlone = new Map<string, SubjectOutcome>();
+  for (const subject of SUBJECTS) {
+    const outcome =
+      batch.get(subject.entityId) ?? panic("Expected a batch outcome");
+    batchThenAlone.set(
+      subject.entityId,
+      outcome.type === "at_risk"
+        ? await repairAlone(subject)
+        : outcomeType(outcome),
+    );
+  }
 
-  expect(
-    new Map(
-      [...batch].map(([entityId, outcome]) => [entityId, outcomeType(outcome)]),
-    ),
-  ).toEqual(perRow);
+  expect(batchThenAlone).toEqual(perRow);
   expect(Object.fromEntries(perRow)).toEqual({
     [MOVED[0]]: { type: "reconciled", changed: true },
     [MOVED[1]]: { type: "reconciled", changed: true },
@@ -302,7 +320,7 @@ test("a page of mismatches re-derives in one transaction as one repair per subje
   expect(order).toEqual(order.toSorted((left, right) => left - right));
 });
 
-test("a batch repair reaches a fixed point and holds only the subject at risk", async () => {
+test("a batch repair reaches a fixed point and leaves only the subject at risk to its own repair", async () => {
   await seedMismatches();
   const repair = async () =>
     await db.transaction(
@@ -321,5 +339,5 @@ test("a batch repair reaches a fixed point and holds only the subject at risk", 
       (outcome) => outcome.type === "reconciled" && outcome.outcome.changed,
     ),
   ).toEqual([]);
-  expect(again.get(HELD)?.type).toBe("held");
+  expect(again.get(HELD)?.type).toBe("at_risk");
 });

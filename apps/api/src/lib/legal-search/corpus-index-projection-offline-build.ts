@@ -776,7 +776,7 @@ export const CORPUS_PROJECTION_OFFLINE_CANONICAL_MISMATCH_PAGE_LIMIT = 8;
  * this often, even while no shard delivers: a stretch of pages that only
  * re-derives mismatches still shows movement.
  */
-export const CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_PAGES = 16;
+const CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_PAGES = 16;
 export const CORPUS_PROJECTION_OFFLINE_PROGRESS_REPORT_MS = 60_000;
 
 type Stop = Exclude<CorpusProjectionOfflineBuildOutcome["status"], "drained">;

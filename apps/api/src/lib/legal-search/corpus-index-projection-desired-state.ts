@@ -2128,10 +2128,15 @@ export const synchronizeLockedCaseLawProjectionBatchTx = async (
 export const CORPUS_PROJECTION_REPAIR_BATCH_SIZE =
   CASE_LAW_PROJECTION_REPAIR_BATCH_SIZE;
 
-/** What one subject of a batch repair came to. */
+/**
+ * What one subject of a batch repair came to. A subject whose write would take
+ * a named copy away from readers is `at_risk`: the batch writes nothing of it,
+ * and its own repair (`reconcileCorpusProjectionDesiredStateTx`) restores or
+ * holds it alone.
+ */
 export type CorpusProjectionBatchRepairOutcome =
   | { type: "reconciled"; outcome: ReconcileOutcome }
-  | { type: "held"; hold: CorpusProjectionServedCopyHold }
+  | { type: "at_risk" }
   | { type: "missing" };
 
 type LockedBatchInput = LockedProjectionInput & {
@@ -2336,11 +2341,11 @@ const batchEpochUpdate = (
  * and in id order: source policy, canonical rows and identifiers, the
  * projection writer fence, then the desired states. The subjects whose write
  * takes no named copy away from readers move together, in one canonical
- * epoch statement and one desired-state statement. Each other subject goes
- * through the repair writer on its own
- * (`writeRepairedCorpusProjectionDesiredStatesTx`), so its hold, or its
- * restore, touches no other subject. A subject whose canonical row is gone
- * is missing, and nothing of it moves.
+ * epoch statement and one desired-state statement. Every other subject is
+ * at risk and nothing of it moves here: the caller repairs it on its own
+ * (`reconcileCorpusProjectionDesiredStateTx`), so its hold, or its restore,
+ * touches no other subject. A subject whose canonical row is gone is missing,
+ * and nothing of it moves.
  */
 export const reconcileCorpusProjectionDesiredStatesTx = async (
   tx: Transaction,
@@ -2433,31 +2438,8 @@ export const reconcileCorpusProjectionDesiredStatesTx = async (
       },
     });
   }
-  for (const plan of plans.filter(({ subject }) =>
-    atRisk.has(subject.entityId),
-  )) {
-    // db-await-in-loop: a subject at risk restores or holds alone, in turn
-    const written = await writeRepairedCorpusProjectionDesiredStatesTx(tx, {
-      epochs:
-        plan.epoch === plan.currentEpoch
-          ? null
-          : projectionEpochUpdate(plan.subject, plan.epoch),
-      values: plan.values,
-    });
-    outcomes.set(
-      plan.subject.entityId,
-      written.isErr()
-        ? { type: "held", hold: written.error }
-        : {
-            type: "reconciled",
-            outcome: {
-              epoch: plan.epoch,
-              changed: plan.values.length > 0,
-              generationCount: plan.count,
-              servedCopies: written.value.servedCopies,
-            },
-          },
-    );
+  for (const entityId of atRisk) {
+    outcomes.set(entityId, { type: "at_risk" });
   }
   return outcomes;
 };
