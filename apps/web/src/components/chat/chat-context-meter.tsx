@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import type {
@@ -26,7 +27,7 @@ import { useFormatter } from "@/i18n/formatting-context";
  *  chat-messages endpoint. The five breakdown parts sum to `estimatedTokens`,
  *  so the segmented bar renders without any reconciliation. `cacheStableTokens`
  *  (= prompt + tools) is the prompt-cache-stable prefix. */
-export type ChatContextEstimate = {
+type ChatContextEstimate = {
   source: "estimate";
   estimatedTokens: number;
   triggerTokens: number;
@@ -119,6 +120,9 @@ export const ChatContextMeter = (props: ChatContextMeterProps) => {
       );
     case "estimate":
       return <EstimatedContextMeter compact={compact} usage={usage} />;
+    default:
+      usage satisfies never;
+      return panic("Unhandled context meter source");
   }
 };
 
