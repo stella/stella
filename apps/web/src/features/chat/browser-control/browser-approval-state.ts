@@ -26,7 +26,7 @@ import { onStorageOwnerChange } from "@/lib/account/user-scoped-storage";
  */
 
 /** The controlled tab's page from a successful result: never a URL the model wrote. */
-export const toBrowserReportedPage = (
+const toBrowserReportedPage = (
   snapshot: BrowserControlSnapshot,
 ): BrowserReportedPage => ({
   revision: snapshot.revision,

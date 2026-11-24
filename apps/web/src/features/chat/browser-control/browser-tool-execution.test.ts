@@ -272,19 +272,28 @@ describe("steps the level does not run", () => {
           });
           if (!held) {
             expect(result).toEqual(success);
-          } else if (signIn) {
-            expect(result).toMatchObject({
-              code: BROWSER_CONTROL_ERROR_CODE.needsMember,
-              message: expect.stringContaining("sign in"),
-              status: "error",
-            });
-          } else {
-            expect(result).toMatchObject({
-              code: BROWSER_CONTROL_ERROR_CODE.permissionDenied,
-              message: expect.stringContaining("Plan mode is read-only"),
-              status: "error",
-            });
+            continue;
           }
+          const refusal =
+            result.status === "error"
+              ? {
+                  code: result.code,
+                  explains: result.message.includes(
+                    signIn ? "sign in" : "Plan mode is read-only",
+                  ),
+                }
+              : null;
+          expect({ level, signIn, action: command.action, refusal }).toEqual({
+            level,
+            signIn,
+            action: command.action,
+            refusal: {
+              code: signIn
+                ? BROWSER_CONTROL_ERROR_CODE.needsMember
+                : BROWSER_CONTROL_ERROR_CODE.permissionDenied,
+              explains: true,
+            },
+          });
         }
       }
     }
