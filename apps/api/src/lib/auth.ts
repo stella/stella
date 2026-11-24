@@ -63,6 +63,7 @@ import {
   bindOwnerSyntheticSessionAuthorizer,
   isPartnerOAuthClient,
   provisionOrgSsoMemberByProviderRecord,
+  readOrgSsoSeatLimit,
   rlsDb,
   rootDb,
 } from "@/api/db/root";
