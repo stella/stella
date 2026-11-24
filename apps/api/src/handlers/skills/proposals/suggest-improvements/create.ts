@@ -153,7 +153,7 @@ const suggestSkillImprovements = createSafeRootHandler(
       }),
     );
     if (Result.isError(sourceResult)) {
-      return sourceResult;
+      return Result.err(sourceResult.error);
     }
     const source = sourceResult.value;
 
@@ -232,7 +232,7 @@ const suggestSkillImprovements = createSafeRootHandler(
       raw: generation.value.markdown,
     });
     if (Result.isError(validated)) {
-      return validated;
+      return Result.err(validated.error);
     }
     const markdown = validated.value;
 
