@@ -163,14 +163,15 @@ const updateFactDetails = createSafeHandler(
             .for("update")
         ).at(0);
 
-        const changes: FieldDiffs = {};
+        const changeEntries = new Map<string, { old: unknown; new: unknown }>();
         for (const key of FACT_DETAIL_FIELDS) {
           const old = existing?.[key] ?? null;
           if (old !== values[key]) {
-            changes[key] = { old, new: values[key] };
+            changeEntries.set(key, { old, new: values[key] });
           }
         }
-        if (existing !== undefined && Object.keys(changes).length === 0) {
+        const changes: FieldDiffs = Object.fromEntries(changeEntries);
+        if (existing !== undefined && changeEntries.size === 0) {
           return { type: "unchanged" } as const;
         }
 

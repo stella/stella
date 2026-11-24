@@ -59,16 +59,18 @@ const isCompleteLocaleRecord = (
   UI_LOCALES.every((tag) => tag in value);
 
 const buildLocales = (): Record<Locale, LocaleConfig> => {
-  const result: Partial<Record<Locale, LocaleConfig>> = {};
-  for (const tag of UI_LOCALES) {
-    result[tag] = {
-      path: toPath(tag),
-      label: displayLanguageName(tag),
-      hreflang: tag,
-      og: OG_LOCALE[tag],
-      dir: getUiLocaleDirection(tag),
-    };
-  }
+  const result: Partial<Record<Locale, LocaleConfig>> = Object.fromEntries(
+    UI_LOCALES.map((tag) => [
+      tag,
+      {
+        path: toPath(tag),
+        label: displayLanguageName(tag),
+        hreflang: tag,
+        og: OG_LOCALE[tag],
+        dir: getUiLocaleDirection(tag),
+      },
+    ]),
+  );
   if (!isCompleteLocaleRecord(result)) {
     panic("landing locales are missing a UI locale entry");
   }

@@ -1,4 +1,4 @@
-// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: [pl-courts] Bounded publisher body reads preserve successful response text, raw payloads and parsed decisions.
 // parser-output-unchanged: [pl-ncourt] Only SAOS transport reads change; imported ruling decision-type constants are unchanged.
 // parser-output-unchanged: The day listing and reconciliation page carry the existing totalResults count for the census; decision parsing and listed records are unchanged.
@@ -831,7 +831,9 @@ const normalizeDecisionType = (
   content: string | null | undefined,
 ): string | undefined => {
   if (raw) {
-    const mapped = JUDGMENT_TYPE_MAP[raw];
+    const mapped = Object.hasOwn(JUDGMENT_TYPE_MAP, raw)
+      ? JUDGMENT_TYPE_MAP[raw]
+      : undefined;
     if (mapped) {
       return mapped;
     }

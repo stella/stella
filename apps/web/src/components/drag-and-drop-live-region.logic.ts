@@ -50,7 +50,12 @@ export const withDragAnnouncementData = (
   name: string,
   count = 1,
 ): DragDataRecord => {
-  data[DRAG_ANNOUNCEMENT_KEY] = { count, name, type: "item" };
+  Object.defineProperty(data, DRAG_ANNOUNCEMENT_KEY, {
+    value: { count, name, type: "item" },
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
   return data;
 };
 
@@ -58,7 +63,12 @@ export const withDropAnnouncementData = (
   data: DropDataRecord,
   destination: DragAnnouncementDestination,
 ): DropDataRecord => {
-  data[DRAG_ANNOUNCEMENT_KEY] = destination;
+  Object.defineProperty(data, DRAG_ANNOUNCEMENT_KEY, {
+    value: destination,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
   return data;
 };
 

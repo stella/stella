@@ -363,10 +363,15 @@ const createNeedsResolver = ({
     if (cached !== undefined) {
       return cached;
     }
-    const widened: ChatSkillContext = { ...chatContext };
+    const widenedEntries = new Map<string, unknown>(
+      Object.entries(chatContext),
+    );
     for (const need of chosen) {
-      Object.assign(widened, needs.get(need));
+      for (const [k, v] of Object.entries(needs.get(need) ?? {})) {
+        widenedEntries.set(k, v);
+      }
     }
+    const widened = Object.fromEntries(widenedEntries) as ChatSkillContext;
     const names = chatContextToolNames(inputs, widened);
     namesWith.set(key, names);
     return names;

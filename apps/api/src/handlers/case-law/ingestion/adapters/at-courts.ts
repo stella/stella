@@ -1,4 +1,4 @@
-// parser-output-unchanged: Named listedDocumentUrl options preserve its body, argument values and evaluation order.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
 // parser-output-unchanged: Reconciliation exposes the existing listing total for unfiltered source scopes; decision parsing and listed identities are unchanged.
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
@@ -579,7 +579,7 @@ const MAIN_DOCUMENT_CONTENT_TYPE = "MainDocument";
  * is mandatory in the schema, and a payload that omits it lists one document.
  */
 const mainDocumentFormats = (item: RisListingItem): Record<string, string> => {
-  const urls: Record<string, string> = {};
+  const urls = new Map<string, string>();
   for (const reference of contentReferences(item)) {
     if (
       reference.contentType !== undefined &&
@@ -588,10 +588,12 @@ const mainDocumentFormats = (item: RisListingItem): Record<string, string> => {
       continue;
     }
     for (const { dataType, url } of reference.formats) {
-      urls[dataType] ??= url;
+      if (!urls.has(dataType)) {
+        urls.set(dataType, url);
+      }
     }
   }
-  return urls;
+  return Object.fromEntries(urls);
 };
 
 const parsedUrl = (value: string): URL | null =>

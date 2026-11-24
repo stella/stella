@@ -92,21 +92,25 @@ const Slot = ({
   // This matches Radix's Slot behaviour: because handlers
   // are merged (not DOM-propagated), the child can inspect
   // the event before the parent acts on it.
+  const mergedHandlers = new Map<string, (...args: unknown[]) => void>();
   const restEntries: [string, unknown][] = Object.entries(rest);
   for (const [key, parentValue] of restEntries) {
     if (key.startsWith("on") && typeof parentValue === "function") {
       const childValue = childProps[key];
 
       if (typeof childValue === "function") {
-        mergedProps[key] = (...args: unknown[]) => {
+        mergedHandlers.set(key, (...args: unknown[]) => {
           Reflect.apply(childValue, undefined, args);
           Reflect.apply(parentValue, undefined, args);
-        };
+        });
       }
     }
   }
 
-  return cloneElement(child, mergedProps);
+  return cloneElement(child, {
+    ...mergedProps,
+    ...Object.fromEntries(mergedHandlers),
+  });
 };
 
 const composeSlotRefs =

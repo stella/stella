@@ -305,7 +305,7 @@ const literalToJson = (literal: string): string => {
 export const parseGeneratedConstants = (
   source: string,
 ): Readonly<Record<string, unknown>> => {
-  const constants: Record<string, unknown> = {};
+  const constants = new Map<string, unknown>();
   const lines = source.split("\n");
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index] ?? "";
@@ -330,12 +330,12 @@ export const parseGeneratedConstants = (
       literal = literal.slice(0, -AS_CONST.length).trimEnd();
     }
     try {
-      constants[name] = JSON.parse(literalToJson(literal)) as unknown;
+      constants.set(name, JSON.parse(literalToJson(literal)) as unknown);
     } catch {
       panic(`generated constant ${name} is not a plain literal: ${literal}`);
     }
   }
-  return constants;
+  return Object.fromEntries(constants);
 };
 
 /** JSON with object keys sorted at every level, so key order never reads as drift. */

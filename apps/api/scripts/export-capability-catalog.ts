@@ -379,7 +379,9 @@ const withEntryAdditionalScopes = ({
   uses: Set<string>;
 }): readonly string[] => {
   const scopes = new Set(additionalScopes);
-  const extraScopes = ENTRY_ADDITIONAL_SCOPES[id];
+  const extraScopes = Object.hasOwn(ENTRY_ADDITIONAL_SCOPES, id)
+    ? ENTRY_ADDITIONAL_SCOPES[id]
+    : undefined;
   if (extraScopes !== undefined) {
     uses.add(id);
     for (const extraScope of extraScopes) {
@@ -1246,14 +1248,18 @@ const buildCatalog = async (): Promise<BuildResult> => {
   // Permanent `internal` waivers, tallied by reason for the coverage doc's
   // summary section. These endpoints never enter `entries` (the main loop
   // below only admits tool/covered/capability dispositions).
-  const internalWaiverCounts: Record<string, number> = {};
+  const internalWaiverCountMap = new Map<string, number>();
   for (const endpoint of endpoints) {
     if (endpoint.exposure.type !== "internal") {
       continue;
     }
     const { reason } = endpoint.exposure;
-    internalWaiverCounts[reason] = (internalWaiverCounts[reason] ?? 0) + 1;
+    internalWaiverCountMap.set(
+      reason,
+      (internalWaiverCountMap.get(reason) ?? 0) + 1,
+    );
   }
+  const internalWaiverCounts = Object.fromEntries(internalWaiverCountMap);
 
   const discoveredFiles = new Set(files.map(({ id }) => id));
   for (const id of Object.keys(INLINE_CAPABILITY_ALLOWLIST)) {

@@ -104,7 +104,10 @@ const LABEL_TO_BUCKET: Record<string, Bucket> = {
   misc: "misc",
 };
 
-const bucketOf = (label: string): Bucket => LABEL_TO_BUCKET[label] ?? "misc";
+const bucketOf = (label: string): Bucket =>
+  Object.hasOwn(LABEL_TO_BUCKET, label)
+    ? (LABEL_TO_BUCKET[label] ?? "misc")
+    : "misc";
 
 // person/organization/id keep the exact hues from the static section-1
 // preview (AnonymizationPreview.tsx) for visual continuity between the

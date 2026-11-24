@@ -80,13 +80,14 @@ const updateBillingCode = createSafeHandler(
           ),
         );
 
-      const changes: Record<string, { old: unknown; new: unknown }> = {};
+      const changeEntries = new Map<string, { old: unknown; new: unknown }>();
       for (const field of ["code", "label", "active", "sortOrder"] as const) {
         const next = updates[field];
         if (next !== undefined) {
-          changes[field] = { old: existing[field], new: next };
+          changeEntries.set(field, { old: existing[field], new: next });
         }
       }
+      const changes = Object.fromEntries(changeEntries);
 
       await recordAuditEvent(tx, {
         action: AUDIT_ACTION.UPDATE,

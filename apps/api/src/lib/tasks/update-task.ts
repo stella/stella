@@ -238,7 +238,7 @@ const taskFieldDiffs = (
   before: Record<string, unknown>,
   values: Record<string, unknown>,
 ): FieldDiffs => {
-  const changes: FieldDiffs = {};
+  const changes = new Map<string, { old: unknown; new: unknown }>();
   for (const [field, next] of Object.entries(values)) {
     if (field === "updatedAt") {
       continue;
@@ -247,10 +247,10 @@ const taskFieldDiffs = (
     // Structural, not serialized: JSONB reorders object keys on the way back,
     // so a no-op save of organizer/attendees/recurrence must not read as a change.
     if (!isDeepStrictEqual(previous, next)) {
-      changes[field] = { old: previous, new: next };
+      changes.set(field, { old: previous, new: next });
     }
   }
-  return changes;
+  return Object.fromEntries(changes);
 };
 
 type LockedWorkObligation = NonNullable<

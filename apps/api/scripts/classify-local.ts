@@ -317,13 +317,13 @@ const main = async () => {
   }
 
   // Summary
-  const counts: Record<string, number> = {};
+  const counts = new Map<string, number>();
   for (const m of matches) {
-    counts[m.polarity] = (counts[m.polarity] ?? 0) + 1;
+    counts.set(m.polarity, (counts.get(m.polarity) ?? 0) + 1);
   }
 
   console.log("\nSummary:");
-  for (const [polarity, count] of Object.entries(counts)) {
+  for (const [polarity, count] of counts.entries()) {
     if (!isValidPolarity(polarity)) {
       continue;
     }

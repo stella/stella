@@ -1,3 +1,4 @@
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 /**
  * An RTF reader that answers in folio's document model.
  *
@@ -1143,7 +1144,9 @@ const readRtfInto = (
       case "qc":
       case "qr":
       case "qj": {
-        const alignment = PARAGRAPH_ALIGNMENTS[word];
+        const alignment = Object.hasOwn(PARAGRAPH_ALIGNMENTS, word)
+          ? PARAGRAPH_ALIGNMENTS[word]
+          : undefined;
         state.paragraph.alignment = alignment;
         paragraph.alignment = alignment;
         break;

@@ -349,10 +349,7 @@ const plannedBatches = orderBatchesForLanes(
   testFileDurationWeights(allTestPaths, durationWeights),
 );
 
-const testProcessEnv: Record<string, string | undefined> = {
-  ...process.env,
-  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
-};
+let pgliteTestSnapshot: string | undefined;
 // Only a run that selected a DB-backed or module-mock batch boots PGlite, so
 // a run of logic test files skips the snapshot build.
 if (
@@ -364,11 +361,18 @@ if (
   )
 ) {
   try {
-    testProcessEnv[PGLITE_TEST_SNAPSHOT_ENV] = await buildTestDbSnapshot();
+    pgliteTestSnapshot = await buildTestDbSnapshot();
   } catch (error) {
     exitAfterSnapshotFailure(error);
   }
 }
+const testProcessEnv: Record<string, string | undefined> = {
+  ...process.env,
+  [PROPERTY_TEST_TIMEOUT_BASE_MS_ENV]: String(API_TEST_TIMEOUT_MS),
+  ...(pgliteTestSnapshot === undefined
+    ? {}
+    : { [PGLITE_TEST_SNAPSHOT_ENV]: pgliteTestSnapshot }),
+};
 
 const testLanes =
   rssMode.mode === "measure-rss"

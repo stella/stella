@@ -1,4 +1,4 @@
-// parser-output-unchanged: HTML loads through @stll/html, which reproduces cheerio.load output; parsed content is unchanged.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 /**
  * Read the bibliographic block of the Publications Office's Formex encoding
  * of a CJEU decision.
@@ -81,13 +81,15 @@ export const parseFormexBibliography = (
   xml: string | readonly string[],
 ): EcjFormexBibliography => {
   const reader = readBibliography(xml);
-  const pages: Record<string, readonly string[]> = {};
+  const pageEntries = new Map<string, readonly string[]>();
   for (const tag of PAGE_TAGS) {
     const values = reader.values(tag);
     if (values.length > 0) {
-      pages[tag] = values;
+      pageEntries.set(tag, values);
     }
   }
+  const pages: Record<string, readonly string[]> =
+    Object.fromEntries(pageEntries);
   return {
     caseNumber: reader.values("REF.CASE"),
     celex: reader.values("NO.CELEX"),

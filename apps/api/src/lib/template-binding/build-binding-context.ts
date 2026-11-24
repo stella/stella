@@ -259,19 +259,20 @@ const fetchParties = async ({
     }),
   );
 
-  const parties: Partial<Record<WorkspaceContactRole, ContactSourceRecord>> =
-    {};
+  const parties = new Map<WorkspaceContactRole, ContactSourceRecord>();
   for (const link of links) {
-    if (parties[link.role] !== undefined) {
+    if (parties.has(link.role)) {
       continue;
     }
     const { contact } = link;
     if (contact === null) {
       continue;
     }
-    parties[link.role] = toContactSourceRecord(contact);
+    parties.set(link.role, toContactSourceRecord(contact));
   }
-  return parties;
+  return Object.fromEntries(parties) as Partial<
+    Record<WorkspaceContactRole, ContactSourceRecord>
+  >;
 };
 
 const fetchAttorneys = async ({

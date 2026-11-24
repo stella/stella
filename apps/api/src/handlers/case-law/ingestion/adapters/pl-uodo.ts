@@ -1,4 +1,4 @@
-// parser-output-unchanged: replacing static Record lookup tables with Map preserves identical parser output.
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: source-fields-pl: Additional publisher categories and inventory targets leave existing parsed decisions unchanged.
 // parser-output-unchanged: source-exclusion-contract: Publisher schemas, raw retention and coverage checks do not change parsed decision projections.
 // parser-output-unchanged: a page states whether the publisher was asked; parsed decision output is unchanged.
@@ -654,14 +654,14 @@ export type PlUodoSkipTally = Partial<Record<PlUodoSkipReason, number>>;
 export const tallyPlUodoSkips = (
   rows: readonly PlUodoRow[],
 ): PlUodoSkipTally => {
-  const tally: PlUodoSkipTally = {};
+  const tally = new Map<string, number>();
   for (const row of rows) {
     const recordClass = classifyPlUodoRow(row);
     if (recordClass.type === "skipped") {
-      tally[recordClass.reason] = (tally[recordClass.reason] ?? 0) + 1;
+      tally.set(recordClass.reason, (tally.get(recordClass.reason) ?? 0) + 1);
     }
   }
-  return tally;
+  return Object.fromEntries(tally) as PlUodoSkipTally;
 };
 
 const reportSkips = (where: string, tally: PlUodoSkipTally): void => {

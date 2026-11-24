@@ -277,7 +277,7 @@ const readLegacyProvisionPage = async ({
     )
     .limit(limit + 1);
   return provisionPage({
-    rows: rows.map((row) => Object.assign(row, UNAVAILABLE_SPAN_FIELDS)),
+    rows: rows.map((row) => ({ ...row, ...UNAVAILABLE_SPAN_FIELDS })),
     limit,
     generation: "0",
     status: { type: "pending" },

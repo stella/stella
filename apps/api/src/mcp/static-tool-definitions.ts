@@ -202,13 +202,13 @@ const scopeSchemaEntry = (
     return value;
   }
   let changed = false;
-  const next: Record<string, unknown> = {};
+  const next = new Map<string, unknown>();
   for (const [childKey, child] of Object.entries(value)) {
     const scoped = scopeSchemaEntry(childKey, child, vocabulary);
     changed ||= scoped !== child;
-    next[childKey] = scoped;
+    next.set(childKey, scoped);
   }
-  return changed ? next : value;
+  return changed ? Object.fromEntries(next) : value;
 };
 
 /**
@@ -232,16 +232,17 @@ const scopeDefinitionsToSurface = (
     const description =
       scopeProseToSurface(tool.description, vocabulary) ?? tool.description;
     let inputSchemaChanged = false;
-    const inputSchema: McpToolDefinition["inputSchema"] = {
-      ...tool.inputSchema,
-    };
+    const schemaUpdates = new Map<string, unknown>();
     for (const [key, value] of Object.entries(tool.inputSchema)) {
       const scoped = scopeSchemaEntry(key, value, vocabulary);
       if (scoped !== value) {
         inputSchemaChanged = true;
-        inputSchema[key] = scoped;
+        schemaUpdates.set(key, scoped);
       }
     }
+    const inputSchema: McpToolDefinition["inputSchema"] = inputSchemaChanged
+      ? { ...tool.inputSchema, ...Object.fromEntries(schemaUpdates) }
+      : tool.inputSchema;
     return description === tool.description && !inputSchemaChanged
       ? tool
       : { ...tool, description, inputSchema };

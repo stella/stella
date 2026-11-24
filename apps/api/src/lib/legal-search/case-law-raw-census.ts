@@ -172,7 +172,17 @@ export const censusCaseLawRawObjectsPage = async ({
     for (const [id, objects] of judged) {
       const decisionId = brandPersistedCaseLawDecisionId(id);
       const state = states.get(decisionId) ?? RAW_PREFIX_STATE.ORPHANED;
-      counts[state] += 1;
+      switch (state) {
+        case RAW_PREFIX_STATE.LIVE:
+          counts.live += 1;
+          break;
+        case RAW_PREFIX_STATE.ERASED:
+          counts.erased += 1;
+          break;
+        case RAW_PREFIX_STATE.ORPHANED:
+          counts.orphaned += 1;
+          break;
+      }
       const newestMs = Math.max(
         ...objects.map(({ lastModified }) => lastModified.getTime()),
       );

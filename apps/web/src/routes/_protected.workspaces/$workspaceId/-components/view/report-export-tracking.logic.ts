@@ -13,21 +13,19 @@ const MAX_TRACKED_EXPORTS = 100;
 export const retainNewestTrackedExports = (
   trackedExports: TrackedReportExport[],
 ): Record<string, TrackedReportExport> => {
-  const exports: Record<string, TrackedReportExport> = {};
-  let retainedCount = 0;
+  const exports = new Map<string, TrackedReportExport>();
   for (const reportExport of trackedExports.toSorted(
     (left, right) => right.trackedAt - left.trackedAt,
   )) {
-    if (reportExport.exportId in exports) {
+    if (exports.has(reportExport.exportId)) {
       continue;
     }
-    exports[reportExport.exportId] = reportExport;
-    retainedCount += 1;
-    if (retainedCount === MAX_TRACKED_EXPORTS) {
+    exports.set(reportExport.exportId, reportExport);
+    if (exports.size === MAX_TRACKED_EXPORTS) {
       break;
     }
   }
-  return exports;
+  return Object.fromEntries(exports);
 };
 
 export const evictedTrackedExportIds = (

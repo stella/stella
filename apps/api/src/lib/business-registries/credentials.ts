@@ -95,9 +95,6 @@ export const getOrganizationRegistryDispatch = async ({
       limit: BUSINESS_REGISTRY_CREDENTIAL_SLUGS.length,
     }),
   );
-  const dispatch: Record<BusinessRegistrySlug, RegistryHandler> = {
-    ...BUSINESS_REGISTRY_DISPATCH,
-  };
   const configured = await Promise.all(
     rows.map(async (row) => ({
       registry: row.registry,
@@ -105,13 +102,20 @@ export const getOrganizationRegistryDispatch = async ({
       version: hashSha256Hex(row.ciphertext),
     })),
   );
+  const overrides = new Map<BusinessRegistrySlug, RegistryHandler>();
   for (const entry of configured) {
-    dispatch[entry.registry] = {
-      ...bindRegistryCredential(dispatch[entry.registry], entry.credential),
+    const base =
+      overrides.get(entry.registry) ??
+      BUSINESS_REGISTRY_DISPATCH[entry.registry];
+    overrides.set(entry.registry, {
+      ...bindRegistryCredential(base, entry.credential),
       cacheVersion: entry.version,
-    };
+    });
   }
-  return dispatch;
+  return {
+    ...BUSINESS_REGISTRY_DISPATCH,
+    ...Object.fromEntries(overrides),
+  };
 };
 
 export const getOrganizationRegistryHandler = async ({

@@ -1,4 +1,4 @@
-// parser-output-unchanged: imports the document AST from its package owner
+// parser-output-unchanged: Map and own-property refactor preserves identical runtime output
 // parser-output-unchanged: front matter is validated against its source paragraphs, the text its validation markup held.
 import type { Block } from "@stll/legal-ast/document-ast";
 
@@ -113,7 +113,17 @@ export const composeFrontMatter = ({
     }
     if (field !== "headmatter") {
       const visible = added.map((block) => block.plainText).join("\n\n");
-      textFields[field] = visible;
+      switch (field) {
+        case "headnotes":
+          textFields.headnotes = visible;
+          break;
+        case "syllabus":
+          textFields.syllabus = visible;
+          break;
+        case "summary":
+          textFields.summary = visible;
+          break;
+      }
       if (semanticTexts([...blocks, ...existing], field).has(visible)) {
         continue;
       }

@@ -198,6 +198,7 @@ export const AIStep = ({
         ? current.bedrock
         : { status: "idle" },
     };
+    const resetProviders = new Map<ProviderId, ProviderRowState>();
     for (const draft of next) {
       const fingerprint = fingerprintDraft(draft);
       const state = nextRowStates[draft.provider];
@@ -208,10 +209,13 @@ export const AIStep = ({
       const clearedKey =
         fingerprint === null && state.status !== "idle" && !draft.apiKeyMasked;
       if (changedSavedKey || clearedKey) {
-        nextRowStates[draft.provider] = { status: "idle" };
+        resetProviders.set(draft.provider, { status: "idle" });
       }
     }
-    commitRowStates(nextRowStates);
+    commitRowStates({
+      ...nextRowStates,
+      ...Object.fromEntries(resetProviders),
+    });
   };
 
   const rowStatusList: ProviderRowStatus[] = providers.map(

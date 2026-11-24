@@ -342,10 +342,30 @@ export const summarizeSnippetComparison = (
     for (const { outcome } of row.hits) {
       hits += 1;
       if (outcome.status === "skipped") {
-        skipped[outcome.reason] += 1;
+        switch (outcome.reason) {
+          case "anchor_not_found":
+            skipped.anchor_not_found += 1;
+            break;
+          case "no_snippet":
+            skipped.no_snippet += 1;
+            break;
+        }
         continue;
       }
-      marks[outcome.comparison.marks] += 1;
+      switch (outcome.comparison.marks) {
+        case "identical":
+          marks.identical += 1;
+          break;
+        case "passage_superset":
+          marks.passage_superset += 1;
+          break;
+        case "snippet_superset":
+          marks.snippet_superset += 1;
+          break;
+        case "divergent":
+          marks.divergent += 1;
+          break;
+      }
       overlaps.push(outcome.comparison.overlap);
       highlightMs.push(outcome.highlightMs);
       if (outcome.comparison.overlap >= OVERLAP_AGREEMENT_THRESHOLD) {

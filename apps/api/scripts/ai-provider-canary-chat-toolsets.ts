@@ -108,15 +108,15 @@ const activeSkillContext: ActiveChatSkillContext = {
   version: null,
 };
 
-const canaryRegistryDispatch: Record<BusinessRegistrySlug, RegistryHandler> = {
-  ...BUSINESS_REGISTRY_DISPATCH,
-};
-for (const slug of BUSINESS_REGISTRY_SLUGS) {
-  canaryRegistryDispatch[slug] = {
-    ...BUSINESS_REGISTRY_DISPATCH[slug],
-    isDeployAvailable: () => true,
-  };
-}
+const canaryRegistryDispatch = Object.fromEntries(
+  BUSINESS_REGISTRY_SLUGS.map((slug) => [
+    slug,
+    {
+      ...BUSINESS_REGISTRY_DISPATCH[slug],
+      isDeployAvailable: () => true,
+    },
+  ]),
+) as Record<BusinessRegistrySlug, RegistryHandler>;
 
 const TOOLSET_DISPOSITION = {
   [CHAT_EDIT_APPLY_MODE.manual]: {

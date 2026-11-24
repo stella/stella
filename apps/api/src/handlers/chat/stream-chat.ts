@@ -5386,7 +5386,12 @@ const restoreRecordProperty = (
 ): void => {
   const value = record[key];
   if (value !== undefined) {
-    Object.assign(record, Object.fromEntries([[key, restoreValue(value)]]));
+    Object.defineProperty(record, key, {
+      value: restoreValue(value),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
 };
 

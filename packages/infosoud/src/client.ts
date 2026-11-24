@@ -339,17 +339,17 @@ const parseCourtEntries = (value: unknown): CourtEntry[] =>
 
 const parseCourtMap = (value: unknown): CourtMap => {
   const record = assertRecord(value, "CourtMap");
-  const result: CourtMap = {};
+  const entries = new Map<string, string>();
 
   for (const [courtCode, courtName] of Object.entries(record)) {
     if (typeof courtName !== "string") {
       throw new InfoSoudParseError(`CourtMap.${courtCode} must be a string`);
     }
 
-    result[courtCode] = courtName;
+    entries.set(courtCode, courtName);
   }
 
-  return result;
+  return Object.fromEntries(entries);
 };
 
 const parseErrorMessage = (

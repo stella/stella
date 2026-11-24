@@ -45,14 +45,14 @@ export const parseGuideProgress = (
   if (!blob) {
     return {};
   }
-  const progress: StoredGuideProgress = {};
+  const progress = new Map<GuideTourId, GuideTourStatus>();
   for (const [tourId, status] of Object.entries(blob)) {
     const parsedStatus = v.safeParse(guideTourStatusSchema, status);
     if (isGuideTourId(tourId) && parsedStatus.success) {
-      progress[tourId] = parsedStatus.output;
+      progress.set(tourId, parsedStatus.output);
     }
   }
-  return progress;
+  return Object.fromEntries(progress) as StoredGuideProgress;
 };
 
 const isGuideTourId = (value: string): value is GuideTourId =>

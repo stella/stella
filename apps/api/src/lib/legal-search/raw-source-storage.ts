@@ -488,10 +488,10 @@ export const homeRawPayloadObjects = ({
   }
   const named = Object.entries(decodeSourceRawEnvelopeObjects(payload));
   const copies: RawObjectCopy[] = [];
-  const homed: Record<string, SourceRawObjectRef> = {};
+  const homedEntries = new Map<string, SourceRawObjectRef>();
   for (const [part, ref] of named) {
     if (classifyCaseLawRawKey(ref.location, owner) === RAW_KEY_OWNERSHIP.OWN) {
-      homed[part] = ref;
+      homedEntries.set(part, ref);
       continue;
     }
     if (ref.location.startsWith("pack:") || !SHA256_HEX.test(ref.sha256)) {
@@ -509,7 +509,7 @@ export const homeRawPayloadObjects = ({
         key: sourceBinaryKey(owner, ref.sha256),
       }),
     };
-    homed[part] = own;
+    homedEntries.set(part, own);
     copies.push({ fromKey: ref.location, ref: own });
   }
   return Result.ok(
@@ -518,7 +518,7 @@ export const homeRawPayloadObjects = ({
       : {
           payload: withSourceRawObjects(
             payload,
-            homed satisfies SourceRawObjects,
+            Object.fromEntries(homedEntries) satisfies SourceRawObjects,
           ),
           copies,
         },
