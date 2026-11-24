@@ -149,15 +149,20 @@ const getTokenSignature = ({ content, types }: Token): string =>
   `${types.join(".")}:${content}`;
 
 const getTokenStyle = ({ types }: Token): CSSProperties => {
-  const styleEntries = new Map<string, unknown>();
+  const style: CSSProperties = {};
 
   for (const themeEntry of TOOL_CODE_THEME.styles) {
     if (themeEntry.types.some((type) => types.includes(type))) {
-      for (const [k, v] of Object.entries(themeEntry.style)) {
-        styleEntries.set(k, v);
+      for (const [key, value] of Object.entries(themeEntry.style)) {
+        Object.defineProperty(style, key, {
+          value,
+          enumerable: true,
+          configurable: true,
+          writable: true,
+        });
       }
     }
   }
 
-  return Object.fromEntries(styleEntries);
+  return style;
 };
