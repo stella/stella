@@ -405,7 +405,17 @@ const queryFor = ({ profile, court }: Probe): string => {
 
 type Timed = { elapsedMs: number; hits: number };
 
-const timedSearch = async (probe: Probe): Promise<Timed> => {
+// readyz can answer before the restarted node joins the searcher pool. Such a
+// search fails at placement, before any split is read, so retrying it keeps
+// the measurement cold.
+const SEARCHER_POOL_PENDING = "no available searcher nodes";
+const SEARCHER_POOL_TIMEOUT_MS = 60_000;
+const SEARCHER_POOL_POLL_MS = 250;
+
+const timedSearch = async (
+  probe: Probe,
+  deadline = Date.now() + SEARCHER_POOL_TIMEOUT_MS,
+): Promise<Timed> => {
   const started = performance.now();
   const result = await getCorpusIndexClient("q09").search({
     observer: "unobserved",
@@ -416,10 +426,17 @@ const timedSearch = async (probe: Probe): Promise<Timed> => {
     sortBy: "_score",
   });
   const elapsedMs = performance.now() - started;
-  if (result.isErr()) {
+  if (result.isOk()) {
+    return { elapsedMs, hits: result.value.numHits };
+  }
+  if (
+    !result.error.message.includes(SEARCHER_POOL_PENDING) ||
+    Date.now() > deadline
+  ) {
     return panic(`${probe.label}: ${result.error.message}`);
   }
-  return { elapsedMs, hits: result.value.numHits };
+  await Bun.sleep(SEARCHER_POOL_POLL_MS);
+  return await timedSearch(probe, deadline);
 };
 
 type Measurement = {
